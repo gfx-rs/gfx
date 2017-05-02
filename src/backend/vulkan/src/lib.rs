@@ -1,4 +1,4 @@
-// Copyright 2016 The Gfx-rs Developers.
+// Copyright 2017 The Gfx-rs Developers.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,326 +14,534 @@
 
 #[macro_use]
 extern crate log;
-extern crate shared_library;
+
+extern crate ash;
 extern crate gfx_core as core;
-extern crate vk_sys as vk;
-extern crate spirv_utils;
+#[macro_use]
+extern crate lazy_static;
+extern crate winit;
 
-use std::{fmt, iter, mem, ptr};
+#[cfg(target_os = "windows")]
+extern crate kernel32;
+
+use ash::{Entry, LoadingError};
+use ash::version::{EntryV1_0, DeviceV1_0, InstanceV1_0, V1_0};
+use ash::vk;
+use core::memory;
+use core::{CommandBuffer, FrameSync};
+use std::{mem, ptr};
+use std::ffi::{CStr, CString};
 use std::sync::{Arc, Mutex};
-use std::ffi::CStr;
-use shared_library::dynamic_library::DynamicLibrary;
-
-pub use self::command::{GraphicsQueue, Buffer as CommandBuffer};
-pub use self::factory::Factory;
+use std::collections::VecDeque;
 
 mod command;
 pub mod data;
 mod factory;
-mod native;
-mod mirror;
+pub mod native;
 
-struct PhysicalDeviceInfo {
-    device: vk::PhysicalDevice,
-    _properties: vk::PhysicalDeviceProperties,
-    queue_families: Vec<vk::QueueFamilyProperties>,
-    memory: vk::PhysicalDeviceMemoryProperties,
-    _features: vk::PhysicalDeviceFeatures,
+const SURFACE_EXTENSIONS: &'static [&'static str] = &[
+    vk::VK_KHR_SURFACE_EXTENSION_NAME,
+
+    // Platform-specific WSI extensions
+    vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
+    vk::VK_KHR_XCB_SURFACE_EXTENSION_NAME,
+    vk::VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME,
+    vk::VK_KHR_MIR_SURFACE_EXTENSION_NAME,
+    vk::VK_KHR_ANDROID_SURFACE_EXTENSION_NAME,
+    vk::VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
+];
+
+lazy_static! {
+    // Entry function pointers
+    pub static ref VK_ENTRY: Result<Entry<V1_0>, LoadingError> = Entry::new();
+
+    pub static ref INSTANCE: Instance = Instance::create();
 }
 
-impl PhysicalDeviceInfo {
-    pub fn new(dev: vk::PhysicalDevice, vk: &vk::InstancePointers) -> PhysicalDeviceInfo {
-        PhysicalDeviceInfo {
-            device: dev,
-            _properties: unsafe {
-                let mut out = mem::zeroed();
-                vk.GetPhysicalDeviceProperties(dev, &mut out);
-                out
-            },
-            queue_families: unsafe {
-                let mut num = 0;
-                vk.GetPhysicalDeviceQueueFamilyProperties(dev, &mut num, ptr::null_mut());
-                let mut families = Vec::with_capacity(num as usize);
-                vk.GetPhysicalDeviceQueueFamilyProperties(dev, &mut num, families.as_mut_ptr());
-                families.set_len(num as usize);
-                families
-            },
-            memory: unsafe {
-                let mut out = mem::zeroed();
-                vk.GetPhysicalDeviceMemoryProperties(dev, &mut out);
-                out
-            },
-            _features: unsafe {
-                let mut out = mem::zeroed();
-                vk.GetPhysicalDeviceFeatures(dev, &mut out);
-                out
-            },
+pub struct Instance {
+    pub raw: ash::Instance<ash::version::V1_0>,
+
+    /// Supported surface extensions of this instance.
+    surface_extensions: Vec<&'static str>,
+}
+
+
+impl Instance {
+    fn create() -> Instance {
+        // TODO: return errors instead of panic
+        let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
+
+        let app_info = vk::ApplicationInfo {
+            s_type: vk::StructureType::ApplicationInfo,
+            p_next: ptr::null(),
+            p_application_name: "vulkan_ll".as_ptr() as *const _, // TODO:
+            application_version: 0,
+            p_engine_name: "gfx-rs".as_ptr() as *const _,
+            engine_version: 0, //TODO
+            api_version: 0, //TODO
+        };
+
+        let instance_extensions = entry.enumerate_instance_extension_properties()
+                                       .expect("Unable to enumerate instance extensions");
+
+        // Check our surface extensions against the available extensions
+        let surface_extensions = SURFACE_EXTENSIONS.iter().filter_map(|ext| {
+            instance_extensions.iter().find(|inst_ext| {
+                unsafe { CStr::from_ptr(inst_ext.extension_name.as_ptr()) == CStr::from_ptr(ext.as_ptr() as *const i8) }
+            }).and_then(|_| Some(*ext))
+        }).collect::<Vec<&str>>();
+
+        let instance = {
+            let cstrings = surface_extensions.iter()
+                                    .map(|&s| CString::new(s).unwrap())
+                                    .collect::<Vec<_>>();
+
+            let str_pointers = cstrings.iter()
+                                    .map(|s| s.as_ptr())
+                                    .collect::<Vec<_>>();
+
+            let create_info = vk::InstanceCreateInfo {
+                s_type: vk::StructureType::InstanceCreateInfo,
+                p_next: ptr::null(),
+                flags: vk::InstanceCreateFlags::empty(),
+                p_application_info: &app_info,
+                enabled_layer_count: 0,
+                pp_enabled_layer_names: ptr::null(),
+                enabled_extension_count: str_pointers.len() as u32,
+                pp_enabled_extension_names: str_pointers.as_ptr(),
+            };
+
+            entry.create_instance(&create_info, None).expect("Unable to create vulkan instance")
+        };
+
+        Instance {
+            raw: instance,
+            surface_extensions: surface_extensions,
+        }
+    }
+
+    fn enumerate_adapters(&self) -> Vec<Adapter> {
+        self.raw.enumerate_physical_devices()
+            .expect("Unable to enumerate adapter")
+            .iter()
+            .map(|&device| {
+                let properties = self.raw.get_physical_device_properties(device);
+                let name = unsafe {
+                    CStr::from_ptr(properties.device_name.as_ptr())
+                            .to_str()
+                            .expect("Invalid UTF-8 string")
+                            .to_owned()
+                };
+
+                let info = core::AdapterInfo {
+                    name: name,
+                    vendor: properties.vendor_id as usize,
+                    device: properties.device_id as usize,
+                    software_rendering: properties.device_type == vk::PhysicalDeviceType::Cpu,
+                };
+
+                let queue_families = self.raw.get_physical_device_queue_family_properties(device)
+                                                 .iter()
+                                                 .enumerate()
+                                                 .map(|(i, queue_family)| {
+                                                    QueueFamily {
+                                                        device: device,
+                                                        family_index: i as u32,
+                                                        queue_type: queue_family.queue_flags,
+                                                        queue_count: queue_family.queue_count,
+                                                    }
+                                                 }).collect();
+
+                Adapter {
+                    handle: device,
+                    queue_families: queue_families,
+                    info: info,
+                }
+            })
+            .collect()
+    }
+}
+
+pub struct QueueFamily {
+    device: vk::PhysicalDevice,
+    family_index: u32,
+    queue_type: vk::QueueFlags,
+    queue_count: u32,
+}
+
+impl QueueFamily {
+    #[doc(hidden)]
+    pub fn device(&self) -> vk::PhysicalDevice {
+        self.device
+    }
+
+    #[doc(hidden)]
+    pub fn family_index(&self) -> u32 {
+        self.family_index
+    }
+
+}
+impl core::QueueFamily for QueueFamily {
+    fn num_queues(&self) -> u32 {
+        self.queue_count
+    }
+}
+
+pub struct Adapter {
+    handle: vk::PhysicalDevice,
+    queue_families: Vec<QueueFamily>,
+    info: core::AdapterInfo,
+}
+
+impl core::Adapter for Adapter {
+    type CommandQueue = CommandQueue;
+    type Resources = Resources;
+    type Factory = Factory;
+    type QueueFamily = QueueFamily;
+
+    fn enumerate_adapters() -> Vec<Self> {
+        INSTANCE.raw.enumerate_physical_devices()
+            .expect("Unable to enumerate adapter")
+            .iter()
+            .map(|&device| {
+                let properties = INSTANCE.raw.get_physical_device_properties(device);
+                let name = unsafe {
+                    CStr::from_ptr(properties.device_name.as_ptr())
+                            .to_str()
+                            .expect("Invalid UTF-8 string")
+                            .to_owned()
+                };
+
+                let info = core::AdapterInfo {
+                    name: name,
+                    vendor: properties.vendor_id as usize,
+                    device: properties.device_id as usize,
+                    software_rendering: properties.device_type == vk::PhysicalDeviceType::Cpu,
+                };
+
+                let queue_families = INSTANCE.raw.get_physical_device_queue_family_properties(device)
+                                                 .iter()
+                                                 .enumerate()
+                                                 .map(|(i, queue_family)| {
+                                                    QueueFamily {
+                                                        device: device,
+                                                        family_index: i as u32,
+                                                        queue_type: queue_family.queue_flags,
+                                                        queue_count: queue_family.queue_count,
+                                                    }
+                                                 }).collect();
+
+                Adapter {
+                    handle: device,
+                    queue_families: queue_families,
+                    info: info,
+                }
+            })
+            .collect()
+    }
+
+    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> core::Device_<Resources, Factory, CommandQueue>
+    {
+        let mut queue_priorities = Vec::with_capacity(queue_descs.len());
+
+        let queue_infos = queue_descs.iter().map(|&(family, queue_count)| {
+                queue_priorities.push(vec![0.0f32; queue_count as usize]);
+
+                vk::DeviceQueueCreateInfo {
+                    s_type: vk::StructureType::DeviceQueueCreateInfo,
+                    p_next: ptr::null(),
+                    flags: vk::DeviceQueueCreateFlags::empty(),
+                    queue_family_index: family.family_index,
+                    queue_count: queue_count,
+                    p_queue_priorities: queue_priorities.last().unwrap().as_ptr(),
+                }
+            }).collect::<Vec<_>>();
+
+        // Create device
+        let device_extensions = &[vk::VK_KHR_SWAPCHAIN_EXTENSION_NAME,];
+
+        let device_raw = {
+            let cstrings = device_extensions.iter()
+                                    .map(|&s| CString::new(s).unwrap())
+                                    .collect::<Vec<_>>();
+
+            let str_pointers = cstrings.iter()
+                                    .map(|s| s.as_ptr())
+                                    .collect::<Vec<_>>();
+
+            let features = unsafe { mem::zeroed() };
+            let info = vk::DeviceCreateInfo {
+                s_type: vk::StructureType::DeviceCreateInfo,
+                p_next: ptr::null(),
+                flags: vk::DeviceCreateFlags::empty(),
+                queue_create_info_count: queue_infos.len() as u32,
+                p_queue_create_infos: queue_infos.as_ptr(),
+                enabled_layer_count: 0,
+                pp_enabled_layer_names: ptr::null(),
+                enabled_extension_count: str_pointers.len() as u32,
+                pp_enabled_extension_names: str_pointers.as_ptr(),
+                p_enabled_features: &features,
+            };
+
+            unsafe {
+                INSTANCE.raw.create_device(self.handle, &info, None)
+                    .expect("Error on device creation")
+            }
+        };
+
+        let factory = Factory {
+            device: Arc::new(RawDevice(device_raw)),
+        };
+
+        let mem_properties =  INSTANCE.raw.get_physical_device_memory_properties(self.handle);
+        let memory_heaps = mem_properties.memory_heaps[..mem_properties.memory_heap_count as usize].iter()
+                                .map(|mem| mem.size).collect::<Vec<_>>();
+        let heap_types = mem_properties.memory_types[..mem_properties.memory_type_count as usize].iter().enumerate().map(|(i, mem)| {
+            let mut type_flags = memory::HeapProperties::empty();
+
+            if mem.property_flags.intersects(vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+                type_flags |= memory::DEVICE_LOCAL;
+            }
+            if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_COHERENT_BIT) {
+                type_flags |= memory::COHERENT;
+            }
+            if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_CACHED_BIT) {
+                type_flags |= memory::CPU_CACHED;
+            }
+            if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+                type_flags |= memory::CPU_VISIBLE;
+            }
+            if mem.property_flags.intersects(vk::MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) {
+                type_flags |= memory::LAZILY_ALLOCATED;
+            }
+            
+            core::HeapType {
+                id: i,
+                properties: type_flags,
+                heap_index: mem.heap_index as usize,
+            }
+        }).collect::<Vec<_>>();
+
+        // Create associated command queues for each queue type
+        let queues = queue_infos.iter().flat_map(|info| {
+            (0..info.queue_count).map(|id| {
+                let queue = unsafe {
+                    factory.device.0.get_device_queue(info.queue_family_index, id)
+                };
+                unimplemented!()
+                /*
+                // TODO:
+                unsafe {
+                    core::GeneralQueue::new(CommandQueue {
+                        inner: CommandQueueInner(Rc::new(RefCell::new(queue))),
+                        device: factory.device.clone(),
+                        family_index: info.queue_family_index,
+                    })
+                }
+                */
+            }).collect::<Vec<_>>()
+        }).collect();
+
+        core::Device_ {
+            factory: factory,
+            general_queues: queues,
+            graphics_queues: Vec::new(),
+            compute_queues: Vec::new(),
+            transfer_queues: Vec::new(),
+            heap_types: heap_types,
+            memory_heaps: memory_heaps,
+
+            _marker: std::marker::PhantomData,
+        }
+    }
+
+    fn get_info(&self) -> &core::AdapterInfo {
+        &self.info
+    }
+
+    fn get_queue_families(&self) -> &[Self::QueueFamily] {
+        &self.queue_families
+    }
+}
+
+#[doc(hidden)]
+pub struct RawDevice(pub ash::Device<V1_0>);
+impl Drop for RawDevice {
+    fn drop(&mut self) {
+        unsafe { self.0.destroy_device(None); }
+    }
+}
+
+// Need to explicitly synchronize on submission and present.
+// TODO: Can we avoid somehow the use of a mutex?
+type RawCommandQueue = Arc<Mutex<vk::Queue>>;
+
+pub struct CommandQueue {
+    raw: RawCommandQueue,
+    device: Arc<RawDevice>,
+    family_index: u32,
+}
+
+impl CommandQueue {
+    #[doc(hidden)]
+    pub fn device_handle(&self) -> vk::Device {
+        self.device.0.handle()
+    }
+}
+
+impl core::CommandQueue for CommandQueue {
+    type Resources = Resources;
+    type SubmitInfo = command::SubmitInfo;
+    type GeneralCommandBuffer = native::GeneralCommandBuffer;
+    type GraphicsCommandBuffer = native::GraphicsCommandBuffer;
+    type ComputeCommandBuffer = native::ComputeCommandBuffer;
+    type TransferCommandBuffer = native::TransferCommandBuffer;
+    type SubpassCommandBuffer = native::SubpassCommandBuffer;
+
+    unsafe fn submit<'a, C>(&mut self, submit_infos: &[core::QueueSubmit<C, Resources>], fence: Option<&'a mut native::Fence>)
+        where C: CommandBuffer<SubmitInfo = command::SubmitInfo>
+    {
+
+        unimplemented!()
+    }
+}
+
+pub struct Factory {
+    device: Arc<RawDevice>,
+}
+
+pub struct SwapChain {
+    raw: vk::SwapchainKHR,
+    device: Arc<RawDevice>,
+    present_queue: RawCommandQueue,
+    swapchain_fn: vk::SwapchainFn,
+    images: Vec<native::Image>,
+
+    // Queued up frames for presentation
+    frame_queue: VecDeque<usize>,
+}
+
+impl SwapChain {
+    #[doc(hidden)]
+    pub fn from_raw(raw: vk::SwapchainKHR,
+                    queue: &CommandQueue,
+                    swapchain_fn: vk::SwapchainFn,
+                    images: Vec<native::Image>) -> Self
+    {
+        SwapChain {
+            raw: raw,
+            device: queue.device.clone(),
+            present_queue: queue.raw.clone(),
+            swapchain_fn: swapchain_fn,
+            images: images,
+            frame_queue: VecDeque::new(),
         }
     }
 }
 
+impl core::SwapChain for SwapChain {
+    type R = Resources;
 
-pub struct Share {
-    _dynamic_lib: DynamicLibrary,
-    _library: vk::Static,
-    instance: vk::Instance,
-    inst_pointers: vk::InstancePointers,
-    device: vk::Device,
-    dev_pointers: vk::DevicePointers,
-    physical_device: vk::PhysicalDevice,
-    handles: Mutex<core::handle::Manager<Resources>>,
-}
-
-pub type SharePointer = Arc<Share>;
-
-impl Share {
-    pub fn get_instance(&self) -> (vk::Instance, &vk::InstancePointers) {
-        (self.instance, &self.inst_pointers)
+    fn get_images(&mut self) -> &[()] {
+        // TODO
+        // &self.images
+        unimplemented!()
     }
-    pub fn get_device(&self) -> (vk::Device, &vk::DevicePointers) {
-        (self.device, &self.dev_pointers)
-    }
-    pub fn get_physical_device(&self) -> vk::PhysicalDevice {
-        self.physical_device
-    }
-}
 
-const SURFACE_EXTENSIONS: &'static [&'static str] = &[
-    // Platform-specific WSI extensions
-    "VK_KHR_xlib_surface",
-    "VK_KHR_xcb_surface",
-    "VK_KHR_wayland_surface",
-    "VK_KHR_mir_surface",
-    "VK_KHR_android_surface",
-    "VK_KHR_win32_surface",
-];
-
-
-pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&str],
-              dev_extensions: &[&str]) -> (command::GraphicsQueue, factory::Factory, SharePointer) {
-    use std::ffi::CString;
-    use std::path::Path;
-
-    let dynamic_lib = DynamicLibrary::open(Some(
-            if cfg!(target_os = "windows") {
-                Path::new("vulkan-1.dll")
-            } else {
-                Path::new("libvulkan.so.1")
-            }
-        )).expect("Unable to open vulkan shared library");
-    let lib = vk::Static::load(|name| unsafe {
-        let name = name.to_str().unwrap();
-        dynamic_lib.symbol(name).unwrap()
-    });
-    let entry_points = vk::EntryPoints::load(|name| unsafe {
-        mem::transmute(lib.GetInstanceProcAddr(0, name.as_ptr()))
-    });
-
-    let app_info = vk::ApplicationInfo {
-        sType: vk::STRUCTURE_TYPE_APPLICATION_INFO,
-        pNext: ptr::null(),
-        pApplicationName: app_name.as_ptr() as *const _,
-        applicationVersion: app_version,
-        pEngineName: "gfx-rs".as_ptr() as *const _,
-        engineVersion: 0x1000, //TODO
-        apiVersion: 0x400000, //TODO
-    };
-
-    let instance_extensions = {
-        let mut num = 0;
-        assert_eq!(vk::SUCCESS, unsafe {
-            entry_points.EnumerateInstanceExtensionProperties(ptr::null(), &mut num, ptr::null_mut())
-        });
-        let mut out = Vec::with_capacity(num as usize);
-        assert_eq!(vk::SUCCESS, unsafe {
-            entry_points.EnumerateInstanceExtensionProperties(ptr::null(), &mut num, out.as_mut_ptr())
-        });
-        unsafe { out.set_len(num as usize); }
-        out
-    };
-
-    // Check our surface extensions against the available extensions
-    let surface_extensions = SURFACE_EXTENSIONS.iter().filter_map(|ext| {
-        instance_extensions.iter().find(|inst_ext| {
-            unsafe { CStr::from_ptr(inst_ext.extensionName.as_ptr()) == CStr::from_ptr(ext.as_ptr() as *const i8) }
-        }).and_then(|_| Some(*ext))
-    }).collect::<Vec<&str>>();
-    
-    let instance = {
-        let cstrings = layers.iter().chain(extensions.iter())
-                                    .chain(surface_extensions.iter())
-                         .map(|&s| CString::new(s).unwrap())
-                         .collect::<Vec<_>>();
-        let str_pointers = cstrings.iter()
-                                   .map(|s| s.as_ptr())
-                                   .collect::<Vec<_>>();
-
-        let create_info = vk::InstanceCreateInfo {
-            sType: vk::STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-            pNext: ptr::null(),
-            flags: 0,
-            pApplicationInfo: &app_info,
-            enabledLayerCount: layers.len() as u32,
-            ppEnabledLayerNames: str_pointers.as_ptr(),
-            enabledExtensionCount: (extensions.len() + surface_extensions.len()) as u32,
-            ppEnabledExtensionNames: str_pointers[layers.len()..].as_ptr(),
+    fn acquire_frame(&mut self, sync: FrameSync<Resources>) -> core::Frame {
+        let (semaphore, fence) = match sync {
+            FrameSync::Semaphore(semaphore) => (semaphore.0, vk::Fence::null()),
+            FrameSync::Fence(fence) => (vk::Semaphore::null(), fence.0),
         };
-        let mut out = 0;
-        assert_eq!(vk::SUCCESS, unsafe {
-            entry_points.CreateInstance(&create_info, ptr::null(), &mut out)
-        });
-        out
-    };
 
-    let inst_pointers = vk::InstancePointers::load(|name| unsafe {
-        mem::transmute(lib.GetInstanceProcAddr(instance, name.as_ptr()))
-    });
-
-    let physical_devices = {
-        let mut num = 0;
-        assert_eq!(vk::SUCCESS, unsafe {
-            inst_pointers.EnumeratePhysicalDevices(instance, &mut num, ptr::null_mut())
-        });
-        let mut devices = Vec::with_capacity(num as usize);
-        assert_eq!(vk::SUCCESS, unsafe {
-            inst_pointers.EnumeratePhysicalDevices(instance, &mut num, devices.as_mut_ptr())
-        });
-        unsafe { devices.set_len(num as usize); }
-        devices
-    };
-    
-    let devices = physical_devices.iter()
-        .map(|dev| PhysicalDeviceInfo::new(*dev, &inst_pointers))
-        .collect::<Vec<_>>();
-
-    let (dev, (qf_id, _))  = devices.iter()
-        .flat_map(|d| iter::repeat(d).zip(d.queue_families.iter().enumerate()))
-        .find(|&(_, (_, qf))| qf.queueFlags & vk::QUEUE_GRAPHICS_BIT != 0)
-        .unwrap();
-    info!("Chosen physical device {:?} with queue family {}", dev.device, qf_id);
-
-    let mvid_id = dev.memory.memoryTypes.iter().take(dev.memory.memoryTypeCount as usize)
-                            .position(|mt| (mt.propertyFlags & vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT != 0))
-                            .unwrap() as u32;
-    let msys_id = dev.memory.memoryTypes.iter().take(dev.memory.memoryTypeCount as usize)
-                            .position(|mt| (mt.propertyFlags & vk::MEMORY_PROPERTY_HOST_COHERENT_BIT != 0)
-                                        && (mt.propertyFlags & vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT != 0))
-                            .unwrap() as u32;
-
-    let device = {
-        let cstrings = dev_extensions.iter()
-                                     .map(|&s| CString::new(s).unwrap())
-                                     .collect::<Vec<_>>();
-        let str_pointers = cstrings.iter().map(|s| s.as_ptr())
-                                   .collect::<Vec<_>>();
-
-        let queue_info = vk::DeviceQueueCreateInfo {
-            sType: vk::STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-            pNext: ptr::null(),
-            flags: 0,
-            queueFamilyIndex: qf_id as u32,
-            queueCount: 1,
-            pQueuePriorities: &1.0,
+        // TODO: error handling
+        let index = unsafe {
+            let mut index = mem::uninitialized();
+            self.swapchain_fn.acquire_next_image_khr(
+                    self.device.0.handle(),
+                    self.raw,
+                    std::u64::MAX, // will block if no image is available
+                    semaphore,
+                    fence,
+                    &mut index);
+            index
         };
-        let features = unsafe{ mem::zeroed() };
 
-        let dev_info = vk::DeviceCreateInfo {
-            sType: vk::STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-            pNext: ptr::null(),
-            flags: 0,
-            queueCreateInfoCount: 1,
-            pQueueCreateInfos: &queue_info,
-            enabledLayerCount: 0,
-            ppEnabledLayerNames: ptr::null(),
-            enabledExtensionCount: str_pointers.len() as u32,
-            ppEnabledExtensionNames: str_pointers.as_ptr(),
-            pEnabledFeatures: &features,
+        self.frame_queue.push_back(index as usize);
+        unsafe { core::Frame::new(index as usize) }
+    }
+
+    fn present(&mut self) {
+        let frame = self.frame_queue.pop_front().expect("No frame currently queued up. Need to acquire a frame first.");
+
+        let info = vk::PresentInfoKHR {
+            s_type: vk::StructureType::PresentInfoKhr,
+            p_next: ptr::null(),
+            wait_semaphore_count: 0,
+            p_wait_semaphores: ptr::null(),
+            swapchain_count: 1,
+            p_swapchains: &self.raw,
+            p_image_indices: &(frame as u32),
+            p_results: ptr::null_mut(),
         };
-        let mut out = 0;
-        assert_eq!(vk::SUCCESS, unsafe {
-            inst_pointers.CreateDevice(dev.device, &dev_info, ptr::null(), &mut out)
-        });
-        out
-    };
+        let mut queue = match self.present_queue.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
 
-    let dev_pointers = vk::DevicePointers::load(|name| unsafe {
-        inst_pointers.GetDeviceProcAddr(device, name.as_ptr()) as *const _
-    });
-    let queue = unsafe {
-        let mut out = mem::zeroed();
-        dev_pointers.GetDeviceQueue(device, qf_id as u32, 0, &mut out);
-        out
-    };
-
-    let share = Arc::new(Share {
-        _dynamic_lib: dynamic_lib,
-        _library: lib,
-        instance: instance,
-        inst_pointers: inst_pointers,
-        device: device,
-        dev_pointers: dev_pointers,
-        physical_device: dev.device,
-        handles: Mutex::new(core::handle::Manager::new()),
-    });
-    let gfx_device = command::GraphicsQueue::new(share.clone(), queue, qf_id as u32);
-    let gfx_factory = factory::Factory::new(share.clone(), qf_id as u32, mvid_id, msys_id);
-
-    (gfx_device, gfx_factory, share)
-}
-
-
-#[derive(Clone, PartialEq, Eq)]
-pub struct Error(pub vk::Result);
-
-impl fmt::Debug for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(match self.0 {
-            vk::SUCCESS => "success",
-            vk::NOT_READY => "not ready",
-            vk::TIMEOUT => "timeout",
-            vk::EVENT_SET => "event_set",
-            vk::EVENT_RESET => "event_reset",
-            vk::INCOMPLETE => "incomplete",
-            vk::ERROR_OUT_OF_HOST_MEMORY => "out of host memory",
-            vk::ERROR_OUT_OF_DEVICE_MEMORY => "out of device memory",
-            vk::ERROR_INITIALIZATION_FAILED => "initialization failed",
-            vk::ERROR_DEVICE_LOST => "device lost",
-            vk::ERROR_MEMORY_MAP_FAILED => "memory map failed",
-            vk::ERROR_LAYER_NOT_PRESENT => "layer not present",
-            vk::ERROR_EXTENSION_NOT_PRESENT => "extension not present",
-            vk::ERROR_FEATURE_NOT_PRESENT => "feature not present",
-            vk::ERROR_INCOMPATIBLE_DRIVER => "incompatible driver",
-            vk::ERROR_TOO_MANY_OBJECTS => "too many objects",
-            vk::ERROR_FORMAT_NOT_SUPPORTED => "format not supported",
-            vk::ERROR_SURFACE_LOST_KHR => "surface lost (KHR)",
-            vk::ERROR_NATIVE_WINDOW_IN_USE_KHR => "native window in use (KHR)",
-            vk::SUBOPTIMAL_KHR => "suboptimal (KHR)",
-            vk::ERROR_OUT_OF_DATE_KHR => "out of date (KHR)",
-            vk::ERROR_INCOMPATIBLE_DISPLAY_KHR => "incompatible display (KHR)",
-            vk::ERROR_VALIDATION_FAILED_EXT => "validation failed (EXT)",
-            _ => "unknown",
-        })
+        unsafe {
+            self.swapchain_fn.queue_present_khr(*queue, &info);
+        }
+        // TODO: handle result and return code
     }
 }
 
+
+#[doc(hidden)]
+pub struct RawSurface {
+    pub handle: vk::SurfaceKHR,
+    pub loader: vk::SurfaceFn,
+}
+
+impl Drop for RawSurface {
+    fn drop(&mut self) {
+        unsafe { self.loader.destroy_surface_khr(INSTANCE.raw.handle(), self.handle, ptr::null()); }
+    }
+}
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Resources {}
-
+pub enum Resources { }
 impl core::Resources for Resources {
-    type Buffer               = native::Buffer;
-    type Shader               = native::Shader;
-    type Program              = native::Program;
-    type PipelineStateObject  = native::Pipeline;
-    type Texture              = native::Texture;
-    type ShaderResourceView   = native::TextureView; //TODO: buffer view
-    type UnorderedAccessView  = ();
-    type RenderTargetView     = native::TextureView;
-    type DepthStencilView     = native::TextureView;
-    type Sampler              = vk::Sampler;
-    type Fence                = Fence;
-    type Mapping              = factory::MappingGate;
+    type Buffer = ();
+    type Shader = ();
+    type Program = ();
+    type PipelineStateObject = ();
+    type Texture = ();
+    type ShaderResourceView = ();
+    type UnorderedAccessView = ();
+    type RenderTargetView = ();
+    type DepthStencilView = ();
+    type Sampler = ();
+    type Fence = native::Fence;
+    type Semaphore = native::Semaphore;
+    type Mapping = Mapping;
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Fence(vk::Fence);
+// TODO: temporary
+#[derive(Debug, Eq, Hash, PartialEq)]
+pub struct Mapping;
+
+impl core::mapping::Gate<Resources> for Mapping {
+    unsafe fn set<T>(&self, index: usize, val: T) {
+        unimplemented!()
+    }
+
+    unsafe fn slice<'a, 'b, T>(&'a self, len: usize) -> &'b [T] {
+        unimplemented!()
+    }
+
+    unsafe fn mut_slice<'a, 'b, T>(&'a self, len: usize) -> &'b mut [T] {
+        unimplemented!()
+    }
+}
+

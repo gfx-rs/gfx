@@ -38,7 +38,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 
 mod command;
-mod data;
+pub mod data;
 mod factory;
 mod native;
 mod pool;
