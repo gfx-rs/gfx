@@ -302,3 +302,43 @@ impl<R: Resources> PixelTargetSet<R> {
             .unwrap_or((1, 1, 1))
     }
 }
+
+bitflags!(
+    /// Stages of the logical pipeline.
+    ///
+    /// The pipeline is structured as given the by the ordering of the flags.
+    /// Some stages are queue type dependent.
+    pub flags PipelineStage: u32 {
+        /// Beginning of the command queue.
+        const TOP_OF_PIPE = 0x1,
+        /// Indirect data consumption.
+        const DRAW_INDIRECT = 0x2,
+        /// Vertex data consumption.
+        const VERTEX_INPUT = 0x4,
+        /// Vertex shader execution.
+        const VERTEX_SHADER = 0x8,
+        /// Hull shader execution.
+        const HULL_SHADER = 0x10,
+        /// Domain shader execution.
+        const DOMAIN_SHADER = 0x20,
+        /// Geometry shader execution.
+        const GEOMETRY_SHADER = 0x40,
+        /// Pixel shader execution.
+        const PIXEL_SHADER = 0x80,
+        /// Stage of early depth and stencil test.
+        const EARLY_FRAGMENT_TESTS = 0x100,
+        /// Stage of late depth and stencil test.
+        const LATE_FRAGMENT_TESTS = 0x200,
+        /// Stage of final color value calculation.
+        const COLOR_ATTACHMENT_OUTPUT = 0x400,
+        /// Compute shader execution,
+        const COMPUTE_SHADER = 0x800,
+        /// Copy/Transfer command execution.
+        const TRANSFER = 0x1000,
+        /// End of the command queue.
+        const BOTTOM_OF_PIPE = 0x2000,
+        /// Read/Write access from host.
+        /// (Not a real pipeline stage)
+        const HOST = 0x4000,
+    }
+);
