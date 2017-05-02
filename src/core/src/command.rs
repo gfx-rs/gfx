@@ -36,6 +36,24 @@ pub enum ClearColor {
 /// Optional instance parameters: (instance count, buffer offset)
 pub type InstanceParams = (InstanceCount, VertexCount);
 
+/// Thread-safe finished command buffer for submission.
+pub struct Submit<C: CommandBuffer>(C::SubmitInfo);
+impl<C: CommandBuffer> Submit<C> {
+    #[doc(hidden)]
+    pub unsafe fn get_info(&self) -> &C::SubmitInfo {
+        &self.0
+    }
+}
+
+///
+pub trait CommandBuffer {
+    /// Associated `SubmitInfo` type.
+    type SubmitInfo;
+
+    #[doc(hidden)]
+    unsafe fn end(&mut self) -> Self::SubmitInfo;
+}
+
 /// An interface of the abstract command buffer. It collects commands in an
 /// efficient API-specific manner, to be ready for execution on the device.
 #[allow(missing_docs)]
