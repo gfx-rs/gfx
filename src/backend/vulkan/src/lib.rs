@@ -65,7 +65,6 @@ pub struct Instance {
     surface_extensions: Vec<&'static str>,
 }
 
-
 impl Instance {
     fn create() -> Instance {
         // TODO: return errors instead of panic
@@ -181,6 +180,7 @@ impl QueueFamily {
     }
 
 }
+
 impl core::QueueFamily for QueueFamily {
     fn num_queues(&self) -> u32 {
         self.queue_count
