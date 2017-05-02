@@ -17,6 +17,7 @@
 use gl;
 use core::{self as c, command, state as s};
 use core::target::{ColorValue, Depth, Mirror, Rect, Stencil};
+use native::{GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer};
 use {Buffer, BufferElement, Program, FrameBuffer, Texture,
      NewTexture, Resources, PipelineState, ResourceView, TargetView};
 
@@ -71,6 +72,10 @@ impl DataBuffer {
     }
 }
 
+pub struct SubmitInfo {
+    pub buf: Vec<Command>,
+    pub data: DataBuffer,
+}
 
 /// Serialized device command.
 #[derive(Clone, Copy, Debug)]
@@ -628,3 +633,29 @@ impl command::Buffer<Resources> for CommandBuffer {
                       instances));
     }
 }
+
+impl c::CommandBuffer for CommandBuffer {
+    type SubmitInfo = SubmitInfo;
+    unsafe fn end(&mut self) -> SubmitInfo {
+        unimplemented!()
+    }
+}
+
+// CommandBuffer trait implementation
+macro_rules! impl_cmd_buffer {
+    ($buffer:ident) => (
+        impl command::CommandBuffer for $buffer {
+            type SubmitInfo = SubmitInfo;
+            unsafe fn end(&mut self) -> SubmitInfo {
+                self.0.end()
+            }
+        }
+    )
+}
+
+impl_cmd_buffer!(GeneralCommandBuffer);
+impl_cmd_buffer!(GraphicsCommandBuffer);
+impl_cmd_buffer!(ComputeCommandBuffer);
+impl_cmd_buffer!(TransferCommandBuffer);
+impl_cmd_buffer!(SubpassCommandBuffer);
+
