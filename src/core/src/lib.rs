@@ -37,7 +37,9 @@ use std::hash::Hash;
 use std::any::Any;
 
 pub use draw_state::{state, target};
+pub use self::command::CommandBuffer;
 pub use self::factory::Factory;
+pub use self::queue::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 
 pub mod buffer;
 pub mod command;
@@ -48,6 +50,7 @@ pub mod handle;
 pub mod mapping;
 pub mod memory;
 pub mod pso;
+pub mod queue;
 pub mod shade;
 pub mod texture;
 
@@ -205,6 +208,17 @@ pub enum IndexType {
     U32,
 }
 
+#[derive(Copy, Clone, Debug)]
+///
+pub struct HeapType {
+    /// Id of the heap type.
+    pub id: usize,
+    /// Properties of the associated heap memory.
+    pub properties: memory::HeapProperties,
+    /// Index to the underlying memory heap.
+    pub heap_index: usize,
+}
+
 /// Different types of a specific API. 
 #[allow(missing_docs)]
 pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq + Any {
@@ -281,7 +295,8 @@ impl Error for SubmissionError {
 #[allow(missing_docs)]
 pub type SubmissionResult<T> = Result<T, SubmissionError>;
 
-/// A `Device` is responsible for submitting `CommandBuffer`s to the GPU. 
+/// A `Device` is responsible for submitting `CommandBuffer`s to the GPU.
+#[deprecated]
 pub trait Device: Sized {
     /// Associated `Resources` type.
     type Resources: Resources;
@@ -316,20 +331,43 @@ pub trait Device: Sized {
     fn cleanup(&mut self);
 }
 
+///
+pub struct Device_<R: Resources, F: Factory<R>, Q: CommandQueue> {
+    ///
+    pub factory: F,
+    ///
+    pub general_queues: Vec<GeneralQueue<Q>>,
+    ///
+    pub graphics_queues: Vec<GraphicsQueue<Q>>,
+    ///
+    pub compute_queues: Vec<ComputeQueue<Q>>,
+    ///
+    pub transfer_queues: Vec<TransferQueue<Q>>,
+    ///
+    pub heap_types: Vec<HeapType>,
+    ///
+    pub memory_heaps: Vec<u64>,
+
+    ///
+    pub _marker: std::marker::PhantomData<*const R>
+}
+
 /// Represents a physical or virtual device, which is capable of running the backend.
 pub trait Adapter: Sized {
     /// Associated `CommandQueue` type.
     type CommandQueue: CommandQueue;
-    /// Associated `Device` type.
-    type Device: Device;
+    /// Associated `Factory` type.
+    type Factory: Factory<Self::Resources>;
     /// Associated `QueueFamily` type.
     type QueueFamily: QueueFamily;
+    /// Associated `Resources` type.
+    type Resources: Resources;
 
     /// Enumerate all available adapters supporting this backend 
     fn enumerate_adapters() -> Vec<Self>;
 
     /// Create a new device and command queues.
-    fn open<'a, I>(&self, queue_descs: I) -> (Self::Device, Vec<Self::CommandQueue>)
+    fn open<'a, I>(&self, queue_descs: I) -> Device_<Self::Resources, Self::Factory, Self::CommandQueue>
         where I: Iterator<Item=(&'a Self::QueueFamily, u32)>;
 
     /// Get the `AdapterInfo` for this adapater.
@@ -367,9 +405,38 @@ pub trait QueueFamily: 'static {
     fn num_queues(&self) -> u32;
 }
 
+/// Submission information for a command queue.
+pub struct QueueSubmit<'a, C: CommandBuffer + 'a, R: Resources> {
+    /// Command buffers to submit.
+    pub cmd_buffers: &'a [command::Submit<C>],
+    /// Semaphores to wait being signaled before submission.
+    pub wait_semaphores: &'a [(&'a mut R::Semaphore, pso::PipelineStage)],
+    /// Semaphores which get signaled after submission.
+    pub signal_semaphores: &'a [&'a mut R::Semaphore],
+}
+
 /// Dummy trait for command queues.
 /// CommandBuffers will be later submitted to command queues instead of the device.
-pub trait CommandQueue { }
+pub trait CommandQueue {
+    /// Associated `Resources` type.
+    type Resources: Resources;
+    /// Submit data for command queues.
+    type SubmitInfo;
+    /// General command buffer type of the backend.
+    type GeneralCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // + GraphicsCommandBuffer<Self::R> + ComputeCommandBuffer<Self::R>;
+    /// Graphics command buffer type of the backend.
+    type GraphicsCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // + GraphicsCommandBuffer<Self::R>;
+    /// Compute command buffer type of the backend.
+    type ComputeCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // + ComputeCommandBuffer<Self::R>;
+    /// Transfer/Copy command buffer type of the backend.
+    type TransferCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // + TransferCommandBuffer<Self::R>;
+    /// Subpass command buffer type of the backend.
+    type SubpassCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // + SubpassCommandBuffer<Self::R>;
+
+    /// Submit command buffers to queue for execution.
+    unsafe fn submit<'a, C>(&mut self, submit_infos: &[QueueSubmit<C, Self::Resources>], fence: Option<&'a mut <Self::Resources as Resources>::Fence>)
+        where C: CommandBuffer<SubmitInfo = Self::SubmitInfo>;
+}
 
 /// A `Surface` abstracts the surface of a native window, which will be presented
 pub trait Surface {
