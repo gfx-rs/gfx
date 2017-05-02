@@ -1,4 +1,4 @@
-# Copyright 2016 The Gfx-rs Developers.
+# Copyright 2017 The Gfx-rs Developers.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,30 +13,27 @@
 # limitations under the License.
 
 [package]
-name = "gfx"
-version = "0.16.0"
-description = "A high-performance, bindless graphics API"
+name = "gfx_app"
+version = "0.6.0"
+description = "GFX example application framework"
 homepage = "https://github.com/gfx-rs/gfx"
-repository = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
-readme = "../../README.md"
-documentation = "https://docs.rs/gfx"
-categories = ["rendering::graphics-api"]
+documentation = "https://docs.rs/gfx_app"
 
 [lib]
-name = "gfx"
-path = "src/lib.rs"
-
-[features]
-cgmath-types = ["gfx_core/cgmath-types", "cgmath"]
-serialize = ["gfx_core/serialize", "draw_state/serialize"]
-unstable = []
+name = "gfx_app"
+path ="src/lib.rs"
 
 [dependencies]
-cgmath = { version = "0.14", optional = true }
-derivative = "1.0"
-draw_state = "0.7"
-gfx_core = { path = "../core", version = "0.7.1" }
 log = "0.3"
+env_logger = "0.4"
+glutin = "0.8.0"
+winit = "0.6"
+gfx_core = { path = "../core", version = "0.7" }
+gfx_corell = { path = "../corell", version = "0.1" }
+gfx = { path = "../..", version = "0.16" }
+gfx_macros = { path = "../macros", version = "0.2" }
+gfx_device_gl = { path = "../backend/gl", version = "0.14" }
+gfx_window_glutin = { path = "../window/glutin", version = "0.16" }
