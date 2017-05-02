@@ -333,19 +333,19 @@ pub trait Device: Sized {
 
 ///
 pub struct Device_<R: Resources, F: Factory<R>, Q: CommandQueue> {
-    ///
+    /// Resource factory.
     pub factory: F,
-    ///
+    /// General command queues.
     pub general_queues: Vec<GeneralQueue<Q>>,
-    ///
+    /// Graphics command queues.
     pub graphics_queues: Vec<GraphicsQueue<Q>>,
-    ///
+    /// Compute command queues.
     pub compute_queues: Vec<ComputeQueue<Q>>,
-    ///
+    /// Transfer command queues.
     pub transfer_queues: Vec<TransferQueue<Q>>,
-    ///
+    /// Types of memory heaps.
     pub heap_types: Vec<HeapType>,
-    ///
+    /// Memory heaps.
     pub memory_heaps: Vec<u64>,
 
     ///
@@ -367,8 +367,7 @@ pub trait Adapter: Sized {
     fn enumerate_adapters() -> Vec<Self>;
 
     /// Create a new device and command queues.
-    fn open<'a, I>(&self, queue_descs: I) -> Device_<Self::Resources, Self::Factory, Self::CommandQueue>
-        where I: Iterator<Item=(&'a Self::QueueFamily, u32)>;
+    fn open(&self, queue_descs: &[(&Self::QueueFamily, u32)]) -> Device_<Self::Resources, Self::Factory, Self::CommandQueue>;
 
     /// Get the `AdapterInfo` for this adapater.
     fn get_info(&self) -> &AdapterInfo;
@@ -394,12 +393,6 @@ pub struct AdapterInfo {
 /// `QueueFamily` denotes a group of command queues provided by the backend
 /// with the same properties/type.
 pub trait QueueFamily: 'static {
-    /// Associated `Surface` type.
-    type Surface: Surface;
-
-    /// Check if the queue family supports presentation to a surface
-    fn supports_present(&self, surface: &Self::Surface) -> bool;
-
     /// Return the number of available queues of this family
     // TODO: some backends like d3d12 support infinite software queues (verify)
     fn num_queues(&self) -> u32;
@@ -444,13 +437,20 @@ pub trait Surface {
     type CommandQueue: CommandQueue;
     /// Associated native `Window` type.
     type Window;
+    ///
+    type SwapChain: SwapChain;
+    ///
+    type QueueFamily: QueueFamily;
 
     /// Create a new surface from a native window.
     fn from_window(window: &Self::Window) -> Self;
 
+    /// Check if the queue family supports presentation for this surface.
+    fn supports_queue(&self, queue_family: &Self::QueueFamily) -> bool;
+
     /// Create a new swapchain from the current surface with an associated present queue.
-    fn build_swapchain<S, T>(&self, present_queue: &Self::CommandQueue) -> S
-        where S: SwapChain, T: format::RenderFormat;
+    fn build_swapchain<T>(&self, present_queue: &Self::CommandQueue) -> Self::SwapChain
+        where T: format::RenderFormat;
 }
 
 /// Handle to a backbuffer of the swapchain.

@@ -13,309 +13,220 @@
 // limitations under the License.
 
 extern crate winit;
-extern crate vk_sys as vk;
+extern crate ash;
 extern crate gfx_core as core;
 extern crate gfx_device_vulkan as device_vulkan;
 
 #[cfg(target_os = "windows")]
 extern crate kernel32;
 
+use ash::vk;
+use ash::version::EntryV1_0;
+use std::collections::VecDeque;
 use std::ffi::CStr;
-use std::ptr;
+use std::{mem, ptr};
 use std::os::raw;
+use std::sync::Arc;
 use core::format;
 use core::memory::Typed;
+use device_vulkan::{data, native, CommandQueue, RawSurface, SwapChain, QueueFamily, VK_ENTRY, INSTANCE};
 
 #[cfg(unix)]
 use winit::os::unix::WindowExt;
 #[cfg(target_os = "windows")]
 use winit::os::windows::WindowExt;
 
-pub type TargetHandle<T> = core::handle::RenderTargetView<device_vulkan::Resources, T>;
-
-pub struct SwapTarget<T> {
-    _image: vk::Image,
-    target: TargetHandle<T>,
-    _fence: vk::Fence,
+pub struct Surface {
+    // Vk (EXT) specs [29.2.7 Platform-Independent Information]
+    // For vkDestroySurfaceKHR: Host access to surface must be externally synchronized
+    raw: Arc<RawSurface>,
+    width: u32,
+    height: u32,
 }
 
-pub struct Window<T> {
-    window: winit::Window,
-    _debug_callback: Option<vk::DebugReportCallbackEXT>,
-    swapchain: vk::SwapchainKHR,
-    targets: Vec<SwapTarget<T>>,
-    queue: device_vulkan::GraphicsQueue,
-}
+impl Surface {
+    fn from_raw(surface: vk::SurfaceKHR, (width, height): (u32, u32)) -> Surface {
+        let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
 
-pub struct Frame<'a, T: 'a> {
-    window: &'a mut Window<T>,
-    target_id: u32,
-}
+        let loader = vk::SurfaceFn::load(|name| {
+                unsafe {
+                    mem::transmute(entry.get_instance_proc_addr(
+                        INSTANCE.raw.handle(),
+                        name.as_ptr()))
+                }
+            }).expect("Unable to load surface functions");
 
-impl<'a, T: Clone> Frame<'a, T> {
-    pub fn get_target(&self) -> TargetHandle<T> {
-        self.window.targets[self.target_id as usize].target.clone()
+        let raw = Arc::new(RawSurface {
+            handle: surface,
+            loader: loader,
+        });
+
+        Surface {
+            raw: raw,
+            width: width,
+            height: height,
+        }
     }
-    pub fn get_queue(&mut self) -> &mut device_vulkan::GraphicsQueue {
-        &mut self.window.queue
-    }
 }
 
-impl<'a, T> Drop for Frame<'a, T> {
-    fn drop(&mut self) {
-        let mut result = vk::SUCCESS;
-        let info = vk::PresentInfoKHR {
-            sType: vk::STRUCTURE_TYPE_PRESENT_INFO_KHR,
-            pNext: ptr::null(),
-            waitSemaphoreCount: 0,
-            pWaitSemaphores: ptr::null(),
-            swapchainCount: 1,
-            pSwapchains: &self.window.swapchain,
-            pImageIndices: &self.target_id,
-            pResults: &mut result,
-        };
-        let (_dev, vk) = self.window.queue.get_share().get_device();
+impl core::Surface for Surface {
+    type CommandQueue = CommandQueue;
+    type SwapChain = SwapChain;
+    type QueueFamily = QueueFamily;
+    type Window = winit::Window;
+
+    fn supports_queue(&self, queue_family: &Self::QueueFamily) -> bool {
         unsafe {
-            vk.QueuePresentKHR(self.window.queue.get_queue(), &info);
+            let mut support = mem::uninitialized();
+            self.raw.loader.get_physical_device_surface_support_khr(
+                queue_family.device(),
+                queue_family.family_index(),
+                self.raw.handle,
+                &mut support);
+            support == vk::VK_TRUE
         }
-        assert_eq!(vk::SUCCESS, result);
     }
-}
 
-impl<T: Clone> Window<T> {
-    pub fn start_frame(&mut self) -> Frame<T> {
-        //TODO: handle window resize (requires swapchain recreation)
-        let index = unsafe {
-            let (dev, vk) = self.queue.get_share().get_device();
-            let mut i = 0;
-            assert_eq!(vk::SUCCESS, vk.AcquireNextImageKHR(dev, self.swapchain, 60, 0, 0, &mut i));
-            i
+    fn from_window(window: &winit::Window) -> Self {
+        unimplemented!()
+    }
+
+    fn build_swapchain<T: core::format::RenderFormat>(&self,
+                    present_queue: &CommandQueue) -> SwapChain {
+        let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
+        let loader = vk::SwapchainFn::load(|name| {
+                unsafe {
+                    mem::transmute(entry.get_instance_proc_addr(
+                        INSTANCE.raw.handle(),
+                        name.as_ptr()))
+                }
+            }).expect("Unable to load swapchain functions");
+
+        // TODO: check for better ones if available
+        let present_mode = vk::PresentModeKHR::Fifo; // required to be supported
+
+        let format = <T as format::Formatted>::get_format();
+
+        let info = vk::SwapchainCreateInfoKHR {
+            s_type: vk::StructureType::SwapchainCreateInfoKhr,
+            p_next: ptr::null(),
+            flags: vk::SwapchainCreateFlagsKHR::empty(),
+            surface: self.raw.handle,
+            min_image_count: 2, // TODO: let the user specify the value
+            image_format: data::map_format(format.0, format.1).unwrap(),
+            image_color_space: vk::ColorSpaceKHR::SrgbNonlinear,
+            image_extent: vk::Extent2D {
+                width: self.width,
+                height: self.height
+            },
+            image_array_layers: 1,
+            image_usage: vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            image_sharing_mode: vk::SharingMode::Exclusive,
+            queue_family_index_count: 0,
+            p_queue_family_indices: ptr::null(),
+            pre_transform: vk::SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
+            composite_alpha: vk::COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+            present_mode: present_mode,
+            clipped: 1,
+            old_swapchain: vk::SwapchainKHR::null(), 
         };
-        Frame {
-            window: self,
-            target_id: index,
-        }
-    }
 
-    pub fn get_any_target(&self) -> TargetHandle<T> {
-        self.targets[0].target.clone()
-    }
-
-    pub fn get_window(&mut self) -> &mut winit::Window {
-        &mut self.window
-    }
-
-    pub fn get_size(&self) -> (u32, u32) {
-        self.window.get_inner_size_points().unwrap()
-    }
-}
-
-const LAYERS: &'static [&'static str] = &[
-];
-const LAYERS_DEBUG: &'static [&'static str] = &[
-    "VK_LAYER_LUNARG_standard_validation",
-];
-const EXTENSIONS: &'static [&'static str] = &[
-    "VK_KHR_surface",
-];
-const EXTENSIONS_DEBUG: &'static [&'static str] = &[
-    "VK_KHR_surface",
-    "VK_EXT_debug_report",
-];
-const DEV_EXTENSIONS: &'static [&'static str] = &[
-    "VK_KHR_swapchain",
-];
-
-extern "system" fn callback(flags: vk::DebugReportFlagsEXT,
-                            _ob_type: vk::DebugReportObjectTypeEXT, _object: u64, _location: usize,
-                            _msg_code: i32, layer_prefix_c: *const raw::c_char,
-                            description_c: *const raw::c_char, _user_data: *mut raw::c_void) -> u32
-{
-    let layer_prefix = unsafe { CStr::from_ptr(layer_prefix_c) }.to_str().unwrap();
-    let description  = unsafe { CStr::from_ptr(description_c)  }.to_str().unwrap();
-    println!("Vk flags {:x} in layer {}: {}", flags, layer_prefix, description);
-    vk::FALSE
-}
-
-pub fn init<T: core::format::RenderFormat>(wb: winit::WindowBuilder)
-                -> (Window<T>, device_vulkan::Factory) {
-    let title = wb.window.title.clone();
-    let window = wb.build().unwrap();
-
-    let debug = false;
-    let (mut device, mut factory, backend) = device_vulkan::create(&title, 1,
-        if debug {LAYERS_DEBUG} else {LAYERS},
-        if debug {EXTENSIONS_DEBUG} else {EXTENSIONS},
-        DEV_EXTENSIONS);
-
-    let debug_callback = if debug {
-        let info = vk::DebugReportCallbackCreateInfoEXT {
-            sType: vk::STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT,
-            pNext: ptr::null(),
-            flags: vk::DEBUG_REPORT_INFORMATION_BIT_EXT | vk::DEBUG_REPORT_WARNING_BIT_EXT |
-                   vk::DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT | vk::DEBUG_REPORT_ERROR_BIT_EXT |
-                   vk::DEBUG_REPORT_DEBUG_BIT_EXT,
-            pfnCallback: callback,
-            pUserData: ptr::null_mut(),
+        let swapchain = unsafe {
+            let mut swapchain = mem::uninitialized();
+            assert_eq!(vk::Result::Success, unsafe {
+                loader.create_swapchain_khr(
+                    present_queue.device_handle(),
+                    &info,
+                    ptr::null(),
+                    &mut swapchain)
+            });
+            swapchain
         };
-        let (inst, vk) = backend.get_instance();
-        let mut out = 0;
-        assert_eq!(vk::SUCCESS, unsafe {
-            vk.CreateDebugReportCallbackEXT(inst, &info, ptr::null(), &mut out)
-        });
-        Some(out)
-    }else {
-        None
-    };
 
-    let surface = create_surface(backend.clone(), &window);
+        let swapchain_images = unsafe {
+            // TODO: error handling
+            let mut count = 0;
+            loader.get_swapchain_images_khr(
+                present_queue.device_handle(),
+                swapchain,
+                &mut count,
+                ptr::null_mut());
 
-    let (dev, vk) = backend.get_device();
-    let mut images: [vk::Image; 2] = [0; 2];
-    let mut num = images.len() as u32;
-    let format = <T as format::Formatted>::get_format();
+            let mut v = Vec::with_capacity(count as vk::size_t);
+            loader.get_swapchain_images_khr(
+                present_queue.device_handle(),
+                swapchain,
+                &mut count,
+                v.as_mut_ptr());
 
-    let surface_capabilities = {
-        let (_, vk) = backend.get_instance();
-        let dev = backend.get_physical_device();
-        let mut capabilities: vk::SurfaceCapabilitiesKHR = unsafe { std::mem::uninitialized() };
-        assert_eq!(vk::SUCCESS, unsafe {
-            vk.GetPhysicalDeviceSurfaceCapabilitiesKHR(dev, surface, &mut capabilities)
-        });
-        capabilities
-    };
+            v.set_len(count as vk::size_t);
+            v.into_iter().map(|image| native::Image(image))
+                    .collect::<Vec<_>>()
+        };
 
-    // Determine whether a queue family of a physical device supports presentation to a given surface 
-    let supports_presentation = {
-        let (_, vk) = backend.get_instance();
-        let dev = backend.get_physical_device();
-        let mut supported = 0;
-        assert_eq!(vk::SUCCESS, unsafe {
-            vk.GetPhysicalDeviceSurfaceSupportKHR(dev, device.get_family(), surface, &mut supported)
-        });
-        supported != 0
-    };
-
-    let surface_formats = {
-        let (_, vk) = backend.get_instance();
-        let dev = backend.get_physical_device();
-        let mut num = 0;
-        assert_eq!(vk::SUCCESS, unsafe {
-            vk.GetPhysicalDeviceSurfaceFormatsKHR(dev, surface, &mut num, ptr::null_mut())
-        });
-        let mut formats = Vec::with_capacity(num as usize);
-        assert_eq!(vk::SUCCESS, unsafe {
-            vk.GetPhysicalDeviceSurfaceFormatsKHR(dev, surface, &mut num, formats.as_mut_ptr())
-        });
-        unsafe { formats.set_len(num as usize); }
-        formats
-    };
-
-    let present_modes = {
-        let (_, vk) = backend.get_instance();
-        let dev = backend.get_physical_device();
-        let mut num = 0;
-        assert_eq!(vk::SUCCESS, unsafe {
-            vk.GetPhysicalDeviceSurfacePresentModesKHR(dev, surface, &mut num, ptr::null_mut())
-        });
-        let mut modes = Vec::with_capacity(num as usize);
-        assert_eq!(vk::SUCCESS, unsafe {
-            vk.GetPhysicalDeviceSurfacePresentModesKHR(dev, surface, &mut num, modes.as_mut_ptr())
-        });
-        unsafe { modes.set_len(num as usize); }
-        modes
-    };
-
-    let (width, height) = window.get_inner_size_points().unwrap();
-
-    // TODO: Use the queried information to check if our values are supported before creating the swapchain
-    let swapchain_info = vk::SwapchainCreateInfoKHR {
-        sType: vk::STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-        pNext: ptr::null(),
-        flags: 0,
-        surface: surface,
-        minImageCount: num,
-        imageFormat: device_vulkan::data::map_format(format.0, format.1).unwrap(),
-        imageColorSpace: vk::COLOR_SPACE_SRGB_NONLINEAR_KHR,
-        imageExtent: vk::Extent2D { width: width, height: height },
-        imageArrayLayers: 1,
-        imageUsage: vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-        imageSharingMode: vk::SHARING_MODE_EXCLUSIVE,
-        queueFamilyIndexCount: 1,
-        pQueueFamilyIndices: &0,
-        preTransform: vk::SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
-        compositeAlpha: vk::COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-        presentMode: vk::PRESENT_MODE_FIFO_KHR, // required to be supported
-        clipped: vk::TRUE,
-        oldSwapchain: 0,
-    };
-
-    let mut swapchain = 0;
-    assert_eq!(vk::SUCCESS, unsafe {
-        vk.CreateSwapchainKHR(dev, &swapchain_info, ptr::null(), &mut swapchain)
-    });
-
-    assert_eq!(vk::SUCCESS, unsafe {
-        vk.GetSwapchainImagesKHR(dev, swapchain, &mut num, images.as_mut_ptr())
-    });
-
-    let mut cbuf = factory.create_command_buffer();
-
-    let targets = images[.. num as usize].iter().map(|image| {
-        cbuf.image_barrier(*image, vk::IMAGE_ASPECT_COLOR_BIT, vk::IMAGE_LAYOUT_UNDEFINED, vk::IMAGE_LAYOUT_PRESENT_SRC_KHR);
-        let raw_view = factory.view_swapchain_image(*image, format, (width, height)).unwrap();
-        SwapTarget {
-            _image: *image,
-            target: Typed::new(raw_view),
-            _fence: factory.create_fence(true),
-        }
-    }).collect();
-
-    {
-        use core::Device;
-        device.submit(&mut cbuf, &core::command::AccessInfo::new()).unwrap();
+        SwapChain::from_raw(
+            swapchain,
+            &present_queue,
+            loader,
+            swapchain_images)
     }
+}
 
-    let win = Window {
-        window: window,
-        _debug_callback: debug_callback,
-        swapchain: swapchain,
-        targets: targets,
-        queue: device,
-    };
-    (win, factory)
+#[cfg(not(target_os = "windows"))]
+fn create_surface(window: &winit::Window) -> Surface {
+    let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
+
+    let surface = self.surface_extensions.iter().map(|&extension| {
+        match extension {
+            vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME => {
+                use winit::os::unix::WindowExt;
+                let xlib_loader = if let Ok(loader) = ash::extensions::XlibSurface::new(entry, &INSTANCE.raw) {
+                    loader
+                } else {
+                    return None;
+                };
+
+                unsafe {
+                    let info = vk::XlibSurfaceCreateInfoKHR {
+                        s_type: vk::StructureType::XlibSurfaceCreateInfoKhr,
+                        p_next: ptr::null(),
+                        flags: vk::XlibSurfaceCreateFlagsKHR::empty(),
+                        window: window.get_xlib_window().unwrap() as *const _,
+                        dpy: window.get_xlib_display().unwrap() as *mut _,
+                    };
+
+                    xlib_loader.create_xlib_surface_khr(&info, None).ok()
+                }
+            },
+            // TODO: other platforms
+            _ => None,
+        }
+    }).find(|x| x.is_some())
+      .expect("Unable to find a surface implementation.")
+      .unwrap();
+
+    Surface::from_raw(surface, window.get_inner_size_pixels().unwrap())
 }
 
 #[cfg(target_os = "windows")]
-fn create_surface(backend: device_vulkan::SharePointer, window: &winit::Window) -> vk::SurfaceKHR {
-    let (inst, vk) = backend.get_instance();
-    let info = vk::Win32SurfaceCreateInfoKHR {
-        sType: vk::STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
-        pNext: ptr::null(),
-        flags: 0,
-        hinstance: unsafe { kernel32::GetModuleHandleW(ptr::null()) } as *mut _,
-        hwnd: window.get_hwnd() as *mut _,
-    };
-    let mut out = 0;
-    assert_eq!(vk::SUCCESS, unsafe {
-        vk.CreateWin32SurfaceKHR(inst, &info, ptr::null(), &mut out)
-    });
-    out
-}
+fn create_surface(window: &winit::Window) -> Surface {
+    use winit::os::windows::WindowExt;
+    let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
+    let win32_loader = ash::extensions::Win32Surface::new(entry, &INSTANCE.raw)
+                    .expect("Unable to load win32 surface functions");
 
-#[cfg(unix)]
-fn create_surface(backend: device_vulkan::SharePointer, window: &winit::Window) -> vk::SurfaceKHR {
-    let (inst, vk) = backend.get_instance();
-    let info = vk::XcbSurfaceCreateInfoKHR {
-        sType: vk::STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
-        pNext: ptr::null(),
-        flags: 0,
-        connection: window.get_xcb_connection().unwrap() as *const _,
-        window: window.get_xlib_window().unwrap() as *const _,
+    let surface = unsafe {
+        let info = vk::Win32SurfaceCreateInfoKHR {
+            s_type: vk::StructureType::Win32SurfaceCreateInfoKhr,
+            p_next: ptr::null(),
+            flags: vk::Win32SurfaceCreateFlagsKHR::empty(),
+            hinstance: unsafe { kernel32::GetModuleHandleW(ptr::null()) } as *mut _,
+            hwnd: window.get_hwnd() as *mut _,
+        };
+
+        win32_loader.create_win32_surface_khr(&info, None)
+            .expect("Error on surface creation")
     };
-    let mut out = 0;
-    assert_eq!(vk::SUCCESS, unsafe {
-        vk.CreateXcbSurfaceKHR(inst, &info, ptr::null(), &mut out)
-    });
-    out
+
+    Surface::from_raw(surface, window.get_inner_size_pixels().unwrap())
 }

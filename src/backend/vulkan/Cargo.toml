@@ -15,9 +15,13 @@ name = "gfx_device_vulkan"
 
 [dependencies]
 log = "0.3"
-vk = "0.0"
-vk-sys = { git = "https://github.com/sectopod/vulkano", branch = "bind" }
+lazy_static = "0.2"
 shared_library = "0.1"
-winit = "0.5"
-gfx_core = { path = "../../core", version = "0.7" }
+gfx_core = { path = "../../core", version = "0.7.0" }
+ash = "0.15.7"
 spirv-utils = { git = "https://github.com/msiglreith/spirv-utils.git", branch = "gfx" }
+winit = "0.5"
+
+[target.'cfg(windows)'.dependencies]
+kernel32-sys = "0.2.2"
+
