@@ -133,3 +133,33 @@ pub fn cast_slice<A: Pod, B: Pod>(slice: &[A]) -> &[B] {
         slice::from_raw_parts(slice.as_ptr() as *const B, len)
     }
 }
+
+bitflags!(
+    /// Heap property flags.
+    pub flags HeapProperties: u16 {
+        /// Device local heaps are located on the GPU.
+        const DEVICE_LOCAL   = 0x1,
+
+        /// CPU-GPU coherent.
+        ///
+        /// Non-coherent heaps require explicit flushing.
+        const COHERENT     = 0x2,
+
+        /// Host visible heaps can be accessed by the CPU.
+        ///
+        /// Backends must provide at least one cpu visible heap.
+        const CPU_VISIBLE   = 0x4,
+
+        /// Cached memory by the CPU
+        const CPU_CACHED = 0x8,
+
+        /// Memory combined writes.
+        ///
+        /// Buffer writes will be combined for possible larger bus transactions.
+        /// It's not advised to use these heaps for reading back data.
+        const WRITE_COMBINED = 0x10,
+
+        ///
+        const LAZILY_ALLOCATED = 0x20,
+    }
+);
