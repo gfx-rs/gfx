@@ -87,9 +87,65 @@ impl core::Surface for Surface {
         }
     }
 
-    fn from_window(window: &winit::Window) -> Self {
-        unimplemented!()
+    #[cfg(not(target_os = "windows"))]
+    fn from_window(window: &winit::Window) -> Surface {
+        let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
+
+        let surface = self.surface_extensions.iter().map(|&extension| {
+            match extension {
+                vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME => {
+                    use winit::os::unix::WindowExt;
+                    let xlib_loader = if let Ok(loader) = ash::extensions::XlibSurface::new(entry, &INSTANCE.raw) {
+                        loader
+                    } else {
+                        return None;
+                    };
+
+                    unsafe {
+                        let info = vk::XlibSurfaceCreateInfoKHR {
+                            s_type: vk::StructureType::XlibSurfaceCreateInfoKhr,
+                            p_next: ptr::null(),
+                            flags: vk::XlibSurfaceCreateFlagsKHR::empty(),
+                            window: window.get_xlib_window().unwrap() as *const _,
+                            dpy: window.get_xlib_display().unwrap() as *mut _,
+                        };
+
+                        xlib_loader.create_xlib_surface_khr(&info, None).ok()
+                    }
+                },
+                // TODO: other platforms
+                _ => None,
+            }
+        }).find(|x| x.is_some())
+          .expect("Unable to find a surface implementation.")
+          .unwrap();
+
+        Surface::from_raw(surface, window.get_inner_size_pixels().unwrap())
     }
+
+    #[cfg(target_os = "windows")]
+    fn from_window(window: &winit::Window) -> Surface {
+        use winit::os::windows::WindowExt;
+        let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
+        let win32_loader = ash::extensions::Win32Surface::new(entry, &INSTANCE.raw)
+                        .expect("Unable to load win32 surface functions");
+
+        let surface = unsafe {
+            let info = vk::Win32SurfaceCreateInfoKHR {
+                s_type: vk::StructureType::Win32SurfaceCreateInfoKhr,
+                p_next: ptr::null(),
+                flags: vk::Win32SurfaceCreateFlagsKHR::empty(),
+                hinstance: unsafe { kernel32::GetModuleHandleW(ptr::null()) } as *mut _,
+                hwnd: window.get_hwnd() as *mut _,
+            };
+
+            win32_loader.create_win32_surface_khr(&info, None)
+                .expect("Error on surface creation")
+        };
+
+        Surface::from_raw(surface, window.get_inner_size_pixels().unwrap())
+    }
+
 
     fn build_swapchain<T: core::format::RenderFormat>(&self,
                     present_queue: &CommandQueue) -> SwapChain {
@@ -170,63 +226,4 @@ impl core::Surface for Surface {
             loader,
             swapchain_images)
     }
-}
-
-#[cfg(not(target_os = "windows"))]
-fn create_surface(window: &winit::Window) -> Surface {
-    let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
-
-    let surface = self.surface_extensions.iter().map(|&extension| {
-        match extension {
-            vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME => {
-                use winit::os::unix::WindowExt;
-                let xlib_loader = if let Ok(loader) = ash::extensions::XlibSurface::new(entry, &INSTANCE.raw) {
-                    loader
-                } else {
-                    return None;
-                };
-
-                unsafe {
-                    let info = vk::XlibSurfaceCreateInfoKHR {
-                        s_type: vk::StructureType::XlibSurfaceCreateInfoKhr,
-                        p_next: ptr::null(),
-                        flags: vk::XlibSurfaceCreateFlagsKHR::empty(),
-                        window: window.get_xlib_window().unwrap() as *const _,
-                        dpy: window.get_xlib_display().unwrap() as *mut _,
-                    };
-
-                    xlib_loader.create_xlib_surface_khr(&info, None).ok()
-                }
-            },
-            // TODO: other platforms
-            _ => None,
-        }
-    }).find(|x| x.is_some())
-      .expect("Unable to find a surface implementation.")
-      .unwrap();
-
-    Surface::from_raw(surface, window.get_inner_size_pixels().unwrap())
-}
-
-#[cfg(target_os = "windows")]
-fn create_surface(window: &winit::Window) -> Surface {
-    use winit::os::windows::WindowExt;
-    let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
-    let win32_loader = ash::extensions::Win32Surface::new(entry, &INSTANCE.raw)
-                    .expect("Unable to load win32 surface functions");
-
-    let surface = unsafe {
-        let info = vk::Win32SurfaceCreateInfoKHR {
-            s_type: vk::StructureType::Win32SurfaceCreateInfoKhr,
-            p_next: ptr::null(),
-            flags: vk::Win32SurfaceCreateFlagsKHR::empty(),
-            hinstance: unsafe { kernel32::GetModuleHandleW(ptr::null()) } as *mut _,
-            hwnd: window.get_hwnd() as *mut _,
-        };
-
-        win32_loader.create_win32_surface_khr(&info, None)
-            .expect("Error on surface creation")
-    };
-
-    Surface::from_raw(surface, window.get_inner_size_pixels().unwrap())
 }
