@@ -37,6 +37,7 @@ pub use self::info::{Info, PlatformName, Version};
 mod command;
 mod factory;
 mod info;
+mod native;
 mod shade;
 mod state;
 mod tex;
@@ -958,4 +959,56 @@ impl c::Device for Device {
             |gl, fence| unsafe { gl.DeleteSync(fence.0) },
         );
     }
+}
+
+#[allow(missing_copy_implementations)]
+pub struct Adapter;
+
+impl c::Adapter for Adapter {
+    type CommandQueue = CommandQueue;
+    type Factory = Factory;
+    type QueueFamily = QueueFamily;
+    type Resources = Resources;
+
+    fn enumerate_adapters() -> Vec<Self> {
+        vec![Adapter]
+    }
+
+    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> c::Device_<Resources, Factory, CommandQueue> {
+        unimplemented!()
+    }
+
+    fn get_info(&self) -> &c::AdapterInfo {
+        unimplemented!()
+    }
+
+    fn get_queue_families(&self) -> &[QueueFamily] {
+        unimplemented!()
+    }
+}
+
+#[allow(missing_copy_implementations)]
+pub struct CommandQueue;
+
+impl c::CommandQueue for CommandQueue {
+    type Resources = Resources;
+    type SubmitInfo = command::SubmitInfo;
+    type GeneralCommandBuffer = native::GeneralCommandBuffer;
+    type GraphicsCommandBuffer = native::GraphicsCommandBuffer;
+    type ComputeCommandBuffer = native::ComputeCommandBuffer;
+    type TransferCommandBuffer = native::TransferCommandBuffer;
+    type SubpassCommandBuffer = native::SubpassCommandBuffer;
+
+    unsafe fn submit<'a, C>(&mut self, submit_infos: &[c::QueueSubmit<C, Resources>], fence: Option<&'a mut Fence>)
+        where C: c::CommandBuffer<SubmitInfo = command::SubmitInfo>
+    {
+        unimplemented!()
+    }
+}
+
+#[allow(missing_copy_implementations)]
+pub struct QueueFamily;
+
+impl c::QueueFamily for QueueFamily {
+    fn num_queues(&self) -> u32 { 1 }
 }
