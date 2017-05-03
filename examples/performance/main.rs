@@ -115,11 +115,11 @@ struct GL {
 
 
 impl GFX {
-    fn new(builder: glutin::WindowBuilder, dimension: i16) -> Self {
+    fn new(builder: glutin::WindowBuilder, events_loop: &glutin::EventsLoop, dimension: i16) -> Self {
         use gfx::traits::FactoryExt;
 
         let (window, device, mut factory, main_color, _) =
-            gfx_window_glutin::init::<ColorFormat, DepthStencil>(builder);
+            gfx_window_glutin::init::<ColorFormat, DepthStencil>(builder, events_loop);
         let encoder: gfx::Encoder<_,_> = factory.create_command_buffer().into();
 
         let pso = factory.create_pipeline_simple(
@@ -185,7 +185,7 @@ impl Drop for GFX {
 
 
 impl GL {
-    fn new(builder: glutin::WindowBuilder, dimension: i16) -> Self {
+    fn new(builder: glutin::WindowBuilder, events_loop: &glutin::EventsLoop, dimension: i16) -> Self {
         fn compile_shader (gl:&Gl, src: &[u8], ty: GLenum) -> GLuint {
             unsafe {
                 let shader = gl.CreateShader(ty);
@@ -213,7 +213,7 @@ impl GL {
             }
         };
 
-        let window = builder.build().unwrap();
+        let window = builder.build(events_loop).unwrap();
         unsafe { window.make_current().unwrap() };
         let gl = Gl::load_with(|s| window.get_proc_address(s) as *const _);
         
@@ -365,6 +365,7 @@ fn main() {
 
     let count = ((count as f64).sqrt() / 2.) as i16;
 
+    let events_loop = glutin::EventsLoop::new();
     let builder = glutin::WindowBuilder::new()
         .with_title("Performance example".to_string())
         .with_dimensions(800, 600)
@@ -372,8 +373,8 @@ fn main() {
 
     let mut r: Box<Renderer>;
     match mode.as_ref() {
-        "gfx" => r = Box::new(GFX::new(builder, count)),
-        "gl" => r = Box::new(GL::new(builder, count)),
+        "gfx" => r = Box::new(GFX::new(builder, &events_loop, count)),
+        "gl" => r = Box::new(GL::new(builder, &events_loop, count)),
         x => {
             panic!("{} is not a known mode", x)
         }
@@ -398,13 +399,17 @@ fn main() {
 
     println!("count is {}", count*count*4);
 
-    'main: loop {
-        for event in r.window().poll_events() {
+    let mut running = true;
+    loop {
+        events_loop.poll_events(|glutin::Event::WindowEvent{window_id: _, event}| {
             match event {
-                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
-                glutin::Event::Closed => break 'main,
+                glutin::WindowEvent::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape), _) |
+                glutin::WindowEvent::Closed => running = false,
                 _ => {},
             }
+        });
+        if !running {
+            break;
         }
         r.render(&proj_view);
     }

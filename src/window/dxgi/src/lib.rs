@@ -49,10 +49,6 @@ impl Window {
         }
     }
 
-    pub fn poll_events(&self) -> winit::PollEventsIterator {
-        self.inner.poll_events()
-    }
-
     fn make_back_buffer(&self, factory: &mut Factory) -> h::RawRenderTargetView<Resources> {
         let mut back_buffer: *mut winapi::ID3D11Texture2D = ptr::null_mut();
         assert_eq!(winapi::S_OK, unsafe {
@@ -105,18 +101,18 @@ pub enum InitError {
 }
 
 /// Initialize with a given size. Typed format version.
-pub fn init<Cf>(wb: winit::WindowBuilder)
+pub fn init<Cf>(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop)
            -> Result<(Window, Device, Factory, h::RenderTargetView<Resources, Cf>), InitError>
 where Cf: format::RenderFormat
 {
-    init_raw(wb, Cf::get_format())
+    init_raw(wb, events_loop, Cf::get_format())
         .map(|(window, device, factory, color)| (window, device, factory, memory::Typed::new(color)))
 }
 
 /// Initialize with a given size. Raw format version.
-pub fn init_raw(wb: winit::WindowBuilder, color_format: format::Format)
+pub fn init_raw(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop, color_format: format::Format)
                 -> Result<(Window, Device, Factory, h::RawRenderTargetView<Resources>), InitError> {
-    let inner = match wb.build() {
+    let inner = match wb.build(events_loop) {
         Ok(w) => w,
         Err(_) => return Err(InitError::Window),
     };

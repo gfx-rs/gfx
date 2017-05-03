@@ -45,12 +45,13 @@ const QUAD: [Vertex; 4] = [
 const CLEAR_COLOR: [f32; 4] = [0.5, 0.5, 0.5, 1.0];
 
 pub fn main() {
+    let events_loop = glutin::EventsLoop::new();
     let builder = glutin::WindowBuilder::new()
         .with_title("Gamma example".to_string())
         .with_dimensions(1024, 768)
         .with_vsync();
     let (window, mut device, mut factory, main_color, mut main_depth) =
-        gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
+        gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder, &events_loop);
     let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
     let pso = factory.create_pipeline_simple(
         include_bytes!("shader/quad_150.glslv"),
@@ -63,18 +64,19 @@ pub fn main() {
         out: main_color
     };
 
-    'main: loop {
-        // loop over events
-        for event in window.poll_events() {
+    let mut running = true;
+    while running {
+        events_loop.poll_events(|glutin::Event::WindowEvent{window_id: _, event}| {
             match event {
-                glutin::Event::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape)) |
-                glutin::Event::Closed => break 'main,
-                glutin::Event::Resized(_width, _height) => {
+                glutin::WindowEvent::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape), _) |
+                glutin::WindowEvent::Closed => running = false,
+                glutin::WindowEvent::Resized(_width, _height) => {
                     gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
                 },
                 _ => {},
             }
-        }
+        });
+
         // draw a frame
         encoder.clear(&data.out, CLEAR_COLOR);
         encoder.draw(&slice, &pso, &data);

@@ -137,10 +137,10 @@ extern "system" fn callback(flags: vk::DebugReportFlagsEXT,
     vk::FALSE
 }
 
-pub fn init<T: core::format::RenderFormat>(wb: winit::WindowBuilder)
+pub fn init<T: core::format::RenderFormat>(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop)
                 -> (Window<T>, device_vulkan::Factory) {
     let title = wb.window.title.clone();
-    let window = wb.build().unwrap();
+    let window = wb.build(events_loop).unwrap();
 
     let debug = false;
     let (mut device, mut factory, backend) = device_vulkan::create(&title, 1,

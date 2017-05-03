@@ -151,9 +151,9 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         self.bundle.encode(encoder);
     }
 
-    fn on(&mut self, event: winit::Event) {
+    fn on(&mut self, event: winit::WindowEvent) {
         match event {
-            winit::Event::KeyboardInput(winit::ElementState::Pressed, _, Some(winit::VirtualKeyCode::B)) => {
+            winit::WindowEvent::KeyboardInput(winit::ElementState::Pressed, _, Some(winit::VirtualKeyCode::B), _) => {
                 self.id += 1;
                 if self.id as usize >= BLENDS.len() {
                     self.id = 0;

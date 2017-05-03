@@ -36,21 +36,22 @@ use device_gl::Resources as R;
 /// use gfx_core::format::{DepthStencil, Rgba8};
 ///
 /// fn main() {
+///     let events_loop = glutin::EventsLoop::new();
 ///     let builder = glutin::WindowBuilder::new().with_title("Example".to_string());
 ///     let (window, device, factory, rtv, stv) =
-///         gfx_window_glutin::init::<Rgba8, DepthStencil>(builder);
+///         gfx_window_glutin::init::<Rgba8, DepthStencil>(builder, &events_loop);
 ///
 ///     // your code
 /// }
 /// ```
-pub fn init<Cf, Df>(builder: glutin::WindowBuilder) ->
+pub fn init<Cf, Df>(builder: glutin::WindowBuilder, events_loop: &glutin::EventsLoop) ->
             (glutin::Window, device_gl::Device, device_gl::Factory,
             handle::RenderTargetView<R, Cf>, handle::DepthStencilView<R, Df>)
 where
     Cf: format::RenderFormat,
     Df: format::DepthFormat,
 {
-    let (window, device, factory, color_view, ds_view) = init_raw(builder, Cf::get_format(), Df::get_format());
+    let (window, device, factory, color_view, ds_view) = init_raw(builder, events_loop, Cf::get_format(), Df::get_format());
     (window, device, factory, Typed::new(color_view), Typed::new(ds_view))
 }
 
@@ -93,7 +94,7 @@ fn get_window_dimensions(window: &glutin::Window) -> texture::Dimensions {
 }
 
 /// Initialize with a window builder. Raw version.
-pub fn init_raw(builder: glutin::WindowBuilder,
+pub fn init_raw(builder: glutin::WindowBuilder, events_loop: &glutin::EventsLoop,
                 color_format: format::Format, ds_format: format::Format) ->
                 (glutin::Window, device_gl::Device, device_gl::Factory,
                 handle::RawRenderTargetView<R>, handle::RawDepthStencilView<R>)
@@ -108,7 +109,7 @@ pub fn init_raw(builder: glutin::WindowBuilder,
             .with_stencil_buffer(stencil_bits)
             .with_pixel_format(color_total_bits - alpha_bits, alpha_bits)
             .with_srgb(Some(color_format.1 == format::ChannelType::Srgb))
-            .build()
+            .build(events_loop)
     }.unwrap();
 
     let (device, factory, color_view, ds_view) = init_existing_raw(&window, color_format, ds_format);
