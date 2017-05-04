@@ -21,7 +21,7 @@ extern crate gfx_device_vulkan as device_vulkan;
 extern crate kernel32;
 
 use ash::vk;
-use ash::version::EntryV1_0;
+use ash::version::{EntryV1_0, InstanceV1_0};
 use std::collections::VecDeque;
 use std::ffi::CStr;
 use std::{mem, ptr};
@@ -65,25 +65,6 @@ impl Surface {
             raw: raw,
             width: width,
             height: height,
-        }
-    }
-}
-
-impl core::Surface for Surface {
-    type CommandQueue = CommandQueue;
-    type SwapChain = SwapChain;
-    type QueueFamily = QueueFamily;
-    type Window = winit::Window;
-
-    fn supports_queue(&self, queue_family: &Self::QueueFamily) -> bool {
-        unsafe {
-            let mut support = mem::uninitialized();
-            self.raw.loader.get_physical_device_surface_support_khr(
-                queue_family.device(),
-                queue_family.family_index(),
-                self.raw.handle,
-                &mut support);
-            support == vk::VK_TRUE
         }
     }
 
@@ -145,7 +126,24 @@ impl core::Surface for Surface {
 
         Surface::from_raw(surface, window.get_inner_size_pixels().unwrap())
     }
+}
 
+impl core::Surface for Surface {
+    type CommandQueue = CommandQueue;
+    type SwapChain = SwapChain;
+    type QueueFamily = QueueFamily;
+
+    fn supports_queue(&self, queue_family: &Self::QueueFamily) -> bool {
+        unsafe {
+            let mut support = mem::uninitialized();
+            self.raw.loader.get_physical_device_surface_support_khr(
+                queue_family.device(),
+                queue_family.family_index(),
+                self.raw.handle,
+                &mut support);
+            support == vk::VK_TRUE
+        }
+    }
 
     fn build_swapchain<T: core::format::RenderFormat>(&self,
                     present_queue: &CommandQueue) -> SwapChain {
@@ -225,5 +223,52 @@ impl core::Surface for Surface {
             &present_queue,
             loader,
             swapchain_images)
+    }
+}
+
+pub struct Window<'a>(&'a winit::Window);
+
+impl<'a> core::WindowExt for Window<'a> {
+    type Surface = Surface;
+    type Adapter = device_vulkan::Adapter;
+
+    /// Create window surface and enumerate all available adapters.
+    fn get_surface_and_adapters(&mut self) -> (Surface, Vec<device_vulkan::Adapter>) {
+        let surface = Surface::from_window(self.0);
+        let adapters = INSTANCE.raw.enumerate_physical_devices()
+            .expect("Unable to enumerate adapter")
+            .iter()
+            .map(|&device| {
+                let properties = INSTANCE.raw.get_physical_device_properties(device);
+                let name = unsafe {
+                    CStr::from_ptr(properties.device_name.as_ptr())
+                            .to_str()
+                            .expect("Invalid UTF-8 string")
+                            .to_owned()
+                };
+
+                let info = core::AdapterInfo {
+                    name: name,
+                    vendor: properties.vendor_id as usize,
+                    device: properties.device_id as usize,
+                    software_rendering: properties.device_type == vk::PhysicalDeviceType::Cpu,
+                };
+
+                let queue_families = INSTANCE.raw.get_physical_device_queue_family_properties(device)
+                                                 .iter()
+                                                 .enumerate()
+                                                 .map(|(i, queue_family)| {
+                                                    QueueFamily::from_raw(
+                                                        device,
+                                                        i as u32,
+                                                        queue_family,
+                                                    )
+                                                 }).collect();
+
+                device_vulkan::Adapter::from_raw(device, queue_families, info)
+            })
+            .collect();
+
+        (surface, adapters)
     }
 }
