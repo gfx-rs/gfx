@@ -28,7 +28,6 @@ use shade::Usage;
 use std::error::Error;
 use std::fmt;
 
-
 /// Maximum number of vertex buffers used in a PSO definition.
 pub const MAX_VERTEX_BUFFERS: usize = 4;
 
@@ -36,7 +35,7 @@ pub const MAX_VERTEX_BUFFERS: usize = 4;
 pub type BufferOffset = usize;
 
 /// Error types happening upon PSO creation on the device side.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CreationError;
 
 impl fmt::Display for CreationError {
@@ -213,7 +212,7 @@ impl Descriptor {
 }
 
 /// A complete set of vertex buffers to be used for vertex import in PSO.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct VertexBufferSet<R: Resources>(
     /// Array of buffer handles with offsets in them
     pub [Option<(R::Buffer, BufferOffset)>; MAX_VERTEX_ATTRIBUTES]
@@ -227,19 +226,19 @@ impl<R: Resources> VertexBufferSet<R> {
 }
 
 /// A constant buffer run-time parameter for PSO.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ConstantBufferParam<R: Resources>(pub R::Buffer, pub Usage, pub ConstantBufferSlot);
 
 /// A shader resource view (SRV) run-time parameter for PSO.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ResourceViewParam<R: Resources>(pub R::ShaderResourceView, pub Usage, pub ResourceViewSlot);
 
 /// An unordered access view (UAV) run-time parameter for PSO.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct UnorderedViewParam<R: Resources>(pub R::UnorderedAccessView, pub Usage, pub UnorderedViewSlot);
 
 /// A sampler run-time parameter for PSO.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct SamplerParam<R: Resources>(pub R::Sampler, pub Usage, pub SamplerSlot);
 
 /// A complete set of render targets to be used for pixel export in PSO.

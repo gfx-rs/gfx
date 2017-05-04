@@ -14,6 +14,7 @@
 
 //! Render target components for a PSO.
 
+use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use core::{ColorSlot, Resources};
 use core::{format, handle, pso, state, target};
@@ -25,43 +26,79 @@ use super::{DataLink, DataBind, RawDataSet, AccessInfo};
 ///
 /// - init: `&str` = name of the target
 /// - data: `RenderTargetView<T>`
-pub struct RenderTarget<T>(Option<ColorSlot>, PhantomData<T>);
+#[derive(Derivative)]
+#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct RenderTarget<T>(
+    Option<ColorSlot>,
+    #[derivative(Hash = "ignore", PartialEq = "ignore")]
+    PhantomData<T>
+);
+
 /// Render target component with active blending mode.
 ///
 /// - init: (`&str`, `ColorMask`, `Blend` = blending state)
 /// - data: `RenderTargetView<T>`
-pub struct BlendTarget<T>(RawRenderTarget, PhantomData<T>);
+#[derive(Derivative)]
+#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct BlendTarget<T>(
+    RawRenderTarget,
+    #[derivative(Hash = "ignore", PartialEq = "ignore")]
+    PhantomData<T>
+);
+
 /// Raw (untyped) render target component with optional blending.
 ///
 /// - init: (`&str`, `Format`, `ColorMask`, `Option<Blend>`)
 /// - data: `RawRenderTargetView`
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RawRenderTarget(Option<ColorSlot>);
+
 /// Depth target component.
 ///
 /// - init: `Depth` = depth state
 /// - data: `DepthStencilView<T>`
-pub struct DepthTarget<T>(PhantomData<T>);
+#[derive(Derivative)]
+#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct DepthTarget<T>(
+    #[derivative(Hash = "ignore", PartialEq = "ignore")]
+    PhantomData<T>
+);
+
 /// Stencil target component.
 ///
 /// - init: `Stencil` = stencil state
 /// - data: (`DepthStencilView<T>`, `(front, back)` = stencil reference values)
-pub struct StencilTarget<T>(PhantomData<T>);
+#[derive(Derivative)]
+#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct StencilTarget<T>(
+    #[derivative(Hash = "ignore", PartialEq = "ignore")]
+    PhantomData<T>
+);
+
 /// Depth + stencil target component.
 ///
 /// - init: (`Depth` = depth state, `Stencil` = stencil state)
 /// - data: (`DepthStencilView<T>`, `(front, back)` = stencil reference values)
-pub struct DepthStencilTarget<T>(PhantomData<T>);
+#[derive(Derivative)]
+#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct DepthStencilTarget<T>(
+    #[derivative(Hash = "ignore", PartialEq = "ignore")]
+    PhantomData<T>
+);
+
 /// Scissor component. Sets up the scissor test for rendering.
 ///
 /// - init: `()`
 /// - data: `Rect` = target area
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Scissor(bool);
+
 /// Blend reference component. Sets up the reference color for blending.
 ///
 /// - init: `()`
 /// - data: `ColorValue`
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct BlendRef;
-
 
 impl<'a, T: format::RenderFormat> DataLink<'a> for RenderTarget<T> {
     type Init = &'a str;

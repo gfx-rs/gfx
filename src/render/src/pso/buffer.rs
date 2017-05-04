@@ -32,38 +32,64 @@ pub trait Structure<F> {
 }
 
 type AttributeSlotSet = usize;
+
 /// Service struct to simplify the implementations of `VertexBuffer` and `InstanceBuffer`.
-pub struct VertexBufferCommon<T, I>(RawVertexBuffer, PhantomData<(T, I)>);
+#[derive(Derivative)]
+#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct VertexBufferCommon<T, I>(
+    RawVertexBuffer,
+    #[derivative(Hash = "ignore", PartialEq = "ignore")]
+    PhantomData<(T, I)>
+);
+
 /// Vertex buffer component. Advanced per vertex.
 ///
 /// - init: `()`
 /// - data: `Buffer<T>`
 pub type VertexBuffer<T> = VertexBufferCommon<T, [(); 0]>;
+
 /// Instance buffer component. Same as the vertex buffer but advances per instance.
 pub type InstanceBuffer<T> = VertexBufferCommon<T, [(); 1]>;
+
 /// Raw vertex/instance buffer component. Can be used when the formats of vertex attributes
 /// are not known at compile time.
 ///
 /// - init: `(&[&str, element], stride, inst_rate)`
 /// - data: `RawBuffer`
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RawVertexBuffer(Option<BufferIndex>, AttributeSlotSet);
+
 /// Constant buffer component.
 ///
 /// - init: `&str` = name of the buffer
 /// - data: `Buffer<T>`
-pub struct ConstantBuffer<T: Structure<shade::ConstFormat>>(RawConstantBuffer, PhantomData<T>);
+#[derive(Derivative)]
+#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct ConstantBuffer<T: Structure<shade::ConstFormat>>(
+    RawConstantBuffer,
+    #[derivative(Hash = "ignore", PartialEq = "ignore")]
+    PhantomData<T>
+);
+
 /// Raw constant buffer component.
 ///
 /// - init: `&str` = name of the buffer
 /// - data: `RawBuffer`
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RawConstantBuffer(Option<(Usage, ConstantBufferSlot)>);
+
 /// Global (uniform) constant component. Describes a free-standing value passed into
 /// the shader, which is not enclosed into any constant buffer. Deprecated in DX10 and higher.
 ///
 /// - init: `&str` = name of the constant
 /// - data: `T` = value
-pub struct Global<T: ToUniform>(Option<shade::Location>, PhantomData<T>);
-
+#[derive(Derivative)]
+#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Global<T: ToUniform>(
+    Option<shade::Location>,
+    #[derivative(Hash = "ignore", PartialEq = "ignore")]
+    PhantomData<T>
+);
 
 fn match_attribute(_: &shade::AttributeVar, _: Format) -> bool {
     true //TODO

@@ -16,8 +16,8 @@
 
 //! Resource handles
 
-use std::{ops, cmp, hash};
 use std::marker::PhantomData;
+use std::ops::Deref;
 use std::sync::Arc;
 use {buffer, shade, texture, Resources};
 use memory::Typed;
@@ -26,24 +26,19 @@ use memory::Typed;
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RawBuffer<R: Resources>(Arc<buffer::Raw<R>>);
 
-impl<R: Resources> ops::Deref for RawBuffer<R> {
+impl<R: Resources> Deref for RawBuffer<R> {
     type Target = buffer::Raw<R>;
     fn deref(&self) -> &Self::Target { &self.0 }
 }
 
 /// Type-safe buffer handle
-#[derive(Clone, Debug)]
-pub struct Buffer<R: Resources, T>(RawBuffer<R>, PhantomData<T>);
-
-impl<R: Resources, T> cmp::PartialEq for Buffer<R, T> {
-    fn eq(&self, other: &Self) -> bool { self.0.eq(&other.0) }
-}
-
-impl<R: Resources, T> cmp::Eq for Buffer<R, T> {}
-
-impl<R: Resources, T> hash::Hash for Buffer<R, T> {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) { self.0.hash(state) }
-}
+#[derive(Derivative)]
+#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Buffer<R: Resources, T>(
+    RawBuffer<R>,
+    #[derivative(Hash = "ignore", PartialEq = "ignore")]
+    PhantomData<T>
+);
 
 impl<R: Resources, T> Typed for Buffer<R, T> {
     type Raw = RawBuffer<R>;
@@ -74,28 +69,32 @@ pub struct Shader<R: Resources>(Arc<R::Shader>);
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Program<R: Resources>(Arc<shade::Program<R>>);
 
-impl<R: Resources> ops::Deref for Program<R> {
+impl<R: Resources> Deref for Program<R> {
     type Target = shade::Program<R>;
     fn deref(&self) -> &Self::Target { &self.0 }
 }
 
 /// Raw Pipeline State Handle
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RawPipelineState<R: Resources>(Arc<R::PipelineStateObject>, Program<R>);
 
 /// Raw texture handle
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RawTexture<R: Resources>(Arc<texture::Raw<R>>);
 
-impl<R: Resources> ops::Deref for RawTexture<R> {
+impl<R: Resources> Deref for RawTexture<R> {
     type Target = texture::Raw<R>;
     fn deref(&self) -> &Self::Target { &self.0 }
 }
 
 /// Typed texture object
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-// TODO: manual Eq & Hash impl because PhantomData
-pub struct Texture<R: Resources, S>(RawTexture<R>, PhantomData<S>);
+#[derive(Derivative)]
+#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Texture<R: Resources, S>(
+    RawTexture<R>,
+    #[derivative(Hash = "ignore", PartialEq = "ignore")]
+    PhantomData<S>
+);
 
 impl<R: Resources, S> Typed for Texture<R, S> {
     type Raw = RawTexture<R>;
@@ -122,9 +121,13 @@ enum ViewSource<R: Resources> {
 pub struct RawShaderResourceView<R: Resources>(Arc<R::ShaderResourceView>, ViewSource<R>);
 
 /// Type-safe Shader Resource View Handle
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-// TODO: manual Eq & Hash impl because PhantomData
-pub struct ShaderResourceView<R: Resources, T>(RawShaderResourceView<R>, PhantomData<T>);
+#[derive(Derivative)]
+#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct ShaderResourceView<R: Resources, T>(
+    RawShaderResourceView<R>,
+    #[derivative(Hash = "ignore", PartialEq = "ignore")]
+    PhantomData<T>
+);
 
 impl<R: Resources, T> Typed for ShaderResourceView<R, T> {
     type Raw = RawShaderResourceView<R>;
@@ -140,9 +143,13 @@ impl<R: Resources, T> Typed for ShaderResourceView<R, T> {
 pub struct RawUnorderedAccessView<R: Resources>(Arc<R::UnorderedAccessView>, ViewSource<R>);
 
 /// Type-safe Unordered Access View Handle
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-// TODO: manual Eq & Hash impl because PhantomData
-pub struct UnorderedAccessView<R: Resources, T>(RawUnorderedAccessView<R>, PhantomData<T>);
+#[derive(Derivative)]
+#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct UnorderedAccessView<R: Resources, T>(
+    RawUnorderedAccessView<R>,
+    #[derivative(Hash = "ignore", PartialEq = "ignore")]
+    PhantomData<T>
+);
 
 impl<R: Resources, T> Typed for UnorderedAccessView<R, T> {
     type Raw = RawUnorderedAccessView<R>;
@@ -180,9 +187,13 @@ impl<R: Resources> RawDepthStencilView<R> {
 }
 
 /// Typed RTV
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-// TODO: manual Eq & Hash impl because PhantomData
-pub struct RenderTargetView<R: Resources, T>(RawRenderTargetView<R>, PhantomData<T>);
+#[derive(Derivative)]
+#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct RenderTargetView<R: Resources, T>(
+    RawRenderTargetView<R>,
+    #[derivative(Hash = "ignore", PartialEq = "ignore")]
+    PhantomData<T>
+);
 
 impl<R: Resources, T> RenderTargetView<R, T> {
     /// Get target dimensions
@@ -199,13 +210,19 @@ impl<R: Resources, T> Typed for RenderTargetView<R, T> {
 }
 
 /// Typed DSV
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-// TODO: manual Eq & Hash impl because PhantomData
-pub struct DepthStencilView<R: Resources, T>(RawDepthStencilView<R>, PhantomData<T>);
+#[derive(Derivative)]
+#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct DepthStencilView<R: Resources, T>(
+    RawDepthStencilView<R>,
+    #[derivative(Hash = "ignore", PartialEq = "ignore")]
+    PhantomData<T>
+);
 
 impl<R: Resources, T> DepthStencilView<R, T> {
     /// Get target dimensions
-    pub fn get_dimensions(&self) -> texture::Dimensions { self.raw().get_dimensions() }
+    pub fn get_dimensions(&self) -> texture::Dimensions {
+        self.raw().get_dimensions()
+    }
 }
 
 impl<R: Resources, T> Typed for DepthStencilView<R, T> {
@@ -219,7 +236,7 @@ impl<R: Resources, T> Typed for DepthStencilView<R, T> {
 
 /// Sampler Handle
 // TODO: Arc it all
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Sampler<R: Resources>(Arc<R::Sampler>, texture::SamplerInfo);
 
 impl<R: Resources> Sampler<R> {
@@ -228,7 +245,7 @@ impl<R: Resources> Sampler<R> {
 }
 
 /// Fence Handle
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Fence<R: Resources>(Arc<R::Fence>);
 
 /// Stores reference-counted resources used in a command buffer.

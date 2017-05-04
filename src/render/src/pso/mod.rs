@@ -57,7 +57,7 @@ pub use core::command::AccessInfo;
 /// It doesn't have any typing information, since PSO knows what
 /// format and layout to expect from each resource.
 #[allow(missing_docs)]
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RawDataSet<R: c::Resources>{
     pub vertex_buffers: c::pso::VertexBufferSet<R>,
     pub constant_buffers: Vec<c::pso::ConstantBufferParam<R>>,
@@ -166,7 +166,7 @@ impl<'a> From<ElementError<&'a str>> for ElementError<String> {
 }
 
 /// Failure to initilize the link between the shader and the data.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum InitError<S> {
     /// Vertex attribute mismatch.
     VertexImport(S, Option<c::format::Format>),
@@ -271,8 +271,9 @@ pub trait PipelineData<R: c::Resources> {
 }
 
 /// A strongly typed Pipleline State Object. See the module documentation for more information.
-pub struct PipelineState<R: c::Resources, M>(
-    c::handle::RawPipelineState<R>, c::Primitive, M);
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct PipelineState<R: c::Resources, M>(c::handle::RawPipelineState<R>,
+                                             c::Primitive, M);
 
 impl<R: c::Resources, M> PipelineState<R, M> {
     /// Create a new PSO from a raw handle and the "meta" instance.

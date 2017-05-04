@@ -87,7 +87,7 @@ impl TextureType {
 }
 
 /// A type of the sampler variable.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct SamplerType(pub IsComparison, pub IsRect);
 
@@ -348,7 +348,7 @@ impl From<Stage> for Usage {
 }
 
 /// Vertex information that a shader takes as input.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct AttributeVar {
     /// Name of this attribute.
@@ -363,7 +363,7 @@ pub struct AttributeVar {
 
 /// A constant in the shader - a bit of data that doesn't vary
 // between the shader execution units (vertices/pixels/etc).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct ConstVar {
     /// Name of this constant.
@@ -380,7 +380,7 @@ pub struct ConstVar {
 }
 
 /// A constant buffer.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct ConstantBufferVar {
     /// Name of this constant buffer.
@@ -396,7 +396,7 @@ pub struct ConstantBufferVar {
 }
 
 /// Texture shader parameter.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct TextureVar {
     /// Name of this texture variable.
@@ -412,7 +412,7 @@ pub struct TextureVar {
 }
 
 /// Unordered access shader parameter.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct UnorderedVar {
     /// Name of this unordered variable.
@@ -424,7 +424,7 @@ pub struct UnorderedVar {
 }
 
 /// Sampler shader parameter.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct SamplerVar {
     /// Name of this sampler variable.
@@ -438,7 +438,7 @@ pub struct SamplerVar {
 }
 
 /// Target output variable.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct OutputVar {
     /// Name of this output variable.
@@ -452,7 +452,7 @@ pub struct OutputVar {
 }
 
 /// Metadata about a program.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct ProgramInfo {
     /// Attributes in the program
@@ -514,7 +514,7 @@ impl<R: Resources + hash::Hash> hash::Hash for Program<R> {
 }
 
 /// Error type for trying to store a UniformValue in a ConstVar.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CompatibilityError {
     /// Array sizes differ between the value and the var (trying to upload a vec2 as a vec4, etc)
     ErrorArraySize,

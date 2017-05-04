@@ -31,7 +31,7 @@ macro_rules! gfx_impl_struct_meta {
         $( $field:ident: $ty:ty = $name:expr, )*
     }) => {
         #[allow(missing_docs)]
-        #[derive(Clone, Copy, Debug)]
+        #[derive(Clone, Copy, Debug, PartialEq)]
         $(#[$attr])*
         pub struct $root {
             $( pub $field: $ty, )*
