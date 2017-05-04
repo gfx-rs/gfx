@@ -970,10 +970,6 @@ impl c::Adapter for Adapter {
     type QueueFamily = QueueFamily;
     type Resources = Resources;
 
-    fn enumerate_adapters() -> Vec<Self> {
-        vec![Adapter]
-    }
-
     fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> c::Device_<Resources, Factory, CommandQueue> {
         unimplemented!()
     }

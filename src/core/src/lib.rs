@@ -363,9 +363,6 @@ pub trait Adapter: Sized {
     /// Associated `Resources` type.
     type Resources: Resources;
 
-    /// Enumerate all available adapters supporting this backend 
-    fn enumerate_adapters() -> Vec<Self>;
-
     /// Create a new device and command queues.
     fn open(&self, queue_descs: &[(&Self::QueueFamily, u32)]) -> Device_<Self::Resources, Self::Factory, Self::CommandQueue>;
 
@@ -435,15 +432,10 @@ pub trait CommandQueue {
 pub trait Surface {
     /// Associated `CommandQueue` type.
     type CommandQueue: CommandQueue;
-    /// Associated native `Window` type.
-    type Window;
     ///
     type SwapChain: SwapChain;
     ///
     type QueueFamily: QueueFamily;
-
-    /// Create a new surface from a native window.
-    fn from_window(window: &Self::Window) -> Self;
 
     /// Check if the queue family supports presentation for this surface.
     fn supports_queue(&self, queue_family: &Self::QueueFamily) -> bool;
@@ -494,4 +486,16 @@ pub trait SwapChain {
 
     /// Present one acquired frame in FIFO order.
     fn present(&mut self);
+}
+
+/// Extension for windows.
+/// Main entry point for backend initialization from a window.
+pub trait WindowExt {
+    /// Associated `Surface` type.
+    type Surface: Surface;
+    /// Associated `Adapter` type.
+    type Adapter: Adapter;
+
+    /// Create window surface and enumerate all available adapters.
+    fn get_surface_and_adapters(&mut self) -> (Self::Surface, Vec<Self::Adapter>);
 }
