@@ -170,6 +170,16 @@ pub struct QueueFamily {
 
 impl QueueFamily {
     #[doc(hidden)]
+    pub fn from_raw(device: vk::PhysicalDevice, index: u32, properties: &vk::QueueFamilyProperties) -> Self {
+        QueueFamily {
+            device: device,
+            family_index: index,
+            queue_type: properties.queue_flags,
+            queue_count: properties.queue_count,
+        }
+    }
+
+    #[doc(hidden)]
     pub fn device(&self) -> vk::PhysicalDevice {
         self.device
     }
@@ -193,52 +203,22 @@ pub struct Adapter {
     info: core::AdapterInfo,
 }
 
+impl Adapter {
+    #[doc(hidden)]
+    pub fn from_raw(device: vk::PhysicalDevice, queue_families: Vec<QueueFamily>, info: core::AdapterInfo) -> Self {
+        Adapter {
+            handle: device,
+            queue_families: queue_families,
+            info: info,
+        }
+    }
+}
+
 impl core::Adapter for Adapter {
     type CommandQueue = CommandQueue;
     type Resources = Resources;
     type Factory = Factory;
     type QueueFamily = QueueFamily;
-
-    fn enumerate_adapters() -> Vec<Self> {
-        INSTANCE.raw.enumerate_physical_devices()
-            .expect("Unable to enumerate adapter")
-            .iter()
-            .map(|&device| {
-                let properties = INSTANCE.raw.get_physical_device_properties(device);
-                let name = unsafe {
-                    CStr::from_ptr(properties.device_name.as_ptr())
-                            .to_str()
-                            .expect("Invalid UTF-8 string")
-                            .to_owned()
-                };
-
-                let info = core::AdapterInfo {
-                    name: name,
-                    vendor: properties.vendor_id as usize,
-                    device: properties.device_id as usize,
-                    software_rendering: properties.device_type == vk::PhysicalDeviceType::Cpu,
-                };
-
-                let queue_families = INSTANCE.raw.get_physical_device_queue_family_properties(device)
-                                                 .iter()
-                                                 .enumerate()
-                                                 .map(|(i, queue_family)| {
-                                                    QueueFamily {
-                                                        device: device,
-                                                        family_index: i as u32,
-                                                        queue_type: queue_family.queue_flags,
-                                                        queue_count: queue_family.queue_count,
-                                                    }
-                                                 }).collect();
-
-                Adapter {
-                    handle: device,
-                    queue_families: queue_families,
-                    info: info,
-                }
-            })
-            .collect()
-    }
 
     fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> core::Device_<Resources, Factory, CommandQueue>
     {
