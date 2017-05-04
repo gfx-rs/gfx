@@ -96,7 +96,7 @@ pub trait ApplicationBase<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
     fn new<F>(&mut F, shade::Backend, WindowTargets<R>) -> Self where F: Factory<R, CommandBuffer = C>;
     fn render<D>(&mut self, &mut D) where D: gfx::Device<Resources = R, CommandBuffer = C>;
     fn get_exit_key() -> Option<winit::VirtualKeyCode>;
-    fn on(&mut self, winit::Event);
+    fn on(&mut self, winit::WindowEvent);
     fn on_resize<F>(&mut self, &mut F, WindowTargets<R>) where F: Factory<R, CommandBuffer = C>;
 }
 
@@ -121,8 +121,9 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
     let builder = glutin::WindowBuilder::from_winit_builder(wb)
                                         .with_gl(gl_version)
                                         .with_vsync();
+    let events_loop = glutin::EventsLoop::new();
     let (window, mut device, mut factory, main_color, main_depth) =
-        gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder);
+        gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder, &events_loop);
     let (mut cur_width, mut cur_height) = window.get_inner_size_points().unwrap();
     let shade_lang = device.get_info().shading_language;
 
@@ -138,12 +139,13 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
     });
 
     let mut harness = Harness::new();
-    loop {
-        for event in window.poll_events() {
+    let mut running = true;
+    while running {
+        events_loop.poll_events(|winit::Event::WindowEvent{window_id: _, event}| {
             match event {
-                winit::Event::Closed => return,
-                winit::Event::KeyboardInput(winit::ElementState::Pressed, _, key) if key == A::get_exit_key() => return,
-                winit::Event::Resized(width, height) => if width != cur_width || height != cur_height {
+                winit::WindowEvent::Closed => running = false,
+                winit::WindowEvent::KeyboardInput(winit::ElementState::Pressed, _, key, _) if key == A::get_exit_key() => return,
+                winit::WindowEvent::Resized(width, height) => if width != cur_width || height != cur_height {
                     cur_width = width;
                     cur_height = height;
                     let (new_color, new_depth) = gfx_window_glutin::new_views(&window);
@@ -155,7 +157,7 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
                 },
                 _ => app.on(event),
             }
-        }
+        });
         // draw a frame
         app.render(&mut device);
         window.swap_buffers().unwrap();
@@ -185,8 +187,9 @@ A: Sized + ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>
     use gfx::traits::{Device, Factory};
 
     env_logger::init().unwrap();
+    let events_loop = winit::EventsLoop::new();
     let (mut window, device, mut factory, main_color) =
-        gfx_window_dxgi::init::<ColorFormat>(wb).unwrap();
+        gfx_window_dxgi::init::<ColorFormat>(wb, &events_loop).unwrap();
     let main_depth = factory.create_depth_stencil_view_only(window.size.0, window.size.1)
                             .unwrap();
 
@@ -199,23 +202,23 @@ A: Sized + ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>
     let mut device = gfx_device_dx11::Deferred::from(device);
 
     let mut harness = Harness::new();
-    loop {
+    let mut running = true;
+    while running {
         let mut new_size = None;
-        for event in window.poll_events() {
+        events_loop.poll_events(|winit::Event::WindowEvent{window_id: _, event}| {
             match event {
-                winit::Event::Closed => return,
-                winit::Event::KeyboardInput(winit::ElementState::Pressed, _, key) if key == A::get_exit_key() => return,
-                winit::Event::Resized(width, height) => {
+                winit::WindowEvent::Closed => running = false,
+                winit::WindowEvent::KeyboardInput(winit::ElementState::Pressed, _, key, _) if key == A::get_exit_key() => return,
+                winit::WindowEvent::Resized(width, height) => {
                     let size = (width as gfx::texture::Size, height as gfx::texture::Size);
                     if size != window.size {
                         // working around the borrow checker: window is already borrowed here
                         new_size = Some(size);
-                        break;
                     }
                 },
                 _ => app.on(event),
             }
-        }
+        });
         if let Some((width, height)) = new_size {
             use gfx_window_dxgi::update_views;
             match update_views(&mut window, &mut factory, &mut device, width, height) {
@@ -255,7 +258,8 @@ A: Sized + ApplicationBase<gfx_device_metal::Resources, gfx_device_metal::Comman
     use gfx::texture::Size;
 
     env_logger::init().unwrap();
-    let (window, mut device, mut factory, main_color) = gfx_window_metal::init::<ColorFormat>(wb)
+    let events_loop = winit::EventsLoop::new();
+    let (window, mut device, mut factory, main_color) = gfx_window_metal::init::<ColorFormat>(wb, &events_loop)
                                                                                 .unwrap();
     let (width, height) = window.get_inner_size_points().unwrap();
     let main_depth = factory.create_depth_stencil_view_only(width as Size, height as Size).unwrap();
@@ -268,17 +272,18 @@ A: Sized + ApplicationBase<gfx_device_metal::Resources, gfx_device_metal::Comman
     });
 
     let mut harness = Harness::new();
-    loop {
-        for event in window.poll_events() {
+    let mut running = true;
+    while running {
+        events_loop.poll_events(|winit::Event::WindowEvent{window_id: _, event}| {
             match event {
-                winit::Event::Closed => return,
-                winit::Event::KeyboardInput(winit::ElementState::Pressed, _, key) if key == A::get_exit_key() => return,
-                winit::Event::Resized(_width, _height) => {
+                winit::WindowEvent::Closed => running = false,
+                winit::WindowEvent::KeyboardInput(winit::ElementState::Pressed, _, key, _) if key == A::get_exit_key() => return,
+                winit::WindowEvent::Resized(_width, _height) => {
                     warn!("TODO: resize on Metal");
                 },
                 _ => app.on(event),
             }
-        }
+        });
         app.render(&mut device);
         window.swap_buffers().unwrap();
         device.cleanup();
@@ -303,7 +308,8 @@ A: Sized + ApplicationBase<gfx_device_vulkan::Resources, gfx_device_vulkan::Comm
     use gfx::texture::Size;
 
     env_logger::init().unwrap();
-    let (mut win, mut factory) = gfx_window_vulkan::init::<ColorFormat>(wb);
+    let events_loop = winit::EventsLoop::new();
+    let (mut win, mut factory) = gfx_window_vulkan::init::<ColorFormat>(wb, &events_loop);
     let (width, height) = win.get_size();
     let main_depth = factory.create_depth_stencil::<DepthFormat>(width as Size, height as Size).unwrap();
 
@@ -315,17 +321,18 @@ A: Sized + ApplicationBase<gfx_device_vulkan::Resources, gfx_device_vulkan::Comm
     });
 
     let mut harness = Harness::new();
-    loop {
-        for event in win.get_window().poll_events() {
+    let mut running = true;
+    while running {
+        events_loop.poll_events(|winit::Event::WindowEvent{window_id: _, event}| {
             match event {
-                winit::Event::Closed => return,
-                winit::Event::KeyboardInput(winit::ElementState::Pressed, _, key) if key == A::get_exit_key() => return,
-                winit::Event::Resized(_width, _height) => {
+                winit::WindowEvent::Closed => running = false,
+                winit::WindowEvent::KeyboardInput(winit::ElementState::Pressed, _, key, _) if key == A::get_exit_key() => return,
+                winit::WindowEvent::Resized(_width, _height) => {
                     warn!("TODO: resize on Vulkan");
                 },
                 _ => app.on(event),
             }
-        }
+        });
         let mut frame = win.start_frame();
         app.render(frame.get_queue());
         frame.get_queue().cleanup();
@@ -354,7 +361,7 @@ pub trait Application<R: gfx::Resources>: Sized {
     fn on_resize_ext<F: gfx::Factory<R>>(&mut self, _factory: &mut F, targets: WindowTargets<R>) {
         self.on_resize(targets);
     }
-    fn on(&mut self, _event: winit::Event) {}
+    fn on(&mut self, _event: winit::WindowEvent) {}
 
     fn launch_simple(name: &str) where Self: Application<DefaultResources> {
         let wb = winit::WindowBuilder::new().with_title(name);
@@ -408,7 +415,7 @@ impl<R, C, A> ApplicationBase<R, C> for Wrap<R, C, A>
         A::get_exit_key()
     }
 
-    fn on(&mut self, event: winit::Event) {
+    fn on(&mut self, event: winit::WindowEvent) {
         self.app.on(event)
     }
 

@@ -620,7 +620,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
         Some(winit::VirtualKeyCode::Escape)
     }
 
-    fn on(&mut self, event: winit::Event) {
+    fn on(&mut self, event: winit::WindowEvent) {
         match event {
             _ => () //TODO
         }

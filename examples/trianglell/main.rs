@@ -57,10 +57,11 @@ const TRIANGLE: [Vertex; 6] = [
 #[cfg(any(feature = "vulkan", target_os = "windows"))]
 fn main() {
     env_logger::init().unwrap();
+    let events_loop = winit::EventsLoop::new();
     let window = winit::WindowBuilder::new()
         .with_dimensions(1024, 768)
         .with_title("triangle (Low Level)".to_string())
-        .build()
+        .build(&events_loop)
         .unwrap();
 
     // instantiate backend
@@ -367,14 +368,15 @@ fn main() {
     }
     
     //
-    'main: loop {
-        for event in window.poll_events() {
+    let mut running = true;
+    while running {
+        events_loop.poll_events(|winit::Event::WindowEvent{window_id: _, event}| {
             match event {
-                winit::Event::KeyboardInput(_, _, Some(winit::VirtualKeyCode::Escape)) |
-                winit::Event::Closed => break 'main,
+                winit::WindowEvent::KeyboardInput(_, _, Some(winit::VirtualKeyCode::Escape), _) |
+                winit::WindowEvent::Closed => running = false,
                 _ => {},
             }
-        }
+        });
 
         general_queues[0].wait_idle(); // SLOW!
 
