@@ -174,3 +174,32 @@ pub fn new_views<Cf, Df>(window: &glutin::Window)
         device_gl::create_main_targets_raw(dim, Cf::get_format().0, Df::get_format().0);
     (Typed::new(color_view_raw), Typed::new(depth_view_raw))
 }
+
+pub struct Surface;
+
+impl core::Surface for Surface {
+    type CommandQueue = device_gl::CommandQueue;
+    type SwapChain = device_gl::SwapChain;
+    type QueueFamily = device_gl::QueueFamily;
+
+    fn supports_queue(&self, queue_family: &device_gl::QueueFamily) -> bool { true }
+    fn build_swapchain<T: core::format::RenderFormat>(&self,
+                    present_queue: &device_gl::CommandQueue) -> device_gl::SwapChain
+    {
+        unimplemented!()
+    }
+}
+
+pub struct Window<'a>(&'a glutin::Window);
+
+impl<'a> core::WindowExt for Window<'a> {
+    type Surface = Surface;
+    type Adapter = device_gl::Adapter;
+
+    fn get_surface_and_adapters(&mut self) -> (Surface, Vec<device_gl::Adapter>) {
+        unsafe { self.0.make_current().unwrap() };
+        let adapter = device_gl::Adapter::new(|s| self.0.get_proc_address(s) as *const std::os::raw::c_void);
+
+        (Surface, vec![adapter])
+    }
+}

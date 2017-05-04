@@ -962,7 +962,41 @@ impl c::Device for Device {
 }
 
 #[allow(missing_copy_implementations)]
-pub struct Adapter;
+pub struct Adapter {
+    context: Rc<gl::Gl>,
+    adapter_info: c::AdapterInfo,
+}
+
+impl Adapter {
+    #[doc(hidden)]
+    pub fn new<F>(fn_proc: F) -> Self where
+        F: FnMut(&str) -> *const std::os::raw::c_void
+    {
+        let gl = gl::Gl::load_with(fn_proc);
+        // query information
+        let (info, caps, private) = info::get(&gl);
+        info!("Vendor: {:?}", info.platform_name.vendor);
+        info!("Renderer: {:?}", info.platform_name.renderer);
+        info!("Version: {:?}", info.version);
+        info!("Shading Language: {:?}", info.shading_language);
+        debug!("Loaded Extensions:");
+        for extension in info.extensions.iter() {
+            debug!("- {}", *extension);
+        }
+
+        let adapter_info = c::AdapterInfo {
+            name: info.platform_name.renderer.into(),
+            vendor: 0, // TODO
+            device: 0, // TODO
+            software_rendering: true, // not always true ..
+        };
+
+        Adapter {
+            context: Rc::new(gl),
+            adapter_info: adapter_info,
+        }
+    }
+}
 
 impl c::Adapter for Adapter {
     type CommandQueue = CommandQueue;
@@ -975,7 +1009,7 @@ impl c::Adapter for Adapter {
     }
 
     fn get_info(&self) -> &c::AdapterInfo {
-        unimplemented!()
+        &self.adapter_info
     }
 
     fn get_queue_families(&self) -> &[QueueFamily] {
@@ -1007,4 +1041,23 @@ pub struct QueueFamily;
 
 impl c::QueueFamily for QueueFamily {
     fn num_queues(&self) -> u32 { 1 }
+}
+
+#[allow(missing_copy_implementations)]
+pub struct SwapChain;
+
+impl c::SwapChain for SwapChain {
+    type R = Resources;
+
+    fn get_images(&mut self) -> &[NewTexture] {
+        unimplemented!()
+    }
+
+    fn acquire_frame(&mut self, sync: c::FrameSync<Resources>) -> c::Frame {
+        unimplemented!()
+    }
+
+    fn present(&mut self) {
+        unimplemented!()
+    }
 }
