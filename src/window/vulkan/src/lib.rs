@@ -232,7 +232,6 @@ impl<'a> core::WindowExt for Window<'a> {
     type Surface = Surface;
     type Adapter = device_vulkan::Adapter;
 
-    /// Create window surface and enumerate all available adapters.
     fn get_surface_and_adapters(&mut self) -> (Surface, Vec<device_vulkan::Adapter>) {
         let surface = Surface::from_window(self.0);
         let adapters = INSTANCE.raw.enumerate_physical_devices()
