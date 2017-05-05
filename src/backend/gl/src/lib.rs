@@ -1042,22 +1042,3 @@ pub struct QueueFamily;
 impl c::QueueFamily for QueueFamily {
     fn num_queues(&self) -> u32 { 1 }
 }
-
-#[allow(missing_copy_implementations)]
-pub struct SwapChain;
-
-impl c::SwapChain for SwapChain {
-    type R = Resources;
-
-    fn get_images(&mut self) -> &[NewTexture] {
-        unimplemented!()
-    }
-
-    fn acquire_frame(&mut self, sync: c::FrameSync<Resources>) -> c::Frame {
-        unimplemented!()
-    }
-
-    fn present(&mut self) {
-        unimplemented!()
-    }
-}
