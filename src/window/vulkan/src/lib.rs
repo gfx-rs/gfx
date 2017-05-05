@@ -28,8 +28,9 @@ use std::{mem, ptr};
 use std::os::raw;
 use std::sync::Arc;
 use core::format;
+use core::FrameSync;
 use core::memory::Typed;
-use device_vulkan::{data, native, CommandQueue, RawSurface, SwapChain, QueueFamily, VK_ENTRY, INSTANCE};
+use device_vulkan::{data, native, CommandQueue, QueueFamily, VK_ENTRY, INSTANCE};
 
 #[cfg(unix)]
 use winit::os::unix::WindowExt;
@@ -42,6 +43,17 @@ pub struct Surface {
     raw: Arc<RawSurface>,
     width: u32,
     height: u32,
+}
+
+pub struct RawSurface {
+    pub handle: vk::SurfaceKHR,
+    pub loader: vk::SurfaceFn,
+}
+
+impl Drop for RawSurface {
+    fn drop(&mut self) {
+        unsafe { self.loader.destroy_surface_khr(INSTANCE.raw.handle(), self.handle, ptr::null()); }
+    }
 }
 
 impl Surface {
@@ -129,9 +141,9 @@ impl Surface {
 }
 
 impl core::Surface for Surface {
-    type CommandQueue = CommandQueue;
+    type CommandQueue = device_vulkan::CommandQueue;
     type SwapChain = SwapChain;
-    type QueueFamily = QueueFamily;
+    type QueueFamily = device_vulkan::QueueFamily;
 
     fn supports_queue(&self, queue_family: &Self::QueueFamily) -> bool {
         unsafe {
@@ -146,7 +158,7 @@ impl core::Surface for Surface {
     }
 
     fn build_swapchain<T: core::format::RenderFormat>(&self,
-                    present_queue: &CommandQueue) -> SwapChain {
+                    present_queue: &device_vulkan::CommandQueue) -> SwapChain {
         let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
         let loader = vk::SwapchainFn::load(|name| {
                 unsafe {
@@ -223,6 +235,91 @@ impl core::Surface for Surface {
             &present_queue,
             loader,
             swapchain_images)
+    }
+}
+
+pub struct SwapChain {
+    raw: vk::SwapchainKHR,
+    device: Arc<device_vulkan::RawDevice>,
+    present_queue: device_vulkan::RawCommandQueue,
+    swapchain_fn: vk::SwapchainFn,
+    images: Vec<native::Image>,
+
+    // Queued up frames for presentation
+    frame_queue: VecDeque<usize>,
+}
+
+impl SwapChain {
+    fn from_raw(raw: vk::SwapchainKHR,
+                queue: &CommandQueue,
+                swapchain_fn: vk::SwapchainFn,
+                images: Vec<native::Image>) -> Self
+    {
+        SwapChain {
+            raw: raw,
+            device: queue.device(),
+            present_queue: queue.raw(),
+            swapchain_fn: swapchain_fn,
+            images: images,
+            frame_queue: VecDeque::new(),
+        }
+    }
+}
+
+impl core::SwapChain for SwapChain {
+    type R = device_vulkan::Resources;
+
+    fn get_images(&mut self) -> &[()] {
+        // TODO
+        // &self.images
+        unimplemented!()
+    }
+
+    fn acquire_frame(&mut self, sync: FrameSync<device_vulkan::Resources>) -> core::Frame {
+        let (semaphore, fence) = match sync {
+            FrameSync::Semaphore(semaphore) => (semaphore.0, vk::Fence::null()),
+            FrameSync::Fence(fence) => (vk::Semaphore::null(), fence.0),
+        };
+
+        // TODO: error handling
+        let index = unsafe {
+            let mut index = mem::uninitialized();
+            self.swapchain_fn.acquire_next_image_khr(
+                    self.device.0.handle(),
+                    self.raw,
+                    std::u64::MAX, // will block if no image is available
+                    semaphore,
+                    fence,
+                    &mut index);
+            index
+        };
+
+        self.frame_queue.push_back(index as usize);
+        unsafe { core::Frame::new(index as usize) }
+    }
+
+    fn present(&mut self) {
+        let frame = self.frame_queue.pop_front().expect("No frame currently queued up. Need to acquire a frame first.");
+
+        let info = vk::PresentInfoKHR {
+            s_type: vk::StructureType::PresentInfoKhr,
+            p_next: ptr::null(),
+            wait_semaphore_count: 0,
+            p_wait_semaphores: ptr::null(),
+            swapchain_count: 1,
+            p_swapchains: &self.raw,
+            p_image_indices: &(frame as u32),
+            p_results: ptr::null_mut(),
+        };
+        let mut queue = match self.present_queue.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+
+        unsafe {
+            self.swapchain_fn.queue_present_khr(*queue, &info);
+        }
+        // TODO: handle result and return code
     }
 }
 
