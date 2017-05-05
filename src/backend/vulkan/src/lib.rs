@@ -354,7 +354,7 @@ impl Drop for RawDevice {
 
 // Need to explicitly synchronize on submission and present.
 // TODO: Can we avoid somehow the use of a mutex?
-type RawCommandQueue = Arc<Mutex<vk::Queue>>;
+pub type RawCommandQueue = Arc<Mutex<vk::Queue>>;
 
 pub struct CommandQueue {
     raw: RawCommandQueue,
@@ -363,6 +363,16 @@ pub struct CommandQueue {
 }
 
 impl CommandQueue {
+    #[doc(hidden)]
+    pub fn raw(&self) -> RawCommandQueue {
+        self.raw.clone()
+    }
+
+    #[doc(hidden)]
+    pub fn device(&self) -> Arc<RawDevice> {
+        self.device.clone()
+    }
+
     #[doc(hidden)]
     pub fn device_handle(&self) -> vk::Device {
         self.device.0.handle()
@@ -388,105 +398,6 @@ impl core::CommandQueue for CommandQueue {
 
 pub struct Factory {
     device: Arc<RawDevice>,
-}
-
-pub struct SwapChain {
-    raw: vk::SwapchainKHR,
-    device: Arc<RawDevice>,
-    present_queue: RawCommandQueue,
-    swapchain_fn: vk::SwapchainFn,
-    images: Vec<native::Image>,
-
-    // Queued up frames for presentation
-    frame_queue: VecDeque<usize>,
-}
-
-impl SwapChain {
-    #[doc(hidden)]
-    pub fn from_raw(raw: vk::SwapchainKHR,
-                    queue: &CommandQueue,
-                    swapchain_fn: vk::SwapchainFn,
-                    images: Vec<native::Image>) -> Self
-    {
-        SwapChain {
-            raw: raw,
-            device: queue.device.clone(),
-            present_queue: queue.raw.clone(),
-            swapchain_fn: swapchain_fn,
-            images: images,
-            frame_queue: VecDeque::new(),
-        }
-    }
-}
-
-impl core::SwapChain for SwapChain {
-    type R = Resources;
-
-    fn get_images(&mut self) -> &[()] {
-        // TODO
-        // &self.images
-        unimplemented!()
-    }
-
-    fn acquire_frame(&mut self, sync: FrameSync<Resources>) -> core::Frame {
-        let (semaphore, fence) = match sync {
-            FrameSync::Semaphore(semaphore) => (semaphore.0, vk::Fence::null()),
-            FrameSync::Fence(fence) => (vk::Semaphore::null(), fence.0),
-        };
-
-        // TODO: error handling
-        let index = unsafe {
-            let mut index = mem::uninitialized();
-            self.swapchain_fn.acquire_next_image_khr(
-                    self.device.0.handle(),
-                    self.raw,
-                    std::u64::MAX, // will block if no image is available
-                    semaphore,
-                    fence,
-                    &mut index);
-            index
-        };
-
-        self.frame_queue.push_back(index as usize);
-        unsafe { core::Frame::new(index as usize) }
-    }
-
-    fn present(&mut self) {
-        let frame = self.frame_queue.pop_front().expect("No frame currently queued up. Need to acquire a frame first.");
-
-        let info = vk::PresentInfoKHR {
-            s_type: vk::StructureType::PresentInfoKhr,
-            p_next: ptr::null(),
-            wait_semaphore_count: 0,
-            p_wait_semaphores: ptr::null(),
-            swapchain_count: 1,
-            p_swapchains: &self.raw,
-            p_image_indices: &(frame as u32),
-            p_results: ptr::null_mut(),
-        };
-        let mut queue = match self.present_queue.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-
-        unsafe {
-            self.swapchain_fn.queue_present_khr(*queue, &info);
-        }
-        // TODO: handle result and return code
-    }
-}
-
-
-#[doc(hidden)]
-pub struct RawSurface {
-    pub handle: vk::SurfaceKHR,
-    pub loader: vk::SurfaceFn,
-}
-
-impl Drop for RawSurface {
-    fn drop(&mut self) {
-        unsafe { self.loader.destroy_surface_khr(INSTANCE.raw.handle(), self.handle, ptr::null()); }
-    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]

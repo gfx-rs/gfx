@@ -175,16 +175,35 @@ pub fn new_views<Cf, Df>(window: &glutin::Window)
     (Typed::new(color_view_raw), Typed::new(depth_view_raw))
 }
 
+#[allow(missing_copy_implementations)]
+pub struct SwapChain;
+
+impl core::SwapChain for SwapChain {
+    type R = device_gl::Resources;
+
+    fn get_images(&mut self) -> &[device_gl::NewTexture] {
+        unimplemented!()
+    }
+
+    fn acquire_frame(&mut self, sync: core::FrameSync<device_gl::Resources>) -> core::Frame {
+        unimplemented!()
+    }
+
+    fn present(&mut self) {
+        unimplemented!()
+    }
+}
+
 pub struct Surface;
 
 impl core::Surface for Surface {
     type CommandQueue = device_gl::CommandQueue;
-    type SwapChain = device_gl::SwapChain;
+    type SwapChain = SwapChain;
     type QueueFamily = device_gl::QueueFamily;
 
     fn supports_queue(&self, queue_family: &device_gl::QueueFamily) -> bool { true }
     fn build_swapchain<T: core::format::RenderFormat>(&self,
-                    present_queue: &device_gl::CommandQueue) -> device_gl::SwapChain
+                    present_queue: &device_gl::CommandQueue) -> SwapChain
     {
         unimplemented!()
     }
