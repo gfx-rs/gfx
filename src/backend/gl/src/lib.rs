@@ -963,8 +963,9 @@ impl c::Device for Device {
 
 #[allow(missing_copy_implementations)]
 pub struct Adapter {
-    context: Rc<gl::Gl>,
+    share: Rc<Share>,
     adapter_info: c::AdapterInfo,
+    queue_family: Vec<QueueFamily>,
 }
 
 impl Adapter {
@@ -991,9 +992,19 @@ impl Adapter {
             software_rendering: true, // not always true ..
         };
 
+        // create the shared context
+        let handles = handle::Manager::new();
+        let share = Share {
+            context: gl,
+            capabilities: caps,
+            private_caps: private,
+            handles: RefCell::new(handles),
+        };
+
         Adapter {
-            context: Rc::new(gl),
+            share: Rc::new(share),
             adapter_info: adapter_info,
+            queue_family: vec![QueueFamily],
         }
     }
 }
@@ -1005,7 +1016,17 @@ impl c::Adapter for Adapter {
     type Resources = Resources;
 
     fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> c::Device_<Resources, Factory, CommandQueue> {
-        unimplemented!()
+        c::Device_ {
+            factory: Factory::new(self.share.clone()),
+            general_queues: Vec::new(), // TODO
+            graphics_queues: Vec::new(),
+            compute_queues: Vec::new(),
+            transfer_queues: Vec::new(),
+            heap_types: Vec::new(), // TODO
+            memory_heaps: Vec::new(), // TODO
+
+            _marker: std::marker::PhantomData,
+        }
     }
 
     fn get_info(&self) -> &c::AdapterInfo {
@@ -1013,7 +1034,7 @@ impl c::Adapter for Adapter {
     }
 
     fn get_queue_families(&self) -> &[QueueFamily] {
-        unimplemented!()
+        &self.queue_family
     }
 }
 
