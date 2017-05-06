@@ -175,50 +175,61 @@ pub fn new_views<Cf, Df>(window: &glutin::Window)
     (Typed::new(color_view_raw), Typed::new(depth_view_raw))
 }
 
-#[allow(missing_copy_implementations)]
-pub struct SwapChain;
+pub struct SwapChain<'a> {
+    // Underlying window, required for presentation
+    window: &'a glutin::Window,
+    // Single element backbuffer
+    backbuffer: Vec<device_gl::NewTexture>,
+}
 
-impl core::SwapChain for SwapChain {
+impl<'a> core::SwapChain for SwapChain<'a> {
     type R = device_gl::Resources;
 
     fn get_images(&mut self) -> &[device_gl::NewTexture] {
-        unimplemented!()
+        &self.backbuffer
     }
 
     fn acquire_frame(&mut self, sync: core::FrameSync<device_gl::Resources>) -> core::Frame {
-        unimplemented!()
+        // TODO: sync
+        core::Frame::new(0)
     }
 
     fn present(&mut self) {
-        unimplemented!()
+        self.window.swap_buffers();
     }
 }
 
-pub struct Surface;
+pub struct Surface<'a> {
+    window: &'a glutin::Window,
+}
 
-impl core::Surface for Surface {
+impl<'a> core::Surface for Surface<'a> {
     type CommandQueue = device_gl::CommandQueue;
-    type SwapChain = SwapChain;
+    type SwapChain = SwapChain<'a>;
     type QueueFamily = device_gl::QueueFamily;
 
     fn supports_queue(&self, queue_family: &device_gl::QueueFamily) -> bool { true }
     fn build_swapchain<T: core::format::RenderFormat>(&self,
-                    present_queue: &device_gl::CommandQueue) -> SwapChain
+                    present_queue: &device_gl::CommandQueue) -> SwapChain<'a>
     {
-        unimplemented!()
+        SwapChain {
+            window: self.window,
+            backbuffer: vec![device_gl::NewTexture::Surface(0)],
+        }
     }
 }
 
 pub struct Window<'a>(&'a glutin::Window);
 
 impl<'a> core::WindowExt for Window<'a> {
-    type Surface = Surface;
+    type Surface = Surface<'a>;
     type Adapter = device_gl::Adapter;
 
-    fn get_surface_and_adapters(&mut self) -> (Surface, Vec<device_gl::Adapter>) {
+    fn get_surface_and_adapters(&mut self) -> (Surface<'a>, Vec<device_gl::Adapter>) {
         unsafe { self.0.make_current().unwrap() };
         let adapter = device_gl::Adapter::new(|s| self.0.get_proc_address(s) as *const std::os::raw::c_void);
+        let surface = Surface { window: self.0 };
 
-        (Surface, vec![adapter])
+        (surface, vec![adapter])
     }
 }
