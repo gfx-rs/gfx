@@ -52,6 +52,7 @@ pub struct DataPointer {
     size: u32,
 }
 
+#[derive(Clone)]
 pub struct DataBuffer(Vec<u8>);
 impl DataBuffer {
     /// Create a new empty data buffer.
@@ -637,7 +638,15 @@ impl command::Buffer<Resources> for CommandBuffer {
 impl c::CommandBuffer for CommandBuffer {
     type SubmitInfo = SubmitInfo;
     unsafe fn end(&mut self) -> SubmitInfo {
-        unimplemented!()
+        // TODO: Slow! Avoid cloning!
+        // Constraints:
+        //   cmd can only be written on one thread,
+        //   and send read-only submit to the queue.
+        //   In theory we could just share a pointer to the buffer.
+        SubmitInfo {
+            buf: self.buf.clone(),
+            data: self.data.clone(),
+        }
     }
 }
 
