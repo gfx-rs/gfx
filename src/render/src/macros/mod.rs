@@ -153,6 +153,12 @@ macro_rules! gfx_defines {
     }) => {
         gfx_pipeline!($name {$($field:$ty = $e,)+});
     };
+	
+    (pipeline $crt:ident : $name:ident {
+            $( $field:ident : $ty:ty = $e:expr, )+
+    }) => {
+        gfx_pipeline!($crt:$name {$($field:$ty = $e,)+});
+    };
 
     // The recursive case for vertex structs
     ($(#[$attr:meta])* vertex $name:ident {

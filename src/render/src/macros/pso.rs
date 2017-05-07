@@ -224,31 +224,39 @@ macro_rules! gfx_pipeline_inner {
 
 #[macro_export]
 macro_rules! gfx_pipeline_base {
-    ($module:ident {
+    ($crt:ident : $module:ident {
         $( $field:ident: $ty:ty, )*
     }) => {
         #[allow(missing_docs)]
         pub mod $module {
             #[allow(unused_imports)]
             use super::*;
-            use super::gfx;
+            use super::$crt;
             gfx_pipeline_inner!{ $(
                 $field: $ty,
             )*}
+        }
+    };
+	
+    ($module:ident {
+        $( $field:ident: $ty:ty, )*
+    }) => {
+        gfx_pipeline_base! {
+            gfx : $module { $( $field: $ty, )*}
         }
     }
 }
 
 #[macro_export]
 macro_rules! gfx_pipeline {
-    ($module:ident {
+    ($crt:ident : $module:ident {
         $( $field:ident: $ty:ty = $value:expr, )*
     }) => {
         #[allow(missing_docs)]
         pub mod $module {
             #[allow(unused_imports)]
             use super::*;
-            use super::gfx;
+            use super::$crt;
             gfx_pipeline_inner!{ $(
                 $field: $ty,
             )*}
@@ -256,6 +264,16 @@ macro_rules! gfx_pipeline {
                 Init {
                     $( $field: $value, )*
                 }
+            }
+        }
+    };
+	
+    ($module:ident {
+        $( $field:ident: $ty:ty = $value:expr, )*
+    }) => {
+        gfx_pipeline! {
+            gfx : $module {
+                $( $field: $ty = $value, )*
             }
         }
     }
