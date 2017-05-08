@@ -36,20 +36,46 @@ type AttributeSlotSet = usize;
 /// Service struct to simplify the implementations of `VertexBuffer` and `InstanceBuffer`.
 #[derive(Derivative)]
 #[derivative(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct VertexBufferCommon<T, I>(
+pub struct VertexBufferCommon<T, I=InstanceRate>(
     RawVertexBuffer,
     #[derivative(Hash = "ignore", PartialEq = "ignore")]
     PhantomData<(T, I)>
 );
 
+/// Helper trait for `VertexBufferCommon` to support variable instance rate.
+pub trait ToInstanceRate {
+    /// The associated init type for PSO component.
+    type Init;
+    /// Get an actual instance rate value from the init.
+    fn get_rate(init: &Self::Init) -> InstanceRate;
+}
+
+/// Helper phantom type for per-vertex attributes.
+pub enum NonInstanced {}
+/// Helper phantom type for per-instance attributes.
+pub enum Instanced {}
+
+impl ToInstanceRate for InstanceRate {
+    type Init = InstanceRate;
+    fn get_rate(init: &Self::Init) -> InstanceRate { *init }
+}
+impl ToInstanceRate for Instanced {
+    type Init = ();
+    fn get_rate(_: &Self::Init) -> InstanceRate { 1 }
+}
+impl ToInstanceRate for NonInstanced {
+    type Init = ();
+    fn get_rate(_: &Self::Init) -> InstanceRate { 0 }
+}
+
 /// Vertex buffer component. Advanced per vertex.
 ///
 /// - init: `()`
 /// - data: `Buffer<T>`
-pub type VertexBuffer<T> = VertexBufferCommon<T, [(); 0]>;
+pub type VertexBuffer<T> = VertexBufferCommon<T, NonInstanced>;
 
 /// Instance buffer component. Same as the vertex buffer but advances per instance.
-pub type InstanceBuffer<T> = VertexBufferCommon<T, [(); 1]>;
+pub type InstanceBuffer<T> = VertexBufferCommon<T, Instanced>;
 
 /// Raw vertex/instance buffer component. Can be used when the formats of vertex attributes
 /// are not known at compile time.
@@ -97,20 +123,20 @@ fn match_attribute(_: &shade::AttributeVar, _: Format) -> bool {
 
 impl<'a,
     T: Structure<Format>,
-    I: AsRef<[()]> + Default,
+    I: ToInstanceRate + 'a,
 > DataLink<'a> for VertexBufferCommon<T, I> {
-    type Init = ();
+    type Init = I::Init;
     fn new() -> Self {
         VertexBufferCommon(DataLink::new(), PhantomData)
     }
     fn is_active(&self) -> bool {
         self.0.is_active()
     }
-    fn link_vertex_buffer(&mut self, index: BufferIndex, _: &Self::Init)
+    fn link_vertex_buffer(&mut self, index: BufferIndex, init: &Self::Init)
                           -> Option<pso::VertexBufferDesc> {
         use std::mem;
         (self.0).0 = Some(index);
-        let rate = <I as Default>::default().as_ref().len();
+        let rate = I::get_rate(init);
         Some(pso::VertexBufferDesc {
             stride: mem::size_of::<T>() as ElemStride,
             rate: rate as InstanceRate,

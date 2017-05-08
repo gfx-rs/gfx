@@ -14,7 +14,6 @@
 
 //! Render target components for a PSO.
 
-use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use core::{ColorSlot, Resources};
 use core::{format, handle, pso, state, target};
