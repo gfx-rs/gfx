@@ -116,6 +116,10 @@ name = "triangle"
 path = "examples/triangle/main.rs"
 
 [[example]]
+name = "triangle_glfw"
+path = "examples/triangle_glfw/main.rs"
+
+[[example]]
 name = "instancing"
 path = "examples/instancing/main.rs"
 
@@ -145,4 +149,4 @@ image = "0.13"
 winit = "0.6"
 
 [target.x86_64-unknown-linux-gnu.dev-dependencies]
-glfw = "0.12"
+glfw = "0.14"
