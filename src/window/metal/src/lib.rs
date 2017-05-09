@@ -91,6 +91,8 @@ pub enum InitError {
     Window,
     /// Unable to map format to Metal.
     Format(Format),
+    /// The given format is present in Metal, but not allowed by the backbuffer.
+    BackbufferFormat(Format),
     /// Unable to find a supported driver type.
     DriverType,
 }
@@ -114,10 +116,16 @@ pub fn init_raw(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop, color
         let wnd: cocoa_id = mem::transmute(winit_window.get_nswindow());
 
         let layer = CAMetalLayer::new();
-        layer.set_pixel_format(match map_format(color_format, true) {
+        let desired_pixel_format = match map_format(color_format, true) {
             Some(fm) => fm,
             None => return Err(InitError::Format(color_format)),
-        });
+        };
+        match desired_pixel_format {
+            MTLPixelFormat::BGRA8Unorm | MTLPixelFormat::BGRA8Unorm_sRGB | MTLPixelFormat::RGBA16Float => {
+                layer.set_pixel_format(desired_pixel_format);
+            },
+            _ => return Err(InitError::BackbufferFormat(color_format)),
+        }
         let draw_size = winit_window.get_inner_size().unwrap();
         layer.set_edge_antialiasing_mask(0);
         layer.set_masks_to_bounds(true);
