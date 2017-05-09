@@ -237,16 +237,13 @@ pub fn map_format(format: Format, is_target: bool) -> Option<MTLPixelFormat> {
             Int   => RGBA8Sint,
             Uint  => RGBA8Uint,
             Inorm => RGBA8Snorm,
-            Unorm => if is_target {
-                         BGRA8Unorm
-                     } else {
-                         RGBA8Unorm
-                     },
-            Srgb  => if is_target {
-                         BGRA8Unorm_sRGB
-                     } else {
-                         RGBA8Unorm_sRGB
-                     },
+            Unorm => RGBA8Unorm,
+            Srgb  => RGBA8Unorm_sRGB,
+            _ => return None,
+        },
+        B8_G8_R8_A8 => match format.1 {
+            Unorm => BGRA8Unorm,
+            Srgb  => BGRA8Unorm_sRGB,
             _ => return None,
         },
         R10_G10_B10_A2 => match format.1 {
