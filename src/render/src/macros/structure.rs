@@ -40,7 +40,7 @@ macro_rules! gfx_impl_struct_meta {
         unsafe impl $crate::traits::Pod for $root {}
 
         impl $crate::pso::buffer::Structure<$runtime_format> for $root {
-            fn query(name: &str) -> Option<$crate::pso::buffer::Element<$runtime_format>> {
+            fn query(name: &str) -> ::std::option::Option<$crate::pso::buffer::Element<$runtime_format>> {
                 use std::mem::{size_of, transmute};
                 use $crate::pso::buffer::{Element, ElemOffset};
                 // using "1" here as a simple non-zero pointer addres
