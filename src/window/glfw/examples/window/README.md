@@ -14,10 +14,6 @@
     limitations under the License.
 -->
 
-# Triangle Example
+# Gfx-rs + GLFW Example
 
-No rendering library would be complete without a triangle example!
-
-## Screenshot
-
-![Triangle Example](screenshot.png)
+Basic window with glfw. For drawing code, refer to main triangle example.

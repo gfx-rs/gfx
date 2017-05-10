@@ -116,10 +116,6 @@ name = "triangle"
 path = "examples/triangle/main.rs"
 
 [[example]]
-name = "triangle_glfw"
-path = "examples/triangle_glfw/main.rs"
-
-[[example]]
 name = "instancing"
 path = "examples/instancing/main.rs"
 
