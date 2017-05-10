@@ -1,4 +1,4 @@
-# Copyright 2015 The Gfx-rs Developers.
+# Copyright 2017 The Gfx-rs Developers.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,4 +33,4 @@ gfx_core = { path = "../../core", version = "0.7" }
 gfx_device_gl = { path = "../../backend/gl", version = "0.14" }
 
 [dev-dependencies]
-gfx = "0.15"
+gfx = { path = "../../../src/render", version = "0.15" }
