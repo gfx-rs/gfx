@@ -94,8 +94,8 @@ macro_rules! gfx_pipeline_inner {
                                 assert!(meta.$field.is_active());
                                 continue;
                             },
-                            Some(Err(_)) => return Err(
-                                InitError::GlobalConstant(&gc.name, Some(()))
+                            Some(Err(e)) => return Err(
+                                InitError::GlobalConstant(&gc.name, Some(e))
                             ),
                             None => (),
                         }
