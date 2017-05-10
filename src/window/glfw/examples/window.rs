@@ -27,7 +27,7 @@ pub fn main() {
     glfw.window_hint(glfw::WindowHint::OpenGlForwardCompat(true));
     glfw.window_hint(glfw::WindowHint::OpenGlProfile(glfw::OpenGlProfileHint::Core));
 
-    let (mut window, events) = glfw.create_window(1024, 768, "Triangle example", glfw::WindowMode::Windowed)
+    let (mut window, events) = glfw.create_window(1024, 768, "Window example", glfw::WindowMode::Windowed)
         .expect("Failed to create GLFW window.");
 
     window.set_key_polling(true);
@@ -35,6 +35,8 @@ pub fn main() {
     window.make_current();
     glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
     let (_, _, _, _) = gfx_window_glfw::init(&mut window);
+
+    //Note: actual drawing code is no different from the triangle example, or any other.
 
     let mut running = true;
     while running {
