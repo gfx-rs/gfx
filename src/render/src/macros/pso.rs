@@ -39,7 +39,7 @@ macro_rules! gfx_pipeline_inner {
         impl<'a> $crate::pso::PipelineInit for Init<'a> {
             type Meta = Meta;
             fn link_to<'s>(&self, desc: &mut Descriptor, info: &'s $crate::ProgramInfo)
-                       -> Result<Self::Meta, InitError<&'s str>>
+                       -> ::std::result::Result<Self::Meta, InitError<&'s str>>
             {
                 let mut meta = Meta {
                     $( $field: <$ty as DataLink<'a>>::new(), )*
