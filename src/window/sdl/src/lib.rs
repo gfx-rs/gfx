@@ -148,7 +148,7 @@ pub fn init_raw(mut builder: WindowBuilder, cf: Format, df: Format)
 fn get_window_dimensions(window: &sdl2::video::Window) -> texture::Dimensions {
     let (width, height) = window.size();
     let aa = window.subsystem().gl_attr().multisample_samples() as texture::NumSamples;
-    ((width as f32) as texture::Size, (height) as texture::Size, 1, aa.into())
+    (width as texture::Size, height as texture::Size, 1, aa.into())
 }
 
 /// Update the internal dimensions of the main framebuffer targets. Generic version over the format.
