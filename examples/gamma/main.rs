@@ -35,12 +35,22 @@ gfx_defines!{
     }
 }
 
-const QUAD: [Vertex; 4] = [
-    Vertex { pos: [ -0.5,  0.5 ], color: [0.0, 0.0, 0.0] },
-    Vertex { pos: [ -0.5, -0.5 ], color: [0.0, 0.0, 0.0] },
-    Vertex { pos: [  0.5, -0.5 ], color: [1.0, 1.0, 1.0] },
-    Vertex { pos: [  0.5,  0.5 ], color: [1.0, 1.0, 1.0] }
-];
+const QUAD: [Vertex; 4] = [Vertex {
+                               pos: [-0.5, 0.5],
+                               color: [0.0, 0.0, 0.0],
+                           },
+                           Vertex {
+                               pos: [-0.5, -0.5],
+                               color: [0.0, 0.0, 0.0],
+                           },
+                           Vertex {
+                               pos: [0.5, -0.5],
+                               color: [1.0, 1.0, 1.0],
+                           },
+                           Vertex {
+                               pos: [0.5, 0.5],
+                               color: [1.0, 1.0, 1.0],
+                           }];
 
 const CLEAR_COLOR: [f32; 4] = [0.5, 0.5, 0.5, 1.0];
 
@@ -53,27 +63,34 @@ pub fn main() {
     let (window, mut device, mut factory, main_color, mut main_depth) =
         gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder, &events_loop);
     let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
-    let pso = factory.create_pipeline_simple(
-        include_bytes!("shader/quad_150.glslv"),
-        include_bytes!("shader/quad_150.glslf"),
-        pipe::new()
-    ).unwrap();
-    let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&QUAD, &[0u16, 1, 2, 2, 3, 0] as &[u16]);
+    let pso = factory
+        .create_pipeline_simple(include_bytes!("shader/quad_150.glslv"),
+                                include_bytes!("shader/quad_150.glslf"),
+                                pipe::new())
+        .unwrap();
+    let (vertex_buffer, slice) =
+        factory.create_vertex_buffer_with_slice(&QUAD, &[0u16, 1, 2, 2, 3, 0] as &[u16]);
     let mut data = pipe::Data {
         vbuf: vertex_buffer,
-        out: main_color
+        out: main_color,
     };
 
     let mut running = true;
     while running {
-        events_loop.poll_events(|glutin::Event::WindowEvent{window_id: _, event}| {
+        events_loop.poll_events(|glutin::Event::WindowEvent {
+                                     window_id: _,
+                                     event,
+                                 }| {
             match event {
-                glutin::WindowEvent::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape), _) |
+                glutin::WindowEvent::KeyboardInput(_,
+                                                   _,
+                                                   Some(glutin::VirtualKeyCode::Escape),
+                                                   _) |
                 glutin::WindowEvent::Closed => running = false,
                 glutin::WindowEvent::Resized(_width, _height) => {
                     gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
-                },
-                _ => {},
+                }
+                _ => {}
             }
         });
 

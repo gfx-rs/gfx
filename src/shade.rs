@@ -63,7 +63,9 @@ pub struct SelectError(Backend);
 
 impl fmt::Display for SelectError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "An error occurred when selecting the {:?} backend", self.0)
+        write!(f,
+               "An error occurred when selecting the {:?} backend",
+               self.0)
     }
 }
 
@@ -100,52 +102,52 @@ impl<'a> Source<'a> {
     /// Pick one of the stored versions that is the highest supported by the backend.
     pub fn select(&self, backend: Backend) -> Result<&'a [u8], SelectError> {
         Ok(match backend {
-            Backend::Glsl(version) => {
-                let v = version.major * 100 + version.minor;
-                match *self {
-                    Source { glsl_430: s, .. } if s != EMPTY && v >= 430 => s,
-                    Source { glsl_400: s, .. } if s != EMPTY && v >= 400 => s,
-                    Source { glsl_150: s, .. } if s != EMPTY && v >= 150 => s,
-                    Source { glsl_140: s, .. } if s != EMPTY && v >= 140 => s,
-                    Source { glsl_130: s, .. } if s != EMPTY && v >= 130 => s,
-                    Source { glsl_120: s, .. } if s != EMPTY && v >= 120 => s,
-                    _ => return Err(SelectError(backend)),
-                }
-            }
-            Backend::GlslEs(version) => {
-                let v = version.major * 100 + version.minor;
-                match *self {
-                    Source { glsl_es_100: s, .. } if s != EMPTY && v >= 100 => s,
-                    Source { glsl_es_200: s, .. } if s != EMPTY && v >= 200 => s,
-                    Source { glsl_es_300: s, .. } if s != EMPTY && v >= 300 => s,
-                    _ => return Err(SelectError(backend)),
-                }
-            }
-            #[cfg(target_os = "windows")]
+               Backend::Glsl(version) => {
+                   let v = version.major * 100 + version.minor;
+                   match *self {
+                       Source { glsl_430: s, .. } if s != EMPTY && v >= 430 => s,
+                       Source { glsl_400: s, .. } if s != EMPTY && v >= 400 => s,
+                       Source { glsl_150: s, .. } if s != EMPTY && v >= 150 => s,
+                       Source { glsl_140: s, .. } if s != EMPTY && v >= 140 => s,
+                       Source { glsl_130: s, .. } if s != EMPTY && v >= 130 => s,
+                       Source { glsl_120: s, .. } if s != EMPTY && v >= 120 => s,
+                       _ => return Err(SelectError(backend)),
+                   }
+               }
+               Backend::GlslEs(version) => {
+                   let v = version.major * 100 + version.minor;
+                   match *self {
+                       Source { glsl_es_100: s, .. } if s != EMPTY && v >= 100 => s,
+                       Source { glsl_es_200: s, .. } if s != EMPTY && v >= 200 => s,
+                       Source { glsl_es_300: s, .. } if s != EMPTY && v >= 300 => s,
+                       _ => return Err(SelectError(backend)),
+                   }
+               }
+               #[cfg(target_os = "windows")]
             Backend::Hlsl(model) => {
-                match *self {
-                    Source { hlsl_50: s, .. } if s != EMPTY && model >= 50 => s,
-                    Source { hlsl_41: s, .. } if s != EMPTY && model >= 41 => s,
-                    Source { hlsl_40: s, .. } if s != EMPTY && model >= 40 => s,
-                    Source { hlsl_30: s, .. } if s != EMPTY && model >= 30 => s,
-                    _ => return Err(SelectError(backend)),
-                }
-            }
-            #[cfg(feature = "metal")]
+                   match *self {
+                       Source { hlsl_50: s, .. } if s != EMPTY && model >= 50 => s,
+                       Source { hlsl_41: s, .. } if s != EMPTY && model >= 41 => s,
+                       Source { hlsl_40: s, .. } if s != EMPTY && model >= 40 => s,
+                       Source { hlsl_30: s, .. } if s != EMPTY && model >= 30 => s,
+                       _ => return Err(SelectError(backend)),
+                   }
+               }
+               #[cfg(feature = "metal")]
             Backend::Msl(revision) => {
-                match *self {
-                    Source { msl_11: s, .. } if s != EMPTY && revision >= 11 => s,
-                    Source { msl_10: s, .. } if s != EMPTY && revision >= 10 => s,
-                    _ => return Err(SelectError(backend)),
-                }
-            }
-            #[cfg(feature = "vulkan")]
+                   match *self {
+                       Source { msl_11: s, .. } if s != EMPTY && revision >= 11 => s,
+                       Source { msl_10: s, .. } if s != EMPTY && revision >= 10 => s,
+                       _ => return Err(SelectError(backend)),
+                   }
+               }
+               #[cfg(feature = "vulkan")]
             Backend::Vulkan => {
-                match *self {
-                    Source { vulkan: s, .. } if s != EMPTY => s,
-                    _ => return Err(SelectError(backend)),
-                }
-            }
-        })
+                   match *self {
+                       Source { vulkan: s, .. } if s != EMPTY => s,
+                       _ => return Err(SelectError(backend)),
+                   }
+               }
+           })
     }
 }

@@ -52,7 +52,7 @@ static VERTEX_SRC: &'static [u8] = b"
     uniform mat4 u_Transform;
 
     void main() {
-        gl_Position = u_Transform * vec4(a_Pos, 1.0); 
+        gl_Position = u_Transform * vec4(a_Pos, 1.0);
    }
 ";
 
@@ -65,11 +65,9 @@ static FRAGMENT_SRC: &'static [u8] = b"
     }
 ";
 
-static VERTEX_DATA: &'static [Vertex] = &[
-    Vertex { pos: [-1.0, 0.0, -1.0] },
-    Vertex { pos: [ 1.0, 0.0, -1.0] },
-    Vertex { pos: [-1.0, 0.0,  1.0] },
-];
+static VERTEX_DATA: &'static [Vertex] = &[Vertex { pos: [-1.0, 0.0, -1.0] },
+ Vertex { pos: [1.0, 0.0, -1.0] },
+ Vertex { pos: [-1.0, 0.0, 1.0] }];
 
 const CLEAR_COLOR: (f32, f32, f32, f32) = (0.3, 0.3, 0.3, 1.0);
 
@@ -77,10 +75,7 @@ const CLEAR_COLOR: (f32, f32, f32, f32) = (0.3, 0.3, 0.3, 1.0);
 
 fn transform(x: i16, y: i16, proj_view: &Matrix4<f32>) -> Matrix4<f32> {
     let mut model = Matrix4::from(Matrix3::identity() * 0.05);
-    model.w = Vector4::new(x as f32 * 0.10,
-                           0f32,
-                           y as f32 * 0.10,
-                           1f32);
+    model.w = Vector4::new(x as f32 * 0.10, 0f32, y as f32 * 0.10, 1f32);
     proj_view * model
 }
 
@@ -94,8 +89,8 @@ trait Renderer: Drop {
 struct GFX {
     dimension: i16,
     window: glutin::Window,
-    device:gfx_device_gl::Device,
-    encoder: gfx::Encoder<R,CB>,
+    device: gfx_device_gl::Device,
+    encoder: gfx::Encoder<R, CB>,
     data: pipe::Data<R>,
     pso: gfx::PipelineState<R, pipe::Meta>,
     slice: gfx::Slice<R>,
@@ -104,30 +99,32 @@ struct GFX {
 struct GL {
     dimension: i16,
     window: glutin::Window,
-    gl:Gl,
-    trans_uniform:GLint,
-    vs:GLuint,
-    fs:GLuint,
-    program:GLuint,
-    vbo:GLuint,
-    vao:GLuint,
+    gl: Gl,
+    trans_uniform: GLint,
+    vs: GLuint,
+    fs: GLuint,
+    program: GLuint,
+    vbo: GLuint,
+    vao: GLuint,
 }
 
 
 impl GFX {
-    fn new(builder: glutin::WindowBuilder, events_loop: &glutin::EventsLoop, dimension: i16) -> Self {
+    fn new(builder: glutin::WindowBuilder,
+           events_loop: &glutin::EventsLoop,
+           dimension: i16)
+           -> Self {
         use gfx::traits::FactoryExt;
 
         let (window, device, mut factory, main_color, _) =
             gfx_window_glutin::init::<ColorFormat, DepthStencil>(builder, events_loop);
-        let encoder: gfx::Encoder<_,_> = factory.create_command_buffer().into();
+        let encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
 
-        let pso = factory.create_pipeline_simple(
-            VERTEX_SRC, FRAGMENT_SRC,
-            pipe::new()
-        ).unwrap();
+        let pso = factory
+            .create_pipeline_simple(VERTEX_SRC, FRAGMENT_SRC, pipe::new())
+            .unwrap();
 
-        let (vbuf, slice) = factory.create_vertex_buffer_with_slice(VERTEX_DATA,());
+        let (vbuf, slice) = factory.create_vertex_buffer_with_slice(VERTEX_DATA, ());
 
         let data = pipe::Data {
             vbuf: vbuf,
@@ -150,13 +147,12 @@ impl GFX {
 impl Renderer for GFX {
     fn render(&mut self, proj_view: &Matrix4<f32>) {
         let start = Instant::now();
-        self.encoder.clear(&self.data.out_color, [CLEAR_COLOR.0,
-                                                  CLEAR_COLOR.1,
-                                                  CLEAR_COLOR.2,
-                                                  CLEAR_COLOR.3]);
+        self.encoder
+            .clear(&self.data.out_color,
+                   [CLEAR_COLOR.0, CLEAR_COLOR.1, CLEAR_COLOR.2, CLEAR_COLOR.3]);
 
-        for x in (-self.dimension) ..self.dimension {
-            for y in (-self.dimension) ..self.dimension {
+        for x in (-self.dimension)..self.dimension {
+            for y in (-self.dimension)..self.dimension {
                 self.data.transform = transform(x, y, proj_view).into();
                 self.encoder.draw(&self.slice, &self.pso, &self.data);
             }
@@ -171,26 +167,32 @@ impl Renderer for GFX {
 
         println!("total time:\t\t{0:4.2}ms", duration_to_ms(swap));
         println!("\tcreate list:\t{0:4.2}ms", duration_to_ms(pre_submit));
-        println!("\tsubmit:\t\t{0:4.2}ms", duration_to_ms(post_submit - pre_submit));
+        println!("\tsubmit:\t\t{0:4.2}ms",
+                 duration_to_ms(post_submit - pre_submit));
         println!("\tgpu wait:\t{0:4.2}ms", duration_to_ms(swap - post_submit));
     }
-    fn window(&mut self) -> &glutin::Window { &self.window }
+    fn window(&mut self) -> &glutin::Window {
+        &self.window
+    }
 }
 
 impl Drop for GFX {
-    fn drop(&mut self) {
-    }
+    fn drop(&mut self) {}
 }
 
 
 
 impl GL {
-    fn new(builder: glutin::WindowBuilder, events_loop: &glutin::EventsLoop, dimension: i16) -> Self {
-        fn compile_shader (gl:&Gl, src: &[u8], ty: GLenum) -> GLuint {
+    fn new(builder: glutin::WindowBuilder,
+           events_loop: &glutin::EventsLoop,
+           dimension: i16)
+           -> Self {
+        fn compile_shader(gl: &Gl, src: &[u8], ty: GLenum) -> GLuint {
             unsafe {
                 let shader = gl.CreateShader(ty);
                 // Attempt to compile the shader
-                gl.ShaderSource(shader, 1,
+                gl.ShaderSource(shader,
+                                1,
                                 &(src.as_ptr() as *const i8),
                                 &(src.len() as GLint));
                 gl.CompileShader(shader);
@@ -205,9 +207,16 @@ impl GL {
                     gl.GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut len);
 
                     // allocate a buffer of size (len - 1) to skip the trailing null character
-                    let mut buf: Vec<u8> = repeat(0u8).take((len as usize).saturating_sub(1)).collect();
-                    gl.GetShaderInfoLog(shader, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
-                    panic!("{}", str::from_utf8(&buf).ok().expect("ShaderInfoLog not valid utf8"));
+                    let mut buf: Vec<u8> =
+                        repeat(0u8).take((len as usize).saturating_sub(1)).collect();
+                    gl.GetShaderInfoLog(shader,
+                                        len,
+                                        ptr::null_mut(),
+                                        buf.as_mut_ptr() as *mut GLchar);
+                    panic!("{}",
+                           str::from_utf8(&buf)
+                               .ok()
+                               .expect("ShaderInfoLog not valid utf8"));
                 }
                 shader
             }
@@ -216,7 +225,7 @@ impl GL {
         let window = builder.build(events_loop).unwrap();
         unsafe { window.make_current().unwrap() };
         let gl = Gl::load_with(|s| window.get_proc_address(s) as *const _);
-        
+
         // Create GLSL shaders
         let vs = compile_shader(&gl, VERTEX_SRC, gl::VERTEX_SHADER);
         let fs = compile_shader(&gl, FRAGMENT_SRC, gl::FRAGMENT_SHADER);
@@ -239,8 +248,14 @@ impl GL {
 
                 // allocate a buffer of size (len - 1) to skip the trailing null character
                 let mut buf: Vec<u8> = repeat(0u8).take((len as usize).saturating_sub(1)).collect();
-                gl.GetProgramInfoLog(program, len, ptr::null_mut(), buf.as_mut_ptr() as *mut GLchar);
-                panic!("{}", str::from_utf8(&buf).ok().expect("ProgramInfoLog not valid utf8"));
+                gl.GetProgramInfoLog(program,
+                                     len,
+                                     ptr::null_mut(),
+                                     buf.as_mut_ptr() as *mut GLchar);
+                panic!("{}",
+                       str::from_utf8(&buf)
+                           .ok()
+                           .expect("ProgramInfoLog not valid utf8"));
             }
         }
 
@@ -265,7 +280,9 @@ impl GL {
             // Use shader program
             gl.UseProgram(program);
             let o_color = CString::new("o_Color").unwrap();
-            gl.BindFragDataLocation(program, 0, o_color.as_bytes_with_nul().as_ptr() as *const i8);
+            gl.BindFragDataLocation(program,
+                                    0,
+                                    o_color.as_bytes_with_nul().as_ptr() as *const i8);
 
             // Specify the layout of the vertex data
             let a_pos = CString::new("a_Pos").unwrap();
@@ -273,15 +290,21 @@ impl GL {
 
             let pos_attr = gl.GetAttribLocation(program, a_pos.as_ptr());
             gl.EnableVertexAttribArray(pos_attr as GLuint);
-            gl.VertexAttribPointer(pos_attr as GLuint, 3, gl::FLOAT,
-                                   gl::FALSE as GLboolean, 0, ptr::null());
+            gl.VertexAttribPointer(pos_attr as GLuint,
+                                   3,
+                                   gl::FLOAT,
+                                   gl::FALSE as GLboolean,
+                                   0,
+                                   ptr::null());
 
             let u_transform = CString::new("u_Transform").unwrap();
-            trans_uniform = gl.GetUniformLocation(program, u_transform.as_bytes_with_nul().as_ptr() as *const i8)
+            trans_uniform = gl.GetUniformLocation(program,
+                                                  u_transform.as_bytes_with_nul().as_ptr() as
+                                                  *const i8)
         };
 
         GL {
-            window: window,            
+            window: window,
             dimension: dimension,
             gl: gl,
             vs: vs,
@@ -304,19 +327,18 @@ impl Renderer for GL {
 
         // Clear the screen to black
         unsafe {
-            self.gl.ClearColor(CLEAR_COLOR.0, CLEAR_COLOR.1, CLEAR_COLOR.2, CLEAR_COLOR.3);
+            self.gl
+                .ClearColor(CLEAR_COLOR.0, CLEAR_COLOR.1, CLEAR_COLOR.2, CLEAR_COLOR.3);
             self.gl.Clear(gl::COLOR_BUFFER_BIT);
         }
-        
-        for x in (-self.dimension) ..self.dimension {
-            for y in (-self.dimension) ..self.dimension {
-                let mat:Matrix4<f32> = transform(x, y, proj_view).into();
+
+        for x in (-self.dimension)..self.dimension {
+            for y in (-self.dimension)..self.dimension {
+                let mat: Matrix4<f32> = transform(x, y, proj_view).into();
 
                 unsafe {
-                    self.gl.UniformMatrix4fv(self.trans_uniform,
-                                             1,
-                                             gl::FALSE,
-                                             mat.as_ptr());
+                    self.gl
+                        .UniformMatrix4fv(self.trans_uniform, 1, gl::FALSE, mat.as_ptr());
                     self.gl.DrawArrays(gl::TRIANGLES, 0, 3);
                 }
 
@@ -333,7 +355,9 @@ impl Renderer for GL {
         println!("\tsubmit:\t\t{0:4.2}ms", duration_to_ms(submit));
         println!("\tgpu wait:\t{0:4.2}ms", duration_to_ms(swap - submit));
     }
-    fn window(&mut self) -> &glutin::Window { &self.window }
+    fn window(&mut self) -> &glutin::Window {
+        &self.window
+    }
 }
 
 impl Drop for GL {
@@ -358,10 +382,11 @@ fn main() {
 
     let mode = args.nth(1).unwrap();
     let count: i32 = if args_count == 3 {
-        FromStr::from_str(&args.next().unwrap()).ok()
-    } else {
-        None
-    }.unwrap_or(10000);
+            FromStr::from_str(&args.next().unwrap()).ok()
+        } else {
+            None
+        }
+        .unwrap_or(10000);
 
     let count = ((count as f64).sqrt() / 2.) as i16;
 
@@ -375,17 +400,13 @@ fn main() {
     match mode.as_ref() {
         "gfx" => r = Box::new(GFX::new(builder, &events_loop, count)),
         "gl" => r = Box::new(GL::new(builder, &events_loop, count)),
-        x => {
-            panic!("{} is not a known mode", x)
-        }
+        x => panic!("{} is not a known mode", x),
     }
 
     let proj_view = {
-        let view = Matrix4::look_at(
-            Point3::new(0f32, 5.0, -5.0),
-            Point3::new(0f32, 0.0, 0.0),
-            Vector3::unit_z(),
-        );
+        let view = Matrix4::look_at(Point3::new(0f32, 5.0, -5.0),
+                                    Point3::new(0f32, 0.0, 0.0),
+                                    Vector3::unit_z());
 
         let proj = {
             let aspect = {
@@ -397,15 +418,21 @@ fn main() {
         proj * view
     };
 
-    println!("count is {}", count*count*4);
+    println!("count is {}", count * count * 4);
 
     let mut running = true;
     loop {
-        events_loop.poll_events(|glutin::Event::WindowEvent{window_id: _, event}| {
+        events_loop.poll_events(|glutin::Event::WindowEvent {
+                                     window_id: _,
+                                     event,
+                                 }| {
             match event {
-                glutin::WindowEvent::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape), _) |
+                glutin::WindowEvent::KeyboardInput(_,
+                                                   _,
+                                                   Some(glutin::VirtualKeyCode::Escape),
+                                                   _) |
                 glutin::WindowEvent::Closed => running = false,
-                _ => {},
+                _ => {}
             }
         });
         if !running {

@@ -35,11 +35,18 @@ gfx_defines!{
     }
 }
 
-const TRIANGLE: [Vertex; 3] = [
-    Vertex { pos: [ -0.5, -0.5 ], color: [1.0, 0.0, 0.0] },
-    Vertex { pos: [  0.5, -0.5 ], color: [0.0, 1.0, 0.0] },
-    Vertex { pos: [  0.0,  0.5 ], color: [0.0, 0.0, 1.0] }
-];
+const TRIANGLE: [Vertex; 3] = [Vertex {
+                                   pos: [-0.5, -0.5],
+                                   color: [1.0, 0.0, 0.0],
+                               },
+                               Vertex {
+                                   pos: [0.5, -0.5],
+                                   color: [0.0, 1.0, 0.0],
+                               },
+                               Vertex {
+                                   pos: [0.0, 0.5],
+                                   color: [0.0, 0.0, 1.0],
+                               }];
 
 const CLEAR_COLOR: [f32; 4] = [0.1, 0.2, 0.3, 1.0];
 
@@ -52,29 +59,35 @@ pub fn main() {
     let (window, mut device, mut factory, main_color, mut main_depth) =
         gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder, &events_loop);
     let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
-    let pso = factory.create_pipeline_simple(
-        include_bytes!("shader/triangle_150.glslv"),
-        include_bytes!("shader/triangle_150.glslf"),
-        pipe::new()
-    ).unwrap();
+    let pso = factory
+        .create_pipeline_simple(include_bytes!("shader/triangle_150.glslv"),
+                                include_bytes!("shader/triangle_150.glslf"),
+                                pipe::new())
+        .unwrap();
     let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&TRIANGLE, ());
     let mut data = pipe::Data {
         vbuf: vertex_buffer,
-        out: main_color
+        out: main_color,
     };
 
 
     let mut running = true;
     while running {
         // fetch events
-        events_loop.poll_events(|glutin::Event::WindowEvent{window_id: _, event}| {
+        events_loop.poll_events(|glutin::Event::WindowEvent {
+                                     window_id: _,
+                                     event,
+                                 }| {
             match event {
-                glutin::WindowEvent::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape), _) |
+                glutin::WindowEvent::KeyboardInput(_,
+                                                   _,
+                                                   Some(glutin::VirtualKeyCode::Escape),
+                                                   _) |
                 glutin::WindowEvent::Closed => running = false,
                 glutin::WindowEvent::Resized(_width, _height) => {
                     gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
-                },
-                _ => {},
+                }
+                _ => {}
             }
         });
 
