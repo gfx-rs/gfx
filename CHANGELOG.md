@@ -1,5 +1,11 @@
 ## Change Log
 
+### v0.16 (2017-05-11)
+  - `RawGlobal` PSO component ([#1262](https://github.com/gfx-rs/gfx/pull/1262))
+  - run-time configurable instance rate ([#1256](https://github.com/gfx-rs/gfx/pull/1256))
+  - more convenience traits are derived ([#1249](https://github.com/gfx-rs/gfx/pull/1249))
+  - optional cgmath support ([#1242](https://github.com/gfx-rs/gfx/pull/1242))
+
 ### v0.15 (2017-04-22)
   - optional serialization support ([#1234](https://github.com/gfx-rs/gfx/pull/1234))
   - better GL state caching ([#1221](https://github.com/gfx-rs/gfx/pull/1221))
