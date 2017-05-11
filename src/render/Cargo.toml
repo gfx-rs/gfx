@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx"
-version = "0.15.1"
+version = "0.16.0"
 description = "A high-performance, bindless graphics API"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -38,5 +38,5 @@ unstable = []
 cgmath = { version = "0.14", optional = true }
 derivative = "1.0"
 draw_state = "0.7"
-gfx_core = { path = "../core", version = "0.7" }
+gfx_core = { path = "../core", version = "0.7.1" }
 log = "0.3"
