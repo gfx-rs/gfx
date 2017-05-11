@@ -104,21 +104,58 @@ pub struct ConstantBuffer<T: Structure<shade::ConstFormat>>(
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RawConstantBuffer(Option<(Usage, ConstantBufferSlot)>);
 
-/// Global (uniform) constant component. Describes a free-standing value passed into
-/// the shader, which is not enclosed into any constant buffer. Deprecated in DX10 and higher.
+/// Global (uniform) constant component. Describes a free-standing value passed
+/// into the shader, which is not enclosed into any constant buffer.
 ///
 /// - init: `&str` = name of the constant
 /// - data: `T` = value
 #[derive(Derivative)]
 #[derivative(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Global<T: ToUniform>(
-    Option<shade::Location>,
+    RawGlobal,
     #[derivative(Hash = "ignore", PartialEq = "ignore")]
     PhantomData<T>
 );
 
-fn match_attribute(_: &shade::AttributeVar, _: Format) -> bool {
-    true //TODO
+/// Raw global (uniform) constant component. Describes a free-standing value
+/// passed into the shader, which is not enclosed in any constant buffer.
+///
+/// - init: `&str` = name of the constant
+/// - data: `UniformValue` = value
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct RawGlobal(Option<shade::Location>);
+
+fn match_attribute(attr: &shade::AttributeVar, fmt: Format) -> bool {
+    use core::shade::{BaseType, ContainerType};
+    use core::format::ChannelType;
+
+    // TODO: Fill in `_` with compatible `core::format::SurfaceType` variants.
+
+    match (attr.base_type, fmt.1) {
+        (BaseType::I32, ChannelType::Int) |
+        (BaseType::F32, ChannelType::Float) |
+        (BaseType::F32, ChannelType::Inorm) |
+        (BaseType::F32, ChannelType::Srgb) |
+        (BaseType::F32, ChannelType::Unorm) |
+        (BaseType::U32, ChannelType::Uint) => match (attr.container, fmt.0) {
+                (ContainerType::Single, _) |
+                (ContainerType::Vector(2), _) |
+                (ContainerType::Vector(3), _) |
+                (ContainerType::Vector(4), _) => true,
+                _ => false,
+        },
+        (BaseType::F64, ChannelType::Float) |
+        (BaseType::F64, ChannelType::Inorm) |
+        (BaseType::F64, ChannelType::Srgb) |
+        (BaseType::F64, ChannelType::Unorm) => match (attr.container, fmt.0) {
+                (ContainerType::Single, _) |
+                (ContainerType::Vector(2), _) |
+                (ContainerType::Vector(3), _) |
+                (ContainerType::Vector(4), _) => true,
+                _ => false,
+        },
+        _ => false,
+    }
 }
 
 impl<'a,
@@ -167,7 +204,7 @@ impl RawVertexBuffer {
         self.1 |= 1 << (at.slot as AttributeSlotSet);
         if match_attribute(at, el.format) {
             Ok((self.0.unwrap(), el))
-        }else {
+        } else {
             Err(el.format)
         }
     }
@@ -268,10 +305,10 @@ impl<'a> DataLink<'a> for RawConstantBuffer {
     }
     fn link_constant_buffer<'b>(&mut self, cb: &'b shade::ConstantBufferVar, init: &Self::Init)
                             -> Option<Result<pso::ConstantBufferDesc, ElementError<&'b str>>> {
-        if &cb.name == *init {
+        if cb.name.as_str() == *init {
             self.0 = Some((cb.usage, cb.slot));
             Some(Ok(cb.usage))
-        }else {
+        } else {
             None
         }
     }
@@ -292,23 +329,18 @@ impl<R: Resources> DataBind<R> for RawConstantBuffer {
     }
 }
 
-impl<'a, T: ToUniform> DataLink<'a> for Global<T> {
+impl<'a, T: ToUniform + Default> DataLink<'a> for Global<T> {
     type Init = &'a str;
     fn new() -> Self {
-        Global(None, PhantomData)
+        Global(RawGlobal::new(), PhantomData)
     }
     fn is_active(&self) -> bool {
-        self.0.is_some()
+        self.0.is_active()
     }
     fn link_global_constant(&mut self, var: &shade::ConstVar, init: &Self::Init) ->
-                            Option<Result<(), shade::UniformValue>> {
-        if &var.name == *init {
-            //if match_constant(var, ())
-            self.0 = Some(var.location);
-            Some(Ok(()))
-        }else {
-            None
-        }
+                            Option<Result<(), shade::CompatibilityError>> {
+        let kind = ToUniform::convert(T::default());
+        self.0.link_global_constant(var, init).and(Some(var.is_compatible(&kind)))
     }
 }
 
@@ -317,11 +349,41 @@ impl<R: Resources, T: ToUniform> DataBind<R> for Global<T> {
     fn bind_to(&self,
                out: &mut RawDataSet<R>,
                data: &Self::Data,
+               man: &mut handle::Manager<R>,
+               access: &mut AccessInfo<R>) {
+        let val = data.convert();
+        self.0.bind_to(out, &val, man, access);
+    }
+}
+
+impl<'a> DataLink<'a> for RawGlobal {
+    type Init = &'a str;
+    fn new() -> Self {
+        RawGlobal(None)
+    }
+    fn is_active(&self) -> bool {
+        self.0.is_some()
+    }
+    fn link_global_constant(&mut self, var: &shade::ConstVar, init: &Self::Init) ->
+                            Option<Result<(), shade::CompatibilityError>> {
+        if var.name.as_str() == *init {
+            self.0 = Some(var.location);
+            Some(Ok(()))
+        } else {
+            None
+        }
+    }
+}
+
+impl<R: Resources> DataBind<R> for RawGlobal {
+    type Data = shade::UniformValue;
+    fn bind_to(&self,
+               out: &mut RawDataSet<R>,
+               data: &Self::Data,
                _: &mut handle::Manager<R>,
                _: &mut AccessInfo<R>) {
         if let Some(loc) = self.0 {
-            let value = data.convert();
-            out.global_constants.push((loc, value));
+            out.global_constants.push((loc, *data));
         }
     }
 }

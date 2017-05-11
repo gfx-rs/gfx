@@ -173,7 +173,7 @@ pub enum InitError<S> {
     /// Constant buffer mismatch.
     ConstantBuffer(S, Option<ElementError<S>>),
     /// Global constant mismatch.
-    GlobalConstant(S, Option<()>),
+    GlobalConstant(S, Option<c::shade::CompatibilityError>),
     /// Shader resource view mismatch.
     ResourceView(S, Option<()>),
     /// Unordered access view mismatch.
@@ -312,7 +312,7 @@ pub trait DataLink<'a>: Sized {
                             Option<Result<c::pso::ConstantBufferDesc, ElementError<&'b str>>> { None }
     /// Attempt to link with a global constant.
     fn link_global_constant(&mut self, _: &c::shade::ConstVar, _: &Self::Init) ->
-                            Option<Result<(), c::shade::UniformValue>> { None }
+                            Option<Result<(), c::shade::CompatibilityError>> { None }
     /// Attempt to link with an output render target (RTV).
     fn link_output(&mut self, _: &c::shade::OutputVar, _: &Self::Init) ->
                    Option<Result<c::pso::ColorTargetDesc, c::format::Format>> { None }
