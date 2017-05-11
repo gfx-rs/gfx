@@ -39,10 +39,8 @@ extern crate gfx_window_vulkan;
 
 pub mod shade;
 
-#[cfg(not(any(feature = "vulkan", feature = "metal")))]
+#[cfg(not(feature = "metal"))]
 pub type ColorFormat = gfx::format::Rgba8;
-#[cfg(feature = "vulkan")]
-pub type ColorFormat = gfx::format::Bgra8;
 #[cfg(feature = "metal")]
 pub type ColorFormat = (gfx::format::B8_G8_R8_A8, gfx::format::Srgb);
 
