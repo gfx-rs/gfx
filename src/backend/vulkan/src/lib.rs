@@ -19,7 +19,6 @@ extern crate ash;
 extern crate gfx_core as core;
 #[macro_use]
 extern crate lazy_static;
-extern crate winit;
 
 #[cfg(target_os = "windows")]
 extern crate kernel32;
