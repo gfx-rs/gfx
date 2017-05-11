@@ -23,6 +23,9 @@ use core::format::{ChannelType, DepthFormat, Format, RenderFormat};
 pub use gfx_device_gl::{Device, Factory, Resources};
 use sdl2::video::{DisplayMode, GLContext, Window, WindowBuilder, WindowBuildError};
 use sdl2::pixels::PixelFormatEnum;
+use core::{format, texture};
+use core::memory::Typed;
+use gfx_device_gl::Resources as R;
 
 #[derive(Debug)]
 pub enum InitError {
@@ -140,4 +143,38 @@ pub fn init_raw(mut builder: WindowBuilder, cf: Format, df: Format)
     let (color_view, ds_view) = gfx_device_gl::create_main_targets_raw(dim, cf.0, df.0);
 
     Ok((window, context, device, factory, color_view, ds_view))
+}
+
+fn get_window_dimensions(window: &sdl2::video::Window) -> texture::Dimensions {
+    let (width, height) = window.size();
+    let aa = window.subsystem().gl_attr().multisample_samples() as texture::NumSamples;
+    (width as texture::Size, height as texture::Size, 1, aa.into())
+}
+
+/// Update the internal dimensions of the main framebuffer targets. Generic version over the format.
+pub fn update_views<Cf, Df>(window: &sdl2::video::Window, color_view: &mut handle::RenderTargetView<R, Cf>,
+                            ds_view: &mut handle::DepthStencilView<R, Df>)
+where
+    Cf: format::RenderFormat,
+    Df: format::DepthFormat
+{
+    let dim = color_view.get_dimensions();
+    assert_eq!(dim, ds_view.get_dimensions());
+    if let Some((cv, dv)) = update_views_raw(window, dim, Cf::get_format(), Df::get_format()) {
+        *color_view = Typed::new(cv);
+        *ds_view = Typed::new(dv);
+    }
+}
+
+/// Return new main target views if the window resolution has changed from the old dimensions.
+pub fn update_views_raw(window: &sdl2::video::Window, old_dimensions: texture::Dimensions,
+                        color_format: format::Format, ds_format: format::Format)
+                        -> Option<(handle::RawRenderTargetView<R>, handle::RawDepthStencilView<R>)>
+{
+    let dim = get_window_dimensions(window);
+    if dim != old_dimensions {
+        Some(gfx_device_gl::create_main_targets_raw(dim, color_format.0, ds_format.0))
+    } else {
+        None
+    }
 }
