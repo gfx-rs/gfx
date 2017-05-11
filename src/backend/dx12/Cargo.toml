@@ -13,27 +13,26 @@
 # limitations under the License.
 
 [package]
-name = "gfx_device_vulkan"
-version = "0.2.0"
-description = "Vulkan API backend for gfx-rs"
+name = "gfx_device_dx12"
+version = "0.1.0"
+description = "DirectX-12 API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
 readme = "README.md"
-documentation = "https://docs.rs/gfx_device_vulkan"
+documentation = "https://docs.rs/gfx_device_dx12"
 
 [lib]
-name = "gfx_device_vulkan"
+name = "gfx_device_dx12"
 
 [dependencies]
 log = "0.3"
-lazy_static = "0.2"
-shared_library = "0.1"
-ash = "0.15.7"
 gfx_core = { path = "../../core", version = "0.7" }
-
-[target.'cfg(windows)'.dependencies]
-kernel32-sys = "0.2.2"
-
+d3d12-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
+d3dcompiler-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
+dxgi-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
+dxguid-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
+comptr = { git = "https://github.com/msiglreith/comptr-rs.git" }
+winapi = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
