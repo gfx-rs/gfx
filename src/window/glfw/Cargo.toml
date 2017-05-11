@@ -1,4 +1,4 @@
-# Copyright 2015 The Gfx-rs Developers.
+# Copyright 2017 The Gfx-rs Developers.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx_window_glfw"
-version = "0.14.0"
+version = "0.15.0"
 description = "GLFW window for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -28,6 +28,11 @@ documentation = "https://docs.rs/gfx_window_glfw"
 name = "gfx_window_glfw"
 
 [dependencies]
-glfw = "0.13"
+glfw = "0.14"
 gfx_core = { path = "../../core", version = "0.7" }
 gfx_device_gl = { path = "../../backend/gl", version = "0.14" }
+
+# Currently there is an issue with cargo and dev-dependencies:
+# https://github.com/rust-lang/cargo/issues/860
+# TODO: move gfx to [dev-dependencies] once it gets resolved.
+gfx = { path = "../../render", version = "0.15" }
