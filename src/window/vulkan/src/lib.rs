@@ -323,7 +323,7 @@ impl core::SwapChain for SwapChain {
     }
 }
 
-pub struct Window<'a>(&'a winit::Window);
+pub struct Window<'a>(pub &'a winit::Window);
 
 impl<'a> core::WindowExt for Window<'a> {
     type Surface = Surface;
