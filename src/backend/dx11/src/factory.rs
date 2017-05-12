@@ -900,6 +900,8 @@ impl core::Factory<R> for Factory {
         }
     }
 
+    fn create_semaphore(&mut self) -> () { unimplemented!() }
+
     fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b h::Buffer<R, T>)
                                -> Result<mapping::Reader<'b, R, T>,
                                          mapping::Error>

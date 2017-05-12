@@ -38,6 +38,8 @@ impl f::Factory<R> for Factory {
 
     fn create_sampler(&mut self, _: t::SamplerInfo) -> handle::Sampler<R> { unimplemented!() }
 
+    fn create_semaphore(&mut self) -> () { unimplemented!() }
+
     fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<R, T>)
                                -> Result<mapping::Reader<'b, R, T>,
                                          mapping::Error>
