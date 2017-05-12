@@ -141,11 +141,11 @@ impl<T: Any + fmt::Debug + fmt::Display> Error for UpdateError<T> {
 /// Graphics Command Encoder
 ///
 /// # Overview
-/// The `Encoder` is a wrapper structure around a `CommandBuffer`. It is responsible for sending
+/// The `GraphicsEncoder` is a wrapper structure around a `CommandBuffer`. It is responsible for sending
 /// commands to the `CommandBuffer`.
 ///
 /// # Construction & Handling
-/// The `Encoder` implements `From<CommandBuffer>`, which is how it is constructed. There is no
+/// The `GraphicsEncoder` implements `From<CommandBuffer>`, which is how it is constructed. There is no
 /// cross-API way to create a `CommandBuffer`, however, an API back-end should expose a function to
 /// create one in its `Factory` type. See the specific back-end for details on how to construct a
 /// `CommandBuffer`.
@@ -153,16 +153,16 @@ impl<T: Any + fmt::Debug + fmt::Display> Error for UpdateError<T> {
 /// The encoder exposes multiple functions that add commands to its internal `CommandBuffer`. To
 /// submit these commands to the GPU so they can be rendered, call `flush`.
 #[derive(Debug)]
-pub struct Encoder<R: Resources, C> {
+pub struct GraphicsEncoder<R: Resources, C> {
     command_buffer: C,
     raw_pso_data: pso::RawDataSet<R>,
     access_info: command::AccessInfo<R>,
     handles: handle::Manager<R>,
 }
 
-impl<R: Resources, C> From<C> for Encoder<R, C> {
-    fn from(combuf: C) -> Encoder<R, C> {
-        Encoder {
+impl<R: Resources, C> From<C> for GraphicsEncoder<R, C> {
+    fn from(combuf: C) -> GraphicsEncoder<R, C> {
+        GraphicsEncoder {
             command_buffer: combuf,
             raw_pso_data: pso::RawDataSet::new(),
             access_info: command::AccessInfo::new(),
@@ -171,8 +171,8 @@ impl<R: Resources, C> From<C> for Encoder<R, C> {
     }
 }
 
-impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
-    /// Submits the commands in this `Encoder`'s internal `CommandBuffer` to the GPU, so they can
+impl<R: Resources, C: command::Buffer<R>> GraphicsEncoder<R, C> {
+    /// Submits the commands in this `GraphicsEncoder`'s internal `CommandBuffer` to the GPU, so they can
     /// be executed.
     ///
     /// Calling `flush` before swapping buffers is critical as without it the commands of the
