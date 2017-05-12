@@ -15,6 +15,7 @@
 use core::{self as c, factory as f, handle, texture as t, format, shade, pso, buffer, mapping};
 use core::memory::Bind;
 use core::ShaderSet;
+use native;
 use std::sync::Arc;
 use {Resources as R, Factory};
 
@@ -37,6 +38,8 @@ impl f::Factory<R> for Factory {
                      Result<handle::Shader<R>, shade::CreateShaderError> { unimplemented!() }
 
     fn create_sampler(&mut self, _: t::SamplerInfo) -> handle::Sampler<R> { unimplemented!() }
+
+    fn create_semaphore(&mut self) -> native::Semaphore { unimplemented!() }
 
     fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<R, T>)
                                -> Result<mapping::Reader<'b, R, T>,

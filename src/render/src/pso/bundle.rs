@@ -2,7 +2,7 @@
 //!
 //! Suitable for use when PSO is always used with the same one slice.
 
-use { Resources, Slice, PipelineState, Encoder, CommandBuffer };
+use { Resources, Slice, PipelineState, GraphicsEncoder, CommandBuffer };
 use super::PipelineData;
 
 /// Slice-PSO bundle.
@@ -27,7 +27,7 @@ impl<R: Resources, Data: PipelineData<R>> Bundle<R, Data> {
     }
 
     /// Draw bundle using encoder.
-    pub fn encode<C>(&self, encoder: &mut Encoder<R, C>) where
+    pub fn encode<C>(&self, encoder: &mut GraphicsEncoder<R, C>) where
         C: CommandBuffer<R> {
         encoder.draw(&self.slice, &self.pso, &self.data);
     }
