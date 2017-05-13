@@ -193,7 +193,7 @@ impl DeviceExt for Device {
 */
 
 /// Update the internal dimensions of the main framebuffer targets. Generic version over the format.
-pub fn update_views<Cf, D>(window: &mut Window, factory: &mut Factory, _device: &mut D, width: u16, height: u16)
+pub fn update_views<Cf>(window: &mut Window, factory: &mut Factory, width: u16, height: u16)
             -> Result<h::RenderTargetView<Resources, Cf>, f::TargetViewError>
 where Cf: format::RenderFormat
 {
