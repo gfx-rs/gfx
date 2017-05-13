@@ -21,7 +21,7 @@ use std::error::Error;
 use std::any::Any;
 use std::{fmt, mem};
 
-use core::{Device, SubmissionResult, IndexType, Resources, VertexCount};
+use core::{SubmissionResult, IndexType, Resources, VertexCount};
 use core::{command, format, handle, texture};
 use core::memory::{self, cast_slice, Typed, Pod, Usage};
 use slice;
@@ -180,18 +180,17 @@ impl<R: Resources, C: command::Buffer<R>> GraphicsEncoder<R, C> {
     /// processed. Calling flush too often however will result in a performance hit. It is
     /// generally recommended to call flush once per frame, when all draw calls have been made.
     pub fn flush<D>(&mut self, device: &mut D)
-        where D: Device<Resources=R, CommandBuffer=C>
     {
-        self.flush_no_reset(device).unwrap();
+        // self.flush_no_reset(device).unwrap();
         self.reset();
     }
 
     /// Like `flush` but keeps the encoded commands.
     pub fn flush_no_reset<D>(&mut self, device: &mut D) -> SubmissionResult<()>
-        where D: Device<Resources=R, CommandBuffer=C>
     {
-        device.pin_submitted_resources(&self.handles);
-        device.submit(&mut self.command_buffer, &self.access_info)
+        // device.pin_submitted_resources(&self.handles);
+        // device.submit(&mut self.command_buffer, &self.access_info)
+        unimplemented!()
     }
 
     /// Like `flush_no_reset` but places a fence.
@@ -199,10 +198,11 @@ impl<R: Resources, C: command::Buffer<R>> GraphicsEncoder<R, C> {
                                     device: &mut D,
                                     after: Option<handle::Fence<R>>)
                                     -> SubmissionResult<handle::Fence<R>>
-        where D: Device<Resources=R, CommandBuffer=C>
+        // where D: Device<Resources=R, CommandBuffer=C>
     {
-        device.pin_submitted_resources(&self.handles);
-        device.fenced_submit(&mut self.command_buffer, &self.access_info, after)
+        // device.pin_submitted_resources(&self.handles);
+        // device.fenced_submit(&mut self.command_buffer, &self.access_info, after)
+        unimplemented!()
     }
 
     /// Resets the encoded commands.
