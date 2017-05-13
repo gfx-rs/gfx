@@ -299,42 +299,6 @@ impl Error for SubmissionError {
 #[allow(missing_docs)]
 pub type SubmissionResult<T> = Result<T, SubmissionError>;
 
-/// A `Device` is responsible for submitting `CommandBuffer`s to the GPU.
-#[deprecated]
-pub trait Device: Sized {
-    /// Associated `Resources` type.
-    type Resources: Resources;
-    /// Associated `CommandBuffer` type. Every `Device` type can only work with one `CommandBuffer`
-    /// type.
-    type CommandBuffer: command::Buffer<Self::Resources>;
-
-    /// Returns the capabilities of this `Ðevice`.
-    fn get_capabilities(&self) -> &Capabilities;
-
-    /// Pin everything from this handle manager to live for a frame.
-    fn pin_submitted_resources(&mut self, &handle::Manager<Self::Resources>);
-
-    /// Submits a `CommandBuffer` to the GPU for execution.
-    fn submit(&mut self,
-              &mut Self::CommandBuffer,
-              access: &command::AccessInfo<Self::Resources>)
-              -> SubmissionResult<()>;
-
-    /// Submits a `CommandBuffer` to the GPU for execution.
-    /// returns a fence that is signaled after the GPU has executed all commands
-    fn fenced_submit(&mut self,
-                     &mut Self::CommandBuffer,
-                     access: &command::AccessInfo<Self::Resources>,
-                     after: Option<handle::Fence<Self::Resources>>)
-                     -> SubmissionResult<handle::Fence<Self::Resources>>;
-
-    /// Stalls the current thread until the fence is satisfied
-    fn wait_fence(&mut self, &handle::Fence<Self::Resources>);
-
-    /// Cleanup unused resources. This should be called between frames. 
-    fn cleanup(&mut self);
-}
-
 ///
 pub struct Device_<R: Resources, F: Factory<R>, Q: CommandQueue> {
     /// Resource factory.

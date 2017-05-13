@@ -26,7 +26,7 @@ use std::ptr;
 use winit::os::windows::WindowExt;
 use core::{format, handle as h, factory as f, memory, texture as tex};
 use core::texture::Size;
-use device_dx11::{Device, Factory, Resources};
+use device_dx11::{Factory, Resources};
 
 
 pub struct Window {
@@ -102,16 +102,16 @@ pub enum InitError {
 
 /// Initialize with a given size. Typed format version.
 pub fn init<Cf>(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop)
-           -> Result<(Window, Device, Factory, h::RenderTargetView<Resources, Cf>), InitError>
+           -> Result<(Window, Factory, h::RenderTargetView<Resources, Cf>), InitError>
 where Cf: format::RenderFormat
 {
     init_raw(wb, events_loop, Cf::get_format())
-        .map(|(window, device, factory, color)| (window, device, factory, memory::Typed::new(color)))
+        .map(|(window, factory, color)| (window, factory, memory::Typed::new(color)))
 }
 
 /// Initialize with a given size. Raw format version.
 pub fn init_raw(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop, color_format: format::Format)
-                -> Result<(Window, Device, Factory, h::RawRenderTargetView<Resources>), InitError> {
+                -> Result<(Window, Factory, h::RawRenderTargetView<Resources>), InitError> {
     let inner = match wb.build(events_loop) {
         Ok(w) => w,
         Err(_) => return Err(InitError::Window),
@@ -154,8 +154,8 @@ pub fn init_raw(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop, color
     info!("Creating swap chain of size {}x{}", width, height);
     for dt in driver_types.iter() {
         match device_dx11::create(*dt, &swap_desc) {
-            Ok((device, mut factory, chain)) => {
-                info!("Success with driver {:?}, shader model {}", *dt, device.get_shader_model());
+            Ok((mut factory, chain)) => {
+                // info!("Success with driver {:?}, shader model {}", *dt, device.get_shader_model());
                 let win = Window {
                     inner: inner,
                     swap_chain: chain,
@@ -164,7 +164,7 @@ pub fn init_raw(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop, color
                     size: (width as Size, height as Size),
                 };
                 let color = win.make_back_buffer(&mut factory);
-                return Ok((win, device, factory, color))
+                return Ok((win, factory, color))
             },
             Err(hres) => {
                 info!("Failure with driver {:?}: code {:x}", *dt, hres);
@@ -174,6 +174,7 @@ pub fn init_raw(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop, color
     Err(InitError::DriverType)
 }
 
+/*
 pub trait DeviceExt: core::Device {
     fn clear_state(&self);
 }
@@ -189,16 +190,17 @@ impl DeviceExt for Device {
         self.clear_state();
     }
 }
+*/
 
 /// Update the internal dimensions of the main framebuffer targets. Generic version over the format.
-pub fn update_views<Cf, D>(window: &mut Window, factory: &mut Factory, device: &mut D, width: u16, height: u16)
+pub fn update_views<Cf, D>(window: &mut Window, factory: &mut Factory, _device: &mut D, width: u16, height: u16)
             -> Result<h::RenderTargetView<Resources, Cf>, f::TargetViewError>
-where Cf: format::RenderFormat, D: DeviceExt
+where Cf: format::RenderFormat
 {
     
     factory.cleanup();
-    device.clear_state();
-    device.cleanup();
+    // device.clear_state();
+    // device.cleanup();
 
     window.resize_swap_chain::<Cf>(factory, width, height)
         .map_err(|hr| {
