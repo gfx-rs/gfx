@@ -265,7 +265,10 @@ impl Device {
         }
         unsafe {
             gl.PixelStorei(gl::UNPACK_ALIGNMENT, 1);
-            gl.Enable(gl::PROGRAM_POINT_SIZE);
+
+            if !info.version.is_embedded {
+                gl.Enable(gl::PROGRAM_POINT_SIZE);
+            }
         }
         // create main VAO and bind it
         let mut vao = 0;
