@@ -22,7 +22,7 @@ use core::memory::{self, Bind, Typed};
 use core::handle::{self as h, Producer};
 use {Resources as R, Share, Buffer, Texture, Pipeline, Program, Shader};
 use command::CommandBuffer;
-use {CommandList, DeferredContext};
+use {CommandList, DeferredContext, ShaderModel};
 use native;
 
 
@@ -68,12 +68,13 @@ pub struct Factory {
     /// some valid views to be created because the typed formats can't be reinterpret.
     use_texture_format_hint: bool,
     sub_data_array: Vec<winapi::D3D11_SUBRESOURCE_DATA>,
+    feature_level: winapi::D3D_FEATURE_LEVEL,
 }
 
 impl Clone for Factory {
     fn clone(&self) -> Factory {
         unsafe { (*self.device).AddRef(); }
-        Factory::new(self.device, self.share.clone())
+        Factory::new(self.device, self.feature_level, self.share.clone())
     }
 }
 
@@ -85,7 +86,7 @@ impl Drop for Factory {
 
 impl Factory {
     /// Create a new `Factory`.
-    pub fn new(device: *mut winapi::ID3D11Device, share: Arc<Share>) -> Factory {
+    pub fn new(device: *mut winapi::ID3D11Device, feature_level: winapi::D3D_FEATURE_LEVEL, share: Arc<Share>) -> Factory {
         Factory {
             device: device,
             share: share,
@@ -93,6 +94,7 @@ impl Factory {
             vs_cache: Map::new(),
             use_texture_format_hint: false,
             sub_data_array: Vec::new(),
+            feature_level: feature_level,
         }
     }
 
@@ -103,6 +105,20 @@ impl Factory {
         let raw_tex = Texture(native::Texture::D2(back_buffer));
         let color_tex = self.share.handles.borrow_mut().make_texture(raw_tex, info);
         self.view_texture_as_render_target_raw(&color_tex, desc).unwrap()
+    }
+
+    /// Return the maximum supported shader model.
+    pub fn get_shader_model(&self) -> ShaderModel {
+        match self.feature_level {
+            winapi::D3D_FEATURE_LEVEL_10_0 => 40,
+            winapi::D3D_FEATURE_LEVEL_10_1 => 41,
+            winapi::D3D_FEATURE_LEVEL_11_0 => 50,
+            winapi::D3D_FEATURE_LEVEL_11_1 => 51,
+            _ => {
+                error!("Unknown feature level {:?}", self.feature_level);
+                0
+            },
+        }
     }
 
     pub fn create_command_buffer(&self) -> CommandBuffer<CommandList> {

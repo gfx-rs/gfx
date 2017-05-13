@@ -148,7 +148,7 @@ A: Sized + Application<gfx_device_gl::Resources>
             }
         });
         // draw a frame
-        app.render_ext(&mut device);
+        app.render_ext();
         window.swap_buffers().unwrap();
         // device.cleanup();
         harness.bump();
@@ -174,7 +174,7 @@ A: Sized + Application<gfx_device_dx11::Resources>
     let main_depth = factory.create_depth_stencil_view_only(window.size.0, window.size.1)
                             .unwrap();
 
-    let backend = shade::Backend::Hlsl(device.get_shader_model()); 
+    let backend = shade::Backend::Hlsl(factory.get_shader_model()); 
     let mut app = A::new(&mut factory, backend, WindowTargets {
         colors: vec![main_color],
         depth: main_depth,
@@ -202,7 +202,7 @@ A: Sized + Application<gfx_device_dx11::Resources>
         });
         if let Some((width, height)) = new_size {
             use gfx_window_dxgi::update_views;
-            match update_views(&mut window, &mut factory, &mut device, width, height) {
+            match update_views(&mut window, &mut factory, width, height) {
                 Ok(new_color) => {
                     let new_depth = factory.create_depth_stencil_view_only(width, height).unwrap();
                     app.on_resize_ext(&mut factory, WindowTargets {
@@ -215,7 +215,7 @@ A: Sized + Application<gfx_device_dx11::Resources>
             }
             continue;
         }
-        app.render_ext(&mut device);
+        app.render_ext();
         window.swap_buffers(1);
         // device.cleanup();
         harness.bump();
@@ -256,7 +256,7 @@ A: Sized + Application<gfx_device_metal::Resources>
                 _ => app.on(event),
             }
         });
-        app.render_ext(&mut device);
+        app.render_ext();
         window.swap_buffers().unwrap();
         device.cleanup();
         harness.bump();
@@ -268,12 +268,13 @@ pub fn launch_vulkan<A>(wb: winit::WindowBuilder) where
 A: Sized + Application<gfx_device_vulkan::Resources>
 {
     use gfx::traits::{Factory};
-    use gfx::texture::Size;
+    use gfx::texture::{self, Size};
+    use gfx_core::format::Formatted;
 
     env_logger::init().unwrap();
     let events_loop = winit::EventsLoop::new();
     let win = wb.build(&events_loop).unwrap();
-    let window = gfx_window_vulkan::Window(&win);
+    let mut window = gfx_window_vulkan::Window(&win);
 
     let (surface, adapters) = window.get_surface_and_adapters();
 
@@ -284,21 +285,25 @@ A: Sized + Application<gfx_device_vulkan::Resources>
                                  .collect::<Vec<_>>();
     let mut device = adapters[0].open(&queue_descs);
 
-    let queue = if !device.general_queues.is_empty() {
-        device.general_queues[0].into()
-    } else {
-        device.graphics_queues[0]
+    let mut swap_chain = {
+        if !device.general_queues.is_empty() {
+            surface.build_swapchain::<ColorFormat>(&device.general_queues[0])
+        } else {
+            surface.build_swapchain::<ColorFormat>(&device.graphics_queues[0])
+        }
     };
-
-    let swap_chain = surface.build_swapchain::<ColorFormat>(&queue);
 
     let (width, height) = win.get_inner_size_points().unwrap();
 
     let main_colors = swap_chain.get_images()
                                 .iter()
                                 .map(|image| {
-                                    let rtv = device.factory.view_texture_as_render_target_raw(
-                                                                    image, ColorFormat::get_format())
+                                    let desc = texture::RenderDesc {
+                                        channel: ColorFormat::get_format().1,
+                                        level: 0,
+                                        layer: None,
+                                    };
+                                    let rtv = device.factory.view_texture_as_render_target_raw(image, desc)
                                                              .unwrap();
                                     Typed::new(rtv)
                                 })
@@ -329,7 +334,7 @@ A: Sized + Application<gfx_device_vulkan::Resources>
             }
         });
         let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&mut frame_semaphore));
-        app.render_ext(frame.get_queue());
+        app.render_ext();
         swap_chain.present();
         harness.bump();
     }
@@ -348,7 +353,7 @@ pub type DefaultResources = gfx_device_vulkan::Resources;
 pub trait Application<R: gfx::Resources>: Sized {
     fn new<F: gfx::Factory<R>>(&mut F, shade::Backend, WindowTargets<R>) -> Self;
     fn render<C: gfx::CommandBuffer<R>>(&mut self, &mut gfx::GraphicsEncoder<R, C>);
-    fn render_ext<D, C: gfx::CommandBuffer<R>>(&mut self, device: &mut D)
+    fn render_ext(&mut self)
     {
         unimplemented!()
         // TODO: self.app.render(&mut self.encoder);
