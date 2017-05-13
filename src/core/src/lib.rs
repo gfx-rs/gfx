@@ -447,7 +447,7 @@ pub trait SwapChain {
     type R: Resources;
 
     /// Access the backbuffer images.
-    fn get_images(&mut self) -> &[<Self::R as Resources>::Texture];
+    fn get_images(&mut self) -> &[handle::RawTexture<Self::R>];
 
     /// Acquire a new frame for rendering. This needs to be called before presenting.
     fn acquire_frame(&mut self, sync: FrameSync<Self::R>) -> Frame;
