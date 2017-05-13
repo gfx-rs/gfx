@@ -22,7 +22,7 @@ extern crate glutin;
 pub use headless::{init_headless, init_headless_raw};
 
 use core::{format, handle, texture};
-use core::memory::Typed;
+use core::memory::{self, Typed};
 use device_gl::Resources as R;
 use glutin::GlContext;
 
@@ -200,13 +200,13 @@ pub struct SwapChain<'a> {
     // Underlying window, required for presentation
     window: &'a glutin::Window,
     // Single element backbuffer
-    backbuffer: Vec<device_gl::NewTexture>,
+    backbuffer: Vec<handle::RawTexture<device_gl::Resources>>,
 }
 
 impl<'a> core::SwapChain for SwapChain<'a> {
     type R = device_gl::Resources;
 
-    fn get_images(&mut self) -> &[device_gl::NewTexture] {
+    fn get_images(&mut self) -> &[handle::RawTexture<Self::R>] {
         &self.backbuffer
     }
 
@@ -233,9 +233,23 @@ impl<'a> core::Surface for Surface<'a> {
     fn build_swapchain<T: core::format::RenderFormat>(&self,
                     present_queue: &device_gl::CommandQueue) -> SwapChain<'a>
     {
+        use core::handle::Producer;
+        let dim = get_window_dimensions(self.window);
+        let mut temp = handle::Manager::new();
+        let backbuffer = temp.make_texture(
+            device_gl::NewTexture::Surface(0),
+            texture::Info {
+                levels: 1,
+                kind: texture::Kind::D2(dim.0, dim.1, dim.3),
+                format: T::get_format().0,
+                bind: memory::RENDER_TARGET | memory::TRANSFER_SRC,
+                usage: memory::Usage::Data,
+            },
+        );
+
         SwapChain {
             window: self.window,
-            backbuffer: vec![device_gl::NewTexture::Surface(0)],
+            backbuffer: vec![backbuffer],
         }
     }
 }
