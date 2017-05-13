@@ -15,15 +15,9 @@
 //! Dummy backend implementation to test the code for compile errors
 //! outside of the graphics development environment.
 
-use {Capabilities, Device, SubmissionResult, Resources, IndexType, VertexCount};
+use {Capabilities, SubmissionResult, Resources, IndexType, VertexCount};
 use {state, target, handle, mapping, pso, shade, texture};
 use command::{self, AccessInfo};
-
-/// Dummy device which does minimal work, just to allow testing
-/// gfx-rs apps for compilation.
-pub struct DummyDevice {
-    capabilities: Capabilities,
-}
 
 /// Dummy resources phantom type
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -57,30 +51,6 @@ impl mapping::Gate<DummyResources> for DummyMapping {
     unsafe fn set<T>(&self, _index: usize, _val: T) { unimplemented!() }
     unsafe fn slice<'a, 'b, T>(&'a self, _len: usize) -> &'b [T] { unimplemented!() }
     unsafe fn mut_slice<'a, 'b, T>(&'a self, _len: usize) -> &'b mut [T] { unimplemented!() }
-}
-
-impl DummyDevice {
-    /// Create a new dummy device
-    pub fn new() -> DummyDevice {
-        let caps = Capabilities {
-            max_vertex_count: 0,
-            max_index_count: 0,
-            max_texture_size: 0,
-            max_patch_size: 0,
-            instance_base_supported: false,
-            instance_call_supported: false,
-            instance_rate_supported: false,
-            vertex_base_supported: false,
-            srgb_color_supported: false,
-            constant_buffer_supported: false,
-            unordered_access_view_supported: false,
-            separate_blending_slots_supported: false,
-            copy_buffer_supported: false,
-        };
-        DummyDevice {
-            capabilities: caps,
-        }
-    }
 }
 
 /// Dummy command buffer, which ignores all the calls.
@@ -119,34 +89,4 @@ impl command::Buffer<DummyResources> for DummyCommandBuffer {
     fn call_draw(&mut self, _: VertexCount, _: VertexCount, _: Option<command::InstanceParams>) {}
     fn call_draw_indexed(&mut self, _: VertexCount, _: VertexCount,
                          _: VertexCount, _: Option<command::InstanceParams>) {}
-}
-
-impl Device for DummyDevice {
-    type Resources = DummyResources;
-    type CommandBuffer = DummyCommandBuffer;
-
-    fn get_capabilities(&self) -> &Capabilities {
-        &self.capabilities
-    }
-    fn pin_submitted_resources(&mut self, _: &handle::Manager<DummyResources>) {}
-    fn submit(&mut self,
-              _: &mut DummyCommandBuffer,
-              _: &AccessInfo<Self::Resources>)
-              -> SubmissionResult<()> {
-        unimplemented!()
-    }
-
-    fn fenced_submit(&mut self,
-                     _: &mut Self::CommandBuffer,
-                     _: &AccessInfo<Self::Resources>,
-                     _after: Option<handle::Fence<Self::Resources>>)
-                     -> SubmissionResult<handle::Fence<Self::Resources>> {
-        unimplemented!()
-    }
-
-    fn wait_fence(&mut self, _: &handle::Fence<Self::Resources>) {
-        unimplemented!()
-    }
-
-    fn cleanup(&mut self) {}
 }

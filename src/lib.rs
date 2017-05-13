@@ -93,7 +93,7 @@ impl Drop for Harness {
 
 pub trait ApplicationBase<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
     fn new<F>(&mut F, shade::Backend, WindowTargets<R>) -> Self where F: gfx::Factory<R>;
-    fn render<D>(&mut self, &mut D) where D: gfx::Device<Resources = R, CommandBuffer = C>;
+    fn render<D>(&mut self, &mut D);
     fn get_exit_key() -> Option<winit::VirtualKeyCode>;
     fn on(&mut self, winit::WindowEvent);
     fn on_resize<F>(&mut self, &mut F, WindowTargets<R>) where F: gfx::Factory<R>;
@@ -102,8 +102,6 @@ pub trait ApplicationBase<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
 pub fn launch_gl3<A>(wb: winit::WindowBuilder) where
 A: Sized + Application<gfx_device_gl::Resources>
 {
-    use gfx::traits::Device;
-
     env_logger::init().unwrap();
     let gl_version = glutin::GlRequest::GlThenGles {
         opengl_version: (3, 2), // TODO: try more versions
@@ -152,7 +150,7 @@ A: Sized + Application<gfx_device_gl::Resources>
         // draw a frame
         app.render_ext(&mut device);
         window.swap_buffers().unwrap();
-        device.cleanup();
+        // device.cleanup();
         harness.bump();
     }
 }
@@ -167,11 +165,11 @@ pub type D3D11CommandBufferFake = gfx_device_dx11::CommandBuffer<gfx_device_dx11
 pub fn launch_d3d11<A>(wb: winit::WindowBuilder) where
 A: Sized + Application<gfx_device_dx11::Resources>
 {
-    use gfx::traits::{Device, Factory};
+    use gfx::traits::Factory;
 
     env_logger::init().unwrap();
     let events_loop = winit::EventsLoop::new();
-    let (mut window, device, mut factory, main_color) =
+    let (mut window, mut factory, main_color) =
         gfx_window_dxgi::init::<ColorFormat>(wb, &events_loop).unwrap();
     let main_depth = factory.create_depth_stencil_view_only(window.size.0, window.size.1)
                             .unwrap();
@@ -182,7 +180,7 @@ A: Sized + Application<gfx_device_dx11::Resources>
         depth: main_depth,
         aspect_ratio: window.size.0 as f32 / window.size.1 as f32,
     });
-    let mut device = gfx_device_dx11::Deferred::from(device);
+    // let mut device = gfx_device_dx11::Deferred::from(device);
 
     let mut harness = Harness::new();
     let mut running = true;
@@ -219,7 +217,7 @@ A: Sized + Application<gfx_device_dx11::Resources>
         }
         app.render_ext(&mut device);
         window.swap_buffers(1);
-        device.cleanup();
+        // device.cleanup();
         harness.bump();
     }
 }
@@ -228,7 +226,7 @@ A: Sized + Application<gfx_device_dx11::Resources>
 pub fn launch_metal<A>(wb: winit::WindowBuilder) where
 A: Sized + Application<gfx_device_metal::Resources>
 {
-    use gfx::traits::{Device, Factory};
+    use gfx::traits::Factory;
     use gfx::texture::Size;
 
     env_logger::init().unwrap();
@@ -269,7 +267,7 @@ A: Sized + Application<gfx_device_metal::Resources>
 pub fn launch_vulkan<A>(wb: winit::WindowBuilder) where
 A: Sized + Application<gfx_device_vulkan::Resources>
 {
-    use gfx::traits::{Device, Factory};
+    use gfx::traits::{Factory};
     use gfx::texture::Size;
 
     env_logger::init().unwrap();
@@ -351,7 +349,6 @@ pub trait Application<R: gfx::Resources>: Sized {
     fn new<F: gfx::Factory<R>>(&mut F, shade::Backend, WindowTargets<R>) -> Self;
     fn render<C: gfx::CommandBuffer<R>>(&mut self, &mut gfx::GraphicsEncoder<R, C>);
     fn render_ext<D, C: gfx::CommandBuffer<R>>(&mut self, device: &mut D)
-        where D: gfx::Device<Resources = R, CommandBuffer = C>
     {
         unimplemented!()
         // TODO: self.app.render(&mut self.encoder);
