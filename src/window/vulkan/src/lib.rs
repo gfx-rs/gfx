@@ -27,7 +27,7 @@ use std::ffi::CStr;
 use std::{mem, ptr};
 use std::os::raw;
 use std::sync::Arc;
-use core::format;
+use core::{format, handle};
 use core::FrameSync;
 use core::memory::Typed;
 use device_vulkan::{data, native, CommandQueue, QueueFamily, VK_ENTRY, INSTANCE};
@@ -269,7 +269,7 @@ impl SwapChain {
 impl core::SwapChain for SwapChain {
     type R = device_vulkan::Resources;
 
-    fn get_images(&mut self) -> &[()] {
+    fn get_images(&mut self) -> &[handle::RawTexture<Self::R>] {
         // TODO
         // &self.images
         unimplemented!()
