@@ -872,6 +872,7 @@ impl Device {
     }
 }
 
+/*
 impl c::Device for Device {
     type Resources = Resources;
     type CommandBuffer = command::CommandBuffer;
@@ -965,6 +966,7 @@ impl c::Device for Device {
         );
     }
 }
+*/
 
 #[allow(missing_copy_implementations)]
 pub struct Adapter {
