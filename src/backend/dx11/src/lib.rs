@@ -208,7 +208,7 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
         return Err(hr)
     }
 
-    let factory = Factory::new(device, Arc::new(share));
+    let factory = Factory::new(device, feature_level, Arc::new(share));
     Ok((factory, swap_chain))
 }
 
