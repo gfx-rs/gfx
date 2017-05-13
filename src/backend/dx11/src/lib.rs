@@ -167,14 +167,6 @@ pub struct Share {
     handles: RefCell<h::Manager<Resources>>,
 }
 
-pub struct Device {
-    context: *mut winapi::ID3D11DeviceContext,
-    feature_level: winapi::D3D_FEATURE_LEVEL,
-    share: Arc<Share>,
-    frame_handles: h::Manager<Resources>,
-    max_resource_count: Option<usize>,
-}
-
 static FEATURE_LEVELS: [winapi::D3D_FEATURE_LEVEL; 3] = [
     winapi::D3D_FEATURE_LEVEL_11_0,
     winapi::D3D_FEATURE_LEVEL_10_1,
@@ -182,7 +174,7 @@ static FEATURE_LEVELS: [winapi::D3D_FEATURE_LEVEL; 3] = [
 ];
 
 pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHAIN_DESC)
-              -> Result<(Device, Factory, *mut winapi::IDXGISwapChain), winapi::HRESULT> {
+              -> Result<(Factory, *mut winapi::IDXGISwapChain), winapi::HRESULT> {
     let mut swap_chain = ptr::null_mut();
     let create_flags = winapi::D3D11_CREATE_DEVICE_FLAG(0); //D3D11_CREATE_DEVICE_DEBUG;
     let mut device = ptr::null_mut();
@@ -216,50 +208,12 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
         return Err(hr)
     }
 
-    let dev = Device {
-        context: context,
-        feature_level: feature_level,
-        share: Arc::new(share),
-        frame_handles: h::Manager::new(),
-        max_resource_count: None,
-    };
-    let factory = Factory::new(device, dev.share.clone());
-
-    Ok((dev, factory, swap_chain))
+    let factory = Factory::new(device, Arc::new(share));
+    Ok((factory, swap_chain))
 }
 
 pub type ShaderModel = u16;
 
-impl Device {
-    /// Return the maximum supported shader model.
-    pub fn get_shader_model(&self) -> ShaderModel {
-        match self.feature_level {
-            winapi::D3D_FEATURE_LEVEL_10_0 => 40,
-            winapi::D3D_FEATURE_LEVEL_10_1 => 41,
-            winapi::D3D_FEATURE_LEVEL_11_0 => 50,
-            winapi::D3D_FEATURE_LEVEL_11_1 => 51,
-            _ => {
-                error!("Unknown feature level {:?}", self.feature_level);
-                0
-            },
-        }
-    }
-
-    pub fn before_submit<'a>(&mut self, gpu_access: &'a AccessInfo<Resources>)
-                             -> core::SubmissionResult<AccessGuard<'a, Resources>> {
-        let mut gpu_access = try!(gpu_access.take_accesses());
-        for (buffer, mut mapping) in gpu_access.access_mapped() {
-            factory::ensure_unmapped(&mut mapping, buffer, self.context);
-        }
-        Ok(gpu_access)
-    }
-
-    pub fn clear_state(&self) {
-        unsafe {
-            (*self.context).ClearState();
-        }
-    }
-}
 
 pub struct CommandList(Vec<command::Command>, command::DataBuffer);
 impl CommandList {
@@ -316,166 +270,6 @@ impl command::Parser for DeferredContext {
     }
     fn update_texture(&mut self, tex: Texture, kind: tex::Kind, face: Option<tex::CubeFace>, data: &[u8], image: tex::RawImageInfo) {
         execute::update_texture(self.0, &tex, kind, face, data, &image);
-    }
-}
-
-
-impl core::Device for Device {
-    type Resources = Resources;
-    type CommandBuffer = command::CommandBuffer<CommandList>;
-
-    fn get_capabilities(&self) -> &core::Capabilities {
-        &self.share.capabilities
-    }
-
-    fn pin_submitted_resources(&mut self, man: &h::Manager<Resources>) {
-        self.frame_handles.extend(man);
-        match self.max_resource_count {
-            Some(c) if self.frame_handles.count() > c => {
-                error!("Way too many resources in the current frame. Did you call Device::cleanup()?");
-                self.max_resource_count = None;
-            },
-            _ => (),
-        }
-    }
-
-    fn submit(&mut self,
-              cb: &mut Self::CommandBuffer,
-              access: &AccessInfo<Resources>) -> SubmissionResult<()>
-    {
-        let _guard = try!(self.before_submit(access));
-        unsafe { (*self.context).ClearState(); }
-        for com in &cb.parser.0 {
-            execute::process(self.context, com, &cb.parser.1);
-        }
-        Ok(())
-    }
-
-    fn fenced_submit(&mut self,
-                     _: &mut Self::CommandBuffer,
-                     _: &AccessInfo<Resources>,
-                     _after: Option<h::Fence<Resources>>)
-                     -> SubmissionResult<h::Fence<Resources>>
-    {
-        unimplemented!()
-    }
-
-    fn wait_fence(&mut self, _fence: &h::Fence<Self::Resources>) {
-        unimplemented!()
-    }
-
-    fn cleanup(&mut self) {
-        use core::handle::Producer;
-
-        self.frame_handles.clear();
-        self.share.handles.borrow_mut().clean_with(&mut self.context,
-            |ctx, buffer| {
-                buffer.mapping().map(|raw| {
-                    // we have exclusive access because it's the last reference
-                    let mut mapping = unsafe { raw.use_access() };
-                    factory::ensure_unmapped(&mut mapping, buffer, *ctx);
-                });
-                unsafe { (*(buffer.resource().0).0).Release(); }
-            },
-            |_, s| unsafe { //shader
-                (*s.object).Release();
-                (*s.reflection).Release();
-            },
-            |_, program| unsafe {
-                let p = program.resource();
-                if p.vs != ptr::null_mut() { (*p.vs).Release(); }
-                if p.hs != ptr::null_mut() { (*p.hs).Release(); }
-                if p.ds != ptr::null_mut() { (*p.ds).Release(); }
-                if p.gs != ptr::null_mut() { (*p.gs).Release(); }
-                if p.ps != ptr::null_mut() { (*p.ps).Release(); }
-            },
-            |_, v| unsafe { //PSO
-                type Child = *mut winapi::ID3D11DeviceChild;
-                (*v.layout).Release();
-                (*(v.rasterizer as Child)).Release();
-                (*(v.depth_stencil as Child)).Release();
-                (*(v.blend as Child)).Release();
-            },
-            |_, texture| unsafe { (*texture.resource().as_resource()).Release(); },
-            |_, v| unsafe { (*v.0).Release(); }, //SRV
-            |_, _| {}, //UAV
-            |_, v| unsafe { (*v.0).Release(); }, //RTV
-            |_, v| unsafe { (*v.0).Release(); }, //DSV
-            |_, v| unsafe { (*v.0).Release(); }, //sampler
-            |_, _fence| {},
-        );
-    }
-}
-
-pub struct Deferred(Device);
-impl From<Device> for Deferred {
-    fn from(device: Device) -> Deferred {
-        Deferred(device)
-    }
-}
-impl Deferred {
-    pub fn clear_state(&self) {
-        self.0.clear_state();
-    }
-}
-
-impl core::Device for Deferred {
-    type Resources = Resources;
-    type CommandBuffer = command::CommandBuffer<DeferredContext>;
-
-    fn get_capabilities(&self) -> &core::Capabilities {
-        &self.0.share.capabilities
-    }
-
-    fn pin_submitted_resources(&mut self, man: &h::Manager<Resources>) {
-        self.0.pin_submitted_resources(man);
-    }
-
-    fn submit(&mut self,
-              cb: &mut Self::CommandBuffer,
-              access: &AccessInfo<Resources>) -> SubmissionResult<()>
-    {
-        let _guard = try!(self.0.before_submit(access));
-        let cl = match cb.parser.1 {
-            Some(cl) => cl,
-            None => {
-                let mut cl = ptr::null_mut();
-                let hr = unsafe {
-                    (*cb.parser.0).FinishCommandList(winapi::FALSE, &mut cl)
-                };
-                assert!(winapi::SUCCEEDED(hr));
-                cb.parser.1 = Some(cl);
-                cl
-            },
-        };
-        unsafe {
-            (*self.0.context).ExecuteCommandList(cl, winapi::TRUE)
-        };
-        match self.0.max_resource_count {
-            Some(c) if self.0.frame_handles.count() > c => {
-                error!("Way too many resources in the current frame. Did you call Device::cleanup()?");
-                self.0.max_resource_count = None;
-            },
-            _ => (),
-        }
-        Ok(())
-    }
-
-    fn fenced_submit(&mut self,
-                     _: &mut Self::CommandBuffer,
-                     _: &AccessInfo<Resources>,
-                     _after: Option<h::Fence<Resources>>)
-                     -> SubmissionResult<h::Fence<Resources>>
-    {
-        unimplemented!()
-    }
-
-    fn wait_fence(&mut self, _fence: &h::Fence<Self::Resources>) {
-        unimplemented!()
-    }
-
-    fn cleanup(&mut self) {
-        self.0.cleanup();
     }
 }
 
