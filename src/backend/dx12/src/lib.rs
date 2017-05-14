@@ -144,6 +144,10 @@ impl core::CommandQueue for CommandQueue {
     {
         unimplemented!()
     }
+
+    fn wait_idle(&mut self) {
+        unimplemented!()
+    }
 }
 
 pub struct Factory {

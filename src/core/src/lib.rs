@@ -395,6 +395,9 @@ pub trait CommandQueue {
     /// Submit command buffers to queue for execution.
     unsafe fn submit<'a, C>(&mut self, submit_infos: &[QueueSubmit<C, Self::Resources>], fence: Option<&'a mut <Self::Resources as Resources>::Fence>)
         where C: CommandBuffer<SubmitInfo = Self::SubmitInfo>;
+
+    ///
+    fn wait_idle(&mut self);
 }
 
 /// `CommandPool` can allocate command buffers of a specific type only.
