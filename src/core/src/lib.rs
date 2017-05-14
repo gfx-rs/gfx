@@ -51,6 +51,7 @@ pub mod format;
 pub mod handle;
 pub mod mapping;
 pub mod memory;
+pub mod pool;
 pub mod pso;
 pub mod queue;
 pub mod shade;
@@ -394,6 +395,31 @@ pub trait CommandQueue {
     /// Submit command buffers to queue for execution.
     unsafe fn submit<'a, C>(&mut self, submit_infos: &[QueueSubmit<C, Self::Resources>], fence: Option<&'a mut <Self::Resources as Resources>::Fence>)
         where C: CommandBuffer<SubmitInfo = Self::SubmitInfo>;
+}
+
+/// `CommandPool` can allocate command buffers of a specific type only.
+/// The allocated command buffers are associated with the creating command queue.
+pub trait CommandPool {
+    /// Associated `Queue` type.
+    type Queue: CommandQueue;
+
+    /// Associated `PoolBuffer` type (command buffer).
+    type PoolBuffer: command::CommandBuffer;
+
+    /// Get a command buffer for recording.
+    ///
+    /// You can only record to one command buffer per pool at the same time.
+    /// If more command buffers are requested than allocated, new buffers will be reserved.
+    /// The command buffer will be returned in 'recording' state.
+    fn acquire_command_buffer<'a>(&'a mut self) -> command::Encoder<'a, Self::PoolBuffer>;
+
+    /// Reset the command pool and the corresponding command buffers.
+    ///
+    /// # Synchronization: You may _not_ free the pool if a command buffer is still in use (pool memory still in use)
+    fn reset(&mut self);
+
+    /// Reserve an additional amount of command buffers.
+    fn reserve(&mut self, additional: usize);
 }
 
 /// A `Surface` abstracts the surface of a native window, which will be presented
