@@ -44,6 +44,7 @@ addons:
       - libxcursor-dev
       - libxcursor1
       - libglfw-dev
+      - libosmesa6-dev
 script:
   - export RUST_BACKTRACE=1
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export PATH=$PATH:$HOME/deps/bin ; fi
@@ -51,11 +52,12 @@ script:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export LD_LIBRARY_PATH=$LIBRARY_PATH ; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo build --features vulkan; else cargo build; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cargo build --features metal; else cargo build; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then HEADLESS_FEATURE="--features headless"; fi
   - cargo test --all
   - cargo test -p gfx -p gfx_core --features "cgmath-types serialize"
   - cargo test -p gfx_window_sdl
   - cargo test -p gfx_device_gl
-  - cargo test -p gfx_window_glutin
+  - cargo test -p gfx_window_glutin $HEADLESS_FEATURE
   - cargo test -p gfx_window_glfw
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo test --all --features vulkan; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cargo test --all --features metal; fi

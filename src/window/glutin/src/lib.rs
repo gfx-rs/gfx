@@ -18,9 +18,15 @@ extern crate gfx_core as core;
 extern crate gfx_device_gl as device_gl;
 extern crate glutin;
 
+#[cfg(feature = "headless")]
+pub use headless::{init_headless, init_headless_raw};
+
 use core::{format, handle, texture};
 use core::memory::Typed;
 use device_gl::Resources as R;
+
+#[cfg(feature = "headless")]
+mod headless;
 
 /// Initialize with a window builder.
 /// Generically parametrized version over the main framebuffer format.
