@@ -46,6 +46,21 @@ impl<C: CommandBuffer> Submit<C> {
 }
 
 ///
+pub struct Encoder<'a, C: CommandBuffer + 'a>(&'a mut C);
+
+impl<'a, C: CommandBuffer> Encoder<'a, C> {
+    #[doc(hidden)]
+    pub unsafe fn new(buffer: &'a mut C) -> Self {
+        Encoder(buffer)
+    }
+
+    /// Finish recording commands to the command buffers.
+    pub fn finish(self) -> Submit<C> {
+        Submit(unsafe { self.0.end() })
+    }
+}
+
+///
 pub trait CommandBuffer {
     /// Associated `SubmitInfo` type.
     type SubmitInfo;

@@ -37,6 +37,10 @@ mod command;
 pub mod data;
 mod factory;
 pub mod native;
+mod pool;
+
+pub use pool::{GeneralCommandPool, GraphicsCommandPool,
+    ComputeCommandPool, TransferCommandPool, SubpassCommandPool};
 
 const SURFACE_EXTENSIONS: &'static [&'static str] = &[
     vk::VK_KHR_SURFACE_EXTENSION_NAME,
