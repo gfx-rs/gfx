@@ -39,7 +39,8 @@ extern crate gfx_device_vulkan;
 extern crate gfx_window_vulkan;
 
 use gfx_core::memory::Typed;
-use gfx_core::{Adapter, FrameSync, Surface, SwapChain, QueueFamily, WindowExt};
+use gfx_core::{Adapter, CommandQueue, FrameSync, Surface, SwapChain, QueueFamily, WindowExt};
+use gfx_core::pool::GraphicsCommandPool;
 
 pub mod shade;
 
@@ -148,7 +149,7 @@ A: Sized + Application<gfx_device_gl::Resources>
             }
         });
         // draw a frame
-        app.render_ext();
+        // TODO: app.render_ext();
         window.swap_buffers().unwrap();
         // device.cleanup();
         harness.bump();
@@ -215,7 +216,7 @@ A: Sized + Application<gfx_device_dx11::Resources>
             }
             continue;
         }
-        app.render_ext();
+        // TODO: app.render_ext();
         window.swap_buffers(1);
         // device.cleanup();
         harness.bump();
@@ -256,7 +257,7 @@ A: Sized + Application<gfx_device_metal::Resources>
                 _ => app.on(event),
             }
         });
-        app.render_ext();
+        // TODO: app.render_ext();
         window.swap_buffers().unwrap();
         device.cleanup();
         harness.bump();
@@ -283,15 +284,15 @@ A: Sized + Application<gfx_device_vulkan::Resources>
                                  .filter(|family| surface.supports_queue(&family) )
                                  .map(|family| { (family, family.num_queues()) })
                                  .collect::<Vec<_>>();
-    let mut device = adapters[0].open(&queue_descs);
+    let gfx_core::Device_ { mut factory, mut general_queues, mut graphics_queues, .. } = adapters[0].open(&queue_descs);
 
-    let mut swap_chain = {
-        if !device.general_queues.is_empty() {
-            surface.build_swapchain::<ColorFormat>(&device.general_queues[0])
-        } else {
-            surface.build_swapchain::<ColorFormat>(&device.graphics_queues[0])
-        }
+    let queue = if !general_queues.is_empty() {
+        (&mut general_queues[0]).into()
+    } else {
+        &mut graphics_queues[0]
     };
+
+    let mut swap_chain = surface.build_swapchain::<ColorFormat>(queue);
 
     let (width, height) = win.get_inner_size_points().unwrap();
 
@@ -303,16 +304,16 @@ A: Sized + Application<gfx_device_vulkan::Resources>
                                         level: 0,
                                         layer: None,
                                     };
-                                    let rtv = device.factory.view_texture_as_render_target_raw(image, desc)
+                                    let rtv = factory.view_texture_as_render_target_raw(image, desc)
                                                              .unwrap();
                                     Typed::new(rtv)
                                 })
                                 .collect::<Vec<_>>();
 
-    let main_depth = device.factory.create_depth_stencil::<DepthFormat>(width as Size, height as Size).unwrap();
+    let main_depth = factory.create_depth_stencil::<DepthFormat>(width as Size, height as Size).unwrap();
 
     let backend = shade::Backend::Vulkan;
-    let mut app = A::new(&mut device.factory, backend, WindowTargets {
+    let mut app = A::new(&mut factory, backend, WindowTargets {
         colors: main_colors,
         depth: main_depth.2,
         aspect_ratio: width as f32 / height as f32, //TODO
@@ -320,7 +321,10 @@ A: Sized + Application<gfx_device_vulkan::Resources>
 
     let mut harness = Harness::new();
     let mut running = true;
-    let mut frame_semaphore = device.factory.create_semaphore();
+    let mut frame_semaphore = factory.create_semaphore();
+
+    // TODO: How can we get rid of this checks all the time?
+    let mut graphics_pool = gfx_device_vulkan::GraphicsCommandPool::from_queue(queue, 1);
 
     while running {
         events_loop.poll_events(|winit::Event::WindowEvent{window_id: _, event}| {
@@ -334,7 +338,12 @@ A: Sized + Application<gfx_device_vulkan::Resources>
             }
         });
         let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&mut frame_semaphore));
-        app.render_ext();
+
+        app.render_ext(&mut graphics_pool);
+
+        // Wait til rendering has finished
+        queue.wait_idle();
+
         swap_chain.present();
         harness.bump();
     }
@@ -353,7 +362,7 @@ pub type DefaultResources = gfx_device_vulkan::Resources;
 pub trait Application<R: gfx::Resources>: Sized {
     fn new<F: gfx::Factory<R>>(&mut F, shade::Backend, WindowTargets<R>) -> Self;
     fn render<C: gfx::CommandBuffer<R>>(&mut self, &mut gfx::GraphicsEncoder<R, C>);
-    fn render_ext(&mut self)
+    fn render_ext<P: gfx_core::pool::GraphicsCommandPool>(&mut self, pool: &mut P)
     {
         unimplemented!()
         // TODO: self.app.render(&mut self.encoder);
