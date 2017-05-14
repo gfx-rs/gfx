@@ -58,19 +58,51 @@ impl<Q: CommandQueue> DerefMut for GeneralQueue<Q> {
     }
 }
 
-impl<Q: CommandQueue> Into<GraphicsQueue<Q>> for GeneralQueue<Q> {
-    fn into(self) -> GraphicsQueue<Q> {
-        GraphicsQueue(self.0)
+impl<Q: CommandQueue> From<GeneralQueue<Q>> for GraphicsQueue<Q> {
+    fn from(queue: GeneralQueue<Q>) -> GraphicsQueue<Q> {
+        GraphicsQueue(queue.0)
     }
 }
-impl<Q: CommandQueue> Into<ComputeQueue<Q>> for GeneralQueue<Q> {
-    fn into(self) -> ComputeQueue<Q> {
-        ComputeQueue(self.0)
+impl<Q: CommandQueue> From<GeneralQueue<Q>> for ComputeQueue<Q> {
+    fn from(queue: GeneralQueue<Q>) -> ComputeQueue<Q> {
+        ComputeQueue(queue.0)
     }
 }
-impl<Q: CommandQueue> Into<TransferQueue<Q>> for GeneralQueue<Q> {
-    fn into(self) -> TransferQueue<Q> {
-        TransferQueue(self.0)
+impl<Q: CommandQueue> From<GeneralQueue<Q>> for TransferQueue<Q> {
+    fn from(queue: GeneralQueue<Q>) -> TransferQueue<Q> {
+        TransferQueue(queue.0)
+    }
+}
+
+impl<'a, Q: CommandQueue> From<&'a GeneralQueue<Q>> for &'a GraphicsQueue<Q> {
+    fn from(queue: &'a GeneralQueue<Q>) -> &'a GraphicsQueue<Q> {
+        unsafe { &*(queue as *const _ as *const GraphicsQueue<Q>) }
+    }
+}
+impl<'a, Q: CommandQueue> From<&'a GeneralQueue<Q>> for &'a ComputeQueue<Q> {
+    fn from(queue: &'a GeneralQueue<Q>) -> &'a ComputeQueue<Q> {
+        unsafe { &*(queue as *const _ as *const ComputeQueue<Q>) }
+    }
+}
+impl<'a, Q: CommandQueue> From<&'a GeneralQueue<Q>> for &'a TransferQueue<Q> {
+    fn from(queue: &'a GeneralQueue<Q>) -> &'a TransferQueue<Q> {
+        unsafe { &*(queue as *const _ as *const TransferQueue<Q>) }
+    }
+}
+
+impl<'a, Q: CommandQueue> From<&'a mut GeneralQueue<Q>> for &'a mut GraphicsQueue<Q> {
+    fn from(queue: &'a mut GeneralQueue<Q>) -> &'a mut GraphicsQueue<Q> {
+        unsafe { &mut *(queue as *mut _ as *mut GraphicsQueue<Q>) }
+    }
+}
+impl<'a, Q: CommandQueue> From<&'a mut GeneralQueue<Q>> for &'a mut ComputeQueue<Q> {
+    fn from(queue: &'a mut GeneralQueue<Q>) -> &'a mut ComputeQueue<Q> {
+        unsafe { &mut *(queue as *mut _ as *mut ComputeQueue<Q>) }
+    }
+}
+impl<'a, Q: CommandQueue> From<&'a mut GeneralQueue<Q>> for &'a mut TransferQueue<Q> {
+    fn from(queue: &'a mut GeneralQueue<Q>) -> &'a mut TransferQueue<Q> {
+        unsafe { &mut *(queue as *mut _ as *mut TransferQueue<Q>) }
     }
 }
 
@@ -104,9 +136,9 @@ impl<Q: CommandQueue> DerefMut for GraphicsQueue<Q> {
     }
 }
 
-impl<Q: CommandQueue> Into<TransferQueue<Q>> for GraphicsQueue<Q> {
-    fn into(self) -> TransferQueue<Q> {
-        TransferQueue(self.0)
+impl<Q: CommandQueue> From<GraphicsQueue<Q>> for TransferQueue<Q> {
+    fn from(queue: GraphicsQueue<Q>) -> TransferQueue<Q> {
+        TransferQueue(queue.0)
     }
 }
 
@@ -140,9 +172,9 @@ impl<Q: CommandQueue> DerefMut for ComputeQueue<Q> {
     }
 }
 
-impl<Q: CommandQueue> Into<TransferQueue<Q>> for ComputeQueue<Q> {
-    fn into(self) -> TransferQueue<Q> {
-        TransferQueue(self.0)
+impl<Q: CommandQueue> From<ComputeQueue<Q>> for TransferQueue<Q> {
+    fn from(queue: ComputeQueue<Q>) -> TransferQueue<Q> {
+        TransferQueue(queue.0)
     }
 }
 

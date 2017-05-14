@@ -1062,6 +1062,10 @@ impl c::CommandQueue for CommandQueue {
     {
         unimplemented!()
     }
+
+    fn wait_idle(&mut self) {
+        unimplemented!()
+    }
 }
 
 #[allow(missing_copy_implementations)]
