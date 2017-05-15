@@ -44,8 +44,12 @@ addons:
       - libxcursor-dev
       - libxcursor1
       - libglfw-dev
+before_script:
+  - export PATH="$PATH:$HOME/.cargo/bin"
+  - which rustfmt || cargo install rustfmt
 script:
   - export RUST_BACKTRACE=1
+  - cargo fmt -- --write-mode=diff
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export PATH=$PATH:$HOME/deps/bin ; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export LIBRARY_PATH=$HOME/deps/usr/lib/x86_64-linux-gnu ; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export LD_LIBRARY_PATH=$LIBRARY_PATH ; fi

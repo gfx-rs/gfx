@@ -43,7 +43,9 @@ gfx_defines!{
     pipeline particles {
         vbuf: gfx::VertexBuffer<Vertex> = (),
         locals: gfx::ConstantBuffer<Locals> = "Locals",
-        out_color: gfx::BlendTarget<ColorFormat> = ("Target0", gfx::state::ColorMask::all(), gfx::preset::blend::ALPHA),
+        out_color: gfx::BlendTarget<ColorFormat> = ("Target0",
+                                                    gfx::state::ColorMask::all(),
+                                                    gfx::preset::blend::ALPHA),
     }
 }
 
@@ -60,71 +62,82 @@ impl Vertex {
 }
 
 //----------------------------------------
-struct App<R: gfx::Resources>{
+struct App<R: gfx::Resources> {
     bundle: Bundle<R, particles::Data<R>>,
     particles: Vec<Vertex>,
     aspect: f32,
     time_start: Instant,
 }
 
-fn create_shader_set<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F, vs_code: &[u8], gs_code: &[u8], ps_code: &[u8]) -> ShaderSet<R> {
-    let vs = factory.create_shader_vertex(vs_code).expect("Failed to compile vertex shader");
-    let gs = factory.create_shader_geometry(gs_code).expect("Failed to compile geometry shader");
-    let ps = factory.create_shader_pixel(ps_code).expect("Failed to compile pixel shader");
+fn create_shader_set<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F,
+                                                            vs_code: &[u8],
+                                                            gs_code: &[u8],
+                                                            ps_code: &[u8])
+                                                            -> ShaderSet<R> {
+    let vs = factory
+        .create_shader_vertex(vs_code)
+        .expect("Failed to compile vertex shader");
+    let gs = factory
+        .create_shader_geometry(gs_code)
+        .expect("Failed to compile geometry shader");
+    let ps = factory
+        .create_shader_pixel(ps_code)
+        .expect("Failed to compile pixel shader");
     ShaderSet::Geometry(vs, gs, ps)
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(factory: &mut F, backend: gfx_app::shade::Backend,
-           window_targets: gfx_app::WindowTargets<R>) -> Self {
+    fn new<F: gfx::Factory<R>>(factory: &mut F,
+                               backend: gfx_app::shade::Backend,
+                               window_targets: gfx_app::WindowTargets<R>)
+                               -> Self {
         use gfx::traits::FactoryExt;
 
         // Compute the aspect ratio so that our particles aren't stretched
         let (width, height, _, _) = window_targets.color.get_dimensions();
-        let aspect = (height as f32)/(width as f32);
+        let aspect = (height as f32) / (width as f32);
 
         // Load in our vertex, geometry and pixel shaders
         let vs = gfx_app::shade::Source {
             glsl_150: include_bytes!("shader/particle_150.glslv"),
-            hlsl_40:  include_bytes!("data/vs_particle.fx"),
-            .. gfx_app::shade::Source::empty()
+            hlsl_40: include_bytes!("data/vs_particle.fx"),
+            ..gfx_app::shade::Source::empty()
         };
         let gs = gfx_app::shade::Source {
             glsl_150: include_bytes!("shader/particle_150.glslg"),
-            hlsl_40:  include_bytes!("data/gs_particle.fx"),
-            .. gfx_app::shade::Source::empty()
+            hlsl_40: include_bytes!("data/gs_particle.fx"),
+            ..gfx_app::shade::Source::empty()
         };
         let ps = gfx_app::shade::Source {
             glsl_150: include_bytes!("shader/particle_150.glslf"),
-            hlsl_40:  include_bytes!("data/ps_particle.fx"),
-            .. gfx_app::shade::Source::empty()
+            hlsl_40: include_bytes!("data/ps_particle.fx"),
+            ..gfx_app::shade::Source::empty()
         };
 
-        let shader_set = create_shader_set(
-            factory,
-            vs.select(backend).unwrap(),
-            gs.select(backend).unwrap(),
-            ps.select(backend).unwrap(),
-        );
+        let shader_set = create_shader_set(factory,
+                                           vs.select(backend).unwrap(),
+                                           gs.select(backend).unwrap(),
+                                           ps.select(backend).unwrap());
 
         // Create 4096 particles, using one point vertex per particle
         let mut particles = vec![Vertex::new(); 4096];
 
         // Create a dynamic vertex buffer to hold the particle data
-        let vbuf = factory.create_buffer(particles.len(),
-                                         buffer::Role::Vertex,
-                                         gfx::memory::Usage::Dynamic,
-                                         Bind::empty())
+        let vbuf = factory
+            .create_buffer(particles.len(),
+                           buffer::Role::Vertex,
+                           gfx::memory::Usage::Dynamic,
+                           Bind::empty())
             .expect("Failed to create vertex buffer");
         let slice = Slice::new_match_vertex_buffer(&vbuf);
 
         // Construct our pipeline state
-        let pso = factory.create_pipeline_state(
-            &shader_set,
-            Primitive::PointList,
-            Rasterizer::new_fill(),
-            particles::new()
-        ).unwrap();
+        let pso = factory
+            .create_pipeline_state(&shader_set,
+                                   Primitive::PointList,
+                                   Rasterizer::new_fill(),
+                                   particles::new())
+            .unwrap();
 
         let data = particles::Data {
             vbuf: vbuf,
@@ -135,7 +148,10 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         // Initialize the particles with random colours
         // (the alpha value doubles as the particle's "remaining life")
         for p in particles.iter_mut() {
-            p.color = [rand::random(), rand::random(), rand::random(), rand::random()];
+            p.color = [rand::random(),
+                       rand::random(),
+                       rand::random(),
+                       rand::random()];
         }
 
         App {
@@ -159,20 +175,20 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             // Particles are under constant acceleration, so use the exact formulae:
             // s = ut + 1/2 at^2
             // v = u + at
-            p.pos[0] += p.vel[0]*delta;
-            p.pos[1] += p.vel[1]*delta + 0.5*acc*delta*delta;
-            p.vel[1] += acc*delta;
+            p.pos[0] += p.vel[0] * delta;
+            p.pos[1] += p.vel[1] * delta + 0.5 * acc * delta * delta;
+            p.vel[1] += acc * delta;
             // Fade out steadily
-            p.color[3] -= 1.0*delta;
+            p.color[3] -= 1.0 * delta;
 
             // If particle has faded out completely
             if p.color[3] <= 0.0 {
                 // Put it back at the emitter with new random parameters
                 p.color[3] += 1.0;
                 p.pos = [0.0, -1.0];
-                let angle: f32 = (rand::random::<f32>()-0.5)*std::f32::consts::PI*0.2;
-                let speed: f32 = rand::random::<f32>()*4.0 + 3.0;
-                p.vel = [angle.sin()*speed, angle.cos()*speed];
+                let angle: f32 = (rand::random::<f32>() - 0.5) * std::f32::consts::PI * 0.2;
+                let speed: f32 = rand::random::<f32>() * 4.0 + 3.0;
+                p.vel = [angle.sin() * speed, angle.cos() * speed];
             }
         }
 
@@ -180,7 +196,9 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         let locals = Locals { aspect: self.aspect };
         encoder.update_constant_buffer(&self.bundle.data.locals, &locals);
         // Update the vertex data with the changes to the particles array
-        encoder.update_buffer(&self.bundle.data.vbuf, &self.particles, 0).unwrap();
+        encoder
+            .update_buffer(&self.bundle.data.vbuf, &self.particles, 0)
+            .unwrap();
         // Clear the background to dark blue
         encoder.clear(&self.bundle.data.out_color, [0.1, 0.2, 0.3, 1.0]);
         // Draw the particles!

@@ -47,72 +47,76 @@ gfx_defines!{
 
 impl Vertex {
     fn new(p: [f32; 2], u: [f32; 2]) -> Vertex {
-        Vertex {
-            pos: p,
-            uv: u,
-        }
+        Vertex { pos: p, uv: u }
     }
 }
 
-fn load_texture<R, F>(factory: &mut F, data: &[u8])
-                -> Result<gfx::handle::ShaderResourceView<R, [f32; 4]>, String>
-        where R: gfx::Resources, F: gfx::Factory<R> {
+fn load_texture<R, F>(factory: &mut F,
+                      data: &[u8])
+                      -> Result<gfx::handle::ShaderResourceView<R, [f32; 4]>, String>
+    where R: gfx::Resources,
+          F: gfx::Factory<R>
+{
     use gfx::texture as t;
-    let img = image::load(Cursor::new(data), image::PNG).unwrap().to_rgba();
+    let img = image::load(Cursor::new(data), image::PNG)
+        .unwrap()
+        .to_rgba();
     let (width, height) = img.dimensions();
     let kind = t::Kind::D2(width as t::Size, height as t::Size, t::AaMode::Single);
-    let (_, view) = factory.create_texture_immutable_u8::<Rgba8>(kind, &[&img]).unwrap();
+    let (_, view) = factory
+        .create_texture_immutable_u8::<Rgba8>(kind, &[&img])
+        .unwrap();
     Ok(view)
 }
 
-struct App<R: gfx::Resources>{
+struct App<R: gfx::Resources> {
     bundle: Bundle<R, pipe::Data<R>>,
     cycles: [f32; 2],
     time_start: Instant,
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(factory: &mut F, backend: gfx_app::shade::Backend,
-           window_targets: gfx_app::WindowTargets<R>) -> Self {
+    fn new<F: gfx::Factory<R>>(factory: &mut F,
+                               backend: gfx_app::shade::Backend,
+                               window_targets: gfx_app::WindowTargets<R>)
+                               -> Self {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/flowmap_120.glslv"),
             glsl_150: include_bytes!("shader/flowmap_150.glslv"),
-            hlsl_40:  include_bytes!("data/vertex.fx"),
-            msl_11:   include_bytes!("shader/flowmap_vertex.metal"),
-            .. gfx_app::shade::Source::empty()
+            hlsl_40: include_bytes!("data/vertex.fx"),
+            msl_11: include_bytes!("shader/flowmap_vertex.metal"),
+            ..gfx_app::shade::Source::empty()
         };
         let ps = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/flowmap_120.glslf"),
             glsl_150: include_bytes!("shader/flowmap_150.glslf"),
-            hlsl_40:  include_bytes!("data/pixel.fx"),
-            msl_11:   include_bytes!("shader/flowmap_frag.metal"),
-            .. gfx_app::shade::Source::empty()
+            hlsl_40: include_bytes!("data/pixel.fx"),
+            msl_11: include_bytes!("shader/flowmap_frag.metal"),
+            ..gfx_app::shade::Source::empty()
         };
 
-        let vertex_data = [
-            Vertex::new([-1.0, -1.0], [0.0, 0.0]),
-            Vertex::new([ 1.0, -1.0], [1.0, 0.0]),
-            Vertex::new([ 1.0,  1.0], [1.0, 1.0]),
+        let vertex_data = [Vertex::new([-1.0, -1.0], [0.0, 0.0]),
+                           Vertex::new([1.0, -1.0], [1.0, 0.0]),
+                           Vertex::new([1.0, 1.0], [1.0, 1.0]),
 
-            Vertex::new([-1.0, -1.0], [0.0, 0.0]),
-            Vertex::new([ 1.0,  1.0], [1.0, 1.0]),
-            Vertex::new([-1.0,  1.0], [0.0, 1.0]),
-        ];
+                           Vertex::new([-1.0, -1.0], [0.0, 0.0]),
+                           Vertex::new([1.0, 1.0], [1.0, 1.0]),
+                           Vertex::new([-1.0, 1.0], [0.0, 1.0])];
 
         let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
 
         let water_texture = load_texture(factory, &include_bytes!("image/water.png")[..]).unwrap();
-        let flow_texture  = load_texture(factory, &include_bytes!("image/flow.png")[..]).unwrap();
+        let flow_texture = load_texture(factory, &include_bytes!("image/flow.png")[..]).unwrap();
         let noise_texture = load_texture(factory, &include_bytes!("image/noise.png")[..]).unwrap();
         let sampler = factory.create_sampler_linear();
 
-        let pso = factory.create_pipeline_simple(
-            vs.select(backend).unwrap(),
-            ps.select(backend).unwrap(),
-            pipe::new()
-            ).unwrap();
+        let pso = factory
+            .create_pipeline_simple(vs.select(backend).unwrap(),
+                                    ps.select(backend).unwrap(),
+                                    pipe::new())
+            .unwrap();
 
         let data = pipe::Data {
             vbuf: vbuf,

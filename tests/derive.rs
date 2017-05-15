@@ -1,5 +1,6 @@
 extern crate gfx;
-#[macro_use] extern crate gfx_macros;
+#[macro_use]
+extern crate gfx_macros;
 
 #[derive(VertexData)]
 struct Vertex {

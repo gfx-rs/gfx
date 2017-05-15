@@ -58,65 +58,66 @@ impl Vertex {
 }
 
 //----------------------------------------
-struct App<R: gfx::Resources>{
+struct App<R: gfx::Resources> {
     bundle: Bundle<R, pipe::Data<R>>,
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(factory: &mut F, backend: gfx_app::shade::Backend, window_targets: gfx_app::WindowTargets<R>) -> Self {
+    fn new<F: gfx::Factory<R>>(factory: &mut F,
+                               backend: gfx_app::shade::Backend,
+                               window_targets: gfx_app::WindowTargets<R>)
+                               -> Self {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/cube_120.glslv"),
             glsl_150: include_bytes!("shader/cube_150.glslv"),
             glsl_es_100: include_bytes!("shader/cube_100_es.glslv"),
-            hlsl_40:  include_bytes!("data/vertex.fx"),
+            hlsl_40: include_bytes!("data/vertex.fx"),
             msl_11: include_bytes!("shader/cube_vertex.metal"),
-            vulkan:   include_bytes!("data/vert.spv"),
-            .. gfx_app::shade::Source::empty()
+            vulkan: include_bytes!("data/vert.spv"),
+            ..gfx_app::shade::Source::empty()
         };
         let ps = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/cube_120.glslf"),
             glsl_150: include_bytes!("shader/cube_150.glslf"),
             glsl_es_100: include_bytes!("shader/cube_100_es.glslf"),
-            hlsl_40:  include_bytes!("data/pixel.fx"),
+            hlsl_40: include_bytes!("data/pixel.fx"),
             msl_11: include_bytes!("shader/cube_frag.metal"),
-            vulkan:   include_bytes!("data/frag.spv"),
-            .. gfx_app::shade::Source::empty()
+            vulkan: include_bytes!("data/frag.spv"),
+            ..gfx_app::shade::Source::empty()
         };
 
-        let vertex_data = [
-            // top (0, 0, 1)
-            Vertex::new([-1, -1,  1], [0, 0]),
-            Vertex::new([ 1, -1,  1], [1, 0]),
-            Vertex::new([ 1,  1,  1], [1, 1]),
-            Vertex::new([-1,  1,  1], [0, 1]),
-            // bottom (0, 0, -1)
-            Vertex::new([-1,  1, -1], [1, 0]),
-            Vertex::new([ 1,  1, -1], [0, 0]),
-            Vertex::new([ 1, -1, -1], [0, 1]),
-            Vertex::new([-1, -1, -1], [1, 1]),
-            // right (1, 0, 0)
-            Vertex::new([ 1, -1, -1], [0, 0]),
-            Vertex::new([ 1,  1, -1], [1, 0]),
-            Vertex::new([ 1,  1,  1], [1, 1]),
-            Vertex::new([ 1, -1,  1], [0, 1]),
-            // left (-1, 0, 0)
-            Vertex::new([-1, -1,  1], [1, 0]),
-            Vertex::new([-1,  1,  1], [0, 0]),
-            Vertex::new([-1,  1, -1], [0, 1]),
-            Vertex::new([-1, -1, -1], [1, 1]),
-            // front (0, 1, 0)
-            Vertex::new([ 1,  1, -1], [1, 0]),
-            Vertex::new([-1,  1, -1], [0, 0]),
-            Vertex::new([-1,  1,  1], [0, 1]),
-            Vertex::new([ 1,  1,  1], [1, 1]),
-            // back (0, -1, 0)
-            Vertex::new([ 1, -1,  1], [0, 0]),
-            Vertex::new([-1, -1,  1], [1, 0]),
-            Vertex::new([-1, -1, -1], [1, 1]),
-            Vertex::new([ 1, -1, -1], [0, 1]),
-        ];
+        let vertex_data = [// top (0, 0, 1)
+                           Vertex::new([-1, -1, 1], [0, 0]),
+                           Vertex::new([1, -1, 1], [1, 0]),
+                           Vertex::new([1, 1, 1], [1, 1]),
+                           Vertex::new([-1, 1, 1], [0, 1]),
+                           // bottom (0, 0, -1)
+                           Vertex::new([-1, 1, -1], [1, 0]),
+                           Vertex::new([1, 1, -1], [0, 0]),
+                           Vertex::new([1, -1, -1], [0, 1]),
+                           Vertex::new([-1, -1, -1], [1, 1]),
+                           // right (1, 0, 0)
+                           Vertex::new([1, -1, -1], [0, 0]),
+                           Vertex::new([1, 1, -1], [1, 0]),
+                           Vertex::new([1, 1, 1], [1, 1]),
+                           Vertex::new([1, -1, 1], [0, 1]),
+                           // left (-1, 0, 0)
+                           Vertex::new([-1, -1, 1], [1, 0]),
+                           Vertex::new([-1, 1, 1], [0, 0]),
+                           Vertex::new([-1, 1, -1], [0, 1]),
+                           Vertex::new([-1, -1, -1], [1, 1]),
+                           // front (0, 1, 0)
+                           Vertex::new([1, 1, -1], [1, 0]),
+                           Vertex::new([-1, 1, -1], [0, 0]),
+                           Vertex::new([-1, 1, 1], [0, 1]),
+                           Vertex::new([1, 1, 1], [1, 1]),
+                           // back (0, -1, 0)
+                           Vertex::new([1, -1, 1], [0, 0]),
+                           Vertex::new([-1, -1, 1], [1, 0]),
+                           Vertex::new([-1, -1, -1], [1, 1]),
+                           Vertex::new([1, -1, -1], [0, 1])];
 
         let index_data: &[u16] = &[
              0,  1,  2,  2,  3,  0, // top
@@ -134,15 +135,14 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             texture::Kind::D2(1, 1, texture::AaMode::Single), &[&texels]
             ).unwrap();
 
-        let sinfo = texture::SamplerInfo::new(
-            texture::FilterMethod::Bilinear,
-            texture::WrapMode::Clamp);
+        let sinfo = texture::SamplerInfo::new(texture::FilterMethod::Bilinear,
+                                              texture::WrapMode::Clamp);
 
-        let pso = factory.create_pipeline_simple(
-            vs.select(backend).unwrap(),
-            ps.select(backend).unwrap(),
-            pipe::new()
-        ).unwrap();
+        let pso = factory
+            .create_pipeline_simple(vs.select(backend).unwrap(),
+                                    ps.select(backend).unwrap(),
+                                    pipe::new())
+            .unwrap();
 
         let proj = cgmath::perspective(Deg(45.0f32), window_targets.aspect_ratio, 1.0, 10.0);
 
@@ -155,9 +155,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             out_depth: window_targets.depth,
         };
 
-        App {
-            bundle: Bundle::new(slice, pso, data),
-        }
+        App { bundle: Bundle::new(slice, pso, data) }
     }
 
     fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
@@ -184,9 +182,7 @@ pub fn main() {
 }
 
 fn default_view() -> Matrix4<f32> {
-    Matrix4::look_at(
-        Point3::new(1.5f32, -5.0, 3.0),
-        Point3::new(0f32, 0.0, 0.0),
-        Vector3::unit_z(),
-    )
+    Matrix4::look_at(Point3::new(1.5f32, -5.0, 3.0),
+                     Point3::new(0f32, 0.0, 0.0),
+                     Vector3::unit_z())
 }

@@ -15,18 +15,17 @@
 extern crate rand;
 extern crate winit;
 
-#[macro_use] extern crate gfx;
+#[macro_use]
+extern crate gfx;
 extern crate gfx_app;
 
 use rand::Rng;
 pub use gfx_app::ColorFormat;
 
-const QUAD_VERTICES: [Vertex; 4] = [
-    Vertex { position: [-0.5,  0.5] },
-    Vertex { position: [-0.5, -0.5] },
-    Vertex { position: [ 0.5, -0.5] },
-    Vertex { position: [ 0.5,  0.5] },
-];
+const QUAD_VERTICES: [Vertex; 4] = [Vertex { position: [-0.5, 0.5] },
+                                    Vertex { position: [-0.5, -0.5] },
+                                    Vertex { position: [0.5, -0.5] },
+                                    Vertex { position: [0.5, 0.5] }];
 
 const QUAD_INDICES: [u16; 6] = [0, 1, 2, 2, 3, 0];
 
@@ -58,24 +57,24 @@ fn fill_instances(instances: &mut [Instance], instances_per_length: u32, size: f
     let gap = 0.4 / (instances_per_length + 1) as f32;
     println!("gap: {}", gap);
 
-    let begin = -1. + gap + (size /2.);
+    let begin = -1. + gap + (size / 2.);
     let mut translate = [begin, begin];
     let mut rng = rand::StdRng::new().unwrap();
 
     let length = instances_per_length as usize;
     for x in 0..length {
         for y in 0..length {
-            let i = x*length + y;
+            let i = x * length + y;
             instances[i] = Instance {
                 translate: translate,
-                color: rng.next_u32()
+                color: rng.next_u32(),
             };
             translate[1] += size + gap;
         }
         translate[1] = begin;
         translate[0] += size + gap;
     }
- }
+}
 
 const MAX_INSTANCE_COUNT: usize = 2048;
 
@@ -88,23 +87,25 @@ struct App<R: gfx::Resources> {
 }
 
 impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(factory: &mut F, backend: gfx_app::shade::Backend,
-           window_targets: gfx_app::WindowTargets<R>) -> Self {
+    fn new<F: gfx::Factory<R>>(factory: &mut F,
+                               backend: gfx_app::shade::Backend,
+                               window_targets: gfx_app::WindowTargets<R>)
+                               -> Self {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/instancing_120.glslv"),
             glsl_150: include_bytes!("shader/instancing_150.glslv"),
-            msl_11:   include_bytes!("shader/instancing_vertex.metal"),
-            hlsl_40:  include_bytes!("data/vertex.fx"),
-            .. gfx_app::shade::Source::empty()
+            msl_11: include_bytes!("shader/instancing_vertex.metal"),
+            hlsl_40: include_bytes!("data/vertex.fx"),
+            ..gfx_app::shade::Source::empty()
         };
         let fs = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/instancing_120.glslf"),
             glsl_150: include_bytes!("shader/instancing_150.glslf"),
-            msl_11:   include_bytes!("shader/instancing_frag.metal"),
-            hlsl_40:  include_bytes!("data/pixel.fx"),
-            .. gfx_app::shade::Source::empty()
+            msl_11: include_bytes!("shader/instancing_frag.metal"),
+            hlsl_40: include_bytes!("data/pixel.fx"),
+            ..gfx_app::shade::Source::empty()
         };
 
         let instances_per_length: u32 = 32;
@@ -112,10 +113,12 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         let instance_count = instances_per_length * instances_per_length;
         println!("{} instances", instance_count);
         assert!(instance_count as usize <= MAX_INSTANCE_COUNT);
-         let size = 1.6 / instances_per_length as f32;
+        let size = 1.6 / instances_per_length as f32;
         println!("size: {}", size);
 
-        let upload = factory.create_upload_buffer(instance_count as usize).unwrap();
+        let upload = factory
+            .create_upload_buffer(instance_count as usize)
+            .unwrap();
         {
             let mut writer = factory.write_mapping(&upload).unwrap();
             fill_instances(&mut writer, instances_per_length, size);
@@ -125,26 +128,29 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             .create_buffer(instance_count as usize,
                            gfx::buffer::Role::Vertex,
                            gfx::memory::Usage::Data,
-                           gfx::TRANSFER_DST).unwrap();
+                           gfx::TRANSFER_DST)
+            .unwrap();
 
 
-        let (quad_vertices, mut slice) = factory
-            .create_vertex_buffer_with_slice(&QUAD_VERTICES, &QUAD_INDICES[..]);
+        let (quad_vertices, mut slice) =
+            factory.create_vertex_buffer_with_slice(&QUAD_VERTICES, &QUAD_INDICES[..]);
         slice.instances = Some((instance_count, 0));
         let locals = Locals { scale: size };
 
         App {
-            pso: factory.create_pipeline_simple(
-                vs.select(backend).unwrap(),
-                fs.select(backend).unwrap(),
-                pipe::new()
-                ).unwrap(),
+            pso: factory
+                .create_pipeline_simple(vs.select(backend).unwrap(),
+                                        fs.select(backend).unwrap(),
+                                        pipe::new())
+                .unwrap(),
             data: pipe::Data {
                 vertex: quad_vertices,
                 instance: instances,
                 scale: size,
                 locals: factory
-                    .create_buffer_immutable(&[locals], gfx::buffer::Role::Constant, gfx::Bind::empty())
+                    .create_buffer_immutable(&[locals],
+                                             gfx::buffer::Role::Constant,
+                                             gfx::Bind::empty())
                     .unwrap(),
                 out: window_targets.color,
             },
@@ -156,8 +162,9 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
     fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
         if self.uploading {
-            encoder.copy_buffer(&self.upload, &self.data.instance,
-                                0, 0, self.upload.len()).unwrap();
+            encoder
+                .copy_buffer(&self.upload, &self.data.instance, 0, 0, self.upload.len())
+                .unwrap();
             self.uploading = false;
         }
 
