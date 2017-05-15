@@ -59,12 +59,12 @@ optional = true
 
 [dependencies.gfx_window_sdl]
 path = "src/window/sdl"
-version = "0.6"
+version = "0.7"
 optional = true
 
 [target.'cfg(unix)'.dependencies]
 gfx_window_glfw = { path = "src/window/glfw", version = "0.15" }
-gfx_window_sdl = { path = "src/window/sdl", version = "0.6" }
+gfx_window_sdl = { path = "src/window/sdl", version = "0.7" }
 
 [target.'cfg(windows)'.dependencies]
 gfx_device_dx11 = { path = "src/backend/dx11", version = "0.6" }
