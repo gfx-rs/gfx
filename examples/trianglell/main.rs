@@ -18,6 +18,8 @@ extern crate gfx_corell;
 extern crate gfx_device_dx12ll as back;
 #[cfg(feature = "vulkan")]
 extern crate gfx_device_vulkanll as back;
+#[cfg(feature = "metal")]
+extern crate gfx_device_metalll as back;
 
 extern crate winit;
 extern crate image;
@@ -54,7 +56,7 @@ const TRIANGLE: [Vertex; 6] = [
     Vertex { a_Pos: [ -0.5,-0.33 ], a_Uv: [0.0, 0.0, 0.0] },
 ];
 
-#[cfg(any(feature = "vulkan", target_os = "windows"))]
+#[cfg(any(feature = "vulkan", target_os = "windows", feature = "metal"))]
 fn main() {
     env_logger::init().unwrap();
     let events_loop = winit::EventsLoop::new();
@@ -90,6 +92,11 @@ fn main() {
     let shader_lib = factory.create_shader_library(&[
             ("vs_main", include_bytes!("data/vs_main.spv")),
             ("ps_main", include_bytes!("data/ps_main.spv"))]
+        ).expect("Error on creating shader lib");
+
+    #[cfg(feature = "metal")]
+    let shader_lib = factory.create_shader_library_from_source(
+            include_str!("shader/triangle.metal")
         ).expect("Error on creating shader lib");
 
     // dx12 runtime shader compilation
@@ -459,5 +466,5 @@ fn main() {
     }
 }
 
-#[cfg(not(any(feature = "vulkan", target_os = "windows")))]
+#[cfg(not(any(feature = "vulkan", target_os = "windows", feature = "metal")))]
 fn main() {}

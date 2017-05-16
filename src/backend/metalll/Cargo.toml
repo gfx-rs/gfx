@@ -1,0 +1,16 @@
+[package]
+name = "gfx_device_metalll"
+version = "0.1.0"
+homepage = "https://github.com/gfx-rs/gfx"
+repository = "https://github.com/gfx-rs/gfx"
+keywords = ["graphics", "gamedev"]
+license = "Apache-2.0"
+authors = ["The Gfx-rs Developers"]
+
+[dependencies]
+log = "0.3"
+gfx_corell = { path = "../../corell", version = "0.1.0" }
+winit = "0.6"
+
+metal-rs = "0.3"
+
