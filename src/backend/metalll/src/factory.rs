@@ -3,7 +3,7 @@ use ::native::*;
 use ::conversions::*;
 
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::slice;
 use std::mem;
 use std::ptr;
@@ -224,7 +224,26 @@ impl core::Factory<Resources> for Factory {
             let descriptor = MTLSamplerDescriptor::new(); // Returns retained
             defer! { descriptor.release() };
 
-            // FIXME
+
+            use self::image::FilterMethod::*;
+            let (min_mag, mipmap) = match info.filter {
+                Scale => (MTLSamplerMinMagFilter::Nearest, MTLSamplerMipFilter::NotMipmapped),
+                Mipmap => (MTLSamplerMinMagFilter::Nearest, MTLSamplerMipFilter::Nearest),
+                Bilinear => {
+                    (MTLSamplerMinMagFilter::Linear, MTLSamplerMipFilter::NotMipmapped)
+                }
+                Trilinear => (MTLSamplerMinMagFilter::Linear, MTLSamplerMipFilter::Linear),
+                Anisotropic(max) => {
+                    descriptor.set_max_anisotropy(max as u64);
+                    (MTLSamplerMinMagFilter::Linear, MTLSamplerMipFilter::NotMipmapped)
+                }
+            };
+
+            descriptor.set_min_filter(min_mag);
+            descriptor.set_mag_filter(min_mag);
+            descriptor.set_mip_filter(mipmap);
+
+            // FIXME: more state
 
             Sampler(self.device.new_sampler(descriptor))
         }
@@ -314,6 +333,114 @@ impl core::Factory<Resources> for Factory {
         unsafe { Semaphore(dispatch_semaphore_create(1)) } // Returns retained
     }
 
+    fn create_descriptor_heap(&mut self, ty: DescriptorHeapType, size: usize) -> DescriptorHeap {
+        DescriptorHeap {}
+    }
+
+    fn create_descriptor_set_pool(&mut self, heap: &DescriptorHeap, max_sets: usize, offset: usize, descriptor_pools: &[DescriptorPoolDesc]) -> DescriptorSetPool {
+        DescriptorSetPool {}
+    }
+
+    fn create_descriptor_set_layout(&mut self, bindings: &[DescriptorSetLayoutBinding]) -> DescriptorSetLayout {
+        DescriptorSetLayout(bindings.to_vec())
+    }
+
+    fn create_descriptor_sets(&mut self, set_pool: &mut DescriptorSetPool, layout: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
+        use factory::DescriptorType::*;
+
+        layout.iter().map(|layout| {
+            let bindings = layout.0.iter().map(|layout| {
+                let binding = match layout.ty {
+                    Sampler => {
+                        DescriptorSetBinding::Sampler((0..layout.count).map(|_| MTLSamplerState::nil()).collect())
+                    },
+                    SampledImage => {
+                        DescriptorSetBinding::SampledImage((0..layout.count).map(|_| (MTLTexture::nil(), memory::ImageLayout::General)).collect())
+                    },
+                    _ => unimplemented!(),
+                };
+                (layout.binding, binding)
+            }).collect();
+
+            DescriptorSet(Arc::new(Mutex::new(DescriptorSetInner {
+                layout: layout.0.clone(),
+                bindings,
+            })))
+        }).collect()
+    }
+
+    fn update_descriptor_sets(&mut self, writes: &[DescriptorSetWrite<Resources>]) {
+        use factory::DescriptorWrite::*;
+
+        for write in writes.iter() {
+            let mut set = write.set.0.lock().unwrap();
+            let set: &mut DescriptorSetInner = &mut*set;
+            
+            // Find layout entry
+            let layout = set.layout.iter().find(|layout| layout.binding == write.binding)
+                .expect("invalid descriptor set binding index");
+
+            match write.write {
+                Sampler(ref samplers) => {
+                    if write.array_offset + samplers.len() > layout.count {
+                        panic!("out of range descriptor write");
+                    }
+                    let target = if let &mut DescriptorSetBinding::Sampler(ref mut vec) = set.bindings.get_mut(&write.binding).unwrap() {
+                        vec
+                    } else {
+                        panic!("mismatched descriptor set type");
+                    };
+
+                    let target_range = &mut target[write.array_offset..(write.array_offset + samplers.len())];
+
+                    unsafe {
+                        for (new, old) in samplers.iter().zip(target_range.iter_mut()) {
+                            old.release();
+                            new.0.retain();
+                            *old = new.0;
+                        }
+                    }
+                },
+                SampledImage(ref images) => {
+                    if write.array_offset + images.len() > layout.count {
+                        panic!("out of range descriptor write");
+                    }
+                    let target = if let &mut DescriptorSetBinding::SampledImage(ref mut vec) = set.bindings.get_mut(&write.binding).unwrap() {
+                        vec
+                    } else {
+                        panic!("mismatched descriptor set type");
+                    };
+
+                    let target_range = &mut target[write.array_offset..(write.array_offset + images.len())];
+
+                    unsafe {
+                        for (new, old) in images.iter().zip(target_range.iter_mut()) {
+                            old.0.release();
+                            (new.0).0.retain();
+                            *old = ((new.0).0, new.1);
+                        }
+                    }
+                },
+                _ => unimplemented!(),
+            }
+        }
+    }
+
+    fn reset_descriptor_set_pool(&mut self, pool: &mut DescriptorSetPool) {
+    }
+
+    fn destroy_descriptor_heap(&mut self, heap: DescriptorHeap) {
+    }
+
+    fn destroy_descriptor_set_pool(&mut self, pool: DescriptorSetPool) {
+    }
+
+    fn destroy_descriptor_set_layout(&mut self, layout: DescriptorSetLayout) {
+    }
+
+    fn destroy_pipeline_layout(&mut self, pipeline_layout: PipelineLayout) {
+    }
+
     fn destroy_shader_lib(&mut self, lib: ShaderLib) {
         unsafe { lib.0.release(); }
     }
@@ -373,51 +500,6 @@ impl core::Factory<Resources> for Factory {
     }
     #[cfg(not(feature = "native_heap"))]
     fn destroy_heap(&mut self, heap: Heap) {
-    }
-
-    #[cfg(not(feature = "native_heap"))]
-    fn create_descriptor_heap(&mut self, ty: DescriptorHeapType, size: usize) -> DescriptorHeap {
-        DescriptorHeap {}
-    }
-
-    #[cfg(not(feature = "native_heap"))]
-    fn create_descriptor_set_pool(&mut self, heap: &DescriptorHeap, max_sets: usize, offset: usize, descriptor_pools: &[DescriptorPoolDesc]) -> DescriptorSetPool {
-        DescriptorSetPool {}
-    }
-
-    #[cfg(not(feature = "native_heap"))]
-    fn create_descriptor_set_layout(&mut self, bindings: &[DescriptorSetLayoutBinding]) -> DescriptorSetLayout {
-        DescriptorSetLayout {}
-    }
-
-    #[cfg(not(feature = "native_heap"))]
-    fn create_descriptor_sets(&mut self, set_pool: &mut DescriptorSetPool, layout: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
-        layout.iter().map(|_| DescriptorSet {}).collect()
-    }
-
-    #[cfg(not(feature = "native_heap"))]
-    fn reset_descriptor_set_pool(&mut self, pool: &mut DescriptorSetPool) {
-        unimplemented!()
-    }
-
-    #[cfg(not(feature = "native_heap"))]
-    fn update_descriptor_sets(&mut self, writes: &[DescriptorSetWrite<Resources>]) {
-    }
-
-    #[cfg(not(feature = "native_heap"))]
-    fn destroy_descriptor_heap(&mut self, heap: DescriptorHeap) {
-    }
-
-    #[cfg(not(feature = "native_heap"))]
-    fn destroy_descriptor_set_pool(&mut self, pool: DescriptorSetPool) {
-    }
-
-    #[cfg(not(feature = "native_heap"))]
-    fn destroy_descriptor_set_layout(&mut self, layout: DescriptorSetLayout) {
-    }
-
-    #[cfg(not(feature = "native_heap"))]
-    fn destroy_pipeline_layout(&mut self, pipeline_layout: PipelineLayout) {
     }
 
     #[cfg(not(feature = "native_heap"))]

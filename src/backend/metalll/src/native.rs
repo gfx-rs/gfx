@@ -5,7 +5,8 @@ use std::os::raw::{c_void, c_long, c_int};
 use std::ptr;
 
 use core;
-use core::format;
+use core::{format, memory};
+use core::factory::DescriptorSetLayoutBinding;
 use metal::*;
 use objc;
 
@@ -142,6 +143,62 @@ unsafe impl Send for Buffer {
 unsafe impl Sync for Buffer {
 }
 
+#[derive(Debug)]
+pub struct DescriptorHeap {}
+#[derive(Debug)]
+pub struct DescriptorSetPool {}
+#[derive(Debug)]
+pub struct DescriptorSet(pub Arc<Mutex<DescriptorSetInner>>); // TODO: can only be modified via factory, might not need mutex?
+
+#[derive(Debug)]
+pub struct DescriptorSetInner {
+    pub layout: Vec<DescriptorSetLayoutBinding>, // TODO: maybe don't clone?
+    pub bindings: HashMap<usize, DescriptorSetBinding>,
+}
+
+#[derive(Debug)]
+pub enum DescriptorSetBinding {
+    Sampler(Vec<MTLSamplerState>),
+    SampledImage(Vec<(MTLTexture, memory::ImageLayout)>),
+    StorageImage(Vec<(MTLTexture, memory::ImageLayout)>),
+    UniformTexelBuffer,
+    StorageTexelBuffer,
+    ConstantBuffer(Vec<MTLBuffer>),
+    StorageBuffer,
+    InputAttachment(Vec<(MTLTexture, memory::ImageLayout)>),
+}
+
+impl Drop for DescriptorSetBinding {
+    fn drop(&mut self) {
+        use self::DescriptorSetBinding::*;
+
+        unsafe {
+            match *self {
+                Sampler(ref mut states) => for state in states.drain(..) {
+                    state.release();
+                },
+                SampledImage(ref mut images) => for (image, _) in images.drain(..) {
+                    image.release();
+                },
+                StorageImage(ref mut images) => for (image, _) in images.drain(..) {
+                    image.release();
+                },
+                ConstantBuffer(ref mut buffers) => for buffer in buffers.drain(..) {
+                    buffer.release();
+                },
+                InputAttachment(ref mut attachments) => for (attachment, _) in attachments.drain(..) {
+                    attachment.release();
+                },
+                _ => {}
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct DescriptorSetLayout(pub Vec<DescriptorSetLayoutBinding>);
+
+
 pub use self::heap_related::*;
 pub use self::fence_related::*;
 
@@ -154,16 +211,7 @@ mod heap_related {
         pub heap_type: core::HeapType,
         pub size: u64,
     }
-
-    #[derive(Debug)]
-    pub struct DescriptorHeap {}
-    #[derive(Debug)]
-    pub struct DescriptorSetPool {}
-    #[derive(Debug)]
-    pub struct DescriptorSet {}
-    #[derive(Debug)]
-    pub struct DescriptorSetLayout {}
-
+    
     #[derive(Debug)]
     pub struct UnboundBuffer(pub MTLBuffer);
 
@@ -227,3 +275,5 @@ extern "C" {
         object: *mut c_void,
     );
 }
+
+pub const kCVPixelFormatType_32RGBA: u32 = (b'R' as u32) << 24 | (b'G' as u32) << 16 | (b'B' as u32) << 8 | b'A' as u32;
