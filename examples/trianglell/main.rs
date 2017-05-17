@@ -18,6 +18,8 @@ extern crate gfx_corell;
 extern crate gfx_device_dx12ll as back;
 #[cfg(feature = "vulkan")]
 extern crate gfx_device_vulkanll as back;
+#[cfg(feature = "metal")]
+extern crate gfx_device_metalll as back;
 
 extern crate winit;
 extern crate image;
@@ -54,7 +56,7 @@ const TRIANGLE: [Vertex; 6] = [
     Vertex { a_Pos: [ -0.5,-0.33 ], a_Uv: [0.0, 0.0, 0.0] },
 ];
 
-#[cfg(any(feature = "vulkan", target_os = "windows"))]
+#[cfg(any(feature = "vulkan", target_os = "windows", feature = "metal"))]
 fn main() {
     env_logger::init().unwrap();
     let events_loop = winit::EventsLoop::new();
@@ -63,6 +65,9 @@ fn main() {
         .with_title("triangle (Low Level)".to_string())
         .build(&events_loop)
         .unwrap();
+    let (pixel_width, pixel_height) = window.get_inner_size_pixels().unwrap();
+    let pixel_width = pixel_width as u16;
+    let pixel_height = pixel_height as u16;
 
     // instantiate backend
     let instance = back::Instance::create();
@@ -90,6 +95,11 @@ fn main() {
     let shader_lib = factory.create_shader_library(&[
             ("vs_main", include_bytes!("data/vs_main.spv")),
             ("ps_main", include_bytes!("data/ps_main.spv"))]
+        ).expect("Error on creating shader lib");
+
+    #[cfg(feature = "metal")]
+    let shader_lib = factory.create_shader_library_from_source(
+            include_str!("shader/triangle.metal")
         ).expect("Error on creating shader lib");
 
     // dx12 runtime shader compilation
@@ -224,7 +234,7 @@ fn main() {
     }).collect::<Vec<_>>();
 
     let framebuffers = frame_rtvs.iter().map(|frame_rtv| {
-        factory.create_framebuffer(&render_pass, &[&frame_rtv], &[], 1024, 768, 1)
+        factory.create_framebuffer(&render_pass, &[&frame_rtv], &[], pixel_width as u32, pixel_height as u32, 1)
     }).collect::<Vec<_>>();
 
 
@@ -310,11 +320,11 @@ fn main() {
     // Rendering setup
     let viewport = target::Rect {
         x: 0, y: 0,
-        w: 1024, h: 768,
+        w: pixel_width, h: pixel_height,
     };
     let scissor = target::Rect {
         x: 0, y: 0,
-        w: 1024, h: 768,
+        w: pixel_width, h: pixel_height,
     };
 
     let mut frame_semaphore = factory.create_semaphore();
@@ -399,7 +409,7 @@ fn main() {
                     &mut cmd_buffer,
                     &render_pass,
                     &framebuffers[frame.id()],
-                    target::Rect { x: 0, y: 0, w: 1024, h: 768 },
+                    target::Rect { x: 0, y: 0, w: pixel_width, h: pixel_height },
                     &[command::ClearValue::Color(command::ClearColor::Float([0.8, 0.8, 0.8, 1.0]))]);
 
                 encoder.draw(0, 6, None);
@@ -459,5 +469,5 @@ fn main() {
     }
 }
 
-#[cfg(not(any(feature = "vulkan", target_os = "windows")))]
+#[cfg(not(any(feature = "vulkan", target_os = "windows", feature = "metal")))]
 fn main() {}
