@@ -24,6 +24,7 @@ pub use headless::{init_headless, init_headless_raw};
 use core::{format, handle, texture};
 use core::memory::{self, Typed};
 use device_gl::Resources as R;
+use std::borrow::Borrow;
 
 #[cfg(feature = "headless")]
 mod headless;
@@ -216,8 +217,9 @@ impl<'a> core::Surface for Surface<'a> {
     type QueueFamily = device_gl::QueueFamily;
 
     fn supports_queue(&self, queue_family: &device_gl::QueueFamily) -> bool { true }
-    fn build_swapchain<T: core::format::RenderFormat>(&self,
-                    present_queue: &device_gl::CommandQueue) -> SwapChain<'a>
+    fn build_swapchain<T, Q>(&self, present_queue: Q) -> SwapChain<'a>
+        where T: core::format::RenderFormat,
+              Q: Borrow<Self::CommandQueue>
     {
         use core::handle::Producer;
         let dim = get_window_dimensions(self.window);
