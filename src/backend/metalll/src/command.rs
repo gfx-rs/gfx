@@ -1,6 +1,6 @@
 use ::{Surface, Resources};
 use ::native;
-use ::mapping::get_format_bytes_per_pixel;
+use ::conversions::*;
 
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;

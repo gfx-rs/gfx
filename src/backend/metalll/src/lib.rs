@@ -28,7 +28,7 @@ extern crate metal_rs as metal;
 mod command;
 mod factory;
 mod native;
-mod mapping;
+mod conversions;
 
 pub use command::{QueueFamily, CommandQueue, CommandPool, RenderPassInlineEncoder};
 pub use factory::{Factory};
@@ -173,7 +173,7 @@ impl core::Adapter for Adapter {
         let heap_types;
         let memory_heaps;
 
-        #[cfg(target_os = "macos")]
+        #[cfg(not(feature = "native_heap"))]
         {
             // TODO: heap types for each memory binding
             heap_types = vec![core::HeapType {
@@ -224,7 +224,7 @@ impl core::Surface for Surface {
             let scale_factor: CGFloat = msg_send![self.layer, contentsScale];
             let pixel_width = (layer_points_size.size.width * scale_factor) as u64;
             let pixel_height = (layer_points_size.size.height * scale_factor) as u64;
-            let pixel_size = mapping::get_format_bytes_per_pixel(mtl_format) as u64;
+            let pixel_size = conversions::get_format_bytes_per_pixel(mtl_format) as u64;
 
             info!("allocating {} IOSurface backbuffers of size {}x{} with pixel format 0x{:x}", SWAP_CHAIN_IMAGE_COUNT, pixel_width, pixel_height, cv_format);
             // Create swap chain surfaces

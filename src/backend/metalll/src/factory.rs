@@ -1,6 +1,6 @@
 use ::Resources;
 use ::native::*;
-use ::mapping::{map_format, map_store_operation, map_load_operation, map_write_mask, map_vertex_format};
+use ::conversions::*;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -51,11 +51,6 @@ impl Factory {
 }
 
 impl core::Factory<Resources> for Factory {
-    #[cfg(target_os = "macos")]
-    fn create_heap(&mut self, heap_type: &core::HeapType, size: u64) -> Heap {
-        Heap { heap_type: *heap_type, size }
-    }
-
     fn create_renderpass(&mut self, attachments: &[pass::Attachment], subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> RenderPass {
         unsafe {
             let pass = MTLRenderPassDescriptor::new(); // Returns retained
@@ -83,7 +78,6 @@ impl core::Factory<Resources> for Factory {
         }
     }
 
-    #[cfg(target_os = "macos")]
     fn create_pipeline_layout(&mut self, sets: &[&DescriptorSetLayout]) -> PipelineLayout {
         PipelineLayout {}
     }
@@ -235,70 +229,7 @@ impl core::Factory<Resources> for Factory {
             Sampler(self.device.new_sampler(descriptor))
         }
     }
-
-    #[cfg(target_os = "macos")]
-    fn create_buffer(&mut self, size: u64, usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
-        // TODO: map usage
-        Ok(UnboundBuffer(self.device.new_buffer(size, MTLResourceOptions::empty()))) 
-    }
-
-    #[cfg(target_os = "macos")]
-    fn get_buffer_requirements(&mut self, buffer: &UnboundBuffer) -> memory::MemoryRequirements {
-        memory::MemoryRequirements {
-            size: buffer.0.length(),
-            alignment: 1,
-        }
-    }
-
-    #[cfg(target_os = "macos")]
-    fn bind_buffer_memory(&mut self, heap: &Heap, offset: u64, buffer: UnboundBuffer) -> Result<Buffer, buffer::CreationError> {
-        unsafe { buffer.0.retain(); }
-        Ok(Buffer(buffer.0))
-    }
-
-    #[cfg(target_os = "macos")]
-    fn create_image(&mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
-         -> Result<UnboundImage, image::CreationError>
-    {
-        let (mtl_format, _) = map_format(format).expect("unsupported texture format");
-
-        unsafe {
-            let descriptor = MTLTextureDescriptor::new(); // Returns retained
-            defer! { descriptor.release() }
-
-            match kind {
-                image::Kind::D2(width, height, aa) => {
-                    descriptor.set_texture_type(MTLTextureType::D2);
-                    descriptor.set_width(width as u64);
-                    descriptor.set_height(height as u64);
-                },
-                _ => unimplemented!(),
-            }
-
-            descriptor.set_mipmap_level_count(mip_levels as u64);
-            descriptor.set_pixel_format(mtl_format);
-            // TODO: usage
-
-            Ok(UnboundImage(self.device.new_texture(descriptor))) // Returns retained
-        }
-    }
-
-    #[cfg(target_os = "macos")]
-    fn get_image_requirements(&mut self, image: &UnboundImage) -> memory::MemoryRequirements {
-        unsafe {
-            memory::MemoryRequirements {
-                size: 1, // TODO
-                alignment: 1,
-            }
-        }
-    }
-
-    #[cfg(target_os = "macos")]
-    fn bind_image_memory(&mut self, heap: &Heap, offset: u64, image: UnboundImage) -> Result<Image, image::CreationError> {
-        unsafe { image.0.retain() }
-        Ok(Image(image.0))
-    }
-
+    
     fn view_buffer_as_constant(&mut self, buffer: &Buffer, offset: usize, size: usize) -> Result<ConstantBufferView, TargetViewError> {
         unimplemented!()
     }
@@ -327,32 +258,6 @@ impl core::Factory<Resources> for Factory {
 
     fn view_image_as_unordered_access(&mut self, image: &Image, format: format::Format) -> Result<UnorderedAccessView, TargetViewError> {
         unimplemented!()
-    }
-
-    #[cfg(target_os = "macos")]
-    fn create_descriptor_heap(&mut self, ty: DescriptorHeapType, size: usize) -> DescriptorHeap {
-        DescriptorHeap {}
-    }
-
-    fn create_descriptor_set_pool(&mut self, heap: &DescriptorHeap, max_sets: usize, offset: usize, descriptor_pools: &[DescriptorPoolDesc]) -> DescriptorSetPool {
-        DescriptorSetPool {}
-    }
-
-    #[cfg(target_os = "macos")]
-    fn create_descriptor_set_layout(&mut self, bindings: &[DescriptorSetLayoutBinding]) -> DescriptorSetLayout {
-        DescriptorSetLayout {}
-    }
-
-    fn create_descriptor_sets(&mut self, set_pool: &mut DescriptorSetPool, layout: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
-        layout.iter().map(|_| DescriptorSet {}).collect()
-    }
-
-    fn reset_descriptor_set_pool(&mut self, pool: &mut DescriptorSetPool) {
-        unimplemented!()
-    }
-
-    #[cfg(target_os = "macos")]
-    fn update_descriptor_sets(&mut self, writes: &[DescriptorSetWrite<Resources>]) {
     }
 
     fn read_mapping<'a, T>(&self, buf: &'a Buffer, offset: u64, size: u64)
@@ -403,28 +308,12 @@ impl core::Factory<Resources> for Factory {
         unsafe { Semaphore(dispatch_semaphore_create(1)) } // Returns retained
     }
 
-    fn create_fence(&mut self, signaled: bool) -> Fence {
-        unimplemented!()
-    }
-
-    fn reset_fences(&mut self, fences: &[&Fence]) {
-        unimplemented!()
-    }
-
-    #[cfg(target_os = "macos")]
-    fn destroy_heap(&mut self, heap: Heap) {
-    }
-
     fn destroy_shader_lib(&mut self, lib: ShaderLib) {
         unsafe { lib.0.release(); }
     }
 
     fn destroy_renderpass(&mut self, pass: RenderPass) {
         unsafe { pass.0.release(); }
-    }
-
-    #[cfg(target_os = "macos")]
-    fn destroy_pipeline_layout(&mut self, pipeline_layout: PipelineLayout) {
     }
 
     fn destroy_graphics_pipeline(&mut self, pipeline: GraphicsPipeline) {
@@ -467,23 +356,135 @@ impl core::Factory<Resources> for Factory {
         unsafe { sampler.0.release(); }
     }
 
-    #[cfg(target_os = "macos")]
-    fn destroy_descriptor_heap(&mut self, heap: DescriptorHeap) {
+    fn destroy_semaphore(&mut self, semaphore: Semaphore) {
+        unsafe { dispatch_release(semaphore.0) }
     }
 
-    #[cfg(target_os = "macos")]
-    fn destroy_descriptor_set_pool(&mut self, pool: DescriptorSetPool) {
+    // Emulated heap implementations
+    #[cfg(not(feature = "native_heap"))]
+    fn create_heap(&mut self, heap_type: &core::HeapType, size: u64) -> Heap {
+        Heap { heap_type: *heap_type, size }
+    }
+    #[cfg(not(feature = "native_heap"))]
+    fn destroy_heap(&mut self, heap: Heap) {
     }
 
-    #[cfg(target_os = "macos")]
-    fn destroy_descriptor_set_layout(&mut self, layout: DescriptorSetLayout) {
+    #[cfg(not(feature = "native_heap"))]
+    fn create_descriptor_heap(&mut self, ty: DescriptorHeapType, size: usize) -> DescriptorHeap {
+        DescriptorHeap {}
     }
 
-    fn destroy_fence(&mut self, fence: Fence) {
+    #[cfg(not(feature = "native_heap"))]
+    fn create_descriptor_set_pool(&mut self, heap: &DescriptorHeap, max_sets: usize, offset: usize, descriptor_pools: &[DescriptorPoolDesc]) -> DescriptorSetPool {
+        DescriptorSetPool {}
+    }
+
+    #[cfg(not(feature = "native_heap"))]
+    fn create_descriptor_set_layout(&mut self, bindings: &[DescriptorSetLayoutBinding]) -> DescriptorSetLayout {
+        DescriptorSetLayout {}
+    }
+
+    #[cfg(not(feature = "native_heap"))]
+    fn create_descriptor_sets(&mut self, set_pool: &mut DescriptorSetPool, layout: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
+        layout.iter().map(|_| DescriptorSet {}).collect()
+    }
+
+    #[cfg(not(feature = "native_heap"))]
+    fn reset_descriptor_set_pool(&mut self, pool: &mut DescriptorSetPool) {
         unimplemented!()
     }
 
-    fn destroy_semaphore(&mut self, semaphore: Semaphore) {
-        unsafe { dispatch_release(semaphore.0) }
+    #[cfg(not(feature = "native_heap"))]
+    fn update_descriptor_sets(&mut self, writes: &[DescriptorSetWrite<Resources>]) {
+    }
+
+    #[cfg(not(feature = "native_heap"))]
+    fn destroy_descriptor_heap(&mut self, heap: DescriptorHeap) {
+    }
+
+    #[cfg(not(feature = "native_heap"))]
+    fn destroy_descriptor_set_pool(&mut self, pool: DescriptorSetPool) {
+    }
+
+    #[cfg(not(feature = "native_heap"))]
+    fn destroy_descriptor_set_layout(&mut self, layout: DescriptorSetLayout) {
+    }
+
+    #[cfg(not(feature = "native_heap"))]
+    fn destroy_pipeline_layout(&mut self, pipeline_layout: PipelineLayout) {
+    }
+
+    #[cfg(not(feature = "native_heap"))]
+    fn create_buffer(&mut self, size: u64, usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
+        // TODO: map usage
+        Ok(UnboundBuffer(self.device.new_buffer(size, MTLResourceOptions::empty()))) 
+    }
+
+    #[cfg(not(feature = "native_heap"))]
+    fn get_buffer_requirements(&mut self, buffer: &UnboundBuffer) -> memory::MemoryRequirements {
+        memory::MemoryRequirements {
+            size: buffer.0.length(),
+            alignment: 1,
+        }
+    }
+
+    #[cfg(not(feature = "native_heap"))]
+    fn bind_buffer_memory(&mut self, heap: &Heap, offset: u64, buffer: UnboundBuffer) -> Result<Buffer, buffer::CreationError> {
+        Ok(Buffer(buffer.0))
+    }
+
+    #[cfg(not(feature = "native_heap"))]
+    fn create_image(&mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
+         -> Result<UnboundImage, image::CreationError>
+    {
+        let (mtl_format, _) = map_format(format).expect("unsupported texture format");
+
+        unsafe {
+            let descriptor = MTLTextureDescriptor::new(); // Returns retained
+            defer! { descriptor.release() }
+
+            match kind {
+                image::Kind::D2(width, height, aa) => {
+                    descriptor.set_texture_type(MTLTextureType::D2);
+                    descriptor.set_width(width as u64);
+                    descriptor.set_height(height as u64);
+                },
+                _ => unimplemented!(),
+            }
+
+            descriptor.set_mipmap_level_count(mip_levels as u64);
+            descriptor.set_pixel_format(mtl_format);
+            // TODO: usage
+
+            Ok(UnboundImage(self.device.new_texture(descriptor))) // Returns retained
+        }
+    }
+
+    #[cfg(not(feature = "native_heap"))]
+    fn get_image_requirements(&mut self, image: &UnboundImage) -> memory::MemoryRequirements {
+        unsafe {
+            memory::MemoryRequirements {
+                size: 1, // TODO
+                alignment: 1,
+            }
+        }
+    }
+
+    #[cfg(not(feature = "native_heap"))]
+    fn bind_image_memory(&mut self, heap: &Heap, offset: u64, image: UnboundImage) -> Result<Image, image::CreationError> {
+        Ok(Image(image.0))
+    }
+
+    // Emulated fence implementations
+    #[cfg(not(feature = "native_fence"))]
+    fn create_fence(&mut self, signaled: bool) -> Fence {
+        unimplemented!()
+    }
+    fn reset_fences(&mut self, fences: &[&Fence]) {
+        unimplemented!()
+    }
+    #[cfg(not(feature = "native_fence"))]
+    fn destroy_fence(&mut self, fence: Fence) {
+        unimplemented!()
     }
 }

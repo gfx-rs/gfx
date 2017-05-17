@@ -7,6 +7,11 @@ keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
 
+[features]
+default = []
+native_heap = []
+native_fence = []
+
 [dependencies]
 log = "0.3"
 gfx_corell = { path = "../../corell", version = "0.1.0" }

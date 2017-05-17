@@ -34,6 +34,9 @@ unsafe impl Sync for FrameBuffer {
 }
 
 #[derive(Debug)]
+pub struct PipelineLayout {}
+
+#[derive(Debug)]
 pub struct GraphicsPipeline(pub MTLRenderPipelineState);
 
 unsafe impl Send for GraphicsPipeline {
@@ -99,51 +102,7 @@ unsafe impl Sync for Semaphore {
 }
 
 #[derive(Debug)]
-pub struct Fence {}
-#[derive(Debug)]
 pub struct Mapping {}
-
-#[cfg(target_os = "macos")]
-#[derive(Debug)]
-pub struct DescriptorHeap {}
-
-#[derive(Debug)]
-pub struct DescriptorSetPool {}
-#[derive(Debug)]
-pub struct DescriptorSet {}
-
-#[cfg(target_os = "macos")]
-#[derive(Debug)]
-pub struct Heap {
-    pub heap_type: core::HeapType,
-    pub size: u64,
-}
-
-#[cfg(target_os = "macos")]
-#[derive(Debug)]
-pub struct PipelineLayout {}
-
-#[cfg(target_os = "macos")]
-#[derive(Debug)]
-pub struct DescriptorSetLayout {}
-
-#[cfg(target_os = "macos")]
-#[derive(Debug)]
-pub struct UnboundBuffer(pub MTLBuffer);
-
-unsafe impl Send for UnboundBuffer {
-}
-unsafe impl Sync for UnboundBuffer {
-}
-
-#[cfg(target_os = "macos")]
-#[derive(Debug)]
-pub struct UnboundImage(pub MTLTexture);
-
-unsafe impl Send for UnboundImage {
-}
-unsafe impl Sync for UnboundImage {
-}
 
 #[derive(Debug)]
 pub struct Buffer(pub MTLBuffer);
@@ -151,6 +110,51 @@ pub struct Buffer(pub MTLBuffer);
 unsafe impl Send for Buffer {
 }
 unsafe impl Sync for Buffer {
+}
+
+pub use self::heap_related::*;
+pub use self::fence_related::*;
+
+#[cfg(not(feature = "native_heap"))]
+mod heap_related {
+    use super::*;
+
+    #[derive(Debug)]
+    pub struct Heap {
+        pub heap_type: core::HeapType,
+        pub size: u64,
+    }
+
+    #[derive(Debug)]
+    pub struct DescriptorHeap {}
+    #[derive(Debug)]
+    pub struct DescriptorSetPool {}
+    #[derive(Debug)]
+    pub struct DescriptorSet {}
+    #[derive(Debug)]
+    pub struct DescriptorSetLayout {}
+
+    #[derive(Debug)]
+    pub struct UnboundBuffer(pub MTLBuffer);
+
+    unsafe impl Send for UnboundBuffer {
+    }
+    unsafe impl Sync for UnboundBuffer {
+    }
+
+    #[derive(Debug)]
+    pub struct UnboundImage(pub MTLTexture);
+
+    unsafe impl Send for UnboundImage {
+    }
+    unsafe impl Sync for UnboundImage {
+    }
+}
+
+#[cfg(not(feature = "native_fence"))]
+mod fence_related {
+    #[derive(Debug)]
+    pub struct Fence {}
 }
 
 #[repr(C)]
