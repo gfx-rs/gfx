@@ -305,13 +305,16 @@ A: Sized + Application<gfx_device_vulkan::Resources>
                                  .collect::<Vec<_>>();
     let gfx_core::Device_ { mut factory, mut general_queues, mut graphics_queues, .. } = adapters[0].open(&queue_descs);
 
-    let queue = if !general_queues.is_empty() {
-        (&mut general_queues[0]).into()
+    let queue = if let Some(queue) = general_queues.first_mut() {
+        queue.as_mut().into()
+    } else if let Some(queue) = graphics_queues.first_mut() {
+        queue.as_mut()
     } else {
-        &mut graphics_queues[0]
+        error!("Unable to find a matching general or graphics queue.");
+        return
     };
 
-    let mut swap_chain = surface.build_swapchain::<ColorFormat>(queue);
+    let mut swap_chain = surface.build_swapchain::<ColorFormat, _>(queue);
 
     let (width, height) = win.get_inner_size_points().unwrap();
 
@@ -342,7 +345,6 @@ A: Sized + Application<gfx_device_vulkan::Resources>
     let mut running = true;
     let mut frame_semaphore = factory.create_semaphore();
 
-    // TODO: How can we get rid of this checks all the time?
     let mut graphics_pool = gfx_device_vulkan::GraphicsCommandPool::from_queue(queue, 1);
 
     while running {

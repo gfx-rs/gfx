@@ -16,190 +16,393 @@
 //!
 //! There are different types of queues, which can create and submit associated command buffers.
 
+use std::borrow::{Borrow, BorrowMut};
 use std::ops::{Deref, DerefMut};
+use std::marker::PhantomData;
 use {CommandQueue, QueueSubmit, Resources};
 use command::Submit;
 
+///
+pub trait Repr<Q: CommandQueue> { }
+
+///
+impl<Q: CommandQueue> Repr<Q> for Q {}
+
+impl<'a, Q: CommandQueue> Repr<Q> for &'a Q {}
+impl<'a, Q: CommandQueue> Repr<Q> for &'a mut Q {}
+
 /// General command queue, which can execute graphics, compute and transfer command buffers.
-pub struct GeneralQueue<Q: CommandQueue>(Q);
-impl<Q: CommandQueue> GeneralQueue<Q> {
+pub struct GeneralQueueBase<Q: CommandQueue, R: Repr<Q>>(R, PhantomData<Q>);
+impl<Q: CommandQueue> GeneralQueueBase<Q, Q> {
     #[doc(hidden)]
     pub unsafe fn new(queue: Q) -> Self {
-        GeneralQueue(queue)
+        GeneralQueueBase(queue, PhantomData)
     }
 
+    ///
+    pub fn as_ref(&self) -> GeneralQueueBase<Q, &Q> {
+        GeneralQueueBase(&self.0, PhantomData)
+    }
+
+    ///
+    pub fn as_mut(&mut self) -> GeneralQueueBase<Q, &mut Q> {
+        GeneralQueueBase(&mut self.0, PhantomData)
+    }
+}
+impl<'a, Q: CommandQueue> GeneralQueueBase<Q, &'a Q> {
+    ///
+    pub fn as_ref(&self) -> GeneralQueueBase<Q, &Q> {
+        GeneralQueueBase(&self.0, PhantomData)
+    }
+}
+impl<'a, Q: CommandQueue> GeneralQueueBase<Q, &'a mut Q> {
+    ///
+    pub fn as_ref(&self) -> GeneralQueueBase<Q, &Q> {
+        GeneralQueueBase(&self.0, PhantomData)
+    }
+
+    ///
+    pub fn as_mut(&mut self) -> GeneralQueueBase<Q, &mut Q> {
+        GeneralQueueBase(&mut self.0, PhantomData)
+    }
+}
+
+///
+pub type GeneralQueue<Q: CommandQueue> = GeneralQueueBase<Q, Q>;
+
+impl<'a, Q: CommandQueue> GeneralQueueBase<Q, &'a mut Q> {
     /// Submit general command buffers for execution.
     pub fn submit_general(&mut self, submit: &[QueueSubmit<Q::GeneralCommandBuffer, Q::Resources>], fence: Option<&mut <Q::Resources as Resources>::Fence>) {
-        unsafe { self.submit(submit, fence) }
+        unsafe { self.0.submit(submit, fence) }
     }
     /// Submit graphics command buffers for execution.
     pub fn submit_graphics(&mut self, submit: &[QueueSubmit<Q::GraphicsCommandBuffer, Q::Resources>], fence: Option<&mut <Q::Resources as Resources>::Fence>) {
-        unsafe { self.submit(submit, fence) }
+        unsafe { self.0.submit(submit, fence) }
     }
     /// Submit compute command buffers for execution.
     pub fn submit_compute(&mut self, submit: &[QueueSubmit<Q::ComputeCommandBuffer, Q::Resources>], fence: Option<&mut <Q::Resources as Resources>::Fence>) {
-        unsafe { self.submit(submit, fence) }
+        unsafe { self.0.submit(submit, fence) }
     }
     /// Submit transfer command buffers for execution.
     pub fn submit_transfer(&mut self, submit: &[QueueSubmit<Q::TransferCommandBuffer, Q::Resources>], fence: Option<&mut <Q::Resources as Resources>::Fence>) {
-        unsafe { self.submit(submit, fence) }
+        unsafe { self.0.submit(submit, fence) }
     }
 }
 
-impl<Q: CommandQueue> Deref for GeneralQueue<Q> {
+impl<Q: CommandQueue> Deref for GeneralQueueBase<Q, Q> {
     type Target = Q;
-    fn deref(&self) -> &Q {
-        &self.0
-    }
+    fn deref(&self) -> &Self::Target { &self.0 }
 }
-impl<Q: CommandQueue> DerefMut for GeneralQueue<Q> {
-    fn deref_mut(&mut self) -> &mut Q {
-        &mut self.0
-    }
+impl<'a, Q: CommandQueue> Deref for GeneralQueueBase<Q, &'a Q> {
+    type Target = Q;
+    fn deref(&self) -> &Self::Target { &self.0 }
 }
-
-impl<Q: CommandQueue> From<GeneralQueue<Q>> for GraphicsQueue<Q> {
-    fn from(queue: GeneralQueue<Q>) -> GraphicsQueue<Q> {
-        GraphicsQueue(queue.0)
-    }
+impl<'a, Q: CommandQueue> Deref for GeneralQueueBase<Q, &'a mut Q> {
+    type Target = Q;
+    fn deref(&self) -> &Self::Target { &self.0 }
 }
-impl<Q: CommandQueue> From<GeneralQueue<Q>> for ComputeQueue<Q> {
-    fn from(queue: GeneralQueue<Q>) -> ComputeQueue<Q> {
-        ComputeQueue(queue.0)
-    }
+impl<Q: CommandQueue> DerefMut for GeneralQueueBase<Q, Q> {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
 }
-impl<Q: CommandQueue> From<GeneralQueue<Q>> for TransferQueue<Q> {
-    fn from(queue: GeneralQueue<Q>) -> TransferQueue<Q> {
-        TransferQueue(queue.0)
-    }
+impl<'a, Q: CommandQueue> DerefMut for GeneralQueueBase<Q, &'a mut Q> {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
 }
 
-impl<'a, Q: CommandQueue> From<&'a GeneralQueue<Q>> for &'a GraphicsQueue<Q> {
-    fn from(queue: &'a GeneralQueue<Q>) -> &'a GraphicsQueue<Q> {
-        unsafe { &*(queue as *const _ as *const GraphicsQueue<Q>) }
-    }
+impl<Q: CommandQueue> Borrow<Q> for GeneralQueueBase<Q, Q> {
+    fn borrow(&self) -> &Q { &self.0 }
 }
-impl<'a, Q: CommandQueue> From<&'a GeneralQueue<Q>> for &'a ComputeQueue<Q> {
-    fn from(queue: &'a GeneralQueue<Q>) -> &'a ComputeQueue<Q> {
-        unsafe { &*(queue as *const _ as *const ComputeQueue<Q>) }
-    }
+impl<'a, Q: CommandQueue> Borrow<Q> for GeneralQueueBase<Q, &'a Q> {
+    fn borrow(&self) -> &Q { &self.0 }
 }
-impl<'a, Q: CommandQueue> From<&'a GeneralQueue<Q>> for &'a TransferQueue<Q> {
-    fn from(queue: &'a GeneralQueue<Q>) -> &'a TransferQueue<Q> {
-        unsafe { &*(queue as *const _ as *const TransferQueue<Q>) }
-    }
+impl<'a, Q: CommandQueue> Borrow<Q> for GeneralQueueBase<Q, &'a mut Q> {
+    fn borrow(&self) -> &Q { &self.0 }
 }
 
-impl<'a, Q: CommandQueue> From<&'a mut GeneralQueue<Q>> for &'a mut GraphicsQueue<Q> {
-    fn from(queue: &'a mut GeneralQueue<Q>) -> &'a mut GraphicsQueue<Q> {
-        unsafe { &mut *(queue as *mut _ as *mut GraphicsQueue<Q>) }
+impl<Q: CommandQueue> BorrowMut<Q> for GeneralQueueBase<Q, Q> {
+    fn borrow_mut(&mut self) -> &mut Q { &mut self.0 }
+}
+impl<'a, Q: CommandQueue> BorrowMut<Q> for GeneralQueueBase<Q, &'a mut Q> {
+    fn borrow_mut(&mut self) -> &mut Q { &mut self.0 }
+}
+
+impl<Q: CommandQueue, R: Repr<Q>> From<GeneralQueueBase<Q, R>> for GraphicsQueueBase<Q, R> {
+    fn from(queue: GeneralQueueBase<Q, R>) -> GraphicsQueueBase<Q, R> {
+        GraphicsQueueBase(queue.0, PhantomData)
     }
 }
-impl<'a, Q: CommandQueue> From<&'a mut GeneralQueue<Q>> for &'a mut ComputeQueue<Q> {
-    fn from(queue: &'a mut GeneralQueue<Q>) -> &'a mut ComputeQueue<Q> {
-        unsafe { &mut *(queue as *mut _ as *mut ComputeQueue<Q>) }
+impl<Q: CommandQueue, R: Repr<Q>> From<GeneralQueueBase<Q, R>> for ComputeQueueBase<Q, R> {
+    fn from(queue: GeneralQueueBase<Q, R>) -> ComputeQueueBase<Q, R> {
+        ComputeQueueBase(queue.0, PhantomData)
     }
 }
-impl<'a, Q: CommandQueue> From<&'a mut GeneralQueue<Q>> for &'a mut TransferQueue<Q> {
-    fn from(queue: &'a mut GeneralQueue<Q>) -> &'a mut TransferQueue<Q> {
-        unsafe { &mut *(queue as *mut _ as *mut TransferQueue<Q>) }
+impl<Q: CommandQueue, R: Repr<Q>> From<GeneralQueueBase<Q, R>> for TransferQueueBase<Q, R> {
+    fn from(queue: GeneralQueueBase<Q, R>) -> TransferQueueBase<Q, R> {
+        TransferQueueBase(queue.0, PhantomData)
     }
 }
 
 /// Graphics command queue, which can execute graphics and transfer command buffers.
-pub struct GraphicsQueue<Q: CommandQueue>(Q);
-impl<Q: CommandQueue> GraphicsQueue<Q> {
+pub struct GraphicsQueueBase<Q: CommandQueue, R: Repr<Q>>(R, PhantomData<Q>);
+impl<Q: CommandQueue> GraphicsQueueBase<Q, Q> {
     #[doc(hidden)]
     pub unsafe fn new(queue: Q) -> Self {
-        GraphicsQueue(queue)
+        GraphicsQueueBase(queue, PhantomData)
     }
 
+    ///
+    pub fn as_ref(&self) -> GraphicsQueueBase<Q, &Q> {
+        GraphicsQueueBase(&self.0, PhantomData)
+    }
+
+    ///
+    pub fn as_mut(&mut self) -> GraphicsQueueBase<Q, &mut Q> {
+        GraphicsQueueBase(&mut self.0, PhantomData)
+    }
+}
+impl<'a, Q: CommandQueue> GraphicsQueueBase<Q, &'a Q> {
+    ///
+    pub fn as_ref(&self) -> GraphicsQueueBase<Q, &Q> {
+        GraphicsQueueBase(&self.0, PhantomData)
+    }
+}
+impl<'a, Q: CommandQueue> GraphicsQueueBase<Q, &'a mut Q> {
+    ///
+    pub fn as_ref(&self) -> GraphicsQueueBase<Q, &Q> {
+        GraphicsQueueBase(&self.0, PhantomData)
+    }
+
+    ///
+    pub fn as_mut(&mut self) -> GraphicsQueueBase<Q, &mut Q> {
+        GraphicsQueueBase(&mut self.0, PhantomData)
+    }
+}
+
+///
+pub type GraphicsQueue<Q: CommandQueue> = GraphicsQueueBase<Q, Q>;
+
+impl<'a, Q: CommandQueue> GraphicsQueueBase<Q, &'a mut Q> {
     /// Submit graphics command buffers for execution.
     pub fn submit_graphics(&mut self, submit: &[QueueSubmit<Q::GraphicsCommandBuffer, Q::Resources>], fence: Option<&mut <Q::Resources as Resources>::Fence>) {
-        unsafe { self.submit(submit, fence) }
+        unsafe { self.0.submit(submit, fence) }
     }
     /// Submit transfer command buffers for execution.
     pub fn submit_transfer(&mut self, submit: &[QueueSubmit<Q::TransferCommandBuffer, Q::Resources>], fence: Option<&mut <Q::Resources as Resources>::Fence>) {
-        unsafe { self.submit(submit, fence) }
+        unsafe { self.0.submit(submit, fence) }
     }
 }
 
-impl<Q: CommandQueue> Deref for GraphicsQueue<Q> {
+impl<Q: CommandQueue> Deref for GraphicsQueueBase<Q, Q> {
     type Target = Q;
-    fn deref(&self) -> &Q {
-        &self.0
-    }
+    fn deref(&self) -> &Self::Target { &self.0 }
 }
-impl<Q: CommandQueue> DerefMut for GraphicsQueue<Q> {
-    fn deref_mut(&mut self) -> &mut Q {
-        &mut self.0
-    }
+impl<Q: CommandQueue> DerefMut for GraphicsQueueBase<Q, Q> {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+}
+impl<'a, Q: CommandQueue> Deref for GraphicsQueueBase<Q, &'a Q> {
+    type Target = Q;
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+impl<'a, Q: CommandQueue> Deref for GraphicsQueueBase<Q, &'a mut Q> {
+    type Target = Q;
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+impl<'a, Q: CommandQueue> DerefMut for GraphicsQueueBase<Q, &'a mut Q> {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
 }
 
-impl<Q: CommandQueue> From<GraphicsQueue<Q>> for TransferQueue<Q> {
-    fn from(queue: GraphicsQueue<Q>) -> TransferQueue<Q> {
-        TransferQueue(queue.0)
+impl<Q: CommandQueue> Borrow<Q> for GraphicsQueueBase<Q, Q> {
+    fn borrow(&self) -> &Q { &self.0 }
+}
+impl<'a, Q: CommandQueue> Borrow<Q> for GraphicsQueueBase<Q, &'a Q> {
+    fn borrow(&self) -> &Q { &self.0 }
+}
+impl<'a, Q: CommandQueue> Borrow<Q> for GraphicsQueueBase<Q, &'a mut Q> {
+    fn borrow(&self) -> &Q { &self.0 }
+}
+
+impl<Q: CommandQueue> BorrowMut<Q> for GraphicsQueueBase<Q, Q> {
+    fn borrow_mut(&mut self) -> &mut Q { &mut self.0 }
+}
+impl<'a, Q: CommandQueue> BorrowMut<Q> for GraphicsQueueBase<Q, &'a mut Q> {
+    fn borrow_mut(&mut self) -> &mut Q { &mut self.0 }
+}
+
+impl<Q: CommandQueue, R: Repr<Q>> From<GraphicsQueueBase<Q, R>> for TransferQueueBase<Q, R> {
+    fn from(queue: GraphicsQueueBase<Q, R>) -> TransferQueueBase<Q, R> {
+        TransferQueueBase(queue.0, PhantomData)
     }
 }
 
 /// Compute command queue, which can execute compute and transfer command buffers.
-pub struct ComputeQueue<Q: CommandQueue>(Q);
-impl<Q: CommandQueue> ComputeQueue<Q> {
+pub struct ComputeQueueBase<Q: CommandQueue, R: Repr<Q>>(R, PhantomData<Q>);
+impl<Q: CommandQueue> ComputeQueueBase<Q, Q> {
     #[doc(hidden)]
     pub unsafe fn new(queue: Q) -> Self {
-        ComputeQueue(queue)
+        ComputeQueueBase(queue, PhantomData)
     }
 
+     ///
+    pub fn as_ref(&self) -> ComputeQueueBase<Q, &Q> {
+        ComputeQueueBase(&self.0, PhantomData)
+    }
+
+    ///
+    pub fn as_mut(&mut self) -> ComputeQueueBase<Q, &mut Q> {
+        ComputeQueueBase(&mut self.0, PhantomData)
+    }
+}
+impl<'a, Q: CommandQueue> ComputeQueueBase<Q, &'a Q> {
+    ///
+    pub fn as_ref(&self) -> ComputeQueueBase<Q, &Q> {
+        ComputeQueueBase(&self.0, PhantomData)
+    }
+}
+impl<'a, Q: CommandQueue> ComputeQueueBase<Q, &'a mut Q> {
+    ///
+    pub fn as_ref(&self) -> ComputeQueueBase<Q, &Q> {
+        ComputeQueueBase(&self.0, PhantomData)
+    }
+
+    ///
+    pub fn as_mut(&mut self) -> ComputeQueueBase<Q, &mut Q> {
+        ComputeQueueBase(&mut self.0, PhantomData)
+    }
+}
+
+///
+pub type ComputeQueue<Q: CommandQueue> = ComputeQueueBase<Q, Q>;
+
+impl<'a, Q: CommandQueue> ComputeQueueBase<Q, &'a mut Q> {
     /// Submit compute command buffers for execution.
     pub fn submit_compute(&mut self, submit: &[QueueSubmit<Q::ComputeCommandBuffer, Q::Resources>], fence: Option<&mut <Q::Resources as Resources>::Fence>) {
-        unsafe { self.submit(submit, fence) }
+        unsafe { self.0.submit(submit, fence) }
     }
     /// Submit transfer command buffers for execution.
     pub fn submit_transfer(&mut self, submit: &[QueueSubmit<Q::TransferCommandBuffer, Q::Resources>], fence: Option<&mut <Q::Resources as Resources>::Fence>) {
-        unsafe { self.submit(submit, fence) }
+        unsafe { self.0.submit(submit, fence) }
     }
 }
 
-impl<Q: CommandQueue> Deref for ComputeQueue<Q> {
+impl<Q: CommandQueue> Deref for ComputeQueueBase<Q, Q> {
     type Target = Q;
-    fn deref(&self) -> &Q {
-        &self.0
-    }
+    fn deref(&self) -> &Self::Target { &self.0 }
 }
-impl<Q: CommandQueue> DerefMut for ComputeQueue<Q> {
-    fn deref_mut(&mut self) -> &mut Q {
-        &mut self.0
-    }
+impl<Q: CommandQueue> DerefMut for ComputeQueueBase<Q, Q> {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+}
+impl<'a, Q: CommandQueue> Deref for ComputeQueueBase<Q, &'a Q> {
+    type Target = Q;
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+impl<'a, Q: CommandQueue> Deref for ComputeQueueBase<Q, &'a mut Q> {
+    type Target = Q;
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+impl<'a, Q: CommandQueue> DerefMut for ComputeQueueBase<Q, &'a mut Q> {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
 }
 
-impl<Q: CommandQueue> From<ComputeQueue<Q>> for TransferQueue<Q> {
-    fn from(queue: ComputeQueue<Q>) -> TransferQueue<Q> {
-        TransferQueue(queue.0)
+impl<Q: CommandQueue> Borrow<Q> for ComputeQueueBase<Q, Q> {
+    fn borrow(&self) -> &Q { &self.0 }
+}
+impl<'a, Q: CommandQueue> Borrow<Q> for ComputeQueueBase<Q, &'a Q> {
+    fn borrow(&self) -> &Q { &self.0 }
+}
+impl<'a, Q: CommandQueue> Borrow<Q> for ComputeQueueBase<Q, &'a mut Q> {
+    fn borrow(&self) -> &Q { &self.0 }
+}
+
+impl<Q: CommandQueue> BorrowMut<Q> for ComputeQueueBase<Q, Q> {
+    fn borrow_mut(&mut self) -> &mut Q { &mut self.0 }
+}
+impl<'a, Q: CommandQueue> BorrowMut<Q> for ComputeQueueBase<Q, &'a mut Q> {
+    fn borrow_mut(&mut self) -> &mut Q { &mut self.0 }
+}
+
+impl<Q: CommandQueue, R: Repr<Q>> From<ComputeQueueBase<Q, R>> for TransferQueueBase<Q, R> {
+    fn from(queue: ComputeQueueBase<Q, R>) -> TransferQueueBase<Q, R> {
+        TransferQueueBase(queue.0, PhantomData)
     }
 }
 
 /// Transfer command queue, which can execute transfer command buffers.
-pub struct TransferQueue<Q: CommandQueue>(Q);
-impl<Q: CommandQueue> TransferQueue<Q> {
+pub struct TransferQueueBase<Q: CommandQueue, R: Repr<Q>>(R, PhantomData<Q>);
+impl<Q: CommandQueue> TransferQueueBase<Q, Q> {
     #[doc(hidden)]
     pub unsafe fn new(queue: Q) -> Self {
-        TransferQueue(queue)
+        TransferQueueBase(queue, PhantomData)
     }
 
+     ///
+    pub fn as_ref(&self) -> TransferQueueBase<Q, &Q> {
+        TransferQueueBase(&self.0, PhantomData)
+    }
+
+    ///
+    pub fn as_mut(&mut self) -> TransferQueueBase<Q, &mut Q> {
+        TransferQueueBase(&mut self.0, PhantomData)
+    }
+}
+impl<'a, Q: CommandQueue> TransferQueueBase<Q, &'a Q> {
+    ///
+    pub fn as_ref(&self) -> TransferQueueBase<Q, &Q> {
+        TransferQueueBase(&self.0, PhantomData)
+    }
+}
+impl<'a, Q: CommandQueue> TransferQueueBase<Q, &'a mut Q> {
+    ///
+    pub fn as_ref(&self) -> TransferQueueBase<Q, &Q> {
+        TransferQueueBase(&self.0, PhantomData)
+    }
+
+    ///
+    pub fn as_mut(&mut self) -> TransferQueueBase<Q, &mut Q> {
+        TransferQueueBase(&mut self.0, PhantomData)
+    }
+}
+
+///
+pub type TransferQueue<Q: CommandQueue> = TransferQueueBase<Q, Q>;
+
+impl<'a, Q: CommandQueue> TransferQueueBase<Q, &'a mut Q> {
     /// Submit transfer command buffers for execution.
     pub fn submit_transfer(&mut self, submit: &[QueueSubmit<Q::TransferCommandBuffer, Q::Resources>], fence: Option<&mut <Q::Resources as Resources>::Fence>) {
-        unsafe { self.submit(submit, fence) }
+        unsafe { self.0.submit(submit, fence) }
     }
 }
 
-impl<Q: CommandQueue> Deref for TransferQueue<Q> {
+impl<Q: CommandQueue> Deref for TransferQueueBase<Q, Q> {
     type Target = Q;
-    fn deref(&self) -> &Q {
-        &self.0
-    }
+    fn deref(&self) -> &Self::Target { &self.0 }
 }
-impl<Q: CommandQueue> DerefMut for TransferQueue<Q> {
-    fn deref_mut(&mut self) -> &mut Q {
-        &mut self.0
-    }
+impl<Q: CommandQueue> DerefMut for TransferQueueBase<Q, Q> {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+}
+impl<'a, Q: CommandQueue> Deref for TransferQueueBase<Q, &'a Q> {
+    type Target = Q;
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+impl<'a, Q: CommandQueue> Deref for TransferQueueBase<Q, &'a mut Q> {
+    type Target = Q;
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+impl<'a, Q: CommandQueue> DerefMut for TransferQueueBase<Q, &'a mut Q> {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+}
+
+impl<Q: CommandQueue> Borrow<Q> for TransferQueueBase<Q, Q> {
+    fn borrow(&self) -> &Q { &self.0 }
+}
+impl<'a, Q: CommandQueue> Borrow<Q> for TransferQueueBase<Q, &'a Q> {
+    fn borrow(&self) -> &Q { &self.0 }
+}
+impl<'a, Q: CommandQueue> Borrow<Q> for TransferQueueBase<Q, &'a mut Q> {
+    fn borrow(&self) -> &Q { &self.0 }
+}
+
+impl<Q: CommandQueue> BorrowMut<Q> for TransferQueueBase<Q, Q> {
+    fn borrow_mut(&mut self) -> &mut Q { &mut self.0 }
+}
+impl<'a, Q: CommandQueue> BorrowMut<Q> for TransferQueueBase<Q, &'a mut Q> {
+    fn borrow_mut(&mut self) -> &mut Q { &mut self.0 }
 }
