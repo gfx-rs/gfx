@@ -22,8 +22,6 @@ metal-rs = "0.3"
 io-surface = "0.7"
 core-foundation = "0.3"
 core-graphics = "0.7"
-cgl = "0.1"
-gfx_gl = "0.3.1"
 scopeguard = "0.3"
 block = "0.1"
 

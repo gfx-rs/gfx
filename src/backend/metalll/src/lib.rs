@@ -19,8 +19,6 @@ extern crate cocoa;
 extern crate io_surface;
 extern crate core_foundation;
 extern crate core_graphics;
-extern crate cgl;
-extern crate gfx_gl as gl;
 #[macro_use] extern crate log;
 #[macro_use] extern crate scopeguard;
 extern crate block;
@@ -41,7 +39,7 @@ use std::str::FromStr;
 use std::mem;
 use std::marker::PhantomData;
 use std::cell::RefCell;
-use std::rc::{Rc, Weak as WeakRc};
+use std::rc::Rc;
 use std::sync::Arc;
 
 use core::{format, memory};
@@ -49,7 +47,7 @@ use core::format::SurfaceType;
 use core::format::ChannelType;
 use metal::*;
 use winit::os::macos::WindowExt;
-use objc::runtime::Class;
+use objc::runtime::{Object, Class};
 use core_foundation::base::TCFType;
 use core_foundation::string::{CFString, CFStringRef};
 use core_foundation::dictionary::CFDictionary;
@@ -76,33 +74,37 @@ impl Drop for Adapter {
     }
 }
 
-pub struct Surface {
-    nsview: cocoa::base::id,
-    swap_chain: RefCell<WeakRc<SwapChainInner>>,
+pub struct Surface(Rc<SurfaceInner>);
+
+struct SurfaceInner {
+    nsview: *mut Object,
+    render_layer: RefCell<*mut Object>,
 }
 
-impl Drop for Surface {
+impl Drop for SurfaceInner {
     fn drop(&mut self) {
         unsafe { msg_send![self.nsview, release]; }
     }
 }
 
-pub struct SwapChain(Rc<SwapChainInner>);
-
-struct SwapChainInner {
-    ns_glcontext: cocoa::base::id,
-    gl: Box<gl::Gl>,
+pub struct SwapChain {
+    surface: Rc<SurfaceInner>,
     pixel_width: u64,
     pixel_height: u64,
 
     io_surfaces: Vec<IOSurface>,
     images: Vec<native::Image>,
-    frame_index: RefCell<usize>,
+    frame_index: usize,
+    present_index: usize,
 }
 
-impl Drop for SwapChainInner {
+impl Drop for SwapChain {
     fn drop(&mut self) {
-        unsafe { msg_send![self.ns_glcontext, release] }
+        unsafe {
+            for image in self.images.drain(..) {
+                image.0.release(); 
+            }
+        }
     }
 }
 
@@ -146,11 +148,18 @@ impl core::Instance for Instance {
                 panic!("window does not have a valid contentView");
             }
 
+            msg_send![view, setWantsLayer: YES];
+            let render_layer: *mut Object = msg_send![Class::get("CALayer").unwrap(), new]; // Returns retained
+            let view_size: CGRect = msg_send![view, bounds];
+            msg_send![render_layer, setFrame: view_size];
+            let view_layer: *mut Object = msg_send![view, layer];
+            msg_send![view_layer, addSublayer: render_layer];
+
             msg_send![view, retain];
-            Surface {
+            Surface(Rc::new(SurfaceInner {
                 nsview: view,
-                swap_chain: Default::default(),
-            }
+                render_layer: RefCell::new(render_layer),
+            }))
         }
     }
 }
@@ -214,19 +223,25 @@ impl core::Surface for Surface {
     type SwapChain = SwapChain;
 
     fn build_swapchain<T: format::RenderFormat>(&self, queue: &CommandQueue) -> SwapChain {
-        if let Some(_) = self.swap_chain.borrow().upgrade() {
-            panic!("multiple swap chains with the same surface are not supported")
-        }
-
         let (mtl_format, cv_format) = match T::get_format() {
-            format::Format(SurfaceType::R8_G8_B8_A8, ChannelType::Srgb) => (MTLPixelFormat::RGBA8Unorm_sRGB, kCVPixelFormatType_32RGBA),
+            format::Format(SurfaceType::R8_G8_B8_A8, ChannelType::Srgb) => (MTLPixelFormat::RGBA8Unorm_sRGB, native::kCVPixelFormatType_32RGBA),
             _ => panic!("unsupported backbuffer format"), // TODO: more formats
         };
 
-        let inner = unsafe {
-            let view_points_size: CGRect = msg_send![self.nsview, bounds];
-            let view_window: cocoa::base::id = msg_send![self.nsview, window];
+        let render_layer_borrow = self.0.render_layer.borrow_mut();
+        let render_layer = *render_layer_borrow;
+        let nsview = self.0.nsview;
+
+        unsafe {
+            // Update render layer size
+            let view_points_size: CGRect = msg_send![nsview, bounds];
+            msg_send![render_layer, setBounds: view_points_size];
+            let view_window: *mut Object = msg_send![nsview, window];
+            if view_window.is_null() {
+                panic!("surface is not attached to a window");
+            }
             let scale_factor: CGFloat = msg_send![view_window, backingScaleFactor];
+            msg_send![render_layer, setContentsScale: scale_factor];
             let pixel_width = (view_points_size.size.width * scale_factor) as u64;
             let pixel_height = (view_points_size.size.height * scale_factor) as u64;
             let pixel_size = conversions::get_format_bytes_per_pixel(mtl_format) as u64;
@@ -257,45 +272,17 @@ impl core::Surface for Surface {
                 native::Image(mapped_texture)
             }).collect();
 
-            // Create OpenGL context for compositing
-            // TODO: CAMetalLayer is able to composite IOSurfaces directly, so we should try
-            // to figure out how to do the same.
-            let gl_pixelformat = NSOpenGLPixelFormat::alloc(nil).initWithAttributes_(&[
-                appkit::NSOpenGLPFAOpenGLProfile as u32, appkit::NSOpenGLProfileVersion3_2Core as u32,
-                appkit::NSOpenGLPFAColorSize as u32, 24, // FIXME
-                appkit::NSOpenGLPFAAlphaSize as u32, 8,
-                // TODO: float buffers
-                0,
-            ]); // Returns retained
-            defer! { msg_send![gl_pixelformat, release] };
-            let ns_glcontext = NSOpenGLContext::alloc(nil).initWithFormat_shareContext_(gl_pixelformat, nil);
-            defer_on_unwind! { msg_send![ns_glcontext, release] }
-            if ns_glcontext.is_null() {
-                panic!("failed to create NSOpenGLContext");
-            }
-            ns_glcontext.setView_(self.nsview);
-            let framework_name: CFString = FromStr::from_str("com.apple.opengl").unwrap();
-            let framework = CFBundleGetBundleWithIdentifier(framework_name.as_concrete_TypeRef());
-            let gl = Box::new(gl::Gl::load_with(|name| {
-                let symbol_name: CFString = FromStr::from_str(name).unwrap();
-                CFBundleGetFunctionPointerForName(framework, symbol_name.as_concrete_TypeRef()) as *const _
-            }));
-
-            Rc::new(SwapChainInner {
-                ns_glcontext,
-                gl,
+            SwapChain {
+                surface: self.0.clone(),
                 pixel_width,
                 pixel_height,
 
                 io_surfaces,
                 images,
-                frame_index: RefCell::new(0),
-            })
-        };
-
-        *self.swap_chain.borrow_mut() = Rc::downgrade(&inner);
-
-        SwapChain(inner)
+                frame_index: 0,
+                present_index: 0,
+            }
+        }
     }
 }
 
@@ -304,7 +291,7 @@ impl core::SwapChain for SwapChain {
     type Image = native::Image;
 
     fn get_images(&mut self) -> &[native::Image] {
-        &self.0.images
+        &self.images
     }
 
     fn acquire_frame(&mut self, sync: core::FrameSync<Resources>) -> core::Frame {
@@ -317,62 +304,23 @@ impl core::SwapChain for SwapChain {
                 core::FrameSync::Fence(_fence) => unimplemented!(),
             }
 
-            let mut frame_index = self.0.frame_index.borrow_mut();
-            let frame = core::Frame::new(*frame_index % self.0.images.len());
-            *frame_index += 1;
+            let frame = core::Frame::new(self.frame_index % self.images.len());
+            self.frame_index += 1;
             frame
         }
     }
 
     fn present(&mut self) {
-        let frame_index = *self.0.frame_index.borrow();
-        if frame_index == 0 {
-            panic!("no frame to present");
-        }
-        let buffer_index = (frame_index - 1) % self.0.io_surfaces.len();
+        let buffer_index = self.present_index % self.io_surfaces.len();
 
-        // Draw IOSurface to OpenGL context
         unsafe {
-            let io_surface = &mut *(&self.0.io_surfaces[buffer_index] as *const IOSurface as *mut IOSurface);
-
-            let cgl_context: cgl::CGLContextObj = msg_send![self.0.ns_glcontext, CGLContextObj];
-            cgl::CGLSetCurrentContext(cgl_context);
-
-            self.0.gl.ClearColor(1.0, 1.0, 1.0, 1.0);
-            self.0.gl.Clear(gl::COLOR_BUFFER_BIT);
-
-            let mut gl_surface_tex: gl::types::GLuint = 0;
-            self.0.gl.GenTextures(1, &mut gl_surface_tex);
-
-            self.0.gl.BindTexture(gl::TEXTURE_RECTANGLE, gl_surface_tex);
-            io_surface.bind_to_gl_texture(self.0.pixel_width as i32, self.0.pixel_height as i32);
-            self.0.gl.TexParameteri(gl::TEXTURE_RECTANGLE, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
-            self.0.gl.TexParameteri(gl::TEXTURE_RECTANGLE, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
-
-            // Bind IOSurface texture as framebuffer
-            self.0.gl.BindTexture(gl::TEXTURE_RECTANGLE, 0);
-            let mut gl_surface_fb: gl::types::GLuint = 0;
-            self.0.gl.GenFramebuffers(1, &mut gl_surface_fb);
-            self.0.gl.BindFramebuffer(gl::FRAMEBUFFER, gl_surface_fb);
-            self.0.gl.FramebufferTexture2D(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::TEXTURE_RECTANGLE, gl_surface_tex, 0);
-            self.0.gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
-
-            // Blit!
-            self.0.gl.BindFramebuffer(gl::READ_FRAMEBUFFER, gl_surface_fb);
-            self.0.gl.BindFramebuffer(gl::DRAW_FRAMEBUFFER, 0);
-            self.0.gl.BlitFramebuffer(
-                0, 0, self.0.pixel_width as i32, self.0.pixel_height as i32,
-                0, 0, self.0.pixel_width as i32, self.0.pixel_height as i32,
-                gl::COLOR_BUFFER_BIT,
-                gl::NEAREST
-            );
-            self.0.gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
-
-            self.0.gl.Flush();
-
-            self.0.gl.DeleteFramebuffers(1, &gl_surface_fb);
-            self.0.gl.DeleteTextures(1, &gl_surface_tex);
+            let io_surface = &mut self.io_surfaces[buffer_index];
+            let render_layer_borrow = self.surface.render_layer.borrow_mut();
+            let render_layer = *render_layer_borrow;
+            msg_send![render_layer, setContents: io_surface.obj];
         }
+
+        self.present_index += 1;
     }
 }
 
@@ -404,4 +352,3 @@ impl core::Resources for Resources {
 
 }
 
-const kCVPixelFormatType_32RGBA: u32 = (b'R' as u32) << 24 | (b'G' as u32) << 16 | (b'B' as u32) << 8 | b'C' as u32;

@@ -3,10 +3,10 @@ use ::native;
 use ::conversions::*;
 
 use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::cell::UnsafeCell;
 
-use core::{self, mapping, memory, target, pso, state, pool, queue, command};
+use core::{self, mapping, memory, target, pso, state, pool, queue, command, shade};
 use core::{VertexCount, VertexOffset};
 use core::buffer::{IndexBufferView};
 use core::command::{InstanceParams, ClearColor, ClearValue, BufferImageCopy, BufferCopy, Encoder};
@@ -49,6 +49,7 @@ pub struct CommandBuffer {
     scissors: Option<MTLScissorRect>,
     pipeline_state: Option<MTLRenderPipelineState>, // Unretained
     vertex_buffers: Vec<(MTLBuffer, pso::BufferOffset)>, // Unretained
+    descriptor_sets: Vec<Option<Arc<Mutex<native::DescriptorSetInner>>>>,
 }
 
 impl Drop for CommandBuffer {
@@ -177,6 +178,7 @@ impl core::CommandPool for CommandPool {
                 scissors: None,
                 pipeline_state: None,
                 vertex_buffers: Vec::new(),
+                descriptor_sets: Vec::new(),
             });
             Encoder::new(self.active_buffers.last_mut().unwrap())
         }
@@ -302,7 +304,17 @@ impl core::GraphicsCommandBuffer<Resources> for CommandBuffer {
     }
 
     fn bind_graphics_descriptor_sets(&mut self, layout: &native::PipelineLayout, first_set: usize, sets: &[&native::DescriptorSet]) {
-        // FIXME
+        for (i, set) in (first_set..sets.len() + first_set).zip(sets) {
+            if let Some(existing) = self.descriptor_sets.get_mut(i) {
+                *existing = Some(set.0.clone());
+                continue;
+            }
+
+            while i > self.descriptor_sets.len() {
+                self.descriptor_sets.push(None);
+            }
+            self.descriptor_sets.push(Some(set.0.clone()));
+        }
     }
 }
 
@@ -360,8 +372,8 @@ impl core::ProcessingCommandBuffer<Resources> for CommandBuffer {
     }
 
     fn bind_descriptor_heaps(&mut self, srv_cbv_uav: Option<&native::DescriptorHeap>, samplers: Option<&native::DescriptorHeap>) {
-        // FIXME
     }
+
     fn push_constants(&mut self) {
         unimplemented!()
     }
@@ -501,6 +513,41 @@ impl<'cb, 'rp, 'fb, 'enc> command::RenderPassEncoder<'cb, 'rp, 'fb, 'enc, Comman
             }
             for (i, &(buffer, offset)) in command_buffer.vertex_buffers.iter().enumerate() {
                 render_encoder.set_vertex_buffer(i as u64, offset as u64, buffer);
+            }
+            // Interpret descriptor sets
+            for set in command_buffer.descriptor_sets.iter().filter_map(|x| x.as_ref()) {
+                use native::DescriptorSetBinding::*;
+
+                let set = set.lock().unwrap();
+
+                for (&binding, values) in set.bindings.iter() {
+                    let layout = set.layout.iter().find(|x| x.binding == binding).unwrap();
+
+                    if layout.stage_flags.contains(shade::STAGE_PIXEL) {
+                        match *values {
+                            Sampler(ref samplers) => {
+                                if samplers.len() > 1 {
+                                    unimplemented!()
+                                }
+                                
+                                let sampler = samplers[0];
+                                render_encoder.set_fragment_sampler_state(binding as u64, sampler);
+                            },
+                            SampledImage(ref images) => {
+                                if images.len() > 1 {
+                                    unimplemented!()
+                                }
+
+                                let (image, layout) = images[0]; // TODO: layout?
+                                render_encoder.set_fragment_texture(binding as u64, image);
+                            },
+                            _ => unimplemented!(),
+                        }
+                    }
+                    if layout.stage_flags.contains(shade::STAGE_VERTEX) {
+                        unimplemented!()
+                    }
+                }
             }
 
             RenderPassInlineEncoder {
