@@ -37,11 +37,13 @@ use std::fmt::{self, Debug};
 use std::error::Error;
 use std::hash::Hash;
 use std::any::Any;
+use std::borrow::Borrow;
 
 pub use draw_state::{state, target};
 pub use self::command::CommandBuffer;
 pub use self::factory::Factory;
-pub use self::queue::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
+pub use self::queue::{
+    GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 
 pub mod buffer;
 pub mod command;
@@ -438,8 +440,9 @@ pub trait Surface {
     fn supports_queue(&self, queue_family: &Self::QueueFamily) -> bool;
 
     /// Create a new swapchain from the current surface with an associated present queue.
-    fn build_swapchain<T>(&self, present_queue: &Self::CommandQueue) -> Self::SwapChain
-        where T: format::RenderFormat;
+    fn build_swapchain<T, Q>(&self, present_queue: Q) -> Self::SwapChain
+        where T: format::RenderFormat,
+              Q: Borrow<Self::CommandQueue>;
 }
 
 /// Handle to a backbuffer of the swapchain.
