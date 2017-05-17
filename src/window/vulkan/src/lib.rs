@@ -27,6 +27,7 @@ use std::ffi::CStr;
 use std::{mem, ptr};
 use std::os::raw;
 use std::sync::Arc;
+use std::borrow::Borrow;
 use core::{format, handle};
 use core::FrameSync;
 use core::memory::Typed;
@@ -157,8 +158,10 @@ impl core::Surface for Surface {
         }
     }
 
-    fn build_swapchain<T: core::format::RenderFormat>(&self,
-                    present_queue: &device_vulkan::CommandQueue) -> SwapChain {
+    fn build_swapchain<T, Q>(&self, present_queue: Q) -> SwapChain
+        where T: core::format::RenderFormat,
+              Q: Borrow<Self::CommandQueue>
+    {
         let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
         let loader = vk::SwapchainFn::load(|name| {
                 unsafe {
@@ -170,6 +173,7 @@ impl core::Surface for Surface {
 
         // TODO: check for better ones if available
         let present_mode = vk::PresentModeKHR::Fifo; // required to be supported
+        let present_queue = present_queue.borrow();
 
         let format = <T as format::Formatted>::get_format();
 
@@ -232,7 +236,7 @@ impl core::Surface for Surface {
 
         SwapChain::from_raw(
             swapchain,
-            &present_queue,
+            present_queue,
             loader,
             swapchain_images)
     }
