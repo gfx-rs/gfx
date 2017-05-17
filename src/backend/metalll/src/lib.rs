@@ -19,6 +19,8 @@ extern crate cocoa;
 extern crate io_surface;
 extern crate core_foundation;
 extern crate core_graphics;
+extern crate cgl;
+extern crate gfx_gl as gl;
 #[macro_use] extern crate log;
 #[macro_use] extern crate scopeguard;
 extern crate block;
@@ -35,6 +37,7 @@ pub use factory::{Factory};
 
 pub type GraphicsCommandPool = CommandPool;
 
+use std::str::FromStr;
 use std::mem;
 use std::marker::PhantomData;
 use std::cell::RefCell;
@@ -51,8 +54,9 @@ use core_foundation::base::TCFType;
 use core_foundation::string::{CFString, CFStringRef};
 use core_foundation::dictionary::CFDictionary;
 use core_foundation::number::{CFNumber, CFNumberRef};
-use cocoa::base::YES;
-use cocoa::appkit::{NSWindow, NSView};
+use core_foundation::bundle::{CFBundleGetBundleWithIdentifier, CFBundleGetFunctionPointerForName};
+use cocoa::base::{nil, YES};
+use cocoa::appkit::{self, NSWindow, NSView, NSOpenGLPixelFormat, NSOpenGLContext};
 use core_graphics::base::CGFloat;
 use core_graphics::geometry::CGRect;
 use io_surface::IOSurface;
@@ -73,20 +77,24 @@ impl Drop for Adapter {
 }
 
 pub struct Surface {
-    layer: cocoa::base::id,
+    nsview: cocoa::base::id,
     swap_chain: RefCell<WeakRc<SwapChainInner>>,
 }
 
 impl Drop for Surface {
     fn drop(&mut self) {
-        unsafe { msg_send![self.layer, release]; }
+        unsafe { msg_send![self.nsview, release]; }
     }
 }
 
 pub struct SwapChain(Rc<SwapChainInner>);
 
 struct SwapChainInner {
-    layer: cocoa::base::id,
+    ns_glcontext: cocoa::base::id,
+    gl: Box<gl::Gl>,
+    pixel_width: u64,
+    pixel_height: u64,
+
     io_surfaces: Vec<IOSurface>,
     images: Vec<native::Image>,
     frame_index: RefCell<usize>,
@@ -94,7 +102,7 @@ struct SwapChainInner {
 
 impl Drop for SwapChainInner {
     fn drop(&mut self) {
-        unsafe { msg_send![self.layer, release] }
+        unsafe { msg_send![self.ns_glcontext, release] }
     }
 }
 
@@ -138,13 +146,9 @@ impl core::Instance for Instance {
                 panic!("window does not have a valid contentView");
             }
 
-            let layer_class = Class::get("CALayer").unwrap();
-            let layer = msg_send![layer_class, new];
-            view.setWantsLayer(YES);
-            view.setLayer(layer);
-
+            msg_send![view, retain];
             Surface {
-                layer,
+                nsview: view,
                 swap_chain: Default::default(),
             }
         }
@@ -220,10 +224,11 @@ impl core::Surface for Surface {
         };
 
         let inner = unsafe {
-            let layer_points_size: CGRect = msg_send![self.layer, bounds];
-            let scale_factor: CGFloat = msg_send![self.layer, contentsScale];
-            let pixel_width = (layer_points_size.size.width * scale_factor) as u64;
-            let pixel_height = (layer_points_size.size.height * scale_factor) as u64;
+            let view_points_size: CGRect = msg_send![self.nsview, bounds];
+            let view_window: cocoa::base::id = msg_send![self.nsview, window];
+            let scale_factor: CGFloat = msg_send![view_window, backingScaleFactor];
+            let pixel_width = (view_points_size.size.width * scale_factor) as u64;
+            let pixel_height = (view_points_size.size.height * scale_factor) as u64;
             let pixel_size = conversions::get_format_bytes_per_pixel(mtl_format) as u64;
 
             info!("allocating {} IOSurface backbuffers of size {}x{} with pixel format 0x{:x}", SWAP_CHAIN_IMAGE_COUNT, pixel_width, pixel_height, cv_format);
@@ -245,15 +250,43 @@ impl core::Surface for Surface {
             backbuffer_descriptor.set_pixel_format(mtl_format);
             backbuffer_descriptor.set_width(pixel_width as u64);
             backbuffer_descriptor.set_height(pixel_height as u64);
+            backbuffer_descriptor.set_usage(MTLTextureUsageRenderTarget);
 
             let images = io_surfaces.iter().map(|surface| {
                 let mapped_texture: MTLTexture = msg_send![device.0, newTextureWithDescriptor: backbuffer_descriptor.0 iosurface: surface.obj plane: 0];
                 native::Image(mapped_texture)
             }).collect();
 
-            msg_send![self.layer, retain];
+            // Create OpenGL context for compositing
+            // TODO: CAMetalLayer is able to composite IOSurfaces directly, so we should try
+            // to figure out how to do the same.
+            let gl_pixelformat = NSOpenGLPixelFormat::alloc(nil).initWithAttributes_(&[
+                appkit::NSOpenGLPFAOpenGLProfile as u32, appkit::NSOpenGLProfileVersion3_2Core as u32,
+                appkit::NSOpenGLPFAColorSize as u32, 24, // FIXME
+                appkit::NSOpenGLPFAAlphaSize as u32, 8,
+                // TODO: float buffers
+                0,
+            ]); // Returns retained
+            defer! { msg_send![gl_pixelformat, release] };
+            let ns_glcontext = NSOpenGLContext::alloc(nil).initWithFormat_shareContext_(gl_pixelformat, nil);
+            defer_on_unwind! { msg_send![ns_glcontext, release] }
+            if ns_glcontext.is_null() {
+                panic!("failed to create NSOpenGLContext");
+            }
+            ns_glcontext.setView_(self.nsview);
+            let framework_name: CFString = FromStr::from_str("com.apple.opengl").unwrap();
+            let framework = CFBundleGetBundleWithIdentifier(framework_name.as_concrete_TypeRef());
+            let gl = Box::new(gl::Gl::load_with(|name| {
+                let symbol_name: CFString = FromStr::from_str(name).unwrap();
+                CFBundleGetFunctionPointerForName(framework, symbol_name.as_concrete_TypeRef()) as *const _
+            }));
+
             Rc::new(SwapChainInner {
-                layer: self.layer,
+                ns_glcontext,
+                gl,
+                pixel_width,
+                pixel_height,
+
                 io_surfaces,
                 images,
                 frame_index: RefCell::new(0),
@@ -298,9 +331,47 @@ impl core::SwapChain for SwapChain {
         }
         let buffer_index = (frame_index - 1) % self.0.io_surfaces.len();
 
+        // Draw IOSurface to OpenGL context
         unsafe {
-            let layer = self.0.layer;
-            msg_send![layer, setContents: self.0.io_surfaces[buffer_index].obj];
+            let io_surface = &mut *(&self.0.io_surfaces[buffer_index] as *const IOSurface as *mut IOSurface);
+
+            let cgl_context: cgl::CGLContextObj = msg_send![self.0.ns_glcontext, CGLContextObj];
+            cgl::CGLSetCurrentContext(cgl_context);
+
+            self.0.gl.ClearColor(1.0, 1.0, 1.0, 1.0);
+            self.0.gl.Clear(gl::COLOR_BUFFER_BIT);
+
+            let mut gl_surface_tex: gl::types::GLuint = 0;
+            self.0.gl.GenTextures(1, &mut gl_surface_tex);
+
+            self.0.gl.BindTexture(gl::TEXTURE_RECTANGLE, gl_surface_tex);
+            io_surface.bind_to_gl_texture(self.0.pixel_width as i32, self.0.pixel_height as i32);
+            self.0.gl.TexParameteri(gl::TEXTURE_RECTANGLE, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
+            self.0.gl.TexParameteri(gl::TEXTURE_RECTANGLE, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
+
+            // Bind IOSurface texture as framebuffer
+            self.0.gl.BindTexture(gl::TEXTURE_RECTANGLE, 0);
+            let mut gl_surface_fb: gl::types::GLuint = 0;
+            self.0.gl.GenFramebuffers(1, &mut gl_surface_fb);
+            self.0.gl.BindFramebuffer(gl::FRAMEBUFFER, gl_surface_fb);
+            self.0.gl.FramebufferTexture2D(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::TEXTURE_RECTANGLE, gl_surface_tex, 0);
+            self.0.gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
+
+            // Blit!
+            self.0.gl.BindFramebuffer(gl::READ_FRAMEBUFFER, gl_surface_fb);
+            self.0.gl.BindFramebuffer(gl::DRAW_FRAMEBUFFER, 0);
+            self.0.gl.BlitFramebuffer(
+                0, 0, self.0.pixel_width as i32, self.0.pixel_height as i32,
+                0, 0, self.0.pixel_width as i32, self.0.pixel_height as i32,
+                gl::COLOR_BUFFER_BIT,
+                gl::NEAREST
+            );
+            self.0.gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
+
+            self.0.gl.Flush();
+
+            self.0.gl.DeleteFramebuffers(1, &gl_surface_fb);
+            self.0.gl.DeleteTextures(1, &gl_surface_tex);
         }
     }
 }

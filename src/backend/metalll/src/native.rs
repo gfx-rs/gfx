@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::{Arc, Mutex};
 use std::os::raw::{c_void, c_long, c_int};
 use std::ptr;
@@ -7,7 +8,9 @@ use core;
 use core::format;
 use metal::*;
 use objc;
-use cocoa::foundation::NSUInteger;
+
+pub use cocoa::foundation::NSUInteger;
+pub use cocoa::foundation::NSRange;
 
 #[derive(Debug)]
 pub struct ShaderLib(pub MTLLibrary);
@@ -102,7 +105,34 @@ unsafe impl Sync for Semaphore {
 }
 
 #[derive(Debug)]
-pub struct Mapping {}
+pub struct Mapping(pub MappingInner);
+
+pub enum MappingInner {
+    Read,
+    Write(MTLBuffer, NSRange),
+}
+
+impl Drop for Mapping {
+    fn drop(&mut self) {
+        unsafe {
+            if let MappingInner::Write(buffer, ref range) = self.0 {
+                buffer.did_modify_range(NSRange {
+                    location: range.location,
+                    length: range.length,
+                });
+            }
+        }
+    }
+}
+
+impl fmt::Debug for MappingInner {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            MappingInner::Read => write!(f, "Read"),
+            MappingInner::Write(_, _) => write!(f, "Write"),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct Buffer(pub MTLBuffer);
@@ -155,12 +185,6 @@ mod heap_related {
 mod fence_related {
     #[derive(Debug)]
     pub struct Fence {}
-}
-
-#[repr(C)]
-pub struct NSRange {
-    pub location: NSUInteger,
-    pub length: NSUInteger,
 }
 
 pub unsafe fn objc_err_description(object: *mut objc::runtime::Object) -> String {

@@ -16,12 +16,14 @@ native_fence = []
 log = "0.3"
 gfx_corell = { path = "../../corell", version = "0.1.0" }
 winit = "0.6"
-cocoa = "0.8"
+cocoa = "0.5.0"
 objc = "0.2"
 metal-rs = "0.3"
 io-surface = "0.7"
 core-foundation = "0.3"
 core-graphics = "0.7"
+cgl = "0.1"
+gfx_gl = "0.3.1"
 scopeguard = "0.3"
 block = "0.1"
 

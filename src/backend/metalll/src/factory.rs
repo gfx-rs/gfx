@@ -278,7 +278,7 @@ impl core::Factory<Resources> for Factory {
 
             Ok(mapping::Reader::new(
                     slice::from_raw_parts(base_ptr.offset(offset as isize), size as usize),
-                    Mapping {}, // TODO
+                    Mapping(MappingInner::Read), // TODO
             ))
         }
     }
@@ -298,11 +298,17 @@ impl core::Factory<Resources> for Factory {
                 panic!("offset/size out of range");
             }
 
+            let nsrange = NSRange {
+                location: offset * mem::size_of::<T>() as u64,
+                length: size * mem::size_of::<T>() as u64,
+            };
+
             Ok(mapping::Writer::new(
                     slice::from_raw_parts_mut(base_ptr.offset(offset as isize), size as usize),
-                    Mapping {}, // TODO
+                    Mapping(MappingInner::Write(buf.0, nsrange)), // TODO
             ))
-        }    }
+        }
+    }
 
     fn create_semaphore(&mut self) -> Semaphore {
         unsafe { Semaphore(dispatch_semaphore_create(1)) } // Returns retained

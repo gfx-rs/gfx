@@ -65,6 +65,9 @@ fn main() {
         .with_title("triangle (Low Level)".to_string())
         .build(&events_loop)
         .unwrap();
+    let (pixel_width, pixel_height) = window.get_inner_size_pixels().unwrap();
+    let pixel_width = pixel_width as u16;
+    let pixel_height = pixel_height as u16;
 
     // instantiate backend
     let instance = back::Instance::create();
@@ -231,7 +234,7 @@ fn main() {
     }).collect::<Vec<_>>();
 
     let framebuffers = frame_rtvs.iter().map(|frame_rtv| {
-        factory.create_framebuffer(&render_pass, &[&frame_rtv], &[], 1024, 768, 1)
+        factory.create_framebuffer(&render_pass, &[&frame_rtv], &[], pixel_width as u32, pixel_height as u32, 1)
     }).collect::<Vec<_>>();
 
 
@@ -317,11 +320,11 @@ fn main() {
     // Rendering setup
     let viewport = target::Rect {
         x: 0, y: 0,
-        w: 1024, h: 768,
+        w: pixel_width, h: pixel_height,
     };
     let scissor = target::Rect {
         x: 0, y: 0,
-        w: 1024, h: 768,
+        w: pixel_width, h: pixel_height,
     };
 
     let mut frame_semaphore = factory.create_semaphore();
@@ -406,7 +409,7 @@ fn main() {
                     &mut cmd_buffer,
                     &render_pass,
                     &framebuffers[frame.id()],
-                    target::Rect { x: 0, y: 0, w: 1024, h: 768 },
+                    target::Rect { x: 0, y: 0, w: pixel_width, h: pixel_height },
                     &[command::ClearValue::Color(command::ClearColor::Float([0.8, 0.8, 0.8, 1.0]))]);
 
                 encoder.draw(0, 6, None);

@@ -465,9 +465,29 @@ impl<'cb, 'rp, 'fb, 'enc> command::RenderPassEncoder<'cb, 'rp, 'fb, 'enc, Comman
     {
         unsafe {
             // FIXME: subpasses
-            let render_encoder = command_buffer.command_buffer.new_render_command_encoder(framebuffer.0);
+            
+            let pass_descriptor = framebuffer.0;
+            // TODO: we may want to copy here because we will modify the Framebuffer (by setting
+            // clear colors)
+            // TODO: validate number of clear colors
+            for (i, value) in clear_values.iter().enumerate() {
+                let color_desc = pass_descriptor.color_attachments().object_at(i);
+                let mtl_color = match *value {
+                    ClearValue::Color(ClearColor::Float(values)) => MTLClearColor::new(
+                        values[0] as f64,
+                        values[1] as f64,
+                        values[2] as f64,
+                        values[3] as f64,
+                    ),
+                    _ => unimplemented!(),
+                };
+                color_desc.set_clear_color(mtl_color);
+            }
+
+            let render_encoder = command_buffer.command_buffer.new_render_command_encoder(pass_descriptor);
             defer_on_unwind! { render_encoder.release() };
 
+            // Apply previously bound values for this command buffer
             if let Some(viewport) = command_buffer.viewport {
                 render_encoder.set_viewport(viewport);
             }
