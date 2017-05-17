@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::BorrowMut;
 use std::ops::DerefMut;
 use std::ptr;
 use std::sync::Arc;
@@ -77,9 +78,11 @@ macro_rules! impl_pool {
         }
 
         impl pool::$pool for $pool {
-            fn from_queue<Q>(queue: &mut Q, capacity: usize) -> $pool
-                where Q: Into<$queue<CommandQueue>> + DerefMut<Target=CommandQueue>
+            fn from_queue<Q>(mut queue: Q, capacity: usize) -> $pool
+                where Q: Into<$queue<CommandQueue>> + BorrowMut<CommandQueue>
             {
+                let queue = queue.borrow_mut();
+
                 // Create command pool
                 let info = vk::CommandPoolCreateInfo {
                     s_type: vk::StructureType::CommandPoolCreateInfo,
@@ -113,7 +116,7 @@ macro_rules! impl_pool {
                             device: queue.device.clone(),
                         }
                     )
-                }).collect::<Vec<_>>();
+                }).collect();
 
                 $pool {
                     pool: command_pool,
