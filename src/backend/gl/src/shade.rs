@@ -14,7 +14,7 @@
 
 use std::iter::repeat;
 use core::{self as c, shade as s};
-use info::PrivateCaps;
+use info::{Info, PrivateCaps};
 use gl;
 
 
@@ -475,6 +475,7 @@ pub fn get_program_log(gl: &gl::Gl, name: super::Program) -> String {
 }
 
 pub fn create_program(gl: &gl::Gl, caps: &c::Capabilities, private: &PrivateCaps,
+                      info: &Info,
                       shaders: &[super::Shader], usage: s::Usage)
                       -> Result<(::Program, s::ProgramInfo), s::CreateProgramError> {
     let name = unsafe { gl.CreateProgram() };
@@ -482,7 +483,7 @@ pub fn create_program(gl: &gl::Gl, caps: &c::Capabilities, private: &PrivateCaps
         unsafe { gl.AttachShader(name, sh) };
     }
 
-    if !private.program_interface_supported {
+    if !private.program_interface_supported && !info.version.is_embedded {
         for i in 0..c::MAX_COLOR_TARGETS {
             let color_name = format!("Target{}\0", i);
             unsafe {
