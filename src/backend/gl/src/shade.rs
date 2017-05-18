@@ -482,7 +482,7 @@ pub fn create_program(gl: &gl::Gl, caps: &c::Capabilities, private: &PrivateCaps
         unsafe { gl.AttachShader(name, sh) };
     }
 
-    if !private.program_interface_supported {
+    if !private.program_interface_supported && private.frag_data_location_supported {
         for i in 0..c::MAX_COLOR_TARGETS {
             let color_name = format!("Target{}\0", i);
             unsafe {
