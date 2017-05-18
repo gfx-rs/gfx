@@ -170,6 +170,7 @@ pub struct PrivateCaps {
     pub program_interface_supported: bool,
     pub buffer_storage_supported: bool,
     pub clear_buffer_supported: bool,
+    pub frag_data_location_supported: bool,
 }
 
 /// OpenGL implementation information
@@ -257,6 +258,7 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
         program_interface_supported:       info.is_version_or_extension_supported(4, 3, "GL_ARB_program_interface_query"),
         buffer_storage_supported:          info.is_version_or_extension_supported(4, 4, "GL_ARB_buffer_storage"),
         clear_buffer_supported:            info.is_version_supported(3, 0) | info.is_embedded_version_supported(3, 0),
+        frag_data_location_supported:      !info.version.is_embedded,
     };
     (info, caps, private)
 }
