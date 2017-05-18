@@ -230,7 +230,7 @@ impl Factory {
             },
         };
         let result = create_program(&self.share.context, &self.share.capabilities,
-                                    &self.share.private_caps, shader_slice, usage);
+                                    &self.share.private_caps, &self.share.info, shader_slice, usage);
         if let Err(err) = self.share.check() {
             panic!("Error {:?} creating program: {:?}", err, shader_set)
         }
