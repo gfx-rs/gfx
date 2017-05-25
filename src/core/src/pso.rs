@@ -290,7 +290,6 @@ impl<R: Resources> PixelTargetSet<R> {
     }
 
     fn set_dimensions(&mut self, dim: texture::Dimensions) {
-        debug_assert!(self.dimensions.map(|d| d == dim).unwrap_or(true));
         self.dimensions = Some(dim);
     }
 
