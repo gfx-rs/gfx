@@ -15,6 +15,7 @@ metal = ["gfx_device_metal", "gfx_window_metal", "gfx_device_metalll"]
 vulkan = ["gfx_device_vulkan", "gfx_device_vulkanll", "gfx_window_vulkan"]
 sdl = ["gfx_window_sdl"]
 serialize = ["gfx/serialize", "gfx_core/serialize"]
+headless = ["gfx_window_glutin/headless"]
 unstable = []
 
 [lib]
