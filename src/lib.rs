@@ -57,12 +57,6 @@ pub struct WindowTargets<R: gfx::Resources> {
     pub aspect_ratio: f32,
 }
 
-pub enum Backend {
-    OpenGL2,
-    Direct3D11 { pix_mode: bool },
-    Metal,
-}
-
 struct Harness {
     start: std::time::Instant,
     num_frames: f64,
