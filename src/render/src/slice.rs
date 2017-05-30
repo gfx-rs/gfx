@@ -33,7 +33,7 @@ use pso;
 /// indices into this `VertexBuffer` (vertex-index). A vertex-index of 0 represents the first
 /// vertex in the `VertexBuffer`, a vertex-index of 1 represents the second, 2 represents the
 /// third, and so on. The vertex-indices in the index-buffer are read in order; every vertex-index
-/// tells the pipeline which vertex to process next. 
+/// tells the pipeline which vertex to process next.
 ///
 /// Because the same index can re-appear multiple times, duplicate-vertices can be avoided. For
 /// instance, if you want to draw a square, you need two triangles, and thus six vertices. Because
@@ -58,7 +58,7 @@ use pso;
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Slice<R: Resources> {
     /// The start index of the index-buffer. Processing will start at this location in the
-    /// index-buffer. 
+    /// index-buffer.
     pub start: VertexCount,
     /// The end index in the index-buffer. Processing will stop at this location (exclusive) in
     /// the index buffer.
@@ -69,7 +69,7 @@ pub struct Slice<R: Resources> {
     pub base_vertex: VertexCount,
     /// Instancing configuration.
     pub instances: Option<InstanceParams>,
-    /// Represents the type of index-buffer used. 
+    /// Represents the type of index-buffer used.
     pub buffer: IndexBuffer<R>,
 }
 
@@ -85,7 +85,7 @@ impl<R: Resources> Slice<R> {
             buffer: IndexBuffer::Auto,
         }
     }
-    
+
     /// Calculates the number of primitives of the specified type in this `Slice`.
     pub fn get_prim_count(&self, prim: Primitive) -> u32 {
         use core::Primitive as p;
@@ -121,11 +121,11 @@ impl<R: Resources> Slice<R> {
 /// Type of index-buffer used in a Slice.
 ///
 /// The `Auto` variant represents a hypothetical index-buffer from 0 to infinity. In other words,
-/// all vertices get processed in order. Do note that the `Slice`' `start` and `end` restrictions
+/// all vertices get processed in order. Do note that the `Slice`'s `start` and `end` restrictions
 /// still apply for this variant. To render every vertex in the `VertexBuffer`, you would set
 /// `start` to 0, and `end` to the `VertexBuffer`'s length.
 ///
-/// The `Index*` variants represent an actual `Buffer` with a list of vertex-indices. The numeric 
+/// The `Index*` variants represent an actual `Buffer` with a list of vertex-indices. The numeric
 /// suffix specifies the amount of bits to use per index. Each of these also contains a
 /// base-vertex. This is the index of the first vertex in the `VertexBuffer`. This value will be
 /// added to every index in the index-buffer, effectively moving the start of the `VertexBuffer` to
@@ -177,7 +177,7 @@ macro_rules! impl_index_buffer {
                 IndexBuffer::$buf_ty(self)
             }
         }
-        
+
         impl<'s, R: Resources> IntoIndexBuffer<R> for &'s [$prim_ty] {
             fn into_index_buffer<F: Factory<R> + ?Sized>(self, factory: &mut F) -> IndexBuffer<R> {
                 factory.create_buffer_immutable(self, buffer::Role::Index, Bind::empty())
