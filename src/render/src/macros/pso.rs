@@ -231,7 +231,6 @@ macro_rules! gfx_pipeline_base {
         pub mod $module {
             #[allow(unused_imports)]
             use super::*;
-            use super::gfx;
             gfx_pipeline_inner!{ $(
                 $field: $ty,
             )*}
@@ -248,7 +247,6 @@ macro_rules! gfx_pipeline {
         pub mod $module {
             #[allow(unused_imports)]
             use super::*;
-            use super::gfx;
             gfx_pipeline_inner!{ $(
                 $field: $ty,
             )*}
