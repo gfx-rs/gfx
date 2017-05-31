@@ -171,6 +171,7 @@ pub struct PrivateCaps {
     pub buffer_storage_supported: bool,
     pub clear_buffer_supported: bool,
     pub frag_data_location_supported: bool,
+    pub sampler_lod_bias_supported: bool,
 }
 
 /// OpenGL implementation information
@@ -184,6 +185,13 @@ pub struct Info {
     pub shading_language: Version,
     /// The extensions supported by the implementation
     pub extensions: HashSet<&'static str>,
+}
+
+#[derive(Copy, Clone)]
+enum Requirement {
+    Core(u32,u32),
+    Es(u32, u32),
+    Ext(&'static str),
 }
 
 impl Info {
@@ -224,41 +232,81 @@ impl Info {
     pub fn is_version_or_extension_supported(&self, major: u32, minor: u32, ext: &'static str) -> bool {
         self.is_version_supported(major, minor) || self.is_extension_supported(ext)
     }
+
+    pub fn is_any_extension_supported(&self, exts: &[&'static str]) -> bool {
+        exts.iter().any(|e| self.extensions.contains(e))
+    }
+
+    fn is_supported(&self, requirements: &[Requirement]) -> bool {
+        use self::Requirement::*;
+        requirements.iter().any(|r| {
+            match *r {
+                Core(major, minor) => self.is_version_supported(major, minor),
+                Es(major, minor) => self.is_embedded_version_supported(major, minor),
+                Ext(extension) => self.is_extension_supported(extension),
+            }
+        })
+    }
 }
 
 /// Load the information pertaining to the driver and the corresponding device
 /// capabilities.
 pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
+    use self::Requirement::*;
     let info = Info::get(gl);
-    let tessellation_supported =           info.is_version_or_extension_supported(4, 0, "GL_ARB_tessellation_shader");
+    let tessellation_supported =           info.is_supported(&[Core(4,0),
+                                                               Ext("GL_ARB_tessellation_shader")]);
     let caps = Capabilities {
         max_vertex_count: get_usize(gl, gl::MAX_ELEMENTS_VERTICES),
         max_index_count:  get_usize(gl, gl::MAX_ELEMENTS_INDICES),
         max_texture_size: get_usize(gl, gl::MAX_TEXTURE_SIZE),
         max_patch_size: if tessellation_supported { get_usize(gl, gl::MAX_PATCH_VERTICES) } else {0},
 
-        instance_base_supported:           info.is_version_or_extension_supported(4, 2, "GL_ARB_base_instance"),
-        instance_call_supported:           info.is_version_or_extension_supported(3, 1, "GL_ARB_draw_instanced"),
-        instance_rate_supported:           info.is_version_or_extension_supported(3, 3, "GL_ARB_instanced_arrays"),
-        vertex_base_supported:             info.is_version_or_extension_supported(3, 2, "GL_ARB_draw_elements_base_vertex"),
-        srgb_color_supported:              info.is_version_or_extension_supported(3, 2, "GL_ARB_framebuffer_sRGB"),
-        constant_buffer_supported:         info.is_version_or_extension_supported(3, 1, "GL_ARB_uniform_buffer_object"),
-        unordered_access_view_supported:   info.is_version_supported(4, 0), //TODO: extension
-        separate_blending_slots_supported: info.is_version_or_extension_supported(4, 0, "GL_ARB_draw_buffers_blend"),
-        copy_buffer_supported:             info.is_version_or_extension_supported(3, 1, "GL_ARB_copy_buffer") |
-                                           info.is_embedded_version_supported(3, 0) |
-                                          (info.is_embedded_version_supported(2, 0) & info.is_extension_supported("GL_NV_copy_buffer")),
+        instance_base_supported:           info.is_supported(&[Core(4,2),
+                                                               Ext ("GL_ARB_base_instance")]),
+        instance_call_supported:           info.is_supported(&[Core(3,1),
+                                                               Es  (3,0),
+                                                               Ext ("GL_ARB_draw_instanced")]),
+        instance_rate_supported:           info.is_supported(&[Core(3,3),
+                                                               Es  (3,0),
+                                                               Ext ("GL_ARB_instanced_arrays")]),
+        vertex_base_supported:             info.is_supported(&[Core(3,2),
+                                                               Es  (3,2),
+                                                               Ext ("GL_ARB_draw_elements_base_vertex")]),
+        srgb_color_supported:              info.is_supported(&[Core(3,2),
+                                                               Ext ("GL_ARB_framebuffer_sRGB")]),
+        constant_buffer_supported:         info.is_supported(&[Core(3,1),
+                                                               Es  (3,0),
+                                                               Ext ("GL_ARB_uniform_buffer_object")]),
+        unordered_access_view_supported:   info.is_supported(&[Core(4,0)]), //TODO: extension
+        separate_blending_slots_supported: info.is_supported(&[Core(4,0),
+                                                               Es  (3,0),
+                                                               Ext ("GL_ARB_draw_buffers_blend")]),
+        copy_buffer_supported:             info.is_supported(&[Core(3,1),
+                                                               Es  (3,0),
+                                                               Ext ("GL_ARB_copy_buffer"),
+                                                               Ext ("GL_NV_copy_buffer")]),
     };
     let private = PrivateCaps {
-        array_buffer_supported:            info.is_version_or_extension_supported(3, 0, "GL_ARB_vertex_array_object"),
-        frame_buffer_supported:            info.is_version_or_extension_supported(3, 0, "GL_ARB_framebuffer_object") |
-                                           info.is_embedded_version_supported(2, 0),
-        immutable_storage_supported:       info.is_version_or_extension_supported(4, 2, "GL_ARB_texture_storage"),
-        sampler_objects_supported:         info.is_version_or_extension_supported(3, 3, "GL_ARB_sampler_objects"),
-        program_interface_supported:       info.is_version_or_extension_supported(4, 3, "GL_ARB_program_interface_query"),
-        buffer_storage_supported:          info.is_version_or_extension_supported(4, 4, "GL_ARB_buffer_storage"),
-        clear_buffer_supported:            info.is_version_supported(3, 0) | info.is_embedded_version_supported(3, 0),
+        array_buffer_supported:            info.is_supported(&[Core(3,0),
+                                                               Es  (3,0),
+                                                               Ext ("GL_ARB_vertex_array_object")]),
+        frame_buffer_supported:            info.is_supported(&[Core(3,0),
+                                                               Es  (2,0),
+                                                               Ext ("GL_ARB_framebuffer_object")]),
+        immutable_storage_supported:       info.is_supported(&[Core(3,2),
+                                                               Ext ("GL_ARB_texture_storage")]),
+        sampler_objects_supported:         info.is_supported(&[Core(3,3),
+                                                               Es  (3,0),
+                                                               Ext ("GL_ARB_sampler_objects")]),
+        program_interface_supported:       info.is_supported(&[Core(4,3),
+                                                               Ext ("GL_ARB_program_interface_query")]),
+        buffer_storage_supported:          info.is_supported(&[Core(4,4),
+                                                               Ext ("GL_ARB_buffer_storage")]),
+        clear_buffer_supported:            info.is_supported(&[Core(3,0),
+                                                               Es  (3,0)]),
         frag_data_location_supported:      !info.version.is_embedded,
+        sampler_lod_bias_supported:        !info.version.is_embedded,
     };
     (info, caps, private)
 }
