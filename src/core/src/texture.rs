@@ -414,7 +414,7 @@ pub struct PackedColor(pub u32);
 impl From<[f32; 4]> for PackedColor {
     fn from(c: [f32; 4]) -> PackedColor {
         PackedColor(c.iter().rev().fold(0, |u, &c| {
-            (u<<8) + (c * 255.0 + 0.5) as u32
+            (u<<8) + (c * 255.0) as u32
         }))
     }
 }
@@ -424,7 +424,7 @@ impl Into<[f32; 4]> for PackedColor {
         let mut out = [0.0; 4];
         for i in 0 .. 4 {
             let byte = (self.0 >> (i<<3)) & 0xFF;
-            out[i] = (byte as f32 + 0.5) / 255.0;
+            out[i] = byte as f32 / 255.0;
         }
         out
     }
