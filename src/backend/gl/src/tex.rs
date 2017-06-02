@@ -15,6 +15,7 @@
 use {gl, Surface, Texture, NewTexture, Buffer, Sampler};
 use gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
 use state;
+use info::PrivateCaps;
 use core::memory::SHADER_RESOURCE;
 use core::format::{Format as NewFormat, ChannelType};
 use core::texture as t;
@@ -539,7 +540,7 @@ pub fn make_with_storage(gl: &gl::Gl, desc: &t::Info, cty: ChannelType) ->
 
 /// Bind a sampler using a given binding anchor.
 /// Used for GL compatibility profile only. The core profile has sampler objects
-pub fn bind_sampler(gl: &gl::Gl, target: GLenum, info: &t::SamplerInfo, is_embedded: bool) { unsafe {
+pub fn bind_sampler(gl: &gl::Gl, target: GLenum, info: &t::SamplerInfo, private_caps: &PrivateCaps) { unsafe {
     let (min, mag) = filter_to_gl(info.filter);
 
     match info.filter {
@@ -556,11 +557,11 @@ pub fn bind_sampler(gl: &gl::Gl, target: GLenum, info: &t::SamplerInfo, is_embed
     gl.TexParameteri(target, gl::TEXTURE_WRAP_T, wrap_to_gl(t) as GLint);
     gl.TexParameteri(target, gl::TEXTURE_WRAP_R, wrap_to_gl(r) as GLint);
 
-    if !is_embedded {
-        let border: [f32; 4] = info.border.into();
-        gl.TexParameterfv(target, gl::TEXTURE_BORDER_COLOR, &border[0]);
+    if private_caps.sampler_lod_bias_supported {
         gl.TexParameterf(target, gl::TEXTURE_LOD_BIAS, info.lod_bias.into());
     }
+    let border: [f32; 4] = info.border.into();
+    gl.TexParameterfv(target, gl::TEXTURE_BORDER_COLOR, &border[0]);
 
     let (min, max) = info.lod_range;
     gl.TexParameterf(target, gl::TEXTURE_MIN_LOD, min.into());
@@ -899,7 +900,7 @@ fn filter_to_gl(f: t::FilterMethod) -> (GLenum, GLenum) {
     }
 }
 
-pub fn make_sampler(gl: &gl::Gl, info: &t::SamplerInfo) -> Sampler { unsafe {
+pub fn make_sampler(gl: &gl::Gl, info: &t::SamplerInfo, private_caps: &PrivateCaps) -> Sampler { unsafe {
     let mut name = 0 as Sampler;
     gl.GenSamplers(1, &mut name);
 
@@ -919,7 +920,9 @@ pub fn make_sampler(gl: &gl::Gl, info: &t::SamplerInfo) -> Sampler { unsafe {
     gl.SamplerParameteri(name, gl::TEXTURE_WRAP_T, wrap_to_gl(t) as GLint);
     gl.SamplerParameteri(name, gl::TEXTURE_WRAP_R, wrap_to_gl(r) as GLint);
 
-    gl.SamplerParameterf(name, gl::TEXTURE_LOD_BIAS, info.lod_bias.into());
+    if private_caps.sampler_lod_bias_supported {
+        gl.SamplerParameterf(name, gl::TEXTURE_LOD_BIAS, info.lod_bias.into());
+    }
     let border: [f32; 4] = info.border.into();
     gl.SamplerParameterfv(name, gl::TEXTURE_BORDER_COLOR, &border[0]);
 

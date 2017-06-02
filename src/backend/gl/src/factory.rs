@@ -496,7 +496,7 @@ impl f::Factory<R> for Factory {
 
     fn create_sampler(&mut self, info: t::SamplerInfo) -> handle::Sampler<R> {
         let name = if self.share.private_caps.sampler_objects_supported {
-            tex::make_sampler(&self.share.context, &info)
+            tex::make_sampler(&self.share.context, &info, &self.share.private_caps)
         } else {
             0
         };
