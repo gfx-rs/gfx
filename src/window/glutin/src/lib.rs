@@ -184,10 +184,8 @@ pub struct SwapChain<'a> {
     backbuffer: Vec<handle::RawTexture<device_gl::Resources>>,
 }
 
-impl<'a> core::SwapChain for SwapChain<'a> {
-    type R = device_gl::Resources;
-
-    fn get_images(&mut self) -> &[handle::RawTexture<Self::R>] {
+impl<'a> core::SwapChain<device_gl::Backend> for SwapChain<'a> {
+    fn get_images(&mut self) -> &[handle::RawTexture<device_gl::Resources>] {
         &self.backbuffer
     }
 
@@ -205,15 +203,13 @@ pub struct Surface<'a> {
     window: &'a glutin::Window,
 }
 
-impl<'a> core::Surface for Surface<'a> {
-    type CommandQueue = device_gl::CommandQueue;
+impl<'a> core::Surface<device_gl::Backend> for Surface<'a> {
     type SwapChain = SwapChain<'a>;
-    type QueueFamily = device_gl::QueueFamily;
 
     fn supports_queue(&self, queue_family: &device_gl::QueueFamily) -> bool { true }
     fn build_swapchain<T, Q>(&self, present_queue: Q) -> SwapChain<'a>
         where T: core::format::RenderFormat,
-              Q: Borrow<Self::CommandQueue>
+              Q: Borrow<device_gl::CommandQueue>
     {
         use core::handle::Producer;
         let dim = get_window_dimensions(self.window);
@@ -238,7 +234,7 @@ impl<'a> core::Surface for Surface<'a> {
 
 pub struct Window<'a>(&'a glutin::Window);
 
-impl<'a> core::WindowExt for Window<'a> {
+impl<'a> core::WindowExt<device_gl::Backend> for Window<'a> {
     type Surface = Surface<'a>;
     type Adapter = device_gl::Adapter;
 

@@ -11,11 +11,3 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-use command::CommandBuffer;
-
-pub struct GeneralCommandBuffer(pub CommandBuffer);
-pub struct GraphicsCommandBuffer(pub CommandBuffer);
-pub struct ComputeCommandBuffer(pub CommandBuffer);
-pub struct TransferCommandBuffer(pub CommandBuffer);
-pub struct SubpassCommandBuffer(pub CommandBuffer);
