@@ -42,13 +42,8 @@ pub struct Adapter {
     queue_families: Vec<QueueFamily>,
 }
 
-impl core::Adapter for Adapter {
-    type CommandQueue = CommandQueue;
-    type Resources = Resources;
-    type Factory = Factory;
-    type QueueFamily = QueueFamily;
-
-    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> core::Device_<Resources, Factory, CommandQueue>
+impl core::Adapter<Backend> for Adapter {
+    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> core::Device_<Backend>
     {
         // Create D3D12 device
         let mut device = ComPtr::<winapi::ID3D12Device>::new(ptr::null_mut());
@@ -119,7 +114,7 @@ impl core::Adapter for Adapter {
         unimplemented!()
     }
 
-    fn get_queue_families(&self) -> &[Self::QueueFamily] {
+    fn get_queue_families(&self) -> &[QueueFamily] {
         unimplemented!()
     }
 }
@@ -130,18 +125,8 @@ pub struct CommandQueue {
     list_type: winapi::D3D12_COMMAND_LIST_TYPE,
 }
 
-impl core::CommandQueue for CommandQueue {
-    type Resources = Resources;
-    type SubmitInfo = command::SubmitInfo;
-    type GeneralCommandBuffer = native::GeneralCommandBuffer;
-    type GraphicsCommandBuffer = native::GraphicsCommandBuffer;
-    type ComputeCommandBuffer = native::ComputeCommandBuffer;
-    type TransferCommandBuffer = native::TransferCommandBuffer;
-    type SubpassCommandBuffer = native::SubpassCommandBuffer;
-
-    unsafe fn submit<'a, C>(&mut self, submit_infos: &[core::QueueSubmit<C, Resources>], fence: Option<&'a mut ()>)
-        where C: core::CommandBuffer<SubmitInfo = command::SubmitInfo>
-    {
+impl core::CommandQueue<Backend> for CommandQueue {
+    unsafe fn submit(&mut self, submit_infos: &[core::QueueSubmit<Backend>], fence: Option<&mut ()>) {
         unimplemented!()
     }
 
@@ -163,7 +148,22 @@ impl Factory {
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Resources { }
+pub enum Backend {}
+impl core::Backend for Backend {
+    type Resources = Resources;
+    type CommandQueue = CommandQueue;
+    type GeneralCommandBuffer = native::GeneralCommandBuffer;
+    type GraphicsCommandBuffer = native::GraphicsCommandBuffer;
+    type ComputeCommandBuffer = native::ComputeCommandBuffer;
+    type TransferCommandBuffer = native::TransferCommandBuffer;
+    type SubpassCommandBuffer = native::SubpassCommandBuffer;
+    type SubmitInfo = command::SubmitInfo;
+    type Factory = Factory;
+    type QueueFamily = QueueFamily;
+}
+
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+pub enum Resources {}
 impl core::Resources for Resources {
     type Buffer = ();
     type Shader = ();

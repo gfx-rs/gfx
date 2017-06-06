@@ -141,12 +141,10 @@ impl Surface {
     }
 }
 
-impl core::Surface for Surface {
-    type CommandQueue = device_vulkan::CommandQueue;
+impl core::Surface<device_vulkan::Backend> for Surface {
     type SwapChain = SwapChain;
-    type QueueFamily = device_vulkan::QueueFamily;
 
-    fn supports_queue(&self, queue_family: &Self::QueueFamily) -> bool {
+    fn supports_queue(&self, queue_family: &device_vulkan::QueueFamily) -> bool {
         unsafe {
             let mut support = mem::uninitialized();
             self.raw.loader.get_physical_device_surface_support_khr(
@@ -158,9 +156,9 @@ impl core::Surface for Surface {
         }
     }
 
-    fn build_swapchain<T, Q>(&self, present_queue: Q) -> SwapChain
+    fn build_swapchain<T, Q>(&self, present_queue: Q) -> Self::SwapChain
         where T: core::format::RenderFormat,
-              Q: Borrow<Self::CommandQueue>
+              Q: Borrow<device_vulkan::CommandQueue>
     {
         let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
         let loader = vk::SwapchainFn::load(|name| {
@@ -270,10 +268,8 @@ impl SwapChain {
     }
 }
 
-impl core::SwapChain for SwapChain {
-    type R = device_vulkan::Resources;
-
-    fn get_images(&mut self) -> &[handle::RawTexture<Self::R>] {
+impl core::SwapChain<device_vulkan::Backend> for SwapChain {
+    fn get_images(&mut self) -> &[handle::RawTexture<device_vulkan::Resources>] {
         // TODO
         // &self.images
         unimplemented!()
@@ -329,7 +325,7 @@ impl core::SwapChain for SwapChain {
 
 pub struct Window<'a>(pub &'a winit::Window);
 
-impl<'a> core::WindowExt for Window<'a> {
+impl<'a> core::WindowExt<device_vulkan::Backend> for Window<'a> {
     type Surface = Surface;
     type Adapter = device_vulkan::Adapter;
 
