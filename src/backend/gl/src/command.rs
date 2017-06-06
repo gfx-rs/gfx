@@ -17,8 +17,7 @@
 use gl;
 use core::{self as c, command, state as s};
 use core::target::{ColorValue, Depth, Mirror, Rect, Stencil};
-use native::{GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer};
-use {Buffer, BufferElement, Program, FrameBuffer, Texture,
+use {Backend, Buffer, BufferElement, Program, FrameBuffer, Texture,
      NewTexture, Resources, PipelineState, ResourceView, TargetView};
 
 
@@ -324,339 +323,323 @@ impl Cache {
 
 }
 
-/// A command buffer abstraction for OpenGL.
-///
-/// Manages a list of commands that will be executed when submitted to a `Device`. Usually it is
-/// best to use a `Encoder` to manage the command buffer which implements `From<CommandBuffer>`.
-///
-/// If you want to display your rendered results to a framebuffer created externally, see the
-/// `display_fb` field.
-pub struct CommandBuffer {
-    pub buf: Vec<Command>,
-    pub data: DataBuffer,
-    fbo: FrameBuffer,
-    /// The framebuffer to use for rendering to the main targets (0 by default).
-    ///
-    /// Use this to set the framebuffer that will be used for the screen display targets created
-    /// with `create_main_targets_raw`. Usually you don't need to set this field directly unless
-    /// your OS doesn't provide a default framebuffer with name 0 and you have to render to a
-    /// different framebuffer object that can be made visible on the screen (iOS/tvOS need this).
-    ///
-    /// This framebuffer must exist and be configured correctly (with renderbuffer attachments,
-    /// etc.) so that rendering to it can occur immediately.
-    pub display_fb: FrameBuffer,
-    cache: Cache,
-    active_attribs: usize,
-}
-
-impl CommandBuffer {
-    pub fn new(fbo: FrameBuffer) -> CommandBuffer {
-        CommandBuffer {
-            buf: Vec::new(),
-            data: DataBuffer::new(),
-            fbo: fbo,
-            display_fb: 0 as FrameBuffer,
-            cache: Cache::new(),
-            active_attribs: 0,
-        }
-    }
-    fn is_main_target(&self, tv: Option<TargetView>) -> bool {
-        match tv {
-            Some(TargetView::Surface(0)) |
-            None => true,
-            Some(_) => false,
-        }
-    }
-}
-
-impl command::Buffer<Resources> for CommandBuffer {
-    fn reset(&mut self) {
-        self.buf.clear();
-        self.data.0.clear();
-        self.cache = Cache::new();
-        self.active_attribs = (1 << c::MAX_VERTEX_ATTRIBUTES) - 1;
-    }
-
-    fn bind_pipeline_state(&mut self, pso: PipelineState) {
-        let cull = pso.rasterizer.cull_face;
-        self.cache.primitive = primitive_to_gl(pso.primitive);
-        self.cache.attributes = pso.input;
-        self.cache.stencil = pso.output.stencil;
-        self.cache.cull_face = cull;
-        self.cache.draw_mask = pso.output.draw_mask;
-        self.buf.extend(self.cache.bind_program(pso.program));
-        self.cache.scissor = pso.scissor;
-        self.buf.extend(self.cache.set_rasterizer(pso.rasterizer));
-        self.buf.extend(self.cache.set_depth_state(pso.output.depth));
-        self.buf.extend(self.cache.set_stencil_state(pso.output.stencil, (0, 0), cull));
-        for i in 0..c::MAX_COLOR_TARGETS {
-            if pso.output.draw_mask & (1 << i) != 0 {
-                self.buf.extend(self.cache.set_blend_state(i as c::ColorSlot,
-                                           pso.output.colors[i]));
-            }
-        }
-        if let c::Primitive::PatchList(num) = pso.primitive {
-            self.buf.push(Command::SetPatches(num));
-        }
-    }
-
-    fn bind_vertex_buffers(&mut self, vbs: c::pso::VertexBufferSet<Resources>) {
-        if self.cache.current_vbs == Some(vbs) {
-            return;
-        }
-        self.cache.current_vbs = Some(vbs);
-        for i in 0..c::MAX_VERTEX_ATTRIBUTES {
-            match (vbs.0[i], self.cache.attributes[i]) {
-                (None, Some(fm)) => {
-                    error!("No vertex input provided for slot {} of format {:?}", i, fm)
-                }
-                (Some((buffer, offset)), Some(mut bel)) => {
-                    bel.elem.offset += offset as gl::types::GLuint;
-                    self.buf.push(Command::BindAttribute(
-                        i as c::AttributeSlot,
-                        buffer,
-                        bel));
-                    self.active_attribs |= 1 << i;
-                }
-                (_, None) if self.active_attribs & (1 << i) != 0 => {
-                    self.buf.push(Command::UnbindAttribute(i as c::AttributeSlot));
-                    self.active_attribs ^= 1 << i;
-                }
-                (_, None) => (),
-            }
-        }
-    }
-
-    fn bind_constant_buffers(&mut self, cbs: &[c::pso::ConstantBufferParam<Resources>]) {
-        for param in cbs.iter() {
-            self.buf.extend(self.cache.bind_constant_buffer(param.clone()));
-        }
-    }
-
-    fn bind_global_constant(&mut self, loc: c::shade::Location, value: c::shade::UniformValue) {
-        self.buf.push(Command::BindUniform(loc, value));
-    }
-
-    fn bind_resource_views(&mut self, srvs: &[c::pso::ResourceViewParam<Resources>]) {
-        for i in 0..c::MAX_RESOURCE_VIEWS {
-            self.cache.resource_binds[i] = None;
-        }
-        for param in srvs.iter() {
-            self.cache.resource_binds[param.2 as usize] = Some(param.0.bind);
-            self.buf.extend(self.cache.bind_resource_view(param.clone()));
-        }
-    }
-
-    fn bind_unordered_views(&mut self, uavs: &[c::pso::UnorderedViewParam<Resources>]) {
-        for param in uavs.iter() {
-            self.buf.push(Command::BindUnorderedView(param.clone()));
-        }
-    }
-
-    fn bind_samplers(&mut self, ss: &[c::pso::SamplerParam<Resources>]) {
-        for param in ss.iter() {
-            let bind = self.cache.resource_binds[param.2 as usize];
-            self.buf.push(Command::BindSampler(param.clone(), bind));
-        }
-    }
-
-    fn bind_pixel_targets(&mut self, pts: c::pso::PixelTargetSet<Resources>) {
-        let is_main = pts.colors.iter().skip(1).find(|c| c.is_some()).is_none() &&
-                      self.is_main_target(pts.colors[0]) &&
-                      self.is_main_target(pts.depth) &&
-                      self.is_main_target(pts.stencil);
-        if is_main {
-            self.buf.extend(self.cache.bind_framebuffer(gl::DRAW_FRAMEBUFFER, self.display_fb));
-        } else {
-            let num = pts.colors
-                .iter()
-                .position(|c| c.is_none())
-                .unwrap_or(pts.colors.len()) as c::ColorSlot;
-            self.buf.extend(self.cache.bind_framebuffer(gl::DRAW_FRAMEBUFFER, self.fbo));
-            self.buf.push(Command::BindPixelTargets(pts));
-            self.buf.push(Command::SetDrawColorBuffers(num));
-        }
-        let view = pts.get_view();
-        self.cache.target_dim = view;
-        self.buf.extend(
-            self.cache.set_viewport(Rect {
-                                    x: 0,
-                                    y: 0,
-                                    w: view.0,
-                                    h: view.1,
-                                }));
-    }
-
-    fn bind_index(&mut self, buf: Buffer, itype: c::IndexType) {
-        self.buf.extend(self.cache.bind_index(buf, itype));
-    }
-
-    fn set_scissor(&mut self, rect: Rect) {
-        use std::cmp;
-        let scissor = self.cache.scissor;
-        let target_dim = self.cache.target_dim;
-        let scissor_rect = if scissor {
-           Some(Rect {
-               // inverting the Y axis in order to match D3D11
-               y: cmp::max(target_dim.1, rect.y + rect.h) -
-                   rect.y -
-                   rect.h,
-               ..rect
-           })
-       } else {
-            None //TODO: assert?
-       };
-        self.buf.extend(self.cache.set_scissor(scissor_rect));
-    }
-
-    fn set_ref_values(&mut self, rv: s::RefValues) {
-        let stencil = self.cache.stencil;
-        let cull_face = self.cache.cull_face;
-        self.buf.extend(self.cache.set_stencil_state(stencil,
-                                                     rv.stencil,
-                                                     cull_face));
-        self.buf.extend(self.cache.set_blend_color(rv.blend));
-    }
-
-    fn copy_buffer(&mut self,
-                   src: Buffer,
-                   dst: Buffer,
-                   src_offset_bytes: usize,
-                   dst_offset_bytes: usize,
-                   size_bytes: usize) {
-        self.buf.push(Command::CopyBuffer(src, dst,
-                                          src_offset_bytes as gl::types::GLintptr,
-                                          dst_offset_bytes as gl::types::GLintptr,
-                                          size_bytes as gl::types::GLsizeiptr));
-    }
-
-    fn copy_buffer_to_texture(&mut self,
-                              src: Buffer, src_offset_bytes: usize,
-                              dst: NewTexture,
-                              kind: c::texture::Kind,
-                              face: Option<c::texture::CubeFace>,
-                              img: c::texture::RawImageInfo) {
-        match dst {
-            NewTexture::Texture(t) =>
-                self.buf.push(Command::CopyBufferToTexture(
-                    src, src_offset_bytes as gl::types::GLintptr,
-                    t, kind, face, img
-                )),
-            NewTexture::Surface(s) =>
-                error!("GL: Cannot copy to a Surface({})", s)
-        }
-    }
-
-    fn copy_texture_to_buffer(&mut self,
-                              src: NewTexture,
-                              kind: c::texture::Kind,
-                              face: Option<c::texture::CubeFace>,
-                              img: c::texture::RawImageInfo,
-                              dst: Buffer, dst_offset_bytes: usize) {
-        self.buf.push(Command::CopyTextureToBuffer(
-            src, kind, face, img,
-            dst, dst_offset_bytes as gl::types::GLintptr
-        ));
-    }
-
-    fn update_buffer(&mut self, buf: Buffer, data: &[u8], offset_bytes: usize) {
-        let ptr = self.data.add(data);
-        self.buf.push(Command::UpdateBuffer(buf, ptr, offset_bytes));
-    }
-
-    fn update_texture(&mut self,
-                      ntex: NewTexture,
-                      kind: c::texture::Kind,
-                      face: Option<c::texture::CubeFace>,
-                      data: &[u8],
-                      img: c::texture::RawImageInfo) {
-        let ptr = self.data.add(data);
-        match ntex {
-            NewTexture::Texture(t) => {
-                self.buf.push(Command::UpdateTexture(t, kind, face, ptr, img))
-            }
-            NewTexture::Surface(s) => {
-                error!("GL: unable to update the contents of a Surface({})", s)
-            }
-        }
-    }
-
-    fn generate_mipmap(&mut self, srv: ResourceView) {
-        self.buf.push(Command::GenerateMipmap(srv));
-    }
-
-    fn clear_color(&mut self, target: TargetView, value: command::ClearColor) {
-        // this could be optimized by deferring the actual clear call
-        let mut pts = c::pso::PixelTargetSet::new();
-        pts.colors[0] = Some(target);
-        self.bind_pixel_targets(pts);
-        self.buf.push(Command::Clear(Some(value), None, None));
-    }
-
-    fn clear_depth_stencil(&mut self,
-                           target: TargetView,
-                           depth: Option<Depth>,
-                           stencil: Option<Stencil>) {
-        let mut pts = c::pso::PixelTargetSet::new();
-        if depth.is_some() {
-            pts.depth = Some(target);
-        }
-        if stencil.is_some() {
-            pts.stencil = Some(target);
-        }
-        self.bind_pixel_targets(pts);
-        self.buf.push(Command::Clear(None, depth, stencil));
-    }
-
-    fn call_draw(&mut self,
-                 start: c::VertexCount,
-                 count: c::VertexCount,
-                 instances: Option<command::InstanceParams>) {
-        self.buf.push(Command::Draw(self.cache.primitive, start, count, instances));
-    }
-
-    fn call_draw_indexed(&mut self,
-                         start: c::VertexCount,
-                         count: c::VertexCount,
-                         base: c::VertexCount,
-                         instances: Option<command::InstanceParams>) {
-        let (offset, gl_index) = match self.cache.index_type {
-            c::IndexType::U16 => (start * 2u32, gl::UNSIGNED_SHORT),
-            c::IndexType::U32 => (start * 4u32, gl::UNSIGNED_INT),
-        };
-        self.buf.push(
-                  Command::DrawIndexed(
-                      self.cache.primitive,
-                      gl_index,
-                      RawOffset(offset as *const gl::types::GLvoid),
-                      count,
-                      base,
-                      instances));
-    }
-}
-
-impl c::CommandBuffer for CommandBuffer {
-    type SubmitInfo = SubmitInfo;
-    unsafe fn end(&mut self) -> SubmitInfo {
-        // TODO: Slow! Avoid cloning!
-        // Constraints:
-        //   cmd can only be written on one thread,
-        //   and send read-only submit to the queue.
-        //   In theory we could just share a pointer to the buffer.
-        SubmitInfo {
-            buf: self.buf.clone(),
-            data: self.data.clone(),
-        }
-    }
-}
-
 // CommandBuffer trait implementation
 macro_rules! impl_cmd_buffer {
     ($buffer:ident) => (
-        impl command::CommandBuffer for $buffer {
-            type SubmitInfo = SubmitInfo;
+        /// A command buffer abstraction for OpenGL.
+        ///
+        /// If you want to display your rendered results to a framebuffer created externally, see the
+        /// `display_fb` field.
+        pub struct $buffer {
+            pub buf: Vec<Command>,
+            pub data: DataBuffer,
+            fbo: FrameBuffer,
+            /// The framebuffer to use for rendering to the main targets (0 by default).
+            ///
+            /// Use this to set the framebuffer that will be used for the screen display targets created
+            /// with `create_main_targets_raw`. Usually you don't need to set this field directly unless
+            /// your OS doesn't provide a default framebuffer with name 0 and you have to render to a
+            /// different framebuffer object that can be made visible on the screen (iOS/tvOS need this).
+            ///
+            /// This framebuffer must exist and be configured correctly (with renderbuffer attachments,
+            /// etc.) so that rendering to it can occur immediately.
+            pub display_fb: FrameBuffer,
+            cache: Cache,
+            active_attribs: usize,
+        }
+
+        impl command::CommandBuffer<Backend> for $buffer {
             unsafe fn end(&mut self) -> SubmitInfo {
-                self.0.end()
+                SubmitInfo {
+                    buf: self.buf.clone(),
+                    data: self.data.clone(),
+                }
+            }
+        }
+
+        impl $buffer {
+            pub fn new(fbo: FrameBuffer) -> Self {
+                $buffer {
+                    buf: Vec::new(),
+                    data: DataBuffer::new(),
+                    fbo: fbo,
+                    display_fb: 0 as FrameBuffer,
+                    cache: Cache::new(),
+                    active_attribs: 0,
+                }
+            }
+            fn is_main_target(&self, tv: Option<TargetView>) -> bool {
+                match tv {
+                    Some(TargetView::Surface(0)) |
+                    None => true,
+                    Some(_) => false,
+                }
+            }
+        }
+
+        impl command::Buffer<Resources> for $buffer {
+            fn reset(&mut self) {
+                self.buf.clear();
+                self.data.0.clear();
+                self.cache = Cache::new();
+                self.active_attribs = (1 << c::MAX_VERTEX_ATTRIBUTES) - 1;
+            }
+
+            fn bind_pipeline_state(&mut self, pso: PipelineState) {
+                let cull = pso.rasterizer.cull_face;
+                self.cache.primitive = primitive_to_gl(pso.primitive);
+                self.cache.attributes = pso.input;
+                self.cache.stencil = pso.output.stencil;
+                self.cache.cull_face = cull;
+                self.cache.draw_mask = pso.output.draw_mask;
+                self.buf.extend(self.cache.bind_program(pso.program));
+                self.cache.scissor = pso.scissor;
+                self.buf.extend(self.cache.set_rasterizer(pso.rasterizer));
+                self.buf.extend(self.cache.set_depth_state(pso.output.depth));
+                self.buf.extend(self.cache.set_stencil_state(pso.output.stencil, (0, 0), cull));
+                for i in 0..c::MAX_COLOR_TARGETS {
+                    if pso.output.draw_mask & (1 << i) != 0 {
+                        self.buf.extend(self.cache.set_blend_state(i as c::ColorSlot,
+                                                   pso.output.colors[i]));
+                    }
+                }
+                if let c::Primitive::PatchList(num) = pso.primitive {
+                    self.buf.push(Command::SetPatches(num));
+                }
+            }
+
+            fn bind_vertex_buffers(&mut self, vbs: c::pso::VertexBufferSet<Resources>) {
+                if self.cache.current_vbs == Some(vbs) {
+                    return;
+                }
+                self.cache.current_vbs = Some(vbs);
+                for i in 0..c::MAX_VERTEX_ATTRIBUTES {
+                    match (vbs.0[i], self.cache.attributes[i]) {
+                        (None, Some(fm)) => {
+                            error!("No vertex input provided for slot {} of format {:?}", i, fm)
+                        }
+                        (Some((buffer, offset)), Some(mut bel)) => {
+                            bel.elem.offset += offset as gl::types::GLuint;
+                            self.buf.push(Command::BindAttribute(
+                                i as c::AttributeSlot,
+                                buffer,
+                                bel));
+                            self.active_attribs |= 1 << i;
+                        }
+                        (_, None) if self.active_attribs & (1 << i) != 0 => {
+                            self.buf.push(Command::UnbindAttribute(i as c::AttributeSlot));
+                            self.active_attribs ^= 1 << i;
+                        }
+                        (_, None) => (),
+                    }
+                }
+            }
+
+            fn bind_constant_buffers(&mut self, cbs: &[c::pso::ConstantBufferParam<Resources>]) {
+                for param in cbs.iter() {
+                    self.buf.extend(self.cache.bind_constant_buffer(param.clone()));
+                }
+            }
+
+            fn bind_global_constant(&mut self, loc: c::shade::Location, value: c::shade::UniformValue) {
+                self.buf.push(Command::BindUniform(loc, value));
+            }
+
+            fn bind_resource_views(&mut self, srvs: &[c::pso::ResourceViewParam<Resources>]) {
+                for i in 0..c::MAX_RESOURCE_VIEWS {
+                    self.cache.resource_binds[i] = None;
+                }
+                for param in srvs.iter() {
+                    self.cache.resource_binds[param.2 as usize] = Some(param.0.bind);
+                    self.buf.extend(self.cache.bind_resource_view(param.clone()));
+                }
+            }
+
+            fn bind_unordered_views(&mut self, uavs: &[c::pso::UnorderedViewParam<Resources>]) {
+                for param in uavs.iter() {
+                    self.buf.push(Command::BindUnorderedView(param.clone()));
+                }
+            }
+
+            fn bind_samplers(&mut self, ss: &[c::pso::SamplerParam<Resources>]) {
+                for param in ss.iter() {
+                    let bind = self.cache.resource_binds[param.2 as usize];
+                    self.buf.push(Command::BindSampler(param.clone(), bind));
+                }
+            }
+
+            fn bind_pixel_targets(&mut self, pts: c::pso::PixelTargetSet<Resources>) {
+                let is_main = pts.colors.iter().skip(1).find(|c| c.is_some()).is_none() &&
+                              self.is_main_target(pts.colors[0]) &&
+                              self.is_main_target(pts.depth) &&
+                              self.is_main_target(pts.stencil);
+                if is_main {
+                    self.buf.extend(self.cache.bind_framebuffer(gl::DRAW_FRAMEBUFFER, self.display_fb));
+                } else {
+                    let num = pts.colors
+                        .iter()
+                        .position(|c| c.is_none())
+                        .unwrap_or(pts.colors.len()) as c::ColorSlot;
+                    self.buf.extend(self.cache.bind_framebuffer(gl::DRAW_FRAMEBUFFER, self.fbo));
+                    self.buf.push(Command::BindPixelTargets(pts));
+                    self.buf.push(Command::SetDrawColorBuffers(num));
+                }
+                let view = pts.get_view();
+                self.cache.target_dim = view;
+                self.buf.extend(
+                    self.cache.set_viewport(Rect {
+                                            x: 0,
+                                            y: 0,
+                                            w: view.0,
+                                            h: view.1,
+                                        }));
+            }
+
+            fn bind_index(&mut self, buf: Buffer, itype: c::IndexType) {
+                self.buf.extend(self.cache.bind_index(buf, itype));
+            }
+
+            fn set_scissor(&mut self, rect: Rect) {
+                use std::cmp;
+                let scissor = self.cache.scissor;
+                let target_dim = self.cache.target_dim;
+                let scissor_rect = if scissor {
+                   Some(Rect {
+                       // inverting the Y axis in order to match D3D11
+                       y: cmp::max(target_dim.1, rect.y + rect.h) -
+                           rect.y -
+                           rect.h,
+                       ..rect
+                   })
+               } else {
+                    None //TODO: assert?
+               };
+                self.buf.extend(self.cache.set_scissor(scissor_rect));
+            }
+
+            fn set_ref_values(&mut self, rv: s::RefValues) {
+                let stencil = self.cache.stencil;
+                let cull_face = self.cache.cull_face;
+                self.buf.extend(self.cache.set_stencil_state(stencil,
+                                                             rv.stencil,
+                                                             cull_face));
+                self.buf.extend(self.cache.set_blend_color(rv.blend));
+            }
+
+            fn copy_buffer(&mut self,
+                           src: Buffer,
+                           dst: Buffer,
+                           src_offset_bytes: usize,
+                           dst_offset_bytes: usize,
+                           size_bytes: usize) {
+                self.buf.push(Command::CopyBuffer(src, dst,
+                                                  src_offset_bytes as gl::types::GLintptr,
+                                                  dst_offset_bytes as gl::types::GLintptr,
+                                                  size_bytes as gl::types::GLsizeiptr));
+            }
+
+            fn copy_buffer_to_texture(&mut self,
+                                      src: Buffer, src_offset_bytes: usize,
+                                      dst: NewTexture,
+                                      kind: c::texture::Kind,
+                                      face: Option<c::texture::CubeFace>,
+                                      img: c::texture::RawImageInfo) {
+                match dst {
+                    NewTexture::Texture(t) =>
+                        self.buf.push(Command::CopyBufferToTexture(
+                            src, src_offset_bytes as gl::types::GLintptr,
+                            t, kind, face, img
+                        )),
+                    NewTexture::Surface(s) =>
+                        error!("GL: Cannot copy to a Surface({})", s)
+                }
+            }
+
+            fn copy_texture_to_buffer(&mut self,
+                                      src: NewTexture,
+                                      kind: c::texture::Kind,
+                                      face: Option<c::texture::CubeFace>,
+                                      img: c::texture::RawImageInfo,
+                                      dst: Buffer, dst_offset_bytes: usize) {
+                self.buf.push(Command::CopyTextureToBuffer(
+                    src, kind, face, img,
+                    dst, dst_offset_bytes as gl::types::GLintptr
+                ));
+            }
+
+            fn update_buffer(&mut self, buf: Buffer, data: &[u8], offset_bytes: usize) {
+                let ptr = self.data.add(data);
+                self.buf.push(Command::UpdateBuffer(buf, ptr, offset_bytes));
+            }
+
+            fn update_texture(&mut self,
+                              ntex: NewTexture,
+                              kind: c::texture::Kind,
+                              face: Option<c::texture::CubeFace>,
+                              data: &[u8],
+                              img: c::texture::RawImageInfo) {
+                let ptr = self.data.add(data);
+                match ntex {
+                    NewTexture::Texture(t) => {
+                        self.buf.push(Command::UpdateTexture(t, kind, face, ptr, img))
+                    }
+                    NewTexture::Surface(s) => {
+                        error!("GL: unable to update the contents of a Surface({})", s)
+                    }
+                }
+            }
+
+            fn generate_mipmap(&mut self, srv: ResourceView) {
+                self.buf.push(Command::GenerateMipmap(srv));
+            }
+
+            fn clear_color(&mut self, target: TargetView, value: command::ClearColor) {
+                // this could be optimized by deferring the actual clear call
+                let mut pts = c::pso::PixelTargetSet::new();
+                pts.colors[0] = Some(target);
+                self.bind_pixel_targets(pts);
+                self.buf.push(Command::Clear(Some(value), None, None));
+            }
+
+            fn clear_depth_stencil(&mut self,
+                                   target: TargetView,
+                                   depth: Option<Depth>,
+                                   stencil: Option<Stencil>) {
+                let mut pts = c::pso::PixelTargetSet::new();
+                if depth.is_some() {
+                    pts.depth = Some(target);
+                }
+                if stencil.is_some() {
+                    pts.stencil = Some(target);
+                }
+                self.bind_pixel_targets(pts);
+                self.buf.push(Command::Clear(None, depth, stencil));
+            }
+
+            fn call_draw(&mut self,
+                         start: c::VertexCount,
+                         count: c::VertexCount,
+                         instances: Option<command::InstanceParams>) {
+                self.buf.push(Command::Draw(self.cache.primitive, start, count, instances));
+            }
+
+            fn call_draw_indexed(&mut self,
+                                 start: c::VertexCount,
+                                 count: c::VertexCount,
+                                 base: c::VertexCount,
+                                 instances: Option<command::InstanceParams>) {
+                let (offset, gl_index) = match self.cache.index_type {
+                    c::IndexType::U16 => (start * 2u32, gl::UNSIGNED_SHORT),
+                    c::IndexType::U32 => (start * 4u32, gl::UNSIGNED_INT),
+                };
+                self.buf.push(
+                          Command::DrawIndexed(
+                              self.cache.primitive,
+                              gl_index,
+                              RawOffset(offset as *const gl::types::GLvoid),
+                              count,
+                              base,
+                              instances));
             }
         }
     )
