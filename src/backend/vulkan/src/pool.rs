@@ -24,7 +24,7 @@ use core::command::{Encoder};
 use core::{CommandPool, GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 use command::CommandBuffer;
 use native::{self, GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer};
-use {CommandQueue, RawDevice};
+use {Backend, CommandQueue, RawDevice};
 
 macro_rules! impl_pool {
     ($pool:ident, $queue:ident, $buffer:ident) => (
@@ -35,11 +35,25 @@ macro_rules! impl_pool {
             device: Arc<RawDevice>,
         }
 
-        impl core::CommandPool for $pool {
-            type Queue = CommandQueue;
-            type PoolBuffer = $buffer;
+        impl core::CommandPool<Backend> for $pool {
+            fn reset(&mut self) {
+                self.next_buffer = 0;
+                unsafe {
+                    self.device.0.fp_v1_0().reset_command_pool(
+                        self.device.0.handle(),
+                        self.pool,
+                        vk::CommandPoolResetFlags::empty()
+                    );
+                }
+            }
 
-            fn acquire_command_buffer<'a>(&'a mut self) -> Encoder<'a, $buffer> {
+            fn reserve(&mut self, additional: usize) {
+                unimplemented!()
+            }
+        }
+
+        impl pool::$pool<Backend> for $pool {
+            fn acquire_command_buffer<'a>(&'a mut self) -> Encoder<'a, Backend, $buffer> {
                 let available_buffers = self.command_buffers.len() as isize - self.next_buffer as isize;
                 if available_buffers <= 0 {
                     self.reserve((-available_buffers) as usize + 1);
@@ -61,25 +75,8 @@ macro_rules! impl_pool {
                 }
             }
 
-            fn reset(&mut self) {
-                self.next_buffer = 0;
-                unsafe {
-                    self.device.0.fp_v1_0().reset_command_pool(
-                        self.device.0.handle(),
-                        self.pool,
-                        vk::CommandPoolResetFlags::empty()
-                    );
-                }
-            }
-
-            fn reserve(&mut self, additional: usize) {
-                unimplemented!()
-            }
-        }
-
-        impl pool::$pool for $pool {
             fn from_queue<Q>(mut queue: Q, capacity: usize) -> $pool
-                where Q: Into<$queue<CommandQueue>> + BorrowMut<CommandQueue>
+                where Q: Into<$queue<Backend>> + BorrowMut<CommandQueue>
             {
                 let queue = queue.borrow_mut();
 
