@@ -215,8 +215,8 @@ pub enum IndexType {
     U32,
 }
 
-#[derive(Copy, Clone, Debug)]
 ///
+#[derive(Copy, Clone, Debug)]
 pub struct HeapType {
     /// Id of the heap type.
     pub id: usize,
@@ -226,7 +226,22 @@ pub struct HeapType {
     pub heap_index: usize,
 }
 
-/// Different types of a specific API. 
+/// Different types of a specific API.
+#[allow(missing_docs)]
+pub trait Backend: Sized {
+    type Resources: Resources;
+    type CommandQueue: CommandQueue<Self>;
+    type GeneralCommandBuffer: CommandBuffer<Self> + command::Buffer<Self::Resources>; // + GraphicsCommandBuffer<Self::R> + ComputeCommandBuffer<Self::R>;
+    type GraphicsCommandBuffer: CommandBuffer<Self> + command::Buffer<Self::Resources>; // + GraphicsCommandBuffer<Self::R>;
+    type ComputeCommandBuffer: CommandBuffer<Self>; // + ComputeCommandBuffer<Self::R>;
+    type TransferCommandBuffer: CommandBuffer<Self>; // + TransferCommandBuffer<Self::R>;
+    type SubpassCommandBuffer: CommandBuffer<Self>; // + SubpassCommandBuffer<Self::R>;
+    type SubmitInfo;
+    type Factory: Factory<Self::Resources>;
+    type QueueFamily: QueueFamily;
+}
+
+/// Different resource types of a specific API.
 #[allow(missing_docs)]
 pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq + Any {
     type Buffer:              Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
@@ -302,46 +317,37 @@ impl Error for SubmissionError {
 #[allow(missing_docs)]
 pub type SubmissionResult<T> = Result<T, SubmissionError>;
 
-///
-pub struct Device_<R: Resources, F: Factory<R>, Q: CommandQueue> {
+/// 
+pub struct Device_<B: Backend> {
     /// Resource factory.
-    pub factory: F,
+    pub factory: B::Factory,
     /// General command queues.
-    pub general_queues: Vec<GeneralQueue<Q>>,
+    pub general_queues: Vec<GeneralQueue<B>>,
     /// Graphics command queues.
-    pub graphics_queues: Vec<GraphicsQueue<Q>>,
+    pub graphics_queues: Vec<GraphicsQueue<B>>,
     /// Compute command queues.
-    pub compute_queues: Vec<ComputeQueue<Q>>,
+    pub compute_queues: Vec<ComputeQueue<B>>,
     /// Transfer command queues.
-    pub transfer_queues: Vec<TransferQueue<Q>>,
+    pub transfer_queues: Vec<TransferQueue<B>>,
     /// Types of memory heaps.
     pub heap_types: Vec<HeapType>,
     /// Memory heaps.
     pub memory_heaps: Vec<u64>,
 
     ///
-    pub _marker: std::marker::PhantomData<*const R>
+    pub _marker: std::marker::PhantomData<B>
 }
 
 /// Represents a physical or virtual device, which is capable of running the backend.
-pub trait Adapter: Sized {
-    /// Associated `CommandQueue` type.
-    type CommandQueue: CommandQueue;
-    /// Associated `Factory` type.
-    type Factory: Factory<Self::Resources>;
-    /// Associated `QueueFamily` type.
-    type QueueFamily: QueueFamily;
-    /// Associated `Resources` type.
-    type Resources: Resources;
-
+pub trait Adapter<B: Backend>: Sized {
     /// Create a new device and command queues.
-    fn open(&self, queue_descs: &[(&Self::QueueFamily, u32)]) -> Device_<Self::Resources, Self::Factory, Self::CommandQueue>;
+    fn open(&self, queue_descs: &[(&B::QueueFamily, u32)]) -> Device_<B>;
 
     /// Get the `AdapterInfo` for this adapater.
     fn get_info(&self) -> &AdapterInfo;
 
     /// Return the supported queue families for this adapter.
-    fn get_queue_families(&self) -> &[Self::QueueFamily];
+    fn get_queue_families(&self) -> &[B::QueueFamily];
 }
 
 /// Information about a backend adapater.
@@ -367,57 +373,28 @@ pub trait QueueFamily: 'static {
 }
 
 /// Submission information for a command queue.
-pub struct QueueSubmit<'a, C: CommandBuffer + 'a, R: Resources> {
+pub struct QueueSubmit<'a, B: Backend + 'a> {
     /// Command buffers to submit.
-    pub cmd_buffers: &'a [command::Submit<C>],
+    pub cmd_buffers: &'a [command::Submit<B>],
     /// Semaphores to wait being signaled before submission.
-    pub wait_semaphores: &'a [(&'a mut R::Semaphore, pso::PipelineStage)],
+    pub wait_semaphores: &'a [(&'a mut <B::Resources as Resources>::Semaphore, pso::PipelineStage)],
     /// Semaphores which get signaled after submission.
-    pub signal_semaphores: &'a [&'a mut R::Semaphore],
+    pub signal_semaphores: &'a [&'a mut <B::Resources as Resources>::Semaphore],
 }
 
 /// Dummy trait for command queues.
 /// CommandBuffers will be later submitted to command queues instead of the device.
-pub trait CommandQueue {
-    /// Associated `Resources` type.
-    type Resources: Resources;
-    /// Submit data for command queues.
-    type SubmitInfo;
-    /// General command buffer type of the backend.
-    type GeneralCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // + GraphicsCommandBuffer<Self::R> + ComputeCommandBuffer<Self::R>;
-    /// Graphics command buffer type of the backend.
-    type GraphicsCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // + GraphicsCommandBuffer<Self::R>;
-    /// Compute command buffer type of the backend.
-    type ComputeCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // + ComputeCommandBuffer<Self::R>;
-    /// Transfer/Copy command buffer type of the backend.
-    type TransferCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // + TransferCommandBuffer<Self::R>;
-    /// Subpass command buffer type of the backend.
-    type SubpassCommandBuffer: CommandBuffer<SubmitInfo = Self::SubmitInfo>; // + SubpassCommandBuffer<Self::R>;
-
+pub trait CommandQueue<B: Backend> {
     /// Submit command buffers to queue for execution.
-    unsafe fn submit<'a, C>(&mut self, submit_infos: &[QueueSubmit<C, Self::Resources>], fence: Option<&'a mut <Self::Resources as Resources>::Fence>)
-        where C: CommandBuffer<SubmitInfo = Self::SubmitInfo>;
-
+    unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>], fence: Option<&mut <B::Resources as Resources>::Fence>);
+    
     ///
     fn wait_idle(&mut self);
 }
 
 /// `CommandPool` can allocate command buffers of a specific type only.
 /// The allocated command buffers are associated with the creating command queue.
-pub trait CommandPool {
-    /// Associated `Queue` type.
-    type Queue: CommandQueue;
-
-    /// Associated `PoolBuffer` type (command buffer).
-    type PoolBuffer: command::CommandBuffer;
-
-    /// Get a command buffer for recording.
-    ///
-    /// You can only record to one command buffer per pool at the same time.
-    /// If more command buffers are requested than allocated, new buffers will be reserved.
-    /// The command buffer will be returned in 'recording' state.
-    fn acquire_command_buffer<'a>(&'a mut self) -> command::Encoder<'a, Self::PoolBuffer>;
-
+pub trait CommandPool<B: Backend> {
     /// Reset the command pool and the corresponding command buffers.
     ///
     /// # Synchronization: You may _not_ free the pool if a command buffer is still in use (pool memory still in use)
@@ -428,21 +405,17 @@ pub trait CommandPool {
 }
 
 /// A `Surface` abstracts the surface of a native window, which will be presented
-pub trait Surface {
-    /// Associated `CommandQueue` type.
-    type CommandQueue: CommandQueue;
+pub trait Surface<B: Backend> {
     ///
-    type SwapChain: SwapChain;
-    ///
-    type QueueFamily: QueueFamily;
+    type SwapChain: SwapChain<B>;
 
     /// Check if the queue family supports presentation for this surface.
-    fn supports_queue(&self, queue_family: &Self::QueueFamily) -> bool;
+    fn supports_queue(&self, queue_family: &B::QueueFamily) -> bool;
 
     /// Create a new swapchain from the current surface with an associated present queue.
-    fn build_swapchain<T, Q>(&self, present_queue: Q) -> Self::SwapChain
-        where T: format::RenderFormat,
-              Q: Borrow<Self::CommandQueue>;
+    fn build_swapchain<Cf, Q>(&self, present_queue: Q) -> Self::SwapChain
+        where Cf: format::RenderFormat,
+              Q: Borrow<B::CommandQueue>;
 }
 
 /// Handle to a backbuffer of the swapchain.
@@ -474,15 +447,12 @@ pub enum FrameSync<'a, R: Resources> {
 
 /// The `SwapChain` is the backend representation of the surface.
 /// It consists of multiple buffers, which will be presented on the surface.
-pub trait SwapChain {
-    /// Associated `Resources` type.
-    type R: Resources;
-
+pub trait SwapChain<B: Backend> {
     /// Access the backbuffer images.
-    fn get_images(&mut self) -> &[handle::RawTexture<Self::R>];
+    fn get_images(&mut self) -> &[handle::RawTexture<B::Resources>];
 
     /// Acquire a new frame for rendering. This needs to be called before presenting.
-    fn acquire_frame(&mut self, sync: FrameSync<Self::R>) -> Frame;
+    fn acquire_frame(&mut self, sync: FrameSync<B::Resources>) -> Frame;
 
     /// Present one acquired frame in FIFO order.
     fn present(&mut self);
@@ -490,11 +460,11 @@ pub trait SwapChain {
 
 /// Extension for windows.
 /// Main entry point for backend initialization from a window.
-pub trait WindowExt {
+pub trait WindowExt<B: Backend> {
     /// Associated `Surface` type.
-    type Surface: Surface;
+    type Surface: Surface<B>;
     /// Associated `Adapter` type.
-    type Adapter: Adapter;
+    type Adapter: Adapter<B>;
 
     /// Create window surface and enumerate all available adapters.
     fn get_surface_and_adapters(&mut self) -> (Self::Surface, Vec<Self::Adapter>);

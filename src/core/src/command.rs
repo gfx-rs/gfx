@@ -14,9 +14,10 @@
 
 //! Command Buffer device interface
 
+use std::marker::PhantomData;
 use std::ops::Deref;
 use std::collections::hash_set::{self, HashSet};
-use {Resources, IndexType, InstanceCount, VertexCount,
+use {Backend, Resources, IndexType, InstanceCount, VertexCount,
      SubmissionResult, SubmissionError};
 use {state, target, pso, shade, texture, handle};
 
@@ -37,42 +38,39 @@ pub enum ClearColor {
 pub type InstanceParams = (InstanceCount, VertexCount);
 
 /// Thread-safe finished command buffer for submission.
-pub struct Submit<C: CommandBuffer>(C::SubmitInfo);
-impl<C: CommandBuffer> Submit<C> {
+pub struct Submit<B: Backend>(B::SubmitInfo);
+impl<B: Backend> Submit<B> {
     #[doc(hidden)]
-    pub unsafe fn get_info(&self) -> &C::SubmitInfo {
+    pub unsafe fn get_info(&self) -> &B::SubmitInfo {
         &self.0
     }
 }
 
 ///
-pub struct Encoder<'a, C: CommandBuffer + 'a>(&'a mut C);
+pub struct Encoder<'a, B: Backend, C: CommandBuffer<B> + 'a>(&'a mut C, PhantomData<B>);
 
-impl<'a, C: CommandBuffer> Encoder<'a, C> {
+impl<'a, B: Backend, C: CommandBuffer<B>> Encoder<'a, B, C> {
     #[doc(hidden)]
     pub unsafe fn new(buffer: &'a mut C) -> Self {
-        Encoder(buffer)
+        Encoder(buffer, PhantomData)
     }
 
     /// Finish recording commands to the command buffers.
-    pub fn finish(self) -> Submit<C> {
+    pub fn finish(self) -> Submit<B> {
         Submit(unsafe { self.0.end() })
     }
 }
 
 ///
-pub trait CommandBuffer {
-    /// Associated `SubmitInfo` type.
-    type SubmitInfo;
-
+pub trait CommandBuffer<B: Backend> {
     #[doc(hidden)]
-    unsafe fn end(&mut self) -> Self::SubmitInfo;
+    unsafe fn end(&mut self) -> B::SubmitInfo;
 }
 
 /// An interface of the abstract command buffer. It collects commands in an
 /// efficient API-specific manner, to be ready for execution on the device.
 #[allow(missing_docs)]
-pub trait Buffer<R: Resources>: Send {
+pub trait Buffer<R: Resources> {
     /// Reset the command buffer contents, retain the allocated storage
     fn reset(&mut self);
     /// Bind a pipeline state object
