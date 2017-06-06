@@ -217,13 +217,8 @@ impl Adapter {
     }
 }
 
-impl core::Adapter for Adapter {
-    type CommandQueue = CommandQueue;
-    type Resources = Resources;
-    type Factory = Factory;
-    type QueueFamily = QueueFamily;
-
-    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> core::Device_<Resources, Factory, CommandQueue>
+impl core::Adapter<Backend> for Adapter {
+    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> core::Device_<Backend>
     {
         let mut queue_priorities = Vec::with_capacity(queue_descs.len());
 
@@ -342,7 +337,7 @@ impl core::Adapter for Adapter {
         &self.info
     }
 
-    fn get_queue_families(&self) -> &[Self::QueueFamily] {
+    fn get_queue_families(&self) -> &[QueueFamily] {
         &self.queue_families
     }
 }
@@ -382,18 +377,8 @@ impl CommandQueue {
     }
 }
 
-impl core::CommandQueue for CommandQueue {
-    type Resources = Resources;
-    type SubmitInfo = command::SubmitInfo;
-    type GeneralCommandBuffer = native::GeneralCommandBuffer;
-    type GraphicsCommandBuffer = native::GraphicsCommandBuffer;
-    type ComputeCommandBuffer = native::ComputeCommandBuffer;
-    type TransferCommandBuffer = native::TransferCommandBuffer;
-    type SubpassCommandBuffer = native::SubpassCommandBuffer;
-
-    unsafe fn submit<'a, C>(&mut self, submit_infos: &[core::QueueSubmit<C, Resources>], fence: Option<&'a mut native::Fence>)
-        where C: CommandBuffer<SubmitInfo = command::SubmitInfo>
-    {
+impl core::CommandQueue<Backend> for CommandQueue {
+    unsafe fn submit(&mut self, submit_infos: &[core::QueueSubmit<Backend>], fence: Option<&mut native::Fence>) {
 
         unimplemented!()
     }
@@ -407,6 +392,21 @@ impl core::CommandQueue for CommandQueue {
 
 pub struct Factory {
     device: Arc<RawDevice>,
+}
+
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+pub enum Backend {}
+impl core::Backend for Backend {
+    type Resources = Resources;
+    type CommandQueue = CommandQueue;
+    type GeneralCommandBuffer = native::GeneralCommandBuffer;
+    type GraphicsCommandBuffer = native::GraphicsCommandBuffer;
+    type ComputeCommandBuffer = native::ComputeCommandBuffer;
+    type TransferCommandBuffer = native::TransferCommandBuffer;
+    type SubpassCommandBuffer = native::SubpassCommandBuffer;
+    type SubmitInfo = command::SubmitInfo;
+    type Factory = Factory;
+    type QueueFamily = QueueFamily;
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]

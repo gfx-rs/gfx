@@ -22,7 +22,7 @@ use core::format::ChannelType;
 use core::handle::{self, Producer};
 use core::target::{Layer, Level};
 
-use command::{CommandBuffer, COLOR_DEFAULT};
+use command::{COLOR_DEFAULT};
 use {Resources as R, Share, OutputMerger};
 use {Buffer, BufferElement, FatSampler, NewTexture,
      PipelineState, ResourceView, TargetView, Fence};
@@ -86,10 +86,6 @@ impl Factory {
             share: share,
             frame_handles: handle::Manager::new(),
         }
-    }
-
-    pub fn create_command_buffer(&mut self) -> CommandBuffer {
-        CommandBuffer::new(self.create_fbo_internal())
     }
 
     fn create_fbo_internal(&mut self) -> gl::types::GLuint {

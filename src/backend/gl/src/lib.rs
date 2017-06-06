@@ -30,7 +30,6 @@ use core::target::{Layer, Level};
 use command::{Command, DataBuffer};
 use factory::MappingKind;
 
-pub use self::command::CommandBuffer;
 pub use self::factory::Factory;
 pub use self::info::{Info, PlatformName, Version};
 
@@ -58,8 +57,22 @@ unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Resources {}
+pub enum Backend {}
+impl c::Backend for Backend {
+    type Resources = Resources;
+    type CommandQueue = CommandQueue;
+    type GeneralCommandBuffer = command::GeneralCommandBuffer;
+    type GraphicsCommandBuffer = command::GraphicsCommandBuffer;
+    type ComputeCommandBuffer = command::ComputeCommandBuffer;
+    type TransferCommandBuffer = command::TransferCommandBuffer;
+    type SubpassCommandBuffer = command::SubpassCommandBuffer;
+    type SubmitInfo = command::SubmitInfo;
+    type Factory = Factory;
+    type QueueFamily = QueueFamily;
+}
 
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+pub enum Resources {}
 impl c::Resources for Resources {
     type Buffer              = Buffer;
     type Shader              = Shader;
@@ -766,12 +779,14 @@ impl Device {
         }
     }
 
+    /*
     fn no_fence_submit(&mut self, cb: &mut command::CommandBuffer) {
         self.reset_state();
         for com in &cb.buf {
             self.process(com, &cb.data);
         }
     }
+    */
 
     fn before_submit<'a>(&mut self, gpu_access: &'a com::AccessInfo<Resources>)
                          -> c::SubmissionResult<com::AccessGuard<'a, Resources>> {
@@ -1011,13 +1026,8 @@ impl Adapter {
     }
 }
 
-impl c::Adapter for Adapter {
-    type CommandQueue = CommandQueue;
-    type Factory = Factory;
-    type QueueFamily = QueueFamily;
-    type Resources = Resources;
-
-    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> c::Device_<Resources, Factory, CommandQueue> {
+impl c::Adapter<Backend> for Adapter {
+    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> c::Device_<Backend> {
         c::Device_ {
             factory: Factory::new(self.share.clone()),
             general_queues: Vec::new(), // TODO
@@ -1042,19 +1052,8 @@ impl c::Adapter for Adapter {
 
 #[allow(missing_copy_implementations)]
 pub struct CommandQueue;
-
-impl c::CommandQueue for CommandQueue {
-    type Resources = Resources;
-    type SubmitInfo = command::SubmitInfo;
-    type GeneralCommandBuffer = native::GeneralCommandBuffer;
-    type GraphicsCommandBuffer = native::GraphicsCommandBuffer;
-    type ComputeCommandBuffer = native::ComputeCommandBuffer;
-    type TransferCommandBuffer = native::TransferCommandBuffer;
-    type SubpassCommandBuffer = native::SubpassCommandBuffer;
-
-    unsafe fn submit<'a, C>(&mut self, submit_infos: &[c::QueueSubmit<C, Resources>], fence: Option<&'a mut Fence>)
-        where C: c::CommandBuffer<SubmitInfo = command::SubmitInfo>
-    {
+impl c::CommandQueue<Backend> for CommandQueue {
+    unsafe fn submit(&mut self, submit_infos: &[c::QueueSubmit<Backend>], fence: Option<&mut Fence>) {
         unimplemented!()
     }
 
