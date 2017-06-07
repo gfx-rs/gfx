@@ -22,6 +22,11 @@ use std::marker::PhantomData;
 use {Backend, CommandQueue, QueueSubmit, Resources};
 use command::Submit;
 
+/// Defines queue compatibility regarding functionality.
+///
+/// Queue A is compatible with queue B if A supports all functionalities from B.
+pub trait Compatible<Q> { }
+
 macro_rules! define_queue {
     // Bare queue definitions
     (($queue:ident, $queue_ref:ident, $queue_mut:ident)
@@ -36,6 +41,26 @@ macro_rules! define_queue {
         /// 
         pub struct $queue_mut<'a, B: Backend>(&'a mut B::CommandQueue)
             where B::CommandQueue: 'a;
+
+        impl<B: Backend> CommandQueue<B> for $queue<B> {
+            unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>], fence: Option<&mut <B::Resources as Resources>::Fence>) {
+                self.0.submit(submit_infos, fence)
+            }
+            
+            fn wait_idle(&mut self) {
+                self.0.wait_idle()
+            }
+        }
+
+        impl<'a, B: Backend> CommandQueue<B> for $queue_mut<'a, B> {
+            unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>], fence: Option<&mut <B::Resources as Resources>::Fence>) {
+                self.0.submit(submit_infos, fence)
+            }
+            
+            fn wait_idle(&mut self) {
+                self.0.wait_idle()
+            }
+        }
 
         impl<B: Backend> $queue<B> {
             #[doc(hidden)]
@@ -54,11 +79,41 @@ macro_rules! define_queue {
             }
         }
 
+        impl<'a, B: Backend> $queue_mut<'a, B> {
+            ///
+            pub fn as_ref(&self) -> $queue_ref<B> {
+                $queue_ref(self.0)
+            }
+        }
+
         impl<'a, B: Backend> Clone for $queue_ref<'a, B> {
             fn clone(&self) -> Self {
                 $queue_ref(self.0.clone())
             }
-        } 
+        }
+
+        // Self compatibility
+        impl<B: Backend> Compatible<$queue<B>> for $queue<B> { }
+        impl<'a, B: Backend> Compatible<$queue<B>> for $queue_ref<'a, B> { }
+        impl<'a, B: Backend> Compatible<$queue<B>> for $queue_mut<'a, B> { }
+
+        impl<B: Backend> AsRef<B::CommandQueue> for $queue<B> {
+            fn as_ref(&self) -> &B::CommandQueue {
+                &self.0
+            }
+        }
+
+        impl<'a, B: Backend> AsRef<B::CommandQueue> for $queue_ref<'a, B> {
+            fn as_ref(&self) -> &B::CommandQueue {
+                &self.0
+            }
+        }
+
+        impl<'a, B: Backend> AsRef<B::CommandQueue> for $queue_mut<'a, B> {
+            fn as_ref(&self) -> &B::CommandQueue {
+                &self.0
+            }
+        }
     );
 
     // Impl conversion to other queues
@@ -79,11 +134,21 @@ macro_rules! define_queue {
             }
         }
 
+        impl<'a, B: Backend> From<$queue_mut<'a, B>> for $derive_ref<'a, B> {
+            fn from(queue: $queue_mut<'a, B>) -> Self {
+                $derive_ref(queue.0)
+            }
+        }
+
         impl<'a, B: Backend> From<$queue_mut<'a, B>> for $derive_mut<'a, B> {
             fn from(queue: $queue_mut<'a, B>) -> Self {
                 $derive_mut(queue.0)
             }
         }
+
+        impl<B: Backend> Compatible<$derive<B>> for $queue<B> { }
+        impl<'a, B: Backend> Compatible<$derive<B>> for $queue_ref<'a, B> { }
+        impl<'a, B: Backend> Compatible<$derive<B>> for $queue_mut<'a, B> { }
 
         define_queue! {
             ($queue, $queue_ref, $queue_mut)

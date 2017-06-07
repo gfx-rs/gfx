@@ -42,6 +42,9 @@ use std::borrow::Borrow;
 pub use draw_state::{state, target};
 pub use self::command::CommandBuffer;
 pub use self::factory::Factory;
+pub use self::pool::{
+    GeneralCommandPool, GraphicsCommandPool, ComputeCommandPool,
+    TransferCommandPool, SubpassCommandPool};
 pub use self::queue::{
     GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 
@@ -229,16 +232,24 @@ pub struct HeapType {
 /// Different types of a specific API.
 #[allow(missing_docs)]
 pub trait Backend: Sized {
-    type Resources: Resources;
+    type Adapter: Adapter<Self>;
     type CommandQueue: CommandQueue<Self>;
+    type Factory: Factory<Self::Resources>;
+    type QueueFamily: QueueFamily;
+    type Resources: Resources;
+    type SubmitInfo;
+
     type GeneralCommandBuffer: CommandBuffer<Self> + command::Buffer<Self::Resources>; // + GraphicsCommandBuffer<Self::R> + ComputeCommandBuffer<Self::R>;
     type GraphicsCommandBuffer: CommandBuffer<Self> + command::Buffer<Self::Resources>; // + GraphicsCommandBuffer<Self::R>;
     type ComputeCommandBuffer: CommandBuffer<Self>; // + ComputeCommandBuffer<Self::R>;
     type TransferCommandBuffer: CommandBuffer<Self>; // + TransferCommandBuffer<Self::R>;
     type SubpassCommandBuffer: CommandBuffer<Self>; // + SubpassCommandBuffer<Self::R>;
-    type SubmitInfo;
-    type Factory: Factory<Self::Resources>;
-    type QueueFamily: QueueFamily;
+
+    type GeneralCommandPool: GeneralCommandPool<Self>;
+    type GraphicsCommandPool: GraphicsCommandPool<Self>;
+    type ComputeCommandPool: ComputeCommandPool<Self>;
+    type TransferCommandPool: TransferCommandPool<Self>;
+    type SubpassCommandPool: SubpassCommandPool<Self>;
 }
 
 /// Different resource types of a specific API.
@@ -415,7 +426,7 @@ pub trait Surface<B: Backend> {
     /// Create a new swapchain from the current surface with an associated present queue.
     fn build_swapchain<Cf, Q>(&self, present_queue: Q) -> Self::SwapChain
         where Cf: format::RenderFormat,
-              Q: Borrow<B::CommandQueue>;
+              Q: AsRef<B::CommandQueue>;
 }
 
 /// Handle to a backbuffer of the swapchain.

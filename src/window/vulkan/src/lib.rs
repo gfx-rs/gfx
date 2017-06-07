@@ -158,7 +158,7 @@ impl core::Surface<device_vulkan::Backend> for Surface {
 
     fn build_swapchain<T, Q>(&self, present_queue: Q) -> Self::SwapChain
         where T: core::format::RenderFormat,
-              Q: Borrow<device_vulkan::CommandQueue>
+              Q: AsRef<device_vulkan::CommandQueue>
     {
         let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
         let loader = vk::SwapchainFn::load(|name| {
@@ -171,7 +171,7 @@ impl core::Surface<device_vulkan::Backend> for Surface {
 
         // TODO: check for better ones if available
         let present_mode = vk::PresentModeKHR::Fifo; // required to be supported
-        let present_queue = present_queue.borrow();
+        let present_queue = present_queue.as_ref();
 
         let format = <T as format::Formatted>::get_format();
 
