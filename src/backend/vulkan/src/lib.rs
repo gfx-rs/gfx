@@ -397,6 +397,7 @@ pub struct Factory {
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Backend {}
 impl core::Backend for Backend {
+    type Adapter = Adapter;
     type Resources = Resources;
     type CommandQueue = CommandQueue;
     type GeneralCommandBuffer = native::GeneralCommandBuffer;
@@ -407,6 +408,12 @@ impl core::Backend for Backend {
     type SubmitInfo = command::SubmitInfo;
     type Factory = Factory;
     type QueueFamily = QueueFamily;
+
+    type GeneralCommandPool = pool::GeneralCommandPool;
+    type GraphicsCommandPool = pool::GraphicsCommandPool;
+    type ComputeCommandPool = pool::ComputeCommandPool;
+    type TransferCommandPool = pool::TransferCommandPool;
+    type SubpassCommandPool = pool::SubpassCommandPool;
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]

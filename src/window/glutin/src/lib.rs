@@ -209,7 +209,7 @@ impl<'a> core::Surface<device_gl::Backend> for Surface<'a> {
     fn supports_queue(&self, queue_family: &device_gl::QueueFamily) -> bool { true }
     fn build_swapchain<T, Q>(&self, present_queue: Q) -> SwapChain<'a>
         where T: core::format::RenderFormat,
-              Q: Borrow<device_gl::CommandQueue>
+              Q: AsRef<device_gl::CommandQueue>
     {
         use core::handle::Producer;
         let dim = get_window_dimensions(self.window);
