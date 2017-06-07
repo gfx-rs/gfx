@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::BorrowMut;
 use std::ops::DerefMut;
 use std::ptr;
 use std::sync::Arc;
@@ -22,6 +21,7 @@ use ash::version::DeviceV1_0;
 use core::{self, pool};
 use core::command::{Encoder};
 use core::{CommandPool, GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
+use core::queue::Compatible;
 use command::CommandBuffer;
 use native::{self, GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer};
 use {Backend, CommandQueue, RawDevice};
@@ -76,9 +76,9 @@ macro_rules! impl_pool {
             }
 
             fn from_queue<Q>(mut queue: Q, capacity: usize) -> $pool
-                where Q: Into<$queue<Backend>> + BorrowMut<CommandQueue>
+                where Q: Compatible<$queue<Backend>> + AsRef<CommandQueue>
             {
-                let queue = queue.borrow_mut();
+                let queue = queue.as_ref();
 
                 // Create command pool
                 let info = vk::CommandPoolCreateInfo {
