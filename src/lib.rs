@@ -19,13 +19,15 @@ extern crate winit;
 extern crate glutin;
 extern crate gfx;
 extern crate gfx_core;
-extern crate gfx_device_gl;
-extern crate gfx_window_glutin;
-// extern crate gfx_window_glfw;
 
-#[cfg(target_os = "windows")]
+#[cfg(feature = "gl")]
+extern crate gfx_device_gl;
+#[cfg(feature = "gl")]
+extern crate gfx_window_glutin;
+
+#[cfg(feature = "dx11")]
 extern crate gfx_device_dx11;
-#[cfg(target_os = "windows")]
+#[cfg(feature = "dx11")]
 extern crate gfx_window_dxgi;
 
 #[cfg(feature = "metal")]
@@ -100,6 +102,7 @@ pub trait ApplicationBase<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
     fn on_resize<F>(&mut self, &mut F, WindowTargets<R>) where F: gfx::Factory<R>;
 }
 
+#[cfg(feature = "gl")]
 pub fn launch_gl3<A>(wb: winit::WindowBuilder) where
 A: Sized + Application<gfx_device_gl::Resources>
 {
@@ -157,12 +160,12 @@ A: Sized + Application<gfx_device_gl::Resources>
 }
 
 
-#[cfg(target_os = "windows")]
+#[cfg(feature = "dx11")]
 pub type D3D11CommandBuffer = gfx_device_dx11::CommandBuffer<gfx_device_dx11::DeferredContext>;
-#[cfg(target_os = "windows")]
+#[cfg(feature = "dx11")]
 pub type D3D11CommandBufferFake = gfx_device_dx11::CommandBuffer<gfx_device_dx11::CommandList>;
 
-#[cfg(target_os = "windows")]
+#[cfg(feature = "dx11")]
 pub fn launch_d3d11<A>(wb: winit::WindowBuilder) where
 A: Sized + Application<gfx_device_dx11::Resources>
 {
@@ -351,10 +354,9 @@ A: Sized + Application<gfx_device_vulkan::Resources>
     }
 }
 
-
-#[cfg(all(not(target_os = "windows"), not(feature = "vulkan"), not(feature = "metal")))]
+#[cfg(feature = "gl")]
 pub type DefaultResources = gfx_device_gl::Resources;
-#[cfg(all(target_os = "windows", not(feature = "vulkan")))]
+#[cfg(feature = "dx11")]
 pub type DefaultResources = gfx_device_dx11::Resources;
 #[cfg(feature = "metal")]
 pub type DefaultResources = gfx_device_metal::Resources;
@@ -384,11 +386,11 @@ pub trait Application<R: gfx::Resources>: Sized {
         let wb = winit::WindowBuilder::new().with_title(name);
         <Self as Application<DefaultResources>>::launch_default(wb)
     }
-    #[cfg(all(not(target_os = "windows"), not(feature = "vulkan"), not(feature = "metal")))]
+    #[cfg(feature = "gl")]
     fn launch_default(wb: winit::WindowBuilder) where Self: Application<DefaultResources> {
         launch_gl3::<Self>(wb);
     }
-    #[cfg(all(target_os = "windows", not(feature = "vulkan")))]
+    #[cfg(feature = "dx11")]
     fn launch_default(wb: winit::WindowBuilder) where Self: Application<DefaultResources> {
         launch_d3d11::<Self>(wb);
     }
