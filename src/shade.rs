@@ -16,17 +16,20 @@
 use std::error::Error;
 use std::fmt;
 
+#[cfg(feature = "gl")]
 pub use gfx_device_gl::Version as GlslVersion;
-#[cfg(target_os = "windows")]
+#[cfg(feature = "dx11")]
 pub use gfx_device_dx11::ShaderModel as DxShaderModel;
 #[cfg(feature = "metal")]
 pub use gfx_device_metal::ShaderModel as MetalShaderModel;
 /// Shader backend with version numbers.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Backend {
+    #[cfg(feature = "gl")]
     Glsl(GlslVersion),
+    #[cfg(feature = "gl")]
     GlslEs(GlslVersion),
-    #[cfg(target_os = "windows")]
+    #[cfg(feature = "dx11")]
     Hlsl(DxShaderModel),
     #[cfg(feature = "metal")]
     Msl(MetalShaderModel),
@@ -100,6 +103,7 @@ impl<'a> Source<'a> {
     /// Pick one of the stored versions that is the highest supported by the backend.
     pub fn select(&self, backend: Backend) -> Result<&'a [u8], SelectError> {
         Ok(match backend {
+            #[cfg(feature = "gl")]
             Backend::Glsl(version) => {
                 let v = version.major * 100 + version.minor;
                 match *self {
@@ -112,6 +116,7 @@ impl<'a> Source<'a> {
                     _ => return Err(SelectError(backend)),
                 }
             }
+            #[cfg(feature = "gl")]
             Backend::GlslEs(version) => {
                 let v = version.major * 100 + version.minor;
                 match *self {
@@ -121,7 +126,7 @@ impl<'a> Source<'a> {
                     _ => return Err(SelectError(backend)),
                 }
             }
-            #[cfg(target_os = "windows")]
+            #[cfg(feature = "dx11")]
             Backend::Hlsl(model) => {
                 match *self {
                     Source { hlsl_50: s, .. } if s != EMPTY && model >= 50 => s,
