@@ -14,17 +14,16 @@
 
 //! Command pools
 
-use std::borrow::BorrowMut;
 use std::ops::{DerefMut};
 use {command, Backend, CommandPool, CommandQueue};
-pub use queue::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
+pub use queue::{Compatible, GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 
 /// General command pool can allocate general command buffers.
 pub trait GeneralCommandPool<B: Backend>: CommandPool<B> {
     ///
     fn from_queue<Q>(queue: Q, capacity: usize) -> Self
-        where Q: Into<GeneralQueue<B>> +
-                 BorrowMut<B::CommandQueue>;
+        where Q: Compatible<GeneralQueue<B>> +
+                 AsRef<B::CommandQueue>;
 
     /// Get a command buffer for recording.
     ///
@@ -38,8 +37,8 @@ pub trait GeneralCommandPool<B: Backend>: CommandPool<B> {
 pub trait GraphicsCommandPool<B: Backend>: CommandPool<B> {
     ///
     fn from_queue<Q>(queue: Q, capacity: usize) -> Self
-        where Q: Into<GraphicsQueue<B>> +
-                 BorrowMut<B::CommandQueue>;
+        where Q: Compatible<GraphicsQueue<B>> +
+                 AsRef<B::CommandQueue>;
 
     /// Get a command buffer for recording.
     ///
@@ -53,8 +52,8 @@ pub trait GraphicsCommandPool<B: Backend>: CommandPool<B> {
 pub trait ComputeCommandPool<B: Backend>: CommandPool<B> {
     ///
     fn from_queue<Q>(queue: Q, capacity: usize) -> Self
-        where Q: Into<ComputeQueue<B>> +
-                 BorrowMut<B::CommandQueue>;
+        where Q: Compatible<ComputeQueue<B>> +
+                 AsRef<B::CommandQueue>;
 
     /// Get a command buffer for recording.
     ///
@@ -68,8 +67,8 @@ pub trait ComputeCommandPool<B: Backend>: CommandPool<B> {
 pub trait TransferCommandPool<B: Backend>: CommandPool<B> {
     ///
     fn from_queue<Q>(queue: Q, capacity: usize) -> Self
-        where Q: Into<TransferQueue<B>> +
-                 BorrowMut<B::CommandQueue>;
+        where Q: Compatible<TransferQueue<B>> +
+                 AsRef<B::CommandQueue>;
 
     /// Get a command buffer for recording.
     ///
@@ -83,8 +82,8 @@ pub trait TransferCommandPool<B: Backend>: CommandPool<B> {
 pub trait SubpassCommandPool<B: Backend>: CommandPool<B> {
     ///
     fn from_queue<Q>(queue: Q, capacity: usize) -> Self
-        where Q: Into<GraphicsQueue<B>> +
-                 BorrowMut<B::CommandQueue>;
+        where Q: Compatible<GraphicsQueue<B>> +
+                 AsRef<B::CommandQueue>;
 
     /// Get a command buffer for recording.
     ///

@@ -261,20 +261,18 @@ A: Sized + Application<gfx_device_metal::Backend>
     }
 }
 
-#[cfg(feature = "vulkan")]
-pub fn launch_vulkan<A>(wb: winit::WindowBuilder) where
-A: Sized + Application<gfx_device_vulkan::Backend>
+fn run<A, B, S>(backend: shade::Backend,
+                (width, height): (u32, u32),
+                events_loop: winit::EventsLoop,
+                surface: S,
+                adapters: Vec<B::Adapter>)
+    where A: Sized + Application<B>,
+          B: Backend,
+          S: gfx_core::Surface<B>,
 {
-    use gfx::traits::{Factory};
+    use gfx::format::Formatted;
+    use gfx::traits::Factory;
     use gfx::texture::{self, Size};
-    use gfx_core::format::Formatted;
-
-    env_logger::init().unwrap();
-    let events_loop = winit::EventsLoop::new();
-    let win = wb.build(&events_loop).unwrap();
-    let mut window = gfx_window_vulkan::Window(&win);
-
-    let (surface, adapters) = window.get_surface_and_adapters();
 
     // Init device
     let queue_descs = adapters[0].get_queue_families().iter()
@@ -283,7 +281,7 @@ A: Sized + Application<gfx_device_vulkan::Backend>
                                  .collect::<Vec<_>>();
     let gfx_core::Device_ { mut factory, mut general_queues, mut graphics_queues, .. } = adapters[0].open(&queue_descs);
 
-    let queue = if let Some(queue) = general_queues.first_mut() {
+    let mut queue = if let Some(queue) = general_queues.first_mut() {
         queue.as_mut().into()
     } else if let Some(queue) = graphics_queues.first_mut() {
         queue.as_mut()
@@ -292,9 +290,7 @@ A: Sized + Application<gfx_device_vulkan::Backend>
         return
     };
 
-    let mut swap_chain = surface.build_swapchain::<ColorFormat, _>(queue);
-
-    let (width, height) = win.get_inner_size_points().unwrap();
+    let mut swap_chain = surface.build_swapchain::<ColorFormat, _>(queue.as_ref());
 
     let main_colors = swap_chain.get_images()
                                 .iter()
@@ -312,7 +308,6 @@ A: Sized + Application<gfx_device_vulkan::Backend>
 
     let main_depth = factory.create_depth_stencil::<DepthFormat>(width as Size, height as Size).unwrap();
 
-    let backend = shade::Backend::Vulkan;
     let mut app = A::new(&mut factory, backend, WindowTargets {
         colors: main_colors,
         depth: main_depth.2,
@@ -323,7 +318,7 @@ A: Sized + Application<gfx_device_vulkan::Backend>
     let mut running = true;
     let mut frame_semaphore = factory.create_semaphore();
 
-    let mut graphics_pool = gfx_device_vulkan::GraphicsCommandPool::from_queue(queue, 1);
+    let mut graphics_pool = B::GraphicsCommandPool::from_queue(queue.as_ref(), 1);
 
     while running {
         events_loop.poll_events(|winit::Event::WindowEvent{window_id: _, event}| {
@@ -348,7 +343,7 @@ A: Sized + Application<gfx_device_vulkan::Backend>
     }
 }
 
-#[cfg(feature = "gl")]
+#[cfg(all(feature = "gl", not(any(feature = "dx11", feature = "metal", feature = "vulkan"))))]
 pub type DefaultBackend = gfx_device_gl::Backend;
 #[cfg(feature = "dx11")]
 pub type DefaultBackend = gfx_device_dx11::Backend;
@@ -377,23 +372,36 @@ pub trait Application<B: Backend>: Sized {
     fn on(&mut self, _event: winit::WindowEvent) {}
 
     fn launch_simple(name: &str) where Self: Application<DefaultBackend> {
+        env_logger::init().unwrap();
+        let events_loop = winit::EventsLoop::new();
         let wb = winit::WindowBuilder::new().with_title(name);
-        <Self as Application<DefaultBackend>>::launch_default(wb)
+        <Self as Application<DefaultBackend>>::launch_default(events_loop, wb)
     }
-    #[cfg(feature = "gl")]
-    fn launch_default(wb: winit::WindowBuilder) where Self: Application<DefaultBackend> {
+    #[cfg(all(feature = "gl", not(any(feature = "dx11", feature = "metal", feature = "vulkan"))))]
+    fn launch_default(el: winit::EventsLoop, wb: winit::WindowBuilder)
+        where Self: Application<DefaultBackend> {
         launch_gl3::<Self>(wb);
     }
     #[cfg(feature = "dx11")]
-    fn launch_default(wb: winit::WindowBuilder) where Self: Application<DefaultBackend> {
+    fn launch_default(el: winit::EventsLoop, wb: winit::WindowBuilder)
+        where Self: Application<DefaultBackend> {
         launch_d3d11::<Self>(wb);
     }
     #[cfg(feature = "metal")]
-    fn launch_default(wb: winit::WindowBuilder) where Self: Application<DefaultBackend> {
+    fn launch_default(el: winit::EventsLoop, wb: winit::WindowBuilder)
+        where Self: Application<DefaultBackend> {
         launch_metal::<Self>(wb);
     }
     #[cfg(feature = "vulkan")]
-    fn launch_default(wb: winit::WindowBuilder) where Self: Application<DefaultBackend> {
-        launch_vulkan::<Self>(wb);
+    fn launch_default(el: winit::EventsLoop, wb: winit::WindowBuilder)
+        where Self: Application<DefaultBackend>
+    {
+        let win = wb.build(&el).unwrap();
+        let dim = win.get_inner_size_points().unwrap();
+        let mut window = gfx_window_vulkan::Window(&win);
+
+        let (surface, adapters) = window.get_surface_and_adapters();
+        let backend = shade::Backend::Vulkan;
+        run::<Self, _, _>(backend, dim, el, surface, adapters)
     }
 }
