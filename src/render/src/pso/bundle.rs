@@ -2,22 +2,22 @@
 //!
 //! Suitable for use when PSO is always used with the same one slice.
 
-use { Resources, Slice, PipelineState, GraphicsEncoder, CommandBuffer };
+use {Backend, Resources, Slice, PipelineState, GraphicsEncoder, CommandBuffer };
 use super::PipelineData;
 
 /// Slice-PSO bundle.
-pub struct Bundle<R: Resources, Data: PipelineData<R>> {
+pub struct Bundle<B: Backend, Data: PipelineData<B::Resources>> {
     /// Slice
-    pub slice: Slice<R>,
+    pub slice: Slice<B::Resources>,
     /// Pipeline state
-    pub pso: PipelineState<R, Data::Meta>,
+    pub pso: PipelineState<B::Resources, Data::Meta>,
     /// Pipeline data
     pub data: Data,
 }
 
-impl<R: Resources, Data: PipelineData<R>> Bundle<R, Data> {
+impl<B: Backend, Data: PipelineData<B::Resources>> Bundle<B, Data> {
     /// Create new Bundle
-    pub fn new(slice: Slice<R>, pso: PipelineState<R, Data::Meta>, data: Data) -> Self
+    pub fn new(slice: Slice<B::Resources>, pso: PipelineState<B::Resources, Data::Meta>, data: Data) -> Self
     {
         Bundle {
             slice: slice,
@@ -27,8 +27,7 @@ impl<R: Resources, Data: PipelineData<R>> Bundle<R, Data> {
     }
 
     /// Draw bundle using encoder.
-    pub fn encode<C>(&self, encoder: &mut GraphicsEncoder<R, C>) where
-        C: CommandBuffer<R> {
+    pub fn encode(&self, encoder: &mut GraphicsEncoder<B>) {
         encoder.draw(&self.slice, &self.pso, &self.data);
     }
 }
