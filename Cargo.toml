@@ -9,8 +9,11 @@ authors = ["The Gfx-rs Developers"]
 documentation = "https://docs.rs/gfx_app"
 
 [features]
-default = []
+default = ["gl"]
 cgmath-types = ["gfx/cgmath-types", "gfx_core/cgmath-types"]
+gl = ["gfx_device_gl", "gfx_window_glutin"]
+dx11 = ["gfx_device_dx11", "gfx_window_dxgi"]
+dx12 = ["gfx_device_dx12", "gfx_window_dxgi"]
 metal = ["gfx_device_metal", "gfx_window_metal"]
 vulkan = ["gfx_device_vulkan", "gfx_device_vulkanll", "gfx_window_vulkan"]
 sdl = ["gfx_window_sdl"]
@@ -29,8 +32,9 @@ gfx_core = { path = "src/core", version = "0.7" }
 gfx_corell = { path = "src/corell", version = "0.1" }
 gfx = { path = "src/render", version = "0.15" }
 gfx_macros = { path = "src/macros", version = "0.2" }
-gfx_device_gl = { path = "src/backend/gl", version = "0.14" }
-gfx_window_glutin = { path = "src/window/glutin", version = "0.16" }
+
+gfx_device_gl = { path = "src/backend/gl", version = "0.14", optional = true }
+gfx_window_glutin = { path = "src/window/glutin", version = "0.16", optional = true }
 
 [dependencies.gfx_device_vulkan]
 path = "src/backend/vulkan"
@@ -67,9 +71,9 @@ gfx_window_glfw = { path = "src/window/glfw", version = "0.14" }
 gfx_window_sdl = { path = "src/window/sdl", version = "0.6" }
 
 [target.'cfg(windows)'.dependencies]
-gfx_device_dx11 = { path = "src/backend/dx11", version = "0.6" }
-gfx_device_dx12 = { path = "src/backend/dx12", version = "0.1" }
-gfx_window_dxgi = { path = "src/window/dxgi", version = "0.8" }
+gfx_device_dx11 = { path = "src/backend/dx11", version = "0.6", optional = true }
+gfx_device_dx12 = { path = "src/backend/dx12", version = "0.1", optional = true }
+gfx_window_dxgi = { path = "src/window/dxgi", version = "0.8", optional = true }
 
 [[example]]
 name = "blend"
