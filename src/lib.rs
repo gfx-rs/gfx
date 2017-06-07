@@ -41,7 +41,7 @@ extern crate gfx_device_vulkan;
 extern crate gfx_window_vulkan;
 
 use gfx_core::memory::Typed;
-use gfx_core::{Adapter, CommandQueue, FrameSync, Surface, SwapChain, QueueFamily, WindowExt};
+use gfx_core::{Adapter, Backend, CommandQueue, FrameSync, Surface, SwapChain, QueueFamily, WindowExt};
 use gfx_core::pool::GraphicsCommandPool;
 
 pub mod shade;
@@ -60,12 +60,6 @@ pub struct WindowTargets<R: gfx::Resources> {
     pub colors: Vec<gfx::handle::RenderTargetView<R, ColorFormat>>,
     pub depth: gfx::handle::DepthStencilView<R, DepthFormat>,
     pub aspect_ratio: f32,
-}
-
-pub enum Backend {
-    OpenGL2,
-    Direct3D11 { pix_mode: bool },
-    Metal,
 }
 
 struct Harness {
@@ -94,17 +88,17 @@ impl Drop for Harness {
     }
 }
 
-pub trait ApplicationBase<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
-    fn new<F>(&mut F, shade::Backend, WindowTargets<R>) -> Self where F: gfx::Factory<R>;
+pub trait ApplicationBase<B: Backend, C: gfx::CommandBuffer<B::Resources>> {
+    fn new(&mut B::Factory, shade::Backend, WindowTargets<B::Resources>) -> Self;
     fn render<D>(&mut self, &mut D);
     fn get_exit_key() -> Option<winit::VirtualKeyCode>;
     fn on(&mut self, winit::WindowEvent);
-    fn on_resize<F>(&mut self, &mut F, WindowTargets<R>) where F: gfx::Factory<R>;
+    fn on_resize(&mut self, &mut B::Factory, WindowTargets<B::Resources>);
 }
 
 #[cfg(feature = "gl")]
 pub fn launch_gl3<A>(wb: winit::WindowBuilder) where
-A: Sized + Application<gfx_device_gl::Resources>
+A: Sized + Application<gfx_device_gl::Backend>
 {
     use glutin::GlContext;
     env_logger::init().unwrap();
@@ -168,7 +162,7 @@ pub type D3D11CommandBufferFake = gfx_device_dx11::CommandBuffer<gfx_device_dx11
 
 #[cfg(feature = "dx11")]
 pub fn launch_d3d11<A>(wb: winit::WindowBuilder) where
-A: Sized + Application<gfx_device_dx11::Resources>
+A: Sized + Application<gfx_device_dx11::Backend>
 {
     use gfx::traits::Factory;
 
@@ -238,7 +232,7 @@ A: Sized + Application<gfx_device_dx11::Resources>
 
 #[cfg(feature = "metal")]
 pub fn launch_metal<A>(wb: winit::WindowBuilder) where
-A: Sized + Application<gfx_device_metal::Resources>
+A: Sized + Application<gfx_device_metal::Backend>
 {
     use gfx::traits::Factory;
     use gfx::texture::Size;
@@ -288,7 +282,7 @@ A: Sized + Application<gfx_device_metal::Resources>
 
 #[cfg(feature = "vulkan")]
 pub fn launch_vulkan<A>(wb: winit::WindowBuilder) where
-A: Sized + Application<gfx_device_vulkan::Resources>
+A: Sized + Application<gfx_device_vulkan::Backend>
 {
     use gfx::traits::{Factory};
     use gfx::texture::{self, Size};
@@ -383,18 +377,18 @@ A: Sized + Application<gfx_device_vulkan::Resources>
 }
 
 #[cfg(feature = "gl")]
-pub type DefaultResources = gfx_device_gl::Resources;
+pub type DefaultBackend = gfx_device_gl::Backend;
 #[cfg(feature = "dx11")]
-pub type DefaultResources = gfx_device_dx11::Resources;
+pub type DefaultBackend = gfx_device_dx11::Backend;
 #[cfg(feature = "metal")]
-pub type DefaultResources = gfx_device_metal::Resources;
+pub type DefaultBackend = gfx_device_metal::Backend;
 #[cfg(feature = "vulkan")]
-pub type DefaultResources = gfx_device_vulkan::Resources;
+pub type DefaultBackend = gfx_device_vulkan::Backend;
 
-pub trait Application<R: gfx::Resources>: Sized {
-    fn new<F: gfx::Factory<R>>(&mut F, shade::Backend, WindowTargets<R>) -> Self;
-    fn render<C: gfx::CommandBuffer<R>>(&mut self, &mut gfx::GraphicsEncoder<R, C>);
-    fn render_ext<P: gfx_core::pool::GraphicsCommandPool>(&mut self, pool: &mut P)
+pub trait Application<B: Backend>: Sized {
+    fn new(&mut B::Factory, shade::Backend, WindowTargets<B::Resources>) -> Self;
+    fn render(&mut self, &mut gfx::GraphicsEncoder<B>);
+    fn render_ext<P: gfx_core::pool::GraphicsCommandPool<B>>(&mut self, pool: &mut P)
     {
         unimplemented!()
         // TODO: self.app.render(&mut self.encoder);
@@ -404,30 +398,30 @@ pub trait Application<R: gfx::Resources>: Sized {
     fn get_exit_key() -> Option<winit::VirtualKeyCode> {
         Some(winit::VirtualKeyCode::Escape)
     }
-    fn on_resize(&mut self, WindowTargets<R>) {}
-    fn on_resize_ext<F: gfx::Factory<R>>(&mut self, _factory: &mut F, targets: WindowTargets<R>) {
+    fn on_resize(&mut self, WindowTargets<B::Resources>) {}
+    fn on_resize_ext(&mut self, _factory: &mut B::Factory, targets: WindowTargets<B::Resources>) {
         self.on_resize(targets);
     }
     fn on(&mut self, _event: winit::WindowEvent) {}
 
-    fn launch_simple(name: &str) where Self: Application<DefaultResources> {
+    fn launch_simple(name: &str) where Self: Application<DefaultBackend> {
         let wb = winit::WindowBuilder::new().with_title(name);
-        <Self as Application<DefaultResources>>::launch_default(wb)
+        <Self as Application<DefaultBackend>>::launch_default(wb)
     }
     #[cfg(feature = "gl")]
-    fn launch_default(wb: winit::WindowBuilder) where Self: Application<DefaultResources> {
+    fn launch_default(wb: winit::WindowBuilder) where Self: Application<DefaultBackend> {
         launch_gl3::<Self>(wb);
     }
     #[cfg(feature = "dx11")]
-    fn launch_default(wb: winit::WindowBuilder) where Self: Application<DefaultResources> {
+    fn launch_default(wb: winit::WindowBuilder) where Self: Application<DefaultBackend> {
         launch_d3d11::<Self>(wb);
     }
     #[cfg(feature = "metal")]
-    fn launch_default(wb: winit::WindowBuilder) where Self: Application<DefaultResources> {
+    fn launch_default(wb: winit::WindowBuilder) where Self: Application<DefaultBackend> {
         launch_metal::<Self>(wb);
     }
     #[cfg(feature = "vulkan")]
-    fn launch_default(wb: winit::WindowBuilder) where Self: Application<DefaultResources> {
+    fn launch_default(wb: winit::WindowBuilder) where Self: Application<DefaultBackend> {
         launch_vulkan::<Self>(wb);
     }
 }
