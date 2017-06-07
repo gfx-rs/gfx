@@ -15,7 +15,7 @@
 //! Command Buffer device interface
 
 use std::marker::PhantomData;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::collections::hash_set::{self, HashSet};
 use {Backend, Resources, IndexType, InstanceCount, VertexCount,
      SubmissionResult, SubmissionError};
@@ -47,7 +47,25 @@ impl<B: Backend> Submit<B> {
 }
 
 ///
+#[derive(Debug)]
 pub struct Encoder<'a, B: Backend, C: CommandBuffer<B> + 'a>(&'a mut C, PhantomData<B>);
+
+impl<'a, B, C> Deref for Encoder<'a, B, C>
+    where B: Backend, C: CommandBuffer<B> + 'a
+{
+    type Target = C;
+    fn deref(&self) -> &C {
+        self.0
+    }
+}
+
+impl<'a, B, C> DerefMut for Encoder<'a, B,C>
+    where B: Backend, C: CommandBuffer<B> + 'a
+{
+    fn deref_mut(&mut self) -> &mut C {
+        self.0
+    }
+}
 
 impl<'a, B: Backend, C: CommandBuffer<B>> Encoder<'a, B, C> {
     #[doc(hidden)]
