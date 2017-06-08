@@ -168,7 +168,7 @@ impl core::Adapter for Adapter {
             if mem.property_flags.intersects(vk::MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) {
                 type_flags |= memory::LAZILY_ALLOCATED;
             }
-            
+
             core::HeapType {
                 id: i,
                 properties: type_flags,
@@ -280,7 +280,7 @@ impl core::CommandQueue for CommandQueue {
                 wait_semaphore_count: wait_semaphores.len() as u32,
                 p_wait_semaphores: wait_semaphores.as_ptr(),
                 // If count is zero, AMD driver crashes if nullptr is not set for stage masks
-                p_wait_dst_stage_mask: if wait_stages.is_empty() { ptr::null() } else { wait_stages.as_ptr() }, 
+                p_wait_dst_stage_mask: if wait_stages.is_empty() { ptr::null() } else { wait_stages.as_ptr() },
                 command_buffer_count: command_buffers.last().unwrap().len() as u32,
                 p_command_buffers: command_buffers.last().unwrap().as_ptr(),
                 signal_semaphore_count: signal_semaphores.last().unwrap().len() as u32,
@@ -393,7 +393,7 @@ impl core::Surface for Surface {
             composite_alpha: vk::COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
             present_mode: present_mode,
             clipped: 1,
-            old_swapchain: vk::SwapchainKHR::null(), 
+            old_swapchain: vk::SwapchainKHR::null(),
         };
 
         let swapchain = unsafe {
