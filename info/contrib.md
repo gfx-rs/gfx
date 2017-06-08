@@ -31,7 +31,7 @@ Finally, feel free to hop on [#rust-gamedev](http://chat.mibbit.com/?server=irc.
 * _examples_ : GFX's examples
 * _tests_ : GFX's tests
 * _info_ : Information and documentation
-* _src_ : gfx_app, an application framework for GFX
+* _src/gfx_app_ : gfx_app, an application framework for GFX
 * _src/core_ : gfx_core, core structures and the interface that backends must provide
 * _src/backend_ : The backends implementations
 * _src/render_ : The main gfx package
