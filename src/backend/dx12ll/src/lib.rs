@@ -34,7 +34,7 @@ use std::ffi::OsString;
 use winapi::BOOL;
 use winit::os::windows::WindowExt;
 
-use core::command::Submit;
+use core::memory;
 
 mod command;
 mod data;
@@ -46,6 +46,12 @@ mod state;
 
 pub use pool::{GeneralCommandPool, GraphicsCommandPool,
     ComputeCommandPool, TransferCommandPool, SubpassCommandPool};
+
+const HEAP_TYPES: [winapi::D3D12_HEAP_TYPE; 3] = [
+    winapi::D3D12_HEAP_TYPE_DEFAULT,
+    winapi::D3D12_HEAP_TYPE_UPLOAD,
+    winapi::D3D12_HEAP_TYPE_READBACK,
+];
 
 #[derive(Clone)]
 pub struct QueueFamily;
@@ -130,8 +136,26 @@ impl core::Adapter for Adapter {
             }).collect::<Vec<_>>()
         }).collect();
 
-        let heap_types = unimplemented!();
-        let memory_heaps = unimplemented!();
+        // https://msdn.microsoft.com/en-us/library/windows/desktop/dn788678(v=vs.85).aspx
+        let heap_types = vec![
+            core::HeapType {
+                id: 0,
+                properties: memory::DEVICE_LOCAL,
+                heap_index: 1,
+            },
+            core::HeapType {
+                id: 1,
+                properties: memory::CPU_VISIBLE | memory::CPU_CACHED,
+                heap_index: 0,
+            },
+            core::HeapType {
+                id: 2,
+                properties: memory::CPU_VISIBLE | memory::COHERENT,
+                heap_index: 0,
+            },
+        ];
+
+        let memory_heaps = Vec::new(); //TODO
 
         let factory = Factory::new(device);
 
@@ -246,7 +270,7 @@ impl core::Surface for Surface {
 
         // TODO: double-check values
         let desc = winapi::DXGI_SWAP_CHAIN_DESC1 {
-            AlphaMode: winapi::DXGI_ALPHA_MODE(0),
+            AlphaMode: winapi::DXGI_ALPHA_MODE_IGNORE,
             BufferCount: buffer_count,
             Width: self.width,
             Height: self.height,
@@ -257,9 +281,9 @@ impl core::Surface for Surface {
                 Count: 1,
                 Quality: 0,
             },
-            Scaling: winapi::DXGI_SCALING(0),
+            Scaling: winapi::DXGI_SCALING_STRETCH,
             Stereo: false as BOOL,
-            SwapEffect: winapi::DXGI_SWAP_EFFECT(4), // TODO: FLIP_DISCARD
+            SwapEffect: winapi::DXGI_SWAP_EFFECT_DISCARD, // TODO: FLIP_DISCARD
         };
 
         let hr = unsafe {
