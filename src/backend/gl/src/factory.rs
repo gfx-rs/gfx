@@ -125,7 +125,7 @@ impl Factory {
             0 as *const gl::types::GLvoid
         };
 
-        if self.share.private_caps.buffer_storage_supported {
+        if self.share.private_caps.buffer_storage_supported && info.size > 0 {
             let usage = match info.usage {
                 Data => 0,
                 // TODO: we could use mapping instead of glBufferSubData
