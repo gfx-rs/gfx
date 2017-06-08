@@ -156,9 +156,8 @@ impl core::Surface<device_vulkan::Backend> for Surface {
         }
     }
 
-    fn build_swapchain<T, Q>(&self, present_queue: Q) -> Self::SwapChain
-        where T: core::format::RenderFormat,
-              Q: AsRef<device_vulkan::CommandQueue>
+    fn build_swapchain<Q>(&self, config: core::SwapchainConfig, present_queue: &Q) -> Self::SwapChain
+        where Q: AsRef<device_vulkan::CommandQueue>
     {
         let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
         let loader = vk::SwapchainFn::load(|name| {
@@ -173,7 +172,8 @@ impl core::Surface<device_vulkan::Backend> for Surface {
         let present_mode = vk::PresentModeKHR::Fifo; // required to be supported
         let present_queue = present_queue.as_ref();
 
-        let format = <T as format::Formatted>::get_format();
+        // TODO: handle depth stencil
+        let format = config.color_format;
 
         let info = vk::SwapchainCreateInfoKHR {
             s_type: vk::StructureType::SwapchainCreateInfoKhr,
@@ -243,7 +243,6 @@ impl core::Surface<device_vulkan::Backend> for Surface {
 pub struct SwapChain {
     raw: vk::SwapchainKHR,
     device: Arc<device_vulkan::RawDevice>,
-    present_queue: device_vulkan::RawCommandQueue,
     swapchain_fn: vk::SwapchainFn,
     images: Vec<native::Image>,
 
@@ -260,7 +259,6 @@ impl SwapChain {
         SwapChain {
             raw: raw,
             device: queue.device(),
-            present_queue: queue.raw(),
             swapchain_fn: swapchain_fn,
             images: images,
             frame_queue: VecDeque::new(),
@@ -269,9 +267,8 @@ impl SwapChain {
 }
 
 impl core::SwapChain<device_vulkan::Backend> for SwapChain {
-    fn get_images(&mut self) -> &[handle::RawTexture<device_vulkan::Resources>] {
+    fn get_backbuffers(&mut self) -> &[core::Backbuffer<device_vulkan::Backend>] {
         // TODO
-        // &self.images
         unimplemented!()
     }
 
@@ -298,7 +295,9 @@ impl core::SwapChain<device_vulkan::Backend> for SwapChain {
         unsafe { core::Frame::new(index as usize) }
     }
 
-    fn present(&mut self) {
+    fn present<Q>(&mut self, present_queue: &mut Q)
+        where Q: AsMut<device_vulkan::CommandQueue>
+    {
         let frame = self.frame_queue.pop_front().expect("No frame currently queued up. Need to acquire a frame first.");
 
         let info = vk::PresentInfoKHR {
@@ -311,13 +310,9 @@ impl core::SwapChain<device_vulkan::Backend> for SwapChain {
             p_image_indices: &(frame as u32),
             p_results: ptr::null_mut(),
         };
-        let mut queue = match self.present_queue.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
 
         unsafe {
-            self.swapchain_fn.queue_present_khr(*queue, &info);
+            self.swapchain_fn.queue_present_khr(*present_queue.as_mut().raw(), &info);
         }
         // TODO: handle result and return code
     }
