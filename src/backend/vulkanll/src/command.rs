@@ -53,7 +53,7 @@ impl CommandBuffer {
             // TODO
             let base_range = vk::ImageSubresourceRange {
                 aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
-                base_mip_level: 0, 
+                base_mip_level: 0,
                 level_count: 1,
                 base_array_layer: 0,
                 layer_count: vk::VK_REMAINING_ARRAY_LAYERS,
@@ -167,7 +167,7 @@ impl CommandBuffer {
         // TODO: use actual subresource range from rtv
         let base_range = vk::ImageSubresourceRange {
             aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
-            base_mip_level: 0, 
+            base_mip_level: 0,
             level_count: 1,
             base_array_layer: 0,
             layer_count: vk::VK_REMAINING_ARRAY_LAYERS,
@@ -465,7 +465,7 @@ macro_rules! impl_transfer_cmd_buffer {
 
             fn copy_image_to_buffer(&mut self) {
                 self.0.copy_image_to_buffer()
-            } 
+            }
         }
     )
 }
@@ -615,9 +615,9 @@ impl<'cb, 'rp, 'fb, 'enc, C> command::RenderPassEncoder<'cb, 'rp, 'fb, 'enc, C, 
         }
 
         RenderPassInlineEncoder {
-            command_buffer: command_buffer,
-            render_pass: render_pass,
-            framebuffer: framebuffer,
+            command_buffer,
+            render_pass,
+            framebuffer,
             _marker: PhantomData,
         }
     }

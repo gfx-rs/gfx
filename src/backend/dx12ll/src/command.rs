@@ -13,11 +13,13 @@
 // limitations under the License.
 
 use comptr::ComPtr;
+use std::ops;
 use std::ptr;
 use winapi;
 use winapi::*;
 
 use core::{self, command, memory, pso, state, target, IndexType, VertexCount, VertexOffset};
+use core::buffer::IndexBufferView;
 use data;
 use native::{self, CommandBuffer, GeneralCommandBuffer, GraphicsCommandBuffer,
     ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer, RenderPass, FrameBuffer};
@@ -36,10 +38,15 @@ impl CommandBuffer {
     {
         let mut transition_barriers = Vec::new();
 
-        // TODO: very experimental state!
         for barrier in image_barriers {
-            let state_src = data::map_resource_state(barrier.state_src);
-            let state_dst = data::map_resource_state(barrier.state_dst);
+            let state_src = match barrier.state_src {
+                memory::ImageStateSrc::Present(access) => unimplemented!(),
+                memory::ImageStateSrc::State(access, layout) => data::map_image_resource_state(access, layout)
+            };
+            let state_dst = match barrier.state_dst {
+                memory::ImageStateDst::Present => unimplemented!(),
+                memory::ImageStateDst::State(access, layout) => data::map_image_resource_state(access, layout)
+            };
 
             transition_barriers.push(
                 winapi::D3D12_RESOURCE_BARRIER {
@@ -71,30 +78,27 @@ impl CommandBuffer {
         unimplemented!()
     }
 
-    fn copy_buffer(&mut self, src: &native::Buffer, dst: &native::Buffer, regions: Option<&[command::BufferCopy]>) {
-        match regions {
-            Some(regions) => {
-                // copy each region
-                for region in regions {
-                    unsafe {
-                        self.inner.CopyBufferRegion(
-                            dst.resource.as_mut_ptr(), // pDstResource
-                            region.dst as UINT64,      // DstOffset
-                            src.resource.as_mut_ptr(), // pSrcResource
-                            region.src as UINT64,      // SrcOffset
-                            region.size as UINT64,     // NumBytes
-                        );
-                    }
-                }
-            }
-            None => {
-                // copy the whole resource
+    fn copy_buffer(&mut self, src: &native::Buffer, dst: &native::Buffer, regions: &[command::BufferCopy]) {
+        if true { //TODO
+            // copy each region
+            for region in regions {
                 unsafe {
-                    self.inner.CopyResource(
+                    self.inner.CopyBufferRegion(
                         dst.resource.as_mut_ptr(), // pDstResource
+                        region.dst as UINT64,      // DstOffset
                         src.resource.as_mut_ptr(), // pSrcResource
+                        region.src as UINT64,      // SrcOffset
+                        region.size as UINT64,     // NumBytes
                     );
                 }
+            }
+        } else {
+            // copy the whole resource
+            unsafe {
+                self.inner.CopyResource(
+                    dst.resource.as_mut_ptr(), // pDstResource
+                    src.resource.as_mut_ptr(), // pSrcResource
+                );
             }
         }
     }
@@ -103,7 +107,7 @@ impl CommandBuffer {
         unimplemented!()
     }
 
-    fn copy_buffer_to_image(&mut self) {
+    fn copy_buffer_to_image(&mut self, src: &native::Buffer, dst: &native::Image, layout: memory::ImageLayout, regions: &[command::BufferImageCopy]) {
         unimplemented!()
     }
 
@@ -140,7 +144,11 @@ impl CommandBuffer {
         unimplemented!()
     }
 
-    fn bind_descriptor_sets(&mut self) {
+    fn bind_descriptor_heaps(&mut self, srv_cbv_uav: Option<&native::DescriptorHeap>, samplers: Option<&native::DescriptorHeap>) {
+        unimplemented!()
+    }
+
+    fn bind_descriptor_sets(&mut self, layout: &native::PipelineLayout, first_set: usize, sets: &[&native::DescriptorSet]) {
         unimplemented!()
     }
 
@@ -207,21 +215,23 @@ impl CommandBuffer {
         unimplemented!()
     }
 
-    fn bind_index_buffer(&mut self, ib: &native::Buffer, index_type: IndexType) {
-        let format = match index_type {
+    fn bind_index_buffer(&mut self, ibv: IndexBufferView<R>) {
+        let format = match ibv.index_type {
             IndexType::U16 => winapi::DXGI_FORMAT_R16_UINT,
             IndexType::U32 => winapi::DXGI_FORMAT_R32_UINT,
         };
-        let location = unsafe { (*ib.resource.as_mut_ptr()).GetGPUVirtualAddress() };
+        let location = unsafe {
+            (*ibv.buffer.resource.as_mut_ptr()).GetGPUVirtualAddress()
+        };
 
-        let mut ibv = winapi::D3D12_INDEX_BUFFER_VIEW {
+        let mut ibv_raw = winapi::D3D12_INDEX_BUFFER_VIEW {
             BufferLocation: location,
-            SizeInBytes: ib.size,
+            SizeInBytes: ibv.buffer.size,
             Format: format,
         };
 
         unsafe {
-            self.inner.IASetIndexBuffer(&mut ibv);
+            self.inner.IASetIndexBuffer(&mut ibv_raw);
         }
     }
 
@@ -318,8 +328,8 @@ macro_rules! impl_processing_cmd_buffer {
                 self.0.clear_buffer()
             }
 
-            fn bind_descriptor_sets(&mut self) {
-                self.0.bind_descriptor_sets()
+            fn bind_descriptor_heaps(&mut self, srv_cbv_uav: Option<&native::DescriptorHeap>, samplers: Option<&native::DescriptorHeap>) {
+                self.0.bind_descriptor_heaps(srv_cbv_uav, samplers)
             }
 
             fn push_constants(&mut self) {
@@ -341,7 +351,7 @@ macro_rules! impl_transfer_cmd_buffer {
                 self.0.update_buffer(buffer, data, offset)
             }
 
-            fn copy_buffer(&mut self, src: &native::Buffer, dest: &native::Buffer, regions: Option<&[command::BufferCopy]>) {
+            fn copy_buffer(&mut self, src: &native::Buffer, dest: &native::Buffer, regions: &[command::BufferCopy]) {
                 self.0.copy_buffer(src, dest, regions)
             }
 
@@ -349,13 +359,13 @@ macro_rules! impl_transfer_cmd_buffer {
                 self.0.copy_image(src, dest)
             }
 
-            fn copy_buffer_to_image(&mut self) {
-                self.0.copy_buffer_to_image()
+            fn copy_buffer_to_image(&mut self, src: &native::Buffer, dst: &native::Image, layout: memory::ImageLayout, regions: &[command::BufferImageCopy]) {
+                self.0.copy_buffer_to_image(src, dst, layout, regions)
             }
 
             fn copy_image_to_buffer(&mut self) {
                 self.0.copy_image_to_buffer()
-            } 
+            }
         }
     )
 }
@@ -377,8 +387,8 @@ macro_rules! impl_graphics_cmd_buffer {
                 self.0.resolve_image()
             }
 
-            fn bind_index_buffer(&mut self, buffer: &native::Buffer, index_type: IndexType) {
-                self.0.bind_index_buffer(buffer, index_type)
+            fn bind_index_buffer(&mut self, ibv: IndexBufferView<R>) {
+                self.0.bind_index_buffer(ibv)
             }
 
             fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<R>) {
@@ -399,6 +409,10 @@ macro_rules! impl_graphics_cmd_buffer {
 
             fn bind_graphics_pipeline(&mut self, pipeline: &native::GraphicsPipeline) {
                 self.0.bind_graphics_pipeline(pipeline)
+            }
+
+            fn bind_graphics_descriptor_sets(&mut self, layout: &native::PipelineLayout, first_set: usize, sets: &[&native::DescriptorSet]) {
+                self.0.bind_descriptor_sets(layout, first_set, sets)
             }
         }
     )
@@ -431,85 +445,86 @@ impl_graphics_cmd_buffer!(ComputeCommandBuffer);
 
 // TODO: subpass command buffer
 
-pub struct RenderPassInlineEncoder<'cb, 'rp, 'fb> {
-    command_list: &'cb mut GraphicsCommandBuffer,
+pub struct RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc: 'cb> {
+    command_buffer: &'cb mut command::Encoder<'enc, GraphicsCommandBuffer>,
     render_pass: &'rp RenderPass,
     framebuffer: &'fb FrameBuffer,
 }
 
-impl<'cb, 'rp, 'fb> command::RenderPassEncoder<'cb, 'rp, 'fb, GraphicsCommandBuffer, R> for RenderPassInlineEncoder<'cb, 'rp, 'fb> {
-    type SecondaryEncoder = RenderPassSecondaryEncoder<'cb, 'rp, 'fb>;
-    type InlineEncoder = RenderPassInlineEncoder<'cb, 'rp, 'fb>;
+impl<'cb, 'rp, 'fb, 'enc> command::RenderPassEncoder<'cb, 'rp, 'fb, 'enc, GraphicsCommandBuffer, R> for RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc> {
+    type SecondaryEncoder = RenderPassSecondaryEncoder<'cb, 'rp, 'fb, 'enc>;
+    type InlineEncoder = RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc>;
 
-    fn begin(command_buffer: &'cb mut GraphicsCommandBuffer,
+    fn begin(command_buffer: &'cb mut command::Encoder<'enc, GraphicsCommandBuffer>,
              render_pass: &'rp RenderPass,
              framebuffer: &'fb FrameBuffer,
              render_area: target::Rect,
              clear_values: &[command::ClearValue]
     ) -> Self {
         RenderPassInlineEncoder {
-            command_list: command_buffer,
-            render_pass: render_pass,
-            framebuffer: framebuffer,
+            command_buffer,
+            render_pass,
+            framebuffer,
         }
     }
 
-    fn next_subpass(self) -> RenderPassSecondaryEncoder<'cb, 'rp, 'fb> {
+    fn next_subpass(self) -> Self::SecondaryEncoder {
         unimplemented!()
     }
 
-    fn next_subpass_inline(self) -> RenderPassInlineEncoder<'cb, 'rp, 'fb>{
+    fn next_subpass_inline(self) -> Self::InlineEncoder {
         unimplemented!()
     }
 }
 
-impl<'cb, 'rp, 'fb> command::RenderPassInlineEncoder<'cb, 'rp, 'fb, GraphicsCommandBuffer, R> for RenderPassInlineEncoder<'cb, 'rp, 'fb> {
+impl<'cb, 'rp, 'fb, 'enc> command::RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc, GraphicsCommandBuffer, R> for RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc> {
     fn clear_attachment(&mut self) {
-
+        unimplemented!()
     }
 
     fn draw(&mut self, start: VertexCount, count: VertexCount, instance: Option<command::InstanceParams>) {
-        self.command_list.0.draw(start, count, instance)
+        self.command_buffer.0.draw(start, count, instance)
     }
 
     fn draw_indexed(&mut self, start: VertexCount, count: VertexCount, base: VertexOffset, instance: Option<command::InstanceParams>) {
-
+        unimplemented!()
     }
 
     fn draw_indirect(&mut self) {
-
+        unimplemented!()
     }
 
     fn draw_indexed_indirect(&mut self) {
-
+        unimplemented!()
     }
 
-    fn bind_index_buffer(&mut self, ib: &native::Buffer, index_type: IndexType) {
-
+    fn bind_index_buffer(&mut self, ibv: IndexBufferView<R>) {
+        unimplemented!()
     }
 
     fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<R>) {
-
+        unimplemented!()
     }
 
     fn set_viewports(&mut self, viewports: &[target::Rect]) {
-        self.command_list.0.set_viewports(viewports)
+        self.command_buffer.0.set_viewports(viewports)
     }
 
     fn set_scissors(&mut self, scissors: &[target::Rect]) {
-        self.command_list.0.set_scissors(scissors)
+        self.command_buffer.0.set_scissors(scissors)
     }
 
     fn set_ref_values(&mut self, rv: state::RefValues) {
-        self.command_list.0.set_ref_values(rv)
+        self.command_buffer.0.set_ref_values(rv)
     }
 
     fn bind_graphics_pipeline(&mut self, pipeline: &native::GraphicsPipeline) {
-        self.command_list.0.bind_graphics_pipeline(pipeline)
+        self.command_buffer.0.bind_graphics_pipeline(pipeline)
     }
 
-    fn bind_descriptor_sets(&mut self) {
-
+    fn bind_graphics_descriptor_sets(&mut self, layout: &native::PipelineLayout, first_set: usize, sets: &[&native::DescriptorSet]) {
+        //self.0.bind_descriptor_sets(vk::PipelineBindPoint::Graphics, layout, first_set, sets)
+        unimplemented!()
     }
 
     fn push_constants(&mut self) {
@@ -517,36 +532,36 @@ impl<'cb, 'rp, 'fb> command::RenderPassInlineEncoder<'cb, 'rp, 'fb, GraphicsComm
     }
 }
 
-pub struct RenderPassSecondaryEncoder<'cb, 'rp, 'fb> {
-    command_list: &'cb mut GraphicsCommandBuffer,
+pub struct RenderPassSecondaryEncoder<'cb, 'rp, 'fb, 'enc: 'cb> {
+    command_buffer: &'cb mut command::Encoder<'enc, GraphicsCommandBuffer>,
     render_pass: &'rp RenderPass,
     framebuffer: &'fb FrameBuffer,
 }
 
-impl<'cb, 'rp, 'fb> command::RenderPassEncoder<'cb, 'rp, 'fb, GraphicsCommandBuffer, R> for RenderPassSecondaryEncoder<'cb, 'rp, 'fb> {
-    type SecondaryEncoder = RenderPassSecondaryEncoder<'cb, 'rp, 'fb>;
-    type InlineEncoder = RenderPassInlineEncoder<'cb, 'rp, 'fb>;
+impl<'cb, 'rp, 'fb, 'enc> command::RenderPassEncoder<'cb, 'rp, 'fb, 'enc, GraphicsCommandBuffer, R> for RenderPassSecondaryEncoder<'cb, 'rp, 'fb, 'enc> {
+    type SecondaryEncoder = RenderPassSecondaryEncoder<'cb, 'rp, 'fb, 'enc>;
+    type InlineEncoder = RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc>;
 
-    fn begin(command_buffer: &'cb mut GraphicsCommandBuffer,
+    fn begin(command_buffer: &'cb mut command::Encoder<'enc, GraphicsCommandBuffer>,
              render_pass: &'rp RenderPass,
              framebuffer: &'fb FrameBuffer,
              render_area: target::Rect,
              clear_values: &[command::ClearValue]
     ) -> Self {
         RenderPassSecondaryEncoder {
-            command_list: command_buffer,
-            render_pass: render_pass,
-            framebuffer: framebuffer,
+            command_buffer,
+            render_pass,
+            framebuffer,
         }
     }
 
-    fn next_subpass(self) -> RenderPassSecondaryEncoder<'cb, 'rp, 'fb> {
+    fn next_subpass(self) -> Self::SecondaryEncoder {
         unimplemented!()
     }
 
-    fn next_subpass_inline(self) -> RenderPassInlineEncoder<'cb, 'rp, 'fb>{
+    fn next_subpass_inline(self) -> Self::InlineEncoder {
         unimplemented!()
     }
 }
 
-impl<'cb, 'rp, 'fb> command::RenderPassSecondaryEncoder<'cb, 'rp, 'fb, GraphicsCommandBuffer, R> for RenderPassSecondaryEncoder<'cb, 'rp, 'fb> { }
+impl<'cb, 'rp, 'fb, 'enc> command::RenderPassSecondaryEncoder<'cb, 'rp, 'fb, 'enc, GraphicsCommandBuffer, R> for RenderPassSecondaryEncoder<'cb, 'rp, 'fb, 'enc> { }

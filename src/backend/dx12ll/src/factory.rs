@@ -23,11 +23,21 @@ use std::{mem, ptr};
 use std::os::raw::c_void;
 use std::collections::BTreeMap;
 
-use core::{self, shade, factory as f};
-use core::SubPass;
+use core::{self, buffer, format, image, mapping, memory, pass, shade, factory as f};
 use core::pso::{self, EntryPoint};
 use {data, state, mirror, native};
 use {Factory, Resources as R};
+
+
+#[derive(Debug)]
+pub struct UnboundBuffer(native::Buffer);
+
+#[derive(Debug)]
+pub struct UnboundImage(native::Image);
+
+pub struct Mapping {
+    //TODO
+}
 
 impl Factory {
     pub fn create_shader_library(&mut self, shaders: &[(EntryPoint, &[u8])]) -> Result<native::ShaderLib, shade::CreateShaderError> {
@@ -90,11 +100,17 @@ impl Factory {
 }
 
 impl core::Factory<R> for Factory {
-    fn create_renderpass(&mut self) -> native::RenderPass {
+    fn create_heap(&mut self, heap_type: &core::HeapType, size: u64) -> native::Heap {
         unimplemented!()
     }
 
-    fn create_pipeline_layout(&mut self) -> native::PipelineLayout {
+    fn create_renderpass(&mut self, attachments: &[pass::Attachment],
+        subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> native::RenderPass
+    {
+        unimplemented!()
+    }
+
+    fn create_pipeline_layout(&mut self, sets: &[&native::DescriptorSetLayout]) -> native::PipelineLayout {
         let desc = winapi::D3D12_ROOT_SIGNATURE_DESC {
             NumParameters: 0,
             pParameters: ptr::null(),
@@ -126,7 +142,7 @@ impl core::Factory<R> for Factory {
         native::PipelineLayout { inner: signature }
     }
 
-    fn create_graphics_pipelines<'a>(&mut self, descs: &[(&native::ShaderLib, &native::PipelineLayout, SubPass<'a, R>, &pso::GraphicsPipelineDesc)])
+    fn create_graphics_pipelines<'a>(&mut self, descs: &[(&native::ShaderLib, &native::PipelineLayout, core::SubPass<'a, R>, &pso::GraphicsPipelineDesc)])
         -> Vec<Result<native::GraphicsPipeline, pso::CreationError>>
     {
         descs.iter().map(|&(shader_lib, ref signature, _, ref desc)| {
@@ -203,7 +219,7 @@ impl core::Factory<R> for Factory {
                         Some((format, _)) => {
                             *rtv = data::map_format(format, true)
                                     .unwrap_or(winapi::DXGI_FORMAT_UNKNOWN);
-                            num_rtvs += 1;   
+                            num_rtvs += 1;
                         }
                         None => break,
                     }
@@ -211,7 +227,7 @@ impl core::Factory<R> for Factory {
 
                 (rtvs, num_rtvs)
             };
-            
+
             // Setup pipeline description
             let pso_desc = winapi::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
                 pRootSignature: signature.inner.as_mut_ptr(), // TODO
@@ -278,18 +294,52 @@ impl core::Factory<R> for Factory {
         }).collect()
     }
 
-    fn create_compute_pipelines(&mut self) -> Vec<Result<native::ComputePipeline, pso::CreationError>> {
+    fn create_compute_pipelines(&mut self, descs: &[(&native::ShaderLib, EntryPoint, &native::PipelineLayout)]) -> Vec<Result<native::ComputePipeline, pso::CreationError>> {
         unimplemented!()
     }
 
     fn create_framebuffer(&mut self, renderpass: &native::RenderPass,
-        color_attachments: &[native::RenderTargetView], depth_stencil_attachments: &[native::DepthStencilView],
+        color_attachments: &[&native::RenderTargetView], depth_stencil_attachments: &[&native::DepthStencilView],
         width: u32, height: u32, layers: u32) -> native::FrameBuffer
     {
         unimplemented!()
     }
 
-    fn view_image_as_render_target(&mut self, image: &native::Image) -> Result<native::RenderTargetView, f::TargetViewError> {
+    fn create_sampler(&mut self, sampler_info: image::SamplerInfo) -> native::Sampler {
+        unimplemented!()
+    }
+
+    fn create_buffer(&mut self, size: u64, usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
+        unimplemented!()
+    }
+
+    fn get_buffer_requirements(&mut self, buffer: &UnboundBuffer) -> memory::MemoryRequirements {
+        unimplemented!()
+    }
+
+    fn bind_buffer_memory(&mut self, heap: &native::Heap, offset: u64, buffer: UnboundBuffer) -> Result<native::Buffer, buffer::CreationError> {
+        unimplemented!()
+    }
+
+    fn create_image(&mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
+         -> Result<UnboundImage, image::CreationError>
+    {
+        unimplemented!()
+    }
+
+    fn get_image_requirements(&mut self, image: &UnboundImage) -> memory::MemoryRequirements {
+        unimplemented!()
+    }
+
+    fn bind_image_memory(&mut self, heap: &native::Heap, offset: u64, image: UnboundImage) -> Result<native::Image, image::CreationError> {
+        unimplemented!()
+    }
+
+    fn view_buffer_as_constant(&mut self, buffer: &native::Buffer, offset: usize, size: usize) -> Result<native::ConstantBufferView, f::TargetViewError> {
+        unimplemented!()
+    }
+
+    fn view_image_as_render_target(&mut self, image: &native::Image, format: format::Format) -> Result<native::RenderTargetView, f::TargetViewError> {
         // TODO: basic implementation only, needs checks and multiple heaps
         let mut handle = winapi::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: 0 };
         unsafe { self.rtv_heap.GetCPUDescriptorHandleForHeapStart(&mut handle) };
@@ -307,5 +357,141 @@ impl core::Factory<R> for Factory {
         let rtv = native::RenderTargetView { handle: handle };
         self.next_rtv += 1;
         Ok(rtv)
+    }
+
+    fn view_image_as_shader_resource(&mut self, image: &native::Image, format: format::Format) -> Result<native::ShaderResourceView, f::TargetViewError> {
+        unimplemented!()
+    }
+
+    fn view_image_as_unordered_access(&mut self, image: &native::Image, format: format::Format) -> Result<native::UnorderedAccessView, f::TargetViewError> {
+        unimplemented!()
+    }
+
+    fn create_descriptor_heap(&mut self, ty: f::DescriptorHeapType, size: usize) -> native::DescriptorHeap {
+        unimplemented!()
+    }
+
+    fn create_descriptor_set_pool(&mut self, heap: &native::DescriptorHeap, max_sets: usize, offset: usize, descriptor_pools: &[f::DescriptorPoolDesc]) -> native::DescriptorSetPool {
+        unimplemented!()
+    }
+
+    fn create_descriptor_set_layout(&mut self, bindings: &[f::DescriptorSetLayoutBinding]) -> native::DescriptorSetLayout {
+        unimplemented!()
+    }
+
+    fn create_descriptor_sets(&mut self, set_pool: &mut native::DescriptorSetPool, layouts: &[&native::DescriptorSetLayout]) -> Vec<native::DescriptorSet> {
+        unimplemented!()
+    }
+
+    fn reset_descriptor_set_pool(&mut self, pool: &mut native::DescriptorSetPool) {
+        unimplemented!()
+    }
+
+    fn update_descriptor_sets(&mut self, writes: &[f::DescriptorSetWrite<R>]) {
+        unimplemented!()
+    }
+
+    /// Acquire a mapping Reader.
+    fn read_mapping<'a, T>(&self, buf: &'a native::Buffer, offset: u64, size: u64)
+                               -> Result<mapping::Reader<'a, R, T>, mapping::Error>
+        where T: Copy
+    {
+        unimplemented!()
+    }
+
+    /// Acquire a mapping Writer
+    fn write_mapping<'a, 'b, T>(&mut self, buf: &'a native::Buffer, offset: u64, size: u64)
+                                -> Result<mapping::Writer<'a, R, T>, mapping::Error>
+        where T: Copy
+    {
+        unimplemented!()
+    }
+
+    fn create_semaphore(&mut self) -> native::Semaphore {
+        unimplemented!()
+    }
+
+    fn create_fence(&mut self, signaled: bool) -> native::Fence {
+        unimplemented!()
+    }
+
+    fn reset_fences(&mut self, fences: &[&native::Fence]) {
+        unimplemented!()
+    }
+
+    fn destroy_heap(&mut self, heap: native::Heap) {
+        unimplemented!()
+    }
+
+    fn destroy_shader_lib(&mut self, shader_lib: native::ShaderLib) {
+        unimplemented!()
+    }
+
+    fn destroy_renderpass(&mut self, rp: native::RenderPass) {
+        unimplemented!()
+    }
+
+    fn destroy_pipeline_layout(&mut self, pl: native::PipelineLayout) {
+        unimplemented!()
+    }
+
+    fn destroy_graphics_pipeline(&mut self, pipeline: native::GraphicsPipeline) {
+        unimplemented!()
+    }
+
+    fn destroy_compute_pipeline(&mut self, pipeline: native::ComputePipeline) {
+        unimplemented!()
+    }
+
+    fn destroy_framebuffer(&mut self, fb: native::FrameBuffer) {
+        unimplemented!()
+    }
+
+    fn destroy_buffer(&mut self, buffer: native::Buffer) {
+        unimplemented!()
+    }
+
+    fn destroy_image(&mut self, image: native::Image) {
+        unimplemented!()
+    }
+
+    fn destroy_render_target_view(&mut self, rtv: native::RenderTargetView) {
+        unimplemented!()
+    }
+
+    fn destroy_constant_buffer_view(&mut self, _: native::ConstantBufferView) {
+        unimplemented!()
+    }
+
+    fn destroy_shader_resource_view(&mut self, srv: native::ShaderResourceView) {
+        unimplemented!()
+    }
+
+    fn destroy_unordered_access_view(&mut self, uav: native::UnorderedAccessView) {
+        unimplemented!()
+    }
+
+    fn destroy_sampler(&mut self, sampler: native::Sampler) {
+        unimplemented!()
+    }
+
+    fn destroy_descriptor_heap(&mut self, heap: native::DescriptorHeap) {
+        unimplemented!()
+    }
+
+    fn destroy_descriptor_set_pool(&mut self, pool: native::DescriptorSetPool) {
+        unimplemented!()
+    }
+
+    fn destroy_descriptor_set_layout(&mut self, layout: native::DescriptorSetLayout) {
+        unimplemented!()
+    }
+
+    fn destroy_fence(&mut self, fence: native::Fence) {
+        unimplemented!()
+    }
+
+    fn destroy_semaphore(&mut self, semaphore: native::Semaphore) {
+        unimplemented!()
     }
 }

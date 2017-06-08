@@ -43,6 +43,7 @@ mod native;
 mod pool;
 mod state;
 
+pub use command::{RenderPassInlineEncoder, RenderPassSecondaryEncoder};
 pub use pool::{GeneralCommandPool, GraphicsCommandPool,
     ComputeCommandPool, TransferCommandPool, SubpassCommandPool};
 
@@ -53,7 +54,7 @@ impl core::QueueFamily for QueueFamily {
     type Surface = Surface;
 
     fn supports_present(&self, _surface: &Surface) -> bool {
-        // 
+        //
         true
     }
 
@@ -129,14 +130,19 @@ impl core::Adapter for Adapter {
             }).collect::<Vec<_>>()
         }).collect();
 
+        let heap_types = unimplemented!();
+        let memory_heaps = unimplemented!();
+
         let factory = Factory::new(device);
 
         core::Device {
-            factory: factory,
-            general_queues: general_queues,
+            factory,
+            general_queues,
             graphics_queues: Vec::new(),
             compute_queues: Vec::new(),
             transfer_queues: Vec::new(),
+            heap_types,
+            memory_heaps,
             _marker: std::marker::PhantomData,
         }
     }
@@ -208,14 +214,18 @@ impl core::CommandQueue for CommandQueue {
     type TransferCommandBuffer = native::TransferCommandBuffer;
     type SubpassCommandBuffer = native::SubpassCommandBuffer;
 
-    unsafe fn submit<C>(&mut self, submit: &[Submit<C>])
+    unsafe fn submit<C>(&mut self, submit_infos: &[core::QueueSubmit<C, Resources>], fence: Option<&mut native::Fence>)
         where C: core::CommandBuffer<SubmitInfo = command::SubmitInfo>
     {
-        let mut command_lists = submit.iter().map(|submit| {
-            submit.get_info().0.as_mut_ptr()
+        let mut command_lists = submit_infos.iter().map(|submit| {
+            submit.cmd_buffers.as_ptr()
         }).collect::<Vec<_>>();
 
         self.inner.ExecuteCommandLists(command_lists.len() as u32, command_lists.as_mut_ptr() as *mut *mut _);
+    }
+
+    fn wait_idle(&mut self) {
+        unimplemented!()
     }
 }
 
@@ -298,14 +308,16 @@ pub struct SwapChain {
     images: Vec<native::Image>,
 }
 
-impl<'a> core::SwapChain for SwapChain{
+impl<'a> core::SwapChain for SwapChain {
+    type R = Resources;
     type Image = native::Image;
 
     fn get_images(&mut self) -> &[native::Image] {
         &self.images
     }
 
-    fn acquire_frame(&mut self) -> core::Frame {
+    fn acquire_frame(&mut self, sync: core::FrameSync<Resources>) -> core::Frame {
+        //TODO: use sync
         // TODO: we need to block this at some point? (running out of backbuffers)
         let num_images = self.images.len();
         let index = self.next_frame;
@@ -457,14 +469,23 @@ impl core::Resources for Resources {
     type PipelineLayout = native::PipelineLayout;
     type GraphicsPipeline = native::GraphicsPipeline;
     type ComputePipeline = native::ComputePipeline;
+    type UnboundBuffer = factory::UnboundBuffer;
     type Buffer = native::Buffer;
+    type UnboundImage = factory::UnboundImage;
     type Image = native::Image;
-    type ShaderResourceView = ();
-    type UnorderedAccessView = ();
+    type ConstantBufferView = native::ConstantBufferView;
+    type ShaderResourceView = native::ShaderResourceView;
+    type UnorderedAccessView = native::UnorderedAccessView;
     type RenderTargetView = native::RenderTargetView;
     type DepthStencilView = native::DepthStencilView;
     type FrameBuffer = native::FrameBuffer;
-    type Sampler = ();
-    type Fence = ();
-    type Semaphore = ();
+    type Sampler = native::Sampler;
+    type Semaphore = native::Semaphore;
+    type Fence = native::Fence;
+    type Heap = native::Heap;
+    type Mapping = factory::Mapping;
+    type DescriptorHeap = native::DescriptorHeap;
+    type DescriptorSet = native::DescriptorSet;
+    type DescriptorSetPool = native::DescriptorSetPool;
+    type DescriptorSetLayout = native::DescriptorSetLayout;
 }
