@@ -105,13 +105,25 @@ macro_rules! define_queue {
 
         impl<'a, B: Backend> AsRef<B::CommandQueue> for $queue_ref<'a, B> {
             fn as_ref(&self) -> &B::CommandQueue {
-                &self.0
+                self.0
             }
         }
 
         impl<'a, B: Backend> AsRef<B::CommandQueue> for $queue_mut<'a, B> {
             fn as_ref(&self) -> &B::CommandQueue {
-                &self.0
+                self.0
+            }
+        }
+
+        impl<B: Backend> AsMut<B::CommandQueue> for $queue<B> {
+            fn as_mut(&mut self) -> &mut B::CommandQueue {
+                &mut self.0
+            }
+        }
+
+        impl<'a, B: Backend> AsMut<B::CommandQueue> for $queue_mut<'a, B> {
+            fn as_mut(&mut self) -> &mut B::CommandQueue {
+                self.0
             }
         }
     );
