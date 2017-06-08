@@ -30,7 +30,7 @@ use core::memory;
 use core::{CommandBuffer, FrameSync};
 use std::{mem, ptr};
 use std::ffi::{CStr, CString};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::collections::VecDeque;
 
 mod command;
@@ -351,8 +351,7 @@ impl Drop for RawDevice {
 }
 
 // Need to explicitly synchronize on submission and present.
-// TODO: Can we avoid somehow the use of a mutex?
-pub type RawCommandQueue = Arc<Mutex<vk::Queue>>;
+pub type RawCommandQueue = Arc<vk::Queue>;
 
 pub struct CommandQueue {
     raw: RawCommandQueue,
@@ -385,7 +384,7 @@ impl core::CommandQueue<Backend> for CommandQueue {
 
     fn wait_idle(&mut self) {
         unsafe {
-            self.device.0.queue_wait_idle(*self.raw.lock().unwrap());
+            self.device.0.queue_wait_idle(*self.raw);
         }
     }
 }

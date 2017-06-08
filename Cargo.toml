@@ -14,7 +14,8 @@ cgmath-types = ["gfx/cgmath-types", "gfx_core/cgmath-types"]
 metal = ["gfx_device_metal", "gfx_window_metal", "gfx_device_metalll"]
 gl = ["gfx_device_gl", "gfx_window_glutin"]
 dx11 = ["gfx_device_dx11", "gfx_window_dxgi"]
-dx12 = ["gfx_device_dx12", "gfx_window_dxgi"]vulkan = ["gfx_device_vulkan", "gfx_device_vulkanll", "gfx_window_vulkan"]
+dx12 = ["gfx_device_dx12", "gfx_window_dxgi"]
+vulkan = ["gfx_device_vulkan", "gfx_device_vulkanll", "gfx_window_vulkan"]
 sdl = ["gfx_window_sdl"]
 serialize = ["gfx/serialize", "gfx_core/serialize"]
 headless = ["gfx_window_glutin/headless"]
@@ -76,9 +77,10 @@ gfx_window_glfw = { path = "src/window/glfw", version = "0.15" }
 gfx_window_sdl = { path = "src/window/sdl", version = "0.7" }
 
 [target.'cfg(windows)'.dependencies]
-ice_dx11 = { path = "src/backend/dx11", version = "0.6", optional = true }
+gfx_device_dx11 = { path = "src/backend/dx11", version = "0.6", optional = true }
 gfx_device_dx12 = { path = "src/backend/dx12", version = "0.1", optional = true }
-gfx_window_dxgi = { path = "src/window/dxgi", version = "0.8", optional = true }w_gfx_device_dx12ll = { path = "src/backend/dx12ll", version = "0.1" }
+gfx_window_dxgi = { path = "src/window/dxgi", version = "0.8", optional = true }
+gfx_device_dx12ll = { path = "src/backend/dx12ll", version = "0.1" }
 [[example]]
 name = "blend"
 path = "examples/blend/main.rs"
