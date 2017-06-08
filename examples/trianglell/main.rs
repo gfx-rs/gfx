@@ -24,7 +24,7 @@ extern crate gfx_device_metalll as back;
 extern crate winit;
 extern crate image;
 
-use gfx_corell::{buffer, command, format, pass, pso, shade, state, target, 
+use gfx_corell::{buffer, command, format, pass, pso, shade, state, target,
     Device, CommandPool, GraphicsCommandPool, CommandQueue,
     GraphicsCommandBuffer, ProcessingCommandBuffer, TransferCommandBuffer, PrimaryCommandBuffer,
     Primitive, Instance, Adapter, Surface, SwapChain, QueueFamily, QueueSubmit, Factory, SubPass, FrameSync};
@@ -75,7 +75,7 @@ fn main() {
     let surface = instance.create_surface(&window);
 
     let queue_descs = physical_devices[0].get_queue_families().map(|family| { (family, family.num_queues()) });
-    
+
     for device in &physical_devices {
         println!("{:?}", device.get_info());
     }
@@ -376,7 +376,7 @@ fn main() {
             None,
         );
     }
-    
+
     //
     let mut running = true;
     while running {
@@ -416,7 +416,7 @@ fn main() {
             }
 
             // TODO: should transition to (_, Present) -> Present (for d3d12)
-            
+
             cmd_buffer.finish()
         };
 

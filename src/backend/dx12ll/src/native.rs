@@ -65,6 +65,11 @@ pub struct TransferCommandBuffer(pub CommandBuffer);
 
 pub struct SubpassCommandBuffer(pub CommandBuffer);
 
+#[derive(Debug, Hash)]
+pub struct Heap {
+    //TODO
+}
+
 #[derive(Clone, Debug, Hash)]
 pub struct Buffer {
     pub resource: ComPtr<winapi::ID3D12Resource>,
@@ -80,6 +85,25 @@ pub struct Image {
 unsafe impl Send for Image {}
 unsafe impl Sync for Image {}
 
+#[derive(Debug, Hash)]
+pub struct Sampler {
+    //TODO
+}
+
+#[derive(Debug, Hash)]
+pub struct ConstantBufferView {
+    //TODO
+}
+
+#[derive(Debug, Hash)]
+pub struct ShaderResourceView {
+}
+
+#[derive(Debug, Hash)]
+pub struct UnorderedAccessView {
+}
+
+
 #[derive(Clone, Debug)]
 pub struct RenderTargetView {
     pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
@@ -91,10 +115,26 @@ pub struct DepthStencilView {
 }
 
 #[derive(Debug)]
-pub struct Fence;
-
-#[derive(Debug)]
 pub struct Semaphore;
 
 #[derive(Debug)]
+pub struct Fence;
+
+#[derive(Debug)]
 pub struct FrameBuffer;
+
+#[derive(Debug)]
+pub struct DescriptorHeap {
+}
+
+#[derive(Debug)]
+pub struct DescriptorSetPool {
+}
+
+#[derive(Debug)]
+pub struct DescriptorSet {
+}
+
+#[derive(Debug)]
+pub struct DescriptorSetLayout {
+}
