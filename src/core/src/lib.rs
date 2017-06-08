@@ -38,6 +38,7 @@ use std::error::Error;
 use std::hash::Hash;
 use std::any::Any;
 use std::borrow::Borrow;
+use format::Formatted;
 
 pub use draw_state::{state, target};
 pub use self::command::CommandBuffer;
@@ -423,10 +424,9 @@ pub trait Surface<B: Backend> {
     /// Check if the queue family supports presentation for this surface.
     fn supports_queue(&self, queue_family: &B::QueueFamily) -> bool;
 
-    /// Create a new swapchain from the current surface with an associated present queue.
-    fn build_swapchain<Cf, Q>(&self, present_queue: Q) -> Self::SwapChain
-        where Cf: format::RenderFormat,
-              Q: AsRef<B::CommandQueue>;
+    /// 
+    fn build_swapchain<Q>(&self, config: SwapchainConfig, present_queue: &Q) -> Self::SwapChain
+        where Q: AsRef<B::CommandQueue>;
 }
 
 /// Handle to a backbuffer of the swapchain.
@@ -456,17 +456,57 @@ pub enum FrameSync<'a, R: Resources> {
     Fence(&'a R::Fence)
 }
 
+/// Allows you to configure a `SwapChain` for creation.
+#[derive(Debug, Clone)]
+pub struct SwapchainConfig {
+    /// Color format of the backbuffer images.
+    pub color_format: format::Format,
+    /// Depth stencil format of the backbuffer images (optional).
+    pub depth_stencil_format: Option<format::Format>,
+}
+
+impl SwapchainConfig {
+    /// Create a new default configuration (color images only).
+    pub fn new() -> Self {
+        SwapchainConfig {
+            color_format: format::Rgba8::get_format(), // TODO: try to find best default format
+            depth_stencil_format: None,
+        }
+    }
+
+    /// Specify the color format for the backbuffer images.
+    pub fn with_color<Cf: format::RenderFormat>(mut self) -> Self {
+        self.color_format = Cf::get_format();
+        self
+    }
+
+    /// Specify the depth stencil format for the backbuffer images.
+    ///
+    /// The SwapChain will create additional depth-stencil images for each backbuffer.
+    pub fn with_depth_stencil<Dsf: format::DepthStencilFormat>(mut self) -> Self {
+        self.depth_stencil_format = Some(Dsf::get_format());
+        self
+    }
+
+    // TODO: depth-only, stencil-only, swapchain size, present modes, etc.
+}
+
+/// SwapChain backbuffer type (color image, depth-stencil image).
+pub type Backbuffer<B: Backend> = (handle::RawTexture<B::Resources>, Option<handle::RawTexture<B::Resources>>);
+
 /// The `SwapChain` is the backend representation of the surface.
 /// It consists of multiple buffers, which will be presented on the surface.
 pub trait SwapChain<B: Backend> {
-    /// Access the backbuffer images.
-    fn get_images(&mut self) -> &[handle::RawTexture<B::Resources>];
+    /// Access the backbuffer color and depth-stencil images.
+    fn get_backbuffers(&mut self) -> &[Backbuffer<B>];
 
     /// Acquire a new frame for rendering. This needs to be called before presenting.
     fn acquire_frame(&mut self, sync: FrameSync<B::Resources>) -> Frame;
 
     /// Present one acquired frame in FIFO order.
-    fn present(&mut self);
+    ///
+    /// The passed queue _must_ be in the same as set on creation.
+    fn present<Q: AsMut<B::CommandQueue>>(&mut self, present_queue: &mut Q);
 }
 
 /// Extension for windows.
