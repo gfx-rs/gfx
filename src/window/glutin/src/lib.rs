@@ -181,11 +181,11 @@ pub struct SwapChain<'a> {
     // Underlying window, required for presentation
     window: &'a glutin::Window,
     // Single element backbuffer
-    backbuffer: Vec<handle::RawTexture<device_gl::Resources>>,
+    backbuffer: [core::Backbuffer<device_gl::Backend>; 1],
 }
 
 impl<'a> core::SwapChain<device_gl::Backend> for SwapChain<'a> {
-    fn get_images(&mut self) -> &[handle::RawTexture<device_gl::Resources>] {
+    fn get_backbuffers(&mut self) -> &[core::Backbuffer<device_gl::Backend>] {
         &self.backbuffer
     }
 
@@ -194,7 +194,9 @@ impl<'a> core::SwapChain<device_gl::Backend> for SwapChain<'a> {
         core::Frame::new(0)
     }
 
-    fn present(&mut self) {
+    fn present<Q>(&mut self, present_queue: &mut Q)
+        where Q: AsMut<device_gl::CommandQueue>
+    {
         self.window.swap_buffers();
     }
 }
@@ -207,9 +209,8 @@ impl<'a> core::Surface<device_gl::Backend> for Surface<'a> {
     type SwapChain = SwapChain<'a>;
 
     fn supports_queue(&self, queue_family: &device_gl::QueueFamily) -> bool { true }
-    fn build_swapchain<T, Q>(&self, present_queue: Q) -> SwapChain<'a>
-        where T: core::format::RenderFormat,
-              Q: AsRef<device_gl::CommandQueue>
+    fn build_swapchain<Q>(&self, config: core::SwapchainConfig, present_queue: &Q) -> SwapChain<'a>
+        where Q: AsRef<device_gl::CommandQueue>
     {
         use core::handle::Producer;
         let dim = get_window_dimensions(self.window);
@@ -219,15 +220,17 @@ impl<'a> core::Surface<device_gl::Backend> for Surface<'a> {
             texture::Info {
                 levels: 1,
                 kind: texture::Kind::D2(dim.0, dim.1, dim.3),
-                format: T::get_format().0,
+                format: config.color_format.0,
                 bind: memory::RENDER_TARGET | memory::TRANSFER_SRC,
                 usage: memory::Usage::Data,
             },
         );
 
+        // TODO: depth stencil
+
         SwapChain {
             window: self.window,
-            backbuffer: vec![backbuffer],
+            backbuffer: [(backbuffer, None); 1],
         }
     }
 }

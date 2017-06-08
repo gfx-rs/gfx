@@ -290,11 +290,12 @@ fn run<A, B, S>(backend: shade::Backend,
         return
     };
 
-    let mut swap_chain = surface.build_swapchain::<ColorFormat, _>(queue.as_ref());
+    let config = gfx_core::SwapchainConfig::new().with_color::<ColorFormat>();
+    let mut swap_chain = surface.build_swapchain(config, &queue);
 
-    let main_colors = swap_chain.get_images()
+    let main_colors = swap_chain.get_backbuffers()
                                 .iter()
-                                .map(|image| {
+                                .map(|&(ref image, _)| {
                                     let desc = texture::RenderDesc {
                                         channel: ColorFormat::get_format().1,
                                         level: 0,
@@ -338,7 +339,7 @@ fn run<A, B, S>(backend: shade::Backend,
         // Wait til rendering has finished
         queue.wait_idle();
 
-        swap_chain.present();
+        swap_chain.present(&mut queue);
         harness.bump();
     }
 }
