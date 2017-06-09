@@ -44,7 +44,6 @@ mod native;
 mod pool;
 mod state;
 
-pub use command::{RenderPassInlineEncoder, RenderPassSecondaryEncoder};
 pub use pool::{GeneralCommandPool, GraphicsCommandPool,
     ComputeCommandPool, TransferCommandPool, SubpassCommandPool};
 
