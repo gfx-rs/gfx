@@ -24,8 +24,8 @@ extern crate derivative;
 extern crate draw_state;
 extern crate log;
 
-#[cfg(feature = "cgmath-types")]
-extern crate cgmath;
+#[cfg(feature = "mint")]
+extern crate mint;
 
 #[cfg(feature = "serialize")]
 extern crate serde;
@@ -209,7 +209,7 @@ pub enum IndexType {
     U32,
 }
 
-/// Different types of a specific API. 
+/// Different types of a specific API.
 #[allow(missing_docs)]
 pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq + Any {
     type Buffer:              Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
@@ -254,7 +254,7 @@ impl Error for SubmissionError {
 #[allow(missing_docs)]
 pub type SubmissionResult<T> = Result<T, SubmissionError>;
 
-/// A `Device` is responsible for submitting `CommandBuffer`s to the GPU. 
+/// A `Device` is responsible for submitting `CommandBuffer`s to the GPU.
 pub trait Device: Sized {
     /// Associated `Resources` type.
     type Resources: Resources;
@@ -285,7 +285,7 @@ pub trait Device: Sized {
     /// Stalls the current thread until the fence is satisfied
     fn wait_fence(&mut self, &handle::Fence<Self::Resources>);
 
-    /// Cleanup unused resources. This should be called between frames. 
+    /// Cleanup unused resources. This should be called between frames.
     fn cleanup(&mut self);
 }
 
@@ -298,7 +298,7 @@ pub trait Adapter: Sized {
     /// Associated `QueueFamily` type.
     type QueueFamily: QueueFamily;
 
-    /// Enumerate all available adapters supporting this backend 
+    /// Enumerate all available adapters supporting this backend
     fn enumerate_adapters() -> Vec<Self>;
 
     /// Create a new device and command queues.
