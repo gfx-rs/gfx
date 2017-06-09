@@ -14,8 +14,12 @@
 
 //! Shader parameter handling.
 
-#[cfg(feature = "cgmath-types")]
-use cgmath::{Deg, Matrix2, Matrix3, Matrix4, Rad, Point2, Point3, Vector2, Vector3, Vector4};
+#[cfg(feature = "mint")]
+use mint::{
+    Point2, Point3,
+    Vector2, Vector3, Vector4,
+    ColumnMatrix2, ColumnMatrix3, ColumnMatrix4
+};
 
 use std::error::Error;
 use std::fmt;
@@ -52,30 +56,16 @@ impl_uniforms! {
     [[f32; 4]; 4] = F32Matrix4,
 }
 
-#[cfg(feature = "cgmath-types")]
-impl ToUniform for Deg<f32> {
-    fn convert(self) -> core::UniformValue {
-        core::UniformValue::F32(self.0)
-    }
-}
-
-#[cfg(feature = "cgmath-types")]
-impl ToUniform for Rad<f32> {
-    fn convert(self) -> core::UniformValue {
-        core::UniformValue::F32(self.0)
-    }
-}
-
-#[cfg(feature = "cgmath-types")]
+#[cfg(feature = "mint")]
 impl_uniforms! {
     Point2<f32> = F32Vector2,
     Point3<f32> = F32Vector3,
     Vector2<f32> = F32Vector2,
     Vector3<f32> = F32Vector3,
     Vector4<f32> = F32Vector4,
-    Matrix2<f32> = F32Matrix2,
-    Matrix3<f32> = F32Matrix3,
-    Matrix4<f32> = F32Matrix4,
+    ColumnMatrix2<f32> = F32Matrix2,
+    ColumnMatrix3<f32> = F32Matrix3,
+    ColumnMatrix4<f32> = F32Matrix4,
 }
 
 /// Program linking error
