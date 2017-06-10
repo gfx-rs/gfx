@@ -23,7 +23,7 @@ use core::handle::{self, Producer};
 use core::target::{Layer, Level};
 
 use command::{COLOR_DEFAULT};
-use {Resources as R, Share, OutputMerger};
+use {Info, Resources as R, Share, OutputMerger};
 use {Buffer, BufferElement, FatSampler, NewTexture,
      PipelineState, ResourceView, TargetView, Fence};
 
@@ -86,6 +86,11 @@ impl Factory {
             share: share,
             frame_handles: handle::Manager::new(),
         }
+    }
+
+    /// Get the OpenGL-specific driver information
+    pub fn get_info<'a>(&'a self) -> &'a Info {
+        &self.share.info
     }
 
     fn create_fbo_internal(&mut self) -> gl::types::GLuint {
