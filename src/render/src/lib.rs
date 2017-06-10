@@ -49,7 +49,7 @@ pub use core::command::{Buffer as CommandBuffer, InstanceParams};
 pub use core::shade::{ProgramInfo, UniformValue};
 
 pub use encoder::{CopyBufferResult, CopyBufferTextureResult, CopyError,
-                  CopyTextureBufferResult, GraphicsEncoder, UpdateError};
+                  CopyTextureBufferResult, GraphicsEncoder, UpdateError, GraphicsPoolExt};
 pub use factory::PipelineStateError;
 pub use slice::{Slice, IntoIndexBuffer, IndexBuffer};
 pub use pso::{PipelineState};

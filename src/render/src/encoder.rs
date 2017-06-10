@@ -21,7 +21,7 @@ use std::error::Error;
 use std::any::Any;
 use std::{fmt, mem};
 
-use core::{Backend, SubmissionResult, IndexType, Resources, VertexCount};
+use core::{Backend, SubmissionResult, IndexType, Resources, VertexCount, GraphicsCommandPool};
 use core::{command, format, handle, texture};
 use core::command::{Buffer, Encoder};
 use core::memory::{self, cast_slice, Typed, Pod, Usage};
@@ -139,14 +139,26 @@ impl<T: Any + fmt::Debug + fmt::Display> Error for UpdateError<T> {
     }
 }
 
+/// Extension for graphics command buffer pools to acquire a graphics encoder.
+pub trait GraphicsPoolExt<B: Backend>: GraphicsCommandPool<B> {
+    /// Acquire a `GraphicsEncoder` from the pool.
+    fn acquire_graphics_encoder(&mut self) -> GraphicsEncoder<B>;
+}
+
+impl<B: Backend, T> GraphicsPoolExt<B> for T where T: GraphicsCommandPool<B> {
+    fn acquire_graphics_encoder(&mut self) -> GraphicsEncoder<B> {
+        GraphicsEncoder::from(self.acquire_command_buffer())
+    }
+}
+
 /// Graphics Command Encoder
 ///
 /// # Overview
 /// The `GraphicsEncoder` is a wrapper structure around a `CommandBuffer`. It is responsible for sending
-/// commands to the `CommandBuffer`. 
+/// commands to the `CommandBuffer`.
 ///
-/// The encoder exposes multiple functions that add commands to its internal `CommandBuffer`. To 
-/// submit these commands to the GPU so they can be rendered, call `flush`. 
+/// The encoder exposes multiple functions that add commands to its internal `CommandBuffer`. To
+/// submit these commands to the GPU so they can be rendered, call `flush`.
 #[derive(Debug)]
 pub struct GraphicsEncoder<'a, B: Backend>
     where <B as Backend>::GraphicsCommandBuffer: 'a
@@ -170,12 +182,12 @@ impl<'a, B: Backend> From<Encoder<'a, B, B::GraphicsCommandBuffer>> for Graphics
 
 impl<'a, B: Backend> GraphicsEncoder<'a, B> {
     /// Submits the commands in this `GraphicsEncoder`'s internal `CommandBuffer` to the GPU, so they can
-    /// be executed. 
-    /// 
+    /// be executed.
+    ///
     /// Calling `flush` before swapping buffers is critical as without it the commands of the
     /// internal ´CommandBuffer´ will not be sent to the GPU, and as a result they will not be
     /// processed. Calling flush too often however will result in a performance hit. It is
-    /// generally recommended to call flush once per frame, when all draw calls have been made. 
+    /// generally recommended to call flush once per frame, when all draw calls have been made.
     pub fn flush<D>(&mut self, device: &mut D)
     {
         // self.flush_no_reset(device).unwrap();
