@@ -15,11 +15,7 @@
 //! Shader parameter handling.
 
 #[cfg(feature = "mint")]
-use mint::{
-    Point2, Point3,
-    Vector2, Vector3, Vector4,
-    ColumnMatrix2, ColumnMatrix3, ColumnMatrix4
-};
+use mint;
 
 use std::error::Error;
 use std::fmt;
@@ -58,14 +54,14 @@ impl_uniforms! {
 
 #[cfg(feature = "mint")]
 impl_uniforms! {
-    Point2<f32> = F32Vector2,
-    Point3<f32> = F32Vector3,
-    Vector2<f32> = F32Vector2,
-    Vector3<f32> = F32Vector3,
-    Vector4<f32> = F32Vector4,
-    ColumnMatrix2<f32> = F32Matrix2,
-    ColumnMatrix3<f32> = F32Matrix3,
-    ColumnMatrix4<f32> = F32Matrix4,
+    mint::Point2<f32> = F32Vector2,
+    mint::Point3<f32> = F32Vector3,
+    mint::Vector2<f32> = F32Vector2,
+    mint::Vector3<f32> = F32Vector3,
+    mint::Vector4<f32> = F32Vector4,
+    mint::ColumnMatrix2<f32> = F32Matrix2,
+    mint::ColumnMatrix3<f32> = F32Matrix3,
+    mint::ColumnMatrix4<f32> = F32Matrix4,
 }
 
 /// Program linking error

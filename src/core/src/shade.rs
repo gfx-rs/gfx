@@ -22,12 +22,7 @@ use {Resources};
 use {AttributeSlot, ColorSlot, ConstantBufferSlot, ResourceViewSlot, SamplerSlot, UnorderedViewSlot};
 
 #[cfg(feature = "mint")]
-use mint::{
-    Point2, Point3,
-    Vector2, Vector3, Vector4,
-    ColumnMatrix2, ColumnMatrix3, ColumnMatrix4,
-    RowMatrix2, RowMatrix3, RowMatrix4
-};
+use mint;
 
 /// Number of components in a container type (vectors/matrices)
 pub type Dimension = u8;
@@ -261,7 +256,7 @@ macro_rules! impl_const_matrix {
 macro_rules! impl_const_vector_mint {
     ( $( $name:ident = $num:expr, )* ) => {
         $(
-            impl<T: BaseTyped> Formatted for $name<T> {
+            impl<T: BaseTyped> Formatted for mint::$name<T> {
                 fn get_format() -> ConstFormat {
                     (T::get_base_type(), ContainerType::Vector($num))
                 }
@@ -274,7 +269,7 @@ macro_rules! impl_const_vector_mint {
 macro_rules! impl_const_matrix_mint {
     ( $( $name:ident = $format:ident $size:expr, )* ) => {
         $(
-            impl<T: BaseTyped> Formatted for $name<T> {
+            impl<T: BaseTyped> Formatted for mint::$name<T> {
                 fn get_format() -> ConstFormat {
                     let mf = MatrixFormat::$format;
                     (T::get_base_type(), ContainerType::Matrix(mf, $size, $size))
