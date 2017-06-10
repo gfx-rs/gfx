@@ -295,25 +295,22 @@ impl<'cb, 'rp, 'fb, 'enc: 'cb, C, R> RenderPassEncoder<'cb, 'rp, 'fb, 'enc, C, R
     }
 }
 
+#[doc(hidden)]
 pub trait RenderPassInlineBuffer<C, R>: Sized
     where C: GraphicsCommandBuffer<R, InlineBuffer=Self>,
           R: Resources
 {
-    #[doc(hidden)]
     fn begin(&mut Encoder<C>,
              render_pass: &R::RenderPass,
              framebuffer: &R::FrameBuffer,
              render_area: target::Rect,
              clear_values: &[ClearValue]) -> Self;
-    #[doc(hidden)]
     fn finish(&mut self,
               command_buffer: &mut C,
               render_pass: &R::RenderPass,
               framebuffer: &R::FrameBuffer);
     
-    #[doc(hidden)]
     fn next_subpass(&mut self) -> C::SecondaryBuffer;
-    #[doc(hidden)]
     fn next_subpass_inline(&mut self) -> C::InlineBuffer;
 
     fn clear_attachment(&mut RenderPassInlineEncoder<C, R>);
@@ -385,25 +382,22 @@ impl<'cb, 'rp, 'fb, 'enc: 'cb, C, R> RenderPassEncoder<'cb, 'rp, 'fb, 'enc, C, R
     }
 }
 
+#[doc(hidden)]
 pub trait RenderPassSecondaryBuffer<C, R>: Sized
     where C: GraphicsCommandBuffer<R, SecondaryBuffer=Self>,
           R: Resources
 {
-    #[doc(hidden)]
     fn begin(&mut Encoder<C>,
              render_pass: &R::RenderPass,
              framebuffer: &R::FrameBuffer,
              render_area: target::Rect,
              clear_values: &[ClearValue]) -> Self;
-   #[doc(hidden)]
     fn finish(&mut self,
               command_buffer: &mut C,
               render_pass: &R::RenderPass,
               framebuffer: &R::FrameBuffer);
     
-    #[doc(hidden)]
     fn next_subpass(&mut self) -> C::SecondaryBuffer;
-    #[doc(hidden)]
     fn next_subpass_inline(&mut self) -> C::InlineBuffer;
 }
 
