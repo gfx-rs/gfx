@@ -21,7 +21,7 @@ use std::error::Error;
 use std::any::Any;
 use std::{fmt, mem};
 
-use core::{Backend, SubmissionResult, IndexType, Resources, VertexCount};
+use core::{Backend, SubmissionResult, IndexType, Resources, VertexCount, GraphicsCommandPool};
 use core::{command, format, handle, texture};
 use core::command::{Buffer, Encoder};
 use core::memory::{self, cast_slice, Typed, Pod, Usage};
@@ -136,6 +136,18 @@ impl<T: Any + fmt::Debug + fmt::Display> Error for UpdateError<T> {
             UpdateError::UnitCountMismatch {..} => "Unit count mismatch",
             UpdateError::InvalidUsage(_) => "This memory usage does not allow updates",
         }
+    }
+}
+
+/// Extension for graphics command buffer pools to acquire a graphics encoder.
+pub trait GraphicsPoolExt<B: Backend>: GraphicsCommandPool<B> {
+    /// Acquire a `GraphicsEncoder` from the pool.
+    fn acquire_graphics_encoder(&mut self) -> GraphicsEncoder<B>;
+}
+
+impl<B: Backend, T> GraphicsPoolExt<B> for T where T: GraphicsCommandPool<B> {
+    fn acquire_graphics_encoder(&mut self) -> GraphicsEncoder<B> {
+        GraphicsEncoder::from(self.acquire_command_buffer())
     }
 }
 
