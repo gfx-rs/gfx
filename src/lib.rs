@@ -56,9 +56,11 @@ pub type DepthFormat = gfx::format::Depth32F;
 #[cfg(not(feature = "metal"))]
 pub type DepthFormat = gfx::format::DepthStencil;
 
+pub type BackbufferView<R: gfx::Resources> = (gfx::handle::RenderTargetView<R, ColorFormat>,
+                                              gfx::handle::DepthStencilView<R, DepthFormat>);
+
 pub struct WindowTargets<R: gfx::Resources> {
-    pub colors: Vec<gfx::handle::RenderTargetView<R, ColorFormat>>,
-    pub depth: gfx::handle::DepthStencilView<R, DepthFormat>,
+    pub views: Vec<BackbufferView<R>>,
     pub aspect_ratio: f32,
 }
 
@@ -252,29 +254,41 @@ fn run<A, B, S, EL>((width, height): (u32, u32),
         return
     };
 
-    let config = gfx_core::SwapchainConfig::new().with_color::<ColorFormat>();
+    let config = gfx_core::SwapchainConfig::new()
+                    .with_color::<ColorFormat>()
+                    .with_depth_stencil::<DepthFormat>();
     let mut swap_chain = surface.build_swapchain(config, &queue);
 
-    let main_colors = swap_chain.get_backbuffers()
-                                .iter()
-                                .map(|&(ref image, _)| {
-                                    let desc = texture::RenderDesc {
-                                        channel: ColorFormat::get_format().1,
-                                        level: 0,
-                                        layer: None,
-                                    };
-                                    let rtv = factory.view_texture_as_render_target_raw(image, desc)
-                                                             .unwrap();
-                                    Typed::new(rtv)
-                                })
-                                .collect::<Vec<_>>();
+    let views =
+        swap_chain
+            .get_backbuffers()
+            .iter()
+            .map(|&(ref color, ref ds)| {
+                let color_desc = texture::RenderDesc {
+                    channel: ColorFormat::get_format().1,
+                    level: 0,
+                    layer: None,
+                };
+                let rtv = factory.view_texture_as_render_target_raw(color, color_desc)
+                                 .unwrap();
 
-    let main_depth = factory.create_depth_stencil::<DepthFormat>(width as Size, height as Size).unwrap();
+                let ds_desc = texture::DepthStencilDesc {
+                    level: 0,
+                    layer: None,
+                    flags: texture::RO_DEPTH_STENCIL,
+                };
+                let dsv = factory.view_texture_as_depth_stencil_raw(
+                                    ds.as_ref().unwrap(),
+                                    ds_desc)
+                                 .unwrap();
+
+                (Typed::new(rtv), Typed::new(dsv))
+            })
+            .collect();
 
     let shader_backend = factory.shader_backend();
     let mut app = A::new(&mut factory, shader_backend, WindowTargets {
-        colors: main_colors,
-        depth: main_depth.2,
+        views: views,
         aspect_ratio: width as f32 / height as f32, //TODO
     });
 
@@ -295,9 +309,10 @@ fn run<A, B, S, EL>((width, height): (u32, u32),
                 _ => app.on(event),
             }
         });
+
         let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&mut frame_semaphore));
 
-        app.render_ext(&mut graphics_pool);
+        app.render((frame, &frame_semaphore), &mut graphics_pool, &mut queue);
 
         // Wait til rendering has finished
         queue.wait_idle();
@@ -334,13 +349,9 @@ pub type DefaultBackend = gfx_device_vulkan::Backend;
 
 pub trait Application<B: Backend>: Sized {
     fn new(&mut B::Factory, shade::Backend, WindowTargets<B::Resources>) -> Self;
-    fn render(&mut self, &mut gfx::GraphicsEncoder<B>);
-    fn render_ext<P: gfx_core::pool::GraphicsCommandPool<B>>(&mut self, pool: &mut P)
-    {
-        unimplemented!()
-        // TODO: self.app.render(&mut self.encoder);
-        // self.encoder.flush(device);
-    }
+    fn render<Gp>(&mut self, frame: (gfx_core::Frame, &<B::Resources as gfx::Resources>::Semaphore),
+                     pool: &mut Gp, queue: &mut gfx_core::queue::GraphicsQueueMut<B>)
+        where Gp: GraphicsCommandPool<B>;
 
     fn get_exit_key() -> Option<winit::VirtualKeyCode> {
         Some(winit::VirtualKeyCode::Escape)
