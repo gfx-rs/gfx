@@ -117,12 +117,12 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
         (desc, level)
     };
     fn mask_to_vector(mask: u8) -> s::ContainerType {
-        s::ContainerType::Vector(match mask {
-            0...1 => 1,
-            2...3 => 2,
-            4...7 => 3,
-            _ => 4,
-        })
+        match mask {
+            0...1 => s::ContainerType::Single,
+            2...3 => s::ContainerType::Vector(2),
+            4...7 => s::ContainerType::Vector(3),
+            _ => s::ContainerType::Vector(4),
+        }
     }
     if stage == s::Stage::Vertex {
         // record vertex attributes

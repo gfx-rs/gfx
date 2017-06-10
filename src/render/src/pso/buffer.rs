@@ -139,6 +139,7 @@ fn match_attribute(attr: &shade::AttributeVar, fmt: Format) -> bool {
         (BaseType::F32, ChannelType::Unorm) |
         (BaseType::U32, ChannelType::Uint) => match (attr.container, fmt.0) {
                 (ContainerType::Single, _) |
+                (ContainerType::Vector(1), _) |
                 (ContainerType::Vector(2), _) |
                 (ContainerType::Vector(3), _) |
                 (ContainerType::Vector(4), _) => true,
