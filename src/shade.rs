@@ -37,6 +37,29 @@ pub enum Backend {
     Vulkan,
 }
 
+pub trait ShadeExt {
+    fn shader_backend(&self) -> Backend;
+}
+
+#[cfg(feature = "gl")]
+impl ShadeExt for ::gfx_device_gl::Factory {
+    fn shader_backend(&self) -> Backend {
+        let shade_lang = self.get_info().shading_language;
+        if shade_lang.is_embedded {
+            Backend::GlslEs(shade_lang)
+        } else {
+            Backend::Glsl(shade_lang)
+        }
+    }
+}
+
+#[cfg(feature = "vulkan")]
+impl ShadeExt for ::gfx_device_vulkan::Factory {
+    fn shader_backend(&self) -> Backend {
+        Backend::Vulkan
+    }
+}
+
 pub const EMPTY: &'static [u8] = &[];
 
 /// A type storing shader source for different graphics APIs and versions.
