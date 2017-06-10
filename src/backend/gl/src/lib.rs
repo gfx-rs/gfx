@@ -233,6 +233,7 @@ pub fn create_main_targets_raw(dim: texture::Dimensions, color_format: format::S
 #[doc(hidden)]
 pub struct Share {
     context: gl::Gl,
+    info: Info,
     capabilities: c::Capabilities,
     private_caps: info::PrivateCaps,
     handles: RefCell<handle::Manager<Resources>>,
@@ -254,7 +255,6 @@ impl Share {
 
 /// An OpenGL device with GLSL shaders.
 pub struct Device {
-    info: Info,
     share: Rc<Share>,
     vao: ArrayBuffer,
     frame_handles: handle::Manager<Resources>,
@@ -304,6 +304,7 @@ impl Device {
         let handles = handle::Manager::new();
         let share = Share {
             context: gl,
+            info: info,
             capabilities: caps,
             private_caps: private,
             handles: RefCell::new(handles),
@@ -313,7 +314,6 @@ impl Device {
         }
         // create the device
         Device {
-            info: info,
             share: Rc::new(share),
             vao: vao,
             frame_handles: handle::Manager::new(),
@@ -326,11 +326,6 @@ impl Device {
     pub unsafe fn with_gl<F: FnMut(&gl::Gl)>(&mut self, mut fun: F) {
         self.reset_state();
         fun(&self.share.context);
-    }
-
-    /// Get the OpenGL-specific driver information
-    pub fn get_info<'a>(&'a self) -> &'a Info {
-        &self.info
     }
 
     fn bind_attribute(&mut self, slot: c::AttributeSlot, buffer: Buffer, bel: BufferElement) {
@@ -568,7 +563,7 @@ impl Device {
                 state::bind_draw_color_buffers(&self.share.context, mask);
             },
             Command::SetRasterizer(rast) => {
-                state::bind_rasterizer(&self.share.context, &rast, self.info.version.is_embedded);
+                state::bind_rasterizer(&self.share.context, &rast, self.share.info.version.is_embedded);
             },
             Command::SetViewport(rect) => {
                 state::bind_viewport(&self.share.context, rect);
@@ -1023,6 +1018,7 @@ impl Adapter {
         let handles = handle::Manager::new();
         let share = Share {
             context: gl,
+            info: info,
             capabilities: caps,
             private_caps: private,
             handles: RefCell::new(handles),
