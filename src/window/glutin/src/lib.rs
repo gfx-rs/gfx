@@ -254,7 +254,22 @@ impl<'a> core::Surface<device_gl::Backend> for Surface<'a> {
     }
 }
 
-pub struct Window<'a>(&'a glutin::Window);
+pub struct Window<'a>(pub &'a glutin::Window);
+
+pub fn build(builder: glutin::WindowBuilder, events_loop: &glutin::EventsLoop,
+             color_format: format::Format, ds_format: format::Format) -> glutin::Window {
+    let color_total_bits = color_format.0.get_total_bits();
+    let alpha_bits = color_format.0.get_alpha_stencil_bits();
+    let depth_total_bits = ds_format.0.get_total_bits();
+    let stencil_bits = ds_format.0.get_alpha_stencil_bits();
+    builder
+        .with_depth_buffer(depth_total_bits - stencil_bits)
+        .with_stencil_buffer(stencil_bits)
+        .with_pixel_format(color_total_bits - alpha_bits, alpha_bits)
+        .with_srgb(Some(color_format.1 == format::ChannelType::Srgb))
+        .build(events_loop)
+        .unwrap()
+}
 
 impl<'a> core::WindowExt<device_gl::Backend> for Window<'a> {
     type Surface = Surface<'a>;
