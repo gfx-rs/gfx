@@ -143,7 +143,7 @@ impl<P: Parser> CommandBuffer<P> {
     }
 }
 
-impl<P: Parser> command::Buffer<Resources> for CommandBuffer<P> {
+impl<P: 'static + Parser> command::Buffer<Resources> for CommandBuffer<P> {
     fn reset(&mut self) {
         self.parser.reset();
         self.cache = Cache::new();
