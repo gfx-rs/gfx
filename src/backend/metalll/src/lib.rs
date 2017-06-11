@@ -30,7 +30,7 @@ mod factory;
 mod native;
 mod conversions;
 
-pub use command::{QueueFamily, CommandQueue, CommandPool, RenderPassInlineEncoder};
+pub use command::{QueueFamily, CommandQueue, CommandPool};
 pub use factory::{Factory};
 
 pub type GraphicsCommandPool = CommandPool;

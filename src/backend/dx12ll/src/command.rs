@@ -20,6 +20,7 @@ use winapi::*;
 
 use core::{self, command, memory, pso, state, target, IndexType, VertexCount, VertexOffset};
 use core::buffer::IndexBufferView;
+use core::command::{RenderPassInlineEncoder, RenderPassSecondaryEncoder, Encoder};
 use data;
 use native::{self, CommandBuffer, GeneralCommandBuffer, GraphicsCommandBuffer,
     ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer, RenderPass, FrameBuffer};
@@ -379,6 +380,9 @@ impl_transfer_cmd_buffer!(TransferCommandBuffer);
 macro_rules! impl_graphics_cmd_buffer {
     ($buffer:ident) => (
         impl core::GraphicsCommandBuffer<R> for $buffer {
+            type InlineBuffer = RenderPassInlineBuffer;
+            type SecondaryBuffer = RenderPassSecondaryBuffer;
+
             fn clear_depth_stencil(&mut self, dsv: &native::DepthStencilView, depth: Option<target::Depth>, stencil: Option<target::Stencil>) {
                 self.0.clear_depth_stencil(dsv, depth, stencil)
             }
@@ -445,123 +449,127 @@ impl_graphics_cmd_buffer!(ComputeCommandBuffer);
 
 // TODO: subpass command buffer
 
-pub struct RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc: 'cb> {
-    command_buffer: &'cb mut command::Encoder<'enc, GraphicsCommandBuffer>,
-    render_pass: &'rp RenderPass,
-    framebuffer: &'fb FrameBuffer,
+pub struct RenderPassInlineBuffer {
 }
 
-impl<'cb, 'rp, 'fb, 'enc> command::RenderPassEncoder<'cb, 'rp, 'fb, 'enc, GraphicsCommandBuffer, R> for RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc> {
-    type SecondaryEncoder = RenderPassSecondaryEncoder<'cb, 'rp, 'fb, 'enc>;
-    type InlineEncoder = RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc>;
+macro_rules! impl_render_pass_inline_buffer {
+    ($graphics_buffer:ident) => {
+        impl command::RenderPassInlineBuffer<$graphics_buffer, R> for RenderPassInlineBuffer {
+            fn begin(command_buffer: &mut Encoder<$graphics_buffer>,
+                     render_pass: &RenderPass,
+                     framebuffer: &FrameBuffer,
+                     render_area: target::Rect,
+                     clear_values: &[command::ClearValue]
+            ) -> Self {
+                RenderPassInlineBuffer {
+                }
+            }
 
-    fn begin(command_buffer: &'cb mut command::Encoder<'enc, GraphicsCommandBuffer>,
-             render_pass: &'rp RenderPass,
-             framebuffer: &'fb FrameBuffer,
-             render_area: target::Rect,
-             clear_values: &[command::ClearValue]
-    ) -> Self {
-        RenderPassInlineEncoder {
-            command_buffer,
-            render_pass,
-            framebuffer,
+            fn finish(&mut self,
+                      command_buffer: &mut $graphics_buffer,
+                      render_pass: &native::RenderPass,
+                      framebuffer: &native::FrameBuffer) {
+            }
+
+            fn next_subpass(&mut self) -> RenderPassSecondaryBuffer {
+                unimplemented!()
+            }
+
+            fn next_subpass_inline(&mut self) -> Self {
+                unimplemented!()
+            }
+
+            fn clear_attachment(encoder: &mut RenderPassInlineEncoder<$graphics_buffer, R>) {
+                unimplemented!()
+            }
+
+            fn draw(encoder: &mut RenderPassInlineEncoder<$graphics_buffer, R>, start: VertexCount, count: VertexCount, instance: Option<command::InstanceParams>) {
+                encoder.command_buffer.0.draw(start, count, instance)
+            }
+
+            fn draw_indexed(encoder: &mut RenderPassInlineEncoder<$graphics_buffer, R>, start: VertexCount, count: VertexCount, base: VertexOffset, instance: Option<command::InstanceParams>) {
+                unimplemented!()
+            }
+
+            fn draw_indirect(encoder: &mut RenderPassInlineEncoder<$graphics_buffer, R>) {
+                unimplemented!()
+            }
+
+            fn draw_indexed_indirect(encoder: &mut RenderPassInlineEncoder<$graphics_buffer, R>) {
+                unimplemented!()
+            }
+
+            fn bind_index_buffer(encoder: &mut RenderPassInlineEncoder<$graphics_buffer, R>, ibv: IndexBufferView<R>) {
+                unimplemented!()
+            }
+
+            fn bind_vertex_buffers(encoder: &mut RenderPassInlineEncoder<$graphics_buffer, R>, vbs: pso::VertexBufferSet<R>) {
+                unimplemented!()
+            }
+
+            fn set_viewports(encoder: &mut RenderPassInlineEncoder<$graphics_buffer, R>, viewports: &[target::Rect]) {
+                encoder.command_buffer.0.set_viewports(viewports)
+            }
+
+            fn set_scissors(encoder: &mut RenderPassInlineEncoder<$graphics_buffer, R>, scissors: &[target::Rect]) {
+                encoder.command_buffer.0.set_scissors(scissors)
+            }
+
+            fn set_ref_values(encoder: &mut RenderPassInlineEncoder<$graphics_buffer, R>, rv: state::RefValues) {
+                encoder.command_buffer.0.set_ref_values(rv)
+            }
+
+            fn bind_graphics_pipeline(encoder: &mut RenderPassInlineEncoder<$graphics_buffer, R>, pipeline: &native::GraphicsPipeline) {
+                encoder.command_buffer.0.bind_graphics_pipeline(pipeline)
+            }
+
+            fn bind_graphics_descriptor_sets(encoder: &mut RenderPassInlineEncoder<$graphics_buffer, R>, layout: &native::PipelineLayout, first_set: usize, sets: &[&native::DescriptorSet]) {
+                //self.0.bind_descriptor_sets(vk::PipelineBindPoint::Graphics, layout, first_set, sets)
+                unimplemented!()
+            }
+
+            fn push_constants(encoder: &mut RenderPassInlineEncoder<$graphics_buffer, R>) {
+
+            }
         }
     }
-
-    fn next_subpass(self) -> Self::SecondaryEncoder {
-        unimplemented!()
-    }
-
-    fn next_subpass_inline(self) -> Self::InlineEncoder {
-        unimplemented!()
-    }
 }
 
-impl<'cb, 'rp, 'fb, 'enc> command::RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc, GraphicsCommandBuffer, R> for RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc> {
-    fn clear_attachment(&mut self) {
-        unimplemented!()
-    }
+impl_render_pass_inline_buffer!(GeneralCommandBuffer);
+impl_render_pass_inline_buffer!(GraphicsCommandBuffer);
 
-    fn draw(&mut self, start: VertexCount, count: VertexCount, instance: Option<command::InstanceParams>) {
-        self.command_buffer.0.draw(start, count, instance)
-    }
-
-    fn draw_indexed(&mut self, start: VertexCount, count: VertexCount, base: VertexOffset, instance: Option<command::InstanceParams>) {
-        unimplemented!()
-    }
-
-    fn draw_indirect(&mut self) {
-        unimplemented!()
-    }
-
-    fn draw_indexed_indirect(&mut self) {
-        unimplemented!()
-    }
-
-    fn bind_index_buffer(&mut self, ibv: IndexBufferView<R>) {
-        unimplemented!()
-    }
-
-    fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<R>) {
-        unimplemented!()
-    }
-
-    fn set_viewports(&mut self, viewports: &[target::Rect]) {
-        self.command_buffer.0.set_viewports(viewports)
-    }
-
-    fn set_scissors(&mut self, scissors: &[target::Rect]) {
-        self.command_buffer.0.set_scissors(scissors)
-    }
-
-    fn set_ref_values(&mut self, rv: state::RefValues) {
-        self.command_buffer.0.set_ref_values(rv)
-    }
-
-    fn bind_graphics_pipeline(&mut self, pipeline: &native::GraphicsPipeline) {
-        self.command_buffer.0.bind_graphics_pipeline(pipeline)
-    }
-
-    fn bind_graphics_descriptor_sets(&mut self, layout: &native::PipelineLayout, first_set: usize, sets: &[&native::DescriptorSet]) {
-        //self.0.bind_descriptor_sets(vk::PipelineBindPoint::Graphics, layout, first_set, sets)
-        unimplemented!()
-    }
-
-    fn push_constants(&mut self) {
-
-    }
+pub struct RenderPassSecondaryBuffer {
 }
 
-pub struct RenderPassSecondaryEncoder<'cb, 'rp, 'fb, 'enc: 'cb> {
-    command_buffer: &'cb mut command::Encoder<'enc, GraphicsCommandBuffer>,
-    render_pass: &'rp RenderPass,
-    framebuffer: &'fb FrameBuffer,
-}
+macro_rules! impl_render_pass_secondary_buffer {
+    ($graphics_buffer:ident) => {
+        impl command::RenderPassSecondaryBuffer<$graphics_buffer, R> for RenderPassSecondaryBuffer {
+            fn begin(command_buffer: &mut Encoder<$graphics_buffer>,
+                     render_pass: &RenderPass,
+                     framebuffer: &FrameBuffer,
+                     render_area: target::Rect,
+                     clear_values: &[command::ClearValue]
+            ) -> Self {
+                RenderPassSecondaryBuffer {
+                }
+            }
 
-impl<'cb, 'rp, 'fb, 'enc> command::RenderPassEncoder<'cb, 'rp, 'fb, 'enc, GraphicsCommandBuffer, R> for RenderPassSecondaryEncoder<'cb, 'rp, 'fb, 'enc> {
-    type SecondaryEncoder = RenderPassSecondaryEncoder<'cb, 'rp, 'fb, 'enc>;
-    type InlineEncoder = RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc>;
+            fn finish(&mut self,
+                      command_buffer: &mut $graphics_buffer,
+                      render_pass: &native::RenderPass,
+                      framebuffer: &native::FrameBuffer) {
+            }
 
-    fn begin(command_buffer: &'cb mut command::Encoder<'enc, GraphicsCommandBuffer>,
-             render_pass: &'rp RenderPass,
-             framebuffer: &'fb FrameBuffer,
-             render_area: target::Rect,
-             clear_values: &[command::ClearValue]
-    ) -> Self {
-        RenderPassSecondaryEncoder {
-            command_buffer,
-            render_pass,
-            framebuffer,
+            fn next_subpass(&mut self) -> Self {
+                unimplemented!()
+            }
+
+            fn next_subpass_inline(&mut self) -> RenderPassInlineBuffer {
+                unimplemented!()
+            }
         }
     }
-
-    fn next_subpass(self) -> Self::SecondaryEncoder {
-        unimplemented!()
-    }
-
-    fn next_subpass_inline(self) -> Self::InlineEncoder {
-        unimplemented!()
-    }
 }
 
-impl<'cb, 'rp, 'fb, 'enc> command::RenderPassSecondaryEncoder<'cb, 'rp, 'fb, 'enc, GraphicsCommandBuffer, R> for RenderPassSecondaryEncoder<'cb, 'rp, 'fb, 'enc> { }
+impl_render_pass_secondary_buffer!(GeneralCommandBuffer);
+impl_render_pass_secondary_buffer!(GraphicsCommandBuffer);

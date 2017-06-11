@@ -405,8 +405,7 @@ fn main() {
             cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, &[&set0[0], &set1[0]]);
 
             {
-                let mut encoder = back::RenderPassInlineEncoder::begin(
-                    &mut cmd_buffer,
+                let mut encoder = cmd_buffer.begin_render_pass_inline(
                     &render_pass,
                     &framebuffers[frame.id()],
                     target::Rect { x: 0, y: 0, w: pixel_width, h: pixel_height },

@@ -22,6 +22,7 @@ use std::ops::DerefMut;
 use core::{self, command, memory, pso, state, target, VertexCount, VertexOffset};
 use core::buffer::IndexBufferView;
 use core::memory::{ImageStateSrc, ImageStateDst};
+use core::command::{RenderPassInlineEncoder, RenderPassSecondaryEncoder};
 use data;
 use native::{self, GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer};
 use {DeviceInner, Resources as R};
@@ -479,6 +480,9 @@ impl_transfer_cmd_buffer!(TransferCommandBuffer);
 macro_rules! impl_graphics_cmd_buffer {
     ($buffer:ident) => (
         impl core::GraphicsCommandBuffer<R> for $buffer {
+            type InlineBuffer = RenderPassInlineBuffer<Self, R>;
+            type SecondaryBuffer = RenderPassSecondaryBuffer<Self, R>;
+
             fn clear_depth_stencil(&mut self, dsv: &native::DepthStencilView, depth: Option<target::Depth>, stencil: Option<target::Stencil>) {
                 self.0.clear_depth_stencil(dsv, depth, stencil)
             }
@@ -546,34 +550,19 @@ impl_compute_cmd_buffer!(ComputeCommandBuffer);
 // TODO: subpass command buffer
 
 // TODO: not only GraphicsCommandBuffer
-pub struct RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc: 'cb, C, R>
-    where C: core::GraphicsCommandBuffer<R> + 'enc + DerefMut<Target=native::CommandBuffer>,
-          R: core::Resources
-{
-    command_buffer: &'cb mut command::Encoder<'enc, C>,
-    render_pass: &'rp native::RenderPass,
-    framebuffer: &'fb native::FrameBuffer,
-    _marker: PhantomData<*const R>,
-}
-
-impl<'cb, 'rp, 'fb, 'enc, C, R> Drop for RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc, C, R>
+pub struct RenderPassInlineBuffer<C, R>
     where C: core::GraphicsCommandBuffer<R> + DerefMut<Target=native::CommandBuffer>,
           R: core::Resources
 {
-    fn drop(&mut self) {
-        unsafe { self.command_buffer.device.0.cmd_end_render_pass(self.command_buffer.inner); }
-    }
+    _marker: PhantomData<(*const C, *const R)>,
 }
 
-impl<'cb, 'rp, 'fb, 'enc, C> command::RenderPassEncoder<'cb, 'rp, 'fb, 'enc, C, R> for RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc, C, R>
-    where C: core::GraphicsCommandBuffer<R> + DerefMut<Target=native::CommandBuffer>
+impl<C> command::RenderPassInlineBuffer<C, R> for RenderPassInlineBuffer<C, R>
+    where C: core::GraphicsCommandBuffer<R, InlineBuffer=Self> + DerefMut<Target=native::CommandBuffer>
 {
-    type SecondaryEncoder = RenderPassSecondaryEncoder<'cb, 'rp, 'fb, 'enc, C, R>;
-    type InlineEncoder = RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc, C, R>;
-
-    fn begin(command_buffer: &'cb mut command::Encoder<'enc, C>,
-             render_pass: &'rp native::RenderPass,
-             framebuffer: &'fb native::FrameBuffer,
+    fn begin(command_buffer: &mut command::Encoder<C>,
+             render_pass: &native::RenderPass,
+             framebuffer: &native::FrameBuffer,
              render_area: target::Rect,
              clear_values: &[command::ClearValue]) -> Self
     {
@@ -614,121 +603,113 @@ impl<'cb, 'rp, 'fb, 'enc, C> command::RenderPassEncoder<'cb, 'rp, 'fb, 'enc, C, 
                 vk::SubpassContents::Inline);
         }
 
-        RenderPassInlineEncoder {
-            command_buffer,
-            render_pass,
-            framebuffer,
+        RenderPassInlineBuffer {
             _marker: PhantomData,
         }
     }
 
-    fn next_subpass(self) -> Self::SecondaryEncoder {
+    fn finish(&mut self,
+              command_buffer: &mut C,
+              render_pass: &native::RenderPass,
+              framebuffer: &native::FrameBuffer) {
+        unsafe { command_buffer.device.0.cmd_end_render_pass(command_buffer.inner); }
+    }
+
+    fn next_subpass(&mut self) -> C::SecondaryBuffer {
         unimplemented!()
     }
 
-    fn next_subpass_inline(self) -> Self::InlineEncoder {
+    fn next_subpass_inline(&mut self) -> C::InlineBuffer {
+        unimplemented!()
+    }
+
+    fn clear_attachment(encoder: &mut RenderPassInlineEncoder<C, R>) {
+        unimplemented!()
+    }
+
+    fn draw(encoder: &mut RenderPassInlineEncoder<C, R>, start: VertexCount, count: VertexCount, instance: Option<command::InstanceParams>) {
+        encoder.command_buffer.draw(start, count, instance)
+    }
+
+    fn draw_indexed(encoder: &mut RenderPassInlineEncoder<C, R>, start: VertexCount, count: VertexCount, base: VertexOffset, instance: Option<command::InstanceParams>) {
+        encoder.command_buffer.draw_indexed(start, count, base, instance)
+    }
+
+    fn draw_indirect(encoder: &mut RenderPassInlineEncoder<C, R>) {
+        unimplemented!()
+    }
+
+    fn draw_indexed_indirect(encoder: &mut RenderPassInlineEncoder<C, R>) {
+        unimplemented!()
+    }
+
+    fn bind_index_buffer(encoder: &mut RenderPassInlineEncoder<C, R>, ibv: IndexBufferView<R>) {
+        encoder.command_buffer.bind_index_buffer(ibv)
+    }
+
+    fn bind_vertex_buffers(encoder: &mut RenderPassInlineEncoder<C, R>, vbs: pso::VertexBufferSet<R>) {
+        encoder.command_buffer.bind_vertex_buffers(vbs)
+    }
+
+    fn set_viewports(encoder: &mut RenderPassInlineEncoder<C, R>, viewports: &[target::Rect]) {
+        encoder.command_buffer.set_viewports(viewports)
+    }
+
+    fn set_scissors(encoder: &mut RenderPassInlineEncoder<C, R>, scissors: &[target::Rect]) {
+        encoder.command_buffer.set_scissors(scissors)
+    }
+
+    fn set_ref_values(encoder: &mut RenderPassInlineEncoder<C, R>, rv: state::RefValues) {
+        encoder.command_buffer.set_ref_values(rv)
+    }
+
+    fn bind_graphics_pipeline(encoder: &mut RenderPassInlineEncoder<C, R>, pipeline: &native::GraphicsPipeline) {
+        encoder.command_buffer.bind_graphics_pipeline(pipeline)
+    }
+
+    fn bind_graphics_descriptor_sets(encoder: &mut RenderPassInlineEncoder<C, R>, layout: &native::PipelineLayout, first_set: usize, sets: &[&native::DescriptorSet]) {
+        encoder.command_buffer.bind_descriptor_sets(vk::PipelineBindPoint::Graphics, layout, first_set, sets)
+    }
+
+    fn push_constants(encoder: &mut RenderPassInlineEncoder<C, R>) {
         unimplemented!()
     }
 }
 
-
-impl<'cb, 'rp, 'fb, 'enc, C> command::RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc, C, R> for RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc, C, R>
-    where C: core::GraphicsCommandBuffer<R> + DerefMut<Target=native::CommandBuffer>
-{
-    fn clear_attachment(&mut self) {
-        unimplemented!()
-    }
-
-    fn draw(&mut self, start: VertexCount, count: VertexCount, instance: Option<command::InstanceParams>) {
-        self.command_buffer.draw(start, count, instance)
-    }
-
-    fn draw_indexed(&mut self, start: VertexCount, count: VertexCount, base: VertexOffset, instance: Option<command::InstanceParams>) {
-        self.command_buffer.draw_indexed(start, count, base, instance)
-    }
-
-    fn draw_indirect(&mut self) {
-        unimplemented!()
-    }
-
-    fn draw_indexed_indirect(&mut self) {
-        unimplemented!()
-    }
-
-    fn bind_index_buffer(&mut self, ibv: IndexBufferView<R>) {
-        self.command_buffer.bind_index_buffer(ibv)
-    }
-
-    fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<R>) {
-        self.command_buffer.bind_vertex_buffers(vbs)
-    }
-
-    fn set_viewports(&mut self, viewports: &[target::Rect]) {
-        self.command_buffer.set_viewports(viewports)
-    }
-
-    fn set_scissors(&mut self, scissors: &[target::Rect]) {
-        self.command_buffer.set_scissors(scissors)
-    }
-
-    fn set_ref_values(&mut self, rv: state::RefValues) {
-        self.command_buffer.set_ref_values(rv)
-    }
-
-    fn bind_graphics_pipeline(&mut self, pipeline: &native::GraphicsPipeline) {
-        self.command_buffer.bind_graphics_pipeline(pipeline)
-    }
-
-    fn bind_graphics_descriptor_sets(&mut self, layout: &native::PipelineLayout, first_set: usize, sets: &[&native::DescriptorSet]) {
-        self.command_buffer.bind_descriptor_sets(vk::PipelineBindPoint::Graphics, layout, first_set, sets)
-    }
-
-    fn push_constants(&mut self) {
-        unimplemented!()
-    }
-}
-
-pub struct RenderPassSecondaryEncoder<'cb, 'rp, 'fb, 'enc: 'cb, C, R>
-    where C: core::GraphicsCommandBuffer<R> + 'enc,
+pub struct RenderPassSecondaryBuffer<C, R>
+    where C: core::GraphicsCommandBuffer<R>,
           R: core::Resources,
 {
-    command_buffer: &'cb mut command::Encoder<'enc, C>,
-    render_pass: &'rp native::RenderPass,
-    framebuffer: &'fb native::FrameBuffer,
-    _marker: PhantomData<*const R>,
+    _marker: PhantomData<(*const C, *const R)>,
 }
 
-impl<'cb, 'rp, 'fb, 'enc, C> command::RenderPassEncoder<'cb, 'rp, 'fb, 'enc, C, R> for RenderPassSecondaryEncoder<'cb, 'rp, 'fb, 'enc, C, R>
-    where C: core::GraphicsCommandBuffer<R> + DerefMut<Target=native::CommandBuffer>
+impl<C> command::RenderPassSecondaryBuffer<C, R> for RenderPassSecondaryBuffer<C, R>
+    where C: core::GraphicsCommandBuffer<R, SecondaryBuffer=Self> + DerefMut<Target=native::CommandBuffer>
 {
-    type SecondaryEncoder = RenderPassSecondaryEncoder<'cb, 'rp, 'fb, 'enc, C, R>;
-    type InlineEncoder = RenderPassInlineEncoder<'cb, 'rp, 'fb, 'enc, C, R>;
-
-    fn begin(command_buffer: &'cb mut command::Encoder<'enc, C>,
-             render_pass: &'rp native::RenderPass,
-             framebuffer: &'fb native::FrameBuffer,
+    fn begin(command_buffer: &mut command::Encoder<C>,
+             render_pass: &native::RenderPass,
+             framebuffer: &native::FrameBuffer,
              render_area: target::Rect,
              clear_values: &[command::ClearValue]
     ) -> Self {
-        RenderPassSecondaryEncoder {
-            command_buffer: command_buffer,
-            render_pass: render_pass,
-            framebuffer: framebuffer,
+        RenderPassSecondaryBuffer {
             _marker: PhantomData,
         }
     }
 
-    fn next_subpass(self) -> Self::SecondaryEncoder {
+    fn finish(&mut self,
+              command_buffer: &mut C,
+              render_pass: &native::RenderPass,
+              framebuffer: &native::FrameBuffer) {
         unimplemented!()
     }
 
-    fn next_subpass_inline(self) -> Self::InlineEncoder {
+    fn next_subpass(&mut self) -> C::SecondaryBuffer {
+        unimplemented!()
+    }
+
+    fn next_subpass_inline(&mut self) -> C::InlineBuffer {
         unimplemented!()
     }
 }
 
-impl<'cb, 'rp, 'fb, 'enc, C> command::RenderPassSecondaryEncoder<'cb, 'rp, 'fb, 'enc, C, R> for RenderPassSecondaryEncoder<'cb, 'rp, 'fb, 'enc, C, R>
-    where C: core::GraphicsCommandBuffer<R> + DerefMut<Target=native::CommandBuffer>
-{
-
-}
