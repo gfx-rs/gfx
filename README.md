@@ -68,6 +68,7 @@ Hardware features:
 
 Biggest open-source projects are:
   - [Amethyst](https://github.com/amethyst/amethyst) engine
+  - [ggez](https://github.com/ggez/ggez) engine
   - Piston engine - [2d graphics](https://github.com/PistonDevelopers/gfx_graphics)
   - [LazyBox](https://github.com/lazybox/lazybox) engine
   - [Zone of Control](https://github.com/ozkriff/zoc) game
@@ -105,7 +106,7 @@ If you compile the example for the first time, it may take some while since all 
 If you want to build your own stand-alone gfx program, add the following to your new `Cargo.toml`:
 
 	[dependencies]
-	gfx = "0.15"
+	gfx = "0.16"
 
 
 For gfx to work, it needs access to the graphics system of the OS. This is typically provided through some window initialization API.
