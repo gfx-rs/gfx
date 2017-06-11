@@ -21,8 +21,8 @@ use std::error::Error;
 use {Resources};
 use {AttributeSlot, ColorSlot, ConstantBufferSlot, ResourceViewSlot, SamplerSlot, UnorderedViewSlot};
 
-#[cfg(feature = "cgmath-types")]
-use cgmath::{Deg, Matrix2, Matrix3, Matrix4, Point2, Point3, Rad, Vector2, Vector3, Vector4};
+#[cfg(feature = "mint")]
+use mint;
 
 /// Number of components in a container type (vectors/matrices)
 pub type Dimension = u8;
@@ -252,11 +252,11 @@ macro_rules! impl_const_matrix {
     }
 }
 
-#[cfg(feature = "cgmath-types")]
-macro_rules! impl_const_vector_cgmath {
+#[cfg(feature = "mint")]
+macro_rules! impl_const_vector_mint {
     ( $( $name:ident = $num:expr, )* ) => {
         $(
-            impl<T: BaseTyped> Formatted for $name<T> {
+            impl<T: BaseTyped> Formatted for mint::$name<T> {
                 fn get_format() -> ConstFormat {
                     (T::get_base_type(), ContainerType::Vector($num))
                 }
@@ -265,13 +265,13 @@ macro_rules! impl_const_vector_cgmath {
     }
 }
 
-#[cfg(feature = "cgmath-types")]
-macro_rules! impl_const_matrix_cgmath {
-    ( $( $name:ident = $size:expr, )* ) => {
+#[cfg(feature = "mint")]
+macro_rules! impl_const_matrix_mint {
+    ( $( $name:ident = $format:ident $size:expr, )* ) => {
         $(
-            impl<T: BaseTyped> Formatted for $name<T> {
+            impl<T: BaseTyped> Formatted for mint::$name<T> {
                 fn get_format() -> ConstFormat {
-                    let mf = MatrixFormat::ColumnMajor;
+                    let mf = MatrixFormat::$format;
                     (T::get_base_type(), ContainerType::Matrix(mf, $size, $size))
                 }
             }
@@ -286,12 +286,6 @@ impl_base_type! {
     bool = Bool,
 }
 
-#[cfg(feature = "cgmath-types")]
-impl_base_type! {
-    Deg<f32> = F32,
-    Rad<f32> = F32,
-}
-
 impl<T: BaseTyped> Formatted for T {
     fn get_format() -> ConstFormat {
         (T::get_base_type(), ContainerType::Single)
@@ -301,8 +295,8 @@ impl<T: BaseTyped> Formatted for T {
 impl_const_vector!(2, 3, 4);
 impl_const_matrix!([2,2], [3,3], [4,4], [4,3]);
 
-#[cfg(feature = "cgmath-types")]
-impl_const_vector_cgmath! {
+#[cfg(feature = "mint")]
+impl_const_vector_mint! {
     Point2 = 2,
     Point3 = 3,
     Vector2 = 2,
@@ -310,11 +304,14 @@ impl_const_vector_cgmath! {
     Vector4 = 4,
 }
 
-#[cfg(feature = "cgmath-types")]
-impl_const_matrix_cgmath! {
-    Matrix2 = 2,
-    Matrix3 = 3,
-    Matrix4 = 4,
+#[cfg(feature = "mint")]
+impl_const_matrix_mint! {
+    ColumnMatrix2 = ColumnMajor 2,
+    ColumnMatrix3 = ColumnMajor 3,
+    ColumnMatrix4 = ColumnMajor 4,
+    RowMatrix2 = RowMajor 2,
+    RowMatrix3 = RowMajor 3,
+    RowMatrix4 = RowMajor 4,
 }
 
 bitflags!(

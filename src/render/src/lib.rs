@@ -17,8 +17,8 @@
 //! An efficient, low-level, bindless graphics API for Rust. See [the
 //! blog](http://gfx-rs.github.io/) for explanations and annotated examples.
 
-#[cfg(feature = "cgmath-types")]
-extern crate cgmath;
+#[cfg(feature = "mint")]
+extern crate mint;
 
 extern crate log;
 #[macro_use]
