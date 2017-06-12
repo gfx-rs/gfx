@@ -27,7 +27,7 @@
       <img src="https://ci.appveyor.com/api/projects/status/ryn5ee3aumpmbw5l?svg=true" alt="AppVeyor Build Status">
   </a>
   <a href="https://crates.io/crates/gfx">
-      <img src="http://meritbadge.herokuapp.com/gfx?style=flat-square" alt="crates.io">
+      <img src="http://img.shields.io/crates/v/gfx.svg?label=gfx" alt = "gfx on crates.io">
   </a>
   <a href="https://gitter.im/gfx-rs/gfx">
     <img src="https://img.shields.io/badge/GITTER-join%20chat-green.svg?style=flat-square" alt="Gitter Chat">
@@ -122,11 +122,21 @@ To use `glutin`, for example, your `Cargo.toml` must be extended with the follow
 	glutin ="*"
 	gfx_window_glutin = "*"
 
-You may want to inspect `<my_dir>/gfx/Cargo.toml` for other crates typically used in gfx programs.
-
 Alternatively, an excellent introduction into gfx and its related crates can be found [here](https://wiki.alopex.li/LearningGfx).
+
+## Structure and current versions
+`gfx` consist of several crates. You can find all of them in this repository.
+
+| Core functionality: | Graphic backends: | Window backends: |
+| :---: | :---: | :---: |
+| [![gfx on crates.io](http://img.shields.io/crates/v/gfx.svg?label=gfx)](http://crates.io/crates/gfx) | [![gfx_device_gl on crates.io](http://img.shields.io/crates/v/gfx_device_gl.svg?label=gfx_device_gl)](http://crates.io/crates/gfx_device_gl) | [![gfx_window_sdl on crates.io](http://img.shields.io/crates/v/gfx_window_sdl.svg?label=gfx_window_sdl)](http://crates.io/crates/gfx_window_sdl) |
+| [![gfx_app on crates.io](http://img.shields.io/crates/v/gfx_app.svg?label=gfx_app)](http://crates.io/crates/gfx_app) | [![gfx_device_dx11 on crates.io](http://img.shields.io/crates/v/gfx_device_dx11.svg?label=gfx_device_dx11)](http://crates.io/crates/gfx_device_dx11) | [![gfx_window_dxgi on crates.io](http://img.shields.io/crates/v/gfx_window_dxgi.svg?label=gfx_window_dxgi)](http://crates.io/crates/gfx_window_dxgi) |
+| [![gfx_core on crates.io](http://img.shields.io/crates/v/gfx_core.svg?label=gfx_core)](http://crates.io/crates/gfx_core) | [![gfx_device_metal on crates.io](http://img.shields.io/crates/v/gfx_device_metal.svg?label=gfx_device_metal)](http://crates.io/crates/gfx_device_metal) | [![gfx_window_glfw on crates.io](http://img.shields.io/crates/v/gfx_window_glfw.svg?label=gfx_window_glfw)](http://crates.io/crates/gfx_window_glfw) |
+| [![gfx_macros on crates.io](http://img.shields.io/crates/v/gfx_macros.svg?label=gfx_macros)](http://crates.io/crates/gfx_macros) | [![gfx_device_vulkan on crates.io](http://img.shields.io/crates/v/gfx_device_vulkan.svg?label=gfx_device_vulkan)](http://crates.io/crates/gfx_device_vulkan) | [![gfx_window_metal on crates.io](http://img.shields.io/crates/v/gfx_window_metal.svg?label=gfx_window_metal)](http://crates.io/crates/gfx_window_metal) |
+| | | [![gfx_window_glutin on crates.io](http://img.shields.io/crates/v/gfx_window_glutin.svg?label=gfx_window_glutin)](http://crates.io/crates/gfx_window_glutin) |
+| | | [![gfx_window_vulkan on crates.io](http://img.shields.io/crates/v/gfx_window_vulkan.svg?label=gfx_window_vulkan)](http://crates.io/crates/gfx_window_vulkan) |
 
 ## Note
 
-gfx is still in development. API may change with new backends/features to be implemented.
+`gfx` is still in development. API may change with new backends/features to be implemented.
 If you are interested in helping out, checkout [contrib.md](info/contrib.md) and do not hesitate to contact the developers on [Gitter](https://gitter.im/gfx-rs/gfx).
