@@ -188,15 +188,6 @@ impl Error {
     }
 }
 
-/// Create a new device with a factory.
-pub fn create<F>(fn_proc: F) -> (Device, Factory) where
-    F: FnMut(&str) -> *const std::os::raw::c_void
-{
-    let device = Device::new(fn_proc);
-    let factory = Factory::new(device.share.clone());
-    (device, factory)
-}
-
 /// Create the proxy target views (RTV and DSV) for the attachments of the
 /// main framebuffer. These have GL names equal to 0.
 /// Not supposed to be used by the users directly.
@@ -253,19 +244,16 @@ impl Share {
     }
 }
 
-/// An OpenGL device with GLSL shaders.
-pub struct Device {
+#[allow(missing_copy_implementations)]
+pub struct Adapter {
     share: Rc<Share>,
-    vao: ArrayBuffer,
-    frame_handles: handle::Manager<Resources>,
-    max_resource_count: Option<usize>,
+    adapter_info: c::AdapterInfo,
+    queue_family: Vec<QueueFamily>,
 }
 
-impl Device {
-    /// Create a new device. Each GL context can only have a single
-    /// Device on GFX side to represent it. //TODO: enforce somehow
-    /// Also, load OpenGL symbols and detect driver information.
-    fn new<F>(fn_proc: F) -> Device where
+impl Adapter {
+    #[doc(hidden)]
+    pub fn new<F>(fn_proc: F) -> Self where
         F: FnMut(&str) -> *const std::os::raw::c_void
     {
         let gl = gl::Gl::load_with(fn_proc);
@@ -279,27 +267,14 @@ impl Device {
         for extension in info.extensions.iter() {
             debug!("- {}", *extension);
         }
-        // initialize permanent states
-        if caps.srgb_color_supported {
-            unsafe {
-                gl.Enable(gl::FRAMEBUFFER_SRGB);
-            }
-        }
-        unsafe {
-            gl.PixelStorei(gl::UNPACK_ALIGNMENT, 1);
 
-            if !info.version.is_embedded {
-                gl.Enable(gl::PROGRAM_POINT_SIZE);
-            }
-        }
-        // create main VAO and bind it
-        let mut vao = 0;
-        if private.array_buffer_supported {
-            unsafe {
-                gl.GenVertexArrays(1, &mut vao);
-                gl.BindVertexArray(vao);
-            }
-        }
+        let adapter_info = c::AdapterInfo {
+            name: info.platform_name.renderer.into(),
+            vendor: 0, // TODO
+            device: 0, // TODO
+            software_rendering: true, // not always true ..
+        };
+
         // create the shared context
         let handles = handle::Manager::new();
         let share = Share {
@@ -309,18 +284,66 @@ impl Device {
             private_caps: private,
             handles: RefCell::new(handles),
         };
-        if let Err(err) = share.check() {
-            panic!("Error {:?} after initialization", err)
-        }
-        // create the device
-        Device {
+
+        Adapter {
             share: Rc::new(share),
-            vao: vao,
-            frame_handles: handle::Manager::new(),
-            max_resource_count: Some(999999),
+            adapter_info: adapter_info,
+            queue_family: vec![QueueFamily],
+        }
+    }
+}
+
+impl c::Adapter<Backend> for Adapter {
+    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> c::Device_<Backend> {
+        // create main VAO and bind it
+        let mut vao = 0;
+        if self.share.private_caps.array_buffer_supported {
+            let gl = &self.share.context;
+            unsafe {
+                gl.GenVertexArrays(1, &mut vao);
+                gl.BindVertexArray(vao);
+            }
+        }
+
+        let graphics_queue = unsafe {
+            core::GraphicsQueue::new(
+                CommandQueue {
+                    share: self.share.clone(),
+                    vao: vao,
+                    frame_handles: handle::Manager::new(),
+                    max_resource_count: Some(999999),
+                })
+        };
+        c::Device_ {
+            factory: Factory::new(self.share.clone()),
+            general_queues: Vec::new(), // TODO
+            graphics_queues: vec![graphics_queue],
+            compute_queues: Vec::new(),
+            transfer_queues: Vec::new(),
+            heap_types: Vec::new(), // TODO
+            memory_heaps: Vec::new(), // TODO
+
+            _marker: std::marker::PhantomData,
         }
     }
 
+    fn get_info(&self) -> &c::AdapterInfo {
+        &self.adapter_info
+    }
+
+    fn get_queue_families(&self) -> &[QueueFamily] {
+        &self.queue_family
+    }
+}
+
+pub struct CommandQueue {
+    share: Rc<Share>,
+    vao: ArrayBuffer,
+    frame_handles: handle::Manager<Resources>,
+    max_resource_count: Option<usize>,
+}
+
+impl CommandQueue {
     /// Access the OpenGL directly via a closure. OpenGL types and enumerations
     /// can be found in the `gl` crate.
     pub unsafe fn with_gl<F: FnMut(&gl::Gl)>(&mut self, mut fun: F) {
@@ -786,14 +809,12 @@ impl Device {
         }
     }
 
-    /*
-    fn no_fence_submit(&mut self, cb: &mut command::CommandBuffer) {
+    fn no_fence_submit(&mut self, cb: &command::SubmitInfo) {
         self.reset_state();
         for com in &cb.buf {
             self.process(com, &cb.data);
         }
     }
-    */
 
     fn before_submit<'a>(&mut self, gpu_access: &'a com::AccessInfo<Resources>)
                          -> c::SubmissionResult<com::AccessGuard<'a, Resources>> {
@@ -887,16 +908,6 @@ impl Device {
             status.gpu_access(fence.clone());
         }
     }
-}
-
-/*
-impl c::Device for Device {
-    type Resources = Resources;
-    type CommandBuffer = command::CommandBuffer;
-
-    fn get_capabilities(&self) -> &c::Capabilities {
-        &self.share.capabilities
-    }
 
     fn pin_submitted_resources(&mut self, man: &handle::Manager<Resources>) {
         self.frame_handles.extend(man);
@@ -909,37 +920,7 @@ impl c::Device for Device {
         }
     }
 
-    fn submit(&mut self,
-              cb: &mut command::CommandBuffer,
-              access: &com::AccessInfo<Resources>) -> c::SubmissionResult<()>
-    {
-        let mut access = try!(self.before_submit(access));
-        self.no_fence_submit(cb);
-        self.after_submit(&mut access);
-        Ok(())
-    }
-
-    fn fenced_submit(&mut self,
-                     cb: &mut command::CommandBuffer,
-                     access: &com::AccessInfo<Resources>,
-                     after: Option<handle::Fence<Resources>>)
-                     -> c::SubmissionResult<handle::Fence<Resources>> {
-
-        if let Some(fence) = after {
-            let f = self.frame_handles.ref_fence(&fence);
-            let timeout = 1_000_000_000_000;
-            // FIXME: should we use 'glFlush' here ?
-            // see https://www.opengl.org/wiki/Sync_Object
-            unsafe { self.share.context.WaitSync(f.0, 0, timeout); }
-        }
-
-        let mut access = try!(self.before_submit(access));
-        self.no_fence_submit(cb);
-        let fence_opt = self.after_submit(&mut access);
-        Ok(fence_opt.unwrap_or_else(|| self.place_fence()))
-    }
-
-    fn wait_fence(&mut self, fence: &handle::Fence<Self::Resources>) {
+    fn wait_fence(&mut self, fence: &handle::Fence<Resources>) {
         factory::wait_fence(self.frame_handles.ref_fence(&fence),
                             &self.share.context);
     }
@@ -983,90 +964,29 @@ impl c::Device for Device {
         );
     }
 }
-*/
 
-#[allow(missing_copy_implementations)]
-pub struct Adapter {
-    share: Rc<Share>,
-    adapter_info: c::AdapterInfo,
-    queue_family: Vec<QueueFamily>,
-}
-
-impl Adapter {
-    #[doc(hidden)]
-    pub fn new<F>(fn_proc: F) -> Self where
-        F: FnMut(&str) -> *const std::os::raw::c_void
-    {
-        let gl = gl::Gl::load_with(fn_proc);
-        // query information
-        let (info, caps, private) = info::get(&gl);
-        info!("Vendor: {:?}", info.platform_name.vendor);
-        info!("Renderer: {:?}", info.platform_name.renderer);
-        info!("Version: {:?}", info.version);
-        info!("Shading Language: {:?}", info.shading_language);
-        debug!("Loaded Extensions:");
-        for extension in info.extensions.iter() {
-            debug!("- {}", *extension);
-        }
-
-        let adapter_info = c::AdapterInfo {
-            name: info.platform_name.renderer.into(),
-            vendor: 0, // TODO
-            device: 0, // TODO
-            software_rendering: true, // not always true ..
-        };
-
-        // create the shared context
-        let handles = handle::Manager::new();
-        let share = Share {
-            context: gl,
-            info: info,
-            capabilities: caps,
-            private_caps: private,
-            handles: RefCell::new(handles),
-        };
-
-        Adapter {
-            share: Rc::new(share),
-            adapter_info: adapter_info,
-            queue_family: vec![QueueFamily],
-        }
-    }
-}
-
-impl c::Adapter<Backend> for Adapter {
-    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> c::Device_<Backend> {
-        c::Device_ {
-            factory: Factory::new(self.share.clone()),
-            general_queues: Vec::new(), // TODO
-            graphics_queues: Vec::new(),
-            compute_queues: Vec::new(),
-            transfer_queues: Vec::new(),
-            heap_types: Vec::new(), // TODO
-            memory_heaps: Vec::new(), // TODO
-
-            _marker: std::marker::PhantomData,
-        }
-    }
-
-    fn get_info(&self) -> &c::AdapterInfo {
-        &self.adapter_info
-    }
-
-    fn get_queue_families(&self) -> &[QueueFamily] {
-        &self.queue_family
-    }
-}
-
-#[allow(missing_copy_implementations)]
-pub struct CommandQueue;
 impl c::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit(&mut self, submit_infos: &[c::QueueSubmit<Backend>], fence: Option<&mut Fence>) {
-        unimplemented!()
+        if let Some(fence) = fence {
+            let timeout = 1_000_000_000_000;
+            // FIXME: should we use 'glFlush' here ?
+            // see https://www.opengl.org/wiki/Sync_Object
+            unsafe { self.share.context.WaitSync(fence.0, 0, timeout); }
+        }
+
+        // TODO
+        // let mut access = try!(self.before_submit(access));
+        for submit in submit_infos {
+            for cb in submit.cmd_buffers {
+                self.no_fence_submit(cb.get_info());
+            }
+        }
+        // let fence_opt = self.after_submit(&mut access);
     }
 
     fn wait_idle(&mut self) {
-        unimplemented!()
+        let gl = &self.share.context;
+        unsafe { gl.Finish() }; // TODO: we need to finish?
     }
 }
 

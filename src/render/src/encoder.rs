@@ -21,10 +21,11 @@ use std::error::Error;
 use std::any::Any;
 use std::{fmt, mem};
 
-use core::{Backend, SubmissionResult, IndexType, Resources, VertexCount, GraphicsCommandPool};
+use core::{Backend, SubmissionResult, IndexType, Resources, VertexCount, GraphicsCommandPool, QueueSubmit};
 use core::{command, format, handle, texture};
 use core::command::{Buffer, Encoder};
 use core::memory::{self, cast_slice, Typed, Pod, Usage};
+use core::queue::GraphicsQueueMut;
 use slice;
 use pso;
 
@@ -188,37 +189,24 @@ impl<'a, B: Backend> GraphicsEncoder<'a, B> {
     /// internal ´CommandBuffer´ will not be sent to the GPU, and as a result they will not be
     /// processed. Calling flush too often however will result in a performance hit. It is
     /// generally recommended to call flush once per frame, when all draw calls have been made.
-    pub fn flush<D>(&mut self, device: &mut D)
+    pub fn flush(self, queue: &mut GraphicsQueueMut<B>) -> SubmissionResult<()>
     {
-        // self.flush_no_reset(device).unwrap();
-        self.reset();
-    }
-
-    /// Like `flush` but keeps the encoded commands.
-    pub fn flush_no_reset<D>(&mut self, device: &mut D) -> SubmissionResult<()>
-    {
-        // device.pin_submitted_resources(&self.handles);
+        let submit = self.command_buffer.finish();
+        // TODO: handles, access info
+        // queue.pin_submitted_resources(&self.handles);
         // device.submit(&mut self.command_buffer, &self.access_info)
-        unimplemented!()
-    }
+        queue.submit_graphics(
+            &[
+                QueueSubmit {
+                    cmd_buffers: &[submit],
+                    wait_semaphores: &[],
+                    signal_semaphores: &[],
+                }
+            ],
+            None,
+        );
 
-    /// Like `flush_no_reset` but places a fence.
-    pub fn fenced_flush_no_reset<D>(&mut self,
-                                    device: &mut D,
-                                    after: Option<handle::Fence<B::Resources>>)
-                                    -> SubmissionResult<handle::Fence<B::Resources>>
-        // where D: Device<Resources=R, CommandBuffer=C>
-    {
-        // device.pin_submitted_resources(&self.handles);
-        // device.fenced_submit(&mut self.command_buffer, &self.access_info, after)
-        unimplemented!()
-    }
-
-    /// Resets the encoded commands.
-    pub fn reset(&mut self) {
-        self.command_buffer.reset();
-        self.access_info.clear();
-        self.handles.clear();
+        Ok(()) // TODO
     }
 
     /// Copy part of a buffer to another
