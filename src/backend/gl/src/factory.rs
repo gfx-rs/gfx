@@ -511,7 +511,7 @@ impl f::Factory<R> for Factory {
         self.share.handles.borrow_mut().make_sampler(sam, info)
     }
 
-    fn create_semaphore(&mut self) -> () { unimplemented!() }
+    fn create_semaphore(&mut self) -> () { () } // TODO: ?
 
     fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<R, T>)
                                -> Result<mapping::Reader<'b, R, T>,

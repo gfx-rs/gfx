@@ -207,7 +207,7 @@ A: Sized + Application<gfx_device_metal::Backend>
 
 fn run<A, B, S, EL>((width, height): (u32, u32),
                     events_loop: EL,
-                    surface: S,
+                    mut surface: S,
                     adapters: Vec<B::Adapter>)
     where A: Sized + Application<B>,
           B: Backend,
