@@ -74,6 +74,7 @@ Biggest open-source projects are:
   - [Zone of Control](https://github.com/ozkriff/zoc) game
   - [Vange-rs](https://github.com/kvark/vange-rs) game
   - [Claymore](https://github.com/kvark/claymore) game/engine
+  - [Rust-oids](https://github.com/itadinanta/rust-oids) game
 
 Shiny screens, including some older projects:
 <p align="center">
@@ -83,6 +84,7 @@ Shiny screens, including some older projects:
   <img src="https://github.com/kvark/vange-rs/blob/master/etc/shots/Road10-debug-shape.png" height="160" alt="Vange-rs"/>
   <img src="https://github.com/kvark/claymore/raw/master/etc/screens/7-forest.jpg" height="160" alt="Claymore"/>
   <img src="https://camo.githubusercontent.com/fb8c95650fba27061e58e76f17ff8460a41b3312/687474703a2f2f692e696d6775722e636f6d2f504f68534c77682e706e67" height="160" alt="ZoC"/>
+  <img src="https://github.com/itadinanta/rust-oids/raw/master/img/screenshot_007.png" height="160" alt="Rust-oids">
   <!--img src="https://raw.githubusercontent.com/csherratt/petri/master/petri.png" height="160" alt="Petri"/-->
 </p>
 
