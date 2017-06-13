@@ -272,7 +272,7 @@ pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq + Any {
 }
 
 /*
-/// Different resource types of a specific API. 
+/// Different resource types of a specific API.
 pub trait Resources:          Clone + Hash + Debug + Any {
     type ShaderLib:           Debug + Any + Send + Sync;
     type RenderPass:          Debug + Any + Send + Sync;
@@ -329,7 +329,7 @@ impl Error for SubmissionError {
 #[allow(missing_docs)]
 pub type SubmissionResult<T> = Result<T, SubmissionError>;
 
-/// 
+///
 pub struct Device_<B: Backend> {
     /// Resource factory.
     pub factory: B::Factory,
@@ -399,7 +399,7 @@ pub struct QueueSubmit<'a, B: Backend + 'a> {
 pub trait CommandQueue<B: Backend> {
     /// Submit command buffers to queue for execution.
     unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>], fence: Option<&mut <B::Resources as Resources>::Fence>);
-    
+
     ///
     fn wait_idle(&mut self);
 }
@@ -424,8 +424,8 @@ pub trait Surface<B: Backend> {
     /// Check if the queue family supports presentation for this surface.
     fn supports_queue(&self, queue_family: &B::QueueFamily) -> bool;
 
-    /// 
-    fn build_swapchain<Q>(&self, config: SwapchainConfig, present_queue: &Q) -> Self::SwapChain
+    ///
+    fn build_swapchain<Q>(&mut self, config: SwapchainConfig, present_queue: &Q) -> Self::SwapChain
         where Q: AsRef<B::CommandQueue>;
 }
 
