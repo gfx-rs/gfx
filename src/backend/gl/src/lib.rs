@@ -244,7 +244,6 @@ impl Share {
     }
 }
 
-#[allow(missing_copy_implementations)]
 pub struct Adapter {
     share: Rc<Share>,
     adapter_info: c::AdapterInfo,
@@ -807,13 +806,6 @@ impl CommandQueue {
         }
     }
 
-    fn no_fence_submit(&mut self, cb: &command::SubmitInfo) {
-        self.reset_state();
-        for com in &cb.buf {
-            self.process(com, &cb.data);
-        }
-    }
-
     fn before_submit<'a>(&mut self, gpu_access: &'a com::AccessInfo<Resources>)
                          -> c::SubmissionResult<com::AccessGuard<'a, Resources>> {
         let mut gpu_access = try!(gpu_access.take_accesses());
@@ -856,9 +848,7 @@ impl CommandQueue {
         }
     }
 
-    fn after_submit(&mut self, gpu_access: &mut com::AccessGuard<Resources>)
-                    -> Option<handle::Fence<Resources>>
-    {
+    fn after_submit(&mut self, gpu_access: &mut com::AccessGuard<Resources>) {
         if self.share.private_caps.buffer_storage_supported {
             // MappingKind::Persistent
             if gpu_access.has_mapped_reads() || gpu_access.has_mapped_writes() {
@@ -866,15 +856,9 @@ impl CommandQueue {
                     self.place_memory_barrier();
                 }
 
-                let fence = self.place_fence();
+                let fence = self.place_fence(); // TODO: do we need a fence here?
                 self.track_mapped_gpu_access(gpu_access, &fence);
-                Some(fence)
-            } else {
-                None
             }
-        } else {
-            // MappingKind::Temporary
-            None
         }
     }
 
@@ -907,6 +891,29 @@ impl CommandQueue {
         }
     }
 
+    fn wait_fence(&mut self, fence: &handle::Fence<Resources>) {
+        factory::wait_fence(self.frame_handles.ref_fence(&fence),
+                            &self.share.context);
+    }
+}
+
+impl c::CommandQueue<Backend> for CommandQueue {
+    unsafe fn submit(&mut self, submit_infos: &[c::QueueSubmit<Backend>], fence: Option<&mut Fence>, access: &com::AccessInfo<Resources>) {
+        let mut access = self.before_submit(access).unwrap();
+        for submit in submit_infos {
+            for cb in submit.cmd_buffers {
+                let cb = cb.get_info();
+                self.reset_state();
+                for com in &cb.buf {
+                    self.process(com, &cb.data);
+                }
+            }
+        }
+        self.after_submit(&mut access);
+
+        // TODO: signal fence
+    }
+
     fn pin_submitted_resources(&mut self, man: &handle::Manager<Resources>) {
         self.frame_handles.extend(man);
         match self.max_resource_count {
@@ -918,9 +925,9 @@ impl CommandQueue {
         }
     }
 
-    fn wait_fence(&mut self, fence: &handle::Fence<Resources>) {
-        factory::wait_fence(self.frame_handles.ref_fence(&fence),
-                            &self.share.context);
+    fn wait_idle(&mut self) {
+        let gl = &self.share.context;
+        unsafe { gl.Finish() }; // TODO: we need to finish?
     }
 
     fn cleanup(&mut self) {
@@ -960,31 +967,6 @@ impl CommandQueue {
             |gl, v| unsafe { if v.object != 0 { gl.DeleteSamplers(1, &v.object) }},
             |gl, fence| unsafe { gl.DeleteSync(fence.0) },
         );
-    }
-}
-
-impl c::CommandQueue<Backend> for CommandQueue {
-    unsafe fn submit(&mut self, submit_infos: &[c::QueueSubmit<Backend>], fence: Option<&mut Fence>) {
-        if let Some(fence) = fence {
-            let timeout = 1_000_000_000_000;
-            // FIXME: should we use 'glFlush' here ?
-            // see https://www.opengl.org/wiki/Sync_Object
-            unsafe { self.share.context.WaitSync(fence.0, 0, timeout); }
-        }
-
-        // TODO
-        // let mut access = try!(self.before_submit(access));
-        for submit in submit_infos {
-            for cb in submit.cmd_buffers {
-                self.no_fence_submit(cb.get_info());
-            }
-        }
-        // let fence_opt = self.after_submit(&mut access);
-    }
-
-    fn wait_idle(&mut self) {
-        let gl = &self.share.context;
-        unsafe { gl.Finish() }; // TODO: we need to finish?
     }
 }
 

@@ -398,10 +398,22 @@ pub struct QueueSubmit<'a, B: Backend + 'a> {
 /// CommandBuffers will be later submitted to command queues instead of the device.
 pub trait CommandQueue<B: Backend> {
     /// Submit command buffers to queue for execution.
-    unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>], fence: Option<&mut <B::Resources as Resources>::Fence>);
+    /// `fence` will be signalled after submission and _must_ be unsignalled.
+    // TODO: `access` legacy (handle API)
+    #[doc(hidden)]
+    unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>], fence: Option<&mut <B::Resources as Resources>::Fence>,
+        access: &command::AccessInfo<B::Resources>);
 
     ///
     fn wait_idle(&mut self);
+
+    /// Pin everything from this handle manager to live for a frame.
+    // TODO: legacy (handle API)
+    fn pin_submitted_resources(&mut self, &handle::Manager<B::Resources>);
+
+    /// Cleanup unused resources. This should be called between frames.
+    // TODO: legacy (handle API)
+    fn cleanup(&mut self);
 }
 
 /// `CommandPool` can allocate command buffers of a specific type only.
@@ -438,6 +450,11 @@ impl Frame {
     #[doc(hidden)]
     pub fn new(id: usize) -> Self {
         Frame(id)
+    }
+
+    /// Retrive frame id.
+    pub fn id(&self) -> usize {
+        self.0
     }
 }
 

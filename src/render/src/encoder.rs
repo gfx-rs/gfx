@@ -21,7 +21,7 @@ use std::error::Error;
 use std::any::Any;
 use std::{fmt, mem};
 
-use core::{Backend, SubmissionResult, IndexType, Resources, VertexCount, GraphicsCommandPool, QueueSubmit};
+use core::{Backend, CommandQueue, SubmissionResult, IndexType, Resources, VertexCount, GraphicsCommandPool, QueueSubmit};
 use core::{command, format, handle, texture};
 use core::command::{Buffer, Encoder};
 use core::memory::{self, cast_slice, Typed, Pod, Usage};
@@ -192,9 +192,7 @@ impl<'a, B: Backend> GraphicsEncoder<'a, B> {
     pub fn flush(self, queue: &mut GraphicsQueueMut<B>) -> SubmissionResult<()>
     {
         let submit = self.command_buffer.finish();
-        // TODO: handles, access info
-        // queue.pin_submitted_resources(&self.handles);
-        // device.submit(&mut self.command_buffer, &self.access_info)
+        queue.pin_submitted_resources(&self.handles);
         queue.submit_graphics(
             &[
                 QueueSubmit {
@@ -204,6 +202,7 @@ impl<'a, B: Backend> GraphicsEncoder<'a, B> {
                 }
             ],
             None,
+            &self.access_info
         );
 
         Ok(()) // TODO
