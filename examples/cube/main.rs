@@ -16,11 +16,13 @@ extern crate cgmath;
 #[macro_use]
 extern crate gfx;
 extern crate gfx_app;
+extern crate gfx_core;
 
-pub use gfx_app::{ColorFormat, DepthFormat};
+pub use gfx_app::{BackbufferView, ColorFormat, DepthFormat};
 
 use cgmath::{Deg, Matrix4, Point3, Vector3};
-use gfx::{Bundle, texture};
+use gfx::{Bundle, Factory, texture};
+use gfx::GraphicsPoolExt;
 
 // Declare the vertex format suitable for drawing,
 // as well as the constants used by the shaders
@@ -58,12 +60,16 @@ impl Vertex {
 }
 
 //----------------------------------------
-struct App<R: gfx::Resources>{
-    bundle: Bundle<R, pipe::Data<R>>,
+struct App<B: gfx::Backend>{
+    views: Vec<BackbufferView<B::Resources>>,
+    bundle: Bundle<B, pipe::Data<B::Resources>>,
 }
 
-impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(factory: &mut F, backend: gfx_app::shade::Backend, window_targets: gfx_app::WindowTargets<R>) -> Self {
+impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
+    fn new(factory: &mut B::Factory,
+           backend: gfx_app::shade::Backend,
+           window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
+    {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
@@ -151,26 +157,35 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             transform: (proj * default_view()).into(),
             locals: factory.create_constant_buffer(1),
             color: (texture_view, factory.create_sampler(sinfo)),
-            out_color: window_targets.color,
-            out_depth: window_targets.depth,
+            out_color: window_targets.views[0].0.clone(),
+            out_depth: window_targets.views[0].1.clone(),
         };
 
         App {
+            views: window_targets.views,
             bundle: Bundle::new(slice, pso, data),
         }
     }
 
-    fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
+    fn render<Gp>(&mut self, (frame, semaphore): (gfx_core::Frame, &<B::Resources as gfx::Resources>::Semaphore),
+                  pool: &mut Gp, queue: &mut gfx_core::queue::GraphicsQueueMut<B>)
+        where Gp: gfx_core::GraphicsCommandPool<B>
+    {
+        let (cur_color, cur_depth) = self.views[frame.id()].clone();
+        self.bundle.data.out_color = cur_color;
+        self.bundle.data.out_depth = cur_depth;
+
+        let mut encoder = pool.acquire_graphics_encoder();
         let locals = Locals { transform: self.bundle.data.transform };
         encoder.update_constant_buffer(&self.bundle.data.locals, &locals);
         encoder.clear(&self.bundle.data.out_color, [0.1, 0.2, 0.3, 1.0]);
         encoder.clear_depth(&self.bundle.data.out_depth, 1.0);
-        self.bundle.encode(encoder);
+        self.bundle.encode(&mut encoder);
+        encoder.flush(queue);
     }
 
-    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
-        self.bundle.data.out_color = window_targets.color;
-        self.bundle.data.out_depth = window_targets.depth;
+    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<B::Resources>) {
+        self.views = window_targets.views;
 
         // In this example the transform is static except for window resizes.
         let proj = cgmath::perspective(Deg(45.0f32), window_targets.aspect_ratio, 1.0, 10.0);
