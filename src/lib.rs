@@ -90,14 +90,6 @@ impl Drop for Harness {
     }
 }
 
-pub trait ApplicationBase<B: Backend, C: gfx::CommandBuffer<B::Resources>> {
-    fn new(&mut B::Factory, shade::Backend, WindowTargets<B::Resources>) -> Self;
-    fn render<D>(&mut self, &mut D);
-    fn get_exit_key() -> Option<winit::VirtualKeyCode>;
-    fn on(&mut self, winit::WindowEvent);
-    fn on_resize(&mut self, &mut B::Factory, WindowTargets<B::Resources>);
-}
-
 #[cfg(feature = "dx11")]
 pub type D3D11CommandBuffer = gfx_device_dx11::CommandBuffer<gfx_device_dx11::DeferredContext>;
 #[cfg(feature = "dx11")]
