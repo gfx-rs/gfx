@@ -19,8 +19,8 @@
 use std::borrow::{Borrow, BorrowMut};
 use std::ops::{Deref, DerefMut};
 use std::marker::PhantomData;
-use {Backend, CommandQueue, QueueSubmit, Resources};
-use command::Submit;
+use {handle, Backend, CommandQueue, QueueSubmit, Resources};
+use command::{AccessInfo, Submit};
 
 /// Defines queue compatibility regarding functionality.
 ///
@@ -33,32 +33,50 @@ macro_rules! define_queue {
         can ()
         derives ()) =>
     (
-        /// 
+        ///
         pub struct $queue<B: Backend>(B::CommandQueue);
-        /// 
+        ///
         pub struct $queue_ref<'a, B: Backend>(&'a B::CommandQueue)
             where B::CommandQueue: 'a;
-        /// 
+        ///
         pub struct $queue_mut<'a, B: Backend>(&'a mut B::CommandQueue)
             where B::CommandQueue: 'a;
 
         impl<B: Backend> CommandQueue<B> for $queue<B> {
-            unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>], fence: Option<&mut <B::Resources as Resources>::Fence>) {
-                self.0.submit(submit_infos, fence)
+            unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>], fence: Option<&mut <B::Resources as Resources>::Fence>,
+                access: &AccessInfo<B::Resources>) {
+                self.0.submit(submit_infos, fence, access)
             }
-            
+
             fn wait_idle(&mut self) {
                 self.0.wait_idle()
+            }
+
+            fn pin_submitted_resources(&mut self, handles: &handle::Manager<B::Resources>) {
+                self.0.pin_submitted_resources(handles)
+            }
+
+            fn cleanup(&mut self) {
+                self.0.cleanup()
             }
         }
 
         impl<'a, B: Backend> CommandQueue<B> for $queue_mut<'a, B> {
-            unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>], fence: Option<&mut <B::Resources as Resources>::Fence>) {
-                self.0.submit(submit_infos, fence)
+            unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>], fence: Option<&mut <B::Resources as Resources>::Fence>,
+                access: &AccessInfo<B::Resources>) {
+                self.0.submit(submit_infos, fence, access)
             }
-            
+
             fn wait_idle(&mut self) {
                 self.0.wait_idle()
+            }
+
+            fn pin_submitted_resources(&mut self, handles: &handle::Manager<B::Resources>) {
+                self.0.pin_submitted_resources(handles)
+            }
+
+            fn cleanup(&mut self) {
+                self.0.cleanup()
             }
         }
 
@@ -176,18 +194,18 @@ macro_rules! define_queue {
     (
         impl<B: Backend> $queue<B> {
             /// Submit command buffers for execution.
-            pub fn $submit(&mut self, submit: &[QueueSubmit<B>], fence: Option<&mut <B::Resources as Resources>::Fence>) {
-                unsafe { self.0.submit(submit, fence) }
-            } 
+            pub fn $submit(&mut self, submit: &[QueueSubmit<B>], fence: Option<&mut <B::Resources as Resources>::Fence>, access: &AccessInfo<B::Resources>) {
+                unsafe { self.0.submit(submit, fence, access) }
+            }
         }
 
         impl<'a, B: Backend> $queue_mut<'a, B> {
             /// Submit command buffers for execution.
-            pub fn $submit(&mut self, submit: &[QueueSubmit<B>], fence: Option<&mut <B::Resources as Resources>::Fence>) {
-                unsafe { self.0.submit(submit, fence) }
-            } 
+            pub fn $submit(&mut self, submit: &[QueueSubmit<B>], fence: Option<&mut <B::Resources as Resources>::Fence>, access: &AccessInfo<B::Resources>) {
+                unsafe { self.0.submit(submit, fence, access) }
+            }
         }
-        
+
         define_queue! {
             ($queue, $queue_ref, $queue_mut)
                 can ($($tail_submit)*)
