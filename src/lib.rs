@@ -300,10 +300,12 @@ pub trait Application<B: Backend>: Sized {
         where Self: Application<DefaultBackend>
     {
         let events_loop = winit::EventsLoop::new();
-        let (mut window, mut factory, main_color) =
-            gfx_window_dxgi::init::<ColorFormat>(wb, &events_loop).unwrap();
+        let win = wb.build(&events_loop).unwrap();
+        let dim = win.get_inner_size_points().unwrap();
+        let mut window = gfx_window_dxgi::Window(&win);
 
-        unimplemented!()
+        let (surface, adapters) = window.get_surface_and_adapters();
+        run::<Self, _, _, _>(dim, events_loop, surface, adapters)
     }
     #[cfg(feature = "metal")]
     fn launch_default(wb: winit::WindowBuilder)
