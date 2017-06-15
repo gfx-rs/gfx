@@ -301,7 +301,7 @@ pub struct Adapter {
 }
 
 impl core::Adapter<Backend> for Adapter {
-    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> core::Device_<Backend> {
+    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> core::Device<Backend> {
         unimplemented!()
     }
 

@@ -290,7 +290,7 @@ impl Adapter {
 }
 
 impl c::Adapter<Backend> for Adapter {
-    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> c::Device_<Backend> {
+    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> c::Device<Backend> {
         // create main VAO and bind it
         let mut vao = 0;
         if self.share.private_caps.array_buffer_supported {
@@ -310,7 +310,7 @@ impl c::Adapter<Backend> for Adapter {
                     max_resource_count: Some(999999),
                 })
         };
-        c::Device_ {
+        c::Device {
             factory: Factory::new(self.share.clone()),
             general_queues: Vec::new(), // TODO
             graphics_queues: vec![graphics_queue],

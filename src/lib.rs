@@ -151,7 +151,7 @@ fn run<A, B, S, EL>((width, height): (u32, u32),
                                  .filter(|family| surface.supports_queue(&family) )
                                  .map(|family| { (family, family.num_queues()) })
                                  .collect::<Vec<_>>();
-    let gfx_core::Device_ { mut factory, mut general_queues, mut graphics_queues, .. } = adapters[0].open(&queue_descs);
+    let gfx_core::Device { mut factory, mut general_queues, mut graphics_queues, .. } = adapters[0].open(&queue_descs);
 
     let mut queue = if let Some(queue) = general_queues.first_mut() {
         queue.as_mut().into()

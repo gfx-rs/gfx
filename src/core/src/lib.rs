@@ -327,7 +327,7 @@ impl Error for SubmissionError {
 pub type SubmissionResult<T> = Result<T, SubmissionError>;
 
 ///
-pub struct Device_<B: Backend> {
+pub struct Device<B: Backend> {
     /// Resource factory.
     pub factory: B::Factory,
     /// General command queues.
@@ -350,7 +350,7 @@ pub struct Device_<B: Backend> {
 /// Represents a physical or virtual device, which is capable of running the backend.
 pub trait Adapter<B: Backend>: Sized {
     /// Create a new device and command queues.
-    fn open(&self, queue_descs: &[(&B::QueueFamily, u32)]) -> Device_<B>;
+    fn open(&self, queue_descs: &[(&B::QueueFamily, u32)]) -> Device<B>;
 
     /// Get the `AdapterInfo` for this adapater.
     fn get_info(&self) -> &AdapterInfo;
