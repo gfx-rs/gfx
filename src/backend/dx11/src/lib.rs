@@ -19,8 +19,12 @@ extern crate log;
 extern crate gfx_core as core;
 extern crate d3d11;
 extern crate d3dcompiler;
+extern crate dxgi;
 extern crate dxguid;
 extern crate winapi;
+#[macro_use]
+extern crate lazy_static;
+extern crate comptr;
 
 pub use self::data::map_format;
 pub use self::factory::Factory;
@@ -30,56 +34,104 @@ mod data;
 mod execute;
 mod factory;
 mod mirror;
+mod native;
 mod pool;
 mod state;
 
 use core::{command as com, handle};
-
-#[doc(hidden)]
-pub mod native {
-    use winapi::*;
-
-    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-    pub struct Buffer(pub *mut ID3D11Buffer);
-    unsafe impl Send for Buffer {}
-    unsafe impl Sync for Buffer {}
-
-    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-    pub enum Texture {
-        D1(*mut ID3D11Texture1D),
-        D2(*mut ID3D11Texture2D),
-        D3(*mut ID3D11Texture3D),
-    }
-    unsafe impl Send for Texture {}
-    unsafe impl Sync for Texture {}
-
-    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-    pub struct Rtv(pub *mut ID3D11RenderTargetView);
-    unsafe impl Send for Rtv {}
-    unsafe impl Sync for Rtv {}
-
-    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-    pub struct Dsv(pub *mut ID3D11DepthStencilView);
-    unsafe impl Send for Dsv {}
-    unsafe impl Sync for Dsv {}
-
-    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-    pub struct Srv(pub *mut ID3D11ShaderResourceView);
-    unsafe impl Send for Srv {}
-    unsafe impl Sync for Srv {}
-
-    #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-    pub struct Sampler(pub *mut ID3D11SamplerState);
-    unsafe impl Send for Sampler {}
-    unsafe impl Sync for Sampler {}
-}
-
+use comptr::ComPtr;
 use std::cell::RefCell;
 use std::ptr;
 use std::sync::Arc;
 use core::{handle as h, texture as tex};
 use core::SubmissionResult;
 use core::command::{AccessInfo, AccessGuard};
+use std::os::raw::c_void;
+
+lazy_static! {
+    pub static ref INSTANCE: Instance = Instance::create();
+}
+
+///
+pub struct Instance {
+    factory: ComPtr<winapi::IDXGIFactory2>,
+    adapters: Vec<Adapter>,
+}
+
+unsafe impl Sync for Instance {}
+
+static FEATURE_LEVELS: [winapi::D3D_FEATURE_LEVEL; 3] = [
+    winapi::D3D_FEATURE_LEVEL_11_0,
+    winapi::D3D_FEATURE_LEVEL_10_1,
+    winapi::D3D_FEATURE_LEVEL_10_0,
+];
+
+impl Instance {
+    fn create() -> Self {
+        use std::ffi::OsString;
+        use std::os::windows::ffi::OsStringExt;
+
+        // Create DXGI factory
+        let mut dxgi_factory = ComPtr::<winapi::IDXGIFactory2>::new(ptr::null_mut());
+
+        let hr = unsafe {
+            dxgi::CreateDXGIFactory1(
+                &dxguid::IID_IDXGIFactory2,
+                dxgi_factory.as_mut() as *mut *mut _ as *mut *mut c_void)
+        };
+
+        if !winapi::SUCCEEDED(hr) {
+            error!("Failed on dxgi factory creation: {:?}", hr);
+        }
+
+        // Enumerate adapters
+        let mut cur_index = 0;
+        let mut adapters = Vec::new();
+        loop {
+            let mut adapter = ComPtr::<winapi::IDXGIAdapter1>::new(ptr::null_mut());
+            let hr = unsafe {
+                dxgi_factory.EnumAdapters1(
+                    cur_index,
+                    adapter.as_mut() as *mut *mut _ as *mut *mut winapi::IDXGIAdapter1)
+            };
+
+            if hr == winapi::DXGI_ERROR_NOT_FOUND {
+                break;
+            }
+
+            // We have found a possible adapter
+            // acquire the device information
+            let mut desc: winapi::DXGI_ADAPTER_DESC1 = unsafe { std::mem::uninitialized() };
+            unsafe { adapter.GetDesc1(&mut desc); }
+
+            let device_name = {
+                let len = desc.Description.iter().take_while(|&&c| c != 0).count();
+                let name = <OsString as OsStringExt>::from_wide(&desc.Description[..len]);
+                name.to_string_lossy().into_owned()
+            };
+
+            let info = core::AdapterInfo {
+                name: device_name,
+                vendor: desc.VendorId as usize,
+                device: desc.DeviceId as usize,
+                software_rendering: false, // TODO: check for WARP adapter (software rasterizer)?
+            };
+
+            adapters.push(
+                Adapter {
+
+                }
+            );
+
+            cur_index += 1;
+        }
+
+        Instance {
+            factory: dxgi_factory,
+            adapters: adapters,
+        }
+    }
+}
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Buffer(native::Buffer);
@@ -188,12 +240,7 @@ pub struct Share {
     handles: RefCell<h::Manager<Resources>>,
 }
 
-static FEATURE_LEVELS: [winapi::D3D_FEATURE_LEVEL; 3] = [
-    winapi::D3D_FEATURE_LEVEL_11_0,
-    winapi::D3D_FEATURE_LEVEL_10_1,
-    winapi::D3D_FEATURE_LEVEL_10_0,
-];
-
+/*
 pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHAIN_DESC)
               -> Result<(Factory, *mut winapi::IDXGISwapChain), winapi::HRESULT> {
     let mut swap_chain = ptr::null_mut();
@@ -232,6 +279,7 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
     let factory = Factory::new(device, feature_level, Arc::new(share));
     Ok((factory, swap_chain))
 }
+*/
 
 pub type ShaderModel = u16;
 
