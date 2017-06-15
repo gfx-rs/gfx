@@ -21,7 +21,7 @@ use core::{self, factory as f, buffer, texture, mapping};
 use core::memory::{self, Bind, Typed};
 use core::handle::{self as h, Producer};
 use {Resources as R, Share, Buffer, Texture, Pipeline, Program, Shader};
-use command::CommandBuffer;
+use command::RawCommandBuffer;
 use {CommandList, DeferredContext, ShaderModel};
 use native;
 
@@ -121,11 +121,11 @@ impl Factory {
         }
     }
 
-    pub fn create_command_buffer(&self) -> CommandBuffer<CommandList> {
+    pub fn create_command_buffer(&self) -> RawCommandBuffer<CommandList> {
         CommandList::new().into()
     }
 
-    pub fn create_command_buffer_native(&self) -> CommandBuffer<DeferredContext> {
+    pub fn create_command_buffer_native(&self) -> RawCommandBuffer<DeferredContext> {
         let mut dc = ptr::null_mut();
         let hr = unsafe {
             (*self.device).CreateDeferredContext(0, &mut dc)
