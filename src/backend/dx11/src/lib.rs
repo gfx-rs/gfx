@@ -22,7 +22,6 @@ extern crate d3dcompiler;
 extern crate dxguid;
 extern crate winapi;
 
-pub use self::command::CommandBuffer;
 pub use self::data::map_format;
 pub use self::factory::Factory;
 
@@ -31,7 +30,10 @@ mod data;
 mod execute;
 mod factory;
 mod mirror;
+mod pool;
 mod state;
+
+use core::{command as com, handle};
 
 #[doc(hidden)]
 pub mod native {
@@ -142,6 +144,25 @@ unsafe impl Send for Pipeline {}
 unsafe impl Sync for Pipeline {}
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+pub enum Backend {}
+impl core::Backend for Backend {
+    type Adapter = Adapter;
+    type Resources = Resources;
+    type CommandQueue = CommandQueue;
+    type RawCommandBuffer = command::RawCommandBuffer<CommandList>; // TODO: deferred?
+    type SubpassCommandBuffer = command::SubpassCommandBuffer;
+    type SubmitInfo = command::SubmitInfo;
+    type Factory = Factory;
+    type QueueFamily = QueueFamily;
+
+    type GeneralCommandPool = pool::GeneralCommandPool;
+    type GraphicsCommandPool = pool::GraphicsCommandPool;
+    type ComputeCommandPool = pool::ComputeCommandPool;
+    type TransferCommandPool = pool::TransferCommandPool;
+    type SubpassCommandPool = pool::SubpassCommandPool;
+}
+
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Resources {}
 
 impl core::Resources for Resources {
@@ -214,7 +235,6 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
 
 pub type ShaderModel = u16;
 
-
 pub struct CommandList(Vec<command::Command>, command::DataBuffer);
 impl CommandList {
     pub fn new() -> CommandList {
@@ -275,3 +295,48 @@ impl command::Parser for DeferredContext {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Fence(());
+
+pub struct Adapter {
+
+}
+
+impl core::Adapter<Backend> for Adapter {
+    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> core::Device_<Backend> {
+        unimplemented!()
+    }
+
+    fn get_info(&self) -> &core::AdapterInfo {
+        unimplemented!()
+    }
+
+    fn get_queue_families(&self) -> &[QueueFamily] {
+        unimplemented!()
+    }
+}
+
+pub struct CommandQueue {
+}
+
+impl core::CommandQueue<Backend> for CommandQueue {
+    unsafe fn submit(&mut self, submit_infos: &[core::QueueSubmit<Backend>], fence: Option<&mut Fence>, access: &com::AccessInfo<Resources>) {
+         unimplemented!()
+    }
+
+    fn pin_submitted_resources(&mut self, man: &handle::Manager<Resources>) {
+         unimplemented!()
+    }
+
+    fn wait_idle(&mut self) {
+        unimplemented!()
+    }
+
+    fn cleanup(&mut self) {
+        unimplemented!()
+    }
+}
+
+///
+pub struct QueueFamily;
+impl core::QueueFamily for QueueFamily {
+    fn num_queues(&self) -> u32 { 1 }
+}

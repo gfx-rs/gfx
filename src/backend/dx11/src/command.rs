@@ -24,7 +24,9 @@ use core::{IndexType, VertexCount};
 use core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
            MAX_RESOURCE_VIEWS, MAX_UNORDERED_VIEWS,
            MAX_SAMPLERS, MAX_COLOR_TARGETS};
-use {native, Resources, InputLayout, Buffer, Texture, Pipeline, Program};
+use {native, Backend, Resources, InputLayout, Buffer, Texture, Pipeline, Program};
+
+pub struct SubmitInfo;
 
 /// The place of some data in the data buffer.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -114,11 +116,16 @@ impl Cache {
     }
 }
 
-pub struct CommandBuffer<P> {
+pub struct RawCommandBuffer<P> {
     pub parser: P,
     cache: Cache,
 }
 
+impl<P> command::CommandBuffer<Backend> for RawCommandBuffer<P> {
+    unsafe fn end(&mut self) -> SubmitInfo {
+        SubmitInfo
+    }
+}
 pub trait Parser: Sized + Send {
     fn reset(&mut self);
     fn parse(&mut self, Command);
@@ -126,16 +133,16 @@ pub trait Parser: Sized + Send {
     fn update_texture(&mut self, Texture, tex::Kind, Option<tex::CubeFace>, &[u8], tex::RawImageInfo);
 }
 
-impl<P: Parser> From<P> for CommandBuffer<P> {
-    fn from(parser: P) -> CommandBuffer<P> {
-        CommandBuffer {
+impl<P: Parser> From<P> for RawCommandBuffer<P> {
+    fn from(parser: P) -> RawCommandBuffer<P> {
+        RawCommandBuffer {
             parser: parser,
             cache: Cache::new(),
         }
     }
 }
 
-impl<P: Parser> CommandBuffer<P> {
+impl<P: Parser> RawCommandBuffer<P> {
     fn flush(&mut self) {
         let sample_mask = !0; //TODO
         self.parser.parse(Command::SetDepthStencil(self.cache.depth_stencil, self.cache.stencil_ref));
@@ -143,7 +150,7 @@ impl<P: Parser> CommandBuffer<P> {
     }
 }
 
-impl<P: 'static + Parser> command::Buffer<Resources> for CommandBuffer<P> {
+impl<P: 'static + Parser> command::Buffer<Resources> for RawCommandBuffer<P> {
     fn reset(&mut self) {
         self.parser.reset();
         self.cache = Cache::new();
@@ -394,5 +401,14 @@ impl<P: 'static + Parser> command::Buffer<Resources> for CommandBuffer<P> {
             None => Command::DrawIndexed(count as UINT, start as UINT, base as INT),
         });
     }
+}
 
+pub struct SubpassCommandBuffer {
+
+}
+
+impl command::CommandBuffer<Backend> for SubpassCommandBuffer {
+    unsafe fn end(&mut self) -> SubmitInfo {
+        SubmitInfo
+    }
 }

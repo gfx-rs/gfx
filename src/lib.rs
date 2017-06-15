@@ -90,81 +90,6 @@ impl Drop for Harness {
     }
 }
 
-#[cfg(feature = "dx11")]
-pub type D3D11CommandBuffer = gfx_device_dx11::CommandBuffer<gfx_device_dx11::DeferredContext>;
-#[cfg(feature = "dx11")]
-pub type D3D11CommandBufferFake = gfx_device_dx11::CommandBuffer<gfx_device_dx11::CommandList>;
-
-#[cfg(feature = "dx11")]
-pub fn launch_d3d11<A>(wb: winit::WindowBuilder) where
-A: Sized + Application<gfx_device_dx11::Backend>
-{
-    use gfx::traits::Factory;
-
-    env_logger::init().unwrap();
-    let mut events_loop = winit::EventsLoop::new();
-    let (mut window, mut factory, main_color) =
-        gfx_window_dxgi::init::<ColorFormat>(wb, &events_loop).unwrap();
-    let main_depth = factory.create_depth_stencil_view_only(window.size.0, window.size.1)
-                            .unwrap();
-
-    let backend = shade::Backend::Hlsl(factory.get_shader_model());
-    let mut app = A::new(&mut factory, backend, WindowTargets {
-        colors: vec![main_color],
-        depth: main_depth,
-        aspect_ratio: window.size.0 as f32 / window.size.1 as f32,
-    });
-    // let mut device = gfx_device_dx11::Deferred::from(device);
-
-    let mut harness = Harness::new();
-    let mut running = true;
-    while running {
-        let mut new_size = None;
-        events_loop.poll_events(|event| {
-            if let winit::Event::WindowEvent { event, .. } = event {
-                match event {
-                    winit::WindowEvent::Closed => running = false,
-                    winit::WindowEvent::KeyboardInput {
-                        input: winit::KeyboardInput {
-                            state: winit::ElementState::Pressed,
-                            virtual_keycode: key,
-                            ..
-                        },
-                        ..
-                    } if key == A::get_exit_key() => return,
-                    winit::WindowEvent::Resized(width, height) => {
-                        let size = (width as gfx::texture::Size, height as gfx::texture::Size);
-                        if size != window.size {
-                            // working around the borrow checker: window is already borrowed here
-                            new_size = Some(size);
-                        }
-                    },
-                    _ => app.on(event),
-                }
-            }
-        });
-        if let Some((width, height)) = new_size {
-            use gfx_window_dxgi::update_views;
-            match update_views(&mut window, &mut factory, width, height) {
-                Ok(new_color) => {
-                    let new_depth = factory.create_depth_stencil_view_only(width, height).unwrap();
-                    app.on_resize_ext(&mut factory, WindowTargets {
-                        colors: vec![new_color],
-                        depth: new_depth,
-                        aspect_ratio: width as f32 / height as f32,
-                    });
-                },
-                Err(e) => error!("Resize failed: {}", e),
-            }
-            continue;
-        }
-        // TODO: app.render_ext();
-        window.swap_buffers(1);
-        // device.cleanup();
-        harness.bump();
-    }
-}
-
 #[cfg(feature = "metal")]
 pub fn launch_metal<A>(wb: winit::WindowBuilder) where
 A: Sized + Application<gfx_device_metal::Backend>
@@ -381,8 +306,13 @@ pub trait Application<B: Backend>: Sized {
     }
     #[cfg(feature = "dx11")]
     fn launch_default(wb: winit::WindowBuilder)
-        where Self: Application<DefaultBackend> {
-        launch_d3d11::<Self>(wb);
+        where Self: Application<DefaultBackend>
+    {
+        let events_loop = winit::EventsLoop::new();
+        let (mut window, mut factory, main_color) =
+            gfx_window_dxgi::init::<ColorFormat>(wb, &events_loop).unwrap();
+
+        unimplemented!()
     }
     #[cfg(feature = "metal")]
     fn launch_default(wb: winit::WindowBuilder)
