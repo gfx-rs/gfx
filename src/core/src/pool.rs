@@ -15,7 +15,8 @@
 //! Command pools
 
 use std::ops::{DerefMut};
-use {command, Backend, CommandPool, CommandQueue};
+use {Backend, CommandPool, CommandQueue};
+use command::{self, GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer};
 pub use queue::{Compatible, GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 
 /// General command pool can allocate general command buffers.
@@ -30,7 +31,7 @@ pub trait GeneralCommandPool<B: Backend>: CommandPool<B> {
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
-    fn acquire_command_buffer<'a>(&'a mut self) -> command::Encoder<'a, B, B::GeneralCommandBuffer>;
+    fn acquire_command_buffer<'a>(&'a mut self) -> command::Encoder<'a, B, GeneralCommandBuffer<B>>;
 }
 
 /// Graphics command pool can allocate graphics command buffers.
@@ -45,7 +46,7 @@ pub trait GraphicsCommandPool<B: Backend>: CommandPool<B> {
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
-    fn acquire_command_buffer<'a>(&'a mut self) -> command::Encoder<'a, B, B::GraphicsCommandBuffer>;
+    fn acquire_command_buffer<'a>(&'a mut self) -> command::Encoder<'a, B, GraphicsCommandBuffer<B>>;
 }
 
 /// Compute command pool can allocate compute command buffers.
@@ -60,7 +61,7 @@ pub trait ComputeCommandPool<B: Backend>: CommandPool<B> {
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
-    fn acquire_command_buffer<'a>(&'a mut self) -> command::Encoder<'a, B, B::ComputeCommandBuffer>;
+    fn acquire_command_buffer<'a>(&'a mut self) -> command::Encoder<'a, B, ComputeCommandBuffer<B>>;
 }
 
 /// Transfer command pool can allocate transfer command buffers.
@@ -75,7 +76,7 @@ pub trait TransferCommandPool<B: Backend>: CommandPool<B> {
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
-    fn acquire_command_buffer<'a>(&'a mut self) -> command::Encoder<'a, B, B::TransferCommandBuffer>;
+    fn acquire_command_buffer<'a>(&'a mut self) -> command::Encoder<'a, B, TransferCommandBuffer<B>>;
 }
 
 /// Subpass command pool can allocate subpass command buffers.
