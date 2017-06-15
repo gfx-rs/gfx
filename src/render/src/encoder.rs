@@ -23,7 +23,7 @@ use std::{fmt, mem};
 
 use core::{Backend, CommandQueue, SubmissionResult, IndexType, Resources, VertexCount, GraphicsCommandPool, QueueSubmit};
 use core::{command, format, handle, texture};
-use core::command::{Buffer, Encoder};
+use core::command::{Buffer, Encoder, GraphicsCommandBuffer};
 use core::memory::{self, cast_slice, Typed, Pod, Usage};
 use core::queue::GraphicsQueueMut;
 use slice;
@@ -160,18 +160,15 @@ impl<B: Backend, T> GraphicsPoolExt<B> for T where T: GraphicsCommandPool<B> {
 ///
 /// The encoder exposes multiple functions that add commands to its internal `CommandBuffer`. To
 /// submit these commands to the GPU so they can be rendered, call `flush`.
-#[derive(Debug)]
-pub struct GraphicsEncoder<'a, B: Backend>
-    where <B as Backend>::GraphicsCommandBuffer: 'a
-{
-    command_buffer: Encoder<'a, B, B::GraphicsCommandBuffer>,
+pub struct GraphicsEncoder<'a, B: Backend + 'a> {
+    command_buffer: Encoder<'a, B, GraphicsCommandBuffer<B>>,
     raw_pso_data: pso::RawDataSet<B::Resources>,
     access_info: command::AccessInfo<B::Resources>,
     handles: handle::Manager<B::Resources>,
 }
 
-impl<'a, B: Backend> From<Encoder<'a, B, B::GraphicsCommandBuffer>> for GraphicsEncoder<'a, B> {
-    fn from(combuf: Encoder<'a, B, B::GraphicsCommandBuffer>) -> GraphicsEncoder<B> {
+impl<'a, B: Backend> From<Encoder<'a, B, GraphicsCommandBuffer<B>>> for GraphicsEncoder<'a, B> {
+    fn from(combuf: Encoder<'a, B, GraphicsCommandBuffer<B>>) -> GraphicsEncoder<B> {
         GraphicsEncoder {
             command_buffer: combuf,
             raw_pso_data: pso::RawDataSet::new(),
