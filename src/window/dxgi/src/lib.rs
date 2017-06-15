@@ -28,7 +28,7 @@ use core::{format, handle as h, factory as f, memory, texture as tex};
 use core::texture::Size;
 use device_dx11::{Factory, Resources};
 
-
+/*
 pub struct Window {
     inner: winit::Window,
     swap_chain: *mut winapi::IDXGISwapChain,
@@ -174,30 +174,12 @@ pub fn init_raw(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop, color
     Err(InitError::DriverType)
 }
 
-/*
-pub trait DeviceExt: core::Device {
-    fn clear_state(&self);
-}
-
-impl DeviceExt for device_dx11::Deferred {
-     fn clear_state(&self) {
-         self.clear_state();
-     }
-}
-
-impl DeviceExt for Device {
-    fn clear_state(&self) {
-        self.clear_state();
-    }
-}
-*/
-
 /// Update the internal dimensions of the main framebuffer targets. Generic version over the format.
 pub fn update_views<Cf>(window: &mut Window, factory: &mut Factory, width: u16, height: u16)
             -> Result<h::RenderTargetView<Resources, Cf>, f::TargetViewError>
 where Cf: format::RenderFormat
 {
-    
+
     factory.cleanup();
     // device.clear_state();
     // device.cleanup();
@@ -207,5 +189,48 @@ where Cf: format::RenderFormat
             error!("Resize failed with code {:X}", hr);
             f::TargetViewError::NotDetached
         }
-    )    
+    )
+}
+*/
+
+pub struct Surface;
+
+impl core::Surface<device_dx11::Backend> for Surface {
+    type SwapChain = SwapChain;
+
+    fn supports_queue(&self, queue_family: &device_dx11::QueueFamily) -> bool { true }
+    fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, present_queue: &Q) -> SwapChain
+        where Q: AsRef<device_dx11::CommandQueue>
+    {
+        unimplemented!()
+    }
+}
+
+pub struct SwapChain;
+
+impl core::SwapChain<device_dx11::Backend> for SwapChain {
+    fn get_backbuffers(&mut self) -> &[core::Backbuffer<device_dx11::Backend>] {
+        unimplemented!()
+    }
+
+    fn acquire_frame(&mut self, sync: core::FrameSync<device_dx11::Resources>) -> core::Frame {
+        unimplemented!()
+    }
+
+    fn present<Q>(&mut self, present_queue: &mut Q)
+        where Q: AsMut<device_dx11::CommandQueue>
+    {
+        unimplemented!()
+    }
+}
+
+pub struct Window<'a>(pub &'a winit::Window);
+
+impl<'a> core::WindowExt<device_dx11::Backend> for Window<'a> {
+    type Surface = Surface;
+    type Adapter = device_dx11::Adapter;
+
+    fn get_surface_and_adapters(&mut self) -> (Surface, Vec<device_dx11::Adapter>) {
+        unimplemented!()
+    }
 }
