@@ -240,10 +240,7 @@ pub trait Backend: Sized {
     type Resources: Resources;
     type SubmitInfo;
 
-    type GeneralCommandBuffer: CommandBuffer<Self> + command::Buffer<Self::Resources>; // + GraphicsCommandBuffer<Self::R> + ComputeCommandBuffer<Self::R>;
-    type GraphicsCommandBuffer: CommandBuffer<Self> + command::Buffer<Self::Resources>; // + GraphicsCommandBuffer<Self::R>;
-    type ComputeCommandBuffer: CommandBuffer<Self>; // + ComputeCommandBuffer<Self::R>;
-    type TransferCommandBuffer: CommandBuffer<Self>; // + TransferCommandBuffer<Self::R>;
+    type RawCommandBuffer: CommandBuffer<Self> + command::Buffer<Self::Resources>;
     type SubpassCommandBuffer: CommandBuffer<Self>; // + SubpassCommandBuffer<Self::R>;
 
     type GeneralCommandPool: GeneralCommandPool<Self>;
