@@ -62,10 +62,7 @@ impl c::Backend for Backend {
     type Adapter = Adapter;
     type Resources = Resources;
     type CommandQueue = CommandQueue;
-    type GeneralCommandBuffer = command::GeneralCommandBuffer;
-    type GraphicsCommandBuffer = command::GraphicsCommandBuffer;
-    type ComputeCommandBuffer = command::ComputeCommandBuffer;
-    type TransferCommandBuffer = command::TransferCommandBuffer;
+    type RawCommandBuffer = command::RawCommandBuffer;
     type SubpassCommandBuffer = command::SubpassCommandBuffer;
     type SubmitInfo = command::SubmitInfo;
     type Factory = Factory;
