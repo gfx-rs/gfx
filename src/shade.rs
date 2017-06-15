@@ -53,6 +53,13 @@ impl ShadeExt for ::gfx_device_gl::Factory {
     }
 }
 
+#[cfg(feature = "dx11")]
+impl ShadeExt for ::gfx_device_dx11::Factory {
+    fn shader_backend(&self) -> Backend {
+        unimplemented!()
+    }
+}
+
 #[cfg(feature = "vulkan")]
 impl ShadeExt for ::gfx_device_vulkan::Factory {
     fn shader_backend(&self) -> Backend {
