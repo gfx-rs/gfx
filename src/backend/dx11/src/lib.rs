@@ -28,11 +28,11 @@ pub use self::data::map_format;
 pub use self::factory::Factory;
 
 mod command;
-mod data;
+pub mod data;
 mod execute;
 mod factory;
 mod mirror;
-mod native;
+pub mod native;
 mod pool;
 mod state;
 
@@ -140,6 +140,11 @@ impl Buffer {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Texture(native::Texture);
 impl Texture {
+    #[doc(hidden)]
+    pub fn new(tex: native::Texture) -> Self {
+        Texture(tex)
+    }
+
     pub fn as_resource(&self) -> *mut winapi::ID3D11Resource {
         type Res = *mut winapi::ID3D11Resource;
         match self.0 {
@@ -387,11 +392,12 @@ impl core::Adapter<Backend> for Adapter {
             handles: RefCell::new(h::Manager::new()),
         };
 
-        let factory = Factory::new(device, feature_level, Arc::new(share));
+        let factory = Factory::new(device.clone(), feature_level, Arc::new(share));
+        let general_queue = unsafe { core::GeneralQueue::new(CommandQueue { device: device }) };
 
         core::Device {
             factory,
-            general_queues: Vec::new(),
+            general_queues: vec![general_queue],
             graphics_queues: Vec::new(),
             compute_queues: Vec::new(),
             transfer_queues: Vec::new(),
@@ -411,6 +417,8 @@ impl core::Adapter<Backend> for Adapter {
 }
 
 pub struct CommandQueue {
+    #[doc(hidden)]
+    pub device: ComPtr<winapi::ID3D11Device>,
 }
 
 impl core::CommandQueue<Backend> for CommandQueue {
