@@ -200,8 +200,8 @@ impl core::Backend for Backend {
     type Resources = Resources;
     type CommandQueue = CommandQueue;
     type RawCommandBuffer = command::RawCommandBuffer<CommandList>; // TODO: deferred?
-    type SubpassCommandBuffer = command::SubpassCommandBuffer;
-    type SubmitInfo = command::SubmitInfo;
+    type SubpassCommandBuffer = command::SubpassCommandBuffer<CommandList>;
+    type SubmitInfo = command::SubmitInfo<CommandList>;
     type Factory = Factory;
     type QueueFamily = QueueFamily;
 
@@ -281,6 +281,7 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
 
 pub type ShaderModel = u16;
 
+#[derive(Clone)]
 pub struct CommandList(Vec<command::Command>, command::DataBuffer);
 impl CommandList {
     pub fn new() -> CommandList {
@@ -373,7 +374,7 @@ impl core::Adapter<Backend> for Adapter {
             error!("error on device creation: {:x}", hr);
         }
 
-        let share = Share {
+        let share = Arc::new(Share {
             capabilities: core::Capabilities {
                 max_vertex_count: 0,
                 max_index_count: 0,
@@ -390,10 +391,19 @@ impl core::Adapter<Backend> for Adapter {
                 copy_buffer_supported: true,
             },
             handles: RefCell::new(h::Manager::new()),
-        };
+        });
 
-        let factory = Factory::new(device.clone(), feature_level, Arc::new(share));
-        let general_queue = unsafe { core::GeneralQueue::new(CommandQueue { device: device }) };
+        let factory = Factory::new(device.clone(), feature_level, share.clone());
+        let general_queue = unsafe {
+            core::GeneralQueue::new(
+                CommandQueue {
+                    device,
+                    context,
+                    share,
+                    frame_handles: handle::Manager::new(),
+                    max_resource_count: Some(999999),
+                })
+        };
 
         core::Device {
             factory,
@@ -419,23 +429,94 @@ impl core::Adapter<Backend> for Adapter {
 pub struct CommandQueue {
     #[doc(hidden)]
     pub device: ComPtr<winapi::ID3D11Device>,
+    context: ComPtr<winapi::ID3D11DeviceContext>,
+    share: Arc<Share>,
+    frame_handles: handle::Manager<Resources>,
+    max_resource_count: Option<usize>,
+}
+
+impl CommandQueue {
+    pub fn before_submit<'a>(&mut self, gpu_access: &'a AccessInfo<Resources>)
+                             -> core::SubmissionResult<AccessGuard<'a, Resources>> {
+        let mut gpu_access = try!(gpu_access.take_accesses());
+        for (buffer, mut mapping) in gpu_access.access_mapped() {
+            factory::ensure_unmapped(&mut mapping, buffer, &mut self.context);
+        }
+        Ok(gpu_access)
+    }
 }
 
 impl core::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit(&mut self, submit_infos: &[core::QueueSubmit<Backend>], fence: Option<&mut Fence>, access: &com::AccessInfo<Resources>) {
-         unimplemented!()
+        let _guard = self.before_submit(access).unwrap();
+        for submit in submit_infos {
+            for cb in submit.cmd_buffers {
+                let cb = cb.get_info();
+                unsafe { self.context.ClearState(); }
+                for com in &cb.parser.0 {
+                    execute::process(&mut self.context, com, &cb.parser.1);
+                }
+            }
+        }
+
+        // TODO: handle sync
     }
 
     fn pin_submitted_resources(&mut self, man: &handle::Manager<Resources>) {
-         unimplemented!()
+        self.frame_handles.extend(man);
+        match self.max_resource_count {
+            Some(c) if self.frame_handles.count() > c => {
+                error!("Way too many resources in the current frame. Did you call Device::cleanup()?");
+                self.max_resource_count = None;
+            },
+            _ => (),
+        }
     }
 
     fn wait_idle(&mut self) {
-        unimplemented!()
+        // TODO: unimplemented!()
     }
 
     fn cleanup(&mut self) {
-        unimplemented!()
+        use core::handle::Producer;
+
+        self.frame_handles.clear();
+        self.share.handles.borrow_mut().clean_with(&mut self.context,
+            |ctx, buffer| {
+                buffer.mapping().map(|raw| {
+                    // we have exclusive access because it's the last reference
+                    let mut mapping = unsafe { raw.use_access() };
+                    factory::ensure_unmapped(&mut mapping, buffer, ctx);
+                });
+                unsafe { (*(buffer.resource().0).0).Release(); }
+            },
+            |_, s| unsafe { //shader
+                (*s.object).Release();
+                (*s.reflection).Release();
+            },
+            |_, program| unsafe {
+                let p = program.resource();
+                if p.vs != ptr::null_mut() { (*p.vs).Release(); }
+                if p.hs != ptr::null_mut() { (*p.hs).Release(); }
+                if p.ds != ptr::null_mut() { (*p.ds).Release(); }
+                if p.gs != ptr::null_mut() { (*p.gs).Release(); }
+                if p.ps != ptr::null_mut() { (*p.ps).Release(); }
+            },
+            |_, v| unsafe { //PSO
+                type Child = *mut winapi::ID3D11DeviceChild;
+                (*v.layout).Release();
+                (*(v.rasterizer as Child)).Release();
+                (*(v.depth_stencil as Child)).Release();
+                (*(v.blend as Child)).Release();
+            },
+            |_, texture| unsafe { (*texture.resource().as_resource()).Release(); },
+            |_, v| unsafe { (*v.0).Release(); }, //SRV
+            |_, _| {}, //UAV
+            |_, v| unsafe { (*v.0).Release(); }, //RTV
+            |_, v| unsafe { (*v.0).Release(); }, //DSV
+            |_, v| unsafe { (*v.0).Release(); }, //sampler
+            |_, _fence| {},
+        );
     }
 }
 
