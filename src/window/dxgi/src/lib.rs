@@ -324,12 +324,14 @@ impl<'a> core::Surface<device_dx11::Backend> for Surface<'a> {
         };
 
         SwapChain {
+            swap_chain,
             images: [backbuffer],
         }
     }
 }
 
 pub struct SwapChain {
+    swap_chain: ComPtr<winapi::IDXGISwapChain1>,
     images: [core::Backbuffer<device_dx11::Backend>; 1],
 }
 
@@ -339,13 +341,14 @@ impl core::SwapChain<device_dx11::Backend> for SwapChain {
     }
 
     fn acquire_frame(&mut self, sync: core::FrameSync<device_dx11::Resources>) -> core::Frame {
-        unimplemented!()
+        // TODO: sync
+        core::Frame::new(0)
     }
 
-    fn present<Q>(&mut self, present_queue: &mut Q)
+    fn present<Q>(&mut self, _present_queue: &mut Q)
         where Q: AsMut<device_dx11::CommandQueue>
     {
-        unimplemented!()
+        unsafe { self.swap_chain.Present(1, 0); }
     }
 }
 

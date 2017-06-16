@@ -17,21 +17,25 @@ use core::command::{GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandB
 use core::queue::{Compatible,
     GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 use command::{self, RawCommandBuffer, SubpassCommandBuffer};
-use {Backend, CommandQueue, Resources};
+use {Backend, CommandQueue, CommandList, Resources};
 use core::CommandPool;
 
 macro_rules! impl_pool {
     ($pool:ident, $queue:ident, $buffer:ident) => (
         pub struct $pool {
+            command_buffers: Vec<$buffer<Backend>>,
+            next_buffer: usize,
         }
 
         impl core::CommandPool<Backend> for $pool {
             fn reset(&mut self) {
-                unimplemented!()
+                self.next_buffer = 0;
             }
 
             fn reserve(&mut self, additional: usize) {
-                unimplemented!()
+                for _ in 0..additional {
+                    self.command_buffers.push($buffer::new(CommandList::new().into()));
+                }
             }
         }
 
@@ -39,11 +43,24 @@ macro_rules! impl_pool {
             fn from_queue<'a, Q>(mut _queue: Q, capacity: usize) -> Self
                 where Q: Compatible<$queue<Backend>> + AsRef<CommandQueue>
             {
-                unimplemented!()
+                let buffers = (0..capacity).map(|_| $buffer::new(CommandList::new().into()))
+                                           .collect();
+                $pool {
+                    command_buffers: buffers,
+                    next_buffer: 0,
+                }
             }
 
             fn acquire_command_buffer<'a>(&'a mut self) -> Encoder<'a, Backend, $buffer<Backend>> {
-                unimplemented!()
+                let available_buffers = self.command_buffers.len() as isize - self.next_buffer as isize;
+                if available_buffers <= 0 {
+                    self.reserve((-available_buffers) as usize + 1);
+                }
+
+                let buffer = &mut self.command_buffers[self.next_buffer];
+                self.next_buffer += 1;
+
+                unsafe { Encoder::new(buffer) }
             }
         }
     )
@@ -74,7 +91,7 @@ impl pool::SubpassCommandPool<Backend> for SubpassCommandPool {
         unimplemented!()
     }
 
-    fn acquire_command_buffer<'a>(&'a mut self) -> Encoder<'a, Backend, SubpassCommandBuffer> {
+    fn acquire_command_buffer<'a>(&'a mut self) -> Encoder<'a, Backend, SubpassCommandBuffer<CommandList>> {
         unimplemented!()
     }
 }
