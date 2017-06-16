@@ -24,9 +24,11 @@ use core::{IndexType, VertexCount};
 use core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
            MAX_RESOURCE_VIEWS, MAX_UNORDERED_VIEWS,
            MAX_SAMPLERS, MAX_COLOR_TARGETS};
-use {native, Backend, Resources, InputLayout, Buffer, Texture, Pipeline, Program};
+use {native, Backend, CommandList, Resources, InputLayout, Buffer, Texture, Pipeline, Program};
 
-pub struct SubmitInfo;
+pub struct SubmitInfo<P> {
+    pub parser: P,
+}
 
 /// The place of some data in the data buffer.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -35,6 +37,7 @@ pub struct DataPointer {
     size: u32,
 }
 
+#[derive(Clone)]
 pub struct DataBuffer(Vec<u8>);
 impl DataBuffer {
     /// Create a new empty data buffer.
@@ -121,9 +124,11 @@ pub struct RawCommandBuffer<P> {
     cache: Cache,
 }
 
-impl<P> command::CommandBuffer<Backend> for RawCommandBuffer<P> {
-    unsafe fn end(&mut self) -> SubmitInfo {
-        SubmitInfo
+impl command::CommandBuffer<Backend> for RawCommandBuffer<CommandList> {
+    unsafe fn end(&mut self) -> SubmitInfo<CommandList> {
+        SubmitInfo {
+            parser: self.parser.clone(), // TODO: slow
+        }
     }
 }
 pub trait Parser: Sized + Send {
@@ -403,12 +408,14 @@ impl<P: 'static + Parser> command::Buffer<Resources> for RawCommandBuffer<P> {
     }
 }
 
-pub struct SubpassCommandBuffer {
-
+pub struct SubpassCommandBuffer<P> {
+    parser: P,
 }
 
-impl command::CommandBuffer<Backend> for SubpassCommandBuffer {
-    unsafe fn end(&mut self) -> SubmitInfo {
-        SubmitInfo
+impl command::CommandBuffer<Backend> for SubpassCommandBuffer<CommandList> {
+    unsafe fn end(&mut self) -> SubmitInfo<CommandList> {
+        SubmitInfo {
+            parser: self.parser.clone(), // TODO: slow
+        }
     }
 }

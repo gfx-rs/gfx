@@ -183,7 +183,7 @@ fn run<A, B, S, EL>((width, height): (u32, u32),
                 let ds_desc = texture::DepthStencilDesc {
                     level: 0,
                     layer: None,
-                    flags: texture::RO_DEPTH_STENCIL,
+                    flags: texture::DepthStencilFlags::empty(),
                 };
                 let dsv = factory.view_texture_as_depth_stencil_raw(
                                     ds.as_ref().unwrap(),
