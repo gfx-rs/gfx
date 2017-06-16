@@ -16,8 +16,9 @@ use std::ptr;
 use winapi::*;
 use core::{pso, state};
 use data::map_function;
+use comptr::ComPtr;
 
-pub fn make_rasterizer(device: *mut ID3D11Device, rast: &state::Rasterizer, use_scissor: bool)
+pub fn make_rasterizer(device: &mut ComPtr<ID3D11Device>, rast: &state::Rasterizer, use_scissor: bool)
                        -> *const ID3D11RasterizerState {
     let desc = D3D11_RASTERIZER_DESC {
         FillMode: match rast.method {
@@ -57,7 +58,7 @@ pub fn make_rasterizer(device: *mut ID3D11Device, rast: &state::Rasterizer, use_
 
     let mut handle = ptr::null_mut();
     let hr = unsafe {
-        (*device).CreateRasterizerState(&desc, &mut handle)
+        device.CreateRasterizerState(&desc, &mut handle)
     };
     if !SUCCEEDED(hr) {
         error!("Failed to create rasterizer state {:?}, descriptor {:#?}, code {:x}", rast, desc, hr);
@@ -103,7 +104,7 @@ fn map_stencil_mask<F>(dsi: &pso::DepthStencilInfo, name: &str, accessor: F) -> 
     }
 }
 
-pub fn make_depth_stencil(device: *mut ID3D11Device, dsi: &pso::DepthStencilInfo)
+pub fn make_depth_stencil(device: &mut ComPtr<ID3D11Device>, dsi: &pso::DepthStencilInfo)
                           -> *const ID3D11DepthStencilState {
     let desc = D3D11_DEPTH_STENCIL_DESC {
         DepthEnable: if dsi.depth.is_some() {TRUE} else {FALSE},
@@ -124,7 +125,7 @@ pub fn make_depth_stencil(device: *mut ID3D11Device, dsi: &pso::DepthStencilInfo
 
     let mut handle = ptr::null_mut();
     let hr = unsafe {
-        (*device).CreateDepthStencilState(&desc, &mut handle)
+        device.CreateDepthStencilState(&desc, &mut handle)
     };
     if !SUCCEEDED(hr) {
         error!("Failed to create depth-stencil state {:?}, descriptor {:#?}, error {:x}", dsi, desc, hr);
@@ -170,7 +171,7 @@ fn map_blend_op(equation: state::Equation) -> D3D11_BLEND_OP {
     }
 }
 
-pub fn make_blend(device: *mut ID3D11Device, targets: &[Option<pso::ColorTargetDesc>])
+pub fn make_blend(device: &mut ComPtr<ID3D11Device>, targets: &[Option<pso::ColorTargetDesc>])
                   -> *const ID3D11BlendState {
     let dummy_target = D3D11_RENDER_TARGET_BLEND_DESC {
         BlendEnable: FALSE,
@@ -213,7 +214,7 @@ pub fn make_blend(device: *mut ID3D11Device, targets: &[Option<pso::ColorTargetD
 
     let mut handle = ptr::null_mut();
     let hr = unsafe {
-        (*device).CreateBlendState(&desc, &mut handle)
+        device.CreateBlendState(&desc, &mut handle)
     };
     if !SUCCEEDED(hr) {
         error!("Failed to create blend state {:?}, descriptor {:#?}, error {:x}", targets, desc, hr);
