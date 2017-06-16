@@ -235,6 +235,8 @@ mod fence_related {
     pub struct Fence {}
 }
 
+gfx_impl_resources!();
+
 pub unsafe fn objc_err_description(object: *mut objc::runtime::Object) -> String {
     let description: *mut objc::runtime::Object = msg_send![object, localizedDescription];
     let utf16_len: NSUInteger = msg_send![description, length];

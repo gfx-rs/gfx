@@ -16,6 +16,7 @@
 extern crate log;
 
 extern crate ash;
+#[macro_use]
 extern crate gfx_corell as core;
 #[macro_use]
 extern crate lazy_static;

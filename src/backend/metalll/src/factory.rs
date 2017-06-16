@@ -473,6 +473,10 @@ impl core::Factory<Resources> for Factory {
         unsafe { view.0.release(); }
     }
 
+    fn destroy_depth_stencil_view(&mut self, view: DepthStencilView) {
+        unsafe { view.0.release(); }
+    }
+
     fn destroy_constant_buffer_view(&mut self, view: ConstantBufferView) {
         unimplemented!()
     }

@@ -1274,6 +1274,10 @@ impl core::Factory<R> for Factory {
         unsafe { self.inner.0.destroy_image_view(rtv.view, None); }
     }
 
+    fn destroy_depth_stencil_view(&mut self, dsv: native::DepthStencilView) {
+        unsafe { self.inner.0.destroy_image_view(dsv.view, None); }
+    }
+
     fn destroy_constant_buffer_view(&mut self, _: native::ConstantBufferView) { }
 
     fn destroy_shader_resource_view(&mut self, srv: native::ShaderResourceView) {

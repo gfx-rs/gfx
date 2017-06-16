@@ -138,3 +138,5 @@ pub struct DescriptorSet {
 #[derive(Debug)]
 pub struct DescriptorSetLayout {
 }
+
+gfx_impl_resources!();

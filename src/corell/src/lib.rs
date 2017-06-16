@@ -261,30 +261,35 @@ pub trait SwapChain {
 
 /// Different resource types of a specific API. 
 pub trait Resources:          Clone + Hash + Debug + Any {
-    type ShaderLib:           Debug + Any + Send + Sync;
-    type RenderPass:          Debug + Any + Send + Sync;
-    type PipelineLayout:      Debug + Any + Send + Sync;
-    type GraphicsPipeline:    Debug + Any + Send + Sync;
-    type ComputePipeline:     Debug + Any + Send + Sync;
+    type ShaderLib:           Debug + Any + Send + Sync + Resource<Self>;
+    type RenderPass:          Debug + Any + Send + Sync + Resource<Self>;
+    type PipelineLayout:      Debug + Any + Send + Sync + Resource<Self>;
+    type GraphicsPipeline:    Debug + Any + Send + Sync + Resource<Self>;
+    type ComputePipeline:     Debug + Any + Send + Sync + Resource<Self>;
     type UnboundBuffer:       Debug + Any + Send + Sync;
-    type Buffer:              Debug + Any + Send + Sync;
+    type Buffer:              Debug + Any + Send + Sync + Resource<Self>;
     type UnboundImage:        Debug + Any + Send + Sync;
-    type Image:               Debug + Any + Send + Sync;
-    type ConstantBufferView:  Debug + Any + Send + Sync;
-    type ShaderResourceView:  Debug + Any + Send + Sync;
-    type UnorderedAccessView: Debug + Any + Send + Sync;
-    type RenderTargetView:    Debug + Any + Send + Sync;
-    type DepthStencilView:    Debug + Any + Send + Sync;
-    type FrameBuffer:         Debug + Any + Send + Sync;
-    type Sampler:             Debug + Any + Send + Sync;
-    type Semaphore:           Debug + Any + Send + Sync;
-    type Fence:               Debug + Any + Send + Sync;
-    type Heap:                Debug + Any;
+    type Image:               Debug + Any + Send + Sync + Resource<Self>;
+    type ConstantBufferView:  Debug + Any + Send + Sync + Resource<Self>;
+    type ShaderResourceView:  Debug + Any + Send + Sync + Resource<Self>;
+    type UnorderedAccessView: Debug + Any + Send + Sync + Resource<Self>;
+    type RenderTargetView:    Debug + Any + Send + Sync + Resource<Self>;
+    type DepthStencilView:    Debug + Any + Send + Sync + Resource<Self>;
+    type FrameBuffer:         Debug + Any + Send + Sync + Resource<Self>;
+    type Sampler:             Debug + Any + Send + Sync + Resource<Self>;
+    type Semaphore:           Debug + Any + Send + Sync + Resource<Self>;
+    type Fence:               Debug + Any + Send + Sync + Resource<Self>;
+    type Heap:                Debug + Any + Resource<Self>;
     type Mapping;
-    type DescriptorHeap:      Debug + Any;
-    type DescriptorSetPool:   Debug + Any;
+    type DescriptorHeap:      Debug + Any + Resource<Self>;
+    type DescriptorSetPool:   Debug + Any + Resource<Self>;
     type DescriptorSet:       Debug + Any;
-    type DescriptorSetLayout: Debug + Any;
+    type DescriptorSetLayout: Debug + Any + Resource<Self>;
+}
+
+pub trait Resource<R: Resources>: Debug + Any {
+    fn destroy<F>(self, factory: &mut F) where
+        F: Factory<R>;
 }
 
 /// Different types of a specific API.
@@ -296,4 +301,43 @@ pub trait Backend {
     type Resources: Resources;
     type Surface: Surface;
     type SwapChain: SwapChain;
+}
+
+#[macro_export]
+macro_rules! gfx_impl_resource {
+    ($resource:ident => $destructor:ident) => {
+        impl ::core::Resource<::Resources> for $resource {
+            fn destroy<F>(self, factory: &mut F) where
+                F: ::core::Factory<::Resources>,
+            {
+                factory.$destructor(self);
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! gfx_impl_resources {
+    () => {
+        gfx_impl_resource!(ShaderLib => destroy_shader_lib);
+        gfx_impl_resource!(RenderPass => destroy_renderpass);
+        gfx_impl_resource!(PipelineLayout => destroy_pipeline_layout);
+        gfx_impl_resource!(GraphicsPipeline => destroy_graphics_pipeline);
+        gfx_impl_resource!(ComputePipeline => destroy_compute_pipeline);
+        gfx_impl_resource!(Buffer => destroy_buffer);
+        gfx_impl_resource!(Image => destroy_image);
+        gfx_impl_resource!(ConstantBufferView => destroy_constant_buffer_view);
+        gfx_impl_resource!(ShaderResourceView => destroy_shader_resource_view);
+        gfx_impl_resource!(UnorderedAccessView => destroy_unordered_access_view);
+        gfx_impl_resource!(RenderTargetView => destroy_render_target_view);
+        gfx_impl_resource!(DepthStencilView => destroy_depth_stencil_view);
+        gfx_impl_resource!(FrameBuffer => destroy_framebuffer);
+        gfx_impl_resource!(Sampler => destroy_sampler);
+        gfx_impl_resource!(Semaphore => destroy_semaphore);
+        gfx_impl_resource!(Fence => destroy_fence);
+        gfx_impl_resource!(Heap => destroy_heap);
+        gfx_impl_resource!(DescriptorHeap => destroy_descriptor_heap);
+        gfx_impl_resource!(DescriptorSetPool => destroy_descriptor_set_pool);
+        gfx_impl_resource!(DescriptorSetLayout => destroy_descriptor_set_layout);
+    };
 }
