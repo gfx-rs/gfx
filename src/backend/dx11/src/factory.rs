@@ -24,6 +24,7 @@ use {Resources as R, Share, Buffer, Texture, Pipeline, Program, Shader};
 use command::RawCommandBuffer;
 use {CommandList, DeferredContext, ShaderModel};
 use native;
+use comptr::ComPtr;
 
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -59,7 +60,7 @@ struct TextureParam {
 }
 
 pub struct Factory {
-    device: *mut winapi::ID3D11Device,
+    device: ComPtr<winapi::ID3D11Device>,
     share: Arc<Share>,
     frame_handles: h::Manager<R>,
     vs_cache: Map<u64, Vec<u8>>,
@@ -73,20 +74,13 @@ pub struct Factory {
 
 impl Clone for Factory {
     fn clone(&self) -> Factory {
-        unsafe { (*self.device).AddRef(); }
-        Factory::new(self.device, self.feature_level, self.share.clone())
-    }
-}
-
-impl Drop for Factory {
-    fn drop(&mut self) {
-        unsafe { (*self.device).Release(); }
+        Factory::new(self.device.clone(), self.feature_level, self.share.clone())
     }
 }
 
 impl Factory {
     /// Create a new `Factory`.
-    pub fn new(device: *mut winapi::ID3D11Device, feature_level: winapi::D3D_FEATURE_LEVEL, share: Arc<Share>) -> Factory {
+    pub fn new(device: ComPtr<winapi::ID3D11Device>, feature_level: winapi::D3D_FEATURE_LEVEL, share: Arc<Share>) -> Factory {
         Factory {
             device: device,
             share: share,
@@ -125,10 +119,10 @@ impl Factory {
         CommandList::new().into()
     }
 
-    pub fn create_command_buffer_native(&self) -> RawCommandBuffer<DeferredContext> {
-        let mut dc = ptr::null_mut();
+    pub fn create_command_buffer_native(&mut self) -> RawCommandBuffer<DeferredContext> {
+        let mut dc = ComPtr::<winapi::ID3D11DeviceContext>::new(ptr::null_mut());
         let hr = unsafe {
-            (*self.device).CreateDeferredContext(0, &mut dc)
+            self.device.CreateDeferredContext(0, dc.as_mut() as *mut *mut _)
         };
         if winapi::SUCCEEDED(hr) {
             DeferredContext::new(dc).into()
@@ -137,7 +131,7 @@ impl Factory {
         }
     }
 
-    fn create_buffer_internal(&self, info: buffer::Info, raw_data: Option<*const c_void>)
+    fn create_buffer_internal(&mut self, info: buffer::Info, raw_data: Option<*const c_void>)
                               -> Result<h::RawBuffer<R>, buffer::CreationError> {
         use winapi::d3d11::*;
         use data::{map_bind, map_usage};
@@ -188,7 +182,7 @@ impl Factory {
         debug!("Creating Buffer with info {:?} and sub-data {:?}", info, sub);
         let mut raw_buf = native::Buffer(ptr::null_mut());
         let hr = unsafe {
-            (*self.device).CreateBuffer(&native_desc, sub_raw, &mut raw_buf.0)
+            self.device.CreateBuffer(&native_desc, sub_raw, &mut raw_buf.0)
         };
         if winapi::SUCCEEDED(hr) {
             let buf = Buffer(raw_buf);
@@ -375,41 +369,41 @@ impl core::Factory<R> for Factory {
         use core::shade::{CreateShaderError, Stage};
         use mirror::reflect_shader;
 
-        let dev = self.device;
+        let dev = &mut self.device;
         let len = code.len() as winapi::SIZE_T;
         let (hr, object) = match stage {
             Stage::Vertex => {
                 let mut ret = ptr::null_mut();
                 let hr = unsafe {
-                    (*dev).CreateVertexShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
+                    dev.CreateVertexShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
                 };
                 (hr, ret as *mut ID3D11DeviceChild)
             },
             Stage::Hull => {
                 let mut ret = ptr::null_mut();
                 let hr = unsafe {
-                    (*dev).CreateHullShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
+                    dev.CreateHullShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
                 };
                 (hr, ret as *mut ID3D11DeviceChild)
             },
             Stage::Domain => {
                 let mut ret = ptr::null_mut();
                 let hr = unsafe {
-                    (*dev).CreateDomainShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
+                    dev.CreateDomainShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
                 };
                 (hr, ret as *mut ID3D11DeviceChild)
             },
             Stage::Geometry => {
                 let mut ret = ptr::null_mut();
                 let hr = unsafe {
-                    (*dev).CreateGeometryShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
+                    dev.CreateGeometryShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
                 };
                 (hr, ret as *mut ID3D11DeviceChild)
             },
             Stage::Pixel => {
                 let mut ret = ptr::null_mut();
                 let hr = unsafe {
-                    (*dev).CreatePixelShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
+                    dev.CreatePixelShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
                 };
                 (hr, ret as *mut ID3D11DeviceChild)
             },
@@ -566,10 +560,10 @@ impl core::Factory<R> for Factory {
             }
         };
 
-        let dev = self.device;
+        let dev = &mut self.device;
         let mut vertex_layout = ptr::null_mut();
         let hr = unsafe {
-            (*dev).CreateInputLayout(
+            dev.CreateInputLayout(
                 layouts.as_ptr(), layouts.len() as winapi::UINT,
                 vs_bin.as_ptr() as *const c_void, vs_bin.len() as winapi::SIZE_T,
                 &mut vertex_layout)
@@ -947,13 +941,13 @@ impl core::Factory<R> for Factory {
 pub fn ensure_mapped(mapping: &mut MappingGate,
                      buffer: &h::RawBuffer<R>,
                      map_type: winapi::d3d11::D3D11_MAP,
-                     factory: &Factory) {
+                     factory: &mut Factory) {
     if mapping.pointer.is_null() {
         let raw_handle = *buffer.resource();
         let mut ctx = ptr::null_mut();
 
         unsafe {
-            (*factory.device).GetImmediateContext(&mut ctx);
+            factory.device.GetImmediateContext(&mut ctx);
         }
 
         let mut sres = winapi::d3d11::D3D11_MAPPED_SUBRESOURCE {
