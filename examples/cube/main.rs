@@ -16,9 +16,8 @@ extern crate cgmath;
 #[macro_use]
 extern crate gfx;
 extern crate gfx_app;
-extern crate gfx_core;
 
-pub use gfx_app::{BackbufferView, ColorFormat, DepthFormat};
+use gfx_app::{BackbufferView, ColorFormat, DepthFormat};
 
 use cgmath::{Deg, Matrix4, Point3, Vector3};
 use gfx::{Bundle, Factory, texture};
@@ -60,7 +59,7 @@ impl Vertex {
 }
 
 //----------------------------------------
-struct App<B: gfx::Backend>{
+struct App<B: gfx::Backend> {
     views: Vec<BackbufferView<B::Resources>>,
     bundle: Bundle<B, pipe::Data<B::Resources>>,
 }
@@ -167,9 +166,9 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         }
     }
 
-    fn render<Gp>(&mut self, (frame, semaphore): (gfx_core::Frame, &<B::Resources as gfx::Resources>::Semaphore),
-                  pool: &mut Gp, queue: &mut gfx_core::queue::GraphicsQueueMut<B>)
-        where Gp: gfx_core::GraphicsCommandPool<B>
+    fn render<Gp>(&mut self, (frame, semaphore): (gfx::Frame, &<B::Resources as gfx::Resources>::Semaphore),
+                  pool: &mut Gp, queue: &mut gfx::queue::GraphicsQueueMut<B>)
+        where Gp: gfx::GraphicsCommandPool<B>
     {
         let (cur_color, cur_depth) = self.views[frame.id()].clone();
         self.bundle.data.out_color = cur_color;
