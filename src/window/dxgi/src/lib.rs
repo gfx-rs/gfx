@@ -21,12 +21,14 @@ extern crate winapi;
 extern crate winit;
 extern crate gfx_core as core;
 extern crate gfx_device_dx11 as device_dx11;
+extern crate comptr;
 
 use std::ptr;
 use winit::os::windows::WindowExt;
 use core::{format, handle as h, factory as f, memory, texture as tex};
 use core::texture::Size;
 use device_dx11::{Factory, Resources};
+use comptr::ComPtr;
 
 /*
 pub struct Window {
@@ -193,7 +195,12 @@ where Cf: format::RenderFormat
 }
 */
 
-pub struct Surface;
+pub struct Surface {
+    factory: ComPtr<winapi::IDXGIFactory2>,
+    wnd_handle: winapi::HWND,
+    width: u32,
+    height: u32,
+}
 
 impl core::Surface<device_dx11::Backend> for Surface {
     type SwapChain = SwapChain;
@@ -231,6 +238,18 @@ impl<'a> core::WindowExt<device_dx11::Backend> for Window<'a> {
     type Adapter = device_dx11::Adapter;
 
     fn get_surface_and_adapters(&mut self) -> (Surface, Vec<device_dx11::Adapter>) {
-        unimplemented!()
+        let mut instance = device_dx11::Instance::create();
+        let adapters = instance.enumerate_adapters();
+        let surface = {
+            let (width, height) = self.0.get_inner_size_pixels().unwrap();
+            Surface {
+                factory: instance.0,
+                wnd_handle: self.0.get_hwnd() as *mut _,
+                width: width,
+                height: height,
+            }
+        };
+
+        (surface, adapters)
     }
 }
