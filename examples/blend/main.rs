@@ -18,9 +18,10 @@ extern crate gfx_app;
 extern crate image;
 extern crate winit;
 
-pub use gfx_app::ColorFormat;
-pub use gfx::format::{Rgba8, DepthStencil};
+use gfx_app::{BackbufferView, ColorFormat};
+use gfx::format::{Rgba8};
 use gfx::Bundle;
+use gfx::GraphicsPoolExt;
 
 gfx_defines!{
     vertex Vertex {
@@ -75,14 +76,17 @@ const BLENDS: [&'static str; 9] = [
     "Grain Merge",
 ];
 
-struct App<R: gfx::Resources>{
-    bundle: Bundle<R, pipe::Data<R>>,
+struct App<B: gfx::Backend> {
+    bundle: Bundle<B, pipe::Data<B::Resources>>,
     id: u8,
+    views: Vec<BackbufferView<B::Resources>>,
 }
 
-impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(factory: &mut F, backend: gfx_app::shade::Backend,
-           window_targets: gfx_app::WindowTargets<R>) -> Self {
+impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
+    fn new(factory: &mut B::Factory,
+           backend: gfx_app::shade::Backend,
+           window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
+    {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
@@ -134,21 +138,30 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             tint: (tint_texture, sampler),
             blend: 0,
             locals: cbuf,
-            out: window_targets.color,
+            out: window_targets.views[0].0.clone(),
         };
 
         App {
             bundle: Bundle::new(slice, pso, data),
             id: 0,
+            views: window_targets.views,
         }
     }
 
-    fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
+    fn render<Gp>(&mut self, (frame, semaphore): (gfx::Frame, &<B::Resources as gfx::Resources>::Semaphore),
+                  pool: &mut Gp, queue: &mut gfx::queue::GraphicsQueueMut<B>)
+        where Gp: gfx::GraphicsCommandPool<B>
+    {
+        let (cur_color, _) = self.views[frame.id()].clone();
+        self.bundle.data.out = cur_color;
+
+        let mut encoder = pool.acquire_graphics_encoder();
         self.bundle.data.blend = (self.id as i32).into();
         let locals = Locals { blend: self.id as i32 };
         encoder.update_constant_buffer(&self.bundle.data.locals, &locals);
         encoder.clear(&self.bundle.data.out, [0.0; 4]);
-        self.bundle.encode(encoder);
+        self.bundle.encode(&mut encoder);
+        encoder.flush(queue);
     }
 
     fn on(&mut self, event: winit::WindowEvent) {
@@ -167,8 +180,8 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         }
     }
 
-    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
-        self.bundle.data.out = window_targets.color;
+    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<B::Resources>) {
+        self.views = window_targets.views;
     }
 }
 
