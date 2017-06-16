@@ -910,7 +910,7 @@ impl core::Factory<R> for Factory {
         }
     }
 
-    fn create_semaphore(&mut self) -> () { unimplemented!() }
+    fn create_semaphore(&mut self) -> () { () }
 
     fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b h::Buffer<R, T>)
                                -> Result<mapping::Reader<'b, R, T>,
@@ -971,11 +971,11 @@ pub fn ensure_mapped(mapping: &mut MappingGate,
 
 pub fn ensure_unmapped(mapping: &mut MappingGate,
                        buffer: &buffer::Raw<R>,
-                       context: *mut winapi::ID3D11DeviceContext) {
+                       context: &mut ComPtr<winapi::ID3D11DeviceContext>) {
     if !mapping.pointer.is_null() {
         let raw_handle = *buffer.resource();
         unsafe {
-            (*context).Unmap(raw_handle.as_resource() as *mut winapi::d3d11::ID3D11Resource, 0);
+            context.Unmap(raw_handle.as_resource() as *mut winapi::d3d11::ID3D11Resource, 0);
         }
 
         mapping.pointer = ptr::null_mut();

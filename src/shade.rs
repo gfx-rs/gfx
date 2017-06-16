@@ -56,7 +56,7 @@ impl ShadeExt for ::gfx_device_gl::Factory {
 #[cfg(feature = "dx11")]
 impl ShadeExt for ::gfx_device_dx11::Factory {
     fn shader_backend(&self) -> Backend {
-        unimplemented!()
+        Backend::Hlsl(self.get_shader_model())
     }
 }
 
