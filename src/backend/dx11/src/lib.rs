@@ -22,8 +22,6 @@ extern crate d3dcompiler;
 extern crate dxgi;
 extern crate dxguid;
 extern crate winapi;
-#[macro_use]
-extern crate lazy_static;
 extern crate comptr;
 
 pub use self::data::map_format;
@@ -48,29 +46,18 @@ use core::SubmissionResult;
 use core::command::{AccessInfo, AccessGuard};
 use std::os::raw::c_void;
 
-lazy_static! {
-    pub static ref INSTANCE: Instance = Instance::create();
-}
-
-///
-pub struct Instance {
-    factory: ComPtr<winapi::IDXGIFactory2>,
-    adapters: Vec<Adapter>,
-}
-
-unsafe impl Sync for Instance {}
-
 static FEATURE_LEVELS: [winapi::D3D_FEATURE_LEVEL; 3] = [
     winapi::D3D_FEATURE_LEVEL_11_0,
     winapi::D3D_FEATURE_LEVEL_10_1,
     winapi::D3D_FEATURE_LEVEL_10_0,
 ];
 
-impl Instance {
-    fn create() -> Self {
-        use std::ffi::OsString;
-        use std::os::windows::ffi::OsStringExt;
+#[doc(hidden)]
+pub struct Instance(pub ComPtr<winapi::IDXGIFactory2>);
 
+impl Instance {
+    #[doc(hidden)]
+    pub fn create() -> Self {
         // Create DXGI factory
         let mut dxgi_factory = ComPtr::<winapi::IDXGIFactory2>::new(ptr::null_mut());
 
@@ -84,13 +71,20 @@ impl Instance {
             error!("Failed on dxgi factory creation: {:?}", hr);
         }
 
-        // Enumerate adapters
+        Instance(dxgi_factory)
+    }
+
+    #[doc(hidden)]
+    pub fn enumerate_adapters(&mut self) -> Vec<Adapter> {
+        use std::ffi::OsString;
+        use std::os::windows::ffi::OsStringExt;
+
         let mut cur_index = 0;
         let mut adapters = Vec::new();
         loop {
             let mut adapter = ComPtr::<winapi::IDXGIAdapter1>::new(ptr::null_mut());
             let hr = unsafe {
-                dxgi_factory.EnumAdapters1(
+                self.0.EnumAdapters1(
                     cur_index,
                     adapter.as_mut() as *mut *mut _ as *mut *mut winapi::IDXGIAdapter1)
             };
@@ -114,22 +108,21 @@ impl Instance {
                 name: device_name,
                 vendor: desc.VendorId as usize,
                 device: desc.DeviceId as usize,
-                software_rendering: false, // TODO: check for WARP adapter (software rasterizer)?
+                software_rendering: false, // TODO
             };
 
             adapters.push(
                 Adapter {
-
+                    adapter: adapter,
+                    info: info,
+                    queue_family: [QueueFamily],
                 }
             );
 
             cur_index += 1;
         }
 
-        Instance {
-            factory: dxgi_factory,
-            adapters: adapters,
-        }
+        adapters
     }
 }
 
@@ -307,16 +300,16 @@ impl command::Parser for CommandList {
     }
 }
 
-pub struct DeferredContext(*mut winapi::ID3D11DeviceContext, Option<*mut winapi::ID3D11CommandList>);
+pub struct DeferredContext(ComPtr<winapi::ID3D11DeviceContext>, Option<*mut winapi::ID3D11CommandList>);
 unsafe impl Send for DeferredContext {}
 impl DeferredContext {
-    pub fn new(dc: *mut winapi::ID3D11DeviceContext) -> DeferredContext {
+    pub fn new(dc: ComPtr<winapi::ID3D11DeviceContext>) -> DeferredContext {
         DeferredContext(dc, None)
     }
 }
 impl Drop for DeferredContext {
     fn drop(&mut self) {
-        unsafe { (*self.0).Release() };
+        unsafe { self.0.Release() };
     }
 }
 impl command::Parser for DeferredContext {
@@ -326,39 +319,94 @@ impl command::Parser for DeferredContext {
             self.1 = None;
         }
         unsafe {
-            (*self.0).ClearState()
+            self.0.ClearState()
         };
     }
     fn parse(&mut self, com: command::Command) {
         let db = command::DataBuffer::new(); //not used
-        execute::process(self.0, &com, &db);
+        execute::process(&mut self.0, &com, &db);
     }
     fn update_buffer(&mut self, buf: Buffer, data: &[u8], offset: usize) {
-        execute::update_buffer(self.0, &buf, data, offset);
+        execute::update_buffer(&mut self.0, &buf, data, offset);
     }
     fn update_texture(&mut self, tex: Texture, kind: tex::Kind, face: Option<tex::CubeFace>, data: &[u8], image: tex::RawImageInfo) {
-        execute::update_texture(self.0, &tex, kind, face, data, &image);
+        execute::update_texture(&mut self.0, &tex, kind, face, data, &image);
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Fence(());
 
+#[derive(Debug)]
 pub struct Adapter {
-
+    adapter: ComPtr<winapi::IDXGIAdapter1>,
+    info: core::AdapterInfo,
+    queue_family: [QueueFamily; 1],
 }
 
 impl core::Adapter<Backend> for Adapter {
     fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> core::Device<Backend> {
-        unimplemented!()
+        // Create D3D11 device
+        let mut device = ComPtr::<winapi::ID3D11Device>::new(ptr::null_mut());
+        let mut feature_level = winapi::D3D_FEATURE_LEVEL_10_0;
+        let mut context = ComPtr::<winapi::ID3D11DeviceContext>::new(ptr::null_mut());
+        let hr = unsafe {
+            d3d11::D3D11CreateDevice(
+                self.adapter.as_mut_ptr() as *mut _ as *mut winapi::IDXGIAdapter,
+                winapi::D3D_DRIVER_TYPE_UNKNOWN,
+                ptr::null_mut(),
+                0, // TODO
+                &FEATURE_LEVELS[0],
+                FEATURE_LEVELS.len() as winapi::UINT,
+                winapi::D3D11_SDK_VERSION,
+                device.as_mut() as *mut *mut _ as *mut *mut winapi::d3d11::ID3D11Device,
+                &mut feature_level as *mut _,
+                context.as_mut() as *mut *mut _ as *mut *mut winapi::d3d11::ID3D11DeviceContext,
+            )
+        };
+        if !winapi::SUCCEEDED(hr) {
+            error!("error on device creation: {:x}", hr);
+        }
+
+        let share = Share {
+            capabilities: core::Capabilities {
+                max_vertex_count: 0,
+                max_index_count: 0,
+                max_texture_size: 0,
+                max_patch_size: 32, //hard-coded in D3D11
+                instance_base_supported: false,
+                instance_call_supported: false,
+                instance_rate_supported: false,
+                vertex_base_supported: false,
+                srgb_color_supported: false,
+                constant_buffer_supported: true,
+                unordered_access_view_supported: false,
+                separate_blending_slots_supported: false,
+                copy_buffer_supported: true,
+            },
+            handles: RefCell::new(h::Manager::new()),
+        };
+
+        let factory = Factory::new(device, feature_level, Arc::new(share));
+
+        core::Device {
+            factory,
+            general_queues: Vec::new(),
+            graphics_queues: Vec::new(),
+            compute_queues: Vec::new(),
+            transfer_queues: Vec::new(),
+            heap_types: Vec::new(),
+            memory_heaps: Vec::new(),
+            _marker: std::marker::PhantomData,
+        }
     }
 
     fn get_info(&self) -> &core::AdapterInfo {
-        unimplemented!()
+        &self.info
     }
 
     fn get_queue_families(&self) -> &[QueueFamily] {
-        unimplemented!()
+        &self.queue_family
     }
 }
 
@@ -384,6 +432,7 @@ impl core::CommandQueue<Backend> for CommandQueue {
 }
 
 ///
+#[derive(Debug)]
 pub struct QueueFamily;
 impl core::QueueFamily for QueueFamily {
     fn num_queues(&self) -> u32 { 1 }
