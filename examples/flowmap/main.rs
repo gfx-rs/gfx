@@ -19,9 +19,9 @@ extern crate image;
 
 use std::io::Cursor;
 use std::time::Instant;
-pub use gfx::format::{Rgba8, Depth};
-pub use gfx_app::ColorFormat;
-use gfx::Bundle;
+use gfx::format::{Rgba8, Depth};
+use gfx_app::{BackbufferView, ColorFormat};
+use gfx::{Bundle, GraphicsPoolExt};
 
 gfx_defines!{
     vertex Vertex {
@@ -65,15 +65,18 @@ fn load_texture<R, F>(factory: &mut F, data: &[u8])
     Ok(view)
 }
 
-struct App<R: gfx::Resources>{
-    bundle: Bundle<R, pipe::Data<R>>,
+struct App<B: gfx::Backend> {
+    views: Vec<BackbufferView<B::Resources>>,
+    bundle: Bundle<B, pipe::Data<B::Resources>>,
     cycles: [f32; 2],
     time_start: Instant,
 }
 
-impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(factory: &mut F, backend: gfx_app::shade::Backend,
-           window_targets: gfx_app::WindowTargets<R>) -> Self {
+impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
+    fn new(factory: &mut B::Factory,
+           backend: gfx_app::shade::Backend,
+           window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
+    {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
@@ -122,17 +125,21 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             offset0: 0.0,
             offset1: 0.0,
             locals: factory.create_constant_buffer(1),
-            out: window_targets.color,
+            out: window_targets.views[0].0.clone(),
         };
 
         App {
+            views: window_targets.views,
             bundle: Bundle::new(slice, pso, data),
             cycles: [0.0, 0.5],
             time_start: Instant::now(),
         }
     }
 
-    fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
+    fn render<Gp>(&mut self, (frame, semaphore): (gfx::Frame, &<B::Resources as gfx::Resources>::Semaphore),
+                  pool: &mut Gp, queue: &mut gfx::queue::GraphicsQueueMut<B>)
+        where Gp: gfx::GraphicsCommandPool<B>
+    {
         let delta = self.time_start.elapsed();
         self.time_start = Instant::now();
         let delta = delta.as_secs() as f32 + delta.subsec_nanos() as f32 / 1000_000_000.0;
@@ -150,17 +157,22 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             self.cycles[1] -= 1.0;
         }
 
+        let (cur_color, _) = self.views[frame.id()].clone();
+        self.bundle.data.out = cur_color;
+
+        let mut encoder = pool.acquire_graphics_encoder();
         self.bundle.data.offset0 = self.cycles[0];
         self.bundle.data.offset1 = self.cycles[1];
         let locals = Locals { offsets: self.cycles };
         encoder.update_constant_buffer(&self.bundle.data.locals, &locals);
 
         encoder.clear(&self.bundle.data.out, [0.3, 0.3, 0.3, 1.0]);
-        self.bundle.encode(encoder);
+        self.bundle.encode(&mut encoder);
+        encoder.flush(queue);
     }
 
-    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
-        self.bundle.data.out = window_targets.color;
+    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<B::Resources>) {
+        self.views = window_targets.views;
     }
 }
 
