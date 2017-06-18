@@ -250,13 +250,13 @@ impl Factory {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug)]
 pub enum MappingKind {
     Persistent(mapping::Status<R>),
     Temporary,
 }
 
-#[derive(Debug, Eq, Hash, PartialEq)]
+#[derive(Debug)]
 #[allow(missing_copy_implementations)]
 pub struct MappingGate {
     pub kind: MappingKind,
@@ -512,7 +512,9 @@ impl f::Factory<R> for Factory {
         self.share.handles.borrow_mut().make_sampler(sam, info)
     }
 
-    fn create_semaphore(&mut self) -> () { () } // TODO: ?
+    fn create_semaphore(&mut self) -> handle::Semaphore<R> {
+        self.share.handles.borrow_mut().make_semaphore(())
+    }
 
     fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<R, T>)
                                -> Result<mapping::Reader<'b, R, T>,
@@ -524,7 +526,7 @@ impl f::Factory<R> for Factory {
         unsafe {
             mapping::read(buf.raw(), |mapping| match mapping.kind {
                 MappingKind::Persistent(ref mut status) =>
-                    status.cpu_access(|fence| wait_fence(&handles.ref_fence(&fence), gl)),
+                    status.cpu_access(|fence| wait_fence(&*handles.ref_fence(&fence).lock().unwrap(), gl)),
                 MappingKind::Temporary =>
                     temporary_ensure_mapped(&mut mapping.pointer,
                                             role_to_target(buf.get_info().role),
@@ -545,7 +547,7 @@ impl f::Factory<R> for Factory {
         unsafe {
             mapping::write(buf.raw(), |mapping| match mapping.kind {
                 MappingKind::Persistent(ref mut status) =>
-                    status.cpu_write_access(|fence| wait_fence(&handles.ref_fence(&fence), gl)),
+                    status.cpu_write_access(|fence| wait_fence(&*handles.ref_fence(&fence).lock().unwrap(), gl)),
                 MappingKind::Temporary =>
                     temporary_ensure_mapped(&mut mapping.pointer,
                                             role_to_target(buf.get_info().role),
