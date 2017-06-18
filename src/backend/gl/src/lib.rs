@@ -514,9 +514,11 @@ impl Device {
                 }
             },
             Command::BindVao => {
-                let gl = &self.share.context;
-                unsafe {
-                    gl.BindVertexArray(self.vao);
+                if self.share.private_caps.array_buffer_supported {
+                    let gl = &self.share.context;
+                    unsafe {
+                        gl.BindVertexArray(self.vao);
+                    }
                 }
             },
             Command::BindAttribute(slot, buffer,  bel) => {
