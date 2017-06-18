@@ -202,7 +202,7 @@ fn run<A, B, S, EL>((width, height): (u32, u32),
 
     let mut harness = Harness::new();
     let mut running = true;
-    let mut frame_semaphore = factory.create_semaphore();
+    let frame_semaphore = factory.create_semaphore();
 
     let mut graphics_pool = B::GraphicsCommandPool::from_queue(queue.as_ref(), 1);
 
@@ -218,7 +218,7 @@ fn run<A, B, S, EL>((width, height): (u32, u32),
             }
         });
 
-        let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&mut frame_semaphore));
+        let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&frame_semaphore));
 
         app.render((frame, &frame_semaphore), &mut graphics_pool, &mut queue);
 
@@ -257,7 +257,7 @@ pub type DefaultBackend = gfx_device_vulkan::Backend;
 
 pub trait Application<B: Backend>: Sized {
     fn new(&mut B::Factory, shade::Backend, WindowTargets<B::Resources>) -> Self;
-    fn render<Gp>(&mut self, frame: (gfx_core::Frame, &<B::Resources as gfx::Resources>::Semaphore),
+    fn render<Gp>(&mut self, frame: (gfx_core::Frame, &gfx::handle::Semaphore<B::Resources>),
                      pool: &mut Gp, queue: &mut gfx_core::queue::GraphicsQueueMut<B>)
         where Gp: GraphicsCommandPool<B>;
 

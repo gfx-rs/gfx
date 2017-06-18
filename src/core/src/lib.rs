@@ -265,7 +265,7 @@ pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq + Any {
     type Sampler:             Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
     type Fence:               Debug + Hash + Eq + PartialEq + Any + Send + Sync;
     type Semaphore:           Debug + Any + Send + Sync;
-    type Mapping:             Hash + Debug + Eq + PartialEq + Any + Send + Sync + mapping::Gate<Self>;
+    type Mapping:             Debug + Any + Send + Sync + mapping::Gate<Self>;
 }
 
 /*
@@ -386,9 +386,9 @@ pub struct QueueSubmit<'a, B: Backend + 'a> {
     /// Command buffers to submit.
     pub cmd_buffers: &'a [command::Submit<B>],
     /// Semaphores to wait being signaled before submission.
-    pub wait_semaphores: &'a [(&'a mut <B::Resources as Resources>::Semaphore, pso::PipelineStage)],
+    pub wait_semaphores: &'a [(&'a handle::Semaphore<B::Resources>, pso::PipelineStage)],
     /// Semaphores which get signaled after submission.
-    pub signal_semaphores: &'a [&'a mut <B::Resources as Resources>::Semaphore],
+    pub signal_semaphores: &'a [&'a handle::Semaphore<B::Resources>],
 }
 
 /// Dummy trait for command queues.
@@ -398,7 +398,7 @@ pub trait CommandQueue<B: Backend> {
     /// `fence` will be signalled after submission and _must_ be unsignalled.
     // TODO: `access` legacy (handle API)
     #[doc(hidden)]
-    unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>], fence: Option<&mut <B::Resources as Resources>::Fence>,
+    unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>], fence: Option<&handle::Fence<B::Resources>>,
         access: &command::AccessInfo<B::Resources>);
 
     ///
@@ -462,12 +462,12 @@ pub enum FrameSync<'a, R: Resources> {
     /// Semaphore used for synchronization.
     ///
     /// Will be signaled once the frame backbuffer is available.
-    Semaphore(&'a R::Semaphore),
+    Semaphore(&'a handle::Semaphore<R>),
 
     /// Fence used for synchronization.
     ///
     /// Will be signaled once the frame backbuffer is available.
-    Fence(&'a R::Fence)
+    Fence(&'a handle::Semaphore<R>)
 }
 
 /// Allows you to configure a `SwapChain` for creation.

@@ -889,13 +889,14 @@ impl CommandQueue {
     }
 
     fn wait_fence(&mut self, fence: &handle::Fence<Resources>) {
-        factory::wait_fence(self.frame_handles.ref_fence(&fence),
-                            &self.share.context);
+        factory::wait_fence(
+            &*self.frame_handles.ref_fence(&fence).lock().unwrap(),
+            &self.share.context);
     }
 }
 
 impl c::CommandQueue<Backend> for CommandQueue {
-    unsafe fn submit(&mut self, submit_infos: &[c::QueueSubmit<Backend>], fence: Option<&mut Fence>, access: &com::AccessInfo<Resources>) {
+    unsafe fn submit(&mut self, submit_infos: &[c::QueueSubmit<Backend>], fence: Option<&handle::Fence<Resources>>, access: &com::AccessInfo<Resources>) {
         let mut access = self.before_submit(access).unwrap();
         for submit in submit_infos {
             for cb in submit.cmd_buffers {
@@ -962,7 +963,8 @@ impl c::CommandQueue<Backend> for CommandQueue {
             |_, _| {}, //RTV
             |_, _| {}, //DSV
             |gl, v| unsafe { if v.object != 0 { gl.DeleteSamplers(1, &v.object) }},
-            |gl, fence| unsafe { gl.DeleteSync(fence.0) },
+            |gl, fence| { fence.get_mut().map(|fence| unsafe { gl.DeleteSync(fence.0) }); },
+            |_, _| {}, // Semaphore
         );
     }
 }

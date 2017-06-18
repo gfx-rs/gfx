@@ -15,7 +15,7 @@
 //! Resource factory
 //!
 //! This module exposes the `Factory` trait, used for creating and managing graphics resources, and
-//! includes several items to facilitate this. 
+//! includes several items to facilitate this.
 
 use std::error::Error;
 use std::{mem, fmt};
@@ -110,7 +110,7 @@ impl Error for TargetViewError {
             TargetViewError::Unsupported =>
                 "The backend was refused for some reason",
             TargetViewError::NotDetached =>
-                "The RTV cannot be changed due to the references to it existing",    
+                "The RTV cannot be changed due to the references to it existing",
         }
     }
 
@@ -179,7 +179,7 @@ impl From<TargetViewError> for CombinedError {
 }
 
 /// A `Factory` is responsible for creating and managing resources for the context it was created
-/// with. 
+/// with.
 ///
 /// # Construction and Handling
 /// A `Factory` is typically created along with other objects using a helper function of the
@@ -221,11 +221,11 @@ pub trait Factory<R: Resources> {
     /// `FactoryExt` trait and `pso` module, both in the `gfx` crate.
     fn create_pipeline_state_raw(&mut self, &handle::Program<R>, &pso::Descriptor)
                                  -> Result<handle::RawPipelineState<R>, pso::CreationError>;
-                                 
+
     /// Creates a new shader `Program` for the supplied `ShaderSet`.
     fn create_program(&mut self, shader_set: &ShaderSet<R>)
                       -> Result<handle::Program<R>, shade::CreateProgramError>;
-    
+
     /// Compiles a shader source into a `Shader` object that can be used to create a shader
     /// `Program`.
     fn create_shader(&mut self, stage: shade::Stage, code: &[u8]) ->
@@ -255,7 +255,7 @@ pub trait Factory<R: Resources> {
     fn create_sampler(&mut self, texture::SamplerInfo) -> handle::Sampler<R>;
 
     ///
-    fn create_semaphore(&mut self) -> R::Semaphore;
+    fn create_semaphore(&mut self) -> handle::Semaphore<R>;
 
     /// Acquire a mapping Reader
     ///
