@@ -18,7 +18,7 @@
 
 use std::marker::PhantomData;
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use {buffer, shade, texture, Resources};
 use memory::Typed;
 
@@ -245,8 +245,12 @@ impl<R: Resources> Sampler<R> {
 }
 
 /// Fence Handle
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Fence<R: Resources>(Arc<R::Fence>);
+#[derive(Clone, Debug)]
+pub struct Fence<R: Resources>(Arc<Mutex<R::Fence>>);
+
+/// Semaphore Handle
+#[derive(Clone, Debug)]
+pub struct Semaphore<R: Resources>(Arc<Mutex<R::Semaphore>>);
 
 /// Stores reference-counted resources used in a command buffer.
 /// Seals actual resource names behind the interface, automatically
@@ -265,7 +269,8 @@ pub struct Manager<R: Resources> {
     rtvs:          Vec<Arc<R::RenderTargetView>>,
     dsvs:          Vec<Arc<R::DepthStencilView>>,
     samplers:      Vec<Arc<R::Sampler>>,
-    fences:        Vec<Arc<R::Fence>>,
+    fences:        Vec<Arc<Mutex<R::Fence>>>,
+    semaphores:    Vec<Arc<Mutex<R::Semaphore>>>,
 }
 
 /// A service trait to be used by the device implementation
@@ -287,22 +292,24 @@ pub trait Producer<R: Resources> {
     fn make_dsv(&mut self, R::DepthStencilView, &RawTexture<R>, texture::Dimensions) -> RawDepthStencilView<R>;
     fn make_sampler(&mut self, R::Sampler, texture::SamplerInfo) -> Sampler<R>;
     fn make_fence(&mut self, name: R::Fence) -> Fence<R>;
+    fn make_semaphore(&mut self, R::Semaphore) -> Semaphore<R>;
 
     /// Walk through all the handles, keep ones that are reference elsewhere
     /// and call the provided delete function (resource-specific) for others
     fn clean_with<T,
-        A: Fn(&mut T, &buffer::Raw<R>),
-        B: Fn(&mut T, &R::Shader),
-        C: Fn(&mut T, &shade::Program<R>),
-        D: Fn(&mut T, &R::PipelineStateObject),
-        E: Fn(&mut T, &texture::Raw<R>),
-        F: Fn(&mut T, &R::ShaderResourceView),
-        G: Fn(&mut T, &R::UnorderedAccessView),
-        H: Fn(&mut T, &R::RenderTargetView),
-        I: Fn(&mut T, &R::DepthStencilView),
-        J: Fn(&mut T, &R::Sampler),
-        K: Fn(&mut T, &R::Fence),
-    >(&mut self, &mut T, A, B, C, D, E, F, G, H, I, J, K);
+        A: Fn(&mut T, &mut buffer::Raw<R>),
+        B: Fn(&mut T, &mut R::Shader),
+        C: Fn(&mut T, &mut shade::Program<R>),
+        D: Fn(&mut T, &mut R::PipelineStateObject),
+        E: Fn(&mut T, &mut texture::Raw<R>),
+        F: Fn(&mut T, &mut R::ShaderResourceView),
+        G: Fn(&mut T, &mut R::UnorderedAccessView),
+        H: Fn(&mut T, &mut R::RenderTargetView),
+        I: Fn(&mut T, &mut R::DepthStencilView),
+        J: Fn(&mut T, &mut R::Sampler),
+        K: Fn(&mut T, &mut Mutex<R::Fence>),
+        L: Fn(&mut T, &mut Mutex<R::Semaphore>),
+    >(&mut self, &mut T, A, B, C, D, E, F, G, H, I, J, K, L);
 }
 
 impl<R: Resources> Producer<R> for Manager<R> {
@@ -382,26 +389,33 @@ impl<R: Resources> Producer<R> for Manager<R> {
     }
 
     fn make_fence(&mut self, res: R::Fence) -> Fence<R> {
-        let r = Arc::new(res);
+        let r = Arc::new(Mutex::new(res));
         self.fences.push(r.clone());
         Fence(r)
     }
 
+    fn make_semaphore(&mut self, res: R::Semaphore) -> Semaphore<R> {
+        let r = Arc::new(Mutex::new(res));
+        self.semaphores.push(r.clone());
+        Semaphore(r)
+    }
+
     fn clean_with<T,
-        A: Fn(&mut T, &buffer::Raw<R>),
-        B: Fn(&mut T, &R::Shader),
-        C: Fn(&mut T, &shade::Program<R>),
-        D: Fn(&mut T, &R::PipelineStateObject),
-        E: Fn(&mut T, &texture::Raw<R>),
-        F: Fn(&mut T, &R::ShaderResourceView),
-        G: Fn(&mut T, &R::UnorderedAccessView),
-        H: Fn(&mut T, &R::RenderTargetView),
-        I: Fn(&mut T, &R::DepthStencilView),
-        J: Fn(&mut T, &R::Sampler),
-        K: Fn(&mut T, &R::Fence),
-    >(&mut self, param: &mut T, fa: A, fb: B, fc: C, fd: D, fe: E, ff: F, fg: G, fh: H, fi: I, fj: J, fk: K) {
+        A: Fn(&mut T, &mut buffer::Raw<R>),
+        B: Fn(&mut T, &mut R::Shader),
+        C: Fn(&mut T, &mut shade::Program<R>),
+        D: Fn(&mut T, &mut R::PipelineStateObject),
+        E: Fn(&mut T, &mut texture::Raw<R>),
+        F: Fn(&mut T, &mut R::ShaderResourceView),
+        G: Fn(&mut T, &mut R::UnorderedAccessView),
+        H: Fn(&mut T, &mut R::RenderTargetView),
+        I: Fn(&mut T, &mut R::DepthStencilView),
+        J: Fn(&mut T, &mut R::Sampler),
+        K: Fn(&mut T, &mut Mutex<R::Fence>),
+        L: Fn(&mut T, &mut Mutex<R::Semaphore>),
+    >(&mut self, param: &mut T, fa: A, fb: B, fc: C, fd: D, fe: E, ff: F, fg: G, fh: H, fi: I, fj: J, fk: K, fl: L) {
         fn clean_vec<X, Param, Fun>(param: &mut Param, vector: &mut Vec<Arc<X>>, fun: Fun)
-            where Fun: Fn(&mut Param, &X)
+            where Fun: Fn(&mut Param, &mut X)
         {
             let mut temp = Vec::new();
             // delete unique resources and make a list of their indices
@@ -428,6 +442,7 @@ impl<R: Resources> Producer<R> for Manager<R> {
         clean_vec(param, &mut self.dsvs,          fi);
         clean_vec(param, &mut self.samplers,      fj);
         clean_vec(param, &mut self.fences,        fk);
+        clean_vec(param, &mut self.semaphores,    fl);
     }
 }
 
@@ -446,6 +461,7 @@ impl<R: Resources> Manager<R> {
             dsvs: Vec::new(),
             samplers: Vec::new(),
             fences: Vec::new(),
+            semaphores: Vec::new(),
         }
     }
     /// Clear all references
@@ -461,20 +477,22 @@ impl<R: Resources> Manager<R> {
         self.dsvs.clear();
         self.samplers.clear();
         self.fences.clear();
+        self.semaphores.clear();
     }
     /// Extend with all references of another handle manager
     pub fn extend(&mut self, other: &Manager<R>) {
-        self.buffers  .extend(other.buffers  .iter().map(|h| h.clone()));
-        self.shaders  .extend(other.shaders  .iter().map(|h| h.clone()));
-        self.programs .extend(other.programs .iter().map(|h| h.clone()));
-        self.psos     .extend(other.psos     .iter().map(|h| h.clone()));
-        self.textures .extend(other.textures .iter().map(|h| h.clone()));
-        self.srvs     .extend(other.srvs     .iter().map(|h| h.clone()));
-        self.uavs     .extend(other.uavs     .iter().map(|h| h.clone()));
-        self.rtvs     .extend(other.rtvs     .iter().map(|h| h.clone()));
-        self.dsvs     .extend(other.dsvs     .iter().map(|h| h.clone()));
-        self.samplers .extend(other.samplers .iter().map(|h| h.clone()));
-        self.fences   .extend(other.fences   .iter().map(|h| h.clone()));
+        self.buffers   .extend(other.buffers   .iter().map(|h| h.clone()));
+        self.shaders   .extend(other.shaders   .iter().map(|h| h.clone()));
+        self.programs  .extend(other.programs  .iter().map(|h| h.clone()));
+        self.psos      .extend(other.psos      .iter().map(|h| h.clone()));
+        self.textures  .extend(other.textures  .iter().map(|h| h.clone()));
+        self.srvs      .extend(other.srvs      .iter().map(|h| h.clone()));
+        self.uavs      .extend(other.uavs      .iter().map(|h| h.clone()));
+        self.rtvs      .extend(other.rtvs      .iter().map(|h| h.clone()));
+        self.dsvs      .extend(other.dsvs      .iter().map(|h| h.clone()));
+        self.samplers  .extend(other.samplers  .iter().map(|h| h.clone()));
+        self.fences    .extend(other.fences    .iter().map(|h| h.clone()));
+        self.semaphores.extend(other.semaphores.iter().map(|h| h.clone()));
     }
     /// Count the total number of referenced resources
     pub fn count(&self) -> usize {
@@ -488,7 +506,8 @@ impl<R: Resources> Manager<R> {
         self.rtvs.len() +
         self.dsvs.len() +
         self.samplers.len() +
-        self.fences.len()
+        self.fences.len() +
+        self.semaphores.len()
     }
     /// Reference a buffer
     pub fn ref_buffer<'a>(&mut self, handle: &'a RawBuffer<R>) -> &'a R::Buffer {
@@ -544,8 +563,13 @@ impl<R: Resources> Manager<R> {
         &handle.0
     }
     /// Reference a fence
-    pub fn ref_fence<'a>(&mut self, fence: &'a Fence<R>) -> &'a R::Fence {
+    pub fn ref_fence<'a>(&mut self, fence: &'a Fence<R>) -> &'a Mutex<R::Fence> {
         self.fences.push(fence.0.clone());
         &fence.0
+    }
+    /// Reference a semaphore
+    pub fn ref_semaphore<'a>(&mut self, semaphore: &'a Semaphore<R>) -> &'a Mutex<R::Semaphore> {
+        self.semaphores.push(semaphore.0.clone());
+        &semaphore.0
     }
 }
