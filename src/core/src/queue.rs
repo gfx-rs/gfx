@@ -43,7 +43,7 @@ macro_rules! define_queue {
             where B::CommandQueue: 'a;
 
         impl<B: Backend> CommandQueue<B> for $queue<B> {
-            unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>], fence: Option<&mut <B::Resources as Resources>::Fence>,
+            unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>], fence: Option<&handle::Fence<B::Resources>>,
                 access: &AccessInfo<B::Resources>) {
                 self.0.submit(submit_infos, fence, access)
             }
@@ -62,7 +62,7 @@ macro_rules! define_queue {
         }
 
         impl<'a, B: Backend> CommandQueue<B> for $queue_mut<'a, B> {
-            unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>], fence: Option<&mut <B::Resources as Resources>::Fence>,
+            unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>], fence: Option<&handle::Fence<B::Resources>>,
                 access: &AccessInfo<B::Resources>) {
                 self.0.submit(submit_infos, fence, access)
             }
@@ -194,14 +194,14 @@ macro_rules! define_queue {
     (
         impl<B: Backend> $queue<B> {
             /// Submit command buffers for execution.
-            pub fn $submit(&mut self, submit: &[QueueSubmit<B>], fence: Option<&mut <B::Resources as Resources>::Fence>, access: &AccessInfo<B::Resources>) {
+            pub fn $submit(&mut self, submit: &[QueueSubmit<B>], fence: Option<&handle::Fence<B::Resources>>, access: &AccessInfo<B::Resources>) {
                 unsafe { self.0.submit(submit, fence, access) }
             }
         }
 
         impl<'a, B: Backend> $queue_mut<'a, B> {
             /// Submit command buffers for execution.
-            pub fn $submit(&mut self, submit: &[QueueSubmit<B>], fence: Option<&mut <B::Resources as Resources>::Fence>, access: &AccessInfo<B::Resources>) {
+            pub fn $submit(&mut self, submit: &[QueueSubmit<B>], fence: Option<&handle::Fence<B::Resources>>, access: &AccessInfo<B::Resources>) {
                 unsafe { self.0.submit(submit, fence, access) }
             }
         }

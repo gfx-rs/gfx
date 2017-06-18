@@ -255,7 +255,7 @@ pub trait Factory<R: Resources> {
     fn create_sampler(&mut self, texture::SamplerInfo) -> handle::Sampler<R>;
 
     ///
-    fn create_semaphore(&mut self) -> R::Semaphore;
+    fn create_semaphore(&mut self) -> handle::Semaphore<R>;
 
     /// Acquire a mapping Reader
     ///
