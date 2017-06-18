@@ -213,7 +213,7 @@ impl<'a, R: Resources, T: 'a + Copy> DerefMut for Writer<'a, R, T> {
 }
 
 /// A service struct that can be used by backends to track the mapping status
-#[derive(Debug, Eq, Hash, PartialEq)]
+#[derive(Debug)]
 #[doc(hidden)]
 pub struct Status<R: Resources> {
     cpu_wrote: bool,

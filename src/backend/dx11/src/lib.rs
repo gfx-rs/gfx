@@ -447,7 +447,7 @@ impl CommandQueue {
 }
 
 impl core::CommandQueue<Backend> for CommandQueue {
-    unsafe fn submit(&mut self, submit_infos: &[core::QueueSubmit<Backend>], fence: Option<&mut Fence>, access: &com::AccessInfo<Resources>) {
+    unsafe fn submit(&mut self, submit_infos: &[core::QueueSubmit<Backend>], fence: Option<&h::Fence<Resources>>, access: &com::AccessInfo<Resources>) {
         let _guard = self.before_submit(access).unwrap();
         for submit in submit_infos {
             for cb in submit.cmd_buffers {
@@ -516,6 +516,7 @@ impl core::CommandQueue<Backend> for CommandQueue {
             |_, v| unsafe { (*v.0).Release(); }, //DSV
             |_, v| unsafe { (*v.0).Release(); }, //sampler
             |_, _fence| {},
+            |_, _| {}, // Semaphore
         );
     }
 }
