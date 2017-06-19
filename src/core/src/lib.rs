@@ -48,6 +48,8 @@ pub use self::pool::{
     TransferCommandPool, SubpassCommandPool};
 pub use self::queue::{
     GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
+pub use self::window::{
+    Backbuffer, Frame, FrameSync, Surface, SwapChain, SwapchainConfig, WindowExt};
 
 pub mod buffer;
 pub mod command;
@@ -62,6 +64,7 @@ pub mod pso;
 pub mod queue;
 pub mod shade;
 pub mod texture;
+pub mod window;
 
 /// Compile-time maximum number of vertex attributes.
 pub const MAX_VERTEX_ATTRIBUTES: usize = 16;
@@ -423,114 +426,4 @@ pub trait CommandPool<B: Backend> {
 
     /// Reserve an additional amount of command buffers.
     fn reserve(&mut self, additional: usize);
-}
-
-/// A `Surface` abstracts the surface of a native window, which will be presented
-pub trait Surface<B: Backend> {
-    ///
-    type SwapChain: SwapChain<B>;
-
-    /// Check if the queue family supports presentation for this surface.
-    fn supports_queue(&self, queue_family: &B::QueueFamily) -> bool;
-
-    ///
-    fn build_swapchain<Q>(&mut self, config: SwapchainConfig, present_queue: &Q) -> Self::SwapChain
-        where Q: AsRef<B::CommandQueue>;
-}
-
-/// Handle to a backbuffer of the swapchain.
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-pub struct Frame(usize);
-
-impl Frame {
-    #[doc(hidden)]
-    pub fn new(id: usize) -> Self {
-        Frame(id)
-    }
-
-    /// Retrive frame id.
-    pub fn id(&self) -> usize {
-        self.0
-    }
-}
-
-/// Synchronization primitives which will be signaled once a frame got retrieved.
-///
-/// The semaphore or fence _must_ be unsignaled.
-pub enum FrameSync<'a, R: Resources> {
-    /// Semaphore used for synchronization.
-    ///
-    /// Will be signaled once the frame backbuffer is available.
-    Semaphore(&'a handle::Semaphore<R>),
-
-    /// Fence used for synchronization.
-    ///
-    /// Will be signaled once the frame backbuffer is available.
-    Fence(&'a handle::Semaphore<R>)
-}
-
-/// Allows you to configure a `SwapChain` for creation.
-#[derive(Debug, Clone)]
-pub struct SwapchainConfig {
-    /// Color format of the backbuffer images.
-    pub color_format: format::Format,
-    /// Depth stencil format of the backbuffer images (optional).
-    pub depth_stencil_format: Option<format::Format>,
-}
-
-impl SwapchainConfig {
-    /// Create a new default configuration (color images only).
-    pub fn new() -> Self {
-        SwapchainConfig {
-            color_format: format::Rgba8::get_format(), // TODO: try to find best default format
-            depth_stencil_format: None,
-        }
-    }
-
-    /// Specify the color format for the backbuffer images.
-    pub fn with_color<Cf: format::RenderFormat>(mut self) -> Self {
-        self.color_format = Cf::get_format();
-        self
-    }
-
-    /// Specify the depth stencil format for the backbuffer images.
-    ///
-    /// The SwapChain will create additional depth-stencil images for each backbuffer.
-    pub fn with_depth_stencil<Dsf: format::DepthStencilFormat>(mut self) -> Self {
-        self.depth_stencil_format = Some(Dsf::get_format());
-        self
-    }
-
-    // TODO: depth-only, stencil-only, swapchain size, present modes, etc.
-}
-
-/// SwapChain backbuffer type (color image, depth-stencil image).
-pub type Backbuffer<B: Backend> = (handle::RawTexture<B::Resources>, Option<handle::RawTexture<B::Resources>>);
-
-/// The `SwapChain` is the backend representation of the surface.
-/// It consists of multiple buffers, which will be presented on the surface.
-pub trait SwapChain<B: Backend> {
-    /// Access the backbuffer color and depth-stencil images.
-    fn get_backbuffers(&mut self) -> &[Backbuffer<B>];
-
-    /// Acquire a new frame for rendering. This needs to be called before presenting.
-    fn acquire_frame(&mut self, sync: FrameSync<B::Resources>) -> Frame;
-
-    /// Present one acquired frame in FIFO order.
-    ///
-    /// The passed queue _must_ be in the same as set on creation.
-    fn present<Q: AsMut<B::CommandQueue>>(&mut self, present_queue: &mut Q);
-}
-
-/// Extension for windows.
-/// Main entry point for backend initialization from a window.
-pub trait WindowExt<B: Backend> {
-    /// Associated `Surface` type.
-    type Surface: Surface<B>;
-    /// Associated `Adapter` type.
-    type Adapter: Adapter<B>;
-
-    /// Create window surface and enumerate all available adapters.
-    fn get_surface_and_adapters(&mut self) -> (Self::Surface, Vec<Self::Adapter>);
 }
