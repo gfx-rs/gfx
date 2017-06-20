@@ -123,6 +123,12 @@ impl<'a> core::Surface<device_gl::Backend> for Surface {
 }
 
 pub struct Window(pub Rc<RefCell<glfw::Window>>);
+impl Window {
+    pub fn new(window: glfw::Window) -> Self {
+        Window(Rc::new(RefCell::new(window)))
+    }
+}
+
 impl<'a> core::WindowExt<device_gl::Backend> for Window {
     type Surface = Surface;
     type Adapter = device_gl::Adapter;
