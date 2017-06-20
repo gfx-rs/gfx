@@ -22,15 +22,15 @@ use core::{self, pool};
 use core::command::{Encoder};
 use core::{CommandPool, GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 use core::queue::Compatible;
-use command::CommandBuffer;
-use native::{self, GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer};
+use command::{CommandBuffer, SubpassCommandBuffer};
+use core::command::{GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer};
 use {Backend, CommandQueue, RawDevice};
 
 macro_rules! impl_pool {
     ($pool:ident, $queue:ident, $buffer:ident) => (
         pub struct $pool {
             pool: vk::CommandPool,
-            command_buffers: Vec<$buffer>,
+            command_buffers: Vec<$buffer<Backend>>,
             next_buffer: usize,
             device: Arc<RawDevice>,
         }
@@ -53,7 +53,7 @@ macro_rules! impl_pool {
         }
 
         impl pool::$pool<Backend> for $pool {
-            fn acquire_command_buffer<'a>(&'a mut self) -> Encoder<'a, Backend, $buffer> {
+            fn acquire_command_buffer<'a>(&'a mut self) -> Encoder<'a, Backend, $buffer<Backend>> {
                 let available_buffers = self.command_buffers.len() as isize - self.next_buffer as isize;
                 if available_buffers <= 0 {
                     self.reserve((-available_buffers) as usize + 1);
@@ -70,7 +70,7 @@ macro_rules! impl_pool {
                 };
 
                 unsafe {
-                    self.device.0.begin_command_buffer(buffer.0.raw, &info); // TODO: error handling
+                    self.device.0.begin_command_buffer(buffer.raw().raw, &info); // TODO: error handling
                     Encoder::new(buffer)
                 }
             }
@@ -107,7 +107,7 @@ macro_rules! impl_pool {
                                   .expect("Error on command buffer allocation") // TODO: better error handling
                 };
                 let command_buffers = command_buffers.into_iter().map(|buffer| {
-                    $buffer(
+                    $buffer::new(
                         CommandBuffer {
                             raw: buffer,
                             device: queue.device.clone(),
@@ -130,4 +130,81 @@ impl_pool!{ GeneralCommandPool, GeneralQueue, GeneralCommandBuffer }
 impl_pool!{ GraphicsCommandPool, GraphicsQueue, GraphicsCommandBuffer }
 impl_pool!{ ComputeCommandPool, ComputeQueue, ComputeCommandBuffer }
 impl_pool!{ TransferCommandPool, TransferQueue, TransferCommandBuffer }
-impl_pool!{ SubpassCommandPool, GraphicsQueue, SubpassCommandBuffer }
+
+pub struct SubpassCommandPool {
+    pool: vk::CommandPool,
+    command_buffers: Vec<SubpassCommandBuffer>,
+    next_buffer: usize,
+    device: Arc<RawDevice>,
+}
+
+impl core::CommandPool<Backend> for SubpassCommandPool {
+    fn reset(&mut self) {
+        self.next_buffer = 0;
+        unsafe {
+            self.device.0.fp_v1_0().reset_command_pool(
+                self.device.0.handle(),
+                self.pool,
+                vk::CommandPoolResetFlags::empty()
+            );
+        }
+    }
+
+    fn reserve(&mut self, additional: usize) {
+        unimplemented!()
+    }
+}
+
+impl pool::SubpassCommandPool<Backend> for SubpassCommandPool {
+    fn acquire_command_buffer<'a>(&'a mut self) -> Encoder<'a, Backend, SubpassCommandBuffer> {
+        unimplemented!()
+    }
+
+    fn from_queue<Q>(mut queue: Q, capacity: usize) -> SubpassCommandPool
+        where Q: Compatible<GraphicsQueue<Backend>> + AsRef<CommandQueue>
+    {
+        let queue = queue.as_ref();
+
+        // Create command pool
+        let info = vk::CommandPoolCreateInfo {
+            s_type: vk::StructureType::CommandPoolCreateInfo,
+            p_next: ptr::null(),
+            flags: vk::CommandPoolCreateFlags::empty(),
+            queue_family_index: queue.family_index,
+        };
+
+        let command_pool = unsafe {
+            queue.device.0.create_command_pool(&info, None)
+                        .expect("Error on command pool creation") // TODO: better error handling
+        };
+
+        // Allocate initial command buffers
+        let info = vk::CommandBufferAllocateInfo {
+            s_type: vk::StructureType::CommandBufferAllocateInfo,
+            p_next: ptr::null(),
+            command_pool: command_pool,
+            level: vk::CommandBufferLevel::Secondary,
+            command_buffer_count: capacity as u32,
+        };
+
+        let command_buffers = unsafe {
+            queue.device.0.allocate_command_buffers(&info)
+                          .expect("Error on command buffer allocation") // TODO: better error handling
+        };
+        let command_buffers = command_buffers.into_iter().map(|buffer| {
+            SubpassCommandBuffer(
+                CommandBuffer {
+                    raw: buffer,
+                    device: queue.device.clone(),
+                }
+            )
+        }).collect();
+
+        SubpassCommandPool {
+            pool: command_pool,
+            command_buffers: command_buffers,
+            next_buffer: 0,
+            device: queue.device.clone(),
+        }
+    }
+}

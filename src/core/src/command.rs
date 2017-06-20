@@ -99,6 +99,10 @@ impl<B: Backend> GeneralCommandBuffer<B> {
     pub fn new(buffer: B::RawCommandBuffer) -> Self {
         GeneralCommandBuffer(buffer)
     }
+    #[doc(hidden)]
+    pub fn raw(&self) -> &B::RawCommandBuffer {
+        &self.0
+    }
 }
 impl<B: Backend> CommandBuffer<B> for GeneralCommandBuffer<B> {
     unsafe fn end(&mut self) -> B::SubmitInfo {
@@ -126,6 +130,10 @@ impl<B: Backend> GraphicsCommandBuffer<B> {
     #[doc(hidden)]
     pub fn new(buffer: B::RawCommandBuffer) -> Self {
         GraphicsCommandBuffer(buffer)
+    }
+    #[doc(hidden)]
+    pub fn raw(&self) -> &B::RawCommandBuffer {
+        &self.0
     }
 }
 impl<B: Backend> CommandBuffer<B> for GraphicsCommandBuffer<B> {
@@ -155,6 +163,10 @@ impl<B: Backend> ComputeCommandBuffer<B> {
     pub fn new(buffer: B::RawCommandBuffer) -> Self {
         ComputeCommandBuffer(buffer)
     }
+    #[doc(hidden)]
+    pub fn raw(&self) -> &B::RawCommandBuffer {
+        &self.0
+    }
 }
 impl<B: Backend> CommandBuffer<B> for ComputeCommandBuffer<B> {
     unsafe fn end(&mut self) -> B::SubmitInfo {
@@ -168,6 +180,10 @@ impl<B: Backend> TransferCommandBuffer<B> {
     #[doc(hidden)]
     pub fn new(buffer: B::RawCommandBuffer) -> Self {
         TransferCommandBuffer(buffer)
+    }
+    #[doc(hidden)]
+    pub fn raw(&self) -> &B::RawCommandBuffer {
+        &self.0
     }
 }
 impl<B: Backend> CommandBuffer<B> for TransferCommandBuffer<B> {
