@@ -26,7 +26,7 @@ extern crate kernel32;
 use ash::{Entry, LoadingError};
 use ash::version::{EntryV1_0, DeviceV1_0, InstanceV1_0, V1_0};
 use ash::vk;
-use core::memory;
+use core::{command as com, handle, memory};
 use core::{CommandBuffer, FrameSync};
 use std::{mem, ptr};
 use std::ffi::{CStr, CString};
@@ -218,7 +218,7 @@ impl Adapter {
 }
 
 impl core::Adapter<Backend> for Adapter {
-    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> core::Device_<Backend>
+    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> core::Device<Backend>
     {
         let mut queue_priorities = Vec::with_capacity(queue_descs.len());
 
@@ -292,7 +292,7 @@ impl core::Adapter<Backend> for Adapter {
             if mem.property_flags.intersects(vk::MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) {
                 type_flags |= memory::LAZILY_ALLOCATED;
             }
-            
+
             core::HeapType {
                 id: i,
                 properties: type_flags,
@@ -320,7 +320,7 @@ impl core::Adapter<Backend> for Adapter {
             }).collect::<Vec<_>>()
         }).collect();
 
-        core::Device_ {
+        core::Device {
             factory: factory,
             general_queues: queues,
             graphics_queues: Vec::new(),
@@ -357,6 +357,9 @@ pub struct CommandQueue {
     raw: RawCommandQueue,
     device: Arc<RawDevice>,
     family_index: u32,
+
+    frame_handles: handle::Manager<Resources>,
+    max_resource_count: Option<usize>,
 }
 
 impl CommandQueue {
@@ -377,8 +380,9 @@ impl CommandQueue {
 }
 
 impl core::CommandQueue<Backend> for CommandQueue {
-    unsafe fn submit(&mut self, submit_infos: &[core::QueueSubmit<Backend>], fence: Option<&mut native::Fence>) {
-
+    unsafe fn submit(&mut self, submit_infos: &[core::QueueSubmit<Backend>],
+        fence: Option<&handle::Fence<Resources>>, access: &com::AccessInfo<Resources>)
+    {
         unimplemented!()
     }
 
@@ -386,6 +390,24 @@ impl core::CommandQueue<Backend> for CommandQueue {
         unsafe {
             self.device.0.queue_wait_idle(*self.raw);
         }
+    }
+
+    fn pin_submitted_resources(&mut self, man: &handle::Manager<Resources>) {
+        self.frame_handles.extend(man);
+        match self.max_resource_count {
+            Some(c) if self.frame_handles.count() > c => {
+                error!("Way too many resources in the current frame. Did you call Device::cleanup()?");
+                self.max_resource_count = None;
+            },
+            _ => (),
+        }
+    }
+
+    fn cleanup(&mut self) {
+        use core::handle::Producer;
+
+        self.frame_handles.clear();
+        // TODO
     }
 }
 
@@ -399,11 +421,8 @@ impl core::Backend for Backend {
     type Adapter = Adapter;
     type Resources = Resources;
     type CommandQueue = CommandQueue;
-    type GeneralCommandBuffer = native::GeneralCommandBuffer;
-    type GraphicsCommandBuffer = native::GraphicsCommandBuffer;
-    type ComputeCommandBuffer = native::ComputeCommandBuffer;
-    type TransferCommandBuffer = native::TransferCommandBuffer;
-    type SubpassCommandBuffer = native::SubpassCommandBuffer;
+    type RawCommandBuffer = command::CommandBuffer;
+    type SubpassCommandBuffer = command::SubpassCommandBuffer;
     type SubmitInfo = command::SubmitInfo;
     type Factory = Factory;
     type QueueFamily = QueueFamily;
