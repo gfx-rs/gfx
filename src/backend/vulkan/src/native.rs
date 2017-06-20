@@ -13,13 +13,6 @@
 // limitations under the License.
 
 use ash::vk;
-use command::CommandBuffer;
-
-pub struct GeneralCommandBuffer(pub CommandBuffer);
-pub struct GraphicsCommandBuffer(pub CommandBuffer);
-pub struct ComputeCommandBuffer(pub CommandBuffer);
-pub struct TransferCommandBuffer(pub CommandBuffer);
-pub struct SubpassCommandBuffer(pub CommandBuffer);
 
 #[derive(Debug, Hash)]
 pub struct Image(pub vk::Image);

@@ -76,7 +76,7 @@ pub enum FrameSync<'a, R: Resources> {
     /// Fence used for synchronization.
     ///
     /// Will be signaled once the frame backbuffer is available.
-    Fence(&'a handle::Semaphore<R>)
+    Fence(&'a handle::Fence<R>)
 }
 
 /// Allows you to configure a `SwapChain` for creation.
