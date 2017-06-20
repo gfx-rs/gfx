@@ -57,8 +57,6 @@ const SURFACE_EXTENSIONS: &'static [&'static str] = &[
 lazy_static! {
     // Entry function pointers
     pub static ref VK_ENTRY: Result<Entry<V1_0>, LoadingError> = Entry::new();
-
-    pub static ref INSTANCE: Instance = Instance::create();
 }
 
 pub struct Instance {
@@ -69,7 +67,7 @@ pub struct Instance {
 }
 
 impl Instance {
-    fn create() -> Instance {
+    pub fn create() -> Instance {
         // TODO: return errors instead of panic
         let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
 
@@ -122,12 +120,12 @@ impl Instance {
         }
     }
 
-    fn enumerate_adapters(&self) -> Vec<Adapter> {
-        self.raw.enumerate_physical_devices()
+    pub fn enumerate_adapters(instance: Arc<Instance>) -> Vec<Adapter> {
+        instance.raw.enumerate_physical_devices()
             .expect("Unable to enumerate adapter")
             .iter()
             .map(|&device| {
-                let properties = self.raw.get_physical_device_properties(device);
+                let properties = instance.raw.get_physical_device_properties(device);
                 let name = unsafe {
                     CStr::from_ptr(properties.device_name.as_ptr())
                             .to_str()
@@ -142,7 +140,7 @@ impl Instance {
                     software_rendering: properties.device_type == vk::PhysicalDeviceType::Cpu,
                 };
 
-                let queue_families = self.raw.get_physical_device_queue_family_properties(device)
+                let queue_families = instance.raw.get_physical_device_queue_family_properties(device)
                                                  .iter()
                                                  .enumerate()
                                                  .map(|(i, queue_family)| {
@@ -155,6 +153,7 @@ impl Instance {
                                                  }).collect();
 
                 Adapter {
+                    instance: instance.clone(),
                     handle: device,
                     queue_families: queue_families,
                     info: info,
@@ -201,20 +200,10 @@ impl core::QueueFamily for QueueFamily {
 }
 
 pub struct Adapter {
+    instance: Arc<Instance>,
     handle: vk::PhysicalDevice,
     queue_families: Vec<QueueFamily>,
     info: core::AdapterInfo,
-}
-
-impl Adapter {
-    #[doc(hidden)]
-    pub fn from_raw(device: vk::PhysicalDevice, queue_families: Vec<QueueFamily>, info: core::AdapterInfo) -> Self {
-        Adapter {
-            handle: device,
-            queue_families: queue_families,
-            info: info,
-        }
-    }
 }
 
 impl core::Adapter<Backend> for Adapter {
@@ -262,7 +251,7 @@ impl core::Adapter<Backend> for Adapter {
             };
 
             unsafe {
-                INSTANCE.raw.create_device(self.handle, &info, None)
+                self.instance.raw.create_device(self.handle, &info, None)
                     .expect("Error on device creation")
             }
         };
@@ -271,7 +260,7 @@ impl core::Adapter<Backend> for Adapter {
             device: Arc::new(RawDevice(device_raw)),
         };
 
-        let mem_properties =  INSTANCE.raw.get_physical_device_memory_properties(self.handle);
+        let mem_properties =  self.instance.raw.get_physical_device_memory_properties(self.handle);
         let memory_heaps = mem_properties.memory_heaps[..mem_properties.memory_heap_count as usize].iter()
                                 .map(|mem| mem.size).collect::<Vec<_>>();
         let heap_types = mem_properties.memory_types[..mem_properties.memory_type_count as usize].iter().enumerate().map(|(i, mem)| {

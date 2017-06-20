@@ -31,7 +31,7 @@ use std::borrow::Borrow;
 use core::{format, handle};
 use core::FrameSync;
 use core::memory::Typed;
-use device_vulkan::{data, native, CommandQueue, QueueFamily, VK_ENTRY, INSTANCE};
+use device_vulkan::{data, native, CommandQueue, QueueFamily, VK_ENTRY, Instance};
 
 #[cfg(unix)]
 use winit::os::unix::WindowExt;
@@ -47,29 +47,31 @@ pub struct Surface {
 }
 
 pub struct RawSurface {
+    instance: Arc<Instance>,
     pub handle: vk::SurfaceKHR,
     pub loader: vk::SurfaceFn,
 }
 
 impl Drop for RawSurface {
     fn drop(&mut self) {
-        unsafe { self.loader.destroy_surface_khr(INSTANCE.raw.handle(), self.handle, ptr::null()); }
+        unsafe { self.loader.destroy_surface_khr(self.instance.raw.handle(), self.handle, ptr::null()); }
     }
 }
 
 impl Surface {
-    fn from_raw(surface: vk::SurfaceKHR, (width, height): (u32, u32)) -> Surface {
+    fn from_raw(instance: Arc<Instance>, surface: vk::SurfaceKHR, (width, height): (u32, u32)) -> Surface {
         let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
 
         let loader = vk::SurfaceFn::load(|name| {
                 unsafe {
                     mem::transmute(entry.get_instance_proc_addr(
-                        INSTANCE.raw.handle(),
+                        instance.raw.handle(),
                         name.as_ptr()))
                 }
             }).expect("Unable to load surface functions");
 
         let raw = Arc::new(RawSurface {
+            instance: instance,
             handle: surface,
             loader: loader,
         });
@@ -82,14 +84,14 @@ impl Surface {
     }
 
     #[cfg(not(target_os = "windows"))]
-    fn from_window(window: &winit::Window) -> Surface {
+    fn from_window(window: &winit::Window, instance: Arc<Instance>) -> Surface {
         let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
 
         let surface = self.surface_extensions.iter().map(|&extension| {
             match extension {
                 vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME => {
                     use winit::os::unix::WindowExt;
-                    let xlib_loader = if let Ok(loader) = ash::extensions::XlibSurface::new(entry, &INSTANCE.raw) {
+                    let xlib_loader = if let Ok(loader) = ash::extensions::XlibSurface::new(entry, &instance.raw) {
                         loader
                     } else {
                         return None;
@@ -114,14 +116,14 @@ impl Surface {
           .expect("Unable to find a surface implementation.")
           .unwrap();
 
-        Surface::from_raw(surface, window.get_inner_size_pixels().unwrap())
+        Surface::from_raw(instance, surface, window.get_inner_size_pixels().unwrap())
     }
 
     #[cfg(target_os = "windows")]
-    fn from_window(window: &winit::Window) -> Surface {
+    fn from_window(window: &winit::Window, instance: Arc<Instance>) -> Surface {
         use winit::os::windows::WindowExt;
         let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
-        let win32_loader = ash::extensions::Win32Surface::new(entry, &INSTANCE.raw)
+        let win32_loader = ash::extensions::Win32Surface::new(entry, &instance.raw)
                         .expect("Unable to load win32 surface functions");
 
         let surface = unsafe {
@@ -137,7 +139,7 @@ impl Surface {
                 .expect("Error on surface creation")
         };
 
-        Surface::from_raw(surface, window.get_inner_size_pixels().unwrap())
+        Surface::from_raw(instance, surface, window.get_inner_size_pixels().unwrap())
     }
 }
 
@@ -163,7 +165,7 @@ impl core::Surface<device_vulkan::Backend> for Surface {
         let loader = vk::SwapchainFn::load(|name| {
                 unsafe {
                     mem::transmute(entry.get_instance_proc_addr(
-                        INSTANCE.raw.handle(),
+                        self.raw.instance.raw.handle(),
                         name.as_ptr()))
                 }
             }).expect("Unable to load swapchain functions");
@@ -201,13 +203,12 @@ impl core::Surface<device_vulkan::Backend> for Surface {
 
         let swapchain = unsafe {
             let mut swapchain = mem::uninitialized();
-            assert_eq!(vk::Result::Success, unsafe {
+            assert_eq!(vk::Result::Success,
                 loader.create_swapchain_khr(
                     present_queue.device_handle(),
                     &info,
                     ptr::null(),
-                    &mut swapchain)
-            });
+                    &mut swapchain));
             swapchain
         };
 
@@ -334,41 +335,9 @@ impl<'a> core::WindowExt<device_vulkan::Backend> for Window<'a> {
     type Adapter = device_vulkan::Adapter;
 
     fn get_surface_and_adapters(&mut self) -> (Surface, Vec<device_vulkan::Adapter>) {
-        let surface = Surface::from_window(self.0);
-        let adapters = INSTANCE.raw.enumerate_physical_devices()
-            .expect("Unable to enumerate adapter")
-            .iter()
-            .map(|&device| {
-                let properties = INSTANCE.raw.get_physical_device_properties(device);
-                let name = unsafe {
-                    CStr::from_ptr(properties.device_name.as_ptr())
-                            .to_str()
-                            .expect("Invalid UTF-8 string")
-                            .to_owned()
-                };
-
-                let info = core::AdapterInfo {
-                    name: name,
-                    vendor: properties.vendor_id as usize,
-                    device: properties.device_id as usize,
-                    software_rendering: properties.device_type == vk::PhysicalDeviceType::Cpu,
-                };
-
-                let queue_families = INSTANCE.raw.get_physical_device_queue_family_properties(device)
-                                                 .iter()
-                                                 .enumerate()
-                                                 .map(|(i, queue_family)| {
-                                                    QueueFamily::from_raw(
-                                                        device,
-                                                        i as u32,
-                                                        queue_family,
-                                                    )
-                                                 }).collect();
-
-                device_vulkan::Adapter::from_raw(device, queue_families, info)
-            })
-            .collect();
-
+        let instance = Arc::new(Instance::create());
+        let surface = Surface::from_window(self.0, instance.clone());
+        let adapters = Instance::enumerate_adapters(instance);
         (surface, adapters)
     }
 }
