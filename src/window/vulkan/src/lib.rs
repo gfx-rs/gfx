@@ -156,7 +156,7 @@ impl core::Surface<device_vulkan::Backend> for Surface {
         }
     }
 
-    fn build_swapchain<Q>(&self, config: core::SwapchainConfig, present_queue: &Q) -> Self::SwapChain
+    fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, present_queue: &Q) -> Self::SwapChain
         where Q: AsRef<device_vulkan::CommandQueue>
     {
         let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
@@ -196,7 +196,7 @@ impl core::Surface<device_vulkan::Backend> for Surface {
             composite_alpha: vk::COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
             present_mode: present_mode,
             clipped: 1,
-            old_swapchain: vk::SwapchainKHR::null(), 
+            old_swapchain: vk::SwapchainKHR::null(),
         };
 
         let swapchain = unsafe {
@@ -273,22 +273,31 @@ impl core::SwapChain<device_vulkan::Backend> for SwapChain {
     }
 
     fn acquire_frame(&mut self, sync: FrameSync<device_vulkan::Resources>) -> core::Frame {
-        let (semaphore, fence) = match sync {
-            FrameSync::Semaphore(semaphore) => (semaphore.0, vk::Fence::null()),
-            FrameSync::Fence(fence) => (vk::Semaphore::null(), fence.0),
-        };
+        let index = {
+            let acquire = |semaphore, fence| {
+                unsafe {
+                    let mut index = mem::uninitialized();
+                    self.swapchain_fn.acquire_next_image_khr(
+                            self.device.0.handle(),
+                            self.raw,
+                            std::u64::MAX, // will block if no image is available
+                            semaphore,
+                            fence,
+                            &mut index);
+                    index
+                }
+            };
 
-        // TODO: error handling
-        let index = unsafe {
-            let mut index = mem::uninitialized();
-            self.swapchain_fn.acquire_next_image_khr(
-                    self.device.0.handle(),
-                    self.raw,
-                    std::u64::MAX, // will block if no image is available
-                    semaphore,
-                    fence,
-                    &mut index);
-            index
+            let mut manager = handle::Manager::new();
+
+            match sync {
+                FrameSync::Semaphore(semaphore) => {
+                    acquire(manager.ref_semaphore(semaphore).lock().unwrap().0, vk::Fence::null())
+                }
+                FrameSync::Fence(fence) => {
+                    acquire(vk::Semaphore::null(), manager.ref_fence(fence).lock().unwrap().0)
+                }
+            }
         };
 
         self.frame_queue.push_back(index as usize);
