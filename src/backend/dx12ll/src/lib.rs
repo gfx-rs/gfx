@@ -19,6 +19,7 @@ extern crate d3d12;
 extern crate d3dcompiler;
 extern crate dxgi;
 extern crate dxguid;
+#[macro_use]
 extern crate gfx_corell as core;
 extern crate winapi;
 extern crate winit;

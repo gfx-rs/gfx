@@ -273,6 +273,9 @@ pub trait Factory<R: Resources> {
     fn destroy_render_target_view(&mut self, R::RenderTargetView);
 
     ///
+    fn destroy_depth_stencil_view(&mut self, R::DepthStencilView);
+
+    ///
     fn destroy_constant_buffer_view(&mut self, R::ConstantBufferView);
 
     ///

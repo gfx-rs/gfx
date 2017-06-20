@@ -459,6 +459,10 @@ impl core::Factory<R> for Factory {
         unimplemented!()
     }
 
+    fn destroy_depth_stencil_view(&mut self, dsv: native::DepthStencilView) {
+        unimplemented!()
+    }
+
     fn destroy_constant_buffer_view(&mut self, _: native::ConstantBufferView) {
         unimplemented!()
     }

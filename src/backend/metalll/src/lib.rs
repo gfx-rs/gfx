@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate gfx_corell as core;
+#[macro_use] extern crate gfx_corell as core;
 extern crate winit;
 extern crate cocoa;
 #[macro_use] extern crate objc;
