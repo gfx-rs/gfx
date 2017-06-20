@@ -261,30 +261,30 @@ pub trait SwapChain {
 
 /// Different resource types of a specific API. 
 pub trait Resources:          Clone + Hash + Debug + Any {
-    type ShaderLib:           Debug + Any + Send + Sync + Resource<Self>;
-    type RenderPass:          Debug + Any + Send + Sync + Resource<Self>;
-    type PipelineLayout:      Debug + Any + Send + Sync + Resource<Self>;
-    type GraphicsPipeline:    Debug + Any + Send + Sync + Resource<Self>;
-    type ComputePipeline:     Debug + Any + Send + Sync + Resource<Self>;
+    type ShaderLib:           Send + Sync + Resource<Self>;
+    type RenderPass:          Send + Sync + Resource<Self>;
+    type PipelineLayout:      Send + Sync + Resource<Self>;
+    type GraphicsPipeline:    Send + Sync + Resource<Self>;
+    type ComputePipeline:     Send + Sync + Resource<Self>;
     type UnboundBuffer:       Debug + Any + Send + Sync;
-    type Buffer:              Debug + Any + Send + Sync + Resource<Self>;
+    type Buffer:              Send + Sync + Resource<Self>;
     type UnboundImage:        Debug + Any + Send + Sync;
-    type Image:               Debug + Any + Send + Sync + Resource<Self>;
-    type ConstantBufferView:  Debug + Any + Send + Sync + Resource<Self>;
-    type ShaderResourceView:  Debug + Any + Send + Sync + Resource<Self>;
-    type UnorderedAccessView: Debug + Any + Send + Sync + Resource<Self>;
-    type RenderTargetView:    Debug + Any + Send + Sync + Resource<Self>;
-    type DepthStencilView:    Debug + Any + Send + Sync + Resource<Self>;
-    type FrameBuffer:         Debug + Any + Send + Sync + Resource<Self>;
-    type Sampler:             Debug + Any + Send + Sync + Resource<Self>;
-    type Semaphore:           Debug + Any + Send + Sync + Resource<Self>;
-    type Fence:               Debug + Any + Send + Sync + Resource<Self>;
-    type Heap:                Debug + Any + Resource<Self>;
+    type Image:               Send + Sync + Resource<Self>;
+    type ConstantBufferView:  Send + Sync + Resource<Self>;
+    type ShaderResourceView:  Send + Sync + Resource<Self>;
+    type UnorderedAccessView: Send + Sync + Resource<Self>;
+    type RenderTargetView:    Send + Sync + Resource<Self>;
+    type DepthStencilView:    Send + Sync + Resource<Self>;
+    type FrameBuffer:         Send + Sync + Resource<Self>;
+    type Sampler:             Send + Sync + Resource<Self>;
+    type Semaphore:           Send + Sync + Resource<Self>;
+    type Fence:               Send + Sync + Resource<Self>;
+    type Heap:                Resource<Self>;
     type Mapping;
-    type DescriptorHeap:      Debug + Any + Resource<Self>;
-    type DescriptorSetPool:   Debug + Any + Resource<Self>;
+    type DescriptorHeap:      Resource<Self>;
+    type DescriptorSetPool:   Resource<Self>;
     type DescriptorSet:       Debug + Any;
-    type DescriptorSetLayout: Debug + Any + Resource<Self>;
+    type DescriptorSetLayout: Resource<Self>;
 }
 
 pub trait Resource<R: Resources>: Debug + Any {
