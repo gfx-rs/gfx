@@ -30,16 +30,16 @@ impl f::Factory<R> for Factory {
 
     fn create_pipeline_state_raw(&mut self, _: &handle::Program<R>, _: &pso::Descriptor)
                                  -> Result<handle::RawPipelineState<R>, pso::CreationError> { unimplemented!() }
-                                 
+
     fn create_program(&mut self, shader_set: &ShaderSet<R>)
                       -> Result<handle::Program<R>, shade::CreateProgramError> { unimplemented!() }
-    
+
     fn create_shader(&mut self, stage: shade::Stage, code: &[u8]) ->
                      Result<handle::Shader<R>, shade::CreateShaderError> { unimplemented!() }
 
     fn create_sampler(&mut self, _: t::SamplerInfo) -> handle::Sampler<R> { unimplemented!() }
 
-    fn create_semaphore(&mut self) -> native::Semaphore { unimplemented!() }
+    fn create_semaphore(&mut self) -> handle::Semaphore<R> { unimplemented!() }
 
     fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<R, T>)
                                -> Result<mapping::Reader<'b, R, T>,
