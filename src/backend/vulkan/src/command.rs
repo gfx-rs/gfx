@@ -16,7 +16,6 @@ use ash::vk;
 use ash::version::DeviceV1_0;
 use core::{command, pso, shade, state, target, texture as tex};
 use core::{IndexType, VertexCount};
-use native::{GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer};
 use {Backend, RawDevice, Resources};
 use std::sync::Arc;
 
@@ -46,7 +45,7 @@ macro_rules! impl_cmd_buffer {
     ($buffer:ident) => (
         impl command::CommandBuffer<Backend> for $buffer {
             unsafe fn end(&mut self) -> SubmitInfo {
-                self.0.end()
+                self.end()
             }
         }
 
@@ -158,11 +157,12 @@ macro_rules! impl_cmd_buffer {
     )
 }
 
-impl_cmd_buffer!(GeneralCommandBuffer);
-impl_cmd_buffer!(GraphicsCommandBuffer);
-impl_cmd_buffer!(ComputeCommandBuffer);
-impl_cmd_buffer!(TransferCommandBuffer);
-impl_cmd_buffer!(SubpassCommandBuffer);
+impl_cmd_buffer!(CommandBuffer);
 
+pub struct SubpassCommandBuffer(pub CommandBuffer);
 
-
+impl command::CommandBuffer<Backend> for SubpassCommandBuffer {
+    unsafe fn end(&mut self) -> SubmitInfo {
+        self.0.end()
+    }
+}
