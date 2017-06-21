@@ -182,43 +182,23 @@ impl core::Adapter for Adapter {
 
 pub struct Factory {
     inner: ComPtr<winapi::ID3D12Device>,
-
-    rtv_heap: ComPtr<winapi::ID3D12DescriptorHeap>, // TODO: temporary cpu heap
-    rtv_handle_size: u64,
-    next_rtv: usize
+    rtv_pool: native::DescriptorSetPool,
 }
 
 impl Factory {
     fn new(mut device: ComPtr<winapi::ID3D12Device>) -> Factory {
-        let rtv_heap = {
-            let heap_desc = winapi::D3D12_DESCRIPTOR_HEAP_DESC {
-                Type: winapi::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-                NumDescriptors: 64,
-                Flags: winapi::D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
-                NodeMask: 0,
-            };
-
-            let mut heap = ComPtr::<winapi::ID3D12DescriptorHeap>::new(ptr::null_mut());
-            unsafe {
-                device.CreateDescriptorHeap(
-                    &heap_desc,
-                    &dxguid::IID_ID3D12DescriptorHeap,
-                    heap.as_mut() as *mut *mut _ as *mut *mut c_void,
-                );
-            }
-
-            heap
-        };
-
-        let rtv_descriptor_size = unsafe {
-            device.GetDescriptorHandleIncrementSize(winapi::D3D12_DESCRIPTOR_HEAP_TYPE_RTV) as u64
+        let max_rtvs = 64;
+        let rtv_pool = native::DescriptorSetPool {
+            heap: Self::create_descriptor_heap_impl(&mut device, winapi::D3D12_DESCRIPTOR_HEAP_TYPE_RTV, max_rtvs),
+            pools: Vec::new(),
+            offset: 0,
+            size: 0,
+            max_size: max_rtvs as u64,
         };
 
         Factory {
             inner: device,
-            rtv_heap: rtv_heap,
-            rtv_handle_size: rtv_descriptor_size,
-            next_rtv: 0,
+            rtv_pool,
         }
     }
 }
@@ -274,7 +254,9 @@ impl core::Surface for Surface {
             BufferCount: buffer_count,
             Width: self.width,
             Height: self.height,
-            Format: data::map_format(T::get_format(), true).unwrap(), // TODO: error handling
+            //TODO: data::map_format(T::get_format(), true).unwrap(), // TODO: error handling
+            //[15716] DXGI ERROR: IDXGIFactory::CreateSwapChain: Flip model swapchains (DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL and DXGI_SWAP_EFFECT_FLIP_DISCARD) only support the following Formats: (DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R10G10B10A2_UNORM), assuming the underlying Device does as well.
+            Format: winapi::DXGI_FORMAT_R8G8B8A8_UNORM,
             Flags: 0,
             BufferUsage: winapi::DXGI_USAGE_RENDER_TARGET_OUTPUT,
             SampleDesc: winapi::DXGI_SAMPLE_DESC {
@@ -283,7 +265,7 @@ impl core::Surface for Surface {
             },
             Scaling: winapi::DXGI_SCALING_STRETCH,
             Stereo: false as BOOL,
-            SwapEffect: winapi::DXGI_SWAP_EFFECT_DISCARD, // TODO: FLIP_DISCARD
+            SwapEffect: winapi::DXGI_SWAP_EFFECT(4), //DXGI_SWAP_EFFECT_FLIP_DISCARD,
         };
 
         let hr = unsafe {

@@ -30,7 +30,7 @@ use {Factory, Resources as R};
 
 
 #[derive(Debug)]
-pub struct UnboundBuffer(native::Buffer);
+pub struct UnboundBuffer(memory::MemoryRequirements, buffer::Usage);
 
 #[derive(Debug)]
 pub struct UnboundImage(native::Image);
@@ -97,17 +97,71 @@ impl Factory {
         }
         Ok(native::ShaderLib { shaders: shader_map })
     }
+
+    pub fn create_descriptor_heap_impl(device: &mut ComPtr<winapi::ID3D12Device>,
+                                       heap_type: winapi::D3D12_DESCRIPTOR_HEAP_TYPE,
+                                       capacity: usize) -> native::DescriptorHeap {
+        let desc = winapi::D3D12_DESCRIPTOR_HEAP_DESC {
+            Type: heap_type,
+            NumDescriptors: capacity as u32,
+            Flags: winapi::D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+            NodeMask: 0,
+        };
+
+        let mut heap: *mut winapi::ID3D12DescriptorHeap = ptr::null_mut();
+        let mut handle = winapi::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: 0 };
+        let descriptor_size = unsafe {
+            device.CreateDescriptorHeap(
+                &desc,
+                &dxguid::IID_ID3D12DescriptorHeap,
+                &mut heap as *mut *mut _ as *mut *mut c_void,
+            );
+            (*heap).GetCPUDescriptorHandleForHeapStart(&mut handle);
+            device.GetDescriptorHandleIncrementSize(heap_type) as u64
+        };
+
+        native::DescriptorHeap {
+            inner: ComPtr::new(heap),
+            handle_size: descriptor_size,
+            total_handles: capacity as u64,
+            start_handle: handle,
+        }
+    }
 }
 
 impl core::Factory<R> for Factory {
     fn create_heap(&mut self, heap_type: &core::HeapType, size: u64) -> native::Heap {
-        unimplemented!()
+        let mut heap = ptr::null_mut();
+        let desc = winapi::D3D12_HEAP_DESC {
+            SizeInBytes: size,
+            Properties: data::map_heap_properties(heap_type.properties),
+            Alignment: 0,
+            Flags: winapi::D3D12_HEAP_FLAGS(0),
+        };
+
+        assert_eq!(winapi::S_OK, unsafe {
+            self.inner.CreateHeap(&desc, &dxguid::IID_ID3D12Heap, &mut heap)
+        });
+
+        native::Heap {
+            inner: ComPtr::new(heap as *mut _),
+            ty: heap_type.clone(),
+            size: size,
+            //TODO: merge with `map_heap_properties`
+            default_state: if !heap_type.properties.contains(memory::CPU_VISIBLE) {
+                winapi::D3D12_RESOURCE_STATE_COMMON
+            } else if heap_type.properties.contains(memory::WRITE_COMBINED) {
+                winapi::D3D12_RESOURCE_STATE_GENERIC_READ
+            } else {
+                winapi::D3D12_RESOURCE_STATE_COPY_DEST
+            },
+        }
     }
 
     fn create_renderpass(&mut self, attachments: &[pass::Attachment],
         subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> native::RenderPass
     {
-        unimplemented!()
+        native::RenderPass {}
     }
 
     fn create_pipeline_layout(&mut self, sets: &[&native::DescriptorSetLayout]) -> native::PipelineLayout {
@@ -302,7 +356,10 @@ impl core::Factory<R> for Factory {
         color_attachments: &[&native::RenderTargetView], depth_stencil_attachments: &[&native::DepthStencilView],
         width: u32, height: u32, layers: u32) -> native::FrameBuffer
     {
-        unimplemented!()
+        native::FrameBuffer {
+            color: color_attachments.iter().cloned().cloned().collect(),
+            depth_stencil: depth_stencil_attachments.iter().cloned().cloned().collect(),
+        }
     }
 
     fn create_sampler(&mut self, sampler_info: image::SamplerInfo) -> native::Sampler {
@@ -310,15 +367,46 @@ impl core::Factory<R> for Factory {
     }
 
     fn create_buffer(&mut self, size: u64, usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
-        unimplemented!()
+        let requirements = memory::MemoryRequirements {
+            size: size,
+            alignment: winapi::D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT as u64,
+        };
+        Ok(UnboundBuffer(requirements, usage))
     }
 
     fn get_buffer_requirements(&mut self, buffer: &UnboundBuffer) -> memory::MemoryRequirements {
-        unimplemented!()
+        buffer.0
     }
 
     fn bind_buffer_memory(&mut self, heap: &native::Heap, offset: u64, buffer: UnboundBuffer) -> Result<native::Buffer, buffer::CreationError> {
-        unimplemented!()
+        let mut resource = ptr::null_mut();
+        let init_state = heap.default_state; //TODO?
+        let desc = winapi::D3D12_RESOURCE_DESC {
+            Dimension: winapi::D3D12_RESOURCE_DIMENSION_BUFFER,
+            Alignment: 0,
+            Width: buffer.0.size,
+            Height: 1,
+            DepthOrArraySize: 1,
+            MipLevels: 1,
+            Format: winapi::DXGI_FORMAT_UNKNOWN,
+            SampleDesc: winapi::DXGI_SAMPLE_DESC {
+                Count: 1,
+                Quality: 0,
+            },
+            Layout: winapi::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+            Flags: winapi::D3D12_RESOURCE_FLAGS(0),
+        };
+
+        assert_eq!(winapi::S_OK, unsafe {
+            self.inner.CreatePlacedResource(
+                &*heap.inner as *const _ as *mut _, offset,
+                &desc, init_state, ptr::null(),
+                &dxguid::IID_ID3D12Resource, &mut resource)
+        });
+        Ok(native::Buffer {
+            resource: ComPtr::new(resource as *mut _),
+            size: buffer.0.size as u32,
+        })
     }
 
     fn create_image(&mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
@@ -340,10 +428,7 @@ impl core::Factory<R> for Factory {
     }
 
     fn view_image_as_render_target(&mut self, image: &native::Image, format: format::Format) -> Result<native::RenderTargetView, f::TargetViewError> {
-        // TODO: basic implementation only, needs checks and multiple heaps
-        let mut handle = winapi::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: 0 };
-        unsafe { self.rtv_heap.GetCPUDescriptorHandleForHeapStart(&mut handle) };
-        handle.ptr += self.next_rtv as u64 * self.rtv_handle_size;
+        let handle = self.rtv_pool.alloc_handles(1);
 
         // create descriptor
         unsafe {
@@ -354,9 +439,7 @@ impl core::Factory<R> for Factory {
             );
         }
 
-        let rtv = native::RenderTargetView { handle: handle };
-        self.next_rtv += 1;
-        Ok(rtv)
+        Ok(native::RenderTargetView { handle })
     }
 
     fn view_image_as_shader_resource(&mut self, image: &native::Image, format: format::Format) -> Result<native::ShaderResourceView, f::TargetViewError> {
@@ -368,19 +451,35 @@ impl core::Factory<R> for Factory {
     }
 
     fn create_descriptor_heap(&mut self, ty: f::DescriptorHeapType, size: usize) -> native::DescriptorHeap {
-        unimplemented!()
+        let native_type = match ty {
+            f::DescriptorHeapType::SrvCbvUav => winapi::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+            f::DescriptorHeapType::Sampler => winapi::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
+        };
+        Self::create_descriptor_heap_impl(&mut self.inner, native_type, size)
     }
 
     fn create_descriptor_set_pool(&mut self, heap: &native::DescriptorHeap, max_sets: usize, offset: usize, descriptor_pools: &[f::DescriptorPoolDesc]) -> native::DescriptorSetPool {
-        unimplemented!()
+        native::DescriptorSetPool {
+            heap: heap.clone(),
+            pools: descriptor_pools.to_vec(),
+            offset: offset as u64,
+            size: 0,
+            max_size: max_sets as u64,
+        }
     }
 
     fn create_descriptor_set_layout(&mut self, bindings: &[f::DescriptorSetLayoutBinding]) -> native::DescriptorSetLayout {
-        unimplemented!()
+        native::DescriptorSetLayout { bindings: bindings.to_vec() }
     }
 
     fn create_descriptor_sets(&mut self, set_pool: &mut native::DescriptorSetPool, layouts: &[&native::DescriptorSetLayout]) -> Vec<native::DescriptorSet> {
-        unimplemented!()
+        layouts.iter().map(|layout| native::DescriptorSet {
+            ranges: layout.bindings.iter().map(|binding| native::DescriptorRange {
+                handle: set_pool.alloc_handles(binding.count as u64),
+                ty: binding.ty,
+                count: binding.count,
+            }).collect()
+        }).collect()
     }
 
     fn reset_descriptor_set_pool(&mut self, pool: &mut native::DescriptorSetPool) {

@@ -52,6 +52,7 @@ pub enum DescriptorType {
 }
 
 /// Pool of descriptors of a specific type.
+#[derive(Clone, Copy, Debug)]
 pub struct DescriptorPoolDesc {
     /// Type of the stored descriptors.
     pub ty: DescriptorType,
@@ -66,7 +67,7 @@ pub struct DescriptorPoolDesc {
 /// The binding point is only valid for the pipelines stages specified.
 ///
 /// The binding _must_ match with the corresponding shader interface.
-#[derive(Debug, Copy, Clone)]
+#[derive(Clone, Copy, Debug)]
 pub struct DescriptorSetLayoutBinding {
     /// Integer identifier of the binding.
     pub binding: usize,

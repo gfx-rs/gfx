@@ -475,4 +475,6 @@ fn main() {
 }
 
 #[cfg(not(any(feature = "vulkan", target_os = "windows", feature = "metal")))]
-fn main() {}
+fn main() {
+    println!("You need to enable the native API feature (vulkan/metal) in order to test the LL");
+}

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::pso;
+use core::{factory as f, pso, HeapType};
 use comptr::ComPtr;
 use winapi;
 
@@ -26,7 +26,8 @@ unsafe impl Send for ShaderLib {}
 unsafe impl Sync for ShaderLib {}
 
 #[derive(Clone, Debug, Hash)]
-pub struct RenderPass;
+pub struct RenderPass {
+}
 unsafe impl Send for RenderPass {}
 unsafe impl Sync for RenderPass {}
 
@@ -65,9 +66,12 @@ pub struct TransferCommandBuffer(pub CommandBuffer);
 
 pub struct SubpassCommandBuffer(pub CommandBuffer);
 
-#[derive(Debug, Hash)]
+#[derive(Debug)]
 pub struct Heap {
-    //TODO
+    pub inner: ComPtr<winapi::ID3D12Heap>,
+    pub ty: HeapType,
+    pub size: u64,
+    pub default_state: winapi::D3D12_RESOURCE_STATES,
 }
 
 #[derive(Clone, Debug, Hash)]
@@ -121,22 +125,61 @@ pub struct Semaphore;
 pub struct Fence;
 
 #[derive(Debug)]
-pub struct FrameBuffer;
+pub struct FrameBuffer {
+    pub color: Vec<RenderTargetView>,
+    pub depth_stencil: Vec<DepthStencilView>,
+}
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct DescriptorHeap {
+    pub inner: ComPtr<winapi::ID3D12DescriptorHeap>,
+    //TODO: hide members?
+    pub handle_size: u64,
+    pub total_handles: u64,
+    pub start_handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
+}
+
+impl DescriptorHeap {
+    pub fn get_handle(&self, index: u64) -> winapi::D3D12_CPU_DESCRIPTOR_HANDLE {
+        assert!(index < self.total_handles);
+        let ptr = self.start_handle.ptr + self.handle_size * index;
+        winapi::D3D12_CPU_DESCRIPTOR_HANDLE { ptr }
+    }
 }
 
 #[derive(Debug)]
 pub struct DescriptorSetPool {
+    pub heap: DescriptorHeap,
+    pub pools: Vec<f::DescriptorPoolDesc>,
+    pub offset: u64,
+    pub size: u64,
+    pub max_size: u64,
+}
+
+impl DescriptorSetPool {
+    pub fn alloc_handles(&mut self, count: u64) -> winapi::D3D12_CPU_DESCRIPTOR_HANDLE {
+        assert!(self.size + count <= self.max_size);
+        let index = self.offset + self.size;
+        self.size += count;
+        self.heap.get_handle(index)
+    }
+}
+
+#[derive(Debug)]
+pub struct DescriptorRange {
+    pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
+    pub ty: f::DescriptorType,
+    pub count: usize,
 }
 
 #[derive(Debug)]
 pub struct DescriptorSet {
+    pub ranges: Vec<DescriptorRange>,
 }
 
 #[derive(Debug)]
 pub struct DescriptorSetLayout {
+    pub bindings: Vec<f::DescriptorSetLayoutBinding>,
 }
 
 gfx_impl_resources!();

@@ -12,9 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::memory::{self, ImageAccess, ImageLayout};
+use core::{buffer, memory, HeapType};
 use core::format::Format;
 use winapi::*;
+
+
+pub fn map_heap_properties(props: memory::HeapProperties) -> D3D12_HEAP_PROPERTIES {
+    //TODO: ensure the flags are valid
+    D3D12_HEAP_PROPERTIES {
+        Type: if !props.contains(memory::CPU_VISIBLE) {
+            D3D12_HEAP_TYPE_DEFAULT
+        } else if props.contains(memory::WRITE_COMBINED) {
+            D3D12_HEAP_TYPE_UPLOAD
+        } else {
+            D3D12_HEAP_TYPE_READBACK
+        },
+        CPUPageProperty: D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+        MemoryPoolPreference: D3D12_MEMORY_POOL_UNKNOWN,
+        CreationNodeMask: 0,
+        VisibleNodeMask: 0,
+    }
+}
 
 pub fn map_format(format: Format, is_target: bool) -> Option<DXGI_FORMAT> {
     use core::format::SurfaceType::*;
@@ -129,11 +147,11 @@ pub fn map_format(format: Format, is_target: bool) -> Option<DXGI_FORMAT> {
     })
 }
 
-//TODO: map_buffer_resource_stat {
-    //handle D3D12_RESOURCE_STATE_INDEX_BUFFER
-//}
+pub fn map_buffer_resource_state(usage: buffer::Usage) -> D3D12_RESOURCE_STATES {
+    unimplemented!()
+}
 
-pub fn map_image_resource_state(access: ImageAccess, _layout: ImageLayout) -> D3D12_RESOURCE_STATES {
+pub fn map_image_resource_state(access: memory::ImageAccess, _layout: memory::ImageLayout) -> D3D12_RESOURCE_STATES {
     let mut state = D3D12_RESOURCE_STATE_COMMON;
 
     if access.contains(memory::RENDER_TARGET_CLEAR) {
