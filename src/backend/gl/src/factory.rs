@@ -18,7 +18,7 @@ use std::{slice, ptr};
 use {gl, tex};
 use core::{self as d, factory as f, texture as t, buffer, mapping};
 use core::memory::{self, Bind, SHADER_RESOURCE, UNORDERED_ACCESS, Typed};
-use core::format::ChannelType;
+use core::format::{ChannelType, Format};
 use core::handle::{self, Producer};
 use core::target::{Layer, Level};
 
@@ -436,12 +436,13 @@ impl f::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_texture(object, desc))
     }
 
-    fn view_buffer_as_shader_resource_raw(&mut self, hbuf: &handle::RawBuffer<R>)
+    fn view_buffer_as_shader_resource_raw(&mut self, hbuf: &handle::RawBuffer<R>, format: Format)
                                       -> Result<handle::RawShaderResourceView<R>, f::ResourceViewError> {
         let gl = &self.share.context;
         let mut name = 0 as gl::types::GLuint;
         let buf_name = *self.frame_handles.ref_buffer(hbuf);
-        let format = gl::R8; //TODO: get from the buffer handle
+        let format = tex::format_to_glfull(format)
+            .map_err(|_| f::ResourceViewError::Unsupported)?;
         unsafe {
             gl.GenTextures(1, &mut name);
             gl.BindTexture(gl::TEXTURE_BUFFER, name);

@@ -617,7 +617,8 @@ impl core::Factory<Resources> for Factory {
 
     fn view_buffer_as_shader_resource_raw
         (&mut self,
-         _hbuf: &handle::RawBuffer<Resources>)
+         _hbuf: &handle::RawBuffer<Resources>,
+         _: core::format::Format)
          -> Result<handle::RawShaderResourceView<Resources>, factory::ResourceViewError> {
         unimplemented!()
         // Err(factory::ResourceViewError::Unsupported) //TODO

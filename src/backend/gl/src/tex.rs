@@ -100,7 +100,7 @@ fn format_to_gltype(format: NewFormat) -> Result<GLenum, ()> {
     })
 }
 
-fn format_to_glfull(format: NewFormat) -> Result<GLenum, ()> {
+pub fn format_to_glfull(format: NewFormat) -> Result<GLenum, ()> {
     use core::format::SurfaceType as S;
     use core::format::ChannelType as C;
     let cty = format.1;

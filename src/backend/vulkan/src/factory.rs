@@ -17,7 +17,7 @@ use std::os::raw::c_void;
 use core::{self, handle as h, pso, state, texture, buffer, mapping};
 use core::memory::{self, Bind};
 use core::factory::{self as f};
-use core::format::ChannelType;
+use core::format::{ChannelType, Format};
 use core::target::Layer;
 use vk;
 use {command, data, native};
@@ -820,7 +820,7 @@ impl core::Factory<R> for Factory {
         Ok(self.share.handles.lock().unwrap().make_texture(tex, desc))
     }
 
-    fn view_buffer_as_shader_resource_raw(&mut self, _hbuf: &h::RawBuffer<R>)
+    fn view_buffer_as_shader_resource_raw(&mut self, _hbuf: &h::RawBuffer<R>, _: Format)
                                       -> Result<h::RawShaderResourceView<R>, f::ResourceViewError> {
         Err(f::ResourceViewError::Unsupported) //TODO
     }
