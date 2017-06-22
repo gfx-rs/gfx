@@ -142,7 +142,7 @@ impl Factory {
                 (D3D11_BIND_FLAG(0), info.size)
         };
 
-        assert!(size >= info.size);        
+        assert!(size >= info.size);
         let (usage, cpu) = map_usage(info.usage, info.bind);
         let bind = map_bind(info.bind) | subind;
         if info.bind.contains(memory::RENDER_TARGET) | info.bind.contains(memory::DEPTH_STENCIL) {
@@ -326,10 +326,10 @@ impl Factory {
             Err(hr)
         }
     }
-    
+
     pub fn cleanup(&mut self) {
         self.frame_handles.clear();
-    }    
+    }
 }
 
 impl core::Factory<R> for Factory {
@@ -473,7 +473,7 @@ impl core::Factory<R> for Factory {
             },
             &core::ShaderSet::Tessellated(ref vs, ref hs, ref ds, ref ps) => {
                 let (vs, hs, ds, ps) = (vs.reference(fh), hs.reference(fh), ds.reference(fh), ps.reference(fh));
-              
+
                 populate_info(&mut info, Stage::Vertex, vs.reflection);
                 populate_info(&mut info, Stage::Hull,   hs.reflection);
                 populate_info(&mut info, Stage::Domain, ds.reflection);
@@ -602,7 +602,7 @@ impl core::Factory<R> for Factory {
                           data_opt: Option<&[&[u8]]>) -> Result<h::RawTexture<R>, texture::CreationError> {
         use core::texture::{AaMode, CreationError, Kind};
         use data::{map_bind, map_usage, map_surface, map_format};
-        
+
         let (usage, cpu_access) = map_usage(desc.usage, desc.bind);
         let tparam = TextureParam {
             levels: desc.levels as winapi::UINT,
@@ -668,7 +668,7 @@ impl core::Factory<R> for Factory {
         }
     }
 
-    fn view_buffer_as_shader_resource_raw(&mut self, _hbuf: &h::RawBuffer<R>)
+    fn view_buffer_as_shader_resource_raw(&mut self, _hbuf: &h::RawBuffer<R>, _: core::format::Format)
                                       -> Result<h::RawShaderResourceView<R>, f::ResourceViewError> {
         Err(f::ResourceViewError::Unsupported) //TODO
     }
@@ -931,24 +931,24 @@ pub fn ensure_mapped(mapping: &mut MappingGate,
                      map_type: winapi::d3d11::D3D11_MAP,
                      factory: &Factory) {
     if mapping.pointer.is_null() {
-        let raw_handle = *buffer.resource();                  
+        let raw_handle = *buffer.resource();
         let mut ctx = ptr::null_mut();
-            
+
         unsafe {
             (*factory.device).GetImmediateContext(&mut ctx);
         }
-        
+
         let mut sres = winapi::d3d11::D3D11_MAPPED_SUBRESOURCE {
             pData: ptr::null_mut(),
             RowPitch: 0,
             DepthPitch: 0,
         };
-            
+
         let dst = raw_handle.as_resource() as *mut winapi::d3d11::ID3D11Resource;
         let hr = unsafe {
             (*ctx).Map(dst, 0, map_type, 0, &mut sres)
         };
-        
+
         if winapi::SUCCEEDED(hr) {
             mapping.pointer = sres.pData;
         } else {
