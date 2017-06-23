@@ -12,6 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Builds an SDL2 window from a WindowBuilder struct.
+//!
+//! # Example
+//!
+//! ```no_run
+//! extern crate gfx_core;
+//! extern crate gfx_window_sdl;
+//! extern crate sdl2;
+//!
+//! use gfx_core::format::{DepthStencil, Rgba8};
+//!
+//! fn main() {
+//!     let sdl = sdl2::init().unwrap();
+//!
+//!     let builder = sdl.video().unwrap().window("Example", 800, 600);
+//!     let (window, glcontext) = gfx_window_sdl::build(window, Rgba8::get_format(), DepthStencil::get_format());
+//!     let mut window = gfx_window_sdl::Window::new(&window);
+//!     let (surface, adapters) = window.get_surface_and_adapters();
+//!
+//!     // some code...
+//! }
+//! ```
+
 #[macro_use]
 extern crate log;
 extern crate sdl2;
@@ -75,29 +98,6 @@ fn get_window_dimensions(window: &sdl2::video::Window) -> texture::Dimensions {
     let aa = window.subsystem().gl_attr().multisample_samples() as texture::NumSamples;
     (width as texture::Size, height as texture::Size, 1, aa.into())
 }
-
-/// Builds an SDL2 window from a WindowBuilder struct.
-///
-/// # Example
-///
-/// ```no_run
-/// extern crate gfx_core;
-/// extern crate gfx_window_sdl;
-/// extern crate sdl2;
-///
-/// use gfx_core::format::{DepthStencil, Rgba8};
-///
-/// fn main() {
-///     let sdl = sdl2::init().unwrap();
-///
-///     let builder = sdl.video().unwrap().window("Example", 800, 600);
-///     let (window, glcontext) = gfx_window_sdl::build(window, Rgba8::get_format(), DepthStencil::get_format());
-///     let mut window = gfx_window_sdl::Window::new(&window);
-///     let (surface, adapters) = window.get_surface_and_adapters();
-///
-///     // some code...
-/// }
-/// ```
 
 pub struct SwapChain<'a> {
     // Underlying window, required for presentation

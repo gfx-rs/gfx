@@ -19,6 +19,9 @@
 //! ```no_run
 //! extern crate gfx_window_glfw;
 //! extern crate glfw;
+//! extern crate gfx_core;
+//!
+//! use gfx_core::WindowExt;
 //!
 //! fn main() {
 //!     use glfw::Context;
@@ -34,7 +37,7 @@
 //!         .create_window(800, 600, "Example", glfw::WindowMode::Windowed)
 //!         .expect("Failed to create GLFW window.");
 //!
-//!     let window = gfx_window_glfw::Window(Rc::new(RefCell::new(window)));
+//!     let mut window = gfx_window_glfw::Window::new(window);
 //!     glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
 //!     let (surface, adapters) = window.get_surface_and_adapters();
 //!
