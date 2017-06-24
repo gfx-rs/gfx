@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 extern crate gfx;
+extern crate gfx_core;
 extern crate gfx_window_sdl;
 extern crate sdl2;
 
-use gfx::Device;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
-use gfx::format::{Rgba8, DepthStencil};
+use gfx::format::{Formatted, Rgba8, DepthStencil};
+use gfx_core::{Adapter, Surface, QueueFamily, SwapChain, WindowExt};
 
 const CLEAR_COLOR: [f32; 4] = [0.1, 0.2, 0.3, 1.0];
 
@@ -29,10 +30,26 @@ pub fn main() {
     video.gl_attr().set_context_profile(sdl2::video::GLProfile::Core);
     video.gl_attr().set_context_version(3, 2);
     let builder = video.window("SDL Window", 1024, 768);
-    let (window, _gl_context, mut device, mut factory, main_color, _main_depth) =
-        gfx_window_sdl::init::<Rgba8, DepthStencil>(builder).unwrap();
+    let (window, _gl_context) = gfx_window_sdl::build(builder, Rgba8::get_format(), DepthStencil::get_format()).unwrap();
+    let mut window = gfx_window_sdl::Window::new(&window);
+    let (mut surface, adapters) = window.get_surface_and_adapters();
 
-    let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
+    let queue_descs = adapters[0].get_queue_families().iter()
+                                 .filter(|family| surface.supports_queue(&family) )
+                                 .map(|family| { (family, family.num_queues()) })
+                                 .collect::<Vec<_>>();
+    let gfx_core::Device { mut general_queues, mut graphics_queues, .. } = adapters[0].open(&queue_descs);
+
+    let mut queue = if let Some(queue) = general_queues.first_mut() {
+        queue.as_mut().into()
+    } else if let Some(queue) = graphics_queues.first_mut() {
+        queue.as_mut()
+    } else {
+        return
+    };
+
+    let config = gfx_core::SwapchainConfig::new();
+    let mut swap_chain = surface.build_swapchain(config, &queue);
 
     let mut events = sdl_context.event_pump().unwrap();
 
@@ -49,11 +66,6 @@ pub fn main() {
             }
         }
 
-        // draw a frame
-        encoder.clear(&main_color, CLEAR_COLOR);
-        // <- draw actual stuff here
-        encoder.flush(&mut device);
-        window.gl_swap_window();
-        device.cleanup();
+        swap_chain.present(&mut queue);
     }
 }

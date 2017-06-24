@@ -87,7 +87,7 @@ impl Surface {
     fn from_window(window: &winit::Window, instance: Arc<Instance>) -> Surface {
         let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
 
-        let surface = self.surface_extensions.iter().map(|&extension| {
+        let surface = instance.surface_extensions.iter().map(|&extension| {
             match extension {
                 vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME => {
                     use winit::os::unix::WindowExt;
