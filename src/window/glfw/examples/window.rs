@@ -13,9 +13,11 @@
 // limitations under the License.
 
 extern crate gfx;
+extern crate gfx_core;
 extern crate gfx_window_glfw;
 extern crate glfw;
 
+use gfx_core::{Adapter, Surface, SwapChain, QueueFamily, WindowExt};
 use glfw::{Action, Context, Key};
 
 pub fn main() {
@@ -34,9 +36,29 @@ pub fn main() {
     window.set_close_polling(true);
     window.make_current();
     glfw.set_error_callback(glfw::FAIL_ON_ERRORS);
-    let (_, _, _, _) = gfx_window_glfw::init(&mut window);
 
-    //Note: actual drawing code is no different from the triangle example, or any other.
+    // Surface and Swapchain creation
+    let mut window = gfx_window_glfw::Window::new(window);
+    let (mut surface, adapters) = window.get_surface_and_adapters();
+
+    let queue_descs = adapters[0].get_queue_families().iter()
+                                 .filter(|family| surface.supports_queue(&family) )
+                                 .map(|family| { (family, family.num_queues()) })
+                                 .collect::<Vec<_>>();
+    let gfx_core::Device { mut general_queues, mut graphics_queues, .. } = adapters[0].open(&queue_descs);
+
+    let mut queue = if let Some(queue) = general_queues.first_mut() {
+        queue.as_mut().into()
+    } else if let Some(queue) = graphics_queues.first_mut() {
+        queue.as_mut()
+    } else {
+        return
+    };
+
+    let config = gfx_core::SwapchainConfig::new();
+    let mut swap_chain = surface.build_swapchain(config, &queue);
+
+    // Note: actual drawing code is no different from the triangle example, or any other.
 
     let mut running = true;
     while running {
@@ -50,6 +72,8 @@ pub fn main() {
             }
         }
 
-        window.swap_buffers();
+        // Note: you are supposed to acquire a frame first before calling present
+        
+        swap_chain.present(&mut queue);
     }
 }
