@@ -12,20 +12,46 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Builds an SDL2 window from a WindowBuilder struct.
+//!
+//! # Example
+//!
+//! ```no_run
+//! extern crate gfx_core;
+//! extern crate gfx_window_sdl;
+//! extern crate sdl2;
+//!
+//! use gfx_core::WindowExt;
+//! use gfx_core::format::{Formatted, DepthStencil, Rgba8};
+//!
+//! fn main() {
+//!     let sdl = sdl2::init().unwrap();
+//!
+//!     let builder = sdl.video().unwrap().window("Example", 800, 600);
+//!     let (window, glcontext) = gfx_window_sdl::build(
+//!             builder, Rgba8::get_format(), DepthStencil::get_format()).unwrap();
+//!     let mut window = gfx_window_sdl::Window::new(&window);
+//!     let (surface, adapters) = window.get_surface_and_adapters();
+//!
+//!     // some code...
+//! }
+//! ```
+
 #[macro_use]
 extern crate log;
 extern crate sdl2;
 extern crate gfx_core as core;
-extern crate gfx_device_gl;
+extern crate gfx_device_gl as device_gl;
 
 use core::handle;
 use core::format::{ChannelType, DepthFormat, Format, RenderFormat};
-pub use gfx_device_gl::{Device, Factory, Resources};
-use sdl2::video::{DisplayMode, GLContext, Window, WindowBuilder, WindowBuildError};
+pub use device_gl::{Backend, Factory, Resources};
+use sdl2::video::{DisplayMode, GLContext, WindowBuilder, WindowBuildError};
 use sdl2::pixels::PixelFormatEnum;
-use core::{format, texture};
+use core::{format, memory, texture};
+use core::texture::Size;
 use core::memory::Typed;
-use gfx_device_gl::Resources as R;
+use device_gl::Resources as R;
 
 #[derive(Debug)]
 pub enum InitError {
@@ -69,50 +95,105 @@ fn sdl2_pixel_format_from_gfx(format: Format) -> Option<PixelFormatEnum> {
     }
 }
 
-pub type InitRawOk = (Window, GLContext, Device, Factory,
-    handle::RawRenderTargetView<Resources>, handle::RawDepthStencilView<Resources>);
-
-pub type InitOk<Cf, Df> =
-    (Window, GLContext, Device, Factory,
-     handle::RenderTargetView<Resources, Cf>,
-     handle::DepthStencilView<Resources, Df>);
-
-/// Builds an SDL2 window from a WindowBuilder struct.
-///
-/// # Example
-///
-/// ```no_run
-/// extern crate gfx_core;
-/// extern crate gfx_window_sdl;
-/// extern crate sdl2;
-///
-/// use gfx_core::format::{DepthStencil, Rgba8};
-///
-/// fn main() {
-///     let sdl = sdl2::init().unwrap();
-///
-///     let builder = sdl.video().unwrap().window("Example", 800, 600);
-///     let (window, glcontext, device, factory, color_view, depth_view) =
-///         gfx_window_sdl::init::<Rgba8, DepthStencil>(builder).expect("gfx_window_sdl::init failed!");
-///
-///     // some code...
-/// }
-/// ```
-pub fn init<Cf, Df>(builder: WindowBuilder) -> Result<InitOk<Cf, Df>, InitError>
-where
-    Cf: RenderFormat,
-    Df: DepthFormat,
-{
-    use core::memory::Typed;
-    init_raw(builder, Cf::get_format(), Df::get_format())
-        .map(|(w, gl, d, f, color_view, ds_view)|
-            (w, gl, d, f, Typed::new(color_view), Typed::new(ds_view)))
+fn get_window_dimensions(window: &sdl2::video::Window) -> texture::Dimensions {
+    let (width, height) = window.size();
+    let aa = window.subsystem().gl_attr().multisample_samples() as texture::NumSamples;
+    (width as texture::Size, height as texture::Size, 1, aa.into())
 }
 
-pub fn init_raw(mut builder: WindowBuilder, cf: Format, df: Format)
-                -> Result<InitRawOk, InitError> {
-    use core::texture::{AaMode, Size};
+pub struct SwapChain<'a> {
+    // Underlying window, required for presentation
+    window: &'a sdl2::video::Window,
+    // Single element backbuffer
+    backbuffer: [core::Backbuffer<Backend>; 1],
+}
 
+impl<'a> core::SwapChain<Backend> for SwapChain<'a> {
+    fn get_backbuffers(&mut self) -> &[core::Backbuffer<Backend>] {
+        &self.backbuffer
+    }
+
+    fn acquire_frame(&mut self, sync: core::FrameSync<R>) -> core::Frame {
+        // TODO: fence sync
+        core::Frame::new(0)
+    }
+
+    fn present<Q>(&mut self, _: &mut Q)
+        where Q: AsMut<device_gl::CommandQueue> {
+        self.window.gl_swap_window();
+    }
+}
+
+pub struct Surface<'a> {
+    window: &'a sdl2::video::Window,
+    manager: handle::Manager<R>,
+}
+
+impl<'a> core::Surface<Backend> for Surface<'a> {
+    type SwapChain = SwapChain<'a>;
+
+    fn supports_queue(&self, _: &device_gl::QueueFamily) -> bool { true }
+    fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, _: &Q) -> SwapChain<'a>
+        where Q: AsRef<device_gl::CommandQueue>
+    {
+        use core::handle::Producer;
+        let dim = get_window_dimensions(self.window);
+        let color = self.manager.make_texture(
+            device_gl::NewTexture::Surface(0),
+            texture::Info {
+                levels: 1,
+                kind: texture::Kind::D2(dim.0, dim.1, dim.3),
+                format: config.color_format.0,
+                bind: memory::RENDER_TARGET | memory::TRANSFER_SRC,
+                usage: memory::Usage::Data,
+            },
+        );
+
+        let ds = config.depth_stencil_format.map(|ds_format| {
+            self.manager.make_texture(
+                device_gl::NewTexture::Surface(0),
+                texture::Info {
+                    levels: 1,
+                    kind: texture::Kind::D2(dim.0, dim.1, dim.3),
+                    format: ds_format.0,
+                    bind: memory::DEPTH_STENCIL | memory::TRANSFER_SRC,
+                    usage: memory::Usage::Data,
+                },
+            )
+        });
+
+        SwapChain {
+            window: self.window.clone(),
+            backbuffer: [(color, ds); 1],
+        }
+    }
+}
+
+pub struct Window<'a>(&'a sdl2::video::Window);
+impl<'a> Window<'a> {
+    pub fn new(window: &'a sdl2::video::Window) -> Self {
+        Window(window)
+    }
+}
+
+impl<'a> core::WindowExt<Backend> for Window<'a> {
+    type Surface = Surface<'a>;
+    type Adapter = device_gl::Adapter;
+
+    fn get_surface_and_adapters(&mut self) -> (Surface<'a>, Vec<device_gl::Adapter>) {
+        let adapter = device_gl::Adapter::new(|s|
+            self.0.subsystem().gl_get_proc_address(s) as *const std::os::raw::c_void);
+        let surface = Surface {
+            window: self.0,
+            manager: handle::Manager::new(),
+        };
+
+        (surface, vec![adapter])
+    }
+}
+
+/// Helper function for setting up an GL window and context
+pub fn build(mut builder: WindowBuilder, cf: Format, df: Format) -> Result<(sdl2::video::Window, GLContext), InitError> {
     let mut window = builder.opengl().build()?;
 
     let display_mode = DisplayMode {
@@ -134,47 +215,5 @@ pub fn init_raw(mut builder: WindowBuilder, cf: Format, df: Format)
 
     let context = window.gl_create_context()?;
 
-    let (device, factory) = gfx_device_gl::create(|s| {
-        window.subsystem().gl_get_proc_address(s) as *const std::os::raw::c_void
-    });
-
-    let (width, height) = window.drawable_size();
-    let dim = (width as Size, height as Size, 1, AaMode::Single);
-    let (color_view, ds_view) = gfx_device_gl::create_main_targets_raw(dim, cf.0, df.0);
-
-    Ok((window, context, device, factory, color_view, ds_view))
-}
-
-fn get_window_dimensions(window: &sdl2::video::Window) -> texture::Dimensions {
-    let (width, height) = window.size();
-    let aa = window.subsystem().gl_attr().multisample_samples() as texture::NumSamples;
-    (width as texture::Size, height as texture::Size, 1, aa.into())
-}
-
-/// Update the internal dimensions of the main framebuffer targets. Generic version over the format.
-pub fn update_views<Cf, Df>(window: &sdl2::video::Window, color_view: &mut handle::RenderTargetView<R, Cf>,
-                            ds_view: &mut handle::DepthStencilView<R, Df>)
-where
-    Cf: format::RenderFormat,
-    Df: format::DepthFormat
-{
-    let dim = color_view.get_dimensions();
-    assert_eq!(dim, ds_view.get_dimensions());
-    if let Some((cv, dv)) = update_views_raw(window, dim, Cf::get_format(), Df::get_format()) {
-        *color_view = Typed::new(cv);
-        *ds_view = Typed::new(dv);
-    }
-}
-
-/// Return new main target views if the window resolution has changed from the old dimensions.
-pub fn update_views_raw(window: &sdl2::video::Window, old_dimensions: texture::Dimensions,
-                        color_format: format::Format, ds_format: format::Format)
-                        -> Option<(handle::RawRenderTargetView<R>, handle::RawDepthStencilView<R>)>
-{
-    let dim = get_window_dimensions(window);
-    if dim != old_dimensions {
-        Some(gfx_device_gl::create_main_targets_raw(dim, color_format.0, ds_format.0))
-    } else {
-        None
-    }
+    Ok((window, context))
 }
