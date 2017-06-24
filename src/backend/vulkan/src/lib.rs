@@ -63,7 +63,7 @@ pub struct Instance {
     pub raw: ash::Instance<ash::version::V1_0>,
 
     /// Supported surface extensions of this instance.
-    surface_extensions: Vec<&'static str>,
+    pub surface_extensions: Vec<&'static str>,
 }
 
 impl Instance {

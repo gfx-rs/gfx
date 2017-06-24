@@ -21,13 +21,15 @@
 //! extern crate gfx_window_sdl;
 //! extern crate sdl2;
 //!
-//! use gfx_core::format::{DepthStencil, Rgba8};
+//! use gfx_core::WindowExt;
+//! use gfx_core::format::{Formatted, DepthStencil, Rgba8};
 //!
 //! fn main() {
 //!     let sdl = sdl2::init().unwrap();
 //!
 //!     let builder = sdl.video().unwrap().window("Example", 800, 600);
-//!     let (window, glcontext) = gfx_window_sdl::build(window, Rgba8::get_format(), DepthStencil::get_format());
+//!     let (window, glcontext) = gfx_window_sdl::build(
+//!             builder, Rgba8::get_format(), DepthStencil::get_format()).unwrap();
 //!     let mut window = gfx_window_sdl::Window::new(&window);
 //!     let (surface, adapters) = window.get_surface_and_adapters();
 //!
