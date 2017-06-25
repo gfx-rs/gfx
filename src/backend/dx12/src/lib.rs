@@ -23,7 +23,9 @@ extern crate winapi;
 mod command;
 mod factory;
 mod native;
+mod pool;
 
+use core::{command as com, handle};
 use comptr::ComPtr;
 use std::ptr;
 use std::os::raw::c_void;
@@ -43,7 +45,7 @@ pub struct Adapter {
 }
 
 impl core::Adapter<Backend> for Adapter {
-    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> core::Device_<Backend>
+    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> core::Device<Backend>
     {
         // Create D3D12 device
         let mut device = ComPtr::<winapi::ID3D12Device>::new(ptr::null_mut());
@@ -89,6 +91,8 @@ impl core::Adapter<Backend> for Adapter {
                             raw: queue,
                             device: device.clone(),
                             list_type: winapi::D3D12_COMMAND_LIST_TYPE_DIRECT, // TODO
+                            frame_handles: handle::Manager::new(),
+                            max_resource_count: Some(999999),
                         }
                     )
                 }
@@ -97,7 +101,7 @@ impl core::Adapter<Backend> for Adapter {
 
         let factory = Factory::new(device);
 
-        core::Device_ {
+        core::Device {
             factory: factory,
             general_queues: general_queues,
             graphics_queues: Vec::new(),
@@ -123,15 +127,37 @@ pub struct CommandQueue {
     raw: ComPtr<winapi::ID3D12CommandQueue>,
     device: ComPtr<winapi::ID3D12Device>,
     list_type: winapi::D3D12_COMMAND_LIST_TYPE,
+
+    frame_handles: handle::Manager<Resources>,
+    max_resource_count: Option<usize>,
 }
 
 impl core::CommandQueue<Backend> for CommandQueue {
-    unsafe fn submit(&mut self, submit_infos: &[core::QueueSubmit<Backend>], fence: Option<&mut ()>) {
+    unsafe fn submit(&mut self, submit_infos: &[core::QueueSubmit<Backend>],
+        fence: Option<&handle::Fence<Resources>>, access: &com::AccessInfo<Resources>) {
         unimplemented!()
     }
 
     fn wait_idle(&mut self) {
         unimplemented!()
+    }
+
+    fn pin_submitted_resources(&mut self, man: &handle::Manager<Resources>) {
+        self.frame_handles.extend(man);
+        match self.max_resource_count {
+            Some(c) if self.frame_handles.count() > c => {
+                error!("Way too many resources in the current frame. Did you call Device::cleanup()?");
+                self.max_resource_count = None;
+            },
+            _ => (),
+        }
+    }
+
+    fn cleanup(&mut self) {
+        use core::handle::Producer;
+
+        self.frame_handles.clear();
+        // TODO
     }
 }
 
@@ -150,16 +176,20 @@ impl Factory {
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Backend {}
 impl core::Backend for Backend {
+    type Adapter = Adapter;
     type Resources = Resources;
     type CommandQueue = CommandQueue;
-    type GeneralCommandBuffer = native::GeneralCommandBuffer;
-    type GraphicsCommandBuffer = native::GraphicsCommandBuffer;
-    type ComputeCommandBuffer = native::ComputeCommandBuffer;
-    type TransferCommandBuffer = native::TransferCommandBuffer;
-    type SubpassCommandBuffer = native::SubpassCommandBuffer;
+    type RawCommandBuffer = command::CommandBuffer;
+    type SubpassCommandBuffer = command::SubpassCommandBuffer;
     type SubmitInfo = command::SubmitInfo;
     type Factory = Factory;
     type QueueFamily = QueueFamily;
+
+    type GeneralCommandPool = pool::GeneralCommandPool;
+    type GraphicsCommandPool = pool::GraphicsCommandPool;
+    type ComputeCommandPool = pool::ComputeCommandPool;
+    type TransferCommandPool = pool::TransferCommandPool;
+    type SubpassCommandPool = pool::SubpassCommandPool;
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
