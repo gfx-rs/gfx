@@ -30,9 +30,10 @@ name = "gfx_window_dxgi"
 log = "0.3"
 kernel32-sys = "0.2"
 user32-sys = "0.2"
-dxguid-sys = "0.2"
-winapi = "0.2"
+dxguid-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
+winapi = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
 winit = "0.7"
 gfx_core = { path = "../../core", version = "0.7" }
 gfx_device_dx11 = { path = "../../backend/dx11", version = "0.6" }
+gfx_device_dx12 = { path = "../../backend/dx12", version = "0.1" }
 comptr = { git = "https://github.com/msiglreith/comptr-rs.git" }
