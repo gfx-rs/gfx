@@ -27,7 +27,9 @@ extern crate gfx_window_glutin;
 
 #[cfg(feature = "dx11")]
 extern crate gfx_device_dx11;
-#[cfg(feature = "dx11")]
+#[cfg(feature = "dx12")]
+extern crate gfx_device_dx12;
+#[cfg(any(feature = "dx11", feature = "dx12"))]
 extern crate gfx_window_dxgi;
 
 #[cfg(feature = "metal")]
@@ -246,10 +248,12 @@ impl EventsLoop for glutin::EventsLoop {
     }
 }
 
-#[cfg(all(feature = "gl", not(any(feature = "dx11", feature = "metal", feature = "vulkan"))))]
+#[cfg(all(feature = "gl", not(any(feature = "dx11", feature = "dx12", feature = "metal", feature = "vulkan"))))]
 pub type DefaultBackend = gfx_device_gl::Backend;
 #[cfg(feature = "dx11")]
 pub type DefaultBackend = gfx_device_dx11::Backend;
+#[cfg(feature = "dx12")]
+pub type DefaultBackend = gfx_device_dx12::Backend;
 #[cfg(feature = "metal")]
 pub type DefaultBackend = gfx_device_metal::Backend;
 #[cfg(feature = "vulkan")]
@@ -275,7 +279,7 @@ pub trait Application<B: Backend>: Sized {
         let wb = winit::WindowBuilder::new().with_title(name);
         <Self as Application<DefaultBackend>>::launch_default(wb)
     }
-    #[cfg(all(feature = "gl", not(any(feature = "dx11", feature = "metal", feature = "vulkan"))))]
+    #[cfg(all(feature = "gl", not(any(feature = "dx11", feature = "dx12", feature = "metal", feature = "vulkan"))))]
     fn launch_default(wb: winit::WindowBuilder)
         where Self: Application<DefaultBackend>
     {
@@ -304,7 +308,22 @@ pub trait Application<B: Backend>: Sized {
         let dim = win.get_inner_size_points().unwrap();
         let mut window = gfx_window_dxgi::Window(&win);
 
-        let (surface, adapters) = window.get_surface_and_adapters();
+        let (surface, adapters) =
+            <gfx_window_dxgi::Window as WindowExt<DefaultBackend>>::get_surface_and_adapters(&mut window);
+
+        run::<Self, _, _, _>(dim, events_loop, surface, adapters)
+    }
+    #[cfg(feature = "dx12")]
+    fn launch_default(wb: winit::WindowBuilder)
+        where Self: Application<DefaultBackend>
+    {
+        let events_loop = winit::EventsLoop::new();
+        let win = wb.build(&events_loop).unwrap();
+        let dim = win.get_inner_size_points().unwrap();
+        let mut window = gfx_window_dxgi::Window(&win);
+
+        let (surface, adapters) =
+            <gfx_window_dxgi::Window as WindowExt<DefaultBackend>>::get_surface_and_adapters(&mut window);
         run::<Self, _, _, _>(dim, events_loop, surface, adapters)
     }
     #[cfg(feature = "metal")]
