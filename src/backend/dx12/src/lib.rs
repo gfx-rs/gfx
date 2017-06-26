@@ -15,12 +15,14 @@
 extern crate comptr;
 extern crate d3d12;
 extern crate dxguid;
+extern crate dxgi;
 extern crate gfx_core as core;
 #[macro_use]
 extern crate log;
 extern crate winapi;
 
 mod command;
+pub mod data;
 mod factory;
 mod native;
 mod pool;
@@ -29,6 +31,10 @@ use core::{command as com, handle};
 use comptr::ComPtr;
 use std::ptr;
 use std::os::raw::c_void;
+use std::os::windows::ffi::OsStringExt;
+use std::ffi::OsString;
+
+pub type ShaderModel = u16;
 
 #[derive(Clone)]
 pub struct QueueFamily;
@@ -124,7 +130,8 @@ impl core::Adapter<Backend> for Adapter {
 }
 
 pub struct CommandQueue {
-    raw: ComPtr<winapi::ID3D12CommandQueue>,
+    #[doc(hidden)]
+    pub raw: ComPtr<winapi::ID3D12CommandQueue>,
     device: ComPtr<winapi::ID3D12Device>,
     list_type: winapi::D3D12_COMMAND_LIST_TYPE,
 
@@ -171,6 +178,11 @@ impl Factory {
             device: device,
         }
     }
+
+    /// Return the maximum supported shader model.
+    pub fn get_shader_model(&self) -> ShaderModel {
+        unimplemented!()
+    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
@@ -208,6 +220,105 @@ impl core::Resources for Resources {
     type Fence = ();
     type Semaphore = ();
     type Mapping = Mapping;
+}
+
+pub struct Instance {
+    #[doc(hidden)]
+    pub factory: ComPtr<winapi::IDXGIFactory4>,
+}
+
+impl Instance {
+    pub fn create() -> Instance {
+        // Enable debug layer
+        {
+            let mut debug_controller = ComPtr::<winapi::ID3D12Debug>::new(ptr::null_mut());
+            let hr = unsafe {
+                d3d12::D3D12GetDebugInterface(
+                    &dxguid::IID_ID3D12Debug,
+                    debug_controller.as_mut() as *mut *mut _ as *mut *mut c_void)
+            };
+
+            if winapi::SUCCEEDED(hr) {
+                unsafe { debug_controller.EnableDebugLayer() };
+            }
+        }
+
+        // Create DXGI factory
+        let mut dxgi_factory = ComPtr::<winapi::IDXGIFactory4>::new(ptr::null_mut());
+
+        let hr = unsafe {
+            dxgi::CreateDXGIFactory2(
+                winapi::DXGI_CREATE_FACTORY_DEBUG,
+                &dxguid::IID_IDXGIFactory4,
+                dxgi_factory.as_mut() as *mut *mut _ as *mut *mut c_void)
+        };
+
+        if !winapi::SUCCEEDED(hr) {
+            error!("Failed on dxgi factory creation: {:?}", hr);
+        }
+
+        Instance {
+            factory: dxgi_factory,
+        }
+    }
+
+    pub fn enumerate_adapters(&mut self) -> Vec<Adapter> {
+        // Enumerate adapters
+        let mut cur_index = 0;
+        let mut devices = Vec::new();
+        loop {
+            let mut adapter = ComPtr::<winapi::IDXGIAdapter2>::new(ptr::null_mut());
+            let hr = unsafe {
+                self.factory.EnumAdapters1(
+                    cur_index,
+                    adapter.as_mut() as *mut *mut _ as *mut *mut winapi::IDXGIAdapter1)
+            };
+
+            if hr == winapi::DXGI_ERROR_NOT_FOUND {
+                break;
+            }
+
+            // Check for D3D12 support
+            let hr = unsafe {
+                d3d12::D3D12CreateDevice(
+                    adapter.as_mut_ptr() as *mut _ as *mut winapi::IUnknown,
+                    winapi::D3D_FEATURE_LEVEL_11_0, // TODO: correct feature level?
+                    &dxguid::IID_ID3D12Device,
+                    ptr::null_mut(),
+                )
+            };
+
+            if winapi::SUCCEEDED(hr) {
+                // We have found a possible adapter
+                // acquire the device information
+                let mut desc: winapi::DXGI_ADAPTER_DESC2 = unsafe { std::mem::uninitialized() };
+                unsafe { adapter.GetDesc2(&mut desc); }
+
+                let device_name = {
+                    let len = desc.Description.iter().take_while(|&&c| c != 0).count();
+                    let name = <OsString as OsStringExt>::from_wide(&desc.Description[..len]);
+                    name.to_string_lossy().into_owned()
+                };
+
+                let info = core::AdapterInfo {
+                    name: device_name,
+                    vendor: desc.VendorId as usize,
+                    device: desc.DeviceId as usize,
+                    software_rendering: false, // TODO: check for WARP adapter (software rasterizer)?
+                };
+
+                devices.push(
+                    Adapter {
+                        adapter: adapter,
+                        info: info,
+                        queue_families: vec![QueueFamily], // TODO:
+                    });
+            }
+
+            cur_index += 1;
+        }
+        devices
+    }
 }
 
 // TODO: temporary

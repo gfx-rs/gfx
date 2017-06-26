@@ -21,14 +21,15 @@ extern crate winapi;
 extern crate winit;
 extern crate gfx_core as core;
 extern crate gfx_device_dx11 as device_dx11;
+extern crate gfx_device_dx12 as device_dx12;
 extern crate comptr;
 
 use std::ptr;
 use std::os::raw::c_void;
+use std::collections::VecDeque;
 use winit::os::windows::WindowExt;
 use core::{format, handle as h, factory as f, memory, texture as tex};
 use core::texture::Size;
-use device_dx11::{data, native, Factory, Resources, Texture};
 use comptr::ComPtr;
 
 /*
@@ -201,17 +202,17 @@ fn get_window_dimensions(window: &winit::Window) -> tex::Dimensions {
     ((width as f32 * window.hidpi_factor()) as tex::Size, (height as f32 * window.hidpi_factor()) as tex::Size, 1, 1.into())
 }
 
-pub struct Surface<'a> {
+pub struct Surface11<'a> {
     factory: ComPtr<winapi::IDXGIFactory2>,
     window: &'a winit::Window,
-    manager: h::Manager<Resources>,
+    manager: h::Manager<device_dx11::Resources>,
 }
 
-impl<'a> core::Surface<device_dx11::Backend> for Surface<'a> {
-    type SwapChain = SwapChain;
+impl<'a> core::Surface<device_dx11::Backend> for Surface11<'a> {
+    type SwapChain = SwapChain11;
 
     fn supports_queue(&self, queue_family: &device_dx11::QueueFamily) -> bool { true }
-    fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, present_queue: &Q) -> SwapChain
+    fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, present_queue: &Q) -> SwapChain11
         where Q: AsRef<device_dx11::CommandQueue>
     {
         use core::handle::Producer;
@@ -227,7 +228,7 @@ impl<'a> core::Surface<device_dx11::Backend> for Surface<'a> {
             BufferCount: buffer_count,
             Width: dim.0 as u32,
             Height: dim.1 as u32,
-            Format: data::map_format(config.color_format, true).unwrap(), // TODO: error handling
+            Format: device_dx11::data::map_format(config.color_format, true).unwrap(), // TODO: error handling
             Flags: 0,
             BufferUsage: winapi::DXGI_USAGE_RENDER_TARGET_OUTPUT,
             SampleDesc: winapi::DXGI_SAMPLE_DESC { // TODO
@@ -264,7 +265,7 @@ impl<'a> core::Surface<device_dx11::Backend> for Surface<'a> {
             }
 
             let kind = tex::Kind::D2(dim.0, dim.1, dim.3);
-            let raw_tex = Texture::new(native::Texture::D2(back_buffer));
+            let raw_tex = device_dx11::Texture::new(device_dx11::native::Texture::D2(back_buffer));
             let color_tex = self.manager.make_texture(
                                 raw_tex,
                                 tex::Info {
@@ -284,17 +285,17 @@ impl<'a> core::Surface<device_dx11::Backend> for Surface<'a> {
                     usage: memory::Usage::Data,
                 };
 
-                let (usage, cpu_access) = data::map_usage(info.usage, info.bind);
+                let (usage, cpu_access) = device_dx11::data::map_usage(info.usage, info.bind);
 
                 let desc = winapi::D3D11_TEXTURE2D_DESC {
                     Width: dim.0 as winapi::UINT,
                     Height: dim.1 as winapi::UINT,
                     MipLevels: 1,
                     ArraySize: 1,
-                    Format: data::map_surface(info.format).unwrap(),
-                    SampleDesc: data::map_anti_alias(dim.3),
+                    Format: device_dx11::data::map_surface(info.format).unwrap(),
+                    SampleDesc: device_dx11::data::map_anti_alias(dim.3),
                     Usage: usage,
-                    BindFlags: data::map_bind(info.bind).0,
+                    BindFlags: device_dx11::data::map_bind(info.bind).0,
                     CPUAccessFlags: cpu_access.0,
                     MiscFlags: 0,
                 };
@@ -309,7 +310,7 @@ impl<'a> core::Surface<device_dx11::Backend> for Surface<'a> {
                 }
 
                 self.manager.make_texture(
-                    Texture::new(native::Texture::D2(raw)),
+                    device_dx11::Texture::new(device_dx11::native::Texture::D2(raw)),
                     tex::Info {
                         kind: tex::Kind::D2(dim.0, dim.1, dim.3),
                         levels: 1,
@@ -323,19 +324,119 @@ impl<'a> core::Surface<device_dx11::Backend> for Surface<'a> {
 
         };
 
-        SwapChain {
+        SwapChain11 {
             swap_chain,
             images: [backbuffer],
         }
     }
 }
 
-pub struct SwapChain {
+pub struct Surface12 {
+    factory: ComPtr<winapi::IDXGIFactory4>,
+    wnd_handle: winapi::HWND,
+    manager: h::Manager<device_dx12::Resources>,
+    width: u32,
+    height: u32,
+}
+
+impl<'a> core::Surface<device_dx12::Backend> for Surface12 {
+    type SwapChain = SwapChain12;
+
+    fn supports_queue(&self, queue_family: &device_dx12::QueueFamily) -> bool { true }
+    fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, present_queue: &Q) -> SwapChain12
+        where Q: AsRef<device_dx12::CommandQueue>
+    {
+        use core::handle::Producer;
+        let mut swap_chain = ComPtr::<winapi::IDXGISwapChain1>::new(ptr::null_mut());
+        let buffer_count = 2; // TODO: user-defined value
+
+        // TODO: double-check values
+        let desc = winapi::DXGI_SWAP_CHAIN_DESC1 {
+            AlphaMode: winapi::DXGI_ALPHA_MODE_IGNORE,
+            BufferCount: buffer_count,
+            Width: self.width,
+            Height: self.height,
+            Format: device_dx12::data::map_format(config.color_format, true).unwrap(), // TODO: error handling
+            Flags: 0,
+            BufferUsage: winapi::DXGI_USAGE_RENDER_TARGET_OUTPUT,
+            SampleDesc: winapi::DXGI_SAMPLE_DESC {
+                Count: 1,
+                Quality: 0,
+            },
+            Scaling: winapi::DXGI_SCALING_STRETCH,
+            Stereo: false as winapi::BOOL,
+            SwapEffect: winapi::DXGI_SWAP_EFFECT(4), // TODO: DXGI_SWAP_EFFECT_FLIP_DISCARD missing in winapi
+        };
+
+        let hr = unsafe {
+            self.factory.CreateSwapChainForHwnd(
+                present_queue.as_ref().raw.as_mut_ptr() as *mut _ as *mut winapi::IUnknown,
+                self.wnd_handle,
+                &desc,
+                ptr::null(),
+                ptr::null_mut(),
+                swap_chain.as_mut() as *mut *mut _,
+            )
+        };
+
+        if !winapi::SUCCEEDED(hr) {
+            error!("error on swapchain creation {:x}", hr);
+        }
+
+        let mut swap_chain = ComPtr::<winapi::IDXGISwapChain3>::new(swap_chain.as_mut_ptr() as *mut winapi::IDXGISwapChain3);
+
+        // Get backbuffer images
+        let backbuffers = (0..buffer_count).map(|i| {
+            let mut resource: *mut winapi::ID3D12Resource = ptr::null_mut();
+            unsafe {
+                swap_chain.GetBuffer(
+                    i,
+                    &dxguid::IID_ID3D12Resource,
+                    &mut resource as *mut *mut _ as *mut *mut c_void);
+            }
+
+            // TODO: correct AA mode
+            let kind = tex::Kind::D2(self.width as u16, self.height as u16, 1.into());
+            let color_tex = self.manager.make_texture(
+                                (),
+                                tex::Info {
+                                    kind,
+                                    levels: 1,
+                                    format: config.color_format.0,
+                                    bind: memory::RENDER_TARGET,
+                                    usage: memory::Usage::Data,
+                                });
+
+            let ds_tex = config.depth_stencil_format.map(|ds_format| {
+                self.manager.make_texture(
+                    (),
+                    tex::Info {
+                        kind,
+                        levels: 1,
+                        format: ds_format.0,
+                        bind: memory::DEPTH_STENCIL,
+                        usage: memory::Usage::Data,
+                    })
+            });
+
+            (color_tex, ds_tex)
+        }).collect::<Vec<_>>();
+
+        SwapChain12 {
+            inner: swap_chain,
+            next_frame: 0,
+            frame_queue: VecDeque::new(),
+            images: backbuffers,
+        }
+    }
+}
+
+pub struct SwapChain11 {
     swap_chain: ComPtr<winapi::IDXGISwapChain1>,
     images: [core::Backbuffer<device_dx11::Backend>; 1],
 }
 
-impl core::SwapChain<device_dx11::Backend> for SwapChain {
+impl core::SwapChain<device_dx11::Backend> for SwapChain11 {
     fn get_backbuffers(&mut self) -> &[core::Backbuffer<device_dx11::Backend>] {
         &self.images
     }
@@ -352,20 +453,75 @@ impl core::SwapChain<device_dx11::Backend> for SwapChain {
     }
 }
 
+pub struct SwapChain12 {
+    inner: ComPtr<winapi::IDXGISwapChain3>,
+    next_frame: usize,
+    frame_queue: VecDeque<usize>,
+    images: Vec<core::Backbuffer<device_dx12::Backend>>,
+}
+
+impl core::SwapChain<device_dx12::Backend> for SwapChain12 {
+    fn get_backbuffers(&mut self) -> &[core::Backbuffer<device_dx12::Backend>] {
+        &self.images
+    }
+
+    fn acquire_frame(&mut self, sync: core::FrameSync<device_dx12::Resources>) -> core::Frame {
+        // TODO: sync
+        // TODO: we need to block this at some point? (running out of backbuffers)
+        // let num_images = self.images.len();
+        // let index = self.next_frame;
+        // self.frame_queue.push_back(index);
+        // self.next_frame = (self.next_frame + 1) % num_images;
+        // unsafe { core::Frame::new(index) };
+
+        // TODO:
+        let index = unsafe { self.inner.GetCurrentBackBufferIndex() };
+        unsafe { core::Frame::new(index as usize) }
+    }
+
+    fn present<Q>(&mut self, _present_queue: &mut Q)
+        where Q: AsMut<device_dx12::CommandQueue>
+    {
+        unsafe { self.inner.Present(1, 0); }
+    }
+}
+
 pub struct Window<'a>(pub &'a winit::Window);
 
 impl<'a> core::WindowExt<device_dx11::Backend> for Window<'a> {
-    type Surface = Surface<'a>;
+    type Surface = Surface11<'a>;
     type Adapter = device_dx11::Adapter;
 
-    fn get_surface_and_adapters(&mut self) -> (Surface<'a>, Vec<device_dx11::Adapter>) {
+    fn get_surface_and_adapters(&mut self) -> (Surface11<'a>, Vec<device_dx11::Adapter>) {
         let mut instance = device_dx11::Instance::create();
         let adapters = instance.enumerate_adapters();
         let surface = {
-            Surface {
+            Surface11 {
                 factory: instance.0,
                 window: self.0,
                 manager: h::Manager::new()
+            }
+        };
+
+        (surface, adapters)
+    }
+}
+
+impl<'a> core::WindowExt<device_dx12::Backend> for Window<'a> {
+    type Surface = Surface12;
+    type Adapter = device_dx12::Adapter;
+
+    fn get_surface_and_adapters(&mut self) -> (Surface12, Vec<device_dx12::Adapter>) {
+        let mut instance = device_dx12::Instance::create();
+        let adapters = instance.enumerate_adapters();
+        let surface = {
+            let (width, height) = self.0.get_inner_size_pixels().unwrap();
+            Surface12 {
+                factory: instance.factory.clone(),
+                wnd_handle: self.0.get_hwnd() as *mut _,
+                manager: h::Manager::new(),
+                width: width,
+                height: height,
             }
         };
 
