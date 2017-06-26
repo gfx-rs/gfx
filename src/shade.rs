@@ -18,10 +18,11 @@ use std::fmt;
 
 #[cfg(feature = "gl")]
 pub use gfx_device_gl::Version as GlslVersion;
-#[cfg(feature = "dx11")]
-pub use gfx_device_dx11::ShaderModel as DxShaderModel;
 #[cfg(feature = "metal")]
 pub use gfx_device_metal::ShaderModel as MetalShaderModel;
+
+pub type DxShaderModel = u16;
+
 /// Shader backend with version numbers.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Backend {
@@ -29,7 +30,7 @@ pub enum Backend {
     Glsl(GlslVersion),
     #[cfg(feature = "gl")]
     GlslEs(GlslVersion),
-    #[cfg(feature = "dx11")]
+    #[cfg(any(feature = "dx11", feature = "dx12"))]
     Hlsl(DxShaderModel),
     #[cfg(feature = "metal")]
     Msl(MetalShaderModel),
@@ -55,6 +56,13 @@ impl ShadeExt for ::gfx_device_gl::Factory {
 
 #[cfg(feature = "dx11")]
 impl ShadeExt for ::gfx_device_dx11::Factory {
+    fn shader_backend(&self) -> Backend {
+        Backend::Hlsl(self.get_shader_model())
+    }
+}
+
+#[cfg(feature = "dx12")]
+impl ShadeExt for ::gfx_device_dx12::Factory {
     fn shader_backend(&self) -> Backend {
         Backend::Hlsl(self.get_shader_model())
     }
@@ -165,6 +173,10 @@ impl<'a> Source<'a> {
                     Source { hlsl_30: s, .. } if s != EMPTY && model >= 30 => s,
                     _ => return Err(SelectError(backend)),
                 }
+            }
+            #[cfg(feature = "dx12")]
+            Backend::Hlsl(model) => {
+                return Err(SelectError(backend)) // TODO
             }
             #[cfg(feature = "metal")]
             Backend::Msl(revision) => {
