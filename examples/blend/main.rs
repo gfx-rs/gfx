@@ -161,7 +161,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         encoder.update_constant_buffer(&self.bundle.data.locals, &locals);
         encoder.clear(&self.bundle.data.out, [0.0; 4]);
         self.bundle.encode(&mut encoder);
-        encoder.flush(queue);
+        encoder.synced_flush(queue, &[semaphore], &[], None);
     }
 
     fn on(&mut self, event: winit::WindowEvent) {
