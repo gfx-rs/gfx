@@ -8,6 +8,7 @@ struct Light {
 	mat4 proj;	// view-projection matrix
 };
 
+layout (std140)
 uniform PsLocals {
 	// material color
 	vec4 u_Color;
@@ -16,6 +17,7 @@ uniform PsLocals {
 };
 
 //TODO: structured buffer
+layout (std140)
 uniform b_Lights {
 	Light u_Lights[MAX_LIGHTS];
 };

@@ -8,9 +8,11 @@ struct TileMapData {
     vec4 data;
 };
 const int TILEMAP_BUF_LENGTH = 2304;
+layout (std140)
 uniform b_TileMap {
     TileMapData u_Data[TILEMAP_BUF_LENGTH];
 };
+layout (std140)
 uniform b_PsLocals {
     vec4 u_WorldSize;
     vec4 u_TilesheetSize;

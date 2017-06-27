@@ -16,6 +16,7 @@ out gl_PerVertex {
 	float gl_ClipDistance[];
 };
 
+layout (std140)
 uniform Locals {
 	mat4 u_Model;
 	mat4 u_View;

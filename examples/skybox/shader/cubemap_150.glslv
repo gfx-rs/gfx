@@ -1,5 +1,6 @@
 #version 150 core
 
+layout (std140)
 uniform Locals {
 	mat4 u_InvProj;
 	mat4 u_WorldToCamera;

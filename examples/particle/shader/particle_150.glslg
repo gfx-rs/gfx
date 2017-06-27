@@ -12,6 +12,7 @@ out VertexData {
     vec2 uv;
 } VertexOut;
 
+layout (std140)
 uniform Locals {
     float u_Aspect;
 };
