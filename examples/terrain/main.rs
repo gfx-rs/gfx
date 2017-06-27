@@ -145,7 +145,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         }
     }
 
-     fn render<Gp>(&mut self, (frame, semaphore): (gfx::Frame, &gfx::handle::Semaphore<B::Resources>),
+    fn render<Gp>(&mut self, (frame, semaphore): (gfx::Frame, &gfx::handle::Semaphore<B::Resources>),
                   pool: &mut Gp, queue: &mut gfx::queue::GraphicsQueueMut<B>)
         where Gp: gfx::GraphicsCommandPool<B>
     {
