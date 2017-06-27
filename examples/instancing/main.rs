@@ -19,7 +19,8 @@ extern crate winit;
 extern crate gfx_app;
 
 use rand::Rng;
-pub use gfx_app::ColorFormat;
+use gfx::{Factory, GraphicsPoolExt};
+use gfx_app::{BackbufferView, ColorFormat};
 
 const QUAD_VERTICES: [Vertex; 4] = [
     Vertex { position: [-0.5,  0.5] },
@@ -79,17 +80,20 @@ fn fill_instances(instances: &mut [Instance], instances_per_length: u32, size: f
 
 const MAX_INSTANCE_COUNT: usize = 2048;
 
-struct App<R: gfx::Resources> {
-    pso: gfx::PipelineState<R, pipe::Meta>,
-    data: pipe::Data<R>,
-    slice: gfx::Slice<R>,
-    upload: gfx::handle::Buffer<R, Instance>,
+struct App<B: gfx::Backend> {
+    views: Vec<BackbufferView<B::Resources>>,
+    pso: gfx::PipelineState<B::Resources, pipe::Meta>,
+    data: pipe::Data<B::Resources>,
+    slice: gfx::Slice<B::Resources>,
+    upload: gfx::handle::Buffer<B::Resources, Instance>,
     uploading: bool, // TODO: not needed if we have the encoder everywhere
 }
 
-impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(factory: &mut F, backend: gfx_app::shade::Backend,
-           window_targets: gfx_app::WindowTargets<R>) -> Self {
+impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
+    fn new(factory: &mut B::Factory,
+           backend: gfx_app::shade::Backend,
+           window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
+    {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
@@ -146,29 +150,37 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 locals: factory
                     .create_buffer_immutable(&[locals], gfx::buffer::Role::Constant, gfx::Bind::empty())
                     .unwrap(),
-                out: window_targets.color,
+                out: window_targets.views[0].0.clone(),
             },
             slice: slice,
             upload: upload,
             uploading: true,
+            views: window_targets.views,
         }
     }
 
-    fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
+    fn render<Gp>(&mut self, (frame, semaphore): (gfx::Frame, &gfx::handle::Semaphore<B::Resources>),
+                  pool: &mut Gp, queue: &mut gfx::queue::GraphicsQueueMut<B>)
+        where Gp: gfx::GraphicsCommandPool<B>
+    {
+        let mut encoder = pool.acquire_graphics_encoder();
         if self.uploading {
             encoder.copy_buffer(&self.upload, &self.data.instance,
                                 0, 0, self.upload.len()).unwrap();
             self.uploading = false;
         }
 
+        let (cur_color, _) = self.views[frame.id()].clone();
+        self.data.out = cur_color;
         encoder.clear(&self.data.out, [0.1, 0.2, 0.3, 1.0]);
         encoder.draw(&self.slice, &self.pso, &self.data);
+        encoder.synced_flush(queue, &[semaphore], &[], None);
     }
 
     // TODO: rerandomize instance data on event, needs factory
 
-    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
-        self.data.out = window_targets.color;
+    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<B::Resources>) {
+        self.views = window_targets.views;
     }
 }
 
