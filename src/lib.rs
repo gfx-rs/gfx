@@ -155,7 +155,7 @@ fn run<A, B, S, EL>((width, height): (u32, u32),
     use shade::ShadeExt;
     use gfx::format::Formatted;
     use gfx::traits::Factory;
-    use gfx::texture::{self, Size};
+    use gfx::texture;
 
     // Init device
     let queue_descs = adapters[0].get_queue_families().iter()
