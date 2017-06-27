@@ -4,6 +4,7 @@
 in vec3 a_Pos;
 in vec2 a_BufPos;
 
+layout (std140)
 uniform b_VsLocals {
 	mat4 u_Model;
 	mat4 u_View;

@@ -2,6 +2,7 @@
 
 in ivec4 a_Pos;
 
+layout (std140)
 uniform Locals {
 	mat4 u_Transform;
 };

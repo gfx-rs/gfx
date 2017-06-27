@@ -4,6 +4,7 @@ in vec3 a_Pos;
 in vec3 a_Color;
 out vec3 v_Color;
 
+layout (std140)
 uniform Locals {
 	mat4 u_Model;
 	mat4 u_View;
