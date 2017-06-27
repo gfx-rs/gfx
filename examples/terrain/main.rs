@@ -21,8 +21,9 @@ extern crate noise;
 extern crate rand;
 extern crate winit;
 
-pub use gfx::format::{DepthStencil};
-pub use gfx_app::{ColorFormat, DepthFormat};
+use gfx::format::{DepthStencil};
+use gfx::GraphicsPoolExt;
+use gfx_app::{BackbufferView, ColorFormat, DepthFormat};
 
 use cgmath::{Deg, Matrix4, Point3, SquareMatrix, Vector3};
 use genmesh::{Vertices, Triangulate};
@@ -67,16 +68,19 @@ fn calculate_color(height: f32) -> [f32; 3] {
     }
 }
 
-struct App<R: gfx::Resources> {
-    pso: gfx::PipelineState<R, pipe::Meta>,
-    data: pipe::Data<R>,
-    slice: gfx::Slice<R>,
+struct App<B: gfx::Backend> {
+    views: Vec<BackbufferView<B::Resources>>,
+    pso: gfx::PipelineState<B::Resources, pipe::Meta>,
+    data: pipe::Data<B::Resources>,
+    slice: gfx::Slice<B::Resources>,
     start_time: Instant,
 }
 
-impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(factory: &mut F, backend: gfx_app::shade::Backend,
-           window_targets: gfx_app::WindowTargets<R>) -> Self {
+impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
+    fn new(factory: &mut B::Factory,
+           backend: gfx_app::shade::Backend,
+           window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
+    {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
@@ -116,30 +120,35 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             .collect();
 
         let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, &index_data[..]);
+        let (out_color, out_depth) = window_targets.views[0].clone(); // initial placeholder values
 
         App {
+            views: window_targets.views,
             pso: factory.create_pipeline_simple(
                 vs.select(backend).unwrap(),
                 ps.select(backend).unwrap(),
                 pipe::new()
                 ).unwrap(),
             data: pipe::Data {
-                vbuf: vbuf,
+                vbuf,
                 locals: factory.create_constant_buffer(1),
                 model: Matrix4::identity().into(),
                 view: Matrix4::identity().into(),
                 proj: cgmath::perspective(
                     Deg(60.0f32), window_targets.aspect_ratio, 0.1, 1000.0
                     ).into(),
-                out_color: window_targets.color,
-                out_depth: window_targets.depth,
+                out_color,
+                out_depth,
             },
-            slice: slice,
+            slice,
             start_time: Instant::now(),
         }
     }
 
-    fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
+     fn render<Gp>(&mut self, (frame, semaphore): (gfx::Frame, &gfx::handle::Semaphore<B::Resources>),
+                  pool: &mut Gp, queue: &mut gfx::queue::GraphicsQueueMut<B>)
+        where Gp: gfx::GraphicsCommandPool<B>
+    {
         let elapsed = self.start_time.elapsed();
         let time = elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 / 1000_000_000.0;
         let x = time.sin();
@@ -150,6 +159,9 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             Vector3::unit_z(),
         );
 
+        let (cur_color, cur_depth) = self.views[frame.id()].clone();
+        self.data.out_color = cur_color;
+        self.data.out_depth = cur_depth;
         self.data.view = view.into();
         let locals = Locals {
             model: self.data.model,
@@ -157,15 +169,16 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             proj: self.data.proj,
         };
 
+        let mut encoder = pool.acquire_graphics_encoder();
         encoder.update_buffer(&self.data.locals, &[locals], 0).unwrap();
         encoder.clear(&self.data.out_color, [0.3, 0.3, 0.3, 1.0]);
         encoder.clear_depth(&self.data.out_depth, 1.0);
         encoder.draw(&self.slice, &self.pso, &self.data);
+        encoder.synced_flush(queue, &[semaphore], &[], None);
     }
 
-    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
-        self.data.out_color = window_targets.color;
-        self.data.out_depth = window_targets.depth;
+    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<B::Resources>) {
+        self.views = window_targets.views;
         self.data.proj = cgmath::perspective(
                 Deg(60.0f32), window_targets.aspect_ratio, 0.1, 1000.0
             ).into();
