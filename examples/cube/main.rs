@@ -180,7 +180,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         encoder.clear(&self.bundle.data.out_color, [0.1, 0.2, 0.3, 1.0]);
         encoder.clear_depth(&self.bundle.data.out_depth, 1.0);
         self.bundle.encode(&mut encoder);
-        encoder.flush(queue);
+        encoder.synced_flush(queue, &[semaphore], &[], None);
     }
 
     fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<B::Resources>) {

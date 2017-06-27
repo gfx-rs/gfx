@@ -22,7 +22,7 @@ use std::any::Any;
 use std::{fmt, mem};
 
 use core::{Backend, CommandQueue, SubmissionResult, IndexType, Resources, VertexCount, GraphicsCommandPool, QueueSubmit};
-use core::{command, format, handle, texture};
+use core::{self, command, format, handle, texture};
 use core::command::{Buffer, Encoder, GraphicsCommandBuffer};
 use core::memory::{self, cast_slice, Typed, Pod, Usage};
 use core::queue::GraphicsQueueMut;
@@ -152,6 +152,16 @@ impl<B: Backend, T> GraphicsPoolExt<B> for T where T: GraphicsCommandPool<B> {
     }
 }
 
+///
+pub struct FlushSync<'a, R: Resources> {
+    ///
+    pub wait_semaphores: &'a [&'a handle::Semaphore<R>],
+    ///
+    pub signal_semaphores: &'a [&'a handle::Semaphore<R>],
+    ///
+    pub fence: Option<&'a handle::Fence<R>>,
+}
+
 /// Graphics Command Encoder
 ///
 /// # Overview
@@ -186,8 +196,7 @@ impl<'a, B: Backend> GraphicsEncoder<'a, B> {
     /// internal ´CommandBuffer´ will not be sent to the GPU, and as a result they will not be
     /// processed. Calling flush too often however will result in a performance hit. It is
     /// generally recommended to call flush once per frame, when all draw calls have been made.
-    pub fn flush(self, queue: &mut GraphicsQueueMut<B>) -> SubmissionResult<()>
-    {
+    pub fn flush(self, queue: &mut GraphicsQueueMut<B>) -> SubmissionResult<()> {
         let submit = self.command_buffer.finish();
         queue.pin_submitted_resources(&self.handles);
         queue.submit_graphics(
@@ -199,6 +208,32 @@ impl<'a, B: Backend> GraphicsEncoder<'a, B> {
                 }
             ],
             None,
+            &self.access_info
+        );
+
+        Ok(()) // TODO
+    }
+
+    ///
+    pub fn synced_flush(self,
+                        queue: &mut GraphicsQueueMut<B>,
+                        wait_semaphores: &[&handle::Semaphore<B::Resources>],
+                        signal_semaphores: &[&handle::Semaphore<B::Resources>],
+                        fence: Option<&handle::Fence<B::Resources>>) -> SubmissionResult<()> {
+        let submit = self.command_buffer.finish();
+        let wait_semaphores = &wait_semaphores.iter()
+                                                  .map(|&wait| (wait, core::pso::BOTTOM_OF_PIPE))
+                                                  .collect::<Vec<_>>();
+        queue.pin_submitted_resources(&self.handles);
+        queue.submit_graphics(
+            &[
+                QueueSubmit {
+                    cmd_buffers: &[submit],
+                    wait_semaphores,
+                    signal_semaphores,
+                }
+            ],
+            fence,
             &self.access_info
         );
 

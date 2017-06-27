@@ -18,7 +18,6 @@ extern crate gfx_window_glutin;
 extern crate glutin;
 
 use gfx::traits::FactoryExt;
-use gfx::Device;
 
 pub type ColorFormat = gfx::format::Rgba8;
 pub type DepthFormat = gfx::format::DepthStencil;
