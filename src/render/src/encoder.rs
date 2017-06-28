@@ -152,16 +152,6 @@ impl<B: Backend, T> GraphicsPoolExt<B> for T where T: GraphicsCommandPool<B> {
     }
 }
 
-///
-pub struct FlushSync<'a, R: Resources> {
-    ///
-    pub wait_semaphores: &'a [&'a handle::Semaphore<R>],
-    ///
-    pub signal_semaphores: &'a [&'a handle::Semaphore<R>],
-    ///
-    pub fence: Option<&'a handle::Fence<R>>,
-}
-
 /// Graphics Command Encoder
 ///
 /// # Overview
@@ -197,24 +187,11 @@ impl<'a, B: Backend> GraphicsEncoder<'a, B> {
     /// processed. Calling flush too often however will result in a performance hit. It is
     /// generally recommended to call flush once per frame, when all draw calls have been made.
     pub fn flush(self, queue: &mut GraphicsQueueMut<B>) -> SubmissionResult<()> {
-        let submit = self.command_buffer.finish();
-        queue.pin_submitted_resources(&self.handles);
-        queue.submit_graphics(
-            &[
-                QueueSubmit {
-                    cmd_buffers: &[submit],
-                    wait_semaphores: &[],
-                    signal_semaphores: &[],
-                }
-            ],
-            None,
-            &self.access_info
-        );
-
-        Ok(()) // TODO
+        self.synced_flush(queue, &[], &[], None)
     }
 
-    ///
+    /// Submits the commands in this `GraphicsEncoder`'s internal `CommandBuffer` to the GPU, so they can
+    /// be executed.
     pub fn synced_flush(self,
                         queue: &mut GraphicsQueueMut<B>,
                         wait_semaphores: &[&handle::Semaphore<B::Resources>],
