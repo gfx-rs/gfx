@@ -19,8 +19,8 @@ extern crate gfx_app;
 
 use std::time::Instant;
 
-pub use gfx_app::{ColorFormat, DepthFormat};
-use gfx::{Bundle, ShaderSet, Primitive, buffer, Bind, Slice};
+use gfx_app::{BackbufferView, ColorFormat, DepthFormat};
+use gfx::{Bundle, Factory, GraphicsPoolExt, ShaderSet, Primitive, buffer, Bind, Slice};
 use gfx::state::Rasterizer;
 
 // Declare the vertex format suitable for drawing,
@@ -60,8 +60,9 @@ impl Vertex {
 }
 
 //----------------------------------------
-struct App<R: gfx::Resources>{
-    bundle: Bundle<R, particles::Data<R>>,
+struct App<B: gfx::Backend> {
+    views: Vec<BackbufferView<B::Resources>>,
+    bundle: Bundle<B, particles::Data<B::Resources>>,
     particles: Vec<Vertex>,
     aspect: f32,
     time_start: Instant,
@@ -74,14 +75,12 @@ fn create_shader_set<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F, vs_
     ShaderSet::Geometry(vs, gs, ps)
 }
 
-impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(factory: &mut F, backend: gfx_app::shade::Backend,
-           window_targets: gfx_app::WindowTargets<R>) -> Self {
+impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
+    fn new(factory: &mut B::Factory,
+           backend: gfx_app::shade::Backend,
+           window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
+    {
         use gfx::traits::FactoryExt;
-
-        // Compute the aspect ratio so that our particles aren't stretched
-        let (width, height, _, _) = window_targets.color.get_dimensions();
-        let aspect = (height as f32)/(width as f32);
 
         // Load in our vertex, geometry and pixel shaders
         let vs = gfx_app::shade::Source {
@@ -129,7 +128,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         let data = particles::Data {
             vbuf: vbuf,
             locals: factory.create_constant_buffer(1),
-            out_color: window_targets.color,
+            out_color: window_targets.views[0].0.clone(),
         };
 
         // Initialize the particles with random colours
@@ -139,14 +138,18 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         }
 
         App {
+            views: window_targets.views,
             bundle: Bundle::new(slice, pso, data),
-            particles: particles,
-            aspect: aspect,
+            particles,
+            aspect: window_targets.aspect_ratio,
             time_start: Instant::now(),
         }
     }
 
-    fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
+    fn render<Gp>(&mut self, (frame, semaphore): (gfx::Frame, &gfx::handle::Semaphore<B::Resources>),
+                  pool: &mut Gp, queue: &mut gfx::queue::GraphicsQueueMut<B>)
+        where Gp: gfx::GraphicsCommandPool<B>
+    {
         // Compute the time since last frame
         let delta = self.time_start.elapsed();
         self.time_start = Instant::now();
@@ -176,6 +179,10 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             }
         }
 
+        let (cur_color, _) = self.views[frame.id()].clone();
+        self.bundle.data.out_color = cur_color;
+
+        let mut encoder = pool.acquire_graphics_encoder();
         // Pass in the aspect ratio to the geometry shader
         let locals = Locals { aspect: self.aspect };
         encoder.update_constant_buffer(&self.bundle.data.locals, &locals);
@@ -184,11 +191,12 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         // Clear the background to dark blue
         encoder.clear(&self.bundle.data.out_color, [0.1, 0.2, 0.3, 1.0]);
         // Draw the particles!
-        self.bundle.encode(encoder);
+        self.bundle.encode(&mut encoder);
+        encoder.synced_flush(queue, &[semaphore], &[], None);
     }
 
-    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
-        self.bundle.data.out_color = window_targets.color;
+    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<B::Resources>) {
+        self.views = window_targets.views;
     }
 }
 
