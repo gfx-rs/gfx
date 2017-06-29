@@ -22,7 +22,8 @@ extern crate noise;
 extern crate rand;
 extern crate winit;
 
-pub use gfx_app::{ColorFormat, DepthFormat};
+use gfx::GraphicsPoolExt;
+use gfx_app::{BackbufferView, ColorFormat, DepthFormat};
 
 use cgmath::{Deg, Matrix4, Point3, SquareMatrix, Vector3};
 use genmesh::{Vertices, Triangulate};
@@ -101,9 +102,10 @@ impl TileMapData {
 // Abstracts the plane mesh and uniform data
 // Also holds a Vec<TileMapData> as a working data
 // set for consumers
-pub struct TileMapPlane<R> where R: gfx::Resources {
-    pub params: pipe::Data<R>,
-    pub slice: gfx::Slice<R>,
+pub struct TileMapPlane<B> where B: gfx::Backend {
+    views: Vec<BackbufferView<B::Resources>>,
+    pub params: pipe::Data<B::Resources>,
+    pub slice: gfx::Slice<B::Resources>,
     proj_stuff: ProjectionStuff,
     proj_dirty: bool,
     tm_stuff: TilemapStuff,
@@ -111,10 +113,9 @@ pub struct TileMapPlane<R> where R: gfx::Resources {
     pub data: Vec<TileMapData>,
 }
 
-impl<R> TileMapPlane<R> where R: gfx::Resources {
-    pub fn new<F>(factory: &mut F, width: usize, height: usize, tile_size: usize,
-                  targets: gfx_app::WindowTargets<R>)
-               -> TileMapPlane<R> where F: gfx::Factory<R> {
+impl<B> TileMapPlane<B> where B: gfx::Backend {
+    pub fn new(factory: &mut B::Factory, width: usize, height: usize, tile_size: usize,
+                  targets: gfx_app::WindowTargets<B::Resources>) -> Self {
         // charmap info
         let half_width = (tile_size * width) / 2;
         let half_height = (tile_size * height) / 2;
@@ -168,8 +169,8 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
             tilemap: factory.create_constant_buffer(TILEMAP_BUF_LENGTH),
             tilemap_cb: factory.create_constant_buffer(1),
             tilesheet: (tile_texture, factory.create_sampler_linear()),
-            out_color: targets.color,
-            out_depth: targets.depth,
+            out_color: targets.views[0].0.clone(),
+            out_depth: targets.views[0].1.clone(),
         };
 
         let mut charmap_data = Vec::with_capacity(total_size);
@@ -184,8 +185,9 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
         );
 
         TileMapPlane {
-            slice: slice,
-            params: params,
+            views: targets.views,
+            slice,
+            params,
             proj_stuff: ProjectionStuff {
                 model: Matrix4::identity().into(),
                 view: view.into(),
@@ -202,14 +204,13 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
         }
     }
 
-    fn resize(&mut self, targets: gfx_app::WindowTargets<R>) {
-        self.params.out_color = targets.color;
-        self.params.out_depth = targets.depth;
+    fn resize(&mut self, targets: gfx_app::WindowTargets<B::Resources>) {
+        self.views = targets.views;
         self.proj_stuff.proj = cgmath::perspective(Deg(60.0f32), targets.aspect_ratio, 0.1, 4000.0).into();
         self.proj_dirty = true;
     }
 
-    fn prepare_buffers<C>(&mut self, encoder: &mut gfx::Encoder<R, C>, update_data: bool) where C: gfx::CommandBuffer<R> {
+    fn prepare_buffers(&mut self, encoder: &mut gfx::GraphicsEncoder<B>, update_data: bool) {
         if update_data {
             encoder.update_buffer(&self.params.tilemap, &self.data, 0).unwrap();
         }
@@ -222,12 +223,15 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
             self.tm_dirty = false;
         }
     }
-    fn clear<C>(&self, encoder: &mut gfx::Encoder<R, C>) where C: gfx::CommandBuffer<R> {
+    fn clear(&self, encoder: &mut gfx::GraphicsEncoder<B>) {
         encoder.clear(&self.params.out_color,
             [16.0 / 256.0, 14.0 / 256.0, 22.0 / 256.0, 1.0]);
         encoder.clear_depth(&self.params.out_depth, 1.0);
     }
-    pub fn update_view(&mut self, view: &Matrix4<f32>) {
+    pub fn update_view(&mut self, view: &Matrix4<f32>, frame: &gfx::Frame) {
+        let (cur_color, cur_depth) = self.views[frame.id()].clone();
+        self.params.out_color = cur_color;
+        self.params.out_depth = cur_depth;
         self.proj_stuff.view = view.clone().into();
         self.proj_dirty = true;
     }
@@ -253,10 +257,10 @@ struct InputState {
 // Encapsulates the TileMapPlane and holds state for the current
 // visible set of tiles. Is responsible for updating the UBO
 // within the TileMapData when the visible set of tiles changes
-pub struct TileMap<R> where R: gfx::Resources {
+struct TileMap<B: gfx::Backend> {
     pub tiles: Vec<TileMapData>,
-    pso: gfx::PipelineState<R, pipe::Meta>,
-    tilemap_plane: TileMapPlane<R>,
+    pso: gfx::PipelineState<B::Resources, pipe::Meta>,
+    tilemap_plane: TileMapPlane<B>,
     tile_size: f32,
     tilemap_size: [usize; 2],
     charmap_size: [usize; 2],
@@ -266,7 +270,7 @@ pub struct TileMap<R> where R: gfx::Resources {
     input: InputState,
 }
 
-impl<R: gfx::Resources> TileMap<R> {
+impl<B: gfx::Backend> TileMap<B> {
     pub fn set_focus(&mut self, focus: [usize; 2]) {
         if focus[0] <= self.limit_coords[0] && focus[1] <= self.limit_coords[1] {
             self.focus_coords = focus;
@@ -352,7 +356,7 @@ impl<R: gfx::Resources> TileMap<R> {
 }
 
 
-fn populate_tilemap<R>(tilemap: &mut TileMap<R>, tilemap_size: [usize; 2]) where R: gfx::Resources {
+fn populate_tilemap<B>(tilemap: &mut TileMap<B>, tilemap_size: [usize; 2]) where B: gfx::Backend {
     // paper in with dummy data
     for ypos in 0 .. tilemap_size[1] {
         for xpos in 0 .. tilemap_size[0] {
@@ -396,9 +400,11 @@ fn populate_tilemap<R>(tilemap: &mut TileMap<R>, tilemap_size: [usize; 2]) where
     tilemap.set_tile(6,11,[2.0, 2.0, 0.0, 0.0]);
 }
 
-impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
-    fn new<F: gfx::Factory<R>>(factory: &mut F, backend: gfx_app::shade::Backend,
-           window_targets: gfx_app::WindowTargets<R>) -> Self {
+impl<B: gfx::Backend> gfx_app::Application<B> for TileMap<B> {
+    fn new(factory: &mut B::Factory,
+           backend: gfx_app::shade::Backend,
+           window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
+    {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
@@ -422,20 +428,22 @@ impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
             tiles.push(TileMapData::new_empty());
         }
 
+        let tilemap_plane = TileMapPlane::new(factory,
+                charmap_size[0], charmap_size[1], tile_size,
+                window_targets);
+
         // TODO: should probably check that charmap is smaller than tilemap
         let mut tm = TileMap {
-            tiles: tiles,
+            tiles,
             pso: factory.create_pipeline_simple(
                 vs.select(backend).unwrap(),
                 ps.select(backend).unwrap(),
                 pipe::new()
                 ).unwrap(),
-            tilemap_plane: TileMapPlane::new(factory,
-                charmap_size[0], charmap_size[1], tile_size,
-                window_targets),
+            tilemap_plane,
             tile_size: tile_size as f32,
-            tilemap_size: tilemap_size,
-            charmap_size: charmap_size,
+            tilemap_size,
+            charmap_size,
             limit_coords: [tilemap_size[0] - charmap_size[0], tilemap_size[1] - charmap_size[1]],
             focus_coords: [0, 0],
             focus_dirty: false,
@@ -453,7 +461,10 @@ impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
         tm
     }
 
-    fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
+    fn render<Gp>(&mut self, (frame, semaphore): (gfx::Frame, &gfx::handle::Semaphore<B::Resources>),
+                  pool: &mut Gp, queue: &mut gfx::queue::GraphicsQueueMut<B>)
+        where Gp: gfx::GraphicsCommandPool<B>
+    {
         // view configuration based on current position
         let view = Matrix4::look_at(
             Point3::new(self.input.x_pos, -self.input.y_pos, self.input.distance),
@@ -461,13 +472,15 @@ impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
             Vector3::unit_y(),
         );
 
-        self.tilemap_plane.update_view(&view);
-        self.tilemap_plane.prepare_buffers(encoder, self.focus_dirty);
+        let mut encoder = pool.acquire_graphics_encoder();
+        self.tilemap_plane.update_view(&view, &frame);
+        self.tilemap_plane.prepare_buffers(&mut encoder, self.focus_dirty);
         self.focus_dirty = false;
 
-        self.tilemap_plane.clear(encoder);
+        self.tilemap_plane.clear(&mut encoder);
 
         encoder.draw(&self.tilemap_plane.slice, &self.pso, &self.tilemap_plane.params);
+        encoder.synced_flush(queue, &[semaphore], &[], None);
     }
 
     fn on(&mut self, event: winit::WindowEvent) {
@@ -498,7 +511,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
         }
     }
 
-    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
+    fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<B::Resources>) {
         self.tilemap_plane.resize(window_targets);
     }
 }
