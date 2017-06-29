@@ -159,7 +159,7 @@ impl<B: Backend, T> GraphicsPoolExt<B> for T where T: GraphicsCommandPool<B> {
 /// commands to the `CommandBuffer`.
 ///
 /// The encoder exposes multiple functions that add commands to its internal `CommandBuffer`. To
-/// submit these commands to the GPU so they can be rendered, call `flush`.
+/// submit these commands to the GPU so they can be rendered, call `flush` or `synced_flush`.
 pub struct GraphicsEncoder<'a, B: Backend + 'a> {
     command_buffer: Encoder<'a, B, GraphicsCommandBuffer<B>>,
     raw_pso_data: pso::RawDataSet<B::Resources>,
