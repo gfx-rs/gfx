@@ -55,7 +55,7 @@ optional = true
 
 [dependencies.gfx_window_metal]
 path = "src/window/metal"
-version = "0.2"
+version = "0.3"
 optional = true
 
 [dependencies.gfx_device_metalll]
