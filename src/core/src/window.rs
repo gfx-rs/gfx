@@ -24,7 +24,7 @@
 //!
 
 use {Adapter, Backend, Resources};
-use {handle, format};
+use {format, handle};
 use format::Formatted;
 
 /// A `Surface` abstracts the surface of a native window, which will be presented
@@ -76,7 +76,7 @@ pub enum FrameSync<'a, R: Resources> {
     /// Fence used for synchronization.
     ///
     /// Will be signaled once the frame backbuffer is available.
-    Fence(&'a handle::Fence<R>)
+    Fence(&'a handle::Fence<R>),
 }
 
 /// Allows you to configure a `SwapChain` for creation.
@@ -115,7 +115,8 @@ impl SwapchainConfig {
 }
 
 /// SwapChain backbuffer type (color image, depth-stencil image).
-pub type Backbuffer<B: Backend> = (handle::RawTexture<B::Resources>, Option<handle::RawTexture<B::Resources>>);
+pub type Backbuffer<B: Backend> = (handle::RawTexture<B::Resources>,
+                                   Option<handle::RawTexture<B::Resources>>);
 
 /// The `SwapChain` is the backend representation of the surface.
 /// It consists of multiple buffers, which will be presented on the surface.
