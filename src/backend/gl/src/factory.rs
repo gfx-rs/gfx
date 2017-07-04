@@ -93,16 +93,6 @@ impl Factory {
         &self.share.info
     }
 
-    fn create_fbo_internal(&mut self) -> gl::types::GLuint {
-        let gl = &self.share.context;
-        let mut name = 0 as ::FrameBuffer;
-        unsafe {
-            gl.GenFramebuffers(1, &mut name);
-        }
-        info!("\tCreated frame buffer {}", name);
-        name
-    }
-
     fn create_buffer_internal(&mut self) -> Buffer {
         let gl = &self.share.context;
         let mut name = 0 as Buffer;
