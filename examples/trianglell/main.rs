@@ -248,9 +248,10 @@ fn main() {
     println!("Memory heaps: {:?}", heap_types);
 
     let heap = factory.create_heap(upload_heap, 1024);
+    let buffer_len = TRIANGLE.len() as u64 * std::mem::size_of::<Vertex>() as u64;
 
     let vertex_buffer = {
-        let buffer = factory.create_buffer(TRIANGLE.len() as u64 * std::mem::size_of::<Vertex>() as u64, buffer::VERTEX).unwrap();
+        let buffer = factory.create_buffer(buffer_len, buffer::VERTEX).unwrap();
         println!("{:?}", buffer);
         let buffer_req = factory.get_buffer_requirements(&buffer);
         println!("buffer requirements: {:?}", buffer_req);
@@ -261,7 +262,7 @@ fn main() {
     // TODO: check transitions: read/write mapping and vertex buffer read
 
     {
-        let mut mapping = factory.write_mapping::<Vertex>(&vertex_buffer, 0, TRIANGLE.len() as u64).unwrap();
+        let mut mapping = factory.write_mapping::<Vertex>(&vertex_buffer, 0, buffer_len).unwrap();
         mapping.copy_from_slice(&TRIANGLE);
     }
 

@@ -79,12 +79,12 @@ impl Factory {
         // TODO
         let subresource_range = vk::ImageSubresourceRange {
             aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
-            base_mip_level: 0, 
+            base_mip_level: 0,
             level_count: 1,
             base_array_layer: 0,
             layer_count: vk::VK_REMAINING_ARRAY_LAYERS,
         };
-        
+
         let info = vk::ImageViewCreateInfo {
             s_type: vk::StructureType::ImageViewCreateInfo,
             p_next: ptr::null(),
@@ -155,7 +155,7 @@ impl core::Factory<R> for Factory {
 
                 attachment_refs.push(color_attachments);
             }
-            
+
             let color_attachments = attachment_refs.last().unwrap();
 
             vk::SubpassDescription {
@@ -171,7 +171,7 @@ impl core::Factory<R> for Factory {
                 p_preserve_attachments: ptr::null(), // TODO
             }
         }).collect::<Vec<_>>();
-        
+
         let dependencies = dependencies.iter().map(|dependency| {
             // TODO: checks
             vk::SubpassDependency {
@@ -207,7 +207,7 @@ impl core::Factory<R> for Factory {
 
     fn create_pipeline_layout(&mut self, sets: &[&native::DescriptorSetLayout]) -> native::PipelineLayout {
         // TODO:
-        
+
         let set_layouts = sets.iter().map(|set| {
             set.inner
         }).collect::<Vec<_>>();
@@ -464,7 +464,7 @@ impl core::Factory<R> for Factory {
                 let mut blend_states = Vec::with_capacity(desc.color_targets.len());
                 for color_target in desc.color_targets.iter() {
                     let info = if let &Some(ref desc) = color_target { &desc.1 } else { break };
-                    
+
                     let mut blend = vk::PipelineColorBlendAttachmentState {
                         blend_enable: vk::VK_FALSE,
                         src_color_blend_factor: vk::BlendFactor::Zero,
@@ -626,7 +626,7 @@ impl core::Factory<R> for Factory {
                 )
             }
         };
-        
+
         match result {
             Ok(pipelines) => {
                 let mut pipelines = pipelines.iter();
@@ -755,7 +755,7 @@ impl core::Factory<R> for Factory {
             self.inner.0.create_buffer(&info, None)
                         .expect("Error on buffer creation") // TODO: error handling
         };
-        
+
         Ok(UnboundBuffer(native::Buffer {
             inner: buffer,
             memory: vk::DeviceMemory::null(),
@@ -867,7 +867,7 @@ impl core::Factory<R> for Factory {
             self.inner.0.create_image(&info, None)
                         .expect("Error on image creation") // TODO: error handling
         };
-        
+
         Ok(UnboundImage(native::Image(image)))
     }
 
@@ -893,7 +893,7 @@ impl core::Factory<R> for Factory {
         Ok(native::ConstantBufferView {
             buffer: buffer.inner,
             offset: offset,
-            size: size,   
+            size: size,
         })
     }
 

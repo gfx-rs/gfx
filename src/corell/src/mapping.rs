@@ -22,6 +22,8 @@ use Resources;
 /// Error accessing a mapping.
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Error {
+    /// The requested mapping exceeds the resource size.
+    OutOfBounds,
     /// The requested mapping access overlaps with another.
     AccessOverlap,
 }
@@ -30,7 +32,8 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use self::Error::*;
         match *self {
-            AccessOverlap => write!(f, "{}", self.description())
+            OutOfBounds => write!(f, "{}", self.description()),
+            AccessOverlap => write!(f, "{}", self.description()),
         }
     }
 }
@@ -39,7 +42,8 @@ impl StdError for Error {
     fn description(&self) -> &str {
         use self::Error::*;
         match *self {
-            AccessOverlap => "The requested mapping access overlaps with another"
+            OutOfBounds => "The requested mapping exceeds the resource size",
+            AccessOverlap => "The requested mapping access overlaps with another",
         }
     }
 }

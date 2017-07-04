@@ -277,8 +277,13 @@ impl Kind {
         use std::cmp::{max, min};
         // unused dimensions must stay 0, all others must be at least 1
         let map = |val| max(min(val, 1), val >> min(level, MAX_LEVEL));
-        let (w, h, d, _) = self.get_dimensions();
-        (map(w), map(h), map(d), AaMode::Single)
+        let (w, h, da, _) = self.get_dimensions();
+        let dm = if self.get_num_slices().is_some() {
+            0
+        } else {
+            map(da)
+        };
+        (map(w), map(h), dm, AaMode::Single)
     }
     /// Count the number of mipmap levels.
     pub fn get_num_levels(&self) -> Level {
