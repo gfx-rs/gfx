@@ -17,12 +17,24 @@ use core::command::{GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandB
 use core::queue::{Compatible,
     GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 use command::{self, RawCommandBuffer, SubpassCommandBuffer};
-use {Backend, CommandQueue, Resources};
+use {Backend, CommandQueue, Resources, Share};
 use core::CommandPool;
+use gl;
+use std::rc::Rc;
+
+fn create_fbo_internal(gl: &gl::Gl) -> gl::types::GLuint {
+    let mut name = 0 as ::FrameBuffer;
+    unsafe {
+        gl.GenFramebuffers(1, &mut name);
+    }
+    info!("\tCreated frame buffer {}", name);
+    name
+}
 
 macro_rules! impl_pool {
     ($pool:ident, $queue:ident, $buffer:ident) => (
         pub struct $pool {
+            share: Rc<Share>,
             command_buffers: Vec<$buffer<Backend>>,
             next_buffer: usize,
         }
@@ -34,18 +46,22 @@ macro_rules! impl_pool {
 
             fn reserve(&mut self, additional: usize) {
                 for _ in 0..additional {
-                    self.command_buffers.push($buffer::new(RawCommandBuffer::new(0)));
+                    self.command_buffers.push($buffer::new(
+                                                RawCommandBuffer::new(create_fbo_internal(&self.share.context))));
                 }
             }
         }
 
         impl pool::$pool<Backend> for $pool {
-            fn from_queue<'a, Q>(mut _queue: Q, capacity: usize) -> Self
+            fn from_queue<'a, Q>(mut queue: Q, capacity: usize) -> Self
                 where Q: Compatible<$queue<Backend>> + AsRef<CommandQueue>
             {
-                let buffers = (0..capacity).map(|_| $buffer::new(RawCommandBuffer::new(0)))
+                let queue = queue.as_ref();
+                let buffers = (0..capacity).map(|_| $buffer::new(
+                                                        RawCommandBuffer::new(create_fbo_internal(&queue.share.context))))
                                            .collect();
                 $pool {
+                    share: queue.share.clone(),
                     command_buffers: buffers,
                     next_buffer: 0,
                 }
