@@ -33,23 +33,21 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-use std::fmt::{self, Debug};
-use std::error::Error;
-use std::hash::Hash;
+use format::Formatted;
 use std::any::Any;
 use std::borrow::Borrow;
-use format::Formatted;
+use std::error::Error;
+use std::fmt::{self, Debug};
+use std::hash::Hash;
 
-pub use draw_state::{state, target};
 pub use self::command::CommandBuffer;
 pub use self::factory::Factory;
-pub use self::pool::{
-    GeneralCommandPool, GraphicsCommandPool, ComputeCommandPool,
-    TransferCommandPool, SubpassCommandPool};
-pub use self::queue::{
-    GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
-pub use self::window::{
-    Backbuffer, Frame, FrameSync, Surface, SwapChain, SwapchainConfig, WindowExt};
+pub use self::pool::{ComputeCommandPool, GeneralCommandPool, GraphicsCommandPool,
+                     SubpassCommandPool, TransferCommandPool};
+pub use self::queue::{ComputeQueue, GeneralQueue, GraphicsQueue, TransferQueue};
+pub use self::window::{Backbuffer, Frame, FrameSync, Surface, SwapChain, SwapchainConfig,
+                       WindowExt};
+pub use draw_state::{state, target};
 
 pub mod buffer;
 pub mod command;
@@ -321,7 +319,7 @@ impl Error for SubmissionError {
     fn description(&self) -> &str {
         use self::SubmissionError::*;
         match *self {
-            AccessOverlap => "A resource access overlaps with another"
+            AccessOverlap => "A resource access overlaps with another",
         }
     }
 }
@@ -347,7 +345,7 @@ pub struct Device<B: Backend> {
     pub memory_heaps: Vec<u64>,
 
     ///
-    pub _marker: std::marker::PhantomData<B>
+    pub _marker: std::marker::PhantomData<B>,
 }
 
 /// Represents a physical or virtual device, which is capable of running the backend.
@@ -401,8 +399,9 @@ pub trait CommandQueue<B: Backend> {
     /// `fence` will be signalled after submission and _must_ be unsignalled.
     // TODO: `access` legacy (handle API)
     #[doc(hidden)]
-    unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>], fence: Option<&handle::Fence<B::Resources>>,
-        access: &command::AccessInfo<B::Resources>);
+    unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>],
+                     fence: Option<&handle::Fence<B::Resources>>,
+                     access: &command::AccessInfo<B::Resources>);
 
     ///
     fn wait_idle(&mut self);
