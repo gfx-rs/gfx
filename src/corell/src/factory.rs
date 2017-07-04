@@ -22,7 +22,9 @@ pub enum ResourceViewError { }
 
 /// Error creating either a RenderTargetView, or DepthStencilView.
 #[derive(Clone, PartialEq, Debug)]
-pub enum TargetViewError { }
+pub enum TargetViewError {
+    BadFormat,
+}
 
 /// Type of the descriptor heap.
 ///

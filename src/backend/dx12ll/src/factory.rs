@@ -27,6 +27,7 @@ use core::pso::{self, EntryPoint};
 use {data, state, mirror, native};
 use {Factory, Resources as R};
 
+
 const IMAGE_LEVEL_ALIGNMENT: u32 = 16;
 const IMAGE_SLICE_ALIGNMENT: u32 = 64;
 
@@ -40,6 +41,7 @@ pub struct UnboundBuffer {
 pub struct UnboundImage {
     desc: winapi::D3D12_RESOURCE_DESC,
     requirements: memory::MemoryRequirements,
+    kind: image::Kind,
     usage: image::Usage,
 }
 
@@ -108,11 +110,17 @@ impl Factory {
 
     pub fn create_descriptor_heap_impl(device: &mut ComPtr<winapi::ID3D12Device>,
                                        heap_type: winapi::D3D12_DESCRIPTOR_HEAP_TYPE,
-                                       capacity: usize) -> native::DescriptorHeap {
+                                       shader_visible: bool, capacity: usize)
+                                       -> native::DescriptorHeap
+    {
         let desc = winapi::D3D12_DESCRIPTOR_HEAP_DESC {
             Type: heap_type,
             NumDescriptors: capacity as u32,
-            Flags: winapi::D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+            Flags: if shader_visible {
+                winapi::D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
+            } else {
+                winapi::D3D12_DESCRIPTOR_HEAP_FLAG_NONE
+            },
             NodeMask: 0,
         };
 
@@ -133,6 +141,42 @@ impl Factory {
             handle_size: descriptor_size,
             total_handles: capacity as u64,
             start_handle: handle,
+        }
+    }
+
+    fn update_descriptor_sets_impl<F>(&mut self, writes: &[f::DescriptorSetWrite<R>],
+                                      heap_type: winapi::D3D12_DESCRIPTOR_HEAP_TYPE, fun: F)
+    where F: Fn(&f::DescriptorWrite<R>, &mut Vec<winapi::D3D12_CPU_DESCRIPTOR_HANDLE>)
+    {
+        let mut dst_starts = Vec::new();
+        let mut dst_sizes = Vec::new();
+        let mut src_starts = Vec::new();
+        let mut src_sizes = Vec::new();
+
+        for sw in writes.iter() {
+            let old_count = src_starts.len();
+            fun(&sw.write, &mut src_starts);
+            if old_count != src_starts.len() {
+                for _ in old_count .. src_starts.len() {
+                    src_sizes.push(1);
+                }
+                dst_starts.push(sw.set.ranges[sw.binding].at(sw.array_offset));
+                dst_sizes.push((src_starts.len() - old_count) as u32);
+            }
+        }
+
+        if !dst_starts.is_empty() {
+            unsafe {
+                self.inner.CopyDescriptors(
+                    dst_starts.len() as u32,
+                    dst_starts.as_ptr(),
+                    dst_sizes.as_ptr(),
+                    src_starts.len() as u32,
+                    src_starts.as_ptr(),
+                    src_sizes.as_ptr(),
+                    heap_type,
+                );
+            }
         }
     }
 }
@@ -370,8 +414,34 @@ impl core::Factory<R> for Factory {
         }
     }
 
-    fn create_sampler(&mut self, sampler_info: image::SamplerInfo) -> native::Sampler {
-        unimplemented!()
+    fn create_sampler(&mut self, info: image::SamplerInfo) -> native::Sampler {
+        let handle = self.sampler_pool.alloc_handles(1);
+
+        let op = match info.comparison {
+            Some(_) => data::FilterOp::Comparison,
+            None => data::FilterOp::Product,
+        };
+        let desc = winapi::D3D12_SAMPLER_DESC {
+            Filter: data::map_filter(info.filter, op),
+            AddressU: data::map_wrap(info.wrap_mode.0),
+            AddressV: data::map_wrap(info.wrap_mode.1),
+            AddressW: data::map_wrap(info.wrap_mode.2),
+            MipLODBias: info.lod_bias.into(),
+            MaxAnisotropy: match info.filter {
+                image::FilterMethod::Anisotropic(max) => max as winapi::UINT,
+                _ => 0,
+            },
+            ComparisonFunc: data::map_function(info.comparison.unwrap_or(core::state::Comparison::Always)),
+            BorderColor: info.border.into(),
+            MinLOD: info.lod_range.0.into(),
+            MaxLOD: info.lod_range.1.into(),
+        };
+
+        unsafe {
+            self.inner.CreateSampler(&desc, handle);
+        }
+
+        native::Sampler{ handle }
     }
 
     fn create_buffer(&mut self, size: u64, usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
@@ -466,6 +536,7 @@ impl core::Factory<R> for Factory {
                 size: alloc_info.SizeInBytes,
                 alignment: alloc_info.Alignment,
             },
+            kind,
             usage,
         })
     }
@@ -490,6 +561,7 @@ impl core::Factory<R> for Factory {
         });
         Ok(native::Image {
             resource: ComPtr::new(resource as *mut _),
+            kind: image.kind,
         })
     }
 
@@ -505,15 +577,55 @@ impl core::Factory<R> for Factory {
             self.inner.CreateRenderTargetView(
                 image.resource.as_mut_ptr(),
                 ptr::null_mut(),
-                handle
-            );
+                handle);
         }
 
         Ok(native::RenderTargetView { handle })
     }
 
     fn view_image_as_shader_resource(&mut self, image: &native::Image, format: format::Format) -> Result<native::ShaderResourceView, f::TargetViewError> {
-        unimplemented!()
+        let handle = self.srv_pool.alloc_handles(1);
+
+        let dimension = match image.kind {
+            image::Kind::D1(..) |
+            image::Kind::D1Array(..) => winapi::D3D12_SRV_DIMENSION_TEXTURE1D,
+            image::Kind::D2(..) |
+            image::Kind::D2Array(..) => winapi::D3D12_SRV_DIMENSION_TEXTURE2D,
+            image::Kind::D3(..) |
+            image::Kind::Cube(..) |
+            image::Kind::CubeArray(..) => winapi::D3D12_SRV_DIMENSION_TEXTURE3D,
+        };
+
+        let mut desc = winapi::D3D12_SHADER_RESOURCE_VIEW_DESC {
+            Format: match data::map_format(format, false) {
+                Some(format) => format,
+                None => return Err(f::TargetViewError::BadFormat),
+            },
+            ViewDimension: dimension,
+            Shader4ComponentMapping: 1<<3 + 2<<6 + 3<<9, //TODO: map swizzle
+            u: unsafe { mem::zeroed() },
+        };
+
+        match image.kind {
+            image::Kind::D2(_, _, image::AaMode::Single) => {
+                *unsafe{ desc.Texture2D_mut() } = winapi::D3D12_TEX2D_SRV {
+                    MostDetailedMip: 0,
+                    MipLevels: !0,
+                    PlaneSlice: 0,
+                    ResourceMinLODClamp: 0.0,
+                }
+            }
+            _ => unimplemented!()
+        }
+
+        unsafe {
+            self.inner.CreateShaderResourceView(
+                image.resource.as_mut_ptr(),
+                &desc,
+                handle);
+        }
+
+        Ok(native::ShaderResourceView { handle })
     }
 
     fn view_image_as_unordered_access(&mut self, image: &native::Image, format: format::Format) -> Result<native::UnorderedAccessView, f::TargetViewError> {
@@ -525,7 +637,7 @@ impl core::Factory<R> for Factory {
             f::DescriptorHeapType::SrvCbvUav => winapi::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
             f::DescriptorHeapType::Sampler => winapi::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
         };
-        Self::create_descriptor_heap_impl(&mut self.inner, native_type, size)
+        Self::create_descriptor_heap_impl(&mut self.inner, native_type, true, size)
     }
 
     fn create_descriptor_set_pool(&mut self, heap: &native::DescriptorHeap, max_sets: usize, offset: usize, descriptor_pools: &[f::DescriptorPoolDesc]) -> native::DescriptorSetPool {
@@ -548,6 +660,7 @@ impl core::Factory<R> for Factory {
                 handle: set_pool.alloc_handles(binding.count as u64),
                 ty: binding.ty,
                 count: binding.count,
+                handle_size: set_pool.heap.handle_size,
             }).collect()
         }).collect()
     }
@@ -557,7 +670,24 @@ impl core::Factory<R> for Factory {
     }
 
     fn update_descriptor_sets(&mut self, writes: &[f::DescriptorSetWrite<R>]) {
-        unimplemented!()
+        self.update_descriptor_sets_impl(writes,
+            winapi::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+            |dw, starts| match *dw {
+                f::DescriptorWrite::SampledImage(ref images) => {
+                    starts.extend(images.iter().map(|&(ref srv, _layout)| srv.handle))
+                }
+                f::DescriptorWrite::Sampler(_) => (), // done separately
+                _ => unimplemented!()
+            });
+
+        self.update_descriptor_sets_impl(writes,
+            winapi::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
+            |dw, starts| match *dw {
+                f::DescriptorWrite::Sampler(ref samplers) => {
+                    starts.extend(samplers.iter().map(|sm| sm.handle))
+                }
+                _ => ()
+            });
     }
 
     /// Acquire a mapping Reader.

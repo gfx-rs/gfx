@@ -34,7 +34,7 @@ use std::ffi::OsString;
 use winapi::BOOL;
 use winit::os::windows::WindowExt;
 
-use core::memory;
+use core::{image, memory};
 
 mod command;
 mod data;
@@ -183,22 +183,44 @@ impl core::Adapter for Adapter {
 pub struct Factory {
     inner: ComPtr<winapi::ID3D12Device>,
     rtv_pool: native::DescriptorSetPool,
+    srv_pool: native::DescriptorSetPool,
+    sampler_pool: native::DescriptorSetPool,
 }
 
 impl Factory {
     fn new(mut device: ComPtr<winapi::ID3D12Device>) -> Factory {
         let max_rtvs = 64;
         let rtv_pool = native::DescriptorSetPool {
-            heap: Self::create_descriptor_heap_impl(&mut device, winapi::D3D12_DESCRIPTOR_HEAP_TYPE_RTV, max_rtvs),
+            heap: Self::create_descriptor_heap_impl(&mut device, winapi::D3D12_DESCRIPTOR_HEAP_TYPE_RTV, true, max_rtvs),
             pools: Vec::new(),
             offset: 0,
             size: 0,
             max_size: max_rtvs as u64,
         };
 
+        let max_srvs = 0x1000; //TODO
+        let srv_pool = native::DescriptorSetPool {
+            heap: Self::create_descriptor_heap_impl(&mut device, winapi::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, false, max_srvs),
+            pools: Vec::new(),
+            offset: 0,
+            size: 0,
+            max_size: max_srvs as u64,
+        };
+
+        let max_samplers = 0x100;
+        let sampler_pool = native::DescriptorSetPool {
+            heap: Self::create_descriptor_heap_impl(&mut device, winapi::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, false, max_samplers),
+            pools: Vec::new(),
+            offset: 0,
+            size: 0,
+            max_size: max_samplers as u64,
+        };
+
         Factory {
             inner: device,
             rtv_pool,
+            srv_pool,
+            sampler_pool,
         }
     }
 }
@@ -284,6 +306,7 @@ impl core::Surface for Surface {
         }
 
         let mut swap_chain = ComPtr::<winapi::IDXGISwapChain3>::new(swap_chain.as_mut_ptr() as *mut winapi::IDXGISwapChain3);
+        let kind = image::Kind::D2(self.width as image::Size, self.height as image::Size, image::AaMode::Single);
 
         // Get backbuffer images
         let backbuffers = (0..buffer_count).map(|i| {
@@ -295,7 +318,7 @@ impl core::Surface for Surface {
                     resource.as_mut() as *mut *mut _ as *mut *mut c_void);
             }
 
-            native::Image { resource: resource }
+            native::Image { resource, kind }
         }).collect::<Vec<_>>();
 
         SwapChain {

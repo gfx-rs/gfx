@@ -14,6 +14,8 @@
 
 use core::{buffer, memory, HeapType};
 use core::format::Format;
+use core::image::{FilterMethod, WrapMode};
+use core::state::Comparison;
 use winapi::*;
 
 
@@ -173,4 +175,53 @@ pub fn map_image_resource_state(access: memory::ImageAccess, _layout: memory::Im
     }
 
     state
+}
+
+pub fn map_function(fun: Comparison) -> D3D12_COMPARISON_FUNC {
+    match fun {
+        Comparison::Never => D3D12_COMPARISON_FUNC_NEVER,
+        Comparison::Less => D3D12_COMPARISON_FUNC_LESS,
+        Comparison::LessEqual => D3D12_COMPARISON_FUNC_LESS_EQUAL,
+        Comparison::Equal => D3D12_COMPARISON_FUNC_EQUAL,
+        Comparison::GreaterEqual => D3D12_COMPARISON_FUNC_GREATER_EQUAL,
+        Comparison::Greater => D3D12_COMPARISON_FUNC_GREATER,
+        Comparison::NotEqual => D3D12_COMPARISON_FUNC_NOT_EQUAL,
+        Comparison::Always => D3D12_COMPARISON_FUNC_ALWAYS,
+    }
+}
+
+pub fn map_wrap(wrap: WrapMode) -> D3D12_TEXTURE_ADDRESS_MODE {
+    match wrap {
+        WrapMode::Tile   => D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        WrapMode::Mirror => D3D12_TEXTURE_ADDRESS_MODE_MIRROR,
+        WrapMode::Clamp  => D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+        WrapMode::Border => D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+    }
+}
+
+pub enum FilterOp {
+    Product,
+    Comparison,
+    //Maximum, TODO
+    //Minimum, TODO
+}
+
+pub fn map_filter(filter: FilterMethod, op: FilterOp) -> D3D12_FILTER {
+    use core::image::FilterMethod::*;
+    match op {
+        FilterOp::Product => match filter {
+            Scale          => D3D12_FILTER_MIN_MAG_MIP_POINT,
+            Mipmap         => D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR,
+            Bilinear       => D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT,
+            Trilinear      => D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+            Anisotropic(_) => D3D12_FILTER_ANISOTROPIC,
+        },
+        FilterOp::Comparison => match filter {
+            Scale          => D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT,
+            Mipmap         => D3D12_FILTER_COMPARISON_MIN_MAG_POINT_MIP_LINEAR,
+            Bilinear       => D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT,
+            Trilinear      => D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR,
+            Anisotropic(_) => D3D12_FILTER_COMPARISON_ANISOTROPIC,
+        },
+    }
 }
