@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{factory as f, pso, HeapType};
+use core::{factory as f, image, pso, HeapType};
 use comptr::ComPtr;
 use winapi;
 
@@ -85,13 +85,14 @@ unsafe impl Sync for Buffer {}
 #[derive(Clone, Debug, Hash)]
 pub struct Image {
     pub resource: ComPtr<winapi::ID3D12Resource>,
+    pub kind: image::Kind,
 }
 unsafe impl Send for Image {}
 unsafe impl Sync for Image {}
 
-#[derive(Debug, Hash)]
+#[derive(Debug)]
 pub struct Sampler {
-    //TODO
+    pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
 }
 
 #[derive(Debug, Hash)]
@@ -99,8 +100,9 @@ pub struct ConstantBufferView {
     //TODO
 }
 
-#[derive(Debug, Hash)]
+#[derive(Clone, Debug)]
 pub struct ShaderResourceView {
+    pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
 }
 
 #[derive(Debug, Hash)]
@@ -140,7 +142,7 @@ pub struct DescriptorHeap {
 }
 
 impl DescriptorHeap {
-    pub fn get_handle(&self, index: u64) -> winapi::D3D12_CPU_DESCRIPTOR_HANDLE {
+    pub fn at(&self, index: u64) -> winapi::D3D12_CPU_DESCRIPTOR_HANDLE {
         assert!(index < self.total_handles);
         let ptr = self.start_handle.ptr + self.handle_size * index;
         winapi::D3D12_CPU_DESCRIPTOR_HANDLE { ptr }
@@ -161,7 +163,7 @@ impl DescriptorSetPool {
         assert!(self.size + count <= self.max_size);
         let index = self.offset + self.size;
         self.size += count;
-        self.heap.get_handle(index)
+        self.heap.at(index)
     }
 }
 
@@ -169,7 +171,16 @@ impl DescriptorSetPool {
 pub struct DescriptorRange {
     pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
     pub ty: f::DescriptorType,
+    pub handle_size: u64,
     pub count: usize,
+}
+
+impl DescriptorRange {
+    pub fn at(&self, index: usize) -> winapi::D3D12_CPU_DESCRIPTOR_HANDLE {
+        assert!(index < self.count);
+        let ptr = self.handle.ptr + self.handle_size * index as u64;
+        winapi::D3D12_CPU_DESCRIPTOR_HANDLE { ptr }
+    }
 }
 
 #[derive(Debug)]
