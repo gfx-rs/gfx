@@ -16,16 +16,16 @@
 //!
 //! There are different types of queues, which can create and submit associated command buffers.
 
-use std::borrow::{Borrow, BorrowMut};
-use std::ops::{Deref, DerefMut};
-use std::marker::PhantomData;
-use {handle, Backend, CommandQueue, QueueSubmit, Resources};
+use {Backend, CommandQueue, QueueSubmit, Resources, handle};
 use command::{AccessInfo, Submit};
+use std::borrow::{Borrow, BorrowMut};
+use std::marker::PhantomData;
+use std::ops::{Deref, DerefMut};
 
 /// Defines queue compatibility regarding functionality.
 ///
 /// Queue A is compatible with queue B if A supports all functionalities from B.
-pub trait Compatible<Q> { }
+pub trait Compatible<Q> {}
 
 macro_rules! define_queue {
     // Bare queue definitions
