@@ -37,15 +37,15 @@ extern crate genmesh;
 extern crate noise;
 extern crate winit;
 
-pub use gfx_app::ColorFormat;
+use gfx_app::{BackbufferView, ColorFormat};
 
 #[cfg(feature="metal")]
-pub use gfx::format::Depth32F as Depth;
+use gfx::format::Depth32F as Depth;
 #[cfg(not(feature="metal"))]
-pub use gfx::format::Depth;
+use gfx::format::Depth;
 
 use cgmath::{Deg, Matrix4, Point3, SquareMatrix, Vector3};
-use gfx::{Bundle, texture};
+use gfx::{Bundle, Factory, GraphicsPoolExt, texture};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
 use noise::{Seed, perlin2};
@@ -218,25 +218,28 @@ fn create_g_buffer<R: gfx::Resources, F: gfx::Factory<R>>(
 }
 
 
-struct App<R: gfx::Resources> {
-    terrain: Bundle<R, terrain::Data<R>>,
-    blit: Bundle<R, blit::Data<R>>,
-    light: Bundle<R, light::Data<R>>,
-    emitter: Bundle<R, emitter::Data<R>>,
-    intermediate: ViewPair<R, GFormat>,
+struct App<B: gfx::Backend> {
+    views: Vec<BackbufferView<B::Resources>>,
+    terrain: Bundle<B, terrain::Data<B::Resources>>,
+    blit: Bundle<B, blit::Data<B::Resources>>,
+    light: Bundle<B, light::Data<B::Resources>>,
+    emitter: Bundle<B, emitter::Data<B::Resources>>,
+    intermediate: ViewPair<B::Resources, GFormat>,
     light_pos_vec: Vec<LightInfo>,
     seed: Seed,
-    depth_resource: gfx::handle::ShaderResourceView<R, [f32; 4]>,
-    debug_buf: Option<gfx::handle::ShaderResourceView<R, [f32; 4]>>,
+    depth_resource: gfx::handle::ShaderResourceView<B::Resources, [f32; 4]>,
+    debug_buf: Option<gfx::handle::ShaderResourceView<B::Resources, [f32; 4]>>,
     start_time: Instant,
 }
 
-impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
-    fn new<F: gfx::Factory<R>>(factory: &mut F, backend: gfx_app::shade::Backend,
-           window_targets: gfx_app::WindowTargets<R>) -> Self {
+impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
+    fn new(factory: &mut B::Factory,
+           backend: gfx_app::shade::Backend,
+           window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
+    {
         use gfx::traits::FactoryExt;
 
-        let (width, height, _, _) = window_targets.color.get_dimensions();
+        let (width, height, _, _) = window_targets.views[0].0.get_dimensions();
         let (gpos, gnormal, gdiffuse, depth_resource, depth_target) =
             create_g_buffer(width, height, factory);
         let res = {
@@ -337,7 +340,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             let data = blit::Data {
                 vbuf: vbuf,
                 tex: (gpos.resource.clone(), sampler.clone()),
-                out: window_targets.color,
+                out: window_targets.views[0].0.clone(),
             };
 
             Bundle::new(slice, pso, data)
@@ -459,22 +462,26 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         };
 
         App {
-            terrain: terrain,
-            blit: blit,
-            light: light,
-            emitter: emitter,
+            views: window_targets.views,
+            terrain,
+            blit,
+            light,
+            emitter,
             intermediate: res,
             light_pos_vec: (0 ..NUM_LIGHTS).map(|_| {
                 LightInfo{ pos: [0.0, 0.0, 0.0, 0.0] }
             }).collect(),
-            seed: seed,
-            depth_resource: depth_resource,
+            seed,
+            depth_resource,
             debug_buf: None,
             start_time: Instant::now(),
         }
     }
 
-    fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
+    fn render<Gp>(&mut self, (frame, semaphore): (gfx::Frame, &gfx::handle::Semaphore<B::Resources>),
+                  pool: &mut Gp, queue: &mut gfx::queue::GraphicsQueueMut<B>)
+        where Gp: gfx::GraphicsCommandPool<B>
+    {
         let elapsed = self.start_time.elapsed();
         let time = elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 / 1000_000_000.0;
 
@@ -493,6 +500,9 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         let (width, height, _, _) = self.terrain.data.out_depth.get_dimensions();
         let aspect = width as f32 / height as f32;
         let proj = cgmath::perspective(Deg(60.0f32), aspect, 5.0, 100.0);
+        let (cur_color, _) = self.views[frame.id()].clone();
+
+        let mut encoder = pool.acquire_graphics_encoder();
 
         let terrain_locals = TerrainLocals {
             model: Matrix4::identity().into(),
@@ -536,22 +546,24 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         encoder.clear(&self.terrain.data.out_normal, [0.0, 0.0, 0.0, 1.0]);
         encoder.clear(&self.terrain.data.out_color, [0.0, 0.0, 0.0, 1.0]);
         // Render the terrain to the geometry buffer
-        self.terrain.encode(encoder);
+        self.terrain.encode(&mut encoder);
 
         let blit_tex = match self.debug_buf {
             Some(ref tex) => tex,   // Show one of the immediate buffers
             None => {
                 encoder.clear(&self.intermediate.target, [0.0, 0.0, 0.0, 1.0]);
                 // Apply lights
-                self.light.encode(encoder);
+                self.light.encode(&mut encoder);
                 // Draw light emitters
-                self.emitter.encode(encoder);
+                self.emitter.encode(&mut encoder);
                 &self.intermediate.resource
             }
         };
+        self.blit.data.out = cur_color;
         self.blit.data.tex.0 = blit_tex.clone();
         // Show the result
-        self.blit.encode(encoder);
+        self.blit.encode(&mut encoder);
+        encoder.synced_flush(queue, &[semaphore], &[], None);
     }
 
     fn on(&mut self, event: WindowEvent) {
@@ -573,8 +585,8 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         }
     }
 
-    fn on_resize_ext<F: gfx::Factory<R>>(&mut self, factory: &mut F, window_targets: gfx_app::WindowTargets<R>) {
-        let (width, height, _, _) = window_targets.color.get_dimensions();
+    fn on_resize_ext(&mut self, factory: &mut B::Factory, window_targets: gfx_app::WindowTargets<B::Resources>) {
+        let (width, height, _, _) = window_targets.views[0].0.get_dimensions();
 
         let (gpos, gnormal, gdiffuse, depth_resource, depth_target) =
             create_g_buffer(width, height, factory);
@@ -582,13 +594,12 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             let (_ , srv, rtv) = factory.create_render_target(width, height).unwrap();
             ViewPair{ resource: srv, target: rtv }
         };
-
+        self.views = window_targets.views;
         self.terrain.data.out_position = gpos.target.clone();
         self.terrain.data.out_normal = gnormal.target.clone();
         self.terrain.data.out_color = gdiffuse.target.clone();
         self.terrain.data.out_depth = depth_target.clone();
 
-        self.blit.data.out = window_targets.color;
         self.blit.data.tex.0 = gpos.resource.clone();
 
         self.light.data.tex_pos.0 = gpos.resource.clone();
