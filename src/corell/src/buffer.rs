@@ -18,7 +18,9 @@ use std::fmt;
 use {IndexType, Resources};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub enum CreationError { }
+pub enum CreationError {
+    OutOfHeap,
+}
 
 impl fmt::Display for CreationError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -28,7 +30,9 @@ impl fmt::Display for CreationError {
 
 impl Error for CreationError {
     fn description(&self) -> &str {
-        "Could not create buffer on device."
+        match *self {
+            CreationError::OutOfHeap => "Not enough space in the heap.",
+        }
     }
 }
 

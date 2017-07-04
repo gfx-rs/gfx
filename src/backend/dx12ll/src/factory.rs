@@ -18,8 +18,7 @@ use d3dcompiler;
 use dxguid;
 use winapi;
 
-use std::ffi;
-use std::{mem, ptr};
+use std::{cmp, ffi, mem, ptr, slice};
 use std::os::raw::c_void;
 use std::collections::BTreeMap;
 
@@ -28,12 +27,21 @@ use core::pso::{self, EntryPoint};
 use {data, state, mirror, native};
 use {Factory, Resources as R};
 
+const IMAGE_LEVEL_ALIGNMENT: u32 = 16;
+const IMAGE_SLICE_ALIGNMENT: u32 = 64;
 
 #[derive(Debug)]
-pub struct UnboundBuffer(memory::MemoryRequirements, buffer::Usage);
+pub struct UnboundBuffer {
+    requirements: memory::MemoryRequirements,
+    usage: buffer::Usage,
+}
 
 #[derive(Debug)]
-pub struct UnboundImage(native::Image);
+pub struct UnboundImage {
+    desc: winapi::D3D12_RESOURCE_DESC,
+    requirements: memory::MemoryRequirements,
+    usage: image::Usage,
+}
 
 pub struct Mapping {
     //TODO
@@ -371,20 +379,26 @@ impl core::Factory<R> for Factory {
             size: size,
             alignment: winapi::D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT as u64,
         };
-        Ok(UnboundBuffer(requirements, usage))
+        Ok(UnboundBuffer {
+            requirements, usage
+        })
     }
 
     fn get_buffer_requirements(&mut self, buffer: &UnboundBuffer) -> memory::MemoryRequirements {
-        buffer.0
+        buffer.requirements
     }
 
     fn bind_buffer_memory(&mut self, heap: &native::Heap, offset: u64, buffer: UnboundBuffer) -> Result<native::Buffer, buffer::CreationError> {
+        if offset + buffer.requirements.size > heap.size {
+            return Err(buffer::CreationError::OutOfHeap)
+        }
+
         let mut resource = ptr::null_mut();
         let init_state = heap.default_state; //TODO?
         let desc = winapi::D3D12_RESOURCE_DESC {
             Dimension: winapi::D3D12_RESOURCE_DIMENSION_BUFFER,
             Alignment: 0,
-            Width: buffer.0.size,
+            Width: buffer.requirements.size,
             Height: 1,
             DepthOrArraySize: 1,
             MipLevels: 1,
@@ -405,22 +419,78 @@ impl core::Factory<R> for Factory {
         });
         Ok(native::Buffer {
             resource: ComPtr::new(resource as *mut _),
-            size: buffer.0.size as u32,
+            size: buffer.requirements.size as u32,
         })
     }
 
     fn create_image(&mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
          -> Result<UnboundImage, image::CreationError>
     {
-        unimplemented!()
+        let (width, height, depth, aa) = kind.get_dimensions();
+        let dimension = match kind {
+            image::Kind::D1(..) |
+            image::Kind::D1Array(..) => winapi::D3D12_RESOURCE_DIMENSION_TEXTURE1D,
+            image::Kind::D2(..) |
+            image::Kind::D2Array(..) => winapi::D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+            image::Kind::D3(..) |
+            image::Kind::Cube(..) |
+            image::Kind::CubeArray(..) => winapi::D3D12_RESOURCE_DIMENSION_TEXTURE3D,
+        };
+        let desc = winapi::D3D12_RESOURCE_DESC {
+            Dimension: dimension,
+            Alignment: 0,
+            Width: width as u64,
+            Height: height as u32,
+            DepthOrArraySize: cmp::max(1, depth),
+            MipLevels: mip_levels as u16,
+            Format: match data::map_format(format, false) {
+                Some(format) => format,
+                None => return Err(image::CreationError::BadFormat),
+            },
+            SampleDesc: winapi::DXGI_SAMPLE_DESC {
+                Count: aa.get_num_fragments() as u32,
+                Quality: 0,
+            },
+            Layout: winapi::D3D12_TEXTURE_LAYOUT_UNKNOWN,
+            Flags: winapi::D3D12_RESOURCE_FLAGS(0),
+        };
+
+        let mut alloc_info = unsafe { mem::zeroed() };
+        unsafe {
+            self.inner.GetResourceAllocationInfo(0, 1, &desc, &mut alloc_info)
+        };
+
+        Ok(UnboundImage {
+            desc,
+            requirements: memory::MemoryRequirements {
+                size: alloc_info.SizeInBytes,
+                alignment: alloc_info.Alignment,
+            },
+            usage,
+        })
     }
 
     fn get_image_requirements(&mut self, image: &UnboundImage) -> memory::MemoryRequirements {
-        unimplemented!()
+        image.requirements
     }
 
     fn bind_image_memory(&mut self, heap: &native::Heap, offset: u64, image: UnboundImage) -> Result<native::Image, image::CreationError> {
-        unimplemented!()
+        if offset + image.requirements.size > heap.size {
+            return Err(image::CreationError::OutOfHeap)
+        }
+
+        let mut resource = ptr::null_mut();
+        let init_state = heap.default_state; //TODO?
+
+        assert_eq!(winapi::S_OK, unsafe {
+            self.inner.CreatePlacedResource(
+                &*heap.inner as *const _ as *mut _, offset,
+                &image.desc, init_state, ptr::null(),
+                &dxguid::IID_ID3D12Resource, &mut resource)
+        });
+        Ok(native::Image {
+            resource: ComPtr::new(resource as *mut _),
+        })
     }
 
     fn view_buffer_as_constant(&mut self, buffer: &native::Buffer, offset: usize, size: usize) -> Result<native::ConstantBufferView, f::TargetViewError> {
@@ -503,7 +573,25 @@ impl core::Factory<R> for Factory {
                                 -> Result<mapping::Writer<'a, R, T>, mapping::Error>
         where T: Copy
     {
-        unimplemented!()
+        if offset + size > buf.size as u64 {
+            return Err(mapping::Error::OutOfBounds);
+        }
+
+        let range = winapi::D3D12_RANGE {
+            Begin: offset,
+            End: offset + size,
+        };
+        let mut ptr = ptr::null_mut();
+        assert_eq!(winapi::S_OK, unsafe {
+            buf.resource.clone().Map(0, &range, &mut ptr)
+        });
+        let count = size as usize / mem::size_of::<T>();
+
+        Ok(unsafe {
+            let slice = slice::from_raw_parts_mut(ptr as *mut T, count);
+            let mapping = Mapping {};
+            mapping::Writer::new(slice, mapping)
+        })
     }
 
     fn create_semaphore(&mut self) -> native::Semaphore {

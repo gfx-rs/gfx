@@ -18,8 +18,14 @@ use state;
 
 pub use target::{Layer, Level};
 
+/// Maximum accessible mipmap level of an image.
+pub const MAX_LEVEL: Level = 15;
+
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub enum CreationError { }
+pub enum CreationError {
+    OutOfHeap,
+    BadFormat,
+}
 
 impl fmt::Display for CreationError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -29,7 +35,10 @@ impl fmt::Display for CreationError {
 
 impl Error for CreationError {
     fn description(&self) -> &str {
-        "Could not create image on device."
+        match *self {
+            CreationError::OutOfHeap => "Not enough space in the heap.",
+            CreationError::BadFormat => "Unsupported format.",
+        }
     }
 }
 
@@ -39,6 +48,9 @@ pub type Size = u16;
 pub type NumSamples = u8;
 /// Number of EQAA fragments
 pub type NumFragments = u8;
+
+/// Image dimensions: width, height, depth, and samples.
+pub type Dimensions = (Size, Size, Size, AaMode);
 
 /// Describes the configuration of samples inside each texel.
 #[derive(Eq, Ord, PartialEq, PartialOrd, Hash, Copy, Clone, Debug)]
@@ -95,6 +107,62 @@ pub enum Kind {
     Cube(Size),
     /// An array of Cube images.
     CubeArray(Size, Layer),
+}
+
+impl Kind {
+    /// Get image dimensions, with 0 values where not applicable.
+    pub fn get_dimensions(&self) -> Dimensions {
+        let s0 = AaMode::Single;
+        match *self {
+            Kind::D1(w) => (w, 0, 0, s0),
+            Kind::D1Array(w, a) => (w, 0, a as Size, s0),
+            Kind::D2(w, h, s) => (w, h, 0, s),
+            Kind::D2Array(w, h, a, s) => (w, h, a as Size, s),
+            Kind::D3(w, h, d) => (w, h, d, s0),
+            Kind::Cube(w) => (w, w, 6, s0),
+            Kind::CubeArray(w, a) => (w, w, 6 * (a as Size), s0)
+        }
+    }
+    /// Get the dimensionality of a particular mipmap level.
+    pub fn get_level_dimensions(&self, level: Level) -> Dimensions {
+        use std::cmp::{max, min};
+        // unused dimensions must stay 0, all others must be at least 1
+        let map = |val| max(min(val, 1), val >> min(level, MAX_LEVEL));
+        let (w, h, da, _) = self.get_dimensions();
+        let dm = if self.get_num_slices().is_some() {
+            0
+        } else {
+            map(da)
+        };
+        (map(w), map(h), dm, AaMode::Single)
+    }
+    /// Count the number of mipmap levels.
+    pub fn get_num_levels(&self) -> Level {
+        use std::cmp::max;
+        let (w, h, d, aa) = self.get_dimensions();
+        let dominant = max(max(w, h), d);
+        if aa == AaMode::Single {
+            (1..).find(|level| dominant>>level <= 1).unwrap()
+        }else {
+            1 // anti-aliased textures can't have mipmaps
+        }
+    }
+    /// Return the number of slices for an array, or None for non-arrays.
+    pub fn get_num_slices(&self) -> Option<Layer> {
+        match *self {
+            Kind::D1(..) | Kind::D2(..) | Kind::D3(..) | Kind::Cube(..) => None,
+            Kind::D1Array(_, a) => Some(a),
+            Kind::D2Array(_, _, a, _) => Some(a),
+            Kind::CubeArray(_, a) => Some(a),
+        }
+    }
+    /// Check if it's one of the cube kinds.
+    pub fn is_cube(&self) -> bool {
+        match *self {
+            Kind::Cube(_) | Kind::CubeArray(_, _) => true,
+            _ => false,
+        }
+    }
 }
 
 bitflags!(
