@@ -291,10 +291,23 @@ impl Adapter {
 
 impl c::Adapter<Backend> for Adapter {
     fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> c::Device<Backend> {
+        // initialize permanent states
+        let gl = &self.share.context;
+        if self.share.capabilities.srgb_color_supported {
+            unsafe {
+                gl.Enable(gl::FRAMEBUFFER_SRGB);
+            }
+        }
+        unsafe {
+            gl.PixelStorei(gl::UNPACK_ALIGNMENT, 1);
+ 
+            if !self.share.info.version.is_embedded {
+                gl.Enable(gl::PROGRAM_POINT_SIZE);
+            }
+        }
         // create main VAO and bind it
         let mut vao = 0;
         if self.share.private_caps.array_buffer_supported {
-            let gl = &self.share.context;
             unsafe {
                 gl.GenVertexArrays(1, &mut vao);
                 gl.BindVertexArray(vao);
