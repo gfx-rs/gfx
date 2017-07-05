@@ -348,7 +348,7 @@ fn main() {
                     image_base_layer: 0,
                     image_layers: 1,
                     image_offset: command::Offset { x: 0, y: 0, z: 0 },
-                    image_extent: command::Extent { width: width, height: height, depth: 1 },
+                    image_extent: command::Extent { width, height, depth: 1 },
                 }]);
 
             let image_barrier = ImageBarrier {

@@ -87,7 +87,7 @@ impl CommandBuffer {
                 new_layout: new_layout,
                 src_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
                 dst_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
-                image: barrier.image.0,
+                image: barrier.image.inner,
                 subresource_range: base_range,
             }
         }).collect::<Vec<_>>();
@@ -140,11 +140,7 @@ impl CommandBuffer {
                     y: region.image_offset.y,
                     z: region.image_offset.z,
                 },
-                image_extent: vk::Extent3D {
-                    width:  region.image_extent.width,
-                    height: region.image_extent.height,
-                    depth:  region.image_extent.depth,
-                },
+                image_extent: dst.extent.clone(),
             }
         }).collect::<Vec<_>>();
 
@@ -152,7 +148,7 @@ impl CommandBuffer {
             self.device.0.cmd_copy_buffer_to_image(
                 self.inner, // commandBuffer
                 src.inner, // srcBuffer
-                dst.0, // dstImage
+                dst.inner, // dstImage
                 data::map_image_layout(layout), // dstImageLayout
                 &regions, // pRegions
             );

@@ -89,7 +89,7 @@ impl Factory {
             s_type: vk::StructureType::ImageViewCreateInfo,
             p_next: ptr::null(),
             flags: vk::ImageViewCreateFlags::empty(), // TODO
-            image: image.0,
+            image: image.inner,
             view_type: vk::ImageViewType::Type2d, // TODO
             format: data::map_format(format.0, format.1).unwrap(), // TODO
             components: components,
@@ -848,13 +848,13 @@ impl core::Factory<R> for Factory {
         let info = vk::ImageCreateInfo {
             s_type: vk::StructureType::ImageCreateInfo,
             p_next: ptr::null(),
-            flags: flags,
-            image_type: image_type,
+            flags,
+            image_type,
             format: data::map_format(format.0, format.1).unwrap(), // TODO
-            extent: extent,
+            extent: extent.clone(),
             mip_levels: mip_levels as u32,
             array_layers: array_layers as u32,
-            samples: samples,
+            samples,
             tiling: vk::ImageTiling::Optimal, // TODO: read back?
             usage: data::map_image_usage(usage),
             sharing_mode: vk::SharingMode::Exclusive, // TODO:
@@ -863,17 +863,17 @@ impl core::Factory<R> for Factory {
             initial_layout: vk::ImageLayout::Undefined,
         };
 
-        let image = unsafe {
+        let inner = unsafe {
             self.inner.0.create_image(&info, None)
                         .expect("Error on image creation") // TODO: error handling
         };
 
-        Ok(UnboundImage(native::Image(image)))
+        Ok(UnboundImage(native::Image{ inner, extent }))
     }
 
     ///
     fn get_image_requirements(&mut self, image: &UnboundImage) -> memory::MemoryRequirements {
-        let req = self.inner.0.get_image_memory_requirements((image.0).0);
+        let req = self.inner.0.get_image_memory_requirements(image.0.inner);
 
         memory::MemoryRequirements {
             size: req.size,
@@ -884,7 +884,7 @@ impl core::Factory<R> for Factory {
     ///
     fn bind_image_memory(&mut self, heap: &native::Heap, offset: u64, image: UnboundImage) -> Result<native::Image, image::CreationError> {
         // TODO: error handling
-        unsafe { self.inner.0.bind_image_memory((image.0).0, heap.0, offset); }
+        unsafe { self.inner.0.bind_image_memory(image.0.inner, heap.0, offset); }
 
         Ok(image.0)
     }
@@ -898,10 +898,9 @@ impl core::Factory<R> for Factory {
     }
 
     fn view_image_as_render_target(&mut self, image: &native::Image, format: format::Format) -> Result<native::RenderTargetView, f::TargetViewError> {
-        let view = self.create_image_view(image, format);
         let rtv = native::RenderTargetView {
-            image: image.0,
-            view: view,
+            image: image.inner,
+            view: self.create_image_view(image, format),
         };
 
         Ok(rtv)
@@ -1145,7 +1144,7 @@ impl core::Factory<R> for Factory {
             let x: *mut T = data as *mut T;
             match err_code {
                 vk::Result::Success => {
-                    slice::from_raw_parts_mut(x, size as usize)
+                    slice::from_raw_parts_mut(x, size as usize / mem::size_of::<T>())
                 }
                 _ => panic!(err_code), // TODO
             }
@@ -1170,14 +1169,14 @@ impl core::Factory<R> for Factory {
                 self.inner.0.handle(),
                 buf.memory,
                 offset,
-                size * mem::size_of::<T>() as u64,
+                size,
                 vk::MemoryMapFlags::empty(),
                 &mut data);
 
             let x: *mut T = data as *mut T;
             match err_code {
                 vk::Result::Success => {
-                    slice::from_raw_parts_mut(x, size as usize)
+                    slice::from_raw_parts_mut(x, size as usize / mem::size_of::<T>())
                 }
                 _ => panic!(err_code), // TODO
             }
@@ -1267,7 +1266,7 @@ impl core::Factory<R> for Factory {
     }
 
     fn destroy_image(&mut self, image: native::Image) {
-        unsafe { self.inner.0.destroy_image(image.0, None); }
+        unsafe { self.inner.0.destroy_image(image.inner, None); }
     }
 
     fn destroy_render_target_view(&mut self, rtv: native::RenderTargetView) {

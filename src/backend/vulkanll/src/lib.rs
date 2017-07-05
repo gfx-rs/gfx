@@ -290,18 +290,16 @@ impl core::CommandQueue for CommandQueue {
 
         let fence = fence.map(|fence| fence.0).unwrap_or(vk::Fence::null());
 
-        unsafe {
-            self.device.0.queue_submit(
-                *self.inner.0.borrow(),
-                &submits,
-                fence,
-            );
-        }
+        self.device.0.queue_submit(
+            *self.inner.0.borrow(),
+            &submits,
+            fence,
+        );
     }
 
     fn wait_idle(&mut self) {
         unsafe {
-            self.device.0.queue_wait_idle(*self.inner.0.borrow());
+            self.device.0.queue_wait_idle(*self.inner.0.borrow()).unwrap();
         }
     }
 }
@@ -382,7 +380,7 @@ impl core::Surface for Surface {
             image_color_space: vk::ColorSpaceKHR::SrgbNonlinear,
             image_extent: vk::Extent2D {
                 width: self.width,
-                height: self.height
+                height: self.height,
             },
             image_array_layers: 1,
             image_usage: vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
@@ -398,13 +396,13 @@ impl core::Surface for Surface {
 
         let swapchain = unsafe {
             let mut swapchain = mem::uninitialized();
-            assert_eq!(vk::Result::Success, unsafe {
+            assert_eq!(vk::Result::Success,
                 loader.create_swapchain_khr(
                     present_queue.device.0.handle(),
                     &info,
                     ptr::null(),
                     &mut swapchain)
-            });
+            );
             swapchain
         };
 
@@ -425,8 +423,14 @@ impl core::Surface for Surface {
                 v.as_mut_ptr());
 
             v.set_len(count as vk::size_t);
-            v.into_iter().map(|image| native::Image(image))
-                    .collect::<Vec<_>>()
+            v.into_iter().map(|image| native::Image {
+                inner: image,
+                extent: vk::Extent3D {
+                    width: self.width,
+                    height: self.height,
+                    depth: 1,
+                },
+            }).collect()
         };
 
         // TODO: set initial resource states to Present
@@ -689,15 +693,15 @@ impl core::Instance for Instance {
         let win32_loader = ash::extensions::Win32Surface::new(entry, &self.inner.0)
                         .expect("Unable to load win32 surface functions");
 
-        let surface = unsafe {
-            let info = vk::Win32SurfaceCreateInfoKHR {
-                s_type: vk::StructureType::Win32SurfaceCreateInfoKhr,
-                p_next: ptr::null(),
-                flags: vk::Win32SurfaceCreateFlagsKHR::empty(),
-                hinstance: unsafe { kernel32::GetModuleHandleW(ptr::null()) } as *mut _,
-                hwnd: window.get_hwnd() as *mut _,
-            };
+        let info = vk::Win32SurfaceCreateInfoKHR {
+            s_type: vk::StructureType::Win32SurfaceCreateInfoKhr,
+            p_next: ptr::null(),
+            flags: vk::Win32SurfaceCreateFlagsKHR::empty(),
+            hinstance: unsafe { kernel32::GetModuleHandleW(ptr::null()) } as *mut _,
+            hwnd: window.get_hwnd() as *mut _,
+        };
 
+        let surface = unsafe {
             win32_loader.create_win32_surface_khr(&info, None)
                 .expect("Error on surface creation")
         };
