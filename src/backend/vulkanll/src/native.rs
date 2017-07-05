@@ -106,7 +106,10 @@ pub struct Buffer {
 }
 
 #[derive(Debug, Hash)]
-pub struct Image(pub vk::Image);
+pub struct Image {
+    pub inner: vk::Image,
+    pub extent: vk::Extent3D,
+}
 
 #[derive(Debug, Hash)]
 pub struct Sampler(pub vk::Sampler);

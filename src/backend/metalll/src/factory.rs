@@ -123,7 +123,7 @@ impl core::Factory<Resources> for Factory {
 
                 // Color targets
                 for (i, &(target_format, color_desc)) in pipeline_desc.color_targets.iter()
-                    .filter_map(|x| x.as_ref()).enumerate() 
+                    .filter_map(|x| x.as_ref()).enumerate()
                 {
                     let descriptor = pipeline.color_attachments().object_at(i);
 
@@ -168,7 +168,7 @@ impl core::Factory<Resources> for Factory {
                     mtl_attribute_desc.set_offset(element.offset as u64);
                     mtl_attribute_desc.set_format(mtl_vertex_format);
                 }
-                
+
                 pipeline.set_vertex_descriptor(vertex_descriptor);
 
                 let mut err_ptr: *mut ObjcObject = ptr::null_mut();
@@ -248,13 +248,13 @@ impl core::Factory<Resources> for Factory {
             Sampler(self.device.new_sampler(descriptor))
         }
     }
-    
+
     fn view_buffer_as_constant(&mut self, buffer: &Buffer, offset: usize, size: usize) -> Result<ConstantBufferView, TargetViewError> {
         unimplemented!()
     }
 
     fn view_image_as_render_target(&mut self, image: &Image, format: format::Format) -> Result<RenderTargetView, TargetViewError> {
-        let (mtl_format, _) = map_format(format).ok_or_else(|| { 
+        let (mtl_format, _) = map_format(format).ok_or_else(|| {
             error!("failed to find corresponding Metal format for {:?}", format);
             panic!(); // TODO: return TargetViewError once it is implemented
         })?;
@@ -265,7 +265,7 @@ impl core::Factory<Resources> for Factory {
     }
 
     fn view_image_as_shader_resource(&mut self, image: &Image, format: format::Format) -> Result<ShaderResourceView, TargetViewError> {
-        let (mtl_format, _) = map_format(format).ok_or_else(|| { 
+        let (mtl_format, _) = map_format(format).ok_or_else(|| {
             error!("failed to find corresponding Metal format for {:?}", format);
             panic!(); // TODO: return TargetViewError once it is implemented
         })?;
@@ -282,22 +282,23 @@ impl core::Factory<Resources> for Factory {
     fn read_mapping<'a, T>(&self, buf: &'a Buffer, offset: u64, size: u64)
                                -> Result<mapping::Reader<'a, Resources, T>,
                                          mapping::Error>
-        where T: Copy 
+        where T: Copy
     {
         unsafe {
-            let base_ptr = buf.0.contents() as *const T;
+            let base_ptr = buf.0.contents() as *mut u8;
+            let count = size as usize / mem::size_of::<T>();
 
             if base_ptr.is_null() {
                 panic!("the buffer is GPU private");
             }
 
-            if (offset + size) * mem::size_of::<T>() as u64 > buf.0.length() {
+            if offset + size > buf.0.length() {
                 panic!("offset/size out of range");
             }
 
             Ok(mapping::Reader::new(
-                    slice::from_raw_parts(base_ptr.offset(offset as isize), size as usize),
-                    Mapping(MappingInner::Read), // TODO
+                slice::from_raw_parts(base_ptr.offset(offset as isize) as *mut T, count),
+                Mapping(MappingInner::Read), // TODO
             ))
         }
     }
@@ -305,26 +306,28 @@ impl core::Factory<Resources> for Factory {
     fn write_mapping<'a, 'b, T>(&mut self, buf: &'a Buffer, offset: u64, size: u64)
                                 -> Result<mapping::Writer<'a, Resources, T>,
                                           mapping::Error>
-        where T: Copy {
+        where T: Copy
+    {
         unsafe {
-            let base_ptr = buf.0.contents() as *mut T;
+            let base_ptr = buf.0.contents() as *mut u8;
+            let count = size as usize / mem::size_of::<T>();
 
             if base_ptr.is_null() {
                 panic!("the buffer is GPU private");
             }
 
-            if (offset + size) * mem::size_of::<T>() as u64 > buf.0.length() {
+            if offset + size > buf.0.length() {
                 panic!("offset/size out of range");
             }
 
             let nsrange = NSRange {
-                location: offset * mem::size_of::<T>() as u64,
-                length: size * mem::size_of::<T>() as u64,
+                location: offset,
+                length: size,
             };
 
             Ok(mapping::Writer::new(
-                    slice::from_raw_parts_mut(base_ptr.offset(offset as isize), size as usize),
-                    Mapping(MappingInner::Write(buf.0, nsrange)), // TODO
+                slice::from_raw_parts_mut(base_ptr.offset(offset as isize) as *mut T, count),
+                Mapping(MappingInner::Write(buf.0, nsrange)), // TODO
             ))
         }
     }
@@ -375,7 +378,7 @@ impl core::Factory<Resources> for Factory {
         for write in writes.iter() {
             let mut set = write.set.0.lock().unwrap();
             let set: &mut DescriptorSetInner = &mut*set;
-            
+
             // Find layout entry
             let layout = set.layout.iter().find(|layout| layout.binding == write.binding)
                 .expect("invalid descriptor set binding index");
@@ -509,7 +512,7 @@ impl core::Factory<Resources> for Factory {
     #[cfg(not(feature = "native_heap"))]
     fn create_buffer(&mut self, size: u64, usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
         // TODO: map usage
-        Ok(UnboundBuffer(self.device.new_buffer(size, MTLResourceOptions::empty()))) 
+        Ok(UnboundBuffer(self.device.new_buffer(size, MTLResourceOptions::empty())))
     }
 
     #[cfg(not(feature = "native_heap"))]
