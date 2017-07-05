@@ -191,7 +191,7 @@ impl Factory {
     fn new(mut device: ComPtr<winapi::ID3D12Device>) -> Factory {
         let max_rtvs = 64;
         let rtv_pool = native::DescriptorSetPool {
-            heap: Self::create_descriptor_heap_impl(&mut device, winapi::D3D12_DESCRIPTOR_HEAP_TYPE_RTV, true, max_rtvs),
+            heap: Self::create_descriptor_heap_impl(&mut device, winapi::D3D12_DESCRIPTOR_HEAP_TYPE_RTV, false, max_rtvs),
             pools: Vec::new(),
             offset: 0,
             size: 0,
@@ -270,15 +270,17 @@ impl core::Surface for Surface {
         let mut swap_chain = ComPtr::<winapi::IDXGISwapChain1>::new(ptr::null_mut());
         let buffer_count = 2; // TODO: user-defined value
 
+        //TODO: data::map_format(T::get_format(), true).unwrap(), // TODO: error handling
+        //[15716] DXGI ERROR: IDXGIFactory::CreateSwapChain: Flip model swapchains (DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL and DXGI_SWAP_EFFECT_FLIP_DISCARD) only support the following Formats: (DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R10G10B10A2_UNORM), assuming the underlying Device does as well.
+        let dxgi_format = winapi::DXGI_FORMAT_R8G8B8A8_UNORM;
+        let row_pitch = 4 * self.width as usize;
         // TODO: double-check values
         let desc = winapi::DXGI_SWAP_CHAIN_DESC1 {
             AlphaMode: winapi::DXGI_ALPHA_MODE_IGNORE,
             BufferCount: buffer_count,
             Width: self.width,
             Height: self.height,
-            //TODO: data::map_format(T::get_format(), true).unwrap(), // TODO: error handling
-            //[15716] DXGI ERROR: IDXGIFactory::CreateSwapChain: Flip model swapchains (DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL and DXGI_SWAP_EFFECT_FLIP_DISCARD) only support the following Formats: (DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R10G10B10A2_UNORM), assuming the underlying Device does as well.
-            Format: winapi::DXGI_FORMAT_R8G8B8A8_UNORM,
+            Format: dxgi_format,
             Flags: 0,
             BufferUsage: winapi::DXGI_USAGE_RENDER_TARGET_OUTPUT,
             SampleDesc: winapi::DXGI_SAMPLE_DESC {
@@ -318,7 +320,7 @@ impl core::Surface for Surface {
                     resource.as_mut() as *mut *mut _ as *mut *mut c_void);
             }
 
-            native::Image { resource, kind }
+            native::Image { resource, kind, dxgi_format, row_pitch }
         }).collect::<Vec<_>>();
 
         SwapChain {

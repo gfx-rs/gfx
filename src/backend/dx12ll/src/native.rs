@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use core::{factory as f, image, pso, HeapType};
+use core::format::Format;
 use comptr::ComPtr;
 use winapi;
 
@@ -77,7 +78,7 @@ pub struct Heap {
 #[derive(Clone, Debug, Hash)]
 pub struct Buffer {
     pub resource: ComPtr<winapi::ID3D12Resource>,
-    pub size: u32,
+    pub size_in_bytes: u32,
 }
 unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
@@ -86,6 +87,8 @@ unsafe impl Sync for Buffer {}
 pub struct Image {
     pub resource: ComPtr<winapi::ID3D12Resource>,
     pub kind: image::Kind,
+    pub dxgi_format: winapi::DXGI_FORMAT,
+    pub row_pitch: usize,
 }
 unsafe impl Send for Image {}
 unsafe impl Sync for Image {}
@@ -121,7 +124,11 @@ pub struct DepthStencilView {
 }
 
 #[derive(Debug)]
-pub struct Semaphore;
+pub struct Semaphore {
+    pub fence: ComPtr<winapi::ID3D12Fence>,
+}
+unsafe impl Send for Semaphore {}
+unsafe impl Sync for Semaphore {}
 
 #[derive(Debug)]
 pub struct Fence;

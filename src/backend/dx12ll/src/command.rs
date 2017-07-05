@@ -13,10 +13,8 @@
 // limitations under the License.
 
 use comptr::ComPtr;
-use std::ops;
-use std::ptr;
-use winapi;
-use winapi::*;
+use std::{mem, ptr, ops};
+use winapi::{self, UINT, UINT64, FLOAT};
 
 use core::{self, command, memory, pso, state, target, IndexType, VertexCount, VertexOffset};
 use core::buffer::IndexBufferView;
@@ -25,6 +23,7 @@ use data;
 use native::{self, CommandBuffer, GeneralCommandBuffer, GraphicsCommandBuffer,
     ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer, RenderPass, FrameBuffer};
 use {Resources as R};
+
 
 pub struct SubmitInfo(pub ComPtr<winapi::ID3D12GraphicsCommandList>);
 
@@ -108,8 +107,46 @@ impl CommandBuffer {
         unimplemented!()
     }
 
-    fn copy_buffer_to_image(&mut self, src: &native::Buffer, dst: &native::Image, layout: memory::ImageLayout, regions: &[command::BufferImageCopy]) {
-        unimplemented!()
+    fn copy_buffer_to_image(&mut self, buffer: &native::Buffer, image: &native::Image,
+                            _layout: memory::ImageLayout, regions: &[command::BufferImageCopy]) {
+        //TODO: handle layout?
+        assert_eq!(image.row_pitch % winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as usize, 0);
+        let mut src = winapi::D3D12_TEXTURE_COPY_LOCATION {
+            pResource: buffer.resource.as_mut_ptr(),
+            Type: winapi::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+            u: unsafe { mem::zeroed() },
+        };
+        let mut dest = winapi::D3D12_TEXTURE_COPY_LOCATION {
+            pResource: image.resource.as_mut_ptr(),
+            Type: winapi::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+            u: unsafe { mem::zeroed() },
+        };
+        for region in regions {
+            assert_eq!(region.buffer_offset % winapi::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64, 0);
+            *unsafe { src.PlacedFootprint_mut() } = winapi::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
+                Offset: region.buffer_offset as UINT64,
+                Footprint: winapi::D3D12_SUBRESOURCE_FOOTPRINT {
+                    Format: image.dxgi_format,
+                    Width: region.image_extent.width as UINT,
+                    Height: region.image_extent.height as UINT,
+                    Depth: region.image_extent.depth as UINT,
+                    RowPitch: image.row_pitch as UINT,
+                },
+            };
+            // TODO: `D3D12CalcSubresource`
+            *unsafe { dest.SubresourceIndex_mut() } = region.image_mip_level as UINT +
+                region.image_base_layer as UINT * image.kind.get_num_slices().unwrap_or(1) as UINT;
+            // fast path
+            unsafe {
+                self.inner.CopyTextureRegion(
+                    &dest,
+                    region.image_offset.x as UINT,
+                    region.image_offset.y as UINT,
+                    region.image_offset.z as UINT,
+                    &src, ptr::null(),
+                );
+            }
+        }
     }
 
     fn copy_image_to_buffer(&mut self) {
@@ -227,7 +264,7 @@ impl CommandBuffer {
 
         let mut ibv_raw = winapi::D3D12_INDEX_BUFFER_VIEW {
             BufferLocation: location,
-            SizeInBytes: ibv.buffer.size,
+            SizeInBytes: ibv.buffer.size_in_bytes,
             Format: format,
         };
 
