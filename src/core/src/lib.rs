@@ -262,7 +262,7 @@ pub trait Device: Sized {
     /// type.
     type CommandBuffer: command::Buffer<Self::Resources>;
 
-    /// Returns the capabilities of this `Ðevice`.
+    /// Returns the capabilities of this `Device`.
     fn get_capabilities(&self) -> &Capabilities;
 
     /// Pin everything from this handle manager to live for a frame.
