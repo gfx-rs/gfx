@@ -28,7 +28,7 @@ documentation = "https://docs.rs/gfx_window_glfw"
 name = "gfx_window_glfw"
 
 [dependencies]
-glfw = "0.14"
+glfw = "0.15"
 gfx_core = { path = "../../core", version = "0.7" }
 gfx_device_gl = { path = "../../backend/gl", version = "0.14" }
 
