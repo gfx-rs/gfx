@@ -88,7 +88,7 @@ pub struct Image {
     pub resource: ComPtr<winapi::ID3D12Resource>,
     pub kind: image::Kind,
     pub dxgi_format: winapi::DXGI_FORMAT,
-    pub row_pitch: usize,
+    pub bits_per_texel: u8,
 }
 unsafe impl Send for Image {}
 unsafe impl Sync for Image {}

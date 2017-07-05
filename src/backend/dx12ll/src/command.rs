@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use comptr::ComPtr;
-use std::{mem, ptr, ops};
+use std::{cmp, mem, ptr, ops};
 use winapi::{self, UINT, UINT64, FLOAT};
 
 use core::{self, command, memory, pso, state, target, IndexType, VertexCount, VertexOffset};
@@ -110,7 +110,6 @@ impl CommandBuffer {
     fn copy_buffer_to_image(&mut self, buffer: &native::Buffer, image: &native::Image,
                             _layout: memory::ImageLayout, regions: &[command::BufferImageCopy]) {
         //TODO: handle layout?
-        assert_eq!(image.row_pitch % winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as usize, 0);
         let mut src = winapi::D3D12_TEXTURE_COPY_LOCATION {
             pResource: buffer.resource.as_mut_ptr(),
             Type: winapi::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
@@ -121,16 +120,19 @@ impl CommandBuffer {
             Type: winapi::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
             u: unsafe { mem::zeroed() },
         };
+        let (width, height, depth, _) = image.kind.get_dimensions();
         for region in regions {
             assert_eq!(region.buffer_offset % winapi::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64, 0);
+            assert_eq!(region.buffer_row_pitch % winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32, 0);
+            assert!(region.buffer_row_pitch >= width as u32 * image.bits_per_texel as u32 / 8);
             *unsafe { src.PlacedFootprint_mut() } = winapi::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
                 Offset: region.buffer_offset as UINT64,
                 Footprint: winapi::D3D12_SUBRESOURCE_FOOTPRINT {
                     Format: image.dxgi_format,
-                    Width: region.image_extent.width as UINT,
-                    Height: region.image_extent.height as UINT,
-                    Depth: region.image_extent.depth as UINT,
-                    RowPitch: image.row_pitch as UINT,
+                    Width: width as UINT,
+                    Height: cmp::max(1, height as UINT),
+                    Depth: cmp::max(1, depth as UINT),
+                    RowPitch: region.buffer_row_pitch,
                 },
             };
             // TODO: `D3D12CalcSubresource`
