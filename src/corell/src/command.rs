@@ -68,11 +68,12 @@ pub struct BufferCopy {
 
 pub struct BufferImageCopy {
     pub buffer_offset: u64,
+    pub buffer_row_pitch: u32,
+    pub buffer_slice_pitch: u32,
     pub image_mip_level: image::Level,
     pub image_base_layer: image::Layer,
     pub image_layers: image::Layer,
     pub image_offset: Offset,
-    pub image_extent: Extent, //TODO: extract from the image handle?
 }
 
 /// Optional instance parameters: (instance count, buffer offset)

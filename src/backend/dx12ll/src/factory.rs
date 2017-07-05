@@ -43,7 +43,7 @@ pub struct UnboundImage {
     requirements: memory::MemoryRequirements,
     kind: image::Kind,
     usage: image::Usage,
-    row_pitch: usize,
+    bits_per_texel: u8,
 }
 
 pub struct Mapping {
@@ -498,7 +498,6 @@ impl core::Factory<R> for Factory {
          -> Result<UnboundImage, image::CreationError>
     {
         let (width, height, depth, aa) = kind.get_dimensions();
-        let row_pitch = width as usize * format.0.get_total_bits() as usize / 8;
         let dimension = match kind {
             image::Kind::D1(..) |
             image::Kind::D1Array(..) => winapi::D3D12_RESOURCE_DIMENSION_TEXTURE1D,
@@ -540,7 +539,7 @@ impl core::Factory<R> for Factory {
             },
             kind,
             usage,
-            row_pitch,
+            bits_per_texel: format.0.get_total_bits(),
         })
     }
 
@@ -566,7 +565,7 @@ impl core::Factory<R> for Factory {
             resource: ComPtr::new(resource as *mut _),
             kind: image.kind,
             dxgi_format: image.desc.Format,
-            row_pitch: image.row_pitch,
+            bits_per_texel: image.bits_per_texel,
         })
     }
 

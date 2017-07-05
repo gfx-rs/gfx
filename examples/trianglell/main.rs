@@ -273,7 +273,6 @@ fn main() {
     let image_upload_heap = factory.create_heap(upload_heap, img.len() as u64);
     let image_upload_buffer = {
         let buffer = factory.create_buffer(img.len() as u64, buffer::TRANSFER_SRC).unwrap();
-        let buffer_req = factory.get_buffer_requirements(&buffer);
         factory.bind_buffer_memory(&image_upload_heap, 0, buffer).unwrap()
     };
 
@@ -344,11 +343,12 @@ fn main() {
                 memory::ImageLayout::TransferDstOptimal,
                 &[command::BufferImageCopy {
                     buffer_offset: 0,
+                    buffer_row_pitch: 0,
+                    buffer_slice_pitch: 0,
                     image_mip_level: 0,
                     image_base_layer: 0,
                     image_layers: 1,
                     image_offset: command::Offset { x: 0, y: 0, z: 0 },
-                    image_extent: command::Extent { width, height, depth: 1 },
                 }]);
 
             let image_barrier = ImageBarrier {

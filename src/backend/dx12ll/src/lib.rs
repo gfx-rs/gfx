@@ -273,7 +273,7 @@ impl core::Surface for Surface {
         //TODO: data::map_format(T::get_format(), true).unwrap(), // TODO: error handling
         //[15716] DXGI ERROR: IDXGIFactory::CreateSwapChain: Flip model swapchains (DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL and DXGI_SWAP_EFFECT_FLIP_DISCARD) only support the following Formats: (DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R10G10B10A2_UNORM), assuming the underlying Device does as well.
         let dxgi_format = winapi::DXGI_FORMAT_R8G8B8A8_UNORM;
-        let row_pitch = 4 * self.width as usize;
+        let bits_per_texel = 32;
         // TODO: double-check values
         let desc = winapi::DXGI_SWAP_CHAIN_DESC1 {
             AlphaMode: winapi::DXGI_ALPHA_MODE_IGNORE,
@@ -320,7 +320,7 @@ impl core::Surface for Surface {
                     resource.as_mut() as *mut *mut _ as *mut *mut c_void);
             }
 
-            native::Image { resource, kind, dxgi_format, row_pitch }
+            native::Image { resource, kind, dxgi_format, bits_per_texel }
         }).collect::<Vec<_>>();
 
         SwapChain {

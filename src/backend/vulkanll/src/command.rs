@@ -132,8 +132,8 @@ impl CommandBuffer {
 
             vk::BufferImageCopy {
                 buffer_offset: region.buffer_offset,
-                buffer_row_length: 0,
-                buffer_image_height: 0,
+                buffer_row_length: region.buffer_row_pitch,
+                buffer_image_height: region.buffer_slice_pitch,
                 image_subresource: subresource_layers,
                 image_offset: vk::Offset3D {
                     x: region.image_offset.x,
