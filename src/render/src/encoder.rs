@@ -142,7 +142,7 @@ impl<T: Any + fmt::Debug + fmt::Display> Error for UpdateError<T> {
 ///
 /// # Overview
 /// The `Encoder` is a wrapper structure around a `CommandBuffer`. It is responsible for sending
-/// commands to the `CommandBuffer`. 
+/// commands to the `CommandBuffer`.
 ///
 /// # Construction & Handling
 /// The `Encoder` implements `From<CommandBuffer>`, which is how it is constructed. There is no
@@ -150,8 +150,8 @@ impl<T: Any + fmt::Debug + fmt::Display> Error for UpdateError<T> {
 /// create one in its `Factory` type. See the specific back-end for details on how to construct a
 /// `CommandBuffer`.
 ///
-/// The encoder exposes multiple functions that add commands to its internal `CommandBuffer`. To 
-/// submit these commands to the GPU so they can be rendered, call `flush`. 
+/// The encoder exposes multiple functions that add commands to its internal `CommandBuffer`. To
+/// submit these commands to the GPU so they can be rendered, call `flush`.
 #[derive(Debug)]
 pub struct Encoder<R: Resources, C> {
     command_buffer: C,
@@ -173,12 +173,12 @@ impl<R: Resources, C> From<C> for Encoder<R, C> {
 
 impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
     /// Submits the commands in this `Encoder`'s internal `CommandBuffer` to the GPU, so they can
-    /// be executed. 
-    /// 
+    /// be executed.
+    ///
     /// Calling `flush` before swapping buffers is critical as without it the commands of the
     /// internal ´CommandBuffer´ will not be sent to the GPU, and as a result they will not be
     /// processed. Calling flush too often however will result in a performance hit. It is
-    /// generally recommended to call flush once per frame, when all draw calls have been made. 
+    /// generally recommended to call flush once per frame, when all draw calls have been made.
     pub fn flush<D>(&mut self, device: &mut D)
         where D: Device<Resources=R, CommandBuffer=C>
     {
@@ -484,5 +484,16 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
         self.command_buffer.bind_resource_views(&self.raw_pso_data.resource_views);
         self.command_buffer.bind_samplers(&self.raw_pso_data.samplers);
         self.draw_slice(slice, slice.instances);
+    }
+
+    /// Generate a mipmap chain for the given resource view.
+    pub fn generate_mipmap<T: format::BlendFormat>(&mut self, view: &handle::ShaderResourceView<R, T>) {
+        self.generate_mipmap_raw(view.raw())
+    }
+
+    /// Untyped version of mipmap generation.
+    pub fn generate_mipmap_raw(&mut self, view: &handle::RawShaderResourceView<R>) {
+        let srv = self.handles.ref_srv(view).clone();
+        self.command_buffer.generate_mipmap(srv);
     }
 }
