@@ -72,7 +72,7 @@ pub struct BufferImageCopy {
     pub image_base_layer: image::Layer,
     pub image_layers: image::Layer,
     pub image_offset: Offset,
-    pub image_extent: Extent,
+    pub image_extent: Extent, //TODO: extract from the image handle?
 }
 
 /// Optional instance parameters: (instance count, buffer offset)
@@ -442,7 +442,7 @@ pub trait TransferCommandBuffer<R: Resources> : PrimaryCommandBuffer<R> {
     fn copy_buffer(&mut self, src: &R::Buffer, dest: &R::Buffer, regions: &[BufferCopy]);
     fn copy_image(&mut self, src: &R::Image, dest: &R::Image);
     fn copy_buffer_to_image(&mut self, src: &R::Buffer, dst: &R::Image, layout: memory::ImageLayout, regions: &[BufferImageCopy]);
-    fn copy_image_to_buffer(&mut self); 
+    fn copy_image_to_buffer(&mut self);
 }
 
 pub trait PrimaryCommandBuffer<R: Resources>: CommandBuffer {

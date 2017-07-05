@@ -43,6 +43,7 @@ pub struct UnboundImage {
     requirements: memory::MemoryRequirements,
     kind: image::Kind,
     usage: image::Usage,
+    row_pitch: usize,
 }
 
 pub struct Mapping {
@@ -483,13 +484,13 @@ impl core::Factory<R> for Factory {
 
         assert_eq!(winapi::S_OK, unsafe {
             self.inner.CreatePlacedResource(
-                &*heap.inner as *const _ as *mut _, offset,
+                heap.inner.as_mut_ptr(), offset,
                 &desc, init_state, ptr::null(),
                 &dxguid::IID_ID3D12Resource, &mut resource)
         });
         Ok(native::Buffer {
             resource: ComPtr::new(resource as *mut _),
-            size: buffer.requirements.size as u32,
+            size_in_bytes: buffer.requirements.size as u32,
         })
     }
 
@@ -497,6 +498,7 @@ impl core::Factory<R> for Factory {
          -> Result<UnboundImage, image::CreationError>
     {
         let (width, height, depth, aa) = kind.get_dimensions();
+        let row_pitch = width as usize * format.0.get_total_bits() as usize / 8;
         let dimension = match kind {
             image::Kind::D1(..) |
             image::Kind::D1Array(..) => winapi::D3D12_RESOURCE_DIMENSION_TEXTURE1D,
@@ -527,8 +529,8 @@ impl core::Factory<R> for Factory {
 
         let mut alloc_info = unsafe { mem::zeroed() };
         unsafe {
-            self.inner.GetResourceAllocationInfo(0, 1, &desc, &mut alloc_info)
-        };
+            self.inner.GetResourceAllocationInfo(&mut alloc_info, 0, 1, &desc);
+        }
 
         Ok(UnboundImage {
             desc,
@@ -538,6 +540,7 @@ impl core::Factory<R> for Factory {
             },
             kind,
             usage,
+            row_pitch,
         })
     }
 
@@ -555,13 +558,15 @@ impl core::Factory<R> for Factory {
 
         assert_eq!(winapi::S_OK, unsafe {
             self.inner.CreatePlacedResource(
-                &*heap.inner as *const _ as *mut _, offset,
+                heap.inner.as_mut_ptr(), offset,
                 &image.desc, init_state, ptr::null(),
                 &dxguid::IID_ID3D12Resource, &mut resource)
         });
         Ok(native::Image {
             resource: ComPtr::new(resource as *mut _),
             kind: image.kind,
+            dxgi_format: image.desc.Format,
+            row_pitch: image.row_pitch,
         })
     }
 
@@ -602,7 +607,7 @@ impl core::Factory<R> for Factory {
                 None => return Err(f::TargetViewError::BadFormat),
             },
             ViewDimension: dimension,
-            Shader4ComponentMapping: 1<<3 + 2<<6 + 3<<9, //TODO: map swizzle
+            Shader4ComponentMapping: 0x1688, //TODO: map swizzle
             u: unsafe { mem::zeroed() },
         };
 
@@ -703,7 +708,7 @@ impl core::Factory<R> for Factory {
                                 -> Result<mapping::Writer<'a, R, T>, mapping::Error>
         where T: Copy
     {
-        if offset + size > buf.size as u64 {
+        if offset + size > buf.size_in_bytes as u64 {
             return Err(mapping::Error::OutOfBounds);
         }
 
@@ -725,7 +730,17 @@ impl core::Factory<R> for Factory {
     }
 
     fn create_semaphore(&mut self) -> native::Semaphore {
-        unimplemented!()
+        let mut fence = ptr::null_mut();
+        assert_eq!(winapi::S_OK, unsafe {
+            self.inner.CreateFence(0,
+                winapi::D3D12_FENCE_FLAGS(0),
+                &dxguid::IID_ID3D12Fence,
+                &mut fence)
+        });
+
+        native::Semaphore {
+            fence: ComPtr::new(fence as *mut _),
+        }
     }
 
     fn create_fence(&mut self, signaled: bool) -> native::Fence {

@@ -253,9 +253,6 @@ fn main() {
     let vertex_buffer = {
         let buffer = factory.create_buffer(buffer_len, buffer::VERTEX).unwrap();
         println!("{:?}", buffer);
-        let buffer_req = factory.get_buffer_requirements(&buffer);
-        println!("buffer requirements: {:?}", buffer_req);
-
         factory.bind_buffer_memory(&heap, 0, buffer).unwrap()
     };
 
@@ -282,15 +279,13 @@ fn main() {
 
     // copy image data into staging buffer
     {
-
         let mut mapping = factory.write_mapping::<u8>(&image_upload_buffer, 0, img.len() as u64).unwrap();
         mapping.copy_from_slice(img.deref());
     }
 
     let image = factory.create_image(kind, 1, gfx_corell::format::Srgba8::get_format(), i::TRANSFER_DST | i::SAMPLED).unwrap(); // TODO: usage
+    println!("{:?}", image);
     let image_req = factory.get_image_requirements(&image);
-
-    println!("image requirements: {:?}", image_req);
 
     let device_heap = heap_types.iter().find(|&&heap_type| heap_type.properties.contains(memory::DEVICE_LOCAL)).unwrap();
     let image_heap = factory.create_heap(device_heap, image_req.size);
