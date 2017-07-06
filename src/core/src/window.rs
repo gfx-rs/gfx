@@ -140,7 +140,11 @@ pub trait SwapChain<B: Backend> {
     ///
     /// # Safety
     /// The passed queue _must_ be the **same** queue as used for creation.
-    fn present<Q: AsMut<B::CommandQueue>>(&mut self, present_queue: &mut Q);
+    fn present<Q: AsMut<B::CommandQueue>>(
+        &mut self,
+        present_queue: &mut Q,
+        wait_semaphores: &[&handle::Semaphore<B::Resources>],
+    );
 }
 
 /// Extension for windows.

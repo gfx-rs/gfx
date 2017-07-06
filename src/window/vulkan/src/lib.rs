@@ -305,11 +305,12 @@ impl core::SwapChain<device_vulkan::Backend> for SwapChain {
         unsafe { core::Frame::new(index as usize) }
     }
 
-    fn present<Q>(&mut self, present_queue: &mut Q)
+    fn present<Q>(&mut self, present_queue: &mut Q, wait_semaphores: &[&handle::Semaphore<device_vulkan::Resources>])
         where Q: AsMut<device_vulkan::CommandQueue>
     {
         let frame = self.frame_queue.pop_front().expect("No frame currently queued up. Need to acquire a frame first.");
 
+        // TODO: wait semaphores
         let info = vk::PresentInfoKHR {
             s_type: vk::StructureType::PresentInfoKhr,
             p_next: ptr::null(),
