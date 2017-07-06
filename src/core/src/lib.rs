@@ -149,12 +149,6 @@ impl<R: Resources> ShaderSet<R> {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct Capabilities {
-    /// Recommended maximum number of vertices per draw call.
-    /// If there is no recommendation, the value is `None`.
-    pub max_vertex_count: Option<VertexCount>,
-    /// Recommended maximum number of indices per draw call.
-    /// If there is no recommendation, the value is `None`.
-    pub max_index_count: Option<IndexCount>,
     /// Maximum supported texture size.
     pub max_texture_size: usize,
     /// Maximum number of vertices for each patch.
@@ -168,7 +162,7 @@ pub struct Capabilities {
     pub instance_rate_supported: bool,
     /// Support base vertex offset for indexed drawing.
     pub vertex_base_supported: bool,
-    /// Support sRGB rendertargets.
+    /// Support sRGB textures and rendertargets.
     pub srgb_color_supported: bool,
     /// Support constant buffers.
     pub constant_buffer_supported: bool,
@@ -176,7 +170,7 @@ pub struct Capabilities {
     pub unordered_access_view_supported: bool,
     /// Support specifying the blend function and equation for each color target.
     pub separate_blending_slots_supported: bool,
-    /// Support accelerated buffer copy. (unused)
+    /// Support accelerated buffer copy.
     pub copy_buffer_supported: bool,
 }
 
