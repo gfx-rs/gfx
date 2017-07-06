@@ -41,7 +41,8 @@ pub trait Surface<B: Backend> {
     /// The queue family of the `present_queue` _must_ support surface presentation.
     /// This can be checked by calling [`supports_queue`](trait.Surface.html#tymethod.supports_queue).
     fn build_swapchain<Q>(&mut self, config: SwapchainConfig, present_queue: &Q) -> Self::SwapChain
-        where Q: AsRef<B::CommandQueue>;
+    where
+        Q: AsRef<B::CommandQueue>;
 }
 
 /// Handle to a backbuffer of the swapchain.
