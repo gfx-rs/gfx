@@ -102,7 +102,8 @@ pub fn main() {
     ).unwrap();
     let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&TRIANGLE, ());
     let mut graphics_pool = <device_gl::Backend as gfx::Backend>::GraphicsCommandPool::from_queue(graphics_queue.as_ref(), 1);
-    let semaphore = factory.create_semaphore();
+    let frame_semaphore = factory.create_semaphore();
+    let draw_semaphore = factory.create_semaphore();
 
     let mut data = pipe::Data {
         vbuf: vertex_buffer,
@@ -125,17 +126,16 @@ pub fn main() {
         });
 
         // Get next frame
-        let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&semaphore));
+        let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&frame_semaphore));
         data.out = views[frame.id()].clone();        
 
         // draw a frame
+        // wait for frame -> draw -> signal -> present
         let mut encoder = graphics_pool.acquire_graphics_encoder();
         encoder.clear(&data.out, CLEAR_COLOR);
         encoder.draw(&slice, &pso, &data);
-        encoder.synced_flush(&mut graphics_queue, &[&semaphore], &[], None);
-
-        // present
-        swap_chain.present(&mut graphics_queue);
+        encoder.synced_flush(&mut graphics_queue, &[&frame_semaphore], &[&draw_semaphore], None);
+        swap_chain.present(&mut graphics_queue, &[&draw_semaphore]);
         // factory.cleanup();
     }
 }

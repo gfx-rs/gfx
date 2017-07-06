@@ -73,8 +73,9 @@ impl<'a> core::SwapChain<device_gl::Backend> for SwapChain {
         core::Frame::new(0)
     }
 
-    fn present<Q>(&mut self, _: &mut Q)
-        where Q: AsMut<device_gl::CommandQueue> {
+    fn present<Q>(&mut self, _: &mut Q, _: &[&handle::Semaphore<device_gl::Resources>])
+        where Q: AsMut<device_gl::CommandQueue>
+    {
         self.window.borrow_mut().swap_buffers();
     }
 }
