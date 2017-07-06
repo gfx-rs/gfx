@@ -236,7 +236,7 @@ fn run<A, B, S, EL>((width, height): (u32, u32),
         // Wait til rendering has finished
         queue.wait_idle();
 
-        swap_chain.present(&mut queue);
+        swap_chain.present(&mut queue, &[]);
         harness.bump();
     }
 }
