@@ -446,9 +446,10 @@ impl core::SwapChain<device_dx11::Backend> for SwapChain11 {
         core::Frame::new(0)
     }
 
-    fn present<Q>(&mut self, _present_queue: &mut Q)
+    fn present<Q>(&mut self, _present_queue: &mut Q, wait_semaphores: &[&h::Semaphore<device_dx11::Resources>])
         where Q: AsMut<device_dx11::CommandQueue>
     {
+        // TODO: wait semaphores
         unsafe { self.swap_chain.Present(1, 0); }
     }
 }
@@ -479,9 +480,10 @@ impl core::SwapChain<device_dx12::Backend> for SwapChain12 {
         unsafe { core::Frame::new(index as usize) }
     }
 
-    fn present<Q>(&mut self, _present_queue: &mut Q)
+    fn present<Q>(&mut self, _present_queue: &mut Q, wait_semaphores: &[&h::Semaphore<device_dx12::Resources>])
         where Q: AsMut<device_dx12::CommandQueue>
     {
+        // TODO: wait semaphores
         unsafe { self.inner.Present(1, 0); }
     }
 }
