@@ -335,8 +335,6 @@ impl core::Adapter<Backend> for Adapter {
 
         let share = Arc::new(Share {
             capabilities: core::Capabilities {
-                max_vertex_count: None,
-                max_index_count: None,
                 max_texture_size: 0,
                 max_patch_size: 32, //hard-coded in D3D11
                 instance_base_supported: false,

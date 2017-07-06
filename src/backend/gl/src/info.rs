@@ -256,8 +256,6 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
     let tessellation_supported =           info.is_supported(&[Core(4,0),
                                                                Ext("GL_ARB_tessellation_shader")]);
     let caps = Capabilities {
-        max_vertex_count: Some(get_usize(gl, gl::MAX_ELEMENTS_VERTICES) as VertexCount),
-        max_index_count:  Some(get_usize(gl, gl::MAX_ELEMENTS_INDICES) as IndexCount),
         max_texture_size: get_usize(gl, gl::MAX_TEXTURE_SIZE),
         max_patch_size: if tessellation_supported { get_usize(gl, gl::MAX_PATCH_VERTICES) as u8 } else {0},
 
