@@ -238,47 +238,6 @@ pub struct Share {
     handles: RefCell<h::Manager<Resources>>,
 }
 
-/*
-pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHAIN_DESC)
-              -> Result<(Factory, *mut winapi::IDXGISwapChain), winapi::HRESULT> {
-    let mut swap_chain = ptr::null_mut();
-    let create_flags = winapi::D3D11_CREATE_DEVICE_FLAG(0); //D3D11_CREATE_DEVICE_DEBUG;
-    let mut device = ptr::null_mut();
-    let share = Share {
-        capabilities: core::Capabilities {
-            max_vertex_count: 0,
-            max_index_count: 0,
-            max_texture_size: 0,
-            max_patch_size: 32, //hard-coded in D3D11
-            instance_base_supported: false,
-            instance_call_supported: false,
-            instance_rate_supported: false,
-            vertex_base_supported: false,
-            srgb_color_supported: false,
-            constant_buffer_supported: true,
-            unordered_access_view_supported: false,
-            separate_blending_slots_supported: false,
-            copy_buffer_supported: true,
-        },
-        handles: RefCell::new(h::Manager::new()),
-    };
-
-    let mut context = ptr::null_mut();
-    let mut feature_level = winapi::D3D_FEATURE_LEVEL_10_0;
-    let hr = unsafe {
-        d3d11::D3D11CreateDeviceAndSwapChain(ptr::null_mut(), driver_type, ptr::null_mut(), create_flags.0,
-            &FEATURE_LEVELS[0], FEATURE_LEVELS.len() as winapi::UINT, winapi::D3D11_SDK_VERSION, desc,
-            &mut swap_chain, &mut device, &mut feature_level, &mut context)
-    };
-    if !winapi::SUCCEEDED(hr) {
-        return Err(hr)
-    }
-
-    let factory = Factory::new(device, feature_level, Arc::new(share));
-    Ok((factory, swap_chain))
-}
-*/
-
 pub type ShaderModel = u16;
 
 #[derive(Clone)]
@@ -376,8 +335,8 @@ impl core::Adapter<Backend> for Adapter {
 
         let share = Arc::new(Share {
             capabilities: core::Capabilities {
-                max_vertex_count: 0,
-                max_index_count: 0,
+                max_vertex_count: None,
+                max_index_count: None,
                 max_texture_size: 0,
                 max_patch_size: 32, //hard-coded in D3D11
                 instance_base_supported: false,
