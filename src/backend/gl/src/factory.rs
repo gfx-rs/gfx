@@ -344,7 +344,7 @@ impl f::Factory<R> for Factory {
         use core::state as s;
         let caps = &self.share.capabilities;
         match desc.primitive {
-            d::Primitive::PatchList(num) if num == 0 || (num as usize) > caps.max_patch_size =>
+            d::Primitive::PatchList(num) if num == 0 || num > caps.max_patch_size =>
                 return Err(d::pso::CreationError),
             _ => ()
         }

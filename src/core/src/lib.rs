@@ -79,6 +79,8 @@ pub const MAX_SAMPLERS: usize = 16;
 
 /// Draw vertex count.
 pub type VertexCount = u32;
+/// Draw number of indices.
+pub type IndexCount = u32;
 /// Draw number of instances
 pub type InstanceCount = u32;
 /// Number of vertices in a patch
@@ -143,25 +145,38 @@ impl<R: Resources> ShaderSet<R> {
     }
 }
 
-//TODO: use the appropriate units for max vertex count, etc
 /// Features that the device supports.
-#[allow(missing_docs)] // pretty self-explanatory fields!
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct Capabilities {
-    pub max_vertex_count: usize,
-    pub max_index_count: usize,
+    /// Recommended maximum number of vertices per draw call.
+    /// If there is no recommendation, the value is `None`.
+    pub max_vertex_count: Option<VertexCount>,
+    /// Recommended maximum number of indices per draw call.
+    /// If there is no recommendation, the value is `None`.
+    pub max_index_count: Option<IndexCount>,
+    /// Maximum supported texture size.
     pub max_texture_size: usize,
-    pub max_patch_size: usize,
+    /// Maximum number of vertices for each patch.
+    pub max_patch_size: PatchSize,
 
+    /// Support offsets for instanced drawing.
     pub instance_base_supported: bool,
+    /// Support instanced drawing.
     pub instance_call_supported: bool,
+    /// Support manually specified vertex attribute rates (divisors).
     pub instance_rate_supported: bool,
+    /// Support base vertex offset for indexed drawing.
     pub vertex_base_supported: bool,
+    /// Support sRGB rendertargets.
     pub srgb_color_supported: bool,
+    /// Support constant buffers.
     pub constant_buffer_supported: bool,
+    /// Support unordered-access views.
     pub unordered_access_view_supported: bool,
+    /// Support specifying the blend function and equation for each color target.
     pub separate_blending_slots_supported: bool,
+    /// Support accelerated buffer copy. (unused)
     pub copy_buffer_supported: bool,
 }
 

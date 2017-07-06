@@ -588,7 +588,7 @@ impl core::Factory<R> for Factory {
                 TriangleListAdjacency    => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ,
                 TriangleStripAdjacency   => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ,
                 PatchList(num)  => {
-                    if num == 0 || (num as usize) > caps.max_patch_size {
+                    if num == 0 || num > caps.max_patch_size {
                         return Err(core::pso::CreationError)
                     }
                     D3D_PRIMITIVE_TOPOLOGY(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST.0 + (num as u32) - 1)
