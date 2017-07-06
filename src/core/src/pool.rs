@@ -24,7 +24,8 @@ use std::ops::DerefMut;
 pub trait GeneralCommandPool<B: Backend>: CommandPool<B> {
     ///
     fn from_queue<Q>(queue: Q, capacity: usize) -> Self
-        where Q: Compatible<GeneralQueue<B>> + AsRef<B::CommandQueue>;
+    where
+        Q: Compatible<GeneralQueue<B>> + AsRef<B::CommandQueue>;
 
     /// Get a command buffer for recording.
     ///
@@ -32,29 +33,32 @@ pub trait GeneralCommandPool<B: Backend>: CommandPool<B> {
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
     fn acquire_command_buffer<'a>(&'a mut self)
-                                  -> command::Encoder<'a, B, GeneralCommandBuffer<B>>;
+        -> command::Encoder<'a, B, GeneralCommandBuffer<B>>;
 }
 
 /// Graphics command pool can allocate graphics command buffers.
 pub trait GraphicsCommandPool<B: Backend>: CommandPool<B> {
     ///
     fn from_queue<Q>(queue: Q, capacity: usize) -> Self
-        where Q: Compatible<GraphicsQueue<B>> + AsRef<B::CommandQueue>;
+    where
+        Q: Compatible<GraphicsQueue<B>> + AsRef<B::CommandQueue>;
 
     /// Get a command buffer for recording.
     ///
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
-    fn acquire_command_buffer<'a>(&'a mut self)
-                                  -> command::Encoder<'a, B, GraphicsCommandBuffer<B>>;
+    fn acquire_command_buffer<'a>(
+        &'a mut self,
+    ) -> command::Encoder<'a, B, GraphicsCommandBuffer<B>>;
 }
 
 /// Compute command pool can allocate compute command buffers.
 pub trait ComputeCommandPool<B: Backend>: CommandPool<B> {
     ///
     fn from_queue<Q>(queue: Q, capacity: usize) -> Self
-        where Q: Compatible<ComputeQueue<B>> + AsRef<B::CommandQueue>;
+    where
+        Q: Compatible<ComputeQueue<B>> + AsRef<B::CommandQueue>;
 
     /// Get a command buffer for recording.
     ///
@@ -62,29 +66,32 @@ pub trait ComputeCommandPool<B: Backend>: CommandPool<B> {
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
     fn acquire_command_buffer<'a>(&'a mut self)
-                                  -> command::Encoder<'a, B, ComputeCommandBuffer<B>>;
+        -> command::Encoder<'a, B, ComputeCommandBuffer<B>>;
 }
 
 /// Transfer command pool can allocate transfer command buffers.
 pub trait TransferCommandPool<B: Backend>: CommandPool<B> {
     ///
     fn from_queue<Q>(queue: Q, capacity: usize) -> Self
-        where Q: Compatible<TransferQueue<B>> + AsRef<B::CommandQueue>;
+    where
+        Q: Compatible<TransferQueue<B>> + AsRef<B::CommandQueue>;
 
     /// Get a command buffer for recording.
     ///
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
-    fn acquire_command_buffer<'a>(&'a mut self)
-                                  -> command::Encoder<'a, B, TransferCommandBuffer<B>>;
+    fn acquire_command_buffer<'a>(
+        &'a mut self,
+    ) -> command::Encoder<'a, B, TransferCommandBuffer<B>>;
 }
 
 /// Subpass command pool can allocate subpass command buffers.
 pub trait SubpassCommandPool<B: Backend>: CommandPool<B> {
     ///
     fn from_queue<Q>(queue: Q, capacity: usize) -> Self
-        where Q: Compatible<GraphicsQueue<B>> + AsRef<B::CommandQueue>;
+    where
+        Q: Compatible<GraphicsQueue<B>> + AsRef<B::CommandQueue>;
 
     /// Get a command buffer for recording.
     ///
@@ -92,5 +99,5 @@ pub trait SubpassCommandPool<B: Backend>: CommandPool<B> {
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
     fn acquire_command_buffer<'a>(&'a mut self)
-                                  -> command::Encoder<'a, B, B::SubpassCommandBuffer>;
+        -> command::Encoder<'a, B, B::SubpassCommandBuffer>;
 }

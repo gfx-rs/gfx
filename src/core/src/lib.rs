@@ -414,9 +414,12 @@ pub trait CommandQueue<B: Backend> {
     /// `fence` will be signalled after submission and _must_ be unsignalled.
     // TODO: `access` legacy (handle API)
     #[doc(hidden)]
-    unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>],
-                     fence: Option<&handle::Fence<B::Resources>>,
-                     access: &command::AccessInfo<B::Resources>);
+    unsafe fn submit(
+        &mut self,
+        submit_infos: &[QueueSubmit<B>],
+        fence: Option<&handle::Fence<B::Resources>>,
+        access: &command::AccessInfo<B::Resources>,
+    );
 
     ///
     fn wait_idle(&mut self);
