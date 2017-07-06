@@ -306,8 +306,8 @@ pub fn create(format: core::format::Format,
 
     let share = Share {
         capabilities: core::Capabilities {
-            max_vertex_count: 0,
-            max_index_count: 0,
+            max_vertex_count: None,
+            max_index_count: None,
             max_texture_size: 0,
             max_patch_size: 0,
             instance_base_supported: false,
