@@ -14,11 +14,10 @@
 
 #[macro_use]
 extern crate gfx;
-extern crate gfx_device_gl as device_gl;
 extern crate gfx_window_glutin;
 extern crate glutin;
 
-use gfx::{Adapter, Factory, FrameSync, GraphicsCommandPool, GraphicsPoolExt,
+use gfx::{Adapter, Factory, FrameSync, GraphicsPoolExt,
           Surface, SwapChain, SwapChainExt, WindowExt};
 use gfx::texture;
 use gfx::memory::Typed;
@@ -86,7 +85,7 @@ pub fn main() {
         pipe::new()
     ).unwrap();
     let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&TRIANGLE, ());
-    let mut graphics_pool = <device_gl::Backend as gfx::Backend>::GraphicsCommandPool::from_queue(graphics_queue.as_ref(), 1);
+    let mut graphics_pool = graphics_queue.create_graphics_pool(1);
     let frame_semaphore = factory.create_semaphore();
     let draw_semaphore = factory.create_semaphore();
 
