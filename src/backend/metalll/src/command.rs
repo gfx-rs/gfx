@@ -28,7 +28,7 @@ struct QueueInner {
 
 impl Drop for QueueInner {
     fn drop(&mut self) {
-        unsafe { 
+        unsafe {
             self.queue.release();
 
             if let Some(command_buffer) = *self.last_command_buffer.get() {
@@ -55,7 +55,7 @@ pub struct CommandBuffer {
 
 impl Drop for CommandBuffer {
     fn drop(&mut self) {
-        unsafe { 
+        unsafe {
             self.command_buffer.release();
 
             match self.encoder_state {
@@ -118,7 +118,7 @@ impl core::CommandQueue for CommandQueue {
         let mut last_command_buffer = None;
         for submit in submit_infos {
             // FIXME: wait for semaphores!
-         
+
             // FIXME: multiple buffers signaling!
             let signal_block = if !submit.signal_semaphores.is_empty() {
                 let semaphores_copy: Vec<_> = submit.signal_semaphores.iter().map(|semaphore| {
@@ -335,14 +335,10 @@ impl core::TransferCommandBuffer<Resources> for CommandBuffer {
     }
     fn copy_buffer_to_image(&mut self, src: &native::Buffer, dst: &native::Image, layout: memory::ImageLayout, regions: &[BufferImageCopy]) {
         let encoder = self.encode_blit();
-
         // FIXME: layout
-        
-        let bytes_per_row = get_format_bytes_per_pixel(dst.0.pixel_format()) * dst.0.width() as usize;
-        let bytes_per_image = bytes_per_row * dst.0.height() as usize;
 
         for region in regions {
-            let copy_size = &region.image_extent;
+            let copy_size = &region.image_extent; //TODO: extract from the image
             let image_offset = &region.image_offset;
 
             // TODO multiple layers
@@ -351,8 +347,8 @@ impl core::TransferCommandBuffer<Resources> for CommandBuffer {
                 msg_send![encoder.0,
                     copyFromBuffer: (src.0).0
                     sourceOffset: region.buffer_offset as NSUInteger
-                    sourceBytesPerRow: bytes_per_row as NSUInteger
-                    sourceBytesPerImage: bytes_per_image as NSUInteger
+                    sourceBytesPerRow: region.buffer_row_pitch as NSUInteger
+                    sourceBytesPerImage: region.buffer_slice_pitch as NSUInteger
                     sourceSize: MTLSize { width: copy_size.width as NSUInteger, height: copy_size.height as NSUInteger, depth: copy_size.depth as NSUInteger }
                     toTexture: (dst.0).0
                     destinationSlice: region.image_base_layer as NSUInteger
@@ -364,7 +360,7 @@ impl core::TransferCommandBuffer<Resources> for CommandBuffer {
     }
     fn copy_image_to_buffer(&mut self) {
         unimplemented!()
-    } 
+    }
 }
 
 impl core::ProcessingCommandBuffer<Resources> for CommandBuffer {
@@ -469,7 +465,7 @@ impl command::RenderPassInlineBuffer<CommandBuffer, Resources> for RenderPassInl
     {
         unsafe {
             // FIXME: subpasses
-            
+
             let pass_descriptor = framebuffer.0;
             // TODO: we may want to copy here because we will modify the Framebuffer (by setting
             // clear colors)
@@ -521,7 +517,7 @@ impl command::RenderPassInlineBuffer<CommandBuffer, Resources> for RenderPassInl
                                 if samplers.len() > 1 {
                                     unimplemented!()
                                 }
-                                
+
                                 let sampler = samplers[0];
                                 render_encoder.set_fragment_sampler_state(binding as u64, sampler);
                             },

@@ -204,7 +204,7 @@ impl core::Factory<R> for Factory {
             //TODO: merge with `map_heap_properties`
             default_state: if !heap_type.properties.contains(memory::CPU_VISIBLE) {
                 winapi::D3D12_RESOURCE_STATE_COMMON
-            } else if heap_type.properties.contains(memory::WRITE_COMBINED) {
+            } else if heap_type.properties.contains(memory::COHERENT) {
                 winapi::D3D12_RESOURCE_STATE_GENERIC_READ
             } else {
                 winapi::D3D12_RESOURCE_STATE_COPY_DEST

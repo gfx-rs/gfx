@@ -24,7 +24,7 @@ pub fn map_heap_properties(props: memory::HeapProperties) -> D3D12_HEAP_PROPERTI
     D3D12_HEAP_PROPERTIES {
         Type: if !props.contains(memory::CPU_VISIBLE) {
             D3D12_HEAP_TYPE_DEFAULT
-        } else if props.contains(memory::WRITE_COMBINED) {
+        } else if props.contains(memory::COHERENT) {
             D3D12_HEAP_TYPE_UPLOAD
         } else {
             D3D12_HEAP_TYPE_READBACK

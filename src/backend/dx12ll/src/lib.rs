@@ -29,7 +29,6 @@ use comptr::ComPtr;
 use std::ptr;
 use std::os::raw::c_void;
 use std::os::windows::ffi::OsStringExt;
-use std::ops::Deref;
 use std::collections::VecDeque;
 use std::ffi::OsString;
 use winapi::BOOL;
@@ -48,7 +47,7 @@ mod state;
 pub use pool::{GeneralCommandPool, GraphicsCommandPool,
     ComputeCommandPool, TransferCommandPool, SubpassCommandPool};
 
-const HEAP_TYPES: [winapi::D3D12_HEAP_TYPE; 3] = [
+const _HEAP_TYPES: [winapi::D3D12_HEAP_TYPE; 3] = [
     winapi::D3D12_HEAP_TYPE_DEFAULT,
     winapi::D3D12_HEAP_TYPE_UPLOAD,
     winapi::D3D12_HEAP_TYPE_READBACK,
@@ -263,14 +262,6 @@ impl core::CommandQueue for CommandQueue {
 
     fn wait_idle(&mut self) {
         unimplemented!()
-    }
-
-    fn wait(&mut self, fences: &[&native::Fence]) {
-        for fence in fences {
-            assert_eq!(winapi::S_OK, unsafe {
-                self.inner.Wait(fence.inner.as_mut_ptr(), 1)
-            });
-        }
     }
 }
 
