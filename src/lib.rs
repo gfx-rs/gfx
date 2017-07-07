@@ -43,7 +43,7 @@ extern crate gfx_device_vulkan;
 extern crate gfx_window_vulkan;
 
 use gfx_core::memory::Typed;
-use gfx_core::{Adapter, Backend, CommandQueue, FrameSync, Surface, SwapChain, QueueFamily, WindowExt};
+use gfx_core::{Adapter, Backend, CommandQueue, FrameSync, SwapChain, QueueFamily, WindowExt};
 use gfx_core::pool::GraphicsCommandPool;
 
 pub mod shade;
@@ -228,6 +228,7 @@ fn run<A, B, S, EL>((width, height): (u32, u32),
         queue.wait_idle();
 
         swap_chain.present(&mut queue, &[]);
+        queue.cleanup();
         harness.bump();
     }
 }
