@@ -16,13 +16,57 @@
 //!
 //! There are different types of queues, which can create and submit associated command buffers.
 
-use {Backend, CommandQueue, QueueSubmit, Resources, handle};
+use {pso, Backend, Resources, handle};
 use command::{AccessInfo, Submit};
 use pool::{GeneralCommandPool, GraphicsCommandPool, ComputeCommandPool,
            TransferCommandPool, SubpassCommandPool};
 use std::borrow::{Borrow, BorrowMut};
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
+
+/// `QueueFamily` denotes a group of command queues provided by the backend
+/// with the same properties/type.
+pub trait QueueFamily: 'static {
+    /// Return the number of available queues of this family
+    // TODO: some backends like d3d12 support infinite software queues (verify)
+    fn num_queues(&self) -> u32;
+}
+
+/// Submission information for a command queue.
+pub struct QueueSubmit<'a, B: Backend + 'a> {
+    /// Command buffers to submit.
+    pub cmd_buffers: &'a [Submit<B>],
+    /// Semaphores to wait being signaled before submission.
+    pub wait_semaphores: &'a [(&'a handle::Semaphore<B::Resources>, pso::PipelineStage)],
+    /// Semaphores which get signaled after submission.
+    pub signal_semaphores: &'a [&'a handle::Semaphore<B::Resources>],
+}
+
+/// `CommandQueues` are abstractions to the internal GPU execution engines.
+/// Commands are executed on the the device by submitting command buffers to queues.
+pub trait CommandQueue<B: Backend> {
+    /// Submit command buffers to queue for execution.
+    /// `fence` will be signalled after submission and _must_ be unsignalled.
+    // TODO: `access` legacy (handle API)
+    #[doc(hidden)]
+    unsafe fn submit(
+        &mut self,
+        submit_infos: &[QueueSubmit<B>],
+        fence: Option<&handle::Fence<B::Resources>>,
+        access: &AccessInfo<B::Resources>,
+    );
+
+    ///
+    fn wait_idle(&mut self);
+
+    /// Pin everything from this handle manager to live for a frame.
+    // TODO: legacy (handle API)
+    fn pin_submitted_resources(&mut self, &handle::Manager<B::Resources>);
+
+    /// Cleanup unused resources. This should be called between frames.
+    // TODO: legacy (handle API)
+    fn cleanup(&mut self);
+}
 
 /// Defines queue compatibility regarding functionality.
 ///
@@ -254,7 +298,7 @@ macro_rules! impl_create_pool {
     ($func:ident $pool:ident for) => ();
     ($func:ident $pool:ident for $queue:ident $($tail:ident)*) => (
         impl<B: Backend> $queue<B> {
-            ///
+            /// Create a new command pool with given number of command buffers.
             pub fn $func(&self, capacity: usize) -> B::$pool {
                 B::$pool::from_queue(self, capacity)
             }
@@ -274,7 +318,7 @@ macro_rules! impl_create_pool_ref {
     ($func:ident $pool:ident for) => ();
     ($func:ident $pool:ident for $queue:ident $($tail:ident)*) => (
         impl<'a, B: Backend> $queue<'a, B> {
-            ///
+            /// Create a new command pool with given number of command buffers.
             pub fn $func(&self, capacity: usize) -> B::$pool {
                 B::$pool::from_queue(self, capacity)
             }
