@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use comptr::ComPtr;
-use std::{cmp, mem, ptr, ops};
+use std::{cmp, mem, ptr};
 use winapi::{self, UINT, UINT64, FLOAT};
 
 use core::{self, command, memory, pso, state, target, IndexType, VertexCount, VertexOffset};

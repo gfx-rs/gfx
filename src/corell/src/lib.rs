@@ -196,8 +196,6 @@ pub trait CommandQueue {
 
     ///
     fn wait_idle(&mut self);
-
-    fn wait(&mut self, fences: &[&<Self::R as Resources>::Fence]);
 }
 
 /// `CommandPool` can allocate command buffers of a specific type only.

@@ -35,7 +35,6 @@ use gfx_corell::factory::{DescriptorHeapType, DescriptorPoolDesc, DescriptorType
     DescriptorSetLayoutBinding, DescriptorSetWrite, DescriptorWrite, WaitFor};
 
 use std::io::Cursor;
-use std::ops::Deref;
 use gfx_corell::image as i;
 
 pub type ColorFormat = gfx_corell::format::Srgba8;
@@ -269,17 +268,26 @@ fn main() {
     let img = image::load(Cursor::new(&img_data[..]), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
     let kind = i::Kind::D2(width as i::Size, height as i::Size, i::AaMode::Single);
+    let row_alignment_mask = 0xFF; //D3D12 restriction, TODO: have it in device capabilities
+    let row_pitch = (width * 4 + row_alignment_mask) & !row_alignment_mask;
+    let upload_size = (height * row_pitch) as u64;
+    println!("upload row pitch {}, total size {}", row_pitch, upload_size);
 
-    let image_upload_heap = factory.create_heap(upload_heap, img.len() as u64);
+    let image_upload_heap = factory.create_heap(upload_heap, upload_size);
     let image_upload_buffer = {
-        let buffer = factory.create_buffer(img.len() as u64, buffer::TRANSFER_SRC).unwrap();
+        let buffer = factory.create_buffer(upload_size, buffer::TRANSFER_SRC).unwrap();
         factory.bind_buffer_memory(&image_upload_heap, 0, buffer).unwrap()
     };
 
     // copy image data into staging buffer
     {
-        let mut mapping = factory.write_mapping::<u8>(&image_upload_buffer, 0, img.len() as u64).unwrap();
-        mapping.copy_from_slice(img.deref());
+        let mut mapping = factory.write_mapping::<u8>(&image_upload_buffer, 0, upload_size).unwrap();
+        for y in 0 .. height as usize {
+            let row = &(*img)[y*(width as usize)*4 .. (y+1)*(width as usize)*4];
+            let dest_base = y * row_pitch as usize;
+            mapping[dest_base .. dest_base + row.len()].copy_from_slice(row);
+        }
+        mapping.copy_from_slice(&*img);
     }
 
     let image = factory.create_image(kind, 1, gfx_corell::format::Srgba8::get_format(), i::TRANSFER_DST | i::SAMPLED).unwrap(); // TODO: usage
@@ -344,8 +352,8 @@ fn main() {
                 memory::ImageLayout::TransferDstOptimal,
                 &[command::BufferImageCopy {
                     buffer_offset: 0,
-                    buffer_row_pitch: 0,
-                    buffer_slice_pitch: 0,
+                    buffer_row_pitch: row_pitch,
+                    buffer_slice_pitch: row_pitch * (height as u32),
                     image_mip_level: 0,
                     image_base_layer: 0,
                     image_layers: 1,
@@ -374,6 +382,7 @@ fn main() {
         );
 
         factory.wait_for_fences(&[&frame_fence], WaitFor::All, !0);
+        general_queues[0].wait_idle();
     }
 
     //
@@ -435,6 +444,7 @@ fn main() {
 
         // TODO: replace with semaphore
         factory.wait_for_fences(&[&frame_fence], WaitFor::All, !0);
+        general_queues[0].wait_idle();
 
         // present frame
         swap_chain.present();
