@@ -18,6 +18,8 @@
 
 use {Backend, CommandQueue, QueueSubmit, Resources, handle};
 use command::{AccessInfo, Submit};
+use pool::{GeneralCommandPool, GraphicsCommandPool, ComputeCommandPool,
+           TransferCommandPool, SubpassCommandPool};
 use std::borrow::{Borrow, BorrowMut};
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
@@ -112,8 +114,11 @@ macro_rules! define_queue {
 
         // Self compatibility
         impl<B: Backend> Compatible<$queue<B>> for $queue<B> { }
+        impl<'a, B: Backend> Compatible<$queue<B>> for &'a $queue<B> { }
         impl<'a, B: Backend> Compatible<$queue<B>> for $queue_ref<'a, B> { }
+        impl<'a, B: Backend> Compatible<$queue<B>> for &'a $queue_ref<'a, B> { }
         impl<'a, B: Backend> Compatible<$queue<B>> for $queue_mut<'a, B> { }
+        impl<'a, B: Backend> Compatible<$queue<B>> for &'a $queue_mut<'a, B> { }
 
         impl<B: Backend> AsRef<B::CommandQueue> for $queue<B> {
             fn as_ref(&self) -> &B::CommandQueue {
@@ -177,8 +182,11 @@ macro_rules! define_queue {
         }
 
         impl<B: Backend> Compatible<$derive<B>> for $queue<B> { }
+        impl<'a, B: Backend> Compatible<$derive<B>> for &'a $queue<B> { }
         impl<'a, B: Backend> Compatible<$derive<B>> for $queue_ref<'a, B> { }
+        impl<'a, B: Backend> Compatible<$derive<B>> for &'a $queue_ref<'a, B> { }
         impl<'a, B: Backend> Compatible<$derive<B>> for $queue_mut<'a, B> { }
+        impl<'a, B: Backend> Compatible<$derive<B>> for &'a $queue_mut<'a, B> { }
 
         define_queue! {
             ($queue, $queue_ref, $queue_mut)
@@ -239,3 +247,56 @@ define_queue! {
         can (submit_transfer)
         derives ()
 }
+
+// Command pool creation implementations
+
+macro_rules! impl_create_pool {
+    ($func:ident $pool:ident for) => ();
+    ($func:ident $pool:ident for $queue:ident $($tail:ident)*) => (
+        impl<B: Backend> $queue<B> {
+            ///
+            pub fn $func(&self, capacity: usize) -> B::$pool {
+                B::$pool::from_queue(self, capacity)
+            }
+        }
+
+        impl_create_pool!($func $pool for $($tail)*);
+    );
+}
+
+impl_create_pool!(create_general_pool GeneralCommandPool for GeneralQueue);
+impl_create_pool!(create_graphics_pool GraphicsCommandPool for GeneralQueue GraphicsQueue);
+impl_create_pool!(create_compute_pool ComputeCommandPool for GeneralQueue ComputeQueue);
+impl_create_pool!(create_transfer_pool TransferCommandPool for GeneralQueue GraphicsQueue ComputeQueue TransferQueue);
+impl_create_pool!(create_subpass_pool SubpassCommandPool for GeneralQueue GraphicsQueue);
+
+macro_rules! impl_create_pool_ref {
+    ($func:ident $pool:ident for) => ();
+    ($func:ident $pool:ident for $queue:ident $($tail:ident)*) => (
+        impl<'a, B: Backend> $queue<'a, B> {
+            ///
+            pub fn $func(&self, capacity: usize) -> B::$pool {
+                B::$pool::from_queue(self, capacity)
+            }
+        }
+
+        impl_create_pool_ref!($func $pool for $($tail)*);
+    );
+}
+
+impl_create_pool_ref!(create_general_pool GeneralCommandPool for
+    GeneralQueueRef GeneralQueueMut);
+impl_create_pool_ref!(create_graphics_pool GraphicsCommandPool for
+    GeneralQueueRef GeneralQueueMut
+    GraphicsQueueRef GraphicsQueueMut);
+impl_create_pool_ref!(create_compute_pool ComputeCommandPool for
+    GeneralQueueRef GeneralQueueMut
+    ComputeQueueRef ComputeQueueMut);
+impl_create_pool_ref!(create_transfer_pool TransferCommandPool for
+    GeneralQueueRef GeneralQueueMut
+    GraphicsQueueRef GraphicsQueueMut
+    ComputeQueueRef ComputeQueueMut
+    TransferQueueRef TransferQueueMut);
+impl_create_pool_ref!(create_subpass_pool SubpassCommandPool for
+    GeneralQueueRef GeneralQueueMut
+    GraphicsQueueRef GraphicsQueueMut);
