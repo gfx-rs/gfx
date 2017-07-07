@@ -17,11 +17,10 @@ extern crate gfx;
 extern crate gfx_window_glutin;
 extern crate glutin;
 
-use gfx::{Adapter, Factory, FrameSync, GraphicsPoolExt,
+use gfx::{Adapter, CommandQueue, Factory, FrameSync, GraphicsPoolExt,
           Surface, SwapChain, SwapChainExt, WindowExt};
 use gfx::format::Formatted;
 use gfx::texture;
-use gfx::memory::Typed;
 use gfx::traits::FactoryExt;
 use glutin::GlContext;
 
@@ -121,6 +120,6 @@ pub fn main() {
         encoder.draw(&slice, &pso, &data);
         encoder.synced_flush(&mut graphics_queue, &[&frame_semaphore], &[&draw_semaphore], None);
         swap_chain.present(&mut graphics_queue, &[&draw_semaphore]);
-        // factory.cleanup();
+        graphics_queue.cleanup();
     }
 }
