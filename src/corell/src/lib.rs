@@ -25,7 +25,7 @@ use std::slice::Iter;
 use std::ops::{Deref};
 
 pub use draw_state::{state, target};
-pub use self::factory::Factory;
+pub use factory::{Factory, WaitFor};
 pub use queue::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 pub use pool::{GeneralCommandPool, GraphicsCommandPool};
 pub use command::{CommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer,
@@ -103,7 +103,7 @@ pub trait Instance {
     /// Instantiate a new `Instance`, this is our entry point for applications
     fn create() -> Self;
 
-    /// Enumerate all available adapters supporting this backend 
+    /// Enumerate all available adapters supporting this backend
     fn enumerate_adapters(&self) -> Vec<Self::Adapter>;
 
     /// Create a new surface from a native window.
@@ -196,6 +196,8 @@ pub trait CommandQueue {
 
     ///
     fn wait_idle(&mut self);
+
+    fn wait(&mut self, fences: &[&<Self::R as Resources>::Fence]);
 }
 
 /// `CommandPool` can allocate command buffers of a specific type only.
@@ -259,7 +261,7 @@ pub trait SwapChain {
     fn present(&mut self);
 }
 
-/// Different resource types of a specific API. 
+/// Different resource types of a specific API.
 pub trait Resources:          Clone + Hash + Debug + Any {
     type ShaderLib:           Send + Sync + Resource<Self>;
     type RenderPass:          Send + Sync + Resource<Self>;

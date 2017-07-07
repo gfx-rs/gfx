@@ -131,7 +131,11 @@ unsafe impl Send for Semaphore {}
 unsafe impl Sync for Semaphore {}
 
 #[derive(Debug)]
-pub struct Fence;
+pub struct Fence {
+    pub inner: ComPtr<winapi::ID3D12Fence>,
+}
+unsafe impl Send for Fence {}
+unsafe impl Sync for Fence {}
 
 #[derive(Debug)]
 pub struct FrameBuffer {

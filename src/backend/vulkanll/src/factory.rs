@@ -1231,6 +1231,22 @@ impl core::Factory<R> for Factory {
         }
     }
 
+    fn wait_for_fences(&mut self, fences: &[&native::Fence], wait: f::WaitFor, timeout_ms: u32) -> bool
+        let fences = fences.iter().map(|fence| fence.0).collect::<Vec<_>>();
+        let all = match wait {
+            f::WaitFor::Any => vk::FALSE,
+            f::WaitFor::All => vk::TRUE,
+        };
+        let status = unsafe {
+            self.inner.0.wait_for_fences(fences.len(), fences.as_ptr(), all, timeout_ms as u64 * 1000)
+        };
+        match status {
+            vk::SUCCESS, => true,
+            vk::TIMEOUT, => false,
+            _ => panic!("Unexpected wait status 0x{:X}", status),
+        }
+    }
+
     fn destroy_heap(&mut self, heap: native::Heap) {
         unsafe { self.inner.0.free_memory(heap.0, None); }
     }
