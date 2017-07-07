@@ -44,7 +44,7 @@ pub use self::command::CommandBuffer;
 pub use self::factory::Factory;
 pub use self::pool::{ComputeCommandPool, GeneralCommandPool, GraphicsCommandPool,
                      SubpassCommandPool, TransferCommandPool};
-pub use self::queue::{ComputeQueue, GeneralQueue, GraphicsQueue, TransferQueue};
+pub use self::queue::{CommandQueue, ComputeQueue, GeneralQueue, GraphicsQueue, QueueFamily, QueueSubmit, TransferQueue};
 pub use self::window::{Backbuffer, Frame, FrameSync, Surface, SwapChain, SwapchainConfig,
                        WindowExt};
 pub use draw_state::{state, target};
@@ -381,50 +381,6 @@ pub struct AdapterInfo {
     pub device: usize,
     /// The device is based on a software rasterizer
     pub software_rendering: bool,
-}
-
-/// `QueueFamily` denotes a group of command queues provided by the backend
-/// with the same properties/type.
-pub trait QueueFamily: 'static {
-    /// Return the number of available queues of this family
-    // TODO: some backends like d3d12 support infinite software queues (verify)
-    fn num_queues(&self) -> u32;
-}
-
-/// Submission information for a command queue.
-pub struct QueueSubmit<'a, B: Backend + 'a> {
-    /// Command buffers to submit.
-    pub cmd_buffers: &'a [command::Submit<B>],
-    /// Semaphores to wait being signaled before submission.
-    pub wait_semaphores: &'a [(&'a handle::Semaphore<B::Resources>, pso::PipelineStage)],
-    /// Semaphores which get signaled after submission.
-    pub signal_semaphores: &'a [&'a handle::Semaphore<B::Resources>],
-}
-
-/// Dummy trait for command queues.
-/// CommandBuffers will be later submitted to command queues instead of the device.
-pub trait CommandQueue<B: Backend> {
-    /// Submit command buffers to queue for execution.
-    /// `fence` will be signalled after submission and _must_ be unsignalled.
-    // TODO: `access` legacy (handle API)
-    #[doc(hidden)]
-    unsafe fn submit(
-        &mut self,
-        submit_infos: &[QueueSubmit<B>],
-        fence: Option<&handle::Fence<B::Resources>>,
-        access: &command::AccessInfo<B::Resources>,
-    );
-
-    ///
-    fn wait_idle(&mut self);
-
-    /// Pin everything from this handle manager to live for a frame.
-    // TODO: legacy (handle API)
-    fn pin_submitted_resources(&mut self, &handle::Manager<B::Resources>);
-
-    /// Cleanup unused resources. This should be called between frames.
-    // TODO: legacy (handle API)
-    fn cleanup(&mut self);
 }
 
 /// `CommandPool` can allocate command buffers of a specific type only.
