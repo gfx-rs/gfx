@@ -578,6 +578,9 @@ impl core::Factory<Resources> for Factory {
     fn reset_fences(&mut self, fences: &[&Fence]) {
         unimplemented!()
     }
+    fn wait_for_fences(&mut self, _fences: &[&Fence], _wait: WaitFor, _timeout_ms: u32) -> bool {
+        error!("`wait_for_fences` is not implemented yet"); //TODO
+    }
     #[cfg(not(feature = "native_fence"))]
     fn destroy_fence(&mut self, fence: Fence) {
         unimplemented!()

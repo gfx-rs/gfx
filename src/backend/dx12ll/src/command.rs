@@ -300,7 +300,17 @@ impl CommandBuffer {
     }
 
     fn set_scissors(&mut self, scissors: &[target::Rect]) {
-        unimplemented!()
+        let rects = scissors.iter().map(|rect| {
+            winapi::D3D12_RECT {
+                left: rect.x as i32,
+                top: rect.y as i32,
+                right: (rect.x + rect.w) as i32,
+                bottom: (rect.y + rect.h) as i32,
+            }
+        }).collect::<Vec<_>>();
+        unsafe {
+            self.inner.RSSetScissorRects(rects.len() as UINT, rects.as_ptr())
+        };
     }
 
     fn set_ref_values(&mut self, _: state::RefValues) {

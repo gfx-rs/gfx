@@ -21,6 +21,7 @@ extern crate dxgi;
 extern crate dxguid;
 #[macro_use]
 extern crate gfx_corell as core;
+extern crate kernel32;
 extern crate winapi;
 extern crate winit;
 
@@ -102,7 +103,7 @@ impl core::Adapter for Adapter {
 
         // TODO: other queue types
         // Create command queues
-        let mut general_queues = queue_descs.flat_map(|(_family, queue_count)| {
+        let general_queues = queue_descs.flat_map(|(_family, queue_count)| {
             (0..queue_count).map(|_| {
                 let mut queue = ComPtr::<winapi::ID3D12CommandQueue>::new(ptr::null_mut());
                 let queue_desc = winapi::D3D12_COMMAND_QUEUE_DESC {
@@ -129,7 +130,7 @@ impl core::Adapter for Adapter {
                         CommandQueue {
                             inner: queue,
                             device: device.clone(),
-                            list_type: winapi::D3D12_COMMAND_LIST_TYPE_DIRECT, // TODO
+                            list_type: queue_desc.Type,
                         }
                     )
                 }
@@ -185,6 +186,7 @@ pub struct Factory {
     rtv_pool: native::DescriptorSetPool,
     srv_pool: native::DescriptorSetPool,
     sampler_pool: native::DescriptorSetPool,
+    events: Vec<winapi::HANDLE>,
 }
 
 impl Factory {
@@ -221,6 +223,7 @@ impl Factory {
             rtv_pool,
             srv_pool,
             sampler_pool,
+            events: Vec::new(),
         }
     }
 }
@@ -243,15 +246,31 @@ impl core::CommandQueue for CommandQueue {
     unsafe fn submit<C>(&mut self, submit_infos: &[core::QueueSubmit<C, Resources>], fence: Option<&mut native::Fence>)
         where C: core::CommandBuffer<SubmitInfo = command::SubmitInfo>
     {
-        let mut command_lists = submit_infos.iter().map(|submit| {
-            submit.cmd_buffers.as_ptr()
-        }).collect::<Vec<_>>();
+        let mut lists = Vec::new();
+        for submit in submit_infos {
+            lists.clear();
+            lists.extend(submit.cmd_buffers.iter()
+                .map(|cmd| cmd.get_info().0.as_mut_ptr() as *mut _));
+            self.inner.ExecuteCommandLists(lists.len() as u32, lists.as_mut_ptr());
+        }
 
-        self.inner.ExecuteCommandLists(command_lists.len() as u32, command_lists.as_mut_ptr() as *mut *mut _);
+        if let Some(fence) = fence {
+            assert_eq!(winapi::S_OK,
+                self.inner.Signal(fence.inner.as_mut_ptr(), 1)
+            );
+        }
     }
 
     fn wait_idle(&mut self) {
         unimplemented!()
+    }
+
+    fn wait(&mut self, fences: &[&native::Fence]) {
+        for fence in fences {
+            assert_eq!(winapi::S_OK, unsafe {
+                self.inner.Wait(fence.inner.as_mut_ptr(), 1)
+            });
+        }
     }
 }
 

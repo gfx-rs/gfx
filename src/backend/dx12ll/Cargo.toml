@@ -33,6 +33,7 @@ d3d12-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx
 d3dcompiler-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
 dxgi-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
 dxguid-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
+kernel32-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
 comptr = { git = "https://github.com/msiglreith/comptr-rs.git" }
 winapi = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
 winit = "0.7"

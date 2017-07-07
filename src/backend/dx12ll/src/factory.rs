@@ -16,6 +16,7 @@ use comptr::ComPtr;
 use d3d12;
 use d3dcompiler;
 use dxguid;
+use kernel32;
 use winapi;
 
 use std::{cmp, ffi, mem, ptr, slice};
@@ -729,25 +730,66 @@ impl core::Factory<R> for Factory {
     }
 
     fn create_semaphore(&mut self) -> native::Semaphore {
-        let mut fence = ptr::null_mut();
-        assert_eq!(winapi::S_OK, unsafe {
-            self.inner.CreateFence(0,
-                winapi::D3D12_FENCE_FLAGS(0),
-                &dxguid::IID_ID3D12Fence,
-                &mut fence)
-        });
-
+        let fence = self.create_fence(false);
         native::Semaphore {
-            fence: ComPtr::new(fence as *mut _),
+            fence: fence.inner, //TODO
         }
     }
 
     fn create_fence(&mut self, signaled: bool) -> native::Fence {
-        unimplemented!()
+        let mut handle = ptr::null_mut();
+        assert_eq!(winapi::S_OK, unsafe {
+            self.inner.CreateFence(0,
+                winapi::D3D12_FENCE_FLAGS(0),
+                &dxguid::IID_ID3D12Fence,
+                &mut handle)
+        });
+
+        native::Fence {
+            inner: ComPtr::new(handle as *mut _),
+        }
     }
 
     fn reset_fences(&mut self, fences: &[&native::Fence]) {
-        unimplemented!()
+        for fence in fences {
+            assert_eq!(winapi::S_OK, unsafe {
+                fence.inner.clone().Signal(0)
+            });
+        }
+    }
+
+    fn wait_for_fences(&mut self, fences: &[&native::Fence], wait: f::WaitFor, timeout_ms: u32) -> bool {
+        for _ in self.events.len() .. fences.len() {
+            self.events.push(unsafe {
+                kernel32::CreateEventA(ptr::null_mut(),
+                    winapi::FALSE, winapi::FALSE,
+                    ptr::null())
+            });
+        }
+
+        for (&event, fence) in self.events.iter().zip(fences.iter()) {
+            assert_eq!(winapi::S_OK, unsafe {
+                kernel32::ResetEvent(event);
+                fence.inner.clone().SetEventOnCompletion(1, event)
+            });
+        }
+
+        let all = match wait {
+            f::WaitFor::Any => winapi::FALSE,
+            f::WaitFor::All => winapi::TRUE,
+        };
+        let hr = unsafe {
+            kernel32::WaitForMultipleObjects(fences.len() as u32, self.events.as_ptr(), all, timeout_ms)
+        };
+
+        const WAIT_OBJECT_LAST: u32 = winapi::WAIT_OBJECT_0 + winapi::MAXIMUM_WAIT_OBJECTS;
+        const WAIT_ABANDONED_LAST: u32 = winapi::WAIT_ABANDONED_0 + winapi::MAXIMUM_WAIT_OBJECTS;
+        match hr {
+            winapi::WAIT_OBJECT_0 ... WAIT_OBJECT_LAST => true,
+            winapi::WAIT_ABANDONED_0 ... WAIT_ABANDONED_LAST => true, //TODO?
+            winapi::WAIT_TIMEOUT => false,
+            _ => panic!("Unexpected wait status 0x{:X}", hr),
+        }
     }
 
     fn destroy_heap(&mut self, heap: native::Heap) {

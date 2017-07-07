@@ -32,7 +32,7 @@ use gfx_corell::command::{RenderPassEncoder, RenderPassInlineEncoder};
 use gfx_corell::format::Formatted;
 use gfx_corell::memory::{self, ImageBarrier, ImageStateSrc, ImageStateDst, ImageLayout, ImageAccess};
 use gfx_corell::factory::{DescriptorHeapType, DescriptorPoolDesc, DescriptorType,
-    DescriptorSetLayoutBinding, DescriptorSetWrite, DescriptorWrite};
+    DescriptorSetLayoutBinding, DescriptorSetWrite, DescriptorWrite, WaitFor};
 
 use std::io::Cursor;
 use std::ops::Deref;
@@ -323,6 +323,7 @@ fn main() {
     };
 
     let mut frame_semaphore = factory.create_semaphore();
+    let mut frame_fence = factory.create_fence(false); // TODO: remove
     let mut graphics_pool = back::GraphicsCommandPool::from_queue(&mut general_queues[0], 16);
 
     // copy buffer to texture
@@ -369,8 +370,10 @@ fn main() {
                     signal_semaphores: &[],
                 }
             ],
-            None,
+            Some(&mut frame_fence),
         );
+
+        factory.wait_for_fences(&[&frame_fence], WaitFor::All, !0);
     }
 
     //
@@ -390,8 +393,7 @@ fn main() {
             }
         });
 
-        general_queues[0].wait_idle(); // SLOW!
-
+        factory.reset_fences(&[&frame_fence]);
         graphics_pool.reset();
         let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&mut frame_semaphore));
 
@@ -417,7 +419,6 @@ fn main() {
             }
 
             // TODO: should transition to (_, Present) -> Present (for d3d12)
-
             cmd_buffer.finish()
         };
 
@@ -429,10 +430,11 @@ fn main() {
                     signal_semaphores: &[],
                 }
             ],
-            None,
+            Some(&mut frame_fence),
         );
 
-        general_queues[0].wait_idle(); // TODO: replace with semaphore
+        // TODO: replace with semaphore
+        factory.wait_for_fences(&[&frame_fence], WaitFor::All, !0);
 
         // present frame
         swap_chain.present();

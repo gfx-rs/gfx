@@ -102,6 +102,14 @@ pub enum DescriptorWrite<'a, R: Resources> {
     InputAttachment(Vec<(&'a R::ShaderResourceView, memory::ImageLayout)>),
 }
 
+/// Specifies the waiting targets.
+pub enum WaitFor {
+    /// Wait for any target.
+    Any,
+    /// Wait for all targets at once.
+    All,
+}
+
 /// A `Factory` is responsible for creating and managing resources for the backend it was created
 /// with.
 ///
@@ -229,6 +237,10 @@ pub trait Factory<R: Resources> {
 
     ///
     fn reset_fences(&mut self, fences: &[&R::Fence]);
+
+    /// Blocks until all or one of the given fences are signalled.
+    /// Returns true if fences were signalled before the timeout.
+    fn wait_for_fences(&mut self, fences: &[&R::Fence], wait: WaitFor, timeout_ms: u32) -> bool;
 
     ///
     fn destroy_heap(&mut self, R::Heap);
