@@ -17,8 +17,10 @@ extern crate gfx;
 extern crate gfx_window_glutin;
 extern crate glutin;
 
+use gfx::format::Formatted;
 use gfx::traits::FactoryExt;
-use gfx::Device;
+use gfx::{Adapter, Device, Factory, FrameSync, GraphicsPoolExt,
+          Surface, SwapChain, SwapChainExt, WindowExt};
 
 pub type ColorFormat = gfx::format::Rgba8;
 pub type DepthFormat = gfx::format::DepthStencil;
@@ -50,18 +52,43 @@ pub fn main() {
         .with_title("Gamma example".to_string())
         .with_dimensions(1024, 768)
         .with_vsync();
-    let (window, mut device, mut factory, main_color, mut main_depth) =
-        gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder, &events_loop);
-    let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
+    let window = gfx_window_glutin::build(builder, &events_loop, ColorFormat::get_format(), DepthFormat::get_format());
+
+    let (mut surface, adapters) = gfx_window_glutin::Window(&window).get_surface_and_adapters();
+    let queue_descs = adapters[0].get_queue_families().iter()
+                                 .filter(|family| surface.supports_queue(&family) )
+                                 .map(|family| { (family, 1) })
+                                 .collect::<Vec<_>>();
+
+    // Open device (factory and queues)
+    let gfx::Device { mut factory, mut general_queues, mut graphics_queues, .. } = adapters[0].open(&queue_descs);
+    let mut graphics_queue = if let Some(queue) = general_queues.first_mut() {
+        queue.as_mut().into()
+    } else if let Some(queue) = graphics_queues.first_mut() {
+        queue.as_mut()
+    } else {
+        panic!("Unable to find a matching general or graphics queue.");
+    };
+
+    // Create swapchain
+    let config = gfx::SwapchainConfig::new()
+                    .with_color::<ColorFormat>();
+    let mut swap_chain = surface.build_swapchain(config, &graphics_queue);
+    let views = swap_chain.create_color_views(&mut factory);
+
     let pso = factory.create_pipeline_simple(
         include_bytes!("shader/quad_150.glslv"),
         include_bytes!("shader/quad_150.glslf"),
         pipe::new()
     ).unwrap();
     let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&QUAD, &[0u16, 1, 2, 2, 3, 0] as &[u16]);
+    let mut graphics_pool = graphics_queue.create_graphics_pool(1);
+    let frame_semaphore = factory.create_semaphore();
+    let draw_semaphore = factory.create_semaphore();
+
     let mut data = pipe::Data {
         vbuf: vertex_buffer,
-        out: main_color
+        out: views[0].clone(),
     };
 
     let mut running = true;
@@ -71,17 +98,22 @@ pub fn main() {
                 glutin::WindowEvent::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape), _) |
                 glutin::WindowEvent::Closed => running = false,
                 glutin::WindowEvent::Resized(_width, _height) => {
-                    gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
+                    // TODO
                 },
                 _ => {},
             }
         });
 
-        // draw a frame
+        // Get next frame
+        let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&frame_semaphore));
+        data.out = views[frame.id()].clone();        
+
+        // Draw a frame
+        let mut encoder = graphics_pool.acquire_graphics_encoder();
         encoder.clear(&data.out, CLEAR_COLOR);
         encoder.draw(&slice, &pso, &data);
-        encoder.flush(&mut device);
-        window.swap_buffers().unwrap();
-        device.cleanup();
+        encoder.synced_flush(&mut graphics_queue, &[&frame_semaphore], &[&draw_semaphore], None);
+        swap_chain.present(&mut graphics_queue, &[&draw_semaphore]);
+        // factory.cleanup();
     }
 }
