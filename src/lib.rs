@@ -215,7 +215,7 @@ fn run<A, B, S, EL>((width, height): (u32, u32),
     let mut running = true;
     let frame_semaphore = factory.create_semaphore();
 
-    let mut graphics_pool = B::GraphicsCommandPool::from_queue(queue.as_ref(), 1);
+    let mut graphics_pool = queue.create_graphics_pool(1);
 
     while running {
         events_loop.poll_events(|winit::Event::WindowEvent{window_id: _, event}| {
