@@ -38,7 +38,7 @@ pub use draw_state::{preset, state};
 pub use draw_state::target::*;
 
 // public re-exports
-pub use core::{Adapter, Backend, Device, Frame, FrameSync, Primitive, Resources, SubmissionError,
+pub use core::{Adapter, Backend, CommandQueue, Device, Frame, FrameSync, Primitive, Resources, SubmissionError,
                SubmissionResult, Surface, SwapChain, SwapchainConfig, WindowExt};
 pub use core::{VertexCount, InstanceCount};
 pub use core::{ShaderSet, VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
