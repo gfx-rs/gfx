@@ -160,9 +160,8 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         }
     }
 
-    fn render<Gp>(&mut self, (frame, semaphore): (gfx::Frame, &gfx::handle::Semaphore<B::Resources>),
-                  pool: &mut Gp, queue: &mut gfx::queue::GraphicsQueueMut<B>)
-        where Gp: gfx::GraphicsCommandPool<B>
+    fn render(&mut self, (frame, semaphore): (gfx::Frame, &gfx::handle::Semaphore<B::Resources>),
+              pool: &mut gfx::GraphicsCommandPool<B>, queue: &mut gfx::queue::GraphicsQueueMut<B>)
     {
         let elapsed = self.start_time.elapsed();
         let time = elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 / 1000_000_000.0;
