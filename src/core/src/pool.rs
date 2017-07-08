@@ -17,7 +17,7 @@
 use {Backend, CommandQueue};
 use command::{self, ComputeCommandBuffer, Encoder, GeneralCommandBuffer, GraphicsCommandBuffer,
               TransferCommandBuffer};
-pub use queue::{Compatible, ComputeQueue, GeneralQueue, GraphicsQueue, TransferQueue};
+pub use queue::{ComputeQueue, GeneralQueue, GraphicsQueue, TransferQueue};
 use std::ops::DerefMut;
 
 /// `CommandPool` can allocate command buffers of a specific type only.
