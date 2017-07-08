@@ -271,9 +271,8 @@ pub type DefaultBackend = gfx_device_vulkan::Backend;
 
 pub trait Application<B: Backend>: Sized {
     fn new(&mut B::Factory, shade::Backend, WindowTargets<B::Resources>) -> Self;
-    fn render<Gp>(&mut self, frame: (gfx_core::Frame, &gfx::handle::Semaphore<B::Resources>),
-                     pool: &mut Gp, queue: &mut gfx_core::queue::GraphicsQueueMut<B>)
-        where Gp: GraphicsCommandPool<B>;
+    fn render(&mut self, frame: (gfx_core::Frame, &gfx::handle::Semaphore<B::Resources>),
+                     pool: &mut GraphicsCommandPool<B>, queue: &mut gfx_core::queue::GraphicsQueueMut<B>);
 
     fn get_exit_key() -> Option<winit::VirtualKeyCode> {
         Some(winit::VirtualKeyCode::Escape)

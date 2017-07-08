@@ -50,30 +50,30 @@ impl<B: Backend> Submit<B> {
 ///
 /// Pools will always return an Encoder on `acquire_command_buffer` to provide a safe interface.
 #[derive(Debug)]
-pub struct Encoder<'a, B: Backend, C: CommandBuffer<B> + 'a>(&'a mut C, PhantomData<B>);
+pub struct Encoder<B: Backend, C: CommandBuffer<B>>(C, PhantomData<B>);
 
-impl<'a, B, C> Deref for Encoder<'a, B, C>
-    where B: Backend, C: CommandBuffer<B> + 'a
+impl<B, C> Deref for Encoder<B, C>
+    where B: Backend, C: CommandBuffer<B>
 {
     type Target = C;
     fn deref(&self) -> &C {
-        self.0
+        &self.0
     }
 }
 
-impl<'a, B, C> DerefMut for Encoder<'a, B, C>
-    where B: Backend, C: CommandBuffer<B> + 'a
+impl<B, C> DerefMut for Encoder<B, C>
+    where B: Backend, C: CommandBuffer<B>
 {
     fn deref_mut(&mut self) -> &mut C {
-        self.0
+        &mut self.0
     }
 }
 
-impl<'a, B, C> Encoder<'a, B, C>
-    where B: Backend, C: CommandBuffer<B> + 'a
+impl<B, C> Encoder<B, C>
+    where B: Backend, C: CommandBuffer<B>
 {
     #[doc(hidden)]
-    pub unsafe fn new(buffer: &'a mut C) -> Self {
+    pub unsafe fn new(buffer: C) -> Self {
         Encoder(buffer, PhantomData)
     }
 
@@ -81,7 +81,7 @@ impl<'a, B, C> Encoder<'a, B, C>
     ///
     /// The command buffer will be consumed and can't be modified further.
     /// The command pool must be reset to re-record the command buffer.
-    pub fn finish(self) -> Submit<B> {
+    pub fn finish(mut self) -> Submit<B> {
         Submit(unsafe { self.0.end() })
     }
 }
@@ -93,100 +93,92 @@ pub trait CommandBuffer<B: Backend> {
 }
 
 /// Command buffer with graphics, compute and transfer functionality.
-pub struct GeneralCommandBuffer<B: Backend>(B::RawCommandBuffer);
-impl<B: Backend> GeneralCommandBuffer<B> {
-    #[doc(hidden)]
-    pub fn new(buffer: B::RawCommandBuffer) -> Self {
-        GeneralCommandBuffer(buffer)
-    }
+pub struct GeneralCommandBuffer<'a, B: Backend>(pub(crate) &'a mut B::RawCommandBuffer)
+where B::RawCommandBuffer: 'a;
+
+impl<'a, B: Backend> GeneralCommandBuffer<'a, B> {
     #[doc(hidden)]
     pub fn raw(&self) -> &B::RawCommandBuffer {
         &self.0
     }
 }
-impl<B: Backend> CommandBuffer<B> for GeneralCommandBuffer<B> {
+impl<'a, B: Backend> CommandBuffer<B> for GeneralCommandBuffer<'a, B> {
     unsafe fn end(&mut self) -> B::SubmitInfo {
         self.0.end()
     }
 }
 
 // TODO: temporary derefs, remove once command buffers will be reworked
-impl<B: Backend> Deref for GeneralCommandBuffer<B> {
+impl<'a, B: Backend> Deref for GeneralCommandBuffer<'a, B> {
     type Target = B::RawCommandBuffer;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<B: Backend> DerefMut for GeneralCommandBuffer<B> {
+impl<'a, B: Backend> DerefMut for GeneralCommandBuffer<'a, B> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
 /// Command buffer with graphics and transfer functionality.
-pub struct GraphicsCommandBuffer<B: Backend>(B::RawCommandBuffer);
-impl<B: Backend> GraphicsCommandBuffer<B> {
-    #[doc(hidden)]
-    pub fn new(buffer: B::RawCommandBuffer) -> Self {
-        GraphicsCommandBuffer(buffer)
-    }
+pub struct GraphicsCommandBuffer<'a, B: Backend>(pub(crate) &'a mut B::RawCommandBuffer)
+where B::RawCommandBuffer: 'a;
+
+impl<'a, B: Backend> GraphicsCommandBuffer<'a, B> {
     #[doc(hidden)]
     pub fn raw(&self) -> &B::RawCommandBuffer {
         &self.0
     }
 }
-impl<B: Backend> CommandBuffer<B> for GraphicsCommandBuffer<B> {
+impl<'a, B: Backend> CommandBuffer<B> for GraphicsCommandBuffer<'a, B> {
     unsafe fn end(&mut self) -> B::SubmitInfo {
         self.0.end()
     }
 }
 
 // TODO: temporary derefs, remove once command buffers will be reworked
-impl<B: Backend> Deref for GraphicsCommandBuffer<B> {
+impl<'a, B: Backend> Deref for GraphicsCommandBuffer<'a, B> {
     type Target = B::RawCommandBuffer;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<B: Backend> DerefMut for GraphicsCommandBuffer<B> {
+impl<'a, B: Backend> DerefMut for GraphicsCommandBuffer<'a, B> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
 /// Command buffer with compute and transfer functionality.
-pub struct ComputeCommandBuffer<B: Backend>(B::RawCommandBuffer);
-impl<B: Backend> ComputeCommandBuffer<B> {
-    #[doc(hidden)]
-    pub fn new(buffer: B::RawCommandBuffer) -> Self {
-        ComputeCommandBuffer(buffer)
-    }
+pub struct ComputeCommandBuffer<'a, B: Backend>(pub(crate) &'a mut B::RawCommandBuffer)
+where B::RawCommandBuffer: 'a;
+
+impl<'a, B: Backend> ComputeCommandBuffer<'a,B> {
     #[doc(hidden)]
     pub fn raw(&self) -> &B::RawCommandBuffer {
         &self.0
     }
 }
-impl<B: Backend> CommandBuffer<B> for ComputeCommandBuffer<B> {
+impl<'a, B: Backend> CommandBuffer<B> for ComputeCommandBuffer<'a, B> {
     unsafe fn end(&mut self) -> B::SubmitInfo {
         self.0.end()
     }
 }
 
 /// Command buffer with transfer functionality.
-pub struct TransferCommandBuffer<B: Backend>(B::RawCommandBuffer);
-impl<B: Backend> TransferCommandBuffer<B> {
-    #[doc(hidden)]
-    pub fn new(buffer: B::RawCommandBuffer) -> Self {
-        TransferCommandBuffer(buffer)
-    }
+pub struct TransferCommandBuffer<'a, B: Backend>(pub(crate) &'a mut B::RawCommandBuffer)
+where B::RawCommandBuffer: 'a;
+
+impl<'a, B: Backend> TransferCommandBuffer<'a,B> {
     #[doc(hidden)]
     pub fn raw(&self) -> &B::RawCommandBuffer {
         &self.0
     }
 }
-impl<B: Backend> CommandBuffer<B> for TransferCommandBuffer<B> {
+impl<'a, B: Backend> CommandBuffer<B> for TransferCommandBuffer<'a, B> {
     unsafe fn end(&mut self) -> B::SubmitInfo {
         self.0.end()
     }

@@ -19,7 +19,7 @@
 use {pso, Backend, Resources, handle};
 use command::{AccessInfo, Submit};
 use pool::{GeneralCommandPool, GraphicsCommandPool, ComputeCommandPool,
-           TransferCommandPool, SubpassCommandPool};
+           TransferCommandPool, RawCommandPool};
 use std::borrow::{Borrow, BorrowMut};
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
@@ -299,8 +299,8 @@ macro_rules! impl_create_pool {
     ($func:ident $pool:ident for $queue:ident $($tail:ident)*) => (
         impl<B: Backend> $queue<B> {
             /// Create a new command pool with given number of command buffers.
-            pub fn $func(&self, capacity: usize) -> B::$pool {
-                B::$pool::from_queue(self, capacity)
+            pub fn $func(&self, capacity: usize) -> $pool<B> {
+                $pool(unsafe { B::RawCommandPool::from_queue(self, capacity) })
             }
         }
 
@@ -312,15 +312,15 @@ impl_create_pool!(create_general_pool GeneralCommandPool for GeneralQueue);
 impl_create_pool!(create_graphics_pool GraphicsCommandPool for GeneralQueue GraphicsQueue);
 impl_create_pool!(create_compute_pool ComputeCommandPool for GeneralQueue ComputeQueue);
 impl_create_pool!(create_transfer_pool TransferCommandPool for GeneralQueue GraphicsQueue ComputeQueue TransferQueue);
-impl_create_pool!(create_subpass_pool SubpassCommandPool for GeneralQueue GraphicsQueue);
+// impl_create_pool!(create_subpass_pool SubpassCommandPool for GeneralQueue GraphicsQueue);
 
 macro_rules! impl_create_pool_ref {
     ($func:ident $pool:ident for) => ();
     ($func:ident $pool:ident for $queue:ident $($tail:ident)*) => (
         impl<'a, B: Backend> $queue<'a, B> {
             /// Create a new command pool with given number of command buffers.
-            pub fn $func(&self, capacity: usize) -> B::$pool {
-                B::$pool::from_queue(self, capacity)
+            pub fn $func(&self, capacity: usize) -> $pool<B> {
+                $pool(unsafe { B::RawCommandPool::from_queue(self, capacity) })
             }
         }
 
@@ -341,6 +341,7 @@ impl_create_pool_ref!(create_transfer_pool TransferCommandPool for
     GraphicsQueueRef GraphicsQueueMut
     ComputeQueueRef ComputeQueueMut
     TransferQueueRef TransferQueueMut);
-impl_create_pool_ref!(create_subpass_pool SubpassCommandPool for
+/*impl_create_pool_ref!(create_subpass_pool SubpassCommandPool for
     GeneralQueueRef GeneralQueueMut
     GraphicsQueueRef GraphicsQueueMut);
+*/
