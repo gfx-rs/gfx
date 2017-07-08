@@ -141,12 +141,12 @@ impl<T: Any + fmt::Debug + fmt::Display> Error for UpdateError<T> {
 }
 
 /// Extension for graphics command buffer pools to acquire a graphics encoder.
-pub trait GraphicsPoolExt<B: Backend>: GraphicsCommandPool<B> {
+pub trait GraphicsPoolExt<B: Backend> {
     /// Acquire a `GraphicsEncoder` from the pool.
     fn acquire_graphics_encoder(&mut self) -> GraphicsEncoder<B>;
 }
 
-impl<B: Backend, T> GraphicsPoolExt<B> for T where T: GraphicsCommandPool<B> {
+impl<B: Backend> GraphicsPoolExt<B> for GraphicsCommandPool<B> {
     fn acquire_graphics_encoder(&mut self) -> GraphicsEncoder<B> {
         GraphicsEncoder::from(self.acquire_command_buffer())
     }
@@ -161,14 +161,14 @@ impl<B: Backend, T> GraphicsPoolExt<B> for T where T: GraphicsCommandPool<B> {
 /// The encoder exposes multiple functions that add commands to its internal `CommandBuffer`. To
 /// submit these commands to the GPU so they can be rendered, call `flush` or `synced_flush`.
 pub struct GraphicsEncoder<'a, B: Backend + 'a> {
-    command_buffer: Encoder<'a, B, GraphicsCommandBuffer<B>>,
+    command_buffer: Encoder<B, GraphicsCommandBuffer<'a, B>>,
     raw_pso_data: pso::RawDataSet<B::Resources>,
     access_info: command::AccessInfo<B::Resources>,
     handles: handle::Manager<B::Resources>,
 }
 
-impl<'a, B: Backend> From<Encoder<'a, B, GraphicsCommandBuffer<B>>> for GraphicsEncoder<'a, B> {
-    fn from(combuf: Encoder<'a, B, GraphicsCommandBuffer<B>>) -> GraphicsEncoder<B> {
+impl<'a, B: Backend> From<Encoder<B, GraphicsCommandBuffer<'a, B>>> for GraphicsEncoder<'a, B> {
+    fn from(combuf: Encoder<B, GraphicsCommandBuffer<B>>) -> GraphicsEncoder<B> {
         GraphicsEncoder {
             command_buffer: combuf,
             raw_pso_data: pso::RawDataSet::new(),
