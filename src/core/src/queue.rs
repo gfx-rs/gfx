@@ -68,11 +68,6 @@ pub trait CommandQueue<B: Backend> {
     fn cleanup(&mut self);
 }
 
-/// Defines queue compatibility regarding functionality.
-///
-/// Queue A is compatible with queue B if A supports all functionalities from B.
-pub trait Compatible<Q> {}
-
 macro_rules! define_queue {
     // Bare queue definitions
     (($queue:ident, $queue_ref:ident, $queue_mut:ident)
@@ -156,14 +151,6 @@ macro_rules! define_queue {
             }
         }
 
-        // Self compatibility
-        impl<B: Backend> Compatible<$queue<B>> for $queue<B> { }
-        impl<'a, B: Backend> Compatible<$queue<B>> for &'a $queue<B> { }
-        impl<'a, B: Backend> Compatible<$queue<B>> for $queue_ref<'a, B> { }
-        impl<'a, B: Backend> Compatible<$queue<B>> for &'a $queue_ref<'a, B> { }
-        impl<'a, B: Backend> Compatible<$queue<B>> for $queue_mut<'a, B> { }
-        impl<'a, B: Backend> Compatible<$queue<B>> for &'a $queue_mut<'a, B> { }
-
         impl<B: Backend> AsRef<B::CommandQueue> for $queue<B> {
             fn as_ref(&self) -> &B::CommandQueue {
                 &self.0
@@ -224,14 +211,7 @@ macro_rules! define_queue {
                 $derive_mut(queue.0)
             }
         }
-
-        impl<B: Backend> Compatible<$derive<B>> for $queue<B> { }
-        impl<'a, B: Backend> Compatible<$derive<B>> for &'a $queue<B> { }
-        impl<'a, B: Backend> Compatible<$derive<B>> for $queue_ref<'a, B> { }
-        impl<'a, B: Backend> Compatible<$derive<B>> for &'a $queue_ref<'a, B> { }
-        impl<'a, B: Backend> Compatible<$derive<B>> for $queue_mut<'a, B> { }
-        impl<'a, B: Backend> Compatible<$derive<B>> for &'a $queue_mut<'a, B> { }
-
+        
         define_queue! {
             ($queue, $queue_ref, $queue_mut)
                 can ($($submit)*)
