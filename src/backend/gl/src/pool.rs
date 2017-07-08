@@ -14,8 +14,7 @@
 
 use core::{self, pool};
 use core::command::{GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, Encoder};
-use core::queue::{Compatible,
-    GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
+use core::queue::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 use command::{self, RawCommandBuffer, SubpassCommandBuffer};
 use {Backend, CommandQueue, Resources, Share};
 use gl;
