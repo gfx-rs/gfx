@@ -42,7 +42,7 @@ use std::hash::Hash;
 
 pub use self::command::CommandBuffer;
 pub use self::factory::Factory;
-pub use self::pool::{ComputeCommandPool, GeneralCommandPool, GraphicsCommandPool,
+pub use self::pool::{ComputeCommandPool, GeneralCommandPool, GraphicsCommandPool, RawCommandPool,
                      SubpassCommandPool, TransferCommandPool};
 pub use self::queue::{CommandQueue, ComputeQueue, GeneralQueue, GraphicsQueue, QueueFamily, QueueSubmit, TransferQueue};
 pub use self::window::{Backbuffer, Frame, FrameSync, Surface, SwapChain, SwapchainConfig,
@@ -253,10 +253,7 @@ pub trait Backend: Sized {
     type RawCommandBuffer: CommandBuffer<Self> + command::Buffer<Self::Resources>;
     type SubpassCommandBuffer: CommandBuffer<Self>; // + SubpassCommandBuffer<Self::R>;
 
-    type GeneralCommandPool: GeneralCommandPool<Self>;
-    type GraphicsCommandPool: GraphicsCommandPool<Self>;
-    type ComputeCommandPool: ComputeCommandPool<Self>;
-    type TransferCommandPool: TransferCommandPool<Self>;
+    type RawCommandPool: RawCommandPool<Self>;
     type SubpassCommandPool: SubpassCommandPool<Self>;
 }
 
@@ -383,14 +380,3 @@ pub struct AdapterInfo {
     pub software_rendering: bool,
 }
 
-/// `CommandPool` can allocate command buffers of a specific type only.
-/// The allocated command buffers are associated with the creating command queue.
-pub trait CommandPool<B: Backend> {
-    /// Reset the command pool and the corresponding command buffers.
-    ///
-    /// # Synchronization: You may _not_ free the pool if a command buffer is still in use (pool memory still in use)
-    fn reset(&mut self);
-
-    /// Reserve an additional amount of command buffers.
-    fn reserve(&mut self, additional: usize);
-}
