@@ -21,8 +21,7 @@ use winapi;
 
 use core::{self, pool};
 use core::command::Encoder;
-use core::{CommandPool, GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
-use core::queue::Compatible;
+use core::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 use command::{CommandBuffer, SubpassCommandBuffer};
 use core::command::{GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer};
 use {Backend, CommandQueue};
@@ -90,74 +89,61 @@ impl CommandAllocator {
     }
 }
 
-macro_rules! impl_pool {
-    ($pool:ident, $queue:ident, $buffer:ident) => (
-        pub struct $pool {
-            allocator: CommandAllocator,
-            command_lists: Vec<$buffer<Backend>>,
-            next_list: usize,
-        }
-
-        impl core::CommandPool<Backend> for $pool {
-            fn reset(&mut self) {
-                // reset only allocator, as command lists will be reset on acquire.
-                self.allocator.reset();
-            }
-
-            fn reserve(&mut self, additional: usize) {
-                self.command_lists.reserve(additional);
-                for _ in 0..additional {
-                    let command_list = self.allocator.create_command_list();
-                    self.command_lists.push(
-                        $buffer::new(
-                            CommandBuffer { raw : command_list }
-                        ));
-                }
-            }
-        }
-
-        impl pool::$pool<Backend> for $pool {
-            fn from_queue<Q>(mut queue: Q, capacity: usize) -> $pool
-                where Q: Compatible<$queue<Backend>> + AsRef<CommandQueue>
-            {
-                let mut pool = $pool {
-                    allocator: CommandAllocator::from_queue(queue.as_ref()),
-                    command_lists: Vec::new(),
-                    next_list: 0,
-                };
-
-                pool.reserve(capacity);
-                pool
-            }
-
-            fn acquire_command_buffer<'a>(&'a mut self) -> Encoder<'a, Backend, $buffer<Backend>> {
-                let available_lists = self.command_lists.len() as isize - self.next_list as isize;
-                if available_lists <= 0 {
-                    self.reserve((-available_lists) as usize + 1);
-                }
-
-                let mut list = &mut self.command_lists[self.next_list];
-                self.next_list += 1;
-
-                // reset to initial state
-                unsafe { (*list.raw().raw.as_mut_ptr()).Reset(self.allocator.inner.as_mut_ptr(), ptr::null_mut()); }
-                unsafe { Encoder::new(list) }
-            }
-        }
-    )
+pub struct RawCommandPool {
+    allocator: CommandAllocator,
+    command_lists: Vec<CommandBuffer>,
+    next_list: usize,
 }
 
-impl_pool!{ GeneralCommandPool, GeneralQueue, GeneralCommandBuffer }
-impl_pool!{ GraphicsCommandPool, GraphicsQueue, GraphicsCommandBuffer }
-impl_pool!{ ComputeCommandPool, ComputeQueue, ComputeCommandBuffer }
-impl_pool!{ TransferCommandPool, TransferQueue, TransferCommandBuffer }
+impl pool::RawCommandPool<Backend> for RawCommandPool {
+    fn reset(&mut self) {
+        // reset only allocator, as command lists will be reset on acquire.
+        self.allocator.reset();
+    }
+
+    fn reserve(&mut self, additional: usize) {
+        self.command_lists.reserve(additional);
+        for _ in 0..additional {
+            let command_list = self.allocator.create_command_list();
+            self.command_lists.push(CommandBuffer { raw : command_list });
+        }
+    }
+
+    unsafe fn from_queue<Q>(mut queue: Q, capacity: usize) -> RawCommandPool
+    where Q: AsRef<CommandQueue>
+    {
+        let mut pool = RawCommandPool {
+            allocator: CommandAllocator::from_queue(queue.as_ref()),
+            command_lists: Vec::new(),
+            next_list: 0,
+        };
+
+        pool.reserve(capacity);
+        pool
+    }
+
+    unsafe fn acquire_command_buffer(&mut self) -> &mut CommandBuffer {
+        let available_lists = self.command_lists.len() as isize - self.next_list as isize;
+        if available_lists <= 0 {
+            self.reserve((-available_lists) as usize + 1);
+        }
+
+        let mut list = &mut self.command_lists[self.next_list];
+        self.next_list += 1;
+
+        // reset to initial state
+        unsafe { (*list.raw.as_mut_ptr()).Reset(self.allocator.inner.as_mut_ptr(), ptr::null_mut()); }
+        list
+    }
+}
 
 
 pub struct SubpassCommandPool {
 
 }
 
-impl core::CommandPool<Backend> for SubpassCommandPool {
+impl pool::SubpassCommandPool<Backend> for SubpassCommandPool {
+    /*
     fn reset(&mut self) {
         unimplemented!()
     }
@@ -165,9 +151,7 @@ impl core::CommandPool<Backend> for SubpassCommandPool {
     fn reserve(&mut self, additional: usize) {
         unimplemented!()
     }
-}
 
-impl pool::SubpassCommandPool<Backend> for SubpassCommandPool {
     fn acquire_command_buffer<'a>(&'a mut self) -> Encoder<'a, Backend, SubpassCommandBuffer> {
         unimplemented!()
     }
@@ -177,4 +161,5 @@ impl pool::SubpassCommandPool<Backend> for SubpassCommandPool {
     {
         unimplemented!()
     }
+    */
 }

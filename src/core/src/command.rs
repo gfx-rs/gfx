@@ -96,12 +96,6 @@ pub trait CommandBuffer<B: Backend> {
 pub struct GeneralCommandBuffer<'a, B: Backend>(pub(crate) &'a mut B::RawCommandBuffer)
 where B::RawCommandBuffer: 'a;
 
-impl<'a, B: Backend> GeneralCommandBuffer<'a, B> {
-    #[doc(hidden)]
-    pub fn raw(&self) -> &B::RawCommandBuffer {
-        &self.0
-    }
-}
 impl<'a, B: Backend> CommandBuffer<B> for GeneralCommandBuffer<'a, B> {
     unsafe fn end(&mut self) -> B::SubmitInfo {
         self.0.end()
@@ -126,12 +120,6 @@ impl<'a, B: Backend> DerefMut for GeneralCommandBuffer<'a, B> {
 pub struct GraphicsCommandBuffer<'a, B: Backend>(pub(crate) &'a mut B::RawCommandBuffer)
 where B::RawCommandBuffer: 'a;
 
-impl<'a, B: Backend> GraphicsCommandBuffer<'a, B> {
-    #[doc(hidden)]
-    pub fn raw(&self) -> &B::RawCommandBuffer {
-        &self.0
-    }
-}
 impl<'a, B: Backend> CommandBuffer<B> for GraphicsCommandBuffer<'a, B> {
     unsafe fn end(&mut self) -> B::SubmitInfo {
         self.0.end()
@@ -156,12 +144,6 @@ impl<'a, B: Backend> DerefMut for GraphicsCommandBuffer<'a, B> {
 pub struct ComputeCommandBuffer<'a, B: Backend>(pub(crate) &'a mut B::RawCommandBuffer)
 where B::RawCommandBuffer: 'a;
 
-impl<'a, B: Backend> ComputeCommandBuffer<'a,B> {
-    #[doc(hidden)]
-    pub fn raw(&self) -> &B::RawCommandBuffer {
-        &self.0
-    }
-}
 impl<'a, B: Backend> CommandBuffer<B> for ComputeCommandBuffer<'a, B> {
     unsafe fn end(&mut self) -> B::SubmitInfo {
         self.0.end()
@@ -172,12 +154,6 @@ impl<'a, B: Backend> CommandBuffer<B> for ComputeCommandBuffer<'a, B> {
 pub struct TransferCommandBuffer<'a, B: Backend>(pub(crate) &'a mut B::RawCommandBuffer)
 where B::RawCommandBuffer: 'a;
 
-impl<'a, B: Backend> TransferCommandBuffer<'a,B> {
-    #[doc(hidden)]
-    pub fn raw(&self) -> &B::RawCommandBuffer {
-        &self.0
-    }
-}
 impl<'a, B: Backend> CommandBuffer<B> for TransferCommandBuffer<'a, B> {
     unsafe fn end(&mut self) -> B::SubmitInfo {
         self.0.end()
