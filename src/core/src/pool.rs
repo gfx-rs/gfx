@@ -14,90 +14,80 @@
 
 //! Command pools
 
-use {Backend, CommandPool, CommandQueue};
-use command::{self, ComputeCommandBuffer, GeneralCommandBuffer, GraphicsCommandBuffer,
+use {Backend, CommandQueue};
+use command::{self, ComputeCommandBuffer, Encoder, GeneralCommandBuffer, GraphicsCommandBuffer,
               TransferCommandBuffer};
 pub use queue::{Compatible, ComputeQueue, GeneralQueue, GraphicsQueue, TransferQueue};
 use std::ops::DerefMut;
 
-/// General command pool can allocate general command buffers.
-pub trait GeneralCommandPool<B: Backend>: CommandPool<B> {
+/// `CommandPool` can allocate command buffers of a specific type only.
+/// The allocated command buffers are associated with the creating command queue.
+pub trait RawCommandPool<B: Backend> {
+    /// Reset the command pool and the corresponding command buffers.
     ///
-    fn from_queue<Q>(queue: Q, capacity: usize) -> Self
-    where
-        Q: Compatible<GeneralQueue<B>> + AsRef<B::CommandQueue>;
+    /// # Synchronization: You may _not_ free the pool if a command buffer is still in use (pool memory still in use)
+    fn reset(&mut self);
 
+    /// Reserve an additional amount of command buffers.
+    fn reserve(&mut self, additional: usize);
+
+    #[doc(hidden)]
+    unsafe fn from_queue<Q>(queue: Q, capacity: usize) -> Self
+    where Q: AsRef<B::CommandQueue>;
+
+    #[doc(hidden)]
+    unsafe fn acquire_command_buffer(&mut self)
+        -> &mut B::RawCommandBuffer;
+}
+
+///
+pub struct GeneralCommandPool<B: Backend>(pub(crate) B::RawCommandPool);
+impl<B: Backend> GeneralCommandPool<B> {
     /// Get a command buffer for recording.
     ///
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
-    fn acquire_command_buffer<'a>(&'a mut self)
-        -> command::Encoder<'a, B, GeneralCommandBuffer<B>>;
+    pub fn acquire_command_buffer(&mut self) -> Encoder<B, GeneralCommandBuffer<B>> {
+        unsafe { Encoder::new(GeneralCommandBuffer(self.0.acquire_command_buffer())) }
+    }
 }
-
-/// Graphics command pool can allocate graphics command buffers.
-pub trait GraphicsCommandPool<B: Backend>: CommandPool<B> {
-    ///
-    fn from_queue<Q>(queue: Q, capacity: usize) -> Self
-    where
-        Q: Compatible<GraphicsQueue<B>> + AsRef<B::CommandQueue>;
-
+///
+pub struct GraphicsCommandPool<B: Backend>(pub(crate) B::RawCommandPool);
+impl<B: Backend> GraphicsCommandPool<B> {
     /// Get a command buffer for recording.
     ///
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
-    fn acquire_command_buffer<'a>(
-        &'a mut self,
-    ) -> command::Encoder<'a, B, GraphicsCommandBuffer<B>>;
+    pub fn acquire_command_buffer(&mut self) -> Encoder<B, GraphicsCommandBuffer<B>> {
+        unsafe { Encoder::new(GraphicsCommandBuffer(self.0.acquire_command_buffer())) }
+    }
 }
-
-/// Compute command pool can allocate compute command buffers.
-pub trait ComputeCommandPool<B: Backend>: CommandPool<B> {
-    ///
-    fn from_queue<Q>(queue: Q, capacity: usize) -> Self
-    where
-        Q: Compatible<ComputeQueue<B>> + AsRef<B::CommandQueue>;
-
+///
+pub struct ComputeCommandPool<B: Backend>(pub(crate) B::RawCommandPool);
+impl<B: Backend> ComputeCommandPool<B> {
     /// Get a command buffer for recording.
     ///
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
-    fn acquire_command_buffer<'a>(&'a mut self)
-        -> command::Encoder<'a, B, ComputeCommandBuffer<B>>;
+    pub fn acquire_command_buffer(&mut self) -> Encoder<B, ComputeCommandBuffer<B>> {
+        unsafe { Encoder::new(ComputeCommandBuffer(self.0.acquire_command_buffer())) }
+    }
 }
-
-/// Transfer command pool can allocate transfer command buffers.
-pub trait TransferCommandPool<B: Backend>: CommandPool<B> {
-    ///
-    fn from_queue<Q>(queue: Q, capacity: usize) -> Self
-    where
-        Q: Compatible<TransferQueue<B>> + AsRef<B::CommandQueue>;
-
+///
+pub struct TransferCommandPool<B: Backend>(pub(crate) B::RawCommandPool);
+impl<B: Backend> TransferCommandPool<B> {
     /// Get a command buffer for recording.
     ///
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
-    fn acquire_command_buffer<'a>(
-        &'a mut self,
-    ) -> command::Encoder<'a, B, TransferCommandBuffer<B>>;
+    pub fn acquire_command_buffer(&mut self) -> Encoder<B, TransferCommandBuffer<B>> {
+        unsafe { Encoder::new(TransferCommandBuffer(self.0.acquire_command_buffer())) }
+    }
 }
 
-/// Subpass command pool can allocate subpass command buffers.
-pub trait SubpassCommandPool<B: Backend>: CommandPool<B> {
-    ///
-    fn from_queue<Q>(queue: Q, capacity: usize) -> Self
-    where
-        Q: Compatible<GraphicsQueue<B>> + AsRef<B::CommandQueue>;
-
-    /// Get a command buffer for recording.
-    ///
-    /// You can only record to one command buffer per pool at the same time.
-    /// If more command buffers are requested than allocated, new buffers will be reserved.
-    /// The command buffer will be returned in 'recording' state.
-    fn acquire_command_buffer<'a>(&'a mut self)
-        -> command::Encoder<'a, B, B::SubpassCommandBuffer>;
-}
+///
+pub trait SubpassCommandPool<B: Backend> { }
