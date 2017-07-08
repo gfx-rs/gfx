@@ -68,10 +68,7 @@ impl c::Backend for Backend {
     type Factory = Factory;
     type QueueFamily = QueueFamily;
 
-    type GeneralCommandPool = pool::GeneralCommandPool;
-    type GraphicsCommandPool = pool::GraphicsCommandPool;
-    type ComputeCommandPool = pool::ComputeCommandPool;
-    type TransferCommandPool = pool::TransferCommandPool;
+    type RawCommandPool = pool::RawCommandPool;
     type SubpassCommandPool = pool::SubpassCommandPool;
 }
 
