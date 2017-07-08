@@ -461,9 +461,8 @@ impl<B: gfx::Backend> gfx_app::Application<B> for TileMap<B> {
         tm
     }
 
-    fn render<Gp>(&mut self, (frame, semaphore): (gfx::Frame, &gfx::handle::Semaphore<B::Resources>),
-                  pool: &mut Gp, queue: &mut gfx::queue::GraphicsQueueMut<B>)
-        where Gp: gfx::GraphicsCommandPool<B>
+    fn render(&mut self, (frame, semaphore): (gfx::Frame, &gfx::handle::Semaphore<B::Resources>),
+              pool: &mut gfx::GraphicsCommandPool<B>, queue: &mut gfx::queue::GraphicsQueueMut<B>)
     {
         // view configuration based on current position
         let view = Matrix4::look_at(
