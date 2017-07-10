@@ -50,20 +50,16 @@ impl<B: Backend> Submit<B> {
 ///
 /// Pools will always return an Encoder on `acquire_command_buffer` to provide a safe interface.
 #[derive(Debug)]
-pub struct Encoder<B: Backend, C: CommandBuffer<B>>(C, PhantomData<B>);
+pub struct Encoder<B, C>(C, PhantomData<B>);
 
-impl<B, C> Deref for Encoder<B, C>
-    where B: Backend, C: CommandBuffer<B>
-{
+impl<B, C> Deref for Encoder<B, C> {
     type Target = C;
     fn deref(&self) -> &C {
         &self.0
     }
 }
 
-impl<B, C> DerefMut for Encoder<B, C>
-    where B: Backend, C: CommandBuffer<B>
-{
+impl<B, C> DerefMut for Encoder<B, C> {
     fn deref_mut(&mut self) -> &mut C {
         &mut self.0
     }
