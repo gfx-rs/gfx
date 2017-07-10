@@ -356,8 +356,30 @@ pub struct Device<B: Backend> {
 
 /// Represents a physical or virtual device, which is capable of running the backend.
 pub trait Adapter<B: Backend>: Sized {
-    /// Create a new device and command queues.
+    /// Create a new device with the specified queues.
     fn open(&self, queue_descs: &[(&B::QueueFamily, u32)]) -> Device<B>;
+
+    /// Create a new device with the specified queues.
+    ///
+    /// Takes an closure and creates the number of queues for each queue type
+    /// as returned by the closure.
+    fn open_with<F>(&self, mut f: F) -> Device<B>
+    where
+        F: FnMut(&B::QueueFamily) -> u32
+    {
+        let queue_desc = self.get_queue_families()
+            .iter()
+            .filter_map(|family| {
+                let num_queues = f(family);
+                if num_queues > 0 {
+                    Some((family, num_queues))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        self.open(&queue_desc)
+    }
 
     /// Get the `AdapterInfo` for this adapater.
     fn get_info(&self) -> &AdapterInfo;
