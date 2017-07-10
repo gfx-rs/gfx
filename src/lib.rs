@@ -149,11 +149,8 @@ fn run<A, B, S, EL>((width, height): (u32, u32),
     use gfx::texture;
 
     // Init device
-    let queue_descs = adapters[0].get_queue_families().iter()
-                                 .filter(|family| surface.supports_queue(&family) )
-                                 .map(|family| { (family, family.num_queues()) })
-                                 .collect::<Vec<_>>();
-    let gfx_core::Device { mut factory, mut general_queues, mut graphics_queues, .. } = adapters[0].open(&queue_descs);
+    let gfx_core::Device { mut factory, mut general_queues, mut graphics_queues, .. } =
+        adapters[0].open_with(|family| if surface.supports_queue(&family) { 1 } else { 0 });
 
     let mut queue = if let Some(queue) = general_queues.first_mut() {
         queue.as_mut().into()
