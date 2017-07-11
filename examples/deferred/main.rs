@@ -51,7 +51,7 @@ use genmesh::generators::{SharedVertex, IndexedPolygon};
 use noise::{Seed, perlin2};
 use rand::Rng;
 use std::time::{Instant};
-use winit::{WindowEvent, VirtualKeyCode, WindowBuilder};
+use winit::{WindowEvent, WindowBuilder};
 
 // Remember to also change the constants in the shaders
 const NUM_LIGHTS: usize = 250;
@@ -555,18 +555,21 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
     }
 
     fn on(&mut self, event: WindowEvent) {
-        match event {
-            WindowEvent::KeyboardInput(_, _, Some(VirtualKeyCode::Key1), _) =>
-                self.debug_buf = Some(self.light.data.tex_pos.0.clone()),
-            WindowEvent::KeyboardInput(_, _, Some(VirtualKeyCode::Key2), _) =>
-                self.debug_buf = Some(self.light.data.tex_normal.0.clone()),
-            WindowEvent::KeyboardInput(_, _, Some(VirtualKeyCode::Key3), _) =>
-                self.debug_buf = Some(self.light.data.tex_diffuse.0.clone()),
-            WindowEvent::KeyboardInput(_, _, Some(VirtualKeyCode::Key4), _) =>
-                self.debug_buf = Some(self.depth_resource.clone()),
-            WindowEvent::KeyboardInput(_, _, Some(VirtualKeyCode::Key0), _) =>
-                self.debug_buf = None,
-            _ => (),
+        if let WindowEvent::KeyboardInput {
+            input: winit::KeyboardInput {
+                virtual_keycode: Some(key),
+                ..
+            },
+            .. } = event {
+            use winit::VirtualKeyCode::*;
+            match key {
+                Key1 => self.debug_buf = Some(self.light.data.tex_pos.0.clone()),
+                Key2 => self.debug_buf = Some(self.light.data.tex_normal.0.clone()),
+                Key3 => self.debug_buf = Some(self.light.data.tex_diffuse.0.clone()),
+                Key4 => self.debug_buf = Some(self.depth_resource.clone()),
+                Key0 => self.debug_buf = None,
+                _ => (),
+            }
         }
     }
 

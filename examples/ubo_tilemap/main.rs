@@ -471,44 +471,30 @@ impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
     }
 
     fn on(&mut self, event: winit::WindowEvent) {
-        use winit::VirtualKeyCode as Key;
-        use winit::WindowEvent::KeyboardInput;
-        use winit::ElementState::Pressed;
-        let i = self.input.clone();
-        match event {
-            // zooming in/out
-            KeyboardInput(Pressed, _, Some(Key::Equals), _) => {
-                self.input.distance -= i.move_amt;
+        if let winit::WindowEvent::KeyboardInput {
+            input: winit::KeyboardInput {
+                state: winit::ElementState::Pressed,
+                virtual_keycode: Some(key),
+                .. },
+            .. } = event {
+            use winit::VirtualKeyCode::*;
+            let i = self.input.clone();
+
+            match key {
+                // zooming in/out
+                Equals => self.input.distance -= i.move_amt,
+                Minus | Subtract => self.input.distance += i.move_amt,
+                // panning around
+                Up => self.input.y_pos -= i.move_amt,
+                Down => self.input.y_pos += i.move_amt,
+                Left => self.input.x_pos -= i.move_amt,
+                Right => self.input.x_pos += i.move_amt,
+                W => self.apply_y_offset(i.offset_amt),
+                S => self.apply_y_offset(-i.offset_amt),
+                D => self.apply_x_offset(i.offset_amt),
+                A => self.apply_x_offset(-i.offset_amt),
+                _ => ()
             }
-            KeyboardInput(Pressed, _, Some(Key::Minus), _) => {
-                self.input.distance += i.move_amt;
-            }
-            // panning around
-            KeyboardInput(Pressed, _, Some(Key::Up), _) => {
-                self.input.y_pos -= i.move_amt;
-            }
-            KeyboardInput(Pressed, _, Some(Key::Down), _) => {
-                self.input.y_pos += i.move_amt;
-            }
-            KeyboardInput(Pressed, _, Some(Key::Left), _) => {
-                self.input.x_pos -= i.move_amt;
-            }
-            KeyboardInput(Pressed, _, Some(Key::Right), _) => {
-                self.input.x_pos += i.move_amt;
-            }
-            KeyboardInput(Pressed, _, Some(Key::W), _) => {
-                self.apply_y_offset(i.offset_amt);
-            }
-            KeyboardInput(Pressed, _, Some(Key::S), _) => {
-                self.apply_y_offset(-i.offset_amt);
-            }
-            KeyboardInput(Pressed, _, Some(Key::D), _) => {
-                self.apply_x_offset(i.offset_amt);
-            }
-            KeyboardInput(Pressed, _, Some(Key::A), _) => {
-                self.apply_x_offset(-i.offset_amt);
-            }
-            _ => ()
         }
     }
 
