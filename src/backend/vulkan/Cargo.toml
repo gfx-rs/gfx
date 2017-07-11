@@ -18,6 +18,5 @@ log = "0.3"
 vk = "0.0"
 vk-sys = { git = "https://github.com/sectopod/vulkano", branch = "bind" }
 shared_library = "0.1"
-winit = "0.6"
 gfx_core = { path = "../../core", version = "0.7" }
 spirv-utils = { git = "https://github.com/msiglreith/spirv-utils.git", branch = "gfx" }

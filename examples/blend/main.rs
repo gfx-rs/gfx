@@ -152,15 +152,18 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
     }
 
     fn on(&mut self, event: winit::WindowEvent) {
-        match event {
-            winit::WindowEvent::KeyboardInput(winit::ElementState::Pressed, _, Some(winit::VirtualKeyCode::B), _) => {
-                self.id += 1;
-                if self.id as usize >= BLENDS.len() {
-                    self.id = 0;
-                }
-                println!("Using '{}' blend equation", BLENDS[self.id as usize]);
-            },
-            _ => ()
+        if let winit::WindowEvent::KeyboardInput {
+                input: winit::KeyboardInput {
+                    state: winit::ElementState::Pressed,
+                    virtual_keycode: Some(winit::VirtualKeyCode::B),
+                    ..
+                },
+                .. } = event {
+            self.id += 1;
+            if self.id as usize >= BLENDS.len() {
+                self.id = 0;
+            }
+            println!("Using '{}' blend equation", BLENDS[self.id as usize]);
         }
     }
 
