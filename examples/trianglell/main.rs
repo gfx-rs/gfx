@@ -287,7 +287,6 @@ fn main() {
             let dest_base = y * row_pitch as usize;
             mapping[dest_base .. dest_base + row.len()].copy_from_slice(row);
         }
-        mapping.copy_from_slice(&*img);
     }
 
     let image = factory.create_image(kind, 1, gfx_corell::format::Srgba8::get_format(), i::TRANSFER_DST | i::SAMPLED).unwrap(); // TODO: usage

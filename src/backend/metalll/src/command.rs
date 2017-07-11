@@ -335,10 +335,14 @@ impl core::TransferCommandBuffer<Resources> for CommandBuffer {
     }
     fn copy_buffer_to_image(&mut self, src: &native::Buffer, dst: &native::Image, layout: memory::ImageLayout, regions: &[BufferImageCopy]) {
         let encoder = self.encode_blit();
+        let extent = unsafe { MTLSize {
+            width: dst.0.width(),
+            height: dst.0.height(),
+            depth: dst.0.depth(),
+        }};
         // FIXME: layout
 
         for region in regions {
-            let copy_size = &region.image_extent; //TODO: extract from the image
             let image_offset = &region.image_offset;
 
             // TODO multiple layers
@@ -349,7 +353,7 @@ impl core::TransferCommandBuffer<Resources> for CommandBuffer {
                     sourceOffset: region.buffer_offset as NSUInteger
                     sourceBytesPerRow: region.buffer_row_pitch as NSUInteger
                     sourceBytesPerImage: region.buffer_slice_pitch as NSUInteger
-                    sourceSize: MTLSize { width: copy_size.width as NSUInteger, height: copy_size.height as NSUInteger, depth: copy_size.depth as NSUInteger }
+                    sourceSize: extent
                     toTexture: (dst.0).0
                     destinationSlice: region.image_base_layer as NSUInteger
                     destinationLevel: region.image_mip_level as NSUInteger

@@ -840,6 +840,7 @@ impl core::Factory<R> for Factory {
             ),
         };
 
+        let bytes_per_texel = format.0.get_total_bits() / 8;
         let samples = match aa_mode {
             image::AaMode::Single => vk::SAMPLE_COUNT_1_BIT,
             _ => unimplemented!(),
@@ -868,7 +869,7 @@ impl core::Factory<R> for Factory {
                         .expect("Error on image creation") // TODO: error handling
         };
 
-        Ok(UnboundImage(native::Image{ inner, extent }))
+        Ok(UnboundImage(native::Image{ inner, bytes_per_texel, extent }))
     }
 
     ///
