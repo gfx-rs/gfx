@@ -1,8 +1,8 @@
 using namespace metal;
 
 struct VsInput {
-  float3 a_Pos [[attribute(0)]];
-  float3 a_Color [[attribute(1)]];
+  float2 a_Pos [[attribute(0)]];
+  float2 a_Uv [[attribute(1)]];
 };
 
 struct VsOutput {
@@ -12,10 +12,10 @@ struct VsOutput {
 
 vertex VsOutput vs_main(VsInput in [[stage_in]]) {
   VsOutput out;
-  out.pos = float4(in.a_Pos, 1.0);
+  out.pos = float4(in.a_Pos, 0.0, 1.0);
   // Texture coordinates are in OpenGL/Vulkan (origin bottom left)
   // convert them to Metal (origin top left)
-  out.uv = float2(in.a_Color.x, 1 - in.a_Color.y);
+  out.uv = float2(in.a_Uv.x, 1 - in.a_Uv.y);
   return out;
 }
 

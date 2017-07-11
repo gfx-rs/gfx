@@ -40,19 +40,20 @@ use gfx_corell::image as i;
 pub type ColorFormat = gfx_corell::format::Rgba8; //TODO: D3D12 swap chain complains
 
 #[derive(Debug, Clone, Copy)]
+#[allow(non_snake_case)]
 struct Vertex {
     a_Pos: [f32; 2],
-    a_Uv: [f32; 3],
+    a_Uv: [f32; 2],
 }
 
 const TRIANGLE: [Vertex; 6] = [
-    Vertex { a_Pos: [ -0.5, 0.33 ], a_Uv: [0.0, 1.0, 0.0] },
-    Vertex { a_Pos: [  0.5, 0.33 ], a_Uv: [1.0, 1.0, 0.0] },
-    Vertex { a_Pos: [  0.5,-0.33 ], a_Uv: [1.0, 0.0, 0.0] },
+    Vertex { a_Pos: [ -0.5, 0.33 ], a_Uv: [0.0, 1.0] },
+    Vertex { a_Pos: [  0.5, 0.33 ], a_Uv: [1.0, 1.0] },
+    Vertex { a_Pos: [  0.5,-0.33 ], a_Uv: [1.0, 0.0] },
 
-    Vertex { a_Pos: [ -0.5, 0.33 ], a_Uv: [0.0, 1.0, 0.0] },
-    Vertex { a_Pos: [  0.5,-0.33 ], a_Uv: [1.0, 0.0, 0.0] },
-    Vertex { a_Pos: [ -0.5,-0.33 ], a_Uv: [0.0, 0.0, 0.0] },
+    Vertex { a_Pos: [ -0.5, 0.33 ], a_Uv: [0.0, 1.0] },
+    Vertex { a_Pos: [  0.5,-0.33 ], a_Uv: [1.0, 0.0] },
+    Vertex { a_Pos: [ -0.5,-0.33 ], a_Uv: [0.0, 0.0] },
 ];
 
 #[cfg(any(feature = "vulkan", target_os = "windows", feature = "metal"))]
@@ -85,10 +86,14 @@ fn main() {
 
     // Setup renderpass and pipeline
     #[cfg(all(target_os = "windows", not(feature = "vulkan")))]
-    let shader_lib = factory.create_shader_library(&[
+    /*factory.create_shader_library(&[ //for binary loading
             ("vs_main", include_bytes!("data/vs_main.o")),
-            ("ps_main", include_bytes!("data/ps_main.o"))]
-        ).expect("Error on creating shader lib");
+            ("ps_main", include_bytes!("data/ps_main.o"))]*/
+    // dx12 runtime shader compilation
+    let shader_lib = factory.create_shader_library_from_source(&[
+            ("vs_main", shade::Stage::Vertex, include_bytes!("shader/triangle.hlsl")),
+            ("ps_main", shade::Stage::Pixel, include_bytes!("shader/triangle.hlsl"))]
+    ).expect("Error on creating shader lib");
 
     #[cfg(feature = "vulkan")]
     let shader_lib = factory.create_shader_library(&[
@@ -100,14 +105,6 @@ fn main() {
     let shader_lib = factory.create_shader_library_from_source(
             include_str!("shader/triangle.metal")
         ).expect("Error on creating shader lib");
-
-    // dx12 runtime shader compilation
-    /*
-    let shader_lib = factory.create_shader_library_from_hlsl(&[
-                ("vs_main", shade::Stage::Vertex, include_bytes!("shader/triangle.hlsl")),
-                ("ps_main", shade::Stage::Pixel, include_bytes!("shader/triangle.hlsl"))]
-        ).expect("Error on creating shader lib");
-    */
 
     let shader_entries = pso::GraphicsShaderSet {
         vertex_shader: "vs_main",
@@ -195,7 +192,7 @@ fn main() {
         offset: 0
     }));
     pipeline_desc.attributes.push((0, pso::Element {
-        format: <format::Vec3<f32> as format::Formatted>::get_format(),
+        format: <format::Vec2<f32> as format::Formatted>::get_format(),
         offset: 8
     }));
 
