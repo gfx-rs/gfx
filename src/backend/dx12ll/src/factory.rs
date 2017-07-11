@@ -29,9 +29,6 @@ use {data, state, mirror, native};
 use {Factory, Resources as R};
 
 
-const IMAGE_LEVEL_ALIGNMENT: u32 = 16;
-const IMAGE_SLICE_ALIGNMENT: u32 = 64;
-
 #[derive(Debug)]
 pub struct UnboundBuffer {
     requirements: memory::MemoryRequirements,
@@ -63,7 +60,11 @@ impl Factory {
                     byte_code.len() as u64,
                     blob.as_mut() as *mut *mut _)
             };
-            // TODO: error handling
+            if !winapi::SUCCEEDED(hr) {
+                error!("D3DCreateBlob error {:x}", hr);
+                let message = "D3DCreateBlob fail".to_string();
+                return Err(shade::CreateShaderError::CompilationFailed(message))
+            }
 
             unsafe {
                 ptr::copy(
@@ -653,7 +654,7 @@ impl core::Factory<R> for Factory {
                     PlaneSlice: 0,
                 };
             },
-            other => unimplemented!()
+            _ => unimplemented!()
         };
 
         unsafe {
@@ -778,7 +779,25 @@ impl core::Factory<R> for Factory {
                                -> Result<mapping::Reader<'a, R, T>, mapping::Error>
         where T: Copy
     {
-        unimplemented!()
+        if offset + size > buf.size_in_bytes as u64 {
+            return Err(mapping::Error::OutOfBounds);
+        }
+
+        let range = winapi::D3D12_RANGE {
+            Begin: offset,
+            End: offset + size,
+        };
+        let mut ptr = ptr::null_mut();
+        assert_eq!(winapi::S_OK, unsafe {
+            buf.resource.clone().Map(0, &range, &mut ptr)
+        });
+        let count = size as usize / mem::size_of::<T>();
+
+        Ok(unsafe {
+            let slice = slice::from_raw_parts_mut(ptr as *mut T, count);
+            let mapping = Mapping {};
+            mapping::Reader::new(slice, mapping)
+        })
     }
 
     /// Acquire a mapping Writer
