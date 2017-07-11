@@ -221,7 +221,9 @@ impl core::Factory<R> for Factory {
     fn create_renderpass(&mut self, attachments: &[pass::Attachment],
         subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> native::RenderPass
     {
-        native::RenderPass {}
+        native::RenderPass {
+            attachments: attachments.to_vec(),
+        }
     }
 
     fn create_pipeline_layout(&mut self, sets: &[&native::DescriptorSetLayout]) -> native::PipelineLayout {
@@ -444,9 +446,9 @@ impl core::Factory<R> for Factory {
         unimplemented!()
     }
 
-    fn create_framebuffer(&mut self, renderpass: &native::RenderPass,
+    fn create_framebuffer(&mut self, _renderpass: &native::RenderPass,
         color_attachments: &[&native::RenderTargetView], depth_stencil_attachments: &[&native::DepthStencilView],
-        width: u32, height: u32, layers: u32) -> native::FrameBuffer
+        _width: u32, _height: u32, _layers: u32) -> native::FrameBuffer
     {
         native::FrameBuffer {
             color: color_attachments.iter().cloned().cloned().collect(),

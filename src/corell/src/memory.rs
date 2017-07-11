@@ -87,7 +87,7 @@ bitflags!(
     }
 );
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Hash)]
 pub enum ImageLayout {
     General,
     ColorAttachmentOptimal,

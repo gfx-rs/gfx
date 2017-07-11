@@ -19,11 +19,21 @@ use winapi::{self, UINT, UINT64, FLOAT};
 use core::{self, command, memory, pso, state, target, IndexType, VertexCount, VertexOffset};
 use core::buffer::IndexBufferView;
 use core::command::{RenderPassInlineEncoder, RenderPassSecondaryEncoder, Encoder};
+use core::pass::{Attachment, AttachmentLoadOp};
 use data;
 use native::{self, CommandBuffer, GeneralCommandBuffer, GraphicsCommandBuffer,
     ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer, RenderPass, FrameBuffer};
 use {Resources as R};
 
+
+fn get_rect(rect: &target::Rect) -> winapi::D3D12_RECT {
+    winapi::D3D12_RECT {
+        left: rect.x as i32,
+        top: rect.y as i32,
+        right: (rect.x + rect.w) as i32,
+        bottom: (rect.y + rect.h) as i32,
+    }
+}
 
 pub struct SubmitInfo(pub ComPtr<winapi::ID3D12GraphicsCommandList>);
 
@@ -40,13 +50,17 @@ impl CommandBuffer {
 
         for barrier in image_barriers {
             let state_src = match barrier.state_src {
-                memory::ImageStateSrc::Present(access) => unimplemented!(),
+                memory::ImageStateSrc::Present(_access) => winapi::D3D12_RESOURCE_STATE_PRESENT,
                 memory::ImageStateSrc::State(access, layout) => data::map_image_resource_state(access, layout)
             };
             let state_dst = match barrier.state_dst {
-                memory::ImageStateDst::Present => unimplemented!(),
+                memory::ImageStateDst::Present => winapi::D3D12_RESOURCE_STATE_PRESENT,
                 memory::ImageStateDst::State(access, layout) => data::map_image_resource_state(access, layout)
             };
+
+            if state_src == state_dst {
+                warn!("Image pipeline barrier requested with no effect: {:?}", barrier);
+            }
 
             transition_barriers.push(
                 winapi::D3D12_RESOURCE_BARRIER {
@@ -342,14 +356,7 @@ impl CommandBuffer {
     }
 
     fn set_scissors(&mut self, scissors: &[target::Rect]) {
-        let rects = scissors.iter().map(|rect| {
-            winapi::D3D12_RECT {
-                left: rect.x as i32,
-                top: rect.y as i32,
-                right: (rect.x + rect.w) as i32,
-                bottom: (rect.y + rect.h) as i32,
-            }
-        }).collect::<Vec<_>>();
+        let rects = scissors.iter().map(get_rect).collect::<Vec<_>>();
         unsafe {
             self.inner.RSSetScissorRects(rects.len() as UINT, rects.as_ptr())
         };
@@ -552,6 +559,59 @@ macro_rules! impl_render_pass_inline_buffer {
                      render_area: target::Rect,
                      clear_values: &[command::ClearValue]
             ) -> Self {
+				let color_views = framebuffer.color.iter().map(|view| view.handle).collect::<Vec<_>>();
+       			assert!(framebuffer.depth_stencil.len() <= 1);
+		        assert_eq!(framebuffer.color.len() + framebuffer.depth_stencil.len(), render_pass.attachments.len());
+
+ 		        let ds_view = match framebuffer.depth_stencil.first() {
+		            Some(ref view) => &view.handle as *const _,
+		            None => ptr::null(),
+		        };
+		        unsafe {
+		            command_buffer.0.inner.OMSetRenderTargets(
+		                color_views.len() as UINT,
+		                color_views.as_ptr(),
+		                winapi::FALSE,
+		                ds_view,
+		            );
+		        }
+
+		        let area = get_rect(&render_area);
+
+		        let mut clear_iter = clear_values.iter();
+		        for (color, attachment) in framebuffer.color.iter().zip(render_pass.attachments.iter()) {
+        		    if attachment.load_op == AttachmentLoadOp::Clear {
+		                match clear_iter.next() {
+        		            Some(&command::ClearValue::Color(value)) => {
+		                        let data = match value {
+        		                    command::ClearColor::Float(v) => v,
+		                            _ => {
+        		                        error!("Integer clear is not implemented yet");
+		                                [0.0; 4]
+        		                    }
+		                        };
+        		                unsafe {
+                		            command_buffer.0.inner.ClearRenderTargetView(color.handle, &data, 1, &area);
+                        		}
+		                    },
+        		            other => error!("Invalid clear value for view {:?}: {:?}", color, other),
+                		}
+		            }
+        		}
+		        if let (Some(depth), Some(&Attachment{ load_op: AttachmentLoadOp::Clear, .. })) = (framebuffer.depth_stencil.first(), render_pass.attachments.last()) {
+        		    match clear_iter.next() {
+                		Some(&command::ClearValue::DepthStencil(value)) => {
+		                    unsafe {
+        		                command_buffer.0.inner.ClearDepthStencilView(depth.handle,
+                		            winapi::D3D12_CLEAR_FLAG_DEPTH | winapi::D3D12_CLEAR_FLAG_STENCIL,
+                        		    value.depth, value.stencil as u8, 1, &area);
+		                    }
+        		        },
+                		other => error!("Invalid clear value for view {:?}: {:?}",
+		                    framebuffer.depth_stencil[0], other),
+        		    }
+		        }
+
                 RenderPassInlineBuffer {
                 }
             }
@@ -561,6 +621,8 @@ macro_rules! impl_render_pass_inline_buffer {
                       render_pass: &native::RenderPass,
                       framebuffer: &native::FrameBuffer) {
             }
+        }
+
 
             fn next_subpass(&mut self) -> RenderPassSecondaryBuffer {
                 unimplemented!()

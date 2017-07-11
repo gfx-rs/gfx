@@ -33,12 +33,14 @@ pub enum ClearColor {
 }
 
 /// Depth-stencil target clear values.
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub struct ClearDepthStencil {
     pub depth: f32,
     pub stencil: u32,
 }
 
 /// General clear values for attachments (color or depth-stencil).
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub enum ClearValue {
     Color(ClearColor),
     DepthStencil(ClearDepthStencil),

@@ -156,7 +156,7 @@ pub fn map_buffer_resource_state(usage: buffer::Usage) -> D3D12_RESOURCE_STATES 
 pub fn map_image_resource_state(access: memory::ImageAccess, _layout: memory::ImageLayout) -> D3D12_RESOURCE_STATES {
     let mut state = D3D12_RESOURCE_STATE_COMMON;
 
-    if access.contains(memory::RENDER_TARGET_CLEAR) {
+    if access.contains(memory::RENDER_TARGET_CLEAR) | access.contains(memory::COLOR_ATTACHMENT_WRITE) {
         state = state | D3D12_RESOURCE_STATE_RENDER_TARGET;
     }
 
