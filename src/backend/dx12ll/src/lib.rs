@@ -279,12 +279,16 @@ impl core::Surface for Surface {
     fn build_swapchain<T: core::format::RenderFormat>(&self, present_queue: &CommandQueue) -> SwapChain {
         let mut swap_chain = ComPtr::<winapi::IDXGISwapChain1>::new(ptr::null_mut());
         let buffer_count = 2; // TODO: user-defined value
+        let mut format = T::get_format();
+        if format.1 == core::format::ChannelType::Srgb {
+            // Apparently, swap chain doesn't like sRGB, but the RTV can still have some:
+            // https://www.gamedev.net/forums/topic/670546-d3d12srgb-buffer-format-for-swap-chain/
+            // [15716] DXGI ERROR: IDXGIFactory::CreateSwapChain: Flip model swapchains (DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL and DXGI_SWAP_EFFECT_FLIP_DISCARD) only support the following Formats: (DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R10G10B10A2_UNORM), assuming the underlying Device does as well.
+            format.1 = core::format::ChannelType::Unorm;
+        }
+        let dxgi_format = data::map_format(format, true).unwrap();
+        let bits_per_texel = format.0.get_total_bits();
 
-        //TODO: data::map_format(T::get_format(), true).unwrap(), // TODO: error handling
-        //[15716] DXGI ERROR: IDXGIFactory::CreateSwapChain: Flip model swapchains (DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL and DXGI_SWAP_EFFECT_FLIP_DISCARD) only support the following Formats: (DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R10G10B10A2_UNORM), assuming the underlying Device does as well.
-        let dxgi_format = winapi::DXGI_FORMAT_R8G8B8A8_UNORM;
-        let bits_per_texel = 32;
-        // TODO: double-check values
         let desc = winapi::DXGI_SWAP_CHAIN_DESC1 {
             AlphaMode: winapi::DXGI_ALPHA_MODE_IGNORE,
             BufferCount: buffer_count,
@@ -314,7 +318,7 @@ impl core::Surface for Surface {
         };
 
         if !winapi::SUCCEEDED(hr) {
-            error!("error on swapchain creation {:x}", hr);
+            panic!("error on swapchain creation {:x}", hr);
         }
 
         let mut swap_chain3 = ComPtr::<winapi::IDXGISwapChain3>::new(ptr::null_mut());

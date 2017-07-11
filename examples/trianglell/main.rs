@@ -37,7 +37,7 @@ use gfx_corell::factory::{DescriptorHeapType, DescriptorPoolDesc, DescriptorType
 use std::io::Cursor;
 use gfx_corell::image as i;
 
-pub type ColorFormat = gfx_corell::format::Rgba8; //TODO: D3D12 swap chain complains
+pub type ColorFormat = gfx_corell::format::Srgba8;
 
 #[derive(Debug, Clone, Copy)]
 #[allow(non_snake_case)]
