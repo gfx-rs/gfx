@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Range;
 use {buffer, format, image, mapping, memory, pass, pso, shade};
 use {HeapType, Resources, SubPass};
 
@@ -147,7 +146,7 @@ pub trait Factory<R: Resources> {
     /// Create a new buffer (unbound).
     ///
     /// The created buffer won't have associated memory until `bind_buffer_memory` is called.
-    fn create_buffer(&mut self, size: u64, usage: buffer::Usage) -> Result<R::UnboundBuffer, buffer::CreationError>;
+    fn create_buffer(&mut self, size: u64, stride: u64, usage: buffer::Usage) -> Result<R::UnboundBuffer, buffer::CreationError>;
 
     ///
     fn get_buffer_requirements(&mut self, buffer: &R::UnboundBuffer) -> memory::MemoryRequirements;

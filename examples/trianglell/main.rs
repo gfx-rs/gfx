@@ -204,7 +204,7 @@ fn main() {
         (&shader_lib, &pipeline_layout, SubPass { index: 0, main_pass: &render_pass }, &pipeline_desc)
     ]);
 
-    println!("{:?}", pipelines);
+    println!("pipelines: {:?}", pipelines);
 
     // Descriptors
     let heap_srv = factory.create_descriptor_heap(DescriptorHeapType::SrvCbvUav, 16);
@@ -247,10 +247,11 @@ fn main() {
     println!("Memory heaps: {:?}", heap_types);
 
     let heap = factory.create_heap(upload_heap, 1024);
-    let buffer_len = TRIANGLE.len() as u64 * std::mem::size_of::<Vertex>() as u64;
+    let buffer_stride = std::mem::size_of::<Vertex>() as u64;
+    let buffer_len = TRIANGLE.len() as u64 * buffer_stride;
 
     let vertex_buffer = {
-        let buffer = factory.create_buffer(buffer_len, buffer::VERTEX).unwrap();
+        let buffer = factory.create_buffer(buffer_len, buffer_stride, buffer::VERTEX).unwrap();
         println!("{:?}", buffer);
         factory.bind_buffer_memory(&heap, 0, buffer).unwrap()
     };
@@ -269,13 +270,14 @@ fn main() {
     let (width, height) = img.dimensions();
     let kind = i::Kind::D2(width as i::Size, height as i::Size, i::AaMode::Single);
     let row_alignment_mask = 0xFF; //D3D12 restriction, TODO: have it in device capabilities
-    let row_pitch = (width * 4 + row_alignment_mask) & !row_alignment_mask;
+    let image_stride = 4usize;
+    let row_pitch = (width * image_stride as u32 + row_alignment_mask) & !row_alignment_mask;
     let upload_size = (height * row_pitch) as u64;
     println!("upload row pitch {}, total size {}", row_pitch, upload_size);
 
     let image_upload_heap = factory.create_heap(upload_heap, upload_size);
     let image_upload_buffer = {
-        let buffer = factory.create_buffer(upload_size, buffer::TRANSFER_SRC).unwrap();
+        let buffer = factory.create_buffer(upload_size, image_stride as u64, buffer::TRANSFER_SRC).unwrap();
         factory.bind_buffer_memory(&image_upload_heap, 0, buffer).unwrap()
     };
 
@@ -283,7 +285,7 @@ fn main() {
     {
         let mut mapping = factory.write_mapping::<u8>(&image_upload_buffer, 0, upload_size).unwrap();
         for y in 0 .. height as usize {
-            let row = &(*img)[y*(width as usize)*4 .. (y+1)*(width as usize)*4];
+            let row = &(*img)[y*(width as usize)*image_stride .. (y+1)*(width as usize)*image_stride];
             let dest_base = y * row_pitch as usize;
             mapping[dest_base .. dest_base + row.len()].copy_from_slice(row);
         }
@@ -381,7 +383,7 @@ fn main() {
         );
 
         factory.wait_for_fences(&[&frame_fence], WaitFor::All, !0);
-        general_queues[0].wait_idle();
+        //general_queues[0].wait_idle(); //TODO: Metal
     }
 
     //
@@ -443,7 +445,7 @@ fn main() {
 
         // TODO: replace with semaphore
         factory.wait_for_fences(&[&frame_fence], WaitFor::All, !0);
-        general_queues[0].wait_idle();
+        //general_queues[0].wait_idle(); //TODO: Metal
 
         // present frame
         swap_chain.present();

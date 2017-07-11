@@ -35,6 +35,7 @@ const IMAGE_SLICE_ALIGNMENT: u32 = 64;
 #[derive(Debug)]
 pub struct UnboundBuffer {
     requirements: memory::MemoryRequirements,
+    stride: u64,
     usage: buffer::Usage,
 }
 
@@ -127,14 +128,16 @@ impl Factory {
         };
 
         let mut heap: *mut winapi::ID3D12DescriptorHeap = ptr::null_mut();
-        let mut handle = winapi::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: 0 };
+        let mut cpu_handle = winapi::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: 0 };
+        let mut gpu_handle = winapi::D3D12_GPU_DESCRIPTOR_HANDLE { ptr: 0 };
         let descriptor_size = unsafe {
             device.CreateDescriptorHeap(
                 &desc,
                 &dxguid::IID_ID3D12DescriptorHeap,
                 &mut heap as *mut *mut _ as *mut *mut c_void,
             );
-            (*heap).GetCPUDescriptorHandleForHeapStart(&mut handle);
+            (*heap).GetCPUDescriptorHandleForHeapStart(&mut cpu_handle);
+            (*heap).GetGPUDescriptorHandleForHeapStart(&mut gpu_handle);
             device.GetDescriptorHandleIncrementSize(heap_type) as u64
         };
 
@@ -142,7 +145,10 @@ impl Factory {
             inner: ComPtr::new(heap),
             handle_size: descriptor_size,
             total_handles: capacity as u64,
-            start_handle: handle,
+            start: native::DualHandle {
+                cpu: cpu_handle,
+                gpu: gpu_handle,
+            },
         }
     }
 
@@ -219,9 +225,39 @@ impl core::Factory<R> for Factory {
     }
 
     fn create_pipeline_layout(&mut self, sets: &[&native::DescriptorSetLayout]) -> native::PipelineLayout {
+        let mut ranges = Vec::new();
+        let parameters = sets.iter().map(|desc_set| {
+            let mut param = winapi::D3D12_ROOT_PARAMETER {
+                ParameterType: winapi::D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+                ShaderVisibility: winapi::D3D12_SHADER_VISIBILITY_ALL, //TODO
+                .. unsafe { mem::zeroed() }
+            };
+            let range_base = ranges.len();
+            ranges.extend(desc_set.bindings.iter().map(|bind| winapi::D3D12_DESCRIPTOR_RANGE {
+                RangeType: match bind.ty {
+                    f::DescriptorType::Sampler => winapi::D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
+                    f::DescriptorType::SampledImage => winapi::D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+                    f::DescriptorType::StorageBuffer |
+                    f::DescriptorType::StorageImage => winapi::D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
+                    f::DescriptorType::ConstantBuffer => winapi::D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
+                    _ => panic!("unsupported binding type {:?}", bind.ty)
+                },
+                NumDescriptors: bind.count as u32,
+                BaseShaderRegister: bind.binding as u32,
+                RegisterSpace: 0, //TODO?
+                OffsetInDescriptorsFromTableStart: winapi::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
+            }));
+            ranges[0].OffsetInDescriptorsFromTableStart = 0; //careful!
+            *unsafe{ param.DescriptorTable_mut() } = winapi::D3D12_ROOT_DESCRIPTOR_TABLE {
+                NumDescriptorRanges: (ranges.len() - range_base) as u32,
+                pDescriptorRanges: ranges[range_base..].as_ptr(),
+            };
+            param
+        }).collect::<Vec<_>>();
+
         let desc = winapi::D3D12_ROOT_SIGNATURE_DESC {
-            NumParameters: 0,
-            pParameters: ptr::null(),
+            NumParameters: parameters.len() as u32,
+            pParameters: parameters.as_ptr(),
             NumStaticSamplers: 0,
             pStaticSamplers: ptr::null(),
             Flags: winapi::D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT,
@@ -236,8 +272,8 @@ impl core::Factory<R> for Factory {
             d3d12::D3D12SerializeRootSignature(
                 &desc,
                 winapi::D3D_ROOT_SIGNATURE_VERSION_1,
-                signature_raw.as_mut() as *mut *mut _ ,
-                error.as_mut() as *mut *mut _);
+                signature_raw.as_mut(),
+                error.as_mut());
 
             self.inner.CreateRootSignature(
                 0,
@@ -385,6 +421,8 @@ impl core::Factory<R> for Factory {
                 Flags: winapi::D3D12_PIPELINE_STATE_FLAG_NONE,
             };
 
+            let topology = data::map_topology(desc.primitive);
+
             // Create PSO
             let mut pipeline = ComPtr::<winapi::ID3D12PipelineState>::new(ptr::null_mut());
             let hr = unsafe {
@@ -395,7 +433,7 @@ impl core::Factory<R> for Factory {
             };
 
             if winapi::SUCCEEDED(hr) {
-                Ok(native::GraphicsPipeline { inner: pipeline })
+                Ok(native::GraphicsPipeline { inner: pipeline, topology })
             } else {
                 Err(pso::CreationError)
             }
@@ -417,7 +455,7 @@ impl core::Factory<R> for Factory {
     }
 
     fn create_sampler(&mut self, info: image::SamplerInfo) -> native::Sampler {
-        let handle = self.sampler_pool.alloc_handles(1);
+        let handle = self.sampler_pool.alloc_handles(1).cpu;
 
         let op = match info.comparison {
             Some(_) => data::FilterOp::Comparison,
@@ -446,13 +484,13 @@ impl core::Factory<R> for Factory {
         native::Sampler{ handle }
     }
 
-    fn create_buffer(&mut self, size: u64, usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
+    fn create_buffer(&mut self, size: u64, stride: u64, usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
         let requirements = memory::MemoryRequirements {
             size: size,
             alignment: winapi::D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT as u64,
         };
         Ok(UnboundBuffer {
-            requirements, usage
+            requirements, stride, usage
         })
     }
 
@@ -492,6 +530,7 @@ impl core::Factory<R> for Factory {
         Ok(native::Buffer {
             resource: ComPtr::new(resource as *mut _),
             size_in_bytes: buffer.requirements.size as u32,
+            stride: buffer.stride as u32,
         })
     }
 
@@ -575,7 +614,7 @@ impl core::Factory<R> for Factory {
     }
 
     fn view_image_as_render_target(&mut self, image: &native::Image, format: format::Format) -> Result<native::RenderTargetView, f::TargetViewError> {
-        let handle = self.rtv_pool.alloc_handles(1);
+        let handle = self.rtv_pool.alloc_handles(1).cpu;
 
         // create descriptor
         unsafe {
@@ -589,7 +628,7 @@ impl core::Factory<R> for Factory {
     }
 
     fn view_image_as_shader_resource(&mut self, image: &native::Image, format: format::Format) -> Result<native::ShaderResourceView, f::TargetViewError> {
-        let handle = self.srv_pool.alloc_handles(1);
+        let handle = self.srv_pool.alloc_handles(1).cpu;
 
         let dimension = match image.kind {
             image::Kind::D1(..) |

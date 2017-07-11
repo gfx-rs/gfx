@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{buffer, memory, HeapType};
+use core::{buffer, memory, shade, HeapType, Primitive};
 use core::format::Format;
 use core::image::{FilterMethod, WrapMode};
 use core::state::Comparison;
@@ -222,6 +222,23 @@ pub fn map_filter(filter: FilterMethod, op: FilterOp) -> D3D12_FILTER {
             Bilinear       => D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT,
             Trilinear      => D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR,
             Anisotropic(_) => D3D12_FILTER_COMPARISON_ANISOTROPIC,
+        },
+    }
+}
+
+pub fn map_shader_visibility(_stages: shade::StageFlags) -> D3D12_SHADER_VISIBILITY {
+    D3D12_SHADER_VISIBILITY_ALL //TODO
+}
+
+pub fn map_topology(primitive: Primitive) -> D3D12_PRIMITIVE_TOPOLOGY {
+    match primitive {
+        Primitive::PointList       => D3D_PRIMITIVE_TOPOLOGY_POINTLIST,
+        Primitive::LineList        => D3D_PRIMITIVE_TOPOLOGY_LINELIST,
+        Primitive::LineStrip       => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP,
+        Primitive::TriangleList    => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+        Primitive::TriangleStrip   => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+        Primitive::PatchList(num)  => { assert!(num != 0);
+            D3D_PRIMITIVE_TOPOLOGY(D3D_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST.0 + (num as u32) - 1)
         },
     }
 }

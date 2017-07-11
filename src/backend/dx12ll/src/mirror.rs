@@ -18,7 +18,6 @@ use dxguid;
 use winapi;
 
 use std::{mem, ptr};
-use core::{shade};
 
 pub fn reflect_shader(code: &winapi::D3D12_SHADER_BYTECODE) -> ComPtr<winapi::ID3D12ShaderReflection> {
     let mut reflection = ComPtr::<winapi::ID3D12ShaderReflection>::new(ptr::null_mut());

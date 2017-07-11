@@ -27,7 +27,7 @@ use CommandQueue;
 
 struct CommandAllocator {
     inner: ComPtr<winapi::ID3D12CommandAllocator>,
-    
+
     device: ComPtr<winapi::ID3D12Device>,
     list_type: winapi::D3D12_COMMAND_LIST_TYPE,
 }
@@ -59,7 +59,7 @@ impl CommandAllocator {
     fn reset(&mut self) {
         unsafe { self.inner.Reset(); }
     }
-    
+
     fn create_command_list(&mut self) -> ComPtr<winapi::ID3D12GraphicsCommandList> {
         // allocate command lists
         let mut command_list = ComPtr::<winapi::ID3D12GraphicsCommandList>::new(ptr::null_mut());
@@ -115,6 +115,7 @@ macro_rules! impl_pool {
 
             fn reset(&mut self) {
                 // reset only allocator, as command lists will be reset on acquire.
+                self.next_list = 0;
                 self.allocator.reset();
             }
 

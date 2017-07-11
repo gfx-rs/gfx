@@ -177,7 +177,10 @@ impl CommandBuffer {
     }
 
     fn bind_graphics_pipeline(&mut self, pso: &native::GraphicsPipeline) {
-        unimplemented!()
+        unsafe {
+            self.inner.SetPipelineState(pso.inner.as_mut_ptr());
+            self.inner.IASetPrimitiveTopology(pso.topology);
+        };
     }
 
     fn bind_compute_pipeline(&mut self, pso: &native::ComputePipeline) {
@@ -185,11 +188,33 @@ impl CommandBuffer {
     }
 
     fn bind_descriptor_heaps(&mut self, srv_cbv_uav: Option<&native::DescriptorHeap>, samplers: Option<&native::DescriptorHeap>) {
-        unimplemented!()
+        let mut heaps = [ptr::null_mut(); 2];
+        let mut count = 0;
+        if let Some(heap) = srv_cbv_uav {
+            heaps[count] = heap.inner.as_mut_ptr();
+            count += 1;
+        }
+        if let Some(heap) = samplers {
+            heaps[count] = heap.inner.as_mut_ptr();
+            count += 1;
+        }
+        unsafe {
+            self.inner.SetDescriptorHeaps(count as UINT, heaps.as_mut_ptr())
+        }
     }
 
     fn bind_descriptor_sets(&mut self, layout: &native::PipelineLayout, first_set: usize, sets: &[&native::DescriptorSet]) {
-        unimplemented!()
+        //TODO: Compute?
+        unsafe {
+            self.inner.SetGraphicsRootSignature(layout.inner.as_mut_ptr());
+        }
+        for i in 0 .. sets.len() {
+            let handle = sets[i].ranges[0].handle.gpu;
+            unsafe {
+                self.inner.SetGraphicsRootDescriptorTable((first_set + i) as UINT, handle)
+            }
+        }
+
     }
 
     fn push_constants(&mut self) {
@@ -275,8 +300,25 @@ impl CommandBuffer {
         }
     }
 
-    fn bind_vertex_buffers(&mut self, _: pso::VertexBufferSet<R>) {
-        unimplemented!()
+    fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<R>) {
+        let buffers = vbs.0.iter().map(|&(ref buffer, offset)| {
+            let base = unsafe {
+                buffer.resource.clone().GetGPUVirtualAddress()
+            };
+            winapi::D3D12_VERTEX_BUFFER_VIEW {
+                BufferLocation: base + offset as u64,
+                SizeInBytes: buffer.size_in_bytes,
+                StrideInBytes: buffer.stride,
+            }
+        }).collect::<Vec<_>>();
+
+        unsafe {
+            self.inner.IASetVertexBuffers(
+                0,
+                vbs.0.len() as UINT,
+                buffers.as_ptr(),
+            );
+        }
     }
 
     fn set_viewports(&mut self, viewports: &[target::Rect]) {

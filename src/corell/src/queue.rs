@@ -18,7 +18,6 @@
 
 use std::ops::{Deref, DerefMut};
 use {CommandQueue, QueueSubmit, Resources};
-use command::Submit;
 
 /// General command queue, which can execute graphics, compute and transfer command buffers.
 pub struct GeneralQueue<Q: CommandQueue>(Q);

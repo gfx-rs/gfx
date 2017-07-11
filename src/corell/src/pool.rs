@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::ops::{DerefMut};
-use {CommandPool, CommandQueue};
+use CommandPool;
 pub use queue::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 
 /// General command pool can allocate general command buffers.

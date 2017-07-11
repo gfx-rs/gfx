@@ -303,7 +303,7 @@ impl core::Surface for Surface {
         };
 
         let hr = unsafe {
-            (**self.factory.as_ref()).CreateSwapChainForHwnd(
+            self.factory.clone().CreateSwapChainForHwnd(
                 present_queue.inner.as_mut_ptr() as *mut _ as *mut winapi::IUnknown,
                 self.wnd_handle,
                 &desc,
@@ -317,14 +317,19 @@ impl core::Surface for Surface {
             error!("error on swapchain creation {:x}", hr);
         }
 
-        let mut swap_chain = ComPtr::<winapi::IDXGISwapChain3>::new(swap_chain.as_mut_ptr() as *mut winapi::IDXGISwapChain3);
+        let mut swap_chain3 = ComPtr::<winapi::IDXGISwapChain3>::new(ptr::null_mut());
+        assert_eq!(winapi::S_OK, unsafe {
+            swap_chain.QueryInterface(&dxguid::IID_IDXGISwapChain3,
+                swap_chain3.as_mut() as *mut *mut _ as *mut *mut c_void)
+        });
+
         let kind = image::Kind::D2(self.width as image::Size, self.height as image::Size, image::AaMode::Single);
 
         // Get backbuffer images
         let backbuffers = (0..buffer_count).map(|i| {
             let mut resource = ComPtr::<winapi::ID3D12Resource>::new(ptr::null_mut());
             unsafe {
-                swap_chain.GetBuffer(
+                swap_chain3.GetBuffer(
                     i,
                     &dxguid::IID_ID3D12Resource,
                     resource.as_mut() as *mut *mut _ as *mut *mut c_void);
@@ -334,7 +339,7 @@ impl core::Surface for Surface {
         }).collect::<Vec<_>>();
 
         SwapChain {
-            inner: swap_chain,
+            inner: swap_chain3,
             next_frame: 0,
             frame_queue: VecDeque::new(),
             images: backbuffers,

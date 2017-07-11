@@ -510,7 +510,7 @@ impl core::Factory<Resources> for Factory {
     }
 
     #[cfg(not(feature = "native_heap"))]
-    fn create_buffer(&mut self, size: u64, usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
+    fn create_buffer(&mut self, size: u64, _stride: u64, _usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
         // TODO: map usage
         Ok(UnboundBuffer(self.device.new_buffer(size, MTLResourceOptions::empty())))
     }
