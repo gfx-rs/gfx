@@ -157,6 +157,7 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
                         ..
                     } if key == A::get_exit_key() => return,
                     winit::WindowEvent::Resized(width, height) => if width != cur_width || height != cur_height {
+                        window.resize(width, height);
                         cur_width = width;
                         cur_height = height;
                         let (new_color, new_depth) = gfx_window_glutin::new_views(&window);

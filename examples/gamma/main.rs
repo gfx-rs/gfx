@@ -77,7 +77,8 @@ pub fn main() {
                             .. },
                         ..
                     } | glutin::WindowEvent::Closed => running = false,
-                    glutin::WindowEvent::Resized(_width, _height) => {
+                    glutin::WindowEvent::Resized(width, height) => {
+                        window.resize(width, height);
                         gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
                     },
                     _ => (),
