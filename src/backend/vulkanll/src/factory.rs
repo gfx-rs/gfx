@@ -739,12 +739,12 @@ impl core::Factory<R> for Factory {
     }
 
     ///
-    fn create_buffer(&mut self, size: u64, usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
+    fn create_buffer(&mut self, size: u64, _stride: u64, usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
         let info = vk::BufferCreateInfo {
             s_type: vk::StructureType::BufferCreateInfo,
             p_next: ptr::null(),
             flags: vk::BufferCreateFlags::empty(), // TODO:
-            size: size,
+            size,
             usage: data::map_buffer_usage(usage),
             sharing_mode: vk::SharingMode::Exclusive, // TODO:
             queue_family_index_count: 0,

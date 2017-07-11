@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use core::{factory as f, image, pso, HeapType};
-use core::format::Format;
 use comptr::ComPtr;
 use winapi;
 
@@ -35,6 +34,7 @@ unsafe impl Sync for RenderPass {}
 #[derive(Clone, Debug, Hash)]
 pub struct GraphicsPipeline {
     pub inner: ComPtr<winapi::ID3D12PipelineState>,
+    pub topology: winapi::D3D12_PRIMITIVE_TOPOLOGY,
 }
 unsafe impl Send for GraphicsPipeline {}
 unsafe impl Sync for GraphicsPipeline {}
@@ -79,6 +79,7 @@ pub struct Heap {
 pub struct Buffer {
     pub resource: ComPtr<winapi::ID3D12Resource>,
     pub size_in_bytes: u32,
+    pub stride: u32,
 }
 unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
@@ -144,19 +145,27 @@ pub struct FrameBuffer {
 }
 
 #[derive(Clone, Debug)]
+pub struct DualHandle {
+    pub cpu: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
+    pub gpu: winapi::D3D12_GPU_DESCRIPTOR_HANDLE,
+}
+
+#[derive(Clone, Debug)]
 pub struct DescriptorHeap {
     pub inner: ComPtr<winapi::ID3D12DescriptorHeap>,
     //TODO: hide members?
     pub handle_size: u64,
     pub total_handles: u64,
-    pub start_handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
+    pub start: DualHandle,
 }
 
 impl DescriptorHeap {
-    pub fn at(&self, index: u64) -> winapi::D3D12_CPU_DESCRIPTOR_HANDLE {
+    pub fn at(&self, index: u64) -> DualHandle {
         assert!(index < self.total_handles);
-        let ptr = self.start_handle.ptr + self.handle_size * index;
-        winapi::D3D12_CPU_DESCRIPTOR_HANDLE { ptr }
+        DualHandle {
+            cpu: winapi::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: self.start.cpu.ptr + self.handle_size * index },
+            gpu: winapi::D3D12_GPU_DESCRIPTOR_HANDLE { ptr: self.start.gpu.ptr + self.handle_size * index },
+        }
     }
 }
 
@@ -170,7 +179,7 @@ pub struct DescriptorSetPool {
 }
 
 impl DescriptorSetPool {
-    pub fn alloc_handles(&mut self, count: u64) -> winapi::D3D12_CPU_DESCRIPTOR_HANDLE {
+    pub fn alloc_handles(&mut self, count: u64) -> DualHandle {
         assert!(self.size + count <= self.max_size);
         let index = self.offset + self.size;
         self.size += count;
@@ -180,7 +189,7 @@ impl DescriptorSetPool {
 
 #[derive(Debug)]
 pub struct DescriptorRange {
-    pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
+    pub handle: DualHandle,
     pub ty: f::DescriptorType,
     pub handle_size: u64,
     pub count: usize,
@@ -189,7 +198,7 @@ pub struct DescriptorRange {
 impl DescriptorRange {
     pub fn at(&self, index: usize) -> winapi::D3D12_CPU_DESCRIPTOR_HANDLE {
         assert!(index < self.count);
-        let ptr = self.handle.ptr + self.handle_size * index as u64;
+        let ptr = self.handle.cpu.ptr + self.handle_size * index as u64;
         winapi::D3D12_CPU_DESCRIPTOR_HANDLE { ptr }
     }
 }

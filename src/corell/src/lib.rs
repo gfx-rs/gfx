@@ -14,7 +14,6 @@
 
 #[macro_use]
 extern crate bitflags;
-#[macro_use]
 extern crate log;
 extern crate draw_state;
 
@@ -22,7 +21,6 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::any::Any;
 use std::slice::Iter;
-use std::ops::{Deref};
 
 pub use draw_state::{state, target};
 pub use factory::{Factory, WaitFor};
