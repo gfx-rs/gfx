@@ -76,11 +76,13 @@ impl Factory {
         Ok(native::ShaderLib { shaders: shader_map })
     }
 
-    pub fn create_shader_library_from_hlsl(&mut self, shaders: &[(EntryPoint, shade::Stage, &[u8])]) -> Result<native::ShaderLib, shade::CreateShaderError> {
+    pub fn create_shader_library_from_source(&mut self, shaders: &[(EntryPoint, shade::Stage, &[u8])])
+                                             -> Result<native::ShaderLib, shade::CreateShaderError>
+    {
         let stage_to_str = |stage| {
             match stage {
-                shade::Stage::Vertex => "vs_5_0",
-                shade::Stage::Pixel => "ps_5_0",
+                shade::Stage::Vertex => "vs_5_0\0",
+                shade::Stage::Pixel => "ps_5_0\0",
                 _ => unimplemented!(),
             }
         };
@@ -103,8 +105,18 @@ impl Factory {
                     1,
                     0,
                     blob.as_mut() as *mut *mut _,
-                    error.as_mut() as *mut *mut _) // TODO: error handling
+                    error.as_mut() as *mut *mut _)
             };
+            if !winapi::SUCCEEDED(hr) {
+                error!("D3DCompile error {:x}", hr);
+                let message = unsafe {
+                    let pointer = error.GetBufferPointer();
+                    let size = error.GetBufferSize();
+                    let slice = slice::from_raw_parts(pointer as *const u8, size as usize);
+                    String::from_utf8_lossy(slice).into_owned()
+                };
+                return Err(shade::CreateShaderError::CompilationFailed(message))
+            }
 
             shader_map.insert(entry_point, blob);
         }
@@ -227,7 +239,10 @@ impl core::Factory<R> for Factory {
     }
 
     fn create_pipeline_layout(&mut self, sets: &[&native::DescriptorSetLayout]) -> native::PipelineLayout {
-        let mut ranges = Vec::new();
+        let total = sets.iter().map(|desc_sec| desc_sec.bindings.len()).sum();
+        // guarantees that no re-allocation is done, and our pointers are valid
+        let mut ranges = Vec::with_capacity(total);
+
         let parameters = sets.iter().map(|desc_set| {
             let mut param = winapi::D3D12_ROOT_PARAMETER {
                 ParameterType: winapi::D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
@@ -323,11 +338,11 @@ impl core::Factory<R> for Factory {
                 let input_descs = mirror::reflect_input_elements(&mut vs_reflect);
 
                 let mut input_element_descs = Vec::new();
-                for (input_desc, attrib) in input_descs.iter().zip(desc.attributes.iter()) {
-                    let vertex_buffer_desc = if let Some(buffer_desc) = desc.vertex_buffers.get(attrib.0 as usize) {
+                for (input_desc, &(buf_index, ref element)) in input_descs.iter().zip(desc.attributes.iter()) {
+                    let vertex_buffer_desc = if let Some(buffer_desc) = desc.vertex_buffers.get(buf_index as usize) {
                         buffer_desc
                     } else {
-                        error!("Couldn't find associated vertex buffer description {:?}", attrib.0);
+                        error!("Couldn't find associated vertex buffer description {:?}", buf_index);
                         return Err(pso::CreationError);
                     };
 
@@ -339,15 +354,15 @@ impl core::Factory<R> for Factory {
                     input_element_descs.push(winapi::D3D12_INPUT_ELEMENT_DESC {
                         SemanticName: input_desc.semantic_name,
                         SemanticIndex: input_desc.semantic_index,
-                        Format: match data::map_format(attrib.1.format, false) {
+                        Format: match data::map_format(element.format, false) {
                             Some(fm) => fm,
                             None => {
-                                error!("Unable to find DXGI format for {:?}", attrib.1.format);
+                                error!("Unable to find DXGI format for {:?}", element.format);
                                 return Err(core::pso::CreationError);
                             }
                         },
-                        InputSlot: input_desc.input_slot,
-                        AlignedByteOffset: attrib.1.offset,
+                        InputSlot: buf_index as u32, //input_desc.input_slot,
+                        AlignedByteOffset: element.offset,
                         InputSlotClass: slot_class,
                         InstanceDataStepRate: vertex_buffer_desc.rate as u32,
                     });

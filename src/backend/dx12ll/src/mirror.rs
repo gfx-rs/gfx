@@ -35,6 +35,7 @@ pub fn reflect_shader(code: &winapi::D3D12_SHADER_BYTECODE) -> ComPtr<winapi::ID
     reflection
 }
 
+#[derive(Debug)]
 pub struct InputElemDesc {
     pub semantic_name: winapi::LPCSTR,
     pub semantic_index: winapi::UINT,
