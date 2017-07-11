@@ -16,14 +16,14 @@ use format::Format;
 use memory::{ImageAccess, ImageLayout};
 use pso::PipelineStage;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum AttachmentLoadOp {
     Load,
     Clear,
     DontCare,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum AttachmentStoreOp {
     Store,
     DontCare,
@@ -31,6 +31,7 @@ pub enum AttachmentStoreOp {
 
 pub type AttachmentLayout = ImageLayout;
 
+#[derive(Clone, Debug, Hash)]
 pub struct Attachment {
     pub format: Format,
     pub load_op: AttachmentLoadOp,

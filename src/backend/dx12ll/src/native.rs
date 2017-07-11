@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use core::{factory as f, image, pso, HeapType};
+use core::pass::Attachment;
 use comptr::ComPtr;
 use winapi;
 
@@ -27,9 +28,8 @@ unsafe impl Sync for ShaderLib {}
 
 #[derive(Clone, Debug, Hash)]
 pub struct RenderPass {
+    pub attachments: Vec<Attachment>,
 }
-unsafe impl Send for RenderPass {}
-unsafe impl Sync for RenderPass {}
 
 #[derive(Clone, Debug, Hash)]
 pub struct GraphicsPipeline {

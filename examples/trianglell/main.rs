@@ -37,7 +37,7 @@ use gfx_corell::factory::{DescriptorHeapType, DescriptorPoolDesc, DescriptorType
 use std::io::Cursor;
 use gfx_corell::image as i;
 
-pub type ColorFormat = gfx_corell::format::Srgba8;
+pub type ColorFormat = gfx_corell::format::Rgba8; //TODO: D3D12 swap chain complains
 
 #[derive(Debug, Clone, Copy)]
 struct Vertex {
@@ -411,6 +411,14 @@ fn main() {
         let submit = {
             let mut cmd_buffer = graphics_pool.acquire_command_buffer();
 
+            let rtv = &swap_chain.get_images()[frame.id()];
+            let rtv_target_barrier = ImageBarrier {
+                state_src: ImageStateSrc::State(ImageAccess::empty(), ImageLayout::Undefined),
+                state_dst: ImageStateDst::State(memory::COLOR_ATTACHMENT_WRITE, ImageLayout::ColorAttachmentOptimal),
+                image: rtv,
+            };
+            cmd_buffer.pipeline_barrier(&[], &[], &[rtv_target_barrier]);
+
             cmd_buffer.set_viewports(&[viewport]);
             cmd_buffer.set_scissors(&[scissor]);
             cmd_buffer.bind_graphics_pipeline(&pipelines[0].as_ref().unwrap());
@@ -428,7 +436,13 @@ fn main() {
                 encoder.draw(0, 6, None);
             }
 
-            // TODO: should transition to (_, Present) -> Present (for d3d12)
+            let rtv_present_barrier = ImageBarrier {
+                state_src: ImageStateSrc::State(memory::COLOR_ATTACHMENT_WRITE, ImageLayout::ColorAttachmentOptimal),
+                state_dst: ImageStateDst::Present,
+                image: rtv,
+            };
+            cmd_buffer.pipeline_barrier(&[], &[], &[rtv_present_barrier]);
+
             cmd_buffer.finish()
         };
 
