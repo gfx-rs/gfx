@@ -633,11 +633,33 @@ impl core::Factory<R> for Factory {
     fn view_image_as_render_target(&mut self, image: &native::Image, format: format::Format) -> Result<native::RenderTargetView, f::TargetViewError> {
         let handle = self.rtv_pool.alloc_handles(1).cpu;
 
-        // create descriptor
+        if image.kind.get_dimensions().3 != image::AaMode::Single {
+            error!("No MSAA supported yet!");
+        }
+
+        let mut desc = winapi::D3D12_RENDER_TARGET_VIEW_DESC {
+            Format: match data::map_format(format, true) {
+                Some(format) => format,
+                None => return Err(f::TargetViewError::BadFormat)
+            },
+            .. unsafe { mem::zeroed() }
+        };
+
+        match image.kind {
+            image::Kind::D2(..) => {
+                desc.ViewDimension = winapi::D3D12_RTV_DIMENSION_TEXTURE2D;
+                *unsafe { desc.Texture2D_mut() } = winapi::D3D12_TEX2D_RTV {
+                    MipSlice: 0,
+                    PlaneSlice: 0,
+                };
+            },
+            other => unimplemented!()
+        };
+
         unsafe {
             self.inner.CreateRenderTargetView(
                 image.resource.as_mut_ptr(),
-                ptr::null_mut(),
+                &desc,
                 handle);
         }
 
