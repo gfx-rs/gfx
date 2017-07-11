@@ -870,83 +870,63 @@ impl core::Factory<R> for Factory {
         }
     }
 
-    fn destroy_heap(&mut self, heap: native::Heap) {
-        unimplemented!()
+    fn destroy_heap(&mut self, _heap: native::Heap) {
     }
 
-    fn destroy_shader_lib(&mut self, shader_lib: native::ShaderLib) {
-        unimplemented!()
+    fn destroy_shader_lib(&mut self, _shader_lib: native::ShaderLib) {
     }
 
-    fn destroy_renderpass(&mut self, rp: native::RenderPass) {
-        unimplemented!()
+    fn destroy_renderpass(&mut self, _rp: native::RenderPass) {
     }
 
-    fn destroy_pipeline_layout(&mut self, pl: native::PipelineLayout) {
-        unimplemented!()
+    fn destroy_pipeline_layout(&mut self, _pl: native::PipelineLayout) {
     }
 
-    fn destroy_graphics_pipeline(&mut self, pipeline: native::GraphicsPipeline) {
-        unimplemented!()
+    fn destroy_graphics_pipeline(&mut self, _pipeline: native::GraphicsPipeline) {
     }
 
-    fn destroy_compute_pipeline(&mut self, pipeline: native::ComputePipeline) {
-        unimplemented!()
+    fn destroy_compute_pipeline(&mut self, _pipeline: native::ComputePipeline) {
     }
 
-    fn destroy_framebuffer(&mut self, fb: native::FrameBuffer) {
-        unimplemented!()
+    fn destroy_framebuffer(&mut self, _fb: native::FrameBuffer) {
     }
 
-    fn destroy_buffer(&mut self, buffer: native::Buffer) {
-        unimplemented!()
+    fn destroy_buffer(&mut self, _buffer: native::Buffer) {
     }
 
-    fn destroy_image(&mut self, image: native::Image) {
-        unimplemented!()
+    fn destroy_image(&mut self, _image: native::Image) {
     }
 
-    fn destroy_render_target_view(&mut self, rtv: native::RenderTargetView) {
-        unimplemented!()
+    fn destroy_render_target_view(&mut self, _rtv: native::RenderTargetView) {
     }
 
-    fn destroy_depth_stencil_view(&mut self, dsv: native::DepthStencilView) {
-        unimplemented!()
+    fn destroy_depth_stencil_view(&mut self, _dsv: native::DepthStencilView) {
     }
 
-    fn destroy_constant_buffer_view(&mut self, _: native::ConstantBufferView) {
-        unimplemented!()
+    fn destroy_constant_buffer_view(&mut self, _cbv: native::ConstantBufferView) {
     }
 
-    fn destroy_shader_resource_view(&mut self, srv: native::ShaderResourceView) {
-        unimplemented!()
+    fn destroy_shader_resource_view(&mut self, _srv: native::ShaderResourceView) {
     }
 
-    fn destroy_unordered_access_view(&mut self, uav: native::UnorderedAccessView) {
-        unimplemented!()
+    fn destroy_unordered_access_view(&mut self, _uav: native::UnorderedAccessView) {
     }
 
-    fn destroy_sampler(&mut self, sampler: native::Sampler) {
-        unimplemented!()
+    fn destroy_sampler(&mut self, _sampler: native::Sampler) {
     }
 
-    fn destroy_descriptor_heap(&mut self, heap: native::DescriptorHeap) {
-        unimplemented!()
+    fn destroy_descriptor_heap(&mut self, _heap: native::DescriptorHeap) {
     }
 
-    fn destroy_descriptor_set_pool(&mut self, pool: native::DescriptorSetPool) {
-        unimplemented!()
+    fn destroy_descriptor_set_pool(&mut self, _pool: native::DescriptorSetPool) {
     }
 
-    fn destroy_descriptor_set_layout(&mut self, layout: native::DescriptorSetLayout) {
-        unimplemented!()
+    fn destroy_descriptor_set_layout(&mut self, _layout: native::DescriptorSetLayout) {
     }
 
-    fn destroy_fence(&mut self, fence: native::Fence) {
-        unimplemented!()
+    fn destroy_fence(&mut self, _fence: native::Fence) {
     }
 
-    fn destroy_semaphore(&mut self, semaphore: native::Semaphore) {
-        unimplemented!()
+    fn destroy_semaphore(&mut self, _semaphore: native::Semaphore) {
     }
 }
