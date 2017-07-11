@@ -492,12 +492,12 @@ impl<'a, B: Backend> GraphicsEncoder<'a, B> {
     }
 
     /// Generate a mipmap chain for the given resource view.
-    pub fn generate_mipmap<T: format::BlendFormat>(&mut self, view: &handle::ShaderResourceView<R, T>) {
+    pub fn generate_mipmap<T: format::BlendFormat>(&mut self, view: &handle::ShaderResourceView<B::Resources, T>) {
         self.generate_mipmap_raw(view.raw())
     }
 
     /// Untyped version of mipmap generation.
-    pub fn generate_mipmap_raw(&mut self, view: &handle::RawShaderResourceView<R>) {
+    pub fn generate_mipmap_raw(&mut self, view: &handle::RawShaderResourceView<B::Resources>) {
         let srv = self.handles.ref_srv(view).clone();
         self.command_buffer.generate_mipmap(srv);
     }
