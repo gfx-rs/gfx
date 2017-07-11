@@ -621,8 +621,6 @@ macro_rules! impl_render_pass_inline_buffer {
                       render_pass: &native::RenderPass,
                       framebuffer: &native::FrameBuffer) {
             }
-        }
-
 
             fn next_subpass(&mut self) -> RenderPassSecondaryBuffer {
                 unimplemented!()
