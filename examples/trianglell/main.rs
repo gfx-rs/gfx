@@ -57,7 +57,7 @@ const TRIANGLE: [Vertex; 6] = [
 #[cfg(any(feature = "vulkan", target_os = "windows"))]
 fn main() {
     env_logger::init().unwrap();
-    let events_loop = winit::EventsLoop::new();
+    let mut events_loop = winit::EventsLoop::new();
     let window = winit::WindowBuilder::new()
         .with_dimensions(1024, 768)
         .with_title("triangle (Low Level)".to_string())
@@ -370,11 +370,17 @@ fn main() {
     //
     let mut running = true;
     while running {
-        events_loop.poll_events(|winit::Event::WindowEvent{window_id: _, event}| {
-            match event {
-                winit::WindowEvent::KeyboardInput(_, _, Some(winit::VirtualKeyCode::Escape), _) |
-                winit::WindowEvent::Closed => running = false,
-                _ => {},
+        events_loop.poll_events(|event| {
+            if let winit::Event::WindowEvent { event, .. } = event {
+                match event {
+                    winit::WindowEvent::KeyboardInput {
+                        input: winit::KeyboardInput {
+                            virtual_keycode: Some(winit::VirtualKeyCode::Escape),
+                            .. },
+                        ..
+                    } | winit::WindowEvent::Closed => running = false,
+                    _ => (),
+                }
             }
         });
 

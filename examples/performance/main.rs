@@ -33,6 +33,7 @@ use std::ffi::CString;
 use std::time::{Duration, Instant};
 use gfx_device_gl::{Resources as R, CommandBuffer as CB};
 use gfx_core::Device;
+use glutin::GlContext;
 
 gfx_defines!{
     vertex Vertex {
@@ -52,7 +53,7 @@ static VERTEX_SRC: &'static [u8] = b"
     uniform mat4 u_Transform;
 
     void main() {
-        gl_Position = u_Transform * vec4(a_Pos, 1.0); 
+        gl_Position = u_Transform * vec4(a_Pos, 1.0);
    }
 ";
 
@@ -93,7 +94,7 @@ trait Renderer: Drop {
 
 struct GFX {
     dimension: i16,
-    window: glutin::Window,
+    window: glutin::GlWindow,
     device:gfx_device_gl::Device,
     encoder: gfx::Encoder<R,CB>,
     data: pipe::Data<R>,
@@ -103,7 +104,7 @@ struct GFX {
 
 struct GL {
     dimension: i16,
-    window: glutin::Window,
+    window: glutin::GlWindow,
     gl:Gl,
     trans_uniform:GLint,
     vs:GLuint,
@@ -115,11 +116,14 @@ struct GL {
 
 
 impl GFX {
-    fn new(builder: glutin::WindowBuilder, events_loop: &glutin::EventsLoop, dimension: i16) -> Self {
+    fn new(window: glutin::WindowBuilder,
+           context: glutin::ContextBuilder,
+           events_loop: &glutin::EventsLoop,
+           dimension: i16) -> Self {
         use gfx::traits::FactoryExt;
 
         let (window, device, mut factory, main_color, _) =
-            gfx_window_glutin::init::<ColorFormat, DepthStencil>(builder, events_loop);
+            gfx_window_glutin::init::<ColorFormat, DepthStencil>(window, context, events_loop);
         let encoder: gfx::Encoder<_,_> = factory.create_command_buffer().into();
 
         let pso = factory.create_pipeline_simple(
@@ -185,7 +189,10 @@ impl Drop for GFX {
 
 
 impl GL {
-    fn new(builder: glutin::WindowBuilder, events_loop: &glutin::EventsLoop, dimension: i16) -> Self {
+    fn new(builder: glutin::WindowBuilder,
+           context: glutin::ContextBuilder,
+           events_loop: &glutin::EventsLoop,
+           dimension: i16) -> Self {
         fn compile_shader (gl:&Gl, src: &[u8], ty: GLenum) -> GLuint {
             unsafe {
                 let shader = gl.CreateShader(ty);
@@ -213,10 +220,10 @@ impl GL {
             }
         };
 
-        let window = builder.build(events_loop).unwrap();
+        let window = glutin::GlWindow::new(builder, context, &events_loop).unwrap();
         unsafe { window.make_current().unwrap() };
         let gl = Gl::load_with(|s| window.get_proc_address(s) as *const _);
-        
+
         // Create GLSL shaders
         let vs = compile_shader(&gl, VERTEX_SRC, gl::VERTEX_SHADER);
         let fs = compile_shader(&gl, FRAGMENT_SRC, gl::FRAGMENT_SHADER);
@@ -281,7 +288,7 @@ impl GL {
         };
 
         GL {
-            window: window,            
+            window: window,
             dimension: dimension,
             gl: gl,
             vs: vs,
@@ -307,7 +314,7 @@ impl Renderer for GL {
             self.gl.ClearColor(CLEAR_COLOR.0, CLEAR_COLOR.1, CLEAR_COLOR.2, CLEAR_COLOR.3);
             self.gl.Clear(gl::COLOR_BUFFER_BIT);
         }
-        
+
         for x in (-self.dimension) ..self.dimension {
             for y in (-self.dimension) ..self.dimension {
                 let mat:Matrix4<f32> = transform(x, y, proj_view).into();
@@ -352,7 +359,7 @@ fn main() {
     let ref mut args = env::args();
     let args_count = env::args().count();
     if args_count == 1 {
-        println!("gfx-perf [gl|gfx] <size>");
+        println!("cargo run --example performance gl|gfx [size]");
         return;
     }
 
@@ -365,16 +372,17 @@ fn main() {
 
     let count = ((count as f64).sqrt() / 2.) as i16;
 
-    let events_loop = glutin::EventsLoop::new();
+    let mut events_loop = glutin::EventsLoop::new();
     let builder = glutin::WindowBuilder::new()
         .with_title("Performance example".to_string())
-        .with_dimensions(800, 600)
-        .with_vsync();
+        .with_dimensions(800, 600);
+    let context = glutin::ContextBuilder::new()
+        .with_vsync(false);
 
     let mut r: Box<Renderer>;
     match mode.as_ref() {
-        "gfx" => r = Box::new(GFX::new(builder, &events_loop, count)),
-        "gl" => r = Box::new(GL::new(builder, &events_loop, count)),
+        "gfx" => r = Box::new(GFX::new(builder, context, &events_loop, count)),
+        "gl" => r = Box::new(GL::new(builder, context, &events_loop, count)),
         x => {
             panic!("{} is not a known mode", x)
         }
@@ -401,11 +409,18 @@ fn main() {
 
     let mut running = true;
     loop {
-        events_loop.poll_events(|glutin::Event::WindowEvent{window_id: _, event}| {
-            match event {
-                glutin::WindowEvent::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape), _) |
-                glutin::WindowEvent::Closed => running = false,
-                _ => {},
+        events_loop.poll_events(|event| {
+            if let glutin::Event::WindowEvent { event, .. } = event {
+                match event {
+                    glutin::WindowEvent::KeyboardInput {
+                        input: glutin::KeyboardInput {
+                            virtual_keycode: Some(glutin::VirtualKeyCode::Escape),
+                            ..
+                        },
+                        ..
+                    } | glutin::WindowEvent::Closed => running = false,
+                    _ => ()
+                }
             }
         });
         if !running {

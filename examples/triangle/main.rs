@@ -19,6 +19,7 @@ extern crate glutin;
 
 use gfx::traits::FactoryExt;
 use gfx::Device;
+use glutin::GlContext;
 
 pub type ColorFormat = gfx::format::Rgba8;
 pub type DepthFormat = gfx::format::DepthStencil;
@@ -44,13 +45,14 @@ const TRIANGLE: [Vertex; 3] = [
 const CLEAR_COLOR: [f32; 4] = [0.1, 0.2, 0.3, 1.0];
 
 pub fn main() {
-    let events_loop = glutin::EventsLoop::new();
-    let builder = glutin::WindowBuilder::new()
+    let mut events_loop = glutin::EventsLoop::new();
+    let window_config = glutin::WindowBuilder::new()
         .with_title("Triangle example".to_string())
-        .with_dimensions(1024, 768)
-        .with_vsync();
+        .with_dimensions(1024, 768);
+    let context = glutin::ContextBuilder::new()
+        .with_vsync(true);
     let (window, mut device, mut factory, main_color, mut main_depth) =
-        gfx_window_glutin::init::<ColorFormat, DepthFormat>(builder, &events_loop);
+        gfx_window_glutin::init::<ColorFormat, DepthFormat>(window_config, context, &events_loop);
     let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
     let pso = factory.create_pipeline_simple(
         include_bytes!("shader/triangle_150.glslv"),
@@ -67,14 +69,20 @@ pub fn main() {
     let mut running = true;
     while running {
         // fetch events
-        events_loop.poll_events(|glutin::Event::WindowEvent{window_id: _, event}| {
-            match event {
-                glutin::WindowEvent::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape), _) |
-                glutin::WindowEvent::Closed => running = false,
-                glutin::WindowEvent::Resized(_width, _height) => {
-                    gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
-                },
-                _ => {},
+        events_loop.poll_events(|event| {
+            if let glutin::Event::WindowEvent { event, .. } = event {
+                match event {
+                    glutin::WindowEvent::KeyboardInput {
+                        input: glutin::KeyboardInput {
+                            virtual_keycode: Some(glutin::VirtualKeyCode::Escape),
+                            .. },
+                        ..
+                    } | glutin::WindowEvent::Closed => running = false,
+                    glutin::WindowEvent::Resized(_width, _height) => {
+                        gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
+                    },
+                    _ => (),
+                }
             }
         });
 

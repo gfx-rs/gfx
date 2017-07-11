@@ -21,6 +21,7 @@ extern crate glutin;
 use core::{format, handle, texture};
 use core::memory::Typed;
 use device_gl::Resources as R;
+use glutin::GlContext;
 
 /// Initialize with a window builder.
 /// Generically parametrized version over the main framebuffer format.
@@ -37,21 +38,29 @@ use device_gl::Resources as R;
 ///
 /// fn main() {
 ///     let events_loop = glutin::EventsLoop::new();
-///     let builder = glutin::WindowBuilder::new().with_title("Example".to_string());
+///     let window_builder = glutin::WindowBuilder::new().with_title("Example".to_string());
+///     let context = glutin::ContextBuilder::new();
 ///     let (window, device, factory, rtv, stv) =
-///         gfx_window_glutin::init::<Rgba8, DepthStencil>(builder, &events_loop);
+///         gfx_window_glutin::init::<Rgba8, DepthStencil>(window_builder, context, &events_loop);
 ///
 ///     // your code
 /// }
 /// ```
-pub fn init<Cf, Df>(builder: glutin::WindowBuilder, events_loop: &glutin::EventsLoop) ->
-            (glutin::Window, device_gl::Device, device_gl::Factory,
+pub fn init<Cf, Df>(window: glutin::WindowBuilder,
+                    context: glutin::ContextBuilder,
+                    events_loop: &glutin::EventsLoop) ->
+            (glutin::GlWindow, device_gl::Device, device_gl::Factory,
             handle::RenderTargetView<R, Cf>, handle::DepthStencilView<R, Df>)
 where
     Cf: format::RenderFormat,
     Df: format::DepthFormat,
 {
-    let (window, device, factory, color_view, ds_view) = init_raw(builder, events_loop, Cf::get_format(), Df::get_format());
+    let (window, device, factory, color_view, ds_view) = init_raw(
+        window,
+        context,
+        events_loop,
+        Cf::get_format(),
+        Df::get_format());
     (window, device, factory, Typed::new(color_view), Typed::new(ds_view))
 }
 
@@ -75,7 +84,7 @@ where
 ///
 /// let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
 /// ```
-pub fn init_existing<Cf, Df>(window: &glutin::Window) ->
+pub fn init_existing<Cf, Df>(window: &glutin::GlWindow) ->
             (device_gl::Device, device_gl::Factory,
             handle::RenderTargetView<R, Cf>, handle::DepthStencilView<R, Df>)
 where
@@ -86,7 +95,7 @@ where
     (device, factory, Typed::new(color_view), Typed::new(ds_view))
 }
 
-fn get_window_dimensions(window: &glutin::Window) -> texture::Dimensions {
+fn get_window_dimensions(window: &glutin::GlWindow) -> texture::Dimensions {
     let (width, height) = window.get_inner_size().unwrap();
     let aa = window.get_pixel_format().multisampling
                    .unwrap_or(0) as texture::NumSamples;
@@ -94,9 +103,12 @@ fn get_window_dimensions(window: &glutin::Window) -> texture::Dimensions {
 }
 
 /// Initialize with a window builder. Raw version.
-pub fn init_raw(builder: glutin::WindowBuilder, events_loop: &glutin::EventsLoop,
-                color_format: format::Format, ds_format: format::Format) ->
-                (glutin::Window, device_gl::Device, device_gl::Factory,
+pub fn init_raw(window: glutin::WindowBuilder,
+                mut context: glutin::ContextBuilder,
+                events_loop: &glutin::EventsLoop,
+                color_format: format::Format,
+                ds_format: format::Format) ->
+                (glutin::GlWindow, device_gl::Device, device_gl::Factory,
                 handle::RawRenderTargetView<R>, handle::RawDepthStencilView<R>)
 {
     let window = {
@@ -104,13 +116,15 @@ pub fn init_raw(builder: glutin::WindowBuilder, events_loop: &glutin::EventsLoop
         let alpha_bits = color_format.0.get_alpha_stencil_bits();
         let depth_total_bits = ds_format.0.get_total_bits();
         let stencil_bits = ds_format.0.get_alpha_stencil_bits();
-        builder
+
+        context = context
             .with_depth_buffer(depth_total_bits - stencil_bits)
             .with_stencil_buffer(stencil_bits)
             .with_pixel_format(color_total_bits - alpha_bits, alpha_bits)
-            .with_srgb(Some(color_format.1 == format::ChannelType::Srgb))
-            .build(events_loop)
-    }.unwrap();
+            .with_srgb(color_format.1 == format::ChannelType::Srgb);
+
+        glutin::GlWindow::new(window, context, &events_loop).unwrap()
+    };
 
     let (device, factory, color_view, ds_view) = init_existing_raw(&window, color_format, ds_format);
 
@@ -118,7 +132,7 @@ pub fn init_raw(builder: glutin::WindowBuilder, events_loop: &glutin::EventsLoop
 }
 
 /// Initialize with an existing Glutin window. Raw version.
-pub fn init_existing_raw(window: &glutin::Window,
+pub fn init_existing_raw(window: &glutin::GlWindow,
                 color_format: format::Format, ds_format: format::Format) ->
                 (device_gl::Device, device_gl::Factory,
                 handle::RawRenderTargetView<R>, handle::RawDepthStencilView<R>)
@@ -136,7 +150,7 @@ pub fn init_existing_raw(window: &glutin::Window,
 }
 
 /// Update the internal dimensions of the main framebuffer targets. Generic version over the format.
-pub fn update_views<Cf, Df>(window: &glutin::Window, color_view: &mut handle::RenderTargetView<R, Cf>,
+pub fn update_views<Cf, Df>(window: &glutin::GlWindow, color_view: &mut handle::RenderTargetView<R, Cf>,
                     ds_view: &mut handle::DepthStencilView<R, Df>)
 where
     Cf: format::RenderFormat,
@@ -151,7 +165,7 @@ where
 }
 
 /// Return new main target views if the window resolution has changed from the old dimensions.
-pub fn update_views_raw(window: &glutin::Window, old_dimensions: texture::Dimensions,
+pub fn update_views_raw(window: &glutin::GlWindow, old_dimensions: texture::Dimensions,
                         color_format: format::Format, ds_format: format::Format)
                         -> Option<(handle::RawRenderTargetView<R>, handle::RawDepthStencilView<R>)>
 {
@@ -165,7 +179,7 @@ pub fn update_views_raw(window: &glutin::Window, old_dimensions: texture::Dimens
 
 /// Create new main target views based on the current size of the window.
 /// Best called just after a WindowResize event.
-pub fn new_views<Cf, Df>(window: &glutin::Window)
+pub fn new_views<Cf, Df>(window: &glutin::GlWindow)
         -> (handle::RenderTargetView<R, Cf>, handle::DepthStencilView<R, Df>) where
     Cf: format::RenderFormat,
     Df: format::DepthFormat,
