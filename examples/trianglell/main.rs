@@ -480,6 +480,7 @@ fn main() {
     factory.destroy_image(image_logo);
     factory.destroy_shader_resource_view(image_srv);
     factory.destroy_sampler(sampler);
+    factory.destroy_fence(frame_fence);
     factory.destroy_semaphore(frame_semaphore);
     for pipeline in pipelines {
         if let Ok(pipeline) = pipeline {
