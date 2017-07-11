@@ -108,6 +108,7 @@ pub struct Buffer {
 #[derive(Debug, Hash)]
 pub struct Image {
     pub inner: vk::Image,
+    pub bytes_per_texel: u8,
     pub extent: vk::Extent3D,
 }
 

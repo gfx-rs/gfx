@@ -425,6 +425,7 @@ impl core::Surface for Surface {
             v.set_len(count as vk::size_t);
             v.into_iter().map(|image| native::Image {
                 inner: image,
+                bytes_per_texel: format.0.get_total_bits() as u8 / 8,
                 extent: vk::Extent3D {
                     width: self.width,
                     height: self.height,

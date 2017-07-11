@@ -122,6 +122,10 @@ impl CommandBuffer {
     }
 
     fn copy_buffer_to_image(&mut self, src: &native::Buffer, dst: &native::Image, layout: memory::ImageLayout, regions: &[command::BufferImageCopy]) {
+        fn div(a: u32, b: u32) -> u32 {
+            assert_eq!(a % b, 0);
+            a / b
+        };
         let regions = regions.iter().map(|region| {
             let subresource_layers = vk::ImageSubresourceLayers {
                 aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT, // TODO
@@ -129,11 +133,11 @@ impl CommandBuffer {
                 base_array_layer: region.image_base_layer as u32,
                 layer_count: region.image_layers as u32,
             };
-
+            let row_length = div(region.buffer_row_pitch, dst.bytes_per_texel as u32);
             vk::BufferImageCopy {
                 buffer_offset: region.buffer_offset,
-                buffer_row_length: region.buffer_row_pitch,
-                buffer_image_height: region.buffer_slice_pitch,
+                buffer_row_length: row_length,
+                buffer_image_height: div(region.buffer_slice_pitch, row_length),
                 image_subresource: subresource_layers,
                 image_offset: vk::Offset3D {
                     x: region.image_offset.x,
