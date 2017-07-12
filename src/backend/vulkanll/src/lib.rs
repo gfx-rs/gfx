@@ -241,6 +241,14 @@ pub struct CommandQueue {
     family_index: u32,
 }
 
+impl CommandQueue {
+    pub fn wait_idle(&mut self) {
+        unsafe {
+            self.device.0.queue_wait_idle(*self.inner.0.borrow()).unwrap();
+        }
+    }
+}
+
 impl core::CommandQueue for CommandQueue {
     type R = Resources;
     type SubmitInfo = command::SubmitInfo;
@@ -295,12 +303,6 @@ impl core::CommandQueue for CommandQueue {
             &submits,
             fence,
         );
-    }
-
-    fn wait_idle(&mut self) {
-        unsafe {
-            self.device.0.queue_wait_idle(*self.inner.0.borrow()).unwrap();
-        }
     }
 }
 

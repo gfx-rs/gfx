@@ -25,10 +25,9 @@ extern crate winit;
 extern crate image;
 
 use gfx_corell::{buffer, command, format, pass, pso, shade, state, target,
-    Device, CommandPool, GraphicsCommandPool, CommandQueue,
+    Device, CommandPool, GraphicsCommandPool,
     GraphicsCommandBuffer, ProcessingCommandBuffer, TransferCommandBuffer, PrimaryCommandBuffer,
     Primitive, Instance, Adapter, Surface, SwapChain, QueueFamily, QueueSubmit, Factory, SubPass, FrameSync};
-use gfx_corell::command::{RenderPassEncoder, RenderPassInlineEncoder};
 use gfx_corell::format::Formatted;
 use gfx_corell::memory::{self, ImageBarrier, ImageStateSrc, ImageStateDst, ImageLayout, ImageAccess};
 use gfx_corell::factory::{DescriptorHeapType, DescriptorPoolDesc, DescriptorType,
@@ -380,7 +379,6 @@ fn main() {
         );
 
         factory.wait_for_fences(&[&frame_fence], WaitFor::All, !0);
-        //general_queues[0].wait_idle(); //TODO: Metal
     }
 
     //
@@ -456,7 +454,6 @@ fn main() {
 
         // TODO: replace with semaphore
         factory.wait_for_fences(&[&frame_fence], WaitFor::All, !0);
-        //general_queues[0].wait_idle(); //TODO: Metal
 
         // present frame
         swap_chain.present();
