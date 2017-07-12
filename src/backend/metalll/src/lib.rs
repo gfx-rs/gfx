@@ -35,12 +35,10 @@ pub use factory::{Factory};
 
 pub type GraphicsCommandPool = CommandPool;
 
-use std::str::FromStr;
 use std::mem;
 use std::marker::PhantomData;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::Arc;
 
 use core::{format, memory};
 use core::format::SurfaceType;
@@ -52,9 +50,8 @@ use core_foundation::base::TCFType;
 use core_foundation::string::{CFString, CFStringRef};
 use core_foundation::dictionary::CFDictionary;
 use core_foundation::number::{CFNumber, CFNumberRef};
-use core_foundation::bundle::{CFBundleGetBundleWithIdentifier, CFBundleGetFunctionPointerForName};
-use cocoa::base::{nil, YES};
-use cocoa::appkit::{self, NSWindow, NSView, NSOpenGLPixelFormat, NSOpenGLContext};
+use cocoa::base::YES;
+use cocoa::appkit::NSWindow;
 use core_graphics::base::CGFloat;
 use core_graphics::geometry::CGRect;
 use io_surface::IOSurface;

@@ -136,8 +136,19 @@ impl core::Factory<Resources> for Factory {
 
                     descriptor.set_pixel_format(mtl_format);
                     descriptor.set_write_mask(map_write_mask(color_desc.mask));
+                    descriptor.set_blending_enabled(color_desc.color.is_some() | color_desc.alpha.is_some());
 
-                    // TODO: blending
+                    if let Some(blend) = color_desc.color {
+                        descriptor.set_source_rgb_blend_factor(map_blend_factor(blend.source, false));
+                        descriptor.set_destination_rgb_blend_factor(map_blend_factor(blend.destination, false));
+                        descriptor.set_rgb_blend_operation(map_blend_op(blend.equation));
+                    }
+
+                    if let Some(blend) = color_desc.alpha {
+                        descriptor.set_source_alpha_blend_factor(map_blend_factor(blend.source, true));
+                        descriptor.set_destination_alpha_blend_factor(map_blend_factor(blend.destination, true));
+                        descriptor.set_alpha_blend_operation(map_blend_op(blend.equation));
+                    }
                 }
 
                 // Vertex buffers

@@ -67,6 +67,47 @@ pub fn map_write_mask(mask: core::state::ColorMask) -> MTLColorWriteMask {
     mtl_mask
 }
 
+pub fn map_blend_op(equation: core::state::Equation) -> MTLBlendOperation {
+    use core::state::Equation::*;
+
+    match equation {
+        Add => MTLBlendOperation::Add,
+        Sub => MTLBlendOperation::Subtract,
+        RevSub => MTLBlendOperation::ReverseSubtract,
+        Min => MTLBlendOperation::Min,
+        Max => MTLBlendOperation::Max,
+    }
+}
+
+pub fn map_blend_factor(factor: core::state::Factor, scalar: bool) -> MTLBlendFactor {
+    use core::state::BlendValue::*;
+    use core::state::Factor::*;
+
+    match factor {
+        Zero => MTLBlendFactor::Zero,
+        One => MTLBlendFactor::One,
+        SourceAlphaSaturated => MTLBlendFactor::SourceAlphaSaturated,
+        ZeroPlus(SourceColor) if !scalar => MTLBlendFactor::SourceColor,
+        ZeroPlus(SourceAlpha) => MTLBlendFactor::SourceAlpha,
+        ZeroPlus(DestColor) if !scalar => MTLBlendFactor::DestinationColor,
+        ZeroPlus(DestAlpha) => MTLBlendFactor::DestinationAlpha,
+        ZeroPlus(ConstColor) if !scalar => MTLBlendFactor::BlendColor,
+        ZeroPlus(ConstAlpha) => MTLBlendFactor::BlendAlpha,
+        OneMinus(SourceColor) if !scalar => MTLBlendFactor::OneMinusSourceColor,
+        OneMinus(SourceAlpha) => MTLBlendFactor::OneMinusSourceAlpha,
+        OneMinus(DestColor) if !scalar => MTLBlendFactor::OneMinusDestinationColor,
+        OneMinus(DestAlpha) => MTLBlendFactor::OneMinusDestinationAlpha,
+        OneMinus(ConstColor) if !scalar => MTLBlendFactor::OneMinusBlendColor,
+        OneMinus(ConstAlpha) => MTLBlendFactor::OneMinusBlendAlpha,
+        _ => {
+            error!("Invalid blend factor requested for {}: {:?}",
+                if scalar {"alpha"} else {"color"}, factor);
+            MTLBlendFactor::Zero
+        }
+    }
+}
+
+
 pub fn map_vertex_format(format: Format) -> Option<MTLVertexFormat> {
     use core::format::SurfaceType::*;
     use core::format::ChannelType::*;
