@@ -85,6 +85,9 @@ pub struct SubmitInfo {
     pub(crate) data: *const DataBuffer,
 }
 
+// See the explanation above why this is safe.
+unsafe impl Send for SubmitInfo { }
+
 /// Serialized device command.
 #[derive(Clone, Copy, Debug)]
 pub enum Command {

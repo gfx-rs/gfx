@@ -16,7 +16,7 @@ use core::{self, pool};
 use core::command::{Buffer, GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, Encoder};
 use core::queue::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 use command::{self, RawCommandBuffer, SubpassCommandBuffer};
-use {Backend, CommandQueue, Resources, Share};
+use {Backend, CommandQueue, FrameBuffer, Resources, Share};
 use gl;
 use std::rc::Rc;
 
@@ -30,7 +30,7 @@ fn create_fbo_internal(gl: &gl::Gl) -> gl::types::GLuint {
 }
 
 pub struct RawCommandPool {
-    share: Rc<Share>,
+    fbo: FrameBuffer,
     command_buffers: Vec<RawCommandBuffer>,
     next_buffer: usize,
 }
@@ -45,7 +45,7 @@ impl core::RawCommandPool<Backend> for RawCommandPool {
 
     fn reserve(&mut self, additional: usize) {
         for _ in 0..additional {
-            self.command_buffers.push(RawCommandBuffer::new(create_fbo_internal(&self.share.context)));
+            self.command_buffers.push(RawCommandBuffer::new(self.fbo));
         }
     }
 
@@ -53,10 +53,11 @@ impl core::RawCommandPool<Backend> for RawCommandPool {
     where Q: AsRef<CommandQueue>
     {
         let queue = queue.as_ref();
-        let buffers = (0..capacity).map(|_| RawCommandBuffer::new(create_fbo_internal(&queue.share.context)))
+        let fbo = create_fbo_internal(&queue.share.context);
+        let buffers = (0..capacity).map(|_| RawCommandBuffer::new(fbo))
                                    .collect();
         RawCommandPool {
-            share: queue.share.clone(),
+            fbo,
             command_buffers: buffers,
             next_buffer: 0,
         }
