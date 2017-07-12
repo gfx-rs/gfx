@@ -53,16 +53,12 @@ pub fn main() {
         .with_dimensions(1024, 768)
         .with_vsync();
     let win = gfx_window_glutin::build(builder, &events_loop, ColorFormat::get_format(), DepthFormat::get_format());
-    let mut window = gfx_window_glutin::Window::new(window);
+    let mut window = gfx_window_glutin::Window::new(win);
 
     let (mut surface, adapters) = window.get_surface_and_adapters();
-    let queue_descs = adapters[0].get_queue_families().iter()
-                                 .filter(|family| surface.supports_queue(&family) )
-                                 .map(|family| { (family, 1) })
-                                 .collect::<Vec<_>>();
-
     // Open device (factory and queues)
-    let gfx::Device { mut factory, mut general_queues, mut graphics_queues, .. } = adapters[0].open(&queue_descs);
+    let gfx::Device { mut factory, mut general_queues, mut graphics_queues, .. } =
+        adapters[0].open_with(|family| surface.supports_queue(&family) as u32);
     let mut graphics_queue = if let Some(queue) = general_queues.first_mut() {
         queue.as_mut().into()
     } else if let Some(queue) = graphics_queues.first_mut() {
