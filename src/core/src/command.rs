@@ -158,7 +158,7 @@ impl<'a, B: Backend> CommandBuffer<B> for TransferCommandBuffer<'a, B> {
 /// An interface of the abstract command buffer. It collects commands in an
 /// efficient API-specific manner, to be ready for execution on the device.
 #[allow(missing_docs)]
-pub trait Buffer<R: Resources>: 'static + Send {
+pub trait Buffer<R: Resources>: 'static {
     /// Reset the command buffer contents, retain the allocated storage
     fn reset(&mut self);
     /// Bind a pipeline state object

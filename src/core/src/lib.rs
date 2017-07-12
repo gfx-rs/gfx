@@ -242,13 +242,13 @@ pub struct HeapType {
 
 /// Different types of a specific API.
 #[allow(missing_docs)]
-pub trait Backend: Sized {
+pub trait Backend: 'static + Sized {
     type Adapter: Adapter<Self>;
     type CommandQueue: CommandQueue<Self>;
     type Factory: Factory<Self::Resources>;
     type QueueFamily: QueueFamily;
     type Resources: Resources;
-    type SubmitInfo;
+    type SubmitInfo: Send;
 
     type RawCommandBuffer: CommandBuffer<Self> + command::Buffer<Self::Resources>;
     type SubpassCommandBuffer: CommandBuffer<Self>; // + SubpassCommandBuffer<Self::R>;
