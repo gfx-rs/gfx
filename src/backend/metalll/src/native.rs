@@ -231,8 +231,9 @@ mod heap_related {
 
 #[cfg(not(feature = "native_fence"))]
 mod fence_related {
+    use std::sync::{Arc, Mutex};
     #[derive(Debug)]
-    pub struct Fence {}
+    pub struct Fence(pub Arc<Mutex<bool>>);
 }
 
 gfx_impl_resources!();

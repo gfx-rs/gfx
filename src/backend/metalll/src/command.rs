@@ -136,7 +136,18 @@ impl core::CommandQueue for CommandQueue {
             for buffer in submit.cmd_buffers {
                 let command_buffer = buffer.get_info().command_buffer;
                 if let Some(ref signal_block) = signal_block {
-                    msg_send![command_buffer.0, addCompletedHandler: signal_block.deref() as *const Block<_, _>];
+                    msg_send![command_buffer.0, addCompletedHandler: signal_block.deref() as *const _];
+                }
+                // only append the fence handler to the last command buffer
+                if submit as *const _ == submit_infos.last().unwrap() as *const _ &&
+                   buffer as *const _ == submit.cmd_buffers.last().unwrap() as *const _ {
+                    if let Some(ref fence) = fence {
+                        let value_ptr = fence.0.clone();
+                        let fence_block = ConcreteBlock::new(move |cb: *mut ()| -> () {
+                            *value_ptr.lock().unwrap() = true;
+                        }).copy();
+                        msg_send![command_buffer.0, addCompletedHandler: fence_block.deref() as *const _];
+                    }
                 }
                 command_buffer.commit();
                 last_command_buffer = Some(command_buffer);
