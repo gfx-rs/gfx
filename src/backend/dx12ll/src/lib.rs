@@ -259,10 +259,6 @@ impl core::CommandQueue for CommandQueue {
             );
         }
     }
-
-    fn wait_idle(&mut self) {
-        unimplemented!()
-    }
 }
 
 pub struct Surface {

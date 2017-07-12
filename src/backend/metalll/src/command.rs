@@ -23,17 +23,12 @@ pub struct CommandQueue(Arc<QueueInner>);
 
 struct QueueInner {
     queue: MTLCommandQueue,
-    last_command_buffer: UnsafeCell<Option<MTLCommandBuffer>>,
 }
 
 impl Drop for QueueInner {
     fn drop(&mut self) {
         unsafe {
             self.queue.release();
-
-            if let Some(command_buffer) = *self.last_command_buffer.get() {
-                command_buffer.release();
-            }
         }
     }
 }
@@ -94,7 +89,6 @@ impl CommandQueue {
     pub fn new(device: MTLDevice) -> CommandQueue {
         CommandQueue(Arc::new(QueueInner {
             queue: device.new_command_queue(),
-            last_command_buffer: Default::default(),
         }))
     }
 
@@ -115,7 +109,6 @@ impl core::CommandQueue for CommandQueue {
     unsafe fn submit<'a, C>(&mut self, submit_infos: &[core::QueueSubmit<C, Self::R>], fence: Option<&'a mut native::Fence>)
         where C: core::CommandBuffer<SubmitInfo = SubmitInfo>
     {
-        let mut last_command_buffer = None;
         for submit in submit_infos {
             // FIXME: wait for semaphores!
 
@@ -150,24 +143,6 @@ impl core::CommandQueue for CommandQueue {
                     }
                 }
                 command_buffer.commit();
-                last_command_buffer = Some(command_buffer);
-            }
-        }
-
-        if let Some(new_last_command_buffer) = last_command_buffer {
-            if let Some(old_last_command_buffer) = (*self.0.last_command_buffer.get()).take() {
-                old_last_command_buffer.release();
-            }
-            new_last_command_buffer.retain();
-            *self.0.last_command_buffer.get() = Some(new_last_command_buffer);
-        }
-    }
-
-    fn wait_idle(&mut self) {
-        unsafe {
-            if let Some(last_command_buffer) = (*self.0.last_command_buffer.get()).take() {
-                last_command_buffer.wait_until_completed();
-                last_command_buffer.release();
             }
         }
     }
