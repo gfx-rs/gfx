@@ -914,8 +914,8 @@ impl c::CommandQueue<Backend> for CommandQueue {
             for cb in submit.cmd_buffers {
                 let cb = cb.get_info();
                 self.reset_state();
-                for com in &cb.buf {
-                    self.process(com, &cb.data);
+                for com in &*cb.buf {
+                    self.process(com, &*cb.data);
                 }
             }
         }
