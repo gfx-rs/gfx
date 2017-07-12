@@ -107,7 +107,6 @@ pub fn main() {
             }
         });
 
-        // TODO: Need to ensure that it's not in-use (but that's not an issue on GL) 
         graphics_pool.reset();
 
         // Get next frame
@@ -120,6 +119,7 @@ pub fn main() {
         encoder.draw(&slice, &pso, &data);
         encoder.synced_flush(&mut graphics_queue, &[&frame_semaphore], &[&draw_semaphore], None);
         swap_chain.present(&mut graphics_queue, &[&draw_semaphore]);
+        graphics_queue.wait_idle();
         graphics_queue.cleanup();
     }
 }
