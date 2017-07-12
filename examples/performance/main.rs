@@ -21,7 +21,8 @@ extern crate gfx_gl as gl;
 extern crate gfx_window_glutin;
 extern crate glutin;
 
-use gfx::{Adapter, CommandQueue, GraphicsPoolExt, Surface, SwapChain, SwapChainExt, WindowExt};
+use gfx::{Adapter, CommandQueue, GraphicsPoolExt, Factory, FrameSync,
+    Surface, SwapChain, SwapChainExt, WindowExt};
 use gfx::format::{DepthStencil, Formatted, Rgba8 as ColorFormat};
 
 use cgmath::{Deg, Matrix, Matrix3, Matrix4, Point3, Vector3, Vector4, SquareMatrix};
@@ -97,6 +98,8 @@ struct GFX {
     swap_chain: gfx_window_glutin::SwapChain,
     queue: gfx::queue::GraphicsQueue<B>,
     pool: gfx::GraphicsCommandPool<B>,
+    frame_semaphore: gfx::handle::Semaphore<R>,
+    draw_semaphore: gfx::handle::Semaphore<R>,
     views: Vec<gfx::handle::RenderTargetView<R, ColorFormat>>,
     data: pipe::Data<R>,
     pso: gfx::PipelineState<R, pipe::Meta>,
@@ -157,6 +160,8 @@ impl GFX {
             swap_chain,
             queue,
             pool,
+            frame_semaphore: factory.create_semaphore(),
+            draw_semaphore: factory.create_semaphore(),
             views,
             dimension,
             data,
@@ -168,10 +173,12 @@ impl GFX {
 
 impl Renderer for GFX {
     fn render(&mut self, proj_view: &Matrix4<f32>) {
-        // TODO: currently relaying on GL backend internals (sync)
         let start = Instant::now();
 
         self.pool.reset();
+        let frame = self.swap_chain.acquire_frame(FrameSync::Semaphore(&self.frame_semaphore));
+        self.data.out_color = self.views[frame.id()].clone();     
+
         let mut encoder = self.pool.acquire_graphics_encoder();
         encoder.clear(&self.data.out_color, [CLEAR_COLOR.0,
                                                   CLEAR_COLOR.1,
@@ -186,9 +193,14 @@ impl Renderer for GFX {
         }
 
         let pre_submit = start.elapsed();
-        encoder.flush(&mut self.queue.as_mut());
+        encoder.synced_flush(
+            &mut self.queue.as_mut(),
+            &[&self.frame_semaphore],
+            &[&self.draw_semaphore],
+            None);
         let post_submit = start.elapsed();
-        self.swap_chain.present(&mut self.queue, &[]);
+        self.swap_chain.present(&mut self.queue, &[&self.draw_semaphore]);
+        self.queue.wait_idle();
         self.queue.cleanup();
         let swap = start.elapsed();
 
