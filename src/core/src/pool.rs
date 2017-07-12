@@ -43,6 +43,14 @@ pub trait RawCommandPool<B: Backend> {
 ///
 pub struct GeneralCommandPool<B: Backend>(pub(crate) B::RawCommandPool);
 impl<B: Backend> GeneralCommandPool<B> {
+    /// Reset the command pool and the corresponding command buffers.
+    ///
+    /// # Synchronization: You may _not_ free the pool if a command buffer is still in use (pool memory still in use)
+    pub fn reset(&mut self) { self.0.reset() }
+
+    /// Reserve an additional amount of command buffers.
+    pub fn reserve(&mut self, additional: usize) { self.0.reserve(additional) }
+
     /// Get a command buffer for recording.
     ///
     /// You can only record to one command buffer per pool at the same time.
@@ -55,6 +63,14 @@ impl<B: Backend> GeneralCommandPool<B> {
 ///
 pub struct GraphicsCommandPool<B: Backend>(pub(crate) B::RawCommandPool);
 impl<B: Backend> GraphicsCommandPool<B> {
+    /// Reset the command pool and the corresponding command buffers.
+    ///
+    /// # Synchronization: You may _not_ free the pool if a command buffer is still in use (pool memory still in use)
+    pub fn reset(&mut self) { self.0.reset() }
+
+    /// Reserve an additional amount of command buffers.
+    pub fn reserve(&mut self, additional: usize) { self.0.reserve(additional) }
+
     /// Get a command buffer for recording.
     ///
     /// You can only record to one command buffer per pool at the same time.
@@ -67,6 +83,14 @@ impl<B: Backend> GraphicsCommandPool<B> {
 ///
 pub struct ComputeCommandPool<B: Backend>(pub(crate) B::RawCommandPool);
 impl<B: Backend> ComputeCommandPool<B> {
+    /// Reset the command pool and the corresponding command buffers.
+    ///
+    /// # Synchronization: You may _not_ free the pool if a command buffer is still in use (pool memory still in use)
+    pub fn reset(&mut self) { self.0.reset() }
+
+    /// Reserve an additional amount of command buffers.
+    pub fn reserve(&mut self, additional: usize) { self.0.reserve(additional) }
+
     /// Get a command buffer for recording.
     ///
     /// You can only record to one command buffer per pool at the same time.
@@ -79,6 +103,14 @@ impl<B: Backend> ComputeCommandPool<B> {
 ///
 pub struct TransferCommandPool<B: Backend>(pub(crate) B::RawCommandPool);
 impl<B: Backend> TransferCommandPool<B> {
+    /// Reset the command pool and the corresponding command buffers.
+    ///
+    /// # Synchronization: You may _not_ free the pool if a command buffer is still in use (pool memory still in use)
+    pub fn reset(&mut self) { self.0.reset() }
+
+    /// Reserve an additional amount of command buffers.
+    pub fn reserve(&mut self, additional: usize) { self.0.reserve(additional) }
+
     /// Get a command buffer for recording.
     ///
     /// You can only record to one command buffer per pool at the same time.
