@@ -25,6 +25,7 @@ use core::{format, handle, texture};
 use core::memory::{self, Typed};
 use device_gl::Resources as R;
 use glutin::GlContext;
+use std::rc::Rc;
 
 #[cfg(feature = "headless")]
 mod headless;
@@ -64,14 +65,14 @@ pub fn update_views_raw(window: &glutin::GlWindow, old_dimensions: texture::Dime
     }
 }
 
-pub struct SwapChain<'a> {
+pub struct SwapChain {
     // Underlying window, required for presentation
-    window: &'a glutin::Window,
+    window: Rc<glutin::Window>,
     // Single element backbuffer
     backbuffer: [core::Backbuffer<device_gl::Backend>; 1],
 }
 
-impl<'a> core::SwapChain<device_gl::Backend> for SwapChain<'a> {
+impl core::SwapChain<device_gl::Backend> for SwapChain {
     fn get_backbuffers(&mut self) -> &[core::Backbuffer<device_gl::Backend>] {
         &self.backbuffer
     }
@@ -88,20 +89,20 @@ impl<'a> core::SwapChain<device_gl::Backend> for SwapChain<'a> {
     }
 }
 
-pub struct Surface<'a> {
-    window: &'a glutin::Window,
+pub struct Surface {
+    window: Rc<glutin::Window>,
     manager: handle::Manager<R>,
 }
 
-impl<'a> core::Surface<device_gl::Backend> for Surface<'a> {
-    type SwapChain = SwapChain<'a>;
+impl core::Surface<device_gl::Backend> for Surface {
+    type SwapChain = SwapChain;
 
     fn supports_queue(&self, queue_family: &device_gl::QueueFamily) -> bool { true }
-    fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, present_queue: &Q) -> SwapChain<'a>
+    fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, present_queue: &Q) -> SwapChain
         where Q: AsRef<device_gl::CommandQueue>
     {
         use core::handle::Producer;
-        let dim = get_window_dimensions(self.window);
+        let dim = get_window_dimensions(&self.window);
         let color = self.manager.make_texture(
             device_gl::NewTexture::Surface(0),
             texture::Info {
@@ -127,13 +128,13 @@ impl<'a> core::Surface<device_gl::Backend> for Surface<'a> {
         });
 
         SwapChain {
-            window: self.window,
+            window: self.window.clone(),
             backbuffer: [(color, ds); 1],
         }
     }
 }
 
-pub struct Window<'a>(pub &'a glutin::Window);
+pub struct Window(Rc<glutin::Window>);
 
 pub fn build(builder: glutin::WindowBuilder, events_loop: &glutin::EventsLoop,
              color_format: format::Format, ds_format: format::Format) -> glutin::Window {
@@ -150,15 +151,26 @@ pub fn build(builder: glutin::WindowBuilder, events_loop: &glutin::EventsLoop,
         .unwrap()
 }
 
-impl<'a> core::WindowExt<device_gl::Backend> for Window<'a> {
-    type Surface = Surface<'a>;
+impl Window {
+    /// Create a new window.
+    pub fn new(window: glutin::Window) -> Self {
+        Window(Rc::new(window))
+    }
+
+    /// Get the internal glutin window.
+    pub fn raw(&self) -> &glutin::Window {
+        &self.0
+    }
+}
+impl core::WindowExt<device_gl::Backend> for Window {
+    type Surface = Surface;
     type Adapter = device_gl::Adapter;
 
-    fn get_surface_and_adapters(&mut self) -> (Surface<'a>, Vec<device_gl::Adapter>) {
+    fn get_surface_and_adapters(&mut self) -> (Surface, Vec<device_gl::Adapter>) {
         unsafe { self.0.make_current().unwrap() };
         let adapter = device_gl::Adapter::new(|s| self.0.get_proc_address(s) as *const std::os::raw::c_void);
         let surface = Surface {
-            window: self.0,
+            window: self.0.clone(),
             manager: handle::Manager::new(),
         };
 
