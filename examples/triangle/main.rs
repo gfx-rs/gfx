@@ -56,7 +56,7 @@ pub fn main() {
     let window = gfx_window_glutin::build(builder, &events_loop, ColorFormat::get_format(), DepthFormat::get_format());
 
     // Acquire surface and adapters
-    let (mut surface, adapters) = gfx_window_glutin::Window(&window).get_surface_and_adapters();
+    let (mut surface, adapters) = gfx_window_glutin::Window::new(window).get_surface_and_adapters();
     let queue_descs = adapters[0].get_queue_families().iter()
                                  .filter(|family| surface.supports_queue(&family) )
                                  .map(|family| { (family, 1) })

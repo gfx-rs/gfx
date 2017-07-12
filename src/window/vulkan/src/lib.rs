@@ -329,15 +329,15 @@ impl core::SwapChain<device_vulkan::Backend> for SwapChain {
     }
 }
 
-pub struct Window<'a>(pub &'a winit::Window);
+pub struct Window(pub winit::Window);
 
-impl<'a> core::WindowExt<device_vulkan::Backend> for Window<'a> {
+impl core::WindowExt<device_vulkan::Backend> for Window {
     type Surface = Surface;
     type Adapter = device_vulkan::Adapter;
 
     fn get_surface_and_adapters(&mut self) -> (Surface, Vec<device_vulkan::Adapter>) {
         let instance = Arc::new(Instance::create());
-        let surface = Surface::from_window(self.0, instance.clone());
+        let surface = Surface::from_window(&self.0, instance.clone());
         let adapters = Instance::enumerate_adapters(instance);
         (surface, adapters)
     }

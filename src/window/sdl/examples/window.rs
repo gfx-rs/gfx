@@ -31,7 +31,7 @@ pub fn main() {
     video.gl_attr().set_context_version(3, 2);
     let builder = video.window("SDL Window", 1024, 768);
     let (window, _gl_context) = gfx_window_sdl::build(builder, Rgba8::get_format(), DepthStencil::get_format()).unwrap();
-    let mut window = gfx_window_sdl::Window::new(&window);
+    let mut window = gfx_window_sdl::Window::new(window);
     let (mut surface, adapters) = window.get_surface_and_adapters();
 
     let queue_descs = adapters[0].get_queue_families().iter()
