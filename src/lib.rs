@@ -150,7 +150,7 @@ fn run<A, B, S, EL>((width, height): (u32, u32),
 
     // Init device
     let gfx_core::Device { mut factory, mut general_queues, mut graphics_queues, .. } =
-        adapters[0].open_with(|family| if surface.supports_queue(&family) { 1 } else { 0 });
+        adapters[0].open_with(|family| surface.supports_queue(&family) as u32);
 
     let mut queue = if let Some(queue) = general_queues.first_mut() {
         queue.as_mut().into()
@@ -291,9 +291,10 @@ pub trait Application<B: Backend>: Sized {
                                             .with_gl(gl_version)
                                             .with_vsync();
 
-        let window = gfx_window_glutin::build(builder, &events_loop, ColorFormat::get_format(), DepthFormat::get_format());
-        let (surface, adapters) = gfx_window_glutin::Window(&window).get_surface_and_adapters();
-        let dim = window.get_inner_size_points().unwrap();
+        let win = gfx_window_glutin::build(builder, &events_loop, ColorFormat::get_format(), DepthFormat::get_format());
+        let dim = win.get_inner_size_points().unwrap();
+        let mut window = gfx_window_glutin::Window::new(win);
+        let (surface, adapters) = window.get_surface_and_adapters();
         run::<Self, _, _, _>(dim, events_loop, surface, adapters)
     }
     #[cfg(feature = "dx11")]
@@ -303,7 +304,7 @@ pub trait Application<B: Backend>: Sized {
         let events_loop = winit::EventsLoop::new();
         let win = wb.build(&events_loop).unwrap();
         let dim = win.get_inner_size_points().unwrap();
-        let mut window = gfx_window_dxgi::Window(&win);
+        let mut window = gfx_window_dxgi::Window::new(win);
 
         let (surface, adapters) =
             <gfx_window_dxgi::Window as WindowExt<DefaultBackend>>::get_surface_and_adapters(&mut window);
@@ -317,7 +318,7 @@ pub trait Application<B: Backend>: Sized {
         let events_loop = winit::EventsLoop::new();
         let win = wb.build(&events_loop).unwrap();
         let dim = win.get_inner_size_points().unwrap();
-        let mut window = gfx_window_dxgi::Window(&win);
+        let mut window = gfx_window_dxgi::Window::new(win);
 
         let (surface, adapters) =
             <gfx_window_dxgi::Window as WindowExt<DefaultBackend>>::get_surface_and_adapters(&mut window);
@@ -335,7 +336,7 @@ pub trait Application<B: Backend>: Sized {
         let events_loop = winit::EventsLoop::new();
         let win = wb.build(&events_loop).unwrap();
         let dim = win.get_inner_size_points().unwrap();
-        let mut window = gfx_window_vulkan::Window(&win);
+        let mut window = gfx_window_vulkan::Window(win);
 
         let (surface, adapters) = window.get_surface_and_adapters();
         run::<Self, _, _, _>(dim, events_loop, surface, adapters)

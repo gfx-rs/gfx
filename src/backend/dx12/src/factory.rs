@@ -53,7 +53,7 @@ impl f::Factory<R> for Factory {
     fn create_texture_raw(&mut self, _: t::Info, _: Option<format::ChannelType>, _: Option<&[&[u8]]>)
                           -> Result<handle::RawTexture<R>, t::CreationError> { unimplemented!() }
 
-    fn view_buffer_as_shader_resource_raw(&mut self, _: &handle::RawBuffer<R>)
+    fn view_buffer_as_shader_resource_raw(&mut self, _: &handle::RawBuffer<R>, _: format::Format)
         -> Result<handle::RawShaderResourceView<R>, f::ResourceViewError> { unimplemented!() }
     fn view_buffer_as_unordered_access_raw(&mut self, _: &handle::RawBuffer<R>)
         -> Result<handle::RawUnorderedAccessView<R>, f::ResourceViewError> { unimplemented!() }
