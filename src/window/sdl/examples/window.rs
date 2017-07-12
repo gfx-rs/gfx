@@ -66,6 +66,6 @@ pub fn main() {
             }
         }
 
-        swap_chain.present(&mut queue);
+        swap_chain.present(&mut queue, &[]);
     }
 }

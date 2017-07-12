@@ -73,7 +73,6 @@ pub fn main() {
         }
 
         // Note: you are supposed to acquire a frame first before calling present
-        
-        swap_chain.present(&mut queue);
+        swap_chain.present(&mut queue, &[]);
     }
 }
