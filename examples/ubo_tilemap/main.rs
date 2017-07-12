@@ -402,6 +402,7 @@ fn populate_tilemap<B>(tilemap: &mut TileMap<B>, tilemap_size: [usize; 2]) where
 
 impl<B: gfx::Backend> gfx_app::Application<B> for TileMap<B> {
     fn new(factory: &mut B::Factory,
+           _: &mut gfx::queue::GraphicsQueueMut<B>,
            backend: gfx_app::shade::Backend,
            window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
     {

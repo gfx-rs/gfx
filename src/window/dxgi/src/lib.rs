@@ -29,8 +29,7 @@ use std::rc::Rc;
 use std::os::raw::c_void;
 use std::collections::VecDeque;
 use winit::os::windows::WindowExt;
-use core::{format, handle as h, factory as f, memory, texture as tex};
-use core::texture::Size;
+use core::{handle as h, memory, texture as tex};
 use comptr::ComPtr;
 
 /*
@@ -95,7 +94,7 @@ pub struct Surface11 {
 impl core::Surface<device_dx11::Backend> for Surface11 {
     type SwapChain = SwapChain11;
 
-    fn supports_queue(&self, queue_family: &device_dx11::QueueFamily) -> bool { true }
+    fn supports_queue(&self, _: &device_dx11::QueueFamily) -> bool { true }
     fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, present_queue: &Q) -> SwapChain11
         where Q: AsRef<device_dx11::CommandQueue>
     {
@@ -226,7 +225,7 @@ pub struct Surface12 {
 impl core::Surface<device_dx12::Backend> for Surface12 {
     type SwapChain = SwapChain12;
 
-    fn supports_queue(&self, queue_family: &device_dx12::QueueFamily) -> bool { true }
+    fn supports_queue(&self, _: &device_dx12::QueueFamily) -> bool { true }
     fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, present_queue: &Q) -> SwapChain12
         where Q: AsRef<device_dx12::CommandQueue>
     {

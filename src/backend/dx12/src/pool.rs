@@ -28,7 +28,6 @@ use {Backend, CommandQueue};
 
 struct CommandAllocator {
     inner: ComPtr<winapi::ID3D12CommandAllocator>,
-    
     device: ComPtr<winapi::ID3D12Device>,
     list_type: winapi::D3D12_COMMAND_LIST_TYPE,
 }
@@ -88,6 +87,8 @@ impl CommandAllocator {
         command_list
     }
 }
+
+unsafe impl Send for CommandAllocator { }
 
 pub struct RawCommandPool {
     allocator: CommandAllocator,
