@@ -52,6 +52,7 @@ use core::{format, memory, texture};
 use core::texture::Size;
 use core::memory::Typed;
 use device_gl::Resources as R;
+use std::rc::Rc;
 
 #[derive(Debug)]
 pub enum InitError {
