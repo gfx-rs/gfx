@@ -30,7 +30,7 @@
 //!     let builder = sdl.video().unwrap().window("Example", 800, 600);
 //!     let (window, glcontext) = gfx_window_sdl::build(
 //!             builder, Rgba8::get_format(), DepthStencil::get_format()).unwrap();
-//!     let mut window = gfx_window_sdl::Window::new(&window);
+//!     let mut window = gfx_window_sdl::Window::new(window);
 //!     let (surface, adapters) = window.get_surface_and_adapters();
 //!
 //!     // some code...
@@ -101,14 +101,14 @@ fn get_window_dimensions(window: &sdl2::video::Window) -> texture::Dimensions {
     (width as texture::Size, height as texture::Size, 1, aa.into())
 }
 
-pub struct SwapChain<'a> {
+pub struct SwapChain {
     // Underlying window, required for presentation
-    window: &'a sdl2::video::Window,
+    window: Rc<sdl2::video::Window>,
     // Single element backbuffer
     backbuffer: [core::Backbuffer<Backend>; 1],
 }
 
-impl<'a> core::SwapChain<Backend> for SwapChain<'a> {
+impl core::SwapChain<Backend> for SwapChain {
     fn get_backbuffers(&mut self) -> &[core::Backbuffer<Backend>] {
         &self.backbuffer
     }
@@ -125,16 +125,16 @@ impl<'a> core::SwapChain<Backend> for SwapChain<'a> {
     }
 }
 
-pub struct Surface<'a> {
-    window: &'a sdl2::video::Window,
+pub struct Surface {
+    window: Rc<sdl2::video::Window>,
     manager: handle::Manager<R>,
 }
 
-impl<'a> core::Surface<Backend> for Surface<'a> {
-    type SwapChain = SwapChain<'a>;
+impl core::Surface<Backend> for Surface {
+    type SwapChain = SwapChain;
 
     fn supports_queue(&self, _: &device_gl::QueueFamily) -> bool { true }
-    fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, _: &Q) -> SwapChain<'a>
+    fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, _: &Q) -> SwapChain
         where Q: AsRef<device_gl::CommandQueue>
     {
         use core::handle::Producer;
@@ -170,22 +170,28 @@ impl<'a> core::Surface<Backend> for Surface<'a> {
     }
 }
 
-pub struct Window<'a>(&'a sdl2::video::Window);
-impl<'a> Window<'a> {
-    pub fn new(window: &'a sdl2::video::Window) -> Self {
-        Window(window)
+pub struct Window(Rc<sdl2::video::Window>);
+impl Window {
+    /// Create a new window.
+    pub fn new(window: sdl2::video::Window) -> Self {
+        Window(Rc::new(window))
+    }
+
+    /// Get the internal SDL2 window.
+    pub fn raw(&self) -> &sdl2::video::Window {
+        &self.0
     }
 }
 
-impl<'a> core::WindowExt<Backend> for Window<'a> {
-    type Surface = Surface<'a>;
+impl core::WindowExt<Backend> for Window {
+    type Surface = Surface;
     type Adapter = device_gl::Adapter;
 
-    fn get_surface_and_adapters(&mut self) -> (Surface<'a>, Vec<device_gl::Adapter>) {
+    fn get_surface_and_adapters(&mut self) -> (Surface, Vec<device_gl::Adapter>) {
         let adapter = device_gl::Adapter::new(|s|
             self.0.subsystem().gl_get_proc_address(s) as *const std::os::raw::c_void);
         let surface = Surface {
-            window: self.0,
+            window: self.0.clone(),
             manager: handle::Manager::new(),
         };
 

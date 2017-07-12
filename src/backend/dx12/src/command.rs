@@ -22,6 +22,9 @@ pub struct CommandBuffer {
     pub raw: ComPtr<winapi::ID3D12GraphicsCommandList>,
 }
 
+// TODO: temporary to fullfil current `Send` requirement
+unsafe impl Send for CommandBuffer { }
+
 pub struct SubpassCommandBuffer {
 }
 
