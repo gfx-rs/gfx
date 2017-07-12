@@ -52,9 +52,10 @@ pub fn main() {
         .with_title("Gamma example".to_string())
         .with_dimensions(1024, 768)
         .with_vsync();
-    let window = gfx_window_glutin::build(builder, &events_loop, ColorFormat::get_format(), DepthFormat::get_format());
+    let win = gfx_window_glutin::build(builder, &events_loop, ColorFormat::get_format(), DepthFormat::get_format());
+    let mut window = gfx_window_glutin::Window::new(window);
 
-    let (mut surface, adapters) = gfx_window_glutin::Window(&window).get_surface_and_adapters();
+    let (mut surface, adapters) = window.get_surface_and_adapters();
     let queue_descs = adapters[0].get_queue_families().iter()
                                  .filter(|family| surface.supports_queue(&family) )
                                  .map(|family| { (family, 1) })
@@ -103,6 +104,9 @@ pub fn main() {
                 _ => {},
             }
         });
+
+        // TODO: Need to ensure that it's not in-use (but that's not an issue on GL) 
+        graphics_pool.reset();
 
         // Get next frame
         let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&frame_semaphore));
