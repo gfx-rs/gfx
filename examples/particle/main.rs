@@ -77,6 +77,7 @@ fn create_shader_set<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F, vs_
 
 impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
     fn new(factory: &mut B::Factory,
+           _: &mut gfx::queue::GraphicsQueueMut<B>,
            backend: gfx_app::shade::Backend,
            window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
     {

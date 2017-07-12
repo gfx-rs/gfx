@@ -22,7 +22,7 @@ use std::ops::DerefMut;
 
 /// `CommandPool` can allocate command buffers of a specific type only.
 /// The allocated command buffers are associated with the creating command queue.
-pub trait RawCommandPool<B: Backend> {
+pub trait RawCommandPool<B: Backend>: Send {
     /// Reset the command pool and the corresponding command buffers.
     ///
     /// # Synchronization: You may _not_ free the pool if a command buffer is still in use (pool memory still in use)
