@@ -21,7 +21,8 @@ extern crate gfx_gl as gl;
 extern crate gfx_window_glutin;
 extern crate glutin;
 
-pub use gfx::format::{DepthStencil, Rgba8 as ColorFormat};
+use gfx::{Adapter, CommandQueue, GraphicsPoolExt, Surface, SwapChain, SwapChainExt, WindowExt};
+use gfx::format::{DepthStencil, Formatted, Rgba8 as ColorFormat};
 
 use cgmath::{Deg, Matrix, Matrix3, Matrix4, Point3, Vector3, Vector4, SquareMatrix};
 use gl::Gl;
@@ -31,7 +32,7 @@ use std::str::FromStr;
 use std::iter::repeat;
 use std::ffi::CString;
 use std::time::{Duration, Instant};
-use gfx_device_gl::{Resources as R, CommandBuffer as CB};
+use gfx_device_gl::{Resources as R, Backend as B};
 use gfx_core::Device;
 use glutin::GlContext;
 
@@ -90,21 +91,124 @@ trait Renderer: Drop {
     fn window(&mut self) -> &glutin::Window;
 }
 
-
-
 struct GFX {
     dimension: i16,
-    window: glutin::GlWindow,
-    device:gfx_device_gl::Device,
-    encoder: gfx::Encoder<R,CB>,
+    window: gfx_window_glutin::Window,
+    surface: gfx_window_glutin::Surface,
+    swap_chain: gfx_window_glutin::SwapChain,
+    queue: gfx::queue::GraphicsQueue<B>,
+    pool: gfx::GraphicsCommandPool<B>,
+    views: Vec<gfx::handle::RenderTargetView<R, ColorFormat>>,
     data: pipe::Data<R>,
     pso: gfx::PipelineState<R, pipe::Meta>,
     slice: gfx::Slice<R>,
 }
 
+impl GFX {
+    fn new(builder: glutin::WindowBuilder, events_loop: &glutin::EventsLoop, dimension: i16) -> Self {
+        use gfx::traits::FactoryExt;
+
+        // Create window
+        let events_loop = glutin::EventsLoop::new();
+        let builder = glutin::WindowBuilder::new()
+            .with_title("Triangle example".to_string())
+            .with_dimensions(1024, 768)
+            .with_vsync();
+        let win = gfx_window_glutin::build(builder, &events_loop, ColorFormat::get_format(), DepthStencil::get_format());
+        let mut window = gfx_window_glutin::Window::new(win);
+        // Acquire surface and adapters
+        let (mut surface, adapters) = window.get_surface_and_adapters();
+        let queue_descs = adapters[0].get_queue_families().iter()
+                                    .filter(|family| surface.supports_queue(&family) )
+                                    .map(|family| { (family, 1) })
+                                    .collect::<Vec<_>>();
+
+        // Open device (factory and queues)
+        let gfx::Device { mut factory, mut general_queues, mut graphics_queues, .. } = adapters[0].open(&queue_descs);
+        let mut queue = if let Some(queue) = general_queues.pop() {
+            queue.into()
+        } else if let Some(queue) = graphics_queues.pop() {
+            queue
+        } else {
+            panic!("Unable to find a matching general or graphics queue.");
+        };
+
+        // Create swapchain
+        let config = gfx::SwapchainConfig::new()
+                        .with_color::<ColorFormat>();
+        let mut swap_chain = surface.build_swapchain(config, &queue);
+        let views = swap_chain.create_color_views(&mut factory);
+
+        let pso = factory.create_pipeline_simple(
+            VERTEX_SRC, FRAGMENT_SRC,
+            pipe::new()
+        ).unwrap();
+
+        let (vbuf, slice) = factory.create_vertex_buffer_with_slice(VERTEX_DATA,());
+        let data = pipe::Data {
+            vbuf: vbuf,
+            transform: cgmath::Matrix4::identity().into(),
+            out_color: views[0].clone(),
+        };
+        let pool = queue.create_graphics_pool(1);
+
+        GFX {
+            window,
+            surface,
+            swap_chain,
+            queue,
+            pool,
+            views,
+            dimension,
+            data,
+            pso,
+            slice,
+        }
+    }
+}
+
+impl Renderer for GFX {
+    fn render(&mut self, proj_view: &Matrix4<f32>) {
+        // TODO: currently relaying on GL backend internals (sync)
+        let start = Instant::now();
+
+        self.pool.reset();
+        let mut encoder = self.pool.acquire_graphics_encoder();
+        encoder.clear(&self.data.out_color, [CLEAR_COLOR.0,
+                                                  CLEAR_COLOR.1,
+                                                  CLEAR_COLOR.2,
+                                                  CLEAR_COLOR.3]);
+
+        for x in (-self.dimension) ..self.dimension {
+            for y in (-self.dimension) ..self.dimension {
+                self.data.transform = transform(x, y, proj_view).into();
+                encoder.draw(&self.slice, &self.pso, &self.data);
+            }
+        }
+
+        let pre_submit = start.elapsed();
+        encoder.flush(&mut self.queue.as_mut());
+        let post_submit = start.elapsed();
+        self.swap_chain.present(&mut self.queue, &[]);
+        self.queue.cleanup();
+        let swap = start.elapsed();
+
+        println!("total time:\t\t{0:4.2}ms", duration_to_ms(swap));
+        println!("\tcreate list:\t{0:4.2}ms", duration_to_ms(pre_submit));
+        println!("\tsubmit:\t\t{0:4.2}ms", duration_to_ms(post_submit - pre_submit));
+        println!("\tgpu wait:\t{0:4.2}ms", duration_to_ms(swap - post_submit));
+    }
+    fn window(&mut self) -> &glutin::Window { self.window.raw() }
+}
+
+impl Drop for GFX {
+    fn drop(&mut self) {
+    }
+}
+
 struct GL {
     dimension: i16,
-    window: glutin::GlWindow,
+    window: glutin::Window,
     gl:Gl,
     trans_uniform:GLint,
     vs:GLuint,
@@ -113,80 +217,6 @@ struct GL {
     vbo:GLuint,
     vao:GLuint,
 }
-
-
-impl GFX {
-    fn new(window: glutin::WindowBuilder,
-           context: glutin::ContextBuilder,
-           events_loop: &glutin::EventsLoop,
-           dimension: i16) -> Self {
-        use gfx::traits::FactoryExt;
-
-        let (window, device, mut factory, main_color, _) =
-            gfx_window_glutin::init::<ColorFormat, DepthStencil>(window, context, events_loop);
-        let encoder: gfx::Encoder<_,_> = factory.create_command_buffer().into();
-
-        let pso = factory.create_pipeline_simple(
-            VERTEX_SRC, FRAGMENT_SRC,
-            pipe::new()
-        ).unwrap();
-
-        let (vbuf, slice) = factory.create_vertex_buffer_with_slice(VERTEX_DATA,());
-
-        let data = pipe::Data {
-            vbuf: vbuf,
-            transform: cgmath::Matrix4::identity().into(),
-            out_color: main_color,
-        };
-
-        GFX {
-            window: window,
-            dimension: dimension,
-            device: device,
-            encoder: encoder,
-            data: data,
-            pso: pso,
-            slice: slice,
-        }
-    }
-}
-
-impl Renderer for GFX {
-    fn render(&mut self, proj_view: &Matrix4<f32>) {
-        let start = Instant::now();
-        self.encoder.clear(&self.data.out_color, [CLEAR_COLOR.0,
-                                                  CLEAR_COLOR.1,
-                                                  CLEAR_COLOR.2,
-                                                  CLEAR_COLOR.3]);
-
-        for x in (-self.dimension) ..self.dimension {
-            for y in (-self.dimension) ..self.dimension {
-                self.data.transform = transform(x, y, proj_view).into();
-                self.encoder.draw(&self.slice, &self.pso, &self.data);
-            }
-        }
-
-        let pre_submit = start.elapsed();
-        self.encoder.flush(&mut self.device);
-        let post_submit = start.elapsed();
-        self.window.swap_buffers().unwrap();
-        self.device.cleanup();
-        let swap = start.elapsed();
-
-        println!("total time:\t\t{0:4.2}ms", duration_to_ms(swap));
-        println!("\tcreate list:\t{0:4.2}ms", duration_to_ms(pre_submit));
-        println!("\tsubmit:\t\t{0:4.2}ms", duration_to_ms(post_submit - pre_submit));
-        println!("\tgpu wait:\t{0:4.2}ms", duration_to_ms(swap - post_submit));
-    }
-    fn window(&mut self) -> &glutin::Window { &self.window }
-}
-
-impl Drop for GFX {
-    fn drop(&mut self) {
-    }
-}
-
-
 
 impl GL {
     fn new(builder: glutin::WindowBuilder,
