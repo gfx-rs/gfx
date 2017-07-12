@@ -42,9 +42,10 @@ extern crate gfx_device_vulkan;
 #[cfg(feature = "vulkan")]
 extern crate gfx_window_vulkan;
 
-use gfx_core::memory::Typed;
-use gfx_core::{Adapter, Backend, CommandQueue, FrameSync, SwapChain, QueueFamily, WindowExt};
-use gfx_core::pool::GraphicsCommandPool;
+use gfx::memory::Typed;
+use gfx::{Adapter, Backend, CommandQueue, FrameSync, GraphicsCommandPool,
+    SwapChain, QueueFamily, WindowExt};
+use gfx::queue::GraphicsQueueMut;
 
 pub mod shade;
 
@@ -194,7 +195,7 @@ fn run<A, B, S, EL>((width, height): (u32, u32),
             .collect();
 
     let shader_backend = factory.shader_backend();
-    let mut app = A::new(&mut factory, shader_backend, WindowTargets {
+    let mut app = A::new(&mut factory, &mut queue, shader_backend, WindowTargets {
         views: views,
         aspect_ratio: width as f32 / height as f32, //TODO
     });
@@ -258,9 +259,10 @@ pub type DefaultBackend = gfx_device_metal::Backend;
 pub type DefaultBackend = gfx_device_vulkan::Backend;
 
 pub trait Application<B: Backend>: Sized {
-    fn new(&mut B::Factory, shade::Backend, WindowTargets<B::Resources>) -> Self;
+    fn new(&mut B::Factory, &mut GraphicsQueueMut<B>,
+           shade::Backend, WindowTargets<B::Resources>) -> Self;
     fn render(&mut self, frame: (gfx_core::Frame, &gfx::handle::Semaphore<B::Resources>),
-                     pool: &mut GraphicsCommandPool<B>, queue: &mut gfx_core::queue::GraphicsQueueMut<B>);
+                     pool: &mut GraphicsCommandPool<B>, queue: &mut GraphicsQueueMut<B>);
 
     fn get_exit_key() -> Option<winit::VirtualKeyCode> {
         Some(winit::VirtualKeyCode::Escape)

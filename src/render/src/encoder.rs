@@ -23,7 +23,7 @@ use std::{fmt, mem};
 
 use core::{Backend, CommandQueue, SubmissionResult, IndexType, Resources, VertexCount, GraphicsCommandPool, QueueSubmit};
 use core::{self, command, format, handle, texture};
-use core::command::{Buffer, Encoder, GraphicsCommandBuffer};
+use core::command::{Buffer, Encoder, GraphicsCommandBuffer, Submit};
 use core::memory::{self, cast_slice, Typed, Pod, Usage};
 use core::queue::GraphicsQueueMut;
 use slice;
@@ -178,34 +178,29 @@ impl<'a, B: Backend> From<Encoder<B, GraphicsCommandBuffer<'a, B>>> for Graphics
     }
 }
 
-impl<'a, B: Backend> GraphicsEncoder<'a, B> {
-    /// Submits the commands in this `GraphicsEncoder`'s internal `CommandBuffer` to the GPU, so they can
-    /// be executed.
-    ///
-    /// Calling `flush` before swapping buffers is critical as without it the commands of the
-    /// internal ´CommandBuffer´ will not be sent to the GPU, and as a result they will not be
-    /// processed. Calling flush too often however will result in a performance hit. It is
-    /// generally recommended to call flush once per frame, when all draw calls have been made.
-    pub fn flush(self, queue: &mut GraphicsQueueMut<B>) -> SubmissionResult<()> {
-        self.synced_flush(queue, &[], &[], None)
-    }
+///
+pub struct GraphicsSubmission<B: Backend> {
+    submission: Submit<B>,
+    access_info: command::AccessInfo<B::Resources>,
+    handles: handle::Manager<B::Resources>, 
+}
 
-    /// Submits the commands in this `GraphicsEncoder`'s internal `CommandBuffer` to the GPU, so they can
+impl<B: Backend> GraphicsSubmission<B> {
+     /// Submits the commands in the internal `CommandBuffer` to the GPU, so they can
     /// be executed.
     pub fn synced_flush(self,
                         queue: &mut GraphicsQueueMut<B>,
                         wait_semaphores: &[&handle::Semaphore<B::Resources>],
                         signal_semaphores: &[&handle::Semaphore<B::Resources>],
                         fence: Option<&handle::Fence<B::Resources>>) -> SubmissionResult<()> {
-        let submit = self.command_buffer.finish();
         let wait_semaphores = &wait_semaphores.iter()
-                                                  .map(|&wait| (wait, core::pso::BOTTOM_OF_PIPE))
-                                                  .collect::<Vec<_>>();
+                                              .map(|&wait| (wait, core::pso::BOTTOM_OF_PIPE))
+                                              .collect::<Vec<_>>();
         queue.pin_submitted_resources(&self.handles);
         queue.submit_graphics(
             &[
                 QueueSubmit {
-                    cmd_buffers: &[submit],
+                    cmd_buffers: &[self.submission],
                     wait_semaphores,
                     signal_semaphores,
                 }
@@ -215,6 +210,37 @@ impl<'a, B: Backend> GraphicsEncoder<'a, B> {
         );
 
         Ok(()) // TODO
+    }
+}
+
+impl<'a, B: Backend> GraphicsEncoder<'a, B> {
+    /// Submits the internal `CommandBuffer` to the GPU, so it can be executed.
+    ///
+    /// Calling `flush` before swapping buffers is critical as without it the commands of the
+    /// internal ´CommandBuffer´ will not be sent to the GPU, and as a result they will not be
+    /// processed. Calling flush too often however will result in a performance hit. It is
+    /// generally recommended to call flush once per frame, when all draw calls have been made.
+    pub fn flush(self, queue: &mut GraphicsQueueMut<B>) -> SubmissionResult<()> {
+        self.synced_flush(queue, &[], &[], None)
+    }
+
+    /// Submits the commands in the internal `CommandBuffer` to the GPU, so they can
+    /// be executed.
+    pub fn synced_flush(self,
+                        queue: &mut GraphicsQueueMut<B>,
+                        wait_semaphores: &[&handle::Semaphore<B::Resources>],
+                        signal_semaphores: &[&handle::Semaphore<B::Resources>],
+                        fence: Option<&handle::Fence<B::Resources>>) -> SubmissionResult<()> {
+        self.finish().synced_flush(queue, wait_semaphores, signal_semaphores, fence)
+    }
+
+    ///
+    pub fn finish(self) -> GraphicsSubmission<B> {
+        GraphicsSubmission {
+            submission: self.command_buffer.finish(),
+            access_info: self.access_info,
+            handles: self.handles,
+        }
     }
 
     /// Copy part of a buffer to another
