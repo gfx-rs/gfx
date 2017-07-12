@@ -550,6 +550,68 @@ impl_graphics_cmd_buffer!(ComputeCommandBuffer);
 pub struct RenderPassInlineBuffer {
 }
 
+impl RenderPassInlineBuffer {
+    fn bind_targets(command_list: &mut ComPtr<winapi::ID3D12GraphicsCommandList>,
+                    attachments: &[Attachment],
+                    framebuffer: &FrameBuffer,
+                    render_area: target::Rect,
+                    clear_values: &[command::ClearValue],
+    ) {
+        let color_views = framebuffer.color.iter().map(|view| view.handle).collect::<Vec<_>>();
+        assert!(framebuffer.depth_stencil.len() <= 1);
+        assert_eq!(framebuffer.color.len() + framebuffer.depth_stencil.len(), attachments.len());
+
+        let ds_view = match framebuffer.depth_stencil.first() {
+            Some(ref view) => &view.handle as *const _,
+            None => ptr::null(),
+        };
+        unsafe {
+            command_list.OMSetRenderTargets(
+                color_views.len() as UINT,
+                color_views.as_ptr(),
+                winapi::FALSE,
+                ds_view,
+            );
+        }
+
+        let area = get_rect(&render_area);
+
+        let mut clear_iter = clear_values.iter();
+        for (color, attachment) in framebuffer.color.iter().zip(attachments.iter()) {
+            if attachment.load_op == AttachmentLoadOp::Clear {
+                match clear_iter.next() {
+                    Some(&command::ClearValue::Color(value)) => {
+                        let data = match value {
+                            command::ClearColor::Float(v) => v,
+                            _ => {
+                                error!("Integer clear is not implemented yet");
+                                [0.0; 4]
+                            }
+                        };
+                        unsafe {
+                            command_list.ClearRenderTargetView(color.handle, &data, 1, &area);
+                        }
+                    },
+                    other => error!("Invalid clear value for view {:?}: {:?}", color, other),
+                }
+            }
+        }
+        if let (Some(depth), Some(&Attachment{ load_op: AttachmentLoadOp::Clear, .. })) = (framebuffer.depth_stencil.first(), attachments.last()) {
+            match clear_iter.next() {
+                Some(&command::ClearValue::DepthStencil(value)) => {
+                    unsafe {
+                        command_list.ClearDepthStencilView(depth.handle,
+                            winapi::D3D12_CLEAR_FLAG_DEPTH | winapi::D3D12_CLEAR_FLAG_STENCIL,
+                            value.depth, value.stencil as u8, 1, &area);
+                    }
+                },
+                other => error!("Invalid clear value for view {:?}: {:?}",
+                    framebuffer.depth_stencil[0], other),
+            }
+        }
+    }
+}
+
 macro_rules! impl_render_pass_inline_buffer {
     ($graphics_buffer:ident) => {
         impl command::RenderPassInlineBuffer<$graphics_buffer, R> for RenderPassInlineBuffer {
@@ -559,59 +621,7 @@ macro_rules! impl_render_pass_inline_buffer {
                      render_area: target::Rect,
                      clear_values: &[command::ClearValue]
             ) -> Self {
-				let color_views = framebuffer.color.iter().map(|view| view.handle).collect::<Vec<_>>();
-       			assert!(framebuffer.depth_stencil.len() <= 1);
-		        assert_eq!(framebuffer.color.len() + framebuffer.depth_stencil.len(), render_pass.attachments.len());
-
- 		        let ds_view = match framebuffer.depth_stencil.first() {
-		            Some(ref view) => &view.handle as *const _,
-		            None => ptr::null(),
-		        };
-		        unsafe {
-		            command_buffer.0.inner.OMSetRenderTargets(
-		                color_views.len() as UINT,
-		                color_views.as_ptr(),
-		                winapi::FALSE,
-		                ds_view,
-		            );
-		        }
-
-		        let area = get_rect(&render_area);
-
-		        let mut clear_iter = clear_values.iter();
-		        for (color, attachment) in framebuffer.color.iter().zip(render_pass.attachments.iter()) {
-        		    if attachment.load_op == AttachmentLoadOp::Clear {
-		                match clear_iter.next() {
-        		            Some(&command::ClearValue::Color(value)) => {
-		                        let data = match value {
-        		                    command::ClearColor::Float(v) => v,
-		                            _ => {
-        		                        error!("Integer clear is not implemented yet");
-		                                [0.0; 4]
-        		                    }
-		                        };
-        		                unsafe {
-                		            command_buffer.0.inner.ClearRenderTargetView(color.handle, &data, 1, &area);
-                        		}
-		                    },
-        		            other => error!("Invalid clear value for view {:?}: {:?}", color, other),
-                		}
-		            }
-        		}
-		        if let (Some(depth), Some(&Attachment{ load_op: AttachmentLoadOp::Clear, .. })) = (framebuffer.depth_stencil.first(), render_pass.attachments.last()) {
-        		    match clear_iter.next() {
-                		Some(&command::ClearValue::DepthStencil(value)) => {
-		                    unsafe {
-        		                command_buffer.0.inner.ClearDepthStencilView(depth.handle,
-                		            winapi::D3D12_CLEAR_FLAG_DEPTH | winapi::D3D12_CLEAR_FLAG_STENCIL,
-                        		    value.depth, value.stencil as u8, 1, &area);
-		                    }
-        		        },
-                		other => error!("Invalid clear value for view {:?}: {:?}",
-		                    framebuffer.depth_stencil[0], other),
-        		    }
-		        }
-
+                Self::bind_targets(&mut command_buffer.0.inner, &render_pass.attachments, framebuffer, render_area, clear_values);
                 RenderPassInlineBuffer {
                 }
             }

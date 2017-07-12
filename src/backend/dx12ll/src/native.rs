@@ -153,7 +153,6 @@ pub struct DualHandle {
 #[derive(Clone, Debug)]
 pub struct DescriptorHeap {
     pub inner: ComPtr<winapi::ID3D12DescriptorHeap>,
-    //TODO: hide members?
     pub handle_size: u64,
     pub total_handles: u64,
     pub start: DualHandle,
