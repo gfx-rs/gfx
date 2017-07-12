@@ -72,9 +72,17 @@ impl DataBuffer {
     }
 }
 
+#[allow(missing_copy_implementations)]
 pub struct SubmitInfo {
-    pub buf: Vec<Command>,
-    pub data: DataBuffer,
+    // Raw pointer optimization:
+    // Command buffers are stored inside the command pools.
+    // We are using raw pointers here to avoid costly clones
+    // and to circumvent the borrow checker. This is safe because
+    // the command buffers are only reused after calling reset.
+    // Reset also resets the command buffers and implies that all
+    // submit infos are either consumed or thrown away.
+    pub(crate) buf: *const Vec<Command>,
+    pub(crate) data: *const DataBuffer,
 }
 
 /// Serialized device command.
@@ -348,8 +356,8 @@ pub struct RawCommandBuffer {
 impl command::CommandBuffer<Backend> for RawCommandBuffer {
     unsafe fn end(&mut self) -> SubmitInfo {
         SubmitInfo {
-            buf: self.buf.clone(),
-            data: self.data.clone(),
+            buf: &self.buf,
+            data: &self.data,
         }
     }
 }
@@ -658,8 +666,8 @@ impl SubpassCommandBuffer {
 impl command::CommandBuffer<Backend> for SubpassCommandBuffer {
     unsafe fn end(&mut self) -> SubmitInfo {
         SubmitInfo {
-            buf: self.buf.clone(),
-            data: self.data.clone(),
+            buf: &self.buf,
+            data: &self.data,
         }
     }
 }
