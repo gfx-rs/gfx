@@ -62,6 +62,7 @@ optional = true
 path = "src/backend/metalll"
 version = "0.1"
 optional = true
+#features = ["native_fence"]
 
 [dependencies.gfx_window_sdl]
 path = "src/window/sdl"

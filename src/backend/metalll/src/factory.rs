@@ -2,11 +2,10 @@ use ::Resources;
 use ::native::*;
 use ::conversions::*;
 
+use std::cell::Cell;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::slice;
-use std::mem;
-use std::ptr;
+use std::{mem, ptr, slice};
 
 use core::{self, image, pass, format, mapping, memory, buffer, pso, shade};
 use core::factory::*;
@@ -20,14 +19,16 @@ pub struct Factory {
 
 impl Drop for Factory {
     fn drop(&mut self) {
-        unsafe { self.device.release() }
+        unsafe {
+            self.device.release();
+        }
     }
 }
 
 pub fn create_factory(device: MTLDevice) -> Factory {
     unsafe { device.retain(); }
     Factory {
-        device
+        device,
     }
 }
 
@@ -573,16 +574,32 @@ impl core::Factory<Resources> for Factory {
     // Emulated fence implementations
     #[cfg(not(feature = "native_fence"))]
     fn create_fence(&mut self, signaled: bool) -> Fence {
-        unimplemented!()
+        Fence(Arc::new(Mutex::new(signaled)))
     }
     fn reset_fences(&mut self, fences: &[&Fence]) {
-        unimplemented!()
+        for fence in fences {
+            *fence.0.lock().unwrap() = false;
+        }
     }
-    fn wait_for_fences(&mut self, _fences: &[&Fence], _wait: WaitFor, _timeout_ms: u32) -> bool {
-        error!("`wait_for_fences` is not implemented yet"); //TODO
+    fn wait_for_fences(&mut self, fences: &[&Fence], wait: WaitFor, mut timeout_ms: u32) -> bool {
+        use std::{thread, time};
+        let tick = 1;
+        loop {
+            let done = match wait {
+                WaitFor::Any => fences.iter().any(|fence| *fence.0.lock().unwrap()),
+                WaitFor::All => fences.iter().all(|fence| *fence.0.lock().unwrap()),
+            };
+            if done {
+                return true
+            }
+            if timeout_ms < tick {
+                return false
+            }
+            timeout_ms -= tick;
+            thread::sleep(time::Duration::from_millis(tick as u64));
+        }
     }
     #[cfg(not(feature = "native_fence"))]
-    fn destroy_fence(&mut self, fence: Fence) {
-        unimplemented!()
+    fn destroy_fence(&mut self, _fence: Fence) {
     }
 }
