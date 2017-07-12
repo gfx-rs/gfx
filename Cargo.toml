@@ -50,7 +50,7 @@ optional = true
 
 [dependencies.gfx_device_metal]
 path = "src/backend/metal"
-version = "0.2"
+version = "0.3"
 optional = true
 
 [dependencies.gfx_window_metal]
@@ -60,7 +60,7 @@ optional = true
 
 [dependencies.gfx_device_metalll]
 path = "src/backend/metalll"
-version = "0.1"
+version = "0.2"
 optional = true
 #features = ["native_fence"]
 

@@ -1,6 +1,6 @@
 [package]
 name = "gfx_device_metalll"
-version = "0.1.1"
+version = "0.2.0"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
@@ -16,11 +16,11 @@ native_fence = []
 log = "0.3"
 gfx_corell = { path = "../../corell", version = "0.1.0" }
 winit = "0.7"
-cocoa = "0.5.0"
+cocoa = "0.9"
 objc = "0.2"
-metal-rs = "0.3"
+metal-rs = "0.4"
 io-surface = "0.7"
 core-foundation = "0.3"
-core-graphics = "0.7"
+core-graphics = "0.8"
 scopeguard = "0.3"
 block = "0.1"
