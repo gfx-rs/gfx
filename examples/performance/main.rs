@@ -54,7 +54,7 @@ static VERTEX_SRC: &'static [u8] = b"
     uniform mat4 u_Transform;
 
     void main() {
-        gl_Position = u_Transform * vec4(a_Pos, 1.0); 
+        gl_Position = u_Transform * vec4(a_Pos, 1.0);
    }
 ";
 
@@ -121,14 +121,14 @@ impl GFX {
         // Acquire surface and adapters
         let (mut surface, adapters) = window.get_surface_and_adapters();
         // Open device (factory and queues)
-        let gfx::Device { mut factory, mut general_queues, mut graphics_queues, .. } =
-            adapters[0].open_with(|family| surface.supports_queue(&family) as u32);
-        let mut queue = if let Some(queue) = general_queues.pop() {
-            queue.into()
-        } else if let Some(queue) = graphics_queues.pop() {
+        let gfx::Device { mut factory, mut graphics_queues, .. } =
+        adapters[0].open_with(|family, ty| {
+            ((ty.supports_graphics() && surface.supports_queue(&family)) as u32, gfx::QueueType::Graphics)
+        });
+        let mut queue = if let Some(queue) = graphics_queues.pop() {
             queue
         } else {
-            panic!("Unable to find a matching general or graphics queue.");
+            panic!("Unable to find a graphics queue.");
         };
 
         // Create swapchain
@@ -173,7 +173,7 @@ impl Renderer for GFX {
 
         self.pool.reset();
         let frame = self.swap_chain.acquire_frame(FrameSync::Semaphore(&self.frame_semaphore));
-        self.data.out_color = self.views[frame.id()].clone();     
+        self.data.out_color = self.views[frame.id()].clone();
 
         let mut encoder = self.pool.acquire_graphics_encoder();
         encoder.clear(&self.data.out_color, [CLEAR_COLOR.0,
@@ -257,7 +257,7 @@ impl GL {
         let window = builder.build(events_loop).unwrap();
         unsafe { window.make_current().unwrap() };
         let gl = Gl::load_with(|s| window.get_proc_address(s) as *const _);
-        
+
         // Create GLSL shaders
         let vs = compile_shader(&gl, VERTEX_SRC, gl::VERTEX_SHADER);
         let fs = compile_shader(&gl, FRAGMENT_SRC, gl::FRAGMENT_SHADER);
@@ -322,7 +322,7 @@ impl GL {
         };
 
         GL {
-            window: window,            
+            window: window,
             dimension: dimension,
             gl: gl,
             vs: vs,
@@ -348,7 +348,7 @@ impl Renderer for GL {
             self.gl.ClearColor(CLEAR_COLOR.0, CLEAR_COLOR.1, CLEAR_COLOR.2, CLEAR_COLOR.3);
             self.gl.Clear(gl::COLOR_BUFFER_BIT);
         }
-        
+
         for x in (-self.dimension) ..self.dimension {
             for y in (-self.dimension) ..self.dimension {
                 let mat:Matrix4<f32> = transform(x, y, proj_view).into();

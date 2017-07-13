@@ -27,7 +27,7 @@ mod factory;
 mod native;
 mod pool;
 
-use core::{command as com, handle};
+use core::{command as com, handle, QueueType};
 use comptr::ComPtr;
 use std::ptr;
 use std::os::raw::c_void;
@@ -47,11 +47,11 @@ impl core::QueueFamily for QueueFamily {
 pub struct Adapter {
     adapter: ComPtr<winapi::IDXGIAdapter2>,
     info: core::AdapterInfo,
-    queue_families: Vec<QueueFamily>,
+    queue_families: Vec<(QueueFamily, QueueType)>,
 }
 
 impl core::Adapter<Backend> for Adapter {
-    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> core::Device<Backend>
+    fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)]) -> core::Device<Backend>
     {
         // Create D3D12 device
         let mut device = ComPtr::<winapi::ID3D12Device>::new(ptr::null_mut());
@@ -69,7 +69,7 @@ impl core::Adapter<Backend> for Adapter {
 
         // TODO: other queue types
         // Create command queues
-        let mut general_queues = queue_descs.iter().flat_map(|&(_family, queue_count)| {
+        let mut general_queues = queue_descs.iter().flat_map(|&(_family, _ty, queue_count)| {
             (0..queue_count).map(|_| {
                 let mut queue = ComPtr::<winapi::ID3D12CommandQueue>::new(ptr::null_mut());
                 let queue_desc = winapi::D3D12_COMMAND_QUEUE_DESC {
@@ -124,7 +124,7 @@ impl core::Adapter<Backend> for Adapter {
         unimplemented!()
     }
 
-    fn get_queue_families(&self) -> &[QueueFamily] {
+    fn get_queue_families(&self) -> &[(QueueFamily, QueueType)] {
         unimplemented!()
     }
 }
@@ -308,7 +308,7 @@ impl Instance {
                     Adapter {
                         adapter: adapter,
                         info: info,
-                        queue_families: vec![QueueFamily], // TODO:
+                        queue_families: vec![(QueueFamily, QueueType::General)], // TODO:
                     });
             }
 
