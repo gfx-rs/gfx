@@ -27,7 +27,7 @@ use ash::{Entry, LoadingError};
 use ash::version::{EntryV1_0, DeviceV1_0, InstanceV1_0, V1_0};
 use ash::vk;
 use core::{command as com, handle, memory};
-use core::{CommandBuffer, FrameSync};
+use core::{CommandBuffer, FrameSync, QueueType};
 use std::{mem, ptr};
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
@@ -61,6 +61,21 @@ pub struct Instance {
 
     /// Supported surface extensions of this instance.
     pub surface_extensions: Vec<&'static str>,
+}
+
+fn map_queue_type(flags: vk::QueueFlags) -> QueueType {
+    if flags.intersects(vk::QUEUE_GRAPHICS_BIT | vk::QUEUE_COMPUTE_BIT) { // TRANSER_BIT optional
+        QueueType::General
+    } else if flags.intersects(vk::QUEUE_GRAPHICS_BIT) { // TRANSER_BIT optional
+        QueueType::Graphics
+    } else if flags.intersects(vk::QUEUE_COMPUTE_BIT) { // TRANSER_BIT optional
+        QueueType::Compute
+    } else if flags.intersects(vk::QUEUE_TRANSFER_BIT) {
+        QueueType::Transfer
+    } else {
+        // TODO: present only queues?
+        unimplemented!()
+    }
 }
 
 impl Instance {
@@ -137,17 +152,21 @@ impl Instance {
                     software_rendering: properties.device_type == vk::PhysicalDeviceType::Cpu,
                 };
 
-                let queue_families = instance.raw.get_physical_device_queue_family_properties(device)
-                                                 .iter()
-                                                 .enumerate()
-                                                 .map(|(i, queue_family)| {
-                                                    QueueFamily {
-                                                        device: device,
-                                                        family_index: i as u32,
-                                                        queue_type: queue_family.queue_flags,
-                                                        queue_count: queue_family.queue_count,
-                                                    }
-                                                 }).collect();
+                let queue_families =
+                    instance.raw.get_physical_device_queue_family_properties(device)
+                        .iter()
+                        .enumerate()
+                        .map(|(i, queue_family)| {
+                        (
+                            QueueFamily {
+                                device: device,
+                                family_index: i as u32,
+                                queue_type: queue_family.queue_flags,
+                                queue_count: queue_family.queue_count,
+                            },
+                            map_queue_type(queue_family.queue_flags),
+                        )
+                        }).collect();
 
                 Adapter {
                     instance: instance.clone(),
@@ -199,16 +218,16 @@ impl core::QueueFamily for QueueFamily {
 pub struct Adapter {
     instance: Arc<Instance>,
     handle: vk::PhysicalDevice,
-    queue_families: Vec<QueueFamily>,
+    queue_families: Vec<(QueueFamily, QueueType)>,
     info: core::AdapterInfo,
 }
 
 impl core::Adapter<Backend> for Adapter {
-    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> core::Device<Backend>
+    fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)]) -> core::Device<Backend>
     {
         let mut queue_priorities = Vec::with_capacity(queue_descs.len());
 
-        let queue_infos = queue_descs.iter().map(|&(family, queue_count)| {
+        let queue_infos = queue_descs.iter().map(|&(family, _, queue_count)| {
                 queue_priorities.push(vec![0.0f32; queue_count as usize]);
 
                 vk::DeviceQueueCreateInfo {
@@ -323,7 +342,7 @@ impl core::Adapter<Backend> for Adapter {
         &self.info
     }
 
-    fn get_queue_families(&self) -> &[QueueFamily] {
+    fn get_queue_families(&self) -> &[(QueueFamily, QueueType)] {
         &self.queue_families
     }
 }

@@ -44,7 +44,8 @@ pub use self::command::CommandBuffer;
 pub use self::factory::Factory;
 pub use self::pool::{ComputeCommandPool, GeneralCommandPool, GraphicsCommandPool, RawCommandPool,
                      SubpassCommandPool, TransferCommandPool};
-pub use self::queue::{CommandQueue, ComputeQueue, GeneralQueue, GraphicsQueue, QueueFamily, QueueSubmit, TransferQueue};
+pub use self::queue::{CommandQueue, ComputeQueue, GeneralQueue, GraphicsQueue, QueueFamily,
+                      QueueSubmit, QueueType, TransferQueue};
 pub use self::window::{Backbuffer, Frame, FrameSync, Surface, SwapChain, SwapchainConfig,
                        WindowExt};
 pub use draw_state::{state, target};
@@ -357,7 +358,7 @@ pub struct Device<B: Backend> {
 /// Represents a physical or virtual device, which is capable of running the backend.
 pub trait Adapter<B: Backend>: Sized {
     /// Create a new device with the specified queues.
-    fn open(&self, queue_descs: &[(&B::QueueFamily, u32)]) -> Device<B>;
+    fn open(&self, queue_descs: &[(&B::QueueFamily, QueueType, u32)]) -> Device<B>;
 
     /// Create a new device with the specified queues.
     ///
@@ -365,14 +366,14 @@ pub trait Adapter<B: Backend>: Sized {
     /// as returned by the closure.
     fn open_with<F>(&self, mut f: F) -> Device<B>
     where
-        F: FnMut(&B::QueueFamily) -> u32
+        F: FnMut(&B::QueueFamily, QueueType) -> (u32, QueueType)
     {
         let queue_desc = self.get_queue_families()
             .iter()
-            .filter_map(|family| {
-                let num_queues = f(family);
+            .filter_map(|&(ref family, ty)| {
+                let (num_queues, ty) = f(family, ty);
                 if num_queues > 0 {
-                    Some((family, num_queues))
+                    Some((family, ty, num_queues))
                 } else {
                     None
                 }
@@ -385,7 +386,7 @@ pub trait Adapter<B: Backend>: Sized {
     fn get_info(&self) -> &AdapterInfo;
 
     /// Return the supported queue families for this adapter.
-    fn get_queue_families(&self) -> &[B::QueueFamily];
+    fn get_queue_families(&self) -> &[(B::QueueFamily, QueueType)];
 }
 
 /// Information about a backend adapater.

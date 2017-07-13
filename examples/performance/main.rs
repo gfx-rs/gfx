@@ -122,14 +122,14 @@ impl GFX {
         // Acquire surface and adapters
         let (mut surface, adapters) = window.get_surface_and_adapters();
         // Open device (factory and queues)
-        let gfx::Device { mut factory, mut general_queues, mut graphics_queues, .. } =
-            adapters[0].open_with(|family| surface.supports_queue(&family) as u32);
-        let mut queue = if let Some(queue) = general_queues.pop() {
-            queue.into()
-        } else if let Some(queue) = graphics_queues.pop() {
+        let gfx::Device { mut factory, mut graphics_queues, .. } =
+        adapters[0].open_with(|family, ty| {
+            ((ty.supports_graphics() && surface.supports_queue(&family)) as u32, gfx::QueueType::Graphics)
+        });
+        let mut queue = if let Some(queue) = graphics_queues.pop() {
             queue
         } else {
-            panic!("Unable to find a matching general or graphics queue.");
+            panic!("Unable to find a graphics queue.");
         };
 
         // Create swapchain
@@ -174,7 +174,7 @@ impl Renderer for GFX {
 
         self.pool.reset();
         let frame = self.swap_chain.acquire_frame(FrameSync::Semaphore(&self.frame_semaphore));
-        self.data.out_color = self.views[frame.id()].clone();     
+        self.data.out_color = self.views[frame.id()].clone();
 
         let mut encoder = self.pool.acquire_graphics_encoder();
         encoder.clear(&self.data.out_color, [CLEAR_COLOR.0,

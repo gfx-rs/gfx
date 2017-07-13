@@ -42,7 +42,7 @@ use std::cell::RefCell;
 use std::ptr;
 use std::sync::Arc;
 use core::{handle as h, texture as tex};
-use core::SubmissionResult;
+use core::{QueueType, SubmissionResult};
 use core::command::{AccessInfo, AccessGuard};
 use std::os::raw::c_void;
 
@@ -115,7 +115,7 @@ impl Instance {
                 Adapter {
                     adapter: adapter,
                     info: info,
-                    queue_family: [QueueFamily],
+                    queue_family: [(QueueFamily, QueueType::General)],
                 }
             );
 
@@ -303,13 +303,17 @@ pub struct Fence(());
 pub struct Adapter {
     adapter: ComPtr<winapi::IDXGIAdapter1>,
     info: core::AdapterInfo,
-    queue_family: [QueueFamily; 1],
+    queue_family: [(QueueFamily, QueueType); 1],
 }
 
 impl core::Adapter<Backend> for Adapter {
-    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> core::Device<Backend> {
+    fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)]) -> core::Device<Backend> {
+        // Only support a single queue
+        assert_eq!(queue_descs.len(), 1);
+        assert!(queue_descs[0].2 <= 1);
+
         // Create D3D11 device
-        let mut device = ComPtr::<winapi::ID3D11Device>::new(ptr::null_mut());
+        let mut dev = ComPtr::<winapi::ID3D11Device>::new(ptr::null_mut());
         let mut feature_level = winapi::D3D_FEATURE_LEVEL_10_0;
         let mut context = ComPtr::<winapi::ID3D11DeviceContext>::new(ptr::null_mut());
         let hr = unsafe {
@@ -321,7 +325,7 @@ impl core::Adapter<Backend> for Adapter {
                 &FEATURE_LEVELS[0],
                 FEATURE_LEVELS.len() as winapi::UINT,
                 winapi::D3D11_SDK_VERSION,
-                device.as_mut() as *mut *mut _ as *mut *mut winapi::d3d11::ID3D11Device,
+                dev.as_mut() as *mut *mut _ as *mut *mut winapi::d3d11::ID3D11Device,
                 &mut feature_level as *mut _,
                 context.as_mut() as *mut *mut _ as *mut *mut winapi::d3d11::ID3D11DeviceContext,
             )
@@ -347,35 +351,56 @@ impl core::Adapter<Backend> for Adapter {
             handles: RefCell::new(h::Manager::new()),
         });
 
-        let factory = Factory::new(device.clone(), feature_level, share.clone());
-        let general_queue = unsafe {
-            core::GeneralQueue::new(
-                CommandQueue {
-                    device,
-                    context,
-                    share,
-                    frame_handles: handle::Manager::new(),
-                    max_resource_count: Some(999999),
-                })
-        };
-
-        core::Device {
+        let factory = Factory::new(dev.clone(), feature_level, share.clone());
+        let mut device = core::Device {
             factory,
-            general_queues: vec![general_queue],
+            general_queues: Vec::new(),
             graphics_queues: Vec::new(),
             compute_queues: Vec::new(),
             transfer_queues: Vec::new(),
             heap_types: Vec::new(),
             memory_heaps: Vec::new(),
             _marker: std::marker::PhantomData,
+        };
+
+        let raw_queue = || {
+            CommandQueue {
+                device: dev.clone(),
+                context: context.clone(),
+                share: share.clone(),
+                frame_handles: handle::Manager::new(),
+                max_resource_count: Some(999999),
+            }
+        };
+
+        let (_, queue_type, num_queues) = queue_descs[0];
+        for _ in 0..num_queues {
+            unsafe {
+                match queue_type {
+                    QueueType::General => {
+                        device.general_queues.push(core::GeneralQueue::new(raw_queue()));
+                    }
+                    QueueType::Graphics => {
+                        device.graphics_queues.push(core::GraphicsQueue::new(raw_queue()));
+                    }
+                    QueueType::Compute => {
+                        device.compute_queues.push(core::ComputeQueue::new(raw_queue()));
+                    }
+                    QueueType::Transfer => {
+                        device.transfer_queues.push(core::TransferQueue::new(raw_queue()));
+                    }
+                }
+            }
         }
+
+        device
     }
 
     fn get_info(&self) -> &core::AdapterInfo {
         &self.info
     }
 
-    fn get_queue_families(&self) -> &[QueueFamily] {
+    fn get_queue_families(&self) -> &[(QueueFamily, QueueType)] {
         &self.queue_family
     }
 }

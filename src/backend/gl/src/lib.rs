@@ -26,6 +26,7 @@ extern crate gfx_core as core;
 use std::cell::RefCell;
 use std::rc::Rc;
 use core::{self as c, handle, state as s, format, pso, texture, memory, command as com, buffer};
+use core::QueueType;
 use core::target::{Layer, Level};
 use command::{Command, DataBuffer};
 use factory::MappingKind;
@@ -241,7 +242,7 @@ impl Share {
 pub struct Adapter {
     share: Rc<Share>,
     adapter_info: c::AdapterInfo,
-    queue_family: Vec<QueueFamily>,
+    queue_family: [(QueueFamily, QueueType); 1],
 }
 
 impl Adapter {
@@ -281,13 +282,17 @@ impl Adapter {
         Adapter {
             share: Rc::new(share),
             adapter_info: adapter_info,
-            queue_family: vec![QueueFamily],
+            queue_family: [(QueueFamily, QueueType::Graphics)],
         }
     }
 }
 
 impl c::Adapter<Backend> for Adapter {
-    fn open(&self, queue_descs: &[(&QueueFamily, u32)]) -> c::Device<Backend> {
+    fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)]) -> c::Device<Backend> {
+        // Only support a single queue
+        assert_eq!(queue_descs.len(), 1);
+        assert!(queue_descs[0].2 <= 1);
+
         // initialize permanent states
         let gl = &self.share.context;
         if self.share.capabilities.srgb_color_supported {
@@ -297,7 +302,7 @@ impl c::Adapter<Backend> for Adapter {
         }
         unsafe {
             gl.PixelStorei(gl::UNPACK_ALIGNMENT, 1);
- 
+
             if !self.share.info.version.is_embedded {
                 gl.Enable(gl::PROGRAM_POINT_SIZE);
             }
@@ -311,33 +316,55 @@ impl c::Adapter<Backend> for Adapter {
             }
         }
 
-        let graphics_queue = unsafe {
-            core::GraphicsQueue::new(
-                CommandQueue {
-                    share: self.share.clone(),
-                    vao: vao,
-                    frame_handles: handle::Manager::new(),
-                    max_resource_count: Some(999999),
-                })
-        };
-        c::Device {
+        let mut device = c::Device {
             factory: Factory::new(self.share.clone()),
-            general_queues: Vec::new(), // TODO
-            graphics_queues: vec![graphics_queue],
+            general_queues: Vec::new(),
+            graphics_queues: Vec::new(),
             compute_queues: Vec::new(),
             transfer_queues: Vec::new(),
             heap_types: Vec::new(), // TODO
             memory_heaps: Vec::new(), // TODO
 
             _marker: std::marker::PhantomData,
+        };
+
+        let raw_queue = || {
+            CommandQueue {
+                share: self.share.clone(),
+                vao: vao,
+                frame_handles: handle::Manager::new(),
+                max_resource_count: Some(999999),
+            }
+        };
+
+        let (_, queue_type, num_queues) = queue_descs[0];
+        for _ in 0..num_queues {
+            unsafe {
+                match queue_type {
+                    QueueType::General => {
+                        device.general_queues.push(c::GeneralQueue::new(raw_queue()));
+                    }
+                    QueueType::Graphics => {
+                        device.graphics_queues.push(c::GraphicsQueue::new(raw_queue()));
+                    }
+                    QueueType::Compute => {
+                        device.compute_queues.push(c::ComputeQueue::new(raw_queue()));
+                    }
+                    QueueType::Transfer => {
+                        device.transfer_queues.push(c::TransferQueue::new(raw_queue()));
+                    }
+                }
+            }
         }
+
+        device
     }
 
     fn get_info(&self) -> &c::AdapterInfo {
         &self.adapter_info
     }
 
-    fn get_queue_families(&self) -> &[QueueFamily] {
+    fn get_queue_families(&self) -> &[(QueueFamily, QueueType)] {
         &self.queue_family
     }
 }
