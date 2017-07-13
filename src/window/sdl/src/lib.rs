@@ -139,7 +139,7 @@ impl core::Surface<Backend> for Surface {
         where Q: AsRef<device_gl::CommandQueue>
     {
         use core::handle::Producer;
-        let dim = get_window_dimensions(self.window);
+        let dim = get_window_dimensions(&self.window);
         let color = self.manager.make_texture(
             device_gl::NewTexture::Surface(0),
             texture::Info {
