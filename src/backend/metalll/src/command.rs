@@ -296,14 +296,14 @@ impl core::GraphicsCommandBuffer<Resources> for CommandBuffer {
     fn bind_graphics_descriptor_sets(&mut self, layout: &native::PipelineLayout, first_set: usize, sets: &[&native::DescriptorSet]) {
         for (i, set) in (first_set..sets.len() + first_set).zip(sets) {
             if let Some(existing) = self.descriptor_sets.get_mut(i) {
-                *existing = Some(set.0.clone());
+                *existing = Some(set.inner.clone());
                 continue;
             }
 
             while i > self.descriptor_sets.len() {
                 self.descriptor_sets.push(None);
             }
-            self.descriptor_sets.push(Some(set.0.clone()));
+            self.descriptor_sets.push(Some(set.inner.clone()));
         }
     }
 }

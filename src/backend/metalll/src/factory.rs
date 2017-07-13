@@ -13,8 +13,13 @@ use core::shade::CreateShaderError;
 use metal::*;
 use objc::runtime::Object as ObjcObject;
 
+struct PrivateCapabilities {
+    indirect_arguments: bool,
+}
+
 pub struct Factory {
     device: MTLDevice,
+    private_caps: PrivateCapabilities,
 }
 
 impl Drop for Factory {
@@ -29,6 +34,9 @@ pub fn create_factory(device: MTLDevice) -> Factory {
     unsafe { device.retain(); }
     Factory {
         device,
+        private_caps: PrivateCapabilities {
+            indirect_arguments: true, //TEMP
+        },
     }
 }
 
@@ -48,6 +56,27 @@ impl Factory {
             Ok(lib) => Ok(ShaderLib(lib)),
             Err(err) => Err(CreateShaderError::CompilationFailed(err.into())),
         }
+    }
+
+    fn describe_argument(ty: DescriptorType, index: usize, count: usize) -> MTLArgumentDescriptor {
+        let arg = MTLArgumentDescriptor::new();
+        arg.set_array_length(count as NSUInteger);
+
+        match ty {
+            DescriptorType::Sampler => {
+                arg.set_access(MTLArgumentAccess::ReadOnly);
+                arg.set_data_type(MTLDataType::Sampler);
+                arg.set_index(index as NSUInteger);
+            }
+            DescriptorType::SampledImage => {
+                arg.set_access(MTLArgumentAccess::ReadOnly);
+                arg.set_data_type(MTLDataType::Texture);
+                arg.set_index(index as NSUInteger);
+            }
+            _ => unimplemented!()
+        }
+
+        arg
     }
 }
 
@@ -353,18 +382,50 @@ impl core::Factory<Resources> for Factory {
     }
 
     fn create_descriptor_set_pool(&mut self, heap: &DescriptorHeap, max_sets: usize, offset: usize, descriptor_pools: &[DescriptorPoolDesc]) -> DescriptorSetPool {
-        DescriptorSetPool {}
+        let mut num_samplers = 0;
+        let mut num_textures = 0;
+
+        let mut arguments = descriptor_pools.iter().map(|desc| {
+            let mut offset_ref = match desc.ty {
+                DescriptorType::Sampler => &mut num_samplers,
+                DescriptorType::SampledImage => &mut num_textures,
+                _ => unimplemented!()
+            };
+            let index = *offset_ref;
+            *offset_ref += desc.count;
+            Self::describe_argument(desc.ty, *offset_ref, desc.count)
+        }).collect::<Vec<_>>();
+
+        let arg_array = NSArray::array_with_objects(&arguments);
+        let encoder = self.device.new_argument_encoder(arg_array);
+
+        let total_size = encoder.encoded_length();
+        let arg_buffer = self.device.new_buffer(total_size, MTLResourceOptions::empty());
+
+        DescriptorSetPool {
+            arg_buffer,
+            total_size,
+            offset: 0,
+        }
     }
 
     fn create_descriptor_set_layout(&mut self, bindings: &[DescriptorSetLayoutBinding]) -> DescriptorSetLayout {
-        DescriptorSetLayout(bindings.to_vec())
+        let mut arguments = bindings.iter().map(|desc| {
+            Self::describe_argument(desc.ty, desc.binding, desc.count)
+        }).collect::<Vec<_>>();
+        let arg_array = NSArray::array_with_objects(&arguments);
+
+        DescriptorSetLayout {
+            bindings: bindings.to_vec(),
+            encoder: self.device.new_argument_encoder(arg_array),
+        }
     }
 
-    fn create_descriptor_sets(&mut self, set_pool: &mut DescriptorSetPool, layout: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
+    fn create_descriptor_sets(&mut self, set_pool: &mut DescriptorSetPool, layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
         use factory::DescriptorType::*;
 
-        layout.iter().map(|layout| {
-            let bindings = layout.0.iter().map(|layout| {
+        layouts.iter().map(|layout| {
+            let bindings = layout.bindings.iter().map(|layout| {
                 let binding = match layout.ty {
                     Sampler => {
                         DescriptorSetBinding::Sampler((0..layout.count).map(|_| MTLSamplerState::nil()).collect())
@@ -377,10 +438,19 @@ impl core::Factory<Resources> for Factory {
                 (layout.binding, binding)
             }).collect();
 
-            DescriptorSet(Arc::new(Mutex::new(DescriptorSetInner {
-                layout: layout.0.clone(),
+            let inner = DescriptorSetInner {
+                layout: layout.bindings.clone(),
                 bindings,
-            })))
+            };
+            let offset = set_pool.offset;
+            set_pool.offset += layout.encoder.encoded_length();
+
+            DescriptorSet {
+                inner: Arc::new(Mutex::new(inner)),
+                buffer: set_pool.arg_buffer.clone(),
+                offset,
+                encoder: layout.encoder.clone(),
+            }
         }).collect()
     }
 
@@ -388,54 +458,57 @@ impl core::Factory<Resources> for Factory {
         use factory::DescriptorWrite::*;
 
         for write in writes.iter() {
-            let mut set = write.set.0.lock().unwrap();
-            let set: &mut DescriptorSetInner = &mut*set;
+            let DescriptorSetInner { bindings: ref mut set_bindings, layout: ref set_layout } = *write.set.inner.lock().unwrap();
+
+            let mut mtl_samplers = Vec::new();
+            let mut mtl_textures = Vec::new();
 
             // Find layout entry
-            let layout = set.layout.iter().find(|layout| layout.binding == write.binding)
+            let layout = set_layout.iter().find(|layout| layout.binding == write.binding)
                 .expect("invalid descriptor set binding index");
 
-            match write.write {
-                Sampler(ref samplers) => {
+            write.set.encoder.set_argument_buffer(write.set.buffer, write.set.offset);
+
+            match (&write.write, set_bindings.get_mut(&write.binding)) {
+                (&Sampler(ref samplers), Some(&mut DescriptorSetBinding::Sampler(ref mut vec))) => {
                     if write.array_offset + samplers.len() > layout.count {
                         panic!("out of range descriptor write");
                     }
-                    let target = if let &mut DescriptorSetBinding::Sampler(ref mut vec) = set.bindings.get_mut(&write.binding).unwrap() {
-                        vec
-                    } else {
-                        panic!("mismatched descriptor set type");
-                    };
 
-                    let target_range = &mut target[write.array_offset..(write.array_offset + samplers.len())];
+                    mtl_samplers.clear();
+                    mtl_samplers.extend(samplers.iter().map(|sampler| sampler.0.clone()));
+                    write.set.encoder.set_sampler_states(&mtl_samplers, write.array_offset as _);
 
-                    unsafe {
-                        for (new, old) in samplers.iter().zip(target_range.iter_mut()) {
-                            old.release();
+                    let target_iter = vec[write.array_offset..(write.array_offset + samplers.len())].iter_mut();
+
+                    for (new, old) in samplers.iter().zip(target_iter) {
+                        unsafe {
                             new.0.retain();
-                            *old = new.0;
+                            old.release();
                         }
+                        *old = new.0;
                     }
                 },
-                SampledImage(ref images) => {
+                (&SampledImage(ref images), Some(&mut DescriptorSetBinding::SampledImage(ref mut vec))) => {
                     if write.array_offset + images.len() > layout.count {
                         panic!("out of range descriptor write");
                     }
-                    let target = if let &mut DescriptorSetBinding::SampledImage(ref mut vec) = set.bindings.get_mut(&write.binding).unwrap() {
-                        vec
-                    } else {
-                        panic!("mismatched descriptor set type");
-                    };
 
-                    let target_range = &mut target[write.array_offset..(write.array_offset + images.len())];
+                    mtl_textures.clear();
+                    mtl_textures.extend(images.iter().map(|image| image.0.clone().0));
+                    write.set.encoder.set_textures(&mtl_textures, write.array_offset as _);
 
-                    unsafe {
-                        for (new, old) in images.iter().zip(target_range.iter_mut()) {
-                            old.0.release();
+                    let target_iter = vec[write.array_offset..(write.array_offset + images.len())].iter_mut();
+
+                    for (new, old) in images.iter().zip(target_iter) {
+                        unsafe {
                             (new.0).0.retain();
-                            *old = ((new.0).0, new.1);
+                            old.0.release();
                         }
+                        *old = ((new.0).0, new.1);
                     }
                 },
+                (&Sampler(_), _) | (&SampledImage(_), _) => panic!("mismatched descriptor set type"),
                 _ => unimplemented!(),
             }
         }

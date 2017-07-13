@@ -115,13 +115,11 @@ pub enum MappingInner {
 
 impl Drop for Mapping {
     fn drop(&mut self) {
-        unsafe {
-            if let MappingInner::Write(buffer, ref range) = self.0 {
-                buffer.did_modify_range(NSRange {
-                    location: range.location,
-                    length: range.length,
-                });
-            }
+        if let MappingInner::Write(buffer, ref range) = self.0 {
+            buffer.did_modify_range(NSRange {
+                location: range.location,
+                length: range.length,
+            });
         }
     }
 }
@@ -146,9 +144,18 @@ unsafe impl Sync for Buffer {
 #[derive(Debug)]
 pub struct DescriptorHeap {}
 #[derive(Debug)]
-pub struct DescriptorSetPool {}
+pub struct DescriptorSetPool {
+    pub arg_buffer: MTLBuffer,
+    pub total_size: NSUInteger,
+    pub offset: NSUInteger,
+}
 #[derive(Debug)]
-pub struct DescriptorSet(pub Arc<Mutex<DescriptorSetInner>>); // TODO: can only be modified via factory, might not need mutex?
+pub struct DescriptorSet {
+    pub inner: Arc<Mutex<DescriptorSetInner>>,
+    pub buffer: MTLBuffer,
+    pub offset: NSUInteger,
+    pub encoder: MTLArgumentEncoder,
+}
 
 #[derive(Debug)]
 pub struct DescriptorSetInner {
@@ -196,7 +203,10 @@ impl Drop for DescriptorSetBinding {
 }
 
 #[derive(Debug)]
-pub struct DescriptorSetLayout(pub Vec<DescriptorSetLayoutBinding>);
+pub struct DescriptorSetLayout {
+    pub bindings: Vec<DescriptorSetLayoutBinding>,
+    pub encoder: MTLArgumentEncoder,
+}
 
 
 pub use self::heap_related::*;
