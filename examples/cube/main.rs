@@ -66,7 +66,7 @@ struct App<B: gfx::Backend> {
 
 impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
     fn new(factory: &mut B::Factory,
-           _: &mut gfx::queue::GraphicsQueueMut<B>,
+           _: &mut gfx::queue::GraphicsQueue<B>,
            backend: gfx_app::shade::Backend,
            window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
     {
@@ -168,7 +168,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
     }
 
     fn render(&mut self, (frame, semaphore): (gfx::Frame, &gfx::handle::Semaphore<B::Resources>),
-              pool: &mut gfx::GraphicsCommandPool<B>, queue: &mut gfx::queue::GraphicsQueueMut<B>)
+              pool: &mut gfx::GraphicsCommandPool<B>, queue: &mut gfx::queue::GraphicsQueue<B>)
     {
         let (cur_color, cur_depth) = self.views[frame.id()].clone();
         self.bundle.data.out_color = cur_color;

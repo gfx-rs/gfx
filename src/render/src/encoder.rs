@@ -21,11 +21,11 @@ use std::error::Error;
 use std::any::Any;
 use std::{fmt, mem};
 
-use core::{Backend, CommandQueue, SubmissionResult, IndexType, Resources, VertexCount, GraphicsCommandPool, QueueSubmit};
+use core::{Backend, CommandQueue, GraphicsCommandPool, GraphicsQueue, IndexType,
+           QueueSubmit, Resources, SubmissionResult, VertexCount};
 use core::{self, command, format, handle, texture};
 use core::command::{Buffer, Encoder, GraphicsCommandBuffer, Submit};
 use core::memory::{self, cast_slice, Typed, Pod, Usage};
-use core::queue::GraphicsQueueMut;
 use slice;
 use pso;
 
@@ -182,14 +182,14 @@ impl<'a, B: Backend> From<Encoder<B, GraphicsCommandBuffer<'a, B>>> for Graphics
 pub struct GraphicsSubmission<B: Backend> {
     submission: Submit<B>,
     access_info: command::AccessInfo<B::Resources>,
-    handles: handle::Manager<B::Resources>, 
+    handles: handle::Manager<B::Resources>,
 }
 
 impl<B: Backend> GraphicsSubmission<B> {
      /// Submits the commands in the internal `CommandBuffer` to the GPU, so they can
     /// be executed.
     pub fn synced_flush(self,
-                        queue: &mut GraphicsQueueMut<B>,
+                        queue: &mut GraphicsQueue<B>,
                         wait_semaphores: &[&handle::Semaphore<B::Resources>],
                         signal_semaphores: &[&handle::Semaphore<B::Resources>],
                         fence: Option<&handle::Fence<B::Resources>>) -> SubmissionResult<()> {
@@ -220,14 +220,14 @@ impl<'a, B: Backend> GraphicsEncoder<'a, B> {
     /// internal ´CommandBuffer´ will not be sent to the GPU, and as a result they will not be
     /// processed. Calling flush too often however will result in a performance hit. It is
     /// generally recommended to call flush once per frame, when all draw calls have been made.
-    pub fn flush(self, queue: &mut GraphicsQueueMut<B>) -> SubmissionResult<()> {
+    pub fn flush(self, queue: &mut GraphicsQueue<B>) -> SubmissionResult<()> {
         self.synced_flush(queue, &[], &[], None)
     }
 
     /// Submits the commands in the internal `CommandBuffer` to the GPU, so they can
     /// be executed.
     pub fn synced_flush(self,
-                        queue: &mut GraphicsQueueMut<B>,
+                        queue: &mut GraphicsQueue<B>,
                         wait_semaphores: &[&handle::Semaphore<B::Resources>],
                         signal_semaphores: &[&handle::Semaphore<B::Resources>],
                         fence: Option<&handle::Fence<B::Resources>>) -> SubmissionResult<()> {

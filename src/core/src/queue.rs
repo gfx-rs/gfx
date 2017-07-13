@@ -98,39 +98,11 @@ pub trait CommandQueue<B: Backend> {
 
 macro_rules! define_queue {
     // Bare queue definitions
-    (($queue:ident, $queue_ref:ident, $queue_mut:ident)
-        can ()
-        derives ()) =>
-    (
+    ($queue:ident can ()) => (
         ///
         pub struct $queue<B: Backend>(B::CommandQueue);
-        ///
-        pub struct $queue_ref<'a, B: Backend>(&'a B::CommandQueue)
-            where B::CommandQueue: 'a;
-        ///
-        pub struct $queue_mut<'a, B: Backend>(&'a mut B::CommandQueue)
-            where B::CommandQueue: 'a;
 
         impl<B: Backend> CommandQueue<B> for $queue<B> {
-            unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>], fence: Option<&handle::Fence<B::Resources>>,
-                access: &AccessInfo<B::Resources>) {
-                self.0.submit(submit_infos, fence, access)
-            }
-
-            fn wait_idle(&mut self) {
-                self.0.wait_idle()
-            }
-
-            fn pin_submitted_resources(&mut self, handles: &handle::Manager<B::Resources>) {
-                self.0.pin_submitted_resources(handles)
-            }
-
-            fn cleanup(&mut self) {
-                self.0.cleanup()
-            }
-        }
-
-        impl<'a, B: Backend> CommandQueue<B> for $queue_mut<'a, B> {
             unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>], fence: Option<&handle::Fence<B::Resources>>,
                 access: &AccessInfo<B::Resources>) {
                 self.0.submit(submit_infos, fence, access)
@@ -154,29 +126,6 @@ macro_rules! define_queue {
             pub unsafe fn new(queue: B::CommandQueue) -> Self {
                 $queue(queue)
             }
-
-            ///
-            pub fn as_ref(&self) -> $queue_ref<B> {
-                $queue_ref(&self.0)
-            }
-
-            ///
-            pub fn as_mut(&mut self) -> $queue_mut<B> {
-                $queue_mut(&mut self.0)
-            }
-        }
-
-        impl<'a, B: Backend> $queue_mut<'a, B> {
-            ///
-            pub fn as_ref(&self) -> $queue_ref<B> {
-                $queue_ref(self.0)
-            }
-        }
-
-        impl<'a, B: Backend> Clone for $queue_ref<'a, B> {
-            fn clone(&self) -> Self {
-                $queue_ref(self.0.clone())
-            }
         }
 
         impl<B: Backend> AsRef<B::CommandQueue> for $queue<B> {
@@ -185,73 +134,15 @@ macro_rules! define_queue {
             }
         }
 
-        impl<'a, B: Backend> AsRef<B::CommandQueue> for $queue_ref<'a, B> {
-            fn as_ref(&self) -> &B::CommandQueue {
-                self.0
-            }
-        }
-
-        impl<'a, B: Backend> AsRef<B::CommandQueue> for $queue_mut<'a, B> {
-            fn as_ref(&self) -> &B::CommandQueue {
-                self.0
-            }
-        }
-
         impl<B: Backend> AsMut<B::CommandQueue> for $queue<B> {
             fn as_mut(&mut self) -> &mut B::CommandQueue {
                 &mut self.0
             }
         }
-
-        impl<'a, B: Backend> AsMut<B::CommandQueue> for $queue_mut<'a, B> {
-            fn as_mut(&mut self) -> &mut B::CommandQueue {
-                self.0
-            }
-        }
-    );
-
-    // Impl conversion to other queues
-    (($queue:ident, $queue_ref:ident, $queue_mut:ident)
-        can ($($submit:ident)*)
-        derives ($derive:ident, $derive_ref:ident, $derive_mut:ident
-                $($tail_derive:ident, $tail_derive_ref:ident, $tail_derive_mut:ident)*)) =>
-    (
-        impl<B: Backend> From<$queue<B>> for $derive<B> {
-            fn from(queue: $queue<B>) -> Self {
-                $derive(queue.0)
-            }
-        }
-
-        impl<'a, B: Backend> From<$queue_ref<'a, B>> for $derive_ref<'a, B> {
-            fn from(queue: $queue_ref<'a, B>) -> Self {
-                $derive_ref(queue.0)
-            }
-        }
-
-        impl<'a, B: Backend> From<$queue_mut<'a, B>> for $derive_ref<'a, B> {
-            fn from(queue: $queue_mut<'a, B>) -> Self {
-                $derive_ref(queue.0)
-            }
-        }
-
-        impl<'a, B: Backend> From<$queue_mut<'a, B>> for $derive_mut<'a, B> {
-            fn from(queue: $queue_mut<'a, B>) -> Self {
-                $derive_mut(queue.0)
-            }
-        }
-        
-        define_queue! {
-            ($queue, $queue_ref, $queue_mut)
-                can ($($submit)*)
-                derives ($($tail_derive, $tail_derive_ref, $tail_derive_mut)*)
-        }
     );
 
     // Impl submits
-    (($queue:ident, $queue_ref:ident, $queue_mut:ident)
-        can ($submit:ident $($tail_submit:ident)*)
-        derives ()) =>
-    (
+    ($queue:ident can ($submit:ident $($tail_submit:ident)*)) => (
         impl<B: Backend> $queue<B> {
             /// Submit command buffers for execution.
             pub fn $submit(&mut self, submit: &[QueueSubmit<B>], fence: Option<&handle::Fence<B::Resources>>, access: &AccessInfo<B::Resources>) {
@@ -259,49 +150,29 @@ macro_rules! define_queue {
             }
         }
 
-        impl<'a, B: Backend> $queue_mut<'a, B> {
-            /// Submit command buffers for execution.
-            pub fn $submit(&mut self, submit: &[QueueSubmit<B>], fence: Option<&handle::Fence<B::Resources>>, access: &AccessInfo<B::Resources>) {
-                unsafe { self.0.submit(submit, fence, access) }
-            }
-        }
-
         define_queue! {
-            ($queue, $queue_ref, $queue_mut)
-                can ($($tail_submit)*)
-                derives ()
+            $queue can ($($tail_submit)*)
         }
     );
 }
 
 define_queue! {
-    (GeneralQueue, GeneralQueueRef, GeneralQueueMut)
-        can (submit_general submit_graphics submit_compute submit_transfer)
-        derives (GraphicsQueue, GraphicsQueueRef, GraphicsQueueMut
-                 ComputeQueue, ComputeQueueRef, ComputeQueueMut
-                 TransferQueue, TransferQueueRef, TransferQueueMut)
+    GeneralQueue can (submit_general submit_graphics submit_compute submit_transfer)
 }
 
 define_queue! {
-    (GraphicsQueue, GraphicsQueueRef, GraphicsQueueMut)
-        can (submit_graphics submit_transfer)
-        derives (TransferQueue, TransferQueueRef, TransferQueueMut)
+    GraphicsQueue can (submit_graphics submit_transfer)
 }
 
 define_queue! {
-    (ComputeQueue, ComputeQueueRef, ComputeQueueMut)
-        can (submit_compute submit_transfer)
-        derives (TransferQueue, TransferQueueRef, TransferQueueMut)
+    ComputeQueue can (submit_compute submit_transfer)
 }
 
 define_queue! {
-    (TransferQueue, TransferQueueRef, TransferQueueMut)
-        can (submit_transfer)
-        derives ()
+    TransferQueue can (submit_transfer)
 }
 
 // Command pool creation implementations
-
 macro_rules! impl_create_pool {
     ($func:ident $pool:ident for) => ();
     ($func:ident $pool:ident for $queue:ident $($tail:ident)*) => (
@@ -321,35 +192,3 @@ impl_create_pool!(create_graphics_pool GraphicsCommandPool for GeneralQueue Grap
 impl_create_pool!(create_compute_pool ComputeCommandPool for GeneralQueue ComputeQueue);
 impl_create_pool!(create_transfer_pool TransferCommandPool for GeneralQueue GraphicsQueue ComputeQueue TransferQueue);
 // impl_create_pool!(create_subpass_pool SubpassCommandPool for GeneralQueue GraphicsQueue);
-
-macro_rules! impl_create_pool_ref {
-    ($func:ident $pool:ident for) => ();
-    ($func:ident $pool:ident for $queue:ident $($tail:ident)*) => (
-        impl<'a, B: Backend> $queue<'a, B> {
-            /// Create a new command pool with given number of command buffers.
-            pub fn $func(&self, capacity: usize) -> $pool<B> {
-                $pool(unsafe { B::RawCommandPool::from_queue(self, capacity) })
-            }
-        }
-
-        impl_create_pool_ref!($func $pool for $($tail)*);
-    );
-}
-
-impl_create_pool_ref!(create_general_pool GeneralCommandPool for
-    GeneralQueueRef GeneralQueueMut);
-impl_create_pool_ref!(create_graphics_pool GraphicsCommandPool for
-    GeneralQueueRef GeneralQueueMut
-    GraphicsQueueRef GraphicsQueueMut);
-impl_create_pool_ref!(create_compute_pool ComputeCommandPool for
-    GeneralQueueRef GeneralQueueMut
-    ComputeQueueRef ComputeQueueMut);
-impl_create_pool_ref!(create_transfer_pool TransferCommandPool for
-    GeneralQueueRef GeneralQueueMut
-    GraphicsQueueRef GraphicsQueueMut
-    ComputeQueueRef ComputeQueueMut
-    TransferQueueRef TransferQueueMut);
-/*impl_create_pool_ref!(create_subpass_pool SubpassCommandPool for
-    GeneralQueueRef GeneralQueueMut
-    GraphicsQueueRef GraphicsQueueMut);
-*/

@@ -115,7 +115,7 @@ pub fn main() {
         let mut encoder = graphics_pool.acquire_graphics_encoder();
         encoder.clear(&data.out, CLEAR_COLOR);
         encoder.draw(&slice, &pso, &data);
-        encoder.synced_flush(&mut graphics_queue.as_mut(), &[&frame_semaphore], &[&draw_semaphore], None);
+        encoder.synced_flush(&mut graphics_queue, &[&frame_semaphore], &[&draw_semaphore], None);
         swap_chain.present(&mut graphics_queue, &[&draw_semaphore]);
         graphics_queue.cleanup();
     }
