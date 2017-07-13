@@ -24,6 +24,34 @@ use std::borrow::{Borrow, BorrowMut};
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 
+///
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum QueueType {
+    ///
+    General,
+    ///
+    Graphics,
+    ///
+    Compute,
+    ///
+    Transfer,
+}
+
+impl QueueType {
+    ///
+    pub fn supports_graphics(&self) -> bool {
+        *self == QueueType::General || *self == QueueType::Graphics
+    }
+
+    ///
+    pub fn supports_compute(&self) -> bool {
+        *self == QueueType::General || *self == QueueType::Compute
+    }
+
+    ///
+    pub fn supports_transfer(&self) -> bool { true }
+}
+
 /// `QueueFamily` denotes a group of command queues provided by the backend
 /// with the same properties/type.
 pub trait QueueFamily: 'static {
