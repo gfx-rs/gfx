@@ -59,14 +59,14 @@ pub fn main() {
 
     let (mut surface, adapters) = window.get_surface_and_adapters();
     // Open device (factory and queues)
-    let gfx::Device { mut factory, mut general_queues, mut graphics_queues, .. } =
-        adapters[0].open_with(|family| surface.supports_queue(&family) as u32);
-    let mut graphics_queue = if let Some(queue) = general_queues.first_mut() {
-        queue.as_mut().into()
-    } else if let Some(queue) = graphics_queues.first_mut() {
-        queue.as_mut()
+    let gfx::Device { mut factory, mut graphics_queues, .. } =
+        adapters[0].open_with(|family, ty| {
+            ((ty.supports_graphics() && surface.supports_queue(&family)) as u32, gfx::QueueType::Graphics)
+        });
+    let mut graphics_queue = if let Some(queue) = graphics_queues.pop() {
+        queue
     } else {
-        panic!("Unable to find a matching general or graphics queue.");
+        panic!("Unable to find a graphics queue.");
     };
 
     // Create swapchain
@@ -107,13 +107,13 @@ pub fn main() {
 
         // Get next frame
         let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&frame_semaphore));
-        data.out = views[frame.id()].clone();        
+        data.out = views[frame.id()].clone();
 
         // Draw a frame
         let mut encoder = graphics_pool.acquire_graphics_encoder();
         encoder.clear(&data.out, CLEAR_COLOR);
         encoder.draw(&slice, &pso, &data);
-        encoder.synced_flush(&mut graphics_queue, &[&frame_semaphore], &[&draw_semaphore], None);
+        encoder.synced_flush(&mut graphics_queue.as_mut(), &[&frame_semaphore], &[&draw_semaphore], None);
         swap_chain.present(&mut graphics_queue, &[&draw_semaphore]);
         graphics_queue.wait_idle();
         graphics_queue.cleanup();

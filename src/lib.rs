@@ -44,7 +44,7 @@ extern crate gfx_window_vulkan;
 
 use gfx::memory::Typed;
 use gfx::{Adapter, Backend, CommandQueue, FrameSync, GraphicsCommandPool,
-    SwapChain, QueueFamily, WindowExt};
+    SwapChain, QueueFamily, QueueType, WindowExt};
 use gfx::queue::GraphicsQueueMut;
 
 pub mod shade;
@@ -158,16 +158,14 @@ fn run<A, B, S, EL>((width, height): (u32, u32),
     use gfx::traits::Factory;
     use gfx::texture;
 
-    // Init device
-    let gfx_core::Device { mut factory, mut general_queues, mut graphics_queues, .. } =
-        adapters[0].open_with(|family| surface.supports_queue(&family) as u32);
+    // Init device, requesting (at least) one graphics queue with presentation support
+    let gfx_core::Device { mut factory, mut graphics_queues, .. } =
+        adapters[0].open_with(|family, ty| ((ty.supports_graphics() && surface.supports_queue(&family)) as u32, QueueType::Graphics));
 
-    let mut queue = if let Some(queue) = general_queues.first_mut() {
-        queue.as_mut().into()
-    } else if let Some(queue) = graphics_queues.first_mut() {
-        queue.as_mut()
+    let mut queue = if let Some(queue) = graphics_queues.pop() {
+        queue
     } else {
-        error!("Unable to find a matching general or graphics queue.");
+        error!("Unable to find a graphics queue.");
         return
     };
 
@@ -204,7 +202,7 @@ fn run<A, B, S, EL>((width, height): (u32, u32),
             .collect();
 
     let shader_backend = factory.shader_backend();
-    let mut app = A::new(&mut factory, &mut queue, shader_backend, WindowTargets {
+    let mut app = A::new(&mut factory, &mut queue.as_mut(), shader_backend, WindowTargets {
         views: views,
         aspect_ratio: width as f32 / height as f32, //TODO
     });
@@ -229,7 +227,7 @@ fn run<A, B, S, EL>((width, height): (u32, u32),
 
         let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&frame_semaphore));
 
-        app.render((frame, &frame_semaphore), &mut graphics_pool, &mut queue);
+        app.render((frame, &frame_semaphore), &mut graphics_pool, &mut queue.as_mut());
 
         // Wait til rendering has finished
         queue.wait_idle();
