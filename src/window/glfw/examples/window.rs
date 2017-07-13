@@ -41,18 +41,14 @@ pub fn main() {
     let mut window = gfx_window_glfw::Window::new(window);
     let (mut surface, adapters) = window.get_surface_and_adapters();
 
-    let queue_descs = adapters[0].get_queue_families().iter()
-                                 .filter(|family| surface.supports_queue(&family) )
-                                 .map(|family| { (family, family.num_queues()) })
-                                 .collect::<Vec<_>>();
-    let gfx_core::Device { mut general_queues, mut graphics_queues, .. } = adapters[0].open(&queue_descs);
-
-    let mut queue = if let Some(queue) = general_queues.first_mut() {
-        queue.as_mut().into()
-    } else if let Some(queue) = graphics_queues.first_mut() {
-        queue.as_mut()
+    let gfx::Device { mut factory, mut graphics_queues, .. } =
+        adapters[0].open_with(|family, ty| {
+            ((ty.supports_graphics() && surface.supports_queue(&family)) as u32, gfx::QueueType::Graphics)
+        });
+    let mut graphics_queue = if let Some(queue) = graphics_queues.pop() {
+        queue
     } else {
-        return
+        panic!("Unable to find a graphics queue.");
     };
 
     let config = gfx_core::SwapchainConfig::new();
