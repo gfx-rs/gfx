@@ -126,11 +126,7 @@ impl GFX {
         adapters[0].open_with(|family, ty| {
             ((ty.supports_graphics() && surface.supports_queue(&family)) as u32, gfx::QueueType::Graphics)
         });
-        let mut queue = if let Some(queue) = graphics_queues.pop() {
-            queue
-        } else {
-            panic!("Unable to find a graphics queue.");
-        };
+        let mut queue = graphics_queues.pop().expect("Unable to find a graphics queue.");
 
         // Create swapchain
         let config = gfx::SwapchainConfig::new()
@@ -191,7 +187,7 @@ impl Renderer for GFX {
 
         let pre_submit = start.elapsed();
         encoder.synced_flush(
-            &mut self.queue.as_mut(),
+            &mut self.queue,
             &[&self.frame_semaphore],
             &[&self.draw_semaphore],
             None);
