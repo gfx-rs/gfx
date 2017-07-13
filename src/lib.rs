@@ -161,13 +161,7 @@ fn run<A, B, S, EL>((width, height): (u32, u32),
     // Init device, requesting (at least) one graphics queue with presentation support
     let gfx_core::Device { mut factory, mut graphics_queues, .. } =
         adapters[0].open_with(|family, ty| ((ty.supports_graphics() && surface.supports_queue(&family)) as u32, QueueType::Graphics));
-
-    let mut queue = if let Some(queue) = graphics_queues.pop() {
-        queue
-    } else {
-        error!("Unable to find a graphics queue.");
-        return
-    };
+    let mut queue = graphics_queues.pop().expect("Unable to find a graphics queue.");
 
     let config = gfx_core::SwapchainConfig::new()
                     .with_color::<ColorFormat>()
