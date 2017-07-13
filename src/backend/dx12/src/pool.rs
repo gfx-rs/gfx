@@ -60,7 +60,7 @@ impl CommandAllocator {
     fn reset(&mut self) {
         unsafe { self.inner.Reset(); }
     }
-    
+
     fn create_command_list(&mut self) -> ComPtr<winapi::ID3D12GraphicsCommandList> {
         // allocate command lists
         let mut command_list = ComPtr::<winapi::ID3D12GraphicsCommandList>::new(ptr::null_mut());
