@@ -61,11 +61,7 @@ pub fn main() {
         adapters[0].open_with(|family, ty| {
             ((ty.supports_graphics() && surface.supports_queue(&family)) as u32, gfx::QueueType::Graphics)
         });
-    let mut graphics_queue = if let Some(queue) = graphics_queues.pop() {
-        queue
-    } else {
-        panic!("Unable to find a graphics queue.");
-    };
+    let mut graphics_queue = graphics_queues.pop().expect("Unable to find a graphics queue.");
 
     // Create swapchain
     let config = gfx::SwapchainConfig::new()
