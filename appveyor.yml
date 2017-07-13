@@ -19,5 +19,5 @@ build_script:
 test_script:
   - cargo test --all --features vulkan
   - cargo test -p gfx -p gfx_core --features "mint serialize"
-  - cargo test --all --features dx11
-  - cargo test --all --features dx12
+  - if %COMPILER%==msvc cargo test --all --features dx11
+  - if %COMPILER%==msvc cargo test --all --features dx12
