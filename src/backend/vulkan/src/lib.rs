@@ -64,13 +64,13 @@ pub struct Instance {
 }
 
 fn map_queue_type(flags: vk::QueueFlags) -> QueueType {
-    if flags.intersects(vk::QUEUE_GRAPHICS_BIT | vk::QUEUE_COMPUTE_BIT) { // TRANSER_BIT optional
+    if flags.subset(vk::QUEUE_GRAPHICS_BIT | vk::QUEUE_COMPUTE_BIT) { // TRANSER_BIT optional
         QueueType::General
-    } else if flags.intersects(vk::QUEUE_GRAPHICS_BIT) { // TRANSER_BIT optional
+    } else if flags.subset(vk::QUEUE_GRAPHICS_BIT) { // TRANSER_BIT optional
         QueueType::Graphics
-    } else if flags.intersects(vk::QUEUE_COMPUTE_BIT) { // TRANSER_BIT optional
+    } else if flags.subset(vk::QUEUE_COMPUTE_BIT) { // TRANSER_BIT optional
         QueueType::Compute
-    } else if flags.intersects(vk::QUEUE_TRANSFER_BIT) {
+    } else if flags.subset(vk::QUEUE_TRANSFER_BIT) {
         QueueType::Transfer
     } else {
         // TODO: present only queues?
