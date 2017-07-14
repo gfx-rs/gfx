@@ -1,17 +1,19 @@
-use ::Resources;
-use ::native::*;
-use ::conversions::*;
+use {Resources};
+use native as n;
+use conversions::*;
 
 use std::cell::Cell;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::{mem, ptr, slice};
 
-use core::{self, image, pass, format, mapping, memory, buffer, pso, shade};
-use core::factory::*;
-use core::shade::CreateShaderError;
+use core::{Factory as CoreFactory, SubPass, HeapType,
+    factory as f, image, pass, format, mapping, memory, buffer, pso, shade};
+
+use cocoa::foundation::{NSRange, NSUInteger};
 use metal::*;
 use objc::runtime::Object as ObjcObject;
+
 
 struct PrivateCapabilities {
     indirect_arguments: bool,
@@ -44,31 +46,31 @@ impl Factory {
     pub fn create_shader_library_from_file<P>(
         &mut self,
         path: P,
-    ) -> Result<ShaderLib, CreateShaderError> where P: AsRef<Path> {
+    ) -> Result<n::ShaderLib, shade::CreateShaderError> where P: AsRef<Path> {
         unimplemented!()
     }
 
     pub fn create_shader_library_from_source<S>(
         &mut self,
         source: S,
-    ) -> Result<ShaderLib, CreateShaderError> where S: AsRef<str> {
+    ) -> Result<n::ShaderLib, shade::CreateShaderError> where S: AsRef<str> {
         match self.device.new_library_with_source(source.as_ref(), MTLCompileOptions::nil()) { // Returns retained
-            Ok(lib) => Ok(ShaderLib(lib)),
-            Err(err) => Err(CreateShaderError::CompilationFailed(err.into())),
+            Ok(lib) => Ok(n::ShaderLib(lib)),
+            Err(err) => Err(shade::CreateShaderError::CompilationFailed(err.into())),
         }
     }
 
-    fn describe_argument(ty: DescriptorType, index: usize, count: usize) -> MTLArgumentDescriptor {
+    fn describe_argument(ty: f::DescriptorType, index: usize, count: usize) -> MTLArgumentDescriptor {
         let arg = MTLArgumentDescriptor::new();
         arg.set_array_length(count as NSUInteger);
 
         match ty {
-            DescriptorType::Sampler => {
+            f::DescriptorType::Sampler => {
                 arg.set_access(MTLArgumentAccess::ReadOnly);
                 arg.set_data_type(MTLDataType::Sampler);
                 arg.set_index(index as NSUInteger);
             }
-            DescriptorType::SampledImage => {
+            f::DescriptorType::SampledImage => {
                 arg.set_access(MTLArgumentAccess::ReadOnly);
                 arg.set_data_type(MTLDataType::Texture);
                 arg.set_index(index as NSUInteger);
@@ -80,8 +82,8 @@ impl Factory {
     }
 }
 
-impl core::Factory<Resources> for Factory {
-    fn create_renderpass(&mut self, attachments: &[pass::Attachment], subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> RenderPass {
+impl CoreFactory<Resources> for Factory {
+    fn create_renderpass(&mut self, attachments: &[pass::Attachment], subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> n::RenderPass {
         unsafe {
             let pass = MTLRenderPassDescriptor::new(); // Returns retained
             defer_on_unwind! { pass.release() };
@@ -104,18 +106,18 @@ impl core::Factory<Resources> for Factory {
                 mtl_attachment.set_store_action(map_store_operation(attachment.store_op));
             }
 
-            RenderPass(pass)
+            n::RenderPass(pass)
         }
     }
 
-    fn create_pipeline_layout(&mut self, sets: &[&DescriptorSetLayout]) -> PipelineLayout {
-        PipelineLayout {}
+    fn create_pipeline_layout(&mut self, sets: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
+        n::PipelineLayout {}
     }
 
-    fn create_graphics_pipelines<'a>(&mut self, params: &[(&ShaderLib, &PipelineLayout, core::SubPass<'a, Resources>, &pso::GraphicsPipelineDesc)])
-            -> Vec<Result<GraphicsPipeline, pso::CreationError>> {
+    fn create_graphics_pipelines<'a>(&mut self, params: &[(&n::ShaderLib, &n::PipelineLayout, SubPass<'a, Resources>, &pso::GraphicsPipelineDesc)])
+            -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         unsafe {
-            params.iter().map(|&(&ShaderLib(shader_lib), pipeline_layout, ref pass_descriptor, pipeline_desc)| {
+            params.iter().map(|&(&n::ShaderLib(shader_lib), pipeline_layout, ref pass_descriptor, pipeline_desc)| {
                 let pipeline = MTLRenderPipelineDescriptor::alloc().init(); // Returns retained
                 defer! { pipeline.release() };
 
@@ -217,23 +219,23 @@ impl core::Factory<Resources> for Factory {
                 defer! { msg_send![err_ptr, release] };
 
                 if pso.is_null() {
-                    error!("PSO creation failed: {}", objc_err_description(err_ptr));
+                    error!("PSO creation failed: {}", n::objc_err_description(err_ptr));
                     return Err(pso::CreationError);
                 } else {
-                    Ok(GraphicsPipeline(pso))
+                    Ok(n::GraphicsPipeline(pso))
                 }
             }).collect()
         }
     }
 
-    fn create_compute_pipelines(&mut self, params: &[(&ShaderLib, pso::EntryPoint, &PipelineLayout)]) -> Vec<Result<ComputePipeline, pso::CreationError>> {
+    fn create_compute_pipelines(&mut self, params: &[(&n::ShaderLib, pso::EntryPoint, &n::PipelineLayout)]) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
         unimplemented!()
     }
 
-    fn create_framebuffer(&mut self, renderpass: &RenderPass,
-        color_attachments: &[&RenderTargetView], depth_stencil_attachments: &[&DepthStencilView],
+    fn create_framebuffer(&mut self, renderpass: &n::RenderPass,
+        color_attachments: &[&n::RenderTargetView], depth_stencil_attachments: &[&n::DepthStencilView],
         width: u32, height: u32, layers: u32
-    ) -> FrameBuffer {
+    ) -> n::FrameBuffer {
         unsafe {
             let descriptor: MTLRenderPassDescriptor = msg_send![(renderpass.0).0, copy]; // Returns retained
             defer_on_unwind! { descriptor.release() };
@@ -256,11 +258,11 @@ impl core::Factory<Resources> for Factory {
                 // TODO: stencil
             }
 
-            FrameBuffer(descriptor)
+            n::FrameBuffer(descriptor)
         }
     }
 
-    fn create_sampler(&mut self, info: image::SamplerInfo) -> Sampler {
+    fn create_sampler(&mut self, info: image::SamplerInfo) -> n::Sampler {
         unsafe {
             let descriptor = MTLSamplerDescriptor::new(); // Returns retained
             defer! { descriptor.release() };
@@ -286,41 +288,41 @@ impl core::Factory<Resources> for Factory {
 
             // FIXME: more state
 
-            Sampler(self.device.new_sampler(descriptor))
+            n::Sampler(self.device.new_sampler(descriptor))
         }
     }
 
-    fn view_buffer_as_constant(&mut self, buffer: &Buffer, offset: usize, size: usize) -> Result<ConstantBufferView, TargetViewError> {
+    fn view_buffer_as_constant(&mut self, buffer: &n::Buffer, offset: usize, size: usize) -> Result<n::ConstantBufferView, f::TargetViewError> {
         unimplemented!()
     }
 
-    fn view_image_as_render_target(&mut self, image: &Image, format: format::Format) -> Result<RenderTargetView, TargetViewError> {
+    fn view_image_as_render_target(&mut self, image: &n::Image, format: format::Format) -> Result<n::RenderTargetView, f::TargetViewError> {
         let (mtl_format, _) = map_format(format).ok_or_else(|| {
             error!("failed to find corresponding Metal format for {:?}", format);
             panic!(); // TODO: return TargetViewError once it is implemented
         })?;
 
         unsafe {
-            Ok(RenderTargetView(image.0.new_texture_view(mtl_format))) // Returns retained
+            Ok(n::RenderTargetView(image.0.new_texture_view(mtl_format))) // Returns retained
         }
     }
 
-    fn view_image_as_shader_resource(&mut self, image: &Image, format: format::Format) -> Result<ShaderResourceView, TargetViewError> {
+    fn view_image_as_shader_resource(&mut self, image: &n::Image, format: format::Format) -> Result<n::ShaderResourceView, f::TargetViewError> {
         let (mtl_format, _) = map_format(format).ok_or_else(|| {
             error!("failed to find corresponding Metal format for {:?}", format);
             panic!(); // TODO: return TargetViewError once it is implemented
         })?;
 
         unsafe {
-            Ok(ShaderResourceView(image.0.new_texture_view(mtl_format))) // Returns retained
+            Ok(n::ShaderResourceView(image.0.new_texture_view(mtl_format))) // Returns retained
         }
     }
 
-    fn view_image_as_unordered_access(&mut self, image: &Image, format: format::Format) -> Result<UnorderedAccessView, TargetViewError> {
+    fn view_image_as_unordered_access(&mut self, image: &n::Image, format: format::Format) -> Result<n::UnorderedAccessView, f::TargetViewError> {
         unimplemented!()
     }
 
-    fn read_mapping<'a, T>(&self, buf: &'a Buffer, offset: u64, size: u64)
+    fn read_mapping<'a, T>(&self, buf: &'a n::Buffer, offset: u64, size: u64)
                                -> Result<mapping::Reader<'a, Resources, T>,
                                          mapping::Error>
         where T: Copy
@@ -339,12 +341,12 @@ impl core::Factory<Resources> for Factory {
 
             Ok(mapping::Reader::new(
                 slice::from_raw_parts(base_ptr.offset(offset as isize) as *mut T, count),
-                Mapping(MappingInner::Read), // TODO
+                n::Mapping(n::MappingInner::Read), // TODO
             ))
         }
     }
 
-    fn write_mapping<'a, 'b, T>(&mut self, buf: &'a Buffer, offset: u64, size: u64)
+    fn write_mapping<'a, 'b, T>(&mut self, buf: &'a n::Buffer, offset: u64, size: u64)
                                 -> Result<mapping::Writer<'a, Resources, T>,
                                           mapping::Error>
         where T: Copy
@@ -368,27 +370,28 @@ impl core::Factory<Resources> for Factory {
 
             Ok(mapping::Writer::new(
                 slice::from_raw_parts_mut(base_ptr.offset(offset as isize) as *mut T, count),
-                Mapping(MappingInner::Write(buf.0, nsrange)), // TODO
+                n::Mapping(n::MappingInner::Write(buf.0, nsrange)), // TODO
             ))
         }
     }
 
-    fn create_semaphore(&mut self) -> Semaphore {
-        unsafe { Semaphore(dispatch_semaphore_create(1)) } // Returns retained
+    fn create_semaphore(&mut self) -> n::Semaphore {
+        unsafe { n::Semaphore(n::dispatch_semaphore_create(1)) } // Returns retained
     }
 
-    fn create_descriptor_heap(&mut self, ty: DescriptorHeapType, size: usize) -> DescriptorHeap {
-        DescriptorHeap {}
+    fn create_descriptor_heap(&mut self, ty: f::DescriptorHeapType, size: usize) -> n::DescriptorHeap {
+        n::DescriptorHeap {}
     }
 
-    fn create_descriptor_set_pool(&mut self, heap: &DescriptorHeap, max_sets: usize, offset: usize, descriptor_pools: &[DescriptorPoolDesc]) -> DescriptorSetPool {
+    fn create_descriptor_set_pool(&mut self, heap: &n::DescriptorHeap, max_sets: usize, offset: usize,
+                                  descriptor_pools: &[f::DescriptorPoolDesc]) -> n::DescriptorSetPool {
         let mut num_samplers = 0;
         let mut num_textures = 0;
 
         let mut arguments = descriptor_pools.iter().map(|desc| {
             let mut offset_ref = match desc.ty {
-                DescriptorType::Sampler => &mut num_samplers,
-                DescriptorType::SampledImage => &mut num_textures,
+                f::DescriptorType::Sampler => &mut num_samplers,
+                f::DescriptorType::SampledImage => &mut num_textures,
                 _ => unimplemented!()
             };
             let index = *offset_ref;
@@ -402,206 +405,231 @@ impl core::Factory<Resources> for Factory {
         let total_size = encoder.encoded_length();
         let arg_buffer = self.device.new_buffer(total_size, MTLResourceOptions::empty());
 
-        DescriptorSetPool {
+        n::DescriptorSetPool {
             arg_buffer,
             total_size,
             offset: 0,
         }
     }
 
-    fn create_descriptor_set_layout(&mut self, bindings: &[DescriptorSetLayoutBinding]) -> DescriptorSetLayout {
-        let mut arguments = bindings.iter().map(|desc| {
-            Self::describe_argument(desc.ty, desc.binding, desc.count)
-        }).collect::<Vec<_>>();
-        let arg_array = NSArray::array_with_objects(&arguments);
+    fn create_descriptor_set_layout(&mut self,
+        bindings: &[f::DescriptorSetLayoutBinding],
+        buffer: Option<f::DescriptorSetBufferBinding>,
+    )-> n::DescriptorSetLayout {
+        let indirect = buffer.map(|buf_binding| {
+            let mut arguments = bindings.iter().map(|desc| {
+                Self::describe_argument(desc.ty, desc.binding, desc.count)
+            }).collect::<Vec<_>>();
+            let arg_array = NSArray::array_with_objects(&arguments);
+            let encoder = self.device.new_argument_encoder(arg_array);
+            (buf_binding, encoder)
+        });
 
-        DescriptorSetLayout {
+        n::DescriptorSetLayout {
             bindings: bindings.to_vec(),
-            encoder: self.device.new_argument_encoder(arg_array),
+            indirect,
         }
     }
 
-    fn create_descriptor_sets(&mut self, set_pool: &mut DescriptorSetPool, layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
-        use factory::DescriptorType::*;
-
+    fn create_descriptor_sets(&mut self, set_pool: &mut n::DescriptorSetPool, layouts: &[&n::DescriptorSetLayout]) -> Vec<n::DescriptorSet> {
         layouts.iter().map(|layout| {
-            let bindings = layout.bindings.iter().map(|layout| {
-                let binding = match layout.ty {
-                    Sampler => {
-                        DescriptorSetBinding::Sampler((0..layout.count).map(|_| MTLSamplerState::nil()).collect())
-                    },
-                    SampledImage => {
-                        DescriptorSetBinding::SampledImage((0..layout.count).map(|_| (MTLTexture::nil(), memory::ImageLayout::General)).collect())
-                    },
-                    _ => unimplemented!(),
-                };
-                (layout.binding, binding)
-            }).collect();
+            match layout.indirect {
+                Some((binding, ref arg_encoder)) => {
+                    let offset = set_pool.offset;
+                    set_pool.offset += arg_encoder.encoded_length();
 
-            let inner = DescriptorSetInner {
-                layout: layout.bindings.clone(),
-                bindings,
-            };
-            let offset = set_pool.offset;
-            set_pool.offset += layout.encoder.encoded_length();
+                    n::DescriptorSet::Indirect {
+                        buffer: set_pool.arg_buffer.clone(),
+                        offset,
+                        encoder: arg_encoder.clone(),
+                        binding,
+                    }
+                }
+                None => {
+                    let bindings = layout.bindings.iter().map(|layout| {
+                        let binding = match layout.ty {
+                            f::DescriptorType::Sampler => {
+                                n::DescriptorSetBinding::Sampler((0..layout.count).map(|_| MTLSamplerState::nil()).collect())
+                            },
+                            f::DescriptorType::SampledImage => {
+                                n::DescriptorSetBinding::SampledImage((0..layout.count).map(|_| (MTLTexture::nil(), memory::ImageLayout::General)).collect())
+                            },
+                            _ => unimplemented!(),
+                        };
+                        (layout.binding, binding)
+                    }).collect();
 
-            DescriptorSet {
-                inner: Arc::new(Mutex::new(inner)),
-                buffer: set_pool.arg_buffer.clone(),
-                offset,
-                encoder: layout.encoder.clone(),
+                    let inner = n::DescriptorSetInner {
+                        layout: layout.bindings.clone(),
+                        bindings,
+                    };
+                    n::DescriptorSet::Direct(Arc::new(Mutex::new(inner)))
+                }
             }
         }).collect()
     }
 
-    fn update_descriptor_sets(&mut self, writes: &[DescriptorSetWrite<Resources>]) {
-        use factory::DescriptorWrite::*;
+    fn update_descriptor_sets(&mut self, writes: &[f::DescriptorSetWrite<Resources>]) {
+        use core::factory::DescriptorWrite::*;
 
-        for write in writes.iter() {
-            let DescriptorSetInner { bindings: ref mut set_bindings, layout: ref set_layout } = *write.set.inner.lock().unwrap();
+        let mut mtl_samplers = Vec::new();
+        let mut mtl_textures = Vec::new();
 
-            let mut mtl_samplers = Vec::new();
-            let mut mtl_textures = Vec::new();
+        for write in writes {
+            match *write.set {
+                n::DescriptorSet::Direct(ref inner) => {
+                    let n::DescriptorSetInner { ref mut bindings, layout: ref set_layout } = *inner.lock().unwrap();
 
-            // Find layout entry
-            let layout = set_layout.iter().find(|layout| layout.binding == write.binding)
-                .expect("invalid descriptor set binding index");
+                    // Find layout entry
+                    let layout = set_layout.iter().find(|layout| layout.binding == write.binding)
+                        .expect("invalid descriptor set binding index");
 
-            write.set.encoder.set_argument_buffer(write.set.buffer, write.set.offset);
+                    match (&write.write, bindings.get_mut(&write.binding)) {
+                        (&Sampler(ref samplers), Some(&mut n::DescriptorSetBinding::Sampler(ref mut vec))) => {
+                            if write.array_offset + samplers.len() > layout.count {
+                                panic!("out of range descriptor write");
+                            }
 
-            match (&write.write, set_bindings.get_mut(&write.binding)) {
-                (&Sampler(ref samplers), Some(&mut DescriptorSetBinding::Sampler(ref mut vec))) => {
-                    if write.array_offset + samplers.len() > layout.count {
-                        panic!("out of range descriptor write");
+                            let target_iter = vec[write.array_offset..(write.array_offset + samplers.len())].iter_mut();
+
+                            for (new, old) in samplers.iter().zip(target_iter) {
+                                unsafe {
+                                    new.0.retain();
+                                    old.release();
+                                }
+                                *old = new.0;
+                            }
+                        },
+                        (&SampledImage(ref images), Some(&mut n::DescriptorSetBinding::SampledImage(ref mut vec))) => {
+                            if write.array_offset + images.len() > layout.count {
+                                panic!("out of range descriptor write");
+                            }
+
+                            let target_iter = vec[write.array_offset..(write.array_offset + images.len())].iter_mut();
+
+                            for (new, old) in images.iter().zip(target_iter) {
+                                unsafe {
+                                    (new.0).0.retain();
+                                    old.0.release();
+                                }
+                                *old = ((new.0).0, new.1);
+                            }
+                        },
+                        (&Sampler(_), _) | (&SampledImage(_), _) => panic!("mismatched descriptor set type"),
+                        _ => unimplemented!(),
                     }
+                }
+                n::DescriptorSet::Indirect { buffer, offset, ref encoder, .. } => {
+                    encoder.set_argument_buffer(buffer, offset);
+                    //TODO: range checks, need to keep some layout metadata around
 
-                    mtl_samplers.clear();
-                    mtl_samplers.extend(samplers.iter().map(|sampler| sampler.0.clone()));
-                    write.set.encoder.set_sampler_states(&mtl_samplers, write.array_offset as _);
-
-                    let target_iter = vec[write.array_offset..(write.array_offset + samplers.len())].iter_mut();
-
-                    for (new, old) in samplers.iter().zip(target_iter) {
-                        unsafe {
-                            new.0.retain();
-                            old.release();
-                        }
-                        *old = new.0;
+                    match write.write {
+                        Sampler(ref samplers) => {
+                            mtl_samplers.clear();
+                            mtl_samplers.extend(samplers.iter().map(|sampler| sampler.0.clone()));
+                            encoder.set_sampler_states(&mtl_samplers, write.array_offset as _);
+                        },
+                        SampledImage(ref images) => {
+                            mtl_textures.clear();
+                            mtl_textures.extend(images.iter().map(|image| image.0.clone().0));
+                            encoder.set_textures(&mtl_textures, write.array_offset as _);
+                        },
+                        _ => unimplemented!(),
                     }
-                },
-                (&SampledImage(ref images), Some(&mut DescriptorSetBinding::SampledImage(ref mut vec))) => {
-                    if write.array_offset + images.len() > layout.count {
-                        panic!("out of range descriptor write");
-                    }
-
-                    mtl_textures.clear();
-                    mtl_textures.extend(images.iter().map(|image| image.0.clone().0));
-                    write.set.encoder.set_textures(&mtl_textures, write.array_offset as _);
-
-                    let target_iter = vec[write.array_offset..(write.array_offset + images.len())].iter_mut();
-
-                    for (new, old) in images.iter().zip(target_iter) {
-                        unsafe {
-                            (new.0).0.retain();
-                            old.0.release();
-                        }
-                        *old = ((new.0).0, new.1);
-                    }
-                },
-                (&Sampler(_), _) | (&SampledImage(_), _) => panic!("mismatched descriptor set type"),
-                _ => unimplemented!(),
+                }
             }
+            
         }
     }
 
-    fn reset_descriptor_set_pool(&mut self, pool: &mut DescriptorSetPool) {
+    fn reset_descriptor_set_pool(&mut self, pool: &mut n::DescriptorSetPool) {
     }
 
-    fn destroy_descriptor_heap(&mut self, heap: DescriptorHeap) {
+    fn destroy_descriptor_heap(&mut self, heap: n::DescriptorHeap) {
     }
 
-    fn destroy_descriptor_set_pool(&mut self, pool: DescriptorSetPool) {
+    fn destroy_descriptor_set_pool(&mut self, pool: n::DescriptorSetPool) {
     }
 
-    fn destroy_descriptor_set_layout(&mut self, layout: DescriptorSetLayout) {
+    fn destroy_descriptor_set_layout(&mut self, layout: n::DescriptorSetLayout) {
     }
 
-    fn destroy_pipeline_layout(&mut self, pipeline_layout: PipelineLayout) {
+    fn destroy_pipeline_layout(&mut self, pipeline_layout: n::PipelineLayout) {
     }
 
-    fn destroy_shader_lib(&mut self, lib: ShaderLib) {
+    fn destroy_shader_lib(&mut self, lib: n::ShaderLib) {
         unsafe { lib.0.release(); }
     }
 
-    fn destroy_renderpass(&mut self, pass: RenderPass) {
+    fn destroy_renderpass(&mut self, pass: n::RenderPass) {
         unsafe { pass.0.release(); }
     }
 
-    fn destroy_graphics_pipeline(&mut self, pipeline: GraphicsPipeline) {
+    fn destroy_graphics_pipeline(&mut self, pipeline: n::GraphicsPipeline) {
         unsafe { pipeline.0.release(); }
     }
 
-    fn destroy_compute_pipeline(&mut self, pipeline: ComputePipeline) {
+    fn destroy_compute_pipeline(&mut self, pipeline: n::ComputePipeline) {
         unimplemented!()
     }
 
-    fn destroy_framebuffer(&mut self, buffer: FrameBuffer) {
+    fn destroy_framebuffer(&mut self, buffer: n::FrameBuffer) {
         unsafe { buffer.0.release(); }
     }
 
-    fn destroy_buffer(&mut self, buffer: Buffer) {
+    fn destroy_buffer(&mut self, buffer: n::Buffer) {
         unsafe { buffer.0.release(); }
     }
 
-    fn destroy_image(&mut self, image: Image) {
+    fn destroy_image(&mut self, image: n::Image) {
         unsafe { image.0.release(); }
     }
 
-    fn destroy_render_target_view(&mut self, view: RenderTargetView) {
+    fn destroy_render_target_view(&mut self, view: n::RenderTargetView) {
         unsafe { view.0.release(); }
     }
 
-    fn destroy_depth_stencil_view(&mut self, view: DepthStencilView) {
+    fn destroy_depth_stencil_view(&mut self, view: n::DepthStencilView) {
         unsafe { view.0.release(); }
     }
 
-    fn destroy_constant_buffer_view(&mut self, view: ConstantBufferView) {
+    fn destroy_constant_buffer_view(&mut self, view: n::ConstantBufferView) {
         unimplemented!()
     }
 
-    fn destroy_shader_resource_view(&mut self, view: ShaderResourceView) {
+    fn destroy_shader_resource_view(&mut self, view: n::ShaderResourceView) {
         unsafe { view.0.release(); }
     }
 
-    fn destroy_unordered_access_view(&mut self, view: UnorderedAccessView) {
+    fn destroy_unordered_access_view(&mut self, view: n::UnorderedAccessView) {
         unimplemented!()
     }
 
-    fn destroy_sampler(&mut self, sampler: Sampler) {
+    fn destroy_sampler(&mut self, sampler: n::Sampler) {
         unsafe { sampler.0.release(); }
     }
 
-    fn destroy_semaphore(&mut self, semaphore: Semaphore) {
-        unsafe { dispatch_release(semaphore.0) }
+    fn destroy_semaphore(&mut self, semaphore: n::Semaphore) {
+        unsafe { n::dispatch_release(semaphore.0) }
     }
 
     // Emulated heap implementations
     #[cfg(not(feature = "native_heap"))]
-    fn create_heap(&mut self, heap_type: &core::HeapType, size: u64) -> Heap {
-        Heap { heap_type: *heap_type, size }
+    fn create_heap(&mut self, heap_type: &HeapType, size: u64) -> n::Heap {
+        n::Heap { heap_type: *heap_type, size }
     }
     #[cfg(not(feature = "native_heap"))]
-    fn destroy_heap(&mut self, heap: Heap) {
+    fn destroy_heap(&mut self, heap: n::Heap) {
     }
 
     #[cfg(not(feature = "native_heap"))]
-    fn create_buffer(&mut self, size: u64, _stride: u64, _usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
+    fn create_buffer(&mut self, size: u64, _stride: u64, _usage: buffer::Usage) -> Result<n::UnboundBuffer, buffer::CreationError> {
         // TODO: map usage
-        Ok(UnboundBuffer(self.device.new_buffer(size, MTLResourceOptions::empty())))
+        Ok(n::UnboundBuffer(self.device.new_buffer(size, MTLResourceOptions::empty())))
     }
 
     #[cfg(not(feature = "native_heap"))]
-    fn get_buffer_requirements(&mut self, buffer: &UnboundBuffer) -> memory::MemoryRequirements {
+    fn get_buffer_requirements(&mut self, buffer: &n::UnboundBuffer) -> memory::MemoryRequirements {
         memory::MemoryRequirements {
             size: buffer.0.length(),
             alignment: 1,
@@ -609,13 +637,13 @@ impl core::Factory<Resources> for Factory {
     }
 
     #[cfg(not(feature = "native_heap"))]
-    fn bind_buffer_memory(&mut self, heap: &Heap, offset: u64, buffer: UnboundBuffer) -> Result<Buffer, buffer::CreationError> {
-        Ok(Buffer(buffer.0))
+    fn bind_buffer_memory(&mut self, heap: &n::Heap, offset: u64, buffer: n::UnboundBuffer) -> Result<n::Buffer, buffer::CreationError> {
+        Ok(n::Buffer(buffer.0))
     }
 
     #[cfg(not(feature = "native_heap"))]
     fn create_image(&mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
-         -> Result<UnboundImage, image::CreationError>
+         -> Result<n::UnboundImage, image::CreationError>
     {
         let (mtl_format, _) = map_format(format).expect("unsupported texture format");
 
@@ -636,12 +664,12 @@ impl core::Factory<Resources> for Factory {
             descriptor.set_pixel_format(mtl_format);
             // TODO: usage
 
-            Ok(UnboundImage(self.device.new_texture(descriptor))) // Returns retained
+            Ok(n::UnboundImage(self.device.new_texture(descriptor))) // Returns retained
         }
     }
 
     #[cfg(not(feature = "native_heap"))]
-    fn get_image_requirements(&mut self, image: &UnboundImage) -> memory::MemoryRequirements {
+    fn get_image_requirements(&mut self, image: &n::UnboundImage) -> memory::MemoryRequirements {
         unsafe {
             memory::MemoryRequirements {
                 size: 1, // TODO
@@ -651,27 +679,27 @@ impl core::Factory<Resources> for Factory {
     }
 
     #[cfg(not(feature = "native_heap"))]
-    fn bind_image_memory(&mut self, heap: &Heap, offset: u64, image: UnboundImage) -> Result<Image, image::CreationError> {
-        Ok(Image(image.0))
+    fn bind_image_memory(&mut self, heap: &n::Heap, offset: u64, image: n::UnboundImage) -> Result<n::Image, image::CreationError> {
+        Ok(n::Image(image.0))
     }
 
     // Emulated fence implementations
     #[cfg(not(feature = "native_fence"))]
-    fn create_fence(&mut self, signaled: bool) -> Fence {
-        Fence(Arc::new(Mutex::new(signaled)))
+    fn create_fence(&mut self, signaled: bool) -> n::Fence {
+        n::Fence(Arc::new(Mutex::new(signaled)))
     }
-    fn reset_fences(&mut self, fences: &[&Fence]) {
+    fn reset_fences(&mut self, fences: &[&n::Fence]) {
         for fence in fences {
             *fence.0.lock().unwrap() = false;
         }
     }
-    fn wait_for_fences(&mut self, fences: &[&Fence], wait: WaitFor, mut timeout_ms: u32) -> bool {
+    fn wait_for_fences(&mut self, fences: &[&n::Fence], wait: f::WaitFor, mut timeout_ms: u32) -> bool {
         use std::{thread, time};
         let tick = 1;
         loop {
             let done = match wait {
-                WaitFor::Any => fences.iter().any(|fence| *fence.0.lock().unwrap()),
-                WaitFor::All => fences.iter().all(|fence| *fence.0.lock().unwrap()),
+                f::WaitFor::Any => fences.iter().any(|fence| *fence.0.lock().unwrap()),
+                f::WaitFor::All => fences.iter().all(|fence| *fence.0.lock().unwrap()),
             };
             if done {
                 return true
@@ -684,6 +712,6 @@ impl core::Factory<Resources> for Factory {
         }
     }
     #[cfg(not(feature = "native_fence"))]
-    fn destroy_fence(&mut self, _fence: Fence) {
+    fn destroy_fence(&mut self, _fence: n::Fence) {
     }
 }

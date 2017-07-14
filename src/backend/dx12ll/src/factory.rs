@@ -734,11 +734,17 @@ impl core::Factory<R> for Factory {
         }
     }
 
-    fn create_descriptor_set_layout(&mut self, bindings: &[f::DescriptorSetLayoutBinding]) -> native::DescriptorSetLayout {
+    fn create_descriptor_set_layout(&mut self,
+        bindings: &[f::DescriptorSetLayoutBinding],
+        _buffer: Option<f::DescriptorSetBufferBinding>,
+    )-> native::DescriptorSetLayout {
         native::DescriptorSetLayout { bindings: bindings.to_vec() }
     }
 
-    fn create_descriptor_sets(&mut self, set_pool: &mut native::DescriptorSetPool, layouts: &[&native::DescriptorSetLayout]) -> Vec<native::DescriptorSet> {
+    fn create_descriptor_sets(&mut self,
+        set_pool: &mut native::DescriptorSetPool,
+        layouts: &[&native::DescriptorSetLayout],
+    )-> Vec<native::DescriptorSet> {
         layouts.iter().map(|layout| native::DescriptorSet {
             ranges: layout.bindings.iter().map(|binding| native::DescriptorRange {
                 handle: set_pool.alloc_handles(binding.count as u64),

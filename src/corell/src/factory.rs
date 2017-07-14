@@ -82,6 +82,21 @@ pub struct DescriptorSetLayoutBinding {
     // TODO: immutable samplers?
 }
 
+/// Binding of a descriptor set to an indirect argument buffer in Metal.
+///
+/// Using an argument buffer, Metal is capable of binding descriptor sets
+/// in bulk, similar to Vulkan and D3D12. However, it needs the buffer entry
+/// point in the shader in order to do the binding.
+///
+/// The binding _must_ match with the corresponding shader interface.
+#[derive(Clone, Copy, Debug)]
+pub struct DescriptorSetBufferBinding {
+    /// Integer identifier of the binding.
+    pub binding: usize,
+    /// Valid shader stages.
+    pub stage_flags: shade::StageFlags,
+}
+
 pub struct DescriptorSetWrite<'a, 'b, R: Resources> {
     pub set: &'a R::DescriptorSet,
     pub binding: usize,
@@ -102,6 +117,7 @@ pub enum DescriptorWrite<'a, R: Resources> {
 }
 
 /// Specifies the waiting targets.
+#[derive(Clone, Copy, Debug)]
 pub enum WaitFor {
     /// Wait for any target.
     Any,
@@ -195,7 +211,7 @@ pub trait Factory<R: Resources> {
     fn create_descriptor_set_pool(&mut self, heap: &R::DescriptorHeap, max_sets: usize, offset: usize, descriptor_pools: &[DescriptorPoolDesc]) -> R::DescriptorSetPool;
 
     /// Create a descriptor set layout.
-    fn create_descriptor_set_layout(&mut self, bindings: &[DescriptorSetLayoutBinding]) -> R::DescriptorSetLayout;
+    fn create_descriptor_set_layout(&mut self, bindings: &[DescriptorSetLayoutBinding], buffer: Option<DescriptorSetBufferBinding>) -> R::DescriptorSetLayout;
 
     /// Create one or multiple descriptor sets from a pool.
     ///
