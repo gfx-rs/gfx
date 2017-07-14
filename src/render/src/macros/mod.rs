@@ -137,15 +137,15 @@ macro_rules! gfx_format {
 #[macro_export]
 macro_rules! gfx_defines {
     ($(#[$attr:meta])* vertex $name:ident {
-            $( $field:ident : $ty:ty = $e:expr, )+
+            $( $(#[$field_attr:meta])* $field:ident : $ty:ty = $e:expr, )+
     }) => {
-        gfx_vertex_struct_meta!($(#[$attr])* vertex_struct_meta $name {$($field:$ty = $e,)+});
+        gfx_vertex_struct_meta!($(#[$attr])* vertex_struct_meta $name {$( $(#[$field_attr])* $field:$ty = $e,)+});
     };
 
     ($(#[$attr:meta])* constant $name:ident {
-            $( $field:ident : $ty:ty = $e:expr, )+
+            $( $(#[$field_attr:meta])* $field:ident : $ty:ty = $e:expr, )+
     }) => {
-        gfx_constant_struct_meta!($(#[$attr])* constant_struct_meta $name {$($field:$ty = $e,)+});
+        gfx_constant_struct_meta!($(#[$attr])* constant_struct_meta $name {$( $(#[$field_attr])* $field:$ty = $e,)+});
     };
 
     (pipeline $name:ident {
@@ -156,22 +156,22 @@ macro_rules! gfx_defines {
 
     // The recursive case for vertex structs
     ($(#[$attr:meta])* vertex $name:ident {
-            $( $field:ident : $ty:ty = $e:expr, )+
+            $( $(#[$field_attr:meta])* $field:ident : $ty:ty = $e:expr, )+
     } $($tail:tt)+) => {
         gfx_defines! {
             $(#[$attr])*
-            vertex $name { $($field : $ty = $e,)+ }
+            vertex $name { $( $(#[$field_attr])* $field : $ty = $e,)+ }
         }
         gfx_defines!($($tail)+);
     };
 
     // The recursive case for constant structs
     ($(#[$attr:meta])* constant $name:ident {
-            $( $field:ident : $ty:ty = $e:expr, )+
+            $( $(#[$field_attr:meta])* $field:ident : $ty:ty = $e:expr, )+
     } $($tail:tt)+) => {
         gfx_defines! {
             $(#[$attr])*
-            constant $name { $($field : $ty = $e,)+ }
+            constant $name { $( $(#[$field_attr])* $field : $ty = $e,)+ }
         }
         gfx_defines!($($tail)+);
     };
