@@ -45,7 +45,7 @@ pub struct CommandBuffer {
     scissors: Option<MTLScissorRect>,
     pipeline_state: Option<MTLRenderPipelineState>, // Unretained
     vertex_buffers: Vec<(MTLBuffer, pso::BufferOffset)>, // Unretained
-    descriptor_sets: Vec<Option<Arc<Mutex<native::DescriptorSetInner>>>>,
+    descriptor_sets: Vec<Option<native::DescriptorSet>>,
 }
 
 impl Drop for CommandBuffer {
@@ -294,16 +294,11 @@ impl core::GraphicsCommandBuffer<Resources> for CommandBuffer {
     }
 
     fn bind_graphics_descriptor_sets(&mut self, layout: &native::PipelineLayout, first_set: usize, sets: &[&native::DescriptorSet]) {
-        for (i, set) in (first_set..sets.len() + first_set).zip(sets) {
-            if let Some(existing) = self.descriptor_sets.get_mut(i) {
-                *existing = Some(set.inner.clone());
-                continue;
-            }
-
-            while i > self.descriptor_sets.len() {
-                self.descriptor_sets.push(None);
-            }
-            self.descriptor_sets.push(Some(set.inner.clone()));
+        while self.descriptor_sets.len() < first_set + sets.len() {
+            self.descriptor_sets.push(None);
+        }
+        for (out, &set) in self.descriptor_sets[first_set ..].iter_mut().zip(sets) {
+            *out = Some(set.clone());
         }
     }
 }
@@ -493,38 +488,52 @@ impl command::RenderPassInlineBuffer<CommandBuffer, Resources> for RenderPassInl
                 render_encoder.set_vertex_buffer(i as u64, offset as u64, buffer);
             }
             // Interpret descriptor sets
-            for set in command_buffer.descriptor_sets.iter().filter_map(|x| x.as_ref()) {
+            for set_maybe in &command_buffer.descriptor_sets {
                 use native::DescriptorSetBinding::*;
 
-                let set = set.lock().unwrap();
+                match *set_maybe {
+                    Some(native::DescriptorSet::Direct(ref inner)) => {
+                        let set = inner.lock().unwrap();
 
-                for (&binding, values) in set.bindings.iter() {
-                    let layout = set.layout.iter().find(|x| x.binding == binding).unwrap();
+                        for (&binding, values) in set.bindings.iter() {
+                            let layout = set.layout.iter().find(|x| x.binding == binding).unwrap();
 
-                    if layout.stage_flags.contains(shade::STAGE_PIXEL) {
-                        match *values {
-                            Sampler(ref samplers) => {
-                                if samplers.len() > 1 {
-                                    unimplemented!()
+                            if layout.stage_flags.contains(shade::STAGE_PIXEL) {
+                                match *values {
+                                    Sampler(ref samplers) => {
+                                        if samplers.len() > 1 {
+                                            unimplemented!()
+                                        }
+
+                                        let sampler = samplers[0];
+                                        render_encoder.set_fragment_sampler_state(binding as u64, sampler);
+                                    },
+                                    SampledImage(ref images) => {
+                                        if images.len() > 1 {
+                                            unimplemented!()
+                                        }
+
+                                        let (image, layout) = images[0]; // TODO: layout?
+                                        render_encoder.set_fragment_texture(binding as u64, image);
+                                    },
+                                    _ => unimplemented!(),
                                 }
-
-                                let sampler = samplers[0];
-                                render_encoder.set_fragment_sampler_state(binding as u64, sampler);
-                            },
-                            SampledImage(ref images) => {
-                                if images.len() > 1 {
-                                    unimplemented!()
-                                }
-
-                                let (image, layout) = images[0]; // TODO: layout?
-                                render_encoder.set_fragment_texture(binding as u64, image);
-                            },
-                            _ => unimplemented!(),
+                            }
+                            if layout.stage_flags.contains(shade::STAGE_VERTEX) {
+                                unimplemented!()
+                            }
                         }
                     }
-                    if layout.stage_flags.contains(shade::STAGE_VERTEX) {
-                        unimplemented!()
+                    Some(native::DescriptorSet::Indirect{ buffer, offset, encoder, binding }) => {
+                        let slot = binding.binding as u64;
+                        if binding.stage_flags.contains(shade::STAGE_VERTEX) {
+                            render_encoder.set_vertex_buffer(slot, offset, buffer)
+                        }
+                        if binding.stage_flags.contains(shade::STAGE_PIXEL) {
+                            render_encoder.set_fragment_buffer(slot, offset, buffer)
+                        }
                     }
+                    None => ()
                 }
             }
 

@@ -4,14 +4,14 @@ use std::sync::{Arc, Mutex};
 use std::os::raw::{c_void, c_long, c_int};
 use std::ptr;
 
-use core;
 use core::{format, memory};
-use core::factory::DescriptorSetLayoutBinding;
+use core::shade::StageFlags;
+use core::factory::{DescriptorSetBufferBinding, DescriptorSetLayoutBinding};
+
+use cocoa::foundation::{NSRange, NSUInteger};
 use metal::*;
 use objc;
 
-pub use cocoa::foundation::NSUInteger;
-pub use cocoa::foundation::NSRange;
 
 #[derive(Debug)]
 pub struct ShaderLib(pub MTLLibrary);
@@ -149,12 +149,15 @@ pub struct DescriptorSetPool {
     pub total_size: NSUInteger,
     pub offset: NSUInteger,
 }
-#[derive(Debug)]
-pub struct DescriptorSet {
-    pub inner: Arc<Mutex<DescriptorSetInner>>,
-    pub buffer: MTLBuffer,
-    pub offset: NSUInteger,
-    pub encoder: MTLArgumentEncoder,
+#[derive(Clone, Debug)]
+pub enum DescriptorSet {
+    Direct(Arc<Mutex<DescriptorSetInner>>),
+    Indirect {
+        buffer: MTLBuffer,
+        offset: NSUInteger,
+        encoder: MTLArgumentEncoder,
+        binding: DescriptorSetBufferBinding,
+    }
 }
 
 #[derive(Debug)]
@@ -205,7 +208,7 @@ impl Drop for DescriptorSetBinding {
 #[derive(Debug)]
 pub struct DescriptorSetLayout {
     pub bindings: Vec<DescriptorSetLayoutBinding>,
-    pub encoder: MTLArgumentEncoder,
+    pub indirect: Option<(DescriptorSetBufferBinding, MTLArgumentEncoder)>,
 }
 
 
@@ -215,10 +218,11 @@ pub use self::fence_related::*;
 #[cfg(not(feature = "native_heap"))]
 mod heap_related {
     use super::*;
+    use core::HeapType;
 
     #[derive(Debug)]
     pub struct Heap {
-        pub heap_type: core::HeapType,
+        pub heap_type: HeapType,
         pub size: u64,
     }
     
