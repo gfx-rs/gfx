@@ -19,6 +19,17 @@ struct PrivateCapabilities {
     indirect_arguments: bool,
 }
 
+pub struct LanguageVersion {
+    pub major: u8,
+    pub minor: u8,
+}
+
+impl LanguageVersion {
+    pub fn new(major: u8, minor: u8) -> Self {
+        LanguageVersion { major, minor }
+    }
+}
+
 pub struct Factory {
     device: MTLDevice,
     private_caps: PrivateCapabilities,
@@ -53,8 +64,17 @@ impl Factory {
     pub fn create_shader_library_from_source<S>(
         &mut self,
         source: S,
+        version: LanguageVersion,
     ) -> Result<n::ShaderLib, shade::CreateShaderError> where S: AsRef<str> {
-        match self.device.new_library_with_source(source.as_ref(), MTLCompileOptions::nil()) { // Returns retained
+        let options = MTLCompileOptions::new();
+        options.set_language_version(match version {
+            LanguageVersion { major: 1, minor: 0 } => MTLLanguageVersion::V1_0,
+            LanguageVersion { major: 1, minor: 1 } => MTLLanguageVersion::V1_1,
+            LanguageVersion { major: 1, minor: 2 } => MTLLanguageVersion::V1_2,
+            LanguageVersion { major: 2, minor: 0 } => MTLLanguageVersion::V2_0,
+            _ => return Err(shade::CreateShaderError::ModelNotSupported)
+        });
+        match self.device.new_library_with_source(source.as_ref(), options) { // Returns retained
             Ok(lib) => Ok(n::ShaderLib(lib)),
             Err(err) => Err(shade::CreateShaderError::CompilationFailed(err.into())),
         }
