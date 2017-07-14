@@ -143,14 +143,13 @@ A: Sized + Application<gfx_device_metal::Backend>
     }
 }
 
-fn run<A, B, S, EL>((width, height): (u32, u32),
-                    events_loop: EL,
+fn run<A, B, S>((width, height): (u32, u32),
+                    mut events_loop: winit::EventsLoop,
                     mut surface: S,
                     adapters: Vec<B::Adapter>)
     where A: Sized + Application<B>,
           B: Backend,
           S: gfx_core::Surface<B>,
-          EL: EventsLoop,
           B::Factory: shade::ShadeExt,
 {
     use shade::ShadeExt;
@@ -208,14 +207,21 @@ fn run<A, B, S, EL>((width, height): (u32, u32),
     let mut graphics_pool = queue.create_graphics_pool(1);
 
     while running {
-        events_loop.poll_events(|winit::Event::WindowEvent{window_id: _, event}| {
-            match event {
-                winit::WindowEvent::Closed => running = false,
-                winit::WindowEvent::KeyboardInput(winit::ElementState::Pressed, _, key, _) if key == A::get_exit_key() => return,
-                winit::WindowEvent::Resized(_width, _height) => {
-                    warn!("TODO: resize not implemented");
-                },
-                _ => app.on(event),
+        events_loop.poll_events(|event| {
+            if let glutin::Event::WindowEvent { event, .. } = event {
+                match event {
+                    winit::WindowEvent::Closed => running = false,
+                    winit::WindowEvent::KeyboardInput {
+                        input: winit::KeyboardInput {
+                            state: winit::ElementState::Pressed,
+                            virtual_keycode, ..
+                        }, ..
+                    }  if virtual_keycode == A::get_exit_key() => return,
+                    winit::WindowEvent::Resized(_width, _height) => {
+                        warn!("TODO: resize not implemented");
+                    },
+                    _ => app.on(event),
+                }
             }
         });
 
@@ -229,22 +235,6 @@ fn run<A, B, S, EL>((width, height): (u32, u32),
         swap_chain.present(&mut queue, &[]);
         queue.cleanup();
         harness.bump();
-    }
-}
-
-trait EventsLoop {
-    fn poll_events<F>(&self, callback: F) where F: FnMut(winit::Event);
-}
-
-impl EventsLoop for winit::EventsLoop {
-    fn poll_events<F>(&self, callback: F) where F: FnMut(winit::Event) {
-        self.poll_events(callback)
-    }
-}
-
-impl EventsLoop for glutin::EventsLoop {
-    fn poll_events<F>(&self, callback: F) where F: FnMut(winit::Event) {
-        self.poll_events(callback)
     }
 }
 
@@ -276,35 +266,35 @@ pub trait Application<B: Backend>: Sized {
 
     fn launch_simple(name: &str) where Self: Application<DefaultBackend> {
         env_logger::init().unwrap();
+        let events_loop = winit::EventsLoop::new();
         let wb = winit::WindowBuilder::new().with_title(name);
-        <Self as Application<DefaultBackend>>::launch_default(wb)
+        <Self as Application<DefaultBackend>>::launch_default(wb, events_loop)
     }
     #[cfg(all(feature = "gl", not(any(feature = "dx11", feature = "dx12", feature = "metal", feature = "vulkan"))))]
-    fn launch_default(wb: winit::WindowBuilder)
+    fn launch_default(wb: winit::WindowBuilder, events_loop: winit::EventsLoop)
         where Self: Application<DefaultBackend>
     {
         use gfx_core::format::Formatted;
 
-        let events_loop = glutin::EventsLoop::new();
+        // Create GL window
         let gl_version = glutin::GlRequest::GlThenGles {
             opengl_version: (3, 2), // TODO: try more versions
             opengles_version: (2, 0),
         };
-        let builder = glutin::WindowBuilder::from_winit_builder(wb)
+        let builder = glutin::ContextBuilder::new()
                                             .with_gl(gl_version)
-                                            .with_vsync();
-
-        let win = gfx_window_glutin::build(builder, &events_loop, ColorFormat::get_format(), DepthFormat::get_format());
+                                            .with_vsync(true);
+        let context = gfx_window_glutin::config_context(builder, ColorFormat::get_format(), DepthFormat::get_format());
+        let win = glutin::GlWindow::new(wb, context, &events_loop).unwrap();
         let dim = win.get_inner_size_points().unwrap();
         let mut window = gfx_window_glutin::Window::new(win);
         let (surface, adapters) = window.get_surface_and_adapters();
-        run::<Self, _, _, _>(dim, events_loop, surface, adapters)
+        run::<Self, _, _>(dim, events_loop, surface, adapters)
     }
     #[cfg(feature = "dx11")]
-    fn launch_default(wb: winit::WindowBuilder)
+    fn launch_default(wb: winit::WindowBuilder, events_loop: winit::EventsLoop)
         where Self: Application<DefaultBackend>
     {
-        let events_loop = winit::EventsLoop::new();
         let win = wb.build(&events_loop).unwrap();
         let dim = win.get_inner_size_points().unwrap();
         let mut window = gfx_window_dxgi::Window::new(win);
@@ -312,20 +302,19 @@ pub trait Application<B: Backend>: Sized {
         let (surface, adapters) =
             <gfx_window_dxgi::Window as WindowExt<DefaultBackend>>::get_surface_and_adapters(&mut window);
 
-        run::<Self, _, _, _>(dim, events_loop, surface, adapters)
+        run::<Self, _, _>(dim, events_loop, surface, adapters)
     }
     #[cfg(feature = "dx12")]
-    fn launch_default(wb: winit::WindowBuilder)
+    fn launch_default(wb: winit::WindowBuilder, events_loop: winit::EventsLoop)
         where Self: Application<DefaultBackend>
     {
-        let events_loop = winit::EventsLoop::new();
         let win = wb.build(&events_loop).unwrap();
         let dim = win.get_inner_size_points().unwrap();
         let mut window = gfx_window_dxgi::Window::new(win);
 
         let (surface, adapters) =
             <gfx_window_dxgi::Window as WindowExt<DefaultBackend>>::get_surface_and_adapters(&mut window);
-        run::<Self, _, _, _>(dim, events_loop, surface, adapters)
+        run::<Self, _, _>(dim, events_loop, surface, adapters)
     }
     #[cfg(feature = "metal")]
     fn launch_default(wb: winit::WindowBuilder)
@@ -333,15 +322,14 @@ pub trait Application<B: Backend>: Sized {
         launch_metal::<Self>(wb);
     }
     #[cfg(feature = "vulkan")]
-    fn launch_default(wb: winit::WindowBuilder)
+    fn launch_default(wb: winit::WindowBuilder, events_loop: winit::EventsLoop)
         where Self: Application<DefaultBackend>
     {
-        let events_loop = winit::EventsLoop::new();
         let win = wb.build(&events_loop).unwrap();
         let dim = win.get_inner_size_points().unwrap();
         let mut window = gfx_window_vulkan::Window(win);
 
         let (surface, adapters) = window.get_surface_and_adapters();
-        run::<Self, _, _, _>(dim, events_loop, surface, adapters)
+        run::<Self, _, _>(dim, events_loop, surface, adapters)
     }
 }

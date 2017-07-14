@@ -21,7 +21,6 @@ use gfx::format::Formatted;
 use gfx::traits::FactoryExt;
 use gfx::{Adapter, CommandQueue, Factory, FrameSync, GraphicsPoolExt,
           Surface, SwapChain, SwapChainExt, WindowExt};
-use glutin::GlContext;
 
 pub type ColorFormat = gfx::format::Rgba8;
 pub type DepthFormat = gfx::format::DepthStencil;
@@ -49,15 +48,14 @@ const CLEAR_COLOR: [f32; 4] = [0.5, 0.5, 0.5, 1.0];
 
 pub fn main() {
     let mut events_loop = glutin::EventsLoop::new();
-    let window_builder = glutin::WindowBuilder::new()
+    let wb = glutin::WindowBuilder::new()
         .with_title("Gamma example".to_string())
         .with_dimensions(1024, 768);
-    let context = glutin::ContextBuilder::new()
-        .with_vsync(true);
-    let win = gfx_window_glutin::build(builder, &events_loop, ColorFormat::get_format(), DepthFormat::get_format());
-    let mut window = gfx_window_glutin::Window::new(win);
+    let gl_builder = glutin::ContextBuilder::new().with_vsync(true);
+    let gl_builder = gfx_window_glutin::config_context(gl_builder, ColorFormat::get_format(), DepthFormat::get_format());
+    let window = glutin::GlWindow::new(wb, gl_builder, &events_loop).unwrap();
 
-    let (mut surface, adapters) = window.get_surface_and_adapters();
+    let (mut surface, adapters) = gfx_window_glutin::Window::new(window).get_surface_and_adapters();
     // Open device (factory and queues)
     let gfx::Device { mut factory, mut graphics_queues, .. } =
         adapters[0].open_with(|family, ty| {
@@ -88,14 +86,20 @@ pub fn main() {
 
     let mut running = true;
     while running {
-        events_loop.poll_events(|glutin::Event::WindowEvent{window_id: _, event}| {
-            match event {
-                glutin::WindowEvent::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape), _) |
-                glutin::WindowEvent::Closed => running = false,
-                glutin::WindowEvent::Resized(_width, _height) => {
-                    // TODO
-                },
-                _ => {},
+        events_loop.poll_events(|event| {
+            if let glutin::Event::WindowEvent { event, .. } = event {
+                match event {
+                    glutin::WindowEvent::Closed => running = false,
+                    glutin::WindowEvent::KeyboardInput {
+                        input: glutin::KeyboardInput {
+                            virtual_keycode: Some(glutin::VirtualKeyCode::Escape), ..
+                        }, ..
+                    } => return,
+                    glutin::WindowEvent::Resized(_width, _height) => {
+                        // TODO
+                    },
+                    _ => (),
+                }
             }
         });
 

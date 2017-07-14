@@ -34,7 +34,6 @@ use std::iter::repeat;
 use std::ffi::CString;
 use std::time::{Duration, Instant};
 use gfx_device_gl::{Resources as R, Backend as B};
-use gfx_core::Device;
 use glutin::GlContext;
 
 gfx_defines!{
@@ -108,16 +107,15 @@ struct GFX {
 }
 
 impl GFX {
-    fn new(builder: glutin::WindowBuilder, events_loop: &glutin::EventsLoop, dimension: i16) -> Self {
+    fn new(builder: glutin::WindowBuilder,
+           context: glutin::ContextBuilder,
+           events_loop: &glutin::EventsLoop,
+           dimension: i16) -> Self
+    {
         use gfx::traits::FactoryExt;
 
         // Create window
-        let events_loop = glutin::EventsLoop::new();
-        let builder = glutin::WindowBuilder::new()
-            .with_title("Triangle example".to_string())
-            .with_dimensions(1024, 768)
-            .with_vsync();
-        let win = gfx_window_glutin::build(builder, &events_loop, ColorFormat::get_format(), DepthStencil::get_format());
+        let win = glutin::GlWindow::new(builder, context, &events_loop).unwrap();
         let mut window = gfx_window_glutin::Window::new(win);
         // Acquire surface and adapters
         let (mut surface, adapters) = window.get_surface_and_adapters();
@@ -212,7 +210,7 @@ impl Drop for GFX {
 
 struct GL {
     dimension: i16,
-    window: glutin::Window,
+    window: glutin::GlWindow,
     gl:Gl,
     trans_uniform:GLint,
     vs:GLuint,
