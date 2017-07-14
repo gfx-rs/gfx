@@ -18,6 +18,7 @@ extern crate gfx_core as core;
 extern crate gfx_device_gl as device_gl;
 extern crate glutin;
 
+#[cfg(feature = "headless")]
 pub use headless::Headless;
 
 use core::{format, handle, texture};
@@ -25,6 +26,7 @@ use core::memory;
 use device_gl::Resources as R;
 use std::rc::Rc;
 
+#[cfg(feature = "headless")]
 mod headless;
 
 fn get_window_dimensions(window: &glutin::Window) -> texture::Dimensions {
