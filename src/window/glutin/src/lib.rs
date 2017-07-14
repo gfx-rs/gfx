@@ -18,16 +18,14 @@ extern crate gfx_core as core;
 extern crate gfx_device_gl as device_gl;
 extern crate glutin;
 
-#[cfg(feature = "headless")]
-pub use headless::{init_headless, init_headless_raw};
+pub use headless::Headless;
 
 use core::{format, handle, texture};
-use core::memory::{self, Typed};
+use core::memory;
 use device_gl::Resources as R;
 use glutin::GlContext;
 use std::rc::Rc;
 
-#[cfg(feature = "headless")]
 mod headless;
 
 fn get_window_dimensions(window: &glutin::GlWindow) -> texture::Dimensions {
@@ -37,6 +35,7 @@ fn get_window_dimensions(window: &glutin::GlWindow) -> texture::Dimensions {
     ((width as f32 * window.hidpi_factor()) as texture::Size, (height as f32 * window.hidpi_factor()) as texture::Size, 1, aa.into())
 }
 
+/*
 /// Update the internal dimensions of the main framebuffer targets. Generic version over the format.
 pub fn update_views<Cf, Df>(window: &glutin::GlWindow, color_view: &mut handle::RenderTargetView<R, Cf>,
                     ds_view: &mut handle::DepthStencilView<R, Df>)
@@ -64,6 +63,7 @@ pub fn update_views_raw(window: &glutin::GlWindow, old_dimensions: texture::Dime
         None
     }
 }
+*/
 
 pub struct SwapChain {
     // Underlying window, required for presentation
@@ -97,7 +97,7 @@ pub struct Surface {
 impl core::Surface<device_gl::Backend> for Surface {
     type SwapChain = SwapChain;
 
-    fn supports_queue(&self, queue_family: &device_gl::QueueFamily) -> bool { true }
+    fn supports_queue(&self, _: &device_gl::QueueFamily) -> bool { true }
     fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, present_queue: &Q) -> SwapChain
         where Q: AsRef<device_gl::CommandQueue>
     {

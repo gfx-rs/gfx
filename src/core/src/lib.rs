@@ -403,3 +403,12 @@ pub struct AdapterInfo {
     pub software_rendering: bool,
 }
 
+/// Main entry point for window-less backend initialization.
+pub trait Headless<B: Backend> {
+    /// Associated `Adapter` type.
+    type Adapter: Adapter<B>;
+
+    /// Enumerate all available adapters.
+    fn get_adapters(&mut self) -> Vec<Self::Adapter>;
+}
+
