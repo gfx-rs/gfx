@@ -27,7 +27,6 @@ use device_gl::Resources as R;
 use glutin::GlContext;
 use std::rc::Rc;
 
-#[cfg(feature = "headless")]
 mod headless;
 
 fn get_window_dimensions(window: &glutin::GlWindow) -> texture::Dimensions {
