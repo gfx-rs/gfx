@@ -31,7 +31,7 @@ mod native;
 mod conversions;
 
 pub use command::{QueueFamily, CommandQueue, CommandPool};
-pub use factory::{Factory};
+pub use factory::{Factory, LanguageVersion};
 
 pub type GraphicsCommandPool = CommandPool;
 

@@ -18,7 +18,7 @@ gfx_corell = { path = "../../corell", version = "0.1.0" }
 winit = "0.7"
 cocoa = "0.9"
 objc = "0.2"
-metal-rs = { path = "../../../../metal-rs" } #TEMP
+metal-rs = "0.4.1"
 io-surface = "0.7"
 core-foundation = "0.3"
 core-graphics = "0.8"
