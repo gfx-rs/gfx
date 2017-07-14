@@ -69,7 +69,7 @@ pub fn update_views_raw(window: &glutin::GlWindow, old_dimensions: texture::Dime
 
 pub struct SwapChain {
     // Underlying window, required for presentation
-    window: Rc<glutin::Window>,
+    window: Rc<glutin::GlWindow>,
     // Single element backbuffer
     backbuffer: [core::Backbuffer<device_gl::Backend>; 1],
 }
@@ -92,7 +92,7 @@ impl core::SwapChain<device_gl::Backend> for SwapChain {
 }
 
 pub struct Surface {
-    window: Rc<glutin::Window>,
+    window: Rc<glutin::GlWindow>,
     manager: handle::Manager<R>,
 }
 
@@ -136,10 +136,12 @@ impl core::Surface<device_gl::Backend> for Surface {
     }
 }
 
-pub struct Window(Rc<glutin::Window>);
+pub struct Window(Rc<glutin::GlWindow>);
 
-pub fn build(builder: glutin::WindowBuilder, events_loop: &glutin::EventsLoop,
-             color_format: format::Format, ds_format: format::Format) -> glutin::Window {
+pub fn config_context(
+    builder: glutin::ContextBuilder,
+    color_format: format::Format, ds_format: format::Format) -> glutin::ContextBuilder
+{
     let color_total_bits = color_format.0.get_total_bits();
     let alpha_bits = color_format.0.get_alpha_stencil_bits();
     let depth_total_bits = ds_format.0.get_total_bits();
@@ -148,19 +150,17 @@ pub fn build(builder: glutin::WindowBuilder, events_loop: &glutin::EventsLoop,
         .with_depth_buffer(depth_total_bits - stencil_bits)
         .with_stencil_buffer(stencil_bits)
         .with_pixel_format(color_total_bits - alpha_bits, alpha_bits)
-        .with_srgb(Some(color_format.1 == format::ChannelType::Srgb))
-        .build(events_loop)
-        .unwrap()
+        .with_srgb(color_format.1 == format::ChannelType::Srgb)
 }
 
 impl Window {
     /// Create a new window.
-    pub fn new(window: glutin::Window) -> Self {
+    pub fn new(window: glutin::GlWindow) -> Self {
         Window(Rc::new(window))
     }
 
     /// Get the internal glutin window.
-    pub fn raw(&self) -> &glutin::Window {
+    pub fn raw(&self) -> &glutin::GlWindow {
         &self.0
     }
 }

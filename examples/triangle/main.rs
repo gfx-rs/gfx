@@ -20,9 +20,7 @@ extern crate glutin;
 use gfx::{Adapter, CommandQueue, Factory, FrameSync, GraphicsPoolExt,
           Surface, SwapChain, SwapChainExt, WindowExt};
 use gfx::format::Formatted;
-use gfx::texture;
 use gfx::traits::FactoryExt;
-use glutin::GlContext;
 
 pub type ColorFormat = gfx::format::Rgba8;
 pub type DepthFormat = gfx::format::DepthStencil;
@@ -49,12 +47,13 @@ const CLEAR_COLOR: [f32; 4] = [0.1, 0.2, 0.3, 1.0];
 
 pub fn main() {
     // Create window
-    let events_loop = glutin::EventsLoop::new();
-    let builder = glutin::WindowBuilder::new()
+    let mut events_loop = glutin::EventsLoop::new();
+    let wb = glutin::WindowBuilder::new()
         .with_title("Triangle example".to_string())
-        .with_dimensions(1024, 768)
-        .with_vsync();
-    let window = gfx_window_glutin::build(builder, &events_loop, ColorFormat::get_format(), DepthFormat::get_format());
+        .with_dimensions(1024, 768);
+    let gl_builder = glutin::ContextBuilder::new().with_vsync(true);
+    // let gl_builder = gfx_window_glutin::config_context(gl_builder, ColorFormat::get_format(), DepthFormat::get_format());
+    let window = glutin::GlWindow::new(wb, gl_builder, &events_loop).unwrap();
 
     // Acquire surface and adapters
     let (mut surface, adapters) = gfx_window_glutin::Window::new(window).get_surface_and_adapters();
@@ -91,14 +90,20 @@ pub fn main() {
     let mut running = true;
     while running {
         // fetch events
-        events_loop.poll_events(|glutin::Event::WindowEvent{window_id: _, event}| {
-            match event {
-                glutin::WindowEvent::KeyboardInput(_, _, Some(glutin::VirtualKeyCode::Escape), _) |
-                glutin::WindowEvent::Closed => running = false,
-                glutin::WindowEvent::Resized(_width, _height) => {
-                    // TODO
-                },
-                _ => {},
+        events_loop.poll_events(|event| {
+            if let glutin::Event::WindowEvent { event, .. } = event {
+                match event {
+                    glutin::WindowEvent::Closed => running = false,
+                    glutin::WindowEvent::KeyboardInput {
+                        input: glutin::KeyboardInput {
+                            virtual_keycode: Some(glutin::VirtualKeyCode::Escape), ..
+                        }, ..
+                    } => return,
+                    glutin::WindowEvent::Resized(_width, _height) => {
+                        // TODO
+                    },
+                    _ => (),
+                }
             }
         });
 

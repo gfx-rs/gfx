@@ -617,6 +617,5 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
 
 pub fn main() {
     use gfx_app::Application;
-    let wb = WindowBuilder::new().with_title("Deferred rendering example with gfx-rs");
-    App::launch_default(wb);
+    App::launch_simple("Deferred rendering example with gfx-rs");
 }

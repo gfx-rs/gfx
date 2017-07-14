@@ -20,6 +20,7 @@
 #[cfg(feature = "mint")]
 extern crate mint;
 
+#[macro_use]
 extern crate log;
 #[macro_use]
 extern crate derivative;
@@ -78,3 +79,5 @@ pub mod pso;
 pub mod shade;
 /// Convenience macros
 pub mod macros;
+/// Resource tracking
+pub mod tracker;
