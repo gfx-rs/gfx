@@ -518,6 +518,5 @@ impl<B: gfx::Backend> gfx_app::Application<B> for TileMap<B> {
 
 pub fn main() {
     use gfx_app::Application;
-    let wb = winit::WindowBuilder::new().with_title("Tilemap example");
-    TileMap::launch_default(wb);
+    TileMap::launch_simple("Tilemap example");
 }

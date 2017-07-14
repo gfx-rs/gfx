@@ -187,6 +187,5 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
 
 pub fn main() {
     use gfx_app::Application;
-    let wb = winit::WindowBuilder::new().with_title("Blending example");
-    App::launch_default(wb);
+    App::launch_simple("Blending example");
 }
