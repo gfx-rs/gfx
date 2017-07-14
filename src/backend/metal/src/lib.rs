@@ -198,7 +198,8 @@ impl Device {
             iOS_GPUFamily2_v1 |
             iOS_GPUFamily2_v2 |
             iOS_GPUFamily3_v1 |
-            OSX_GPUFamily1_v1 => 11,
+            macOS_GPUFamily1_v1 => 11,
+            _ => unimplemented!()
         }
     }
 }
@@ -325,8 +326,8 @@ pub fn create(format: core::format::Format,
     let mtl_device = create_system_default_device();
     let feature_sets = {
         use metal::MTLFeatureSet::*;
-        [OSX_GPUFamily1_v1,
-         //OSX_GPUFamily1_v2,
+        [macOS_GPUFamily1_v1,
+         macOS_GPUFamily1_v2,
          iOS_GPUFamily3_v1,
          iOS_GPUFamily2_v2,
          iOS_GPUFamily2_v1,
