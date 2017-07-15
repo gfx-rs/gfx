@@ -297,7 +297,7 @@ impl command::Parser for DeferredContext {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Fence(());
+pub struct Fence;
 
 #[derive(Debug)]
 pub struct Adapter {
@@ -450,10 +450,6 @@ impl core::CommandQueue<Backend> for CommandQueue {
             },
             _ => (),
         }
-    }
-
-    fn wait_idle(&mut self) {
-        // TODO: unimplemented!()
     }
 
     fn cleanup(&mut self) {

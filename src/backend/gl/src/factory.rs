@@ -506,6 +506,84 @@ impl f::Factory<R> for Factory {
         self.share.handles.borrow_mut().make_semaphore(())
     }
 
+    fn create_fence(&mut self, signalled: bool) -> handle::Fence<R> {
+        let sync = if signalled && self.share.private_caps.sync_supported {
+            let gl = &self.share.context;
+            unsafe { gl.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0) }
+        } else {
+            ptr::null()
+        };
+        self.share.handles.borrow_mut().make_fence(Fence(sync))
+    }
+
+    fn reset_fences(&mut self, fences: &[&handle::Fence<R>]) {
+        if !self.share.private_caps.sync_supported {
+            return
+        }
+
+        let gl = &self.share.context;
+        for fence in fences {
+            let fence = &mut *self.frame_handles.ref_fence(&fence).lock().unwrap();
+            let sync = &mut fence.0;
+            unsafe {
+                if gl.IsSync(*sync) == gl::TRUE {
+                    gl.DeleteSync(*sync);
+                }
+            }
+            *sync = ptr::null();
+        }
+    }
+
+    fn wait_for_fences(&mut self, fences: &[&handle::Fence<R>], wait: f::WaitFor, timeout_ms: u32) -> bool {
+        if !self.share.private_caps.sync_supported {
+            return true;
+        }
+
+        match wait {
+            f::WaitFor::All => {
+                for fence in fences {
+                    let fence = &*self.frame_handles.ref_fence(&fence).lock().unwrap();
+                    match wait_fence(fence, &self.share.context, timeout_ms) {
+                        gl::TIMEOUT_EXPIRED => return false,
+                        gl::WAIT_FAILED => {
+                            if let Err(err) = self.share.check() {
+                                error!("Error when waiting on fence: {:?}", err);
+                            }
+                            return false
+                        }
+                        _ => (),
+                    }
+                }
+                // All fences have indicated a positive result
+                true
+            },
+            f::WaitFor::Any => {
+                let mut waiting = |timeout_ms: u32| {
+                    for fence in fences {
+                        let fence = &*self.frame_handles.ref_fence(&fence).lock().unwrap();
+                        match wait_fence(fence, &self.share.context, 0) {
+                            gl::ALREADY_SIGNALED | gl::CONDITION_SATISFIED => return true,
+                            gl::WAIT_FAILED => {
+                                if let Err(err) = self.share.check() {
+                                    error!("Error when waiting on fence: {:?}", err);
+                                }
+                                return false
+                            }
+                            _ => (),
+                        }
+                    }
+                    // No fence has indicated a postive result
+                    false
+                };
+
+                // Short-circuit:
+                //   Check current state of all fences first,
+                //   else go trough each fence and wait til at least one has finished
+                waiting(0) || waiting(timeout_ms)
+            },
+        }
+    }
+
     fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<R, T>)
                                -> Result<mapping::Reader<'b, R, T>,
                                          mapping::Error>
@@ -516,7 +594,7 @@ impl f::Factory<R> for Factory {
         unsafe {
             mapping::read(buf.raw(), |mapping| match mapping.kind {
                 MappingKind::Persistent(ref mut status) =>
-                    status.cpu_access(|fence| wait_fence(&*handles.ref_fence(&fence).lock().unwrap(), gl)),
+                    status.cpu_access(|fence| { wait_fence(&*handles.ref_fence(&fence).lock().unwrap(), gl, 1_000_000); }),
                 MappingKind::Temporary =>
                     temporary_ensure_mapped(&mut mapping.pointer,
                                             role_to_target(buf.get_info().role),
@@ -537,7 +615,7 @@ impl f::Factory<R> for Factory {
         unsafe {
             mapping::write(buf.raw(), |mapping| match mapping.kind {
                 MappingKind::Persistent(ref mut status) =>
-                    status.cpu_write_access(|fence| wait_fence(&*handles.ref_fence(&fence).lock().unwrap(), gl)),
+                    status.cpu_write_access(|fence| { wait_fence(&*handles.ref_fence(&fence).lock().unwrap(), gl, 1_000_000); }),
                 MappingKind::Temporary =>
                     temporary_ensure_mapped(&mut mapping.pointer,
                                             role_to_target(buf.get_info().role),
@@ -549,14 +627,11 @@ impl f::Factory<R> for Factory {
     }
 }
 
-pub fn wait_fence(fence: &Fence, gl: &gl::Gl) {
-    let timeout = 1_000_000_000_000;
-    // TODO: use the return value of this call
+pub fn wait_fence(fence: &Fence, gl: &gl::Gl, timeout_ms: u32) -> gl::types::GLenum {
+    let timeout = timeout_ms as u64 * 1_000_000;
     // TODO:
     // This can be called by multiple objects wanting to ensure they have exclusive
     // access to a resource. How much does this call costs ? The status of the fence
     // could be cached to avoid calling this more than once (in core or in the backend ?).
-    unsafe {
-        gl.ClientWaitSync(fence.0, gl::SYNC_FLUSH_COMMANDS_BIT, timeout);
-    }
+    unsafe { gl.ClientWaitSync(fence.0, gl::SYNC_FLUSH_COMMANDS_BIT, timeout) }
 }

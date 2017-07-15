@@ -20,7 +20,7 @@ use winapi;
 use core::{self, factory as f, buffer, texture, mapping};
 use core::memory::{self, Bind, Typed};
 use core::handle::{self as h, Producer};
-use {Resources as R, Share, Buffer, Texture, Pipeline, Program, Shader};
+use {Resources as R, Share, Buffer, Fence, Texture, Pipeline, Program, Shader};
 use command::RawCommandBuffer;
 use {CommandList, DeferredContext, ShaderModel};
 use native;
@@ -912,6 +912,19 @@ impl core::Factory<R> for Factory {
 
     fn create_semaphore(&mut self) -> h::Semaphore<R> {
         self.share.handles.borrow_mut().make_semaphore(())
+    }
+
+    fn create_fence(&mut self, _signalled: bool) -> h::Fence<R> {
+        self.share.handles.borrow_mut().make_fence(Fence)
+    }
+
+    fn reset_fences(&mut self, fences: &[&h::Fence<R>]) {
+        // TODO: noop?
+    }
+
+    fn wait_for_fences(&mut self, _fences: &[&h::Fence<R>], _wait: f::WaitFor, _timeout_ms: u32) -> bool {
+        // TODO: noop?
+        true
     }
 
     fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b h::Buffer<R, T>)

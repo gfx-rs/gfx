@@ -84,9 +84,6 @@ pub trait CommandQueue<B: Backend> {
         access: &AccessInfo<B::Resources>,
     );
 
-    ///
-    fn wait_idle(&mut self);
-
     /// Pin everything from this handle manager to live for a frame.
     // TODO: legacy (handle API)
     fn pin_submitted_resources(&mut self, &handle::Manager<B::Resources>);
@@ -106,10 +103,6 @@ macro_rules! define_queue {
             unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>], fence: Option<&handle::Fence<B::Resources>>,
                 access: &AccessInfo<B::Resources>) {
                 self.0.submit(submit_infos, fence, access)
-            }
-
-            fn wait_idle(&mut self) {
-                self.0.wait_idle()
             }
 
             fn pin_submitted_resources(&mut self, handles: &handle::Manager<B::Resources>) {

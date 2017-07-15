@@ -161,7 +161,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         }
     }
 
-    fn render(&mut self, (frame, semaphore): (gfx::Frame, &gfx::handle::Semaphore<B::Resources>),
+    fn render(&mut self, (frame, sync): (gfx::Frame, &gfx_app::SyncPrimitives<B::Resources>),
               pool: &mut gfx::GraphicsCommandPool<B>, queue: &mut gfx::queue::GraphicsQueue<B>)
     {
         let elapsed = self.start_time.elapsed();
@@ -190,7 +190,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         encoder.clear(&self.data.out_color, [0.3, 0.3, 0.3, 1.0]);
         encoder.clear_depth(&self.data.out_depth, 1.0);
         encoder.draw(&self.slice, &self.pso, &self.data);
-        encoder.synced_flush(queue, &[semaphore], &[], None);
+        encoder.synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence));
     }
 
     fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<B::Resources>) {

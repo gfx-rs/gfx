@@ -145,10 +145,6 @@ impl core::CommandQueue<Backend> for CommandQueue {
         unimplemented!()
     }
 
-    fn wait_idle(&mut self) {
-        unimplemented!()
-    }
-
     fn pin_submitted_resources(&mut self, man: &handle::Manager<Resources>) {
         self.frame_handles.extend(man);
         match self.max_resource_count {
