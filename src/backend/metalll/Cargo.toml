@@ -9,6 +9,7 @@ authors = ["The Gfx-rs Developers"]
 
 [features]
 default = []
+argument_buffer = []
 native_heap = []
 native_fence = []
 

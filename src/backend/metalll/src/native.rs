@@ -6,7 +6,7 @@ use std::ptr;
 
 use core::{format, memory};
 use core::shade::StageFlags;
-use core::factory::{DescriptorSetBufferBinding, DescriptorSetLayoutBinding};
+use core::factory::DescriptorSetLayoutBinding;
 
 use cocoa::foundation::{NSRange, NSUInteger};
 use metal::*;
@@ -149,17 +149,35 @@ pub struct DescriptorSetPool {
     pub total_size: NSUInteger,
     pub offset: NSUInteger,
 }
-#[derive(Clone, Debug)]
-pub enum DescriptorSet {
-    Direct(Arc<Mutex<DescriptorSetInner>>),
-    Indirect {
-        buffer: MTLBuffer,
-        offset: NSUInteger,
-        encoder: MTLArgumentEncoder,
-        binding: DescriptorSetBufferBinding,
-    }
+
+#[cfg(feature = "argument_buffer")]
+#[derive(Debug)]
+pub struct DescriptorSetLayout {
+    pub encoder: MTLArgumentEncoder,
+    pub stage_flags: StageFlags,
+}
+#[cfg(not(feature = "argument_buffer"))]
+#[derive(Debug)]
+pub struct DescriptorSetLayout {
+    pub bindings: Vec<DescriptorSetLayoutBinding>,
 }
 
+#[derive(Clone, Debug)]
+#[cfg(feature = "argument_buffer")]
+pub struct DescriptorSet {
+    pub buffer: MTLBuffer,
+    pub offset: NSUInteger,
+    pub encoder: MTLArgumentEncoder,
+    pub stage_flags: StageFlags,
+}
+
+#[derive(Clone, Debug)]
+#[cfg(not(feature = "argument_buffer"))]
+pub struct DescriptorSet {
+    pub inner: Arc<Mutex<DescriptorSetInner>>,
+}
+
+#[cfg(not(feature = "argument_buffer"))]
 #[derive(Debug)]
 pub struct DescriptorSetInner {
     pub layout: Vec<DescriptorSetLayoutBinding>, // TODO: maybe don't clone?
@@ -203,12 +221,6 @@ impl Drop for DescriptorSetBinding {
             }
         }
     }
-}
-
-#[derive(Debug)]
-pub struct DescriptorSetLayout {
-    pub bindings: Vec<DescriptorSetLayoutBinding>,
-    pub indirect: Option<(DescriptorSetBufferBinding, MTLArgumentEncoder)>,
 }
 
 

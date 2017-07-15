@@ -437,6 +437,53 @@ impl Drop for RenderPassInlineBuffer {
     }
 }
 
+impl RenderPassInlineBuffer {
+    #[cfg(feature = "argument_buffer")]
+    fn bind_descriptor_set(encoder: MTLRenderCommandEncoder, slot: u64, set: &native::DescriptorSet) {
+        if set.stage_flags.contains(shade::STAGE_VERTEX) {
+            encoder.set_vertex_buffer(slot, set.offset, set.buffer)
+        }
+        if set.stage_flags.contains(shade::STAGE_PIXEL) {
+            encoder.set_fragment_buffer(slot, set.offset, set.buffer)
+        }
+    }
+
+    #[cfg(not(feature = "argument_buffer"))]
+    fn bind_descriptor_set(encoder: MTLRenderCommandEncoder, _slot: u64, set: &native::DescriptorSet) {
+        use native::DescriptorSetBinding::*;
+        let set = set.inner.lock().unwrap();
+
+        for (&binding, values) in set.bindings.iter() {
+            let layout = set.layout.iter().find(|x| x.binding == binding).unwrap();
+
+            if layout.stage_flags.contains(shade::STAGE_PIXEL) {
+                match *values {
+                    Sampler(ref samplers) => {
+                        if samplers.len() > 1 {
+                            unimplemented!()
+                        }
+
+                        let sampler = samplers[0];
+                        encoder.set_fragment_sampler_state(binding as u64, sampler);
+                    },
+                    SampledImage(ref images) => {
+                        if images.len() > 1 {
+                            unimplemented!()
+                        }
+
+                        let (image, layout) = images[0]; // TODO: layout?
+                        encoder.set_fragment_texture(binding as u64, image);
+                    },
+                    _ => unimplemented!(),
+                }
+            }
+            if layout.stage_flags.contains(shade::STAGE_VERTEX) {
+                unimplemented!()
+            }
+        }
+    }
+}
+
 pub struct RenderPassSecondaryBuffer {
 }
 
@@ -488,52 +535,9 @@ impl command::RenderPassInlineBuffer<CommandBuffer, Resources> for RenderPassInl
                 render_encoder.set_vertex_buffer(i as u64, offset as u64, buffer);
             }
             // Interpret descriptor sets
-            for set_maybe in &command_buffer.descriptor_sets {
-                use native::DescriptorSetBinding::*;
-
-                match *set_maybe {
-                    Some(native::DescriptorSet::Direct(ref inner)) => {
-                        let set = inner.lock().unwrap();
-
-                        for (&binding, values) in set.bindings.iter() {
-                            let layout = set.layout.iter().find(|x| x.binding == binding).unwrap();
-
-                            if layout.stage_flags.contains(shade::STAGE_PIXEL) {
-                                match *values {
-                                    Sampler(ref samplers) => {
-                                        if samplers.len() > 1 {
-                                            unimplemented!()
-                                        }
-
-                                        let sampler = samplers[0];
-                                        render_encoder.set_fragment_sampler_state(binding as u64, sampler);
-                                    },
-                                    SampledImage(ref images) => {
-                                        if images.len() > 1 {
-                                            unimplemented!()
-                                        }
-
-                                        let (image, layout) = images[0]; // TODO: layout?
-                                        render_encoder.set_fragment_texture(binding as u64, image);
-                                    },
-                                    _ => unimplemented!(),
-                                }
-                            }
-                            if layout.stage_flags.contains(shade::STAGE_VERTEX) {
-                                unimplemented!()
-                            }
-                        }
-                    }
-                    Some(native::DescriptorSet::Indirect{ buffer, offset, encoder, binding }) => {
-                        let slot = binding.binding as u64;
-                        if binding.stage_flags.contains(shade::STAGE_VERTEX) {
-                            render_encoder.set_vertex_buffer(slot, offset, buffer)
-                        }
-                        if binding.stage_flags.contains(shade::STAGE_PIXEL) {
-                            render_encoder.set_fragment_buffer(slot, offset, buffer)
-                        }
-                    }
-                    None => ()
+            for (i, set_maybe) in command_buffer.descriptor_sets.iter().enumerate() {
+                if let &Some(ref set) = set_maybe {
+                    Self::bind_descriptor_set(render_encoder, i as u64, set);
                 }
             }
 
