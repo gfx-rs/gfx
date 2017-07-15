@@ -31,21 +31,14 @@ use gfx_corell::{buffer, command, format, pass, pso, shade, state, target,
 use gfx_corell::format::Formatted;
 use gfx_corell::memory::{self, ImageBarrier, ImageStateSrc, ImageStateDst, ImageLayout, ImageAccess};
 use gfx_corell::factory::{DescriptorHeapType, DescriptorPoolDesc, DescriptorType,
-    DescriptorSetBufferBinding, DescriptorSetLayoutBinding, DescriptorSetWrite, DescriptorWrite, WaitFor};
+    DescriptorSetLayoutBinding, DescriptorSetWrite, DescriptorWrite, WaitFor};
 
 use std::io::Cursor;
 use gfx_corell::image as i;
 
-#[allow(dead_code)]
-enum ShaderSet {
-    Source,
-    SourceIndirectArgs,
-    Binary,
-}
 
 type ColorFormat = gfx_corell::format::Srgba8;
 
-const SHADER_SET: ShaderSet = ShaderSet::SourceIndirectArgs;
 const VS: &str = "vs_main";
 const PS: &str = "ps_main";
 
@@ -106,24 +99,16 @@ fn main() {
             (VS, include_bytes!("data/vs_main.spv")),
             (PS, include_bytes!("data/ps_main.spv")),
         ]).expect("Error on creating shader lib");
-    #[cfg(feature = "metal")]
-    let shader_lib = match SHADER_SET {
-        ShaderSet::Source => {
-            factory.create_shader_library_from_source(
-                include_str!("shader/triangle.metal"),
-                back::LanguageVersion::new(1, 0),
-            )
-        }
-        ShaderSet::SourceIndirectArgs => {
-            factory.create_shader_library_from_source(
-                include_str!("shader/triangle_indirect.metal"),
-                back::LanguageVersion::new(2, 0),
-            )
-        }
-        ShaderSet::Binary => {
-            unimplemented!()
-        }
-    }.expect("Error on creating shader lib");
+    #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
+    let shader_lib = factory.create_shader_library_from_source(
+            include_str!("shader/triangle_indirect.metal"),
+            back::LanguageVersion::new(2, 0),
+        ).expect("Error on creating shader lib");
+    #[cfg(all(feature = "metal", not(feature = "metal_argument_buffer")))]
+    let shader_lib = factory.create_shader_library_from_source(
+            include_str!("shader/triangle.metal"),
+            back::LanguageVersion::new(1, 1),
+        ).expect("Error on creating shader lib");
 
     let shader_entries = pso::GraphicsShaderSet {
         vertex_shader: VS,
@@ -141,13 +126,6 @@ fn main() {
                 stage_flags: shade::STAGE_PIXEL,
             }
         ],
-        match SHADER_SET {
-            ShaderSet::SourceIndirectArgs => Some(DescriptorSetBufferBinding {
-                binding: 0,
-                stage_flags: shade::STAGE_PIXEL,
-            }),
-            _ => None,
-        }
     );
 
     let set1_layout = factory.create_descriptor_set_layout(&[
@@ -158,13 +136,6 @@ fn main() {
                 stage_flags: shade::STAGE_PIXEL,
             }
         ],
-        match SHADER_SET {
-            ShaderSet::SourceIndirectArgs => Some(DescriptorSetBufferBinding {
-                binding: 1,
-                stage_flags: shade::STAGE_PIXEL,
-            }),
-            _ => None,
-        }
     );
 
     let pipeline_layout = factory.create_pipeline_layout(&[&set0_layout, &set1_layout]);

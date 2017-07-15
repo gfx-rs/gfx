@@ -61,3 +61,4 @@ script:
   - cargo test -p gfx_window_glfw
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo test --all --features vulkan; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cargo test --all --features metal; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cargo test --features "metal metal_argument_buffer"; fi
