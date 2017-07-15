@@ -962,10 +962,7 @@ impl core::Factory<R> for Factory {
         }
     }
 
-    fn create_descriptor_set_layout(&mut self,
-        bindings: &[f::DescriptorSetLayoutBinding],
-        _buffer: Option<f::DescriptorSetBufferBinding>,
-    )-> native::DescriptorSetLayout {
+    fn create_descriptor_set_layout(&mut self, bindings: &[f::DescriptorSetLayoutBinding])-> native::DescriptorSetLayout {
         let bindings = bindings.iter().map(|binding| {
             vk::DescriptorSetLayoutBinding {
                 binding: binding.binding as u32,
