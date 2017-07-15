@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use core::{self, pool};
-use core::command::{GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, Encoder};
+use core::command::{Buffer, GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, Encoder};
 use core::queue::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 use command::{self, RawCommandBuffer, SubpassCommandBuffer};
 use {Backend, CommandQueue, CommandList, Resources};
@@ -26,6 +26,9 @@ pub struct RawCommandPool {
 impl pool::RawCommandPool<Backend> for RawCommandPool {
     fn reset(&mut self) {
         self.next_buffer = 0;
+        for cb in &mut self.command_buffers {
+            cb.reset();
+        }
     }
 
     fn reserve(&mut self, additional: usize) {

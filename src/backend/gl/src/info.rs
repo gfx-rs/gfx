@@ -171,6 +171,7 @@ pub struct PrivateCaps {
     pub clear_buffer_supported: bool,
     pub frag_data_location_supported: bool,
     pub sampler_lod_bias_supported: bool,
+    pub sync_supported: bool,
 }
 
 /// OpenGL implementation information
@@ -304,6 +305,9 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
                                                                Es  (3,0)]),
         frag_data_location_supported:      !info.version.is_embedded,
         sampler_lod_bias_supported:        !info.version.is_embedded,
+        sync_supported:                    info.is_supported(&[Core(3,2),
+                                                               Es  (3,0),
+                                                               Ext ("GL_ARB_sync")]),
     };
     (info, caps, private)
 }
