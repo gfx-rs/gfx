@@ -160,7 +160,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         }
     }
 
-    fn render(&mut self, (frame, semaphore): (gfx::Frame, &gfx::handle::Semaphore<B::Resources>),
+    fn render(&mut self, (frame, sync): (gfx::Frame, &gfx_app::SyncPrimitives<B::Resources>),
               pool: &mut gfx::GraphicsCommandPool<B>, queue: &mut gfx::queue::GraphicsQueue<B>)
     {
         let mut encoder = pool.acquire_graphics_encoder();
@@ -174,7 +174,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         self.data.out = cur_color;
         encoder.clear(&self.data.out, [0.1, 0.2, 0.3, 1.0]);
         encoder.draw(&self.slice, &self.pso, &self.data);
-        encoder.synced_flush(queue, &[semaphore], &[], None);
+        encoder.synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence));
     }
 
     // TODO: rerandomize instance data on event, needs factory

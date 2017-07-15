@@ -479,7 +479,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         }
     }
 
-    fn render(&mut self, (frame, semaphore): (gfx::Frame, &gfx::handle::Semaphore<B::Resources>),
+    fn render(&mut self, (frame, sync): (gfx::Frame, &gfx_app::SyncPrimitives<B::Resources>),
               pool: &mut gfx::GraphicsCommandPool<B>, queue: &mut gfx::queue::GraphicsQueue<B>)
     {
         let elapsed = self.start_time.elapsed();
@@ -563,7 +563,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         self.blit.data.tex.0 = blit_tex.clone();
         // Show the result
         self.blit.encode(&mut encoder);
-        encoder.synced_flush(queue, &[semaphore], &[], None);
+        encoder.synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence));
     }
 
     fn on(&mut self, event: WindowEvent) {

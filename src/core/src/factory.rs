@@ -178,6 +178,15 @@ impl From<TargetViewError> for CombinedError {
     }
 }
 
+/// Specifies the waiting targets.
+#[derive(Clone, Copy, Debug)]
+pub enum WaitFor {
+    /// Wait for any target.
+    Any,
+    /// Wait for all targets at once.
+    All,
+}
+
 /// A `Factory` is responsible for creating and managing resources for the context it was created
 /// with.
 ///
@@ -256,6 +265,16 @@ pub trait Factory<R: Resources> {
 
     ///
     fn create_semaphore(&mut self) -> handle::Semaphore<R>;
+
+    ///
+    fn create_fence(&mut self, signalled: bool) -> handle::Fence<R>;
+
+    ///
+    fn reset_fences(&mut self, fences: &[&handle::Fence<R>]);
+
+    /// Blocks until all or one of the given fences are signalled.
+    /// Returns true if fences were signalled before the timeout.
+    fn wait_for_fences(&mut self, fences: &[&handle::Fence<R>], wait: WaitFor, timeout_ms: u32) -> bool;
 
     /// Acquire a mapping Reader
     ///
