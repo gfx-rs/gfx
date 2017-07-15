@@ -78,6 +78,7 @@ pub fn main() {
     let mut graphics_pool = graphics_queue.create_graphics_pool(1);
     let frame_semaphore = factory.create_semaphore();
     let draw_semaphore = factory.create_semaphore();
+    let frame_fence = factory.create_fence(false);
 
     let mut data = pipe::Data {
         vbuf: vertex_buffer,
@@ -103,19 +104,21 @@ pub fn main() {
             }
         });
 
-        graphics_pool.reset();
-
         // Get next frame
         let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&frame_semaphore));
         data.out = views[frame.id()].clone();
 
         // Draw a frame
-        let mut encoder = graphics_pool.acquire_graphics_encoder();
-        encoder.clear(&data.out, CLEAR_COLOR);
-        encoder.draw(&slice, &pso, &data);
-        encoder.synced_flush(&mut graphics_queue, &[&frame_semaphore], &[&draw_semaphore], None);
+        {
+            let mut encoder = graphics_pool.acquire_graphics_encoder();
+            encoder.clear(&data.out, CLEAR_COLOR);
+            encoder.draw(&slice, &pso, &data);
+            encoder.synced_flush(&mut graphics_queue, &[&frame_semaphore], &[&draw_semaphore], Some(&frame_fence));
+        }
+
         swap_chain.present(&mut graphics_queue, &[&draw_semaphore]);
-        graphics_queue.wait_idle();
+        factory.wait_for_fences(&[&frame_fence], gfx::WaitFor::All, 1_000_000);
         graphics_queue.cleanup();
+        graphics_pool.reset();
     }
 }

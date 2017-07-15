@@ -96,10 +96,12 @@ struct GFX {
     window: gfx_window_glutin::Window,
     surface: gfx_window_glutin::Surface,
     swap_chain: gfx_window_glutin::SwapChain,
+    factory: gfx_device_gl::Factory,
     queue: gfx::queue::GraphicsQueue<B>,
     pool: gfx::GraphicsCommandPool<B>,
     frame_semaphore: gfx::handle::Semaphore<R>,
     draw_semaphore: gfx::handle::Semaphore<R>,
+    frame_fence: gfx::handle::Fence<R>,
     views: Vec<gfx::handle::RenderTargetView<R, ColorFormat>>,
     data: pipe::Data<R>,
     pso: gfx::PipelineState<R, pipe::Meta>,
@@ -153,11 +155,13 @@ impl GFX {
             pool,
             frame_semaphore: factory.create_semaphore(),
             draw_semaphore: factory.create_semaphore(),
+            frame_fence: factory.create_fence(false),
             views,
             dimension,
             data,
             pso,
             slice,
+            factory,
         }
     }
 }
@@ -166,10 +170,10 @@ impl Renderer for GFX {
     fn render(&mut self, proj_view: &Matrix4<f32>) {
         let start = Instant::now();
 
-        self.pool.reset();
         let frame = self.swap_chain.acquire_frame(FrameSync::Semaphore(&self.frame_semaphore));
         self.data.out_color = self.views[frame.id()].clone();
 
+        self.pool.reset();
         let mut encoder = self.pool.acquire_graphics_encoder();
         encoder.clear(&self.data.out_color, [CLEAR_COLOR.0,
                                                   CLEAR_COLOR.1,
@@ -188,10 +192,10 @@ impl Renderer for GFX {
             &mut self.queue,
             &[&self.frame_semaphore],
             &[&self.draw_semaphore],
-            None);
+            Some(&self.frame_fence));
         let post_submit = start.elapsed();
         self.swap_chain.present(&mut self.queue, &[&self.draw_semaphore]);
-        self.queue.wait_idle();
+        self.factory.wait_for_fences(&[&self.frame_fence], gfx::WaitFor::All, 1_000_000);
         self.queue.cleanup();
         let swap = start.elapsed();
 

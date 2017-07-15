@@ -45,7 +45,7 @@ extern crate gfx_window_vulkan;
 use gfx::memory::Typed;
 use gfx::queue::GraphicsQueue;
 use gfx::{Adapter, Backend, CommandQueue, FrameSync, GraphicsCommandPool,
-          SwapChain, QueueFamily, QueueType, WindowExt};
+          SwapChain, QueueType, WindowExt};
 
 pub mod shade;
 
@@ -65,6 +65,15 @@ pub type BackbufferView<R: gfx::Resources> = (gfx::handle::RenderTargetView<R, C
 pub struct WindowTargets<R: gfx::Resources> {
     pub views: Vec<BackbufferView<R>>,
     pub aspect_ratio: f32,
+}
+
+pub struct SyncPrimitives<R: gfx::Resources> {
+    /// Semaphore will be signalled once a frame is ready.
+    pub acquisition: gfx::handle::Semaphore<R>,
+    /// Indicates that rendering has been finished.
+    pub rendering: gfx::handle::Semaphore<R>,
+    /// Sync point to ensure no resources are in-use.
+    pub frame_fence: gfx::handle::Fence<R>,
 }
 
 struct Harness {
@@ -202,7 +211,13 @@ fn run<A, B, S>((width, height): (u32, u32),
 
     let mut harness = Harness::new();
     let mut running = true;
-    let frame_semaphore = factory.create_semaphore();
+
+    // TODO: For optimal performance we should use a ring-buffer
+    let sync = SyncPrimitives {
+        acquisition: factory.create_semaphore(),
+        rendering: factory.create_semaphore(),
+        frame_fence: factory.create_fence(false),
+    };
 
     let mut graphics_pool = queue.create_graphics_pool(1);
 
@@ -225,14 +240,12 @@ fn run<A, B, S>((width, height): (u32, u32),
             }
         });
 
-        let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&frame_semaphore));
-
-        app.render((frame, &frame_semaphore), &mut graphics_pool, &mut queue);
-
-        // Wait til rendering has finished
-        queue.wait_idle();
-
+        graphics_pool.reset();
+        let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&sync.acquisition));
+        app.render((frame, &sync), &mut graphics_pool, &mut queue);
         swap_chain.present(&mut queue, &[]);
+
+        factory.wait_for_fences(&[&sync.frame_fence], gfx::WaitFor::All, 1_000_000);
         queue.cleanup();
         harness.bump();
     }
@@ -252,7 +265,7 @@ pub type DefaultBackend = gfx_device_vulkan::Backend;
 pub trait Application<B: Backend>: Sized {
     fn new(&mut B::Factory, &mut GraphicsQueue<B>,
            shade::Backend, WindowTargets<B::Resources>) -> Self;
-    fn render(&mut self, frame: (gfx_core::Frame, &gfx::handle::Semaphore<B::Resources>),
+    fn render(&mut self, frame: (gfx_core::Frame, &SyncPrimitives<B::Resources>),
                      pool: &mut GraphicsCommandPool<B>, queue: &mut GraphicsQueue<B>);
 
     fn get_exit_key() -> Option<winit::VirtualKeyCode> {

@@ -505,7 +505,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         }
     }
 
-    fn render(&mut self, (frame, semaphore): (gfx::Frame, &gfx::handle::Semaphore<B::Resources>),
+    fn render(&mut self, (frame, sync): (gfx::Frame, &gfx_app::SyncPrimitives<B::Resources>),
               pool: &mut gfx::GraphicsCommandPool<B>, mut queue: &mut gfx::queue::GraphicsQueue<B>)
     {
         let (cur_color, cur_depth) = self.window_targets.views[frame.id()].clone();
@@ -618,7 +618,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
             encoder.draw(&ent.slice, &self.forward_pso, batch);
         }
 
-        encoder.synced_flush(&mut queue, &[semaphore], &[], None);
+        encoder.synced_flush(&mut queue, &[&sync.rendering], &[], Some(&sync.frame_fence));
     }
 
     fn get_exit_key() -> Option<winit::VirtualKeyCode> {

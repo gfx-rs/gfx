@@ -914,6 +914,17 @@ impl CommandQueue {
         self.frame_handles.make_fence(Fence(fence))
     }
 
+    fn signal_fence(&mut self, fence: &handle::Fence<Resources>) {
+        if self.share.private_caps.sync_supported {
+            let gl = &self.share.context;
+            let sync = unsafe {
+                gl.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0)
+            };
+
+            self.frame_handles.ref_fence(&fence).lock().unwrap().0 = sync;
+        }
+    }
+
     // MappingKind::Persistent
     fn track_mapped_gpu_access(&mut self,
                                gpu_access: &mut com::AccessGuard<Resources>,
@@ -930,7 +941,8 @@ impl CommandQueue {
     fn wait_fence(&mut self, fence: &handle::Fence<Resources>) {
         factory::wait_fence(
             &*self.frame_handles.ref_fence(&fence).lock().unwrap(),
-            &self.share.context);
+            &self.share.context,
+            1_000_000);
     }
 }
 
@@ -947,8 +959,7 @@ impl c::CommandQueue<Backend> for CommandQueue {
             }
         }
         self.after_submit(&mut access);
-
-        // TODO: signal fence
+        fence.map(|fence| self.signal_fence(fence));
     }
 
     fn pin_submitted_resources(&mut self, man: &handle::Manager<Resources>) {
@@ -960,11 +971,6 @@ impl c::CommandQueue<Backend> for CommandQueue {
             },
             _ => (),
         }
-    }
-
-    fn wait_idle(&mut self) {
-        let gl = &self.share.context;
-        unsafe { gl.Finish() }; // TODO: we need to finish?
     }
 
     fn cleanup(&mut self) {

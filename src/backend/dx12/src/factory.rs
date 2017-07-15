@@ -40,6 +40,18 @@ impl f::Factory<R> for Factory {
 
     fn create_semaphore(&mut self) -> handle::Semaphore<R> { unimplemented!() }
 
+    fn create_fence(&mut self, _signalled: bool) -> handle::Fence<R> {
+        unimplemented!()
+    }
+
+    fn reset_fences(&mut self, fences: &[&handle::Fence<R>]) {
+        unimplemented!()
+    }
+
+    fn wait_for_fences(&mut self, _fences: &[&handle::Fence<R>], _wait: f::WaitFor, _timeout_ms: u32) -> bool {
+        unimplemented!()
+    }
+
     fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<R, T>)
                                -> Result<mapping::Reader<'b, R, T>,
                                          mapping::Error>
