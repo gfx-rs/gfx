@@ -3,6 +3,7 @@ use native as n;
 use conversions::*;
 
 use std::cell::Cell;
+use std::cmp;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::{mem, ptr, slice};
@@ -16,6 +17,7 @@ use objc::runtime::Object as ObjcObject;
 
 
 struct PrivateCapabilities {
+    resource_heaps: bool,
     indirect_arguments: bool,
 }
 
@@ -45,9 +47,24 @@ impl Drop for Factory {
 
 pub fn create_factory(device: MTLDevice) -> Factory {
     unsafe { device.retain(); }
+    let resource_heaps = [
+        MTLFeatureSet::iOS_GPUFamily1_v3,
+        MTLFeatureSet::iOS_GPUFamily2_v3,
+        MTLFeatureSet::iOS_GPUFamily3_v2,
+        MTLFeatureSet::iOS_GPUFamily1_v4,
+        MTLFeatureSet::iOS_GPUFamily2_v4,
+        MTLFeatureSet::iOS_GPUFamily3_v3,
+
+        MTLFeatureSet::tvOS_GPUFamily1_v2,
+        MTLFeatureSet::tvOS_GPUFamily1_v3,
+
+        MTLFeatureSet::macOS_GPUFamily1_v3,
+    ].iter().cloned().any(|x| device.supports_feature_set(x));
+
     Factory {
         device,
         private_caps: PrivateCapabilities {
+            resource_heaps,
             indirect_arguments: true, //TEMP
         },
     }
@@ -642,43 +659,82 @@ impl CoreFactory<Resources> for Factory {
         unsafe { n::dispatch_release(semaphore.0) }
     }
 
-    // Emulated heap implementations
-    #[cfg(not(feature = "native_heap"))]
     fn create_heap(&mut self, heap_type: &HeapType, _resource_type: f::ResourceHeapType, size: u64) -> Result<n::Heap, f::ResourceHeapError> {
-        Ok(n::Heap { heap_type: *heap_type, size })
-    }
-    #[cfg(not(feature = "native_heap"))]
-    fn destroy_heap(&mut self, heap: n::Heap) {
-    }
+        let (storage, cache) = map_heap_properties_to_storage_and_cache(heap_type.properties);
 
-    #[cfg(not(feature = "native_heap"))]
-    fn create_buffer(&mut self, size: u64, _stride: u64, _usage: buffer::Usage) -> Result<n::UnboundBuffer, buffer::CreationError> {
-        // TODO: map usage
-        Ok(n::UnboundBuffer(self.device.new_buffer(size, MTLResourceOptions::empty())))
-    }
-
-    #[cfg(not(feature = "native_heap"))]
-    fn get_buffer_requirements(&mut self, buffer: &n::UnboundBuffer) -> memory::MemoryRequirements {
-        memory::MemoryRequirements {
-            size: buffer.0.length(),
-            alignment: 1,
+        // Heaps cannot be used for CPU coherent resources
+        if self.private_caps.resource_heaps && storage != MTLStorageMode::Shared {
+            let descriptor = MTLHeapDescriptor::new();
+            descriptor.set_storage_mode(storage);
+            descriptor.set_cpu_cache_mode(cache);
+            descriptor.set_size(size);
+            Ok(n::Heap::Native(self.device.new_heap(descriptor)))
+        } else {
+            Ok(n::Heap::Emulated { heap_type: *heap_type, size })
         }
     }
 
-    #[cfg(not(feature = "native_heap"))]
-    fn bind_buffer_memory(&mut self, heap: &n::Heap, offset: u64, buffer: n::UnboundBuffer) -> Result<n::Buffer, buffer::CreationError> {
-        Ok(n::Buffer(buffer.0))
+    fn destroy_heap(&mut self, heap: n::Heap) {
+        match heap {
+            n::Heap::Emulated { .. } => {},
+            n::Heap::Native(heap) => unsafe { heap.release(); },
+        }
     }
 
-    #[cfg(not(feature = "native_heap"))]
+    fn create_buffer(&mut self, size: u64, _stride: u64, _usage: buffer::Usage) -> Result<n::UnboundBuffer, buffer::CreationError> {
+        Ok(n::UnboundBuffer {
+            size
+        })
+    }
+
+    fn get_buffer_requirements(&mut self, buffer: &n::UnboundBuffer) -> memory::MemoryRequirements {
+        // We don't know what memory type the user will try to allocate the buffer with, so we test them
+        // all get the most stringent ones. Note we don't check Shared because heaps can't use it
+        let mut max_size = 0;
+        let mut max_alignment = 0;
+        for &options in [
+            MTLResourceStorageModeManaged,
+            MTLResourceStorageModeManaged | MTLResourceCPUCacheModeWriteCombined,
+            MTLResourceStorageModePrivate,
+        ].iter() {
+            let requirements = self.device.heap_buffer_size_and_align(buffer.size, options);
+            max_size = cmp::max(max_size, requirements.size);
+            max_alignment = cmp::max(max_alignment, requirements.align);
+        }
+        memory::MemoryRequirements {
+            size: max_size,
+            alignment: max_alignment,
+        }
+    }
+
+    fn bind_buffer_memory(&mut self, heap: &n::Heap, offset: u64, buffer: n::UnboundBuffer) -> Result<n::Buffer, buffer::CreationError> {
+        let bound_buffer = match *heap {
+            n::Heap::Native(ref heap) => {
+                let resource_options = resource_options_from_storage_and_cache(
+                    heap.storage_mode(),
+                    heap.cpu_cache_mode());
+                heap.new_buffer(buffer.size, resource_options)
+            }
+            n::Heap::Emulated { ref heap_type, size: _ } => {
+                // TODO: disable hazard tracking?
+                let resource_options = map_heap_properties_to_options(heap_type.properties);
+                self.device.new_buffer(buffer.size, resource_options)
+            }
+        };
+        if !bound_buffer.is_null() {
+            Ok(n::Buffer(bound_buffer))
+        } else {
+            Err(buffer::CreationError::OutOfHeap)
+        }
+    }
+
     fn create_image(&mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
          -> Result<n::UnboundImage, image::CreationError>
     {
-        let (mtl_format, _) = map_format(format).expect("unsupported texture format");
+        let (mtl_format, _) = map_format(format).ok_or(image::CreationError::BadFormat)?;
 
         unsafe {
             let descriptor = MTLTextureDescriptor::new(); // Returns retained
-            defer! { descriptor.release() }
 
             match kind {
                 image::Kind::D2(width, height, aa) => {
@@ -691,25 +747,55 @@ impl CoreFactory<Resources> for Factory {
 
             descriptor.set_mipmap_level_count(mip_levels as u64);
             descriptor.set_pixel_format(mtl_format);
-            // TODO: usage
+            descriptor.set_usage(map_texture_usage(usage));
 
-            Ok(n::UnboundImage(self.device.new_texture(descriptor))) // Returns retained
+            Ok(n::UnboundImage(descriptor))
         }
     }
 
-    #[cfg(not(feature = "native_heap"))]
     fn get_image_requirements(&mut self, image: &n::UnboundImage) -> memory::MemoryRequirements {
-        unsafe {
-            memory::MemoryRequirements {
-                size: 1, // TODO
-                alignment: 1,
-            }
+        // We don't know what memory type the user will try to allocate the image with, so we test them
+        // all get the most stringent ones. Note we don't check Shared because heaps can't use it
+        let mut max_size = 0;
+        let mut max_alignment = 0;
+        for &options in [
+            MTLResourceStorageModeManaged,
+            MTLResourceStorageModeManaged | MTLResourceCPUCacheModeWriteCombined,
+            MTLResourceStorageModePrivate,
+        ].iter() {
+            image.0.set_resource_options(options);
+            let requirements = self.device.heap_texture_size_and_align(image.0);
+            max_size = cmp::max(max_size, requirements.size);
+            max_alignment = cmp::max(max_alignment, requirements.align);
+        }
+        memory::MemoryRequirements {
+            size: max_size,
+            alignment: max_alignment,
         }
     }
 
-    #[cfg(not(feature = "native_heap"))]
     fn bind_image_memory(&mut self, heap: &n::Heap, offset: u64, image: n::UnboundImage) -> Result<n::Image, image::CreationError> {
-        Ok(n::Image(image.0))
+        let bound_image = match *heap {
+            n::Heap::Native(ref heap) => {
+                let resource_options = resource_options_from_storage_and_cache(
+                    heap.storage_mode(),
+                    heap.cpu_cache_mode());
+                image.0.set_resource_options(resource_options);
+                heap.new_texture(image.0)
+            },
+            n::Heap::Emulated { ref heap_type, size: _ } => {
+                // TODO: disable hazard tracking?
+                let resource_options = map_heap_properties_to_options(heap_type.properties);
+                image.0.set_resource_options(resource_options);
+                self.device.new_texture(image.0)
+            }
+        };
+        unsafe { image.0.release(); }
+        if !bound_image.is_null() {
+            Ok(n::Image(bound_image))
+        } else {
+            Err(image::CreationError::OutOfHeap)
+        }
     }
 
     // Emulated fence implementations
