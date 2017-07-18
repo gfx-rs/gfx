@@ -1,5 +1,5 @@
 use core;
-use core::pass;
+use core::{pass, image, memory};
 use core::format::Format;
 use metal::*;
 
@@ -119,4 +119,61 @@ pub fn map_vertex_format(format: Format) -> Option<MTLVertexFormat> {
         Format(R32_G32, Float) => MTLVertexFormat::Float2,
         _ => return None,
     })
+}
+
+pub fn map_heap_properties_to_options(properties: memory::HeapProperties) -> MTLResourceOptions {
+    let mut options = MTLResourceOptions::empty();
+    if properties.contains(memory::CPU_VISIBLE) {
+        if properties.contains(memory::COHERENT) {
+            options |= MTLResourceStorageModeShared;
+        } else {
+            options |= MTLResourceStorageModeManaged;
+        }
+    } else if properties.contains(memory::DEVICE_LOCAL) {
+        options |= MTLResourceStorageModePrivate;
+    } else {
+        panic!("invalid heap properties");
+    }
+    if properties.contains(memory::WRITE_COMBINED) {
+        options |= MTLResourceOptionCPUCacheModeWriteCombined;
+    }
+    options
+}
+
+pub fn map_heap_properties_to_storage_and_cache(properties: memory::HeapProperties) -> (MTLStorageMode, MTLCPUCacheMode) {
+    let storage = if properties.contains(memory::CPU_VISIBLE) {
+        if properties.contains(memory::COHERENT) {
+            MTLStorageMode::Shared
+        } else {
+            MTLStorageMode::Managed
+        }
+    } else if properties.contains(memory::DEVICE_LOCAL) {
+        MTLStorageMode::Private
+    } else {
+        panic!("invalid heap properties");
+    };
+    let cpu = if properties.contains(memory::WRITE_COMBINED) {
+        MTLCPUCacheMode::WriteCombined
+    } else {
+        MTLCPUCacheMode::DefaultCache
+    };
+    (storage, cpu)
+}
+
+pub fn resource_options_from_storage_and_cache(storage: MTLStorageMode, cache: MTLCPUCacheMode) -> MTLResourceOptions {
+    MTLResourceOptions::from_bits(
+        ((storage as u64) << MTLResourceStorageModeShift) | ((cache as u64) << MTLResourceCPUCacheModeShift)
+    ).unwrap()
+}
+
+pub fn map_texture_usage(usage: image::Usage) -> MTLTextureUsage {
+    let mut texture_usage = MTLTextureUsage::empty();
+    if usage.contains(image::COLOR_ATTACHMENT) || usage.contains(image::DEPTH_STENCIL_ATTACHMENT) {
+        texture_usage |= MTLTextureUsagePixelFormatView;
+    }
+    if usage.contains(image::SAMPLED) {
+        texture_usage |= MTLTextureUsageShaderRead;
+    }
+    // TODO shader write
+    texture_usage
 }

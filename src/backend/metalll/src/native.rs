@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::os::raw::{c_void, c_long, c_int};
 use std::ptr;
 
-use core::{format, memory};
+use core::{format, memory, HeapType};
 use core::shade::StageFlags;
 use core::factory::DescriptorSetLayoutBinding;
 
@@ -116,10 +116,12 @@ pub enum MappingInner {
 impl Drop for Mapping {
     fn drop(&mut self) {
         if let MappingInner::Write(buffer, ref range) = self.0 {
-            buffer.did_modify_range(NSRange {
-                location: range.location,
-                length: range.length,
-            });
+            if buffer.storage_mode() != MTLStorageMode::Shared {
+                buffer.did_modify_range(NSRange {
+                    location: range.location,
+                    length: range.length,
+                });
+            }
         }
     }
 }
@@ -223,44 +225,33 @@ impl Drop for DescriptorSetBinding {
     }
 }
 
-
-pub use self::heap_related::*;
-pub use self::fence_related::*;
-
-#[cfg(not(feature = "native_heap"))]
-mod heap_related {
-    use super::*;
-    use core::HeapType;
-
-    #[derive(Debug)]
-    pub struct Heap {
-        pub heap_type: HeapType,
-        pub size: u64,
-    }
-    
-    #[derive(Debug)]
-    pub struct UnboundBuffer(pub MTLBuffer);
-
-    unsafe impl Send for UnboundBuffer {
-    }
-    unsafe impl Sync for UnboundBuffer {
-    }
-
-    #[derive(Debug)]
-    pub struct UnboundImage(pub MTLTexture);
-
-    unsafe impl Send for UnboundImage {
-    }
-    unsafe impl Sync for UnboundImage {
-    }
+#[derive(Debug)]
+pub enum Heap {
+    Emulated { heap_type: HeapType, size: u64 },
+    Native(MTLHeap),
 }
 
-#[cfg(not(feature = "native_fence"))]
-mod fence_related {
-    use std::sync::{Arc, Mutex};
-    #[derive(Debug)]
-    pub struct Fence(pub Arc<Mutex<bool>>);
+#[derive(Debug)]
+pub struct UnboundBuffer {
+    pub size: u64,
 }
+
+unsafe impl Send for UnboundBuffer {
+}
+unsafe impl Sync for UnboundBuffer {
+}
+
+#[derive(Debug)]
+pub struct UnboundImage(pub MTLTextureDescriptor);
+
+unsafe impl Send for UnboundImage {
+}
+unsafe impl Sync for UnboundImage {
+}
+
+#[derive(Debug)]
+pub struct Fence(pub Arc<Mutex<bool>>);
+
 
 gfx_impl_resources!();
 

@@ -10,8 +10,6 @@ authors = ["The Gfx-rs Developers"]
 [features]
 default = []
 argument_buffer = []
-native_heap = []
-native_fence = []
 
 [dependencies]
 log = "0.3"
@@ -19,7 +17,7 @@ gfx_corell = { path = "../../corell", version = "0.1.0" }
 winit = "0.7"
 cocoa = "0.9"
 objc = "0.2"
-metal-rs = "0.4.1"
+metal-rs = "0.4.2"
 io-surface = "0.7"
 core-foundation = "0.3"
 core-graphics = "0.8"

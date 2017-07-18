@@ -180,19 +180,35 @@ impl core::Adapter for Adapter {
             unsafe { core::GeneralQueue::new(command::CommandQueue::new(self.device)) }
         }).collect();
 
-        let heap_types;
-        let memory_heaps;
-
-        #[cfg(not(feature = "native_heap"))]
-        {
-            // TODO: heap types for each memory binding
-            heap_types = vec![core::HeapType {
+        let heap_types = vec![
+            core::HeapType {
                 id: 0,
-                properties: memory::HeapProperties::all(),
+                properties: memory::CPU_VISIBLE | memory::CPU_CACHED,
                 heap_index: 0,
-            }];
-            memory_heaps = Vec::new();
-        }
+            },
+            core::HeapType {
+                id: 1,
+                properties: memory::CPU_VISIBLE | memory::CPU_CACHED | memory::WRITE_COMBINED,
+                heap_index: 1,
+            },
+            core::HeapType {
+                id: 2,
+                properties: memory::CPU_VISIBLE | memory::COHERENT | memory::CPU_CACHED,
+                heap_index: 2,
+            },
+            core::HeapType {
+                id: 3,
+                properties: memory::CPU_VISIBLE | memory::COHERENT 
+                    | memory::CPU_CACHED | memory::WRITE_COMBINED,
+                heap_index: 3,
+            },
+            core::HeapType {
+                id: 4,
+                properties: memory::DEVICE_LOCAL,
+                heap_index: 4,
+            },
+        ];
+        let memory_heaps = Vec::new();
 
         core::Device {
             factory,
