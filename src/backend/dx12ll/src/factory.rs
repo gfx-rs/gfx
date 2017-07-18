@@ -200,6 +200,35 @@ impl Factory {
             }
         }
     }
+fn create_flagged_heap(&mut self, heap_type: &core::HeapType, size: u64, flags: winapi::D3D12_HEAP_FLAGS) -> native::Heap {
+        let mut heap = ptr::null_mut();
+        let desc = winapi::D3D12_HEAP_DESC {
+            SizeInBytes: size,
+            Properties: data::map_heap_properties(heap_type.properties),
+            Alignment: 0,
+            Flags: flags,
+        };
+
+        assert_eq!(winapi::S_OK, unsafe {
+            self.inner.CreateHeap(&desc, &dxguid::IID_ID3D12Heap, &mut heap)
+        });
+
+        native::Heap {
+            inner: ComPtr::new(heap as *mut _),
+            ty: heap_type.clone(),
+            size: size,
+            //TODO: merge with `map_heap_properties`
+            default_state: if !heap_type.properties.contains(memory::CPU_VISIBLE) {
+                winapi::D3D12_RESOURCE_STATE_COMMON
+            } else if heap_type.properties.contains(memory::COHERENT) {
+                winapi::D3D12_RESOURCE_STATE_GENERIC_READ
+            } else {
+                winapi::D3D12_RESOURCE_STATE_COPY_DEST
+            },
+        }
+    }
+
+   
 }
 
 impl core::Factory<R> for Factory {
@@ -229,6 +258,21 @@ impl core::Factory<R> for Factory {
                 winapi::D3D12_RESOURCE_STATE_COPY_DEST
             },
         }
+    }
+
+    fn create_buffer_heap(&mut self, heap_type: &core::HeapType, size: u64) -> native::Heap {
+        self.create_flagged_heap(heap_type, size, 
+                                 winapi::D3D12_HEAP_FLAGS(0) | winapi::D3D12_HEAP_FLAG_DENY_NON_RT_DS_TEXTURES | winapi::D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES)
+     }
+
+    fn create_texture_heap(&mut self, heap_type: &core::HeapType, size: u64) -> native::Heap {
+        self.create_flagged_heap(heap_type, size, 
+                                 winapi::D3D12_HEAP_FLAGS(0) | winapi::D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES | winapi::D3D12_HEAP_FLAG_DENY_BUFFERS)
+    }
+
+    fn create_render_texture_heap(&mut self, heap_type: &core::HeapType, size: u64) -> native::Heap {
+        self.create_flagged_heap(heap_type, size, 
+                                 winapi::D3D12_HEAP_FLAGS(0) | winapi::D3D12_HEAP_FLAG_DENY_NON_RT_DS_TEXTURES | winapi::D3D12_HEAP_FLAG_DENY_BUFFERS)
     }
 
     fn create_renderpass(&mut self, attachments: &[pass::Attachment],

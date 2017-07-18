@@ -120,6 +120,16 @@ impl core::Factory<R> for Factory {
         native::Heap(memory)
     }
 
+    fn create_buffer_heap(&mut self, heap_type: &HeapType, size: u64) -> native::Heap {
+        self.create_heap(heap_type, size)
+    }
+    fn create_texture_heap(&mut self, heap_type: &HeapType, size: u64) -> native::Heap {
+        self.create_heap(heap_type, size)
+    }
+    fn create_render_texture_heap(&mut self, heap_type: &HeapType, size: u64) -> native::Heap {
+        self.create_heap(heap_type, size)
+    }
+
     fn create_renderpass(&mut self, attachments: &[pass::Attachment],
         subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> native::RenderPass
     {

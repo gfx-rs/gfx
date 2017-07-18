@@ -122,6 +122,14 @@ pub trait Factory<R: Resources> {
     /// There is only a limited amount of allocations allowed depending on the implementation!
     fn create_heap(&mut self, heap_type: &HeapType, size: u64) -> R::Heap;
 
+
+    /// Create a heap with flags depending on the resource type
+    ///
+    /// DX12 implementation needs this to provide the correct flags
+    fn create_buffer_heap(&mut self, heap_type: &HeapType, size: u64) -> R::Heap;
+    fn create_texture_heap(&mut self, heap_type: &HeapType, size: u64) -> R::Heap;
+    fn create_render_texture_heap(&mut self, heap_type: &HeapType, size: u64) -> R::Heap;
+
     ///
     fn create_renderpass(&mut self, attachments: &[pass::Attachment], subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> R::RenderPass;
 
