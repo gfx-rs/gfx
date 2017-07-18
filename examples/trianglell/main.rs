@@ -249,7 +249,7 @@ fn main() {
     // Buffer allocations
     println!("Memory heaps: {:?}", heap_types);
 
-    let heap = factory.create_heap(upload_heap, 1024);
+    let heap = factory.create_buffer_heap(upload_heap, 1024);
     let buffer_stride = std::mem::size_of::<Vertex>() as u64;
     let buffer_len = TRIANGLE.len() as u64 * buffer_stride;
 
@@ -278,7 +278,7 @@ fn main() {
     let upload_size = (height * row_pitch) as u64;
     println!("upload row pitch {}, total size {}", row_pitch, upload_size);
 
-    let image_upload_heap = factory.create_heap(upload_heap, upload_size);
+    let image_upload_heap = factory.create_buffer_heap(upload_heap, upload_size);
     let image_upload_buffer = {
         let buffer = factory.create_buffer(upload_size, image_stride as u64, buffer::TRANSFER_SRC).unwrap();
         factory.bind_buffer_memory(&image_upload_heap, 0, buffer).unwrap()
@@ -299,7 +299,7 @@ fn main() {
     let image_req = factory.get_image_requirements(&image);
 
     let device_heap = heap_types.iter().find(|&&heap_type| heap_type.properties.contains(memory::DEVICE_LOCAL)).unwrap();
-    let image_heap = factory.create_heap(device_heap, image_req.size);
+    let image_heap = factory.create_texture_heap(device_heap, image_req.size);
 
     let image_logo = factory.bind_image_memory(&image_heap, 0, image).unwrap();
     let image_srv = factory.view_image_as_shader_resource(&image_logo, gfx_corell::format::Srgba8::get_format()).unwrap();
