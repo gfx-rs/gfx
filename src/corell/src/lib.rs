@@ -145,6 +145,20 @@ pub trait Adapter {
     fn get_queue_families(&self) -> Iter<Self::QueueFamily>;
 }
 
+/// Adapter capabilities struct.
+#[derive(Clone, Debug)]
+pub struct Capabilities {
+    /// Adapter is backed by real graphics hardware.
+    pub dedicated_hardware: bool,
+    /// Resource heaps can contain any type of resources, as opposed to be locked to one.
+    pub heterogeneous_resource_heaps: bool,
+    /// The alignment of the start of the buffer used as a GPU copy source, in bytes, non-zero.
+    pub buffer_copy_offset_alignment: usize,
+    /// The alignment of the row pitch of the texture data stored in a buffer that is
+    /// used as a GPU copy source, in bytes, non-zero.
+    pub buffer_copy_row_pitch_alignment: usize,
+}
+
 /// Information about a backend adapater.
 #[derive(Clone, Debug)]
 pub struct AdapterInfo {
@@ -154,8 +168,8 @@ pub struct AdapterInfo {
     pub vendor: usize,
     /// PCI id of the adapter
     pub device: usize,
-    /// The device is based on a software rasterizer
-    pub software_rendering: bool,
+    /// Adapter capabilities
+    pub caps: Capabilities,
 }
 
 /// `QueueFamily` denotes a group of command queues provided by the backend

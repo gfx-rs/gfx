@@ -627,7 +627,12 @@ impl core::Instance for Instance {
                     name: name,
                     vendor: properties.vendor_id as usize,
                     device: properties.device_id as usize,
-                    software_rendering: properties.device_type == vk::PhysicalDeviceType::Cpu,
+                    caps: core::Capabilities {
+                        dedicated_hardware: properties.device_type != vk::PhysicalDeviceType::Cpu,
+                        heterogeneous_resource_heaps: true,
+                        buffer_copy_offset_alignment: properties.limits.optimal_buffer_copy_offset_alignment as usize,
+                        buffer_copy_row_pitch_alignment: properties.limits.optimal_buffer_copy_row_pitch_alignment as usize,
+                    },
                 };
 
                 let queue_families = self.inner.0.get_physical_device_queue_family_properties(device)
@@ -646,7 +651,7 @@ impl core::Instance for Instance {
                 Adapter {
                     handle: device,
                     queue_families: queue_families,
-                    info: info,
+                    info,
                     instance: self.inner.clone(),
                 }
             })

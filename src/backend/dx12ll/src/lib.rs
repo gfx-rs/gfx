@@ -460,7 +460,12 @@ impl core::Instance for Instance {
                     name: device_name,
                     vendor: desc.VendorId as usize,
                     device: desc.DeviceId as usize,
-                    software_rendering: false, // TODO: check for WARP adapter (software rasterizer)?
+                    caps: core::Capabilities {
+                        dedicated_hardware: true, // TODO: check for WARP adapter (software rasterizer)?
+                        heterogeneous_resource_heaps: false, //TODO
+                        buffer_copy_offset_alignment: winapi::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as usize,
+                        buffer_copy_row_pitch_alignment: winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as usize,
+                    },
                 };
 
                 devices.push(

@@ -74,17 +74,20 @@ fn main() {
 
     // instantiate backend
     let instance = back::Instance::create();
-    let physical_devices = instance.enumerate_adapters();
-    let surface = instance.create_surface(&window);
-
-    let queue_descs = physical_devices[0].get_queue_families().map(|family| { (family, family.num_queues()) });
-
-    for device in &physical_devices {
-        println!("{:?}", device.get_info());
+    let adapters = instance.enumerate_adapters();
+    for adapter in &adapters {
+        println!("{:?}", adapter.get_info());
     }
 
+    let adapter = &adapters[0];
+    let surface = instance.create_surface(&window);
+
+    let queue_descs = adapter.get_queue_families().map(|family| (family, family.num_queues()) );
+
+
+
     // Build a new device and associated command queues
-    let Device { mut factory, mut general_queues, heap_types, .. } = physical_devices[0].open(queue_descs);
+    let Device { mut factory, mut general_queues, heap_types, .. } = adapter.open(queue_descs);
     let mut swap_chain = surface.build_swapchain::<ColorFormat>(&general_queues[0]);
 
     // Setup renderpass and pipeline
@@ -272,7 +275,7 @@ fn main() {
     let img = image::load(Cursor::new(&img_data[..]), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
     let kind = i::Kind::D2(width as i::Size, height as i::Size, i::AaMode::Single);
-    let row_alignment_mask = 0xFF; //D3D12 restriction, TODO: have it in device capabilities
+    let row_alignment_mask = adapter.get_info().caps.buffer_copy_row_pitch_alignment as u32 - 1;
     let image_stride = 4usize;
     let row_pitch = (width * image_stride as u32 + row_alignment_mask) & !row_alignment_mask;
     let upload_size = (height * row_pitch) as u64;
