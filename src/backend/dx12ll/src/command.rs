@@ -20,9 +20,10 @@ use core::{self, command, memory, pso, state, target, IndexType, VertexCount, Ve
 use core::buffer::IndexBufferView;
 use core::command::{RenderPassInlineEncoder, RenderPassSecondaryEncoder, Encoder};
 use core::pass::{Attachment, AttachmentLoadOp};
-use data;
+
 use native::{self, CommandBuffer, GeneralCommandBuffer, GraphicsCommandBuffer,
     ComputeCommandBuffer, TransferCommandBuffer, SubpassCommandBuffer, RenderPass, FrameBuffer};
+use state::map_image_resource_state;
 use {Resources as R};
 
 
@@ -51,11 +52,11 @@ impl CommandBuffer {
         for barrier in image_barriers {
             let state_src = match barrier.state_src {
                 memory::ImageStateSrc::Present(_access) => winapi::D3D12_RESOURCE_STATE_PRESENT,
-                memory::ImageStateSrc::State(access, layout) => data::map_image_resource_state(access, layout)
+                memory::ImageStateSrc::State(access, layout) => map_image_resource_state(access, layout)
             };
             let state_dst = match barrier.state_dst {
                 memory::ImageStateDst::Present => winapi::D3D12_RESOURCE_STATE_PRESENT,
-                memory::ImageStateDst::State(access, layout) => data::map_image_resource_state(access, layout)
+                memory::ImageStateDst::State(access, layout) => map_image_resource_state(access, layout)
             };
 
             if state_src == state_dst {
