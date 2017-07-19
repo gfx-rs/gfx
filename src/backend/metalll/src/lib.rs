@@ -99,7 +99,7 @@ impl Drop for SwapChain {
     fn drop(&mut self) {
         unsafe {
             for image in self.images.drain(..) {
-                image.0.release(); 
+                image.0.release();
             }
         }
     }
@@ -121,7 +121,7 @@ impl core::Instance for Instance {
 
     fn enumerate_adapters(&self) -> Vec<Self::Adapter> {
         // TODO: enumerate all devices
-    
+
         let device = metal::create_system_default_device(); // Returns retained
 
         vec![Adapter {
@@ -130,7 +130,12 @@ impl core::Instance for Instance {
                 name: device.name().into(),
                 vendor: 0,
                 device: 0,
-                software_rendering: false,
+                caps: core::Capabilities {
+                    dedicated_hardware: true,
+                    heterogeneous_resource_heaps: true,
+                    buffer_copy_offset_alignment: 1,
+                    buffer_copy_row_pitch_alignment: 1,
+                },
             },
             queue_families: [QueueFamily{}],
         }]
@@ -168,7 +173,7 @@ impl core::Adapter for Adapter {
     type Resources = Resources;
 
     fn open<'a, I>(&self, mut queue_descs: I) -> core::Device<Self::Resources, Self::Factory, Self::CommandQueue>
-        where I: ExactSizeIterator<Item=(&'a Self::QueueFamily, u32)> 
+        where I: ExactSizeIterator<Item=(&'a Self::QueueFamily, u32)>
     {
         if queue_descs.len() != 1 {
             panic!("Metal only supports one queue family");
@@ -256,7 +261,7 @@ impl core::Surface for Surface {
             }).collect();
 
             let device = queue.device();
-            
+
             let backbuffer_descriptor = MTLTextureDescriptor::new();
             defer! { backbuffer_descriptor.release() };
             backbuffer_descriptor.set_pixel_format(mtl_format);
