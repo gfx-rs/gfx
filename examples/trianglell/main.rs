@@ -31,7 +31,8 @@ use gfx_corell::{buffer, command, format, pass, pso, shade, state, target,
 use gfx_corell::format::Formatted;
 use gfx_corell::memory::{self, ImageBarrier, ImageStateSrc, ImageStateDst, ImageLayout, ImageAccess};
 use gfx_corell::factory::{DescriptorHeapType, DescriptorPoolDesc, DescriptorType,
-    DescriptorSetLayoutBinding, DescriptorSetWrite, DescriptorWrite, WaitFor};
+    DescriptorSetLayoutBinding, DescriptorSetWrite, DescriptorWrite,
+    ResourceHeapType, WaitFor};
 
 use std::io::Cursor;
 use gfx_corell::image as i;
@@ -87,7 +88,7 @@ fn main() {
 
 
     // Build a new device and associated command queues
-    let Device { mut factory, mut general_queues, heap_types, .. } = adapter.open(queue_descs);
+    let Device { mut factory, mut general_queues, heap_types, caps, .. } = adapter.open(queue_descs);
     let mut swap_chain = surface.build_swapchain::<ColorFormat>(&general_queues[0]);
 
     // Setup renderpass and pipeline
@@ -252,7 +253,7 @@ fn main() {
     // Buffer allocations
     println!("Memory heaps: {:?}", heap_types);
 
-    let heap = factory.create_heap(upload_heap, 1024);
+    let heap = factory.create_heap(upload_heap, ResourceHeapType::Buffers, 1024).unwrap();
     let buffer_stride = std::mem::size_of::<Vertex>() as u64;
     let buffer_len = TRIANGLE.len() as u64 * buffer_stride;
 
@@ -275,13 +276,13 @@ fn main() {
     let img = image::load(Cursor::new(&img_data[..]), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
     let kind = i::Kind::D2(width as i::Size, height as i::Size, i::AaMode::Single);
-    let row_alignment_mask = adapter.get_info().caps.buffer_copy_row_pitch_alignment as u32 - 1;
+    let row_alignment_mask = caps.buffer_copy_row_pitch_alignment as u32 - 1;
     let image_stride = 4usize;
     let row_pitch = (width * image_stride as u32 + row_alignment_mask) & !row_alignment_mask;
     let upload_size = (height * row_pitch) as u64;
     println!("upload row pitch {}, total size {}", row_pitch, upload_size);
 
-    let image_upload_heap = factory.create_heap(upload_heap, upload_size);
+    let image_upload_heap = factory.create_heap(upload_heap, ResourceHeapType::Buffers, upload_size).unwrap();
     let image_upload_buffer = {
         let buffer = factory.create_buffer(upload_size, image_stride as u64, buffer::TRANSFER_SRC).unwrap();
         factory.bind_buffer_memory(&image_upload_heap, 0, buffer).unwrap()
@@ -302,7 +303,7 @@ fn main() {
     let image_req = factory.get_image_requirements(&image);
 
     let device_heap = heap_types.iter().find(|&&heap_type| heap_type.properties.contains(memory::DEVICE_LOCAL)).unwrap();
-    let image_heap = factory.create_heap(device_heap, image_req.size);
+    let image_heap = factory.create_heap(device_heap, ResourceHeapType::Images, image_req.size).unwrap();
 
     let image_logo = factory.bind_image_memory(&image_heap, 0, image).unwrap();
     let image_srv = factory.view_image_as_shader_resource(&image_logo, gfx_corell::format::Srgba8::get_format()).unwrap();

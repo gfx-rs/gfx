@@ -26,7 +26,7 @@ extern crate winapi;
 extern crate winit;
 
 use comptr::ComPtr;
-use std::ptr;
+use std::{mem, ptr};
 use std::os::raw::c_void;
 use std::os::windows::ffi::OsStringExt;
 use std::collections::VecDeque;
@@ -34,7 +34,7 @@ use std::ffi::OsString;
 use winapi::BOOL;
 use winit::os::windows::WindowExt;
 
-use core::{image, memory};
+use core::{image, memory, Capabilities};
 
 mod command;
 mod factory;
@@ -99,6 +99,13 @@ impl core::Adapter for Adapter {
             error!("error on device creation: {:x}", hr);
         }
 
+        let mut features: winapi::D3D12_FEATURE_DATA_D3D12_OPTIONS = unsafe { mem::zeroed() };
+        assert_eq!(winapi::S_OK, unsafe {
+            device.CheckFeatureSupport(winapi::D3D12_FEATURE_D3D12_OPTIONS,
+                &mut features as *mut _ as *mut c_void,
+                mem::size_of::<winapi::D3D12_FEATURE_DATA_D3D12_OPTIONS>() as u32)
+        });
+
         // TODO: other queue types
         // Create command queues
         let general_queues = queue_descs.flat_map(|(_family, queue_count)| {
@@ -156,7 +163,12 @@ impl core::Adapter for Adapter {
 
         let memory_heaps = Vec::new(); //TODO
 
-        let factory = Factory::new(device);
+        let caps = Capabilities {
+            heterogeneous_resource_heaps: features.ResourceHeapTier != winapi::D3D12_RESOURCE_HEAP_TIER_1,
+            buffer_copy_offset_alignment: winapi::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as usize,
+            buffer_copy_row_pitch_alignment: winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as usize,
+        };
+        let factory = Factory::new(device, caps.clone());
 
         core::Device {
             factory,
@@ -166,6 +178,7 @@ impl core::Adapter for Adapter {
             transfer_queues: Vec::new(),
             heap_types,
             memory_heaps,
+            caps,
             _marker: std::marker::PhantomData,
         }
     }
@@ -185,10 +198,11 @@ pub struct Factory {
     srv_pool: native::DescriptorSetPool,
     sampler_pool: native::DescriptorSetPool,
     events: Vec<winapi::HANDLE>,
+    caps: core::Capabilities,
 }
 
 impl Factory {
-    fn new(mut device: ComPtr<winapi::ID3D12Device>) -> Factory {
+    fn new(mut device: ComPtr<winapi::ID3D12Device>, caps: Capabilities) -> Factory {
         let max_rtvs = 64;
         let rtv_pool = native::DescriptorSetPool {
             heap: Self::create_descriptor_heap_impl(&mut device, winapi::D3D12_DESCRIPTOR_HEAP_TYPE_RTV, false, max_rtvs),
@@ -222,6 +236,7 @@ impl Factory {
             srv_pool,
             sampler_pool,
             events: Vec::new(),
+            caps,
         }
     }
 }
@@ -460,12 +475,7 @@ impl core::Instance for Instance {
                     name: device_name,
                     vendor: desc.VendorId as usize,
                     device: desc.DeviceId as usize,
-                    caps: core::Capabilities {
-                        dedicated_hardware: true, // TODO: check for WARP adapter (software rasterizer)?
-                        heterogeneous_resource_heaps: false, //TODO
-                        buffer_copy_offset_alignment: winapi::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as usize,
-                        buffer_copy_row_pitch_alignment: winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as usize,
-                    },
+                    software_rendering: false, // TODO: check for WARP adapter (software rasterizer)?
                 };
 
                 devices.push(

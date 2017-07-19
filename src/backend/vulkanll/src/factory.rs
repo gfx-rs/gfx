@@ -104,7 +104,7 @@ impl Factory {
 }
 
 impl core::Factory<R> for Factory {
-    fn create_heap(&mut self, heap_type: &HeapType, size: u64) -> native::Heap {
+    fn create_heap(&mut self, heap_type: &HeapType, _resource_type: f::ResourceHeapType, size: u64) -> Result<native::Heap, f::ResourceHeapError> {
         let info = vk::MemoryAllocateInfo {
             s_type: vk::StructureType::MemoryAllocateInfo,
             p_next: ptr::null(),
@@ -117,7 +117,7 @@ impl core::Factory<R> for Factory {
                         .expect("Error on heap creation") // TODO: error handling
         };
 
-        native::Heap(memory)
+        Ok(native::Heap(memory))
     }
 
     fn create_renderpass(&mut self, attachments: &[pass::Attachment],

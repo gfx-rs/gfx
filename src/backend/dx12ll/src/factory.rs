@@ -202,32 +202,47 @@ impl Factory {
 }
 
 impl core::Factory<R> for Factory {
-    fn create_heap(&mut self, heap_type: &core::HeapType, size: u64) -> native::Heap {
+    fn create_heap(&mut self, heap_type: &core::HeapType, resource_type: f::ResourceHeapType, size: u64) -> Result<native::Heap, f::ResourceHeapError> {
         let mut heap = ptr::null_mut();
+
+        let flags = match resource_type {
+            f::ResourceHeapType::Any if !self.caps.heterogeneous_resource_heaps => return Err(f::ResourceHeapError::UnsupportedType),
+            f::ResourceHeapType::Any => winapi::D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES,
+            f::ResourceHeapType::Buffers => winapi::D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS,
+            f::ResourceHeapType::Images  => winapi::D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES,
+            f::ResourceHeapType::Targets => winapi::D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES,
+        };
+
         let desc = winapi::D3D12_HEAP_DESC {
             SizeInBytes: size,
             Properties: state::map_heap_properties(heap_type.properties),
-            Alignment: 0,
-            Flags: winapi::D3D12_HEAP_FLAGS(0),
+            Alignment: 0, //Warning: has to be 4K for MSAA targets
+            Flags: flags,
         };
 
-        assert_eq!(winapi::S_OK, unsafe {
+        let hr = unsafe {
             self.inner.CreateHeap(&desc, &dxguid::IID_ID3D12Heap, &mut heap)
-        });
+        };
+        if hr == winapi::E_OUTOFMEMORY {
+            return Err(f::ResourceHeapError::OutOfMemory);
+        }
+        assert_eq!(winapi::S_OK, hr);
 
-        native::Heap {
+        //TODO: merge with `map_heap_properties`
+        let default_state = if !heap_type.properties.contains(memory::CPU_VISIBLE) {
+            winapi::D3D12_RESOURCE_STATE_COMMON
+        } else if heap_type.properties.contains(memory::COHERENT) {
+            winapi::D3D12_RESOURCE_STATE_GENERIC_READ
+        } else {
+            winapi::D3D12_RESOURCE_STATE_COPY_DEST
+        };
+
+        Ok(native::Heap {
             inner: ComPtr::new(heap as *mut _),
             ty: heap_type.clone(),
             size: size,
-            //TODO: merge with `map_heap_properties`
-            default_state: if !heap_type.properties.contains(memory::CPU_VISIBLE) {
-                winapi::D3D12_RESOURCE_STATE_COMMON
-            } else if heap_type.properties.contains(memory::COHERENT) {
-                winapi::D3D12_RESOURCE_STATE_GENERIC_READ
-            } else {
-                winapi::D3D12_RESOURCE_STATE_COPY_DEST
-            },
-        }
+            default_state,
+        })
     }
 
     fn create_renderpass(&mut self, attachments: &[pass::Attachment],
