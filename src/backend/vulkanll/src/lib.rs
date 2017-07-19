@@ -82,6 +82,7 @@ impl core::QueueFamily for QueueFamily {
 
 pub struct Adapter {
     handle: vk::PhysicalDevice,
+    properties: vk::PhysicalDeviceProperties,
     queue_families: Vec<QueueFamily>,
     info: core::AdapterInfo,
     instance: Arc<InstanceInner>,
@@ -194,13 +195,19 @@ impl core::Adapter for Adapter {
         }).collect();
 
         core::Device {
-            factory: factory,
+            factory,
             general_queues: queues,
             graphics_queues: Vec::new(),
             compute_queues: Vec::new(),
             transfer_queues: Vec::new(),
-            heap_types: heap_types,
-            memory_heaps: memory_heaps,
+            heap_types,
+            memory_heaps,
+
+            caps: core::Capabilities {
+                heterogeneous_resource_heaps: true,
+                buffer_copy_offset_alignment: self.properties.limits.optimal_buffer_copy_offset_alignment as usize,
+                buffer_copy_row_pitch_alignment: self.properties.limits.optimal_buffer_copy_row_pitch_alignment as usize,
+            },
 
             _marker: std::marker::PhantomData,
         }
@@ -624,15 +631,10 @@ impl core::Instance for Instance {
                 };
 
                 let info = core::AdapterInfo {
-                    name: name,
+                    name,
                     vendor: properties.vendor_id as usize,
                     device: properties.device_id as usize,
-                    caps: core::Capabilities {
-                        dedicated_hardware: properties.device_type != vk::PhysicalDeviceType::Cpu,
-                        heterogeneous_resource_heaps: true,
-                        buffer_copy_offset_alignment: properties.limits.optimal_buffer_copy_offset_alignment as usize,
-                        buffer_copy_row_pitch_alignment: properties.limits.optimal_buffer_copy_row_pitch_alignment as usize,
-                    },
+                    software_rendering: properties.device_type == vk::PhysicalDeviceType::Cpu,
                 };
 
                 let queue_families = self.inner.0.get_physical_device_queue_family_properties(device)
@@ -650,7 +652,8 @@ impl core::Instance for Instance {
 
                 Adapter {
                     handle: device,
-                    queue_families: queue_families,
+                    properties,
+                    queue_families,
                     info,
                     instance: self.inner.clone(),
                 }

@@ -644,8 +644,8 @@ impl CoreFactory<Resources> for Factory {
 
     // Emulated heap implementations
     #[cfg(not(feature = "native_heap"))]
-    fn create_heap(&mut self, heap_type: &HeapType, size: u64) -> n::Heap {
-        n::Heap { heap_type: *heap_type, size }
+    fn create_heap(&mut self, heap_type: &HeapType, _resource_type: f::ResourceHeapType, size: u64) -> Result<n::Heap, f::ResourceHeapError> {
+        Ok(n::Heap { heap_type: *heap_type, size })
     }
     #[cfg(not(feature = "native_heap"))]
     fn destroy_heap(&mut self, heap: n::Heap) {

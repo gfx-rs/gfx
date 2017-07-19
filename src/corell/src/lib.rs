@@ -23,7 +23,7 @@ use std::any::Any;
 use std::slice::Iter;
 
 pub use draw_state::{state, target};
-pub use factory::{Factory, WaitFor};
+pub use factory::Factory;
 pub use queue::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 pub use pool::{GeneralCommandPool, GraphicsCommandPool};
 pub use command::{CommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer,
@@ -115,6 +115,18 @@ pub struct HeapType {
     pub heap_index: usize,
 }
 
+/// Device capabilities struct.
+#[derive(Clone, Debug)]
+pub struct Capabilities {
+    /// Resource heaps can contain any type of resources, as opposed to be locked to one.
+    pub heterogeneous_resource_heaps: bool,
+    /// The alignment of the start of the buffer used as a GPU copy source, in bytes, non-zero.
+    pub buffer_copy_offset_alignment: usize,
+    /// The alignment of the row pitch of the texture data stored in a buffer that is
+    /// used as a GPU copy source, in bytes, non-zero.
+    pub buffer_copy_row_pitch_alignment: usize,
+}
+
 pub struct Device<R: Resources, F: Factory<R>, Q: CommandQueue> {
     pub factory: F,
     pub general_queues: Vec<GeneralQueue<Q>>,
@@ -123,6 +135,8 @@ pub struct Device<R: Resources, F: Factory<R>, Q: CommandQueue> {
     pub transfer_queues: Vec<TransferQueue<Q>>,
     pub heap_types: Vec<HeapType>,
     pub memory_heaps: Vec<u64>,
+    /// Device capabilities
+    pub caps: Capabilities,
 
     pub _marker: std::marker::PhantomData<*const R>
 }
@@ -145,20 +159,6 @@ pub trait Adapter {
     fn get_queue_families(&self) -> Iter<Self::QueueFamily>;
 }
 
-/// Adapter capabilities struct.
-#[derive(Clone, Debug)]
-pub struct Capabilities {
-    /// Adapter is backed by real graphics hardware.
-    pub dedicated_hardware: bool,
-    /// Resource heaps can contain any type of resources, as opposed to be locked to one.
-    pub heterogeneous_resource_heaps: bool,
-    /// The alignment of the start of the buffer used as a GPU copy source, in bytes, non-zero.
-    pub buffer_copy_offset_alignment: usize,
-    /// The alignment of the row pitch of the texture data stored in a buffer that is
-    /// used as a GPU copy source, in bytes, non-zero.
-    pub buffer_copy_row_pitch_alignment: usize,
-}
-
 /// Information about a backend adapater.
 #[derive(Clone, Debug)]
 pub struct AdapterInfo {
@@ -168,8 +168,8 @@ pub struct AdapterInfo {
     pub vendor: usize,
     /// PCI id of the adapter
     pub device: usize,
-    /// Adapter capabilities
-    pub caps: Capabilities,
+    /// The device is based on a software rasterizer
+    pub software_rendering: bool,
 }
 
 /// `QueueFamily` denotes a group of command queues provided by the backend

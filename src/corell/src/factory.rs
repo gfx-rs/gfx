@@ -25,6 +25,24 @@ pub enum TargetViewError {
     BadFormat,
 }
 
+/// Type of the resources that can be allocated on a heap.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ResourceHeapType {
+    Any,
+    Buffers,
+    Images,
+    Targets,
+}
+
+/// Error creating a resource heap.
+#[derive(Clone, PartialEq, Debug)]
+pub enum ResourceHeapError {
+    /// Requested `ResourceHeapType::Any` is not supported.
+    UnsupportedType,
+    /// Unable to allocate the specified size.
+    OutOfMemory,
+}
+
 /// Type of the descriptor heap.
 ///
 /// Defines which descriptors can be placed in a descriptor heap.
@@ -120,7 +138,7 @@ pub trait Factory<R: Resources> {
     /// Create an heap of a specific type.
     ///
     /// There is only a limited amount of allocations allowed depending on the implementation!
-    fn create_heap(&mut self, heap_type: &HeapType, size: u64) -> R::Heap;
+    fn create_heap(&mut self, heap_type: &HeapType, resource_type: ResourceHeapType, size: u64) -> Result<R::Heap, ResourceHeapError>;
 
     ///
     fn create_renderpass(&mut self, attachments: &[pass::Attachment], subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> R::RenderPass;

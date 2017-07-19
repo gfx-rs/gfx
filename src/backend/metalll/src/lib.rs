@@ -130,12 +130,7 @@ impl core::Instance for Instance {
                 name: device.name().into(),
                 vendor: 0,
                 device: 0,
-                caps: core::Capabilities {
-                    dedicated_hardware: true,
-                    heterogeneous_resource_heaps: true,
-                    buffer_copy_offset_alignment: 1,
-                    buffer_copy_row_pitch_alignment: 1,
-                },
+                software_rendering: false,
             },
             queue_families: [QueueFamily{}],
         }]
@@ -207,6 +202,11 @@ impl core::Adapter for Adapter {
             transfer_queues: Vec::new(),
             heap_types,
             memory_heaps,
+            caps: core::Capabilities {
+                heterogeneous_resource_heaps: true,
+                buffer_copy_offset_alignment: 1,
+                buffer_copy_row_pitch_alignment: 1,
+            },
             _marker: PhantomData,
         }
     }
