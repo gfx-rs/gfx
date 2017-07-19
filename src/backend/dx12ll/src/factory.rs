@@ -23,9 +23,8 @@ use std::{cmp, ffi, mem, ptr, slice};
 use std::os::raw::c_void;
 use std::collections::BTreeMap;
 
-use core::{self, buffer, format, image, mapping, memory, pass, shade, factory as f};
-use core::pso::{self, EntryPoint};
-use {data, state, mirror, native};
+use core::{self, buffer, format, image, mapping, memory, pass, pso, shade, factory as f};
+use {state, mirror, native};
 use {Factory, Resources as R};
 
 
@@ -50,7 +49,7 @@ pub struct Mapping {
 }
 
 impl Factory {
-    pub fn create_shader_library(&mut self, shaders: &[(EntryPoint, &[u8])]) -> Result<native::ShaderLib, shade::CreateShaderError> {
+    pub fn create_shader_library(&mut self, shaders: &[(pso::EntryPoint, &[u8])]) -> Result<native::ShaderLib, shade::CreateShaderError> {
         let mut shader_map = BTreeMap::new();
         // TODO: handle entry points with the same name
         for &(entry_point, byte_code) in shaders {
@@ -77,7 +76,7 @@ impl Factory {
         Ok(native::ShaderLib { shaders: shader_map })
     }
 
-    pub fn create_shader_library_from_source(&mut self, shaders: &[(EntryPoint, shade::Stage, &[u8])])
+    pub fn create_shader_library_from_source(&mut self, shaders: &[(pso::EntryPoint, shade::Stage, &[u8])])
                                              -> Result<native::ShaderLib, shade::CreateShaderError>
     {
         let stage_to_str = |stage| {
@@ -207,7 +206,7 @@ impl core::Factory<R> for Factory {
         let mut heap = ptr::null_mut();
         let desc = winapi::D3D12_HEAP_DESC {
             SizeInBytes: size,
-            Properties: data::map_heap_properties(heap_type.properties),
+            Properties: state::map_heap_properties(heap_type.properties),
             Alignment: 0,
             Flags: winapi::D3D12_HEAP_FLAGS(0),
         };
@@ -308,7 +307,7 @@ impl core::Factory<R> for Factory {
         -> Vec<Result<native::GraphicsPipeline, pso::CreationError>>
     {
         descs.iter().map(|&(shader_lib, ref signature, _, ref desc)| {
-            let build_shader = |lib: &native::ShaderLib, entry: Option<EntryPoint>| {
+            let build_shader = |lib: &native::ShaderLib, entry: Option<pso::EntryPoint>| {
                 // TODO: better handle case where looking up shader fails
                 let shader = entry.and_then(|entry| lib.shaders.get(entry));
                 match shader {
@@ -355,7 +354,7 @@ impl core::Factory<R> for Factory {
                     input_element_descs.push(winapi::D3D12_INPUT_ELEMENT_DESC {
                         SemanticName: input_desc.semantic_name,
                         SemanticIndex: input_desc.semantic_index,
-                        Format: match data::map_format(element.format, false) {
+                        Format: match state::map_format(element.format, false) {
                             Some(fm) => fm,
                             None => {
                                 error!("Unable to find DXGI format for {:?}", element.format);
@@ -379,7 +378,7 @@ impl core::Factory<R> for Factory {
                 for (mut rtv, target) in rtvs.iter_mut().zip(desc.color_targets.iter()) {
                     match *target {
                         Some((format, _)) => {
-                            *rtv = data::map_format(format, true)
+                            *rtv = state::map_format(format, true)
                                     .unwrap_or(winapi::DXGI_FORMAT_UNKNOWN);
                             num_rtvs += 1;
                         }
@@ -422,10 +421,10 @@ impl core::Factory<R> for Factory {
                     NumElements: input_element_descs.len() as u32,
                 },
                 IBStripCutValue: winapi::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED,
-                PrimitiveTopologyType: state::map_primitive_topology(desc.primitive),
+                PrimitiveTopologyType: state::map_topology_type(desc.primitive),
                 NumRenderTargets: num_rtvs,
                 RTVFormats: rtvs,
-                DSVFormat: desc.depth_stencil.and_then(|(format, _)| data::map_format(format, true))
+                DSVFormat: desc.depth_stencil.and_then(|(format, _)| state::map_format(format, true))
                                              .unwrap_or(winapi::DXGI_FORMAT_UNKNOWN),
                 SampleDesc: winapi::DXGI_SAMPLE_DESC {
                     Count: 1, // TODO
@@ -439,7 +438,7 @@ impl core::Factory<R> for Factory {
                 Flags: winapi::D3D12_PIPELINE_STATE_FLAG_NONE,
             };
 
-            let topology = data::map_topology(desc.primitive);
+            let topology = state::map_topology(desc.primitive);
 
             // Create PSO
             let mut pipeline = ComPtr::<winapi::ID3D12PipelineState>::new(ptr::null_mut());
@@ -458,7 +457,7 @@ impl core::Factory<R> for Factory {
         }).collect()
     }
 
-    fn create_compute_pipelines(&mut self, descs: &[(&native::ShaderLib, EntryPoint, &native::PipelineLayout)]) -> Vec<Result<native::ComputePipeline, pso::CreationError>> {
+    fn create_compute_pipelines(&mut self, descs: &[(&native::ShaderLib, pso::EntryPoint, &native::PipelineLayout)]) -> Vec<Result<native::ComputePipeline, pso::CreationError>> {
         unimplemented!()
     }
 
@@ -476,20 +475,20 @@ impl core::Factory<R> for Factory {
         let handle = self.sampler_pool.alloc_handles(1).cpu;
 
         let op = match info.comparison {
-            Some(_) => data::FilterOp::Comparison,
-            None => data::FilterOp::Product,
+            Some(_) => state::FilterOp::Comparison,
+            None => state::FilterOp::Product,
         };
         let desc = winapi::D3D12_SAMPLER_DESC {
-            Filter: data::map_filter(info.filter, op),
-            AddressU: data::map_wrap(info.wrap_mode.0),
-            AddressV: data::map_wrap(info.wrap_mode.1),
-            AddressW: data::map_wrap(info.wrap_mode.2),
+            Filter: state::map_filter(info.filter, op),
+            AddressU: state::map_wrap(info.wrap_mode.0),
+            AddressV: state::map_wrap(info.wrap_mode.1),
+            AddressW: state::map_wrap(info.wrap_mode.2),
             MipLODBias: info.lod_bias.into(),
             MaxAnisotropy: match info.filter {
                 image::FilterMethod::Anisotropic(max) => max as winapi::UINT,
                 _ => 0,
             },
-            ComparisonFunc: data::map_function(info.comparison.unwrap_or(core::state::Comparison::Always)),
+            ComparisonFunc: state::map_function(info.comparison.unwrap_or(core::state::Comparison::Always)),
             BorderColor: info.border.into(),
             MinLOD: info.lod_range.0.into(),
             MaxLOD: info.lod_range.1.into(),
@@ -572,7 +571,7 @@ impl core::Factory<R> for Factory {
             Height: height as u32,
             DepthOrArraySize: cmp::max(1, depth),
             MipLevels: mip_levels as u16,
-            Format: match data::map_format(format, false) {
+            Format: match state::map_format(format, false) {
                 Some(format) => format,
                 None => return Err(image::CreationError::BadFormat),
             },
@@ -639,7 +638,7 @@ impl core::Factory<R> for Factory {
         }
 
         let mut desc = winapi::D3D12_RENDER_TARGET_VIEW_DESC {
-            Format: match data::map_format(format, true) {
+            Format: match state::map_format(format, true) {
                 Some(format) => format,
                 None => return Err(f::TargetViewError::BadFormat)
             },
@@ -681,7 +680,7 @@ impl core::Factory<R> for Factory {
         };
 
         let mut desc = winapi::D3D12_SHADER_RESOURCE_VIEW_DESC {
-            Format: match data::map_format(format, false) {
+            Format: match state::map_format(format, false) {
                 Some(format) => format,
                 None => return Err(f::TargetViewError::BadFormat),
             },

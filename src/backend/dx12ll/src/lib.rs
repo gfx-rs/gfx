@@ -37,7 +37,6 @@ use winit::os::windows::WindowExt;
 use core::{image, memory};
 
 mod command;
-mod data;
 mod factory;
 mod mirror;
 mod native;
@@ -282,7 +281,7 @@ impl core::Surface for Surface {
             // [15716] DXGI ERROR: IDXGIFactory::CreateSwapChain: Flip model swapchains (DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL and DXGI_SWAP_EFFECT_FLIP_DISCARD) only support the following Formats: (DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R10G10B10A2_UNORM), assuming the underlying Device does as well.
             format.1 = core::format::ChannelType::Unorm;
         }
-        let dxgi_format = data::map_format(format, true).unwrap();
+        let dxgi_format = state::map_format(format, true).unwrap();
         let bits_per_texel = format.0.get_total_bits();
 
         let desc = winapi::DXGI_SWAP_CHAIN_DESC1 {
