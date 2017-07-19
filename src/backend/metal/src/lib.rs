@@ -21,28 +21,33 @@ extern crate cocoa;
 extern crate gfx_core as core;
 extern crate metal_rs as metal;
 extern crate bit_set;
+extern crate block;
 
 // use cocoa::base::{selector, class};
 // use cocoa::foundation::{NSUInteger};
 
 use metal::*;
 
+use block::{Block, ConcreteBlock};
 use core::{handle, texture as tex};
-use core::SubmissionResult;
+use core::{QueueType, SubmissionResult};
 use core::memory::{self, Usage, Bind};
 use core::command::{AccessInfo, AccessGuard};
 
 use std::cell::RefCell;
+use std::marker::PhantomData;
+use std::ops::Deref;
 use std::sync::Arc;
 // use std::{mem, ptr};
 
 mod factory;
-mod encoder;
 mod command;
+mod encoder;
 mod mirror;
 mod map;
+pub mod native;
+mod pool;
 
-pub use self::command::CommandBuffer;
 pub use self::factory::Factory;
 pub use self::map::*;
 
@@ -51,335 +56,242 @@ const MTL_MAX_TEXTURE_BINDINGS: usize = 128;
 const MTL_MAX_BUFFER_BINDINGS: usize = 31;
 const MTL_MAX_SAMPLER_BINDINGS: usize = 16;
 
-/// Internal struct of shared data between the device and its factories.
-#[doc(hidden)]
-pub struct Share {
-    capabilities: core::Capabilities,
-    handles: RefCell<handle::Manager<Resources>>,
+pub fn enumerate_adapters() -> Vec<Adapter> {
+    // TODO: enumerate all devices
+    let device = metal::create_system_default_device(); // Returns retained
+
+    vec![
+        Adapter {
+            device,
+            adapter_info: core::AdapterInfo {
+                name: device.name().into(),
+                vendor: 0,
+                device: 0,
+                software_rendering: false,
+            },
+            queue_families: [(QueueFamily, QueueType::General)],
+        }
+    ]
 }
 
-pub mod native {
-    use metal::*;
-
-    #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-    pub struct Buffer(pub *mut MTLBuffer);
-    unsafe impl Send for Buffer {}
-    unsafe impl Sync for Buffer {}
-
-    #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-    pub struct Texture(pub *mut MTLTexture);
-    unsafe impl Send for Texture {}
-    unsafe impl Sync for Texture {}
-
-    #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-    pub struct Sampler(pub MTLSamplerState);
-    unsafe impl Send for Sampler {}
-    unsafe impl Sync for Sampler {}
-
-    #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-    pub struct Rtv(pub *mut MTLTexture);
-    unsafe impl Send for Rtv {}
-    unsafe impl Sync for Rtv {}
-
-    #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-    pub struct Dsv(pub *mut MTLTexture, pub Option<u16>);
-    unsafe impl Send for Dsv {}
-    unsafe impl Sync for Dsv {}
-
-    #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-    pub struct Srv(pub *mut MTLTexture);
-    unsafe impl Send for Srv {}
-    unsafe impl Sync for Srv {}
+#[derive(Clone)]
+pub struct QueueFamily;
+impl core::QueueFamily for QueueFamily {
+    fn num_queues(&self) -> u32 { 1 }
 }
 
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub struct InputLayout(pub MTLVertexDescriptor);
-unsafe impl Send for InputLayout {}
-unsafe impl Sync for InputLayout {}
-
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Shader {
-    func: MTLFunction,
+pub struct Adapter {
+    device: MTLDevice,
+    adapter_info: core::AdapterInfo,
+    queue_families: [(QueueFamily, QueueType); 1],
 }
-unsafe impl Send for Shader {}
-unsafe impl Sync for Shader {}
 
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Program {
-    vs: MTLFunction,
-    ps: MTLFunction,
-}
-unsafe impl Send for Program {}
-unsafe impl Sync for Program {}
+impl core::Adapter<Backend> for Adapter {
+    fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)])
+        -> core::Device<Backend>
+    {
+        // Single queue family supported only
+        assert_eq!(queue_descs.len(), 1);
 
-pub struct ShaderLibrary {
-    lib: MTLLibrary,
-}
-unsafe impl Send for ShaderLibrary {}
-unsafe impl Sync for ShaderLibrary {}
+        let share = Share {
+            capabilities: core::Capabilities {
+                max_texture_size: 0,
+                max_patch_size: 0,
+                instance_base_supported: false,
+                instance_call_supported: false,
+                instance_rate_supported: false,
+                vertex_base_supported: false,
+                srgb_color_supported: false,
+                constant_buffer_supported: true,
+                unordered_access_view_supported: false,
+                separate_blending_slots_supported: false,
+                copy_buffer_supported: true,
+            },
+            handles: RefCell::new(handle::Manager::new()),
+        };
 
-// ShaderLibrary isn't handled via Device.cleanup(). Not really an issue since it will usually
-// live for the entire application lifetime and be cloned rarely.
-impl Drop for ShaderLibrary {
-    fn drop(&mut self) {
-        unsafe { self.lib.release() };
+        unsafe { self.device.retain(); }
+        let factory = Factory::new(self.device, Arc::new(share));
+
+        let mut device = core::Device {
+            factory,
+            general_queues: Vec::new(),
+            graphics_queues: Vec::new(),
+            compute_queues: Vec::new(),
+            transfer_queues: Vec::new(),
+            heap_types: Vec::new(),
+            memory_heaps: Vec::new(),
+            _marker: PhantomData,
+        };
+
+        let raw_queue = || {
+            unsafe { self.device.retain(); }
+            CommandQueue::new(self.device)
+        };
+
+        if let Some(&(_, queue_type, queue_count)) = queue_descs.iter().next() {
+            for _ in 0..queue_count {
+                unsafe {
+                    match queue_type {
+                        QueueType::General => {
+                            device.general_queues.push(core::GeneralQueue::new(raw_queue()));
+                        }
+                        QueueType::Graphics => {
+                            device.graphics_queues.push(core::GraphicsQueue::new(raw_queue()));
+                        }
+                        QueueType::Compute => {
+                            device.compute_queues.push(core::ComputeQueue::new(raw_queue()));
+                        }
+                        QueueType::Transfer => {
+                            device.transfer_queues.push(core::TransferQueue::new(raw_queue()));
+                        }
+                    }
+                }
+            }
+        }
+
+        device
+    }
+
+    fn get_info(&self) -> &core::AdapterInfo {
+        &self.adapter_info
+    }
+
+    fn get_queue_families(&self) -> &[(QueueFamily, QueueType)] {
+        &self.queue_families
     }
 }
 
-impl Clone for ShaderLibrary {
-    fn clone(&self) -> Self {
-        unsafe { self.lib.retain() };
-        ShaderLibrary { lib: self.lib }
-    }
-}
-
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Pipeline {
-    pipeline: MTLRenderPipelineState,
-    depth_stencil: Option<MTLDepthStencilState>,
-    winding: MTLWinding,
-    cull: MTLCullMode,
-    fill: MTLTriangleFillMode,
-    alpha_to_one: bool,
-    alpha_to_coverage: bool,
-    depth_bias: i32,
-    slope_scaled_depth_bias: i32,
-    depth_clip: bool,
-}
-unsafe impl Send for Pipeline {}
-unsafe impl Sync for Pipeline {}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Buffer(native::Buffer, Usage, Bind);
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Texture(native::Texture, Usage);
-
-pub struct Device {
-    pub device: MTLDevice,
-    pub drawable: *mut CAMetalDrawable,
-    pub backbuffer: *mut MTLTexture,
-    feature_set: MTLFeatureSet,
-    share: Arc<Share>,
+pub struct CommandQueue {
+    raw: Arc<QueueInner>,
     frame_handles: handle::Manager<Resources>,
     max_resource_count: Option<usize>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Fence;
-
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Resources {}
-
-impl core::Resources for Resources {
-    type Buffer = Buffer;
-    type Shader = Shader;
-    type Program = Program;
-    type PipelineStateObject = Pipeline;
-    type Texture = Texture;
-    type RenderTargetView = native::Rtv;
-    type DepthStencilView = native::Dsv;
-    type ShaderResourceView = native::Srv;
-    type UnorderedAccessView = ();
-    type Sampler = native::Sampler;
-    type Fence = Fence;
-    type Semaphore = (); // TODO
-    type Mapping = factory::RawMapping;
+struct QueueInner {
+    queue: MTLCommandQueue,
 }
 
-pub type ShaderModel = u16;
-
-impl Device {
-    pub fn get_shader_model(&self) -> ShaderModel {
-        use metal::MTLFeatureSet::*;
-
-        match self.feature_set {
-            iOS_GPUFamily1_v1 |
-            iOS_GPUFamily1_v2 => 10,
-            iOS_GPUFamily2_v1 |
-            iOS_GPUFamily2_v2 |
-            iOS_GPUFamily3_v1 |
-            macOS_GPUFamily1_v1 => 11,
-            _ => unimplemented!()
+impl Drop for QueueInner {
+    fn drop(&mut self) {
+        unsafe {
+            self.queue.release();
         }
     }
 }
 
-impl core::Device for Device {
-    type Resources = Resources;
-    type CommandBuffer = command::CommandBuffer;
+impl CommandQueue {
+    pub fn new(device: MTLDevice) -> CommandQueue {
+        let raw_queue = QueueInner { queue: device.new_command_queue() };
+        CommandQueue {
+            raw: Arc::new(raw_queue),
+            frame_handles: handle::Manager::new(),
+            max_resource_count: Some(999999),
+        }
+    }
 
-    fn get_capabilities(&self) -> &core::Capabilities {
-        &self.share.capabilities
+    pub unsafe fn device(&self) -> MTLDevice {
+        // TODO: How often do we call this and how costly is it?
+        msg_send![self.raw.queue.0, device]
+    }
+}
+
+impl core::CommandQueue<Backend> for CommandQueue {
+    unsafe fn submit(&mut self, submit_infos: &[core::QueueSubmit<Backend>],
+        fence: Option<&handle::Fence<Resources>>, access: &AccessInfo<Resources>)
+    {
+        for submit in submit_infos {
+            // FIXME: wait for semaphores!
+
+            // FIXME: multiple buffers signaling!
+            let signal_block = if !submit.signal_semaphores.is_empty() {
+                let semaphores_copy: Vec<_> = submit.signal_semaphores.iter().map(|semaphore| {
+                    self.frame_handles.ref_semaphore(semaphore).lock().unwrap().0
+                }).collect();
+                Some(ConcreteBlock::new(move |cb: *mut ()| -> () {
+                    for semaphore in semaphores_copy.iter() {
+                        native::dispatch_semaphore_signal(*semaphore);
+                    }
+                }).copy())
+            } else {
+                None
+            };
+
+            for buffer in submit.cmd_buffers {
+                let command_buffer = buffer.get_info().command_buffer;
+                if let Some(ref signal_block) = signal_block {
+                    msg_send![command_buffer.0, addCompletedHandler: signal_block.deref() as *const _];
+                }
+                // only append the fence handler to the last command buffer
+                if submit as *const _ == submit_infos.last().unwrap() as *const _ &&
+                   buffer as *const _ == submit.cmd_buffers.last().unwrap() as *const _ {
+                    if let Some(ref fence) = fence {
+                        let value_ptr = self.frame_handles.ref_fence(fence).lock().unwrap().0.clone();
+                        let fence_block = ConcreteBlock::new(move |cb: *mut ()| -> () {
+                            *value_ptr.lock().unwrap() = true;
+                        }).copy();
+                        msg_send![command_buffer.0, addCompletedHandler: fence_block.deref() as *const _];
+                    }
+                }
+                command_buffer.commit();
+            }
+        }
     }
 
     fn pin_submitted_resources(&mut self, man: &handle::Manager<Resources>) {
         self.frame_handles.extend(man);
         match self.max_resource_count {
             Some(c) if self.frame_handles.count() > c => {
-                error!("Way too many resources in the current frame. Did you call \
-                        Device::cleanup()?");
+                error!("Way too many resources in the current frame. Did you call Device::cleanup()?");
                 self.max_resource_count = None;
-            }
+            },
             _ => (),
         }
-    }
-
-    fn submit(&mut self,
-              cb: &mut command::CommandBuffer,
-              access: &AccessInfo<Resources>) -> SubmissionResult<()> {
-        let _guard = try!(access.take_accesses());
-        cb.commit(unsafe { *self.drawable });
-        Ok(())
-    }
-
-    fn fenced_submit(&mut self,
-                     _: &mut Self::CommandBuffer,
-                     _: &AccessInfo<Resources>,
-                     _after: Option<handle::Fence<Resources>>)
-                     -> SubmissionResult<handle::Fence<Resources>> {
-        unimplemented!()
-    }
-
-    fn wait_fence(&mut self, fence: &handle::Fence<Self::Resources>) {
-        unimplemented!()
     }
 
     fn cleanup(&mut self) {
         use core::handle::Producer;
         self.frame_handles.clear();
-        self.share.handles.borrow_mut().clean_with(&mut (),
-                                                   |_, _v| {
-                                                       // v.0.release();
-                                                   }, // buffer
-                                                   |_, _s| { //shader
-                /*(*s.object).Release();
-                (*s.reflection).Release();*/
-            },
-                                                   |_, _p| {
-                                                       // if !p.vs.is_null() { p.vs.release(); }
-                                                       // if !p.ps.is_null() { p.ps.release(); }
-                                                   }, // program
-                                                   |_, _v| { //PSO
-                /*type Child = *mut winapi::ID3D11DeviceChild;
-                (*v.layout).Release();
-                (*(v.rasterizer as Child)).Release();
-                (*(v.depth_stencil as Child)).Release();
-                (*(v.blend as Child)).Release();*/
-            },
-                                                   |_, _v| {
-                                                       // (*(v.0).0).release();
-                                                   }, // texture
-                                                   |_, _v| {
-                                                       // (*v.0).Release();
-                                                   }, // SRV
-                                                   |_, _| {}, // UAV
-                                                   |_, _v| {
-                                                       // (*v.0).Release();
-                                                   }, // RTV
-                                                   |_, _v| {
-                                                       // (*v.0).Release();
-                                                   }, // DSV
-                                                   |_, _v| {
-                                                       // v.sampler.release();
-                                                   }, // sampler
-                                                   |_, _| {
-                                                       // fence
-                                                   });
     }
 }
 
-#[derive(Clone, Debug)]
-pub enum InitError {
-    FeatureSet,
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+pub enum Backend {}
+impl core::Backend for Backend {
+    type Adapter = Adapter;
+    type Resources = Resources;
+    type CommandQueue = CommandQueue;
+    type RawCommandBuffer = command::RawCommandBuffer;
+    type SubpassCommandBuffer = command::SubpassCommandBuffer;
+    type SubmitInfo = command::SubmitInfo;
+    type Factory = Factory;
+    type QueueFamily = QueueFamily;
+
+    type RawCommandPool = pool::RawCommandPool;
+    type SubpassCommandPool = pool::SubpassCommandPool;
 }
 
-pub fn create(format: core::format::Format,
-              width: u32,
-              height: u32)
-              -> Result<(Device,
-                         Factory,
-                         handle::RawRenderTargetView<Resources>,
-                         *mut CAMetalDrawable,
-                         *mut MTLTexture),
-                        InitError> {
-    use core::handle::Producer;
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+pub enum Resources {}
+impl core::Resources for Resources {
+    type Buffer = native::Buffer;
+    type Shader = native::Shader;
+    type Program = native::Program;
+    type PipelineStateObject = native::Pipeline;
+    type Texture = native::Texture;
+    type ShaderResourceView = native::Srv;
+    type UnorderedAccessView = native::Uav;
+    type RenderTargetView = native::Rtv;
+    type DepthStencilView = native::Dsv;
+    type Sampler = native::Sampler;
+    type Fence = native::Fence;
+    type Semaphore = native::Semaphore;
+    type Mapping = factory::RawMapping;
+}
 
-    let share = Share {
-        capabilities: core::Capabilities {
-            max_texture_size: 0,
-            max_patch_size: 0,
-            instance_base_supported: false,
-            instance_call_supported: false,
-            instance_rate_supported: false,
-            vertex_base_supported: false,
-            srgb_color_supported: false,
-            constant_buffer_supported: true,
-            unordered_access_view_supported: false,
-            separate_blending_slots_supported: false,
-            copy_buffer_supported: true,
-        },
-        handles: RefCell::new(handle::Manager::new()),
-    };
-
-    let mtl_device = create_system_default_device();
-    let feature_sets = {
-        use metal::MTLFeatureSet::*;
-        [macOS_GPUFamily1_v1,
-         macOS_GPUFamily1_v2,
-         iOS_GPUFamily3_v1,
-         iOS_GPUFamily2_v2,
-         iOS_GPUFamily2_v1,
-         iOS_GPUFamily1_v2,
-         iOS_GPUFamily1_v1]
-    };
-    let selected_set = feature_sets.into_iter()
-                                   .find(|&&f| mtl_device.supports_feature_set(f));
-
-    let bb = Box::into_raw(Box::new(MTLTexture::nil()));
-    let d = Box::into_raw(Box::new(CAMetalDrawable::nil()));
-
-    let device = Device {
-        device: mtl_device,
-        feature_set: match selected_set {
-            Some(&set) => set,
-            None => return Err(InitError::FeatureSet),
-        },
-        share: Arc::new(share),
-        frame_handles: handle::Manager::new(),
-        max_resource_count: None,
-
-        drawable: d,
-        backbuffer: bb,
-    };
-
-    // let raw_addr: *mut MTLTexture = ptr::null_mut();//&mut MTLTexture::nil();//unsafe { mem::transmute(&(raw_tex.0).0) };
-    let raw_tex = Texture(native::Texture(bb), Usage::Data);
-
-    let color_info = tex::Info {
-        kind: tex::Kind::D2(width as tex::Size,
-                            height as tex::Size,
-                            tex::AaMode::Single),
-        levels: 1,
-        format: format.0,
-        bind: memory::RENDER_TARGET,
-        usage: raw_tex.1,
-    };
-    let color_tex = device.share.handles.borrow_mut().make_texture(raw_tex, color_info);
-
-    let mut factory = Factory::new(mtl_device, device.share.clone());
-
-    let color_target = {
-        use core::Factory;
-
-        let desc = tex::RenderDesc {
-            channel: format.1,
-            level: 0,
-            layer: None,
-        };
-
-        factory.view_texture_as_render_target_raw(&color_tex, desc).unwrap()
-    };
-
-    Ok((device, factory, color_target, d, bb))
+/// Internal struct of shared data.
+#[doc(hidden)]
+pub struct Share {
+    capabilities: core::Capabilities,
+    handles: RefCell<handle::Manager<Resources>>,
 }

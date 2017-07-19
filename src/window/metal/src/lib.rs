@@ -19,72 +19,46 @@ extern crate log;
 #[macro_use]
 extern crate objc;
 extern crate cocoa;
+extern crate core_foundation;
+extern crate core_graphics;
+extern crate io_surface;
 extern crate winit;
 extern crate metal_rs as metal;
 extern crate gfx_core as core;
 extern crate gfx_device_metal as device_metal;
+#[macro_use]
+extern crate scopeguard;
 
 use winit::os::macos::WindowExt;
 
-use objc::runtime::{YES};
+use objc::runtime::{Class, Object, YES};
 
 use cocoa::base::id as cocoa_id;
 //use cocoa::base::{selector, class};
 use cocoa::foundation::{NSSize};
 use cocoa::appkit::{NSWindow, NSView};
+use core_foundation::base::TCFType;
+use core_foundation::string::{CFString, CFStringRef};
+use core_foundation::dictionary::CFDictionary;
+use core_foundation::number::{CFNumber, CFNumberRef};
+use core_graphics::base::CGFloat;
+use core_graphics::geometry::CGRect;
+use io_surface::IOSurface;
 
-use core::format::{RenderFormat, Format};
+use core::{format, handle, memory, texture};
+use core::format::{ChannelType, RenderFormat, SurfaceType, Format};
 use core::handle::{RawRenderTargetView, RenderTargetView};
 use core::memory::Typed;
 
-use device_metal::{Device, Factory, Resources};
+use device_metal::{native, Factory, Resources};
 
 use metal::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 
-//use winit::{Window};
+const SWAP_CHAIN_IMAGE_COUNT: usize = 3;
 
-use std::ops::Deref;
-use std::cell::Cell;
-use std::mem;
-
-pub struct MetalWindow {
-    window: winit::Window,
-    layer: CAMetalLayer,
-    drawable: *mut CAMetalDrawable,
-    backbuffer: *mut MTLTexture,
-    pool: Cell<NSAutoreleasePool>
-}
-
-impl Deref for MetalWindow {
-    type Target = winit::Window;
-
-    fn deref(&self) -> &winit::Window {
-        &self.window
-    }
-}
-
-impl MetalWindow {
-    pub fn swap_buffers(&self) -> Result<(), ()> {
-        // TODO: did we fail to swap buffers?
-        // TODO: come up with alternative to this hack
-
-        unsafe {
-            self.pool.get().release();
-            self.pool.set(NSAutoreleasePool::alloc().init());
-
-            let drawable = self.layer.next_drawable().unwrap();
-            //drawable.retain();
-
-            *self.drawable = drawable;
-
-            *self.backbuffer = drawable.texture();
-        }
-
-        Ok(())
-    }
-}
-
-
+/*
 #[derive(Copy, Clone, Debug)]
 pub enum InitError {
     /// Unable to create a window.
@@ -95,13 +69,6 @@ pub enum InitError {
     BackbufferFormat(Format),
     /// Unable to find a supported driver type.
     DriverType,
-}
-
-pub fn init<C: RenderFormat>(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop)
-        -> Result<(MetalWindow, Device, Factory, RenderTargetView<Resources, C>), InitError>
-{
-    init_raw(wb, events_loop, C::get_format())
-        .map(|(window, device, factory, color)| (window, device, factory, Typed::new(color)))
 }
 
 /// Initialize with a given size. Raw format version.
@@ -156,5 +123,212 @@ pub fn init_raw(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop, color
         (*addr).0 = drawable.texture().0;
 
         Ok((window, device, factory, color))
+    }
+}
+*/
+
+fn get_format_bytes_per_pixel(format: MTLPixelFormat) -> usize {
+    // TODO: more formats
+    match format {
+        MTLPixelFormat::RGBA8Unorm => 4,
+        MTLPixelFormat::RGBA8Unorm_sRGB => 4,
+        MTLPixelFormat::BGRA8Unorm => 4,
+        _ => unimplemented!(),
+    }
+}
+
+pub struct Surface(Rc<SurfaceInner>);
+
+struct SurfaceInner {
+    nsview: *mut Object,
+    render_layer: RefCell<*mut Object>,
+    manager: handle::Manager<Resources>,
+}
+
+impl Drop for SurfaceInner {
+    fn drop(&mut self) {
+        unsafe { msg_send![self.nsview, release]; }
+    }
+}
+
+impl core::Surface<device_metal::Backend> for Surface {
+    type SwapChain = SwapChain;
+
+    fn supports_queue(&self, queue_family: &device_metal::QueueFamily) -> bool {
+        true
+    }
+
+    fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, present_queue: &Q) -> Self::SwapChain
+        where Q: AsRef<device_metal::CommandQueue>
+    {
+        let (mtl_format, cv_format) = match config.color_format {
+            format::Format(SurfaceType::R8_G8_B8_A8, ChannelType::Srgb) => (MTLPixelFormat::RGBA8Unorm_sRGB, native::kCVPixelFormatType_32RGBA),
+            _ => panic!("unsupported backbuffer format"), // TODO: more formats
+        };
+
+        let render_layer_borrow = self.0.render_layer.borrow_mut();
+        let render_layer = *render_layer_borrow;
+        let nsview = self.0.nsview;
+        let queue = present_queue.as_ref();
+
+        unsafe {
+            // Update render layer size
+            let view_points_size: CGRect = msg_send![nsview, bounds];
+            msg_send![render_layer, setBounds: view_points_size];
+            let view_window: *mut Object = msg_send![nsview, window];
+            if view_window.is_null() {
+                panic!("surface is not attached to a window");
+            }
+            let scale_factor: CGFloat = msg_send![view_window, backingScaleFactor];
+            msg_send![render_layer, setContentsScale: scale_factor];
+            let pixel_width = (view_points_size.size.width * scale_factor) as u64;
+            let pixel_height = (view_points_size.size.height * scale_factor) as u64;
+            let pixel_size = get_format_bytes_per_pixel(mtl_format) as u64;
+
+            info!("allocating {} IOSurface backbuffers of size {}x{} with pixel format 0x{:x}", SWAP_CHAIN_IMAGE_COUNT, pixel_width, pixel_height, cv_format);
+            // Create swap chain surfaces
+            let io_surfaces: Vec<_> = (0..SWAP_CHAIN_IMAGE_COUNT).map(|_| {
+                io_surface::new(&CFDictionary::from_CFType_pairs::<CFStringRef, CFNumberRef, CFString, CFNumber>(&[
+                    (TCFType::wrap_under_get_rule(io_surface::kIOSurfaceWidth), CFNumber::from_i32(pixel_width as i32)),
+                    (TCFType::wrap_under_get_rule(io_surface::kIOSurfaceHeight), CFNumber::from_i32(pixel_height as i32)),
+                    (TCFType::wrap_under_get_rule(io_surface::kIOSurfaceBytesPerRow), CFNumber::from_i32((pixel_width * pixel_size) as i32)),
+                    (TCFType::wrap_under_get_rule(io_surface::kIOSurfaceBytesPerElement), CFNumber::from_i32(pixel_size as i32)),
+                    (TCFType::wrap_under_get_rule(io_surface::kIOSurfacePixelFormat), CFNumber::from_i32(cv_format as i32)),
+                ]))
+            }).collect();
+
+            let device = queue.device();
+            let backbuffer_descriptor = MTLTextureDescriptor::new();
+            defer! { backbuffer_descriptor.release() };
+            backbuffer_descriptor.set_pixel_format(mtl_format);
+            backbuffer_descriptor.set_width(pixel_width as u64);
+            backbuffer_descriptor.set_height(pixel_height as u64);
+            backbuffer_descriptor.set_usage(MTLTextureUsageRenderTarget);
+
+            let backbuffers = io_surfaces.iter().map(|surface| {
+                use core::handle::Producer;
+                let mapped_texture: MTLTexture = msg_send![device.0, newTextureWithDescriptor: backbuffer_descriptor.0 iosurface: surface.obj plane: 0];
+                let color = self.0.manager.make_texture(
+                    device_metal::native::Texture(
+                        device_metal::native::RawTexture(Box::into_raw(Box::new(mapped_texture))),
+                        memory::Usage::Data,
+                    ),
+                    texture::Info {
+                        levels: 1,
+                        kind: texture::Kind::D2(pixel_width as u16, pixel_height as u16, texture::AaMode::Single),
+                        format: config.color_format.0,
+                        bind: memory::RENDER_TARGET | memory::TRANSFER_SRC,
+                        usage: memory::Usage::Data,
+                    },
+                );
+
+                // TODO: depth-stencil
+
+                (color, None)
+            }).collect();
+
+            SwapChain {
+                surface: self.0.clone(),
+                pixel_width,
+                pixel_height,
+
+                io_surfaces,
+                backbuffers,
+                frame_index: 0,
+                present_index: 0,
+            }
+        }
+    }
+}
+
+pub struct SwapChain {
+    surface: Rc<SurfaceInner>,
+    pixel_width: u64,
+    pixel_height: u64,
+
+    io_surfaces: Vec<IOSurface>,
+    backbuffers: Vec<core::Backbuffer<device_metal::Backend>>,
+    frame_index: usize,
+    present_index: usize,
+}
+
+impl core::SwapChain<device_metal::Backend> for SwapChain {
+    fn get_backbuffers(&mut self) -> &[core::Backbuffer<device_metal::Backend>] {
+        &self.backbuffers
+    }
+
+    fn acquire_frame(&mut self, sync: core::FrameSync<device_metal::Resources>) -> core::Frame {
+        unsafe {
+            // TODO: sync
+            /*
+            match sync {
+                core::FrameSync::Semaphore(semaphore) => {
+                    // FIXME: this is definitely wrong
+                    native::dispatch_semaphore_signal(semaphore.0);
+                },
+                core::FrameSync::Fence(_fence) => {
+                    // TODO: unimplemented!(),
+                    warn!("Fence based frame acquisition not implemented");
+                }
+            }
+            */
+
+            let frame = core::Frame::new(self.frame_index % self.backbuffers.len());
+            self.frame_index += 1;
+            frame
+        }
+    }
+
+    fn present<Q>(&mut self, present_queue: &mut Q, wait_semaphores: &[&handle::Semaphore<device_metal::Resources>])
+        where Q: AsMut<device_metal::CommandQueue>
+    {
+        let buffer_index = self.present_index % self.io_surfaces.len();
+
+        unsafe {
+            let io_surface = &mut self.io_surfaces[buffer_index];
+            let render_layer_borrow = self.surface.render_layer.borrow_mut();
+            let render_layer = *render_layer_borrow;
+            msg_send![render_layer, setContents: io_surface.obj];
+        }
+
+        self.present_index += 1;
+    }
+}
+
+pub struct Window(pub winit::Window);
+
+impl core::WindowExt<device_metal::Backend> for Window {
+    type Surface = Surface;
+    type Adapter = device_metal::Adapter;
+
+    fn get_surface_and_adapters(&mut self) -> (Surface, Vec<device_metal::Adapter>) {
+        let surface = create_surface(&self.0);
+        let adapters = device_metal::enumerate_adapters();
+        (surface, adapters)
+    }
+}
+
+fn create_surface(window: &winit::Window) -> Surface {
+    unsafe {
+        let wnd: cocoa::base::id = std::mem::transmute(window.get_nswindow());
+
+        let view = wnd.contentView();
+        if view.is_null() {
+            panic!("window does not have a valid contentView");
+        }
+
+        msg_send![view, setWantsLayer: YES];
+        let render_layer: *mut Object = msg_send![Class::get("CALayer").unwrap(), new]; // Returns retained
+        let view_size: CGRect = msg_send![view, bounds];
+        msg_send![render_layer, setFrame: view_size];
+        let view_layer: *mut Object = msg_send![view, layer];
+        msg_send![view_layer, addSublayer: render_layer];
+
+        msg_send![view, retain];
+        Surface(Rc::new(SurfaceInner {
+            nsview: view,
+            render_layer: RefCell::new(render_layer),
+            manager: handle::Manager::new(),
+        }))
     }
 }
