@@ -271,7 +271,7 @@ pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq + Any {
     type RenderTargetView:    Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
     type DepthStencilView:    Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
     type Sampler:             Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
-    type Fence:               Debug + Hash + Eq + PartialEq + Any + Send + Sync;
+    type Fence:               Debug + Any + Send + Sync;
     type Semaphore:           Debug + Any + Send + Sync;
     type Mapping:             Debug + Any + Send + Sync + mapping::Gate<Self>;
 }

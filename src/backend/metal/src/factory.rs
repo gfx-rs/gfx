@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::os::raw::c_void;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::{mem, slice, str};
 use std::path::Path;
 
@@ -26,13 +26,12 @@ use core::memory::Typed;
 
 use metal::*;
 
-use command::CommandBuffer;
+use command::RawCommandBuffer;
 
 use MTL_MAX_BUFFER_BINDINGS;
 
-use {Resources, Share, Texture, Buffer, Shader, Program, ShaderLibrary, Pipeline};
-use native;
-use mirror;
+use {Resources, Share};
+use {mirror, native as n};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RawMapping {
@@ -59,7 +58,6 @@ impl mapping::Gate<Resources> for RawMapping {
 
 pub struct Factory {
     device: MTLDevice,
-    queue: MTLCommandQueue,
     share: Arc<Share>,
     frame_handles: handle::Manager<Resources>,
 }
@@ -68,14 +66,9 @@ impl Factory {
     pub fn new(device: MTLDevice, share: Arc<Share>) -> Factory {
         Factory {
             device: device,
-            queue: device.new_command_queue(),
             share: share,
             frame_handles: handle::Manager::new(),
         }
-    }
-
-    pub fn create_command_buffer(&self) -> CommandBuffer {
-        CommandBuffer::new(self.device, self.queue)
     }
 
     fn create_buffer_internal(&self,
@@ -92,12 +85,12 @@ impl Factory {
 
         let raw_buf = if let Some(data) = raw_data {
             self.device
-                .new_buffer_with_data(unsafe { mem::transmute(data) }, info.size as u64, usage)
+                .new_buffer_with_data(unsafe { mem::transmute(data) }, info.size as u32, usage)
         } else {
             self.device.new_buffer(info.size as u64, usage)
         };
 
-        let buf = Buffer(native::Buffer(Box::into_raw(Box::new(raw_buf))), info.usage, info.bind);
+        let buf = n::Buffer(n::RawBuffer(Box::into_raw(Box::new(raw_buf))), info.usage, info.bind);
 
         // TODO(fkaa): if we have a way to track buffers in use (added on
         //             scheduling of command buffers, removed on completion),
@@ -155,11 +148,11 @@ impl Factory {
     pub fn create_library<P: AsRef<Path>>
         (&mut self,
          file: P)
-         -> Result<ShaderLibrary, core::shade::CreateShaderError> {
+         -> Result<n::ShaderLibrary, core::shade::CreateShaderError> {
         use core::shade::CreateShaderError;
 
         match self.device.new_library_with_file(file) {
-            Ok(lib) => Ok(ShaderLibrary { lib: lib }),
+            Ok(lib) => Ok(n::ShaderLibrary { lib: lib }),
             Err(err) => Err(CreateShaderError::CompilationFailed(err.into())),
         }
     }
@@ -167,7 +160,7 @@ impl Factory {
     fn create_shader_from_library<S: AsRef<str>>
         (&mut self,
          stage: core::shade::Stage,
-         library: &ShaderLibrary,
+         library: &n::ShaderLibrary,
          function_name: S)
          -> Result<handle::Shader<Resources>, core::shade::CreateShaderError> {
         use core::shade::{CreateShaderError, Stage};
@@ -177,7 +170,7 @@ impl Factory {
             _ => return Err(CreateShaderError::StageNotSupported(stage)),
         }
 
-        let shader = Shader {
+        let shader = n::Shader {
             func: library.lib.get_function(function_name.as_ref()),
         };
 
@@ -186,7 +179,7 @@ impl Factory {
 
     pub fn create_shader_vertex_from_library<S: AsRef<str>>
         (&mut self,
-         library: &ShaderLibrary,
+         library: &n::ShaderLibrary,
          function_name: S)
         -> Result<core::VertexShader<Resources>, core::shade::CreateShaderError> {
         self.create_shader_from_library(
@@ -198,7 +191,7 @@ impl Factory {
 
     pub fn create_shader_pixel_from_library<S: AsRef<str>>
         (&mut self,
-         library: &ShaderLibrary,
+         library: &n::ShaderLibrary,
          function_name: S)
          -> Result<core::PixelShader<Resources>, core::shade::CreateShaderError> {
         self.create_shader_from_library(
@@ -255,7 +248,7 @@ impl core::Factory<Resources> for Factory {
             _ => return Err(CreateShaderError::StageNotSupported(stage)),
         };
 
-        let shader = Shader {
+        let shader = n::Shader {
             func: lib.get_function(match stage {
                 Stage::Vertex => "vert",
                 Stage::Pixel => "frag",
@@ -346,7 +339,7 @@ impl core::Factory<Resources> for Factory {
                 // }
 
                 // FIXME: retain functions?
-                let program = Program { vs: vs, ps: ps };
+                let program = n::Program { vs: vs, ps: ps };
 
                 (program, info)
             }
@@ -456,7 +449,7 @@ impl core::Factory<Resources> for Factory {
 
         let pso = self.device.new_render_pipeline_state(pso_descriptor).unwrap();
 
-        let pso = Pipeline {
+        let pso = n::Pipeline {
             pipeline: pso,
             depth_stencil: desc.depth_stencil.map(|desc| self.make_depth_stencil(&desc.1)),
             winding: map_winding(desc.rasterizer.front_face),
@@ -554,7 +547,7 @@ impl core::Factory<Resources> for Factory {
                     MTLRegion {
                         origin: MTLOrigin { x: 0, y: 0, z: 0 },
                         size: MTLSize {
-                            width: w as u64,
+                            width: w as u32,
                             height: 1,
                             depth: 1,
                         },
@@ -564,9 +557,9 @@ impl core::Factory<Resources> for Factory {
                     MTLRegion {
                         origin: MTLOrigin { x: 0, y: 0, z: 0 },
                         size: MTLSize {
-                            width: w as u64,
+                            width: w as u32,
                             height: 1,
-                            depth: d as u64,
+                            depth: d as u32,
                         },
                     }
                 }
@@ -574,8 +567,8 @@ impl core::Factory<Resources> for Factory {
                     MTLRegion {
                         origin: MTLOrigin { x: 0, y: 0, z: 0 },
                         size: MTLSize {
-                            width: w as u64,
-                            height: h as u64,
+                            width: w as u32,
+                            height: h as u32,
                             depth: 1,
                         },
                     }
@@ -584,9 +577,9 @@ impl core::Factory<Resources> for Factory {
                     MTLRegion {
                         origin: MTLOrigin { x: 0, y: 0, z: 0 },
                         size: MTLSize {
-                            width: w as u64,
-                            height: h as u64,
-                            depth: d as u64,
+                            width: w as u32,
+                            height: h as u32,
+                            depth: d as u32,
                         },
                     }
                 }
@@ -594,9 +587,9 @@ impl core::Factory<Resources> for Factory {
                     MTLRegion {
                         origin: MTLOrigin { x: 0, y: 0, z: 0 },
                         size: MTLSize {
-                            width: w as u64,
-                            height: h as u64,
-                            depth: d as u64,
+                            width: w as u32,
+                            height: h as u32,
+                            depth: d as u32,
                         },
                     }
                 }
@@ -606,11 +599,11 @@ impl core::Factory<Resources> for Factory {
             // TODO: handle the data better
             raw_tex.replace_region(region,
                                    0,
-                                   4 * region.size.width,
+                                   4 * region.size.width as u64,
                                    data[0].as_ptr() as *const _);
         }
 
-        let tex = Texture(native::Texture(Box::into_raw(Box::new(raw_tex))),
+        let tex = n::Texture(n::RawTexture(Box::into_raw(Box::new(raw_tex))),
                           desc.usage);
         Ok(self.share.handles.borrow_mut().make_texture(tex, desc))
     }
@@ -688,7 +681,7 @@ impl core::Factory<Resources> for Factory {
         // }
         // Ok(self.share.handles.borrow_mut().make_texture_srv(native::Srv(raw_view), htex))
         let raw_tex = self.frame_handles.ref_texture(htex).0;
-        Ok(self.share.handles.borrow_mut().make_texture_srv(native::Srv(raw_tex.0), htex))
+        Ok(self.share.handles.borrow_mut().make_texture_srv(n::Srv(raw_tex.0), htex))
     }
 
     fn view_texture_as_unordered_access_raw
@@ -706,7 +699,7 @@ impl core::Factory<Resources> for Factory {
          -> Result<handle::RawRenderTargetView<Resources>, factory::TargetViewError> {
         let raw_tex = self.frame_handles.ref_texture(htex).0;
         let size = htex.get_info().kind.get_level_dimensions(desc.level);
-        Ok(self.share.handles.borrow_mut().make_rtv(native::Rtv(raw_tex.0), htex, size))
+        Ok(self.share.handles.borrow_mut().make_rtv(n::Rtv(raw_tex.0), htex, size))
     }
 
     fn view_texture_as_depth_stencil_raw
@@ -776,7 +769,7 @@ impl core::Factory<Resources> for Factory {
         // Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_view), htex, dim))
         let raw_tex = self.frame_handles.ref_texture(htex).0;
         let size = htex.get_info().kind.get_level_dimensions(desc.level);
-        Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_tex.0, desc.layer), htex, size))
+        Ok(self.share.handles.borrow_mut().make_dsv(n::Dsv(raw_tex.0, desc.layer), htex, size))
     }
 
     fn create_sampler(&mut self, info: core::texture::SamplerInfo) -> handle::Sampler<Resources> {
@@ -805,7 +798,29 @@ impl core::Factory<Resources> for Factory {
 
         let sampler = self.device.new_sampler(desc);
 
-        self.share.handles.borrow_mut().make_sampler(native::Sampler(sampler), info)
+        self.share.handles.borrow_mut().make_sampler(n::Sampler(sampler), info)
+    }
+
+    fn create_semaphore(&mut self) -> handle::Semaphore<Resources> {
+        let semaphore = unsafe { n::Semaphore(n::dispatch_semaphore_create(1)) }; // Returns retained
+        self.share.handles.borrow_mut().make_semaphore(semaphore)
+    }
+
+    fn create_fence(&mut self, signalled: bool) -> handle::Fence<Resources> {
+        let fence = n::Fence(Arc::new(Mutex::new(signalled)));
+        self.share.handles.borrow_mut().make_fence(fence)
+    }
+
+    fn reset_fences(&mut self, fences: &[&handle::Fence<Resources>]) {
+        for fence in fences {
+            let fence = &mut *self.frame_handles.ref_fence(&fence).lock().unwrap();
+            *fence.0.lock().unwrap() = false;
+        }
+    }
+
+    fn wait_for_fences(&mut self, fences: &[&handle::Fence<Resources>], wait: factory::WaitFor, timeout_ms: u32) -> bool {
+        warn!("`wait_for_fences` not implemented!");
+        true
     }
 
     fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<Resources, T>)
