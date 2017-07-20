@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Memory stuff
+//! Types to describe the properties of memory allocated for gfx resources.
 
 use std::mem;
 
-/// How this memory will be used.
+/// How this memory will be used on the GPU and/or the CPU.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[repr(u8)]
@@ -36,7 +36,13 @@ pub enum Usage {
 }
 
 bitflags!(
-    /// Memory access
+    /// Flags providing information about the type of memory access to a resource.
+    ///
+    /// An `Access` value can be a combination of the the following bit patterns:
+    ///
+    /// - [`READ`](constant.READ.html)
+    /// - [`WRITE`](constant.WRITE.html)
+    /// - Or [`RW`](constant.RW.html) which is equivalent to `READ` and `WRITE`.
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
     pub flags Access: u8 {
         /// Read access
@@ -49,7 +55,16 @@ bitflags!(
 );
 
 bitflags!(
-    /// Bind flags
+    /// Flags providing information about the usage of a resource.
+    ///
+    /// A `Bind` value can be a combination of the following bit patterns:
+    ///
+    /// - [`RENDER_TARGET`](constant.RENDER_TARGET.html)
+    /// - [`DEPTH_STENCIL`](constant.DEPTH_STENCIL.html)
+    /// - [`SHADER_RESOURCE`](constant.SHADER_RESOURCE.html)
+    /// - [`UNORDERED_ACCESS`](constant.UNORDERED_ACCESS.html)
+    /// - [`TRANSFER_SRC`](constant.TRANSFER_SRC.html)
+    /// - [`TRANSFER_DST`](constant.TRANSFER_DST.html)
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
     pub flags Bind: u8 {
         /// Can be rendered into.
@@ -91,6 +106,8 @@ pub trait Typed: Sized {
 ///
 /// A POD type does not have invalid bit patterns and can be safely
 /// created from arbitrary bit pattern.
+/// The `Pod` trait is implemented for standard integer and floating point numbers as well as
+/// common arrays of them (for example `[f32; 2]`).
 pub unsafe trait Pod {}
 
 macro_rules! impl_pod {
