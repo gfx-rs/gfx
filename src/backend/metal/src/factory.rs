@@ -85,7 +85,7 @@ impl Factory {
 
         let raw_buf = if let Some(data) = raw_data {
             self.device
-                .new_buffer_with_data(unsafe { mem::transmute(data) }, info.size as u32, usage)
+                .new_buffer_with_data(unsafe { mem::transmute(data) }, info.size as u64, usage)
         } else {
             self.device.new_buffer(info.size as u64, usage)
         };
@@ -547,7 +547,7 @@ impl core::Factory<Resources> for Factory {
                     MTLRegion {
                         origin: MTLOrigin { x: 0, y: 0, z: 0 },
                         size: MTLSize {
-                            width: w as u32,
+                            width: w as u64,
                             height: 1,
                             depth: 1,
                         },
@@ -557,9 +557,9 @@ impl core::Factory<Resources> for Factory {
                     MTLRegion {
                         origin: MTLOrigin { x: 0, y: 0, z: 0 },
                         size: MTLSize {
-                            width: w as u32,
+                            width: w as u64,
                             height: 1,
-                            depth: d as u32,
+                            depth: d as u64,
                         },
                     }
                 }
@@ -567,8 +567,8 @@ impl core::Factory<Resources> for Factory {
                     MTLRegion {
                         origin: MTLOrigin { x: 0, y: 0, z: 0 },
                         size: MTLSize {
-                            width: w as u32,
-                            height: h as u32,
+                            width: w as u64,
+                            height: h as u64,
                             depth: 1,
                         },
                     }
@@ -577,9 +577,9 @@ impl core::Factory<Resources> for Factory {
                     MTLRegion {
                         origin: MTLOrigin { x: 0, y: 0, z: 0 },
                         size: MTLSize {
-                            width: w as u32,
-                            height: h as u32,
-                            depth: d as u32,
+                            width: w as u64,
+                            height: h as u64,
+                            depth: d as u64,
                         },
                     }
                 }
@@ -587,9 +587,9 @@ impl core::Factory<Resources> for Factory {
                     MTLRegion {
                         origin: MTLOrigin { x: 0, y: 0, z: 0 },
                         size: MTLSize {
-                            width: w as u32,
-                            height: h as u32,
-                            depth: d as u32,
+                            width: w as u64,
+                            height: h as u64,
+                            depth: d as u64,
                         },
                     }
                 }
