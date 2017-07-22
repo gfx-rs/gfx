@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Resource factory
+//! # Resource factory
 //!
 //! This module exposes the `Factory` trait, used for creating and managing graphics resources, and
 //! includes several items to facilitate this.
@@ -178,17 +178,52 @@ impl From<TargetViewError> for CombinedError {
     }
 }
 
+/// # Overview
+///
 /// A `Factory` is responsible for creating and managing resources for the context it was created
 /// with.
 ///
-/// # Construction and Handling
+/// ## Construction and Handling
+///
 /// A `Factory` is typically created along with other objects using a helper function of the
 /// appropriate gfx_window module (e.g. gfx_window_glutin::init()).
 ///
 /// This factory structure can then be used to create and manage different resources, like buffers,
 /// shader programs and textures. See the individual methods for more information.
 ///
-/// Also see the `FactoryExt` trait inside the `gfx` module for additional methods.
+/// This trait is extended by the [`gfx::FactoryExt` trait](https://docs.rs/gfx/*/gfx/traits/trait.FactoryExt.html).
+/// All types implementing `Factory` also implement `FactoryExt`.
+///
+/// ## Immutable resources
+///
+/// Immutable buffers and textures can only be read by the GPU. They cannot be written by the GPU and
+/// cannot be accessed at all by the CPU.
+///
+/// See:
+///  - [`Factory::create_texture_immutable`](trait.Factory.html#tymethod.create_texture_immutable),
+///  - [`Factory::create_buffer_immutable`](trait.Factory.html#tymethod.create_buffer_immutable).
+///
+/// ## Raw resources
+///
+/// The term "raw" is used in the context of types of functions that have a strongly typed and an
+/// untyped equivalent, to refer to the untyped equivalent.
+///
+/// For example ['Factory::create_buffer_raw'](trait.Factory.html#tymethod.create_buffer_raw) and
+/// ['Factory::create_buffer'](trait.Factory.html#tymethod.create_buffer)
+///
+/// ## Shader resource views and unordered access views
+///
+/// This terminology is borrowed from D3D.
+///
+/// Shader resource views typically wrap textures and buffers to provide read-only access in shaders.
+/// An unordered access view provides similar functionality, but enables reading and writing to
+/// the buffer or texture in any order.
+///
+/// See:
+///
+/// - [The gfx::UNORDERED_ACCESS bit in the gfx::Bind flags](../gfx/struct.Bind.html).
+/// - [Factory::view_buffer_as_unordered_access](trait.Factory.html#method.view_buffer_as_unordered_access).
+///
 #[allow(missing_docs)]
 pub trait Factory<R: Resources> {
     /// Returns the capabilities of this `Factory`. This usually depends on the graphics API being
