@@ -332,6 +332,13 @@ pub fn map_format(format: Format, is_target: bool) -> Option<MTLPixelFormat> {
                 _ => return None,
             }
         }
+        D32_S8 => {
+            match (is_target, format.1) {
+                (true, _) => Depth32Float_Stencil8,
+                (false, Float) => Depth32Float_Stencil8,
+                _ => return None,
+            }
+        }
     })
 }
 
@@ -350,6 +357,7 @@ pub fn map_channel_hint(hint: SurfaceType) -> Option<ChannelType> {
         D24 => Unorm,
         D24_S8 => Unorm,
         D32 => Float,
+        D32_S8 => Float,
     })
 }
 
