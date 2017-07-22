@@ -137,12 +137,14 @@ fn get_format_bytes_per_pixel(format: MTLPixelFormat) -> usize {
     }
 }
 
-pub struct Surface(Rc<SurfaceInner>);
+pub struct Surface {
+    raw: Rc<SurfaceInner>,
+    manager: handle::Manager<Resources>,
+}
 
 struct SurfaceInner {
     nsview: *mut Object,
-    render_layer: RefCell<*mut Object>,
-    manager: handle::Manager<Resources>,
+    render_layer: *mut Object,
 }
 
 impl Drop for SurfaceInner {
@@ -166,9 +168,8 @@ impl core::Surface<device_metal::Backend> for Surface {
             _ => panic!("unsupported backbuffer format"), // TODO: more formats
         };
 
-        let render_layer_borrow = self.0.render_layer.borrow_mut();
-        let render_layer = *render_layer_borrow;
-        let nsview = self.0.nsview;
+        let render_layer = self.raw.render_layer;
+        let nsview = self.raw.nsview;
         let queue = present_queue.as_ref();
 
         unsafe {
@@ -208,7 +209,7 @@ impl core::Surface<device_metal::Backend> for Surface {
             let backbuffers = io_surfaces.iter().map(|surface| {
                 use core::handle::Producer;
                 let mapped_texture: MTLTexture = msg_send![device.0, newTextureWithDescriptor: backbuffer_descriptor.0 iosurface: surface.obj plane: 0];
-                let color = self.0.manager.make_texture(
+                let color = self.manager.make_texture(
                     device_metal::native::Texture(
                         device_metal::native::RawTexture(Box::into_raw(Box::new(mapped_texture))),
                         memory::Usage::Data,
@@ -228,7 +229,7 @@ impl core::Surface<device_metal::Backend> for Surface {
             }).collect();
 
             SwapChain {
-                surface: self.0.clone(),
+                surface: self.raw.clone(),
                 pixel_width,
                 pixel_height,
 
@@ -286,9 +287,7 @@ impl core::SwapChain<device_metal::Backend> for SwapChain {
 
         unsafe {
             let io_surface = &mut self.io_surfaces[buffer_index];
-            let render_layer_borrow = self.surface.render_layer.borrow_mut();
-            let render_layer = *render_layer_borrow;
-            msg_send![render_layer, setContents: io_surface.obj];
+            msg_send![self.surface.render_layer, setContents: io_surface.obj];
         }
 
         self.present_index += 1;
@@ -325,10 +324,13 @@ fn create_surface(window: &winit::Window) -> Surface {
         msg_send![view_layer, addSublayer: render_layer];
 
         msg_send![view, retain];
-        Surface(Rc::new(SurfaceInner {
-            nsview: view,
-            render_layer: RefCell::new(render_layer),
+        Surface {
+            raw: Rc::new(
+                    SurfaceInner {
+                        nsview: view,
+                        render_layer,
+                    }),
             manager: handle::Manager::new(),
-        }))
+        }
     }
 }

@@ -30,7 +30,7 @@ use command::RawCommandBuffer;
 
 use MTL_MAX_BUFFER_BINDINGS;
 
-use {Resources, Share};
+use {Resources, ShaderModel, Share};
 use {mirror, native as n};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -68,6 +68,35 @@ impl Factory {
             device: device,
             share: share,
             frame_handles: handle::Manager::new(),
+        }
+    }
+
+    pub fn get_shader_model(&self) -> ShaderModel {
+        use metal::MTLFeatureSet::*;
+
+        // TODO: double check if these are correct (and correct way?)
+        // Check support via MSL specs and compare OS versions for feature sets
+        // [Metal Shading Language Specification Section 6.3](https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf)
+        // [Metal Feature Set Tables](https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf)
+        match self.share.feature_set {
+            iOS_GPUFamily1_v1 |
+            iOS_GPUFamily2_v1 => 10,
+            iOS_GPUFamily1_v2 |
+            iOS_GPUFamily2_v2 |
+            iOS_GPUFamily3_v1 |
+            tvOS_GPUFamily1_v1 | // TODO: not enlisted?
+            macOS_GPUFamily1_v1 => 11,
+            iOS_GPUFamily1_v3 |
+            iOS_GPUFamily2_v3 |
+            iOS_GPUFamily3_v2 |
+            tvOS_GPUFamily1_v2 | // TODO: not enlisted?
+            macOS_GPUFamily1_v2 => 12,
+            iOS_GPUFamily1_v4 |
+            iOS_GPUFamily2_v4 |
+            iOS_GPUFamily3_v3 |
+            tvOS_GPUFamily1_v3 | // TODO: not enlisted?
+            macOS_GPUFamily1_v3 => 20,
+            _ => unreachable!(),
         }
     }
 

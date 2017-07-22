@@ -66,7 +66,7 @@ fn format_to_glpixel(format: NewFormat) -> GLenum {
         S::R16_G16_B16 | S::R32_G32_B32 | S::R5_G6_B5 | S::R11_G11_B10 => rgb,
         S::R8_G8_B8_A8 | S::R16_G16_B16_A16 | S::R32_G32_B32_A32 |
         S::R4_G4_B4_A4 | S::R5_G5_B5_A1 | S::R10_G10_B10_A2 => rgba,
-        S::D24_S8 => gl::DEPTH_STENCIL,
+        S::D24_S8 | S::D32_S8 => gl::DEPTH_STENCIL,
         S::D16 | S::D24 | S::D32 => gl::DEPTH_COMPONENT,
         S::B8_G8_R8_A8 => bgra,
     }
@@ -97,6 +97,7 @@ fn format_to_gltype(format: NewFormat) -> Result<GLenum, ()> {
         S::D24 => gl::UNSIGNED_INT,
         S::D24_S8 => gl::UNSIGNED_INT_24_8,
         S::D32 => gl::FLOAT,
+        S::D32_S8 => gl::FLOAT_32_UNSIGNED_INT_24_8_REV,
     })
 }
 
@@ -217,6 +218,7 @@ pub fn format_to_glfull(format: NewFormat) -> Result<GLenum, ()> {
         S::D24 => gl::DEPTH_COMPONENT24,
         S::D24_S8 => gl::DEPTH24_STENCIL8,
         S::D32 => gl::DEPTH_COMPONENT32F,
+        S::D32_S8 => gl::DEPTH32F_STENCIL8,
     })
 }
 

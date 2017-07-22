@@ -29,7 +29,7 @@ name = "gfx_window_metal"
 [dependencies]
 log = "0.3"
 cocoa = "0.9"
-core-foundation = "0.4"
+core-foundation = "0.3"
 core-graphics = "0.8"
 objc = "0.2"
 io-surface = "0.7"

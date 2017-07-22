@@ -68,6 +68,13 @@ impl ShadeExt for ::gfx_device_dx12::Factory {
     }
 }
 
+#[cfg(feature = "metal")]
+impl ShadeExt for ::gfx_device_metal::Factory {
+    fn shader_backend(&self) -> Backend {
+        Backend::Msl(self.get_shader_model())
+    }
+}
+
 #[cfg(feature = "vulkan")]
 impl ShadeExt for ::gfx_device_vulkan::Factory {
     fn shader_backend(&self) -> Backend {
