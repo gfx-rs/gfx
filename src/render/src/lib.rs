@@ -14,8 +14,79 @@
 
 #![deny(missing_docs)]
 
-//! An efficient, low-level, bindless graphics API for Rust. See [the
-//! blog](http://gfx-rs.github.io/) for explanations and annotated examples.
+//! # gfx
+//!
+//! An efficient, low-level, bindless graphics API for Rust.
+//!
+//! # Overview
+//!
+//! ## Command buffers and encoders
+//!
+//! A command buffer is a serialized list of drawing and compute commands.
+//! Unlike with vulkan, command buffers are not what you use to create commands, but only
+//! the result of creating these commands. Gfx, borrowing metal's terminology, uses
+//! encoders to build command buffers. This means that, in general, users of the gfx crate
+//! don't manipulate command buffers directly much and interact mostly with encoders.
+//!
+//! Manipulating an `Encoder` in gfx corresponds to interacting with:
+//!
+//! - a `VkCommandBuffer` in vulkan,
+//! - a `MTLCommandEncoder` in metal,
+//! - an `ID3D12GraphicsCommandList` in D3D12.
+//!
+//! OpenGL and earlier versions of D3D don't have an explicit notion of command buffers
+//! or encoders (with the exception of draw indirect commands in late versions of OpenGL,
+//! which can be seen as a GPU-side command buffer). They are managed implicitly by the driver.
+//!
+//! See:
+//!
+//! - The [`Encoder` struct documentation](struct.Encoder.html).
+//! - The [`Command buffer` trait documentation](trait.CommandBuffer.html).
+//!
+//! ## Factory
+//!
+//! The factory is what lets you allocate GPU resources such as buffers and textures.
+//!
+//! Each gfx backend provides its own factory type which implements both:
+//!
+//! - The [`Factory` trait](traits/trait.Factory.html#overview).
+//! - The [`FactoryExt` trait](traits/trait.FactoryExt.html).
+//!
+//! `gfx::Factory` is roughly equivalent to:
+//!
+//! - `VkDevice` in vulkan,
+//! - `ID3D11Device` in D3D11,
+//! - `MTLDevice` in metal.
+//!
+//! OpenGL does not have a notion of factory (resources are created directly off of the global
+//! context). D3D11 has a DXGI factory but it is only used to interface with other processes
+//! and the window manager, resources like textures are usually created using the device.
+//!
+//! ## Device
+//!
+//! See [the `gfx::Device` trait](trait.Device.html).
+//!
+//! ## Pipeline state (PSO)
+//!
+//! See [the documentation of the gfx::pso module](pso/index.html).
+//!
+//! ## Memory management
+//!
+//! Handles internally use atomically reference counted pointers to deal with memory management.
+//! GPU resources are not destroyed right away when all references to them are gone. Instead they
+//! are destroyed the next time [Device::cleanup](trait.Device.html#tymethod.cleanup) is called.
+//!
+//! # Examples
+//!
+//! See [the examples in the repository](https://github.com/gfx-rs/gfx/tree/master/examples).
+//!
+//! # Useful resources
+//!
+//!  - [Documentation for some of the technical terms](doc/terminology/index.html)
+//! used in the API.
+//!  - [Learning gfx](https://wiki.alopex.li/LearningGfx) tutorial.
+//!  - See [the blog](http://gfx-rs.github.io/) for more explanations and annotated examples.
+//!
 
 #[cfg(feature = "mint")]
 extern crate mint;
