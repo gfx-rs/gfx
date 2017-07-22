@@ -142,6 +142,12 @@ pub fn map_format(format: Format, is_target: bool) -> Option<DXGI_FORMAT> {
             (false, Float) => DXGI_FORMAT_R32_FLOAT,
             _ => return None,
         },
+        D32_S8 => match (is_target, format.1) {
+            (true, _)      => DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
+            (false, Float) => DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS,
+            (false, Uint)  => DXGI_FORMAT_X32_TYPELESS_G8X24_UINT,
+            _ => return None,
+        },
     })
 }
 
@@ -166,6 +172,7 @@ pub fn map_surface(surface: SurfaceType) -> Option<DXGI_FORMAT> {
         D16             => DXGI_FORMAT_R16_TYPELESS,
         D24 | D24_S8    => DXGI_FORMAT_R24G8_TYPELESS,
         D32             => DXGI_FORMAT_R32_TYPELESS,
+        D32_S8          => DXGI_FORMAT_R32G8X24_TYPELESS,
     })
 }
 

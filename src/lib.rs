@@ -55,7 +55,7 @@ pub type ColorFormat = gfx::format::Rgba8;
 pub type ColorFormat = (gfx::format::B8_G8_R8_A8, gfx::format::Srgb);
 
 #[cfg(feature = "metal")]
-pub type DepthFormat = gfx::format::Depth32F;
+pub type DepthFormat = (gfx::format::D32_S8, gfx::format::Float);
 #[cfg(not(feature = "metal"))]
 pub type DepthFormat = gfx::format::DepthStencil;
 
@@ -99,56 +99,6 @@ impl Drop for Harness {
         println!("Avg frame time: {} ms",
                  ((time_end.as_secs() * 1000) as f64 +
                   (time_end.subsec_nanos() / 1000_000) as f64) / self.num_frames);
-    }
-}
-
-#[cfg(feature = "metal")]
-pub fn launch_metal<A>(wb: winit::WindowBuilder) where
-A: Sized + Application<gfx_device_metal::Backend>
-{
-    use gfx::traits::Factory;
-    use gfx::texture::Size;
-
-    env_logger::init().unwrap();
-    let mut events_loop = winit::EventsLoop::new();
-    let (window, mut device, mut factory, main_color) = gfx_window_metal::init::<ColorFormat>(wb, &events_loop)
-                                                                                .unwrap();
-    let (width, height) = window.get_inner_size_points().unwrap();
-    let main_depth = factory.create_depth_stencil_view_only(width as Size, height as Size).unwrap();
-
-    let backend = shade::Backend::Msl(device.get_shader_model());
-    let mut app = A::new(&mut factory, backend, WindowTargets {
-        color: main_color,
-        depth: main_depth,
-        aspect_ratio: width as f32 / height as f32
-    });
-
-    let mut harness = Harness::new();
-    let mut running = true;
-    while running {
-        events_loop.poll_events(|event| {
-            if let winit::Event::WindowEvent { event, .. } = event {
-                match event {
-                    winit::WindowEvent::Closed => running = false,
-                    winit::WindowEvent::KeyboardInput {
-                        input: winit::KeyboardInput {
-                            state: winit::ElementState::Pressed,
-                            virtual_keycode: key,
-                            ..
-                        },
-                        ..
-                    } if key == A::get_exit_key() => return,
-                    winit::WindowEvent::Resized(_width, _height) => {
-                        warn!("TODO: resize on Metal");
-                    },
-                    _ => app.on(event),
-                }
-            }
-        });
-        // TODO: app.render_ext();
-        window.swap_buffers().unwrap();
-        device.cleanup();
-        harness.bump();
     }
 }
 
@@ -330,9 +280,14 @@ pub trait Application<B: Backend>: Sized {
         run::<Self, _, _>(dim, events_loop, surface, adapters)
     }
     #[cfg(feature = "metal")]
-    fn launch_default(wb: winit::WindowBuilder)
-        where Self: Application<DefaultBackend> {
-        launch_metal::<Self>(wb);
+    fn launch_default(wb: winit::WindowBuilder, events_loop: winit::EventsLoop)
+        where Self: Application<DefaultBackend>
+    {
+        let win = wb.build(&events_loop).unwrap();
+        let dim = win.get_inner_size_points().unwrap();
+        let mut window = gfx_window_metal::Window(win);
+        let (surface, adapters) = window.get_surface_and_adapters();
+        run::<Self, _, _>(dim, events_loop, surface, adapters);
     }
     #[cfg(feature = "vulkan")]
     fn launch_default(wb: winit::WindowBuilder, events_loop: winit::EventsLoop)

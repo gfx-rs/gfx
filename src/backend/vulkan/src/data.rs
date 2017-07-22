@@ -154,6 +154,10 @@ pub fn map_format(surface: SurfaceType, chan: ChannelType) -> Option<vk::Format>
             Float => vk::Format::D32Sfloat,
             _ => return None,
         },
+        D32_S8 => match chan {
+            Float => vk::Format::D32SfloatS8Uint,
+            _ => return None,
+        },
     })
 }
 /*
