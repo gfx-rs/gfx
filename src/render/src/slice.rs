@@ -28,6 +28,8 @@ use pso;
 /// processing a PSO.
 ///
 /// # Overview
+/// A `Slice` in gfx has a different meaning from the term slice as employed more broadly in rust (`&[T]`).
+///
 /// A `Slice` object in essence dictates in what order the vertices in a `VertexBuffer` get
 /// processed. To do this, it contains an internal index-buffer. This `Buffer` is a list of
 /// indices into this `VertexBuffer` (vertex-index). A vertex-index of 0 represents the first

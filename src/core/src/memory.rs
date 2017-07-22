@@ -16,7 +16,12 @@
 
 use std::mem;
 
-/// How this memory will be used on the GPU and/or the CPU.
+// TODO: It would be useful to document what parameters these map to in D3D, vulkan, etc.
+
+/// How this memory will be used regarding GPU-CPU data flow.
+///
+/// This information is used to create resources
+/// (see [gfx::Factory](../trait.Factory.html#overview)).
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[repr(u8)]
@@ -43,6 +48,9 @@ bitflags!(
     /// - [`READ`](constant.READ.html)
     /// - [`WRITE`](constant.WRITE.html)
     /// - Or [`RW`](constant.RW.html) which is equivalent to `READ` and `WRITE`.
+    ///
+    /// This information is used to create resources
+    /// (see [gfx::Factory](trait.Factory.html#overview)).
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
     pub flags Access: u8 {
         /// Read access
@@ -65,6 +73,10 @@ bitflags!(
     /// - [`UNORDERED_ACCESS`](constant.UNORDERED_ACCESS.html)
     /// - [`TRANSFER_SRC`](constant.TRANSFER_SRC.html)
     /// - [`TRANSFER_DST`](constant.TRANSFER_DST.html)
+    ///
+    ///
+    /// This information is used to create resources
+    /// (see [gfx::Factory](trait.Factory.html#overview)).
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
     pub flags Bind: u8 {
         /// Can be rendered into.
