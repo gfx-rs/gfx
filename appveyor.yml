@@ -1,4 +1,8 @@
 environment:
+  # WORKAROUND START #
+  RUSTUP_USE_HYPER: 1
+  CARGO_HTTP_CHECK_REVOKE: false
+  # WORKAROUND END #
   matrix:
     - TARGET: 1.18.0-x86_64-pc-windows
       COMPILER: gnu
