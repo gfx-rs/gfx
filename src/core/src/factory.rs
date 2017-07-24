@@ -217,8 +217,8 @@ pub enum WaitFor {
 /// The term "raw" is used in the context of types of functions that have a strongly typed and an
 /// untyped equivalent, to refer to the untyped equivalent.
 ///
-/// For example ['Encloder::create_buffer_raw'](trait.Factory.html#tymethod.create_buffer_raw) and
-/// ['Encloder::create_buffer'](trait.Factory.html#tymethod.create_buffer)
+/// For example ['Factory::create_buffer_raw'](trait.Factory.html#tymethod.create_buffer_raw) and
+/// ['Factory::create_buffer'](trait.Factory.html#tymethod.create_buffer)
 ///
 /// ## Shader resource views and unordered access views
 ///

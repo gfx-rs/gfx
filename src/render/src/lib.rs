@@ -14,34 +14,40 @@
 
 #![deny(missing_docs)]
 
+// TODO(doc) clarify the different type of queues and what is accessible from the high-level API
+// vs what belongs to core-ll. There doesn't seem to be a "ComputeEncoder" can I submit something
+// built with a GraphicsEncoder to a ComputeQueue?
+
 //! # gfx
 //!
 //! An efficient, low-level, bindless graphics API for Rust.
 //!
 //! # Overview
 //!
-//! ## Command buffers and encoders
+//! ## Command buffers and encoders and queues
 //!
 //! A command buffer is a serialized list of drawing and compute commands.
 //! Unlike with vulkan, command buffers are not what you use to create commands, but only
 //! the result of creating these commands. Gfx, borrowing metal's terminology, uses
 //! encoders to build command buffers. This means that, in general, users of the gfx crate
-//! don't manipulate command buffers directly much and interact mostly with encoders.
+//! don't manipulate command buffers directly much and interact mostly with graphics encoders.
+//! In order to be executed, a command buffer is then submitted to a queue.
 //!
-//! Manipulating an `Encoder` in gfx corresponds to interacting with:
+//! Manipulating a `GraphicsEncoder` in gfx corresponds to interacting with:
 //!
 //! - a `VkCommandBuffer` in vulkan,
 //! - a `MTLCommandEncoder` in metal,
 //! - an `ID3D12GraphicsCommandList` in D3D12.
 //!
 //! OpenGL and earlier versions of D3D don't have an explicit notion of command buffers
-//! or encoders (with the exception of draw indirect commands in late versions of OpenGL,
+//! encoders or queues (with the exception of draw indirect commands in late versions of OpenGL,
 //! which can be seen as a GPU-side command buffer). They are managed implicitly by the driver.
 //!
 //! See:
 //!
-//! - The [`Encoder` struct documentation](struct.Encoder.html).
-//! - The [`Command buffer` trait documentation](trait.CommandBuffer.html).
+//! - The [`GraphicsEncoder` struct](struct.GraphicsEncoder.html).
+//! - The [`CommandBuffer` trait](trait.CommandBuffer.html).
+//! - The [`CommandQueue` struct](struct.CommandQueue.html).
 //!
 //! ## Factory
 //!
@@ -64,7 +70,7 @@
 //!
 //! ## Device
 //!
-//! See [the `gfx::Device` trait](trait.Device.html).
+//! The `Device` contains the `Factory` and the `Queue`s.
 //!
 //! ## Pipeline state (PSO)
 //!
@@ -74,7 +80,7 @@
 //!
 //! Handles internally use atomically reference counted pointers to deal with memory management.
 //! GPU resources are not destroyed right away when all references to them are gone. Instead they
-//! are destroyed the next time [Device::cleanup](trait.Device.html#tymethod.cleanup) is called.
+//! are destroyed the next time `cleanup` is called on the queue.
 //!
 //! # Examples
 //!
