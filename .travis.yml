@@ -26,16 +26,7 @@ notifications:
     on_start: false
 
 before_install:
-  - "export DISPLAY=:99.0"
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sh -e /etc/init.d/xvfb start; fi
-  # Extract SDL2 .deb into a cached directory (see cache section above and LIBRARY_PATH exports below)
-  # Will no longer be needed when Trusty build environment goes out of beta at Travis CI
-  # (assuming it will have libsdl2-dev and Rust by then)
-  # see https://docs.travis-ci.com/user/trusty-ci-environment/
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then scripts/travis-install-sdl2.sh ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install sdl2; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew outdated cmake || brew upgrade cmake; fi
+  - bash scripts/travis-before_install.sh
 
 addons:
   apt:
@@ -55,19 +46,4 @@ addons:
       - libosmesa6-dev
 
 script:
-  - export RUST_BACKTRACE=1
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export PATH=$PATH:$HOME/deps/bin ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export LIBRARY_PATH=$HOME/deps/usr/lib/x86_64-linux-gnu ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export LD_LIBRARY_PATH=$LIBRARY_PATH ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo build --features vulkan; else cargo build; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cargo build --features metal; else cargo build; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then HEADLESS_FEATURE="--features headless"; fi
-  - cargo test --all
-  - cargo test -p gfx -p gfx_core --features "mint serialize"
-  - cargo test -p gfx_window_sdl
-  - cargo test -p gfx_device_gl
-  - cargo test -p gfx_window_glutin $HEADLESS_FEATURE
-  - cargo test -p gfx_window_glfw
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo test --all --features vulkan; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cargo test --all --features metal; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cargo test --features "metal metal_argument_buffer"; fi
+  - bash scripts/travis-script.sh
