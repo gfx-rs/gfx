@@ -656,14 +656,34 @@ impl CommandQueue {
             },
             Command::CopyBuffer(src, dst, src_offset, dst_offset, size) => {
                 let gl = &self.share.context;
-                unsafe {
-                    gl.BindBuffer(gl::COPY_READ_BUFFER, src);
-                    gl.BindBuffer(gl::COPY_WRITE_BUFFER, dst);
-                    gl.CopyBufferSubData(gl::COPY_READ_BUFFER,
-                                         gl::COPY_WRITE_BUFFER,
-                                         src_offset,
-                                         dst_offset,
-                                         size);
+
+                if self.share.capabilities.copy_buffer_supported {
+                    unsafe {
+                        gl.BindBuffer(gl::COPY_READ_BUFFER, src);
+                        gl.BindBuffer(gl::COPY_WRITE_BUFFER, dst);
+                        gl.CopyBufferSubData(gl::COPY_READ_BUFFER,
+                                            gl::COPY_WRITE_BUFFER,
+                                            src_offset,
+                                            dst_offset,
+                                            size);
+                    }
+                } else {
+                    debug_assert!(self.share.private_caps.buffer_storage_supported == false);
+
+                    unsafe {
+                        let mut src_ptr = 0 as *mut ::std::os::raw::c_void;
+                        factory::temporary_ensure_mapped(&mut src_ptr, gl::COPY_READ_BUFFER, src, memory::READ, gl);
+                        src_ptr.offset(src_offset);
+
+                        let mut dst_ptr = 0 as *mut ::std::os::raw::c_void;
+                        factory::temporary_ensure_mapped(&mut dst_ptr, gl::COPY_WRITE_BUFFER, dst, memory::WRITE, gl);
+                        dst_ptr.offset(dst_offset);
+
+                        ::std::ptr::copy(src_ptr, dst_ptr, size as usize);
+
+                        factory::temporary_ensure_unmapped(&mut src_ptr, gl::COPY_READ_BUFFER, src, gl);
+                        factory::temporary_ensure_unmapped(&mut dst_ptr, gl::COPY_WRITE_BUFFER, dst, gl);
+                    }
                 }
             },
             Command::CopyBufferToTexture(src, src_offset, dst, kind, face, img) => {
