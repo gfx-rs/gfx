@@ -1,5 +1,10 @@
 #!/bin/bash
 set -ex
+if [[ $TRAVIS_RUST_VERSION == "nightly" && $TRAVIS_BRANCH == "staging" ]]; then
+  # Do not run bors builds against the nightly compiler.
+  # We want to find out about nightly bugs, so they're done in master, but we don't block on them.
+  exit
+fi
 if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
   export DISPLAY=:99.0
   sh -e /etc/init.d/xvfb start
