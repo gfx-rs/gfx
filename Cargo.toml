@@ -7,6 +7,7 @@ keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
 documentation = "https://docs.rs/gfx_app"
+exclude = ["bors.toml", ".travis.yml"]
 
 [features]
 default = ["gl"]

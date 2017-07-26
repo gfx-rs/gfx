@@ -4,12 +4,19 @@ cache:
   cargo: true
   directories:
    - $HOME/deps
+
 rust:
   - stable
   - nightly
 os:
   - linux
   - osx
+branches:
+  only:
+    - staging
+    - trying
+    - master
+
 notifications:
   webhooks:
     urls:
@@ -17,6 +24,7 @@ notifications:
     on_success: always
     on_failure: always
     on_start: false
+
 before_install:
   - "export DISPLAY=:99.0"
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sh -e /etc/init.d/xvfb start; fi
@@ -45,6 +53,7 @@ addons:
       - libxcursor1
       - libglfw-dev
       - libosmesa6-dev
+
 script:
   - export RUST_BACKTRACE=1
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export PATH=$PATH:$HOME/deps/bin ; fi
