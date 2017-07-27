@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use comptr::ComPtr;
+use wio::com::ComPtr;
 use dxguid;
 use std::ptr;
 use std::os::raw::c_void;
@@ -35,13 +35,13 @@ struct CommandAllocator {
 impl CommandAllocator {
     fn from_queue(queue: &CommandQueue) -> CommandAllocator {
         // create command allocator
-        let mut command_allocator = ComPtr::<winapi::ID3D12CommandAllocator>::new(ptr::null_mut());
+        let mut command_allocator: *mut winapi::ID3D12CommandAllocator = ptr::null_mut();
         let hr = unsafe {
             // Note: ID3D12Device interface is free-threaded, therefore this call is safe
-            (*queue.device.as_mut_ptr()).CreateCommandAllocator(
+            queue.device.as_mut().CreateCommandAllocator(
                 queue.list_type,
                 &dxguid::IID_ID3D12CommandAllocator,
-                command_allocator.as_mut() as *mut *mut _ as *mut *mut c_void,
+                &mut command_allocator as *mut *mut _ as *mut *mut c_void,
             )
         };
         // TODO: error handling
@@ -50,7 +50,7 @@ impl CommandAllocator {
         }
 
         CommandAllocator {
-            inner: command_allocator,
+            inner: unsafe { ComPtr::new(command_allocator) },
             device: queue.device.clone(),
             list_type: queue.list_type,
         }
@@ -63,22 +63,26 @@ impl CommandAllocator {
 
     fn create_command_list(&mut self) -> ComPtr<winapi::ID3D12GraphicsCommandList> {
         // allocate command lists
-        let mut command_list = ComPtr::<winapi::ID3D12GraphicsCommandList>::new(ptr::null_mut());
-        let hr = unsafe {
-            self.device.CreateCommandList(
-                0, // single gpu only atm
-                self.list_type,
-                self.inner.as_mut_ptr(),
-                ptr::null_mut(),
-                &dxguid::IID_ID3D12GraphicsCommandList,
-                command_list.as_mut() as *mut *mut _ as *mut *mut c_void,
-            )
-        };
+        let mut command_list = {
+            let mut command_list: *mut winapi::ID3D12GraphicsCommandList = ptr::null_mut();
+            let hr = unsafe {
+                self.device.CreateCommandList(
+                    0, // single gpu only atm
+                    self.list_type,
+                    self.inner.as_mut() as *mut _,
+                    ptr::null_mut(),
+                    &dxguid::IID_ID3D12GraphicsCommandList,
+                    &mut command_list as *mut *mut _ as *mut *mut c_void,
+                )
+            };
 
-        // TODO: error handling
-        if !winapi::SUCCEEDED(hr) {
-            error!("error on command list creation: {:x}", hr);
-        }
+            // TODO: error handling
+            if !winapi::SUCCEEDED(hr) {
+                error!("error on command list creation: {:x}", hr);
+            }
+
+            unsafe { ComPtr::new(command_list) }
+        };
 
         // Close command list as they are initiated as recording.
         // But only one command list can be recording for each allocator
@@ -133,7 +137,7 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         self.next_list += 1;
 
         // reset to initial state
-        unsafe { (*list.raw.as_mut_ptr()).Reset(self.allocator.inner.as_mut_ptr(), ptr::null_mut()); }
+        unsafe { list.raw.as_mut().Reset(self.allocator.inner.as_mut() as *mut _, ptr::null_mut()); }
         list
     }
 }

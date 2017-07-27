@@ -36,4 +36,4 @@ winit = "0.7"
 gfx_core = { path = "../../core", version = "0.7" }
 gfx_device_dx11 = { path = "../../backend/dx11", version = "0.6" }
 gfx_device_dx12 = { path = "../../backend/dx12", version = "0.1" }
-comptr = { git = "https://github.com/msiglreith/comptr-rs.git" }
+wio = { git = "https://github.com/msiglreith/wio-rs.git", branch = "stable" }

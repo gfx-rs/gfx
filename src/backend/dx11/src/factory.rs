@@ -24,7 +24,7 @@ use {Resources as R, Share, Buffer, Fence, Texture, Pipeline, Program, Shader};
 use command::RawCommandBuffer;
 use {CommandList, DeferredContext, ShaderModel};
 use native;
-use comptr::ComPtr;
+use wio::com::ComPtr;
 
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -120,9 +120,9 @@ impl Factory {
     }
 
     pub fn create_command_buffer_native(&mut self) -> RawCommandBuffer<DeferredContext> {
-        let mut dc = ComPtr::<winapi::ID3D11DeviceContext>::new(ptr::null_mut());
+        let mut dc = unsafe { ComPtr::<winapi::ID3D11DeviceContext>::new(ptr::null_mut()) };
         let hr = unsafe {
-            self.device.CreateDeferredContext(0, dc.as_mut() as *mut *mut _)
+            self.device.CreateDeferredContext(0, &mut dc.as_mut() as *mut &mut _ as *mut *mut _)
         };
         if winapi::SUCCEEDED(hr) {
             DeferredContext::new(dc).into()

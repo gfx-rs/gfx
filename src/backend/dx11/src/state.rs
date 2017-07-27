@@ -16,7 +16,7 @@ use std::ptr;
 use winapi::*;
 use core::{pso, state};
 use data::map_function;
-use comptr::ComPtr;
+use wio::com::ComPtr;
 
 pub fn make_rasterizer(device: &mut ComPtr<ID3D11Device>, rast: &state::Rasterizer, use_scissor: bool)
                        -> *const ID3D11RasterizerState {
