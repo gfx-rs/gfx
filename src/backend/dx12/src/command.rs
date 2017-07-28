@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use comptr::ComPtr;
+use wio::com::ComPtr;
 use core::{command, pso, shade, state, target, texture as tex};
 use core::{IndexType, VertexCount};
 use winapi;

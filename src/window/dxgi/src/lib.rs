@@ -22,7 +22,7 @@ extern crate winit;
 extern crate gfx_core as core;
 extern crate gfx_device_dx11 as device_dx11;
 extern crate gfx_device_dx12 as device_dx12;
-extern crate comptr;
+extern crate wio;
 
 use std::ptr;
 use std::rc::Rc;
@@ -30,7 +30,7 @@ use std::os::raw::c_void;
 use std::collections::VecDeque;
 use winit::os::windows::WindowExt;
 use core::{handle as h, memory, texture as tex};
-use comptr::ComPtr;
+use wio::com::ComPtr;
 
 /*
 pub fn resize_swap_chain<Cf>(&mut self, factory: &mut Factory, width: Size, height: Size)
@@ -101,42 +101,47 @@ impl core::Surface<device_dx11::Backend> for Surface11 {
         use core::handle::Producer;
 
         let present_queue = present_queue.as_ref();
-        let mut swap_chain = ComPtr::<winapi::IDXGISwapChain1>::new(ptr::null_mut());
-        let buffer_count = 2; // TODO: user-defined value
         let dim = get_window_dimensions(&self.window);
 
-        // TODO: double-check values
-        let desc = winapi::DXGI_SWAP_CHAIN_DESC1 {
-            AlphaMode: winapi::DXGI_ALPHA_MODE(0),
-            BufferCount: buffer_count,
-            Width: dim.0 as u32,
-            Height: dim.1 as u32,
-            Format: device_dx11::data::map_format(config.color_format, true).unwrap(), // TODO: error handling
-            Flags: 0,
-            BufferUsage: winapi::DXGI_USAGE_RENDER_TARGET_OUTPUT,
-            SampleDesc: winapi::DXGI_SAMPLE_DESC { // TODO
-                Count: 1,
-                Quality: 0,
-            },
-            Scaling: winapi::DXGI_SCALING(0),
-            Stereo: false as winapi::BOOL,
-            SwapEffect: winapi::DXGI_SWAP_EFFECT(4), // TODO: FLIP_DISCARD
-        };
+        let mut swap_chain = {
+            let mut swap_chain: *mut winapi::IDXGISwapChain1 = ptr::null_mut();
+            let buffer_count = 2; // TODO: user-defined value
 
-        let hr = unsafe {
-            (**self.factory.as_ref()).CreateSwapChainForHwnd(
-                present_queue.device.as_mut_ptr() as *mut _ as *mut winapi::IUnknown,
-                self.window.get_hwnd() as *mut _,
-                &desc,
-                ptr::null(),
-                ptr::null_mut(),
-                swap_chain.as_mut() as *mut *mut _,
-            )
-        };
+            // TODO: double-check values
+            let desc = winapi::DXGI_SWAP_CHAIN_DESC1 {
+                AlphaMode: winapi::DXGI_ALPHA_MODE(0),
+                BufferCount: buffer_count,
+                Width: dim.0 as u32,
+                Height: dim.1 as u32,
+                Format: device_dx11::data::map_format(config.color_format, true).unwrap(), // TODO: error handling
+                Flags: 0,
+                BufferUsage: winapi::DXGI_USAGE_RENDER_TARGET_OUTPUT,
+                SampleDesc: winapi::DXGI_SAMPLE_DESC { // TODO
+                    Count: 1,
+                    Quality: 0,
+                },
+                Scaling: winapi::DXGI_SCALING(0),
+                Stereo: false as winapi::BOOL,
+                SwapEffect: winapi::DXGI_SWAP_EFFECT(4), // TODO: FLIP_DISCARD
+            };
 
-        if !winapi::SUCCEEDED(hr) {
-            error!("error on swapchain creation {:x}", hr);
-        }
+            let hr = unsafe {
+                self.factory.as_mut().CreateSwapChainForHwnd(
+                    present_queue.device.as_mut() as *mut _ as *mut winapi::IUnknown,
+                    self.window.get_hwnd() as *mut _,
+                    &desc,
+                    ptr::null(),
+                    ptr::null_mut(),
+                    &mut swap_chain as *mut *mut _,
+                )
+            };
+
+            if !winapi::SUCCEEDED(hr) {
+                error!("error on swapchain creation {:x}", hr);
+            }
+
+            unsafe { ComPtr::new(swap_chain) }
+        };
 
         let backbuffer = {
             let mut back_buffer: *mut winapi::ID3D11Texture2D = ptr::null_mut();
@@ -185,7 +190,7 @@ impl core::Surface<device_dx11::Backend> for Surface11 {
 
                 let mut raw = ptr::null_mut();
                 let hr = unsafe {
-                    (*present_queue.device.as_mut_ptr()).CreateTexture2D(&desc, ptr::null(), &mut raw)
+                    present_queue.device.as_mut().CreateTexture2D(&desc, ptr::null(), &mut raw)
                 };
 
                 if !winapi::SUCCEEDED(hr) {
@@ -230,7 +235,7 @@ impl core::Surface<device_dx12::Backend> for Surface12 {
         where Q: AsRef<device_dx12::CommandQueue>
     {
         use core::handle::Producer;
-        let mut swap_chain = ComPtr::<winapi::IDXGISwapChain1>::new(ptr::null_mut());
+        let mut swap_chain: *mut winapi::IDXGISwapChain1 = ptr::null_mut();
         let buffer_count = 2; // TODO: user-defined value
 
         // TODO: double-check values
@@ -253,12 +258,12 @@ impl core::Surface<device_dx12::Backend> for Surface12 {
 
         let hr = unsafe {
             self.factory.CreateSwapChainForHwnd(
-                present_queue.as_ref().raw.as_mut_ptr() as *mut _ as *mut winapi::IUnknown,
+                present_queue.as_ref().raw.as_mut() as *mut _ as *mut winapi::IUnknown,
                 self.wnd_handle,
                 &desc,
                 ptr::null(),
                 ptr::null_mut(),
-                swap_chain.as_mut() as *mut *mut _,
+                &mut swap_chain as *mut *mut _,
             )
         };
 
@@ -266,7 +271,7 @@ impl core::Surface<device_dx12::Backend> for Surface12 {
             error!("error on swapchain creation {:x}", hr);
         }
 
-        let mut swap_chain = ComPtr::<winapi::IDXGISwapChain3>::new(swap_chain.as_mut_ptr() as *mut winapi::IDXGISwapChain3);
+        let mut swap_chain = unsafe { ComPtr::<winapi::IDXGISwapChain3>::new(swap_chain as *mut winapi::IDXGISwapChain3) };
 
         // Get backbuffer images
         let backbuffers = (0..buffer_count).map(|i| {

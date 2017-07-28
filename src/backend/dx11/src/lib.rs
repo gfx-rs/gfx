@@ -22,7 +22,7 @@ extern crate d3dcompiler;
 extern crate dxgi;
 extern crate dxguid;
 extern crate winapi;
-extern crate comptr;
+extern crate wio;
 
 pub use self::data::map_format;
 pub use self::factory::Factory;
@@ -37,7 +37,7 @@ mod pool;
 mod state;
 
 use core::{command as com, handle};
-use comptr::ComPtr;
+use wio::com::ComPtr;
 use std::cell::RefCell;
 use std::ptr;
 use std::sync::Arc;
@@ -59,19 +59,18 @@ impl Instance {
     #[doc(hidden)]
     pub fn create() -> Self {
         // Create DXGI factory
-        let mut dxgi_factory = ComPtr::<winapi::IDXGIFactory2>::new(ptr::null_mut());
-
+        let mut dxgi_factory: *mut winapi::IDXGIFactory2 = ptr::null_mut();
         let hr = unsafe {
             dxgi::CreateDXGIFactory1(
                 &dxguid::IID_IDXGIFactory2,
-                dxgi_factory.as_mut() as *mut *mut _ as *mut *mut c_void)
+                &mut dxgi_factory as *mut *mut _ as *mut *mut c_void)
         };
 
         if !winapi::SUCCEEDED(hr) {
             error!("Failed on dxgi factory creation: {:?}", hr);
         }
 
-        Instance(dxgi_factory)
+        Instance(unsafe { ComPtr::new(dxgi_factory) })
     }
 
     #[doc(hidden)]
@@ -82,16 +81,20 @@ impl Instance {
         let mut cur_index = 0;
         let mut adapters = Vec::new();
         loop {
-            let mut adapter = ComPtr::<winapi::IDXGIAdapter1>::new(ptr::null_mut());
-            let hr = unsafe {
-                self.0.EnumAdapters1(
-                    cur_index,
-                    adapter.as_mut() as *mut *mut _ as *mut *mut winapi::IDXGIAdapter1)
-            };
+            let mut adapter = {
+                let mut adapter: *mut winapi::IDXGIAdapter1 = ptr::null_mut();
+                let hr = unsafe {
+                    self.0.EnumAdapters1(
+                        cur_index,
+                        &mut adapter as *mut *mut _)
+                };
 
-            if hr == winapi::DXGI_ERROR_NOT_FOUND {
-                break;
-            }
+                if hr == winapi::DXGI_ERROR_NOT_FOUND {
+                    break;
+                }
+
+                unsafe { ComPtr::new(adapter) }
+            };
 
             // We have found a possible adapter
             // acquire the device information
@@ -299,7 +302,6 @@ impl command::Parser for DeferredContext {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Fence;
 
-#[derive(Debug)]
 pub struct Adapter {
     adapter: ComPtr<winapi::IDXGIAdapter1>,
     info: core::AdapterInfo,
@@ -313,26 +315,33 @@ impl core::Adapter<Backend> for Adapter {
         assert!(queue_descs[0].2 <= 1);
 
         // Create D3D11 device
-        let mut dev = ComPtr::<winapi::ID3D11Device>::new(ptr::null_mut());
         let mut feature_level = winapi::D3D_FEATURE_LEVEL_10_0;
-        let mut context = ComPtr::<winapi::ID3D11DeviceContext>::new(ptr::null_mut());
-        let hr = unsafe {
-            d3d11::D3D11CreateDevice(
-                self.adapter.as_mut_ptr() as *mut _ as *mut winapi::IDXGIAdapter,
-                winapi::D3D_DRIVER_TYPE_UNKNOWN,
-                ptr::null_mut(),
-                0, // TODO
-                &FEATURE_LEVELS[0],
-                FEATURE_LEVELS.len() as winapi::UINT,
-                winapi::D3D11_SDK_VERSION,
-                dev.as_mut() as *mut *mut _ as *mut *mut winapi::d3d11::ID3D11Device,
-                &mut feature_level as *mut _,
-                context.as_mut() as *mut *mut _ as *mut *mut winapi::d3d11::ID3D11DeviceContext,
-            )
+
+        let (mut dev, context) = {
+            let mut device: *mut winapi::ID3D11Device         = ptr::null_mut();
+            let mut context: *mut winapi::ID3D11DeviceContext = ptr::null_mut();
+
+            let hr = unsafe {
+                d3d11::D3D11CreateDevice(
+                    self.adapter.as_mut() as *mut _ as *mut winapi::IDXGIAdapter,
+                    winapi::D3D_DRIVER_TYPE_UNKNOWN,
+                    ptr::null_mut(),
+                    0, // TODO
+                    &FEATURE_LEVELS[0],
+                    FEATURE_LEVELS.len() as winapi::UINT,
+                    winapi::D3D11_SDK_VERSION,
+                    &mut device as *mut *mut winapi::ID3D11Device,
+                    &mut feature_level as *mut _,
+                    &mut context as *mut *mut winapi::ID3D11DeviceContext,
+                )
+            };
+
+            if !winapi::SUCCEEDED(hr) {
+                error!("error on device creation: {:x}", hr);
+            }
+
+            unsafe { (ComPtr::new(device), ComPtr::new(context)) }
         };
-        if !winapi::SUCCEEDED(hr) {
-            error!("error on device creation: {:x}", hr);
-        }
 
         let share = Arc::new(Share {
             capabilities: core::Capabilities {

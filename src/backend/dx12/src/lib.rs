@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate comptr;
 extern crate d3d12;
 extern crate dxguid;
 extern crate dxgi;
@@ -20,6 +19,7 @@ extern crate gfx_core as core;
 #[macro_use]
 extern crate log;
 extern crate winapi;
+extern crate wio;
 
 mod command;
 pub mod data;
@@ -28,7 +28,8 @@ mod native;
 mod pool;
 
 use core::{command as com, handle, QueueType};
-use comptr::ComPtr;
+use wio::com::ComPtr;
+
 use std::ptr;
 use std::os::raw::c_void;
 use std::os::windows::ffi::OsStringExt;
@@ -54,13 +55,13 @@ impl core::Adapter<Backend> for Adapter {
     fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)]) -> core::Device<Backend>
     {
         // Create D3D12 device
-        let mut device = ComPtr::<winapi::ID3D12Device>::new(ptr::null_mut());
+        let mut device = unsafe { ComPtr::<winapi::ID3D12Device>::new(ptr::null_mut()) };
         let hr = unsafe {
             d3d12::D3D12CreateDevice(
-                self.adapter.as_mut_ptr() as *mut _ as *mut winapi::IUnknown,
+                self.adapter.as_mut() as *mut _ as *mut winapi::IUnknown,
                 winapi::D3D_FEATURE_LEVEL_12_0, // TODO: correct feature level?
                 &dxguid::IID_ID3D12Device,
-                device.as_mut() as *mut *mut _ as *mut *mut c_void,
+                &mut device.as_mut() as *mut &mut _ as *mut *mut c_void,
             )
         };
         if !winapi::SUCCEEDED(hr) {
@@ -71,7 +72,7 @@ impl core::Adapter<Backend> for Adapter {
         // Create command queues
         let mut general_queues = queue_descs.iter().flat_map(|&(_family, _ty, queue_count)| {
             (0..queue_count).map(|_| {
-                let mut queue = ComPtr::<winapi::ID3D12CommandQueue>::new(ptr::null_mut());
+                let mut queue = unsafe { ComPtr::<winapi::ID3D12CommandQueue>::new(ptr::null_mut()) };
                 let queue_desc = winapi::D3D12_COMMAND_QUEUE_DESC {
                     Type: winapi::D3D12_COMMAND_LIST_TYPE_DIRECT, // TODO: correct queue type
                     Priority: 0,
@@ -83,7 +84,7 @@ impl core::Adapter<Backend> for Adapter {
                     device.CreateCommandQueue(
                         &queue_desc,
                         &dxguid::IID_ID3D12CommandQueue,
-                        queue.as_mut() as *mut *mut _ as *mut *mut c_void,
+                        &mut queue.as_mut() as *mut &mut _ as *mut *mut c_void,
                     )
                 };
 
@@ -224,26 +225,26 @@ impl Instance {
     pub fn create() -> Instance {
         // Enable debug layer
         {
-            let mut debug_controller = ComPtr::<winapi::ID3D12Debug>::new(ptr::null_mut());
+            let mut debug_controller: *mut winapi::ID3D12Debug = ptr::null_mut();
             let hr = unsafe {
                 d3d12::D3D12GetDebugInterface(
                     &dxguid::IID_ID3D12Debug,
-                    debug_controller.as_mut() as *mut *mut _ as *mut *mut c_void)
+                    &mut debug_controller as *mut *mut _ as *mut *mut c_void)
             };
 
             if winapi::SUCCEEDED(hr) {
-                unsafe { debug_controller.EnableDebugLayer() };
+                unsafe { (*debug_controller).EnableDebugLayer() };
             }
         }
 
         // Create DXGI factory
-        let mut dxgi_factory = ComPtr::<winapi::IDXGIFactory4>::new(ptr::null_mut());
+        let mut dxgi_factory: *mut winapi::IDXGIFactory4 = ptr::null_mut();
 
         let hr = unsafe {
             dxgi::CreateDXGIFactory2(
                 winapi::DXGI_CREATE_FACTORY_DEBUG,
                 &dxguid::IID_IDXGIFactory4,
-                dxgi_factory.as_mut() as *mut *mut _ as *mut *mut c_void)
+                &mut dxgi_factory as *mut *mut _ as *mut *mut c_void)
         };
 
         if !winapi::SUCCEEDED(hr) {
@@ -251,7 +252,7 @@ impl Instance {
         }
 
         Instance {
-            factory: dxgi_factory,
+            factory: unsafe { ComPtr::new(dxgi_factory) },
         }
     }
 
@@ -260,21 +261,25 @@ impl Instance {
         let mut cur_index = 0;
         let mut devices = Vec::new();
         loop {
-            let mut adapter = ComPtr::<winapi::IDXGIAdapter2>::new(ptr::null_mut());
-            let hr = unsafe {
-                self.factory.EnumAdapters1(
-                    cur_index,
-                    adapter.as_mut() as *mut *mut _ as *mut *mut winapi::IDXGIAdapter1)
-            };
+            let mut adapter = {
+                let mut adapter: *mut winapi::IDXGIAdapter1 = ptr::null_mut();
+                let hr = unsafe {
+                    self.factory.EnumAdapters1(
+                        cur_index,
+                        &mut adapter as *mut *mut _)
+                };
 
-            if hr == winapi::DXGI_ERROR_NOT_FOUND {
-                break;
-            }
+                if hr == winapi::DXGI_ERROR_NOT_FOUND {
+                    break;
+                }
+
+                unsafe { ComPtr::new(adapter as *mut winapi::IDXGIAdapter2) }
+            };
 
             // Check for D3D12 support
             let hr = unsafe {
                 d3d12::D3D12CreateDevice(
-                    adapter.as_mut_ptr() as *mut _ as *mut winapi::IUnknown,
+                    adapter.as_mut() as *mut _ as *mut winapi::IUnknown,
                     winapi::D3D_FEATURE_LEVEL_11_0, // TODO: correct feature level?
                     &dxguid::IID_ID3D12Device,
                     ptr::null_mut(),

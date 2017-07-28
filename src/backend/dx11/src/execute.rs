@@ -17,7 +17,7 @@ use winapi::{self, UINT};
 use core::{self, texture as tex};
 use command;
 use {Buffer, Texture};
-use comptr::ComPtr;
+use wio::com::ComPtr;
 
 fn copy_buffer(context: &mut ComPtr<winapi::ID3D11DeviceContext>,
                src: &Buffer, dst: &Buffer,
