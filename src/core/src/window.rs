@@ -14,10 +14,58 @@
 
 //! Windowing system interoperability
 //!
-//! Screen presentation (fullscreen or window) of images requires two objects
+//! Screen presentation (fullscreen or window) of images requires two objects:
 //!
 //! * [`Surface`] is the host abstraction of the native screen
 //! * [`SwapChain`] is the device abstraction for a surface, containing multiple presentable images
+//!
+//! ## Window
+//!
+//! // TODO
+//!
+//! ## Surface
+//!
+//! // TODO
+//!
+//! ## SwapChain
+//!
+//! The most interesting part of a swapchain are the contained presentable images/backbuffers.
+//! Presentable images are specialized images, which can be presented on the screen. They are
+//! 2D color images with optionally associated depth-stencil images.
+//!
+//! The common steps for presentation per frame are acquisition and presentation:
+//!
+//! ```no_run
+//! # use gfx_core::SwapChain;
+//! # use gfx_core::dummy::DummySwapchain;
+//! let frame = swapchain.acquire_frame();
+//! // render the scene
+//! swapchain.present();
+//! ```
+//!
+//! Queues need to synchronize with the presentation engine, usually done via signalling a semaphore
+//! once a frame is available for rendering and waiting on a separate semaphore until scene rendering
+//! has finished.
+//!
+//! ### Recreation
+//!
+//! // TODO
+//!
+//! # Examples
+//!
+//! Initializing a swapchain and device from a window:
+//!
+//! ```no_run
+//! use gfx_core::{Adapter, Surface, WindowExt};
+//! # use gfx_core::dummy::DummyWindow;
+//!
+//! # let window: DummyWindow = return;
+//! let (mut surface, adapters) = window.get_surface_and_adapters();
+//! # TODO:
+//! ```
+//!
+//! > *Note*: `WindowExt`, `Surface` and `SwapChain` are _not_ part of the `Backend`
+//! > to allow support for different window libraries.
 //!
 //! [`Surface`]: trait.Surface.html
 //! [`SwapChain`]: trait.SwapChain.html
@@ -33,13 +81,34 @@ pub trait Surface<B: Backend> {
     type SwapChain: SwapChain<B>;
 
     /// Check if the queue family supports presentation for this surface.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    ///
+    /// ```
     fn supports_queue(&self, queue_family: &B::QueueFamily) -> bool;
 
     /// Create a new swapchain from a surface and a queue.
     ///
     /// # Safety
-    /// The queue family of the `present_queue` _must_ support surface presentation.
-    /// This can be checked by calling [`supports_queue`](trait.Surface.html#tymethod.supports_queue).
+    ///
+    /// The queue family of the passed `present_queue` _must_ support surface presentation.
+    /// This can be checked by calling [`supports_queue`](trait.Surface.html#tymethod.supports_queue)
+    /// on this surface.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use gfx_core::Surface;
+    /// # use gfx_core::dummy::{DummyQueue, DummySurface};
+    ///
+    /// # let mut surface: DummySurface = return;
+    /// # let queue: DummyQueue = return;
+    /// let swapchain_config = SwapchainConfig::new()
+    ///                             .with_color::<Srgb8>();
+    /// surface.build_swapchain(swapchain_config, &queue);
+    /// ```
     fn build_swapchain<Q>(&mut self, config: SwapchainConfig, present_queue: &Q) -> Self::SwapChain
     where
         Q: AsRef<B::CommandQueue>;
@@ -60,14 +129,20 @@ impl Frame {
     ///
     /// The can be used to fetch the currently used backbuffer from
     /// [`get_backbuffers`](trait.SwapChain.html#tymethod.get_backbuffers)
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    ///
+    /// ```
     pub fn id(&self) -> usize {
         self.0
     }
 }
 
-/// Synchronization primitives which will be signaled once a frame got retrieved.
+/// Synchronization primitives which will be signalled once a frame got retrieved.
 ///
-/// The semaphore or fence _must_ be unsignaled.
+/// The semaphore or fence _must_ be unsignalled.
 pub enum FrameSync<'a, R: Resources> {
     /// Semaphore used for synchronization.
     ///
@@ -91,6 +166,12 @@ pub struct SwapchainConfig {
 
 impl SwapchainConfig {
     /// Create a new default configuration (color images only).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    ///
+    /// ```
     pub fn new() -> Self {
         SwapchainConfig {
             color_format: format::Rgba8::get_format(), // TODO: try to find best default format
@@ -99,6 +180,12 @@ impl SwapchainConfig {
     }
 
     /// Specify the color format for the backbuffer images.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    ///
+    /// ```
     pub fn with_color<Cf: format::RenderFormat>(mut self) -> Self {
         self.color_format = Cf::get_format();
         self
@@ -107,6 +194,12 @@ impl SwapchainConfig {
     /// Specify the depth stencil format for the backbuffer images.
     ///
     /// The SwapChain will create additional depth-stencil images for each backbuffer.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    ///
+    /// ```
     pub fn with_depth_stencil<Dsf: format::DepthStencilFormat>(mut self) -> Self {
         self.depth_stencil_format = Some(Dsf::get_format());
         self
@@ -125,21 +218,41 @@ pub trait SwapChain<B: Backend> {
     /// Access the backbuffer color and depth-stencil images.
     ///
     /// *Note*: The number of exposed backbuffers might differ from number of internally used buffers.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    ///
+    /// ```
     fn get_backbuffers(&mut self) -> &[Backbuffer<B>];
 
     /// Acquire a new frame for rendering. This needs to be called before presenting.
     ///
     /// # Synchronization
+    ///
     /// The acquired image will not be immediately available when the function returns.
     /// Once available the underlying primitive of `sync` will be signaled.
     /// This can either be a [`Semaphore`](../trait.Resources.html#associatedtype.Semaphore)
     /// or a [`Fence`](../trait.Resources.html#associatedtype.Fence).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    ///
+    /// ```
     fn acquire_frame(&mut self, sync: FrameSync<B::Resources>) -> Frame;
 
     /// Present one acquired frame in FIFO order.
     ///
     /// # Safety
+    ///
     /// The passed queue _must_ be the **same** queue as used for creation.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    ///
+    /// ```
     fn present<Q: AsMut<B::CommandQueue>>(
         &mut self,
         present_queue: &mut Q,
@@ -156,5 +269,11 @@ pub trait WindowExt<B: Backend> {
     type Adapter: Adapter<B>;
 
     /// Create window surface and enumerate all available adapters.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    ///
+    /// ```
     fn get_surface_and_adapters(&mut self) -> (Self::Surface, Vec<Self::Adapter>);
 }
