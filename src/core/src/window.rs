@@ -33,14 +33,23 @@
 //! Presentable images are specialized images, which can be presented on the screen. They are
 //! 2D color images with optionally associated depth-stencil images.
 //!
-//! The common steps for presentation per frame are acquisition and presentation:
+//! The common steps for presentation of a frame are acquisition and presentation:
 //!
 //! ```no_run
-//! # use gfx_core::SwapChain;
-//! # use gfx_core::dummy::DummySwapchain;
-//! let frame = swapchain.acquire_frame();
-//! // render the scene
-//! swapchain.present();
+//! use gfx_core::{Factory, FrameSync};
+//! # use gfx_core::{GraphicsQueue, SwapChain};
+//! # use gfx_core::dummy::{DummyBackend, DummyFactory, DummyResources, DummySwapChain};
+//!
+//! # let mut swapchain: DummySwapChain = return;
+//! # let mut factory: DummyFactory = return;
+//! # let mut present_queue: GraphicsQueue<DummyBackend> = return;
+//! let acquisition_semaphore = factory.create_semaphore();
+//! let render_semaphore = factory.create_semaphore();
+//!
+//! let frame = swapchain.acquire_frame(FrameSync::Semaphore(&acquisition_semaphore));
+//! // render the scene..
+//! // `render_semaphore` will be signalled once rendering has been finished
+//! swapchain.present(&mut present_queue, &[&render_semaphore]);
 //! ```
 //!
 //! Queues need to synchronize with the presentation engine, usually done via signalling a semaphore
@@ -59,9 +68,9 @@
 //! use gfx_core::{Adapter, Surface, WindowExt};
 //! # use gfx_core::dummy::DummyWindow;
 //!
-//! # let window: DummyWindow = return;
+//! # let mut window: DummyWindow = return;
 //! let (mut surface, adapters) = window.get_surface_and_adapters();
-//! # TODO:
+//! # // TODO:
 //! ```
 //!
 //! > *Note*: `WindowExt`, `Surface` and `SwapChain` are _not_ part of the `Backend`
@@ -100,13 +109,15 @@ pub trait Surface<B: Backend> {
     /// # Examples
     ///
     /// ```no_run
-    /// use gfx_core::Surface;
-    /// # use gfx_core::dummy::{DummyQueue, DummySurface};
+    /// use gfx_core::{Surface, SwapchainConfig};
+    /// use gfx_core::format::Srgba8;
+    /// # use gfx_core::GraphicsQueue;
+    /// # use gfx_core::dummy::{DummyBackend, DummySurface};
     ///
     /// # let mut surface: DummySurface = return;
-    /// # let queue: DummyQueue = return;
+    /// # let queue: GraphicsQueue<DummyBackend> = return;
     /// let swapchain_config = SwapchainConfig::new()
-    ///                             .with_color::<Srgb8>();
+    ///                             .with_color::<Srgba8>();
     /// surface.build_swapchain(swapchain_config, &queue);
     /// ```
     fn build_swapchain<Q>(&mut self, config: SwapchainConfig, present_queue: &Q) -> Self::SwapChain
