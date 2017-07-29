@@ -17,7 +17,7 @@
 
 use {Adapter, AdapterInfo, Backend, Capabilities, Resources, IndexType, VertexCount, QueueType,
      Device, Factory, CommandQueue, QueueFamily, QueueSubmit, ShaderSet, Surface, SwapChain,
-     Frame, FrameSync, SwapchainConfig, Backbuffer};
+     Frame, FrameSync, SwapchainConfig, Backbuffer, WindowExt};
 use {buffer, format, state, target, handle, mapping, pool, pso, shade, texture};
 use command::{self, AccessInfo};
 use factory::{ResourceViewError, TargetViewError, WaitFor};
@@ -398,6 +398,17 @@ impl SwapChain<DummyBackend> for DummySwapChain {
         _: &mut Q,
         _: &[&handle::Semaphore<DummyResources>],
     ) {
+        unimplemented!()
+    }
+}
+
+/// Dummy window.
+pub struct DummyWindow;
+impl WindowExt<DummyBackend> for DummyWindow {
+    type Surface = DummySurface;
+    type Adapter = DummyAdapter;
+
+    fn get_surface_and_adapters(&mut self) -> (DummySurface, Vec<DummyAdapter>) {
         unimplemented!()
     }
 }

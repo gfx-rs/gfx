@@ -12,10 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Command queue types.
+//! Command queues.
 //!
-//! There are different types of queues, which can create and submit associated command buffers.
-
+//! Queues are the execution paths of the graphical processing units. These process
+//! submitted commands buffers.
+//!
+//! There are different types of queues, which can only handle associated command buffers.
+//! Queues are differed by there functionality: graphics, compute and transfer.
+//!
+//! * `GeneralQueue` supports graphics, compute and transfer.
+//! * `GraphicsQueue` supports graphics and transfer.
+//! * `ComputeQueue` supports compute and transfer.
+//! * `TransferQueue` supports transfer.
+//!
+//! # Submission
+//!
+//! // TODO
 use {pso, Backend, Resources, handle};
 use command::{AccessInfo, Submit};
 use pool::{GeneralCommandPool, GraphicsCommandPool, ComputeCommandPool,
@@ -38,24 +50,29 @@ pub enum QueueType {
 }
 
 impl QueueType {
-    ///
+    /// Checks for graphics functionality support.
+    /// Supported by general and graphics queues.
     pub fn supports_graphics(&self) -> bool {
         *self == QueueType::General || *self == QueueType::Graphics
     }
 
-    ///
+    /// Checks for graphics functionality support.
+    /// Supported by general and compute queues.
     pub fn supports_compute(&self) -> bool {
         *self == QueueType::General || *self == QueueType::Compute
     }
 
-    ///
+    /// Checks for graphics functionality support.
+    /// Supported by general, graphics and compute queues.
     pub fn supports_transfer(&self) -> bool { true }
 }
 
 /// `QueueFamily` denotes a group of command queues provided by the backend
 /// with the same properties/type.
+///
+/// *Note*: A backend can expose multiple queue families with the same properties.
 pub trait QueueFamily: 'static {
-    /// Return the number of available queues of this family
+    /// Return the number of available queues of this family.
     // TODO: some backends like d3d12 support infinite software queues (verify)
     fn num_queues(&self) -> u32;
 }
@@ -64,9 +81,9 @@ pub trait QueueFamily: 'static {
 pub struct QueueSubmit<'a, B: Backend + 'a> {
     /// Command buffers to submit.
     pub cmd_buffers: &'a [Submit<B>],
-    /// Semaphores to wait being signaled before submission.
+    /// Semaphores to wait being signalled before submission.
     pub wait_semaphores: &'a [(&'a handle::Semaphore<B::Resources>, pso::PipelineStage)],
-    /// Semaphores which get signaled after submission.
+    /// Semaphores which get signalled after submission.
     pub signal_semaphores: &'a [&'a handle::Semaphore<B::Resources>],
 }
 
@@ -75,8 +92,11 @@ pub struct QueueSubmit<'a, B: Backend + 'a> {
 pub trait CommandQueue<B: Backend> {
     /// Submit command buffers to queue for execution.
     /// `fence` will be signalled after submission and _must_ be unsignalled.
+    ///
+    /// Unsafe because it's not checked that the queue can process the submitted command buffers.
+    /// Trying to submit compute commands to a graphics queue will result in undefined behavior.
+    /// Each queue implements safe wrappers according to their supported functionalities!
     // TODO: `access` legacy (handle API)
-    #[doc(hidden)]
     unsafe fn submit(
         &mut self,
         submit_infos: &[QueueSubmit<B>],

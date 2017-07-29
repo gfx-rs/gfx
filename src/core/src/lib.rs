@@ -40,6 +40,7 @@ use std::error::Error;
 use std::fmt::{self, Debug};
 use std::hash::Hash;
 
+pub use self::adapter::{Adapter, AdapterInfo};
 pub use self::command::CommandBuffer;
 pub use self::factory::Factory;
 pub use self::pool::{ComputeCommandPool, GeneralCommandPool, GraphicsCommandPool, RawCommandPool,
@@ -50,6 +51,7 @@ pub use self::window::{Backbuffer, Frame, FrameSync, Surface, SwapChain, Swapcha
                        WindowExt};
 pub use draw_state::{state, target};
 
+pub mod adapter;
 pub mod buffer;
 pub mod command;
 pub mod dummy;
@@ -141,7 +143,9 @@ impl<R: Resources> ShaderSet<R> {
         match self {
             &ShaderSet::Simple(..) => shade::VERTEX | shade::PIXEL,
             &ShaderSet::Geometry(..) => shade::VERTEX | shade::GEOMETRY | shade::PIXEL,
-            &ShaderSet::Tessellated(..) => shade::VERTEX | shade::HULL | shade::DOMAIN | shade::PIXEL,
+            &ShaderSet::Tessellated(..) => {
+                shade::VERTEX | shade::HULL | shade::DOMAIN | shade::PIXEL
+            }
         }
     }
 }
@@ -355,54 +359,6 @@ pub struct Device<B: Backend> {
     pub _marker: std::marker::PhantomData<B>,
 }
 
-/// Represents a physical or virtual device, which is capable of running the backend.
-pub trait Adapter<B: Backend>: Sized {
-    /// Create a new device with the specified queues.
-    fn open(&self, queue_descs: &[(&B::QueueFamily, QueueType, u32)]) -> Device<B>;
-
-    /// Create a new device with the specified queues.
-    ///
-    /// Takes an closure and creates the number of queues for each queue type
-    /// as returned by the closure.
-    fn open_with<F>(&self, mut f: F) -> Device<B>
-    where
-        F: FnMut(&B::QueueFamily, QueueType) -> (u32, QueueType)
-    {
-        let queue_desc = self.get_queue_families()
-            .iter()
-            .filter_map(|&(ref family, ty)| {
-                let (num_queues, ty) = f(family, ty);
-                if num_queues > 0 {
-                    Some((family, ty, num_queues))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-        self.open(&queue_desc)
-    }
-
-    /// Get the `AdapterInfo` for this adapater.
-    fn get_info(&self) -> &AdapterInfo;
-
-    /// Return the supported queue families for this adapter.
-    fn get_queue_families(&self) -> &[(B::QueueFamily, QueueType)];
-}
-
-/// Information about a backend adapater.
-#[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-pub struct AdapterInfo {
-    /// Adapter name
-    pub name: String,
-    /// Vendor PCI id of the adapter
-    pub vendor: usize,
-    /// PCI id of the adapter
-    pub device: usize,
-    /// The device is based on a software rasterizer
-    pub software_rendering: bool,
-}
-
 /// Main entry point for window-less backend initialization.
 pub trait Headless<B: Backend> {
     /// Associated `Adapter` type.
@@ -411,4 +367,3 @@ pub trait Headless<B: Backend> {
     /// Enumerate all available adapters.
     fn get_adapters(&mut self) -> Vec<Self::Adapter>;
 }
-
