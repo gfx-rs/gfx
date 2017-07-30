@@ -19,6 +19,7 @@ use core::{IndexType, VertexCount};
 use {Backend, RawDevice, Resources};
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct SubmitInfo {
     pub command_buffer: vk::CommandBuffer,
 }
