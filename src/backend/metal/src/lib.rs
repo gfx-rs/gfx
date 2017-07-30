@@ -228,6 +228,45 @@ impl CommandQueue {
     }
 }
 
+// Iterator extension which checks
+// if are at the last element of the iterator
+trait CheckLast: Iterator + Sized {
+    fn check_last(mut self) -> CheckLastIter<Self> {
+        CheckLastIter {
+            next: self.next(),
+            iterator: self,
+        }
+    }
+}
+
+impl<It> CheckLast for It where It: Iterator { }
+
+struct CheckLastIter<It: Iterator> {
+    iterator: It,
+    next: Option<It::Item>,
+}
+
+impl<It> Iterator for CheckLastIter<It> where It: Iterator {
+    type Item = (bool, It::Item);
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.next.take() {
+            Some(cur_elem) => {
+                match self.iterator.next() {
+                    Some(next) => {
+                        self.next = Some(next);
+                        Some((false, cur_elem))
+                    }
+                    None => {
+                        self.next = None;
+                        Some((true, cur_elem))
+                    }
+                }
+            }
+            None => None,
+        }
+    }
+}
+
 impl core::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit_raw<'a, I>(
         &mut self,
@@ -235,7 +274,7 @@ impl core::CommandQueue<Backend> for CommandQueue {
         fence: Option<&handle::Fence<Resources>>,
         access: &AccessInfo<Resources>,
     ) where I: Iterator<Item=core::RawSubmission<'a, Backend>> {
-        for submit in submit_infos {
+        for (last_submission, submit) in submit_infos.check_last() {
             // FIXME: wait for semaphores!
 
             // FIXME: multiple buffers signaling!
@@ -252,14 +291,13 @@ impl core::CommandQueue<Backend> for CommandQueue {
                 None
             };
 
-            for buffer in submit.cmd_buffers {
+            for (last_buffer, buffer) in submit.cmd_buffers.iter().check_last() {
                 let command_buffer = buffer.command_buffer;
                 if let Some(ref signal_block) = signal_block {
                     msg_send![command_buffer.0, addCompletedHandler: signal_block.deref() as *const _];
                 }
                 // only append the fence handler to the last command buffer
-                if submit as *const _ == submit_infos.last().unwrap() as *const _ &&
-                   buffer as *const _ == submit.cmd_buffers.last().unwrap() as *const _ {
+                if last_submission && last_buffer {
                     if let Some(ref fence) = fence {
                         let value_ptr = self.frame_handles.ref_fence(fence).lock().unwrap().0.clone();
                         let fence_block = ConcreteBlock::new(move |cb: *mut ()| -> () {
