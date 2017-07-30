@@ -26,6 +26,7 @@ use core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
            MAX_SAMPLERS, MAX_COLOR_TARGETS};
 use {native, Backend, CommandList, Resources, InputLayout, Buffer, Texture, Pipeline, Program};
 
+#[derive(Clone)]
 pub struct SubmitInfo<P> {
     pub parser: P,
 }

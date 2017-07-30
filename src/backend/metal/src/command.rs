@@ -32,6 +32,7 @@ use metal::*;
 use std::ptr;
 use std::collections::hash_map::{HashMap, Entry};
 
+#[derive(Clone)]
 pub struct SubmitInfo {
     pub(crate) command_buffer: MTLCommandBuffer
 }

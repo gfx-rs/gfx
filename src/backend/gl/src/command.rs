@@ -73,6 +73,7 @@ impl DataBuffer {
 }
 
 #[allow(missing_copy_implementations)]
+#[derive(Clone)]
 pub struct SubmitInfo {
     // Raw pointer optimization:
     // Command buffers are stored inside the command pools.

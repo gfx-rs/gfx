@@ -21,8 +21,8 @@ use std::error::Error;
 use std::any::Any;
 use std::{fmt, mem};
 
-use core::{Backend, CommandQueue, GraphicsCommandPool, GraphicsQueue, IndexType,
-           QueueSubmit, Resources, SubmissionResult, VertexCount};
+use core::{Backend, CommandQueue, GraphicsCommandPool, GraphicsQueue,
+           IndexType, Resources, SubmissionResult, VertexCount};
 use core::{self, command, format, handle, texture};
 use core::command::{Buffer, Encoder, GraphicsCommandBuffer, Submit};
 use core::memory::{self, cast_slice, Typed, Pod, Usage};
@@ -180,7 +180,7 @@ impl<'a, B: Backend> From<Encoder<B, GraphicsCommandBuffer<'a, B>>> for Graphics
 
 ///
 pub struct GraphicsSubmission<B: Backend> {
-    submission: Submit<B>,
+    submission: Submit<B, core::queue::Graphics>,
     access_info: command::AccessInfo<B::Resources>,
     handles: handle::Manager<B::Resources>,
 }
@@ -197,14 +197,14 @@ impl<B: Backend> GraphicsSubmission<B> {
                                               .map(|&wait| (wait, core::pso::BOTTOM_OF_PIPE))
                                               .collect::<Vec<_>>();
         queue.pin_submitted_resources(&self.handles);
-        queue.submit_graphics(
-            &[
-                QueueSubmit {
-                    cmd_buffers: &[self.submission],
-                    wait_semaphores,
-                    signal_semaphores,
-                }
-            ],
+        let submission =
+            core::Submission::new()
+                    .wait_on(wait_semaphores)
+                    .submit(&[self.submission])
+                    .signal(signal_semaphores);
+
+        queue.submit(
+            &[submission],
             fence,
             &self.access_info
         );

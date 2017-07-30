@@ -16,8 +16,8 @@
 //! outside of the graphics development environment.
 
 use {Adapter, AdapterInfo, Backend, Capabilities, Resources, IndexType, VertexCount, QueueType,
-     Device, Factory, CommandQueue, QueueFamily, QueueSubmit, ShaderSet, Surface, SwapChain,
-     Frame, FrameSync, SwapchainConfig, Backbuffer, WindowExt};
+     Device, Factory, CommandQueue, QueueFamily, ShaderSet, Surface, SwapChain,
+     Frame, FrameSync, SwapchainConfig, Backbuffer, WindowExt, RawSubmission};
 use {buffer, format, state, target, handle, mapping, pool, pso, shade, texture};
 use command::{self, AccessInfo};
 use factory::{ResourceViewError, TargetViewError, WaitFor};
@@ -59,12 +59,12 @@ impl Adapter<DummyBackend> for DummyAdapter {
 /// Dummy command queue doing nothing.
 pub struct DummyQueue;
 impl CommandQueue<DummyBackend> for DummyQueue {
-    unsafe fn submit(
+    unsafe fn submit_raw<'a, I>(
         &mut self,
-        _: &[QueueSubmit<DummyBackend>],
+        _: I,
         _: Option<&handle::Fence<DummyResources>>,
         _: &AccessInfo<DummyResources>,
-    ) {
+    ) where I: Iterator<Item=RawSubmission<'a, DummyBackend>> {
         unimplemented!()
     }
 
@@ -222,6 +222,7 @@ impl QueueFamily for DummyFamily {
 }
 
 /// Dummy submit info containing nothing.
+#[derive(Clone)]
 pub struct DummySubmitInfo;
 
 /// Dummy subpass command buffer.

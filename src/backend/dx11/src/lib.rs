@@ -435,11 +435,15 @@ impl CommandQueue {
 }
 
 impl core::CommandQueue<Backend> for CommandQueue {
-    unsafe fn submit(&mut self, submit_infos: &[core::QueueSubmit<Backend>], fence: Option<&h::Fence<Resources>>, access: &com::AccessInfo<Resources>) {
+    unsafe fn submit_raw<'a, I>(
+        &mut self,
+        submit_infos: I,
+        fence: Option<&h::Fence<Resources>>,
+        access: &com::AccessInfo<Resources>,
+    ) where I: Iterator<Item=core::RawSubmission<'a, Backend>> {
         let _guard = self.before_submit(access).unwrap();
         for submit in submit_infos {
             for cb in submit.cmd_buffers {
-                let cb = cb.get_info();
                 unsafe { self.context.ClearState(); }
                 for com in &cb.parser.0 {
                     execute::process(&mut self.context, com, &cb.parser.1);

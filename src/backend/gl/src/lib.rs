@@ -967,11 +967,15 @@ impl CommandQueue {
 }
 
 impl c::CommandQueue<Backend> for CommandQueue {
-    unsafe fn submit(&mut self, submit_infos: &[c::QueueSubmit<Backend>], fence: Option<&handle::Fence<Resources>>, access: &com::AccessInfo<Resources>) {
+    unsafe fn submit_raw<'a, I>(
+        &mut self,
+        submit_infos: I,
+        fence: Option<&handle::Fence<Resources>>,
+        access: &com::AccessInfo<Resources>,
+    ) where I: Iterator<Item=c::RawSubmission<'a, Backend>> {
         let mut access = self.before_submit(access).unwrap();
         for submit in submit_infos {
             for cb in submit.cmd_buffers {
-                let cb = cb.get_info();
                 self.reset_state();
                 for com in &*cb.buf {
                     self.process(com, &*cb.data);
