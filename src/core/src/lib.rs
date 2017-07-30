@@ -23,6 +23,7 @@ extern crate bitflags;
 extern crate derivative;
 extern crate draw_state;
 extern crate log;
+extern crate smallvec;
 
 #[cfg(feature = "mint")]
 extern crate mint;
@@ -45,8 +46,8 @@ pub use self::command::CommandBuffer;
 pub use self::factory::Factory;
 pub use self::pool::{ComputeCommandPool, GeneralCommandPool, GraphicsCommandPool, RawCommandPool,
                      SubpassCommandPool, TransferCommandPool};
-pub use self::queue::{CommandQueue, ComputeQueue, GeneralQueue, GraphicsQueue, QueueFamily,
-                      QueueSubmit, QueueType, TransferQueue};
+pub use self::queue::{CommandQueue, QueueType, RawSubmission, Submission, QueueFamily,
+                      ComputeQueue, GeneralQueue, GraphicsQueue, TransferQueue};
 pub use self::window::{Backbuffer, Frame, FrameSync, Surface, SwapChain, SwapchainConfig,
                        WindowExt};
 pub use draw_state::{state, target};
@@ -253,7 +254,7 @@ pub trait Backend: 'static + Sized {
     type Factory: Factory<Self::Resources>;
     type QueueFamily: QueueFamily;
     type Resources: Resources;
-    type SubmitInfo: Send;
+    type SubmitInfo: Clone + Send;
 
     type RawCommandBuffer: CommandBuffer<Self> + command::Buffer<Self::Resources>;
     type SubpassCommandBuffer: CommandBuffer<Self>; // + SubpassCommandBuffer<Self::R>;

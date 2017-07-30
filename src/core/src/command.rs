@@ -20,6 +20,7 @@ use std::collections::hash_set::{self, HashSet};
 use {Backend, Resources, IndexType, InstanceCount, VertexCount,
      SubmissionResult, SubmissionError};
 use {state, target, pso, shade, texture, handle};
+use queue::capability::{Capability, General, Graphics, Compute, Transfer};
 
 /// A universal clear color supporting integet formats
 /// as well as the standard floating-point.
@@ -38,11 +39,19 @@ pub enum ClearColor {
 pub type InstanceParams = (InstanceCount, VertexCount);
 
 /// Thread-safe finished command buffer for submission.
-pub struct Submit<B: Backend>(B::SubmitInfo);
-impl<B: Backend> Submit<B> {
+pub struct Submit<B: Backend, C>(B::SubmitInfo, PhantomData<C>);
+unsafe impl<B: Backend, C> Send for Submit<B, C> { }
+
+impl<B: Backend, C> Submit<B, C> {
+    // Unsafe because we could try to submit a command buffer multiple times.
     #[doc(hidden)]
     pub unsafe fn get_info(&self) -> &B::SubmitInfo {
         &self.0
+    }
+
+    ///
+    pub fn into_info(self) -> B::SubmitInfo {
+        self.0
     }
 }
 
@@ -66,7 +75,7 @@ impl<B, C> DerefMut for Encoder<B, C> {
 }
 
 impl<B, C> Encoder<B, C>
-    where B: Backend, C: CommandBuffer<B>
+    where B: Backend, C: CommandBuffer<B> + Capability
 {
     #[doc(hidden)]
     pub unsafe fn new(buffer: C) -> Self {
@@ -77,8 +86,8 @@ impl<B, C> Encoder<B, C>
     ///
     /// The command buffer will be consumed and can't be modified further.
     /// The command pool must be reset to re-record the command buffer.
-    pub fn finish(mut self) -> Submit<B> {
-        Submit(unsafe { self.0.end() })
+    pub fn finish(mut self) -> Submit<B, C::Capability> {
+        Submit(unsafe { self.0.end() }, PhantomData)
     }
 }
 
@@ -96,6 +105,10 @@ impl<'a, B: Backend> CommandBuffer<B> for GeneralCommandBuffer<'a, B> {
     unsafe fn end(&mut self) -> B::SubmitInfo {
         self.0.end()
     }
+}
+
+impl<'a, B: Backend> Capability for GeneralCommandBuffer<'a, B> {
+    type Capability = General;
 }
 
 // TODO: temporary derefs, remove once command buffers will be reworked
@@ -122,6 +135,10 @@ impl<'a, B: Backend> CommandBuffer<B> for GraphicsCommandBuffer<'a, B> {
     }
 }
 
+impl<'a, B: Backend> Capability for GraphicsCommandBuffer<'a, B> {
+    type Capability = Graphics;
+}
+
 // TODO: temporary derefs, remove once command buffers will be reworked
 impl<'a, B: Backend> Deref for GraphicsCommandBuffer<'a, B> {
     type Target = B::RawCommandBuffer;
@@ -146,6 +163,10 @@ impl<'a, B: Backend> CommandBuffer<B> for ComputeCommandBuffer<'a, B> {
     }
 }
 
+impl<'a, B: Backend> Capability for ComputeCommandBuffer<'a, B> {
+    type Capability = Compute;
+}
+
 /// Command buffer with transfer functionality.
 pub struct TransferCommandBuffer<'a, B: Backend>(pub(crate) &'a mut B::RawCommandBuffer)
 where B::RawCommandBuffer: 'a;
@@ -155,6 +176,11 @@ impl<'a, B: Backend> CommandBuffer<B> for TransferCommandBuffer<'a, B> {
         self.0.end()
     }
 }
+
+impl<'a, B: Backend> Capability for TransferCommandBuffer<'a, B> {
+    type Capability = Transfer;
+}
+
 /// An interface of the abstract command buffer. It collects commands in an
 /// efficient API-specific manner, to be ready for execution on the device.
 #[allow(missing_docs)]

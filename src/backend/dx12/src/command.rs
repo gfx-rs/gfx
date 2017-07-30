@@ -28,6 +28,7 @@ unsafe impl Send for CommandBuffer { }
 pub struct SubpassCommandBuffer {
 }
 
+#[derive(Clone)]
 pub struct SubmitInfo; // TODO
 
 // CommandBuffer trait implementation

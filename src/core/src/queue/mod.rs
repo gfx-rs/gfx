@@ -25,16 +25,16 @@
 //! * `ComputeQueue` supports compute and transfer.
 //! * `TransferQueue` supports transfer.
 //!
-//! # Submission
-//!
-//! // TODO
+pub mod capability;
+pub mod submission;
+
 use {pso, Backend, Resources, handle};
 use command::{AccessInfo, Submit};
 use pool::{GeneralCommandPool, GraphicsCommandPool, ComputeCommandPool,
            TransferCommandPool, RawCommandPool};
-use std::borrow::{Borrow, BorrowMut};
-use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
+
+pub use self::capability::{Capability, Compute, Graphics, General, Transfer, Supports, SupportedBy};
+pub use self::submission::{RawSubmission, Submission};
 
 ///
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -77,16 +77,6 @@ pub trait QueueFamily: 'static {
     fn num_queues(&self) -> u32;
 }
 
-/// Submission information for a command queue.
-pub struct QueueSubmit<'a, B: Backend + 'a> {
-    /// Command buffers to submit.
-    pub cmd_buffers: &'a [Submit<B>],
-    /// Semaphores to wait being signalled before submission.
-    pub wait_semaphores: &'a [(&'a handle::Semaphore<B::Resources>, pso::PipelineStage)],
-    /// Semaphores which get signalled after submission.
-    pub signal_semaphores: &'a [&'a handle::Semaphore<B::Resources>],
-}
-
 /// `CommandQueues` are abstractions to the internal GPU execution engines.
 /// Commands are executed on the the device by submitting command buffers to queues.
 pub trait CommandQueue<B: Backend> {
@@ -97,12 +87,12 @@ pub trait CommandQueue<B: Backend> {
     /// Trying to submit compute commands to a graphics queue will result in undefined behavior.
     /// Each queue implements safe wrappers according to their supported functionalities!
     // TODO: `access` legacy (handle API)
-    unsafe fn submit(
+    unsafe fn submit_raw<'a, I>(
         &mut self,
-        submit_infos: &[QueueSubmit<B>],
+        submit_infos: I,
         fence: Option<&handle::Fence<B::Resources>>,
         access: &AccessInfo<B::Resources>,
-    );
+    ) where I: Iterator<Item=RawSubmission<'a, B>>;
 
     /// Pin everything from this handle manager to live for a frame.
     // TODO: legacy (handle API)
@@ -114,15 +104,19 @@ pub trait CommandQueue<B: Backend> {
 }
 
 macro_rules! define_queue {
+    () => ();
     // Bare queue definitions
-    ($queue:ident can ()) => (
+    ($queue:ident $capability:ident $($tail:ident)*) => (
         ///
         pub struct $queue<B: Backend>(B::CommandQueue);
 
         impl<B: Backend> CommandQueue<B> for $queue<B> {
-            unsafe fn submit(&mut self, submit_infos: &[QueueSubmit<B>], fence: Option<&handle::Fence<B::Resources>>,
-                access: &AccessInfo<B::Resources>) {
-                self.0.submit(submit_infos, fence, access)
+            unsafe fn submit_raw<'a, I>(&mut self,
+                submit_infos: I,
+                fence: Option<&handle::Fence<B::Resources>>,
+                access: &AccessInfo<B::Resources>,
+            ) where I: Iterator<Item=RawSubmission<'a, B>> {
+                self.0.submit_raw(submit_infos, fence, access)
             }
 
             fn pin_submitted_resources(&mut self, handles: &handle::Manager<B::Resources>) {
@@ -139,6 +133,20 @@ macro_rules! define_queue {
             pub unsafe fn new(queue: B::CommandQueue) -> Self {
                 $queue(queue)
             }
+
+            ///
+            pub fn submit<C>(
+                &mut self,
+                submit_infos: &[Submission<B, C>],
+                fence: Option<&handle::Fence<B::Resources>>,
+                access: &AccessInfo<B::Resources>)
+            where
+                C: SupportedBy<$capability>
+            {
+                unsafe {
+                    self.submit_raw(submit_infos.iter().map(|submit| submit.as_raw()), fence, access)
+                }
+            }
         }
 
         impl<B: Backend> AsRef<B::CommandQueue> for $queue<B> {
@@ -152,37 +160,16 @@ macro_rules! define_queue {
                 &mut self.0
             }
         }
-    );
 
-    // Impl submits
-    ($queue:ident can ($submit:ident $($tail_submit:ident)*)) => (
-        impl<B: Backend> $queue<B> {
-            /// Submit command buffers for execution.
-            pub fn $submit(&mut self, submit: &[QueueSubmit<B>], fence: Option<&handle::Fence<B::Resources>>, access: &AccessInfo<B::Resources>) {
-                unsafe { self.0.submit(submit, fence, access) }
-            }
-        }
-
-        define_queue! {
-            $queue can ($($tail_submit)*)
-        }
+        define_queue! { $($tail)* }
     );
 }
 
 define_queue! {
-    GeneralQueue can (submit_general submit_graphics submit_compute submit_transfer)
-}
-
-define_queue! {
-    GraphicsQueue can (submit_graphics submit_transfer)
-}
-
-define_queue! {
-    ComputeQueue can (submit_compute submit_transfer)
-}
-
-define_queue! {
-    TransferQueue can (submit_transfer)
+    GeneralQueue General
+    GraphicsQueue Graphics
+    ComputeQueue Compute
+    TransferQueue Transfer
 }
 
 // Command pool creation implementations

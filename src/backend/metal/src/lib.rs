@@ -229,9 +229,12 @@ impl CommandQueue {
 }
 
 impl core::CommandQueue<Backend> for CommandQueue {
-    unsafe fn submit(&mut self, submit_infos: &[core::QueueSubmit<Backend>],
-        fence: Option<&handle::Fence<Resources>>, access: &AccessInfo<Resources>)
-    {
+    unsafe fn submit_raw<'a, I>(
+        &mut self,
+        submit_infos: I,
+        fence: Option<&handle::Fence<Resources>>,
+        access: &AccessInfo<Resources>,
+    ) where I: Iterator<Item=core::RawSubmission<'a, Backend>> {
         for submit in submit_infos {
             // FIXME: wait for semaphores!
 
@@ -250,7 +253,7 @@ impl core::CommandQueue<Backend> for CommandQueue {
             };
 
             for buffer in submit.cmd_buffers {
-                let command_buffer = buffer.get_info().command_buffer;
+                let command_buffer = buffer.command_buffer;
                 if let Some(ref signal_block) = signal_block {
                     msg_send![command_buffer.0, addCompletedHandler: signal_block.deref() as *const _];
                 }

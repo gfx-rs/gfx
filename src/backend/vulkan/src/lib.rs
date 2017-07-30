@@ -385,9 +385,12 @@ impl CommandQueue {
 }
 
 impl core::CommandQueue<Backend> for CommandQueue {
-    unsafe fn submit(&mut self, submit_infos: &[core::QueueSubmit<Backend>],
-        fence: Option<&handle::Fence<Resources>>, access: &com::AccessInfo<Resources>)
-    {
+    unsafe fn submit_raw<'a, I>(
+        &mut self,
+        submit_infos: I,
+        fence: Option<&handle::Fence<Resources>>,
+        access: &com::AccessInfo<Resources>,
+    ) where I: Iterator<Item=core::RawSubmission<'a, Backend>> {
         unimplemented!()
     }
 
