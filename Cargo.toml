@@ -150,9 +150,9 @@ name = "trianglell"
 path = "examples/trianglell/main.rs"
 
 [dev-dependencies]
-cgmath = "0.14"
+cgmath = "0.15"
 gfx_gl = "0.3"
 rand = "0.3"
-genmesh = "0.4"
-noise = "0.1"
-image = "0.13"
+genmesh = "0.5"
+noise = "0.4"
+image = "0.14"

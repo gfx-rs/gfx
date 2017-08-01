@@ -18,8 +18,6 @@ extern crate genmesh;
 extern crate gfx;
 extern crate gfx_app;
 extern crate image;
-extern crate noise;
-extern crate rand;
 extern crate winit;
 
 use gfx::GraphicsPoolExt;
@@ -137,7 +135,8 @@ impl<B> TileMapPlane<B> where B: gfx::Backend {
         // to the frag shader as a varying, used to determine the "current tile" and the frag's offset,
         // which is used to calculate the displayed frag color)
         let vertex_data: Vec<VertexData> = plane.shared_vertex_iter()
-            .map(|(raw_x, raw_y)| {
+            .map(|genmesh::Vertex { pos, .. }| {
+                let (raw_x, raw_y) = (pos[0], pos[1]);
                 let vertex_x = half_width as f32 * raw_x;
                 let vertex_y = half_height as f32 * raw_y;
 
