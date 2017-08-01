@@ -18,7 +18,6 @@ extern crate gfx;
 extern crate gfx_app;
 extern crate genmesh;
 extern crate noise;
-extern crate rand;
 extern crate winit;
 
 use gfx::format::{DepthStencil};
@@ -28,8 +27,7 @@ use gfx_app::{BackbufferView, ColorFormat, DepthFormat};
 use cgmath::{Deg, Matrix4, Point3, SquareMatrix, Vector3};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
-use noise::{Seed, perlin2};
-use rand::Rng;
+use noise::{NoiseModule, Perlin};
 use std::time::{Instant};
 
 gfx_defines!{
@@ -101,12 +99,12 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
             .. gfx_app::shade::Source::empty()
         };
 
-        let rand_seed = rand::thread_rng().gen();
-        let seed = Seed::new(rand_seed);
+        let perlin = Perlin::new();
         let plane = Plane::subdivide(256, 256);
         let vertex_data: Vec<Vertex> = plane.shared_vertex_iter()
-            .map(|(x, y)| {
-                let h = perlin2(&seed, &[x, y]) * 32.0;
+            .map(|genmesh::Vertex { pos, .. }| {
+                let (x, y) = (pos[0], pos[1]);
+                let h = perlin.get([x, y]) * 32.0;
                 Vertex {
                     pos: [25.0 * x, 25.0 * y, h],
                     color: calculate_color(h),
