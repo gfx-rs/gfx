@@ -32,7 +32,6 @@ extern crate gfx;
 extern crate gfx_window_glutin;
 extern crate glutin;
 extern crate gfx_app;
-extern crate rand;
 extern crate genmesh;
 extern crate noise;
 extern crate winit;
@@ -48,8 +47,7 @@ use cgmath::{Deg, Matrix4, Point3, SquareMatrix, Vector3};
 use gfx::{Bundle, Factory, GraphicsPoolExt, texture};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
-use noise::{Seed, perlin2};
-use rand::Rng;
+use noise::{NoiseModule, Perlin};
 use std::time::{Instant};
 use winit::{WindowEvent, WindowBuilder};
 
@@ -138,7 +136,7 @@ gfx_defines!{
     }
 }
 
-fn calculate_normal(seed: &Seed, x: f32, y: f32)-> [f32; 3] {
+fn calculate_normal(perlin: &Perlin, x: f32, y: f32)-> [f32; 3] {
     use cgmath::InnerSpace;
 
     // determine sample points
@@ -148,8 +146,8 @@ fn calculate_normal(seed: &Seed, x: f32, y: f32)-> [f32; 3] {
     let s_y1 = y + 0.001;
 
     // calculate gradient in point
-    let dzdx = (perlin2(seed, &[s_x1, y]) - perlin2(seed, &[s_x0, y]))/(s_x1 - s_x0);
-    let dzdy = (perlin2(seed, &[x, s_y1]) - perlin2(seed, &[x, s_y0]))/(s_y1 - s_y0);
+    let dzdx = (perlin.get([s_x1, y]) - perlin.get([s_x0, y]))/(s_x1 - s_x0);
+    let dzdy = (perlin.get([x, s_y1]) - perlin.get([x, s_y0]))/(s_y1 - s_y0);
 
     // cross gradient vectors to get normal
     let normal = Vector3::new(1.0, 0.0, dzdx).cross(Vector3::new(0.0, 1.0, dzdy)).normalize();
@@ -226,7 +224,7 @@ struct App<B: gfx::Backend> {
     emitter: Bundle<B, emitter::Data<B::Resources>>,
     intermediate: ViewPair<B::Resources, GFormat>,
     light_pos_vec: Vec<LightInfo>,
-    seed: Seed,
+    perlin: Perlin,
     depth_resource: gfx::handle::ShaderResourceView<B::Resources, [f32; 4]>,
     debug_buf: Option<gfx::handle::ShaderResourceView<B::Resources, [f32; 4]>>,
     start_time: Instant,
@@ -248,10 +246,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
             ViewPair{ resource: srv, target: rtv }
         };
 
-        let seed = {
-            let rand_seed = rand::thread_rng().gen();
-            Seed::new(rand_seed)
-        };
+        let perlin = Perlin::new();
 
         let sampler = factory.create_sampler(
             texture::SamplerInfo::new(texture::FilterMethod::Scale,
@@ -261,11 +256,12 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         let terrain = {
             let plane = genmesh::generators::Plane::subdivide(256, 256);
             let vertex_data: Vec<TerrainVertex> = plane.shared_vertex_iter()
-                .map(|(x, y)| {
-                    let h = TERRAIN_SCALE[2] * perlin2(&seed, &[x, y]);
+                .map(|genmesh::Vertex { pos, .. }| {
+                    let (x, y) = (pos[0], pos[1]);
+                    let h = TERRAIN_SCALE[2] * perlin.get([x, y]);
                     TerrainVertex {
                         pos: [TERRAIN_SCALE[0] * x, TERRAIN_SCALE[1] * y, h],
-                        normal: calculate_normal(&seed, x, y),
+                        normal: calculate_normal(&perlin, x, y),
                         color: calculate_color(h),
                     }
                 })
@@ -472,7 +468,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
             light_pos_vec: (0 ..NUM_LIGHTS).map(|_| {
                 LightInfo{ pos: [0.0, 0.0, 0.0, 0.0] }
             }).collect(),
-            seed,
+            perlin,
             depth_resource,
             debug_buf: None,
             start_time: Instant::now(),
@@ -533,7 +529,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
                 let r = 1.0 - (fi*fi) / ((NUM_LIGHTS*NUM_LIGHTS) as f32);
                 (r * (0.2*time + i as f32).cos(), r * (0.2*time + i as f32).sin())
             };
-            let h = perlin2(&self.seed, &[x, y]);
+            let h = self.perlin.get([x, y]);
 
             d.pos[0] = TERRAIN_SCALE[0] * x;
             d.pos[1] = TERRAIN_SCALE[1] * y;
