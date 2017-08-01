@@ -32,26 +32,24 @@ extern crate gfx;
 extern crate gfx_window_glutin;
 extern crate glutin;
 extern crate gfx_app;
-extern crate rand;
 extern crate genmesh;
 extern crate noise;
 extern crate winit;
 
 use gfx_app::{BackbufferView, ColorFormat};
 
-#[cfg(feature="metal")]
+#[cfg(feature = "metal")]
 use gfx::format::Depth32F as Depth;
-#[cfg(not(feature="metal"))]
+#[cfg(not(feature = "metal"))]
 use gfx::format::Depth;
 
 use cgmath::{Deg, Matrix4, Point3, SquareMatrix, Vector3};
 use gfx::{Bundle, Factory, GraphicsPoolExt, texture};
-use genmesh::{Vertices, Triangulate};
+use genmesh::{Vertex, Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
-use noise::{Seed, perlin2};
-use rand::Rng;
-use std::time::{Instant};
-use winit::{WindowEvent, WindowBuilder};
+use noise::{NoiseModule, Perlin};
+use std::time::Instant;
+use winit::WindowEvent;
 
 // Remember to also change the constants in the shaders
 const NUM_LIGHTS: usize = 250;
@@ -138,7 +136,7 @@ gfx_defines!{
     }
 }
 
-fn calculate_normal(seed: &Seed, x: f32, y: f32)-> [f32; 3] {
+fn calculate_normal(perlin: &Perlin, x: f32, y: f32) -> [f32; 3] {
     use cgmath::InnerSpace;
 
     // determine sample points
@@ -148,11 +146,13 @@ fn calculate_normal(seed: &Seed, x: f32, y: f32)-> [f32; 3] {
     let s_y1 = y + 0.001;
 
     // calculate gradient in point
-    let dzdx = (perlin2(seed, &[s_x1, y]) - perlin2(seed, &[s_x0, y]))/(s_x1 - s_x0);
-    let dzdy = (perlin2(seed, &[x, s_y1]) - perlin2(seed, &[x, s_y0]))/(s_y1 - s_y0);
+    let dzdx = (perlin.get([s_x1, y]) - perlin.get([s_x0, y])) / (s_x1 - s_x0);
+    let dzdy = (perlin.get([x, s_y1]) - perlin.get([x, s_y0])) / (s_y1 - s_y0);
 
     // cross gradient vectors to get normal
-    let normal = Vector3::new(1.0, 0.0, dzdx).cross(Vector3::new(0.0, 1.0, dzdy)).normalize();
+    let normal = Vector3::new(1.0, 0.0, dzdx)
+        .cross(Vector3::new(0.0, 1.0, dzdy))
+        .normalize();
 
     return normal.into();
 }
@@ -177,9 +177,9 @@ struct ViewPair<R: gfx::Resources, T: gfx::format::Formatted> {
 // need a custom depth format in order to view SRV depth as float4
 struct DepthFormat;
 impl gfx::format::Formatted for DepthFormat {
-    #[cfg(feature="metal")]
+    #[cfg(feature = "metal")]
     type Surface = gfx::format::D32;
-    #[cfg(not(feature="metal"))]
+    #[cfg(not(feature = "metal"))]
     type Surface = gfx::format::D24;
 
     type Channel = gfx::format::Unorm;
@@ -192,27 +192,47 @@ impl gfx::format::Formatted for DepthFormat {
 }
 
 fn create_g_buffer<R: gfx::Resources, F: gfx::Factory<R>>(
-                   width: texture::Size, height: texture::Size, factory: &mut F)
-                   -> (ViewPair<R, GFormat>, ViewPair<R, GFormat>, ViewPair<R, GFormat>,
-                       gfx::handle::ShaderResourceView<R, [f32; 4]>, gfx::handle::DepthStencilView<R, Depth>)
-{
+    width: texture::Size,
+    height: texture::Size,
+    factory: &mut F,
+) -> (ViewPair<R, GFormat>,
+      ViewPair<R, GFormat>,
+      ViewPair<R, GFormat>,
+      gfx::handle::ShaderResourceView<R, [f32; 4]>,
+      gfx::handle::DepthStencilView<R, Depth>) {
     use gfx::format::ChannelSource;
     let pos = {
-        let (_ , srv, rtv) = factory.create_render_target(width, height).unwrap();
-        ViewPair{ resource: srv, target: rtv }
+        let (_, srv, rtv) = factory.create_render_target(width, height).unwrap();
+        ViewPair {
+            resource: srv,
+            target: rtv,
+        }
     };
     let normal = {
-        let (_ , srv, rtv) = factory.create_render_target(width, height).unwrap();
-        ViewPair{ resource: srv, target: rtv }
+        let (_, srv, rtv) = factory.create_render_target(width, height).unwrap();
+        ViewPair {
+            resource: srv,
+            target: rtv,
+        }
     };
     let diffuse = {
-        let (_ , srv, rtv) = factory.create_render_target(width, height).unwrap();
-        ViewPair{ resource: srv, target: rtv }
+        let (_, srv, rtv) = factory.create_render_target(width, height).unwrap();
+        ViewPair {
+            resource: srv,
+            target: rtv,
+        }
     };
     let (tex, _srv, depth_rtv) = factory.create_depth_stencil(width, height).unwrap();
     // ignoring the default SRV since we need to create a custom one with swizzling
-    let swizzle = gfx::format::Swizzle(ChannelSource::X, ChannelSource::X, ChannelSource::X, ChannelSource::X);
-    let depth_srv = factory.view_texture_as_shader_resource::<DepthFormat>(&tex, (0,0), swizzle).unwrap();
+    let swizzle = gfx::format::Swizzle(
+        ChannelSource::X,
+        ChannelSource::X,
+        ChannelSource::X,
+        ChannelSource::X,
+    );
+    let depth_srv = factory
+        .view_texture_as_shader_resource::<DepthFormat>(&tex, (0, 0), swizzle)
+        .unwrap();
 
     (pos, normal, diffuse, depth_srv, depth_rtv)
 }
@@ -226,77 +246,85 @@ struct App<B: gfx::Backend> {
     emitter: Bundle<B, emitter::Data<B::Resources>>,
     intermediate: ViewPair<B::Resources, GFormat>,
     light_pos_vec: Vec<LightInfo>,
-    seed: Seed,
+    perlin: Perlin,
     depth_resource: gfx::handle::ShaderResourceView<B::Resources, [f32; 4]>,
     debug_buf: Option<gfx::handle::ShaderResourceView<B::Resources, [f32; 4]>>,
     start_time: Instant,
 }
 
 impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
-    fn new(factory: &mut B::Factory,
-           _: &mut gfx::queue::GraphicsQueue<B>,
-           backend: gfx_app::shade::Backend,
-           window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
-    {
+    fn new(
+        factory: &mut B::Factory,
+        _: &mut gfx::queue::GraphicsQueue<B>,
+        backend: gfx_app::shade::Backend,
+        window_targets: gfx_app::WindowTargets<B::Resources>,
+    ) -> Self {
         use gfx::traits::FactoryExt;
 
         let (width, height, _, _) = window_targets.views[0].0.get_dimensions();
         let (gpos, gnormal, gdiffuse, depth_resource, depth_target) =
             create_g_buffer(width, height, factory);
         let res = {
-            let (_ , srv, rtv) = factory.create_render_target(width, height).unwrap();
-            ViewPair{ resource: srv, target: rtv }
+            let (_, srv, rtv) = factory.create_render_target(width, height).unwrap();
+            ViewPair {
+                resource: srv,
+                target: rtv,
+            }
         };
 
-        let seed = {
-            let rand_seed = rand::thread_rng().gen();
-            Seed::new(rand_seed)
-        };
+        let perlin = Perlin::new();
 
-        let sampler = factory.create_sampler(
-            texture::SamplerInfo::new(texture::FilterMethod::Scale,
-                                       texture::WrapMode::Clamp)
-        );
+        let sampler = factory.create_sampler(texture::SamplerInfo::new(
+            texture::FilterMethod::Scale,
+            texture::WrapMode::Clamp,
+        ));
 
         let terrain = {
             let plane = genmesh::generators::Plane::subdivide(256, 256);
-            let vertex_data: Vec<TerrainVertex> = plane.shared_vertex_iter()
-                .map(|(x, y)| {
-                    let h = TERRAIN_SCALE[2] * perlin2(&seed, &[x, y]);
+            let vertex_data: Vec<TerrainVertex> = plane
+                .shared_vertex_iter()
+                .map(|Vertex { pos, .. }| {
+                    let x = pos[0];
+                    let y = pos[1];
+                    let h = TERRAIN_SCALE[2] * perlin.get([x, y]);
                     TerrainVertex {
                         pos: [TERRAIN_SCALE[0] * x, TERRAIN_SCALE[1] * y, h],
-                        normal: calculate_normal(&seed, x, y),
+                        normal: calculate_normal(&perlin, x, y),
                         color: calculate_color(h),
                     }
                 })
                 .collect();
 
-            let index_data: Vec<u32> = plane.indexed_polygon_iter()
+            let index_data: Vec<u32> = plane
+                .indexed_polygon_iter()
                 .triangulate()
                 .vertices()
                 .map(|i| i as u32)
                 .collect();
 
-            let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, &index_data[..]);
+            let (vbuf, slice) =
+                factory.create_vertex_buffer_with_slice(&vertex_data, &index_data[..]);
 
             let vs = gfx_app::shade::Source {
                 glsl_150: include_bytes!("shader/terrain.glslv"),
-                hlsl_40:  include_bytes!("data/terrain_vs.fx"),
-                msl_11:   include_bytes!("shader/terrain_vertex.metal"),
-                .. gfx_app::shade::Source::empty()
+                hlsl_40: include_bytes!("data/terrain_vs.fx"),
+                msl_11: include_bytes!("shader/terrain_vertex.metal"),
+                ..gfx_app::shade::Source::empty()
             };
             let ps = gfx_app::shade::Source {
                 glsl_150: include_bytes!("shader/terrain.glslf"),
-                hlsl_40:  include_bytes!("data/terrain_ps.fx"),
-                msl_11:   include_bytes!("shader/terrain_frag.metal"),
-                .. gfx_app::shade::Source::empty()
+                hlsl_40: include_bytes!("data/terrain_ps.fx"),
+                msl_11: include_bytes!("shader/terrain_frag.metal"),
+                ..gfx_app::shade::Source::empty()
             };
 
-            let pso = factory.create_pipeline_simple(
-                vs.select(backend).unwrap(),
-                ps.select(backend).unwrap(),
-                terrain::new()
-                ).unwrap();
+            let pso = factory
+                .create_pipeline_simple(
+                    vs.select(backend).unwrap(),
+                    ps.select(backend).unwrap(),
+                    terrain::new(),
+                )
+                .unwrap();
 
             let data = terrain::Data {
                 vbuf: vbuf,
@@ -313,30 +341,32 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         let blit = {
             let vertex_data = [
                 BlitVertex { pos_tex: [-3, -1, -1, 0] },
-                BlitVertex { pos_tex: [ 1, -1,  1, 0] },
-                BlitVertex { pos_tex: [ 1,  3,  1, 2] },
+                BlitVertex { pos_tex: [1, -1, 1, 0] },
+                BlitVertex { pos_tex: [1, 3, 1, 2] },
             ];
 
             let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
 
             let vs = gfx_app::shade::Source {
                 glsl_150: include_bytes!("shader/blit.glslv"),
-                hlsl_40:  include_bytes!("data/blit_vs.fx"),
-                msl_11:   include_bytes!("shader/blit_vertex.metal"),
-                .. gfx_app::shade::Source::empty()
+                hlsl_40: include_bytes!("data/blit_vs.fx"),
+                msl_11: include_bytes!("shader/blit_vertex.metal"),
+                ..gfx_app::shade::Source::empty()
             };
             let ps = gfx_app::shade::Source {
                 glsl_150: include_bytes!("shader/blit.glslf"),
-                hlsl_40:  include_bytes!("data/blit_ps.fx"),
-                msl_11:   include_bytes!("shader/blit_frag.metal"),
-                .. gfx_app::shade::Source::empty()
+                hlsl_40: include_bytes!("data/blit_ps.fx"),
+                msl_11: include_bytes!("shader/blit_frag.metal"),
+                ..gfx_app::shade::Source::empty()
             };
 
-            let pso = factory.create_pipeline_simple(
-                vs.select(backend).unwrap(),
-                ps.select(backend).unwrap(),
-                blit::new()
-                ).unwrap();
+            let pso = factory
+                .create_pipeline_simple(
+                    vs.select(backend).unwrap(),
+                    ps.select(backend).unwrap(),
+                    blit::new(),
+                )
+                .unwrap();
 
             let data = blit::Data {
                 vbuf: vbuf,
@@ -352,35 +382,35 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         let (light_vbuf, mut light_slice) = {
             let vertex_data = [
                 // top (0, 0, 1)
-                CubeVertex { pos: [-1, -1,  1, 1] },
-                CubeVertex { pos: [ 1, -1,  1, 1] },
-                CubeVertex { pos: [ 1,  1,  1, 1] },
-                CubeVertex { pos: [-1,  1,  1, 1] },
+                CubeVertex { pos: [-1, -1, 1, 1] },
+                CubeVertex { pos: [1, -1, 1, 1] },
+                CubeVertex { pos: [1, 1, 1, 1] },
+                CubeVertex { pos: [-1, 1, 1, 1] },
                 // bottom (0, 0, -1)
-                CubeVertex { pos: [-1,  1, -1, 1] },
-                CubeVertex { pos: [ 1,  1, -1, 1] },
-                CubeVertex { pos: [ 1, -1, -1, 1] },
+                CubeVertex { pos: [-1, 1, -1, 1] },
+                CubeVertex { pos: [1, 1, -1, 1] },
+                CubeVertex { pos: [1, -1, -1, 1] },
                 CubeVertex { pos: [-1, -1, -1, 1] },
                 // right (1, 0, 0)
-                CubeVertex { pos: [ 1, -1, -1, 1] },
-                CubeVertex { pos: [ 1,  1, -1, 1] },
-                CubeVertex { pos: [ 1,  1,  1, 1] },
-                CubeVertex { pos: [ 1, -1,  1, 1] },
+                CubeVertex { pos: [1, -1, -1, 1] },
+                CubeVertex { pos: [1, 1, -1, 1] },
+                CubeVertex { pos: [1, 1, 1, 1] },
+                CubeVertex { pos: [1, -1, 1, 1] },
                 // left (-1, 0, 0)
-                CubeVertex { pos: [-1, -1,  1, 1] },
-                CubeVertex { pos: [-1,  1,  1, 1] },
-                CubeVertex { pos: [-1,  1, -1, 1] },
+                CubeVertex { pos: [-1, -1, 1, 1] },
+                CubeVertex { pos: [-1, 1, 1, 1] },
+                CubeVertex { pos: [-1, 1, -1, 1] },
                 CubeVertex { pos: [-1, -1, -1, 1] },
                 // front (0, 1, 0)
-                CubeVertex { pos: [ 1,  1, -1, 1] },
-                CubeVertex { pos: [-1,  1, -1, 1] },
-                CubeVertex { pos: [-1,  1,  1, 1] },
-                CubeVertex { pos: [ 1,  1,  1, 1] },
+                CubeVertex { pos: [1, 1, -1, 1] },
+                CubeVertex { pos: [-1, 1, -1, 1] },
+                CubeVertex { pos: [-1, 1, 1, 1] },
+                CubeVertex { pos: [1, 1, 1, 1] },
                 // back (0, -1, 0)
-                CubeVertex { pos: [ 1, -1,  1, 1] },
-                CubeVertex { pos: [-1, -1,  1, 1] },
+                CubeVertex { pos: [1, -1, 1, 1] },
+                CubeVertex { pos: [-1, -1, 1, 1] },
                 CubeVertex { pos: [-1, -1, -1, 1] },
-                CubeVertex { pos: [ 1, -1, -1, 1] },
+                CubeVertex { pos: [1, -1, -1, 1] },
             ];
 
             let index_data: &[u16] = &[
@@ -399,22 +429,24 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         let light = {
             let vs = gfx_app::shade::Source {
                 glsl_150: include_bytes!("shader/light.glslv"),
-                hlsl_40:  include_bytes!("data/light_vs.fx"),
-                msl_11:   include_bytes!("shader/light_vertex.metal"),
-                .. gfx_app::shade::Source::empty()
+                hlsl_40: include_bytes!("data/light_vs.fx"),
+                msl_11: include_bytes!("shader/light_vertex.metal"),
+                ..gfx_app::shade::Source::empty()
             };
             let ps = gfx_app::shade::Source {
                 glsl_150: include_bytes!("shader/light.glslf"),
-                hlsl_40:  include_bytes!("data/light_ps.fx"),
-                msl_11:   include_bytes!("shader/light_frag.metal"),
-                .. gfx_app::shade::Source::empty()
+                hlsl_40: include_bytes!("data/light_ps.fx"),
+                msl_11: include_bytes!("shader/light_frag.metal"),
+                ..gfx_app::shade::Source::empty()
             };
 
-            let pso = factory.create_pipeline_simple(
-                vs.select(backend).unwrap(),
-                ps.select(backend).unwrap(),
-                light::new()
-                ).unwrap();
+            let pso = factory
+                .create_pipeline_simple(
+                    vs.select(backend).unwrap(),
+                    ps.select(backend).unwrap(),
+                    light::new(),
+                )
+                .unwrap();
 
             let data = light::Data {
                 vbuf: light_vbuf.clone(),
@@ -434,22 +466,24 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         let emitter = {
             let vs = gfx_app::shade::Source {
                 glsl_150: include_bytes!("shader/emitter.glslv"),
-                hlsl_40:  include_bytes!("data/emitter_vs.fx"),
-                msl_11:   include_bytes!("shader/emitter_vertex.metal"),
-                .. gfx_app::shade::Source::empty()
+                hlsl_40: include_bytes!("data/emitter_vs.fx"),
+                msl_11: include_bytes!("shader/emitter_vertex.metal"),
+                ..gfx_app::shade::Source::empty()
             };
             let ps = gfx_app::shade::Source {
                 glsl_150: include_bytes!("shader/emitter.glslf"),
-                hlsl_40:  include_bytes!("data/emitter_ps.fx"),
-                msl_11:   include_bytes!("shader/emitter_frag.metal"),
-                .. gfx_app::shade::Source::empty()
+                hlsl_40: include_bytes!("data/emitter_ps.fx"),
+                msl_11: include_bytes!("shader/emitter_frag.metal"),
+                ..gfx_app::shade::Source::empty()
             };
 
-            let pso = factory.create_pipeline_simple(
-                vs.select(backend).unwrap(),
-                ps.select(backend).unwrap(),
-                emitter::new()
-                ).unwrap();
+            let pso = factory
+                .create_pipeline_simple(
+                    vs.select(backend).unwrap(),
+                    ps.select(backend).unwrap(),
+                    emitter::new(),
+                )
+                .unwrap();
 
             let data = emitter::Data {
                 vbuf: light_vbuf.clone(),
@@ -469,34 +503,33 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
             light,
             emitter,
             intermediate: res,
-            light_pos_vec: (0 ..NUM_LIGHTS).map(|_| {
-                LightInfo{ pos: [0.0, 0.0, 0.0, 0.0] }
-            }).collect(),
-            seed,
+            light_pos_vec: (0..NUM_LIGHTS)
+                .map(|_| LightInfo { pos: [0.0, 0.0, 0.0, 0.0] })
+                .collect(),
+            perlin,
             depth_resource,
             debug_buf: None,
             start_time: Instant::now(),
         }
     }
 
-    fn render(&mut self, (frame, sync): (gfx::Frame, &gfx_app::SyncPrimitives<B::Resources>),
-              pool: &mut gfx::GraphicsCommandPool<B>, queue: &mut gfx::queue::GraphicsQueue<B>)
-    {
+    fn render(
+        &mut self,
+        (frame, sync): (gfx::Frame, &gfx_app::SyncPrimitives<B::Resources>),
+        pool: &mut gfx::GraphicsCommandPool<B>,
+        queue: &mut gfx::queue::GraphicsQueue<B>,
+    ) {
         let elapsed = self.start_time.elapsed();
         let time = elapsed.as_secs() as f32 + elapsed.subsec_nanos() as f32 / 1000_000_000.0;
 
         // Update camera position
         let cam_pos = {
             // Slowly circle the center
-            let x = (0.05*time).sin();
-            let y = (0.05*time).cos();
+            let x = (0.05 * time).sin();
+            let y = (0.05 * time).cos();
             Point3::new(x * 32.0, y * 32.0, 16.0)
         };
-        let view = Matrix4::look_at(
-            cam_pos,
-            Point3::new(0.0, 0.0, 0.0),
-            Vector3::unit_z(),
-        );
+        let view = Matrix4::look_at(cam_pos, Point3::new(0.0, 0.0, 0.0), Vector3::unit_z());
         let (width, height, _, _) = self.terrain.data.out_depth.get_dimensions();
         let aspect = width as f32 / height as f32;
         let proj = cgmath::perspective(Deg(60.0f32), aspect, 5.0, 100.0);
@@ -512,10 +545,16 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         encoder.update_constant_buffer(&self.terrain.data.locals, &terrain_locals);
 
         let light_locals = LightLocals {
-            cam_pos_and_radius: [cam_pos.x, cam_pos.y, cam_pos.z,
-                1.0 / (LIGHT_RADIUS * LIGHT_RADIUS)],
+            cam_pos_and_radius: [
+                cam_pos.x,
+                cam_pos.y,
+                cam_pos.z,
+                1.0 / (LIGHT_RADIUS * LIGHT_RADIUS),
+            ],
         };
-        encoder.update_buffer(&self.light.data.locals_ps, &[light_locals], 0).unwrap();
+        encoder
+            .update_buffer(&self.light.data.locals_ps, &[light_locals], 0)
+            .unwrap();
 
         let mut cube_locals = CubeLocals {
             transform: (proj * view).into(),
@@ -530,16 +569,21 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
             let (x, y) = {
                 let fi = i as f32;
                 // Distribute lights nicely
-                let r = 1.0 - (fi*fi) / ((NUM_LIGHTS*NUM_LIGHTS) as f32);
-                (r * (0.2*time + i as f32).cos(), r * (0.2*time + i as f32).sin())
+                let r = 1.0 - (fi * fi) / ((NUM_LIGHTS * NUM_LIGHTS) as f32);
+                (
+                    r * (0.2 * time + i as f32).cos(),
+                    r * (0.2 * time + i as f32).sin(),
+                )
             };
-            let h = perlin2(&self.seed, &[x, y]);
+            let h = self.perlin.get([x, y]);
 
             d.pos[0] = TERRAIN_SCALE[0] * x;
             d.pos[1] = TERRAIN_SCALE[1] * y;
             d.pos[2] = TERRAIN_SCALE[2] * h + 0.5;
-        };
-        encoder.update_buffer(&self.light.data.light_pos_buf, &self.light_pos_vec, 0).unwrap();
+        }
+        encoder
+            .update_buffer(&self.light.data.light_pos_buf, &self.light_pos_vec, 0)
+            .unwrap();
 
         encoder.clear_depth(&self.terrain.data.out_depth, 1.0);
         encoder.clear(&self.terrain.data.out_position, [0.0, 0.0, 0.0, 1.0]);
@@ -563,16 +607,16 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         self.blit.data.tex.0 = blit_tex.clone();
         // Show the result
         self.blit.encode(&mut encoder);
-        encoder.synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence));
+        encoder
+            .synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence))
+            .expect("Could not flush encoder");
     }
 
     fn on(&mut self, event: WindowEvent) {
         if let WindowEvent::KeyboardInput {
-            input: winit::KeyboardInput {
-                virtual_keycode: Some(key),
-                ..
-            },
-            .. } = event {
+            input: winit::KeyboardInput { virtual_keycode: Some(key), .. }, ..
+        } = event
+        {
             use winit::VirtualKeyCode::*;
             match key {
                 Key1 => self.debug_buf = Some(self.light.data.tex_pos.0.clone()),
@@ -585,14 +629,21 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         }
     }
 
-    fn on_resize_ext(&mut self, factory: &mut B::Factory, window_targets: gfx_app::WindowTargets<B::Resources>) {
+    fn on_resize_ext(
+        &mut self,
+        factory: &mut B::Factory,
+        window_targets: gfx_app::WindowTargets<B::Resources>,
+    ) {
         let (width, height, _, _) = window_targets.views[0].0.get_dimensions();
 
         let (gpos, gnormal, gdiffuse, depth_resource, depth_target) =
             create_g_buffer(width, height, factory);
         self.intermediate = {
-            let (_ , srv, rtv) = factory.create_render_target(width, height).unwrap();
-            ViewPair{ resource: srv, target: rtv }
+            let (_, srv, rtv) = factory.create_render_target(width, height).unwrap();
+            ViewPair {
+                resource: srv,
+                target: rtv,
+            }
         };
         self.views = window_targets.views;
         self.terrain.data.out_position = gpos.target.clone();

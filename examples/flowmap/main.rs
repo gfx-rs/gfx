@@ -19,7 +19,7 @@ extern crate image;
 
 use std::io::Cursor;
 use std::time::Instant;
-use gfx::format::{Rgba8, Depth};
+use gfx::format::Rgba8;
 use gfx_app::{BackbufferView, ColorFormat};
 use gfx::{Bundle, GraphicsPoolExt};
 
@@ -47,21 +47,27 @@ gfx_defines!{
 
 impl Vertex {
     fn new(p: [f32; 2], u: [f32; 2]) -> Vertex {
-        Vertex {
-            pos: p,
-            uv: u,
-        }
+        Vertex { pos: p, uv: u }
     }
 }
 
-fn load_texture<R, F>(factory: &mut F, data: &[u8])
-                -> Result<gfx::handle::ShaderResourceView<R, [f32; 4]>, String>
-        where R: gfx::Resources, F: gfx::Factory<R> {
+fn load_texture<R, F>(
+    factory: &mut F,
+    data: &[u8],
+) -> Result<gfx::handle::ShaderResourceView<R, [f32; 4]>, String>
+where
+    R: gfx::Resources,
+    F: gfx::Factory<R>,
+{
     use gfx::texture as t;
-    let img = image::load(Cursor::new(data), image::PNG).unwrap().to_rgba();
+    let img = image::load(Cursor::new(data), image::PNG)
+        .unwrap()
+        .to_rgba();
     let (width, height) = img.dimensions();
     let kind = t::Kind::D2(width as t::Size, height as t::Size, t::AaMode::Single);
-    let (_, view) = factory.create_texture_immutable_u8::<Rgba8>(kind, &[&img]).unwrap();
+    let (_, view) = factory
+        .create_texture_immutable_u8::<Rgba8>(kind, &[&img])
+        .unwrap();
     Ok(view)
 }
 
@@ -73,50 +79,53 @@ struct App<B: gfx::Backend> {
 }
 
 impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
-    fn new(factory: &mut B::Factory,
-           _: &mut gfx::queue::GraphicsQueue<B>,
-           backend: gfx_app::shade::Backend,
-           window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
-    {
+    fn new(
+        factory: &mut B::Factory,
+        _: &mut gfx::queue::GraphicsQueue<B>,
+        backend: gfx_app::shade::Backend,
+        window_targets: gfx_app::WindowTargets<B::Resources>,
+    ) -> Self {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/flowmap_120.glslv"),
             glsl_150: include_bytes!("shader/flowmap_150.glslv"),
-            hlsl_40:  include_bytes!("data/vertex.fx"),
-            msl_11:   include_bytes!("shader/flowmap_vertex.metal"),
-            .. gfx_app::shade::Source::empty()
+            hlsl_40: include_bytes!("data/vertex.fx"),
+            msl_11: include_bytes!("shader/flowmap_vertex.metal"),
+            ..gfx_app::shade::Source::empty()
         };
         let ps = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/flowmap_120.glslf"),
             glsl_150: include_bytes!("shader/flowmap_150.glslf"),
-            hlsl_40:  include_bytes!("data/pixel.fx"),
-            msl_11:   include_bytes!("shader/flowmap_frag.metal"),
-            .. gfx_app::shade::Source::empty()
+            hlsl_40: include_bytes!("data/pixel.fx"),
+            msl_11: include_bytes!("shader/flowmap_frag.metal"),
+            ..gfx_app::shade::Source::empty()
         };
 
         let vertex_data = [
             Vertex::new([-1.0, -1.0], [0.0, 0.0]),
-            Vertex::new([ 1.0, -1.0], [1.0, 0.0]),
-            Vertex::new([ 1.0,  1.0], [1.0, 1.0]),
+            Vertex::new([1.0, -1.0], [1.0, 0.0]),
+            Vertex::new([1.0, 1.0], [1.0, 1.0]),
 
             Vertex::new([-1.0, -1.0], [0.0, 0.0]),
-            Vertex::new([ 1.0,  1.0], [1.0, 1.0]),
-            Vertex::new([-1.0,  1.0], [0.0, 1.0]),
+            Vertex::new([1.0, 1.0], [1.0, 1.0]),
+            Vertex::new([-1.0, 1.0], [0.0, 1.0]),
         ];
 
         let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
 
         let water_texture = load_texture(factory, &include_bytes!("image/water.png")[..]).unwrap();
-        let flow_texture  = load_texture(factory, &include_bytes!("image/flow.png")[..]).unwrap();
+        let flow_texture = load_texture(factory, &include_bytes!("image/flow.png")[..]).unwrap();
         let noise_texture = load_texture(factory, &include_bytes!("image/noise.png")[..]).unwrap();
         let sampler = factory.create_sampler_linear();
 
-        let pso = factory.create_pipeline_simple(
-            vs.select(backend).unwrap(),
-            ps.select(backend).unwrap(),
-            pipe::new()
-            ).unwrap();
+        let pso = factory
+            .create_pipeline_simple(
+                vs.select(backend).unwrap(),
+                ps.select(backend).unwrap(),
+                pipe::new(),
+            )
+            .unwrap();
 
         let data = pipe::Data {
             vbuf: vbuf,
@@ -137,9 +146,12 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         }
     }
 
-    fn render(&mut self, (frame, sync): (gfx::Frame, &gfx_app::SyncPrimitives<B::Resources>),
-              pool: &mut gfx::GraphicsCommandPool<B>, queue: &mut gfx::queue::GraphicsQueue<B>)
-    {
+    fn render(
+        &mut self,
+        (frame, sync): (gfx::Frame, &gfx_app::SyncPrimitives<B::Resources>),
+        pool: &mut gfx::GraphicsCommandPool<B>,
+        queue: &mut gfx::queue::GraphicsQueue<B>,
+    ) {
         let delta = self.time_start.elapsed();
         self.time_start = Instant::now();
         let delta = delta.as_secs() as f32 + delta.subsec_nanos() as f32 / 1000_000_000.0;
@@ -168,7 +180,9 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
 
         encoder.clear(&self.bundle.data.out, [0.3, 0.3, 0.3, 1.0]);
         self.bundle.encode(&mut encoder);
-        encoder.synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence));
+        encoder
+            .synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence))
+            .expect("Could not flush encoder");
     }
 
     fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<B::Resources>) {

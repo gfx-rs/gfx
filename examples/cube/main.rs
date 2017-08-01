@@ -65,63 +65,64 @@ struct App<B: gfx::Backend> {
 }
 
 impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
-    fn new(factory: &mut B::Factory,
-           _: &mut gfx::queue::GraphicsQueue<B>,
-           backend: gfx_app::shade::Backend,
-           window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
-    {
+    fn new(
+        factory: &mut B::Factory,
+        _: &mut gfx::queue::GraphicsQueue<B>,
+        backend: gfx_app::shade::Backend,
+        window_targets: gfx_app::WindowTargets<B::Resources>,
+    ) -> Self {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/cube_120.glslv"),
             glsl_150: include_bytes!("shader/cube_150.glslv"),
             glsl_es_100: include_bytes!("shader/cube_100_es.glslv"),
-            hlsl_40:  include_bytes!("data/vertex.fx"),
+            hlsl_40: include_bytes!("data/vertex.fx"),
             msl_11: include_bytes!("shader/cube_vertex.metal"),
-            vulkan:   include_bytes!("data/vert.spv"),
-            .. gfx_app::shade::Source::empty()
+            vulkan: include_bytes!("data/vert.spv"),
+            ..gfx_app::shade::Source::empty()
         };
         let ps = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/cube_120.glslf"),
             glsl_150: include_bytes!("shader/cube_150.glslf"),
             glsl_es_100: include_bytes!("shader/cube_100_es.glslf"),
-            hlsl_40:  include_bytes!("data/pixel.fx"),
+            hlsl_40: include_bytes!("data/pixel.fx"),
             msl_11: include_bytes!("shader/cube_frag.metal"),
-            vulkan:   include_bytes!("data/frag.spv"),
-            .. gfx_app::shade::Source::empty()
+            vulkan: include_bytes!("data/frag.spv"),
+            ..gfx_app::shade::Source::empty()
         };
 
         let vertex_data = [
             // top (0, 0, 1)
-            Vertex::new([-1, -1,  1], [0, 0]),
-            Vertex::new([ 1, -1,  1], [1, 0]),
-            Vertex::new([ 1,  1,  1], [1, 1]),
-            Vertex::new([-1,  1,  1], [0, 1]),
+            Vertex::new([-1, -1, 1], [0, 0]),
+            Vertex::new([1, -1, 1], [1, 0]),
+            Vertex::new([1, 1, 1], [1, 1]),
+            Vertex::new([-1, 1, 1], [0, 1]),
             // bottom (0, 0, -1)
-            Vertex::new([-1,  1, -1], [1, 0]),
-            Vertex::new([ 1,  1, -1], [0, 0]),
-            Vertex::new([ 1, -1, -1], [0, 1]),
+            Vertex::new([-1, 1, -1], [1, 0]),
+            Vertex::new([1, 1, -1], [0, 0]),
+            Vertex::new([1, -1, -1], [0, 1]),
             Vertex::new([-1, -1, -1], [1, 1]),
             // right (1, 0, 0)
-            Vertex::new([ 1, -1, -1], [0, 0]),
-            Vertex::new([ 1,  1, -1], [1, 0]),
-            Vertex::new([ 1,  1,  1], [1, 1]),
-            Vertex::new([ 1, -1,  1], [0, 1]),
+            Vertex::new([1, -1, -1], [0, 0]),
+            Vertex::new([1, 1, -1], [1, 0]),
+            Vertex::new([1, 1, 1], [1, 1]),
+            Vertex::new([1, -1, 1], [0, 1]),
             // left (-1, 0, 0)
-            Vertex::new([-1, -1,  1], [1, 0]),
-            Vertex::new([-1,  1,  1], [0, 0]),
-            Vertex::new([-1,  1, -1], [0, 1]),
+            Vertex::new([-1, -1, 1], [1, 0]),
+            Vertex::new([-1, 1, 1], [0, 0]),
+            Vertex::new([-1, 1, -1], [0, 1]),
             Vertex::new([-1, -1, -1], [1, 1]),
             // front (0, 1, 0)
-            Vertex::new([ 1,  1, -1], [1, 0]),
-            Vertex::new([-1,  1, -1], [0, 0]),
-            Vertex::new([-1,  1,  1], [0, 1]),
-            Vertex::new([ 1,  1,  1], [1, 1]),
+            Vertex::new([1, 1, -1], [1, 0]),
+            Vertex::new([-1, 1, -1], [0, 0]),
+            Vertex::new([-1, 1, 1], [0, 1]),
+            Vertex::new([1, 1, 1], [1, 1]),
             // back (0, -1, 0)
-            Vertex::new([ 1, -1,  1], [0, 0]),
-            Vertex::new([-1, -1,  1], [1, 0]),
+            Vertex::new([1, -1, 1], [0, 0]),
+            Vertex::new([-1, -1, 1], [1, 0]),
             Vertex::new([-1, -1, -1], [1, 1]),
-            Vertex::new([ 1, -1, -1], [0, 1]),
+            Vertex::new([1, -1, -1], [0, 1]),
         ];
 
         let index_data: &[u16] = &[
@@ -136,19 +137,23 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, index_data);
 
         let texels = [[0x20, 0xA0, 0xC0, 0x00]];
-        let (_, texture_view) = factory.create_texture_immutable::<gfx::format::Rgba8>(
-            texture::Kind::D2(1, 1, texture::AaMode::Single), &[&texels]
-            ).unwrap();
+        let (_, texture_view) = factory
+            .create_texture_immutable::<gfx::format::Rgba8>(
+                texture::Kind::D2(1, 1, texture::AaMode::Single),
+                &[&texels],
+            )
+            .unwrap();
 
-        let sinfo = texture::SamplerInfo::new(
-            texture::FilterMethod::Bilinear,
-            texture::WrapMode::Clamp);
+        let sinfo =
+            texture::SamplerInfo::new(texture::FilterMethod::Bilinear, texture::WrapMode::Clamp);
 
-        let pso = factory.create_pipeline_simple(
-            vs.select(backend).unwrap(),
-            ps.select(backend).unwrap(),
-            pipe::new()
-        ).unwrap();
+        let pso = factory
+            .create_pipeline_simple(
+                vs.select(backend).unwrap(),
+                ps.select(backend).unwrap(),
+                pipe::new(),
+            )
+            .unwrap();
 
         let proj = cgmath::perspective(Deg(45.0f32), window_targets.aspect_ratio, 1.0, 10.0);
 
@@ -167,9 +172,12 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         }
     }
 
-    fn render(&mut self, (frame, sync): (gfx::Frame, &gfx_app::SyncPrimitives<B::Resources>),
-              pool: &mut gfx::GraphicsCommandPool<B>, queue: &mut gfx::queue::GraphicsQueue<B>)
-    {
+    fn render(
+        &mut self,
+        (frame, sync): (gfx::Frame, &gfx_app::SyncPrimitives<B::Resources>),
+        pool: &mut gfx::GraphicsCommandPool<B>,
+        queue: &mut gfx::queue::GraphicsQueue<B>,
+    ) {
         let (cur_color, cur_depth) = self.views[frame.id()].clone();
         self.bundle.data.out_color = cur_color;
         self.bundle.data.out_depth = cur_depth;
@@ -180,7 +188,9 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         encoder.clear(&self.bundle.data.out_color, [0.1, 0.2, 0.3, 1.0]);
         encoder.clear_depth(&self.bundle.data.out_depth, 1.0);
         self.bundle.encode(&mut encoder);
-        encoder.synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence));
+        encoder
+            .synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence))
+            .expect("Could not flush encoder");
     }
 
     fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<B::Resources>) {

@@ -19,12 +19,11 @@ extern crate gfx_app;
 extern crate winit;
 
 use gfx::{Factory, GraphicsPoolExt};
-use gfx::format::{DepthStencil};
 use gfx_app::{ColorFormat, DepthFormat};
 
-#[cfg(feature="metal")]
+#[cfg(feature = "metal")]
 pub use gfx::format::Depth32F as Depth;
-#[cfg(not(feature="metal"))]
+#[cfg(not(feature = "metal"))]
 pub use gfx::format::Depth;
 
 use cgmath::{Deg, Matrix4, Point3, Vector3};
@@ -93,41 +92,41 @@ const MAX_LIGHTS: usize = 10;
 // Section-2: simple primitives generation
 //TODO: replace by genmesh
 
-fn create_cube<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
-               -> (gfx::handle::Buffer<R, Vertex>, gfx::Slice<R>)
-{
+fn create_cube<R: gfx::Resources, F: gfx::Factory<R>>(
+    factory: &mut F,
+) -> (gfx::handle::Buffer<R, Vertex>, gfx::Slice<R>) {
     use gfx::traits::FactoryExt;
     let vertex_data = [
         // top (0, 0, 1)
-        Vertex::new([-1, -1,  1], [0, 0, 1]),
-        Vertex::new([ 1, -1,  1], [0, 0, 1]),
-        Vertex::new([ 1,  1,  1], [0, 0, 1]),
-        Vertex::new([-1,  1,  1], [0, 0, 1]),
+        Vertex::new([-1, -1, 1], [0, 0, 1]),
+        Vertex::new([1, -1, 1], [0, 0, 1]),
+        Vertex::new([1, 1, 1], [0, 0, 1]),
+        Vertex::new([-1, 1, 1], [0, 0, 1]),
         // bottom (0, 0, -1)
-        Vertex::new([-1,  1, -1], [0, 0, -1]),
-        Vertex::new([ 1,  1, -1], [0, 0, -1]),
-        Vertex::new([ 1, -1, -1], [0, 0, -1]),
+        Vertex::new([-1, 1, -1], [0, 0, -1]),
+        Vertex::new([1, 1, -1], [0, 0, -1]),
+        Vertex::new([1, -1, -1], [0, 0, -1]),
         Vertex::new([-1, -1, -1], [0, 0, -1]),
         // right (1, 0, 0)
-        Vertex::new([ 1, -1, -1], [1, 0, 0]),
-        Vertex::new([ 1,  1, -1], [1, 0, 0]),
-        Vertex::new([ 1,  1,  1], [1, 0, 0]),
-        Vertex::new([ 1, -1,  1], [1, 0, 0]),
+        Vertex::new([1, -1, -1], [1, 0, 0]),
+        Vertex::new([1, 1, -1], [1, 0, 0]),
+        Vertex::new([1, 1, 1], [1, 0, 0]),
+        Vertex::new([1, -1, 1], [1, 0, 0]),
         // left (-1, 0, 0)
-        Vertex::new([-1, -1,  1], [-1, 0, 0]),
-        Vertex::new([-1,  1,  1], [-1, 0, 0]),
-        Vertex::new([-1,  1, -1], [-1, 0, 0]),
+        Vertex::new([-1, -1, 1], [-1, 0, 0]),
+        Vertex::new([-1, 1, 1], [-1, 0, 0]),
+        Vertex::new([-1, 1, -1], [-1, 0, 0]),
         Vertex::new([-1, -1, -1], [-1, 0, 0]),
         // front (0, 1, 0)
-        Vertex::new([ 1,  1, -1], [0, 1, 0]),
-        Vertex::new([-1,  1, -1], [0, 1, 0]),
-        Vertex::new([-1,  1,  1], [0, 1, 0]),
-        Vertex::new([ 1,  1,  1], [0, 1, 0]),
+        Vertex::new([1, 1, -1], [0, 1, 0]),
+        Vertex::new([-1, 1, -1], [0, 1, 0]),
+        Vertex::new([-1, 1, 1], [0, 1, 0]),
+        Vertex::new([1, 1, 1], [0, 1, 0]),
         // back (0, -1, 0)
-        Vertex::new([ 1, -1,  1], [0, -1, 0]),
-        Vertex::new([-1, -1,  1], [0, -1, 0]),
+        Vertex::new([1, -1, 1], [0, -1, 0]),
+        Vertex::new([-1, -1, 1], [0, -1, 0]),
         Vertex::new([-1, -1, -1], [0, -1, 0]),
-        Vertex::new([ 1, -1, -1], [0, -1, 0]),
+        Vertex::new([1, -1, -1], [0, -1, 0]),
     ];
 
     let index_data: &[u16] = &[
@@ -142,21 +141,19 @@ fn create_cube<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
     factory.create_vertex_buffer_with_slice(&vertex_data, index_data)
 }
 
-fn create_plane<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F, size: i8)
-                -> (gfx::handle::Buffer<R, Vertex>, gfx::Slice<R>)
-{
+fn create_plane<R: gfx::Resources, F: gfx::Factory<R>>(
+    factory: &mut F,
+    size: i8,
+) -> (gfx::handle::Buffer<R, Vertex>, gfx::Slice<R>) {
     use gfx::traits::FactoryExt;
     let vertex_data = [
-        Vertex::new([ size, -size,  0], [0, 0, 1]),
-        Vertex::new([ size,  size,  0], [0, 0, 1]),
-        Vertex::new([-size, -size,  0], [0, 0, 1]),
-        Vertex::new([-size,  size,  0], [0, 0, 1]),
+        Vertex::new([size, -size, 0], [0, 0, 1]),
+        Vertex::new([size, size, 0], [0, 0, 1]),
+        Vertex::new([-size, -size, 0], [0, 0, 1]),
+        Vertex::new([-size, size, 0], [0, 0, 1]),
     ];
 
-    let index_data: &[u16] = &[
-        0, 1, 2,
-        2, 1, 3
-    ];
+    let index_data: &[u16] = &[0, 1, 2, 2, 1, 3];
 
     factory.create_vertex_buffer_with_slice(&vertex_data, index_data)
 }
@@ -208,9 +205,10 @@ fn create_scene<B>(
     queue: &mut gfx::queue::GraphicsQueue<B>,
     out_color: gfx::handle::RenderTargetView<B::Resources, ColorFormat>,
     out_depth: gfx::handle::DepthStencilView<B::Resources, DepthFormat>,
-    shadow_pso: gfx::PipelineState<B::Resources, shadow::Meta>) -> Scene<B>
+    shadow_pso: gfx::PipelineState<B::Resources, shadow::Meta>,
+) -> Scene<B>
 where
-    B: gfx::Backend
+    B: gfx::Backend,
 {
     use cgmath::{InnerSpace, SquareMatrix};
     use gfx::traits::FactoryExt;
@@ -221,17 +219,17 @@ where
         let kind = t::Kind::D2Array(512, 512, MAX_LIGHTS as gfx::Layer, t::AaMode::Single);
         let bind = gfx::SHADER_RESOURCE | gfx::DEPTH_STENCIL;
         let cty = gfx::format::ChannelType::Unorm;
-        let tex = factory.create_texture(kind, 1, bind, gfx::memory::Usage::Data, Some(cty)).unwrap();
-        let resource = factory.view_texture_as_shader_resource::<Depth>(
-            &tex, (0, 0), gfx::format::Swizzle::new()).unwrap();
+        let tex = factory
+            .create_texture(kind, 1, bind, gfx::memory::Usage::Data, Some(cty))
+            .unwrap();
+        let resource = factory
+            .view_texture_as_shader_resource::<Depth>(&tex, (0, 0), gfx::format::Swizzle::new())
+            .unwrap();
         (tex, resource)
     };
     let shadow_sampler = {
         use gfx::texture as t;
-        let mut sinfo = t::SamplerInfo::new(
-            t::FilterMethod::Bilinear,
-            t::WrapMode::Clamp
-        );
+        let mut sinfo = t::SamplerInfo::new(t::FilterMethod::Bilinear, t::WrapMode::Clamp);
         sinfo.comparison = Some(gfx::state::Comparison::LessEqual);
         factory.create_sampler(sinfo)
     };
@@ -257,25 +255,32 @@ where
     ];
 
     let (near, far) = (1f32, 20f32);
-    let lights: Vec<_> = light_descs.iter().enumerate().map(|(i, desc)| Light {
-        position: desc.pos.clone(),
-        mx_view: Matrix4::look_at(
-            desc.pos,
-            Point3::new(0.0, 0.0, 0.0),
-            Vector3::unit_z(),
-        ),
-        projection: cgmath::PerspectiveFov {
-            fovy: Deg(desc.fov).into(),
-            aspect: 1.0,
-            near: near,
-            far: far,
-        }.to_perspective(),
-        color: desc.color.clone(),
-        shadow: factory.view_texture_as_depth_stencil(
-            &shadow_tex, 0, Some(i as gfx::Layer), gfx::texture::DepthStencilFlags::empty(),
-            ).unwrap(),
-        pool: queue.create_graphics_pool(1),
-    }).collect();
+    let lights: Vec<_> = light_descs
+        .iter()
+        .enumerate()
+        .map(|(i, desc)| {
+            Light {
+                position: desc.pos.clone(),
+                mx_view: Matrix4::look_at(desc.pos, Point3::new(0.0, 0.0, 0.0), Vector3::unit_z()),
+                projection: cgmath::PerspectiveFov {
+                    fovy: Deg(desc.fov).into(),
+                    aspect: 1.0,
+                    near: near,
+                    far: far,
+                }.to_perspective(),
+                color: desc.color.clone(),
+                shadow: factory
+                    .view_texture_as_depth_stencil(
+                        &shadow_tex,
+                        0,
+                        Some(i as gfx::Layer),
+                        gfx::texture::DepthStencilFlags::empty(),
+                    )
+                    .unwrap(),
+                pool: queue.create_graphics_pool(1),
+            }
+        })
+        .collect();
     let light_buf = factory.create_constant_buffer(MAX_LIGHTS);
 
     // create entities
@@ -312,15 +317,15 @@ where
     let locals = ForwardPsLocals {
         color: [1.0, 1.0, 1.0, 1.0],
         num_lights: lights.len() as i32,
-        _padding: [0i32; 3]
+        _padding: [0i32; 3],
     };
 
     let mut fw_data = forward::Data {
         vbuf: cube_buf.clone(),
         vs_locals: factory.create_constant_buffer(1),
-        ps_locals: factory.create_buffer_immutable(&[locals],
-            gfx::buffer::Role::Constant, gfx::Bind::empty()
-            ).unwrap(),
+        ps_locals: factory
+            .create_buffer_immutable(&[locals], gfx::buffer::Role::Constant, gfx::Bind::empty())
+            .unwrap(),
         light_buf: light_buf.clone(),
         shadow: (shadow_resource, shadow_sampler),
         out_color,
@@ -331,28 +336,34 @@ where
         vbuf: cube_buf,
         locals: factory.create_constant_buffer(1),
         // the output here is temporary, will be overwritten for every light source
-        out: factory.view_texture_as_depth_stencil(&shadow_tex, 0, None,
-            gfx::texture::DepthStencilFlags::empty()).unwrap(),
+        out: factory
+            .view_texture_as_depth_stencil(
+                &shadow_tex,
+                0,
+                None,
+                gfx::texture::DepthStencilFlags::empty(),
+            )
+            .unwrap(),
     };
 
-    let mut entities: Vec<_> = cube_descs.iter().map(|desc| {
-        use cgmath::{Decomposed, Quaternion, Rotation3};
-        let transform = Decomposed {
-            disp: desc.offset.clone(),
-            rot: Quaternion::from_axis_angle(
-                desc.offset.normalize(),
-                Deg(desc.angle),
-            ),
-            scale: desc.scale,
-        }.into();
-        Entity {
-            dynamic: true,
-            mx_to_world: transform,
-            batch_forward: fw_data.clone(),
-            batch_shadow: sh_data.clone(),
-            slice: cube_slice.clone(),
-        }
-    }).collect();
+    let mut entities: Vec<_> = cube_descs
+        .iter()
+        .map(|desc| {
+            use cgmath::{Decomposed, Quaternion, Rotation3};
+            let transform = Decomposed {
+                disp: desc.offset.clone(),
+                rot: Quaternion::from_axis_angle(desc.offset.normalize(), Deg(desc.angle)),
+                scale: desc.scale,
+            }.into();
+            Entity {
+                dynamic: true,
+                mx_to_world: transform,
+                batch_forward: fw_data.clone(),
+                batch_shadow: sh_data.clone(),
+                slice: cube_slice.clone(),
+            }
+        })
+        .collect();
 
     let (plane_buf, plane_slice) = create_plane(factory, 7);
     fw_data.vbuf = plane_buf.clone();
@@ -411,16 +422,13 @@ impl<B: gfx::Backend> App<B> {
         let len = axis.magnitude();
         for ent in self.scene.share.write().unwrap().entities.iter_mut() {
             if !ent.dynamic {
-                continue
+                continue;
             }
             // rotate all cubes around the axis
             let rot = Decomposed {
                 scale: 1.0,
-                rot: Quaternion::from_axis_angle(
-                    axis * (1.0 / len),
-                    Deg(len * 0.3),
-                ),
-                disp: cgmath::vec3(0.0, 0.0, 0.0)
+                rot: Quaternion::from_axis_angle(axis * (1.0 / len), Deg(len * 0.3)),
+                disp: cgmath::vec3(0.0, 0.0, 0.0),
             };
             ent.mx_to_world = ent.mx_to_world * Matrix4::from(rot);
         }
@@ -428,11 +436,12 @@ impl<B: gfx::Backend> App<B> {
 }
 
 impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
-    fn new(factory: &mut B::Factory,
-           queue: &mut gfx::queue::GraphicsQueue<B>,
-           backend: gfx_app::shade::Backend,
-           window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
-    {
+    fn new(
+        factory: &mut B::Factory,
+        queue: &mut gfx::queue::GraphicsQueue<B>,
+        backend: gfx_app::shade::Backend,
+        window_targets: gfx_app::WindowTargets<B::Resources>,
+    ) -> Self {
         use std::env;
         use gfx::traits::FactoryExt;
         use gfx_app::shade::Source;
@@ -450,52 +459,60 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         let forward_pso = {
             let vs = Source {
                 glsl_150: include_bytes!("shader/forward_150.glslv"),
-                hlsl_41:  include_bytes!("data/forward_vs.fx"),
-                msl_11:   include_bytes!("shader/forward_vertex.metal"),
-                .. Source::empty()
+                hlsl_41: include_bytes!("data/forward_vs.fx"),
+                msl_11: include_bytes!("shader/forward_vertex.metal"),
+                ..Source::empty()
             };
             let ps = Source {
                 glsl_150: include_bytes!("shader/forward_150.glslf"),
-                hlsl_41:  include_bytes!("data/forward_ps.fx"),
-                msl_11:   include_bytes!("shader/forward_frag.metal"),
-                .. Source::empty()
+                hlsl_41: include_bytes!("data/forward_ps.fx"),
+                msl_11: include_bytes!("shader/forward_frag.metal"),
+                ..Source::empty()
             };
-            factory.create_pipeline_simple(
-                vs.select(backend).unwrap(),
-                ps.select(backend).unwrap(),
-                forward::new()).unwrap()
+            factory
+                .create_pipeline_simple(
+                    vs.select(backend).unwrap(),
+                    ps.select(backend).unwrap(),
+                    forward::new(),
+                )
+                .unwrap()
         };
 
         let shadow_pso = {
             let vs = Source {
                 glsl_150: include_bytes!("shader/shadow_150.glslv"),
-                hlsl_41:  include_bytes!("data/shadow_vs.fx"),
-                msl_11:   include_bytes!("shader/shadow_vertex.metal"),
-                .. Source::empty()
+                hlsl_41: include_bytes!("data/shadow_vs.fx"),
+                msl_11: include_bytes!("shader/shadow_vertex.metal"),
+                ..Source::empty()
             };
             let ps = Source {
                 glsl_150: include_bytes!("shader/shadow_150.glslf"),
-                hlsl_41:  include_bytes!("data/shadow_ps.fx"),
-                msl_11:   b"\n",
-                .. Source::empty()
+                hlsl_41: include_bytes!("data/shadow_ps.fx"),
+                msl_11: b"\n",
+                ..Source::empty()
             };
-            let set = factory.create_shader_set(
-                vs.select(backend).unwrap(),
-                ps.select(backend).unwrap()
-                ).unwrap();
-            factory.create_pipeline_state(&set,
-                gfx::Primitive::TriangleList,
-                gfx::state::Rasterizer::new_fill()
-                                       .with_cull_back()
-                                       .with_offset(2.0, 1),
-                shadow::new()
-                ).unwrap()
+            let set = factory
+                .create_shader_set(vs.select(backend).unwrap(), ps.select(backend).unwrap())
+                .unwrap();
+            factory
+                .create_pipeline_state(
+                    &set,
+                    gfx::Primitive::TriangleList,
+                    gfx::state::Rasterizer::new_fill()
+                        .with_cull_back()
+                        .with_offset(2.0, 1),
+                    shadow::new(),
+                )
+                .unwrap()
         };
 
-        let scene = create_scene(factory, queue,
+        let scene = create_scene(
+            factory,
+            queue,
             window_targets.views[0].0.clone(),
             window_targets.views[0].1.clone(),
-            shadow_pso);
+            shadow_pso,
+        );
 
         App {
             window_targets: window_targets,
@@ -505,23 +522,34 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         }
     }
 
-    fn render(&mut self, (frame, sync): (gfx::Frame, &gfx_app::SyncPrimitives<B::Resources>),
-              pool: &mut gfx::GraphicsCommandPool<B>, mut queue: &mut gfx::queue::GraphicsQueue<B>)
-    {
+    fn render(
+        &mut self,
+        (frame, sync): (gfx::Frame, &gfx_app::SyncPrimitives<B::Resources>),
+        pool: &mut gfx::GraphicsCommandPool<B>,
+        mut queue: &mut gfx::queue::GraphicsQueue<B>,
+    ) {
         let (cur_color, cur_depth) = self.window_targets.views[frame.id()].clone();
         let mut encoder = pool.acquire_graphics_encoder();
         self.rotate(cgmath::vec3(0.0, 0.0, 1.0));
         if self.scene.light_dirty {
             // init light parameters
-            let light_params: Vec<_> = self.scene.lights.iter().map(|light| LightParam {
-                pos: [light.position.x, light.position.y, light.position.z, 1.0],
-                color: light.color,
-                proj: {
-                    let mx_proj = Matrix4::from(light.projection);
-                    (mx_proj * light.mx_view).into()
-                },
-            }).collect();
-            encoder.update_buffer(&self.scene.light_buf, &light_params, 0).unwrap();
+            let light_params: Vec<_> = self.scene
+                .lights
+                .iter()
+                .map(|light| {
+                    LightParam {
+                        pos: [light.position.x, light.position.y, light.position.z, 1.0],
+                        color: light.color,
+                        proj: {
+                            let mx_proj = Matrix4::from(light.projection);
+                            (mx_proj * light.mx_view).into()
+                        },
+                    }
+                })
+                .collect();
+            encoder
+                .update_buffer(&self.scene.light_buf, &light_params, 0)
+                .unwrap();
             self.scene.light_dirty = false;
         }
 
@@ -533,43 +561,47 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
             let (sender_orig, receiver) = mpsc::channel();
             let num = self.scene.lights.len();
             // run parallel threads
-            let _threads: Vec<_> = (0..num).map(|_| {
-                // move the light into the thread scope
-                let mut light = self.scene.lights.swap_remove(0);
-                let share = self.scene.share.clone();
-                let sender = sender_orig.clone();
-                thread::spawn(move || {
-                    light.pool.reset();
-                    let light_submission = {
-                        let mut light_encoder = light.pool.acquire_graphics_encoder();
-                        // clear
-                        light_encoder.clear_depth(&light.shadow, 1.0);
-                        // fill
-                        let subshare = share.read().unwrap();
-                        for ent in subshare.entities.iter() {
-                            let mut batch = ent.batch_shadow.clone();
-                            batch.out = light.shadow.clone();
-                            let locals = ShadowLocals{
-                                transform: {
-                                    let mx_proj: Matrix4<_> = light.projection.into();
-                                    let mx_view = mx_proj * light.mx_view;
-                                    let mvp = mx_view * ent.mx_to_world;
-                                    mvp.into()
-                                },
-                            };
-                            light_encoder.update_constant_buffer(&batch.locals, &locals);
-                            light_encoder.draw(&ent.slice, &subshare.shadow_pso, &batch);
-                        }
-                        light_encoder.finish()
-                    };
-                    sender.send((light, light_submission)).unwrap();
+            let _threads: Vec<_> = (0..num)
+                .map(|_| {
+                    // move the light into the thread scope
+                    let mut light = self.scene.lights.swap_remove(0);
+                    let share = self.scene.share.clone();
+                    let sender = sender_orig.clone();
+                    thread::spawn(move || {
+                        light.pool.reset();
+                        let light_submission = {
+                            let mut light_encoder = light.pool.acquire_graphics_encoder();
+                            // clear
+                            light_encoder.clear_depth(&light.shadow, 1.0);
+                            // fill
+                            let subshare = share.read().unwrap();
+                            for ent in subshare.entities.iter() {
+                                let mut batch = ent.batch_shadow.clone();
+                                batch.out = light.shadow.clone();
+                                let locals = ShadowLocals {
+                                    transform: {
+                                        let mx_proj: Matrix4<_> = light.projection.into();
+                                        let mx_view = mx_proj * light.mx_view;
+                                        let mvp = mx_view * ent.mx_to_world;
+                                        mvp.into()
+                                    },
+                                };
+                                light_encoder.update_constant_buffer(&batch.locals, &locals);
+                                light_encoder.draw(&ent.slice, &subshare.shadow_pso, &batch);
+                            }
+                            light_encoder.finish()
+                        };
+                        sender.send((light, light_submission)).unwrap();
+                    })
                 })
-            }).collect();
+                .collect();
             // wait for the results and execute them
             // put the lights back into the scene
             for _ in 0..num {
                 let (light, submission) = receiver.recv().unwrap();
-                submission.synced_flush(&mut queue, &[], &[], None);
+                submission.synced_flush(&mut queue, &[], &[], None).expect(
+                    "Could not flush encoder",
+                );
                 self.scene.lights.push(light);
             }
         } else {
@@ -581,7 +613,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
                 for ent in subshare.entities.iter() {
                     let mut batch = ent.batch_shadow.clone();
                     batch.out = light.shadow.clone();
-                    let locals = ShadowLocals{
+                    let locals = ShadowLocals {
                         transform: {
                             let mx_proj: Matrix4<_> = light.projection.into();
                             let mx_view = mx_proj * light.mx_view;
@@ -618,7 +650,9 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
             encoder.draw(&ent.slice, &self.forward_pso, batch);
         }
 
-        encoder.synced_flush(&mut queue, &[&sync.rendering], &[], Some(&sync.frame_fence));
+        encoder
+            .synced_flush(&mut queue, &[&sync.rendering], &[], Some(&sync.frame_fence))
+            .expect("Could not flush encoder");
     }
 
     fn get_exit_key() -> Option<winit::VirtualKeyCode> {
@@ -627,7 +661,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
 
     fn on(&mut self, event: winit::WindowEvent) {
         match event {
-            _ => () //TODO
+            _ => (), //TODO
         }
     }
 
