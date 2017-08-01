@@ -19,7 +19,6 @@ extern crate gfx;
 extern crate gfx_app;
 extern crate image;
 extern crate noise;
-extern crate rand;
 extern crate winit;
 
 use gfx::GraphicsPoolExt;
@@ -37,16 +36,24 @@ use std::io::Cursor;
 pub const TILEMAP_BUF_LENGTH: usize = 4096;
 
 // texture loading boilerplate
-pub fn load_texture<R, F>(factory: &mut F, data: &[u8])
-                    -> Result<gfx::handle::ShaderResourceView<R, [f32; 4]>, String>
-        where R: gfx::Resources, F: gfx::Factory<R>
+pub fn load_texture<R, F>(
+    factory: &mut F,
+    data: &[u8],
+) -> Result<gfx::handle::ShaderResourceView<R, [f32; 4]>, String>
+where
+    R: gfx::Resources,
+    F: gfx::Factory<R>,
 {
     use gfx::format::Rgba8;
     use gfx::texture as t;
-    let img = image::load(Cursor::new(data), image::PNG).unwrap().to_rgba();
+    let img = image::load(Cursor::new(data), image::PNG)
+        .unwrap()
+        .to_rgba();
     let (width, height) = img.dimensions();
     let kind = t::Kind::D2(width as t::Size, height as t::Size, t::AaMode::Single);
-    let (_, view) = factory.create_texture_immutable_u8::<Rgba8>(kind, &[&img]).unwrap();
+    let (_, view) = factory
+        .create_texture_immutable_u8::<Rgba8>(kind, &[&img])
+        .unwrap();
     Ok(view)
 }
 
@@ -102,7 +109,10 @@ impl TileMapData {
 // Abstracts the plane mesh and uniform data
 // Also holds a Vec<TileMapData> as a working data
 // set for consumers
-pub struct TileMapPlane<B> where B: gfx::Backend {
+pub struct TileMapPlane<B>
+where
+    B: gfx::Backend,
+{
     views: Vec<BackbufferView<B::Resources>>,
     pub params: pipe::Data<B::Resources>,
     pub slice: gfx::Slice<B::Resources>,
@@ -113,13 +123,21 @@ pub struct TileMapPlane<B> where B: gfx::Backend {
     pub data: Vec<TileMapData>,
 }
 
-impl<B> TileMapPlane<B> where B: gfx::Backend {
-    pub fn new(factory: &mut B::Factory, width: usize, height: usize, tile_size: usize,
-                  targets: gfx_app::WindowTargets<B::Resources>) -> Self {
+impl<B> TileMapPlane<B>
+where
+    B: gfx::Backend,
+{
+    pub fn new(
+        factory: &mut B::Factory,
+        width: usize,
+        height: usize,
+        tile_size: usize,
+        targets: gfx_app::WindowTargets<B::Resources>,
+    ) -> Self {
         // charmap info
         let half_width = (tile_size * width) / 2;
         let half_height = (tile_size * height) / 2;
-        let total_size = width*height;
+        let total_size = width * height;
 
         // tilesheet info
         let tilesheet_bytes = &include_bytes!("scifitiles-sheet_0.png")[..];
@@ -133,11 +151,13 @@ impl<B> TileMapPlane<B> where B: gfx::Backend {
         let plane = Plane::subdivide(width, width);
 
         // law out the vertices of the plane slice based on the configured tile size information,
-        // setting the a_BufPos vertex data for the vertex shader (that ultimate gets passed through
-        // to the frag shader as a varying, used to determine the "current tile" and the frag's offset,
-        // which is used to calculate the displayed frag color)
-        let vertex_data: Vec<VertexData> = plane.shared_vertex_iter()
-            .map(|(raw_x, raw_y)| {
+        // setting the a_BufPos vertex data for the vertex shader (that ultimate gets passed
+        // through to the frag shader as a varying, used to determine the "current tile" and the
+        // frag's offset, which is used to calculate the displayed frag color)
+        let vertex_data: Vec<VertexData> = plane
+            .shared_vertex_iter()
+            .map(|genmesh::Vertex { pos, .. }| {
+                let (raw_x, raw_y) = (pos[0], pos[1]);
                 let vertex_x = half_width as f32 * raw_x;
                 let vertex_y = half_height as f32 * raw_y;
 
@@ -148,12 +168,13 @@ impl<B> TileMapPlane<B> where B: gfx::Backend {
 
                 VertexData {
                     pos: [vertex_x, vertex_y, 0.0],
-                    buf_pos: [tilemap_x as f32, tilemap_y as f32]
+                    buf_pos: [tilemap_x as f32, tilemap_y as f32],
                 }
             })
             .collect();
 
-        let index_data: Vec<u32> = plane.indexed_polygon_iter()
+        let index_data: Vec<u32> = plane
+            .indexed_polygon_iter()
             .triangulate()
             .vertices()
             .map(|i| i as u32)
@@ -196,7 +217,12 @@ impl<B> TileMapPlane<B> where B: gfx::Backend {
             proj_dirty: true,
             tm_stuff: TilemapStuff {
                 world_size: [width as f32, height as f32, tile_size as f32, 0.0],
-                tilesheet_size: [tilesheet_width as f32, tilesheet_height as f32, tilesheet_total_width as f32, tilesheet_total_height as f32],
+                tilesheet_size: [
+                    tilesheet_width as f32,
+                    tilesheet_height as f32,
+                    tilesheet_total_width as f32,
+                    tilesheet_total_height as f32,
+                ],
                 offsets: [0.0, 0.0],
             },
             tm_dirty: true,
@@ -206,13 +232,16 @@ impl<B> TileMapPlane<B> where B: gfx::Backend {
 
     fn resize(&mut self, targets: gfx_app::WindowTargets<B::Resources>) {
         self.views = targets.views;
-        self.proj_stuff.proj = cgmath::perspective(Deg(60.0f32), targets.aspect_ratio, 0.1, 4000.0).into();
+        self.proj_stuff.proj = cgmath::perspective(Deg(60.0f32), targets.aspect_ratio, 0.1, 4000.0)
+            .into();
         self.proj_dirty = true;
     }
 
     fn prepare_buffers(&mut self, encoder: &mut gfx::GraphicsEncoder<B>, update_data: bool) {
         if update_data {
-            encoder.update_buffer(&self.params.tilemap, &self.data, 0).unwrap();
+            encoder
+                .update_buffer(&self.params.tilemap, &self.data, 0)
+                .unwrap();
         }
         if self.proj_dirty {
             encoder.update_constant_buffer(&self.params.projection_cb, &self.proj_stuff);
@@ -224,8 +253,10 @@ impl<B> TileMapPlane<B> where B: gfx::Backend {
         }
     }
     fn clear(&self, encoder: &mut gfx::GraphicsEncoder<B>) {
-        encoder.clear(&self.params.out_color,
-            [16.0 / 256.0, 14.0 / 256.0, 22.0 / 256.0, 1.0]);
+        encoder.clear(
+            &self.params.out_color,
+            [16.0 / 256.0, 14.0 / 256.0, 22.0 / 256.0, 1.0],
+        );
         encoder.clear_depth(&self.params.out_depth, 1.0);
     }
     pub fn update_view(&mut self, view: &Matrix4<f32>, frame: &gfx::Frame) {
@@ -275,9 +306,9 @@ impl<B: gfx::Backend> TileMap<B> {
         if focus[0] <= self.limit_coords[0] && focus[1] <= self.limit_coords[1] {
             self.focus_coords = focus;
             let mut charmap_ypos = 0;
-            for ypos in self.focus_coords[1] .. self.focus_coords[1]+self.charmap_size[1] {
+            for ypos in self.focus_coords[1]..self.focus_coords[1] + self.charmap_size[1] {
                 let mut charmap_xpos = 0;
-                for xpos in self.focus_coords[0] .. self.focus_coords[0]+self.charmap_size[0] {
+                for xpos in self.focus_coords[0]..self.focus_coords[0] + self.charmap_size[0] {
                     let tile_idx = (ypos * self.tilemap_size[0]) + xpos;
                     let charmap_idx = (charmap_ypos * self.charmap_size[0]) + charmap_xpos;
                     self.tilemap_plane.data[charmap_idx] = self.tiles[tile_idx];
@@ -287,7 +318,11 @@ impl<B: gfx::Backend> TileMap<B> {
             }
             self.focus_dirty = true;
         } else {
-            panic!("tried to set focus to {:?} with tilemap_size of {:?}", focus, self.tilemap_size);
+            panic!(
+                "tried to set focus to {:?} with tilemap_size of {:?}",
+                focus,
+                self.tilemap_size
+            );
         }
     }
     pub fn apply_x_offset(&mut self, offset_amt: f32) {
@@ -356,67 +391,71 @@ impl<B: gfx::Backend> TileMap<B> {
 }
 
 
-fn populate_tilemap<B>(tilemap: &mut TileMap<B>, tilemap_size: [usize; 2]) where B: gfx::Backend {
+fn populate_tilemap<B>(tilemap: &mut TileMap<B>, tilemap_size: [usize; 2])
+where
+    B: gfx::Backend,
+{
     // paper in with dummy data
-    for ypos in 0 .. tilemap_size[1] {
-        for xpos in 0 .. tilemap_size[0] {
+    for ypos in 0..tilemap_size[1] {
+        for xpos in 0..tilemap_size[0] {
             tilemap.set_tile(xpos, ypos, [1.0, 7.0, 0.0, 0.0]);
         }
     }
-    tilemap.set_tile(1,3,[5.0, 0.0, 0.0, 0.0]);
-    tilemap.set_tile(2,3,[6.0, 0.0, 0.0, 0.0]);
-    tilemap.set_tile(3,3,[7.0, 0.0, 0.0, 0.0]);
-    tilemap.set_tile(1,2,[5.0, 1.0, 0.0, 0.0]);
-    tilemap.set_tile(2,2,[4.0, 0.0, 0.0, 0.0]);
-    tilemap.set_tile(3,2,[11.0, 2.0, 0.0, 0.0]);
-    tilemap.set_tile(1,1,[5.0, 2.0, 0.0, 0.0]);
-    tilemap.set_tile(2,1,[6.0, 2.0, 0.0, 0.0]);
-    tilemap.set_tile(3,1,[7.0, 2.0, 0.0, 0.0]);
-    tilemap.set_tile(1,0,[4.0, 7.0, 0.0, 0.0]);
-    tilemap.set_tile(2,0,[4.0, 7.0, 0.0, 0.0]);
-    tilemap.set_tile(3,0,[4.0, 7.0, 0.0, 0.0]);
-    tilemap.set_tile(4,2,[4.0, 2.0, 0.0, 0.0]);
-    tilemap.set_tile(5,2,[4.0, 2.0, 0.0, 0.0]);
-    tilemap.set_tile(6,2,[11.0, 1.0, 0.0, 0.0]);
-    tilemap.set_tile(4,1,[4.0, 7.0, 0.0, 0.0]);
-    tilemap.set_tile(5,1,[4.0, 7.0, 0.0, 0.0]);
-    tilemap.set_tile(6,1,[4.0, 7.0, 0.0, 0.0]);
-    tilemap.set_tile(6,3,[4.0, 1.0, 0.0, 0.0]);
-    tilemap.set_tile(6,4,[4.0, 1.0, 0.0, 0.0]);
-    tilemap.set_tile(6,5,[4.0, 1.0, 0.0, 0.0]);
-    tilemap.set_tile(6,6,[4.0, 1.0, 0.0, 0.0]);
-    tilemap.set_tile(6,7,[4.0, 1.0, 0.0, 0.0]);
-    tilemap.set_tile(5,10,[5.0, 0.0, 0.0, 0.0]);
-    tilemap.set_tile(7,10,[7.0, 0.0, 0.0, 0.0]);
-    tilemap.set_tile(5,9,[5.0, 1.0, 0.0, 0.0]);
-    tilemap.set_tile(6,9,[6.0, 1.0, 0.0, 0.0]);
-    tilemap.set_tile(7,9,[7.0, 1.0, 0.0, 0.0]);
-    tilemap.set_tile(5,8,[5.0, 2.0, 0.0, 0.0]);
-    tilemap.set_tile(6,8,[8.0, 2.0, 0.0, 0.0]);
-    tilemap.set_tile(7,8,[7.0, 2.0, 0.0, 0.0]);
-    tilemap.set_tile(5,7,[2.0, 1.0, 0.0, 0.0]);
-    tilemap.set_tile(7,7,[2.0, 1.0, 0.0, 0.0]);
-    tilemap.set_tile(6,10,[2.0, 3.0, 0.0, 0.0]);
-    tilemap.set_tile(6,11,[2.0, 2.0, 0.0, 0.0]);
+    tilemap.set_tile(1, 3, [5.0, 0.0, 0.0, 0.0]);
+    tilemap.set_tile(2, 3, [6.0, 0.0, 0.0, 0.0]);
+    tilemap.set_tile(3, 3, [7.0, 0.0, 0.0, 0.0]);
+    tilemap.set_tile(1, 2, [5.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(2, 2, [4.0, 0.0, 0.0, 0.0]);
+    tilemap.set_tile(3, 2, [11.0, 2.0, 0.0, 0.0]);
+    tilemap.set_tile(1, 1, [5.0, 2.0, 0.0, 0.0]);
+    tilemap.set_tile(2, 1, [6.0, 2.0, 0.0, 0.0]);
+    tilemap.set_tile(3, 1, [7.0, 2.0, 0.0, 0.0]);
+    tilemap.set_tile(1, 0, [4.0, 7.0, 0.0, 0.0]);
+    tilemap.set_tile(2, 0, [4.0, 7.0, 0.0, 0.0]);
+    tilemap.set_tile(3, 0, [4.0, 7.0, 0.0, 0.0]);
+    tilemap.set_tile(4, 2, [4.0, 2.0, 0.0, 0.0]);
+    tilemap.set_tile(5, 2, [4.0, 2.0, 0.0, 0.0]);
+    tilemap.set_tile(6, 2, [11.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(4, 1, [4.0, 7.0, 0.0, 0.0]);
+    tilemap.set_tile(5, 1, [4.0, 7.0, 0.0, 0.0]);
+    tilemap.set_tile(6, 1, [4.0, 7.0, 0.0, 0.0]);
+    tilemap.set_tile(6, 3, [4.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(6, 4, [4.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(6, 5, [4.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(6, 6, [4.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(6, 7, [4.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(5, 10, [5.0, 0.0, 0.0, 0.0]);
+    tilemap.set_tile(7, 10, [7.0, 0.0, 0.0, 0.0]);
+    tilemap.set_tile(5, 9, [5.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(6, 9, [6.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(7, 9, [7.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(5, 8, [5.0, 2.0, 0.0, 0.0]);
+    tilemap.set_tile(6, 8, [8.0, 2.0, 0.0, 0.0]);
+    tilemap.set_tile(7, 8, [7.0, 2.0, 0.0, 0.0]);
+    tilemap.set_tile(5, 7, [2.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(7, 7, [2.0, 1.0, 0.0, 0.0]);
+    tilemap.set_tile(6, 10, [2.0, 3.0, 0.0, 0.0]);
+    tilemap.set_tile(6, 11, [2.0, 2.0, 0.0, 0.0]);
 }
 
 impl<B: gfx::Backend> gfx_app::Application<B> for TileMap<B> {
-    fn new(factory: &mut B::Factory,
-           _: &mut gfx::queue::GraphicsQueue<B>,
-           backend: gfx_app::shade::Backend,
-           window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
-    {
+    fn new(
+        factory: &mut B::Factory,
+        _: &mut gfx::queue::GraphicsQueue<B>,
+        backend: gfx_app::shade::Backend,
+        window_targets: gfx_app::WindowTargets<B::Resources>,
+    ) -> Self {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
             glsl_150: include_bytes!("shader/tilemap_150.glslv"),
-            hlsl_40:  include_bytes!("data/vertex.fx"),
-            .. gfx_app::shade::Source::empty()
+            hlsl_40: include_bytes!("data/vertex.fx"),
+            ..gfx_app::shade::Source::empty()
         };
         let ps = gfx_app::shade::Source {
             glsl_150: include_bytes!("shader/tilemap_150.glslf"),
-            hlsl_40:  include_bytes!("data/pixel.fx"),
-            .. gfx_app::shade::Source::empty()
+            hlsl_40: include_bytes!("data/pixel.fx"),
+            ..gfx_app::shade::Source::empty()
         };
 
         // set up charmap plane and configure its tiles
@@ -425,27 +464,36 @@ impl<B: gfx::Backend> gfx_app::Application<B> for TileMap<B> {
         let tile_size = 32;
 
         let mut tiles = Vec::new();
-        for _ in 0 .. tilemap_size[0]*tilemap_size[1] {
+        for _ in 0..tilemap_size[0] * tilemap_size[1] {
             tiles.push(TileMapData::new_empty());
         }
 
-        let tilemap_plane = TileMapPlane::new(factory,
-                charmap_size[0], charmap_size[1], tile_size,
-                window_targets);
+        let tilemap_plane = TileMapPlane::new(
+            factory,
+            charmap_size[0],
+            charmap_size[1],
+            tile_size,
+            window_targets,
+        );
 
         // TODO: should probably check that charmap is smaller than tilemap
         let mut tm = TileMap {
             tiles,
-            pso: factory.create_pipeline_simple(
-                vs.select(backend).unwrap(),
-                ps.select(backend).unwrap(),
-                pipe::new()
-                ).unwrap(),
+            pso: factory
+                .create_pipeline_simple(
+                    vs.select(backend).unwrap(),
+                    ps.select(backend).unwrap(),
+                    pipe::new(),
+                )
+                .unwrap(),
             tilemap_plane,
             tile_size: tile_size as f32,
             tilemap_size,
             charmap_size,
-            limit_coords: [tilemap_size[0] - charmap_size[0], tilemap_size[1] - charmap_size[1]],
+            limit_coords: [
+                tilemap_size[0] - charmap_size[0],
+                tilemap_size[1] - charmap_size[1],
+            ],
             focus_coords: [0, 0],
             focus_dirty: false,
             input: InputState {
@@ -462,9 +510,12 @@ impl<B: gfx::Backend> gfx_app::Application<B> for TileMap<B> {
         tm
     }
 
-    fn render(&mut self, (frame, sync): (gfx::Frame, &gfx_app::SyncPrimitives<B::Resources>),
-              pool: &mut gfx::GraphicsCommandPool<B>, queue: &mut gfx::queue::GraphicsQueue<B>)
-    {
+    fn render(
+        &mut self,
+        (frame, sync): (gfx::Frame, &gfx_app::SyncPrimitives<B::Resources>),
+        pool: &mut gfx::GraphicsCommandPool<B>,
+        queue: &mut gfx::queue::GraphicsQueue<B>,
+    ) {
         // view configuration based on current position
         let view = Matrix4::look_at(
             Point3::new(self.input.x_pos, -self.input.y_pos, self.input.distance),
@@ -474,13 +525,22 @@ impl<B: gfx::Backend> gfx_app::Application<B> for TileMap<B> {
 
         let mut encoder = pool.acquire_graphics_encoder();
         self.tilemap_plane.update_view(&view, &frame);
-        self.tilemap_plane.prepare_buffers(&mut encoder, self.focus_dirty);
+        self.tilemap_plane.prepare_buffers(
+            &mut encoder,
+            self.focus_dirty,
+        );
         self.focus_dirty = false;
 
         self.tilemap_plane.clear(&mut encoder);
 
-        encoder.draw(&self.tilemap_plane.slice, &self.pso, &self.tilemap_plane.params);
-        encoder.synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence));
+        encoder.draw(
+            &self.tilemap_plane.slice,
+            &self.pso,
+            &self.tilemap_plane.params,
+        );
+        encoder
+            .synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence))
+            .expect("Could not flush encoder");
     }
 
     fn on(&mut self, event: winit::WindowEvent) {
@@ -488,8 +548,11 @@ impl<B: gfx::Backend> gfx_app::Application<B> for TileMap<B> {
             input: winit::KeyboardInput {
                 state: winit::ElementState::Pressed,
                 virtual_keycode: Some(key),
-                .. },
-            .. } = event {
+                ..
+            },
+            ..
+        } = event
+        {
             use winit::VirtualKeyCode::*;
             let i = self.input.clone();
 
@@ -506,7 +569,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for TileMap<B> {
                 S => self.apply_y_offset(-i.offset_amt),
                 D => self.apply_x_offset(i.offset_amt),
                 A => self.apply_x_offset(-i.offset_amt),
-                _ => ()
+                _ => (),
             }
         }
     }
