@@ -99,4 +99,20 @@ where
             marker: PhantomData,
         }
     }
+
+    /// Promote a submission to a higher capability type.
+    ///
+    /// Submission promotion is only necessary for shoving multiple submissions
+    /// of different capabilities into one submit call.
+    pub fn promote<P>(self) -> Submission<'a, B, P>
+    where
+        P: Supports<C>
+    {
+        Submission {
+            cmd_buffers: self.cmd_buffers,
+            wait_semaphores: self.wait_semaphores,
+            signal_semaphores: self.signal_semaphores,
+            marker: PhantomData,
+        }
+    }
 }
