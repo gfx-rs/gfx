@@ -480,7 +480,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for TileMap<B> {
 
         encoder.draw(&self.tilemap_plane.slice, &self.pso, &self.tilemap_plane.params);
         encoder.synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence))
-               .expect("Could not flush encoder");;
+               .expect("Could not flush encoder");
     }
 
     fn on(&mut self, event: winit::WindowEvent) {

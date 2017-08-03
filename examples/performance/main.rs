@@ -190,7 +190,7 @@ impl Renderer for GFX {
                              &[&self.frame_semaphore],
                              &[&self.draw_semaphore],
                              Some(&self.frame_fence))
-               .expect("Could not flush encoder");;
+               .expect("Could not flush encoder");
         let post_submit = start.elapsed();
         self.swap_chain.present(&mut self.queue, &[&self.draw_semaphore]);
         self.factory.wait_for_fences(&[&self.frame_fence], gfx::WaitFor::All, 1_000_000);

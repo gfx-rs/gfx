@@ -619,7 +619,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         }
 
         encoder.synced_flush(&mut queue, &[&sync.rendering], &[], Some(&sync.frame_fence))
-               .expect("Could not flush encoder");;
+               .expect("Could not flush encoder");
     }
 
     fn get_exit_key() -> Option<winit::VirtualKeyCode> {

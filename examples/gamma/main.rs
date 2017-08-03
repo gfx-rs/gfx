@@ -114,7 +114,7 @@ pub fn main() {
             encoder.clear(&data.out, CLEAR_COLOR);
             encoder.draw(&slice, &pso, &data);
             encoder.synced_flush(&mut graphics_queue, &[&frame_semaphore], &[&draw_semaphore], Some(&frame_fence))
-                   .expect("Could not flush encoder");;
+                   .expect("Could not flush encoder");
         }
 
         swap_chain.present(&mut graphics_queue, &[&draw_semaphore]);

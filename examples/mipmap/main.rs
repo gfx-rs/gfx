@@ -136,7 +136,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         encoder.clear(&self.data.out, [0.1, 0.2, 0.3, 1.0]);
         encoder.draw(&self.slice, &self.pso, &self.data);
         encoder.synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence))
-               .expect("Could not flush encoder");;
+               .expect("Could not flush encoder");
     }
 
     fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<B::Resources>) {

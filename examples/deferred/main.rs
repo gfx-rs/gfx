@@ -560,7 +560,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         // Show the result
         self.blit.encode(&mut encoder);
         encoder.synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence))
-               .expect("Could not flush encoder");;
+               .expect("Could not flush encoder");
     }
 
     fn on(&mut self, event: WindowEvent) {
