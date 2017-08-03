@@ -23,7 +23,7 @@ extern crate glutin;
 
 use gfx::{Adapter, CommandQueue, GraphicsPoolExt, Factory, FrameSync,
     Surface, SwapChain, SwapChainExt, WindowExt};
-use gfx::format::{DepthStencil, Formatted, Rgba8 as ColorFormat};
+use gfx::format::Rgba8 as ColorFormat;
 
 use cgmath::{Deg, Matrix, Matrix3, Matrix4, Point3, Vector3, Vector4, SquareMatrix};
 use gl::Gl;
@@ -94,7 +94,6 @@ trait Renderer: Drop {
 struct GFX {
     dimension: i16,
     window: gfx_window_glutin::Window,
-    surface: gfx_window_glutin::Surface,
     swap_chain: gfx_window_glutin::SwapChain,
     factory: gfx_device_gl::Factory,
     queue: gfx::queue::GraphicsQueue<B>,
@@ -126,7 +125,7 @@ impl GFX {
         adapters[0].open_with(|family, ty| {
             ((ty.supports_graphics() && surface.supports_queue(&family)) as u32, gfx::QueueType::Graphics)
         });
-        let mut queue = graphics_queues.pop().expect("Unable to find a graphics queue.");
+        let queue = graphics_queues.pop().expect("Unable to find a graphics queue.");
 
         // Create swapchain
         let config = gfx::SwapchainConfig::new()
@@ -149,7 +148,6 @@ impl GFX {
 
         GFX {
             window,
-            surface,
             swap_chain,
             queue,
             pool,
@@ -188,11 +186,11 @@ impl Renderer for GFX {
         }
 
         let pre_submit = start.elapsed();
-        encoder.synced_flush(
-            &mut self.queue,
-            &[&self.frame_semaphore],
-            &[&self.draw_semaphore],
-            Some(&self.frame_fence));
+        encoder.synced_flush(&mut self.queue,
+                             &[&self.frame_semaphore],
+                             &[&self.draw_semaphore],
+                             Some(&self.frame_fence))
+               .expect("Could not flush encoder");
         let post_submit = start.elapsed();
         self.swap_chain.present(&mut self.queue, &[&self.draw_semaphore]);
         self.factory.wait_for_fences(&[&self.frame_fence], gfx::WaitFor::All, 1_000_000);

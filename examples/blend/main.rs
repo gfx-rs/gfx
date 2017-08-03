@@ -19,7 +19,7 @@ extern crate image;
 extern crate winit;
 
 use gfx_app::{BackbufferView, ColorFormat};
-use gfx::format::{Rgba8};
+use gfx::format::Rgba8;
 use gfx::Bundle;
 use gfx::GraphicsPoolExt;
 
@@ -161,7 +161,8 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         encoder.update_constant_buffer(&self.bundle.data.locals, &locals);
         encoder.clear(&self.bundle.data.out, [0.0; 4]);
         self.bundle.encode(&mut encoder);
-        encoder.synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence));
+        encoder.synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence))
+               .expect("Could not flush encoder");
     }
 
     fn on(&mut self, event: winit::WindowEvent) {

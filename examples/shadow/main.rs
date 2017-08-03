@@ -19,7 +19,6 @@ extern crate gfx_app;
 extern crate winit;
 
 use gfx::{Factory, GraphicsPoolExt};
-use gfx::format::{DepthStencil};
 use gfx_app::{ColorFormat, DepthFormat};
 
 #[cfg(feature="metal")]
@@ -569,7 +568,8 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
             // put the lights back into the scene
             for _ in 0..num {
                 let (light, submission) = receiver.recv().unwrap();
-                submission.synced_flush(&mut queue, &[], &[], None);
+                submission.synced_flush(&mut queue, &[], &[], None)
+                          .expect("Could not flush submission");
                 self.scene.lights.push(light);
             }
         } else {
@@ -618,7 +618,8 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
             encoder.draw(&ent.slice, &self.forward_pso, batch);
         }
 
-        encoder.synced_flush(&mut queue, &[&sync.rendering], &[], Some(&sync.frame_fence));
+        encoder.synced_flush(&mut queue, &[&sync.rendering], &[], Some(&sync.frame_fence))
+               .expect("Could not flush encoder");
     }
 
     fn get_exit_key() -> Option<winit::VirtualKeyCode> {

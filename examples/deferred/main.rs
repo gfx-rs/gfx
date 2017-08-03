@@ -48,8 +48,8 @@ use gfx::{Bundle, Factory, GraphicsPoolExt, texture};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
 use noise::{NoiseModule, Perlin};
-use std::time::{Instant};
-use winit::{WindowEvent, WindowBuilder};
+use std::time::Instant;
+use winit::WindowEvent;
 
 // Remember to also change the constants in the shaders
 const NUM_LIGHTS: usize = 250;
@@ -559,7 +559,8 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         self.blit.data.tex.0 = blit_tex.clone();
         // Show the result
         self.blit.encode(&mut encoder);
-        encoder.synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence));
+        encoder.synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence))
+               .expect("Could not flush encoder");
     }
 
     fn on(&mut self, event: WindowEvent) {

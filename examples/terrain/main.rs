@@ -20,7 +20,6 @@ extern crate genmesh;
 extern crate noise;
 extern crate winit;
 
-use gfx::format::{DepthStencil};
 use gfx::GraphicsPoolExt;
 use gfx_app::{BackbufferView, ColorFormat, DepthFormat};
 
@@ -172,7 +171,8 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         encoder.clear(&self.data.out_color, [0.3, 0.3, 0.3, 1.0]);
         encoder.clear_depth(&self.data.out_depth, 1.0);
         encoder.draw(&self.slice, &self.pso, &self.data);
-        encoder.synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence));
+        encoder.synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence))
+               .expect("Could not flush encoder");
     }
 
     fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<B::Resources>) {

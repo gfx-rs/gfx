@@ -19,7 +19,7 @@ extern crate gfx_app;
 
 use std::time::Instant;
 
-use gfx_app::{BackbufferView, ColorFormat, DepthFormat};
+use gfx_app::{BackbufferView, ColorFormat};
 use gfx::{Bundle, Factory, GraphicsPoolExt, ShaderSet, Primitive, buffer, Bind, Slice};
 use gfx::state::Rasterizer;
 
@@ -192,7 +192,8 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         encoder.clear(&self.bundle.data.out_color, [0.1, 0.2, 0.3, 1.0]);
         // Draw the particles!
         self.bundle.encode(&mut encoder);
-        encoder.synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence));
+        encoder.synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence))
+               .expect("Could not flush encoder");
     }
 
     fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<B::Resources>) {

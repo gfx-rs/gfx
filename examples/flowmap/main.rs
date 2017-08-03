@@ -19,7 +19,7 @@ extern crate image;
 
 use std::io::Cursor;
 use std::time::Instant;
-use gfx::format::{Rgba8, Depth};
+use gfx::format::Rgba8;
 use gfx_app::{BackbufferView, ColorFormat};
 use gfx::{Bundle, GraphicsPoolExt};
 
@@ -168,7 +168,8 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
 
         encoder.clear(&self.bundle.data.out, [0.3, 0.3, 0.3, 1.0]);
         self.bundle.encode(&mut encoder);
-        encoder.synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence));
+        encoder.synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence))
+               .expect("Could not flush encoder");
     }
 
     fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<B::Resources>) {
