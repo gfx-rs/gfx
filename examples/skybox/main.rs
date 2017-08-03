@@ -19,12 +19,12 @@ extern crate cgmath;
 extern crate image;
 
 use gfx_app::{BackbufferView, ColorFormat};
-use gfx::format::{Depth, Rgba8};
+use gfx::format::Rgba8;
 
 use cgmath::{Deg, Matrix4};
 use gfx::{Bundle, GraphicsPoolExt, texture};
 use std::io::Cursor;
-use std::time::{Instant};
+use std::time::Instant;
 
 gfx_defines!{
     vertex Vertex {
@@ -179,7 +179,8 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
 
         encoder.clear(&self.bundle.data.out, [0.3, 0.3, 0.3, 1.0]);
         self.bundle.encode(&mut encoder);
-        encoder.synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence));
+        encoder.synced_flush(queue, &[&sync.rendering], &[], Some(&sync.frame_fence))
+               .expect("Could not flush encoder");;
     }
 
     fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<B::Resources>) {

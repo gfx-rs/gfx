@@ -19,7 +19,6 @@ extern crate glutin;
 
 use gfx::{Adapter, CommandQueue, Factory, FrameSync, GraphicsPoolExt,
           Surface, SwapChain, SwapChainExt, WindowExt};
-use gfx::format::Formatted;
 use gfx::traits::FactoryExt;
 
 pub type ColorFormat = gfx::format::Rgba8;
@@ -118,7 +117,8 @@ pub fn main() {
             let mut encoder = graphics_pool.acquire_graphics_encoder();
             encoder.clear(&data.out, CLEAR_COLOR);
             encoder.draw(&slice, &pso, &data);
-            encoder.synced_flush(&mut graphics_queue, &[&frame_semaphore], &[&draw_semaphore], Some(&frame_fence));
+            encoder.synced_flush(&mut graphics_queue, &[&frame_semaphore], &[&draw_semaphore], Some(&frame_fence))
+                   .expect("Could not flush encoder");;
         }
 
         swap_chain.present(&mut graphics_queue, &[&draw_semaphore]);
