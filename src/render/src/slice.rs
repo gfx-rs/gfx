@@ -19,7 +19,7 @@
 use core::{handle, buffer};
 use core::{Primitive, Resources, VertexCount};
 use core::command::InstanceParams;
-use core::factory::Factory;
+use core::device::Device;
 use core::memory::Bind;
 use format::Format;
 use pso;
@@ -52,7 +52,7 @@ use pso;
 /// vertex with this index.
 ///
 /// # Constuction & Handling
-/// The `Slice` structure can be constructed automatically when using a `Factory` to create a
+/// The `Slice` structure can be constructed automatically when using a `Device` to create a
 /// vertex buffer. If needed, it can also be created manually.
 ///
 /// A `Slice` is required to process a PSO, as it contains the needed information on in what order
@@ -135,7 +135,7 @@ impl<R: Resources> Slice<R> {
 ///
 /// # Construction & Handling
 /// A `IndexBuffer` can be constructed using the `IntoIndexBuffer` trait, from either a slice or a
-/// `Buffer` of integers, using a factory.
+/// `Buffer` of integers, using a device.
 ///
 /// An `IndexBuffer` is exclusively used to create `Slice`s.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -157,17 +157,17 @@ impl<R: Resources> Default for IndexBuffer<R> {
 /// A helper trait to create `IndexBuffers` from different kinds of data.
 pub trait IntoIndexBuffer<R: Resources> {
     /// Turns self into an `IndexBuffer`.
-    fn into_index_buffer<F: Factory<R> + ?Sized>(self, factory: &mut F) -> IndexBuffer<R>;
+    fn into_index_buffer<F: Device<R> + ?Sized>(self, device: &mut F) -> IndexBuffer<R>;
 }
 
 impl<R: Resources> IntoIndexBuffer<R> for IndexBuffer<R> {
-    fn into_index_buffer<F: Factory<R> + ?Sized>(self, _: &mut F) -> IndexBuffer<R> {
+    fn into_index_buffer<F: Device<R> + ?Sized>(self, _: &mut F) -> IndexBuffer<R> {
         self
     }
 }
 
 impl<R: Resources> IntoIndexBuffer<R> for () {
-    fn into_index_buffer<F: Factory<R> + ?Sized>(self, _: &mut F) -> IndexBuffer<R> {
+    fn into_index_buffer<F: Device<R> + ?Sized>(self, _: &mut F) -> IndexBuffer<R> {
         IndexBuffer::Auto
     }
 }
@@ -175,16 +175,16 @@ impl<R: Resources> IntoIndexBuffer<R> for () {
 macro_rules! impl_index_buffer {
     ($prim_ty:ty, $buf_ty:ident) => (
         impl<R: Resources> IntoIndexBuffer<R> for handle::Buffer<R, $prim_ty> {
-            fn into_index_buffer<F: Factory<R> + ?Sized>(self, _: &mut F) -> IndexBuffer<R> {
+            fn into_index_buffer<F: Device<R> + ?Sized>(self, _: &mut F) -> IndexBuffer<R> {
                 IndexBuffer::$buf_ty(self)
             }
         }
 
         impl<'s, R: Resources> IntoIndexBuffer<R> for &'s [$prim_ty] {
-            fn into_index_buffer<F: Factory<R> + ?Sized>(self, factory: &mut F) -> IndexBuffer<R> {
-                factory.create_buffer_immutable(self, buffer::Role::Index, Bind::empty())
-                       .unwrap()
-                       .into_index_buffer(factory)
+            fn into_index_buffer<F: Device<R> + ?Sized>(self, device: &mut F) -> IndexBuffer<R> {
+                device.create_buffer_immutable(self, buffer::Role::Index, Bind::empty())
+                      .unwrap()
+                      .into_index_buffer(device)
             }
         }
     )

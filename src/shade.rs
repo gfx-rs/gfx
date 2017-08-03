@@ -43,7 +43,7 @@ pub trait ShadeExt {
 }
 
 #[cfg(feature = "gl")]
-impl ShadeExt for ::gfx_device_gl::Factory {
+impl ShadeExt for ::gfx_device_gl::Device {
     fn shader_backend(&self) -> Backend {
         let shade_lang = self.get_info().shading_language;
         if shade_lang.is_embedded {
@@ -55,28 +55,28 @@ impl ShadeExt for ::gfx_device_gl::Factory {
 }
 
 #[cfg(feature = "dx11")]
-impl ShadeExt for ::gfx_device_dx11::Factory {
+impl ShadeExt for ::gfx_device_dx11::Device {
     fn shader_backend(&self) -> Backend {
         Backend::Hlsl(self.get_shader_model())
     }
 }
 
 #[cfg(feature = "dx12")]
-impl ShadeExt for ::gfx_device_dx12::Factory {
+impl ShadeExt for ::gfx_device_dx12::Device {
     fn shader_backend(&self) -> Backend {
         Backend::Hlsl(self.get_shader_model())
     }
 }
 
 #[cfg(feature = "metal")]
-impl ShadeExt for ::gfx_device_metal::Factory {
+impl ShadeExt for ::gfx_device_metal::Device {
     fn shader_backend(&self) -> Backend {
         Backend::Msl(self.get_shader_model())
     }
 }
 
 #[cfg(feature = "vulkan")]
-impl ShadeExt for ::gfx_device_vulkan::Factory {
+impl ShadeExt for ::gfx_device_vulkan::Device {
     fn shader_backend(&self) -> Backend {
         Backend::Vulkan
     }

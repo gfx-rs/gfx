@@ -16,7 +16,7 @@ use std::rc::Rc;
 use std::{slice, ptr};
 
 use {gl, tex};
-use core::{self as d, factory as f, texture as t, buffer, mapping};
+use core::{self as c, device as d, texture as t, buffer, mapping};
 use core::memory::{self, Bind, SHADER_RESOURCE, UNORDERED_ACCESS, Typed};
 use core::format::{ChannelType, Format};
 use core::handle::{self, Producer};
@@ -67,22 +67,22 @@ pub fn update_sub_buffer(gl: &gl::Gl, buffer: Buffer, address: *const u8,
 }
 
 
-/// GL resource factory.
-pub struct Factory {
+/// GL device.
+pub struct Device {
     share: Rc<Share>,
     frame_handles: handle::Manager<R>,
 }
 
-impl Clone for Factory {
-    fn clone(&self) -> Factory {
-        Factory::new(self.share.clone())
+impl Clone for Device {
+    fn clone(&self) -> Device {
+        Device::new(self.share.clone())
     }
 }
 
-impl Factory {
-    /// Create a new `Factory`.
-    pub fn new(share: Rc<Share>) -> Factory {
-        Factory {
+impl Device {
+    /// Create a new `Device`.
+    pub fn new(share: Rc<Share>) -> Device {
+        Device {
             share: share,
             frame_handles: handle::Manager::new(),
         }
@@ -194,25 +194,25 @@ impl Factory {
         })
     }
 
-    fn create_program_raw(&mut self, shader_set: &d::ShaderSet<R>)
-                          -> Result<(gl::types::GLuint, d::shade::ProgramInfo), d::shade::CreateProgramError> {
+    fn create_program_raw(&mut self, shader_set: &c::ShaderSet<R>)
+                          -> Result<(gl::types::GLuint, c::shade::ProgramInfo), c::shade::CreateProgramError> {
         use shade::create_program;
         let frame_handles = &mut self.frame_handles;
         let mut shaders = [0; 5];
         let usage = shader_set.get_usage();
         let shader_slice = match shader_set {
-            &d::ShaderSet::Simple(ref vs, ref ps) => {
+            &c::ShaderSet::Simple(ref vs, ref ps) => {
                 shaders[0] = *vs.reference(frame_handles);
                 shaders[1] = *ps.reference(frame_handles);
                 &shaders[..2]
             },
-            &d::ShaderSet::Geometry(ref vs, ref gs, ref ps) => {
+            &c::ShaderSet::Geometry(ref vs, ref gs, ref ps) => {
                 shaders[0] = *vs.reference(frame_handles);
                 shaders[1] = *gs.reference(frame_handles);
                 shaders[2] = *ps.reference(frame_handles);
                 &shaders[..3]
             },
-            &d::ShaderSet::Tessellated(ref vs, ref hs, ref ds, ref ps) => {
+            &c::ShaderSet::Tessellated(ref vs, ref hs, ref ds, ref ps) => {
                 shaders[0] = *vs.reference(frame_handles);
                 shaders[1] = *hs.reference(frame_handles);
                 shaders[2] = *ds.reference(frame_handles);
@@ -229,10 +229,10 @@ impl Factory {
     }
 
     fn view_texture_as_target(&mut self, htex: &handle::RawTexture<R>, level: Level, layer: Option<Layer>)
-                              -> Result<TargetView, f::TargetViewError> {
+                              -> Result<TargetView, d::TargetViewError> {
         match (self.frame_handles.ref_texture(htex), layer) {
-            (&NewTexture::Surface(_), Some(_)) => Err(f::TargetViewError::Unsupported),
-            (&NewTexture::Surface(_), None) if level != 0 => Err(f::TargetViewError::Unsupported),
+            (&NewTexture::Surface(_), Some(_)) => Err(d::TargetViewError::Unsupported),
+            (&NewTexture::Surface(_), None) if level != 0 => Err(d::TargetViewError::Unsupported),
             (&NewTexture::Surface(s), None) => Ok(TargetView::Surface(s)),
             (&NewTexture::Texture(t), Some(l)) => Ok(TargetView::TextureLayer(t, level, l)),
             (&NewTexture::Texture(t), None) => Ok(TargetView::Texture(t, level)),
@@ -298,8 +298,8 @@ pub fn temporary_ensure_unmapped(pointer: &mut *mut ::std::os::raw::c_void,
     }
 }
 
-impl f::Factory<R> for Factory {
-    fn get_capabilities(&self) -> &d::Capabilities {
+impl d::Device<R> for Device {
+    fn get_capabilities(&self) -> &c::Capabilities {
         &self.share.capabilities
     }
 
@@ -327,25 +327,25 @@ impl f::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_buffer(name, info, mapping))
     }
 
-    fn create_shader(&mut self, stage: d::shade::Stage, code: &[u8])
-                     -> Result<handle::Shader<R>, d::shade::CreateShaderError> {
+    fn create_shader(&mut self, stage: c::shade::Stage, code: &[u8])
+                     -> Result<handle::Shader<R>, c::shade::CreateShaderError> {
         ::shade::create_shader(&self.share.context, stage, code)
                 .map(|sh| self.share.handles.borrow_mut().make_shader(sh))
     }
 
-    fn create_program(&mut self, shader_set: &d::ShaderSet<R>)
-                      -> Result<handle::Program<R>, d::shade::CreateProgramError> {
+    fn create_program(&mut self, shader_set: &c::ShaderSet<R>)
+                      -> Result<handle::Program<R>, c::shade::CreateProgramError> {
         self.create_program_raw(shader_set)
             .map(|(name, info)| self.share.handles.borrow_mut().make_program(name, info))
     }
 
-    fn create_pipeline_state_raw(&mut self, program: &handle::Program<R>, desc: &d::pso::Descriptor)
-                                 -> Result<handle::RawPipelineState<R>, d::pso::CreationError> {
+    fn create_pipeline_state_raw(&mut self, program: &handle::Program<R>, desc: &c::pso::Descriptor)
+                                 -> Result<handle::RawPipelineState<R>, c::pso::CreationError> {
         use core::state as s;
         let caps = &self.share.capabilities;
         match desc.primitive {
-            d::Primitive::PatchList(num) if num == 0 || num > caps.max_patch_size =>
-                return Err(d::pso::CreationError),
+            c::Primitive::PatchList(num) if num == 0 || num > caps.max_patch_size =>
+                return Err(c::pso::CreationError),
             _ => ()
         }
         let mut output = OutputMerger {
@@ -358,9 +358,9 @@ impl f::Factory<R> for Factory {
                 _ => None,
             },
             depth: desc.depth_stencil.and_then(|(_, t)| t.depth),
-            colors: [COLOR_DEFAULT; d::MAX_COLOR_TARGETS],
+            colors: [COLOR_DEFAULT; c::MAX_COLOR_TARGETS],
         };
-        for i in 0 .. d::MAX_COLOR_TARGETS {
+        for i in 0 .. c::MAX_COLOR_TARGETS {
             if let Some((_, ref bi)) = desc.color_targets[i] {
                 output.draw_mask |= 1<<i;
                 output.colors[i].mask = bi.mask;
@@ -372,8 +372,8 @@ impl f::Factory<R> for Factory {
                 }
             }
         }
-        let mut inputs = [None; d::MAX_VERTEX_ATTRIBUTES];
-        for i in 0 .. d::MAX_VERTEX_ATTRIBUTES {
+        let mut inputs = [None; c::MAX_VERTEX_ATTRIBUTES];
+        for i in 0 .. c::MAX_VERTEX_ATTRIBUTES {
             inputs[i] = desc.attributes[i].map(|at| BufferElement {
                 desc: desc.vertex_buffers[at.0 as usize].unwrap(),
                 elem: at.1,
@@ -428,12 +428,12 @@ impl f::Factory<R> for Factory {
     }
 
     fn view_buffer_as_shader_resource_raw(&mut self, hbuf: &handle::RawBuffer<R>, format: Format)
-                                      -> Result<handle::RawShaderResourceView<R>, f::ResourceViewError> {
+                                      -> Result<handle::RawShaderResourceView<R>, d::ResourceViewError> {
         let gl = &self.share.context;
         let mut name = 0 as gl::types::GLuint;
         let buf_name = *self.frame_handles.ref_buffer(hbuf);
         let format = tex::format_to_glfull(format)
-            .map_err(|_| f::ResourceViewError::Unsupported)?;
+            .map_err(|_| d::ResourceViewError::Unsupported)?;
         unsafe {
             gl.GenTextures(1, &mut name);
             gl.BindTexture(gl::TEXTURE_BUFFER, name);
@@ -447,14 +447,14 @@ impl f::Factory<R> for Factory {
     }
 
     fn view_buffer_as_unordered_access_raw(&mut self, _hbuf: &handle::RawBuffer<R>)
-                                       -> Result<handle::RawUnorderedAccessView<R>, f::ResourceViewError> {
-        Err(f::ResourceViewError::Unsupported) //TODO
+                                       -> Result<handle::RawUnorderedAccessView<R>, d::ResourceViewError> {
+        Err(d::ResourceViewError::Unsupported) //TODO
     }
 
     fn view_texture_as_shader_resource_raw(&mut self, htex: &handle::RawTexture<R>, _desc: t::ResourceDesc)
-                                       -> Result<handle::RawShaderResourceView<R>, f::ResourceViewError> {
+                                       -> Result<handle::RawShaderResourceView<R>, d::ResourceViewError> {
         match self.frame_handles.ref_texture(htex) {
-            &NewTexture::Surface(_) => Err(f::ResourceViewError::NoBindFlag),
+            &NewTexture::Surface(_) => Err(d::ResourceViewError::NoBindFlag),
             &NewTexture::Texture(t) => {
                 //TODO: use the view descriptor
                 let view = ResourceView::new_texture(t, htex.get_info().kind);
@@ -464,12 +464,12 @@ impl f::Factory<R> for Factory {
     }
 
     fn view_texture_as_unordered_access_raw(&mut self, _htex: &handle::RawTexture<R>)
-                                        -> Result<handle::RawUnorderedAccessView<R>, f::ResourceViewError> {
-        Err(f::ResourceViewError::Unsupported) //TODO
+                                        -> Result<handle::RawUnorderedAccessView<R>, d::ResourceViewError> {
+        Err(d::ResourceViewError::Unsupported) //TODO
     }
 
     fn view_texture_as_render_target_raw(&mut self, htex: &handle::RawTexture<R>, desc: t::RenderDesc)
-                                         -> Result<handle::RawRenderTargetView<R>, f::TargetViewError> {
+                                         -> Result<handle::RawRenderTargetView<R>, d::TargetViewError> {
         self.view_texture_as_target(htex, desc.level, desc.layer)
             .map(|view| {
                 let dim = htex.get_info().kind.get_level_dimensions(desc.level);
@@ -478,7 +478,7 @@ impl f::Factory<R> for Factory {
     }
 
     fn view_texture_as_depth_stencil_raw(&mut self, htex: &handle::RawTexture<R>, desc: t::DepthStencilDesc)
-                                         -> Result<handle::RawDepthStencilView<R>, f::TargetViewError> {
+                                         -> Result<handle::RawDepthStencilView<R>, d::TargetViewError> {
         self.view_texture_as_target(htex, desc.level, desc.layer)
             .map(|view| {
                 let dim = htex.get_info().kind.get_level_dimensions(0);
@@ -534,13 +534,13 @@ impl f::Factory<R> for Factory {
         }
     }
 
-    fn wait_for_fences(&mut self, fences: &[&handle::Fence<R>], wait: f::WaitFor, timeout_ms: u32) -> bool {
+    fn wait_for_fences(&mut self, fences: &[&handle::Fence<R>], wait: d::WaitFor, timeout_ms: u32) -> bool {
         if !self.share.private_caps.sync_supported {
             return true;
         }
 
         match wait {
-            f::WaitFor::All => {
+            d::WaitFor::All => {
                 for fence in fences {
                     let fence = &*self.frame_handles.ref_fence(&fence).lock().unwrap();
                     match wait_fence(fence, &self.share.context, timeout_ms) {
@@ -557,7 +557,7 @@ impl f::Factory<R> for Factory {
                 // All fences have indicated a positive result
                 true
             },
-            f::WaitFor::Any => {
+            d::WaitFor::Any => {
                 let mut waiting = |timeout_ms: u32| {
                     for fence in fences {
                         let fence = &*self.frame_handles.ref_fence(&fence).lock().unwrap();

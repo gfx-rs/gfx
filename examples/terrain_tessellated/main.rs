@@ -73,12 +73,12 @@ struct App<B: gfx::Backend> {
 }
 
 impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
-    fn new(factory: &mut B::Factory,
+    fn new(device: &mut B::Device,
            _: &mut gfx::queue::GraphicsQueue<B>,
            backend: gfx_app::shade::Backend,
            window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
     {
-        use gfx::traits::FactoryExt;
+        use gfx::traits::DeviceExt;
 
         let vs = gfx_app::shade::Source {
             glsl_150: include_bytes!("shader/terrain.glslv"), //v = vertex
@@ -128,8 +128,8 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
             .map(|i| i as u32)
             .collect();
 
-        let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, &index_data[..]);
-        let set = factory.create_shader_set_tessellation(
+        let (vbuf, slice) = device.create_vertex_buffer_with_slice(&vertex_data, &index_data[..]);
+        let set = device.create_shader_set_tessellation(
             &vs.select(backend).unwrap(),
             &hs.select(backend).unwrap(),
             &ds.select(backend).unwrap(),
@@ -140,11 +140,11 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         let (out_color, out_depth) = window_targets.views[0].clone();
         App {
             views: window_targets.views,
-            pso: factory.create_pipeline_state(&set,
+            pso: device.create_pipeline_state(&set,
                 gfx::Primitive::PatchList(4), fillmode, pipe::new()).unwrap(),
             data: pipe::Data {
                 vbuf,
-                locals: factory.create_constant_buffer(1),
+                locals: device.create_constant_buffer(1),
                 model: Matrix4::identity().into(),
                 view: Matrix4::identity().into(),
                 proj: cgmath::perspective(

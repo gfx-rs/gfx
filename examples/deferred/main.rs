@@ -44,7 +44,7 @@ use gfx::format::Depth32F as Depth;
 use gfx::format::Depth;
 
 use cgmath::{Deg, Matrix4, Point3, SquareMatrix, Vector3};
-use gfx::{Bundle, Factory, GraphicsPoolExt, texture};
+use gfx::{Bundle, Device, GraphicsPoolExt, texture};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{SharedVertex, IndexedPolygon};
 use noise::{NoiseModule, Perlin};
@@ -189,28 +189,28 @@ impl gfx::format::Formatted for DepthFormat {
     }
 }
 
-fn create_g_buffer<R: gfx::Resources, F: gfx::Factory<R>>(
-                   width: texture::Size, height: texture::Size, factory: &mut F)
+fn create_g_buffer<R: gfx::Resources, D: gfx::Device<R>>(
+                   width: texture::Size, height: texture::Size, device: &mut D)
                    -> (ViewPair<R, GFormat>, ViewPair<R, GFormat>, ViewPair<R, GFormat>,
                        gfx::handle::ShaderResourceView<R, [f32; 4]>, gfx::handle::DepthStencilView<R, Depth>)
 {
     use gfx::format::ChannelSource;
     let pos = {
-        let (_ , srv, rtv) = factory.create_render_target(width, height).unwrap();
+        let (_ , srv, rtv) = device.create_render_target(width, height).unwrap();
         ViewPair{ resource: srv, target: rtv }
     };
     let normal = {
-        let (_ , srv, rtv) = factory.create_render_target(width, height).unwrap();
+        let (_ , srv, rtv) = device.create_render_target(width, height).unwrap();
         ViewPair{ resource: srv, target: rtv }
     };
     let diffuse = {
-        let (_ , srv, rtv) = factory.create_render_target(width, height).unwrap();
+        let (_ , srv, rtv) = device.create_render_target(width, height).unwrap();
         ViewPair{ resource: srv, target: rtv }
     };
-    let (tex, _srv, depth_rtv) = factory.create_depth_stencil(width, height).unwrap();
+    let (tex, _srv, depth_rtv) = device.create_depth_stencil(width, height).unwrap();
     // ignoring the default SRV since we need to create a custom one with swizzling
     let swizzle = gfx::format::Swizzle(ChannelSource::X, ChannelSource::X, ChannelSource::X, ChannelSource::X);
-    let depth_srv = factory.view_texture_as_shader_resource::<DepthFormat>(&tex, (0,0), swizzle).unwrap();
+    let depth_srv = device.view_texture_as_shader_resource::<DepthFormat>(&tex, (0,0), swizzle).unwrap();
 
     (pos, normal, diffuse, depth_srv, depth_rtv)
 }
@@ -231,24 +231,24 @@ struct App<B: gfx::Backend> {
 }
 
 impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
-    fn new(factory: &mut B::Factory,
+    fn new(device: &mut B::Device,
            _: &mut gfx::queue::GraphicsQueue<B>,
            backend: gfx_app::shade::Backend,
            window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
     {
-        use gfx::traits::FactoryExt;
+        use gfx::traits::DeviceExt;
 
         let (width, height, _, _) = window_targets.views[0].0.get_dimensions();
         let (gpos, gnormal, gdiffuse, depth_resource, depth_target) =
-            create_g_buffer(width, height, factory);
+            create_g_buffer(width, height, device);
         let res = {
-            let (_ , srv, rtv) = factory.create_render_target(width, height).unwrap();
+            let (_ , srv, rtv) = device.create_render_target(width, height).unwrap();
             ViewPair{ resource: srv, target: rtv }
         };
 
         let perlin = Perlin::new();
 
-        let sampler = factory.create_sampler(
+        let sampler = device.create_sampler(
             texture::SamplerInfo::new(texture::FilterMethod::Scale,
                                        texture::WrapMode::Clamp)
         );
@@ -273,7 +273,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
                 .map(|i| i as u32)
                 .collect();
 
-            let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, &index_data[..]);
+            let (vbuf, slice) = device.create_vertex_buffer_with_slice(&vertex_data, &index_data[..]);
 
             let vs = gfx_app::shade::Source {
                 glsl_150: include_bytes!("shader/terrain.glslv"),
@@ -288,7 +288,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
                 .. gfx_app::shade::Source::empty()
             };
 
-            let pso = factory.create_pipeline_simple(
+            let pso = device.create_pipeline_simple(
                 vs.select(backend).unwrap(),
                 ps.select(backend).unwrap(),
                 terrain::new()
@@ -296,7 +296,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
 
             let data = terrain::Data {
                 vbuf: vbuf,
-                locals: factory.create_constant_buffer(1),
+                locals: device.create_constant_buffer(1),
                 out_position: gpos.target.clone(),
                 out_normal: gnormal.target.clone(),
                 out_color: gdiffuse.target.clone(),
@@ -313,7 +313,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
                 BlitVertex { pos_tex: [ 1,  3,  1, 2] },
             ];
 
-            let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
+            let (vbuf, slice) = device.create_vertex_buffer_with_slice(&vertex_data, ());
 
             let vs = gfx_app::shade::Source {
                 glsl_150: include_bytes!("shader/blit.glslv"),
@@ -328,7 +328,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
                 .. gfx_app::shade::Source::empty()
             };
 
-            let pso = factory.create_pipeline_simple(
+            let pso = device.create_pipeline_simple(
                 vs.select(backend).unwrap(),
                 ps.select(backend).unwrap(),
                 blit::new()
@@ -343,7 +343,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
             Bundle::new(slice, pso, data)
         };
 
-        let light_pos_buffer = factory.create_constant_buffer(NUM_LIGHTS);
+        let light_pos_buffer = device.create_constant_buffer(NUM_LIGHTS);
 
         let (light_vbuf, mut light_slice) = {
             let vertex_data = [
@@ -388,7 +388,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
                 20, 21, 22, 22, 23, 20, // back
             ];
 
-            factory.create_vertex_buffer_with_slice(&vertex_data, index_data)
+            device.create_vertex_buffer_with_slice(&vertex_data, index_data)
         };
         light_slice.instances = Some((NUM_LIGHTS as gfx::InstanceCount, 0));
 
@@ -406,7 +406,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
                 .. gfx_app::shade::Source::empty()
             };
 
-            let pso = factory.create_pipeline_simple(
+            let pso = device.create_pipeline_simple(
                 vs.select(backend).unwrap(),
                 ps.select(backend).unwrap(),
                 light::new()
@@ -414,8 +414,8 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
 
             let data = light::Data {
                 vbuf: light_vbuf.clone(),
-                locals_vs: factory.create_constant_buffer(1),
-                locals_ps: factory.create_constant_buffer(1),
+                locals_vs: device.create_constant_buffer(1),
+                locals_ps: device.create_constant_buffer(1),
                 light_pos_buf: light_pos_buffer.clone(),
                 tex_pos: (gpos.resource.clone(), sampler.clone()),
                 tex_normal: (gnormal.resource.clone(), sampler.clone()),
@@ -441,7 +441,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
                 .. gfx_app::shade::Source::empty()
             };
 
-            let pso = factory.create_pipeline_simple(
+            let pso = device.create_pipeline_simple(
                 vs.select(backend).unwrap(),
                 ps.select(backend).unwrap(),
                 emitter::new()
@@ -449,7 +449,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
 
             let data = emitter::Data {
                 vbuf: light_vbuf.clone(),
-                locals: factory.create_constant_buffer(1),
+                locals: device.create_constant_buffer(1),
                 light_pos_buf: light_pos_buffer.clone(),
                 out_color: res.target.clone(),
                 out_depth: depth_target.clone(),
@@ -582,13 +582,13 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         }
     }
 
-    fn on_resize_ext(&mut self, factory: &mut B::Factory, window_targets: gfx_app::WindowTargets<B::Resources>) {
+    fn on_resize_ext(&mut self, device: &mut B::Device, window_targets: gfx_app::WindowTargets<B::Resources>) {
         let (width, height, _, _) = window_targets.views[0].0.get_dimensions();
 
         let (gpos, gnormal, gdiffuse, depth_resource, depth_target) =
-            create_g_buffer(width, height, factory);
+            create_g_buffer(width, height, device);
         self.intermediate = {
-            let (_ , srv, rtv) = factory.create_render_target(width, height).unwrap();
+            let (_ , srv, rtv) = device.create_render_target(width, height).unwrap();
             ViewPair{ resource: srv, target: rtv }
         };
         self.views = window_targets.views;

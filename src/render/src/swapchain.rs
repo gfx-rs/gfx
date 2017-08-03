@@ -17,16 +17,16 @@
 //! This module serves as an extension to the `SwapChain` trait from the core. This module
 //! exposes extension functions and shortcuts to aid with handling the swapchain.
 
-use {format, handle, texture, Backend, Factory, SwapChain};
+use {format, handle, texture, Backend, Device, SwapChain};
 use memory::Typed;
 
 /// Extension trait for SwapChains
 ///
-/// Every `SwapChain` automatically implements `SwapChainExt`. 
+/// Every `SwapChain` automatically implements `SwapChainExt`.
 pub trait SwapChainExt<B: Backend>: SwapChain<B> {
     /// Create color RTVs for all backbuffer images.
     // TODO: error handling
-    fn create_color_views<T: format::RenderFormat>(&mut self, factory: &mut B::Factory) -> Vec<handle::RenderTargetView<B::Resources, T>> {
+    fn create_color_views<T: format::RenderFormat>(&mut self, device: &mut B::Device) -> Vec<handle::RenderTargetView<B::Resources, T>> {
         self.get_backbuffers()
             .iter()
             .map(|&(ref color, _)| {
@@ -35,8 +35,8 @@ pub trait SwapChainExt<B: Backend>: SwapChain<B> {
                     level: 0,
                     layer: None,
                 };
-                let rtv = factory.view_texture_as_render_target_raw(color, color_desc)
-                                 .unwrap();
+                let rtv = device.view_texture_as_render_target_raw(color, color_desc)
+                                .unwrap();
                 Typed::new(rtv)
             })
             .collect()

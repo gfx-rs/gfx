@@ -109,15 +109,15 @@ fn run<A, B, S>((width, height): (u32, u32),
     where A: Sized + Application<B>,
           B: Backend,
           S: gfx_core::Surface<B>,
-          B::Factory: shade::ShadeExt,
+          B::Device: shade::ShadeExt,
 {
     use shade::ShadeExt;
     use gfx::format::Formatted;
-    use gfx::traits::Factory;
+    use gfx::traits::Device;
     use gfx::texture;
 
     // Init device, requesting (at least) one graphics queue with presentation support
-    let gfx_core::Device { mut factory, mut graphics_queues, .. } =
+    let gfx_core::Gpu { mut device, mut graphics_queues, .. } =
         adapters[0].open_with(|family, ty| ((ty.supports_graphics() && surface.supports_queue(&family)) as u32, QueueType::Graphics));
     let mut queue = graphics_queues.pop().expect("Unable to find a graphics queue.");
 
@@ -136,7 +136,7 @@ fn run<A, B, S>((width, height): (u32, u32),
                     level: 0,
                     layer: None,
                 };
-                let rtv = factory.view_texture_as_render_target_raw(color, color_desc)
+                let rtv = device.view_texture_as_render_target_raw(color, color_desc)
                                  .unwrap();
 
                 let ds_desc = texture::DepthStencilDesc {
@@ -144,7 +144,7 @@ fn run<A, B, S>((width, height): (u32, u32),
                     layer: None,
                     flags: texture::DepthStencilFlags::empty(),
                 };
-                let dsv = factory.view_texture_as_depth_stencil_raw(
+                let dsv = device.view_texture_as_depth_stencil_raw(
                                     ds.as_ref().unwrap(),
                                     ds_desc)
                                  .unwrap();
@@ -153,8 +153,8 @@ fn run<A, B, S>((width, height): (u32, u32),
             })
             .collect();
 
-    let shader_backend = factory.shader_backend();
-    let mut app = A::new(&mut factory, &mut queue, shader_backend, WindowTargets {
+    let shader_backend = device.shader_backend();
+    let mut app = A::new(&mut device, &mut queue, shader_backend, WindowTargets {
         views: views,
         aspect_ratio: width as f32 / height as f32, //TODO
     });
@@ -164,9 +164,9 @@ fn run<A, B, S>((width, height): (u32, u32),
 
     // TODO: For optimal performance we should use a ring-buffer
     let sync = SyncPrimitives {
-        acquisition: factory.create_semaphore(),
-        rendering: factory.create_semaphore(),
-        frame_fence: factory.create_fence(false),
+        acquisition: device.create_semaphore(),
+        rendering: device.create_semaphore(),
+        frame_fence: device.create_fence(false),
     };
 
     let mut graphics_pool = queue.create_graphics_pool(1);
@@ -195,7 +195,7 @@ fn run<A, B, S>((width, height): (u32, u32),
         app.render((frame, &sync), &mut graphics_pool, &mut queue);
         swap_chain.present(&mut queue, &[]);
 
-        factory.wait_for_fences(&[&sync.frame_fence], gfx::WaitFor::All, 1_000_000);
+        device.wait_for_fences(&[&sync.frame_fence], gfx::WaitFor::All, 1_000_000);
         queue.cleanup();
         harness.bump();
     }
@@ -213,7 +213,7 @@ pub type DefaultBackend = gfx_device_metal::Backend;
 pub type DefaultBackend = gfx_device_vulkan::Backend;
 
 pub trait Application<B: Backend>: Sized {
-    fn new(&mut B::Factory, &mut GraphicsQueue<B>,
+    fn new(&mut B::Device, &mut GraphicsQueue<B>,
            shade::Backend, WindowTargets<B::Resources>) -> Self;
     fn render(&mut self, frame: (gfx_core::Frame, &SyncPrimitives<B::Resources>),
                      pool: &mut GraphicsCommandPool<B>, queue: &mut GraphicsQueue<B>);
@@ -222,7 +222,7 @@ pub trait Application<B: Backend>: Sized {
         Some(winit::VirtualKeyCode::Escape)
     }
     fn on_resize(&mut self, WindowTargets<B::Resources>) {}
-    fn on_resize_ext(&mut self, _factory: &mut B::Factory, targets: WindowTargets<B::Resources>) {
+    fn on_resize_ext(&mut self, _device: &mut B::Device, targets: WindowTargets<B::Resources>) {
         self.on_resize(targets);
     }
     fn on(&mut self, _event: winit::WindowEvent) {}

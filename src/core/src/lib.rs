@@ -43,7 +43,7 @@ use std::hash::Hash;
 
 pub use self::adapter::{Adapter, AdapterInfo};
 pub use self::command::CommandBuffer;
-pub use self::factory::Factory;
+pub use self::device::Device;
 pub use self::pool::{ComputeCommandPool, GeneralCommandPool, GraphicsCommandPool, RawCommandPool,
                      SubpassCommandPool, TransferCommandPool};
 pub use self::queue::{CommandQueue, QueueType, RawSubmission, Submission, QueueFamily,
@@ -56,7 +56,7 @@ pub mod adapter;
 pub mod buffer;
 pub mod command;
 pub mod dummy;
-pub mod factory;
+pub mod device;
 pub mod format;
 pub mod handle;
 pub mod mapping;
@@ -251,7 +251,7 @@ pub struct HeapType {
 pub trait Backend: 'static + Sized {
     type Adapter: Adapter<Self>;
     type CommandQueue: CommandQueue<Self>;
-    type Factory: Factory<Self::Resources>;
+    type Device: Device<Self::Resources>;
     type QueueFamily: QueueFamily;
     type Resources: Resources;
     type SubmitInfo: Clone + Send;
@@ -340,9 +340,9 @@ impl Error for SubmissionError {
 pub type SubmissionResult<T> = Result<T, SubmissionError>;
 
 ///
-pub struct Device<B: Backend> {
-    /// Resource factory.
-    pub factory: B::Factory,
+pub struct Gpu<B: Backend> {
+    /// Logical device.
+    pub device: B::Device,
     /// General command queues.
     pub general_queues: Vec<GeneralQueue<B>>,
     /// Graphics command queues.
@@ -355,9 +355,6 @@ pub struct Device<B: Backend> {
     pub heap_types: Vec<HeapType>,
     /// Memory heaps.
     pub memory_heaps: Vec<u64>,
-
-    ///
-    pub _marker: std::marker::PhantomData<B>,
 }
 
 /// Main entry point for window-less backend initialization.

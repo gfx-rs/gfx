@@ -18,8 +18,8 @@ extern crate gfx_window_glutin;
 extern crate glutin;
 
 use gfx::format::Formatted;
-use gfx::traits::FactoryExt;
-use gfx::{Adapter, CommandQueue, Factory, FrameSync, GraphicsPoolExt,
+use gfx::traits::DeviceExt;
+use gfx::{Adapter, CommandQueue, Device, FrameSync, GraphicsPoolExt,
           Surface, SwapChain, SwapChainExt, WindowExt};
 
 pub type ColorFormat = gfx::format::Rgba8;
@@ -56,8 +56,8 @@ pub fn main() {
     let window = glutin::GlWindow::new(wb, gl_builder, &events_loop).unwrap();
 
     let (mut surface, adapters) = gfx_window_glutin::Window::new(window).get_surface_and_adapters();
-    // Open device (factory and queues)
-    let gfx::Device { mut factory, mut graphics_queues, .. } =
+    // Open gpu (device and queues)
+    let gfx::Gpu { mut device, mut graphics_queues, .. } =
         adapters[0].open_with(|family, ty| {
             ((ty.supports_graphics() && surface.supports_queue(&family)) as u32, gfx::QueueType::Graphics)
         });
@@ -67,18 +67,18 @@ pub fn main() {
     let config = gfx::SwapchainConfig::new()
                     .with_color::<ColorFormat>();
     let mut swap_chain = surface.build_swapchain(config, &graphics_queue);
-    let views = swap_chain.create_color_views(&mut factory);
+    let views = swap_chain.create_color_views(&mut device);
 
-    let pso = factory.create_pipeline_simple(
+    let pso = device.create_pipeline_simple(
         include_bytes!("shader/quad_150.glslv"),
         include_bytes!("shader/quad_150.glslf"),
         pipe::new()
     ).unwrap();
-    let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&QUAD, &[0u16, 1, 2, 2, 3, 0] as &[u16]);
+    let (vertex_buffer, slice) = device.create_vertex_buffer_with_slice(&QUAD, &[0u16, 1, 2, 2, 3, 0] as &[u16]);
     let mut graphics_pool = graphics_queue.create_graphics_pool(1);
-    let frame_semaphore = factory.create_semaphore();
-    let draw_semaphore = factory.create_semaphore();
-    let frame_fence = factory.create_fence(false);
+    let frame_semaphore = device.create_semaphore();
+    let draw_semaphore = device.create_semaphore();
+    let frame_fence = device.create_fence(false);
 
     let mut data = pipe::Data {
         vbuf: vertex_buffer,
@@ -118,7 +118,7 @@ pub fn main() {
         }
 
         swap_chain.present(&mut graphics_queue, &[&draw_semaphore]);
-        factory.wait_for_fences(&[&frame_fence], gfx::WaitFor::All, 1_000_000);
+        device.wait_for_fences(&[&frame_fence], gfx::WaitFor::All, 1_000_000);
         graphics_queue.cleanup();
         graphics_pool.reset();
     }

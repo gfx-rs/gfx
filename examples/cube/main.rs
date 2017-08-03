@@ -20,7 +20,7 @@ extern crate gfx_app;
 use gfx_app::{BackbufferView, ColorFormat, DepthFormat};
 
 use cgmath::{Deg, Matrix4, Point3, Vector3};
-use gfx::{Bundle, Factory, texture};
+use gfx::{Bundle, Device, texture};
 use gfx::GraphicsPoolExt;
 
 // Declare the vertex format suitable for drawing,
@@ -65,12 +65,12 @@ struct App<B: gfx::Backend> {
 }
 
 impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
-    fn new(factory: &mut B::Factory,
+    fn new(device: &mut B::Device,
            _: &mut gfx::queue::GraphicsQueue<B>,
            backend: gfx_app::shade::Backend,
            window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
     {
-        use gfx::traits::FactoryExt;
+        use gfx::traits::DeviceExt;
 
         let vs = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/cube_120.glslv"),
@@ -133,10 +133,10 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
             20, 21, 22, 22, 23, 20, // back
         ];
 
-        let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, index_data);
+        let (vbuf, slice) = device.create_vertex_buffer_with_slice(&vertex_data, index_data);
 
         let texels = [[0x20, 0xA0, 0xC0, 0x00]];
-        let (_, texture_view) = factory.create_texture_immutable::<gfx::format::Rgba8>(
+        let (_, texture_view) = device.create_texture_immutable::<gfx::format::Rgba8>(
             texture::Kind::D2(1, 1, texture::AaMode::Single), &[&texels]
             ).unwrap();
 
@@ -144,7 +144,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
             texture::FilterMethod::Bilinear,
             texture::WrapMode::Clamp);
 
-        let pso = factory.create_pipeline_simple(
+        let pso = device.create_pipeline_simple(
             vs.select(backend).unwrap(),
             ps.select(backend).unwrap(),
             pipe::new()
@@ -155,8 +155,8 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         let data = pipe::Data {
             vbuf: vbuf,
             transform: (proj * default_view()).into(),
-            locals: factory.create_constant_buffer(1),
-            color: (texture_view, factory.create_sampler(sinfo)),
+            locals: device.create_constant_buffer(1),
+            color: (texture_view, device.create_sampler(sinfo)),
             out_color: window_targets.views[0].0.clone(),
             out_depth: window_targets.views[0].1.clone(),
         };

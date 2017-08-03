@@ -18,7 +18,7 @@ extern crate gfx;
 extern crate gfx_app;
 extern crate winit;
 
-use gfx::{Factory, GraphicsPoolExt};
+use gfx::{Device, GraphicsPoolExt};
 use gfx_app::{ColorFormat, DepthFormat};
 
 #[cfg(feature="metal")]
@@ -92,10 +92,10 @@ const MAX_LIGHTS: usize = 10;
 // Section-2: simple primitives generation
 //TODO: replace by genmesh
 
-fn create_cube<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
+fn create_cube<R: gfx::Resources, D: gfx::Device<R>>(device: &mut D)
                -> (gfx::handle::Buffer<R, Vertex>, gfx::Slice<R>)
 {
-    use gfx::traits::FactoryExt;
+    use gfx::traits::DeviceExt;
     let vertex_data = [
         // top (0, 0, 1)
         Vertex::new([-1, -1,  1], [0, 0, 1]),
@@ -138,13 +138,13 @@ fn create_cube<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F)
         20, 21, 22, 22, 23, 20, // back
     ];
 
-    factory.create_vertex_buffer_with_slice(&vertex_data, index_data)
+    device.create_vertex_buffer_with_slice(&vertex_data, index_data)
 }
 
-fn create_plane<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F, size: i8)
+fn create_plane<R: gfx::Resources, D: gfx::Device<R>>(device: &mut D, size: i8)
                 -> (gfx::handle::Buffer<R, Vertex>, gfx::Slice<R>)
 {
-    use gfx::traits::FactoryExt;
+    use gfx::traits::DeviceExt;
     let vertex_data = [
         Vertex::new([ size, -size,  0], [0, 0, 1]),
         Vertex::new([ size,  size,  0], [0, 0, 1]),
@@ -157,7 +157,7 @@ fn create_plane<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F, size: i8
         2, 1, 3
     ];
 
-    factory.create_vertex_buffer_with_slice(&vertex_data, index_data)
+    device.create_vertex_buffer_with_slice(&vertex_data, index_data)
 }
 
 //----------------------------------------
@@ -203,7 +203,7 @@ struct Scene<B: gfx::Backend> {
 
 /// Create a full scene
 fn create_scene<B>(
-    factory: &mut B::Factory,
+    device: &mut B::Device,
     queue: &mut gfx::queue::GraphicsQueue<B>,
     out_color: gfx::handle::RenderTargetView<B::Resources, ColorFormat>,
     out_depth: gfx::handle::DepthStencilView<B::Resources, DepthFormat>,
@@ -212,7 +212,7 @@ where
     B: gfx::Backend
 {
     use cgmath::{InnerSpace, SquareMatrix};
-    use gfx::traits::FactoryExt;
+    use gfx::traits::DeviceExt;
 
     // create shadows
     let (shadow_tex, shadow_resource) = {
@@ -220,8 +220,8 @@ where
         let kind = t::Kind::D2Array(512, 512, MAX_LIGHTS as gfx::Layer, t::AaMode::Single);
         let bind = gfx::SHADER_RESOURCE | gfx::DEPTH_STENCIL;
         let cty = gfx::format::ChannelType::Unorm;
-        let tex = factory.create_texture(kind, 1, bind, gfx::memory::Usage::Data, Some(cty)).unwrap();
-        let resource = factory.view_texture_as_shader_resource::<Depth>(
+        let tex = device.create_texture(kind, 1, bind, gfx::memory::Usage::Data, Some(cty)).unwrap();
+        let resource = device.view_texture_as_shader_resource::<Depth>(
             &tex, (0, 0), gfx::format::Swizzle::new()).unwrap();
         (tex, resource)
     };
@@ -232,7 +232,7 @@ where
             t::WrapMode::Clamp
         );
         sinfo.comparison = Some(gfx::state::Comparison::LessEqual);
-        factory.create_sampler(sinfo)
+        device.create_sampler(sinfo)
     };
 
     // create lights
@@ -270,12 +270,12 @@ where
             far: far,
         }.to_perspective(),
         color: desc.color.clone(),
-        shadow: factory.view_texture_as_depth_stencil(
+        shadow: device.view_texture_as_depth_stencil(
             &shadow_tex, 0, Some(i as gfx::Layer), gfx::texture::DepthStencilFlags::empty(),
             ).unwrap(),
         pool: queue.create_graphics_pool(1),
     }).collect();
-    let light_buf = factory.create_constant_buffer(MAX_LIGHTS);
+    let light_buf = device.create_constant_buffer(MAX_LIGHTS);
 
     // create entities
     struct CubeDesc {
@@ -307,7 +307,7 @@ where
         },
     ];
 
-    let (cube_buf, cube_slice) = create_cube(factory);
+    let (cube_buf, cube_slice) = create_cube(device);
     let locals = ForwardPsLocals {
         color: [1.0, 1.0, 1.0, 1.0],
         num_lights: lights.len() as i32,
@@ -316,8 +316,8 @@ where
 
     let mut fw_data = forward::Data {
         vbuf: cube_buf.clone(),
-        vs_locals: factory.create_constant_buffer(1),
-        ps_locals: factory.create_buffer_immutable(&[locals],
+        vs_locals: device.create_constant_buffer(1),
+        ps_locals: device.create_buffer_immutable(&[locals],
             gfx::buffer::Role::Constant, gfx::Bind::empty()
             ).unwrap(),
         light_buf: light_buf.clone(),
@@ -328,9 +328,9 @@ where
 
     let mut sh_data = shadow::Data {
         vbuf: cube_buf,
-        locals: factory.create_constant_buffer(1),
+        locals: device.create_constant_buffer(1),
         // the output here is temporary, will be overwritten for every light source
-        out: factory.view_texture_as_depth_stencil(&shadow_tex, 0, None,
+        out: device.view_texture_as_depth_stencil(&shadow_tex, 0, None,
             gfx::texture::DepthStencilFlags::empty()).unwrap(),
     };
 
@@ -353,7 +353,7 @@ where
         }
     }).collect();
 
-    let (plane_buf, plane_slice) = create_plane(factory, 7);
+    let (plane_buf, plane_slice) = create_plane(device, 7);
     fw_data.vbuf = plane_buf.clone();
     sh_data.vbuf = plane_buf;
 
@@ -427,13 +427,13 @@ impl<B: gfx::Backend> App<B> {
 }
 
 impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
-    fn new(factory: &mut B::Factory,
+    fn new(device: &mut B::Device,
            queue: &mut gfx::queue::GraphicsQueue<B>,
            backend: gfx_app::shade::Backend,
            window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
     {
         use std::env;
-        use gfx::traits::FactoryExt;
+        use gfx::traits::DeviceExt;
         use gfx_app::shade::Source;
 
         let mut is_parallel = true;
@@ -459,7 +459,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
                 msl_11:   include_bytes!("shader/forward_frag.metal"),
                 .. Source::empty()
             };
-            factory.create_pipeline_simple(
+            device.create_pipeline_simple(
                 vs.select(backend).unwrap(),
                 ps.select(backend).unwrap(),
                 forward::new()).unwrap()
@@ -478,11 +478,11 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
                 msl_11:   b"\n",
                 .. Source::empty()
             };
-            let set = factory.create_shader_set(
+            let set = device.create_shader_set(
                 vs.select(backend).unwrap(),
                 ps.select(backend).unwrap()
                 ).unwrap();
-            factory.create_pipeline_state(&set,
+            device.create_pipeline_state(&set,
                 gfx::Primitive::TriangleList,
                 gfx::state::Rasterizer::new_fill()
                                        .with_cull_back()
@@ -491,7 +491,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
                 ).unwrap()
         };
 
-        let scene = create_scene(factory, queue,
+        let scene = create_scene(device, queue,
             window_targets.views[0].0.clone(),
             window_targets.views[0].1.clone(),
             shadow_pso);

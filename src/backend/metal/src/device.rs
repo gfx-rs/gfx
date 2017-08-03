@@ -20,7 +20,7 @@ use std::path::Path;
 // use cocoa::base::{selector, class};
 // use cocoa::foundation::{NSUInteger};
 
-use core::{self, buffer, factory, mapping, memory};
+use core::{self, buffer, device, mapping, memory};
 use core::handle::{self, Producer};
 use core::memory::Typed;
 
@@ -56,15 +56,15 @@ impl mapping::Gate<Resources> for RawMapping {
 }
 
 
-pub struct Factory {
+pub struct Device {
     device: MTLDevice,
     share: Arc<Share>,
     frame_handles: handle::Manager<Resources>,
 }
 
-impl Factory {
-    pub fn new(device: MTLDevice, share: Arc<Share>) -> Factory {
-        Factory {
+impl Device {
+    pub fn new(device: MTLDevice, share: Arc<Share>) -> Device {
+        Device {
             device: device,
             share: share,
             frame_handles: handle::Manager::new(),
@@ -232,7 +232,7 @@ impl Factory {
 }
 
 
-impl core::Factory<Resources> for Factory {
+impl core::Device<Resources> for Device {
     fn get_capabilities(&self) -> &core::Capabilities {
         &self.share.capabilities
     }
@@ -641,24 +641,24 @@ impl core::Factory<Resources> for Factory {
         (&mut self,
          _hbuf: &handle::RawBuffer<Resources>,
          _: core::format::Format)
-         -> Result<handle::RawShaderResourceView<Resources>, factory::ResourceViewError> {
+         -> Result<handle::RawShaderResourceView<Resources>, device::ResourceViewError> {
         unimplemented!()
-        // Err(factory::ResourceViewError::Unsupported) //TODO
+        // Err(device::ResourceViewError::Unsupported) //TODO
     }
 
     fn view_buffer_as_unordered_access_raw
         (&mut self,
          _hbuf: &handle::RawBuffer<Resources>)
-         -> Result<handle::RawUnorderedAccessView<Resources>, factory::ResourceViewError> {
+         -> Result<handle::RawUnorderedAccessView<Resources>, device::ResourceViewError> {
         unimplemented!()
-        // Err(factory::ResourceViewError::Unsupported) //TODO
+        // Err(device::ResourceViewError::Unsupported) //TODO
     }
 
     fn view_texture_as_shader_resource_raw
         (&mut self,
          htex: &handle::RawTexture<Resources>,
          _desc: core::texture::ResourceDesc)
-         -> Result<handle::RawShaderResourceView<Resources>, factory::ResourceViewError> {
+         -> Result<handle::RawShaderResourceView<Resources>, device::ResourceViewError> {
         // use winapi::UINT;
         // use core::texture::{AaMode, Kind};
         // use data::map_format;
@@ -716,8 +716,8 @@ impl core::Factory<Resources> for Factory {
     fn view_texture_as_unordered_access_raw
         (&mut self,
          _htex: &handle::RawTexture<Resources>)
-         -> Result<handle::RawUnorderedAccessView<Resources>, factory::ResourceViewError> {
-        // Err(factory::ResourceViewError::Unsupported) //TODO
+         -> Result<handle::RawUnorderedAccessView<Resources>, device::ResourceViewError> {
+        // Err(device::ResourceViewError::Unsupported) //TODO
         unimplemented!()
     }
 
@@ -725,7 +725,7 @@ impl core::Factory<Resources> for Factory {
         (&mut self,
          htex: &handle::RawTexture<Resources>,
          desc: core::texture::RenderDesc)
-         -> Result<handle::RawRenderTargetView<Resources>, factory::TargetViewError> {
+         -> Result<handle::RawRenderTargetView<Resources>, device::TargetViewError> {
         let raw_tex = self.frame_handles.ref_texture(htex).0;
         let size = htex.get_info().kind.get_level_dimensions(desc.level);
         Ok(self.share.handles.borrow_mut().make_rtv(n::Rtv(raw_tex.0), htex, size))
@@ -735,7 +735,7 @@ impl core::Factory<Resources> for Factory {
         (&mut self,
          htex: &handle::RawTexture<Resources>,
          desc: core::texture::DepthStencilDesc)
-         -> Result<handle::RawDepthStencilView<Resources>, factory::TargetViewError> {
+         -> Result<handle::RawDepthStencilView<Resources>, device::TargetViewError> {
         // use winapi::UINT;
         // use core::texture::{AaMode, Kind};
         // use data::{map_format, map_dsv_flags};
@@ -847,7 +847,7 @@ impl core::Factory<Resources> for Factory {
         }
     }
 
-    fn wait_for_fences(&mut self, fences: &[&handle::Fence<Resources>], wait: factory::WaitFor, timeout_ms: u32) -> bool {
+    fn wait_for_fences(&mut self, fences: &[&handle::Fence<Resources>], wait: device::WaitFor, timeout_ms: u32) -> bool {
         warn!("`wait_for_fences` not implemented!");
         true
     }

@@ -45,7 +45,7 @@ extern crate gfx_device_gl as device_gl;
 
 use core::handle;
 use core::format::{ChannelType, DepthFormat, Format, RenderFormat};
-pub use device_gl::{Backend, Factory, Resources};
+pub use device_gl::{Backend, Resources};
 use sdl2::video::{DisplayMode, GLContext, WindowBuilder, WindowBuildError};
 use sdl2::pixels::PixelFormatEnum;
 use core::{format, memory, texture};

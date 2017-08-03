@@ -40,15 +40,15 @@ use std::ops::Deref;
 use std::sync::Arc;
 // use std::{mem, ptr};
 
-mod factory;
 mod command;
+mod device;
 mod encoder;
 mod mirror;
 mod map;
 pub mod native;
 mod pool;
 
-pub use self::factory::Factory;
+pub use self::device::Device;
 pub use self::map::*;
 
 // Grabbed from https://developer.apple.com/metal/limits/
@@ -90,7 +90,7 @@ pub struct Adapter {
 
 impl core::Adapter<Backend> for Adapter {
     fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)])
-        -> core::Device<Backend>
+        -> core::Gpu<Backend>
     {
         // Single queue family supported only
         assert_eq!(queue_descs.len(), 1);
@@ -143,17 +143,16 @@ impl core::Adapter<Backend> for Adapter {
         };
 
         unsafe { self.device.retain(); }
-        let factory = Factory::new(self.device, Arc::new(share));
+        let device = Device::new(self.device, Arc::new(share));
 
-        let mut device = core::Device {
-            factory,
+        let mut gpu = core::Gpu {
+            device,
             general_queues: Vec::new(),
             graphics_queues: Vec::new(),
             compute_queues: Vec::new(),
             transfer_queues: Vec::new(),
             heap_types: Vec::new(),
             memory_heaps: Vec::new(),
-            _marker: PhantomData,
         };
 
         let raw_queue = || {
@@ -166,23 +165,23 @@ impl core::Adapter<Backend> for Adapter {
                 unsafe {
                     match queue_type {
                         QueueType::General => {
-                            device.general_queues.push(core::GeneralQueue::new(raw_queue()));
+                            gpu.general_queues.push(core::GeneralQueue::new(raw_queue()));
                         }
                         QueueType::Graphics => {
-                            device.graphics_queues.push(core::GraphicsQueue::new(raw_queue()));
+                            gpu.graphics_queues.push(core::GraphicsQueue::new(raw_queue()));
                         }
                         QueueType::Compute => {
-                            device.compute_queues.push(core::ComputeQueue::new(raw_queue()));
+                            gpu.compute_queues.push(core::ComputeQueue::new(raw_queue()));
                         }
                         QueueType::Transfer => {
-                            device.transfer_queues.push(core::TransferQueue::new(raw_queue()));
+                            gpu.transfer_queues.push(core::TransferQueue::new(raw_queue()));
                         }
                     }
                 }
             }
         }
 
-        device
+        gpu
     }
 
     fn get_info(&self) -> &core::AdapterInfo {
@@ -337,7 +336,7 @@ impl core::Backend for Backend {
     type RawCommandBuffer = command::RawCommandBuffer;
     type SubpassCommandBuffer = command::SubpassCommandBuffer;
     type SubmitInfo = command::SubmitInfo;
-    type Factory = Factory;
+    type Device = Device;
     type QueueFamily = QueueFamily;
 
     type RawCommandPool = pool::RawCommandPool;
@@ -359,7 +358,7 @@ impl core::Resources for Resources {
     type Sampler = native::Sampler;
     type Fence = native::Fence;
     type Semaphore = native::Semaphore;
-    type Mapping = factory::RawMapping;
+    type Mapping = device::RawMapping;
 }
 
 /// Internal struct of shared data.

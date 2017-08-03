@@ -35,7 +35,7 @@ use std::collections::VecDeque;
 
 mod command;
 pub mod data;
-mod factory;
+mod device;
 pub mod native;
 mod pool;
 
@@ -223,7 +223,7 @@ pub struct Adapter {
 }
 
 impl core::Adapter<Backend> for Adapter {
-    fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)]) -> core::Device<Backend>
+    fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)]) -> core::Gpu<Backend>
     {
         let mut queue_priorities = Vec::with_capacity(queue_descs.len());
 
@@ -272,8 +272,8 @@ impl core::Adapter<Backend> for Adapter {
             }
         };
 
-        let factory = Factory {
-            device: Arc::new(RawDevice(device_raw)),
+        let device = Device {
+            raw: Arc::new(RawDevice(device_raw)),
         };
 
         let mem_properties =  self.instance.raw.get_physical_device_memory_properties(self.handle);
@@ -309,7 +309,7 @@ impl core::Adapter<Backend> for Adapter {
         let queues = queue_infos.iter().flat_map(|info| {
             (0..info.queue_count).map(|id| {
                 let queue = unsafe {
-                    factory.device.0.get_device_queue(info.queue_family_index, id)
+                    device.raw.0.get_device_queue(info.queue_family_index, id)
                 };
                 unimplemented!()
                 /*
@@ -317,7 +317,7 @@ impl core::Adapter<Backend> for Adapter {
                 unsafe {
                     core::GeneralQueue::new(CommandQueue {
                         inner: CommandQueueInner(Rc::new(RefCell::new(queue))),
-                        device: factory.device.clone(),
+                        device: device.device.clone(),
                         family_index: info.queue_family_index,
                     })
                 }
@@ -325,16 +325,14 @@ impl core::Adapter<Backend> for Adapter {
             }).collect::<Vec<_>>()
         }).collect();
 
-        core::Device {
-            factory: factory,
+        core::Gpu {
+            device,
             general_queues: queues,
             graphics_queues: Vec::new(),
             compute_queues: Vec::new(),
             transfer_queues: Vec::new(),
-            heap_types: heap_types,
-            memory_heaps: memory_heaps,
-
-            _marker: std::marker::PhantomData,
+            heap_types,
+            memory_heaps,
         }
     }
 
@@ -413,8 +411,8 @@ impl core::CommandQueue<Backend> for CommandQueue {
     }
 }
 
-pub struct Factory {
-    device: Arc<RawDevice>,
+pub struct Device {
+    raw: Arc<RawDevice>,
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
@@ -426,7 +424,7 @@ impl core::Backend for Backend {
     type RawCommandBuffer = command::CommandBuffer;
     type SubpassCommandBuffer = command::SubpassCommandBuffer;
     type SubmitInfo = command::SubmitInfo;
-    type Factory = Factory;
+    type Device = Device;
     type QueueFamily = QueueFamily;
 
     type RawCommandPool = pool::RawCommandPool;

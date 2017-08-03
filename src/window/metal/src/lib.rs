@@ -50,7 +50,7 @@ use core::format::{ChannelType, RenderFormat, SurfaceType, Format};
 use core::handle::{RawRenderTargetView, RenderTargetView};
 use core::memory::Typed;
 
-use device_metal::{native, Factory, Resources};
+use device_metal::{native, Resources};
 
 use metal::*;
 use std::cell::RefCell;

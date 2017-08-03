@@ -19,7 +19,7 @@ extern crate winit;
 extern crate gfx_app;
 
 use rand::Rng;
-use gfx::{Factory, GraphicsPoolExt};
+use gfx::{Device, GraphicsPoolExt};
 use gfx_app::{BackbufferView, ColorFormat};
 
 const QUAD_VERTICES: [Vertex; 4] = [
@@ -90,12 +90,12 @@ struct App<B: gfx::Backend> {
 }
 
 impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
-    fn new(factory: &mut B::Factory,
+    fn new(device: &mut B::Device,
            _: &mut gfx::queue::GraphicsQueue<B>,
            backend: gfx_app::shade::Backend,
            window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
     {
-        use gfx::traits::FactoryExt;
+        use gfx::traits::DeviceExt;
 
         let vs = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/instancing_120.glslv"),
@@ -120,26 +120,26 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
          let size = 1.6 / instances_per_length as f32;
         println!("size: {}", size);
 
-        let upload = factory.create_upload_buffer(instance_count as usize).unwrap();
+        let upload = device.create_upload_buffer(instance_count as usize).unwrap();
         {
-            let mut writer = factory.write_mapping(&upload).unwrap();
+            let mut writer = device.write_mapping(&upload).unwrap();
             fill_instances(&mut writer, instances_per_length, size);
         }
 
-        let instances = factory
+        let instances = device
             .create_buffer(instance_count as usize,
                            gfx::buffer::Role::Vertex,
                            gfx::memory::Usage::Data,
                            gfx::TRANSFER_DST).unwrap();
 
 
-        let (quad_vertices, mut slice) = factory
+        let (quad_vertices, mut slice) = device
             .create_vertex_buffer_with_slice(&QUAD_VERTICES, &QUAD_INDICES[..]);
         slice.instances = Some((instance_count, 0));
         let locals = Locals { scale: size };
 
         App {
-            pso: factory.create_pipeline_simple(
+            pso: device.create_pipeline_simple(
                 vs.select(backend).unwrap(),
                 fs.select(backend).unwrap(),
                 pipe::new()
@@ -148,7 +148,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
                 vertex: quad_vertices,
                 instance: instances,
                 scale: size,
-                locals: factory
+                locals: device
                     .create_buffer_immutable(&[locals], gfx::buffer::Role::Constant, gfx::Bind::empty())
                     .unwrap(),
                 out: window_targets.views[0].0.clone(),
@@ -178,7 +178,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
                .expect("Could not flush encoder");
     }
 
-    // TODO: rerandomize instance data on event, needs factory
+    // TODO: rerandomize instance data on event, needs device
 
     fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<B::Resources>) {
         self.views = window_targets.views;

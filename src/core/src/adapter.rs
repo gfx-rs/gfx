@@ -16,11 +16,11 @@
 //!
 //! Adapters are the main entry point for opening a [Device](../struct.Device).
 
-use {Backend, Device, QueueType};
+use {Backend, Gpu, QueueType};
 
 /// Represents a physical or virtual device, which is capable of running the backend.
 pub trait Adapter<B: Backend>: Sized {
-    /// Create a new device with the specified queues.
+    /// Create a new logical gpu with the specified queues.
     ///
     /// # Examples
     ///
@@ -34,11 +34,11 @@ pub trait Adapter<B: Backend>: Sized {
     ///                         .map(|&(ref family, ty)|
     ///                             (family, ty, family.num_queues()))
     ///                         .collect::<Vec<_>>();
-    /// let device = adapter.open(&queue_desc);
+    /// let gpu = adapter.open(&queue_desc);
     /// ```
-    fn open(&self, queue_descs: &[(&B::QueueFamily, QueueType, u32)]) -> Device<B>;
+    fn open(&self, queue_descs: &[(&B::QueueFamily, QueueType, u32)]) -> Gpu<B>;
 
-    /// Create a new device with the specified queues.
+    /// Create a new gpu with the specified queues.
     ///
     /// Takes an closure and creates the number of queues for each queue type
     /// as returned by the closure. Queues returning a number of 0 will be filtered out.
@@ -51,14 +51,14 @@ pub trait Adapter<B: Backend>: Sized {
     ///
     /// # let adapter: DummyAdapter = return;
     /// # let surface: DummySurface = return;
-    /// // Open a device with a graphics queue, which can be used for presentation.
+    /// // Open a gpu with a graphics queue, which can be used for presentation.
     /// // GeneralQueues will be downcasted to GraphicsQueues.
-    /// let device = adapter.open_with(|family, ty| {
+    /// let gpu = adapter.open_with(|family, ty| {
     ///     ((ty.supports_graphics() && surface.supports_queue(&family)) as u32, QueueType::Graphics)
     /// });
     ///
     /// ```
-    fn open_with<F>(&self, mut f: F) -> Device<B>
+    fn open_with<F>(&self, mut f: F) -> Gpu<B>
     where
         F: FnMut(&B::QueueFamily, QueueType) -> (u32, QueueType),
     {
