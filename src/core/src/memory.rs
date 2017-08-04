@@ -175,3 +175,15 @@ bitflags!(
         const LAZILY_ALLOCATED = 0x20,
     }
 );
+
+///
+#[derive(Clone, Copy, Debug)]
+pub struct MemoryBarrier;
+
+///
+#[derive(Clone, Copy, Debug)]
+pub struct BufferBarrier;
+
+///
+#[derive(Clone, Copy, Debug)]
+pub struct ImageBarrier;
