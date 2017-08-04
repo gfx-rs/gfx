@@ -38,7 +38,7 @@ where
     }
 
     ///
-    fn pipeline_barrier(
+    pub fn pipeline_barrier(
         &mut self,
         memory_barriers: &[memory::MemoryBarrier],
         buffer_barriers: &[memory::BufferBarrier],
@@ -48,7 +48,7 @@ where
     }
 
     ///
-    fn clear_depth_stencil(
+    pub fn clear_depth_stencil(
         &mut self,
         dsv: &B::DepthStencilView,
         depth_value: Option<target::Depth>,
@@ -58,23 +58,27 @@ where
     }
 
     ///
-    fn update_buffer(&mut self, buffer: &B::Buffer, data: &[u8], offset: usize) {
+    pub fn update_buffer(&mut self, buffer: &B::Buffer, data: &[u8], offset: usize) {
         self.0.update_buffer(buffer, data, offset)
     }
 
-    fn copy_buffer(&mut self, src: &B::Buffer, dst: &B::Buffer, regions: &[BufferCopy]) {
+    ///
+    pub fn copy_buffer(&mut self, src: &B::Buffer, dst: &B::Buffer, regions: &[BufferCopy]) {
         self.0.copy_buffer(src, dst, regions)
     }
 
-    fn copy_image(&mut self, src: &B::Image, dst: &B::Image) {
+    ///
+    pub fn copy_image(&mut self, src: &B::Image, dst: &B::Image) {
         self.0.copy_image(src, dst)
     }
 
-    fn copy_buffer_to_image(&mut self, src: &B::Buffer, dst: &B::Image, layout: texture::ImageLayout, regions: &[BufferImageCopy]) {
+    ///
+    pub fn copy_buffer_to_image(&mut self, src: &B::Buffer, dst: &B::Image, layout: texture::ImageLayout, regions: &[BufferImageCopy]) {
         self.0.copy_buffer_to_image(src, dst, layout, regions)
     }
 
-    fn copy_image_to_buffer(&mut self) {
+    ///
+    pub fn copy_image_to_buffer(&mut self) {
         self.0.copy_image_to_buffer()
     }
 }

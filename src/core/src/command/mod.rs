@@ -23,6 +23,7 @@ mod compute;
 mod general;
 mod graphics;
 mod raw;
+mod renderpass;
 mod transfer;
 
 pub use self::access::AccessInfo;
@@ -115,6 +116,7 @@ pub struct BufferCopy {
     pub size: u64,
 }
 
+///
 pub struct BufferImageCopy {
     ///
     pub buffer_offset: u64,

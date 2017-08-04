@@ -16,7 +16,7 @@
 //!
 //! # Overview
 //! A `PipelineState` holds all information needed to manage a graphics pipeline. It contains
-//! information about the shaders used, and on how to bind variables to these shaders. A 
+//! information about the shaders used, and on how to bind variables to these shaders. A
 //! `PipelineState` manifests itself in the form of a Pipeline State Object, or PSO in short.
 //!
 //! A Pipeline State Object exists out of different components. Every component represents
@@ -27,10 +27,10 @@
 //! macro. This macro creates three different structures:
 //!
 //! - The `Init` structure contains the location of every PSO component. During shader linking,
-//!   this is used to construct the `Meta` structure. 
+//!   this is used to construct the `Meta` structure.
 //! - The `Meta` structure contains the layout of every PSO. Using the `Meta` structure, the right
 //!   data is mapped to the right components.
-//! - The `Data` structure contains the data of all components, to be sent to the GPU. 
+//! - The `Data` structure contains the data of all components, to be sent to the GPU.
 //!
 //! # Construction and Handling
 //! A Pipeline State Object is constructed by a factory, from its `Init` structure, a `Rasterizer`,
@@ -58,21 +58,21 @@ pub use core::command::AccessInfo;
 /// format and layout to expect from each resource.
 #[allow(missing_docs)]
 #[derive(Clone, Debug, PartialEq)]
-pub struct RawDataSet<R: c::Resources>{
-    pub vertex_buffers: c::pso::VertexBufferSet<R>,
-    pub constant_buffers: Vec<c::pso::ConstantBufferParam<R>>,
+pub struct RawDataSet<B: c::Backend>{
+    pub vertex_buffers: c::pso::VertexBufferSet<B>,
+    pub constant_buffers: Vec<c::pso::ConstantBufferParam<B>>,
     pub global_constants: Vec<(c::shade::Location, c::shade::UniformValue)>,
-    pub resource_views: Vec<c::pso::ResourceViewParam<R>>,
-    pub unordered_views: Vec<c::pso::UnorderedViewParam<R>>,
-    pub samplers: Vec<c::pso::SamplerParam<R>>,
-    pub pixel_targets: c::pso::PixelTargetSet<R>,
+    pub resource_views: Vec<c::pso::ResourceViewParam<B>>,
+    pub unordered_views: Vec<c::pso::UnorderedViewParam<B>>,
+    pub samplers: Vec<c::pso::SamplerParam<B>>,
+    pub pixel_targets: c::pso::PixelTargetSet<B>,
     pub ref_values: c::state::RefValues,
     pub scissor: c::target::Rect,
 }
 
-impl<R: c::Resources> RawDataSet<R> {
+impl<B: c::Backend> RawDataSet<B> {
     /// Create an empty data set.
-    pub fn new() -> RawDataSet<R> {
+    pub fn new() -> RawDataSet<B> {
         RawDataSet {
             vertex_buffers: c::pso::VertexBufferSet::new(),
             constant_buffers: Vec::new(),
@@ -258,31 +258,31 @@ pub trait PipelineInit {
 }
 
 /// a service trait implemented the "data" structure of PSO.
-pub trait PipelineData<R: c::Resources> {
+pub trait PipelineData<B: c::Backend> {
     /// The associated "meta" struct.
     type Meta;
     /// Dump all the contained data into the raw data set,
     /// given the mapping ("meta"), and a handle manager.
     fn bake_to(&self,
-               &mut RawDataSet<R>,
+               &mut RawDataSet<B>,
                &Self::Meta,
-               &mut c::handle::Manager<R>,
-               &mut AccessInfo<R>);
+               &mut c::handle::Manager<B>,
+               &mut AccessInfo<B>);
 }
 
 /// A strongly typed Pipleline State Object. See the module documentation for more information.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct PipelineState<R: c::Resources, M>(c::handle::RawPipelineState<R>,
+pub struct PipelineState<B: c::Backend, M>(c::handle::RawPipelineState<B>,
                                              c::Primitive, M);
 
-impl<R: c::Resources, M> PipelineState<R, M> {
+impl<B: c::Backend, M> PipelineState<B, M> {
     /// Create a new PSO from a raw handle and the "meta" instance.
-    pub fn new(raw: c::handle::RawPipelineState<R>, prim: c::Primitive, meta: M)
-               -> PipelineState<R, M> {
+    pub fn new(raw: c::handle::RawPipelineState<B>, prim: c::Primitive, meta: M)
+               -> PipelineState<B, M> {
         PipelineState(raw, prim, meta)
     }
     /// Get a raw handle reference.
-    pub fn get_handle(&self) -> &c::handle::RawPipelineState<R> {
+    pub fn get_handle(&self) -> &c::handle::RawPipelineState<B> {
         &self.0
     }
     /// Get a "meta" struct reference. Can be used by the user to check
@@ -334,13 +334,13 @@ pub trait DataLink<'a>: Sized {
 
 /// The "bind" logic portion of the PSO component.
 /// Defines how the user data translates into the raw data set.
-pub trait DataBind<R: c::Resources> {
+pub trait DataBind<B: c::Backend> {
     /// The associated "data" type - a member of the PSO "data" struct.
     type Data;
     /// Dump the given data into the raw data set.
     fn bind_to(&self,
-               &mut RawDataSet<R>,
+               &mut RawDataSet<B>,
                &Self::Data,
-               &mut c::handle::Manager<R>,
-               &mut AccessInfo<R>);
+               &mut c::handle::Manager<B>,
+               &mut AccessInfo<B>);
 }

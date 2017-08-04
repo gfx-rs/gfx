@@ -15,7 +15,7 @@
 //! Buffer components for a PSO.
 
 use std::marker::PhantomData;
-use core::{ConstantBufferSlot, Resources, MAX_VERTEX_ATTRIBUTES};
+use core::{ConstantBufferSlot, Backend, MAX_VERTEX_ATTRIBUTES};
 use core::{handle, pso, shade};
 use core::memory::Typed;
 use core::format::Format;
@@ -188,13 +188,13 @@ impl<'a,
     }
 }
 
-impl<R: Resources, T, I> DataBind<R> for VertexBufferCommon<T, I> {
-    type Data = handle::Buffer<R, T>;
+impl<B: Backend, T, I> DataBind<B> for VertexBufferCommon<T, I> {
+    type Data = handle::Buffer<B, T>;
     fn bind_to(&self,
-               out: &mut RawDataSet<R>,
+               out: &mut RawDataSet<B>,
                data: &Self::Data,
-               man: &mut handle::Manager<R>,
-               access: &mut AccessInfo<R>) {
+               man: &mut handle::Manager<B>,
+               access: &mut AccessInfo<B>) {
         self.0.bind_to(out, data.raw(), man, access)
     }
 }
@@ -234,13 +234,13 @@ impl<'a> DataLink<'a> for RawVertexBuffer {
     }
 }
 
-impl<R: Resources> DataBind<R> for RawVertexBuffer {
-    type Data = handle::RawBuffer<R>;
+impl<B: Backend> DataBind<B> for RawVertexBuffer {
+    type Data = handle::RawBuffer<B>;
     fn bind_to(&self,
-               out: &mut RawDataSet<R>,
+               out: &mut RawDataSet<B>,
                data: &Self::Data,
-               man: &mut handle::Manager<R>,
-               access: &mut AccessInfo<R>) {
+               man: &mut handle::Manager<B>,
+               access: &mut AccessInfo<B>) {
         let value = Some((man.ref_buffer(data).clone(), 0));
         for i in 0 .. MAX_VERTEX_ATTRIBUTES {
             if (self.1 & (1<<i)) != 0 {
@@ -284,14 +284,14 @@ DataLink<'a> for ConstantBuffer<T> {
     }
 }
 
-impl<R: Resources, T: Structure<shade::ConstFormat>>
-DataBind<R> for ConstantBuffer<T> {
-    type Data = handle::Buffer<R, T>;
+impl<B: Backend, T: Structure<shade::ConstFormat>>
+DataBind<B> for ConstantBuffer<T> {
+    type Data = handle::Buffer<B, T>;
     fn bind_to(&self,
-               out: &mut RawDataSet<R>,
+               out: &mut RawDataSet<B>,
                data: &Self::Data,
-               man: &mut handle::Manager<R>,
-               access: &mut AccessInfo<R>) {
+               man: &mut handle::Manager<B>,
+               access: &mut AccessInfo<B>) {
         self.0.bind_to(out, data.raw(), man, access)
     }
 }
@@ -315,13 +315,13 @@ impl<'a> DataLink<'a> for RawConstantBuffer {
     }
 }
 
-impl<R: Resources> DataBind<R> for RawConstantBuffer {
-    type Data = handle::RawBuffer<R>;
+impl<B: Backend> DataBind<B> for RawConstantBuffer {
+    type Data = handle::RawBuffer<B>;
     fn bind_to(&self,
-               out: &mut RawDataSet<R>,
+               out: &mut RawDataSet<B>,
                data: &Self::Data,
-               man: &mut handle::Manager<R>,
-               access: &mut AccessInfo<R>) {
+               man: &mut handle::Manager<B>,
+               access: &mut AccessInfo<B>) {
         if let Some((usage, slot)) = self.0 {
             let buf = man.ref_buffer(data).clone();
             out.constant_buffers.push(pso::ConstantBufferParam(buf, usage, slot));
@@ -345,13 +345,13 @@ impl<'a, T: ToUniform + Default> DataLink<'a> for Global<T> {
     }
 }
 
-impl<R: Resources, T: ToUniform> DataBind<R> for Global<T> {
+impl<B: Backend, T: ToUniform> DataBind<B> for Global<T> {
     type Data = T;
     fn bind_to(&self,
-               out: &mut RawDataSet<R>,
+               out: &mut RawDataSet<B>,
                data: &Self::Data,
-               man: &mut handle::Manager<R>,
-               access: &mut AccessInfo<R>) {
+               man: &mut handle::Manager<B>,
+               access: &mut AccessInfo<B>) {
         let val = data.convert();
         self.0.bind_to(out, &val, man, access);
     }
@@ -376,13 +376,13 @@ impl<'a> DataLink<'a> for RawGlobal {
     }
 }
 
-impl<R: Resources> DataBind<R> for RawGlobal {
+impl<B: Backend> DataBind<B> for RawGlobal {
     type Data = shade::UniformValue;
     fn bind_to(&self,
-               out: &mut RawDataSet<R>,
+               out: &mut RawDataSet<B>,
                data: &Self::Data,
-               _: &mut handle::Manager<R>,
-               _: &mut AccessInfo<R>) {
+               _: &mut handle::Manager<B>,
+               _: &mut AccessInfo<B>) {
         if let Some(loc) = self.0 {
             out.global_constants.push((loc, *data));
         }
