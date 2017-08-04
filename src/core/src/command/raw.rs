@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use {memory, pso, state, target, texture};
-use {Backend};
+use {Backend, VertexCount, VertexOffset};
 use buffer::IndexBufferView;
-use super::{BufferCopy, BufferImageCopy};
+use super::{BufferCopy, BufferImageCopy, InstanceParams};
 
 ///
 pub trait RawCommandBuffer<B: Backend> {
@@ -67,4 +67,12 @@ pub trait RawCommandBuffer<B: Backend> {
     fn copy_buffer_to_image(&mut self, src: &B::Buffer, dst: &B::Image, layout: texture::ImageLayout, regions: &[BufferImageCopy]);
     ///
     fn copy_image_to_buffer(&mut self);
+    ///
+    fn draw(&mut self, start: VertexCount, count: VertexCount, instance: Option<InstanceParams>);
+    ///
+    fn draw_indexed(&mut self, start: VertexCount, count: VertexCount, base: VertexOffset, instance: Option<InstanceParams>);
+    ///
+    fn draw_indirect(&mut self);
+    ///
+    fn draw_indexed_indirect(&mut self);
 }

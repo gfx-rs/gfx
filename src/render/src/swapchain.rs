@@ -12,7 +12,7 @@ use memory::Typed;
 pub trait SwapchainExt<B: Backend>: Swapchain<B> {
     /// Create color RTVs for all backbuffer images.
     // TODO: error handling
-    fn create_color_views<T: format::RenderFormat>(&mut self, device: &mut B::Device) -> Vec<handle::RenderTargetView<B::Resources, T>> {
+    fn create_color_views<T: format::RenderFormat>(&mut self, device: &mut B::Device) -> Vec<handle::RenderTargetView<B, T>> {
         self.get_backbuffers()
             .iter()
             .map(|&(ref color, _)| {
