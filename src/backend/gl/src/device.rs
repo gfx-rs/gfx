@@ -9,7 +9,7 @@ use core::handle::{self, Producer};
 use core::target::{Layer, Level};
 
 use command::{COLOR_DEFAULT};
-use {Info, Resources as R, Share, OutputMerger};
+use {Info, Backend as B, Share, OutputMerger};
 use {Buffer, BufferElement, FatSampler, NewTexture,
      PipelineState, ResourceView, TargetView, Fence};
 
@@ -56,7 +56,7 @@ pub fn update_sub_buffer(gl: &gl::Gl, buffer: Buffer, address: *const u8,
 /// GL device.
 pub struct Device {
     share: Rc<Share>,
-    frame_handles: handle::Manager<R>,
+    frame_handles: handle::Manager<B>,
 }
 
 impl Clone for Device {
@@ -180,7 +180,7 @@ impl Device {
         })
     }
 
-    fn create_program_raw(&mut self, shader_set: &c::ShaderSet<R>)
+    fn create_program_raw(&mut self, shader_set: &c::ShaderSet<B>)
                           -> Result<(gl::types::GLuint, c::shade::ProgramInfo), c::shade::CreateProgramError> {
         use shade::create_program;
         let frame_handles = &mut self.frame_handles;
@@ -214,7 +214,7 @@ impl Device {
         result
     }
 
-    fn view_texture_as_target(&mut self, htex: &handle::RawTexture<R>, level: Level, layer: Option<Layer>)
+    fn view_texture_as_target(&mut self, htex: &handle::RawTexture<B>, level: Level, layer: Option<Layer>)
                               -> Result<TargetView, d::TargetViewError> {
         match (self.frame_handles.ref_texture(htex), layer) {
             (&NewTexture::Surface(_), Some(_)) => Err(d::TargetViewError::Unsupported),
@@ -228,7 +228,7 @@ impl Device {
 
 #[derive(Debug)]
 pub enum MappingKind {
-    Persistent(mapping::Status<R>),
+    Persistent(mapping::Status<B>),
     Temporary,
 }
 
@@ -242,7 +242,7 @@ pub struct MappingGate {
 unsafe impl Send for MappingGate {}
 unsafe impl Sync for MappingGate {}
 
-impl mapping::Gate<R> for MappingGate {
+impl mapping::Gate<B> for MappingGate {
     unsafe fn set<T>(&self, index: usize, val: T) {
         *(self.pointer as *mut T).offset(index as isize) = val;
     }
@@ -284,12 +284,12 @@ pub fn temporary_ensure_unmapped(pointer: &mut *mut ::std::os::raw::c_void,
     }
 }
 
-impl d::Device<R> for Device {
+impl d::Device<B> for Device {
     fn get_capabilities(&self) -> &c::Capabilities {
         &self.share.capabilities
     }
 
-    fn create_buffer_raw(&mut self, info: buffer::Info) -> Result<handle::RawBuffer<R>, buffer::CreationError> {
+    fn create_buffer_raw(&mut self, info: buffer::Info) -> Result<handle::RawBuffer<B>, buffer::CreationError> {
         if !self.share.capabilities.constant_buffer_supported && info.role == buffer::Role::Constant {
             error!("Constant buffers are not supported by this GL version");
             return Err(buffer::CreationError::Other);
@@ -300,7 +300,7 @@ impl d::Device<R> for Device {
     }
 
     fn create_buffer_immutable_raw(&mut self, data: &[u8], stride: usize, role: buffer::Role, bind: Bind)
-                               -> Result<handle::RawBuffer<R>, buffer::CreationError> {
+                               -> Result<handle::RawBuffer<B>, buffer::CreationError> {
         let name = self.create_buffer_internal();
         let info = buffer::Info {
             role: role,
@@ -314,19 +314,19 @@ impl d::Device<R> for Device {
     }
 
     fn create_shader(&mut self, stage: c::shade::Stage, code: &[u8])
-                     -> Result<handle::Shader<R>, c::shade::CreateShaderError> {
+                     -> Result<handle::Shader<B>, c::shade::CreateShaderError> {
         ::shade::create_shader(&self.share.context, stage, code)
                 .map(|sh| self.share.handles.borrow_mut().make_shader(sh))
     }
 
-    fn create_program(&mut self, shader_set: &c::ShaderSet<R>)
-                      -> Result<handle::Program<R>, c::shade::CreateProgramError> {
+    fn create_program(&mut self, shader_set: &c::ShaderSet<B>)
+                      -> Result<handle::Program<B>, c::shade::CreateProgramError> {
         self.create_program_raw(shader_set)
             .map(|(name, info)| self.share.handles.borrow_mut().make_program(name, info))
     }
 
-    fn create_pipeline_state_raw(&mut self, program: &handle::Program<R>, desc: &c::pso::Descriptor)
-                                 -> Result<handle::RawPipelineState<R>, c::pso::CreationError> {
+    fn create_pipeline_state_raw(&mut self, program: &handle::Program<B>, desc: &c::pso::Descriptor)
+                                 -> Result<handle::RawPipelineState<B>, c::pso::CreationError> {
         use core::state as s;
         let caps = &self.share.capabilities;
         match desc.primitive {
@@ -377,7 +377,7 @@ impl d::Device<R> for Device {
     }
 
     fn create_texture_raw(&mut self, desc: t::Info, hint: Option<ChannelType>, data_opt: Option<&[&[u8]]>)
-                          -> Result<handle::RawTexture<R>, t::CreationError> {
+                          -> Result<handle::RawTexture<B>, t::CreationError> {
         use core::texture::CreationError;
         let caps = &self.share.private_caps;
         if desc.levels == 0 {
@@ -413,8 +413,8 @@ impl d::Device<R> for Device {
         Ok(self.share.handles.borrow_mut().make_texture(object, desc))
     }
 
-    fn view_buffer_as_shader_resource_raw(&mut self, hbuf: &handle::RawBuffer<R>, format: Format)
-                                      -> Result<handle::RawShaderResourceView<R>, d::ResourceViewError> {
+    fn view_buffer_as_shader_resource_raw(&mut self, hbuf: &handle::RawBuffer<B>, format: Format)
+                                      -> Result<handle::RawShaderResourceView<B>, d::ResourceViewError> {
         let gl = &self.share.context;
         let mut name = 0 as gl::types::GLuint;
         let buf_name = *self.frame_handles.ref_buffer(hbuf);
@@ -432,13 +432,13 @@ impl d::Device<R> for Device {
         Ok(self.share.handles.borrow_mut().make_buffer_srv(view, hbuf))
     }
 
-    fn view_buffer_as_unordered_access_raw(&mut self, _hbuf: &handle::RawBuffer<R>)
-                                       -> Result<handle::RawUnorderedAccessView<R>, d::ResourceViewError> {
+    fn view_buffer_as_unordered_access_raw(&mut self, _hbuf: &handle::RawBuffer<B>)
+                                       -> Result<handle::RawUnorderedAccessView<B>, d::ResourceViewError> {
         Err(d::ResourceViewError::Unsupported) //TODO
     }
 
-    fn view_texture_as_shader_resource_raw(&mut self, htex: &handle::RawTexture<R>, _desc: t::ResourceDesc)
-                                       -> Result<handle::RawShaderResourceView<R>, d::ResourceViewError> {
+    fn view_texture_as_shader_resource_raw(&mut self, htex: &handle::RawTexture<B>, _desc: t::ResourceDesc)
+                                       -> Result<handle::RawShaderResourceView<B>, d::ResourceViewError> {
         match self.frame_handles.ref_texture(htex) {
             &NewTexture::Surface(_) => Err(d::ResourceViewError::NoBindFlag),
             &NewTexture::Texture(t) => {
@@ -449,13 +449,13 @@ impl d::Device<R> for Device {
         }
     }
 
-    fn view_texture_as_unordered_access_raw(&mut self, _htex: &handle::RawTexture<R>)
-                                        -> Result<handle::RawUnorderedAccessView<R>, d::ResourceViewError> {
+    fn view_texture_as_unordered_access_raw(&mut self, _htex: &handle::RawTexture<B>)
+                                        -> Result<handle::RawUnorderedAccessView<B>, d::ResourceViewError> {
         Err(d::ResourceViewError::Unsupported) //TODO
     }
 
-    fn view_texture_as_render_target_raw(&mut self, htex: &handle::RawTexture<R>, desc: t::RenderDesc)
-                                         -> Result<handle::RawRenderTargetView<R>, d::TargetViewError> {
+    fn view_texture_as_render_target_raw(&mut self, htex: &handle::RawTexture<B>, desc: t::RenderDesc)
+                                         -> Result<handle::RawRenderTargetView<B>, d::TargetViewError> {
         self.view_texture_as_target(htex, desc.level, desc.layer)
             .map(|view| {
                 let dim = htex.get_info().kind.get_level_dimensions(desc.level);
@@ -463,8 +463,8 @@ impl d::Device<R> for Device {
             })
     }
 
-    fn view_texture_as_depth_stencil_raw(&mut self, htex: &handle::RawTexture<R>, desc: t::DepthStencilDesc)
-                                         -> Result<handle::RawDepthStencilView<R>, d::TargetViewError> {
+    fn view_texture_as_depth_stencil_raw(&mut self, htex: &handle::RawTexture<B>, desc: t::DepthStencilDesc)
+                                         -> Result<handle::RawDepthStencilView<B>, d::TargetViewError> {
         self.view_texture_as_target(htex, desc.level, desc.layer)
             .map(|view| {
                 let dim = htex.get_info().kind.get_level_dimensions(0);
@@ -472,7 +472,7 @@ impl d::Device<R> for Device {
             })
     }
 
-    fn create_sampler(&mut self, info: t::SamplerInfo) -> handle::Sampler<R> {
+    fn create_sampler(&mut self, info: t::SamplerInfo) -> handle::Sampler<B> {
         let name = if self.share.private_caps.sampler_objects_supported {
             tex::make_sampler(&self.share.context, &info, &self.share.private_caps)
         } else {
@@ -488,11 +488,11 @@ impl d::Device<R> for Device {
         self.share.handles.borrow_mut().make_sampler(sam, info)
     }
 
-    fn create_semaphore(&mut self) -> handle::Semaphore<R> {
+    fn create_semaphore(&mut self) -> handle::Semaphore<B> {
         self.share.handles.borrow_mut().make_semaphore(())
     }
 
-    fn create_fence(&mut self, signalled: bool) -> handle::Fence<R> {
+    fn create_fence(&mut self, signalled: bool) -> handle::Fence<B> {
         let sync = if signalled && self.share.private_caps.sync_supported {
             let gl = &self.share.context;
             unsafe { gl.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0) }
@@ -502,7 +502,7 @@ impl d::Device<R> for Device {
         self.share.handles.borrow_mut().make_fence(Fence(sync))
     }
 
-    fn reset_fences(&mut self, fences: &[&handle::Fence<R>]) {
+    fn reset_fences(&mut self, fences: &[&handle::Fence<B>]) {
         if !self.share.private_caps.sync_supported {
             return
         }
@@ -520,7 +520,7 @@ impl d::Device<R> for Device {
         }
     }
 
-    fn wait_for_fences(&mut self, fences: &[&handle::Fence<R>], wait: d::WaitFor, timeout_ms: u32) -> bool {
+    fn wait_for_fences(&mut self, fences: &[&handle::Fence<B>], wait: d::WaitFor, timeout_ms: u32) -> bool {
         if !self.share.private_caps.sync_supported {
             return true;
         }
@@ -570,8 +570,8 @@ impl d::Device<R> for Device {
         }
     }
 
-    fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<R, T>)
-                               -> Result<mapping::Reader<'b, R, T>,
+    fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<B, T>)
+                               -> Result<mapping::Reader<'b, B, T>,
                                          mapping::Error>
         where T: Copy
     {
@@ -591,8 +591,8 @@ impl d::Device<R> for Device {
         }
     }
 
-    fn write_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<R, T>)
-                                -> Result<mapping::Writer<'b, R, T>,
+    fn write_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<B, T>)
+                                -> Result<mapping::Writer<'b, B, T>,
                                           mapping::Error>
         where T: Copy
     {
