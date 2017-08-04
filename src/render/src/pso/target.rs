@@ -15,7 +15,7 @@
 //! Render target components for a PSO.
 
 use std::marker::PhantomData;
-use core::{ColorSlot, Resources};
+use core::{ColorSlot, Backend};
 use core::{format, handle, pso, state, target};
 use core::memory::Typed;
 use core::shade::OutputVar;
@@ -119,13 +119,13 @@ impl<'a, T: format::RenderFormat> DataLink<'a> for RenderTarget<T> {
     }
 }
 
-impl<R: Resources, T> DataBind<R> for RenderTarget<T> {
-    type Data = handle::RenderTargetView<R, T>;
+impl<B: Backend, T> DataBind<B> for RenderTarget<T> {
+    type Data = handle::RenderTargetView<B, T>;
     fn bind_to(&self,
-               out: &mut RawDataSet<R>,
+               out: &mut RawDataSet<B>,
                data: &Self::Data,
-               man: &mut handle::Manager<R>,
-               _: &mut AccessInfo<R>) {
+               man: &mut handle::Manager<B>,
+               _: &mut AccessInfo<B>) {
         if let Some(slot) = self.0 {
             out.pixel_targets.add_color(slot, man.ref_rtv(data.raw()), data.raw().get_dimensions());
         }
@@ -147,13 +147,13 @@ impl<'a, T: format::BlendFormat> DataLink<'a> for BlendTarget<T> {
     }
 }
 
-impl<R: Resources, T> DataBind<R> for BlendTarget<T> {
-    type Data = handle::RenderTargetView<R, T>;
+impl<B: Backend, T> DataBind<B> for BlendTarget<T> {
+    type Data = handle::RenderTargetView<B, T>;
     fn bind_to(&self,
-               out: &mut RawDataSet<R>,
+               out: &mut RawDataSet<B>,
                data: &Self::Data,
-               man: &mut handle::Manager<R>,
-               access: &mut AccessInfo<R>) {
+               man: &mut handle::Manager<B>,
+               access: &mut AccessInfo<B>) {
         self.0.bind_to(out, data.raw(), man, access)
     }
 }
@@ -182,13 +182,13 @@ impl<'a> DataLink<'a> for RawRenderTarget {
     }
 }
 
-impl<R: Resources> DataBind<R> for RawRenderTarget {
-    type Data = handle::RawRenderTargetView<R>;
+impl<B: Backend> DataBind<B> for RawRenderTarget {
+    type Data = handle::RawRenderTargetView<B>;
     fn bind_to(&self,
-               out: &mut RawDataSet<R>,
+               out: &mut RawDataSet<B>,
                data: &Self::Data,
-               man: &mut handle::Manager<R>,
-               _: &mut AccessInfo<R>) {
+               man: &mut handle::Manager<B>,
+               _: &mut AccessInfo<B>) {
         if let Some(slot) = self.0 {
             out.pixel_targets.add_color(slot, man.ref_rtv(data), data.get_dimensions());
         }
@@ -205,13 +205,13 @@ impl<'a, T: format::DepthFormat> DataLink<'a> for DepthTarget<T> {
     }
 }
 
-impl<R: Resources, T> DataBind<R> for DepthTarget<T> {
-    type Data = handle::DepthStencilView<R, T>;
+impl<B: Backend, T> DataBind<B> for DepthTarget<T> {
+    type Data = handle::DepthStencilView<B, T>;
     fn bind_to(&self,
-               out: &mut RawDataSet<R>,
+               out: &mut RawDataSet<B>,
                data: &Self::Data,
-               man: &mut handle::Manager<R>,
-               _: &mut AccessInfo<R>) {
+               man: &mut handle::Manager<B>,
+               _: &mut AccessInfo<B>) {
         let dsv = data.raw();
         out.pixel_targets.add_depth_stencil(man.ref_dsv(dsv), true, false, dsv.get_dimensions());
     }
@@ -226,13 +226,13 @@ impl<'a, T: format::StencilFormat> DataLink<'a> for StencilTarget<T> {
     }
 }
 
-impl<R: Resources, T> DataBind<R> for StencilTarget<T> {
-    type Data = (handle::DepthStencilView<R, T>, (target::Stencil, target::Stencil));
+impl<B: Backend, T> DataBind<B> for StencilTarget<T> {
+    type Data = (handle::DepthStencilView<B, T>, (target::Stencil, target::Stencil));
     fn bind_to(&self,
-               out: &mut RawDataSet<R>,
+               out: &mut RawDataSet<B>,
                data: &Self::Data,
-               man: &mut handle::Manager<R>,
-               _: &mut AccessInfo<R>) {
+               man: &mut handle::Manager<B>,
+               _: &mut AccessInfo<B>) {
         let dsv = data.0.raw();
         out.pixel_targets.add_depth_stencil(man.ref_dsv(dsv), false, true, dsv.get_dimensions());
         out.ref_values.stencil = data.1;
@@ -248,13 +248,13 @@ impl<'a, T: format::DepthStencilFormat> DataLink<'a> for DepthStencilTarget<T> {
     }
 }
 
-impl<R: Resources, T> DataBind<R> for DepthStencilTarget<T> {
-    type Data = (handle::DepthStencilView<R, T>, (target::Stencil, target::Stencil));
+impl<B: Backend, T> DataBind<B> for DepthStencilTarget<T> {
+    type Data = (handle::DepthStencilView<B, T>, (target::Stencil, target::Stencil));
     fn bind_to(&self,
-               out: &mut RawDataSet<R>,
+               out: &mut RawDataSet<B>,
                data: &Self::Data,
-               man: &mut handle::Manager<R>,
-               _: &mut AccessInfo<R>) {
+               man: &mut handle::Manager<B>,
+               _: &mut AccessInfo<B>) {
         let dsv = data.0.raw();
         out.pixel_targets.add_depth_stencil(man.ref_dsv(dsv), true, true, dsv.get_dimensions());
         out.ref_values.stencil = data.1;
@@ -269,13 +269,13 @@ impl<'a> DataLink<'a> for Scissor {
     fn link_scissor(&mut self) -> bool { self.0 = true; true }
 }
 
-impl<R: Resources> DataBind<R> for Scissor {
+impl<B: Backend> DataBind<B> for Scissor {
     type Data = target::Rect;
     fn bind_to(&self,
-               out: &mut RawDataSet<R>,
+               out: &mut RawDataSet<B>,
                data: &Self::Data,
-               _: &mut handle::Manager<R>,
-               _: &mut AccessInfo<R>) {
+               _: &mut handle::Manager<B>,
+               _: &mut AccessInfo<B>) {
         out.scissor = *data;
     }
 }
@@ -286,13 +286,13 @@ impl<'a> DataLink<'a> for BlendRef {
     fn is_active(&self) -> bool { true }
 }
 
-impl<R: Resources> DataBind<R> for BlendRef {
+impl<B: Backend> DataBind<B> for BlendRef {
     type Data = target::ColorValue;
     fn bind_to(&self,
-               out: &mut RawDataSet<R>,
+               out: &mut RawDataSet<B>,
                data: &Self::Data,
-               _: &mut handle::Manager<R>,
-               _: &mut AccessInfo<R>) {
+               _: &mut handle::Manager<B>,
+               _: &mut AccessInfo<B>) {
         out.ref_values.blend = *data;
     }
 }
