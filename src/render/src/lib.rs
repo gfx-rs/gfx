@@ -117,7 +117,7 @@ pub use draw_state::target::*;
 
 // public re-exports
 pub use core::{Adapter, Backend, CommandQueue, Gpu, Frame, FrameSync, Headless, Primitive, QueueFamily, QueueType,
-               Resources, SubmissionError, SubmissionResult, Surface, SwapChain, SwapchainConfig, WindowExt};
+               SubmissionError, SubmissionResult, Surface, SwapChain, SwapchainConfig, WindowExt};
 pub use core::{VertexCount, InstanceCount};
 pub use core::{ShaderSet, VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
 pub use core::{GeneralCommandPool, GraphicsCommandPool, ComputeCommandPool, SubpassCommandPool};
@@ -125,7 +125,7 @@ pub use core::{buffer, format, handle, texture, mapping, queue};
 pub use core::device::{Device, ResourceViewError, TargetViewError, CombinedError, WaitFor};
 pub use core::memory::{self, Bind, TRANSFER_SRC, TRANSFER_DST, RENDER_TARGET,
                        DEPTH_STENCIL, SHADER_RESOURCE, UNORDERED_ACCESS};
-pub use core::command::{Buffer as CommandBuffer, InstanceParams};
+pub use core::command::{InstanceParams};
 pub use core::shade::{ProgramInfo, UniformValue};
 
 pub use encoder::{CopyBufferResult, CopyBufferTextureResult, CopyError,
