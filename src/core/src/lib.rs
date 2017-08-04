@@ -28,7 +28,6 @@ use std::fmt::{self, Debug};
 use std::hash::Hash;
 
 pub use self::adapter::{Adapter, AdapterInfo};
-pub use self::command::CommandBuffer;
 pub use self::device::Device;
 pub use self::pool::{ComputeCommandPool, GeneralCommandPool, GraphicsCommandPool, RawCommandPool,
                      SubpassCommandPool, TransferCommandPool};
@@ -242,8 +241,8 @@ pub trait Backend: 'static + Sized {
     type Resources: Resources;
     type SubmitInfo: Clone + Send;
 
-    type RawCommandBuffer: CommandBuffer<Self> + command::Buffer<Self::Resources>;
-    type SubpassCommandBuffer: CommandBuffer<Self>; // + SubpassCommandBuffer<Self::R>;
+    type RawCommandBuffer: command::RawCommandBuffer<Self, Self::Resources>;
+    type SubpassCommandBuffer; // SubpassCommandBuffer<Self::R>;
 
     type RawCommandPool: RawCommandPool<Self>;
     type SubpassCommandPool: SubpassCommandPool<Self>;
@@ -255,13 +254,18 @@ pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq + Any {
     type Buffer:              Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
     type Shader:              Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
     type Program:             Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
-    type PipelineStateObject: Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
-    type Texture:             Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
+    type PipelineStateObject: Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync; // deprecated
+    type Texture:             Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync; // deprecated
     type ShaderResourceView:  Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
     type UnorderedAccessView: Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
     type RenderTargetView:    Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
     type DepthStencilView:    Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
     type Sampler:             Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
+    type Image:               Debug + Any + Send + Sync;
+    type ComputePipeline:     Debug + Any + Send + Sync;
+    type GraphicsPipeline:    Debug + Any + Send + Sync;
+    type PipelineLayout:      Debug + Any + Send + Sync;
+    type DescriptorSet:       Debug + Any + Send + Sync;
     type Fence:               Debug + Any + Send + Sync;
     type Semaphore:           Debug + Any + Send + Sync;
     type Mapping:             Debug + Any + Send + Sync + mapping::Gate<Self>;

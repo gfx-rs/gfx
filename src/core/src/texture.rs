@@ -547,3 +547,18 @@ impl From<RenderDesc> for DepthStencilDesc {
         }
     }
 }
+
+///
+#[derive(Copy, Clone, Debug, Hash)]
+pub enum ImageLayout {
+    General,
+    ColorAttachmentOptimal,
+    DepthStencilAttachmentOptimal,
+    DepthStencilReadOnlyOptimal,
+    ShaderReadOnlyOptimal,
+    TransferSrcOptimal,
+    TransferDstOptimal,
+    Undefined,
+    Preinitialized,
+    Present,
+}
