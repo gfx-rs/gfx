@@ -14,7 +14,7 @@
 
 use Backend;
 use queue::capability::{Capability, Compute};
-use super::Submit;
+use super::{RawCommandBuffer, Submit};
 
 /// Command buffer with compute and transfer functionality.
 pub struct ComputeCommandBuffer<'a, B: Backend>(pub(crate) &'a mut B::RawCommandBuffer)

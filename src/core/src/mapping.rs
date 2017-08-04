@@ -7,12 +7,12 @@ use std::fmt;
 use std::cell::UnsafeCell;
 use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{self, AtomicBool};
-use Resources;
+use Backend;
 use {memory, buffer, handle};
 
 /// Unsafe, backend-provided operations for a buffer mapping
 #[doc(hidden)]
-pub trait Gate<R: Resources> {
+pub trait Gate<B: Backend> {
     /// Set the element at `index` to `val`. Not bounds-checked.
     unsafe fn set<T>(&self, index: usize, val: T);
     /// Returns a slice of the specified length.
@@ -54,14 +54,14 @@ impl StdError for Error {
 
 #[doc(hidden)]
 #[derive(Debug)]
-pub struct Raw<R: Resources> {
-    resource: UnsafeCell<R::Mapping>,
+pub struct Raw<B: Backend> {
+    resource: UnsafeCell<B::Mapping>,
     accessible: AtomicBool,
 }
 
 #[doc(hidden)]
-impl<R: Resources> Raw<R> {
-    pub fn new(resource: R::Mapping) -> Self {
+impl<B: Backend> Raw<B> {
+    pub fn new(resource: B::Mapping) -> Self {
         Raw {
             resource: UnsafeCell::new(resource),
             accessible: AtomicBool::new(true),
@@ -80,20 +80,20 @@ impl<R: Resources> Raw<R> {
         }
     }
 
-    pub unsafe fn use_access(&self) -> &mut R::Mapping {
+    pub unsafe fn use_access(&self) -> &mut B::Mapping {
         &mut *self.resource.get()
     }
 }
 
-unsafe impl<R: Resources> Sync for Raw<R> {}
+unsafe impl<B: Backend> Sync for Raw<B> {}
 
 #[derive(Debug)]
-struct Guard<'a, R: Resources> {
-    raw: &'a Raw<R>,
+struct Guard<'a, B: Backend> {
+    raw: &'a Raw<B>,
 }
 
-impl<'a, R: Resources> Guard<'a, R> {
-    fn new(raw: &'a Raw<R>) -> Result<Self, Error> {
+impl<'a, B: Backend> Guard<'a, B> {
+    fn new(raw: &'a Raw<B>) -> Result<Self, Error> {
         unsafe {
             if raw.take_access() {
                 Ok(Guard { raw: raw })
@@ -104,28 +104,28 @@ impl<'a, R: Resources> Guard<'a, R> {
     }
 }
 
-impl<'a, R: Resources> Deref for Guard<'a, R> {
-    type Target = R::Mapping;
-    fn deref(&self) -> &R::Mapping {
+impl<'a, B: Backend> Deref for Guard<'a, B> {
+    type Target = B::Mapping;
+    fn deref(&self) -> &B::Mapping {
         unsafe { self.raw.use_access() }
     }
 }
 
-impl<'a, R: Resources> DerefMut for Guard<'a, R> {
-    fn deref_mut(&mut self) -> &mut R::Mapping {
+impl<'a, B: Backend> DerefMut for Guard<'a, B> {
+    fn deref_mut(&mut self) -> &mut B::Mapping {
         unsafe { self.raw.use_access() }
     }
 }
 
-impl<'a, R: Resources> Drop for Guard<'a, R> {
+impl<'a, B: Backend> Drop for Guard<'a, B> {
     fn drop(&mut self) {
         unsafe { self.raw.release_access(); }
     }
 }
 
-fn take_access_checked<R>(access: memory::Access, buffer: &buffer::Raw<R>)
-                          -> Result<Guard<R>, Error>
-    where R: Resources
+fn take_access_checked<B>(access: memory::Access, buffer: &buffer::Raw<B>)
+                          -> Result<Guard<B>, Error>
+    where B: Backend
 {
     let usage = buffer.get_info().usage;
     use memory::Usage::*;
@@ -139,9 +139,9 @@ fn take_access_checked<R>(access: memory::Access, buffer: &buffer::Raw<R>)
 }
 
 #[doc(hidden)]
-pub unsafe fn read<R, T, S>(buffer: &buffer::Raw<R>, sync: S)
-                            -> Result<Reader<R, T>, Error>
-    where R: Resources, T: Copy, S: FnOnce(&mut R::Mapping)
+pub unsafe fn read<B, T, S>(buffer: &buffer::Raw<B>, sync: S)
+                            -> Result<Reader<B, T>, Error>
+    where B: Backend, T: Copy, S: FnOnce(&mut B::Mapping)
 {
     let mut mapping = try!(take_access_checked(memory::READ, buffer));
     sync(&mut mapping);
@@ -153,9 +153,9 @@ pub unsafe fn read<R, T, S>(buffer: &buffer::Raw<R>, sync: S)
 }
 
 #[doc(hidden)]
-pub unsafe fn write<R, T, S>(buffer: &buffer::Raw<R>, sync: S)
-                             -> Result<Writer<R, T>, Error>
-    where R: Resources, T: Copy, S: FnOnce(&mut R::Mapping)
+pub unsafe fn write<B, T, S>(buffer: &buffer::Raw<B>, sync: S)
+                             -> Result<Writer<B, T>, Error>
+    where B: Backend, T: Copy, S: FnOnce(&mut B::Mapping)
 {
     let mut mapping = try!(take_access_checked(memory::WRITE, buffer));
     sync(&mut mapping);
@@ -168,12 +168,12 @@ pub unsafe fn write<R, T, S>(buffer: &buffer::Raw<R>, sync: S)
 
 /// Mapping reader
 #[derive(Debug)]
-pub struct Reader<'a, R: Resources, T: 'a + Copy> {
+pub struct Reader<'a, B: Backend, T: 'a + Copy> {
     slice: &'a [T],
-    #[allow(dead_code)] mapping: Guard<'a, R>,
+    #[allow(dead_code)] mapping: Guard<'a, B>,
 }
 
-impl<'a, R: Resources, T: 'a + Copy> Deref for Reader<'a, R, T> {
+impl<'a, B: Backend, T: 'a + Copy> Deref for Reader<'a, B, T> {
     type Target = [T];
 
     fn deref(&self) -> &[T] { self.slice }
@@ -183,31 +183,31 @@ impl<'a, R: Resources, T: 'a + Copy> Deref for Reader<'a, R, T> {
 /// Currently is not possible to make write-only slice so while it is technically possible
 /// to read from Writer, it will lead to an undefined behavior. Please do not read from it.
 #[derive(Debug)]
-pub struct Writer<'a, R: Resources, T: 'a + Copy> {
+pub struct Writer<'a, B: Backend, T: 'a + Copy> {
     slice: &'a mut [T],
-    #[allow(dead_code)] mapping: Guard<'a, R>,
+    #[allow(dead_code)] mapping: Guard<'a, B>,
 }
 
-impl<'a, R: Resources, T: 'a + Copy> Deref for Writer<'a, R, T> {
+impl<'a, B: Backend, T: 'a + Copy> Deref for Writer<'a, B, T> {
     type Target = [T];
 
     fn deref(&self) -> &[T] { &*self.slice }
 }
 
-impl<'a, R: Resources, T: 'a + Copy> DerefMut for Writer<'a, R, T> {
+impl<'a, B: Backend, T: 'a + Copy> DerefMut for Writer<'a, B, T> {
     fn deref_mut(&mut self) -> &mut [T] { self.slice }
 }
 
 /// A service struct that can be used by backends to track the mapping status
 #[derive(Debug)]
 #[doc(hidden)]
-pub struct Status<R: Resources> {
+pub struct Status<B: Backend> {
     cpu_wrote: bool,
-    gpu_access: Option<handle::Fence<R>>,
+    gpu_access: Option<handle::Fence<B>>,
 }
 
 #[doc(hidden)]
-impl<R: Resources> Status<R> {
+impl<B: Backend> Status<B> {
     pub fn clean() -> Self {
         Status {
             cpu_wrote: false,
@@ -216,19 +216,19 @@ impl<R: Resources> Status<R> {
     }
 
     pub fn cpu_access<F>(&mut self, wait_fence: F)
-        where F: FnOnce(handle::Fence<R>)
+        where F: FnOnce(handle::Fence<B>)
     {
         self.gpu_access.take().map(wait_fence);
     }
 
     pub fn cpu_write_access<F>(&mut self, wait_fence: F)
-        where F: FnOnce(handle::Fence<R>)
+        where F: FnOnce(handle::Fence<B>)
     {
         self.cpu_access(wait_fence);
         self.cpu_wrote = true;
     }
 
-    pub fn gpu_access(&mut self, fence: handle::Fence<R>) {
+    pub fn gpu_access(&mut self, fence: handle::Fence<B>) {
         self.gpu_access = Some(fence);
     }
 

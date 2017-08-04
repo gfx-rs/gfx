@@ -24,7 +24,7 @@
 //! ```no_run
 //! use gfx_core::{Device, FrameSync};
 //! # use gfx_core::{GraphicsQueue, Swapchain};
-//! # use gfx_core::dummy::{DummyBackend, DummyDevice, DummyResources, DummySwapchain};
+//! # use gfx_core::dummy::{DummyBackend, DummyDevice, DummySwapchain};
 //!
 //! # let mut swapchain: DummySwapchain = return;
 //! # let mut device: DummyDevice = return;
@@ -66,7 +66,7 @@
 //! [`Swapchain`]: trait.Swapchain.html
 //!
 
-use {Adapter, Backend, Resources};
+use {Adapter, Backend};
 use {format, handle};
 use format::Formatted;
 
@@ -140,16 +140,16 @@ impl Frame {
 /// Synchronization primitives which will be signalled once a frame got retrieved.
 ///
 /// The semaphore or fence _must_ be unsignalled.
-pub enum FrameSync<'a, R: Resources> {
+pub enum FrameSync<'a, B: Backend> {
     /// Semaphore used for synchronization.
     ///
     /// Will be signaled once the frame backbuffer is available.
-    Semaphore(&'a handle::Semaphore<R>),
+    Semaphore(&'a handle::Semaphore<B>),
 
     /// Fence used for synchronization.
     ///
     /// Will be signaled once the frame backbuffer is available.
-    Fence(&'a handle::Fence<R>),
+    Fence(&'a handle::Fence<B>),
 }
 
 /// Allows you to configure a `Swapchain` for creation.
@@ -206,8 +206,8 @@ impl SwapchainConfig {
 }
 
 /// Swapchain backbuffer type (color image, depth-stencil image).
-pub type Backbuffer<B: Backend> = (handle::RawTexture<B::Resources>,
-                                   Option<handle::RawTexture<B::Resources>>);
+pub type Backbuffer<B: Backend> = (handle::RawTexture<B>,
+                                   Option<handle::RawTexture<B>>);
 
 /// The `Swapchain` is the backend representation of the surface.
 /// It consists of multiple buffers, which will be presented on the surface.
@@ -237,7 +237,7 @@ pub trait Swapchain<B: Backend> {
     /// ```no_run
     ///
     /// ```
-    fn acquire_frame(&mut self, sync: FrameSync<B::Resources>) -> Frame;
+    fn acquire_frame(&mut self, sync: FrameSync<B>) -> Frame;
 
     /// Present one acquired frame in FIFO order.
     ///
@@ -253,7 +253,7 @@ pub trait Swapchain<B: Backend> {
     fn present<Q: AsMut<B::CommandQueue>>(
         &mut self,
         present_queue: &mut Q,
-        wait_semaphores: &[&handle::Semaphore<B::Resources>],
+        wait_semaphores: &[&handle::Semaphore<B>],
     );
 }
 

@@ -14,7 +14,7 @@
 pub mod capability;
 pub mod submission;
 
-use {pso, Backend, Resources, handle};
+use {pso, Backend, handle};
 use command::{AccessInfo, Submit};
 use pool::{GeneralCommandPool, GraphicsCommandPool, ComputeCommandPool,
            TransferCommandPool, RawCommandPool};
@@ -76,13 +76,13 @@ pub trait CommandQueue<B: Backend> {
     unsafe fn submit_raw<'a, I>(
         &mut self,
         submit_infos: I,
-        fence: Option<&handle::Fence<B::Resources>>,
-        access: &AccessInfo<B::Resources>,
+        fence: Option<&handle::Fence<B>>,
+        access: &AccessInfo<B>,
     ) where I: Iterator<Item=RawSubmission<'a, B>>;
 
     /// Pin everything from this handle manager to live for a frame.
     // TODO: legacy (handle API)
-    fn pin_submitted_resources(&mut self, &handle::Manager<B::Resources>);
+    fn pin_submitted_resources(&mut self, &handle::Manager<B>);
 
     /// Cleanup unused resources. This should be called between frames.
     // TODO: legacy (handle API)
@@ -99,13 +99,13 @@ macro_rules! define_queue {
         impl<B: Backend> CommandQueue<B> for $queue<B> {
             unsafe fn submit_raw<'a, I>(&mut self,
                 submit_infos: I,
-                fence: Option<&handle::Fence<B::Resources>>,
-                access: &AccessInfo<B::Resources>,
+                fence: Option<&handle::Fence<B>>,
+                access: &AccessInfo<B>,
             ) where I: Iterator<Item=RawSubmission<'a, B>> {
                 self.0.submit_raw(submit_infos, fence, access)
             }
 
-            fn pin_submitted_resources(&mut self, handles: &handle::Manager<B::Resources>) {
+            fn pin_submitted_resources(&mut self, handles: &handle::Manager<B>) {
                 self.0.pin_submitted_resources(handles)
             }
 
@@ -124,8 +124,8 @@ macro_rules! define_queue {
             pub fn submit<C>(
                 &mut self,
                 submit_infos: &[Submission<B, C>],
-                fence: Option<&handle::Fence<B::Resources>>,
-                access: &AccessInfo<B::Resources>)
+                fence: Option<&handle::Fence<B>>,
+                access: &AccessInfo<B>)
             where
                 C: SupportedBy<$capability>
             {

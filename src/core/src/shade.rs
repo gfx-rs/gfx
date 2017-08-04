@@ -4,8 +4,7 @@
 
 use std::{fmt, cmp, hash};
 use std::error::Error;
-use {Resources};
-use {AttributeSlot, ColorSlot, ConstantBufferSlot, ResourceViewSlot, SamplerSlot, UnorderedViewSlot};
+use {AttributeSlot, Backend, ColorSlot, ConstantBufferSlot, ResourceViewSlot, SamplerSlot, UnorderedViewSlot};
 
 #[cfg(feature = "mint")]
 use mint;
@@ -461,14 +460,14 @@ pub struct ProgramInfo {
 
 /// A program
 #[derive(Debug)]
-pub struct Program<R: Resources> {
-    resource: R::Program,
+pub struct Program<B: Backend> {
+    resource: B::Program,
     info: ProgramInfo,
 }
 
-impl<R: Resources> Program<R> {
+impl<B: Backend> Program<B> {
     #[doc(hidden)]
-    pub fn new(resource: R::Program, info: ProgramInfo) -> Self {
+    pub fn new(resource: B::Program, info: ProgramInfo) -> Self {
         Program {
             resource: resource,
             info: info,
@@ -476,21 +475,21 @@ impl<R: Resources> Program<R> {
     }
 
     #[doc(hidden)]
-    pub fn resource(&self) -> &R::Program { &self.resource }
+    pub fn resource(&self) -> &B::Program { &self.resource }
 
     /// Get program info
     pub fn get_info(&self) -> &ProgramInfo { &self.info }
 }
 
-impl<R: Resources + cmp::PartialEq> cmp::PartialEq for Program<R> {
-    fn eq(&self, other: &Program<R>) -> bool {
+impl<B: Backend + cmp::PartialEq> cmp::PartialEq for Program<B> {
+    fn eq(&self, other: &Program<B>) -> bool {
         self.resource().eq(other.resource())
     }
 }
 
-impl<R: Resources + cmp::Eq> cmp::Eq for Program<R> {}
+impl<B: Backend + cmp::Eq> cmp::Eq for Program<B> {}
 
-impl<R: Resources + hash::Hash> hash::Hash for Program<R> {
+impl<B: Backend + hash::Hash> hash::Hash for Program<B> {
     fn hash<H>(&self, state: &mut H) where H: hash::Hasher {
         self.resource().hash(state);
     }

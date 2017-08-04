@@ -8,7 +8,7 @@ use {MAX_COLOR_TARGETS, MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
      MAX_RESOURCE_VIEWS, MAX_UNORDERED_VIEWS, MAX_SAMPLERS};
 use {ConstantBufferSlot, ColorSlot, ResourceViewSlot,
      UnorderedViewSlot, SamplerSlot,
-     Primitive, Resources};
+     Primitive, Backend};
 use {format, state as s, texture};
 use shade::Usage;
 use std::error::Error;
@@ -199,50 +199,50 @@ impl Descriptor {
 
 /// A complete set of vertex buffers to be used for vertex import in PSO.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct VertexBufferSet<R: Resources>(
+pub struct VertexBufferSet<B: Backend>(
     /// Array of buffer handles with offsets in them
-    pub [Option<(R::Buffer, BufferOffset)>; MAX_VERTEX_ATTRIBUTES]
+    pub [Option<(B::Buffer, BufferOffset)>; MAX_VERTEX_ATTRIBUTES]
 );
 
-impl<R: Resources> VertexBufferSet<R> {
+impl<B: Backend> VertexBufferSet<B> {
     /// Create an empty set
-    pub fn new() -> VertexBufferSet<R> {
+    pub fn new() -> VertexBufferSet<B> {
         VertexBufferSet([None; MAX_VERTEX_ATTRIBUTES])
     }
 }
 
 /// A constant buffer run-time parameter for PSO.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct ConstantBufferParam<R: Resources>(pub R::Buffer, pub Usage, pub ConstantBufferSlot);
+pub struct ConstantBufferParam<B: Backend>(pub B::Buffer, pub Usage, pub ConstantBufferSlot);
 
 /// A shader resource view (SRV) run-time parameter for PSO.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct ResourceViewParam<R: Resources>(pub R::ShaderResourceView, pub Usage, pub ResourceViewSlot);
+pub struct ResourceViewParam<B: Backend>(pub B::ShaderResourceView, pub Usage, pub ResourceViewSlot);
 
 /// An unordered access view (UAV) run-time parameter for PSO.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct UnorderedViewParam<R: Resources>(pub R::UnorderedAccessView, pub Usage, pub UnorderedViewSlot);
+pub struct UnorderedViewParam<B: Backend>(pub B::UnorderedAccessView, pub Usage, pub UnorderedViewSlot);
 
 /// A sampler run-time parameter for PSO.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct SamplerParam<R: Resources>(pub R::Sampler, pub Usage, pub SamplerSlot);
+pub struct SamplerParam<B: Backend>(pub B::Sampler, pub Usage, pub SamplerSlot);
 
 /// A complete set of render targets to be used for pixel export in PSO.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct PixelTargetSet<R: Resources> {
+pub struct PixelTargetSet<B: Backend> {
     /// Array of color target views
-    pub colors: [Option<R::RenderTargetView>; MAX_COLOR_TARGETS],
+    pub colors: [Option<B::RenderTargetView>; MAX_COLOR_TARGETS],
     /// Depth target view
-    pub depth: Option<R::DepthStencilView>,
+    pub depth: Option<B::DepthStencilView>,
     /// Stencil target view
-    pub stencil: Option<R::DepthStencilView>,
+    pub stencil: Option<B::DepthStencilView>,
     /// Rendering dimensions
     pub dimensions: Option<texture::Dimensions>,
 }
 
-impl<R: Resources> PixelTargetSet<R> {
+impl<B: Backend> PixelTargetSet<B> {
     /// Create an empty set
-    pub fn new() -> PixelTargetSet<R> {
+    pub fn new() -> PixelTargetSet<B> {
         PixelTargetSet {
             colors: [None; MAX_COLOR_TARGETS],
             depth: None,
@@ -254,7 +254,7 @@ impl<R: Resources> PixelTargetSet<R> {
     /// Add a color view to the specified slot
     pub fn add_color(&mut self,
                      slot: ColorSlot,
-                     view: &R::RenderTargetView,
+                     view: &B::RenderTargetView,
                      dim: texture::Dimensions) {
         self.colors[slot as usize] = Some(view.clone());
         self.set_dimensions(dim);
@@ -262,7 +262,7 @@ impl<R: Resources> PixelTargetSet<R> {
 
     /// Add a depth or stencil view to the specified slot
     pub fn add_depth_stencil(&mut self,
-                             view: &R::DepthStencilView,
+                             view: &B::DepthStencilView,
                              has_depth: bool,
                              has_stencil: bool,
                              dim: texture::Dimensions) {
