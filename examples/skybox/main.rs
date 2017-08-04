@@ -67,15 +67,15 @@ impl<'a> CubemapData<'a> {
     }
 }
 
-fn load_cubemap<R, F>(factory: &mut F, data: CubemapData) -> Result<gfx::handle::ShaderResourceView<R, [f32; 4]>, String>
-        where R: gfx::Resources, F: gfx::Factory<R>
+fn load_cubemap<R, D>(device: &mut D, data: CubemapData) -> Result<gfx::handle::ShaderResourceView<R, [f32; 4]>, String>
+        where R: gfx::Resources, D: gfx::Device<R>
 {
     let images = data.as_array().iter().map(|data| {
         image::load(Cursor::new(data), image::JPEG).unwrap().to_rgba()
     }).collect::<Vec<_>>();
     let data: [&[u8]; 6] = [&images[0], &images[1], &images[2], &images[3], &images[4], &images[5]];
     let kind = texture::Kind::Cube(images[0].dimensions().0 as u16);
-    match factory.create_texture_immutable_u8::<Rgba8>(kind, &data) {
+    match device.create_texture_immutable_u8::<Rgba8>(kind, &data) {
         Ok((_, view)) => Ok(view),
         Err(_) => Err("Unable to create an immutable cubemap texture".to_owned()),
     }
@@ -89,12 +89,12 @@ struct App<B: gfx::Backend> {
 }
 
 impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
-    fn new(factory: &mut B::Factory,
+    fn new(device: &mut B::Device,
            _: &mut gfx::queue::GraphicsQueue<B>,
            backend: gfx_app::shade::Backend,
            window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
     {
-        use gfx::traits::FactoryExt;
+        use gfx::traits::DeviceExt;
 
         let vs = gfx_app::shade::Source {
             glsl_150: include_bytes!("shader/cubemap_150.glslv"),
@@ -112,9 +112,9 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
             Vertex::new([ 3.0, -1.0]),
             Vertex::new([-1.0,  3.0])
         ];
-        let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
+        let (vbuf, slice) = device.create_vertex_buffer_with_slice(&vertex_data, ());
 
-        let cubemap = load_cubemap(factory, CubemapData {
+        let cubemap = load_cubemap(device, CubemapData {
             up: &include_bytes!("image/posy.jpg")[..],
             down: &include_bytes!("image/negy.jpg")[..],
             front: &include_bytes!("image/posz.jpg")[..],
@@ -123,11 +123,11 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
             left: &include_bytes!("image/negx.jpg")[..],
         }).unwrap();
 
-        let sampler = factory.create_sampler_linear();
+        let sampler = device.create_sampler_linear();
 
         let proj = cgmath::perspective(Deg(60.0f32), window_targets.aspect_ratio, 0.01, 100.0);
 
-        let pso = factory.create_pipeline_simple(
+        let pso = device.create_pipeline_simple(
             vs.select(backend).unwrap(),
             ps.select(backend).unwrap(),
             pipe::new()
@@ -136,7 +136,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         let data = pipe::Data {
             vbuf: vbuf,
             cubemap: (cubemap, sampler),
-            locals: factory.create_constant_buffer(1),
+            locals: device.create_constant_buffer(1),
             out: window_targets.views[0].0.clone(),
         };
 

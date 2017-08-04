@@ -49,28 +49,28 @@
 //! - The [`CommandBuffer` trait](trait.CommandBuffer.html).
 //! - The [`CommandQueue` struct](struct.CommandQueue.html).
 //!
-//! ## Factory
+//! ## Devoce
 //!
-//! The factory is what lets you allocate GPU resources such as buffers and textures.
+//! The device is what lets you allocate GPU resources such as buffers and textures.
 //!
-//! Each gfx backend provides its own factory type which implements both:
+//! Each gfx backend provides its own device type which implements both:
 //!
-//! - The [`Factory` trait](traits/trait.Factory.html#overview).
-//! - The [`FactoryExt` trait](traits/trait.FactoryExt.html).
+//! - The [`Device` trait](traits/trait.Device.html#overview).
+//! - The [`DeviceExt` trait](traits/trait.DeviceExt.html).
 //!
-//! `gfx::Factory` is roughly equivalent to:
+//! `gfx::Device` is roughly equivalent to:
 //!
 //! - `VkDevice` in vulkan,
 //! - `ID3D11Device` in D3D11,
 //! - `MTLDevice` in metal.
 //!
-//! OpenGL does not have a notion of factory (resources are created directly off of the global
+//! OpenGL does not have a notion of device (resources are created directly off of the global
 //! context). D3D11 has a DXGI factory but it is only used to interface with other processes
 //! and the window manager, resources like textures are usually created using the device.
 //!
-//! ## Device
+//! ## Gpu
 //!
-//! The `Device` contains the `Factory` and the `Queue`s.
+//! The `Gpu` contains the `Device` and the `Queue`s.
 //!
 //! ## Pipeline state (PSO)
 //!
@@ -106,9 +106,9 @@ extern crate gfx_core as core;
 
 /// public re-exported traits
 pub mod traits {
-    pub use core::{Factory};
+    pub use core::{Device};
     pub use core::memory::Pod;
-    pub use factory::FactoryExt;
+    pub use device::DeviceExt;
 }
 
 // draw state re-exports
@@ -116,13 +116,13 @@ pub use draw_state::{preset, state};
 pub use draw_state::target::*;
 
 // public re-exports
-pub use core::{Adapter, Backend, CommandQueue, Device, Frame, FrameSync, Headless, Primitive, QueueFamily, QueueType,
+pub use core::{Adapter, Backend, CommandQueue, Gpu, Frame, FrameSync, Headless, Primitive, QueueFamily, QueueType,
                Resources, SubmissionError, SubmissionResult, Surface, SwapChain, SwapchainConfig, WindowExt};
 pub use core::{VertexCount, InstanceCount};
 pub use core::{ShaderSet, VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
 pub use core::{GeneralCommandPool, GraphicsCommandPool, ComputeCommandPool, SubpassCommandPool};
 pub use core::{buffer, format, handle, texture, mapping, queue};
-pub use core::factory::{Factory, ResourceViewError, TargetViewError, CombinedError, WaitFor};
+pub use core::device::{Device, ResourceViewError, TargetViewError, CombinedError, WaitFor};
 pub use core::memory::{self, Bind, TRANSFER_SRC, TRANSFER_DST, RENDER_TARGET,
                        DEPTH_STENCIL, SHADER_RESOURCE, UNORDERED_ACCESS};
 pub use core::command::{Buffer as CommandBuffer, InstanceParams};
@@ -130,7 +130,7 @@ pub use core::shade::{ProgramInfo, UniformValue};
 
 pub use encoder::{CopyBufferResult, CopyBufferTextureResult, CopyError,
                   CopyTextureBufferResult, GraphicsEncoder, UpdateError, GraphicsPoolExt};
-pub use factory::PipelineStateError;
+pub use device::PipelineStateError;
 pub use slice::{Slice, IntoIndexBuffer, IndexBuffer};
 pub use swapchain::SwapChainExt;
 pub use pso::{PipelineState};
@@ -144,8 +144,8 @@ pub use pso::bundle::{Bundle};
 
 /// Render commands encoder
 mod encoder;
-/// Factory extensions
-mod factory;
+/// Device extensions
+mod device;
 /// Slices
 mod slice;
 /// Swapchain extensions

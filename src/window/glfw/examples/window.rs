@@ -41,7 +41,7 @@ pub fn main() {
     let mut window = gfx_window_glfw::Window::new(window);
     let (mut surface, adapters) = window.get_surface_and_adapters();
 
-    let gfx::Device { mut factory, mut graphics_queues, .. } =
+    let gfx::Gpu { mut device, mut graphics_queues, .. } =
         adapters[0].open_with(|family, ty| {
             ((ty.supports_graphics() && surface.supports_queue(&family)) as u32, gfx::QueueType::Graphics)
         });

@@ -17,7 +17,7 @@ use std::collections::BTreeMap as Map;
 use std::os::raw::c_void;
 use std::sync::Arc;
 use winapi;
-use core::{self, factory as f, buffer, texture, mapping};
+use core::{self, device as d, buffer, texture, mapping};
 use core::memory::{self, Bind, Typed};
 use core::handle::{self as h, Producer};
 use {Resources as R, Share, Buffer, Fence, Texture, Pipeline, Program, Shader};
@@ -59,7 +59,7 @@ struct TextureParam {
     cpu_access: winapi::D3D11_CPU_ACCESS_FLAG,
 }
 
-pub struct Factory {
+pub struct Device {
     device: ComPtr<winapi::ID3D11Device>,
     share: Arc<Share>,
     frame_handles: h::Manager<R>,
@@ -72,16 +72,16 @@ pub struct Factory {
     feature_level: winapi::D3D_FEATURE_LEVEL,
 }
 
-impl Clone for Factory {
-    fn clone(&self) -> Factory {
-        Factory::new(self.device.clone(), self.feature_level, self.share.clone())
+impl Clone for Device {
+    fn clone(&self) -> Device {
+        Device::new(self.device.clone(), self.feature_level, self.share.clone())
     }
 }
 
-impl Factory {
-    /// Create a new `Factory`.
-    pub fn new(device: ComPtr<winapi::ID3D11Device>, feature_level: winapi::D3D_FEATURE_LEVEL, share: Arc<Share>) -> Factory {
-        Factory {
+impl Device {
+    /// Create a new `Device`.
+    pub fn new(device: ComPtr<winapi::ID3D11Device>, feature_level: winapi::D3D_FEATURE_LEVEL, share: Arc<Share>) -> Device {
+        Device {
             device: device,
             share: share,
             frame_handles: h::Manager::new(),
@@ -95,7 +95,7 @@ impl Factory {
     #[doc(hidden)]
     pub fn wrap_back_buffer(&mut self, back_buffer: *mut winapi::ID3D11Texture2D, info: texture::Info,
                             desc: texture::RenderDesc) -> h::RawRenderTargetView<R> {
-        use core::Factory;
+        use core::Device;
         let raw_tex = Texture(native::Texture::D2(back_buffer));
         let color_tex = self.share.handles.borrow_mut().make_texture(raw_tex, info);
         self.view_texture_as_render_target_raw(&color_tex, desc).unwrap()
@@ -342,7 +342,7 @@ impl Factory {
     }
 }
 
-impl core::Factory<R> for Factory {
+impl core::Device<R> for Device {
     fn get_capabilities(&self) -> &core::Capabilities {
         &self.share.capabilities
     }
@@ -555,7 +555,7 @@ impl core::Factory<R> for Factory {
         let vs_bin = match self.vs_cache.get(&prog.vs_hash) {
             Some(ref code) => &code[..],
             None => {
-                error!("VS hash {} is not found in the factory cache", prog.vs_hash);
+                error!("VS hash {} is not found in the device cache", prog.vs_hash);
                 return Err(core::pso::CreationError);
             }
         };
@@ -679,17 +679,17 @@ impl core::Factory<R> for Factory {
     }
 
     fn view_buffer_as_shader_resource_raw(&mut self, _hbuf: &h::RawBuffer<R>, _: core::format::Format)
-                                      -> Result<h::RawShaderResourceView<R>, f::ResourceViewError> {
-        Err(f::ResourceViewError::Unsupported) //TODO
+                                      -> Result<h::RawShaderResourceView<R>, d::ResourceViewError> {
+        Err(d::ResourceViewError::Unsupported) //TODO
     }
 
     fn view_buffer_as_unordered_access_raw(&mut self, _hbuf: &h::RawBuffer<R>)
-                                       -> Result<h::RawUnorderedAccessView<R>, f::ResourceViewError> {
-        Err(f::ResourceViewError::Unsupported) //TODO
+                                       -> Result<h::RawUnorderedAccessView<R>, d::ResourceViewError> {
+        Err(d::ResourceViewError::Unsupported) //TODO
     }
 
     fn view_texture_as_shader_resource_raw(&mut self, htex: &h::RawTexture<R>, desc: texture::ResourceDesc)
-                                       -> Result<h::RawShaderResourceView<R>, f::ResourceViewError> {
+                                       -> Result<h::RawShaderResourceView<R>, d::ResourceViewError> {
         use winapi::UINT;
         use core::texture::{AaMode, Kind};
         use data::map_format;
@@ -720,7 +720,7 @@ impl core::Factory<R> for Factory {
         let native_desc = winapi::D3D11_SHADER_RESOURCE_VIEW_DESC {
             Format: match map_format(format, false) {
                 Some(fm) => fm,
-                None => return Err(f::ResourceViewError::Channel(desc.channel)),
+                None => return Err(d::ResourceViewError::Channel(desc.channel)),
             },
             ViewDimension: dim,
             u: if has_levels {
@@ -738,18 +738,18 @@ impl core::Factory<R> for Factory {
         };
         if !winapi::SUCCEEDED(hr) {
             error!("Failed to create SRV from {:#?}, error {:x}", native_desc, hr);
-            return Err(f::ResourceViewError::Unsupported);
+            return Err(d::ResourceViewError::Unsupported);
         }
         Ok(self.share.handles.borrow_mut().make_texture_srv(native::Srv(raw_view), htex))
     }
 
     fn view_texture_as_unordered_access_raw(&mut self, _htex: &h::RawTexture<R>)
-                                        -> Result<h::RawUnorderedAccessView<R>, f::ResourceViewError> {
-        Err(f::ResourceViewError::Unsupported) //TODO
+                                        -> Result<h::RawUnorderedAccessView<R>, d::ResourceViewError> {
+        Err(d::ResourceViewError::Unsupported) //TODO
     }
 
     fn view_texture_as_render_target_raw(&mut self, htex: &h::RawTexture<R>, desc: texture::RenderDesc)
-                                         -> Result<h::RawRenderTargetView<R>, f::TargetViewError>
+                                         -> Result<h::RawRenderTargetView<R>, d::TargetViewError>
     {
         use winapi::UINT;
         use core::texture::{AaMode, Kind};
@@ -787,14 +787,14 @@ impl core::Factory<R> for Factory {
                 (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6 * nlayers as UINT]),
             (Kind::CubeArray(_, nlayers), Some(lid)) if lid < nlayers =>
                 (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 6 * lid as UINT, 6 * (1+lid) as UINT]),
-            (_, None) => return Err(f::TargetViewError::Level(desc.level)),
-            (_, Some(lid)) => return Err(f::TargetViewError::Layer(texture::LayerError::OutOfBounds(lid, 0))), //TODO
+            (_, None) => return Err(d::TargetViewError::Level(desc.level)),
+            (_, Some(lid)) => return Err(d::TargetViewError::Layer(texture::LayerError::OutOfBounds(lid, 0))), //TODO
         };
         let format = core::format::Format(htex.get_info().format, desc.channel);
         let native_desc = winapi::D3D11_RENDER_TARGET_VIEW_DESC {
             Format: match map_format(format, true) {
                 Some(fm) => fm,
-                None => return Err(f::TargetViewError::Channel(desc.channel)),
+                None => return Err(d::TargetViewError::Channel(desc.channel)),
             },
             ViewDimension: dim,
             u: extra,
@@ -806,14 +806,14 @@ impl core::Factory<R> for Factory {
         };
         if !winapi::SUCCEEDED(hr) {
             error!("Failed to create RTV from {:#?}, error {:x}", native_desc, hr);
-            return Err(f::TargetViewError::Unsupported);
+            return Err(d::TargetViewError::Unsupported);
         }
         let size = htex.get_info().kind.get_level_dimensions(desc.level);
         Ok(self.share.handles.borrow_mut().make_rtv(native::Rtv(raw_view), htex, size))
     }
 
     fn view_texture_as_depth_stencil_raw(&mut self, htex: &h::RawTexture<R>, desc: texture::DepthStencilDesc)
-                                         -> Result<h::RawDepthStencilView<R>, f::TargetViewError>
+                                         -> Result<h::RawDepthStencilView<R>, d::TargetViewError>
     {
         use winapi::UINT;
         use core::texture::{AaMode, Kind};
@@ -839,7 +839,7 @@ impl core::Factory<R> for Factory {
                 (winapi::D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY, [0, nlayers as UINT, 0]),
             (Kind::D2Array(_, _, nlayers, _), Some(lid)) if level == 0 && lid < nlayers =>
                 (winapi::D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY, [lid as UINT, 1+lid as UINT, 0]),
-            (Kind::D3(..), _) => return Err(f::TargetViewError::Unsupported),
+            (Kind::D3(..), _) => return Err(d::TargetViewError::Unsupported),
             (Kind::Cube(..), None) =>
                 (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6]),
             (Kind::Cube(..), Some(lid)) if lid < 6 =>
@@ -848,8 +848,8 @@ impl core::Factory<R> for Factory {
                 (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6 * nlayers as UINT]),
             (Kind::CubeArray(_, nlayers), Some(lid)) if lid < nlayers =>
                 (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 6 * lid as UINT, 6 * (1+lid) as UINT]),
-            (_, None) => return Err(f::TargetViewError::Level(desc.level)),
-            (_, Some(lid)) => return Err(f::TargetViewError::Layer(texture::LayerError::OutOfBounds(lid, 0))), //TODO
+            (_, None) => return Err(d::TargetViewError::Level(desc.level)),
+            (_, Some(lid)) => return Err(d::TargetViewError::Layer(texture::LayerError::OutOfBounds(lid, 0))), //TODO
         };
 
         let channel = core::format::ChannelType::Uint; //doesn't matter
@@ -857,7 +857,7 @@ impl core::Factory<R> for Factory {
         let native_desc = winapi::D3D11_DEPTH_STENCIL_VIEW_DESC {
             Format: match map_format(format, true) {
                 Some(fm) => fm,
-                None => return Err(f::TargetViewError::Channel(channel)),
+                None => return Err(d::TargetViewError::Channel(channel)),
             },
             ViewDimension: dim,
             Flags: map_dsv_flags(desc.flags).0,
@@ -871,7 +871,7 @@ impl core::Factory<R> for Factory {
         };
         if !winapi::SUCCEEDED(hr) {
             error!("Failed to create DSV from {:#?}, error {:x}", native_desc, hr);
-            return Err(f::TargetViewError::Unsupported);
+            return Err(d::TargetViewError::Unsupported);
         }
         let dim = htex.get_info().kind.get_level_dimensions(desc.level);
         Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_view), htex, dim))
@@ -922,7 +922,7 @@ impl core::Factory<R> for Factory {
         // TODO: noop?
     }
 
-    fn wait_for_fences(&mut self, _fences: &[&h::Fence<R>], _wait: f::WaitFor, _timeout_ms: u32) -> bool {
+    fn wait_for_fences(&mut self, _fences: &[&h::Fence<R>], _wait: d::WaitFor, _timeout_ms: u32) -> bool {
         // TODO: noop?
         true
     }
@@ -956,13 +956,13 @@ impl core::Factory<R> for Factory {
 pub fn ensure_mapped(mapping: &mut MappingGate,
                      buffer: &h::RawBuffer<R>,
                      map_type: winapi::d3d11::D3D11_MAP,
-                     factory: &mut Factory) {
+                     device: &mut Device) {
     if mapping.pointer.is_null() {
         let raw_handle = *buffer.resource();
         let mut ctx = ptr::null_mut();
 
         unsafe {
-            factory.device.GetImmediateContext(&mut ctx);
+            device.device.GetImmediateContext(&mut ctx);
         }
 
         let mut sres = winapi::d3d11::D3D11_MAPPED_SUBRESOURCE {

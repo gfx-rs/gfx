@@ -11,12 +11,12 @@ gfx_defines!{
         _x: i8 = "x",
         _y: f32 = "y",
     }
-    
+
     vertex Instance {
         pos: [f32; 2] = "pos",
         color: [f32; 3] = "color",
     }
-    
+
     constant Local {
         pos: [u32; 4] = "pos",
     }
@@ -24,7 +24,7 @@ gfx_defines!{
     constant LocalMeta {
         pos: [u32; 4] = "pos_meta",
     }
-    
+
     pipeline testpipe {
         vertex: gfx::VertexBuffer<Vertex> = (),
         instance: gfx::InstanceBuffer<Instance> = (),
@@ -43,11 +43,11 @@ gfx_defines!{
     }
 }
 
-fn _test_pso<R, F>(factory: &mut F) -> gfx::PipelineState<R, testpipe::Meta> where
+fn _test_pso<R, D>(device: &mut D) -> gfx::PipelineState<R, testpipe::Meta> where
     R: gfx::Resources,
-    F: gfx::traits::FactoryExt<R>,
+    D: gfx::traits::DeviceExt<R>,
 {
-    factory.create_pipeline_simple(&[], &[], testpipe::new()).unwrap()
+    device.create_pipeline_simple(&[], &[], testpipe::new()).unwrap()
 }
 
 
@@ -58,9 +58,9 @@ gfx_pipeline_base!( testraw {
     target: gfx::RawRenderTarget,
 });
 
-fn _test_raw<R, F>(factory: &mut F) -> gfx::PipelineState<R, testraw::Meta> where
+fn _test_raw<R, D>(device: &mut D) -> gfx::PipelineState<R, testraw::Meta> where
     R: gfx::Resources,
-    F: gfx::traits::FactoryExt<R>,
+    D: gfx::traits::DeviceExt<R>,
 {
     let special = gfx::pso::buffer::Element {
         format: fm::Format(fm::SurfaceType::R32, fm::ChannelType::Float),
@@ -74,5 +74,5 @@ fn _test_raw<R, F>(factory: &mut F) -> gfx::PipelineState<R, testraw::Meta> wher
             fm::Format(fm::SurfaceType::R8_G8_B8_A8, fm::ChannelType::Unorm),
             gfx::state::MASK_ALL, None),
     };
-    factory.create_pipeline_simple(&[], &[], init).unwrap()
+    device.create_pipeline_simple(&[], &[], init).unwrap()
 }

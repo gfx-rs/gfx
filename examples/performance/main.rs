@@ -21,7 +21,7 @@ extern crate gfx_gl as gl;
 extern crate gfx_window_glutin;
 extern crate glutin;
 
-use gfx::{Adapter, CommandQueue, GraphicsPoolExt, Factory, FrameSync,
+use gfx::{Adapter, CommandQueue, GraphicsPoolExt, Device, FrameSync,
     Surface, SwapChain, SwapChainExt, WindowExt};
 use gfx::format::Rgba8 as ColorFormat;
 
@@ -95,7 +95,7 @@ struct GFX {
     dimension: i16,
     window: gfx_window_glutin::Window,
     swap_chain: gfx_window_glutin::SwapChain,
-    factory: gfx_device_gl::Factory,
+    device: gfx_device_gl::Device,
     queue: gfx::queue::GraphicsQueue<B>,
     pool: gfx::GraphicsCommandPool<B>,
     frame_semaphore: gfx::handle::Semaphore<R>,
@@ -113,15 +113,15 @@ impl GFX {
            events_loop: &glutin::EventsLoop,
            dimension: i16) -> Self
     {
-        use gfx::traits::FactoryExt;
+        use gfx::traits::DeviceExt;
 
         // Create window
         let win = glutin::GlWindow::new(builder, context, &events_loop).unwrap();
         let mut window = gfx_window_glutin::Window::new(win);
         // Acquire surface and adapters
         let (mut surface, adapters) = window.get_surface_and_adapters();
-        // Open device (factory and queues)
-        let gfx::Device { mut factory, mut graphics_queues, .. } =
+        // Open gpu (device and queues)
+        let gfx::Gpu { mut device, mut graphics_queues, .. } =
         adapters[0].open_with(|family, ty| {
             ((ty.supports_graphics() && surface.supports_queue(&family)) as u32, gfx::QueueType::Graphics)
         });
@@ -131,14 +131,14 @@ impl GFX {
         let config = gfx::SwapchainConfig::new()
                         .with_color::<ColorFormat>();
         let mut swap_chain = surface.build_swapchain(config, &queue);
-        let views = swap_chain.create_color_views(&mut factory);
+        let views = swap_chain.create_color_views(&mut device);
 
-        let pso = factory.create_pipeline_simple(
+        let pso = device.create_pipeline_simple(
             VERTEX_SRC, FRAGMENT_SRC,
             pipe::new()
         ).unwrap();
 
-        let (vbuf, slice) = factory.create_vertex_buffer_with_slice(VERTEX_DATA,());
+        let (vbuf, slice) = device.create_vertex_buffer_with_slice(VERTEX_DATA,());
         let data = pipe::Data {
             vbuf: vbuf,
             transform: cgmath::Matrix4::identity().into(),
@@ -151,15 +151,15 @@ impl GFX {
             swap_chain,
             queue,
             pool,
-            frame_semaphore: factory.create_semaphore(),
-            draw_semaphore: factory.create_semaphore(),
-            frame_fence: factory.create_fence(false),
+            frame_semaphore: device.create_semaphore(),
+            draw_semaphore: device.create_semaphore(),
+            frame_fence: device.create_fence(false),
             views,
             dimension,
             data,
             pso,
             slice,
-            factory,
+            device,
         }
     }
 }
@@ -193,7 +193,7 @@ impl Renderer for GFX {
                .expect("Could not flush encoder");
         let post_submit = start.elapsed();
         self.swap_chain.present(&mut self.queue, &[&self.draw_semaphore]);
-        self.factory.wait_for_fences(&[&self.frame_fence], gfx::WaitFor::All, 1_000_000);
+        self.device.wait_for_fences(&[&self.frame_fence], gfx::WaitFor::All, 1_000_000);
         self.queue.cleanup();
         let swap = start.elapsed();
 

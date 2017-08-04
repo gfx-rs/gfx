@@ -29,13 +29,13 @@ use core::{self as c, handle, state as s, format, pso, texture, memory, command 
 use core::QueueType;
 use core::target::{Layer, Level};
 use command::{Command, DataBuffer};
-use factory::MappingKind;
+use device::MappingKind;
 
-pub use self::factory::Factory;
+pub use self::device::Device;
 pub use self::info::{Info, PlatformName, Version};
 
 mod command;
-mod factory;
+mod device;
 mod info;
 mod native;
 mod pool;
@@ -66,7 +66,7 @@ impl c::Backend for Backend {
     type RawCommandBuffer = command::RawCommandBuffer;
     type SubpassCommandBuffer = command::SubpassCommandBuffer;
     type SubmitInfo = command::SubmitInfo;
-    type Factory = Factory;
+    type Device = Device;
     type QueueFamily = QueueFamily;
 
     type RawCommandPool = pool::RawCommandPool;
@@ -88,7 +88,7 @@ impl c::Resources for Resources {
     type Sampler             = FatSampler;
     type Fence               = Fence;
     type Semaphore           = (); // TODO
-    type Mapping             = factory::MappingGate;
+    type Mapping             = device::MappingGate;
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -288,7 +288,7 @@ impl Adapter {
 }
 
 impl c::Adapter<Backend> for Adapter {
-    fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)]) -> c::Device<Backend> {
+    fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)]) -> c::Gpu<Backend> {
         // Only support a single queue
         assert_eq!(queue_descs.len(), 1);
         assert!(queue_descs[0].2 <= 1);
@@ -316,16 +316,14 @@ impl c::Adapter<Backend> for Adapter {
             }
         }
 
-        let mut device = c::Device {
-            factory: Factory::new(self.share.clone()),
+        let mut gpu = c::Gpu {
+            device: Device::new(self.share.clone()),
             general_queues: Vec::new(),
             graphics_queues: Vec::new(),
             compute_queues: Vec::new(),
             transfer_queues: Vec::new(),
             heap_types: Vec::new(), // TODO
             memory_heaps: Vec::new(), // TODO
-
-            _marker: std::marker::PhantomData,
         };
 
         let raw_queue = || {
@@ -342,22 +340,22 @@ impl c::Adapter<Backend> for Adapter {
             unsafe {
                 match queue_type {
                     QueueType::General => {
-                        device.general_queues.push(c::GeneralQueue::new(raw_queue()));
+                        gpu.general_queues.push(c::GeneralQueue::new(raw_queue()));
                     }
                     QueueType::Graphics => {
-                        device.graphics_queues.push(c::GraphicsQueue::new(raw_queue()));
+                        gpu.graphics_queues.push(c::GraphicsQueue::new(raw_queue()));
                     }
                     QueueType::Compute => {
-                        device.compute_queues.push(c::ComputeQueue::new(raw_queue()));
+                        gpu.compute_queues.push(c::ComputeQueue::new(raw_queue()));
                     }
                     QueueType::Transfer => {
-                        device.transfer_queues.push(c::TransferQueue::new(raw_queue()));
+                        gpu.transfer_queues.push(c::TransferQueue::new(raw_queue()));
                     }
                 }
             }
         }
 
-        device
+        gpu
     }
 
     fn get_info(&self) -> &c::AdapterInfo {
@@ -672,17 +670,17 @@ impl CommandQueue {
 
                     unsafe {
                         let mut src_ptr = 0 as *mut ::std::os::raw::c_void;
-                        factory::temporary_ensure_mapped(&mut src_ptr, gl::COPY_READ_BUFFER, src, memory::READ, gl);
+                        device::temporary_ensure_mapped(&mut src_ptr, gl::COPY_READ_BUFFER, src, memory::READ, gl);
                         src_ptr.offset(src_offset);
 
                         let mut dst_ptr = 0 as *mut ::std::os::raw::c_void;
-                        factory::temporary_ensure_mapped(&mut dst_ptr, gl::COPY_WRITE_BUFFER, dst, memory::WRITE, gl);
+                        device::temporary_ensure_mapped(&mut dst_ptr, gl::COPY_WRITE_BUFFER, dst, memory::WRITE, gl);
                         dst_ptr.offset(dst_offset);
 
                         ::std::ptr::copy(src_ptr, dst_ptr, size as usize);
 
-                        factory::temporary_ensure_unmapped(&mut src_ptr, gl::COPY_READ_BUFFER, src, gl);
-                        factory::temporary_ensure_unmapped(&mut dst_ptr, gl::COPY_WRITE_BUFFER, dst, gl);
+                        device::temporary_ensure_unmapped(&mut src_ptr, gl::COPY_READ_BUFFER, src, gl);
+                        device::temporary_ensure_unmapped(&mut dst_ptr, gl::COPY_WRITE_BUFFER, dst, gl);
                     }
                 }
             },
@@ -700,7 +698,7 @@ impl CommandQueue {
             },
             Command::UpdateBuffer(buffer, pointer, offset) => {
                 let data = data_buf.get(pointer);
-                factory::update_sub_buffer(&self.share.context, buffer,
+                device::update_sub_buffer(&self.share.context, buffer,
                     data.as_ptr(), data.len(), offset, buffer::Role::Vertex);
             },
             Command::UpdateTexture(texture, kind, face, pointer, ref image) => {
@@ -879,7 +877,7 @@ impl CommandQueue {
     fn ensure_mappings_flushed(&mut self, gpu_access: &mut com::AccessGuard<Resources>) {
         let gl = &self.share.context;
         for (buffer, mapping) in gpu_access.access_mapped_reads() {
-            let target = factory::role_to_target(buffer.get_info().role);
+            let target = device::role_to_target(buffer.get_info().role);
             let status = match &mut mapping.kind {
                 &mut MappingKind::Persistent(ref mut status) => status,
                 _ => unreachable!(),
@@ -896,8 +894,8 @@ impl CommandQueue {
     // MappingKind::Temporary
     fn ensure_mappings_unmapped(&mut self, gpu_access: &mut com::AccessGuard<Resources>) {
         for (buffer, mapping) in gpu_access.access_mapped() {
-            let target = factory::role_to_target(buffer.get_info().role);
-            factory::temporary_ensure_unmapped(&mut mapping.pointer,
+            let target = device::role_to_target(buffer.get_info().role);
+            device::temporary_ensure_unmapped(&mut mapping.pointer,
                                                target,
                                                *buffer.resource(),
                                                &self.share.context);
@@ -959,7 +957,7 @@ impl CommandQueue {
     }
 
     fn wait_fence(&mut self, fence: &handle::Fence<Resources>) {
-        factory::wait_fence(
+        device::wait_fence(
             &*self.frame_handles.ref_fence(&fence).lock().unwrap(),
             &self.share.context,
             1_000_000);
@@ -1008,8 +1006,8 @@ impl c::CommandQueue<Backend> for CommandQueue {
                     match mapping.kind {
                         MappingKind::Persistent(_) => (),
                         MappingKind::Temporary => {
-                            let target = factory::role_to_target(buffer.get_info().role);
-                            factory::temporary_ensure_unmapped(&mut mapping.pointer,
+                            let target = device::role_to_target(buffer.get_info().role);
+                            device::temporary_ensure_unmapped(&mut mapping.pointer,
                                                                target,
                                                                *buffer.resource(),
                                                                gl);

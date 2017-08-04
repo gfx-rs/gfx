@@ -20,7 +20,7 @@ extern crate gfx_app;
 use std::time::Instant;
 
 use gfx_app::{BackbufferView, ColorFormat};
-use gfx::{Bundle, Factory, GraphicsPoolExt, ShaderSet, Primitive, buffer, Bind, Slice};
+use gfx::{Bundle, Device, GraphicsPoolExt, ShaderSet, Primitive, buffer, Bind, Slice};
 use gfx::state::Rasterizer;
 
 // Declare the vertex format suitable for drawing,
@@ -68,20 +68,20 @@ struct App<B: gfx::Backend> {
     time_start: Instant,
 }
 
-fn create_shader_set<R: gfx::Resources, F: gfx::Factory<R>>(factory: &mut F, vs_code: &[u8], gs_code: &[u8], ps_code: &[u8]) -> ShaderSet<R> {
-    let vs = factory.create_shader_vertex(vs_code).expect("Failed to compile vertex shader");
-    let gs = factory.create_shader_geometry(gs_code).expect("Failed to compile geometry shader");
-    let ps = factory.create_shader_pixel(ps_code).expect("Failed to compile pixel shader");
+fn create_shader_set<R: gfx::Resources, D: gfx::Device<R>>(device: &mut D, vs_code: &[u8], gs_code: &[u8], ps_code: &[u8]) -> ShaderSet<R> {
+    let vs = device.create_shader_vertex(vs_code).expect("Failed to compile vertex shader");
+    let gs = device.create_shader_geometry(gs_code).expect("Failed to compile geometry shader");
+    let ps = device.create_shader_pixel(ps_code).expect("Failed to compile pixel shader");
     ShaderSet::Geometry(vs, gs, ps)
 }
 
 impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
-    fn new(factory: &mut B::Factory,
+    fn new(device: &mut B::Device,
            _: &mut gfx::queue::GraphicsQueue<B>,
            backend: gfx_app::shade::Backend,
            window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
     {
-        use gfx::traits::FactoryExt;
+        use gfx::traits::DeviceExt;
 
         // Load in our vertex, geometry and pixel shaders
         let vs = gfx_app::shade::Source {
@@ -101,7 +101,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         };
 
         let shader_set = create_shader_set(
-            factory,
+            device,
             vs.select(backend).unwrap(),
             gs.select(backend).unwrap(),
             ps.select(backend).unwrap(),
@@ -111,7 +111,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         let mut particles = vec![Vertex::new(); 4096];
 
         // Create a dynamic vertex buffer to hold the particle data
-        let vbuf = factory.create_buffer(particles.len(),
+        let vbuf = device.create_buffer(particles.len(),
                                          buffer::Role::Vertex,
                                          gfx::memory::Usage::Dynamic,
                                          Bind::empty())
@@ -119,7 +119,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
         let slice = Slice::new_match_vertex_buffer(&vbuf);
 
         // Construct our pipeline state
-        let pso = factory.create_pipeline_state(
+        let pso = device.create_pipeline_state(
             &shader_set,
             Primitive::PointList,
             Rasterizer::new_fill(),
@@ -128,7 +128,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
 
         let data = particles::Data {
             vbuf: vbuf,
-            locals: factory.create_constant_buffer(1),
+            locals: device.create_constant_buffer(1),
             out_color: window_targets.views[0].0.clone(),
         };
 

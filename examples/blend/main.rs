@@ -52,15 +52,15 @@ impl Vertex {
     }
 }
 
-fn load_texture<R, F>(factory: &mut F, data: &[u8])
+fn load_texture<R, D>(device: &mut D, data: &[u8])
                 -> Result<gfx::handle::ShaderResourceView<R, [f32; 4]>, String> where
-                R: gfx::Resources, F: gfx::Factory<R> {
+                R: gfx::Resources, D: gfx::Device<R> {
     use std::io::Cursor;
     use gfx::texture as t;
     let img = image::load(Cursor::new(data), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
     let kind = t::Kind::D2(width as t::Size, height as t::Size, t::AaMode::Single);
-    let (_, view) = factory.create_texture_immutable_u8::<Rgba8>(kind, &[&img]).unwrap();
+    let (_, view) = device.create_texture_immutable_u8::<Rgba8>(kind, &[&img]).unwrap();
     Ok(view)
 }
 
@@ -83,12 +83,12 @@ struct App<B: gfx::Backend> {
 }
 
 impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
-    fn new(factory: &mut B::Factory,
+    fn new(device: &mut B::Device,
            _: &mut gfx::queue::GraphicsQueue<B>,
            backend: gfx_app::shade::Backend,
            window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
     {
-        use gfx::traits::FactoryExt;
+        use gfx::traits::DeviceExt;
 
         let vs = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/blend_120.glslv"),
@@ -113,13 +113,13 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
             Vertex::new([ 1.0,  1.0], [1.0, 0.0]),
             Vertex::new([-1.0,  1.0], [0.0, 0.0]),
         ];
-        let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
+        let (vbuf, slice) = device.create_vertex_buffer_with_slice(&vertex_data, ());
 
-        let lena_texture = load_texture(factory, &include_bytes!("image/lena.png")[..]).unwrap();
-        let tint_texture = load_texture(factory, &include_bytes!("image/tint.png")[..]).unwrap();
-        let sampler = factory.create_sampler_linear();
+        let lena_texture = load_texture(device, &include_bytes!("image/lena.png")[..]).unwrap();
+        let tint_texture = load_texture(device, &include_bytes!("image/tint.png")[..]).unwrap();
+        let sampler = device.create_sampler_linear();
 
-        let pso = factory.create_pipeline_simple(
+        let pso = device.create_pipeline_simple(
             vs.select(backend).unwrap(),
             ps.select(backend).unwrap(),
             pipe::new()
@@ -131,7 +131,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
 
         // each index correspond to a conditional branch inside the shader
         println!("Using '{}' blend equation", BLENDS[0]);
-        let cbuf = factory.create_constant_buffer(1);
+        let cbuf = device.create_constant_buffer(1);
 
         let data = pipe::Data {
             vbuf: vbuf,

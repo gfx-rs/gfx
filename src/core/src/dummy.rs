@@ -16,11 +16,11 @@
 //! outside of the graphics development environment.
 
 use {Adapter, AdapterInfo, Backend, Capabilities, Resources, IndexType, VertexCount, QueueType,
-     Device, Factory, CommandQueue, QueueFamily, ShaderSet, Surface, SwapChain,
+     Gpu, Device, CommandQueue, QueueFamily, ShaderSet, Surface, SwapChain,
      Frame, FrameSync, SwapchainConfig, Backbuffer, WindowExt, RawSubmission};
 use {buffer, format, state, target, handle, mapping, pool, pso, shade, texture};
 use command::{self, AccessInfo};
-use factory::{ResourceViewError, TargetViewError, WaitFor};
+use device::{ResourceViewError, TargetViewError, WaitFor};
 use memory::Bind;
 
 /// Dummy backend.
@@ -28,7 +28,7 @@ pub enum DummyBackend { }
 impl Backend for DummyBackend {
     type Adapter = DummyAdapter;
     type CommandQueue = DummyQueue;
-    type Factory = DummyFactory;
+    type Device = DummyDevice;
     type QueueFamily = DummyFamily;
     type Resources = DummyResources;
     type SubmitInfo = DummySubmitInfo;
@@ -43,7 +43,7 @@ impl Backend for DummyBackend {
 /// Dummy adapter.
 pub struct DummyAdapter;
 impl Adapter<DummyBackend> for DummyAdapter {
-    fn open(&self, _: &[(&DummyFamily, QueueType, u32)]) -> Device<DummyBackend> {
+    fn open(&self, _: &[(&DummyFamily, QueueType, u32)]) -> Gpu<DummyBackend> {
         unimplemented!()
     }
 
@@ -77,9 +77,9 @@ impl CommandQueue<DummyBackend> for DummyQueue {
     }
 }
 
-/// Dummy factory doing nothing.
-pub struct DummyFactory;
-impl Factory<DummyResources> for DummyFactory {
+/// Dummy device doing nothing.
+pub struct DummyDevice;
+impl Device<DummyResources> for DummyDevice {
     fn get_capabilities(&self) -> &Capabilities {
         unimplemented!()
     }

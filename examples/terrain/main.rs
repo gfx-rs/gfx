@@ -74,12 +74,12 @@ struct App<B: gfx::Backend> {
 }
 
 impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
-    fn new(factory: &mut B::Factory,
+    fn new(device: &mut B::Device,
            _: &mut gfx::queue::GraphicsQueue<B>,
            backend: gfx_app::shade::Backend,
            window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
     {
-        use gfx::traits::FactoryExt;
+        use gfx::traits::DeviceExt;
 
         let vs = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/terrain_120.glslv"),
@@ -117,19 +117,19 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
             .map(|i| i as u32)
             .collect();
 
-        let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, &index_data[..]);
+        let (vbuf, slice) = device.create_vertex_buffer_with_slice(&vertex_data, &index_data[..]);
         let (out_color, out_depth) = window_targets.views[0].clone(); // initial placeholder values
 
         App {
             views: window_targets.views,
-            pso: factory.create_pipeline_simple(
+            pso: device.create_pipeline_simple(
                 vs.select(backend).unwrap(),
                 ps.select(backend).unwrap(),
                 pipe::new()
                 ).unwrap(),
             data: pipe::Data {
                 vbuf,
-                locals: factory.create_constant_buffer(1),
+                locals: device.create_constant_buffer(1),
                 model: Matrix4::identity().into(),
                 view: Matrix4::identity().into(),
                 proj: cgmath::perspective(

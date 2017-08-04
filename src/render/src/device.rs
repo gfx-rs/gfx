@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Factory extension.
+//! Device extension.
 //!
-//! This module serves as an extension to the `factory` module in the `gfx` crate. This module
+//! This module serves as an extension to the `device` module in the `gfx_core` crate. This module
 //! exposes extension functions and shortcuts to aid with creating and managing graphics resources.
-//! See the `FactoryExt` trait for more information.
+//! See the `DeviceExt` trait for more information.
 
 use std::error::Error;
 use std::fmt;
 use core::{buffer, format, handle, texture, state};
 use core::{Primitive, Resources, ShaderSet};
-use core::factory::Factory;
+use core::device::Device;
 use core::pso::{CreationError, Descriptor};
 use core::memory::{self, Bind, Pod};
 use slice::{Slice, IndexBuffer, IntoIndexBuffer};
@@ -97,9 +97,9 @@ impl<S> From<CreationError> for PipelineStateError<S> {
     }
 }
 
-/// This trait is responsible for creating and managing graphics resources, much like the `Factory`
-/// trait in the `gfx` crate. Every `Factory` automatically implements `FactoryExt`. 
-pub trait FactoryExt<R: Resources>: Factory<R> {
+/// This trait is responsible for creating and managing graphics resources, much like the `Device`
+/// trait in the `gfx_core` crate. Every `Device` automatically implements `DeviceExt`.
+pub trait DeviceExt<R: Resources>: Device<R> {
     /// Creates an immutable vertex buffer from the supplied vertices.
     /// A `Slice` will have to manually be constructed.
     fn create_vertex_buffer<T>(&mut self, vertices: &[T])
@@ -135,7 +135,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
             IndexBuffer::Index16(ref ib) => ib.len(),
             IndexBuffer::Index32(ref ib) => ib.len(),
         };
-        
+
         (vertex_buffer, Slice {
             start: 0,
             end: buffer_length as u32,
@@ -243,7 +243,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     }
 
     /// Similar to `create_pipeline_from_program(..)`, but takes a `ShaderSet` as opposed to a
-    /// shader `Program`.  
+    /// shader `Program`.
     fn create_pipeline_state<I: pso::PipelineInit>(&mut self, shaders: &ShaderSet<R>,
                              primitive: Primitive, rasterizer: state::Rasterizer, init: I)
                              -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError<String>>
@@ -292,4 +292,4 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     }
 }
 
-impl<R: Resources, F: Factory<R>> FactoryExt<R> for F {}
+impl<R: Resources, F: Device<R>> DeviceExt<R> for F {}

@@ -25,12 +25,12 @@ extern crate winapi;
 extern crate wio;
 
 pub use self::data::map_format;
-pub use self::factory::Factory;
+pub use self::device::Device;
 
 mod command;
 pub mod data;
 mod execute;
-mod factory;
+mod device;
 mod mirror;
 pub mod native;
 mod pool;
@@ -205,7 +205,7 @@ impl core::Backend for Backend {
     type RawCommandBuffer = command::RawCommandBuffer<CommandList>; // TODO: deferred?
     type SubpassCommandBuffer = command::SubpassCommandBuffer<CommandList>;
     type SubmitInfo = command::SubmitInfo<CommandList>;
-    type Factory = Factory;
+    type Device = Device;
     type QueueFamily = QueueFamily;
 
     type RawCommandPool = pool::RawCommandPool;
@@ -228,7 +228,7 @@ impl core::Resources for Resources {
     type Sampler             = native::Sampler;
     type Fence               = Fence;
     type Semaphore           = (); // TODO
-    type Mapping             = factory::MappingGate;
+    type Mapping             = device::MappingGate;
 }
 
 /// Internal struct of shared data between the device and its factories.
@@ -309,7 +309,7 @@ pub struct Adapter {
 }
 
 impl core::Adapter<Backend> for Adapter {
-    fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)]) -> core::Device<Backend> {
+    fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)]) -> core::Gpu<Backend> {
         // Only support a single queue
         assert_eq!(queue_descs.len(), 1);
         assert!(queue_descs[0].2 <= 1);
@@ -360,16 +360,15 @@ impl core::Adapter<Backend> for Adapter {
             handles: RefCell::new(h::Manager::new()),
         });
 
-        let factory = Factory::new(dev.clone(), feature_level, share.clone());
-        let mut device = core::Device {
-            factory,
+        let device = Device::new(dev.clone(), feature_level, share.clone());
+        let mut gpu = core::Gpu {
+            device,
             general_queues: Vec::new(),
             graphics_queues: Vec::new(),
             compute_queues: Vec::new(),
             transfer_queues: Vec::new(),
             heap_types: Vec::new(),
             memory_heaps: Vec::new(),
-            _marker: std::marker::PhantomData,
         };
 
         let raw_queue = || {
@@ -387,22 +386,22 @@ impl core::Adapter<Backend> for Adapter {
             unsafe {
                 match queue_type {
                     QueueType::General => {
-                        device.general_queues.push(core::GeneralQueue::new(raw_queue()));
+                        gpu.general_queues.push(core::GeneralQueue::new(raw_queue()));
                     }
                     QueueType::Graphics => {
-                        device.graphics_queues.push(core::GraphicsQueue::new(raw_queue()));
+                        gpu.graphics_queues.push(core::GraphicsQueue::new(raw_queue()));
                     }
                     QueueType::Compute => {
-                        device.compute_queues.push(core::ComputeQueue::new(raw_queue()));
+                        gpu.compute_queues.push(core::ComputeQueue::new(raw_queue()));
                     }
                     QueueType::Transfer => {
-                        device.transfer_queues.push(core::TransferQueue::new(raw_queue()));
+                        gpu.transfer_queues.push(core::TransferQueue::new(raw_queue()));
                     }
                 }
             }
         }
 
-        device
+        gpu
     }
 
     fn get_info(&self) -> &core::AdapterInfo {
@@ -428,7 +427,7 @@ impl CommandQueue {
                              -> core::SubmissionResult<AccessGuard<'a, Resources>> {
         let mut gpu_access = try!(gpu_access.take_accesses());
         for (buffer, mut mapping) in gpu_access.access_mapped() {
-            factory::ensure_unmapped(&mut mapping, buffer, &mut self.context);
+            device::ensure_unmapped(&mut mapping, buffer, &mut self.context);
         }
         Ok(gpu_access)
     }
@@ -474,7 +473,7 @@ impl core::CommandQueue<Backend> for CommandQueue {
                 buffer.mapping().map(|raw| {
                     // we have exclusive access because it's the last reference
                     let mut mapping = unsafe { raw.use_access() };
-                    factory::ensure_unmapped(&mut mapping, buffer, ctx);
+                    device::ensure_unmapped(&mut mapping, buffer, ctx);
                 });
                 unsafe { (*(buffer.resource().0).0).Release(); }
             },

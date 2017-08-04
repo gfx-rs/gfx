@@ -16,7 +16,7 @@
 extern crate gfx;
 extern crate gfx_app;
 
-use gfx::{texture, Factory, GraphicsPoolExt};
+use gfx::{texture, Device, GraphicsPoolExt};
 use gfx_app::{BackbufferView, ColorFormat};
 
 gfx_defines!{
@@ -67,12 +67,12 @@ struct App<B: gfx::Backend> {
 }
 
 impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
-    fn new(factory: &mut B::Factory,
+    fn new(device: &mut B::Device,
            _: &mut gfx::queue::GraphicsQueue<B>,
            backend: gfx_app::shade::Backend,
            window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
     {
-        use gfx::traits::FactoryExt;
+        use gfx::traits::DeviceExt;
 
         let vs = gfx_app::shade::Source {
             glsl_120: include_bytes!("shader/120.glslv"),
@@ -96,14 +96,14 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
             Vertex::new([-1.0,  0.0], [800.0,   0.0]),
             Vertex::new([-1.0, -1.0], [800.0, 800.0]),
         ];
-        let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, ());
+        let (vbuf, slice) = device.create_vertex_buffer_with_slice(&vertex_data, ());
 
-        let (_, texture_view) = factory.create_texture_immutable::<ColorFormat>(
+        let (_, texture_view) = device.create_texture_immutable::<ColorFormat>(
             texture::Kind::D2(4, 4, texture::AaMode::Single),
             &[&L0_DATA, &L1_DATA, &L2_DATA]
             ).unwrap();
 
-        let sampler = factory.create_sampler(texture::SamplerInfo::new(
+        let sampler = device.create_sampler(texture::SamplerInfo::new(
             texture::FilterMethod::Trilinear,
             texture::WrapMode::Tile,
         ));
@@ -112,7 +112,7 @@ impl<B: gfx::Backend> gfx_app::Application<B> for App<B> {
 
         App {
             views: window_targets.views,
-            pso: factory.create_pipeline_simple(
+            pso: device.create_pipeline_simple(
                 vs.select(backend).unwrap(),
                 fs.select(backend).unwrap(),
                 pipe::new()

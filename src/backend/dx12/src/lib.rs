@@ -23,7 +23,7 @@ extern crate wio;
 
 mod command;
 pub mod data;
-mod factory;
+mod device;
 mod native;
 mod pool;
 
@@ -52,7 +52,7 @@ pub struct Adapter {
 }
 
 impl core::Adapter<Backend> for Adapter {
-    fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)]) -> core::Device<Backend>
+    fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)]) -> core::Gpu<Backend>
     {
         // Create D3D12 device
         let mut device = unsafe { ComPtr::<winapi::ID3D12Device>::new(ptr::null_mut()) };
@@ -106,18 +106,16 @@ impl core::Adapter<Backend> for Adapter {
             }).collect::<Vec<_>>()
         }).collect();
 
-        let factory = Factory::new(device);
+        let device = Device::new(device);
 
-        core::Device {
-            factory: factory,
-            general_queues: general_queues,
+        core::Gpu {
+            device,
+            general_queues,
             graphics_queues: Vec::new(),
             compute_queues: Vec::new(),
             transfer_queues: Vec::new(),
             heap_types: Vec::new(), // TODO
             memory_heaps: Vec::new(), // TODO
-
-            _marker: std::marker::PhantomData,
         }
     }
 
@@ -169,13 +167,13 @@ impl core::CommandQueue<Backend> for CommandQueue {
     }
 }
 
-pub struct Factory {
+pub struct Device {
     device: ComPtr<winapi::ID3D12Device>,
 }
 
-impl Factory {
-    fn new(device: ComPtr<winapi::ID3D12Device>) -> Factory {
-        Factory {
+impl Device {
+    fn new(device: ComPtr<winapi::ID3D12Device>) -> Device {
+        Device {
             device: device,
         }
     }
@@ -195,7 +193,7 @@ impl core::Backend for Backend {
     type RawCommandBuffer = command::CommandBuffer;
     type SubpassCommandBuffer = command::SubpassCommandBuffer;
     type SubmitInfo = command::SubmitInfo;
-    type Factory = Factory;
+    type Device = Device;
     type QueueFamily = QueueFamily;
 
     type RawCommandPool = pool::RawCommandPool;

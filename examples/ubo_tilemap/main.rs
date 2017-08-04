@@ -26,7 +26,7 @@ use gfx_app::{BackbufferView, ColorFormat, DepthFormat};
 use cgmath::{Deg, Matrix4, Point3, SquareMatrix, Vector3};
 use genmesh::{Vertices, Triangulate};
 use genmesh::generators::{Plane, SharedVertex, IndexedPolygon};
-use gfx::traits::FactoryExt;
+use gfx::traits::DeviceExt;
 use std::io::Cursor;
 
 // this is a value based on a max buffer size (and hence tilemap size) of 64x64
@@ -35,16 +35,16 @@ use std::io::Cursor;
 pub const TILEMAP_BUF_LENGTH: usize = 4096;
 
 // texture loading boilerplate
-pub fn load_texture<R, F>(factory: &mut F, data: &[u8])
+pub fn load_texture<R, D>(device: &mut D, data: &[u8])
                     -> Result<gfx::handle::ShaderResourceView<R, [f32; 4]>, String>
-        where R: gfx::Resources, F: gfx::Factory<R>
+        where R: gfx::Resources, D: gfx::Device<R>
 {
     use gfx::format::Rgba8;
     use gfx::texture as t;
     let img = image::load(Cursor::new(data), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
     let kind = t::Kind::D2(width as t::Size, height as t::Size, t::AaMode::Single);
-    let (_, view) = factory.create_texture_immutable_u8::<Rgba8>(kind, &[&img]).unwrap();
+    let (_, view) = device.create_texture_immutable_u8::<Rgba8>(kind, &[&img]).unwrap();
     Ok(view)
 }
 
@@ -112,7 +112,7 @@ pub struct TileMapPlane<B> where B: gfx::Backend {
 }
 
 impl<B> TileMapPlane<B> where B: gfx::Backend {
-    pub fn new(factory: &mut B::Factory, width: usize, height: usize, tile_size: usize,
+    pub fn new(device: &mut B::Device, width: usize, height: usize, tile_size: usize,
                   targets: gfx_app::WindowTargets<B::Resources>) -> Self {
         // charmap info
         let half_width = (tile_size * width) / 2;
@@ -158,16 +158,16 @@ impl<B> TileMapPlane<B> where B: gfx::Backend {
             .map(|i| i as u32)
             .collect();
 
-        let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, &index_data[..]);
+        let (vbuf, slice) = device.create_vertex_buffer_with_slice(&vertex_data, &index_data[..]);
 
-        let tile_texture = load_texture(factory, tilesheet_bytes).unwrap();
+        let tile_texture = load_texture(device, tilesheet_bytes).unwrap();
 
         let params = pipe::Data {
             vbuf: vbuf,
-            projection_cb: factory.create_constant_buffer(1),
-            tilemap: factory.create_constant_buffer(TILEMAP_BUF_LENGTH),
-            tilemap_cb: factory.create_constant_buffer(1),
-            tilesheet: (tile_texture, factory.create_sampler_linear()),
+            projection_cb: device.create_constant_buffer(1),
+            tilemap: device.create_constant_buffer(TILEMAP_BUF_LENGTH),
+            tilemap_cb: device.create_constant_buffer(1),
+            tilesheet: (tile_texture, device.create_sampler_linear()),
             out_color: targets.views[0].0.clone(),
             out_depth: targets.views[0].1.clone(),
         };
@@ -400,12 +400,12 @@ fn populate_tilemap<B>(tilemap: &mut TileMap<B>, tilemap_size: [usize; 2]) where
 }
 
 impl<B: gfx::Backend> gfx_app::Application<B> for TileMap<B> {
-    fn new(factory: &mut B::Factory,
+    fn new(device: &mut B::Device,
            _: &mut gfx::queue::GraphicsQueue<B>,
            backend: gfx_app::shade::Backend,
            window_targets: gfx_app::WindowTargets<B::Resources>) -> Self
     {
-        use gfx::traits::FactoryExt;
+        use gfx::traits::DeviceExt;
 
         let vs = gfx_app::shade::Source {
             glsl_150: include_bytes!("shader/tilemap_150.glslv"),
@@ -428,14 +428,14 @@ impl<B: gfx::Backend> gfx_app::Application<B> for TileMap<B> {
             tiles.push(TileMapData::new_empty());
         }
 
-        let tilemap_plane = TileMapPlane::new(factory,
+        let tilemap_plane = TileMapPlane::new(device,
                 charmap_size[0], charmap_size[1], tile_size,
                 window_targets);
 
         // TODO: should probably check that charmap is smaller than tilemap
         let mut tm = TileMap {
             tiles,
-            pso: factory.create_pipeline_simple(
+            pso: device.create_pipeline_simple(
                 vs.select(backend).unwrap(),
                 ps.select(backend).unwrap(),
                 pipe::new()

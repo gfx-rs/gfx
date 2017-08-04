@@ -36,15 +36,15 @@
 //! The common steps for presentation of a frame are acquisition and presentation:
 //!
 //! ```no_run
-//! use gfx_core::{Factory, FrameSync};
+//! use gfx_core::{Device, FrameSync};
 //! # use gfx_core::{GraphicsQueue, SwapChain};
-//! # use gfx_core::dummy::{DummyBackend, DummyFactory, DummyResources, DummySwapChain};
+//! # use gfx_core::dummy::{DummyBackend, DummyDevice, DummyResources, DummySwapChain};
 //!
 //! # let mut swapchain: DummySwapChain = return;
-//! # let mut factory: DummyFactory = return;
+//! # let mut device: DummyDevice = return;
 //! # let mut present_queue: GraphicsQueue<DummyBackend> = return;
-//! let acquisition_semaphore = factory.create_semaphore();
-//! let render_semaphore = factory.create_semaphore();
+//! let acquisition_semaphore = device.create_semaphore();
+//! let render_semaphore = device.create_semaphore();
 //!
 //! let frame = swapchain.acquire_frame(FrameSync::Semaphore(&acquisition_semaphore));
 //! // render the scene..

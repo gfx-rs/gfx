@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{self as c, factory as f, handle, texture as t, format, shade, pso, buffer, mapping};
+use core::{self as c, device as d, handle, texture as t, format, shade, pso, buffer, mapping};
 use core::memory::Bind;
 use core::ShaderSet;
 use native;
 use std::sync::Arc;
-use {Resources as R, Factory};
+use {Resources as R, Device};
 
 // TODO: dummy only
-impl f::Factory<R> for Factory {
+impl d::Device<R> for Device {
     fn get_capabilities(&self) -> &c::Capabilities { unimplemented!() }
 
     fn create_buffer_raw(&mut self, _: buffer::Info) -> Result<handle::RawBuffer<R>, buffer::CreationError> { unimplemented!() }
@@ -49,7 +49,7 @@ impl f::Factory<R> for Factory {
         unimplemented!()
     }
 
-    fn wait_for_fences(&mut self, _fences: &[&handle::Fence<R>], _wait: f::WaitFor, _timeout_ms: u32) -> bool {
+    fn wait_for_fences(&mut self, _fences: &[&handle::Fence<R>], _wait: d::WaitFor, _timeout_ms: u32) -> bool {
         unimplemented!()
     }
 
@@ -67,15 +67,15 @@ impl f::Factory<R> for Factory {
                           -> Result<handle::RawTexture<R>, t::CreationError> { unimplemented!() }
 
     fn view_buffer_as_shader_resource_raw(&mut self, _: &handle::RawBuffer<R>, _: format::Format)
-        -> Result<handle::RawShaderResourceView<R>, f::ResourceViewError> { unimplemented!() }
+        -> Result<handle::RawShaderResourceView<R>, d::ResourceViewError> { unimplemented!() }
     fn view_buffer_as_unordered_access_raw(&mut self, _: &handle::RawBuffer<R>)
-        -> Result<handle::RawUnorderedAccessView<R>, f::ResourceViewError> { unimplemented!() }
+        -> Result<handle::RawUnorderedAccessView<R>, d::ResourceViewError> { unimplemented!() }
     fn view_texture_as_shader_resource_raw(&mut self, _: &handle::RawTexture<R>, _: t::ResourceDesc)
-        -> Result<handle::RawShaderResourceView<R>, f::ResourceViewError> { unimplemented!() }
+        -> Result<handle::RawShaderResourceView<R>, d::ResourceViewError> { unimplemented!() }
     fn view_texture_as_unordered_access_raw(&mut self, _: &handle::RawTexture<R>)
-        -> Result<handle::RawUnorderedAccessView<R>, f::ResourceViewError> { unimplemented!() }
+        -> Result<handle::RawUnorderedAccessView<R>, d::ResourceViewError> { unimplemented!() }
     fn view_texture_as_render_target_raw(&mut self, _: &handle::RawTexture<R>, _: t::RenderDesc)
-        -> Result<handle::RawRenderTargetView<R>, f::TargetViewError> { unimplemented!() }
+        -> Result<handle::RawRenderTargetView<R>, d::TargetViewError> { unimplemented!() }
     fn view_texture_as_depth_stencil_raw(&mut self, _: &handle::RawTexture<R>, _: t::DepthStencilDesc)
-        -> Result<handle::RawDepthStencilView<R>, f::TargetViewError> { unimplemented!() }
+        -> Result<handle::RawDepthStencilView<R>, d::TargetViewError> { unimplemented!() }
 }
