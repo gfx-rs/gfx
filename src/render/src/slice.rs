@@ -3,7 +3,7 @@
 //! See `Slice`-structure documentation for more information on this module.
 
 use core::{handle, buffer};
-use core::{Primitive, Resources, VertexCount};
+use core::{Primitive, Backend, VertexCount};
 use core::command::InstanceParams;
 use core::device::Device;
 use core::memory::Bind;
@@ -44,7 +44,7 @@ use pso;
 /// A `Slice` is required to process a PSO, as it contains the needed information on in what order
 /// to draw which vertices. As such, every `draw` call on an `Encoder` requires a `Slice`.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Slice<R: Resources> {
+pub struct Slice<B: Backend> {
     /// The start index of the index-buffer. Processing will start at this location in the
     /// index-buffer.
     pub start: VertexCount,
@@ -58,12 +58,12 @@ pub struct Slice<R: Resources> {
     /// Instancing configuration.
     pub instances: Option<InstanceParams>,
     /// Represents the type of index-buffer used.
-    pub buffer: IndexBuffer<R>,
+    pub buffer: IndexBuffer<B>,
 }
 
-impl<R: Resources> Slice<R> {
+impl<B: Backend> Slice<B> {
     /// Creates a new `Slice` to match the supplied vertex buffer, from start to end, in order.
-    pub fn new_match_vertex_buffer<V>(vbuf: &handle::Buffer<R, V>) -> Self
+    pub fn new_match_vertex_buffer<V>(vbuf: &handle::Buffer<B, V>) -> Self
                                       where V: pso::buffer::Structure<Format> {
         Slice {
             start: 0,
@@ -125,49 +125,49 @@ impl<R: Resources> Slice<R> {
 ///
 /// An `IndexBuffer` is exclusively used to create `Slice`s.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum IndexBuffer<R: Resources> {
+pub enum IndexBuffer<B: Backend> {
     /// Represents a hypothetical index-buffer from 0 to infinity. In other words, all vertices
     /// get processed in order.
     Auto,
     /// An index-buffer with unsigned 16 bit indices.
-    Index16(handle::Buffer<R, u16>),
+    Index16(handle::Buffer<B, u16>),
     /// An index-buffer with unsigned 32 bit indices.
-    Index32(handle::Buffer<R, u32>),
+    Index32(handle::Buffer<B, u32>),
 }
 
-impl<R: Resources> Default for IndexBuffer<R> {
+impl<B: Backend> Default for IndexBuffer<B> {
     fn default() -> Self {
         IndexBuffer::Auto
     }
 }
 /// A helper trait to create `IndexBuffers` from different kinds of data.
-pub trait IntoIndexBuffer<R: Resources> {
+pub trait IntoIndexBuffer<B: Backend> {
     /// Turns self into an `IndexBuffer`.
-    fn into_index_buffer<F: Device<R> + ?Sized>(self, device: &mut F) -> IndexBuffer<R>;
+    fn into_index_buffer<F: Device<B> + ?Sized>(self, device: &mut F) -> IndexBuffer<B>;
 }
 
-impl<R: Resources> IntoIndexBuffer<R> for IndexBuffer<R> {
-    fn into_index_buffer<F: Device<R> + ?Sized>(self, _: &mut F) -> IndexBuffer<R> {
+impl<B: Backend> IntoIndexBuffer<B> for IndexBuffer<B> {
+    fn into_index_buffer<F: Device<B> + ?Sized>(self, _: &mut F) -> IndexBuffer<B> {
         self
     }
 }
 
-impl<R: Resources> IntoIndexBuffer<R> for () {
-    fn into_index_buffer<F: Device<R> + ?Sized>(self, _: &mut F) -> IndexBuffer<R> {
+impl<B: Backend> IntoIndexBuffer<B> for () {
+    fn into_index_buffer<F: Device<B> + ?Sized>(self, _: &mut F) -> IndexBuffer<B> {
         IndexBuffer::Auto
     }
 }
 
 macro_rules! impl_index_buffer {
     ($prim_ty:ty, $buf_ty:ident) => (
-        impl<R: Resources> IntoIndexBuffer<R> for handle::Buffer<R, $prim_ty> {
-            fn into_index_buffer<F: Device<R> + ?Sized>(self, _: &mut F) -> IndexBuffer<R> {
+        impl<B: Backend> IntoIndexBuffer<B> for handle::Buffer<B, $prim_ty> {
+            fn into_index_buffer<F: Device<B> + ?Sized>(self, _: &mut F) -> IndexBuffer<B> {
                 IndexBuffer::$buf_ty(self)
             }
         }
 
-        impl<'s, R: Resources> IntoIndexBuffer<R> for &'s [$prim_ty] {
-            fn into_index_buffer<F: Device<R> + ?Sized>(self, device: &mut F) -> IndexBuffer<R> {
+        impl<'s, B: Backend> IntoIndexBuffer<B> for &'s [$prim_ty] {
+            fn into_index_buffer<F: Device<B> + ?Sized>(self, device: &mut F) -> IndexBuffer<B> {
                 device.create_buffer_immutable(self, buffer::Role::Index, Bind::empty())
                       .unwrap()
                       .into_index_buffer(device)

@@ -8,9 +8,9 @@ use std::any::Any;
 use std::{fmt, mem};
 
 use core::{Backend, CommandQueue, GraphicsCommandPool, GraphicsQueue,
-           IndexType, Resources, SubmissionResult, VertexCount};
+           IndexType, SubmissionResult, VertexCount};
 use core::{self, command, format, handle, texture};
-use core::command::{Buffer, Encoder, GraphicsCommandBuffer, Submit};
+use core::command::{GraphicsCommandBuffer, Submit};
 use core::memory::{self, cast_slice, Typed, Pod, Usage};
 use slice;
 use pso;
@@ -147,14 +147,14 @@ impl<B: Backend> GraphicsPoolExt<B> for GraphicsCommandPool<B> {
 /// The encoder exposes multiple functions that add commands to its internal `CommandBuffer`. To
 /// submit these commands to the GPU so they can be rendered, call `flush` or `synced_flush`.
 pub struct GraphicsEncoder<'a, B: Backend + 'a> {
-    command_buffer: Encoder<B, GraphicsCommandBuffer<'a, B>>,
-    raw_pso_data: pso::RawDataSet<B::Resources>,
-    access_info: command::AccessInfo<B::Resources>,
-    handles: handle::Manager<B::Resources>,
+    command_buffer: GraphicsCommandBuffer<'a, B>,
+    raw_pso_data: pso::RawDataSet<B>,
+    access_info: command::AccessInfo<B>,
+    handles: handle::Manager<B>,
 }
 
-impl<'a, B: Backend> From<Encoder<B, GraphicsCommandBuffer<'a, B>>> for GraphicsEncoder<'a, B> {
-    fn from(combuf: Encoder<B, GraphicsCommandBuffer<B>>) -> GraphicsEncoder<B> {
+impl<'a, B: Backend> From<GraphicsCommandBuffer<'a, B>> for GraphicsEncoder<'a, B> {
+    fn from(combuf: GraphicsCommandBuffer<B>) -> GraphicsEncoder<B> {
         GraphicsEncoder {
             command_buffer: combuf,
             raw_pso_data: pso::RawDataSet::new(),
@@ -167,8 +167,8 @@ impl<'a, B: Backend> From<Encoder<B, GraphicsCommandBuffer<'a, B>>> for Graphics
 ///
 pub struct GraphicsSubmission<B: Backend> {
     submission: Submit<B, core::queue::Graphics>,
-    access_info: command::AccessInfo<B::Resources>,
-    handles: handle::Manager<B::Resources>,
+    access_info: command::AccessInfo<B>,
+    handles: handle::Manager<B>,
 }
 
 impl<B: Backend> GraphicsSubmission<B> {
@@ -176,9 +176,9 @@ impl<B: Backend> GraphicsSubmission<B> {
     /// be executed.
     pub fn synced_flush(self,
                         queue: &mut GraphicsQueue<B>,
-                        wait_semaphores: &[&handle::Semaphore<B::Resources>],
-                        signal_semaphores: &[&handle::Semaphore<B::Resources>],
-                        fence: Option<&handle::Fence<B::Resources>>) -> SubmissionResult<()> {
+                        wait_semaphores: &[&handle::Semaphore<B>],
+                        signal_semaphores: &[&handle::Semaphore<B>],
+                        fence: Option<&handle::Fence<B>>) -> SubmissionResult<()> {
         let wait_semaphores = &wait_semaphores.iter()
                                               .map(|&wait| (wait, core::pso::BOTTOM_OF_PIPE))
                                               .collect::<Vec<_>>();
@@ -214,9 +214,9 @@ impl<'a, B: Backend> GraphicsEncoder<'a, B> {
     /// be executed.
     pub fn synced_flush(self,
                         queue: &mut GraphicsQueue<B>,
-                        wait_semaphores: &[&handle::Semaphore<B::Resources>],
-                        signal_semaphores: &[&handle::Semaphore<B::Resources>],
-                        fence: Option<&handle::Fence<B::Resources>>) -> SubmissionResult<()> {
+                        wait_semaphores: &[&handle::Semaphore<B>],
+                        signal_semaphores: &[&handle::Semaphore<B>],
+                        fence: Option<&handle::Fence<B>>) -> SubmissionResult<()> {
         self.finish().synced_flush(queue, wait_semaphores, signal_semaphores, fence)
     }
 
@@ -230,7 +230,7 @@ impl<'a, B: Backend> GraphicsEncoder<'a, B> {
     }
 
     /// Copy part of a buffer to another
-    pub fn copy_buffer<T: Pod>(&mut self, src: &handle::Buffer<B::Resources, T>, dst: &handle::Buffer<B::Resources, T>,
+    pub fn copy_buffer<T: Pod>(&mut self, src: &handle::Buffer<B, T>, dst: &handle::Buffer<B, T>,
                                src_offset: usize, dst_offset: usize, size: usize) -> CopyBufferResult {
         if !src.get_info().bind.contains(memory::TRANSFER_SRC) {
             return Err(CopyError::NoSrcBindFlag);
@@ -278,8 +278,8 @@ impl<'a, B: Backend> GraphicsEncoder<'a, B> {
 
     /// Copy part of a buffer to a texture
     pub fn copy_buffer_to_texture_raw(
-        &mut self, src: &handle::RawBuffer<B::Resources>, src_offset_bytes: usize,
-        dst: &handle::RawTexture<B::Resources>, face: Option<texture::CubeFace>, info: texture::RawImageInfo)
+        &mut self, src: &handle::RawBuffer<B>, src_offset_bytes: usize,
+        dst: &handle::RawTexture<B>, face: Option<texture::CubeFace>, info: texture::RawImageInfo)
         -> CopyBufferTextureResult
     {
         if !src.get_info().bind.contains(memory::TRANSFER_SRC) {
@@ -320,9 +320,9 @@ impl<'a, B: Backend> GraphicsEncoder<'a, B> {
 
     /// Copy part of a texture to a buffer
     pub fn copy_texture_to_buffer_raw(
-        &mut self, src: &handle::RawTexture<B::Resources>,
+        &mut self, src: &handle::RawTexture<B>,
         face: Option<texture::CubeFace>, info: texture::RawImageInfo,
-        dst: &handle::RawBuffer<B::Resources>, dst_offset_bytes: usize)
+        dst: &handle::RawBuffer<B>, dst_offset_bytes: usize)
         -> CopyTextureBufferResult
     {
         if !src.get_info().bind.contains(memory::TRANSFER_SRC) {
@@ -362,7 +362,7 @@ impl<'a, B: Backend> GraphicsEncoder<'a, B> {
     }
 
     /// Update a buffer with a slice of data.
-    pub fn update_buffer<T: Pod>(&mut self, buf: &handle::Buffer<B::Resources, T>,
+    pub fn update_buffer<T: Pod>(&mut self, buf: &handle::Buffer<B, T>,
                          data: &[T], offset_elements: usize)
                          -> Result<(), UpdateError<usize>>
     {
@@ -386,7 +386,7 @@ impl<'a, B: Backend> GraphicsEncoder<'a, B> {
     }
 
     /// Update a buffer with a single structure.
-    pub fn update_constant_buffer<T: Copy>(&mut self, buf: &handle::Buffer<B::Resources, T>, data: &T) {
+    pub fn update_constant_buffer<T: Copy>(&mut self, buf: &handle::Buffer<B, T>, data: &T) {
         use std::slice;
 
         check_update_usage::<usize>(buf.raw().get_info().usage).unwrap();
@@ -399,7 +399,7 @@ impl<'a, B: Backend> GraphicsEncoder<'a, B> {
     }
 
     /// Update the contents of a texture.
-    pub fn update_texture<S, T>(&mut self, tex: &handle::Texture<B::Resources, T::Surface>,
+    pub fn update_texture<S, T>(&mut self, tex: &handle::Texture<B, T::Surface>,
                           face: Option<texture::CubeFace>,
                           img: texture::NewImageInfo, data: &[S::DataType])
                           -> Result<(), UpdateError<[texture::Size; 3]>>
@@ -439,15 +439,15 @@ impl<'a, B: Backend> GraphicsEncoder<'a, B> {
         Ok(())
     }
 
-    fn draw_indexed<T>(&mut self, buf: &handle::Buffer<B::Resources, T>, ty: IndexType,
-                    slice: &slice::Slice<B::Resources>, base: VertexCount,
+    fn draw_indexed<T>(&mut self, buf: &handle::Buffer<B, T>, ty: IndexType,
+                    slice: &slice::Slice<B>, base: VertexCount,
                     instances: Option<command::InstanceParams>) {
         self.access_info.buffer_read(buf.raw());
         self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()).clone(), ty);
         self.command_buffer.call_draw_indexed(slice.start, slice.end - slice.start, base, instances);
     }
 
-    fn draw_slice(&mut self, slice: &slice::Slice<B::Resources>, instances: Option<command::InstanceParams>) {
+    fn draw_slice(&mut self, slice: &slice::Slice<B>, instances: Option<command::InstanceParams>) {
         match slice.buffer {
             slice::IndexBuffer::Auto => self.command_buffer.call_draw(
                 slice.start + slice.base_vertex, slice.end - slice.start, instances),
@@ -460,28 +460,28 @@ impl<'a, B: Backend> GraphicsEncoder<'a, B> {
 
     /// Clears the supplied `RenderTargetView` to the supplied `ClearColor`.
     pub fn clear<T: format::RenderFormat>(&mut self,
-                 view: &handle::RenderTargetView<B::Resources, T>, value: T::View)
+                 view: &handle::RenderTargetView<B, T>, value: T::View)
     where T::View: Into<command::ClearColor> {
         let target = self.handles.ref_rtv(view.raw()).clone();
         self.command_buffer.clear_color(target, value.into())
     }
     /// Clear a depth view with a specified value.
     pub fn clear_depth<T: format::DepthFormat>(&mut self,
-                       view: &handle::DepthStencilView<B::Resources, T>, depth: Depth) {
+                       view: &handle::DepthStencilView<B, T>, depth: Depth) {
         let target = self.handles.ref_dsv(view.raw()).clone();
         self.command_buffer.clear_depth_stencil(target, Some(depth), None)
     }
 
     /// Clear a stencil view with a specified value.
     pub fn clear_stencil<T: format::StencilFormat>(&mut self,
-                         view: &handle::DepthStencilView<B::Resources, T>, stencil: Stencil) {
+                         view: &handle::DepthStencilView<B, T>, stencil: Stencil) {
         let target = self.handles.ref_dsv(view.raw()).clone();
         self.command_buffer.clear_depth_stencil(target, None, Some(stencil))
     }
 
     /// Draws a `slice::Slice` using a pipeline state object, and its matching `Data` structure.
-    pub fn draw<D: pso::PipelineData<B::Resources>>(&mut self, slice: &slice::Slice<B::Resources>,
-                pipeline: &pso::PipelineState<B::Resources, D::Meta>, user_data: &D)
+    pub fn draw<D: pso::PipelineData<B>>(&mut self, slice: &slice::Slice<B>,
+                pipeline: &pso::PipelineState<B, D::Meta>, user_data: &D)
     {
         let (pso, _) = self.handles.ref_pso(pipeline.get_handle());
         //TODO: make `raw_data` a member to this struct, to re-use the heap allocation
@@ -504,12 +504,12 @@ impl<'a, B: Backend> GraphicsEncoder<'a, B> {
     }
 
     /// Generate a mipmap chain for the given resource view.
-    pub fn generate_mipmap<T: format::BlendFormat>(&mut self, view: &handle::ShaderResourceView<B::Resources, T>) {
+    pub fn generate_mipmap<T: format::BlendFormat>(&mut self, view: &handle::ShaderResourceView<B, T>) {
         self.generate_mipmap_raw(view.raw())
     }
 
     /// Untyped version of mipmap generation.
-    pub fn generate_mipmap_raw(&mut self, view: &handle::RawShaderResourceView<B::Resources>) {
+    pub fn generate_mipmap_raw(&mut self, view: &handle::RawShaderResourceView<B>) {
         let srv = self.handles.ref_srv(view).clone();
         self.command_buffer.generate_mipmap(srv);
     }
