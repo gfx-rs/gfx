@@ -26,7 +26,7 @@ mod raw;
 mod renderpass;
 mod transfer;
 
-pub use self::access::AccessInfo;
+pub use self::access::{AccessInfo, AccessGuard};
 pub use self::compute::ComputeCommandBuffer;
 pub use self::general::GeneralCommandBuffer;
 pub use self::graphics::GraphicsCommandBuffer;

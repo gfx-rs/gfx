@@ -1,8 +1,8 @@
 use core::{self, pool};
-use core::command::{Buffer, GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, Encoder};
+use core::command::{GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer};
 use core::queue::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 use command::{self, RawCommandBuffer, SubpassCommandBuffer};
-use {Backend, CommandQueue, FrameBuffer, Resources, Share};
+use {Backend, CommandQueue, FrameBuffer, Share};
 use gl;
 use std::rc::Rc;
 
