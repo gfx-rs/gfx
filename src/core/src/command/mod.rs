@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//!
+
 use {texture, Backend, InstanceCount, VertexCount};
 
 use std::marker::PhantomData;
@@ -85,15 +87,21 @@ impl From<u32> for ClearColor {
 
 ///
 pub struct Offset {
+    ///
     pub x: i32,
+    ///
     pub y: i32,
+    ///
     pub z: i32,
 }
 
 ///
 pub struct Extent {
+    ///
     pub width: u32,
+    ///
     pub height: u32,
+    ///
     pub depth: u32,
 }
 
@@ -108,12 +116,19 @@ pub struct BufferCopy {
 }
 
 pub struct BufferImageCopy {
+    ///
     pub buffer_offset: u64,
+    ///
     pub buffer_row_pitch: u32,
+    ///
     pub buffer_slice_pitch: u32,
+    ///
     pub image_mip_level: texture::Level,
+    ///
     pub image_base_layer: texture::Layer,
+    ///
     pub image_layers: texture::Layer,
+    ///
     pub image_offset: Offset,
 }
 

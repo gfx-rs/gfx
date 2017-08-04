@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use {Backend, Resources};
+use {Backend};
 use {memory, target, texture};
 use queue::capability::{Capability, Graphics};
-use super::{BufferCopy, BufferImageCopy, Submit};
+use super::{BufferCopy, BufferImageCopy, RawCommandBuffer, Submit};
 
 /// Command buffer with graphics and transfer functionality.
 pub struct GraphicsCommandBuffer<'a, B: Backend>(pub(crate) &'a mut B::RawCommandBuffer)
@@ -25,10 +25,9 @@ impl<'a, B: Backend> Capability for GraphicsCommandBuffer<'a, B> {
     type Capability = Graphics;
 }
 
-impl<'a, B, R> GraphicsCommandBuffer<'a, B>
+impl<'a, B> GraphicsCommandBuffer<'a, B>
 where
     B: Backend,
-    R: Resources,
 {
     /// Finish recording commands to the command buffers.
     ///
@@ -51,7 +50,7 @@ where
     ///
     fn clear_depth_stencil(
         &mut self,
-        dsv: &R::DepthStencilView,
+        dsv: &B::DepthStencilView,
         depth_value: Option<target::Depth>,
         stencil_value: Option<target::Stencil>)
     {
@@ -59,19 +58,19 @@ where
     }
 
     ///
-    fn update_buffer(&mut self, buffer: &R::Buffer, data: &[u8], offset: usize) {
+    fn update_buffer(&mut self, buffer: &B::Buffer, data: &[u8], offset: usize) {
         self.0.update_buffer(buffer, data, offset)
     }
 
-    fn copy_buffer(&mut self, src: &R::Buffer, dst: &R::Buffer, regions: &[BufferCopy]) {
+    fn copy_buffer(&mut self, src: &B::Buffer, dst: &B::Buffer, regions: &[BufferCopy]) {
         self.0.copy_buffer(src, dst, regions)
     }
 
-    fn copy_image(&mut self, src: &R::Image, dst: &R::Image) {
+    fn copy_image(&mut self, src: &B::Image, dst: &B::Image) {
         self.0.copy_image(src, dst)
     }
 
-    fn copy_buffer_to_image(&mut self, src: &R::Buffer, dst: &R::Image, layout: texture::ImageLayout, regions: &[BufferImageCopy]) {
+    fn copy_buffer_to_image(&mut self, src: &B::Buffer, dst: &B::Image, layout: texture::ImageLayout, regions: &[BufferImageCopy]) {
         self.0.copy_buffer_to_image(src, dst, layout, regions)
     }
 

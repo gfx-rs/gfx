@@ -57,7 +57,7 @@ impl<B: Backend> GeneralCommandPool<B> {
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
     pub fn acquire_command_buffer(&mut self) -> GeneralCommandBuffer<B> {
-        GeneralCommandBuffer(self.0.acquire_command_buffer())
+        unsafe { GeneralCommandBuffer(self.0.acquire_command_buffer()) }
     }
 }
 ///
@@ -77,7 +77,7 @@ impl<B: Backend> GraphicsCommandPool<B> {
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
     pub fn acquire_command_buffer(&mut self) -> GraphicsCommandBuffer<B> {
-        GraphicsCommandBuffer(self.0.acquire_command_buffer())
+        unsafe { GraphicsCommandBuffer(self.0.acquire_command_buffer()) }
     }
 }
 ///
@@ -97,7 +97,7 @@ impl<B: Backend> ComputeCommandPool<B> {
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
     pub fn acquire_command_buffer(&mut self) -> ComputeCommandBuffer<B> {
-        ComputeCommandBuffer(self.0.acquire_command_buffer())
+        unsafe { ComputeCommandBuffer(self.0.acquire_command_buffer()) }
     }
 }
 ///
@@ -117,7 +117,7 @@ impl<B: Backend> TransferCommandPool<B> {
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
     pub fn acquire_command_buffer(&mut self) -> TransferCommandBuffer<B> {
-        TransferCommandBuffer(self.0.acquire_command_buffer())
+        unsafe { TransferCommandBuffer(self.0.acquire_command_buffer()) }
     }
 }
 
