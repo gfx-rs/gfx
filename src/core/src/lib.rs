@@ -68,6 +68,8 @@ pub const MAX_SAMPLERS: usize = 16;
 
 /// Draw vertex count.
 pub type VertexCount = u32;
+/// Draw vertex base offset.
+pub type VertexOffset = i32;
 /// Draw number of indices.
 pub type IndexCount = u32;
 /// Draw number of instances
