@@ -3,7 +3,7 @@
 use std::error::Error;
 use std::{mem, fmt, cmp, hash};
 use {memory, mapping};
-use Resources;
+use {IndexType, Resources};
 
 /// Untyped buffer
 #[derive(Debug)]
@@ -127,4 +127,14 @@ impl Error for CreationError {
             CreationError::UnsupportedUsage(_) => "Requested memory usage mode is not supported",
         }
     }
+}
+
+/// Index buffer view for `bind_index_buffer`.
+pub struct IndexBufferView<'a, R: Resources> {
+    ///
+    pub buffer: &'a R::Buffer,
+    ///
+    pub offset: u64,
+    ///
+    pub index_type: IndexType,
 }
