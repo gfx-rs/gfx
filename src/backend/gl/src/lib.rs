@@ -47,7 +47,6 @@ unsafe impl Sync for Fence {}
 pub enum Backend {}
 impl c::Backend for Backend {
     type Adapter = Adapter;
-    type Resources = Resources;
     type CommandQueue = CommandQueue;
     type RawCommandBuffer = command::RawCommandBuffer;
     type SubpassCommandBuffer = command::SubpassCommandBuffer;
@@ -57,11 +56,7 @@ impl c::Backend for Backend {
 
     type RawCommandPool = pool::RawCommandPool;
     type SubpassCommandPool = pool::SubpassCommandPool;
-}
 
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Resources {}
-impl c::Resources for Resources {
     type Buffer              = Buffer;
     type Shader              = Shader;
     type Program             = Program;
@@ -75,6 +70,11 @@ impl c::Resources for Resources {
     type Fence               = Fence;
     type Semaphore           = (); // TODO
     type Mapping             = device::MappingGate;
+    type Image = ();
+    type ComputePipeline = ();
+    type GraphicsPipeline = ();
+    type PipelineLayout = ();
+    type DescriptorSet = ();
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -173,7 +173,7 @@ impl Error {
 /// main framebuffer. These have GL names equal to 0.
 /// Not supposed to be used by the users directly.
 pub fn create_main_targets_raw(dim: texture::Dimensions, color_format: format::SurfaceType, depth_format: format::SurfaceType)
-                               -> (handle::RawRenderTargetView<Resources>, handle::RawDepthStencilView<Resources>) {
+                               -> (handle::RawRenderTargetView<Backend>, handle::RawDepthStencilView<Backend>) {
     use core::handle::Producer;
     let mut temp = handle::Manager::new();
     let color_tex = temp.make_texture(
@@ -208,7 +208,7 @@ pub struct Share {
     info: Info,
     capabilities: c::Capabilities,
     private_caps: info::PrivateCaps,
-    handles: RefCell<handle::Manager<Resources>>,
+    handles: RefCell<handle::Manager<Backend>>,
 }
 
 impl Share {
@@ -356,7 +356,7 @@ impl c::Adapter<Backend> for Adapter {
 pub struct CommandQueue {
     share: Rc<Share>,
     vao: ArrayBuffer,
-    frame_handles: handle::Manager<Resources>,
+    frame_handles: handle::Manager<Backend>,
     max_resource_count: Option<usize>,
 }
 
@@ -793,6 +793,12 @@ impl CommandQueue {
                     },
                 }
             },
+            Command::Dispatch(x, y, z) => {
+                // Capability support is given by which queue types will be exposed.
+                // If there is no compute support, this pattern should never be reached.
+                let gl = &self.share.context;
+                unsafe { gl.DispatchCompute(x, y, z) };
+            }
             Command::_Blit(mut s_rect, d_rect, mirror, _) => {
                 type GLint = gl::types::GLint;
                 // mirror
@@ -846,8 +852,8 @@ impl CommandQueue {
         }
     }
 
-    fn before_submit<'a>(&mut self, gpu_access: &'a com::AccessInfo<Resources>)
-                         -> c::SubmissionResult<com::AccessGuard<'a, Resources>> {
+    fn before_submit<'a>(&mut self, gpu_access: &'a com::AccessInfo<Backend>)
+                         -> c::SubmissionResult<com::AccessGuard<'a, Backend>> {
         let mut gpu_access = try!(gpu_access.take_accesses());
         if self.share.private_caps.buffer_storage_supported {
             // MappingKind::Persistent
@@ -860,7 +866,7 @@ impl CommandQueue {
     }
 
     // MappingKind::Persistent
-    fn ensure_mappings_flushed(&mut self, gpu_access: &mut com::AccessGuard<Resources>) {
+    fn ensure_mappings_flushed(&mut self, gpu_access: &mut com::AccessGuard<Backend>) {
         let gl = &self.share.context;
         for (buffer, mapping) in gpu_access.access_mapped_reads() {
             let target = device::role_to_target(buffer.get_info().role);
@@ -878,7 +884,7 @@ impl CommandQueue {
     }
 
     // MappingKind::Temporary
-    fn ensure_mappings_unmapped(&mut self, gpu_access: &mut com::AccessGuard<Resources>) {
+    fn ensure_mappings_unmapped(&mut self, gpu_access: &mut com::AccessGuard<Backend>) {
         for (buffer, mapping) in gpu_access.access_mapped() {
             let target = device::role_to_target(buffer.get_info().role);
             device::temporary_ensure_unmapped(&mut mapping.pointer,
@@ -888,7 +894,7 @@ impl CommandQueue {
         }
     }
 
-    fn after_submit(&mut self, gpu_access: &mut com::AccessGuard<Resources>) {
+    fn after_submit(&mut self, gpu_access: &mut com::AccessGuard<Backend>) {
         if self.share.private_caps.buffer_storage_supported {
             // MappingKind::Persistent
             if gpu_access.has_mapped_reads() || gpu_access.has_mapped_writes() {
@@ -908,7 +914,7 @@ impl CommandQueue {
         unsafe { gl.MemoryBarrier(gl::CLIENT_MAPPED_BUFFER_BARRIER_BIT); }
     }
 
-    fn place_fence(&mut self) -> handle::Fence<Resources> {
+    fn place_fence(&mut self) -> handle::Fence<Backend> {
         use core::handle::Producer;
 
         let gl = &self.share.context;
@@ -918,7 +924,7 @@ impl CommandQueue {
         self.frame_handles.make_fence(Fence(fence))
     }
 
-    fn signal_fence(&mut self, fence: &handle::Fence<Resources>) {
+    fn signal_fence(&mut self, fence: &handle::Fence<Backend>) {
         if self.share.private_caps.sync_supported {
             let gl = &self.share.context;
             let sync = unsafe {
@@ -931,8 +937,8 @@ impl CommandQueue {
 
     // MappingKind::Persistent
     fn track_mapped_gpu_access(&mut self,
-                               gpu_access: &mut com::AccessGuard<Resources>,
-                               fence: &handle::Fence<Resources>) {
+                               gpu_access: &mut com::AccessGuard<Backend>,
+                               fence: &handle::Fence<Backend>) {
         for (_, mapping) in gpu_access.access_mapped() {
             let status = match &mut mapping.kind {
                 &mut MappingKind::Persistent(ref mut status) => status,
@@ -942,7 +948,7 @@ impl CommandQueue {
         }
     }
 
-    fn wait_fence(&mut self, fence: &handle::Fence<Resources>) {
+    fn wait_fence(&mut self, fence: &handle::Fence<Backend>) {
         device::wait_fence(
             &*self.frame_handles.ref_fence(&fence).lock().unwrap(),
             &self.share.context,
@@ -954,8 +960,8 @@ impl c::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit_raw<'a, I>(
         &mut self,
         submit_infos: I,
-        fence: Option<&handle::Fence<Resources>>,
-        access: &com::AccessInfo<Resources>,
+        fence: Option<&handle::Fence<Backend>>,
+        access: &com::AccessInfo<Backend>,
     ) where I: Iterator<Item=c::RawSubmission<'a, Backend>> {
         let mut access = self.before_submit(access).unwrap();
         for submit in submit_infos {
@@ -970,7 +976,7 @@ impl c::CommandQueue<Backend> for CommandQueue {
         fence.map(|fence| self.signal_fence(fence));
     }
 
-    fn pin_submitted_resources(&mut self, man: &handle::Manager<Resources>) {
+    fn pin_submitted_resources(&mut self, man: &handle::Manager<Backend>) {
         self.frame_handles.extend(man);
         match self.max_resource_count {
             Some(c) if self.frame_handles.count() > c => {
