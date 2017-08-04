@@ -40,7 +40,7 @@ pub use draw_state::{state, target};
 pub mod adapter;
 pub mod buffer;
 pub mod command;
-pub mod dummy;
+// pub mod dummy;
 pub mod device;
 pub mod format;
 pub mod handle;
@@ -93,16 +93,16 @@ macro_rules! define_shaders {
         $(
         #[allow(missing_docs)]
         #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-        pub struct $name<R: Resources>(handle::Shader<R>);
+        pub struct $name<B: Backend>(handle::Shader<B>);
 
-        impl<R: Resources> $name<R> {
+        impl<B: Backend> $name<B> {
             #[allow(missing_docs)]
-            pub fn reference(&self, man: &mut handle::Manager<R>) -> &R::Shader {
+            pub fn reference(&self, man: &mut handle::Manager<B>) -> &B::Shader {
                 man.ref_shader(&self.0)
             }
 
             #[doc(hidden)]
-            pub fn new(shader: handle::Shader<R>) -> Self {
+            pub fn new(shader: handle::Shader<B>) -> Self {
                 $name(shader)
             }
         }
@@ -114,16 +114,16 @@ define_shaders!(VertexShader, HullShader, DomainShader, GeometryShader, PixelSha
 
 /// A complete set of shaders to link a program.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum ShaderSet<R: Resources> {
+pub enum ShaderSet<B: Backend> {
     /// Simple program: Vs-Ps
-    Simple(VertexShader<R>, PixelShader<R>),
+    Simple(VertexShader<B>, PixelShader<B>),
     /// Geometry shader programs: Vs-Gs-Ps
-    Geometry(VertexShader<R>, GeometryShader<R>, PixelShader<R>),
+    Geometry(VertexShader<B>, GeometryShader<B>, PixelShader<B>),
     /// Tessellated TODO: Tessellated, TessellatedGeometry, TransformFeedback
-    Tessellated(VertexShader<R>, HullShader<R>, DomainShader<R>, PixelShader<R>),
+    Tessellated(VertexShader<B>, HullShader<B>, DomainShader<B>, PixelShader<B>),
 }
 
-impl<R: Resources> ShaderSet<R> {
+impl<B: Backend> ShaderSet<B> {
     /// Return the aggregated stage usage for the set.
     pub fn get_usage(&self) -> shade::Usage {
         match self {
@@ -233,24 +233,19 @@ pub struct HeapType {
 
 /// Different types of a specific API.
 #[allow(missing_docs)]
-pub trait Backend: 'static + Sized {
+pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type Adapter: Adapter<Self>;
     type CommandQueue: CommandQueue<Self>;
-    type Device: Device<Self::Resources>;
+    type Device: Device<Self>;
     type QueueFamily: QueueFamily;
-    type Resources: Resources;
     type SubmitInfo: Clone + Send;
 
-    type RawCommandBuffer: command::RawCommandBuffer<Self, Self::Resources>;
-    type SubpassCommandBuffer; // SubpassCommandBuffer<Self::R>;
+    type RawCommandBuffer: command::RawCommandBuffer<Self>;
+    type SubpassCommandBuffer;
 
     type RawCommandPool: RawCommandPool<Self>;
     type SubpassCommandPool: SubpassCommandPool<Self>;
-}
 
-/// Different resource types of a specific API.
-#[allow(missing_docs)]
-pub trait Resources:          Clone + Hash + Debug + Eq + PartialEq + Any {
     type Buffer:              Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
     type Shader:              Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
     type Program:             Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
