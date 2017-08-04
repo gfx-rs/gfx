@@ -3,21 +3,21 @@
 use std::error::Error;
 use std::{mem, fmt, cmp, hash};
 use {memory, mapping};
-use {IndexType, Resources};
+use {IndexType, Backend};
 
 /// Untyped buffer
 #[derive(Debug)]
-pub struct Raw<R: Resources> {
-    resource: R::Buffer,
+pub struct Raw<B: Backend> {
+    resource: B::Buffer,
     info: Info,
-    mapping: Option<mapping::Raw<R>>,
+    mapping: Option<mapping::Raw<B>>,
 }
 
-impl<R: Resources> Raw<R> {
+impl<B: Backend> Raw<B> {
     #[doc(hidden)]
-    pub fn new(resource: R::Buffer,
+    pub fn new(resource: B::Buffer,
                info: Info,
-               mapping: Option<R::Mapping>) -> Self {
+               mapping: Option<B::Mapping>) -> Self {
         Raw {
             resource: resource,
             info: info,
@@ -26,7 +26,7 @@ impl<R: Resources> Raw<R> {
     }
 
     #[doc(hidden)]
-    pub fn resource(&self) -> &R::Buffer { &self.resource }
+    pub fn resource(&self) -> &B::Buffer { &self.resource }
 
     /// Get buffer info
     pub fn get_info(&self) -> &Info { &self.info }
@@ -37,7 +37,7 @@ impl<R: Resources> Raw<R> {
     }
 
     #[doc(hidden)]
-    pub fn mapping(&self) -> Option<&mapping::Raw<R>> {
+    pub fn mapping(&self) -> Option<&mapping::Raw<B>> {
         self.mapping.as_ref()
     }
 
@@ -51,15 +51,15 @@ impl<R: Resources> Raw<R> {
     }
 }
 
-impl<R: Resources + cmp::PartialEq> cmp::PartialEq for Raw<R> {
+impl<B: Backend + cmp::PartialEq> cmp::PartialEq for Raw<B> {
     fn eq(&self, other: &Self) -> bool {
         self.resource().eq(other.resource())
     }
 }
 
-impl<R: Resources + cmp::Eq> cmp::Eq for Raw<R> {}
+impl<B: Backend + cmp::Eq> cmp::Eq for Raw<B> {}
 
-impl<R: Resources + hash::Hash> hash::Hash for Raw<R> {
+impl<B: Backend + hash::Hash> hash::Hash for Raw<B> {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         self.resource().hash(state);
     }
@@ -130,9 +130,9 @@ impl Error for CreationError {
 }
 
 /// Index buffer view for `bind_index_buffer`.
-pub struct IndexBufferView<'a, R: Resources> {
+pub struct IndexBufferView<'a, B: Backend> {
     ///
-    pub buffer: &'a R::Buffer,
+    pub buffer: &'a B::Buffer,
     ///
     pub offset: u64,
     ///
