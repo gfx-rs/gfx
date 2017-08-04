@@ -15,8 +15,8 @@
 //! Command pools
 
 use {Backend, CommandQueue};
-use command::{self, ComputeCommandBuffer, Encoder, GeneralCommandBuffer, GraphicsCommandBuffer,
-              TransferCommandBuffer};
+use command::{self, ComputeCommandBuffer, GeneralCommandBuffer,
+    GraphicsCommandBuffer, TransferCommandBuffer};
 pub use queue::{ComputeQueue, GeneralQueue, GraphicsQueue, TransferQueue};
 use std::ops::DerefMut;
 
@@ -56,8 +56,8 @@ impl<B: Backend> GeneralCommandPool<B> {
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
-    pub fn acquire_command_buffer(&mut self) -> Encoder<B, GeneralCommandBuffer<B>> {
-        unsafe { Encoder::new(GeneralCommandBuffer(self.0.acquire_command_buffer())) }
+    pub fn acquire_command_buffer(&mut self) -> GeneralCommandBuffer<B> {
+        GeneralCommandBuffer(self.0.acquire_command_buffer())
     }
 }
 ///
@@ -76,8 +76,8 @@ impl<B: Backend> GraphicsCommandPool<B> {
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
-    pub fn acquire_command_buffer(&mut self) -> Encoder<B, GraphicsCommandBuffer<B>> {
-        unsafe { Encoder::new(GraphicsCommandBuffer(self.0.acquire_command_buffer())) }
+    pub fn acquire_command_buffer(&mut self) -> GraphicsCommandBuffer<B> {
+        GraphicsCommandBuffer(self.0.acquire_command_buffer())
     }
 }
 ///
@@ -96,8 +96,8 @@ impl<B: Backend> ComputeCommandPool<B> {
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
-    pub fn acquire_command_buffer(&mut self) -> Encoder<B, ComputeCommandBuffer<B>> {
-        unsafe { Encoder::new(ComputeCommandBuffer(self.0.acquire_command_buffer())) }
+    pub fn acquire_command_buffer(&mut self) -> ComputeCommandBuffer<B> {
+        ComputeCommandBuffer(self.0.acquire_command_buffer())
     }
 }
 ///
@@ -116,8 +116,8 @@ impl<B: Backend> TransferCommandPool<B> {
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
-    pub fn acquire_command_buffer(&mut self) -> Encoder<B, TransferCommandBuffer<B>> {
-        unsafe { Encoder::new(TransferCommandBuffer(self.0.acquire_command_buffer())) }
+    pub fn acquire_command_buffer(&mut self) -> TransferCommandBuffer<B> {
+        TransferCommandBuffer(self.0.acquire_command_buffer())
     }
 }
 
