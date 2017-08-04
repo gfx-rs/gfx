@@ -24,7 +24,7 @@
 use std::error::Error;
 use std::{fmt, cmp, hash};
 use memory::{Bind, Usage};
-use {format, state, target, Resources};
+use {format, state, target, Backend};
 pub use target::{Layer, Level};
 
 /// Maximum accessible mipmap level of a texture.
@@ -32,14 +32,14 @@ pub const MAX_LEVEL: Level = 15;
 
 /// Untyped texture
 #[derive(Debug)]
-pub struct Raw<R: Resources> {
-    resource: R::Texture,
+pub struct Raw<B: Backend> {
+    resource: B::Texture,
     info: Info,
 }
 
-impl<R: Resources> Raw<R> {
+impl<B: Backend> Raw<B> {
     #[doc(hidden)]
-    pub fn new(resource: R::Texture, info: Info) -> Self {
+    pub fn new(resource: B::Texture, info: Info) -> Self {
         Raw {
             resource: resource,
             info: info,
@@ -47,21 +47,21 @@ impl<R: Resources> Raw<R> {
     }
 
     #[doc(hidden)]
-    pub fn resource(&self) -> &R::Texture { &self.resource }
+    pub fn resource(&self) -> &B::Texture { &self.resource }
 
     /// Get texture descriptor
     pub fn get_info(&self) -> &Info { &self.info }
 }
 
-impl<R: Resources + cmp::PartialEq> cmp::PartialEq for Raw<R> {
+impl<B: Backend + cmp::PartialEq> cmp::PartialEq for Raw<B> {
     fn eq(&self, other: &Self) -> bool {
         self.resource().eq(other.resource())
     }
 }
 
-impl<R: Resources + cmp::Eq> cmp::Eq for Raw<R> {}
+impl<B: Backend + cmp::Eq> cmp::Eq for Raw<B> {}
 
-impl<R: Resources + hash::Hash> hash::Hash for Raw<R> {
+impl<B: Backend + hash::Hash> hash::Hash for Raw<B> {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         self.resource().hash(state);
     }
@@ -565,14 +565,24 @@ impl From<RenderDesc> for DepthStencilDesc {
 ///
 #[derive(Copy, Clone, Debug, Hash)]
 pub enum ImageLayout {
+    ///
     General,
+    ///
     ColorAttachmentOptimal,
+    ///
     DepthStencilAttachmentOptimal,
+    ///
     DepthStencilReadOnlyOptimal,
+    ///
     ShaderReadOnlyOptimal,
+    ///
     TransferSrcOptimal,
+    ///
     TransferDstOptimal,
+    ///
     Undefined,
+    ///
     Preinitialized,
+    ///
     Present,
 }
