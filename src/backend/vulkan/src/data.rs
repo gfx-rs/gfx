@@ -17,11 +17,12 @@ use ash::vk;
 // use core::command::ClearColor;
 // use core::factory::DescriptorType;
 use core::format::{SurfaceType, ChannelType};
+use core::texture::{self, ImageAspectFlags, ImageLayout};
 // use core::image::{FilterMethod, PackedColor, WrapMode};
 // use core::memory::{self, ImageAccess, ImageLayout};
 // use core::pass::{AttachmentLoadOp, AttachmentStoreOp, AttachmentLayout};
 // use core::pso::{self, PipelineStage};
-// use core::IndexType;
+use core::IndexType;
 
 pub fn map_format(surface: SurfaceType, chan: ChannelType) -> Option<vk::Format> {
     use core::format::SurfaceType::*;
@@ -160,6 +161,43 @@ pub fn map_format(surface: SurfaceType, chan: ChannelType) -> Option<vk::Format>
         },
     })
 }
+
+pub fn map_index_type(index_type: IndexType) -> vk::IndexType {
+    match index_type {
+        IndexType::U16 => vk::IndexType::Uint16,
+        IndexType::U32 => vk::IndexType::Uint32,
+    }
+}
+
+pub fn map_image_layout(layout: ImageLayout) -> vk::ImageLayout {
+    match layout {
+        ImageLayout::General => vk::ImageLayout::General,
+        ImageLayout::ColorAttachmentOptimal => vk::ImageLayout::ColorAttachmentOptimal,
+        ImageLayout::DepthStencilAttachmentOptimal => vk::ImageLayout::DepthStencilAttachmentOptimal,
+        ImageLayout::DepthStencilReadOnlyOptimal => vk::ImageLayout::DepthStencilReadOnlyOptimal,
+        ImageLayout::ShaderReadOnlyOptimal => vk::ImageLayout::ShaderReadOnlyOptimal,
+        ImageLayout::TransferSrcOptimal => vk::ImageLayout::TransferSrcOptimal,
+        ImageLayout::TransferDstOptimal => vk::ImageLayout::TransferDstOptimal,
+        ImageLayout::Undefined => vk::ImageLayout::Undefined,
+        ImageLayout::Preinitialized => vk::ImageLayout::Preinitialized,
+        ImageLayout::Present => vk::ImageLayout::PresentSrcKhr,
+    }
+}
+
+pub fn map_image_aspects(aspects: ImageAspectFlags) -> vk::ImageAspectFlags {
+    let mut flags = vk::ImageAspectFlags::empty();
+    if aspects.contains(texture::ASPECT_COLOR) {
+        flags |= vk::IMAGE_ASPECT_COLOR_BIT;
+    }
+    if aspects.contains(texture::ASPECT_DEPTH) {
+        flags |= vk::IMAGE_ASPECT_DEPTH_BIT;
+    }
+    if aspects.contains(texture::ASPECT_STENCIL) {
+        flags |= vk::IMAGE_ASPECT_STENCIL_BIT;
+    }
+    flags
+}
+
 /*
 pub fn map_clear_color(value: ClearColor) -> vk::ClearColorValue {
     match value {
@@ -181,21 +219,6 @@ pub fn map_attachment_store_op(op: AttachmentStoreOp) -> vk::AttachmentStoreOp {
     match op {
         AttachmentStoreOp::Store => vk::AttachmentStoreOp::Store,
         AttachmentStoreOp::DontCare => vk::AttachmentStoreOp::DontCare,
-    }
-}
-
-pub fn map_image_layout(layout: ImageLayout) -> vk::ImageLayout {
-    match layout {
-        ImageLayout::General => vk::ImageLayout::General,
-        ImageLayout::ColorAttachmentOptimal => vk::ImageLayout::ColorAttachmentOptimal,
-        ImageLayout::DepthStencilAttachmentOptimal => vk::ImageLayout::DepthStencilAttachmentOptimal,
-        ImageLayout::DepthStencilReadOnlyOptimal => vk::ImageLayout::DepthStencilReadOnlyOptimal,
-        ImageLayout::ShaderReadOnlyOptimal => vk::ImageLayout::ShaderReadOnlyOptimal,
-        ImageLayout::TransferSrcOptimal => vk::ImageLayout::TransferSrcOptimal,
-        ImageLayout::TransferDstOptimal => vk::ImageLayout::TransferDstOptimal,
-        ImageLayout::Undefined => vk::ImageLayout::Undefined,
-        ImageLayout::Preinitialized => vk::ImageLayout::Preinitialized,
-        ImageLayout::Present => vk::ImageLayout::PresentSrcKhr,
     }
 }
 
@@ -324,13 +347,6 @@ pub fn map_image_usage(usage: image::Usage) -> vk::ImageUsageFlags {
     }
 
     flags
-}
-
-pub fn map_index_type(index_type: IndexType) -> vk::IndexType {
-    match index_type {
-        IndexType::U16 => vk::IndexType::Uint16,
-        IndexType::U32 => vk::IndexType::Uint32,
-    }
 }
 
 pub fn map_descriptor_type(ty: DescriptorType) -> vk::DescriptorType {

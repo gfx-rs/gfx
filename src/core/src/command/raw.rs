@@ -23,7 +23,7 @@ pub trait RawCommandBuffer<B: Backend> {
     fn finish(&mut self) -> B::SubmitInfo;
 
     ///
-    fn pipeline_barrier<'a>(&mut self, &[memory::MemoryBarrier], &[memory::BufferBarrier], &[memory::ImageBarrier]);
+    fn pipeline_barrier(&mut self, &[memory::MemoryBarrier], &[memory::BufferBarrier], &[memory::ImageBarrier]);
 
     /// Clear depth-stencil target-
     fn clear_depth_stencil(&mut self, &B::DepthStencilView, Option<target::Depth>, Option<target::Stencil>);
@@ -43,6 +43,9 @@ pub trait RawCommandBuffer<B: Backend> {
     fn set_scissors(&mut self, &[target::Rect]);
     ///
     fn set_ref_values(&mut self, state::RefValues);
+
+    ///
+    fn begin_renderpass(&mut self);
 
     /// Bind a graphics pipeline.
     ///
@@ -66,13 +69,13 @@ pub trait RawCommandBuffer<B: Backend> {
     ///
     fn copy_buffer_to_image(&mut self, src: &B::Buffer, dst: &B::Image, layout: texture::ImageLayout, regions: &[BufferImageCopy]);
     ///
-    fn copy_image_to_buffer(&mut self);
+    fn copy_image_to_buffer(&mut self, src: &B::Image, dst: &B::Buffer, layout: texture::ImageLayout, regions: &[BufferImageCopy]);
     ///
     fn draw(&mut self, start: VertexCount, count: VertexCount, instance: Option<InstanceParams>);
     ///
     fn draw_indexed(&mut self, start: VertexCount, count: VertexCount, base: VertexOffset, instance: Option<InstanceParams>);
     ///
-    fn draw_indirect(&mut self);
+    fn draw_indirect(&mut self, buffer: &B::Buffer, offset: u64, draw_count: u32, stride: u32);
     ///
-    fn draw_indexed_indirect(&mut self);
+    fn draw_indexed_indirect(&mut self, buffer: &B::Buffer, offset: u64, draw_count: u32, stride: u32);
 }

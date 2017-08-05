@@ -212,16 +212,16 @@ impl Descriptor {
 }
 
 /// A complete set of vertex buffers to be used for vertex import in PSO.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct VertexBufferSet<B: Backend>(
+#[derive(Clone, Debug)]
+pub struct VertexBufferSet<'a, B: Backend>(
     /// Array of buffer handles with offsets in them
-    pub [Option<(B::Buffer, BufferOffset)>; MAX_VERTEX_ATTRIBUTES]
+    pub Vec<(&'a B::Buffer, BufferOffset)>,
 );
 
-impl<B: Backend> VertexBufferSet<B> {
+impl<'a, B: Backend> VertexBufferSet<'a, B> {
     /// Create an empty set
-    pub fn new() -> VertexBufferSet<B> {
-        VertexBufferSet([None; MAX_VERTEX_ATTRIBUTES])
+    pub fn new() -> VertexBufferSet<'a, B> {
+        VertexBufferSet(Vec::new())
     }
 }
 
