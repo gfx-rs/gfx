@@ -13,9 +13,11 @@
 // limitations under the License.
 
 use {Backend};
-use {memory, target, texture};
+use {memory, pso, target, texture};
+use buffer::IndexBufferView;
 use queue::capability::{Capability, Graphics};
-use super::{BufferCopy, BufferImageCopy, RawCommandBuffer, Submit};
+use super::{BufferCopy, BufferImageCopy, CommandBufferShim,
+    RawCommandBuffer, Submit};
 
 /// Command buffer with graphics and transfer functionality.
 pub struct GraphicsCommandBuffer<'a, B: Backend>(pub(crate) &'a mut B::RawCommandBuffer)
@@ -23,6 +25,12 @@ where B::RawCommandBuffer: 'a;
 
 impl<'a, B: Backend> Capability for GraphicsCommandBuffer<'a, B> {
     type Capability = Graphics;
+}
+
+impl<'a, B: Backend> CommandBufferShim<'a, B> for GraphicsCommandBuffer<'a, B> {
+    fn raw(&'a mut self) -> &'a mut B::RawCommandBuffer {
+        &mut self.0
+    }
 }
 
 impl<'a, B> GraphicsCommandBuffer<'a, B>
@@ -78,7 +86,25 @@ where
     }
 
     ///
-    pub fn copy_image_to_buffer(&mut self) {
-        self.0.copy_image_to_buffer()
+    pub fn copy_image_to_buffer(&mut self, src: &B::Image, dst: &B::Buffer, layout: texture::ImageLayout, regions: &[BufferImageCopy]) {
+        self.0.copy_image_to_buffer(src, dst, layout, regions)
+    }
+
+    /// Bind index buffer view.
+    pub fn bind_index_buffer(&mut self, ibv: IndexBufferView<B>) {
+        self.0.bind_index_buffer(ibv)
+    }
+
+    /// Bind vertex buffers.
+    pub fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<B>) {
+        self.0.bind_vertex_buffers(vbs)
+    }
+
+    /// Bind a graphics pipeline.
+    ///
+    /// There is only *one* pipeline slot for compute and graphics.
+    /// Calling the corresponding `bind_pipeline` functions will override the slot.
+    pub fn bind_graphics_pipeline(&mut self, pipeline: &B::GraphicsPipeline) {
+        self.0.bind_graphics_pipeline(pipeline)
     }
 }

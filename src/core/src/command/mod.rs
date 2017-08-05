@@ -31,6 +31,7 @@ pub use self::compute::ComputeCommandBuffer;
 pub use self::general::GeneralCommandBuffer;
 pub use self::graphics::GraphicsCommandBuffer;
 pub use self::raw::RawCommandBuffer;
+pub use self::renderpass::RenderPassInlineEncoder;
 pub use self::transfer::TransferCommandBuffer;
 
 /// A universal clear color supporting integet formats
@@ -117,6 +118,20 @@ pub struct BufferCopy {
 }
 
 ///
+pub struct ImageCopy {
+    ///
+    pub extent: Extent,
+    ///
+    pub src_subresource: texture::SubresourceLayers,
+    ///
+    pub src_offset: Offset,
+    ///
+    pub dst_subresource: texture::SubresourceLayers,
+    ///
+    pub dst_offset: Offset,
+}
+
+///
 pub struct BufferImageCopy {
     ///
     pub buffer_offset: u64,
@@ -125,13 +140,11 @@ pub struct BufferImageCopy {
     ///
     pub buffer_slice_pitch: u32,
     ///
-    pub image_mip_level: texture::Level,
-    ///
-    pub image_base_layer: texture::Layer,
-    ///
-    pub image_layers: texture::Layer,
+    pub image_subresource: texture::SubresourceLayers,
     ///
     pub image_offset: Offset,
+    ///
+    pub image_extent: Extent,
 }
 
 /// Optional instance parameters: (instance count, buffer offset)
@@ -157,4 +170,10 @@ impl<B: Backend, C> Submit<B, C> {
     pub fn into_info(self) -> B::SubmitInfo {
         self.0
     }
+}
+
+#[doc(hidden)]
+pub trait CommandBufferShim<'a, B: Backend> {
+    #[doc(hidden)]
+    fn raw(&'a mut self) -> &'a mut B::RawCommandBuffer;
 }

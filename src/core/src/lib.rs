@@ -34,9 +34,7 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-use format::Formatted;
 use std::any::Any;
-use std::borrow::Borrow;
 use std::error::Error;
 use std::fmt::{self, Debug};
 use std::hash::Hash;
@@ -264,7 +262,7 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
 
     type Buffer:              Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
     type Shader:              Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
-    type Program:             Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
+    type Program:             Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync; // deprecated
     type PipelineStateObject: Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync; // deprecated
     type Texture:             Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync; // deprecated
     type ShaderResourceView:  Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;

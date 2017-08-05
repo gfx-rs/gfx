@@ -28,8 +28,8 @@
 pub mod capability;
 pub mod submission;
 
-use {pso, Backend, handle};
-use command::{AccessInfo, Submit};
+use {Backend, handle};
+use command::{AccessInfo};
 use pool::{GeneralCommandPool, GraphicsCommandPool, ComputeCommandPool,
            TransferCommandPool, RawCommandPool};
 
