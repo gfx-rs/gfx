@@ -252,7 +252,7 @@ impl Adapter {
             name: info.platform_name.renderer.into(),
             vendor: 0, // TODO
             device: 0, // TODO
-            software_rendering: true, // not always true ..
+            software_rendering: false, // not always true ..
         };
 
         // create the shared context

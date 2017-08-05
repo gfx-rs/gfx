@@ -9,6 +9,7 @@
 
 use std::error::Error;
 use std::{fmt, cmp, hash};
+use std::ops::Range;
 use memory::{Bind, Usage};
 use {format, state, target, Backend};
 pub use target::{Layer, Level};
@@ -572,3 +573,25 @@ pub enum ImageLayout {
     ///
     Present,
 }
+
+bitflags!(
+    ///
+    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+    pub flags ImageAspectFlags: u8 {
+        /// Color aspect.
+        const ASPECT_COLOR = 0x1,
+        /// Depth aspect.
+        const ASPECT_DEPTH = 0x2,
+        /// Stencil aspect.
+        const ASPECT_STENCIL = 0x4,
+    }
+);
+
+///
+pub type Subresource = (ImageAspectFlags, Level, Layer);
+
+///
+pub type SubresourceLayers = (ImageAspectFlags, Level, Range<Layer>);
+
+///
+pub type SubresourceRange = (ImageAspectFlags, Range<Level>, Range<Layer>);

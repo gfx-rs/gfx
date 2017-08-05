@@ -18,8 +18,9 @@ name = "gfx_device_vulkan"
 log = "0.3"
 lazy_static = "0.2"
 shared_library = "0.1"
-ash = "0.15.7"
+ash = { path = '../../../../ash/ash' } # "0.18"
 gfx_core = { path = "../../core", version = "0.7" }
+smallvec = "0.4"
 
 [target.'cfg(windows)'.dependencies]
 kernel32-sys = "0.2.2"
