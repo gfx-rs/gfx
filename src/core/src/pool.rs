@@ -14,11 +14,10 @@
 
 //! Command pools
 
-use {Backend, CommandQueue};
-use command::{self, ComputeCommandBuffer, GeneralCommandBuffer,
+use {Backend};
+use command::{ComputeCommandBuffer, GeneralCommandBuffer,
     GraphicsCommandBuffer, TransferCommandBuffer};
 pub use queue::{ComputeQueue, GeneralQueue, GraphicsQueue, TransferQueue};
-use std::ops::DerefMut;
 
 /// `CommandPool` can allocate command buffers of a specific type only.
 /// The allocated command buffers are associated with the creating command queue.

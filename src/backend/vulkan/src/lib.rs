@@ -19,6 +19,7 @@ extern crate ash;
 extern crate gfx_core as core;
 #[macro_use]
 extern crate lazy_static;
+extern crate smallvec;
 
 #[cfg(target_os = "windows")]
 extern crate kernel32;
@@ -27,7 +28,7 @@ use ash::{Entry, LoadingError};
 use ash::version::{EntryV1_0, DeviceV1_0, InstanceV1_0, V1_0};
 use ash::vk;
 use core::{command as com, handle, memory};
-use core::{CommandBuffer, FrameSync, QueueType};
+use core::{FrameSync, QueueType};
 use std::{mem, ptr};
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
@@ -361,7 +362,7 @@ pub struct CommandQueue {
     device: Arc<RawDevice>,
     family_index: u32,
 
-    frame_handles: handle::Manager<Resources>,
+    frame_handles: handle::Manager<Backend>,
     max_resource_count: Option<usize>,
 }
 
@@ -386,13 +387,13 @@ impl core::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit_raw<'a, I>(
         &mut self,
         submit_infos: I,
-        fence: Option<&handle::Fence<Resources>>,
-        access: &com::AccessInfo<Resources>,
+        fence: Option<&handle::Fence<Backend>>,
+        access: &com::AccessInfo<Backend>,
     ) where I: Iterator<Item=core::RawSubmission<'a, Backend>> {
         unimplemented!()
     }
 
-    fn pin_submitted_resources(&mut self, man: &handle::Manager<Resources>) {
+    fn pin_submitted_resources(&mut self, man: &handle::Manager<Backend>) {
         self.frame_handles.extend(man);
         match self.max_resource_count {
             Some(c) if self.frame_handles.count() > c => {
@@ -419,7 +420,6 @@ pub struct Device {
 pub enum Backend {}
 impl core::Backend for Backend {
     type Adapter = Adapter;
-    type Resources = Resources;
     type CommandQueue = CommandQueue;
     type RawCommandBuffer = command::CommandBuffer;
     type SubpassCommandBuffer = command::SubpassCommandBuffer;
@@ -429,12 +429,8 @@ impl core::Backend for Backend {
 
     type RawCommandPool = pool::RawCommandPool;
     type SubpassCommandPool = pool::SubpassCommandPool;
-}
 
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Resources { }
-impl core::Resources for Resources {
-    type Buffer = ();
+    type Buffer = native::Buffer;
     type Shader = ();
     type Program = ();
     type PipelineStateObject = ();
@@ -447,13 +443,19 @@ impl core::Resources for Resources {
     type Fence = native::Fence;
     type Semaphore = native::Semaphore;
     type Mapping = Mapping;
+
+    type Image = native::Image;
+    type ComputePipeline = native::ComputePipeline;
+    type GraphicsPipeline = native::GraphicsPipeline;
+    type PipelineLayout = ();
+    type DescriptorSet = ();
 }
 
 // TODO: temporary
 #[derive(Debug, Eq, Hash, PartialEq)]
 pub struct Mapping;
 
-impl core::mapping::Gate<Resources> for Mapping {
+impl core::mapping::Gate<Backend> for Mapping {
     unsafe fn set<T>(&self, index: usize, val: T) {
         unimplemented!()
     }

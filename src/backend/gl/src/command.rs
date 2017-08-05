@@ -381,7 +381,6 @@ impl RawCommandBuffer {
         }
     }
 
-    /*
     fn bind_pixel_targets(&mut self, pts: c::pso::PixelTargetSet<Backend>) {
         let is_main = pts.colors.iter().skip(1).find(|c| c.is_some()).is_none() &&
                       self.is_main_target(pts.colors[0]) &&
@@ -408,7 +407,6 @@ impl RawCommandBuffer {
                                     h: view.1,
                                 }));
     }
-    */
 
     pub(crate) fn reset(&mut self) {
         self.buf.clear();
@@ -436,17 +434,15 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
     fn clear_depth_stencil(&mut self, dsv: &TargetView, depth: Option<target::Depth>, stencil: Option<target::Stencil>) {
-        /*
         let mut pts = c::pso::PixelTargetSet::new();
         if depth.is_some() {
-            pts.depth = Some(dsv);
+            pts.depth = Some(dsv.clone());
         }
         if stencil.is_some() {
-            pts.stencil = Some(dsv);
+            pts.stencil = Some(dsv.clone());
         }
         self.bind_pixel_targets(pts);
         self.buf.push(Command::Clear(None, depth, stencil));
-        */
     }
 
     fn resolve_image(&mut self) {
@@ -514,7 +510,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
     fn dispatch(&mut self, x: u32, y: u32, z: u32) {
-
+        self.buf.extend(Command::Dispatch(x, y, z));
     }
 
     fn dispatch_indirect(&mut self) {

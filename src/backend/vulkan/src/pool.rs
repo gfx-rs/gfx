@@ -19,7 +19,6 @@ use ash::vk;
 use ash::version::DeviceV1_0;
 
 use core::{self, pool};
-use core::command::{Encoder};
 use core::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 use command::{CommandBuffer, SubpassCommandBuffer};
 use core::command::{GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer};
@@ -65,7 +64,7 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         };
 
         unsafe { self.device.0.begin_command_buffer(buffer.raw, &info); } // TODO: error handling
-        buffer 
+        buffer
     }
 
     unsafe fn from_queue<Q>(mut queue: Q, capacity: usize) -> RawCommandPool

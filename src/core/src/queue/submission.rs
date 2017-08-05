@@ -17,13 +17,10 @@
 //! // TODO
 
 use {handle, pso, Backend};
-use command::{Submit, GeneralCommandBuffer, GraphicsCommandBuffer,
-              ComputeCommandBuffer, TransferCommandBuffer};
-use super::capability::{General, Graphics, Compute, Transfer, Supports, Upper};
+use command::{Submit};
+use super::capability::{Transfer, Supports, Upper};
 use std::marker::PhantomData;
 use smallvec::SmallVec;
-
-use super::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 
 /// Raw submission information for a command queue.
 pub struct RawSubmission<'a, B: Backend + 'a> {
