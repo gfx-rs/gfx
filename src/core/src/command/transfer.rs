@@ -14,7 +14,7 @@
 
 use Backend;
 use queue::capability::{Capability, Transfer};
-use super::{RawCommandBuffer, Submit};
+use super::{CommandBufferShim, RawCommandBuffer, Submit};
 
 /// Command buffer with transfer functionality.
 pub struct TransferCommandBuffer<'a, B: Backend>(pub(crate) &'a mut B::RawCommandBuffer)
@@ -22,6 +22,12 @@ where B::RawCommandBuffer: 'a;
 
 impl<'a, B: Backend> Capability for TransferCommandBuffer<'a, B> {
     type Capability = Transfer;
+}
+
+impl<'a, B: Backend> CommandBufferShim<'a, B> for TransferCommandBuffer<'a, B> {
+    fn raw(&'a mut self) -> &'a mut B::RawCommandBuffer {
+        &mut self.0
+    }
 }
 
 impl<'a, B: Backend> TransferCommandBuffer<'a, B> {
