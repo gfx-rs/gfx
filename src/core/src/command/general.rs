@@ -14,7 +14,7 @@
 
 use Backend;
 use queue::capability::{Capability, General};
-use super::{RawCommandBuffer, Submit};
+use super::{CommandBufferShim, RawCommandBuffer, Submit};
 
 /// Command buffer with compute, graphics and transfer functionality.
 pub struct GeneralCommandBuffer<'a, B: Backend>(pub(crate) &'a mut B::RawCommandBuffer)
@@ -22,6 +22,12 @@ where B::RawCommandBuffer: 'a;
 
 impl<'a, B: Backend> Capability for GeneralCommandBuffer<'a, B> {
     type Capability = General;
+}
+
+impl<'a, B: Backend> CommandBufferShim<'a, B> for GeneralCommandBuffer<'a, B> {
+    fn raw(&'a mut self) -> &'a mut B::RawCommandBuffer {
+        &mut self.0
+    }
 }
 
 impl<'a, B: Backend> GeneralCommandBuffer<'a, B> {
