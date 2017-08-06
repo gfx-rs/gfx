@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use {Backend};
-use {memory, pso, target, texture};
+use {memory, pso, state, target, texture};
 use buffer::IndexBufferView;
 use queue::capability::{Capability, Graphics};
 use super::{BufferCopy, BufferImageCopy, CommandBufferShim,
@@ -106,5 +106,20 @@ where
     /// Calling the corresponding `bind_pipeline` functions will override the slot.
     pub fn bind_graphics_pipeline(&mut self, pipeline: &B::GraphicsPipeline) {
         self.0.bind_graphics_pipeline(pipeline)
+    }
+
+    ///
+    fn set_viewports(&mut self, viewports: &[target::Rect]) {
+        self.0.set_viewports(viewports)
+    }
+
+    ///
+    fn set_scissors(&mut self, scissors: &[target::Rect]) {
+        self.0.set_scissors(scissors)
+    }
+
+    ///
+    fn set_ref_values(&mut self, rv: state::RefValues) {
+        self.0.set_ref_values(rv)
     }
 }
