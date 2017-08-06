@@ -13,8 +13,9 @@
 // limitations under the License.
 
 use Backend;
+use {memory, texture};
 use queue::capability::{Capability, Transfer};
-use super::{CommandBufferShim, RawCommandBuffer, Submit};
+use super::{BufferCopy, BufferImageCopy, CommandBufferShim, RawCommandBuffer, Submit};
 
 /// Command buffer with transfer functionality.
 pub struct TransferCommandBuffer<'a, B: Backend>(pub(crate) &'a mut B::RawCommandBuffer)
@@ -37,5 +38,40 @@ impl<'a, B: Backend> TransferCommandBuffer<'a, B> {
     /// The command pool must be reset to able to re-record commands.
     pub fn finish(mut self) -> Submit<B, Transfer> {
         Submit::new(self.0.finish())
+    }
+
+    ///
+    pub fn pipeline_barrier(
+        &mut self,
+        memory_barriers: &[memory::MemoryBarrier],
+        buffer_barriers: &[memory::BufferBarrier],
+        image_barriers: &[memory::ImageBarrier])
+    {
+        self.0.pipeline_barrier(memory_barriers, buffer_barriers, image_barriers)
+    }
+
+    ///
+    pub fn update_buffer(&mut self, buffer: &B::Buffer, data: &[u8], offset: usize) {
+        self.0.update_buffer(buffer, data, offset)
+    }
+
+    ///
+    pub fn copy_buffer(&mut self, src: &B::Buffer, dst: &B::Buffer, regions: &[BufferCopy]) {
+        self.0.copy_buffer(src, dst, regions)
+    }
+
+    ///
+    pub fn copy_image(&mut self, src: &B::Image, dst: &B::Image) {
+        self.0.copy_image(src, dst)
+    }
+
+    ///
+    pub fn copy_buffer_to_image(&mut self, src: &B::Buffer, dst: &B::Image, layout: texture::ImageLayout, regions: &[BufferImageCopy]) {
+        self.0.copy_buffer_to_image(src, dst, layout, regions)
+    }
+
+    ///
+    pub fn copy_image_to_buffer(&mut self, src: &B::Image, dst: &B::Buffer, layout: texture::ImageLayout, regions: &[BufferImageCopy]) {
+        self.0.copy_image_to_buffer(src, dst, layout, regions)
     }
 }
