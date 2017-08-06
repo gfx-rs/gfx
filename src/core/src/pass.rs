@@ -15,8 +15,9 @@
 //!
 
 use format::Format;
-use memory::{ImageAccess, ImageLayout};
+use texture::{ImageAccess, ImageLayout};
 use pso::PipelineStage;
+use Backend;
 
 ///
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
@@ -92,4 +93,12 @@ pub struct SubpassDependency {
 pub struct SubpassDesc<'a> {
     ///
     pub color_attachments: &'a [AttachmentRef],
+}
+
+///
+pub struct SubPass<'a, B: Backend> {
+    ///
+    pub index: usize,
+    ///
+    pub main_pass: &'a B::RenderPass,
 }

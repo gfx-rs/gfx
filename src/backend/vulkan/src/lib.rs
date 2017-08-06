@@ -431,10 +431,6 @@ impl core::Backend for Backend {
     type SubpassCommandPool = pool::SubpassCommandPool;
 
     type Buffer = native::Buffer;
-    type Shader = ();
-    type Program = ();
-    type PipelineStateObject = ();
-    type Texture = ();
     type ShaderResourceView = ();
     type UnorderedAccessView = ();
     type RenderTargetView = ();
@@ -447,8 +443,12 @@ impl core::Backend for Backend {
     type Image = native::Image;
     type ComputePipeline = native::ComputePipeline;
     type GraphicsPipeline = native::GraphicsPipeline;
-    type PipelineLayout = ();
+    type PipelineLayout = native::PipelineLayout;
     type DescriptorSet = ();
+    type ShaderLib = native::ShaderLib;
+    type RenderPass = native::RenderPass;
+    type FrameBuffer = native::FrameBuffer;
+    type DescriptorSetLayout = native::DescriptorSetLayout;
 }
 
 // TODO: temporary
