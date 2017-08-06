@@ -13,8 +13,10 @@
 // limitations under the License.
 
 use Backend;
+use {memory, pso, state, target, texture};
+use buffer::IndexBufferView;
 use queue::capability::{Capability, General};
-use super::{CommandBufferShim, RawCommandBuffer, Submit};
+use super::{BufferCopy, BufferImageCopy, CommandBufferShim, RawCommandBuffer, Submit};
 
 /// Command buffer with compute, graphics and transfer functionality.
 pub struct GeneralCommandBuffer<'a, B: Backend>(pub(crate) &'a mut B::RawCommandBuffer)
@@ -37,5 +39,78 @@ impl<'a, B: Backend> GeneralCommandBuffer<'a, B> {
     /// The command pool must be reset to able to re-record commands.
     pub fn finish(mut self) -> Submit<B, General> {
         Submit::new(self.0.finish())
+    }
+
+    ///
+    pub fn pipeline_barrier(
+        &mut self,
+        memory_barriers: &[memory::MemoryBarrier],
+        buffer_barriers: &[memory::BufferBarrier],
+        image_barriers: &[memory::ImageBarrier])
+    {
+        self.0.pipeline_barrier(memory_barriers, buffer_barriers, image_barriers)
+    }
+
+    ///
+    fn dispatch(&mut self, x: u32, y: u32, z: u32) {
+        self.0.dispatch(x, y, z)
+    }
+
+    ///
+    fn dispatch_indirect(&mut self, buffer: &B::Buffer, offset: u64) {
+        self.0.dispatch_indirect(buffer, offset)
+    }
+
+    /// Bind index buffer view.
+    pub fn bind_index_buffer(&mut self, ibv: IndexBufferView<B>) {
+        self.0.bind_index_buffer(ibv)
+    }
+
+    /// Bind vertex buffers.
+    pub fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<B>) {
+        self.0.bind_vertex_buffers(vbs)
+    }
+
+    /// Bind a graphics pipeline.
+    ///
+    /// There is only *one* pipeline slot for compute and graphics.
+    /// Calling the corresponding `bind_pipeline` functions will override the slot.
+    pub fn bind_graphics_pipeline(&mut self, pipeline: &B::GraphicsPipeline) {
+        self.0.bind_graphics_pipeline(pipeline)
+    }
+
+    ///
+    fn set_viewports(&mut self, viewports: &[target::Rect]) {
+        self.0.set_viewports(viewports)
+    }
+
+    ///
+    fn set_scissors(&mut self, scissors: &[target::Rect]) {
+        self.0.set_scissors(scissors)
+    }
+
+    ///
+    fn set_ref_values(&mut self, rv: state::RefValues) {
+        self.0.set_ref_values(rv)
+    }
+
+    ///
+    pub fn copy_buffer(&mut self, src: &B::Buffer, dst: &B::Buffer, regions: &[BufferCopy]) {
+        self.0.copy_buffer(src, dst, regions)
+    }
+
+    ///
+    pub fn copy_image(&mut self, src: &B::Image, dst: &B::Image) {
+        self.0.copy_image(src, dst)
+    }
+
+    ///
+    pub fn copy_buffer_to_image(&mut self, src: &B::Buffer, dst: &B::Image, layout: texture::ImageLayout, regions: &[BufferImageCopy]) {
+        self.0.copy_buffer_to_image(src, dst, layout, regions)
+    }
+
+    ///
+    pub fn copy_image_to_buffer(&mut self, src: &B::Image, dst: &B::Buffer, layout: texture::ImageLayout, regions: &[BufferImageCopy]) {
+        self.0.copy_image_to_buffer(src, dst, layout, regions)
     }
 }
