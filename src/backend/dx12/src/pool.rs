@@ -20,7 +20,6 @@ use std::ops::DerefMut;
 use winapi;
 
 use core::{self, pool};
-use core::command::Encoder;
 use core::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 use command::{CommandBuffer, SubpassCommandBuffer};
 use core::command::{GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer};
@@ -99,6 +98,8 @@ pub struct RawCommandPool {
     command_lists: Vec<CommandBuffer>,
     next_list: usize,
 }
+
+unsafe impl Send for RawCommandPool { }
 
 impl pool::RawCommandPool<Backend> for RawCommandPool {
     fn reset(&mut self) {

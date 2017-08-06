@@ -186,8 +186,8 @@ impl<B: Backend, C> Submit<B, C> {
         &self.0
     }
 
-    ///
-    pub fn into_info(self) -> B::SubmitInfo {
+    /// Unsafe because we could try to submit a command buffer multiple times by cloning.
+    pub unsafe fn into_info(self) -> B::SubmitInfo {
         self.0
     }
 }
