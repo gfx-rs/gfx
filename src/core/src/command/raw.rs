@@ -53,6 +53,10 @@ pub trait RawCommandBuffer<B: Backend> {
         clear_values: &[ClearValue],
         first_subpass: SubpassContents,
     );
+    ///
+    fn next_subpass(&mut self, contents: SubpassContents);
+    ///
+    fn end_renderpass(&mut self);
 
     /// Bind a graphics pipeline.
     ///
