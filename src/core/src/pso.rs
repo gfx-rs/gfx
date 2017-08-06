@@ -163,54 +163,6 @@ pub type ColorTargetDesc = (format::Format, ColorInfo);
 /// PSO depth-stencil target descriptor
 pub type DepthStencilDesc = (format::Format, DepthStencilInfo);
 
-/// All the information surrounding a shader program that is required
-/// for PSO creation, including the formats of vertex buffers and pixel targets;
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-pub struct Descriptor {
-    /// Type of the primitive
-    pub primitive: Primitive,
-    /// Rasterizer setup
-    pub rasterizer: s::Rasterizer,
-    /// Enable scissor test
-    pub scissor: bool,
-    /// Vertex buffers
-    pub vertex_buffers: [Option<VertexBufferDesc>; MAX_VERTEX_BUFFERS],
-    /// Vertex attributes
-    pub attributes: [Option<AttributeDesc>; MAX_VERTEX_ATTRIBUTES],
-    /// Constant buffers
-    pub constant_buffers: [Option<ConstantBufferDesc>; MAX_CONSTANT_BUFFERS],
-    /// Shader resource views
-    pub resource_views: [Option<ResourceViewDesc>; MAX_RESOURCE_VIEWS],
-    /// Unordered access views
-    pub unordered_views: [Option<UnorderedViewDesc>; MAX_UNORDERED_VIEWS],
-    /// Samplers
-    pub samplers: [Option<SamplerDesc>; MAX_SAMPLERS],
-    /// Render target views (RTV)
-    pub color_targets: [Option<ColorTargetDesc>; MAX_COLOR_TARGETS],
-    /// Depth stencil view (DSV)
-    pub depth_stencil: Option<DepthStencilDesc>,
-}
-
-impl Descriptor {
-    /// Create a new empty PSO descriptor.
-    pub fn new(primitive: Primitive, rast: s::Rasterizer) -> Descriptor {
-        Descriptor {
-            primitive: primitive,
-            rasterizer: rast,
-            scissor: false,
-            vertex_buffers: [None; MAX_VERTEX_BUFFERS],
-            attributes: [None; MAX_VERTEX_ATTRIBUTES],
-            constant_buffers: [None; MAX_CONSTANT_BUFFERS],
-            resource_views: [None; MAX_RESOURCE_VIEWS],
-            unordered_views: [None; MAX_UNORDERED_VIEWS],
-            samplers: [None; MAX_SAMPLERS],
-            color_targets: [None; MAX_COLOR_TARGETS],
-            depth_stencil: None,
-        }
-    }
-}
-
 /// A complete set of vertex buffers to be used for vertex import in PSO.
 #[derive(Clone, Debug)]
 pub struct VertexBufferSet<'a, B: Backend>(
@@ -300,6 +252,59 @@ impl<B: Backend> PixelTargetSet<B> {
         self.dimensions
             .map(|(w, h, d, _)| (max(w, 1), max(h, 1), max(d, 1)))
             .unwrap_or((1, 1, 1))
+    }
+}
+
+/// Shader entry point.
+pub type EntryPoint = &'static str;
+
+/// A complete set of shaders to build a graphics pipeline.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct GraphicsShaderSet {
+    ///
+    pub vertex_shader: EntryPoint,
+    ///
+    pub hull_shader: Option<EntryPoint>,
+    ///
+    pub domain_shader: Option<EntryPoint>,
+    ///
+    pub geometry_shader: Option<EntryPoint>,
+    ///
+    pub pixel_shader: Option<EntryPoint>,
+}
+
+///
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+pub struct GraphicsPipelineDesc {
+    /// Type of the primitive
+    pub primitive: Primitive,
+    /// Rasterizer setup
+    pub rasterizer: s::Rasterizer,
+    /// Depth stencil
+    pub depth_stencil: Option<DepthStencilDesc>,
+    /// Shader entry points
+    pub shader_entries: GraphicsShaderSet,
+    /// Render target views (RTV)
+    /// The entries are supposed to be contiguous, starting from 0
+    pub color_targets: [Option<ColorTargetDesc>; MAX_COLOR_TARGETS],
+    /// Vertex buffers
+    pub vertex_buffers: Vec<VertexBufferDesc>,
+    /// Vertex attributes
+    pub attributes: Vec<AttributeDesc>,
+}
+
+impl GraphicsPipelineDesc {
+    /// Create a new empty PSO descriptor.
+    pub fn new(primitive: Primitive, rasterizer: s::Rasterizer, shader_entries: GraphicsShaderSet) -> GraphicsPipelineDesc {
+        GraphicsPipelineDesc {
+            primitive: primitive,
+            rasterizer: rasterizer,
+            depth_stencil: None,
+            shader_entries: shader_entries,
+            color_targets: [None; MAX_COLOR_TARGETS],
+            vertex_buffers: Vec::new(),
+            attributes: Vec::new(),
+        }
     }
 }
 

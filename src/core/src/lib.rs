@@ -58,6 +58,7 @@ pub mod format;
 pub mod handle;
 pub mod mapping;
 pub mod memory;
+pub mod pass;
 pub mod pool;
 pub mod pso;
 pub mod queue;
@@ -102,53 +103,6 @@ pub type ColorSlot = u8;
 /// Slot for a sampler.
 pub type SamplerSlot = u8;
 
-macro_rules! define_shaders {
-    ( $($name:ident),+ ) => {
-        $(
-        #[allow(missing_docs)]
-        #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-        pub struct $name<B: Backend>(handle::Shader<B>);
-
-        impl<B: Backend> $name<B> {
-            #[allow(missing_docs)]
-            pub fn reference(&self, man: &mut handle::Manager<B>) -> &B::Shader {
-                man.ref_shader(&self.0)
-            }
-
-            #[doc(hidden)]
-            pub fn new(shader: handle::Shader<B>) -> Self {
-                $name(shader)
-            }
-        }
-        )+
-    }
-}
-
-define_shaders!(VertexShader, HullShader, DomainShader, GeometryShader, PixelShader);
-
-/// A complete set of shaders to link a program.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum ShaderSet<B: Backend> {
-    /// Simple program: Vs-Ps
-    Simple(VertexShader<B>, PixelShader<B>),
-    /// Geometry shader programs: Vs-Gs-Ps
-    Geometry(VertexShader<B>, GeometryShader<B>, PixelShader<B>),
-    /// Tessellated TODO: Tessellated, TessellatedGeometry, TransformFeedback
-    Tessellated(VertexShader<B>, HullShader<B>, DomainShader<B>, PixelShader<B>),
-}
-
-impl<B: Backend> ShaderSet<B> {
-    /// Return the aggregated stage usage for the set.
-    pub fn get_usage(&self) -> shade::Usage {
-        match self {
-            &ShaderSet::Simple(..) => shade::VERTEX | shade::PIXEL,
-            &ShaderSet::Geometry(..) => shade::VERTEX | shade::GEOMETRY | shade::PIXEL,
-            &ShaderSet::Tessellated(..) => {
-                shade::VERTEX | shade::HULL | shade::DOMAIN | shade::PIXEL
-            }
-        }
-    }
-}
 
 /// Features that the device supports.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -260,53 +214,35 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type RawCommandPool: RawCommandPool<Self>;
     type SubpassCommandPool: SubpassCommandPool<Self>;
 
-    type Buffer:              Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
-    type Shader:              Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
-    type Program:             Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync; // deprecated
-    type PipelineStateObject: Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync; // deprecated
-    type Texture:             Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync; // deprecated
-    type ShaderResourceView:  Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
-    type UnorderedAccessView: Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
-    type RenderTargetView:    Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
-    type DepthStencilView:    Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync;
-    type Sampler:             Clone + Hash + Debug + Eq + PartialEq + Any + Send + Sync + Copy;
-    type Image:               Debug + Any + Send + Sync;
+    type Buffer:              Debug + Any + Send + Sync + Eq + Hash;
+    type ShaderLib:           Debug + Any + Send + Sync;
+    type ShaderResourceView:  Debug + Any + Send + Sync + Clone + Hash + Eq;
+    type UnorderedAccessView: Debug + Any + Send + Sync + Clone + Hash + Eq;
+    type RenderTargetView:    Debug + Any + Send + Sync + Clone + Hash + Eq + Copy;
+    type DepthStencilView:    Debug + Any + Send + Sync + Clone + Hash + Eq;
+    type Sampler:             Debug + Any + Send + Sync;
+    type Image:               Debug + Any + Send + Sync + Eq + Hash;
     type ComputePipeline:     Debug + Any + Send + Sync;
     type GraphicsPipeline:    Debug + Any + Send + Sync;
     type PipelineLayout:      Debug + Any + Send + Sync;
     type DescriptorSet:       Debug + Any + Send + Sync;
+    type DescriptorSetLayout: Debug + Any;
     type Fence:               Debug + Any + Send + Sync;
     type Semaphore:           Debug + Any + Send + Sync;
     type Mapping:             Debug + Any + Send + Sync + mapping::Gate<Self>;
+    type RenderPass:          Debug + Any + Send + Sync;
+    type FrameBuffer:         Debug + Any + Send + Sync;
 }
 
 /*
-/// Different resource types of a specific API.
-pub trait Resources:          Clone + Hash + Debug + Any {
-    type ShaderLib:           Debug + Any + Send + Sync;
-    type RenderPass:          Debug + Any + Send + Sync;
-    type PipelineLayout:      Debug + Any + Send + Sync;
-    type GraphicsPipeline:    Debug + Any + Send + Sync;
-    type ComputePipeline:     Debug + Any + Send + Sync;
     type UnboundBuffer:       Debug + Any + Send + Sync;
-    type Buffer:              Debug + Any + Send + Sync;
     type UnboundImage:        Debug + Any + Send + Sync;
-    type Image:               Debug + Any + Send + Sync;
     type ConstantBufferView:  Debug + Any + Send + Sync;
-    type ShaderResourceView:  Debug + Any + Send + Sync;
-    type UnorderedAccessView: Debug + Any + Send + Sync;
-    type RenderTargetView:    Debug + Any + Send + Sync;
-    type DepthStencilView:    Debug + Any + Send + Sync;
     type FrameBuffer:         Debug + Any + Send + Sync;
-    type Sampler:             Debug + Any + Send + Sync;
-    type Semaphore:           Debug + Any + Send + Sync;
-    type Fence:               Debug + Any + Send + Sync;
     type Heap:                Debug + Any;
-    type Mapping;
     type DescriptorHeap:      Debug + Any;
     type DescriptorSetPool:   Debug + Any;
     type DescriptorSet:       Debug + Any;
-    type DescriptorSetLayout: Debug + Any;
 }
 */
 
