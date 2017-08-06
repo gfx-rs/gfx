@@ -28,19 +28,19 @@ use memory::{Bind, Usage};
 use {format, state, target, Backend};
 pub use target::{Layer, Level};
 
-/// Maximum accessible mipmap level of a texture.
+/// Maximum accessible mipmap level of a image.
 pub const MAX_LEVEL: Level = 15;
 
-/// Untyped texture
+/// Untyped image
 #[derive(Debug)]
 pub struct Raw<B: Backend> {
-    resource: B::Texture,
+    resource: B::Image,
     info: Info,
 }
 
 impl<B: Backend> Raw<B> {
     #[doc(hidden)]
-    pub fn new(resource: B::Texture, info: Info) -> Self {
+    pub fn new(resource: B::Image, info: Info) -> Self {
         Raw {
             resource: resource,
             info: info,
@@ -48,7 +48,7 @@ impl<B: Backend> Raw<B> {
     }
 
     #[doc(hidden)]
-    pub fn resource(&self) -> &B::Texture { &self.resource }
+    pub fn resource(&self) -> &B::Image { &self.resource }
 
     /// Get texture descriptor
     pub fn get_info(&self) -> &Info { &self.info }
@@ -598,6 +598,14 @@ bitflags!(
         const ASPECT_DEPTH = 0x2,
         /// Stencil aspect.
         const ASPECT_STENCIL = 0x4,
+    }
+);
+
+bitflags!(
+    ///
+    pub flags ImageAccess: u16 {
+        ///
+        const SHADER_READ = 0x1,
     }
 );
 

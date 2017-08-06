@@ -31,7 +31,7 @@ pub use self::compute::ComputeCommandBuffer;
 pub use self::general::GeneralCommandBuffer;
 pub use self::graphics::GraphicsCommandBuffer;
 pub use self::raw::RawCommandBuffer;
-pub use self::renderpass::RenderPassInlineEncoder;
+pub use self::renderpass::{RenderPassInlineEncoder, SubpassContents};
 pub use self::transfer::TransferCommandBuffer;
 
 /// A universal clear color supporting integet formats
@@ -85,6 +85,26 @@ impl From<u32> for ClearColor {
     fn from(v: u32) -> ClearColor {
         ClearColor::Uint([v, 0, 0, 0])
     }
+}
+
+/// Depth-stencil target clear values.
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+pub struct ClearDepthStencil {
+    ///
+    pub depth: f32,
+    ///
+    pub stencil: u32,
+}
+
+/// General clear values for attachments (color or depth-stencil).
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+pub enum ClearValue {
+    ///
+    Color(ClearColor),
+    ///
+    DepthStencil(ClearDepthStencil),
 }
 
 ///

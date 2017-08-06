@@ -61,23 +61,6 @@ impl<B: Backend, T> Buffer<B, T> {
     }
 }
 
-/// Shader Handle
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Shader<B: Backend>(Arc<B::Shader>);
-
-/// Program Handle
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Program<B: Backend>(Arc<shade::Program<B>>);
-
-impl<B: Backend> Deref for Program<B> {
-    type Target = shade::Program<B>;
-    fn deref(&self) -> &Self::Target { &self.0 }
-}
-
-/// Raw Pipeline State Handle
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct RawPipelineState<B: Backend>(Arc<B::PipelineStateObject>, Program<B>);
-
 /// Raw texture handle
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RawTexture<B: Backend>(Arc<texture::Raw<B>>);
@@ -252,6 +235,22 @@ pub struct Fence<B: Backend>(Arc<Mutex<B::Fence>>);
 #[derive(Clone, Debug)]
 pub struct Semaphore<B: Backend>(Arc<Mutex<B::Semaphore>>);
 
+///
+#[derive(Clone, Debug)]
+pub struct RenderPass<B: Backend>(Arc<B::RenderPass>);
+
+///
+#[derive(Clone, Debug)]
+pub struct GraphicsPipeline<B: Backend>(Arc<B::GraphicsPipeline>);
+
+///
+#[derive(Clone, Debug)]
+pub struct ComputePipeline<B: Backend>(Arc<B::ComputePipeline>);
+
+///
+#[derive(Clone, Debug)]
+pub struct PipelineLayout<B: Backend>(Arc<B::PipelineLayout>);
+
 /// Stores reference-counted resources used in a command buffer.
 /// Seals actual resource names behind the interface, automatically
 /// referencing them both by the Factory on resource creation
@@ -260,9 +259,6 @@ pub struct Semaphore<B: Backend>(Arc<Mutex<B::Semaphore>>);
 #[derive(Debug)]
 pub struct Manager<B: Backend> {
     buffers:       Vec<Arc<buffer::Raw<B>>>,
-    shaders:       Vec<Arc<B::Shader>>,
-    programs:      Vec<Arc<shade::Program<B>>>,
-    psos:          Vec<Arc<B::PipelineStateObject>>,
     textures:      Vec<Arc<texture::Raw<B>>>,
     srvs:          Vec<Arc<B::ShaderResourceView>>,
     uavs:          Vec<Arc<B::UnorderedAccessView>>,
@@ -280,10 +276,7 @@ pub trait Producer<Bd: Backend> {
                    Bd::Buffer,
                    buffer::Info,
                    Option<Bd::Mapping>) -> RawBuffer<Bd>;
-    fn make_shader(&mut self, Bd::Shader) -> Shader<Bd>;
-    fn make_program(&mut self, Bd::Program, shade::ProgramInfo) -> Program<Bd>;
-    fn make_pso(&mut self, Bd::PipelineStateObject, &Program<Bd>) -> RawPipelineState<Bd>;
-    fn make_texture(&mut self, Bd::Texture, texture::Info) -> RawTexture<Bd>;
+    fn make_image(&mut self, Bd::Image, texture::Info) -> RawTexture<Bd>;
     fn make_buffer_srv(&mut self, Bd::ShaderResourceView, &RawBuffer<Bd>) -> RawShaderResourceView<Bd>;
     fn make_texture_srv(&mut self, Bd::ShaderResourceView, &RawTexture<Bd>) -> RawShaderResourceView<Bd>;
     fn make_buffer_uav(&mut self, Bd::UnorderedAccessView, &RawBuffer<Bd>) -> RawUnorderedAccessView<Bd>;
@@ -298,9 +291,6 @@ pub trait Producer<Bd: Backend> {
     /// and call the provided delete function (resource-specific) for others
     fn clean_with<T,
         A: Fn(&mut T, &mut buffer::Raw<Bd>),
-        B: Fn(&mut T, &mut Bd::Shader),
-        C: Fn(&mut T, &mut shade::Program<Bd>),
-        D: Fn(&mut T, &mut Bd::PipelineStateObject),
         E: Fn(&mut T, &mut texture::Raw<Bd>),
         F: Fn(&mut T, &mut Bd::ShaderResourceView),
         G: Fn(&mut T, &mut Bd::UnorderedAccessView),
@@ -309,7 +299,7 @@ pub trait Producer<Bd: Backend> {
         J: Fn(&mut T, &mut Bd::Sampler),
         K: Fn(&mut T, &mut Mutex<Bd::Fence>),
         L: Fn(&mut T, &mut Mutex<Bd::Semaphore>),
-    >(&mut self, &mut T, A, B, C, D, E, F, G, H, I, J, K, L);
+    >(&mut self, &mut T, A, E, F, G, H, I, J, K, L);
 }
 
 impl<Bd: Backend> Producer<Bd> for Manager<Bd> {
@@ -322,25 +312,7 @@ impl<Bd: Backend> Producer<Bd> for Manager<Bd> {
         RawBuffer(r)
     }
 
-    fn make_shader(&mut self, res: Bd::Shader) -> Shader<Bd> {
-        let r = Arc::new(res);
-        self.shaders.push(r.clone());
-        Shader(r)
-    }
-
-    fn make_program(&mut self, res: Bd::Program, info: shade::ProgramInfo) -> Program<Bd> {
-        let r = Arc::new(shade::Program::new(res, info));
-        self.programs.push(r.clone());
-        Program(r)
-    }
-
-    fn make_pso(&mut self, res: Bd::PipelineStateObject, program: &Program<Bd>) -> RawPipelineState<Bd> {
-        let r = Arc::new(res);
-        self.psos.push(r.clone());
-        RawPipelineState(r, program.clone())
-    }
-
-    fn make_texture(&mut self, res: Bd::Texture, info: texture::Info) -> RawTexture<Bd> {
+    fn make_image(&mut self, res: Bd::Image, info: texture::Info) -> RawTexture<Bd> {
         let r = Arc::new(texture::Raw::new(res, info));
         self.textures.push(r.clone());
         RawTexture(r)
@@ -402,9 +374,6 @@ impl<Bd: Backend> Producer<Bd> for Manager<Bd> {
 
     fn clean_with<T,
         A: Fn(&mut T, &mut buffer::Raw<Bd>),
-        B: Fn(&mut T, &mut Bd::Shader),
-        C: Fn(&mut T, &mut shade::Program<Bd>),
-        D: Fn(&mut T, &mut Bd::PipelineStateObject),
         E: Fn(&mut T, &mut texture::Raw<Bd>),
         F: Fn(&mut T, &mut Bd::ShaderResourceView),
         G: Fn(&mut T, &mut Bd::UnorderedAccessView),
@@ -413,7 +382,7 @@ impl<Bd: Backend> Producer<Bd> for Manager<Bd> {
         J: Fn(&mut T, &mut Bd::Sampler),
         K: Fn(&mut T, &mut Mutex<Bd::Fence>),
         L: Fn(&mut T, &mut Mutex<Bd::Semaphore>),
-    >(&mut self, param: &mut T, fa: A, fb: B, fc: C, fd: D, fe: E, ff: F, fg: G, fh: H, fi: I, fj: J, fk: K, fl: L) {
+    >(&mut self, param: &mut T, fa: A, fe: E, ff: F, fg: G, fh: H, fi: I, fj: J, fk: K, fl: L) {
         fn clean_vec<X, Param, Fun>(param: &mut Param, vector: &mut Vec<Arc<X>>, fun: Fun)
             where Fun: Fn(&mut Param, &mut X)
         {
@@ -432,9 +401,6 @@ impl<Bd: Backend> Producer<Bd> for Manager<Bd> {
             }
         }
         clean_vec(param, &mut self.buffers,       fa);
-        clean_vec(param, &mut self.shaders,       fb);
-        clean_vec(param, &mut self.programs,      fc);
-        clean_vec(param, &mut self.psos,          fd);
         clean_vec(param, &mut self.textures,      fe);
         clean_vec(param, &mut self.srvs,          ff);
         clean_vec(param, &mut self.uavs,          fg);
@@ -451,9 +417,6 @@ impl<B: Backend> Manager<B> {
     pub fn new() -> Manager<B> {
         Manager {
             buffers: Vec::new(),
-            shaders: Vec::new(),
-            programs: Vec::new(),
-            psos: Vec::new(),
             textures: Vec::new(),
             srvs: Vec::new(),
             uavs: Vec::new(),
@@ -467,9 +430,6 @@ impl<B: Backend> Manager<B> {
     /// Clear all references
     pub fn clear(&mut self) {
         self.buffers.clear();
-        self.shaders.clear();
-        self.programs.clear();
-        self.psos.clear();
         self.textures.clear();
         self.srvs.clear();
         self.uavs.clear();
@@ -482,9 +442,6 @@ impl<B: Backend> Manager<B> {
     /// Extend with all references of another handle manager
     pub fn extend(&mut self, other: &Manager<B>) {
         self.buffers   .extend(other.buffers   .iter().map(|h| h.clone()));
-        self.shaders   .extend(other.shaders   .iter().map(|h| h.clone()));
-        self.programs  .extend(other.programs  .iter().map(|h| h.clone()));
-        self.psos      .extend(other.psos      .iter().map(|h| h.clone()));
         self.textures  .extend(other.textures  .iter().map(|h| h.clone()));
         self.srvs      .extend(other.srvs      .iter().map(|h| h.clone()));
         self.uavs      .extend(other.uavs      .iter().map(|h| h.clone()));
@@ -497,9 +454,6 @@ impl<B: Backend> Manager<B> {
     /// Count the total number of referenced resources
     pub fn count(&self) -> usize {
         self.buffers.len() +
-        self.shaders.len() +
-        self.programs.len() +
-        self.psos.len() +
         self.textures.len() +
         self.srvs.len() +
         self.uavs.len() +
@@ -514,24 +468,8 @@ impl<B: Backend> Manager<B> {
         self.buffers.push(handle.0.clone());
         handle.resource()
     }
-    /// Reference a shader
-    pub fn ref_shader<'a>(&mut self, handle: &'a Shader<B>) -> &'a B::Shader {
-        self.shaders.push(handle.0.clone());
-        &handle.0
-    }
-    /// Reference a program
-    pub fn ref_program<'a>(&mut self, handle: &'a Program<B>) -> &'a B::Program {
-        self.programs.push(handle.0.clone());
-        handle.resource()
-    }
-    /// Reference a pipeline state object
-    pub fn ref_pso<'a>(&mut self, handle: &'a RawPipelineState<B>) -> (&'a B::PipelineStateObject, &'a B::Program) {
-        self.psos.push(handle.0.clone());
-        self.programs.push((handle.1).0.clone());
-        (&handle.0, handle.1.resource())
-    }
-    /// Reference a texture
-    pub fn ref_texture<'a>(&mut self, handle: &'a RawTexture<B>) -> &'a B::Texture {
+    /// Reference an image
+    pub fn ref_image<'a>(&mut self, handle: &'a RawTexture<B>) -> &'a B::Image {
         self.textures.push(handle.0.clone());
         handle.resource()
     }

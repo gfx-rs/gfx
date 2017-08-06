@@ -472,6 +472,7 @@ pub struct ProgramInfo {
     pub knows_outputs: bool,
 }
 
+/*
 /// A program
 #[derive(Debug)]
 pub struct Program<B: Backend> {
@@ -508,6 +509,7 @@ impl<B: Backend + hash::Hash> hash::Hash for Program<B> {
         self.resource().hash(state);
     }
 }
+*/
 
 /// Error type for trying to store a UniformValue in a ConstVar.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -17,8 +17,9 @@ use ash::version::DeviceV1_0;
 use core::{command, memory, pso, shade, state, target, texture};
 use core::{IndexType, VertexCount, VertexOffset};
 use core::buffer::IndexBufferView;
-use core::command::{BufferCopy, BufferImageCopy, InstanceParams};
+use core::command::{BufferCopy, BufferImageCopy, ClearValue, InstanceParams, SubpassContents};
 use {data, native as n, Backend, RawDevice};
+use std::ptr;
 use std::sync::Arc;
 use smallvec::SmallVec;
 
@@ -44,8 +45,54 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn begin_renderpass(&mut self) {
-        unimplemented!()
+    fn begin_renderpass(
+        &mut self,
+        render_pass: &n::RenderPass,
+        frame_buffer: &n::FrameBuffer,
+        render_area: target::Rect,
+        clear_values: &[ClearValue],
+        first_subpass: SubpassContents,
+    ) {
+        let render_area =
+            vk::Rect2D {
+                offset: vk::Offset2D {
+                    x: render_area.x as i32,
+                    y: render_area.y as i32,
+                },
+                extent: vk::Extent2D {
+                    width: render_area.w as u32,
+                    height: render_area.h as u32,
+                },
+            };
+
+        let clear_values: SmallVec<[vk::ClearValue; 16]> =
+            clear_values.iter()
+                        .map(data::map_clear_value)
+                        .collect();
+
+        let info = vk::RenderPassBeginInfo {
+            s_type: vk::StructureType::RenderPassBeginInfo,
+            p_next: ptr::null(),
+            render_pass: render_pass.raw,
+            framebuffer: frame_buffer.raw,
+            render_area,
+            clear_value_count: clear_values.len() as u32,
+            p_clear_values: clear_values.as_ptr(),
+        };
+
+        let contents =
+            match first_subpass {
+                SubpassContents::Inline => vk::SubpassContents::Inline,
+                SubpassContents::SecondaryBuffers => vk::SubpassContents::SecondaryCommandBuffers,
+            };
+
+        unsafe {
+            self.device.0.cmd_begin_render_pass(
+                self.raw, // commandBuffer
+                &info,    // pRenderPassBegin
+                contents, // contents
+            );
+        }
     }
 
     fn pipeline_barrier(
@@ -170,7 +217,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_graphics_descriptor_sets(&mut self, layout: &(), first_set: usize, sets: &[&()]) {
+    fn bind_graphics_descriptor_sets(&mut self, layout: &n::PipelineLayout, first_set: usize, sets: &[&()]) {
         unimplemented!()
     }
 
@@ -195,8 +242,14 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn dispatch_indirect(&mut self) {
-        unimplemented!()
+    fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: u64) {
+        unsafe {
+            self.device.0.cmd_dispatch_indirect(
+                self.raw,
+                buffer.raw,
+                offset,
+            )
+        }
     }
 
     fn update_buffer(&mut self, buffer: &n::Buffer, data: &[u8], offset: usize) {

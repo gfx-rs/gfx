@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{self as c, device as d, handle, texture as t, format, shade, pso, buffer, mapping};
+use core::{self as c, device as d, handle, texture as t, format, shade, pass, pso, buffer, mapping};
 use core::memory::Bind;
-use core::ShaderSet;
-use native;
+use native as n;
 use std::sync::Arc;
 use {Backend as B, Device};
 
@@ -27,15 +26,33 @@ impl d::Device<B> for Device {
     fn create_buffer_immutable_raw(&mut self, data: &[u8], stride: usize, _: buffer::Role, _: Bind)
                                    -> Result<handle::RawBuffer<B>, buffer::CreationError> { unimplemented!() }
 
+    fn create_renderpass(
+        &mut self,
+        attachments: &[pass::Attachment],
+        subpasses: &[pass::SubpassDesc],
+        dependencies: &[pass::SubpassDependency]
+    ) -> handle::RenderPass<B> {
+        unimplemented!()
+    }
 
-    fn create_pipeline_state_raw(&mut self, _: &handle::Program<B>, _: &pso::Descriptor)
-                                 -> Result<handle::RawPipelineState<B>, pso::CreationError> { unimplemented!() }
+    fn create_pipeline_layout(&mut self, sets: &[&n::DescriptorSetLayout]) -> handle::PipelineLayout<B> {
+        unimplemented!()
+    }
 
-    fn create_program(&mut self, shader_set: &ShaderSet<B>)
-                      -> Result<handle::Program<B>, shade::CreateProgramError> { unimplemented!() }
+    fn create_graphics_pipelines(
+        &mut self,
+        descs: &[(n::ShaderLib, n::PipelineLayout, pass::SubPass<B>, &pso::GraphicsPipelineDesc)],
+    ) -> Vec<Result<handle::GraphicsPipeline<B>, pso::CreationError>> {
+        unimplemented!()
+    }
 
-    fn create_shader(&mut self, stage: shade::Stage, code: &[u8]) ->
-                     Result<handle::Shader<B>, shade::CreateShaderError> { unimplemented!() }
+    fn create_compute_pipelines(
+        &mut self,
+        descs: &[(n::ShaderLib, pso::EntryPoint, n::PipelineLayout)],
+    ) -> Vec<Result<handle::ComputePipeline<B>, pso::CreationError>> {
+        unimplemented!()
+    }
+
 
     fn create_sampler(&mut self, _: t::SamplerInfo) -> handle::Sampler<B> { unimplemented!() }
 
