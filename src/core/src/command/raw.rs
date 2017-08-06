@@ -15,7 +15,7 @@
 use {memory, pso, state, target, texture};
 use {Backend, VertexCount, VertexOffset};
 use buffer::IndexBufferView;
-use super::{BufferCopy, BufferImageCopy, InstanceParams};
+use super::{BufferCopy, BufferImageCopy, ClearValue, InstanceParams, SubpassContents};
 
 ///
 pub trait RawCommandBuffer<B: Backend> {
@@ -45,7 +45,14 @@ pub trait RawCommandBuffer<B: Backend> {
     fn set_ref_values(&mut self, state::RefValues);
 
     ///
-    fn begin_renderpass(&mut self);
+    fn begin_renderpass(
+        &mut self,
+        render_pass: &B::RenderPass,
+        frame_buffer: &B::FrameBuffer,
+        render_area: target::Rect,
+        clear_values: &[ClearValue],
+        first_subpass: SubpassContents,
+    );
 
     /// Bind a graphics pipeline.
     ///
@@ -59,7 +66,7 @@ pub trait RawCommandBuffer<B: Backend> {
     ///
     fn dispatch(&mut self, u32, u32, u32);
     ///
-    fn dispatch_indirect(&mut self);
+    fn dispatch_indirect(&mut self, buffer: &B::Buffer, offset: u64);
     ///
     fn update_buffer(&mut self, buffer: &B::Buffer, data: &[u8], offset: usize);
     ///
