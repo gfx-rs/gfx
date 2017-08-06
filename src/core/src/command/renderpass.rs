@@ -55,6 +55,12 @@ where
     }
 
     ///
+    pub fn next_subpass_inline(mut self) -> Self {
+        self.0.next_subpass(SubpassContents::Inline);
+        self
+    }
+
+    ///
     pub fn draw(&mut self, start: VertexCount, count: VertexCount, instance: Option<InstanceParams>) {
         self.0.draw(start, count, instance)
     }
@@ -87,5 +93,11 @@ where
     /// Calling the corresponding `bind_pipeline` functions will override the slot.
     pub fn bind_graphics_pipeline(&mut self, pipeline: &B::GraphicsPipeline) {
         self.0.bind_graphics_pipeline(pipeline)
+    }
+}
+
+impl<'a, B: Backend> Drop for RenderPassInlineEncoder<'a, B> {
+    fn drop(&mut self) {
+        self.0.end_renderpass();
     }
 }

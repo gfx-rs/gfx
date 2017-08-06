@@ -19,6 +19,12 @@ pub struct CommandBuffer {
     pub device: Arc<RawDevice>,
 }
 
+fn map_subpass_contents(contents: SubpassContents) -> vk::SubpassContents {
+    match contents {
+        SubpassContents::Inline => vk::SubpassContents::Inline,
+        SubpassContents::SecondaryBuffers => vk::SubpassContents::SecondaryCommandBuffers,
+    }
+}
 
 impl command::RawCommandBuffer<Backend> for CommandBuffer {
     fn finish(&mut self) -> SubmitInfo {
@@ -66,18 +72,26 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
             p_clear_values: clear_values.as_ptr(),
         };
 
-        let contents =
-            match first_subpass {
-                SubpassContents::Inline => vk::SubpassContents::Inline,
-                SubpassContents::SecondaryBuffers => vk::SubpassContents::SecondaryCommandBuffers,
-            };
-
+        let contents = map_subpass_contents(first_subpass);
         unsafe {
             self.device.0.cmd_begin_render_pass(
                 self.raw, // commandBuffer
                 &info,    // pRenderPassBegin
                 contents, // contents
             );
+        }
+    }
+
+    fn next_subpass(&mut self, contents: SubpassContents) {
+        let contents = map_subpass_contents(contents);
+        unsafe {
+            self.device.0.cmd_next_subpass(self.raw, contents);
+        }
+    }
+
+    fn end_renderpass(&mut self) {
+        unsafe {
+            self.device.0.cmd_end_render_pass(self.raw);
         }
     }
 
