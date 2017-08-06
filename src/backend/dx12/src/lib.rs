@@ -4,6 +4,7 @@ extern crate dxgi;
 extern crate gfx_core as core;
 #[macro_use]
 extern crate log;
+extern crate smallvec;
 extern crate winapi;
 extern crate wio;
 
@@ -120,7 +121,7 @@ pub struct CommandQueue {
     device: ComPtr<winapi::ID3D12Device>,
     list_type: winapi::D3D12_COMMAND_LIST_TYPE,
 
-    frame_handles: handle::Manager<Resources>,
+    frame_handles: handle::Manager<Backend>,
     max_resource_count: Option<usize>,
 }
 
@@ -128,13 +129,13 @@ impl core::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit_raw<'a, I>(
         &mut self,
         submit_infos: I,
-        fence: Option<&handle::Fence<Resources>>,
-        access: &com::AccessInfo<Resources>,
+        fence: Option<&handle::Fence<Backend>>,
+        access: &com::AccessInfo<Backend>,
     ) where I: Iterator<Item=core::RawSubmission<'a, Backend>> {
         unimplemented!()
     }
 
-    fn pin_submitted_resources(&mut self, man: &handle::Manager<Resources>) {
+    fn pin_submitted_resources(&mut self, man: &handle::Manager<Backend>) {
         self.frame_handles.extend(man);
         match self.max_resource_count {
             Some(c) if self.frame_handles.count() > c => {
@@ -174,7 +175,6 @@ impl Device {
 pub enum Backend {}
 impl core::Backend for Backend {
     type Adapter = Adapter;
-    type Resources = Resources;
     type CommandQueue = CommandQueue;
     type RawCommandBuffer = command::CommandBuffer;
     type SubpassCommandBuffer = command::SubpassCommandBuffer;
@@ -184,16 +184,8 @@ impl core::Backend for Backend {
 
     type RawCommandPool = pool::RawCommandPool;
     type SubpassCommandPool = pool::SubpassCommandPool;
-}
 
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Resources {}
-impl core::Resources for Resources {
-    type Buffer = ();
-    type Shader = ();
-    type Program = ();
-    type PipelineStateObject = ();
-    type Texture = ();
+    type Buffer = native::Buffer;
     type ShaderResourceView = ();
     type UnorderedAccessView = ();
     type RenderTargetView = ();
@@ -202,6 +194,16 @@ impl core::Resources for Resources {
     type Fence = ();
     type Semaphore = ();
     type Mapping = Mapping;
+
+    type ShaderLib = native::ShaderLib;
+    type Image = native::Image;
+    type ComputePipeline = native::ComputePipeline;
+    type GraphicsPipeline = native::GraphicsPipeline;
+    type PipelineLayout = native::PipelineLayout;
+    type DescriptorSet = ();
+    type DescriptorSetLayout = native::DescriptorSetLayout;
+    type RenderPass = native::RenderPass;
+    type FrameBuffer = native::FrameBuffer;
 }
 
 pub struct Instance {
@@ -311,7 +313,7 @@ impl Instance {
 #[derive(Debug, Eq, Hash, PartialEq)]
 pub struct Mapping;
 
-impl core::mapping::Gate<Resources> for Mapping {
+impl core::mapping::Gate<Backend> for Mapping {
     unsafe fn set<T>(&self, index: usize, val: T) {
         unimplemented!()
     }
