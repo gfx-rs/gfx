@@ -23,3 +23,4 @@ dxgi-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx"
 dxguid-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
 winapi = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
 wio = { git = "https://github.com/msiglreith/wio-rs.git", branch = "stable" }
+smallvec = "0.4"

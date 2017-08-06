@@ -1,136 +1,234 @@
 use wio::com::ComPtr;
-use core::{command, pso, shade, state, target, texture as tex};
-use core::{IndexType, VertexCount};
-use winapi;
-use {Backend, Resources};
+use core::{command, memory, pso, shade, state, target, texture};
+use core::{IndexType, VertexCount, VertexOffset};
+use core::buffer::IndexBufferView;
+use core::command::{BufferCopy, BufferImageCopy, ClearValue, InstanceParams, SubpassContents};
+use winapi::{self, FLOAT, UINT};
+use {native as n, Backend};
+use smallvec::SmallVec;
 
 pub struct CommandBuffer {
     pub raw: ComPtr<winapi::ID3D12GraphicsCommandList>,
 }
 
-// TODO: temporary to fullfil current `Send` requirement
-unsafe impl Send for CommandBuffer { }
-
 pub struct SubpassCommandBuffer {
 }
 
 #[derive(Clone)]
-pub struct SubmitInfo; // TODO
+pub struct SubmitInfo(pub(crate) ComPtr<winapi::ID3D12GraphicsCommandList>);
+unsafe impl Send for SubmitInfo { }
 
-// CommandBuffer trait implementation
-impl command::CommandBuffer<Backend> for CommandBuffer {
-    unsafe fn end(&mut self) -> SubmitInfo {
-        unimplemented!()
+fn get_rect(rect: &target::Rect) -> winapi::D3D12_RECT {
+    winapi::D3D12_RECT {
+        left: rect.x as i32,
+        top: rect.y as i32,
+        right: (rect.x + rect.w) as i32,
+        bottom: (rect.y + rect.h) as i32,
     }
 }
 
-// temp, can be removed later
-impl command::Buffer<Resources> for CommandBuffer {
-    fn reset(&mut self) {
+impl command::RawCommandBuffer<Backend> for CommandBuffer {
+    fn finish(&mut self) -> SubmitInfo {
+        unsafe { self.raw.Close(); }
+        SubmitInfo(self.raw.clone())
+    }
+
+    fn begin_renderpass(
+        &mut self,
+        render_pass: &n::RenderPass,
+        frame_buffer: &n::FrameBuffer,
+        render_area: target::Rect,
+        clear_values: &[ClearValue],
+        first_subpass: SubpassContents,
+    ) {
         unimplemented!()
     }
 
-    fn bind_pipeline_state(&mut self, _: ()) {
+    fn pipeline_barrier(
+        &mut self,
+        _memory_barries: &[memory::MemoryBarrier],
+        _buffer_barriers: &[memory::BufferBarrier],
+        _image_barriers: &[memory::ImageBarrier],
+    ) {
         unimplemented!()
     }
 
-    fn bind_vertex_buffers(&mut self, _: pso::VertexBufferSet<Resources>) {
+    fn clear_depth_stencil(&mut self, dsv: &(), depth: Option<target::Depth>, stencil: Option<target::Stencil>) {
         unimplemented!()
     }
 
-    fn bind_constant_buffers(&mut self, _: &[pso::ConstantBufferParam<Resources>]) {
+    fn resolve_image(&mut self) {
         unimplemented!()
     }
 
-    fn bind_global_constant(&mut self, _: shade::Location, _: shade::UniformValue) {
+    fn bind_index_buffer(&mut self, ibv: IndexBufferView<Backend>) {
+        let format = match ibv.index_type {
+            IndexType::U16 => winapi::DXGI_FORMAT_R16_UINT,
+            IndexType::U32 => winapi::DXGI_FORMAT_R32_UINT,
+        };
+        let location = unsafe {
+            (*ibv.buffer.resource).GetGPUVirtualAddress()
+        };
+
+        let mut ibv_raw = winapi::D3D12_INDEX_BUFFER_VIEW {
+            BufferLocation: location,
+            SizeInBytes: ibv.buffer.size_in_bytes,
+            Format: format,
+        };
+
+        unsafe {
+            self.raw.IASetIndexBuffer(&mut ibv_raw);
+        }
+    }
+
+    fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<Backend>) {
+        let buffers: SmallVec<[winapi::D3D12_VERTEX_BUFFER_VIEW; 16]> =
+            vbs.0.iter()
+                 .map(|&(ref buffer, offset)| {
+                    let base = unsafe {
+                        (*buffer.resource).GetGPUVirtualAddress()
+                    };
+                    winapi::D3D12_VERTEX_BUFFER_VIEW {
+                        BufferLocation: base + offset as u64,
+                        SizeInBytes: buffer.size_in_bytes,
+                        StrideInBytes: buffer.stride,
+                    }
+                 })
+                 .collect();
+
+        unsafe {
+            self.raw.IASetVertexBuffers(
+                0,
+                vbs.0.len() as UINT,
+                buffers.as_ptr(),
+            );
+        }
+    }
+
+    fn set_viewports(&mut self, viewports: &[target::Rect]) {
+        let viewports: SmallVec<[winapi::D3D12_VIEWPORT; 16]> =
+            viewports.iter()
+                     .map(|viewport| {
+                        winapi::D3D12_VIEWPORT {
+                            TopLeftX: viewport.x as FLOAT,
+                            TopLeftY: viewport.y as FLOAT,
+                            Width: viewport.w as FLOAT,
+                            Height: viewport.h as FLOAT,
+                            MinDepth: 0.0,
+                            MaxDepth: 1.0,
+                        }
+                     })
+                     .collect();
+
+        unsafe {
+            self.raw.RSSetViewports(
+                viewports.len() as UINT, // NumViewports
+                viewports.as_ptr(),      // pViewports
+            );
+        }
+    }
+
+    fn set_scissors(&mut self, scissors: &[target::Rect]) {
+        let rects: SmallVec<[winapi::D3D12_RECT; 16]> =
+            scissors.iter().map(get_rect).collect();
+        unsafe {
+            self.raw.RSSetScissorRects(rects.len() as UINT, rects.as_ptr())
+        };
+    }
+
+    fn set_ref_values(&mut self, rv: state::RefValues) {
         unimplemented!()
     }
 
-    fn bind_resource_views(&mut self, _: &[pso::ResourceViewParam<Resources>]) {
+    fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
+        unsafe {
+            self.raw.SetPipelineState(pipeline.raw);
+            self.raw.IASetPrimitiveTopology(pipeline.topology);
+        };
+    }
+
+    fn bind_graphics_descriptor_sets(&mut self, layout: &n::PipelineLayout, first_set: usize, sets: &[&()]) {
         unimplemented!()
     }
 
-    fn bind_unordered_views(&mut self, _: &[pso::UnorderedViewParam<Resources>]) {
+    fn bind_compute_pipeline(&mut self, pipeline: &n::ComputePipeline) {
+        unsafe {
+            self.raw.SetPipelineState(pipeline.raw);
+        }
+    }
+
+    fn dispatch(&mut self, x: u32, y: u32, z: u32) {
+        unsafe {
+            self.raw.Dispatch(
+                x, // ThreadGroupCountX
+                y, // ThreadGroupCountY
+                z, // ThreadGroupCountZ
+            );
+        }
+    }
+
+    fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: u64) {
         unimplemented!()
     }
 
-    fn bind_samplers(&mut self, _: &[pso::SamplerParam<Resources>]) {
+    fn update_buffer(&mut self, buffer: &n::Buffer, data: &[u8], offset: usize) {
         unimplemented!()
     }
 
-    fn bind_pixel_targets(&mut self, _: pso::PixelTargetSet<Resources>) {
+    fn copy_buffer(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: &[BufferCopy]) {
         unimplemented!()
     }
 
-    fn bind_index(&mut self, _: (), _: IndexType) {
+    fn copy_image(&mut self, src: &n::Image, dst: &n::Image) {
         unimplemented!()
     }
 
-    fn set_scissor(&mut self, _: target::Rect) {
+    fn copy_buffer_to_image(&mut self, src: &n::Buffer, dst: &n::Image, layout: texture::ImageLayout, regions: &[BufferImageCopy]) {
         unimplemented!()
     }
 
-    fn set_ref_values(&mut self, _: state::RefValues) {
+    fn copy_image_to_buffer(&mut self, src: &n::Image, dst: &n::Buffer, layout: texture::ImageLayout, regions: &[BufferImageCopy]) {
         unimplemented!()
     }
 
-    fn copy_buffer(&mut self, src: (), dst: (),
-                   src_offset_bytes: usize, dst_offset_bytes: usize,
-                   size_bytes: usize) {
+    fn draw(&mut self, start: VertexCount, count: VertexCount, instances: Option<InstanceParams>) {
+        let (num_instances, start_instance) = match instances {
+            Some((num_instances, start_instance)) => (num_instances, start_instance),
+            None => (1, 0),
+        };
+
+        unsafe {
+            self.raw.DrawInstanced(
+                count,          // VertexCountPerInstance
+                num_instances,  // InstanceCount
+                start,          // StartVertexLocation
+                start_instance, // StartInstanceLocation
+            );
+        }
+    }
+
+    fn draw_indexed(&mut self, start: VertexCount, count: VertexCount, base: VertexOffset, instances: Option<InstanceParams>) {
+        let (num_instances, start_instance) = match instances {
+            Some((num_instances, start_instance)) => (num_instances, start_instance),
+            None => (1, 0),
+        };
+
+        unsafe {
+            self.raw.DrawIndexedInstanced(
+                count,          // IndexCountPerInstance
+                num_instances,  // InstanceCount
+                start,          // StartIndexLocation
+                base,           // BaseVertexLocation
+                start_instance, // StartInstanceLocation
+            );
+        }
+    }
+
+    fn draw_indirect(&mut self, buffer: &n::Buffer, offset: u64, draw_count: u32, stride: u32) {
         unimplemented!()
     }
 
-    fn copy_buffer_to_texture(&mut self, src: (), src_offset_bytes: usize,
-                              dst: (),
-                              kind: tex::Kind,
-                              face: Option<tex::CubeFace>,
-                              img: tex::RawImageInfo) {
-        unimplemented!()
-    }
-
-    fn copy_texture_to_buffer(&mut self,
-                              src: (),
-                              kind: tex::Kind,
-                              face: Option<tex::CubeFace>,
-                              img: tex::RawImageInfo,
-                              dst: (), dst_offset_bytes: usize) {
-        unimplemented!()
-    }
-
-    fn update_buffer(&mut self, buf: (), data: &[u8], offset: usize) {
-        unimplemented!()
-    }
-
-    fn update_texture(&mut self, tex: (), kind: tex::Kind, face: Option<tex::CubeFace>,
-                      data: &[u8], image: tex::RawImageInfo) {
-        unimplemented!()
-    }
-
-    fn generate_mipmap(&mut self, srv: ()) {
-        unimplemented!()
-    }
-
-    fn clear_color(&mut self, target: (), value: command::ClearColor) {
-        unimplemented!()
-    }
-
-    fn clear_depth_stencil(&mut self, target: (), depth: Option<target::Depth>,
-                           stencil: Option<target::Stencil>) {
-        unimplemented!()
-    }
-
-    fn call_draw(&mut self, start: VertexCount, count: VertexCount, instances: Option<command::InstanceParams>) {
-        unimplemented!();
-    }
-
-    fn call_draw_indexed(&mut self, start: VertexCount, count: VertexCount,
-                         base: VertexCount, instances: Option<command::InstanceParams>) {
-        unimplemented!()
-    }
-}
-
-impl command::CommandBuffer<Backend> for SubpassCommandBuffer {
-    unsafe fn end(&mut self) -> SubmitInfo {
+    fn draw_indexed_indirect(&mut self, buffer: &n::Buffer, offset: u64, draw_count: u32, stride: u32) {
         unimplemented!()
     }
 }
