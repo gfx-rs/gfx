@@ -5,9 +5,8 @@
 
 use std::error::Error;
 use std::{mem, fmt};
-use {buffer, handle, format, mapping, pso, shade, target, texture};
-use {Capabilities, Backend, ShaderSet,
-     VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
+use {buffer, handle, format, mapping, pass, pso, shade, target, texture};
+use {Capabilities, Backend};
 use memory::{Usage, Typed, Pod, cast_slice};
 use memory::{Bind, RENDER_TARGET, DEPTH_STENCIL, SHADER_RESOURCE, UNORDERED_ACCESS};
 
@@ -244,41 +243,25 @@ pub trait Device<B: Backend> {
         self.create_buffer_raw(info).map(|raw| Typed::new(raw))
     }
 
-    /// Creates a new `RawPipelineState`. To create a safely typed `PipelineState`, see the
-    /// `DeviceExt` trait and `pso` module, both in the `gfx` crate.
-    fn create_pipeline_state_raw(&mut self, &handle::Program<B>, &pso::Descriptor)
-                                 -> Result<handle::RawPipelineState<B>, pso::CreationError>;
+    ///
+    fn create_renderpass(
+        &mut self,
+        attachments: &[pass::Attachment],
+        subpasses: &[pass::SubpassDesc],
+        dependencies: &[pass::SubpassDependency]
+    ) -> handle::RenderPass<B>;
 
-    /// Creates a new shader `Program` for the supplied `ShaderSet`.
-    fn create_program(&mut self, shader_set: &ShaderSet<B>)
-                      -> Result<handle::Program<B>, shade::CreateProgramError>;
+    ///
+    fn create_pipeline_layout(&mut self, sets: &[&B::DescriptorSetLayout]) -> handle::PipelineLayout<B>;
 
-    /// Compiles a shader source into a `Shader` object that can be used to create a shader
-    /// `Program`.
-    fn create_shader(&mut self, stage: shade::Stage, code: &[u8]) ->
-                     Result<handle::Shader<B>, shade::CreateShaderError>;
-    /// Compiles a `VertexShader` from source.
-    fn create_shader_vertex(&mut self, code: &[u8]) -> Result<VertexShader<B>, shade::CreateShaderError> {
-        self.create_shader(shade::Stage::Vertex, code).map(|s| VertexShader(s))
-    }
-    /// Compiles a `HullShader` from source.
-    fn create_shader_hull(&mut self, code: &[u8]) -> Result<HullShader<B>, shade::CreateShaderError> {
-        self.create_shader(shade::Stage::Hull, code).map(|s| HullShader(s))
-    }
-    /// Compiles a `VertexShader` from source.
-    fn create_shader_domain(&mut self, code: &[u8]) -> Result<DomainShader<B>, shade::CreateShaderError> {
-        self.create_shader(shade::Stage::Domain, code).map(|s| DomainShader(s))
-    }
-    /// Compiles a `GeometryShader` from source.
-    fn create_shader_geometry(&mut self, code: &[u8]) -> Result<GeometryShader<B>, shade::CreateShaderError> {
-        self.create_shader(shade::Stage::Geometry, code).map(|s| GeometryShader(s))
-    }
-    /// Compiles a `PixelShader` from source. This is the same as what some APIs call a fragment
-    /// shader.
-    fn create_shader_pixel(&mut self, code: &[u8]) -> Result<PixelShader<B>, shade::CreateShaderError> {
-        self.create_shader(shade::Stage::Pixel, code).map(|s| PixelShader(s))
-    }
+    /// Create graphics pipelines.
+    fn create_graphics_pipelines(&mut self, &[(B::ShaderLib, B::PipelineLayout, pass::SubPass<B>, &pso::GraphicsPipelineDesc)])
+            -> Vec<Result<handle::GraphicsPipeline<B>, pso::CreationError>>;
 
+    /// Create compute pipelines.
+    fn create_compute_pipelines(&mut self, &[(B::ShaderLib, pso::EntryPoint, B::PipelineLayout)]) -> Vec<Result<handle::ComputePipeline<B>, pso::CreationError>>;
+
+    ///
     fn create_sampler(&mut self, texture::SamplerInfo) -> handle::Sampler<B>;
 
     ///
