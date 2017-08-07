@@ -15,7 +15,7 @@
 use {memory, pso, state, target, texture};
 use {Backend, VertexCount, VertexOffset};
 use buffer::IndexBufferView;
-use super::{BufferCopy, BufferImageCopy, ClearValue, InstanceParams, SubpassContents};
+use super::{BufferCopy, BufferImageCopy, ClearColor, ClearValue, InstanceParams, SubpassContents};
 
 ///
 pub trait RawCommandBuffer<B: Backend> {
@@ -25,7 +25,10 @@ pub trait RawCommandBuffer<B: Backend> {
     ///
     fn pipeline_barrier(&mut self, &[memory::MemoryBarrier], &[memory::BufferBarrier], &[memory::ImageBarrier]);
 
-    /// Clear depth-stencil target-
+    ///
+    fn clear_color(&mut self, &B::RenderTargetView, texture::ImageLayout, ClearColor);
+
+    /// Clear depth-stencil target
     fn clear_depth_stencil(&mut self, &B::DepthStencilView, Option<target::Depth>, Option<target::Stencil>);
 
     ///
@@ -72,7 +75,7 @@ pub trait RawCommandBuffer<B: Backend> {
     ///
     fn dispatch_indirect(&mut self, buffer: &B::Buffer, offset: u64);
     ///
-    fn update_buffer(&mut self, buffer: &B::Buffer, data: &[u8], offset: usize);
+    // fn update_buffer(&mut self, buffer: &B::Buffer, data: &[u8], offset: usize);
     ///
     fn copy_buffer(&mut self, src: &B::Buffer, dst: &B::Buffer, regions: &[BufferCopy]);
     ///
