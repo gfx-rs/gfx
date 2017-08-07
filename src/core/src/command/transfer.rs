@@ -50,10 +50,12 @@ impl<'a, B: Backend> TransferCommandBuffer<'a, B> {
         self.0.pipeline_barrier(memory_barriers, buffer_barriers, image_barriers)
     }
 
+    /*
     ///
     pub fn update_buffer(&mut self, buffer: &B::Buffer, data: &[u8], offset: usize) {
         self.0.update_buffer(buffer, data, offset)
     }
+    */
 
     ///
     pub fn copy_buffer(&mut self, src: &B::Buffer, dst: &B::Buffer, regions: &[BufferCopy]) {

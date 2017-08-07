@@ -1,5 +1,6 @@
 use ash::vk;
 use core::pso;
+use core::texture::SubresourceRange;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Hash)]
@@ -51,4 +52,17 @@ pub struct PipelineLayout {
 pub struct ShaderLib {
     // TODO: merge SPIR-V modules
     pub shaders: BTreeMap<pso::EntryPoint, vk::ShaderModule>,
+}
+
+#[derive(Debug, Hash, Clone, PartialEq, Eq)]
+pub struct RenderTargetView {
+    pub image: vk::Image,
+    pub view: vk::ImageView,
+    pub range: SubresourceRange
+}
+
+#[derive(Debug, Hash, Clone, PartialEq, Eq)]
+pub struct DepthStencilView {
+    pub image: vk::Image,
+    pub view: vk::ImageView,
 }

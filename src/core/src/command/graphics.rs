@@ -65,10 +65,12 @@ where
         self.0.clear_depth_stencil(dsv, depth_value, stencil_value)
     }
 
+    /*
     ///
     pub fn update_buffer(&mut self, buffer: &B::Buffer, data: &[u8], offset: usize) {
         self.0.update_buffer(buffer, data, offset)
     }
+    */
 
     ///
     pub fn copy_buffer(&mut self, src: &B::Buffer, dst: &B::Buffer, regions: &[BufferCopy]) {

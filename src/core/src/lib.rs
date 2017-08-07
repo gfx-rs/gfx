@@ -204,7 +204,7 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type ShaderLib:           Debug + Any + Send + Sync;
     type ShaderResourceView:  Debug + Any + Send + Sync + Clone + Hash + Eq;
     type UnorderedAccessView: Debug + Any + Send + Sync + Clone + Hash + Eq;
-    type RenderTargetView:    Debug + Any + Send + Sync + Clone + Hash + Eq + Copy;
+    type RenderTargetView:    Debug + Any + Send + Sync + Clone + Hash + Eq;
     type DepthStencilView:    Debug + Any + Send + Sync + Clone + Hash + Eq;
     type Sampler:             Debug + Any + Send + Sync;
     type Image:               Debug + Any + Send + Sync + Eq + Hash;
