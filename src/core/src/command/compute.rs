@@ -55,10 +55,12 @@ impl<'a, B: Backend> ComputeCommandBuffer<'a, B> {
         self.0.dispatch_indirect(buffer, offset)
     }
 
+    /*
     ///
     pub fn update_buffer(&mut self, buffer: &B::Buffer, data: &[u8], offset: usize) {
         self.0.update_buffer(buffer, data, offset)
     }
+    */
 
     ///
     pub fn copy_buffer(&mut self, src: &B::Buffer, dst: &B::Buffer, regions: &[BufferCopy]) {

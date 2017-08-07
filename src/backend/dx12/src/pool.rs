@@ -111,7 +111,11 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         self.command_lists.reserve(additional);
         for _ in 0..additional {
             let command_list = self.allocator.create_command_list();
-            self.command_lists.push(CommandBuffer { raw : command_list });
+            self.command_lists.push(
+                CommandBuffer {
+                    raw : command_list,
+                    pass_cache: None,
+                });
         }
     }
 
