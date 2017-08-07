@@ -31,7 +31,7 @@ name = "gfx_device_vulkan"
 log = "0.3"
 lazy_static = "0.2"
 shared_library = "0.1"
-ash = { path = '../../../../ash/ash' } # "0.18"
+ash = { git = "https://github.com/MaikKlein/ash.git" } # "0.18"
 gfx_core = { path = "../../core", version = "0.7" }
 smallvec = "0.4"
 
