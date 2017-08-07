@@ -12,34 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//!
+//! RenderPass handling.
 
 use format::Format;
 use texture::{ImageAccess, ImageLayout};
 use pso::PipelineStage;
 use Backend;
 
-///
+/// Specifies the operation which will be applied at the beginning of a subpass.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum AttachmentLoadOp {
-    ///
+    /// Preserve existing content in the attachment.
     Load,
-    ///
+    /// Clear the attachment.
     Clear,
-    ///
+    /// Attachment content will be undefined.
     DontCare,
 }
 
 ///
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum AttachmentStoreOp {
-    ///
+    /// Content written to the attachment will be preserved.
     Store,
-    ///
+    /// Attachment content will be undefined.
     DontCare,
 }
 
-///
+/// Image layout of an attachment.
 pub type AttachmentLayout = ImageLayout;
 
 ///
@@ -55,13 +55,13 @@ pub struct Attachment {
     pub stencil_load_op: AttachmentLoadOp,
     ///
     pub stencil_store_op:AttachmentStoreOp,
-    ///
+    /// Initial image layout in the beginning of the renderpass.
     pub src_layout: AttachmentLayout,
-    ///
+    /// Final image layout at the end of the renderpass.
     pub dst_layout: AttachmentLayout,
 }
 
-///
+/// Reference to an attachment by index and expected image layout.
 pub type AttachmentRef = (usize, AttachmentLayout);
 
 ///
@@ -73,7 +73,7 @@ pub enum SubpassRef {
     Pass(usize),
 }
 
-///
+/// Specifies dependencies between subpasses.
 pub struct SubpassDependency {
     ///
     pub src_pass: SubpassRef,
@@ -89,16 +89,16 @@ pub struct SubpassDependency {
     pub dst_access: ImageAccess,
 }
 
-///
+/// Description of a subpass for renderpass creation.
 pub struct SubpassDesc<'a> {
     ///
     pub color_attachments: &'a [AttachmentRef],
 }
 
-///
+/// Reference to a subpass of a renderpass by index.
 pub struct SubPass<'a, B: Backend> {
     ///
     pub index: usize,
-    ///
+    /// Parent renderpass.
     pub main_pass: &'a B::RenderPass,
 }
