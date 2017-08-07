@@ -192,7 +192,15 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn set_ref_values(&mut self, rv: state::RefValues) {
-        unimplemented!()
+        if rv.stencil.0 != rv.stencil.1 {
+            error!("Unable to set different stencil ref values for front ({}) and back ({})",
+                rv.stencil.0, rv.stencil.1);
+        }
+
+        unsafe {
+            self.raw.OMSetStencilRef(rv.stencil.0 as UINT);
+            self.raw.OMSetBlendFactor(&rv.blend);
+        }
     }
 
     fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
