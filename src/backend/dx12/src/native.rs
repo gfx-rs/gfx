@@ -25,9 +25,10 @@ pub struct ShaderLib {
 unsafe impl Send for ShaderLib { }
 unsafe impl Sync for ShaderLib { }
 
-#[derive(Debug, Hash)]
+#[derive(Debug, Hash, Clone)]
 pub struct RenderPass {
     pub attachments: Vec<Attachment>,
+    pub subpasses: Vec<()>, // TODO
 }
 
 #[derive(Debug, Hash)]
@@ -53,7 +54,7 @@ pub struct PipelineLayout {
 unsafe impl Send for PipelineLayout { }
 unsafe impl Sync for PipelineLayout { }
 
-#[derive(Debug, Hash)]
+#[derive(Debug, Hash, Clone)]
 pub struct FrameBuffer {
     pub color: Vec<RenderTargetView>,
     pub depth_stencil: Vec<DepthStencilView>,
@@ -78,12 +79,12 @@ pub struct Image {
 unsafe impl Send for Image { }
 unsafe impl Sync for Image { }
 
-#[derive(Debug, Hash)]
+#[derive(Debug, Hash, Clone)]
 pub struct RenderTargetView {
     pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
 }
 
-#[derive(Debug, Hash)]
+#[derive(Debug, Hash, Clone)]
 pub struct DepthStencilView {
     pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
 }

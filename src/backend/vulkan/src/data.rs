@@ -198,7 +198,7 @@ pub fn map_image_aspects(aspects: ImageAspectFlags) -> vk::ImageAspectFlags {
     flags
 }
 
-fn map_clear_color(value: ClearColor) -> vk::ClearColorValue {
+pub fn map_clear_color(value: ClearColor) -> vk::ClearColorValue {
     match value {
         ClearColor::Float(v) => vk::ClearColorValue::new_float32(v),
         ClearColor::Int(v)   => vk::ClearColorValue::new_int32(v),
@@ -224,14 +224,6 @@ pub fn map_clear_value(value: &ClearValue) -> vk::ClearValue {
 }
 
 /*
-pub fn map_clear_color(value: ClearColor) -> vk::ClearColorValue {
-    match value {
-        ClearColor::Float(v) => vk::ClearColorValue::new_float32(v),
-        ClearColor::Int(v)   => vk::ClearColorValue::new_int32(v),
-        ClearColor::Uint(v)  => vk::ClearColorValue::new_uint32(v),
-    }
-}
-
 pub fn map_attachment_load_op(op: AttachmentLoadOp) -> vk::AttachmentLoadOp {
     match op {
         AttachmentLoadOp::Load => vk::AttachmentLoadOp::Load,
