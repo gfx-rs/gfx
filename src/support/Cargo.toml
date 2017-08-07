@@ -1,0 +1,98 @@
+# Copyright 2017 The Gfx-rs Developers.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+[package]
+name = "gfx_support"
+version = "0.7.0"
+description = "GFX support application framework"
+homepage = "https://github.com/gfx-rs/gfx"
+repository = "https://github.com/gfx-rs/gfx"
+keywords = ["graphics", "gamedev"]
+license = "Apache-2.0"
+authors = ["The Gfx-rs Developers"]
+readme = "README.md"
+documentation = "https://docs.rs/gfx_support"
+workspace = "../.."
+
+[lib]
+name = "gfx_support"
+
+[features]
+default = ["gl"]
+mint = ["gfx/mint", "gfx_core/mint"]
+metal = ["gfx_device_metal", "gfx_window_metal", "gfx_device_metalll"]
+metal_argument_buffer = ["gfx_device_metalll/argument_buffer"]
+gl = ["gfx_device_gl", "gfx_window_glutin"]
+dx11 = ["gfx_device_dx11", "gfx_window_dxgi"]
+dx12 = ["gfx_device_dx12", "gfx_window_dxgi"]
+vulkan = ["gfx_device_vulkan", "gfx_device_vulkanll", "gfx_window_vulkan"]
+serialize = ["gfx/serialize", "gfx_core/serialize"]
+headless = ["gfx_window_glutin/headless"]
+unstable = []
+
+[dependencies.gfx_device_vulkan]
+path = "../backend/vulkan"
+version = "0.2"
+optional = true
+
+[dependencies.gfx_device_vulkanll]
+path = "../backend/vulkanll"
+version = "0.1"
+optional = true
+
+[dependencies.gfx_window_vulkan]
+path = "../window/vulkan"
+version = "0.3"
+optional = true
+
+[dependencies.gfx_device_metal]
+path = "../backend/metal"
+version = "0.3"
+optional = true
+
+[dependencies.gfx_window_metal]
+path = "../window/metal"
+version = "0.4"
+optional = true
+
+[dependencies.gfx_device_metalll]
+path = "../backend/metalll"
+version = "0.2"
+optional = true
+#features = ["native_fence"]
+
+[target.'cfg(windows)'.dependencies]
+gfx_device_dx11 = { path = "../backend/dx11", version = "0.6", optional = true }
+gfx_device_dx12 = { path = "../backend/dx12", version = "0.1", optional = true }
+gfx_window_dxgi = { path = "../window/dxgi", version = "0.9", optional = true }
+gfx_device_dx12ll = { path = "../backend/dx12ll", version = "0.1" }
+
+[dependencies]
+log = "0.3"
+env_logger = "0.4"
+glutin = "0.9"
+winit = "0.7"
+gfx_core = { path = "../core", version = "0.7.1" }
+gfx = { path = "../render", version = "0.16" }
+
+gfx_device_gl = { path = "../backend/gl", version = "0.14", optional = true }
+gfx_window_glutin = { path = "../window/glutin", version = "0.17", optional = true }
+
+[dev-dependencies]
+cgmath = "0.15"
+gfx_gl = "0.3"
+rand = "0.3"
+genmesh = "0.5"
+noise = "0.4"
+image = "0.15"

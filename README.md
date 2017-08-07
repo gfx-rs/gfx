@@ -97,32 +97,21 @@ Shiny screens, including some older projects:
 
 ## Getting started
 
-The gfx-rs git repository contains a number of examples.
-Those examples are automatically downloaded if you clone the gfx directory:
-
-	$ cd <my_dir>
-	$ git clone https://github.com/gfx-rs/gfx
-
-where `<my_dir>` is a directory name of your choice. Once gfx is downloaded you can build any of the gfx examples.
-The examples are listed in the `<my_dir>/gfx/Cargo.toml` file.
-For example try:
-
-	$ cd gfx
-	$ cargo run --example cube
-
-If you compile the example for the first time, it may take some while since all dependencies must be compiled too.
-
 If you want to build your own stand-alone gfx program, add the following to your new `Cargo.toml`:
 
 	[dependencies]
 	gfx = "0.16"
 
+or, if you want the absolute latest commits to master, you can instead add.
+
+	[dependencies]
+	gfx = { git = "https://github.com/gfx-rs/gfx.git" }
 
 For gfx to work, it needs access to the graphics system of the OS. This is typically provided through some window initialization API.
 gfx can use a couple of those to acquire graphical contexts.
 For example; [glfw](https://github.com/PistonDevelopers/glfw-rs) or [glutin](https://github.com/tomaka/glutin/).
 
-To see how the graphic context is acquired, see the [cube example](https://github.com/gfx-rs/gfx/tree/master/examples/cube) or the [triangle example](https://github.com/gfx-rs/gfx/tree/master/examples/triangle).
+To see how the graphic context is acquired, see the [cube example](https://github.com/gfx-rs/gfx/tree/master/support/examples/cube) or the [triangle example](https://github.com/gfx-rs/gfx/tree/master/render/examples/triangle).
 
 To use `glutin`, for example, your `Cargo.toml` must be extended with the following dependencies:
 
@@ -133,13 +122,19 @@ To use `glutin`, for example, your `Cargo.toml` must be extended with the follow
 
 Alternatively, an excellent introduction into gfx and its related crates can be found [here](https://wiki.alopex.li/LearningGfx).
 
+## Running the Examples
+
+The [examples directory](./examples) contains all the examples for GFX, as well as the
+[accompanying documentation](./examples/README.md) for understanding and running those examples.
+
+
 ## Structure and current versions
 `gfx` consist of several crates. You can find all of them in this repository.
 
 | Core functionality: | Graphic backends: | Window backends: |
 | :---: | :---: | :---: |
 | [![gfx on crates.io](http://img.shields.io/crates/v/gfx.svg?label=gfx)](http://crates.io/crates/gfx) | [![gfx_device_gl on crates.io](http://img.shields.io/crates/v/gfx_device_gl.svg?label=gfx_device_gl)](http://crates.io/crates/gfx_device_gl) | [![gfx_window_sdl on crates.io](http://img.shields.io/crates/v/gfx_window_sdl.svg?label=gfx_window_sdl)](http://crates.io/crates/gfx_window_sdl) |
-| [![gfx_app on crates.io](http://img.shields.io/crates/v/gfx_app.svg?label=gfx_app)](http://crates.io/crates/gfx_app) | [![gfx_device_dx11 on crates.io](http://img.shields.io/crates/v/gfx_device_dx11.svg?label=gfx_device_dx11)](http://crates.io/crates/gfx_device_dx11) | [![gfx_window_dxgi on crates.io](http://img.shields.io/crates/v/gfx_window_dxgi.svg?label=gfx_window_dxgi)](http://crates.io/crates/gfx_window_dxgi) |
+| | [![gfx_device_dx11 on crates.io](http://img.shields.io/crates/v/gfx_device_dx11.svg?label=gfx_device_dx11)](http://crates.io/crates/gfx_device_dx11) | [![gfx_window_dxgi on crates.io](http://img.shields.io/crates/v/gfx_window_dxgi.svg?label=gfx_window_dxgi)](http://crates.io/crates/gfx_window_dxgi) |
 | [![gfx_core on crates.io](http://img.shields.io/crates/v/gfx_core.svg?label=gfx_core)](http://crates.io/crates/gfx_core) | [![gfx_device_metal on crates.io](http://img.shields.io/crates/v/gfx_device_metal.svg?label=gfx_device_metal)](http://crates.io/crates/gfx_device_metal) | [![gfx_window_glfw on crates.io](http://img.shields.io/crates/v/gfx_window_glfw.svg?label=gfx_window_glfw)](http://crates.io/crates/gfx_window_glfw) |
 | [![gfx_macros on crates.io](http://img.shields.io/crates/v/gfx_macros.svg?label=gfx_macros)](http://crates.io/crates/gfx_macros) | [![gfx_device_vulkan on crates.io](http://img.shields.io/crates/v/gfx_device_vulkan.svg?label=gfx_device_vulkan)](http://crates.io/crates/gfx_device_vulkan) | [![gfx_window_metal on crates.io](http://img.shields.io/crates/v/gfx_window_metal.svg?label=gfx_window_metal)](http://crates.io/crates/gfx_window_metal) |
 | | | [![gfx_window_glutin on crates.io](http://img.shields.io/crates/v/gfx_window_glutin.svg?label=gfx_window_glutin)](http://crates.io/crates/gfx_window_glutin) |
