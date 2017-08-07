@@ -3,7 +3,7 @@ use ash::version::DeviceV1_0;
 use core::{command, memory, pso, shade, state, target, texture};
 use core::{IndexType, VertexCount, VertexOffset};
 use core::buffer::IndexBufferView;
-use core::command::{BufferCopy, BufferImageCopy, ClearValue, InstanceParams, SubpassContents};
+use core::command::{BufferCopy, BufferImageCopy, ClearColor, ClearValue, InstanceParams, SubpassContents};
 use {data, native as n, Backend, RawDevice};
 use std::ptr;
 use std::sync::Arc;
@@ -104,7 +104,32 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn clear_depth_stencil(&mut self, dsv: &(), depth: Option<target::Depth>, stencil: Option<target::Stencil>) {
+    fn clear_color(&mut self, rtv: &n::RenderTargetView, layout: texture::ImageLayout, color: ClearColor) {
+        let clear_value = data::map_clear_color(color);
+
+        let range = {
+            let (_, ref mip_levels, ref array_layers) = rtv.range;
+            vk::ImageSubresourceRange {
+                aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
+                base_mip_level: mip_levels.start as u32,
+                level_count: (mip_levels.end - mip_levels.start) as u32,
+                base_array_layer: array_layers.start as u32,
+                layer_count: (array_layers.end - array_layers.start) as u32,
+            }
+        };
+
+        unsafe {
+            self.device.0.cmd_clear_color_image(
+                self.raw,
+                rtv.image,
+                data::map_image_layout(layout),
+                &clear_value,
+                &[range],
+            )
+        };
+    }
+
+    fn clear_depth_stencil(&mut self, dsv: &n::DepthStencilView, depth: Option<target::Depth>, stencil: Option<target::Stencil>) {
         unimplemented!()
     }
 
@@ -252,9 +277,17 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
+    /*
     fn update_buffer(&mut self, buffer: &n::Buffer, data: &[u8], offset: usize) {
-        unimplemented!()
+        unsafe {
+            self.device.0.cmd_update_buffer(
+                self.raw,
+                offset,
+                data,
+            )
+        }
     }
+    */
 
     fn copy_buffer(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: &[BufferCopy]) {
         unimplemented!()

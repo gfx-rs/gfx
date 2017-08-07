@@ -2,17 +2,10 @@ use wio::com::ComPtr;
 use core::{command, memory, pso, shade, state, target, texture};
 use core::{IndexType, VertexCount, VertexOffset};
 use core::buffer::IndexBufferView;
-use core::command::{BufferCopy, BufferImageCopy, ClearValue, InstanceParams, SubpassContents};
+use core::command::{BufferCopy, BufferImageCopy, ClearColor, ClearValue, InstanceParams, SubpassContents};
 use winapi::{self, FLOAT, UINT};
 use {native as n, Backend};
 use smallvec::SmallVec;
-
-pub struct CommandBuffer {
-    pub raw: ComPtr<winapi::ID3D12GraphicsCommandList>,
-}
-
-pub struct SubpassCommandBuffer {
-}
 
 #[derive(Clone)]
 pub struct SubmitInfo(pub(crate) ComPtr<winapi::ID3D12GraphicsCommandList>);
@@ -24,6 +17,32 @@ fn get_rect(rect: &target::Rect) -> winapi::D3D12_RECT {
         top: rect.y as i32,
         right: (rect.x + rect.w) as i32,
         bottom: (rect.y + rect.h) as i32,
+    }
+}
+
+pub struct RenderPassCache {
+    render_pass: n::RenderPass,
+    frame_buffer: n::FrameBuffer,
+    next_subpass: usize,
+    render_area: winapi::D3D12_RECT,
+    clear_values: Vec<ClearValue>,
+}
+
+pub struct CommandBuffer {
+    pub(crate) raw: ComPtr<winapi::ID3D12GraphicsCommandList>,
+
+    // Cache renderpasses for graphics operations
+    // TODO: Use pointers to the actual resources to minimize memory overhead.
+    pub(crate) pass_cache: Option<RenderPassCache>,
+}
+
+impl CommandBuffer {
+    fn begin_subpass(&mut self) {
+        let mut pass = self.pass_cache.as_mut().unwrap();
+        assert!(pass.next_subpass < pass.render_pass.subpasses.len());
+
+        // TODO
+        pass.next_subpass += 1;
     }
 }
 
@@ -41,6 +60,24 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         clear_values: &[ClearValue],
         first_subpass: SubpassContents,
     ) {
+        let area = get_rect(&render_area);
+        self.pass_cache = Some(
+            RenderPassCache {
+                render_pass: render_pass.clone(),
+                frame_buffer: frame_buffer.clone(),
+                render_area: area,
+                clear_values: clear_values.into(),
+                next_subpass: 0,
+            });
+
+        self.begin_subpass();
+    }
+
+    fn next_subpass(&mut self, _: SubpassContents) {
+        self.begin_subpass();
+    }
+
+    fn end_renderpass(&mut self) {
         unimplemented!()
     }
 
@@ -50,6 +87,10 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         _buffer_barriers: &[memory::BufferBarrier],
         _image_barriers: &[memory::ImageBarrier],
     ) {
+        unimplemented!()
+    }
+
+    fn clear_color(&mut self, rtv: &(), layout: texture::ImageLayout, color: ClearColor) {
         unimplemented!()
     }
 
@@ -171,9 +212,11 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
+    /*
     fn update_buffer(&mut self, buffer: &n::Buffer, data: &[u8], offset: usize) {
         unimplemented!()
     }
+    */
 
     fn copy_buffer(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: &[BufferCopy]) {
         unimplemented!()
@@ -231,4 +274,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     fn draw_indexed_indirect(&mut self, buffer: &n::Buffer, offset: u64, draw_count: u32, stride: u32) {
         unimplemented!()
     }
+}
+
+pub struct SubpassCommandBuffer {
 }

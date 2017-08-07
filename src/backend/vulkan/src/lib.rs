@@ -419,8 +419,8 @@ impl core::Backend for Backend {
     type Buffer = native::Buffer;
     type ShaderResourceView = ();
     type UnorderedAccessView = ();
-    type RenderTargetView = ();
-    type DepthStencilView = ();
+    type RenderTargetView = native::RenderTargetView;
+    type DepthStencilView = native::DepthStencilView;
     type Sampler = ();
     type Fence = native::Fence;
     type Semaphore = native::Semaphore;
