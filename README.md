@@ -39,6 +39,12 @@
 ## gfx-rs
 `gfx` is a high-performance, bindless graphics API for the Rust programming language. It aims to be the default API for Rust graphics: for one-off applications, or higher level libraries or engines.
 
+### Under Construction
+
+gfx-rs is undergoing severe changes now with transition to the new [low-level core](http://gfx-rs.github.io/2017/07/24/low-level.html). All the following sections apply to the `pre-ll` branch and will be outdated soon. The new development focus is on zero-cost low-level abstraction of current-gen graphics APIs, such as Vulkan, D3D12, and Metal.
+
+---
+
 ## Motivation
 
 - Graphics APIs are mostly designed with C and C++ in mind, and hence are dangerous and error prone, with little static safety guarantees.
@@ -71,9 +77,9 @@ Biggest open-source projects are:
   - [ggez](https://github.com/ggez/ggez) engine
   - Piston engine - [2d graphics](https://github.com/PistonDevelopers/gfx_graphics)
   - [LazyBox](https://github.com/lazybox/lazybox) engine
-  - [Zone of Control](https://github.com/ozkriff/zoc) game
   - [Vange-rs](https://github.com/kvark/vange-rs) game
-  - [Claymore](https://github.com/kvark/claymore) game/engine
+  - [Zemeroth](https://github.com/ozkriff/zemeroth) game
+  - [Rust-quake](https://github.com/Thinkofname/rust-quake) level viewer
   - [Rust-oids](https://github.com/itadinanta/rust-oids) game
 
 Shiny screens, including some older projects:
@@ -84,6 +90,7 @@ Shiny screens, including some older projects:
   <img src="https://github.com/kvark/vange-rs/blob/master/etc/shots/Road10-debug-shape.png" height="160" alt="Vange-rs"/>
   <img src="https://github.com/kvark/claymore/raw/master/etc/screens/7-forest.jpg" height="160" alt="Claymore"/>
   <img src="https://camo.githubusercontent.com/fb8c95650fba27061e58e76f17ff8460a41b3312/687474703a2f2f692e696d6775722e636f6d2f504f68534c77682e706e67" height="160" alt="ZoC"/>
+  <img src="https://camo.githubusercontent.com/0038d5e3c73b280cfa5d01b26ccef12be7237af5/687474703a2f2f692e696d6775722e636f6d2f703163654954352e706e67" height="160" alt="Rust-Quake">
   <img src="https://github.com/itadinanta/rust-oids/raw/master/img/screenshot_007.png" height="160" alt="Rust-oids">
   <!--img src="https://raw.githubusercontent.com/csherratt/petri/master/petri.png" height="160" alt="Petri"/-->
 </p>
