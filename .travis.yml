@@ -44,6 +44,8 @@ addons:
       - libxcursor1
       - libglfw-dev
       - libosmesa6-dev
+      - libxi-dev
+      - libxrandr-dev
 
 script:
   - bash scripts/travis-script.sh
