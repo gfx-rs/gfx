@@ -45,6 +45,8 @@ addons:
       - libxcursor1
       - libglfw-dev
       - libosmesa6-dev
+      - libxi-dev
+      - libxrandr-dev
 script:
   - export RUST_BACKTRACE=1
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export PATH=$PATH:$HOME/deps/bin ; fi
