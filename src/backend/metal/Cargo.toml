@@ -30,9 +30,9 @@ name = "gfx_device_metal"
 [dependencies]
 log = "0.3"
 gfx_core = { path = "../../core", version = "0.7" }
-cocoa = "0.5"
+cocoa = "0.9"
 libc = "0.2"
 objc = "0.2"
 objc-foundation = "0.1"
 bit-set = "0.4"
-metal-rs = "0.3"
+metal-rs = "0.4"
