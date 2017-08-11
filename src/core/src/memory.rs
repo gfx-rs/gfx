@@ -178,12 +178,11 @@ bitflags!(
 
 ///
 #[derive(Clone, Copy, Debug)]
-pub struct MemoryBarrier;
-
-///
-#[derive(Clone, Copy, Debug)]
-pub struct BufferBarrier;
-
-///
-#[derive(Clone, Copy, Debug)]
-pub struct ImageBarrier;
+pub enum Barrier {
+    ///
+    MemoryBarrier,
+    ///
+    BufferBarrier,
+    ///
+    ImageBarrier,
+}

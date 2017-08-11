@@ -26,7 +26,7 @@ mod raw;
 mod renderpass;
 mod transfer;
 
-pub use self::access::{AccessInfo, AccessGuard};
+pub use self::access::{AccessGuard, AccessInfo};
 pub use self::compute::ComputeCommandBuffer;
 pub use self::general::GeneralCommandBuffer;
 pub use self::graphics::GraphicsCommandBuffer;
@@ -108,6 +108,7 @@ pub enum ClearValue {
 }
 
 ///
+#[derive(Clone, Copy, Debug)]
 pub struct Offset {
     ///
     pub x: i32,
@@ -118,6 +119,7 @@ pub struct Offset {
 }
 
 ///
+#[derive(Clone, Copy, Debug)]
 pub struct Extent {
     ///
     pub width: u32,
@@ -128,6 +130,7 @@ pub struct Extent {
 }
 
 /// Region of two buffers for copying.
+#[derive(Clone, Copy, Debug)]
 pub struct BufferCopy {
     /// Buffer region source offset.
     pub src: u64,
@@ -138,9 +141,8 @@ pub struct BufferCopy {
 }
 
 ///
-pub struct ImageCopy {
-    ///
-    pub extent: Extent,
+#[derive(Clone, Debug)]
+pub struct ImageResolve {
     ///
     pub src_subresource: texture::SubresourceLayers,
     ///
@@ -149,9 +151,29 @@ pub struct ImageCopy {
     pub dst_subresource: texture::SubresourceLayers,
     ///
     pub dst_offset: Offset,
+    ///
+    pub extent: Extent,
 }
 
 ///
+#[derive(Clone, Debug)]
+pub struct ImageCopy {
+    ///
+    pub aspect_mask: texture::ImageAspectFlags,
+    ///
+    pub src_subresource: texture::SubresourceLayers,
+    ///
+    pub src_offset: Offset,
+    ///
+    pub dst_subresource: texture::SubresourceLayers,
+    ///
+    pub dst_offset: Offset,
+    ///
+    pub extent: Extent,
+}
+
+///
+#[derive(Clone, Debug)]
 pub struct BufferImageCopy {
     ///
     pub buffer_offset: u64,
@@ -159,6 +181,8 @@ pub struct BufferImageCopy {
     pub buffer_row_pitch: u32,
     ///
     pub buffer_slice_pitch: u32,
+    ///
+    pub image_aspect: texture::ImageAspectFlags,
     ///
     pub image_subresource: texture::SubresourceLayers,
     ///
@@ -172,7 +196,7 @@ pub type InstanceParams = (InstanceCount, VertexCount);
 
 /// Thread-safe finished command buffer for submission.
 pub struct Submit<B: Backend, C>(B::SubmitInfo, PhantomData<C>);
-unsafe impl<B: Backend, C> Send for Submit<B, C> { }
+unsafe impl<B: Backend, C> Send for Submit<B, C> {}
 
 impl<B: Backend, C> Submit<B, C> {
     ///
