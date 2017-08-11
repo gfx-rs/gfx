@@ -73,9 +73,9 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         let contents = map_subpass_contents(first_subpass);
         unsafe {
             self.device.0.cmd_begin_render_pass(
-                self.raw, // commandBuffer
-                &info,    // pRenderPassBegin
-                contents, // contents
+                self.raw,
+                &info,
+                contents,
             );
         }
     }
@@ -197,12 +197,12 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
             .collect();
         unsafe {
             self.device.0.cmd_resolve_image(
-                self.raw,                           // commandBuffer
-                src.raw,                            // srcImage
-                data::map_image_layout(src_layout), // srcImageLayout
-                dst.raw,                            // dstImage
-                data::map_image_layout(dst_layout), // dstImageLayout
-                &regions,                           // pRegions
+                self.raw,
+                src.raw,
+                data::map_image_layout(src_layout),
+                dst.raw,
+                data::map_image_layout(dst_layout),
+                &regions,
             );
         }
     }
@@ -210,10 +210,10 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     fn bind_index_buffer(&mut self, ibv: IndexBufferView<Backend>) {
         unsafe {
             self.device.0.cmd_bind_index_buffer(
-                self.raw,                             // commandBuffer
-                ibv.buffer.raw,                       // buffer
-                ibv.offset,                           // offset
-                data::map_index_type(ibv.index_type), // indexType
+                self.raw,
+                ibv.buffer.raw,
+                ibv.offset,
+                data::map_index_type(ibv.index_type),
             );
         }
     }
@@ -315,15 +315,16 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         sets: &[&n::DescriptorSet],
     ) {
         let sets: SmallVec<[vk::DescriptorSet; 16]> = sets.iter().map(|set| set.raw).collect();
+        let dynamic_offsets = &[]; // TODO
 
         unsafe {
             self.device.0.cmd_bind_descriptor_sets(
-                self.raw,                        // commandBuffer
-                vk::PipelineBindPoint::Graphics, // pipelineBindPoint
-                layout.raw,                      // layout
-                first_set as u32,                // firstSet
-                &sets,                           // pDescriptorSets
-                &[],                             // pDynamicOffsets // TODO
+                self.raw,
+                vk::PipelineBindPoint::Graphics,
+                layout.raw,
+                first_set as u32,
+                &sets,
+                dynamic_offsets,
             );
         }
     }
@@ -339,10 +340,10 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     fn dispatch(&mut self, x: u32, y: u32, z: u32) {
         unsafe {
             self.device.0.cmd_dispatch(
-                self.raw, // commandBuffer
-                x,        // groupCountX
-                y,        // groupCountY
-                z,        // groupCountZ
+                self.raw,
+                x,
+                y,
+                z,
             )
         }
     }
@@ -432,11 +433,11 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
 
         unsafe {
             self.device.0.cmd_copy_buffer_to_image(
-                self.raw,                       // commandBuffer
-                src.raw,                        // srcBuffer
-                dst.raw,                        // dstImage
-                data::map_image_layout(layout), // dstImageLayout
-                &regions,                       // pRegions
+                self.raw,
+                src.raw,
+                dst.raw,
+                data::map_image_layout(layout),
+                &regions,
             );
         }
     }
@@ -459,11 +460,11 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
 
         unsafe {
             self.device.0.cmd_draw(
-                self.raw,       // commandBuffer
-                count,          // vertexCount
-                num_instances,  // instanceCount
-                start,          // firstVertex
-                start_instance, // firstInstance
+                self.raw,
+                count,
+                num_instances,
+                start,
+                start_instance,
             )
         }
     }
@@ -482,12 +483,12 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
 
         unsafe {
             self.device.0.cmd_draw_indexed(
-                self.raw,       // commandBuffer
-                count,          // indexCount
-                num_instances,  // instanceCount
-                start,          // firstIndex
-                base,           // vertexOffset
-                start_instance, // firstInstance
+                self.raw,
+                count,
+                num_instances,
+                start,
+                base,
+                start_instance,
             )
         }
     }
@@ -495,11 +496,11 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     fn draw_indirect(&mut self, buffer: &n::Buffer, offset: u64, draw_count: u32, stride: u32) {
         unsafe {
             self.device.0.cmd_draw_indirect(
-                self.raw,   // commandBuffer
-                buffer.raw, // buffer
-                offset,     // offset
-                draw_count, // drawCount
-                stride,     // stride
+                self.raw,
+                buffer.raw,
+                offset,
+                draw_count,
+                stride,
             )
         }
     }
@@ -513,11 +514,11 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     ) {
         unsafe {
             self.device.0.cmd_draw_indexed_indirect(
-                self.raw,   // commandBuffer
-                buffer.raw, // buffer
-                offset,     // offset
-                draw_count, // drawCount
-                stride,     // stride
+                self.raw,
+                buffer.raw,
+                offset,
+                draw_count,
+                stride,
             )
         }
     }
