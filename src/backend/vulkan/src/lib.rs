@@ -444,7 +444,7 @@ impl core::Backend for Backend {
     type ComputePipeline = native::ComputePipeline;
     type GraphicsPipeline = native::GraphicsPipeline;
     type PipelineLayout = native::PipelineLayout;
-    type DescriptorSet = ();
+    type DescriptorSet = native::DescriptorSet;
     type ShaderLib = native::ShaderLib;
     type RenderPass = native::RenderPass;
     type FrameBuffer = native::FrameBuffer;

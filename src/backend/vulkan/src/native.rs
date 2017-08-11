@@ -57,6 +57,11 @@ pub struct DescriptorSetLayout {
     pub raw: vk::DescriptorSetLayout,
 }
 
+#[derive(Debug)]
+pub struct DescriptorSet {
+    pub raw: vk::DescriptorSet,
+}
+
 #[derive(Debug, Hash)]
 pub struct PipelineLayout {
     pub raw: vk::PipelineLayout,
@@ -79,4 +84,5 @@ pub struct RenderTargetView {
 pub struct DepthStencilView {
     pub image: vk::Image,
     pub view: vk::ImageView,
+    pub range: SubresourceRange
 }

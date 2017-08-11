@@ -14,7 +14,7 @@
 
 use ash::vk;
 // use core::{buffer, image, shade};
-use core::command::{ClearColor, ClearValue};
+use core::command::{ClearColor, ClearValue, Extent, Offset};
 // use core::factory::DescriptorType;
 use core::format::{SurfaceType, ChannelType};
 use core::texture::{self, ImageAspectFlags, ImageLayout};
@@ -220,6 +220,31 @@ pub fn map_clear_value(value: &ClearValue) -> vk::ClearValue {
 
             vk::ClearValue::new_depth_stencil(dsv)
         },
+    }
+}
+
+pub fn map_offset(offset: Offset) -> vk::Offset3D {
+    vk::Offset3D {
+        x: offset.x,
+        y: offset.y,
+        z: offset.z,
+    }
+}
+
+pub fn map_extent(offset: Extent) -> vk::Extent3D {
+    vk::Extent3D {
+        width: offset.width,
+        height: offset.height,
+        depth: offset.depth,
+    }
+}
+
+pub fn map_subresource_layers(aspect_mask: vk::ImageAspectFlags, subresource: &texture::SubresourceLayers) -> vk::ImageSubresourceLayers {
+    vk::ImageSubresourceLayers {
+        aspect_mask,
+        mip_level: subresource.0 as u32,
+        base_array_layer: subresource.1.start as u32,
+        layer_count: subresource.1.end as u32,
     }
 }
 
