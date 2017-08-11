@@ -269,11 +269,11 @@ pub trait Device<B: Backend> {
     fn create_pipeline_layout(&mut self, sets: &[&B::DescriptorSetLayout]) -> handle::PipelineLayout<B>;
 
     /// Create graphics pipelines.
-    fn create_graphics_pipelines(&mut self, &[(B::ShaderLib, B::PipelineLayout, pass::SubPass<B>, &pso::GraphicsPipelineDesc)])
+    fn create_graphics_pipelines(&mut self, &[(&B::ShaderLib, &B::PipelineLayout, pass::SubPass<B>, &pso::GraphicsPipelineDesc)])
             -> Vec<Result<handle::GraphicsPipeline<B>, pso::CreationError>>;
 
     /// Create compute pipelines.
-    fn create_compute_pipelines(&mut self, &[(B::ShaderLib, pso::EntryPoint, B::PipelineLayout)]) -> Vec<Result<handle::ComputePipeline<B>, pso::CreationError>>;
+    fn create_compute_pipelines(&mut self, &[(&B::ShaderLib, pso::EntryPoint, &B::PipelineLayout)]) -> Vec<Result<handle::ComputePipeline<B>, pso::CreationError>>;
 
     ///
     fn create_sampler(&mut self, texture::SamplerInfo) -> handle::Sampler<B>;
