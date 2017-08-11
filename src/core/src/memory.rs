@@ -180,9 +180,9 @@ bitflags!(
 #[derive(Clone, Copy, Debug)]
 pub enum Barrier {
     ///
-    MemoryBarrier,
+    Memory,
     ///
-    BufferBarrier,
+    Buffer,
     ///
-    ImageBarrier,
+    Image,
 }
