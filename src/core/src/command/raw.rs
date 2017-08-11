@@ -15,7 +15,8 @@
 use {memory, pso, state, target, texture};
 use {Backend, VertexCount, VertexOffset};
 use buffer::IndexBufferView;
-use super::{BufferCopy, BufferImageCopy, ClearColor, ClearValue, InstanceParams, SubpassContents};
+use super::{BufferCopy, BufferImageCopy, ClearColor, ClearValue, ImageCopy, ImageResolve,
+            InstanceParams, SubpassContents};
 
 ///
 pub trait RawCommandBuffer<B: Backend> {
@@ -23,16 +24,29 @@ pub trait RawCommandBuffer<B: Backend> {
     fn finish(&mut self) -> B::SubmitInfo;
 
     ///
-    fn pipeline_barrier(&mut self, &[memory::MemoryBarrier], &[memory::BufferBarrier], &[memory::ImageBarrier]);
+    fn pipeline_barrier(&mut self, &[memory::Barrier]);
 
     ///
     fn clear_color(&mut self, &B::RenderTargetView, texture::ImageLayout, ClearColor);
 
     /// Clear depth-stencil target
-    fn clear_depth_stencil(&mut self, &B::DepthStencilView, Option<target::Depth>, Option<target::Stencil>);
+    fn clear_depth_stencil(
+        &mut self,
+        &B::DepthStencilView,
+        texture::ImageLayout,
+        Option<target::Depth>,
+        Option<target::Stencil>,
+    );
 
     ///
-    fn resolve_image(&mut self);
+    fn resolve_image(
+        &mut self,
+        src: &B::Image,
+        src_layout: texture::ImageLayout,
+        dst: &B::Image,
+        dst_layout: texture::ImageLayout,
+        regions: &[ImageResolve],
+    );
 
     /// Bind index buffer view.
     fn bind_index_buffer(&mut self, IndexBufferView<B>);
@@ -67,7 +81,12 @@ pub trait RawCommandBuffer<B: Backend> {
     /// Calling the corresponding `bind_pipeline` functions will override the slot.
     fn bind_graphics_pipeline(&mut self, &B::GraphicsPipeline);
     ///
-    fn bind_graphics_descriptor_sets(&mut self, layout: &B::PipelineLayout, first_set: usize, sets: &[&B::DescriptorSet]);
+    fn bind_graphics_descriptor_sets(
+        &mut self,
+        layout: &B::PipelineLayout,
+        first_set: usize,
+        sets: &[&B::DescriptorSet],
+    );
     ///
     fn bind_compute_pipeline(&mut self, &B::ComputePipeline);
     ///
@@ -79,17 +98,48 @@ pub trait RawCommandBuffer<B: Backend> {
     ///
     fn copy_buffer(&mut self, src: &B::Buffer, dst: &B::Buffer, regions: &[BufferCopy]);
     ///
-    fn copy_image(&mut self, src: &B::Image, dst: &B::Image);
+    fn copy_image(
+        &mut self,
+        src: &B::Image,
+        src_layout: texture::ImageLayout,
+        dst: &B::Image,
+        dst_layout: texture::ImageLayout,
+        regions: &[ImageCopy],
+    );
     ///
-    fn copy_buffer_to_image(&mut self, src: &B::Buffer, dst: &B::Image, layout: texture::ImageLayout, regions: &[BufferImageCopy]);
+    fn copy_buffer_to_image(
+        &mut self,
+        src: &B::Buffer,
+        dst: &B::Image,
+        layout: texture::ImageLayout,
+        regions: &[BufferImageCopy],
+    );
     ///
-    fn copy_image_to_buffer(&mut self, src: &B::Image, dst: &B::Buffer, layout: texture::ImageLayout, regions: &[BufferImageCopy]);
+    fn copy_image_to_buffer(
+        &mut self,
+        src: &B::Image,
+        dst: &B::Buffer,
+        layout: texture::ImageLayout,
+        regions: &[BufferImageCopy],
+    );
     ///
     fn draw(&mut self, start: VertexCount, count: VertexCount, instance: Option<InstanceParams>);
     ///
-    fn draw_indexed(&mut self, start: VertexCount, count: VertexCount, base: VertexOffset, instance: Option<InstanceParams>);
+    fn draw_indexed(
+        &mut self,
+        start: VertexCount,
+        count: VertexCount,
+        base: VertexOffset,
+        instance: Option<InstanceParams>,
+    );
     ///
     fn draw_indirect(&mut self, buffer: &B::Buffer, offset: u64, draw_count: u32, stride: u32);
     ///
-    fn draw_indexed_indirect(&mut self, buffer: &B::Buffer, offset: u64, draw_count: u32, stride: u32);
+    fn draw_indexed_indirect(
+        &mut self,
+        buffer: &B::Buffer,
+        offset: u64,
+        draw_count: u32,
+        stride: u32,
+    );
 }
