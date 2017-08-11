@@ -596,10 +596,10 @@ bitflags!(
 );
 
 ///
-pub type Subresource = (ImageAspectFlags, Level, Layer);
+pub type Subresource = (Level, Layer);
 
 ///
-pub type SubresourceLayers = (ImageAspectFlags, Level, Range<Layer>);
+pub type SubresourceLayers = (Level, Range<Layer>);
 
 ///
-pub type SubresourceRange = (ImageAspectFlags, Range<Level>, Range<Layer>);
+pub type SubresourceRange = (Range<Level>, Range<Layer>);
