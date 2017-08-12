@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use {memory, pso, state, target, texture};
-use {Backend, VertexCount, VertexOffset};
+use {Backend, VertexCount, VertexOffset, Viewport};
 use buffer::IndexBufferView;
 use super::{BufferCopy, BufferImageCopy, ClearColor, ClearValue, ImageCopy, ImageResolve,
             InstanceParams, SubpassContents};
@@ -55,7 +55,7 @@ pub trait RawCommandBuffer<B: Backend> {
     fn bind_vertex_buffers(&mut self, pso::VertexBufferSet<B>);
 
     ///
-    fn set_viewports(&mut self, &[target::Rect]);
+    fn set_viewports(&mut self, &[Viewport]);
     ///
     fn set_scissors(&mut self, &[target::Rect]);
     ///

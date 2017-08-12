@@ -89,6 +89,19 @@ pub type ColorSlot = u8;
 /// Slot for a sampler.
 pub type SamplerSlot = u8;
 
+///
+#[allow(missing_docs)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+pub struct Viewport {
+    pub x: u16,
+    pub y: u16,
+    pub w: u16,
+    pub h: u16,
+    pub near: f32,
+    pub far: f32,
+}
+
 
 /// Features that the device supports.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -204,8 +217,8 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type ShaderLib:           Debug + Any + Send + Sync;
     type ShaderResourceView:  Debug + Any + Send + Sync + Clone + Hash + Eq;
     type UnorderedAccessView: Debug + Any + Send + Sync + Clone + Hash + Eq;
-    type RenderTargetView:    Debug + Any + Send + Sync + Clone + Hash + Eq;
-    type DepthStencilView:    Debug + Any + Send + Sync + Clone + Hash + Eq;
+    type RenderTargetView:    Debug + Any + Send + Sync + Clone;
+    type DepthStencilView:    Debug + Any + Send + Sync + Clone;
     type Sampler:             Debug + Any + Send + Sync;
     type Image:               Debug + Any + Send + Sync + Eq + Hash;
     type ComputePipeline:     Debug + Any + Send + Sync;

@@ -26,14 +26,14 @@ impl d::Device<B> for Device {
 
     fn create_graphics_pipelines(
         &mut self,
-        descs: &[(n::ShaderLib, n::PipelineLayout, pass::SubPass<B>, &pso::GraphicsPipelineDesc)],
+        descs: &[(&n::ShaderLib, &n::PipelineLayout, pass::SubPass<B>, &pso::GraphicsPipelineDesc)],
     ) -> Vec<Result<handle::GraphicsPipeline<B>, pso::CreationError>> {
         unimplemented!()
     }
 
     fn create_compute_pipelines(
         &mut self,
-        descs: &[(n::ShaderLib, pso::EntryPoint, n::PipelineLayout)],
+        descs: &[(&n::ShaderLib, pso::EntryPoint, &n::PipelineLayout)],
     ) -> Vec<Result<handle::ComputePipeline<B>, pso::CreationError>> {
         unimplemented!()
     }
