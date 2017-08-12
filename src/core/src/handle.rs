@@ -251,6 +251,22 @@ pub struct ComputePipeline<B: Backend>(Arc<B::ComputePipeline>);
 #[derive(Clone, Debug)]
 pub struct PipelineLayout<B: Backend>(Arc<B::PipelineLayout>);
 
+///
+#[derive(Clone, Debug)]
+pub struct DescriptorSetPool<B: Backend>(Arc<B::DescriptorSetPool>);
+
+///
+#[derive(Clone, Debug)]
+pub struct DescriptorSet<B: Backend>(Arc<B::DescriptorSet>);
+
+///
+#[derive(Clone, Debug)]
+pub struct DescriptorSetLayout<B: Backend>(Arc<B::DescriptorSetLayout>);
+
+///
+#[derive(Clone, Debug)]
+pub struct DescriptorHeap<B: Backend>(Arc<B::DescriptorHeap>);
+
 /// Stores reference-counted resources used in a command buffer.
 /// Seals actual resource names behind the interface, automatically
 /// referencing them both by the Factory on resource creation
