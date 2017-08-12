@@ -1,7 +1,7 @@
 
 use core::pass::Attachment;
 use core::{pso, texture};
-use winapi;
+use winapi::{self, UINT};
 
 use std::collections::BTreeMap;
 
@@ -62,9 +62,16 @@ pub struct Image {
     pub kind: texture::Kind,
     pub dxgi_format: winapi::DXGI_FORMAT,
     pub bits_per_texel: u8,
+    pub levels: texture::Level,
 }
 unsafe impl Send for Image { }
 unsafe impl Sync for Image { }
+
+impl Image {
+    pub fn calc_subresource(&self, mip_level: UINT, layer: UINT) -> UINT {
+        mip_level + layer * self.levels as UINT
+    }
+}
 
 #[derive(Debug, Hash, Clone)]
 pub struct RenderTargetView {

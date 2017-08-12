@@ -146,7 +146,7 @@ impl CommandBuffer {
                     region.image_offset.x as UINT,
                     region.image_offset.y as UINT,
                     region.image_offset.z as UINT,
-                    &src, ptr::null(),
+                    &src, ptr::null(), // TODO: source box, settle offset and extent
                 );
             }
         }
