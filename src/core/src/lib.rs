@@ -66,19 +66,6 @@ pub mod shade;
 pub mod texture;
 pub mod window;
 
-/// Compile-time maximum number of vertex attributes.
-pub const MAX_VERTEX_ATTRIBUTES: usize = 16;
-/// Compile-time maximum number of color targets.
-pub const MAX_COLOR_TARGETS: usize = 4;
-/// Compile-time maximum number of constant buffers.
-pub const MAX_CONSTANT_BUFFERS: usize = 14;
-/// Compile-time maximum number of shader resource views (SRV).
-pub const MAX_RESOURCE_VIEWS: usize = 32;
-/// Compile-time maximum number of unordered access views (UAV).
-pub const MAX_UNORDERED_VIEWS: usize = 4;
-/// Compile-time maximum number of samplers.
-pub const MAX_SAMPLERS: usize = 16;
-
 /// Draw vertex count.
 pub type VertexCount = u32;
 /// Draw vertex base offset.
