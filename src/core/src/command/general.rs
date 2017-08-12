@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use Backend;
+use {Backend, Viewport};
 use {memory, pso, state, target, texture};
 use buffer::IndexBufferView;
 use queue::capability::{Capability, General};
@@ -76,7 +76,7 @@ impl<'a, B: Backend> GeneralCommandBuffer<'a, B> {
     }
 
     ///
-    pub fn set_viewports(&mut self, viewports: &[target::Rect]) {
+    pub fn set_viewports(&mut self, viewports: &[Viewport]) {
         self.0.set_viewports(viewports)
     }
 
