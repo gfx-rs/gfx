@@ -145,7 +145,7 @@ impl<B: Backend, T> Typed for UnorderedAccessView<B, T> {
 
 /// Raw RTV
 // TODO: Arc it all
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct RawRenderTargetView<B: Backend>(Arc<B::RenderTargetView>, RawTexture<B>, texture::Dimensions);
 
 impl<B: Backend> RawRenderTargetView<B> {
@@ -158,7 +158,7 @@ impl<B: Backend> RawRenderTargetView<B> {
 
 /// Raw DSV
 // TODO: Arc it all
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct RawDepthStencilView<B: Backend>(Arc<B::DepthStencilView>, RawTexture<B>, texture::Dimensions);
 
 impl<B: Backend> RawDepthStencilView<B> {
@@ -171,7 +171,7 @@ impl<B: Backend> RawDepthStencilView<B> {
 
 /// Typed RTV
 #[derive(Derivative)]
-#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
+#[derivative(Clone, Debug)]
 pub struct RenderTargetView<B: Backend, T>(
     RawRenderTargetView<B>,
     #[derivative(Hash = "ignore", PartialEq = "ignore")]
@@ -194,7 +194,7 @@ impl<B: Backend, T> Typed for RenderTargetView<B, T> {
 
 /// Typed DSV
 #[derive(Derivative)]
-#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
+#[derivative(Clone, Debug)]
 pub struct DepthStencilView<B: Backend, T>(
     RawDepthStencilView<B>,
     #[derivative(Hash = "ignore", PartialEq = "ignore")]

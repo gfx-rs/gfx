@@ -144,15 +144,11 @@ pub struct BufferCopy {
 #[derive(Clone, Debug)]
 pub struct ImageResolve {
     ///
-    pub src_subresource: texture::SubresourceLayers,
+    pub src_subresource: texture::Subresource,
     ///
-    pub src_offset: Offset,
+    pub dst_subresource: texture::Subresource,
     ///
-    pub dst_subresource: texture::SubresourceLayers,
-    ///
-    pub dst_offset: Offset,
-    ///
-    pub extent: Extent,
+    pub num_layers: texture::Layer,
 }
 
 ///
@@ -161,15 +157,17 @@ pub struct ImageCopy {
     ///
     pub aspect_mask: texture::ImageAspectFlags,
     ///
-    pub src_subresource: texture::SubresourceLayers,
+    pub src_subresource: texture::Subresource,
     ///
     pub src_offset: Offset,
     ///
-    pub dst_subresource: texture::SubresourceLayers,
+    pub dst_subresource: texture::Subresource,
     ///
     pub dst_offset: Offset,
     ///
     pub extent: Extent,
+    ///
+    pub num_layers: texture::Layer,
 }
 
 ///
