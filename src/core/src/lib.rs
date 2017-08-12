@@ -211,8 +211,10 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type ComputePipeline:     Debug + Any + Send + Sync;
     type GraphicsPipeline:    Debug + Any + Send + Sync;
     type PipelineLayout:      Debug + Any + Send + Sync;
+    type DescriptorHeap:      Debug + Any;
     type DescriptorSet:       Debug + Any + Send + Sync;
     type DescriptorSetLayout: Debug + Any;
+    type DescriptorSetPool:   Debug + Any;
     type Fence:               Debug + Any + Send + Sync;
     type Semaphore:           Debug + Any + Send + Sync;
     type Mapping:             Debug + Any + Send + Sync + mapping::Gate<Self>;

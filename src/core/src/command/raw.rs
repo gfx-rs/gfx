@@ -75,6 +75,16 @@ pub trait RawCommandBuffer<B: Backend> {
     ///
     fn end_renderpass(&mut self);
 
+    /// Bind a descriptor heap.
+    ///
+    /// Descriptor heaps are split into a CBV/SRV/UAV part and a sampler part.
+    /// Each part represents a slot, which can be filled by *one* heap.
+    /// So at the same time there can be bound, at maximum, either *one* heap having both parts
+    /// or two heaps with only a single type each (one CBV/SRV/UAV and one sampler).
+    ///
+    /// Binding a new descriptor heap will automatically overwrite the currently filled slots.
+    fn bind_descriptor_heap(&mut self, &B::DescriptorHeap);
+
     /// Bind a graphics pipeline.
     ///
     /// There is only *one* pipeline slot for compute and graphics.
