@@ -21,6 +21,22 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
+    fn create_descriptor_heap(&mut self, num_srv_cbv_uav: usize, num_samplers: usize) -> handle::DescriptorHeap<B> {
+        unimplemented!()
+    }
+
+    fn create_descriptor_set_pool(&mut self, heap: &n::DescriptorHeap, max_sets: usize, offset: usize, descriptor_pools: &[pso::DescriptorPoolDesc]) -> handle::DescriptorSetPool<B> {
+        unimplemented!()
+    }
+
+    fn create_descriptor_sets(&mut self, set_pool: &mut n::DescriptorSetPool, layout: &[&n::DescriptorSetLayout]) -> Vec<handle::DescriptorSet<B>> {
+        unimplemented!()
+    }
+
+    fn create_descriptor_set_layout(&mut self, bindings: &[pso::DescriptorSetLayoutBinding]) -> handle::DescriptorSetLayout<B> {
+        unimplemented!()
+    }
+
     fn create_pipeline_layout(&mut self, sets: &[&n::DescriptorSetLayout]) -> handle::PipelineLayout<B> {
         unimplemented!()
     }
