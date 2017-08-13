@@ -17,7 +17,7 @@ use ash::vk;
 use core::command::{ClearColor, ClearValue, Extent, Offset};
 // use core::factory::DescriptorType;
 use core::format::{SurfaceType, ChannelType};
-use core::texture::{self, ImageAspectFlags, ImageLayout};
+use core::texture::{self, ImageAspectFlags, ImageLayout, Layer};
 // use core::image::{FilterMethod, PackedColor, WrapMode};
 // use core::memory::{self, ImageAccess, ImageLayout};
 // use core::pass::{AttachmentLoadOp, AttachmentStoreOp, AttachmentLayout};
@@ -246,6 +246,11 @@ pub fn map_subresource_layers(aspect_mask: vk::ImageAspectFlags, subresource: &t
         base_array_layer: subresource.1.start as u32,
         layer_count: subresource.1.end as u32,
     }
+}
+
+pub fn map_subresource_with_layers(aspect_mask: vk::ImageAspectFlags, subresource: texture::Subresource, layers: Layer) -> vk::ImageSubresourceLayers {
+    let (mip_level, base_layer) = subresource;
+    map_subresource_layers(aspect_mask, &(mip_level, base_layer..base_layer+layers))
 }
 
 /*
