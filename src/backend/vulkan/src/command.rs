@@ -1,12 +1,12 @@
 use ash::vk;
 use ash::version::DeviceV1_0;
 use core::{command, memory, pso, shade, state, target, texture};
-use core::{IndexType, VertexCount, VertexOffset};
+use core::{IndexType, VertexCount, VertexOffset, Viewport};
 use core::buffer::IndexBufferView;
 use core::command::{BufferCopy, BufferImageCopy, ClearColor, ClearValue, ImageCopy, ImageResolve,
                     InstanceParams, SubpassContents};
 use {data, native as n, Backend, RawDevice};
-use std::ptr;
+use std::{cmp, ptr};
 use std::sync::Arc;
 use smallvec::SmallVec;
 
@@ -180,18 +180,30 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         let regions: SmallVec<[vk::ImageResolve; 16]> = regions
             .iter()
             .map(|region| {
+                let offset = vk::Offset3D {
+                    x: 0,
+                    y: 0,
+                    z: 0,
+                };
+
                 vk::ImageResolve {
-                    src_subresource: data::map_subresource_layers(
+                    src_subresource: data::map_subresource_with_layers(
                         vk::IMAGE_ASPECT_COLOR_BIT, // Specs [1.0.42] 18.6
-                        &region.src_subresource,
+                        region.src_subresource,
+                        region.num_layers,
                     ),
-                    src_offset: data::map_offset(region.src_offset),
-                    dst_subresource: data::map_subresource_layers(
+                    src_offset: offset,
+                    dst_subresource: data::map_subresource_with_layers(
                         vk::IMAGE_ASPECT_COLOR_BIT, // Specs [1.0.42] 18.6
-                        &region.dst_subresource,
+                        region.dst_subresource,
+                        region.num_layers,
                     ),
-                    dst_offset: data::map_offset(region.dst_offset),
-                    extent: data::map_extent(region.extent),
+                    dst_offset: offset,
+                    extent: vk::Extent3D {
+                        width:  cmp::max(1, src.extent.width  >> region.src_subresource.0),
+                        height: cmp::max(1, src.extent.height >> region.src_subresource.0),
+                        depth:  cmp::max(1, src.extent.depth  >> region.src_subresource.0),
+                    },
                 }
             })
             .collect();
@@ -231,7 +243,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_viewports(&mut self, viewports: &[target::Rect]) {
+    fn set_viewports(&mut self, viewports: &[Viewport]) {
         let viewports: SmallVec<[vk::Viewport; 16]> = viewports
             .iter()
             .map(|viewport| {
@@ -240,8 +252,8 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                     y: viewport.y as f32,
                     width: viewport.w as f32,
                     height: viewport.h as f32,
-                    min_depth: 0.0,
-                    max_depth: 1.0,
+                    min_depth: viewport.near,
+                    max_depth: viewport.far,
                 }
             })
             .collect();
@@ -298,6 +310,10 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                 );
             }
         }
+    }
+
+    fn bind_descriptor_heap(&mut self, _: &n::DescriptorHeap) {
+
     }
 
     fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
@@ -388,9 +404,9 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
             .map(|region| {
                 let aspect_mask = data::map_image_aspects(region.aspect_mask);
                 vk::ImageCopy {
-                    src_subresource: data::map_subresource_layers(aspect_mask, &region.src_subresource),
+                    src_subresource: data::map_subresource_with_layers(aspect_mask, region.src_subresource, region.num_layers),
                     src_offset: data::map_offset(region.src_offset),
-                    dst_subresource: data::map_subresource_layers(aspect_mask, &region.dst_subresource),
+                    dst_subresource: data::map_subresource_with_layers(aspect_mask, region.dst_subresource, region.num_layers),
                     dst_offset: data::map_offset(region.dst_offset),
                     extent: data::map_extent(region.extent),
                 }
