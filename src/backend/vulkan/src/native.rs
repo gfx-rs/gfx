@@ -72,3 +72,14 @@ pub struct DepthStencilView {
     pub view: vk::ImageView,
     pub range: SubresourceRange
 }
+
+#[derive(Debug)]
+pub struct DescriptorHeap {
+    pub(crate) num_cbv_srv_uav: usize,
+    pub(crate) num_sampler: usize,
+}
+
+#[derive(Debug)]
+pub struct DescriptorSetPool {
+    pub(crate) raw: vk::DescriptorPool,
+}

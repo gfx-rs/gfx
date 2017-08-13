@@ -435,6 +435,8 @@ impl core::Backend for Backend {
     type RenderPass = native::RenderPass;
     type FrameBuffer = native::FrameBuffer;
     type DescriptorSetLayout = native::DescriptorSetLayout;
+    type DescriptorSetPool = native::DescriptorSetPool;
+    type DescriptorHeap = native::DescriptorHeap;
 }
 
 // TODO: temporary
