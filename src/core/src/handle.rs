@@ -242,11 +242,7 @@ pub struct PipelineLayout<B: Backend>(Arc<B::PipelineLayout>);
 
 ///
 #[derive(Clone, Debug)]
-pub struct DescriptorSetPool<B: Backend>(Arc<B::DescriptorSetPool>);
-
-///
-#[derive(Clone, Debug)]
-pub struct DescriptorSet<B: Backend>(Arc<B::DescriptorSet>);
+pub struct DescriptorSetPool<B: Backend>(Arc<B::DescriptorSetPool>, Arc<B::DescriptorHeap>);
 
 ///
 #[derive(Clone, Debug)]
@@ -272,6 +268,13 @@ pub struct Manager<B: Backend> {
     samplers:      Vec<Arc<B::Sampler>>,
     fences:        Vec<Arc<Mutex<B::Fence>>>,
     semaphores:    Vec<Arc<Mutex<B::Semaphore>>>,
+    graphics_pipelines:     Vec<Arc<B::GraphicsPipeline>>,
+    compute_pipelines:      Vec<Arc<B::ComputePipeline>>,
+    renderpasses:           Vec<Arc<B::RenderPass>>,
+    pipeline_layouts:       Vec<Arc<B::PipelineLayout>>,
+    descriptor_set_pools:   Vec<Arc<B::DescriptorSetPool>>,
+    descriptor_set_layouts: Vec<Arc<B::DescriptorSetLayout>>,
+    descriptor_heaps:       Vec<Arc<B::DescriptorHeap>>,
 }
 
 /// A service trait to be used by the device implementation
@@ -291,11 +294,21 @@ pub trait Producer<Bd: Backend> {
     fn make_sampler(&mut self, Bd::Sampler, texture::SamplerInfo) -> Sampler<Bd>;
     fn make_fence(&mut self, name: Bd::Fence) -> Fence<Bd>;
     fn make_semaphore(&mut self, Bd::Semaphore) -> Semaphore<Bd>;
+    fn make_graphics_pipeline(&mut self, Bd::GraphicsPipeline) -> GraphicsPipeline<Bd>;
+    fn make_compute_pipeline(&mut self, Bd::ComputePipeline) -> ComputePipeline<Bd>;
+    fn make_renderpass(&mut self, Bd::RenderPass) -> RenderPass<Bd>;
+    fn make_pipeline_layout(&mut self, Bd::PipelineLayout) -> PipelineLayout<Bd>;
+    fn make_descriptor_set_pool(&mut self, Bd::DescriptorSetPool, &Arc<Bd::DescriptorHeap>) -> DescriptorSetPool<Bd>;
+    fn make_descriptor_set_layout(&mut self, Bd::DescriptorSetLayout) -> DescriptorSetLayout<Bd>;
+    fn make_descriptor_heap(&mut self, Bd::DescriptorHeap) -> DescriptorHeap<Bd>;
 
     /// Walk through all the handles, keep ones that are reference elsewhere
     /// and call the provided delete function (resource-specific) for others
     fn clean_with<T,
         A: Fn(&mut T, &mut buffer::Raw<Bd>),
+        B: Fn(&mut T, &mut Bd::GraphicsPipeline),
+        C: Fn(&mut T, &mut Bd::ComputePipeline),
+        D: Fn(&mut T, &mut Bd::RenderPass),
         E: Fn(&mut T, &mut texture::Raw<Bd>),
         F: Fn(&mut T, &mut Bd::ShaderResourceView),
         G: Fn(&mut T, &mut Bd::UnorderedAccessView),
@@ -304,7 +317,12 @@ pub trait Producer<Bd: Backend> {
         J: Fn(&mut T, &mut Bd::Sampler),
         K: Fn(&mut T, &mut Mutex<Bd::Fence>),
         L: Fn(&mut T, &mut Mutex<Bd::Semaphore>),
-    >(&mut self, &mut T, A, E, F, G, H, I, J, K, L);
+        M: Fn(&mut T, &mut Bd::RenderPass),
+        N: Fn(&mut T, &mut Bd::PipelineLayout),
+        O: Fn(&mut T, &mut Bd::DescriptorSetPool),
+        P: Fn(&mut T, &mut Bd::DescriptorSetLayout),
+        Q: Fn(&mut T, &mut Bd::DescriptorHeap),
+    >(&mut self, &mut T, A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q);
 }
 
 impl<Bd: Backend> Producer<Bd> for Manager<Bd> {
@@ -377,8 +395,53 @@ impl<Bd: Backend> Producer<Bd> for Manager<Bd> {
         Semaphore(r)
     }
 
+    fn make_graphics_pipeline(&mut self, res: Bd::GraphicsPipeline) -> GraphicsPipeline<Bd> {
+        let r = Arc::new(res);
+        self.graphics_pipelines.push(r.clone());
+        GraphicsPipeline(r)
+    }
+
+    fn make_compute_pipeline(&mut self, res: Bd::ComputePipeline) -> ComputePipeline<Bd> {
+        let r = Arc::new(res);
+        self.compute_pipelines.push(r.clone());
+        ComputePipeline(r)
+    }
+
+    fn make_renderpass(&mut self, res: Bd::RenderPass) -> RenderPass<Bd> {
+        let r = Arc::new(res);
+        self.renderpasses.push(r.clone());
+        RenderPass(r)
+    }
+
+    fn make_pipeline_layout(&mut self, res: Bd::PipelineLayout) -> PipelineLayout<Bd> {
+        let r = Arc::new(res);
+        self.pipeline_layouts.push(r.clone());
+        PipelineLayout(r)
+    }
+
+    fn make_descriptor_set_pool(&mut self, res: Bd::DescriptorSetPool, heap: &Arc<Bd::DescriptorHeap>) -> DescriptorSetPool<Bd> {
+        let r = Arc::new(res);
+        self.descriptor_set_pools.push(r.clone());
+        DescriptorSetPool(r, heap.clone())
+    }
+
+    fn make_descriptor_set_layout(&mut self, res: Bd::DescriptorSetLayout) -> DescriptorSetLayout<Bd> {
+        let r = Arc::new(res);
+        self.descriptor_set_layouts.push(r.clone());
+        DescriptorSetLayout(r)
+    }
+
+    fn make_descriptor_heap(&mut self, res: Bd::DescriptorHeap) -> DescriptorHeap<Bd> {
+        let r = Arc::new(res);
+        self.descriptor_heaps.push(r.clone());
+        DescriptorHeap(r)
+    }
+
     fn clean_with<T,
         A: Fn(&mut T, &mut buffer::Raw<Bd>),
+        B: Fn(&mut T, &mut Bd::GraphicsPipeline),
+        C: Fn(&mut T, &mut Bd::ComputePipeline),
+        D: Fn(&mut T, &mut Bd::RenderPass),
         E: Fn(&mut T, &mut texture::Raw<Bd>),
         F: Fn(&mut T, &mut Bd::ShaderResourceView),
         G: Fn(&mut T, &mut Bd::UnorderedAccessView),
@@ -387,7 +450,12 @@ impl<Bd: Backend> Producer<Bd> for Manager<Bd> {
         J: Fn(&mut T, &mut Bd::Sampler),
         K: Fn(&mut T, &mut Mutex<Bd::Fence>),
         L: Fn(&mut T, &mut Mutex<Bd::Semaphore>),
-    >(&mut self, param: &mut T, fa: A, fe: E, ff: F, fg: G, fh: H, fi: I, fj: J, fk: K, fl: L) {
+        M: Fn(&mut T, &mut Bd::RenderPass),
+        N: Fn(&mut T, &mut Bd::PipelineLayout),
+        O: Fn(&mut T, &mut Bd::DescriptorSetPool),
+        P: Fn(&mut T, &mut Bd::DescriptorSetLayout),
+        Q: Fn(&mut T, &mut Bd::DescriptorHeap),
+    >(&mut self, param: &mut T, fa: A, fb: B, fc: C, fd: D, fe: E, ff: F, fg: G, fh: H, fi: I, fj: J, fk: K, fl: L, fm: M, fnN: N, fo: O, fp: P, fq: Q) {
         fn clean_vec<X, Param, Fun>(param: &mut Param, vector: &mut Vec<Arc<X>>, fun: Fun)
             where Fun: Fn(&mut Param, &mut X)
         {
@@ -405,15 +473,24 @@ impl<Bd: Backend> Producer<Bd> for Manager<Bd> {
                 vector.swap_remove(*t);
             }
         }
-        clean_vec(param, &mut self.buffers,       fa);
-        clean_vec(param, &mut self.textures,      fe);
-        clean_vec(param, &mut self.srvs,          ff);
-        clean_vec(param, &mut self.uavs,          fg);
-        clean_vec(param, &mut self.rtvs,          fh);
-        clean_vec(param, &mut self.dsvs,          fi);
-        clean_vec(param, &mut self.samplers,      fj);
-        clean_vec(param, &mut self.fences,        fk);
-        clean_vec(param, &mut self.semaphores,    fl);
+        clean_vec(param, &mut self.buffers,            fa);
+        clean_vec(param, &mut self.graphics_pipelines, fb);
+        clean_vec(param, &mut self.compute_pipelines,  fc);
+        clean_vec(param, &mut self.renderpasses,       fd);
+        clean_vec(param, &mut self.textures,           fe);
+        clean_vec(param, &mut self.srvs,               ff);
+        clean_vec(param, &mut self.uavs,               fg);
+        clean_vec(param, &mut self.rtvs,               fh);
+        clean_vec(param, &mut self.dsvs,               fi);
+        clean_vec(param, &mut self.samplers,           fj);
+        clean_vec(param, &mut self.fences,             fk);
+        clean_vec(param, &mut self.semaphores,         fl);
+        clean_vec(param, &mut self.renderpasses,       fm);
+        clean_vec(param, &mut self.pipeline_layouts,   fnN);
+        clean_vec(param, &mut self.descriptor_set_pools,   fo);
+        clean_vec(param, &mut self.descriptor_set_layouts, fp);
+        clean_vec(param, &mut self.descriptor_heaps,   fq);
+
     }
 }
 
@@ -430,6 +507,13 @@ impl<B: Backend> Manager<B> {
             samplers: Vec::new(),
             fences: Vec::new(),
             semaphores: Vec::new(),
+            graphics_pipelines: Vec::new(),
+            compute_pipelines: Vec::new(),
+            renderpasses: Vec::new(),
+            pipeline_layouts: Vec::new(),
+            descriptor_set_pools: Vec::new(),
+            descriptor_set_layouts: Vec::new(),
+            descriptor_heaps: Vec::new(),
         }
     }
     /// Clear all references
@@ -443,18 +527,32 @@ impl<B: Backend> Manager<B> {
         self.samplers.clear();
         self.fences.clear();
         self.semaphores.clear();
+        self.graphics_pipelines.clear();
+        self.compute_pipelines.clear();
+        self.renderpasses.clear();
+        self.pipeline_layouts.clear();
+        self.descriptor_set_pools.clear();
+        self.descriptor_set_layouts.clear();
+        self.descriptor_heaps.clear();
     }
     /// Extend with all references of another handle manager
     pub fn extend(&mut self, other: &Manager<B>) {
-        self.buffers   .extend(other.buffers   .iter().map(|h| h.clone()));
-        self.textures  .extend(other.textures  .iter().map(|h| h.clone()));
-        self.srvs      .extend(other.srvs      .iter().map(|h| h.clone()));
-        self.uavs      .extend(other.uavs      .iter().map(|h| h.clone()));
-        self.rtvs      .extend(other.rtvs      .iter().map(|h| h.clone()));
-        self.dsvs      .extend(other.dsvs      .iter().map(|h| h.clone()));
-        self.samplers  .extend(other.samplers  .iter().map(|h| h.clone()));
-        self.fences    .extend(other.fences    .iter().map(|h| h.clone()));
-        self.semaphores.extend(other.semaphores.iter().map(|h| h.clone()));
+        self.buffers                .extend(other.buffers   .iter().map(|h| h.clone()));
+        self.textures               .extend(other.textures  .iter().map(|h| h.clone()));
+        self.srvs                   .extend(other.srvs      .iter().map(|h| h.clone()));
+        self.uavs                   .extend(other.uavs      .iter().map(|h| h.clone()));
+        self.rtvs                   .extend(other.rtvs      .iter().map(|h| h.clone()));
+        self.dsvs                   .extend(other.dsvs      .iter().map(|h| h.clone()));
+        self.samplers               .extend(other.samplers  .iter().map(|h| h.clone()));
+        self.fences                 .extend(other.fences    .iter().map(|h| h.clone()));
+        self.semaphores             .extend(other.semaphores.iter().map(|h| h.clone()));
+        self.graphics_pipelines     .extend(other.graphics_pipelines.iter().map(|h| h.clone()));
+        self.compute_pipelines      .extend(other.compute_pipelines.iter().map(|h| h.clone()));
+        self.renderpasses           .extend(other.renderpasses.iter().map(|h| h.clone()));
+        self.pipeline_layouts       .extend(other.pipeline_layouts.iter().map(|h| h.clone()));
+        self.descriptor_set_pools   .extend(other.descriptor_set_pools.iter().map(|h| h.clone()));
+        self.descriptor_set_layouts .extend(other.descriptor_set_layouts.iter().map(|h| h.clone()));
+        self.descriptor_heaps       .extend(other.descriptor_heaps.iter().map(|h| h.clone()));
     }
     /// Count the total number of referenced resources
     pub fn count(&self) -> usize {
@@ -466,7 +564,14 @@ impl<B: Backend> Manager<B> {
         self.dsvs.len() +
         self.samplers.len() +
         self.fences.len() +
-        self.semaphores.len()
+        self.semaphores.len() +
+        self.graphics_pipelines.len() +
+        self.compute_pipelines.len() +
+        self.renderpasses.len() +
+        self.pipeline_layouts.len() +
+        self.descriptor_set_pools.len() +
+        self.descriptor_set_layouts.len() +
+        self.descriptor_heaps.len()
     }
     /// Reference a buffer
     pub fn ref_buffer<'a>(&mut self, handle: &'a RawBuffer<B>) -> &'a B::Buffer {
