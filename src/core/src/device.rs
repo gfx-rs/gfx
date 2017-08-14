@@ -282,7 +282,8 @@ pub trait Device<B: Backend> {
     /// Each descriptor set will be allocated from the pool according to the corresponding set layout.
     ///
     /// The descriptor pool _must_ have enough space in to allocate the required descriptors.
-    fn create_descriptor_sets(&mut self, set_pool: &mut B::DescriptorSetPool, layout: &[&B::DescriptorSetLayout]) -> Vec<handle::DescriptorSet<B>>;
+    // TODO: Handle allocation/reset in pools
+    // fn create_descriptor_sets(&mut self, set_pool: &mut B::DescriptorSetPool, layout: &[&B::DescriptorSetLayout]) -> Vec<handle::DescriptorSet<B>>;
 
     /// Create a descriptor set layout.
     fn create_descriptor_set_layout(&mut self, bindings: &[pso::DescriptorSetLayoutBinding]) -> handle::DescriptorSetLayout<B>;
