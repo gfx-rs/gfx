@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use {gl, Surface, Texture, NewTexture, Buffer, Sampler};
+use gl;
 use gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
-use state;
+use {native as n, state};
 use info::PrivateCaps;
 use core::memory::SHADER_RESOURCE;
 use core::format::{Format as NewFormat, ChannelType};
 use core::texture as t;
-
 
 fn cube_face_to_gl(face: t::CubeFace) -> GLenum {
     match face {
@@ -228,7 +227,7 @@ fn set_mipmap_range(gl: &gl::Gl, target: GLenum, (base, max): (u8, u8)) { unsafe
 }}
 
 fn make_surface_impl(gl: &gl::Gl, format: GLenum, dim: t::Dimensions)
-                     -> Result<Surface, ()> {
+                     -> Result<n::Surface, ()> {
     let mut name = 0 as GLuint;
     unsafe {
         gl.GenRenderbuffers(1, &mut name);
@@ -264,7 +263,7 @@ fn make_surface_impl(gl: &gl::Gl, format: GLenum, dim: t::Dimensions)
 
 /// Create a render surface.
 pub fn make_surface(gl: &gl::Gl, desc: &t::Info, cty: ChannelType) ->
-                        Result<Surface, t::CreationError> {
+                        Result<n::Surface, t::CreationError> {
     let format = NewFormat(desc.format, cty);
     let format_error = t::CreationError::Format(desc.format, Some(cty));
     let fmt = match format_to_glfull(format) {
@@ -277,7 +276,7 @@ pub fn make_surface(gl: &gl::Gl, desc: &t::Info, cty: ChannelType) ->
 
 fn make_widout_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLint, pix: GLenum, typ: GLenum,
                             levels: t::Level, fixed_sample_locations: bool)
-                            -> Result<Texture, t::CreationError> {
+                            -> Result<n::Texture, t::CreationError> {
     let (name, target) = make_texture(gl, kind);
     match kind {
         t::Kind::D1(w) => unsafe {
@@ -395,7 +394,7 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLint, pix: GLen
 
 /// Create a texture, using the descriptor, assuming TexStorage* isn't available.
 pub fn make_without_storage(gl: &gl::Gl, desc: &t::Info, cty: ChannelType) ->
-                            Result<Texture, t::CreationError> {
+                            Result<n::Texture, t::CreationError> {
     let format = NewFormat(desc.format, cty);
     let gl_format = match format_to_glfull(format) {
         Ok(f) => f as GLint,
@@ -415,7 +414,7 @@ pub fn make_without_storage(gl: &gl::Gl, desc: &t::Info, cty: ChannelType) ->
 /// Create a texture, assuming TexStorage is available.
 fn make_with_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLenum,
                           levels: t::Level, fixed_sample_locations: bool)
-                          -> Result<Texture, t::CreationError> {
+                          -> Result<n::Texture, t::CreationError> {
     use std::cmp::max;
 
     fn min(a: u8, b: u8) -> GLint {
@@ -530,7 +529,7 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLenum,
 
 /// Create a texture, using the descriptor, assuming TexStorage is available.
 pub fn make_with_storage(gl: &gl::Gl, desc: &t::Info, cty: ChannelType) ->
-                         Result<Texture, t::CreationError> {
+                         Result<n::Texture, t::CreationError> {
     let format = NewFormat(desc.format, cty);
     let gl_format = match format_to_glfull(format) {
         Ok(f) => f,
@@ -641,11 +640,11 @@ fn tex_sub_image<F>(gl: &gl::Gl, kind: t::Kind, target: GLenum, pix: GLenum,
 }
 
 pub fn copy_from_buffer(gl: &gl::Gl,
-                        dst: Texture,
+                        dst: n::Texture,
                         kind: t::Kind,
                         face: Option<t::CubeFace>,
                         img: &t::RawImageInfo,
-                        src: Buffer, src_offset: gl::types::GLintptr)
+                        src: n::Buffer, src_offset: gl::types::GLintptr)
                         -> Result<(), t::CreationError>
 {
     // will be treated as a byte offset into the buffer object's data store
@@ -666,11 +665,11 @@ pub fn copy_from_buffer(gl: &gl::Gl,
 }
 
 pub fn copy_to_buffer(gl: &gl::Gl,
-                      src: NewTexture,
+                      src: n::Image,
                       kind: t::Kind,
                       face: Option<t::CubeFace>,
                       img: &t::RawImageInfo,
-                      dst: Buffer, dst_offset: gl::types::GLintptr)
+                      dst: n::Buffer, dst_offset: gl::types::GLintptr)
                       -> Result<(), t::CreationError>
 {
     let data = dst_offset as *mut GLvoid;
@@ -683,7 +682,7 @@ pub fn copy_to_buffer(gl: &gl::Gl,
     };
 
     match src {
-        NewTexture::Texture(t) => {
+        n::Image::Texture(t) => {
             let target = kind_to_gl(kind);
             unsafe { gl.BindTexture(target, t); }
 
@@ -704,7 +703,7 @@ pub fn copy_to_buffer(gl: &gl::Gl,
                                data);
             }
         }
-        NewTexture::Surface(s) => {
+        n::Image::Surface(s) => {
             unsafe {
                 gl.BindFramebuffer(gl::READ_FRAMEBUFFER, s);
                 gl.ReadPixels(img.xoffset as GLint,
@@ -721,7 +720,7 @@ pub fn copy_to_buffer(gl: &gl::Gl,
     Ok(())
 }
 
-pub fn update_texture(gl: &gl::Gl, name: Texture,
+pub fn update_texture(gl: &gl::Gl, name: n::Texture,
                       kind: t::Kind, face: Option<t::CubeFace>,
                       img: &t::RawImageInfo, slice: &[u8])
                           -> Result<(), t::CreationError> {
@@ -740,7 +739,7 @@ pub fn update_texture(gl: &gl::Gl, name: Texture,
     tex_sub_image(gl, kind, target, pixel_format, data_type, img, data)
 }
 
-pub fn init_texture_data(gl: &gl::Gl, name: Texture, desc: t::Info, channel: ChannelType,
+pub fn init_texture_data(gl: &gl::Gl, name: n::Texture, desc: t::Info, channel: ChannelType,
                          data: &[&[u8]]) -> Result<(), t::CreationError> {
     let opt_slices = desc.kind.get_num_slices();
     let num_slices = opt_slices.unwrap_or(1) as usize;
@@ -872,7 +871,7 @@ pub fn compressed_update(gl: &gl::Gl, kind: Kind, target: GLenum, img: &ImageInf
 */
 
 /// Common texture creation routine, just creates and binds.
-fn make_texture(gl: &gl::Gl, kind: t::Kind) -> (Texture, GLuint) {
+fn make_texture(gl: &gl::Gl, kind: t::Kind) -> (n::Texture, GLuint) {
     let mut name = 0 as GLuint;
     unsafe {
         gl.GenTextures(1, &mut name);
@@ -902,8 +901,8 @@ fn filter_to_gl(f: t::FilterMethod) -> (GLenum, GLenum) {
     }
 }
 
-pub fn make_sampler(gl: &gl::Gl, info: &t::SamplerInfo, private_caps: &PrivateCaps) -> Sampler { unsafe {
-    let mut name = 0 as Sampler;
+pub fn make_sampler(gl: &gl::Gl, info: &t::SamplerInfo, private_caps: &PrivateCaps) -> n::Sampler { unsafe {
+    let mut name = 0 as n::Sampler;
     gl.GenSamplers(1, &mut name);
 
     let (min, mag) = filter_to_gl(info.filter);
@@ -943,7 +942,7 @@ pub fn make_sampler(gl: &gl::Gl, info: &t::SamplerInfo, private_caps: &PrivateCa
     name
 }}
 
-pub fn generate_mipmap(gl: &gl::Gl, name: Texture, target: gl::types::GLenum) { unsafe {
+pub fn generate_mipmap(gl: &gl::Gl, name: n::Texture, target: gl::types::GLenum) { unsafe {
     //can't fail here, but we need to check for integer formats too
     gl.BindTexture(target, name);
     gl.GenerateMipmap(target);

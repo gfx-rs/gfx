@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{MAX_COLOR_TARGETS, ColorSlot};
+use core::{ColorSlot};
 use core::state as s;
 use core::state::{BlendValue, Comparison, CullFace, Equation,
                   Offset, RasterMethod, StencilOp, FrontFace};
@@ -51,7 +51,7 @@ pub fn bind_rasterizer(gl: &gl::Gl, r: &s::Rasterizer, is_embedded: bool) {
             FrontFace::CounterClockwise => gl::CCW,
         })
     };
-    
+
     match r.cull_face {
         CullFace::Nothing => unsafe { gl.Disable(gl::CULL_FACE) },
         CullFace::Front => { unsafe {
@@ -74,6 +74,7 @@ pub fn bind_rasterizer(gl: &gl::Gl, r: &s::Rasterizer, is_embedded: bool) {
 }
 
 pub fn bind_draw_color_buffers(gl: &gl::Gl, mask: usize) {
+    /*
     let attachments = [
         gl::COLOR_ATTACHMENT0,  gl::COLOR_ATTACHMENT1,  gl::COLOR_ATTACHMENT2,
         gl::COLOR_ATTACHMENT3,  gl::COLOR_ATTACHMENT4,  gl::COLOR_ATTACHMENT5,
@@ -92,6 +93,8 @@ pub fn bind_draw_color_buffers(gl: &gl::Gl, mask: usize) {
         i += 1;
     }
     unsafe { gl.DrawBuffers(count as gl::types::GLint, targets.as_ptr()) };
+    */
+    unimplemented!()
 }
 
 pub fn bind_viewport(gl: &gl::Gl, rect: Rect) {
