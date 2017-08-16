@@ -31,9 +31,9 @@ pub mod graphics;
 pub mod input_assembler;
 pub mod output_merger;
 
-pub use self::descriptor_set::{DescriptorType, DescriptorSetLayoutBinding, DescriptorPoolDesc};
+pub use self::descriptor_set::{DescriptorType, DescriptorSetLayoutBinding, DescriptorPool, DescriptorPoolDesc};
 pub use self::graphics::GraphicsPipelineDesc;
-pub use self::input_assembler::VertexBufferSet;
+pub use self::input_assembler::{BufferOffset, Element, VertexBufferDesc, VertexBufferSet};
 
 /// Error types happening upon PSO creation on the device side.
 #[derive(Clone, Debug, PartialEq)]

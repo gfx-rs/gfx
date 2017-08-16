@@ -254,22 +254,14 @@ pub trait Device<B: Backend> {
     /// Create a descriptor heap.
     fn create_descriptor_heap(&mut self, num_srv_cbv_uav: usize, num_samplers: usize) -> handle::DescriptorHeap<B>;
 
-    /// Create a descriptor set pool inside an heap.
+    /// Create a descriptor pool inside an heap.
     ///
-    /// Descriptor set pools allow allocation of descriptor sets by allocating space inside the heap.
+    /// Descriptor pools allow allocation of descriptor sets by allocating space inside the heap.
     /// The heap can't be modified directly, only trough updating descriptor sets.
     ///
     /// Pools reserve a contiguous range in the heap. The application _must_ keep track of the used ranges.
     /// Using overlapping ranges at the same time results in undefined behavior, depending on the backend implementation.
-    fn create_descriptor_set_pool(&mut self, heap: &B::DescriptorHeap, max_sets: usize, offset: usize, descriptor_pools: &[pso::DescriptorPoolDesc]) -> handle::DescriptorSetPool<B>;
-
-    /// Create one or multiple descriptor sets from a pool.
-    ///
-    /// Each descriptor set will be allocated from the pool according to the corresponding set layout.
-    ///
-    /// The descriptor pool _must_ have enough space in to allocate the required descriptors.
-    // TODO: Handle allocation/reset in pools
-    // fn create_descriptor_sets(&mut self, set_pool: &mut B::DescriptorSetPool, layout: &[&B::DescriptorSetLayout]) -> Vec<handle::DescriptorSet<B>>;
+    fn create_descriptor_pool(&mut self, heap: &B::DescriptorHeap, max_sets: usize, offset: usize, descriptor_pools: &[pso::DescriptorPoolDesc]) -> B::DescriptorPool;
 
     /// Create a descriptor set layout.
     fn create_descriptor_set_layout(&mut self, bindings: &[pso::DescriptorSetLayoutBinding]) -> handle::DescriptorSetLayout<B>;

@@ -11,7 +11,7 @@ extern crate gfx_core as core;
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use core::{self as c, handle, state as s, format, pso, texture, memory, command as com, buffer};
+use core::{self as c, handle, format, texture as t, memory, command as com, buffer};
 use core::QueueType;
 use core::target::{Layer, Level};
 use command::{Command, DataBuffer};
@@ -25,23 +25,8 @@ mod device;
 mod info;
 mod native;
 mod pool;
-mod shade;
 mod state;
-mod tex;
-
-pub type Buffer         = gl::types::GLuint;
-pub type ArrayBuffer    = gl::types::GLuint;
-pub type Shader         = gl::types::GLuint;
-pub type Program        = gl::types::GLuint;
-pub type FrameBuffer    = gl::types::GLuint;
-pub type Surface        = gl::types::GLuint;
-pub type Texture        = gl::types::GLuint;
-pub type Sampler        = gl::types::GLuint;
-
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Fence(gl::types::GLsync);
-unsafe impl Send for Fence {}
-unsafe impl Sync for Fence {}
+mod texture;
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Backend {}
@@ -57,92 +42,44 @@ impl c::Backend for Backend {
     type RawCommandPool = pool::RawCommandPool;
     type SubpassCommandPool = pool::SubpassCommandPool;
 
-    type Buffer              = Buffer;
-    type Shader              = Shader;
-    type Program             = Program;
-    type PipelineStateObject = PipelineState;
-    type Texture             = NewTexture;
-    type RenderTargetView    = TargetView;
-    type DepthStencilView    = TargetView;
-    type ShaderResourceView  = ResourceView;
+    type DescriptorPool = pool:: DescriptorPool;
+
+    type Buffer              = native::Buffer;
+    type RenderTargetView    = native::TargetView;
+    type DepthStencilView    = native::TargetView;
+    type ShaderResourceView  = native::ResourceView;
     type UnorderedAccessView = ();
-    type Sampler             = FatSampler;
-    type Fence               = Fence;
+    type Sampler             = native::FatSampler;
+    type Fence               = native::Fence;
     type Semaphore           = (); // TODO
     type Mapping             = device::MappingGate;
-    type Image = ();
-    type ComputePipeline = ();
-    type GraphicsPipeline = ();
+    type Image               = native::Image;
+    type ComputePipeline     = native::PipelineState;
+    type GraphicsPipeline    = native::PipelineState;
     type PipelineLayout = ();
-    type DescriptorSet = ();
+    type DescriptorSet       = native::DescriptorSet;
+    type ShaderLib = ();
+    type DescriptorSetLayout = native::DescriptorSetLayout;
+    type RenderPass = ();
+    type FrameBuffer = ();
+    type DescriptorHeap      = native::DescriptorHeap;
 }
 
+/*
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct BufferElement {
     pub desc: c::pso::VertexBufferDesc,
     pub elem: c::pso::Element<format::Format>,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct OutputMerger {
     pub draw_mask: u32,
     pub stencil: Option<s::Stencil>,
     pub depth: Option<s::Depth>,
-    pub colors: [s::Color; c::MAX_COLOR_TARGETS],
+    pub colors: Vec<s::Color>,
 }
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct PipelineState {
-    program: Program,
-    primitive: c::Primitive,
-    input: [Option<BufferElement>; c::MAX_VERTEX_ATTRIBUTES],
-    scissor: bool,
-    rasterizer: s::Rasterizer,
-    output: OutputMerger,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub enum NewTexture {
-    Surface(Surface),
-    Texture(Texture),
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct ResourceView {
-    object: Texture,
-    bind: gl::types::GLenum,
-    owned: bool,
-}
-
-impl ResourceView {
-    pub fn new_texture(t: Texture, kind: texture::Kind) -> ResourceView {
-        ResourceView {
-            object: t,
-            bind: tex::kind_to_gl(kind),
-            owned: false,
-        }
-    }
-    pub fn new_buffer(b: Texture) -> ResourceView {
-        ResourceView {
-            object: b,
-            bind: gl::TEXTURE_BUFFER,
-            owned: true,
-        }
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct FatSampler {
-    object: Sampler,
-    info: texture::SamplerInfo,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub enum TargetView {
-    Surface(Surface),
-    Texture(Texture, Level),
-    TextureLayer(Texture, Level, Layer),
-}
+*/
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Error {
@@ -169,35 +106,37 @@ impl Error {
     }
 }
 
+type ArrayBuffer = gl::types::GLuint;
+
 /// Create the proxy target views (RTV and DSV) for the attachments of the
 /// main framebuffer. These have GL names equal to 0.
 /// Not supposed to be used by the users directly.
-pub fn create_main_targets_raw(dim: texture::Dimensions, color_format: format::SurfaceType, depth_format: format::SurfaceType)
+pub fn create_main_targets_raw(dim: t::Dimensions, color_format: format::SurfaceType, depth_format: format::SurfaceType)
                                -> (handle::RawRenderTargetView<Backend>, handle::RawDepthStencilView<Backend>) {
     use core::handle::Producer;
     let mut temp = handle::Manager::new();
-    let color_tex = temp.make_texture(
-        NewTexture::Surface(0),
-        texture::Info {
+    let color_tex = temp.make_image(
+        native::Image::Surface(0),
+        t::Info {
             levels: 1,
-            kind: texture::Kind::D2(dim.0, dim.1, dim.3),
+            kind: t::Kind::D2(dim.0, dim.1, dim.3),
             format: color_format,
             bind: memory::RENDER_TARGET | memory::TRANSFER_SRC,
             usage: memory::Usage::Data,
         },
     );
-    let depth_tex = temp.make_texture(
-        NewTexture::Surface(0),
-        texture::Info {
+    let depth_tex = temp.make_image(
+        native::Image::Surface(0),
+        t::Info {
             levels: 1,
-            kind: texture::Kind::D2(dim.0, dim.1, dim.3),
+            kind: t::Kind::D2(dim.0, dim.1, dim.3),
             format: depth_format,
             bind: memory::DEPTH_STENCIL | memory::TRANSFER_SRC,
             usage: memory::Usage::Data,
         },
     );
-    let m_color = temp.make_rtv(TargetView::Surface(0), &color_tex, dim);
-    let m_ds = temp.make_dsv(TargetView::Surface(0), &depth_tex, dim);
+    let m_color = temp.make_rtv(native::TargetView::Surface(0), &color_tex, dim);
+    let m_ds = temp.make_dsv(native::TargetView::Surface(0), &depth_tex, dim);
     (m_color, m_ds)
 }
 
@@ -368,7 +307,8 @@ impl CommandQueue {
         fun(&self.share.context);
     }
 
-    fn bind_attribute(&mut self, slot: c::AttributeSlot, buffer: Buffer, bel: BufferElement) {
+    /*
+    fn bind_attribute(&mut self, slot: c::AttributeSlot, buffer: n::Buffer, bel: BufferElement) {
         use core::format::SurfaceType as S;
         use core::format::ChannelType as C;
         let (fm8, fm16, fm32) = match bel.elem.format.1 {
@@ -426,22 +366,23 @@ impl CommandQueue {
         if self.share.capabilities.instance_rate_supported {
             unsafe { gl.VertexAttribDivisor(slot as gl::types::GLuint,
                 bel.desc.rate as gl::types::GLuint) };
-        }else if bel.desc.rate != 0 {
+        } else if bel.desc.rate != 0 {
             error!("Instanced arrays are not supported");
         }
     }
+    */
 
-    fn bind_target(&mut self, point: gl::types::GLenum, attachment: gl::types::GLenum, view: &TargetView) {
+    fn bind_target(&mut self, point: gl::types::GLenum, attachment: gl::types::GLenum, view: &native::TargetView) {
         let gl = &self.share.context;
         match view {
-            &TargetView::Surface(surface) => unsafe {
+            &native::TargetView::Surface(surface) => unsafe {
                 gl.FramebufferRenderbuffer(point, attachment, gl::RENDERBUFFER, surface);
             },
-            &TargetView::Texture(texture, level) => unsafe {
+            &native::TargetView::Texture(texture, level) => unsafe {
                 gl.FramebufferTexture(point, attachment, texture,
                                       level as gl::types::GLint);
             },
-            &TargetView::TextureLayer(texture, level, layer) => unsafe {
+            &native::TargetView::TextureLayer(texture, level, layer) => unsafe {
                 gl.FramebufferTextureLayer(point, attachment, texture,
                                            level as gl::types::GLint,
                                            layer as gl::types::GLint);
@@ -455,14 +396,125 @@ impl CommandQueue {
     }
 
     fn reset_state(&mut self) {
+        /*
         let data = DataBuffer::new();
         for com in command::RESET.iter() {
             self.process(com, &data);
         }
+        */
     }
 
     fn process(&mut self, cmd: &Command, data_buf: &DataBuffer) {
         match *cmd {
+            Command::Draw { primitive, start, count, instances } => {
+                let gl = &self.share.context;
+                match instances {
+                    Some((num, base)) => unsafe {
+                        if self.share.capabilities.draw_instanced_supported {
+                            if self.share.capabilities.draw_instanced_base_supported {
+                                gl.DrawArraysInstancedBaseInstance(
+                                    primitive,
+                                    start as gl::types::GLsizei,
+                                    count as gl::types::GLsizei,
+                                    num as gl::types::GLsizei,
+                                    base as gl::types::GLuint,
+                                );
+                            } else if base == 0 {
+                                gl.DrawArraysInstanced(
+                                    primitive,
+                                    start as gl::types::GLsizei,
+                                    count as gl::types::GLsizei,
+                                    num as gl::types::GLsizei,
+                                );
+                            } else {
+                                error!("Instanced draw calls with non-zero base instance are not supported");
+                            }
+                        } else {
+                            error!("Instanced draw calls are not supported");
+                        }
+                    },
+                    None => unsafe {
+                        gl.DrawArrays(
+                            primitive,
+                            start as gl::types::GLsizei,
+                            count as gl::types::GLsizei
+                        );
+                    },
+                }
+            }
+            Command::DrawIndexed { primitive, index_type, start, count, base: base_vertex, instances } => {
+                let gl = &self.share.context;
+                let caps = &self.share.capabilities;
+                let offset = start as *const gl::types::GLvoid;
+
+                match instances {
+                    Some((num, base_instance)) => unsafe {
+                        if caps.draw_indexed_instanced_base_supported {
+                            // fully compatible
+                            gl.DrawElementsInstancedBaseVertexBaseInstance(
+                                primitive,
+                                count as gl::types::GLsizei,
+                                index_type,
+                                offset,
+                                num as gl::types::GLsizei,
+                                base_vertex as gl::types::GLint,
+                                base_instance as gl::types::GLuint,
+                            );
+                        } else if base_instance != 0 {
+                            error!("Instance bases with instanced indexed drawing is not supported")
+                        } else {
+                            // No base instance
+                            if caps.draw_indexed_instanced_base_vertex_supported {
+                                gl.DrawElementsInstancedBaseVertex(
+                                    primitive,
+                                    count as gl::types::GLsizei,
+                                    index_type,
+                                    offset,
+                                    num as gl::types::GLsizei,
+                                    base_vertex as gl::types::GLint,
+                                );
+                            } else if base_vertex != 0 {
+                                error!("Base vertex with instanced indexed drawing is not supported")
+                            } else {
+                                // No base instance and base vertex
+                                if caps.draw_indexed_instanced_supported {
+                                    gl.DrawElementsInstanced(
+                                        primitive,
+                                        count as gl::types::GLsizei,
+                                        index_type,
+                                        offset,
+                                        num as gl::types::GLsizei,
+                                    );
+                                } else {
+                                    error!("Instanced indexed drawing is not supported")
+                                }
+                            }
+                        }
+                    },
+                    None => unsafe {
+                        if caps.draw_indexed_base_supported {
+                            gl.DrawElementsBaseVertex(
+                                primitive,
+                                count as gl::types::GLsizei,
+                                index_type,
+                                offset,
+                                base_vertex as gl::types::GLint,
+                            );
+                        } else if base_vertex == 0 {
+                            gl.DrawElements(
+                                primitive,
+                                count as gl::types::GLsizei,
+                                index_type,
+                                offset,
+                            );
+                        } else {
+                            error!("Base vertex with indexed drawing not supported");
+                        }
+                    },
+                }
+            }
+
+            /*
             Command::Clear(color, depth, stencil) => {
                 let gl = &self.share.context;
                 if self.share.private_caps.clear_buffer_supported {
@@ -607,11 +659,11 @@ impl CommandQueue {
             Command::SetRasterizer(rast) => {
                 state::bind_rasterizer(&self.share.context, &rast, self.share.info.version.is_embedded);
             },
-            Command::SetViewport(rect) => {
-                state::bind_viewport(&self.share.context, rect);
+            Command::SetViewports(ref rects) => {
+                state::bind_viewports(&self.share.context, rects);
             },
-            Command::SetScissor(rect) => {
-                state::bind_scissor(&self.share.context, rect);
+            Command::SetScissors(ref rects) => {
+                state::bind_scissors(&self.share.context, rects);
             },
             Command::SetDepthState(depth) => {
                 state::bind_depth(&self.share.context, &depth);
@@ -682,170 +734,13 @@ impl CommandQueue {
                     Err(e) => error!("GL: {:?} failed: {:?}", cmd, e)
                 }
             },
-            Command::UpdateBuffer(buffer, pointer, offset) => {
-                let data = data_buf.get(pointer);
-                device::update_sub_buffer(&self.share.context, buffer,
-                    data.as_ptr(), data.len(), offset, buffer::Role::Vertex);
-            },
-            Command::UpdateTexture(texture, kind, face, pointer, ref image) => {
-                let data = data_buf.get(pointer);
-                match tex::update_texture(&self.share.context, texture, kind, face, image, data) {
-                    Ok(_) => (),
-                    Err(e) => error!("GL: Texture({}) update failed: {:?}", texture, e),
-                }
-            },
-            Command::GenerateMipmap(view) => {
-                tex::generate_mipmap(&self.share.context, view.object, view.bind);
-            },
-            Command::Draw(primitive, start, count, instances) => {
-                let gl = &self.share.context;
-                match instances {
-                    Some((num, base)) if self.share.capabilities.instance_call_supported => unsafe {
-                        gl.DrawArraysInstancedBaseInstance(
-                            primitive,
-                            start as gl::types::GLsizei,
-                            count as gl::types::GLsizei,
-                            num as gl::types::GLsizei,
-                            base as gl::types::GLuint,
-                        );
-                    },
-                    Some(_) => {
-                        error!("Instanced draw calls are not supported");
-                    },
-                    None => unsafe {
-                        gl.DrawArrays(
-                            primitive,
-                            start as gl::types::GLsizei,
-                            count as gl::types::GLsizei
-                        );
-                    },
-                }
-            },
-            Command::DrawIndexed(primitive, index_type, offset, count, base_vertex, instances) => {
-                let gl = &self.share.context;
-                let caps = &self.share.capabilities;
-                match instances {
-                    Some((num, base_instance)) if caps.instance_call_supported => unsafe {
-                        if (base_vertex == 0 && base_instance == 0) || !caps.vertex_base_supported {
-                            if base_vertex != 0 || base_instance != 0 {
-                                error!("Instance bases with indexed drawing is not supported")
-                            }
-                            gl.DrawElementsInstanced(
-                                primitive,
-                                count as gl::types::GLsizei,
-                                index_type,
-                                offset.0,
-                                num as gl::types::GLsizei,
-                            );
-                        } else if base_vertex != 0 && base_instance == 0 {
-                            gl.DrawElementsInstancedBaseVertex(
-                                primitive,
-                                count as gl::types::GLsizei,
-                                index_type,
-                                offset.0,
-                                num as gl::types::GLsizei,
-                                base_vertex as gl::types::GLint,
-                            );
-                        } else if base_vertex == 0 && base_instance != 0 {
-                            gl.DrawElementsInstancedBaseInstance(
-                                primitive,
-                                count as gl::types::GLsizei,
-                                index_type,
-                                offset.0,
-                                num as gl::types::GLsizei,
-                                base_instance as gl::types::GLuint,
-                            );
-                        } else {
-                            gl.DrawElementsInstancedBaseVertexBaseInstance(
-                                primitive,
-                                count as gl::types::GLsizei,
-                                index_type,
-                                offset.0,
-                                num as gl::types::GLsizei,
-                                base_vertex as gl::types::GLint,
-                                base_instance as gl::types::GLuint,
-                            );
-                        }
-                    },
-                    Some(_) => {
-                        error!("Instanced draw calls are not supported");
-                    },
-                    None => unsafe {
-                        if base_vertex == 0 || !caps.vertex_base_supported {
-                            if base_vertex != 0 {
-                                error!("Base vertex with indexed drawing not supported");
-                            }
-                            gl.DrawElements(
-                                primitive,
-                                count as gl::types::GLsizei,
-                                index_type,
-                                offset.0,
-                            );
-                        } else {
-                            gl.DrawElementsBaseVertex(
-                                primitive,
-                                count as gl::types::GLsizei,
-                                index_type,
-                                offset.0,
-                                base_vertex as gl::types::GLint,
-                            );
-                        }
-                    },
-                }
-            },
             Command::Dispatch(x, y, z) => {
                 // Capability support is given by which queue types will be exposed.
                 // If there is no compute support, this pattern should never be reached.
                 let gl = &self.share.context;
                 unsafe { gl.DispatchCompute(x, y, z) };
-            }
-            Command::_Blit(mut s_rect, d_rect, mirror, _) => {
-                type GLint = gl::types::GLint;
-                // mirror
-                let mut s_end_x = s_rect.x + s_rect.w;
-                let mut s_end_y = s_rect.y + s_rect.h;
-                if mirror.intersects(c::target::MIRROR_X) {
-                    s_end_x = s_rect.x;
-                    s_rect.x += s_rect.w;
-                }
-                if mirror.intersects(c::target::MIRROR_Y) {
-                    s_end_y = s_rect.y;
-                    s_rect.y += s_rect.h;
-                }
-                // build mask
-                let flags = 0;
-                error!("Blit mask setup is not implemented");
-                /*TODO
-                if mask.intersects(d::target::COLOR) {
-                    flags |= gl::COLOR_BUFFER_BIT;
-                }
-                if mask.intersects(d::target::DEPTH) {
-                    flags |= gl::DEPTH_BUFFER_BIT;
-                }
-                if mask.intersects(d::target::STENCIL) {
-                    flags |= gl::STENCIL_BUFFER_BIT;
-                }*/
-                // build filter
-                let filter = if s_rect.w == d_rect.w && s_rect.h == d_rect.h {
-                    gl::NEAREST
-                }else {
-                    gl::LINEAR
-                };
-                // blit
-                let gl = &self.share.context;
-                unsafe { gl.BlitFramebuffer(
-                    s_rect.x as GLint,
-                    s_rect.y as GLint,
-                    s_end_x as GLint,
-                    s_end_y as GLint,
-                    d_rect.x as GLint,
-                    d_rect.y as GLint,
-                    (d_rect.x + d_rect.w) as GLint,
-                    (d_rect.y + d_rect.h) as GLint,
-                    flags,
-                    filter
-                ) };
             },
+            */
         }
         if let Err(err) = self.share.check() {
             panic!("Error {:?} executing command: {:?}", err, cmd)
@@ -921,7 +816,7 @@ impl CommandQueue {
         let fence = unsafe {
             gl.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0)
         };
-        self.frame_handles.make_fence(Fence(fence))
+        self.frame_handles.make_fence(native::Fence(fence))
     }
 
     fn signal_fence(&mut self, fence: &handle::Fence<Backend>) {
@@ -1008,12 +903,17 @@ impl c::CommandQueue<Backend> for CommandQueue {
                 });
                 unsafe { gl.DeleteBuffers(1, buffer.resource()) }
             },
+            |gl, pipeline| {}, // TODO: graphics pipeline
+            |gl, pipeline| {}, // TODO: compute pipeline
+            |gl, renderpass| {}, // TODO: render pass
+            /*
             |gl, v| unsafe { gl.DeleteShader(*v) },
             |gl, program| unsafe { gl.DeleteProgram(*program.resource()) },
             |_, _| {}, //PSO
+            */
             |gl, raw_texture| match raw_texture.resource() {
-                &NewTexture::Surface(ref suf) => unsafe { gl.DeleteRenderbuffers(1, suf) },
-                &NewTexture::Texture(ref tex) => unsafe { gl.DeleteTextures(1, tex) },
+                &native::Image::Surface(ref suf) => unsafe { gl.DeleteRenderbuffers(1, suf) },
+                &native::Image::Texture(ref tex) => unsafe { gl.DeleteTextures(1, tex) },
             }, // new texture
             |gl, v| if v.owned {
                 unsafe { gl.DeleteTextures(1, &v.object) }
@@ -1024,6 +924,9 @@ impl c::CommandQueue<Backend> for CommandQueue {
             |gl, v| unsafe { if v.object != 0 { gl.DeleteSamplers(1, &v.object) }},
             |gl, fence| { fence.get_mut().map(|fence| unsafe { gl.DeleteSync(fence.0) }); },
             |_, _| {}, // Semaphore
+            |gl, layout| {}, // TODO: descriptor set layout
+            |gl, layout| {}, // TODO: pipeline layout
+            |gl, heap| {}, // TODO: descriptor heap
         );
     }
 }
