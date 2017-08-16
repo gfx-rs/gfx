@@ -148,7 +148,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                         src.resource,
                         src.calc_subresource(region.src_subresource.0 as UINT, l + region.src_subresource.1 as UINT),
                         dst.resource,
-                        dst.calc_subresource(region.src_subresource.0 as UINT, l + region.src_subresource.1 as UINT),
+                        dst.calc_subresource(region.dst_subresource.0 as UINT, l + region.dst_subresource.1 as UINT),
                         src.dxgi_format,
                     );
                 }
