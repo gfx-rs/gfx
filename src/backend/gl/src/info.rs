@@ -260,11 +260,18 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
         max_texture_size: get_usize(gl, gl::MAX_TEXTURE_SIZE),
         max_patch_size: if tessellation_supported { get_usize(gl, gl::MAX_PATCH_VERTICES) as u8 } else {0},
 
-        instance_base_supported:           info.is_supported(&[Core(4,2),
-                                                               Ext ("GL_ARB_base_instance")]),
-        instance_call_supported:           info.is_supported(&[Core(3,1),
+        draw_instanced_supported:           info.is_supported(&[Core(3,1),
                                                                Es  (3,0),
                                                                Ext ("GL_ARB_draw_instanced")]),
+        draw_instanced_base_supported:      info.is_supported(&[Core(4,2),
+                                                               Ext ("GL_ARB_base_instance")]),
+        draw_indexed_base_supported:        info.is_supported(&[Core(3, 2)]), // TODO: extension
+        draw_indexed_instanced_supported:   info.is_supported(&[Core(3, 1),
+                                                               Es  (3, 0)]), // TODO: extension
+
+        draw_indexed_instanced_base_vertex_supported: info.is_supported(&[Core(3, 2)]), // TODO: extension
+        draw_indexed_instanced_base_supported:        info.is_supported(&[Core(4, 2)]) , // TODO: extension
+
         instance_rate_supported:           info.is_supported(&[Core(3,3),
                                                                Es  (3,0),
                                                                Ext ("GL_ARB_instanced_arrays")]),
@@ -276,7 +283,7 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
         constant_buffer_supported:         info.is_supported(&[Core(3,1),
                                                                Es  (3,0),
                                                                Ext ("GL_ARB_uniform_buffer_object")]),
-        unordered_access_view_supported:   info.is_supported(&[Core(4,0)]), //TODO: extension
+        unordered_access_view_supported:   info.is_supported(&[Core(4,0)]), // TODO: extension
         separate_blending_slots_supported: info.is_supported(&[Core(4,0),
                                                                Es  (3,0),
                                                                Ext ("GL_ARB_draw_buffers_blend")]),

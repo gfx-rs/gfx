@@ -104,8 +104,6 @@ pub trait RawCommandBuffer<B: Backend> {
     ///
     fn dispatch_indirect(&mut self, buffer: &B::Buffer, offset: u64);
     ///
-    // fn update_buffer(&mut self, buffer: &B::Buffer, data: &[u8], offset: usize);
-    ///
     fn copy_buffer(&mut self, src: &B::Buffer, dst: &B::Buffer, regions: &[BufferCopy]);
     ///
     fn copy_image(

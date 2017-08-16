@@ -15,18 +15,15 @@
 use std::rc::Rc;
 use std::{slice, ptr};
 
-use {gl, tex};
-use core::{self as c, device as d, texture as t, buffer, mapping};
+use {gl};
+use core::{self as c, device as d, pso, texture as t, buffer, mapping};
 use core::memory::{self, Bind, SHADER_RESOURCE, UNORDERED_ACCESS, Typed};
 use core::format::{ChannelType, Format};
 use core::handle::{self, Producer};
 use core::target::{Layer, Level};
 
-use command::{COLOR_DEFAULT};
-use {Info, Backend as B, Share, OutputMerger};
-use {Buffer, BufferElement, FatSampler, NewTexture,
-     PipelineState, ResourceView, TargetView, Fence};
-
+use {Info, Backend as B, Share};
+use {native as n, pool, texture};
 
 pub fn role_to_target(role: buffer::Role) -> gl::types::GLenum {
     match role {
@@ -52,20 +49,6 @@ fn access_to_gl(access: memory::Access) -> gl::types::GLenum {
         _ => unreachable!(),
     }
 }
-
-pub fn update_sub_buffer(gl: &gl::Gl, buffer: Buffer, address: *const u8,
-                         size: usize, offset: usize, role: buffer::Role) {
-    let target = role_to_target(role);
-    unsafe {
-        gl.BindBuffer(target, buffer);
-        gl.BufferSubData(target,
-            offset as gl::types::GLintptr,
-            size as gl::types::GLsizeiptr,
-            address as *const gl::types::GLvoid
-        );
-    }
-}
-
 
 /// GL device.
 pub struct Device {
@@ -93,16 +76,16 @@ impl Device {
         &self.share.info
     }
 
-    fn create_buffer_internal(&mut self) -> Buffer {
+    fn create_buffer_internal(&mut self) -> n::Buffer {
         let gl = &self.share.context;
-        let mut name = 0 as Buffer;
+        let mut name = 0 as n::Buffer;
         unsafe { gl.GenBuffers(1, &mut name); }
         info!("\tCreated buffer {}", name);
         name
     }
 
     fn init_buffer(&mut self,
-                   buffer: Buffer,
+                   buffer: n::Buffer,
                    info: &buffer::Info,
                    data_opt: Option<&[u8]>) -> Option<MappingGate> {
         use core::memory::Usage::*;
@@ -194,6 +177,7 @@ impl Device {
         })
     }
 
+    /*
     fn create_program_raw(&mut self, shader_set: &c::ShaderSet<B>)
                           -> Result<(gl::types::GLuint, c::shade::ProgramInfo), c::shade::CreateProgramError> {
         use shade::create_program;
@@ -227,15 +211,17 @@ impl Device {
         }
         result
     }
+    */
+
 
     fn view_texture_as_target(&mut self, htex: &handle::RawTexture<B>, level: Level, layer: Option<Layer>)
-                              -> Result<TargetView, d::TargetViewError> {
-        match (self.frame_handles.ref_texture(htex), layer) {
-            (&NewTexture::Surface(_), Some(_)) => Err(d::TargetViewError::Unsupported),
-            (&NewTexture::Surface(_), None) if level != 0 => Err(d::TargetViewError::Unsupported),
-            (&NewTexture::Surface(s), None) => Ok(TargetView::Surface(s)),
-            (&NewTexture::Texture(t), Some(l)) => Ok(TargetView::TextureLayer(t, level, l)),
-            (&NewTexture::Texture(t), None) => Ok(TargetView::Texture(t, level)),
+                              -> Result<n::TargetView, d::TargetViewError> {
+        match (self.frame_handles.ref_image(htex), layer) {
+            (&n::Image::Surface(_), Some(_)) => Err(d::TargetViewError::Unsupported),
+            (&n::Image::Surface(_), None) if level != 0 => Err(d::TargetViewError::Unsupported),
+            (&n::Image::Surface(s), None) => Ok(n::TargetView::Surface(s)),
+            (&n::Image::Texture(t), Some(l)) => Ok(n::TargetView::TextureLayer(t, level, l)),
+            (&n::Image::Texture(t), None) => Ok(n::TargetView::Texture(t, level)),
         }
     }
 }
@@ -272,7 +258,7 @@ impl mapping::Gate<B> for MappingGate {
 
 pub fn temporary_ensure_mapped(pointer: &mut *mut ::std::os::raw::c_void,
                                target: gl::types::GLenum,
-                               buffer: Buffer,
+                               buffer: n::Buffer,
                                access: memory::Access,
                                gl: &gl::Gl) {
     if pointer.is_null() {
@@ -286,7 +272,7 @@ pub fn temporary_ensure_mapped(pointer: &mut *mut ::std::os::raw::c_void,
 
 pub fn temporary_ensure_unmapped(pointer: &mut *mut ::std::os::raw::c_void,
                                  target: gl::types::GLenum,
-                                 buffer: Buffer,
+                                 buffer: n::Buffer,
                                  gl: &gl::Gl) {
     if !pointer.is_null() {
         unsafe {
@@ -327,6 +313,7 @@ impl d::Device<B> for Device {
         Ok(self.share.handles.borrow_mut().make_buffer(name, info, mapping))
     }
 
+    /*
     fn create_shader(&mut self, stage: c::shade::Stage, code: &[u8])
                      -> Result<handle::Shader<B>, c::shade::CreateShaderError> {
         ::shade::create_shader(&self.share.context, stage, code)
@@ -389,6 +376,43 @@ impl d::Device<B> for Device {
         };
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
     }
+    */
+
+    fn create_renderpass(
+        &mut self,
+        attachments: &[c::pass::Attachment],
+        subpasses: &[c::pass::SubpassDesc],
+        dependencies: &[c::pass::SubpassDependency]
+    ) -> handle::RenderPass<B> {
+        unimplemented!()
+    }
+
+    fn create_descriptor_heap(&mut self, num_srv_cbv_uav: usize, num_samplers: usize) -> handle::DescriptorHeap<B> {
+        unimplemented!()
+    }
+
+    fn create_descriptor_pool(&mut self, heap: &n::DescriptorHeap, max_sets: usize, offset: usize, descriptor_pools: &[pso::DescriptorPoolDesc]) -> pool::DescriptorPool {
+        unimplemented!()
+    }
+
+    fn create_descriptor_set_layout(&mut self, bindings: &[pso::DescriptorSetLayoutBinding]) -> handle::DescriptorSetLayout<B> {
+        unimplemented!()
+    }
+
+    fn create_pipeline_layout(&mut self, sets: &[&n::DescriptorSetLayout]) -> handle::PipelineLayout<B> {
+        unimplemented!()
+    }
+
+    fn create_graphics_pipelines(&mut self, descs: &[(&(), &(), c::pass::SubPass<B>, &c::pso::GraphicsPipelineDesc)])
+            -> Vec<Result<handle::GraphicsPipeline<B>, c::pso::CreationError>> {
+        unimplemented!()
+    }
+
+    fn create_compute_pipelines(&mut self, descs: &[(&(), c::pso::EntryPoint, &())])
+        -> Vec<Result<handle::ComputePipeline<B>, c::pso::CreationError>>
+    {
+        unimplemented!()
+    }
 
     fn create_texture_raw(&mut self, desc: t::Info, hint: Option<ChannelType>, data_opt: Option<&[&[u8]]>)
                           -> Result<handle::RawTexture<B>, t::CreationError> {
@@ -409,22 +433,22 @@ impl d::Device<B> for Device {
         let gl = &self.share.context;
         let object = if desc.bind.intersects(SHADER_RESOURCE | UNORDERED_ACCESS) || data_opt.is_some() {
             let name = if caps.immutable_storage_supported {
-                try!(tex::make_with_storage(gl, &desc, cty))
+                try!(texture::make_with_storage(gl, &desc, cty))
             } else {
-                try!(tex::make_without_storage(gl, &desc, cty))
+                try!(texture::make_without_storage(gl, &desc, cty))
             };
             if let Some(data) = data_opt {
-                try!(tex::init_texture_data(gl, name, desc, cty, data));
+                try!(texture::init_texture_data(gl, name, desc, cty, data));
             }
-            NewTexture::Texture(name)
+            n::Image::Texture(name)
         }else {
-            let name = try!(tex::make_surface(gl, &desc, cty));
-            NewTexture::Surface(name)
+            let name = try!(texture::make_surface(gl, &desc, cty));
+            n::Image::Surface(name)
         };
         if let Err(err) = self.share.check() {
             panic!("Error {:?} creating texture: {:?}, hint: {:?}", err, desc, hint)
         }
-        Ok(self.share.handles.borrow_mut().make_texture(object, desc))
+        Ok(self.share.handles.borrow_mut().make_image(object, desc))
     }
 
     fn view_buffer_as_shader_resource_raw(&mut self, hbuf: &handle::RawBuffer<B>, format: Format)
@@ -432,14 +456,14 @@ impl d::Device<B> for Device {
         let gl = &self.share.context;
         let mut name = 0 as gl::types::GLuint;
         let buf_name = *self.frame_handles.ref_buffer(hbuf);
-        let format = tex::format_to_glfull(format)
+        let format = texture::format_to_glfull(format)
             .map_err(|_| d::ResourceViewError::Unsupported)?;
         unsafe {
             gl.GenTextures(1, &mut name);
             gl.BindTexture(gl::TEXTURE_BUFFER, name);
             gl.TexBuffer(gl::TEXTURE_BUFFER, format, buf_name);
         }
-        let view = ResourceView::new_buffer(name);
+        let view = n::ResourceView::new_buffer(name);
         if let Err(err) = self.share.check() {
             panic!("Error {:?} creating buffer SRV: {:?}", err, hbuf.get_info())
         }
@@ -453,11 +477,11 @@ impl d::Device<B> for Device {
 
     fn view_texture_as_shader_resource_raw(&mut self, htex: &handle::RawTexture<B>, _desc: t::ResourceDesc)
                                        -> Result<handle::RawShaderResourceView<B>, d::ResourceViewError> {
-        match self.frame_handles.ref_texture(htex) {
-            &NewTexture::Surface(_) => Err(d::ResourceViewError::NoBindFlag),
-            &NewTexture::Texture(t) => {
+        match self.frame_handles.ref_image(htex) {
+            &n::Image::Surface(_) => Err(d::ResourceViewError::NoBindFlag),
+            &n::Image::Texture(t) => {
                 //TODO: use the view descriptor
-                let view = ResourceView::new_texture(t, htex.get_info().kind);
+                let view = n::ResourceView::new_texture(t, htex.get_info().kind);
                 Ok(self.share.handles.borrow_mut().make_texture_srv(view, htex))
             },
         }
@@ -488,11 +512,11 @@ impl d::Device<B> for Device {
 
     fn create_sampler(&mut self, info: t::SamplerInfo) -> handle::Sampler<B> {
         let name = if self.share.private_caps.sampler_objects_supported {
-            tex::make_sampler(&self.share.context, &info, &self.share.private_caps)
+            texture::make_sampler(&self.share.context, &info, &self.share.private_caps)
         } else {
             0
         };
-        let sam = FatSampler {
+        let sam = n::FatSampler {
             object: name,
             info: info.clone(),
         };
@@ -513,7 +537,7 @@ impl d::Device<B> for Device {
         } else {
             ptr::null()
         };
-        self.share.handles.borrow_mut().make_fence(Fence(sync))
+        self.share.handles.borrow_mut().make_fence(n::Fence(sync))
     }
 
     fn reset_fences(&mut self, fences: &[&handle::Fence<B>]) {
@@ -627,7 +651,7 @@ impl d::Device<B> for Device {
     }
 }
 
-pub fn wait_fence(fence: &Fence, gl: &gl::Gl, timeout_ms: u32) -> gl::types::GLenum {
+pub fn wait_fence(fence: &n::Fence, gl: &gl::Gl, timeout_ms: u32) -> gl::types::GLenum {
     let timeout = timeout_ms as u64 * 1_000_000;
     // TODO:
     // This can be called by multiple objects wanting to ensure they have exclusive
