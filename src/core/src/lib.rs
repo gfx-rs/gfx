@@ -29,6 +29,7 @@ pub use self::adapter::{Adapter, AdapterInfo};
 pub use self::device::Device;
 pub use self::pool::{ComputeCommandPool, GeneralCommandPool, GraphicsCommandPool, RawCommandPool,
                      SubpassCommandPool, TransferCommandPool};
+pub use self::pso::{DescriptorPool};
 pub use self::queue::{CommandQueue, QueueType, RawSubmission, Submission, QueueFamily,
                       ComputeQueue, GeneralQueue, GraphicsQueue, TransferQueue};
 pub use self::window::{Backbuffer, Frame, FrameSync, Surface, Swapchain, SwapchainConfig,
@@ -99,10 +100,18 @@ pub struct Capabilities {
     /// Maximum number of vertices for each patch.
     pub max_patch_size: PatchSize,
 
-    /// Support offsets for instanced drawing.
-    pub instance_base_supported: bool,
     /// Support instanced drawing.
-    pub instance_call_supported: bool,
+    pub draw_instanced_supported: bool,
+    /// Support offsets for instanced drawing with base instance.
+    pub draw_instanced_base_supported: bool,
+    /// Support indexed drawing with base vertex.
+    pub draw_indexed_base_supported: bool,
+    /// Support indexed, instanced drawing.
+    pub draw_indexed_instanced_supported: bool,
+    /// Support indexed, instanced drawing with base vertex only.
+    pub draw_indexed_instanced_base_vertex_supported: bool,
+    /// Support indexed, instanced drawing with base vertex and instance.
+    pub draw_indexed_instanced_base_supported: bool,
     /// Support manually specified vertex attribute rates (divisors).
     pub instance_rate_supported: bool,
     /// Support base vertex offset for indexed drawing.
@@ -193,6 +202,7 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type Device: Device<Self>;
     type QueueFamily: QueueFamily;
     type SubmitInfo: Clone + Send;
+    type DescriptorPool: DescriptorPool<Self>;
 
     type RawCommandBuffer: command::RawCommandBuffer<Self>;
     type SubpassCommandBuffer;
@@ -214,7 +224,6 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type DescriptorHeap:      Debug + Any;
     type DescriptorSet:       Debug + Any + Send + Sync;
     type DescriptorSetLayout: Debug + Any;
-    type DescriptorSetPool:   Debug + Any;
     type Fence:               Debug + Any + Send + Sync;
     type Semaphore:           Debug + Any + Send + Sync;
     type Mapping:             Debug + Any + Send + Sync + mapping::Gate<Self>;
@@ -226,11 +235,7 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type UnboundBuffer:       Debug + Any + Send + Sync;
     type UnboundImage:        Debug + Any + Send + Sync;
     type ConstantBufferView:  Debug + Any + Send + Sync;
-    type FrameBuffer:         Debug + Any + Send + Sync;
     type Heap:                Debug + Any;
-    type DescriptorHeap:      Debug + Any;
-    type DescriptorSetPool:   Debug + Any;
-    type DescriptorSet:       Debug + Any;
 }
 */
 

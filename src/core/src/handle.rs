@@ -242,10 +242,6 @@ pub struct PipelineLayout<B: Backend>(Arc<B::PipelineLayout>);
 
 ///
 #[derive(Clone, Debug)]
-pub struct DescriptorSetPool<B: Backend>(Arc<B::DescriptorSetPool>, Arc<B::DescriptorHeap>);
-
-///
-#[derive(Clone, Debug)]
 pub struct DescriptorSetLayout<B: Backend>(Arc<B::DescriptorSetLayout>);
 
 ///
@@ -272,7 +268,6 @@ pub struct Manager<B: Backend> {
     compute_pipelines:      Vec<Arc<B::ComputePipeline>>,
     renderpasses:           Vec<Arc<B::RenderPass>>,
     pipeline_layouts:       Vec<Arc<B::PipelineLayout>>,
-    descriptor_set_pools:   Vec<Arc<B::DescriptorSetPool>>,
     descriptor_set_layouts: Vec<Arc<B::DescriptorSetLayout>>,
     descriptor_heaps:       Vec<Arc<B::DescriptorHeap>>,
 }
@@ -298,7 +293,6 @@ pub trait Producer<Bd: Backend> {
     fn make_compute_pipeline(&mut self, Bd::ComputePipeline) -> ComputePipeline<Bd>;
     fn make_renderpass(&mut self, Bd::RenderPass) -> RenderPass<Bd>;
     fn make_pipeline_layout(&mut self, Bd::PipelineLayout) -> PipelineLayout<Bd>;
-    fn make_descriptor_set_pool(&mut self, Bd::DescriptorSetPool, &Arc<Bd::DescriptorHeap>) -> DescriptorSetPool<Bd>;
     fn make_descriptor_set_layout(&mut self, Bd::DescriptorSetLayout) -> DescriptorSetLayout<Bd>;
     fn make_descriptor_heap(&mut self, Bd::DescriptorHeap) -> DescriptorHeap<Bd>;
 
@@ -317,12 +311,10 @@ pub trait Producer<Bd: Backend> {
         J: Fn(&mut T, &mut Bd::Sampler),
         K: Fn(&mut T, &mut Mutex<Bd::Fence>),
         L: Fn(&mut T, &mut Mutex<Bd::Semaphore>),
-        M: Fn(&mut T, &mut Bd::RenderPass),
+        M: Fn(&mut T, &mut Bd::DescriptorSetLayout),
         N: Fn(&mut T, &mut Bd::PipelineLayout),
-        O: Fn(&mut T, &mut Bd::DescriptorSetPool),
-        P: Fn(&mut T, &mut Bd::DescriptorSetLayout),
-        Q: Fn(&mut T, &mut Bd::DescriptorHeap),
-    >(&mut self, &mut T, A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q);
+        O: Fn(&mut T, &mut Bd::DescriptorHeap),
+    >(&mut self, &mut T, A, B, C, D, E, F, G, H, I, J, K, L, M, N, O);
 }
 
 impl<Bd: Backend> Producer<Bd> for Manager<Bd> {
@@ -419,12 +411,6 @@ impl<Bd: Backend> Producer<Bd> for Manager<Bd> {
         PipelineLayout(r)
     }
 
-    fn make_descriptor_set_pool(&mut self, res: Bd::DescriptorSetPool, heap: &Arc<Bd::DescriptorHeap>) -> DescriptorSetPool<Bd> {
-        let r = Arc::new(res);
-        self.descriptor_set_pools.push(r.clone());
-        DescriptorSetPool(r, heap.clone())
-    }
-
     fn make_descriptor_set_layout(&mut self, res: Bd::DescriptorSetLayout) -> DescriptorSetLayout<Bd> {
         let r = Arc::new(res);
         self.descriptor_set_layouts.push(r.clone());
@@ -450,12 +436,10 @@ impl<Bd: Backend> Producer<Bd> for Manager<Bd> {
         J: Fn(&mut T, &mut Bd::Sampler),
         K: Fn(&mut T, &mut Mutex<Bd::Fence>),
         L: Fn(&mut T, &mut Mutex<Bd::Semaphore>),
-        M: Fn(&mut T, &mut Bd::RenderPass),
+        M: Fn(&mut T, &mut Bd::DescriptorSetLayout),
         N: Fn(&mut T, &mut Bd::PipelineLayout),
-        O: Fn(&mut T, &mut Bd::DescriptorSetPool),
-        P: Fn(&mut T, &mut Bd::DescriptorSetLayout),
-        Q: Fn(&mut T, &mut Bd::DescriptorHeap),
-    >(&mut self, param: &mut T, fa: A, fb: B, fc: C, fd: D, fe: E, ff: F, fg: G, fh: H, fi: I, fj: J, fk: K, fl: L, fm: M, fnN: N, fo: O, fp: P, fq: Q) {
+        O: Fn(&mut T, &mut Bd::DescriptorHeap),
+    >(&mut self, param: &mut T, fa: A, fb: B, fc: C, fd: D, fe: E, ff: F, fg: G, fh: H, fi: I, fj: J, fk: K, fl: L, fm: M, fn_: N, fo: O) {
         fn clean_vec<X, Param, Fun>(param: &mut Param, vector: &mut Vec<Arc<X>>, fun: Fun)
             where Fun: Fn(&mut Param, &mut X)
         {
@@ -485,12 +469,9 @@ impl<Bd: Backend> Producer<Bd> for Manager<Bd> {
         clean_vec(param, &mut self.samplers,           fj);
         clean_vec(param, &mut self.fences,             fk);
         clean_vec(param, &mut self.semaphores,         fl);
-        clean_vec(param, &mut self.renderpasses,       fm);
-        clean_vec(param, &mut self.pipeline_layouts,   fnN);
-        clean_vec(param, &mut self.descriptor_set_pools,   fo);
-        clean_vec(param, &mut self.descriptor_set_layouts, fp);
-        clean_vec(param, &mut self.descriptor_heaps,   fq);
-
+        clean_vec(param, &mut self.descriptor_set_layouts, fm);
+        clean_vec(param, &mut self.pipeline_layouts,   fn_);
+        clean_vec(param, &mut self.descriptor_heaps,   fo);
     }
 }
 
@@ -511,7 +492,6 @@ impl<B: Backend> Manager<B> {
             compute_pipelines: Vec::new(),
             renderpasses: Vec::new(),
             pipeline_layouts: Vec::new(),
-            descriptor_set_pools: Vec::new(),
             descriptor_set_layouts: Vec::new(),
             descriptor_heaps: Vec::new(),
         }
@@ -531,7 +511,6 @@ impl<B: Backend> Manager<B> {
         self.compute_pipelines.clear();
         self.renderpasses.clear();
         self.pipeline_layouts.clear();
-        self.descriptor_set_pools.clear();
         self.descriptor_set_layouts.clear();
         self.descriptor_heaps.clear();
     }
@@ -550,7 +529,6 @@ impl<B: Backend> Manager<B> {
         self.compute_pipelines      .extend(other.compute_pipelines.iter().map(|h| h.clone()));
         self.renderpasses           .extend(other.renderpasses.iter().map(|h| h.clone()));
         self.pipeline_layouts       .extend(other.pipeline_layouts.iter().map(|h| h.clone()));
-        self.descriptor_set_pools   .extend(other.descriptor_set_pools.iter().map(|h| h.clone()));
         self.descriptor_set_layouts .extend(other.descriptor_set_layouts.iter().map(|h| h.clone()));
         self.descriptor_heaps       .extend(other.descriptor_heaps.iter().map(|h| h.clone()));
     }
@@ -569,7 +547,6 @@ impl<B: Backend> Manager<B> {
         self.compute_pipelines.len() +
         self.renderpasses.len() +
         self.pipeline_layouts.len() +
-        self.descriptor_set_pools.len() +
         self.descriptor_set_layouts.len() +
         self.descriptor_heaps.len()
     }

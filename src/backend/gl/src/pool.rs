@@ -1,13 +1,15 @@
 use core::{self, pool};
-use core::command::{GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer};
-use core::queue::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
+use core::command::{ComputeCommandBuffer, GeneralCommandBuffer, GraphicsCommandBuffer,
+                    TransferCommandBuffer};
+use core::queue::{ComputeQueue, GeneralQueue, GraphicsQueue, TransferQueue};
 use command::{self, RawCommandBuffer, SubpassCommandBuffer};
-use {Backend, CommandQueue, FrameBuffer, Share};
+use native as n;
+use {Backend, CommandQueue, Share};
 use gl;
 use std::rc::Rc;
 
 fn create_fbo_internal(gl: &gl::Gl) -> gl::types::GLuint {
-    let mut name = 0 as ::FrameBuffer;
+    let mut name = 0 as n::FrameBuffer;
     unsafe {
         gl.GenFramebuffers(1, &mut name);
     }
@@ -16,7 +18,7 @@ fn create_fbo_internal(gl: &gl::Gl) -> gl::types::GLuint {
 }
 
 pub struct RawCommandPool {
-    fbo: FrameBuffer,
+    fbo: n::FrameBuffer,
     command_buffers: Vec<RawCommandBuffer>,
     next_buffer: usize,
 }
@@ -36,12 +38,12 @@ impl core::RawCommandPool<Backend> for RawCommandPool {
     }
 
     unsafe fn from_queue<'a, Q>(mut queue: Q, capacity: usize) -> Self
-    where Q: AsRef<CommandQueue>
+    where
+        Q: AsRef<CommandQueue>,
     {
         let queue = queue.as_ref();
         let fbo = create_fbo_internal(&queue.share.context);
-        let buffers = (0..capacity).map(|_| RawCommandBuffer::new(fbo))
-                                   .collect();
+        let buffers = (0..capacity).map(|_| RawCommandBuffer::new(fbo)).collect();
         RawCommandPool {
             fbo,
             command_buffers: buffers,
@@ -101,4 +103,17 @@ impl pool::SubpassCommandPool<Backend> for SubpassCommandPool {
         unsafe { Encoder::new(buffer) }
     }
     */
+}
+
+#[allow(missing_copy_implementations)]
+pub struct DescriptorPool {}
+
+impl core::DescriptorPool<Backend> for DescriptorPool {
+    fn allocate_sets(&mut self, layouts: &[&n::DescriptorSetLayout]) -> Vec<n::DescriptorSet> {
+        unimplemented!()
+    }
+
+    fn reset(&mut self) {
+        unimplemented!()
+    }
 }
