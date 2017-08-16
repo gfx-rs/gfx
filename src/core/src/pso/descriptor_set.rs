@@ -14,7 +14,7 @@
 
 //! Descriptor sets and layouts.
 
-use shade;
+use {shade, Backend};
 
 ///
 // TODO: Grasping and remembering the differences between these
@@ -74,4 +74,18 @@ pub struct DescriptorPoolDesc {
     pub ty: DescriptorType,
     /// Amount of space.
     pub count: usize,
+}
+
+///
+pub trait DescriptorPool<B: Backend> {
+    /// Allocate one or multiple descriptor sets from the pool.
+    ///
+    /// Each descriptor set will be allocated from the pool according to the corresponding set layout.
+    /// The descriptor pool _must_ have enough space in to allocate the required descriptors.
+    /// Descriptors will become invalid once the pool got reset. Usage of invalidated descriptor sets results
+    /// in undefined behavior.
+    fn allocate_sets(&mut self, layouts: &[&B::DescriptorSetLayout]) -> Vec<B::DescriptorSet>;
+
+    ///
+    fn reset(&mut self);
 }
