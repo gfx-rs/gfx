@@ -26,7 +26,7 @@ if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
   EXCLUDES+=" --exclude gfx_window_metal"
 
   FEATURES+="vulkan"
-elif [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+elif [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
   EXCLUDES+=" --exclude gfx_window_vulkan"
   EXCLUDES+=" --exclude gfx_device_vulkan"
   EXCLUDES+=" --exclude gfx_device_vulkanll"
