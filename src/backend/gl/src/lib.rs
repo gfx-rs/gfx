@@ -194,6 +194,16 @@ impl Adapter {
             software_rendering: false, // not always true ..
         };
 
+        let queue_type = {
+            use info::Requirement::{Core, Es};
+            let compute_supported = info.is_supported(&[Core(4,3), Es(3, 1)]); // TODO: extension
+            if compute_supported {
+                QueueType::General
+            } else {
+                QueueType::Graphics
+            }
+        };
+
         // create the shared context
         let handles = handle::Manager::new();
         let share = Share {
@@ -207,7 +217,7 @@ impl Adapter {
         Adapter {
             share: Rc::new(share),
             adapter_info: adapter_info,
-            queue_family: [(QueueFamily, QueueType::Graphics)],
+            queue_family: [(QueueFamily, queue_type)],
         }
     }
 }

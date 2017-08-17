@@ -174,7 +174,7 @@ pub struct Info {
 }
 
 #[derive(Copy, Clone)]
-enum Requirement {
+pub enum Requirement {
     Core(u32,u32),
     Es(u32, u32),
     Ext(&'static str),
@@ -223,7 +223,7 @@ impl Info {
         exts.iter().any(|e| self.extensions.contains(e))
     }
 
-    fn is_supported(&self, requirements: &[Requirement]) -> bool {
+    pub fn is_supported(&self, requirements: &[Requirement]) -> bool {
         use self::Requirement::*;
         requirements.iter().any(|r| {
             match *r {
