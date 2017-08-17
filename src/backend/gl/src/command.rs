@@ -39,6 +39,8 @@ impl DataBuffer {
 ///
 #[derive(Copy, Clone, Debug)]
 pub enum Command {
+    Dispatch(u32, u32, u32),
+    DispatchIndirect(gl::types::GLuint, u64),
     Draw {
         primitive: gl::types::GLenum,
         start: c::VertexCount,
@@ -233,11 +235,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
     fn dispatch(&mut self, x: u32, y: u32, z: u32) {
-        unimplemented!()
+        self.buf.push(Command::Dispatch(x, y, z));
     }
 
     fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: u64) {
-        unimplemented!()
+        self.buf.push(Command::DispatchIndirect(*buffer, offset));
     }
 
     fn copy_buffer(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: &[BufferCopy]) {
