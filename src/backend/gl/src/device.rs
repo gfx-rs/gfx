@@ -271,12 +271,16 @@ pub fn temporary_ensure_unmapped(pointer: &mut *mut ::std::os::raw::c_void,
 }
 
 impl d::Device<B> for Device {
-    fn get_capabilities(&self) -> &c::Capabilities {
-        &self.share.capabilities
+    fn get_features(&self) -> &c::Features {
+        &self.share.features
+    }
+
+    fn get_limits(&self) -> &c::Limits {
+        &self.share.limits
     }
 
     fn create_buffer_raw(&mut self, info: buffer::Info) -> Result<handle::RawBuffer<B>, buffer::CreationError> {
-        if !self.share.capabilities.features.constant_buffer && info.role == buffer::Role::Constant {
+        if !self.share.features.constant_buffer && info.role == buffer::Role::Constant {
             error!("Constant buffers are not supported by this GL version");
             return Err(buffer::CreationError::Other);
         }
@@ -408,7 +412,7 @@ impl d::Device<B> for Device {
             return Err(CreationError::Size(0))
         }
         let dim = desc.kind.get_dimensions();
-        let max_size = self.share.capabilities.limits.max_texture_size;
+        let max_size = self.share.limits.max_texture_size;
         if dim.0 as usize > max_size {
             return Err(CreationError::Size(dim.0));
         }
