@@ -69,6 +69,7 @@ pub enum Command {
         base: c::VertexOffset,
         instances: Option<InstanceParams>,
     },
+    BindIndexBuffer(gl::types::GLuint),
 }
 
 #[allow(missing_copy_implementations)]
@@ -208,7 +209,13 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
     fn bind_index_buffer(&mut self, ibv: IndexBufferView<Backend>) {
-        unimplemented!()
+        // TODO: how can we incoporate the buffer offset?
+        if ibv.offset > 0 {
+            warn!("Non-zero index buffer offset currently not handled.");
+        }
+
+        self.cache.index_type = Some(ibv.index_type);
+        self.buf.push(Command::BindIndexBuffer(*ibv.buffer));
     }
 
     fn bind_vertex_buffers(&mut self, vbs: c::pso::VertexBufferSet<Backend>) {
