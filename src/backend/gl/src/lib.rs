@@ -246,6 +246,7 @@ impl c::Adapter<Backend> for Adapter {
                 gl.Enable(gl::PROGRAM_POINT_SIZE);
             }
         }
+
         // create main VAO and bind it
         let mut vao = 0;
         if self.share.private_caps.array_buffer_supported {
@@ -268,7 +269,8 @@ impl c::Adapter<Backend> for Adapter {
         let raw_queue = || {
             CommandQueue {
                 share: self.share.clone(),
-                vao: vao,
+                vao,
+                state: State::new(),
                 frame_handles: handle::Manager::new(),
                 max_resource_count: Some(999999),
             }
@@ -309,16 +311,52 @@ impl c::Adapter<Backend> for Adapter {
 pub struct CommandQueue {
     share: Rc<Share>,
     vao: ArrayBuffer,
+    state: State,
     frame_handles: handle::Manager<Backend>,
     max_resource_count: Option<usize>,
+}
+
+// State caching system for command queue.
+//
+// We track the current global state, which is based on
+// the restriction that we only expose _one_ command queue.
+//
+// This allows us to minimize additional driver calls to
+// ensure that command buffers are handled isolated of each other.
+struct State {
+    // Indicate if the vertex array object is bound.
+    // If VAOs are not supported, this will be also set to true.
+    vao: bool
+}
+
+impl State {
+    // Create a new state, respresenting the initial context state
+    // as exposed by OpenGL.
+    fn new() -> Self {
+        State {
+            vao: false,
+        }
+    }
+
+    // Invalidate the current state, forcing a complete reset.
+    // Required if we allow users to manually inject OpenGL calls.
+    fn flush(&mut self) {
+        self.vao = false;
+    }
 }
 
 impl CommandQueue {
     /// Access the OpenGL directly via a closure. OpenGL types and enumerations
     /// can be found in the `gl` crate.
+    ///
+    /// > Note: Calling this function can have a noticeable impact on the performance
+    ///         because the internal state cache will flushed.
     pub unsafe fn with_gl<F: FnMut(&gl::Gl)>(&mut self, mut fun: F) {
         self.reset_state();
         fun(&self.share.context);
+        // Flush the state to enforce a reset once a new command buffer
+        // is execute because we have no control of the called functions.
+        self.state.flush();
     }
 
     /*
@@ -409,13 +447,18 @@ impl CommandQueue {
         unsafe { gl.FramebufferTexture(point, attachment, 0, 0) };
     }
 
+    // Reset the state to match our _expected_ state before executing
+    // a command buffer.
     fn reset_state(&mut self) {
-        /*
-        let data = DataBuffer::new();
-        for com in command::RESET.iter() {
-            self.process(com, &data);
+        let gl = &self.share.context;
+        let priv_caps = &self.share.private_caps;
+
+        if !self.state.vao {
+            if priv_caps.array_buffer_supported {
+                unsafe { gl.BindVertexArray(self.vao) };
+            }
+            self.state.vao = true
         }
-        */
     }
 
     fn process(&mut self, cmd: &Command, data_buf: &DataBuffer) {
@@ -527,6 +570,24 @@ impl CommandQueue {
                     },
                 }
             }
+            Command::Dispatch(x, y, z) => {
+                // Capability support is given by which queue types will be exposed.
+                // If there is no compute support, this pattern should never be reached
+                // because no queue with compute capability can be created.
+                let gl = &self.share.context;
+                unsafe { gl.DispatchCompute(x, y, z) };
+            }
+            Command::DispatchIndirect(buffer, offset) => {
+                // Capability support is given by which queue types will be exposed.
+                // If there is no compute support, this pattern should never be reached
+                // because no queue with compute capability can be created.
+                let gl = &self.share.context;
+                unsafe {
+                    gl.BindBuffer(gl::DRAW_INDIRECT_BUFFER, buffer);
+                    // TODO: possible integer conversion issue
+                    gl.DispatchComputeIndirect(offset as gl::types::GLintptr);
+                }
+            }
 
             /*
             Command::Clear(color, depth, stencil) => {
@@ -636,14 +697,6 @@ impl CommandQueue {
                     self.bind_target(point, gl::STENCIL_ATTACHMENT, stencil);
                 }
             },
-            Command::BindVao => {
-                if self.share.private_caps.array_buffer_supported {
-                    let gl = &self.share.context;
-                    unsafe {
-                        gl.BindVertexArray(self.vao);
-                    }
-                }
-            },
             Command::BindAttribute(slot, buffer,  bel) => {
                 self.bind_attribute(slot, buffer, bel);
             },
@@ -748,12 +801,7 @@ impl CommandQueue {
                     Err(e) => error!("GL: {:?} failed: {:?}", cmd, e)
                 }
             },
-            Command::Dispatch(x, y, z) => {
-                // Capability support is given by which queue types will be exposed.
-                // If there is no compute support, this pattern should never be reached.
-                let gl = &self.share.context;
-                unsafe { gl.DispatchCompute(x, y, z) };
-            },
+
             */
         }
         if let Err(err) = self.share.check() {
