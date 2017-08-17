@@ -159,7 +159,8 @@ pub fn create_main_targets_raw(dim: t::Dimensions, color_format: format::Surface
 pub struct Share {
     context: gl::Gl,
     info: Info,
-    capabilities: c::Capabilities,
+    features: c::Features,
+    limits: c::Limits,
     private_caps: info::PrivateCaps,
     handles: RefCell<handle::Manager<Backend>>,
 }
@@ -191,7 +192,7 @@ impl Adapter {
     {
         let gl = gl::Gl::load_with(fn_proc);
         // query information
-        let (info, caps, private) = info::get(&gl);
+        let (info, features, limits, private_caps) = info::get(&gl);
         info!("Vendor: {:?}", info.platform_name.vendor);
         info!("Renderer: {:?}", info.platform_name.renderer);
         info!("Version: {:?}", info.version);
@@ -222,9 +223,10 @@ impl Adapter {
         let handles = handle::Manager::new();
         let share = Share {
             context: gl,
-            info: info,
-            capabilities: caps,
-            private_caps: private,
+            info,
+            features,
+            limits,
+            private_caps,
             handles: RefCell::new(handles),
         };
 
@@ -244,7 +246,7 @@ impl c::Adapter<Backend> for Adapter {
 
         // initialize permanent states
         let gl = &self.share.context;
-        if self.share.capabilities.features.srgb_color {
+        if self.share.features.srgb_color {
             unsafe {
                 gl.Enable(gl::FRAMEBUFFER_SRGB);
             }
@@ -495,7 +497,7 @@ impl CommandQueue {
             }
             Command::Draw { primitive, start, count, instances } => {
                 let gl = &self.share.context;
-                let features = &self.share.capabilities.features;
+                let features = &self.share.features;
                 match instances {
                     Some((num, base)) => unsafe {
                         if features.draw_instanced {
@@ -532,7 +534,7 @@ impl CommandQueue {
             }
             Command::DrawIndexed { primitive, index_type, start, count, base: base_vertex, instances } => {
                 let gl = &self.share.context;
-                let features = &self.share.capabilities.features;
+                let features = &self.share.features;
                 let offset = start as *const gl::types::GLvoid;
 
                 match instances {
