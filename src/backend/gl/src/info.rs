@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::{ffi, fmt, mem, str};
 use gl;
-use core::{Capabilities, IndexCount, VertexCount};
+use core::{Capabilities, Features, IndexCount, Limits, VertexCount};
 
 /// A version number for a specific component of an OpenGL implementation
 #[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
@@ -242,41 +242,46 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
     let info = Info::get(gl);
     let tessellation_supported =           info.is_supported(&[Core(4,0),
                                                                Ext("GL_ARB_tessellation_shader")]);
-    let caps = Capabilities {
+    let limits = Limits {
         max_texture_size: get_usize(gl, gl::MAX_TEXTURE_SIZE),
         max_patch_size: if tessellation_supported { get_usize(gl, gl::MAX_PATCH_VERTICES) as u8 } else {0},
+    };
+    let features = Features {
+        draw_instanced:                     info.is_supported(&[Core(3,1),
+                                                                Es  (3,0),
+                                                                Ext ("GL_ARB_draw_instanced")]),
+        draw_instanced_base:                info.is_supported(&[Core(4,2),
+                                                                Ext ("GL_ARB_base_instance")]),
+        draw_indexed_base:                  info.is_supported(&[Core(3, 2)]), // TODO: extension
+        draw_indexed_instanced:             info.is_supported(&[Core(3, 1),
+                                                                Es  (3, 0)]), // TODO: extension
 
-        draw_instanced_supported:           info.is_supported(&[Core(3,1),
-                                                               Es  (3,0),
-                                                               Ext ("GL_ARB_draw_instanced")]),
-        draw_instanced_base_supported:      info.is_supported(&[Core(4,2),
-                                                               Ext ("GL_ARB_base_instance")]),
-        draw_indexed_base_supported:        info.is_supported(&[Core(3, 2)]), // TODO: extension
-        draw_indexed_instanced_supported:   info.is_supported(&[Core(3, 1),
-                                                               Es  (3, 0)]), // TODO: extension
+        draw_indexed_instanced_base_vertex: info.is_supported(&[Core(3, 2)]), // TODO: extension
+        draw_indexed_instanced_base:        info.is_supported(&[Core(4, 2)]) , // TODO: extension
 
-        draw_indexed_instanced_base_vertex_supported: info.is_supported(&[Core(3, 2)]), // TODO: extension
-        draw_indexed_instanced_base_supported:        info.is_supported(&[Core(4, 2)]) , // TODO: extension
-
-        instance_rate_supported:           info.is_supported(&[Core(3,3),
-                                                               Es  (3,0),
-                                                               Ext ("GL_ARB_instanced_arrays")]),
-        vertex_base_supported:             info.is_supported(&[Core(3,2),
-                                                               Es  (3,2),
-                                                               Ext ("GL_ARB_draw_elements_base_vertex")]),
-        srgb_color_supported:              info.is_supported(&[Core(3,2),
-                                                               Ext ("GL_ARB_framebuffer_sRGB")]),
-        constant_buffer_supported:         info.is_supported(&[Core(3,1),
-                                                               Es  (3,0),
-                                                               Ext ("GL_ARB_uniform_buffer_object")]),
-        unordered_access_view_supported:   info.is_supported(&[Core(4,0)]), // TODO: extension
-        separate_blending_slots_supported: info.is_supported(&[Core(4,0),
-                                                               Es  (3,0),
-                                                               Ext ("GL_ARB_draw_buffers_blend")]),
-        copy_buffer_supported:             info.is_supported(&[Core(3,1),
-                                                               Es  (3,0),
-                                                               Ext ("GL_ARB_copy_buffer"),
-                                                               Ext ("GL_NV_copy_buffer")]),
+        instance_rate:                      info.is_supported(&[Core(3,3),
+                                                                Es  (3,0),
+                                                                Ext ("GL_ARB_instanced_arrays")]),
+        vertex_base:                        info.is_supported(&[Core(3,2),
+                                                                Es  (3,2),
+                                                                Ext ("GL_ARB_draw_elements_base_vertex")]),
+        srgb_color:                         info.is_supported(&[Core(3,2),
+                                                                Ext ("GL_ARB_framebuffer_sRGB")]),
+        constant_buffer:                    info.is_supported(&[Core(3,1),
+                                                                Es  (3,0),
+                                                                Ext ("GL_ARB_uniform_buffer_object")]),
+        unordered_access_view:              info.is_supported(&[Core(4,0)]), // TODO: extension
+        separate_blending_slots:            info.is_supported(&[Core(4,0),
+                                                                Es  (3,0),
+                                                                Ext ("GL_ARB_draw_buffers_blend")]),
+        copy_buffer:                        info.is_supported(&[Core(3,1),
+                                                                Es  (3,0),
+                                                                Ext ("GL_ARB_copy_buffer"),
+                                                                Ext ("GL_NV_copy_buffer")]),
+    };
+    let caps = Capabilities {
+        features,
+        limits,
     };
     let private = PrivateCaps {
         array_buffer_supported:            info.is_supported(&[Core(3,0),
@@ -302,6 +307,7 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
                                                                Es  (3,0),
                                                                Ext ("GL_ARB_sync")]),
     };
+
     (info, caps, private)
 }
 

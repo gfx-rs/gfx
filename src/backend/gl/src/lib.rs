@@ -230,7 +230,7 @@ impl c::Adapter<Backend> for Adapter {
 
         // initialize permanent states
         let gl = &self.share.context;
-        if self.share.capabilities.srgb_color_supported {
+        if self.share.capabilities.features.srgb_color {
             unsafe {
                 gl.Enable(gl::FRAMEBUFFER_SRGB);
             }
@@ -481,10 +481,11 @@ impl CommandQueue {
             }
             Command::Draw { primitive, start, count, instances } => {
                 let gl = &self.share.context;
+                let features = &self.share.capabilities.features;
                 match instances {
                     Some((num, base)) => unsafe {
-                        if self.share.capabilities.draw_instanced_supported {
-                            if self.share.capabilities.draw_instanced_base_supported {
+                        if features.draw_instanced {
+                            if features.draw_instanced_base {
                                 gl.DrawArraysInstancedBaseInstance(
                                     primitive,
                                     start as gl::types::GLsizei,
@@ -517,12 +518,12 @@ impl CommandQueue {
             }
             Command::DrawIndexed { primitive, index_type, start, count, base: base_vertex, instances } => {
                 let gl = &self.share.context;
-                let caps = &self.share.capabilities;
+                let features = &self.share.capabilities.features;
                 let offset = start as *const gl::types::GLvoid;
 
                 match instances {
                     Some((num, base_instance)) => unsafe {
-                        if caps.draw_indexed_instanced_base_supported {
+                        if features.draw_indexed_instanced_base {
                             // fully compatible
                             gl.DrawElementsInstancedBaseVertexBaseInstance(
                                 primitive,
@@ -537,7 +538,7 @@ impl CommandQueue {
                             error!("Instance bases with instanced indexed drawing is not supported")
                         } else {
                             // No base instance
-                            if caps.draw_indexed_instanced_base_vertex_supported {
+                            if features.draw_indexed_instanced_base_vertex {
                                 gl.DrawElementsInstancedBaseVertex(
                                     primitive,
                                     count as gl::types::GLsizei,
@@ -550,7 +551,7 @@ impl CommandQueue {
                                 error!("Base vertex with instanced indexed drawing is not supported")
                             } else {
                                 // No base instance and base vertex
-                                if caps.draw_indexed_instanced_supported {
+                                if features.draw_indexed_instanced {
                                     gl.DrawElementsInstanced(
                                         primitive,
                                         count as gl::types::GLsizei,
@@ -565,7 +566,7 @@ impl CommandQueue {
                         }
                     },
                     None => unsafe {
-                        if caps.draw_indexed_base_supported {
+                        if features.draw_indexed_base {
                             gl.DrawElementsBaseVertex(
                                 primitive,
                                 count as gl::types::GLsizei,
