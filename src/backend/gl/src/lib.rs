@@ -322,7 +322,10 @@ pub struct CommandQueue {
 struct State {
     // Indicate if the vertex array object is bound.
     // If VAOs are not supported, this will be also set to true.
-    vao: bool
+    vao: bool,
+    // Currently bound index/element buffer.
+    // None denotes that we don't know what is currently bound.
+    index_buffer: Option<gl::types::GLuint>,
 }
 
 impl State {
@@ -331,6 +334,7 @@ impl State {
     fn new() -> Self {
         State {
             vao: false,
+            index_buffer: None,
         }
     }
 
@@ -338,6 +342,7 @@ impl State {
     // Required if we allow users to manually inject OpenGL calls.
     fn flush(&mut self) {
         self.vao = false;
+        self.index_buffer = None;
     }
 }
 
@@ -449,11 +454,21 @@ impl CommandQueue {
         let gl = &self.share.context;
         let priv_caps = &self.share.private_caps;
 
+        // Bind default VAO
         if !self.state.vao {
             if priv_caps.array_buffer_supported {
                 unsafe { gl.BindVertexArray(self.vao) };
             }
             self.state.vao = true
+        }
+
+        // Unbind index buffers
+        match self.state.index_buffer {
+            Some(0) => (), // Nothing to do
+            Some(_) | None => {
+                unsafe { gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, 0) };
+                self.state.index_buffer = Some(0);
+            }
         }
     }
 
@@ -461,6 +476,7 @@ impl CommandQueue {
         match *cmd {
             Command::BindIndexBuffer(buffer) => {
                 let gl = &self.share.context;
+                self.state.index_buffer = Some(buffer);
                 unsafe { gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer) };
             }
             Command::Draw { primitive, start, count, instances } => {
