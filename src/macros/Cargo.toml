@@ -23,6 +23,7 @@ license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
 documentation = "https://docs.rs/gfx_macros"
 categories = ["rendering::graphics-api"]
+workspace = "../.."
 
 [lib]
 proc-macro = true
@@ -30,3 +31,6 @@ proc-macro = true
 [dependencies]
 syn = "0.11"
 quote = "0.3"
+
+[dev-dependencies]
+gfx = { path = "../render", version = "0.16" }

@@ -24,6 +24,7 @@ authors = ["The Gfx-rs Developers"]
 readme = "../../README.md"
 documentation = "https://docs.rs/gfx"
 categories = ["rendering::graphics-api"]
+workspace = "../.."
 
 [lib]
 name = "gfx"
@@ -39,3 +40,4 @@ derivative = "1.0"
 draw_state = "0.7"
 gfx_core = { path = "../core", version = "0.7.1" }
 log = "0.3"
+

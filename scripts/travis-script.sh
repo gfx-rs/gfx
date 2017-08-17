@@ -6,26 +6,37 @@ if [[ $TRAVIS_RUST_VERSION == "nightly" && $TRAVIS_BRANCH == "staging" ]]; then
   exit
 fi
 export RUST_BACKTRACE=1
+
+EXCLUDES=""
+EXCLUDSE+=" --exclude gfx_window_glfw"
+EXCLUDES+=" --exclude gfx_window_dxgi"
+
+EXCLUDES+=" --exclude gfx_device_dx11"
+EXCLUDES+=" --exclude gfx_device_dx12ll"
+EXCLUDES+=" --exclude gfx_device_dx12"
+
+FEATURES=""
 if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
   export PATH=$PATH:$HOME/deps/bin
   export LIBRARY_PATH=$HOME/deps/usr/lib/x86_64-linux-gnu
   export LD_LIBRARY_PATH=$LIBRARY_PATH
-  cargo build --features vulkan
+
+  EXCLUDES+=" --exclude gfx_device_metal"
+  EXCLUDES+=" --exclude gfx_device_metalll"
+  EXCLUDES+=" --exclude gfx_window_metal"
+
+  FEATURES+="vulkan"
 elif [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+  EXCLUDES+=" --exclude gfx_window_vulkan"
+  EXCLUDES+=" --exclude gfx_device_vulkan"
+  EXCLUDES+=" --exclude gfx_device_vulkanll"
+
+  FEATURES+="metal metal_argument_buffer"
   GLUTIN_HEADLESS_FEATURE="--features headless"
-  cargo build --features metal
-else
-  cargo build
 fi
-cargo test --all
-cargo test -p gfx -p gfx_core --features "mint serialize"
-cargo test -p gfx_window_sdl
-cargo test -p gfx_device_gl
+
+cargo build --all --features "$FEATURES" $EXCLUDES
+
+cargo test --all --features $FEATURES $EXCLUDES
+cargo test --all --features "$FEATURES mint serialize" $EXCLUDES
 cargo test -p gfx_window_glutin $GLUTIN_HEADLESS_FEATURE
-cargo test -p gfx_window_glfw
-if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
-  cargo test --all --features vulkan
-elif [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
-  cargo test --all --features metal
-  cargo test --all --features "metal metal_argument_buffer"
-fi

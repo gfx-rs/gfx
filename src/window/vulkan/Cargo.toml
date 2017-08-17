@@ -8,6 +8,7 @@ keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
 documentation = "https://docs.rs/gfx_window_vulkan"
+workspace = "../../.."
 
 [lib]
 name = "gfx_window_vulkan"

@@ -22,6 +22,7 @@ repository = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
+workspace = "../../.."
 
 [lib]
 name = "gfx_device_dx12ll"

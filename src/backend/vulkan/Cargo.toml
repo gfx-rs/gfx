@@ -23,6 +23,7 @@ license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
 readme = "README.md"
 documentation = "https://docs.rs/gfx_device_vulkan"
+workspace = "../../.."
 
 [lib]
 name = "gfx_device_vulkan"

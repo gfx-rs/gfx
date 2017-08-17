@@ -28,13 +28,15 @@ Finally, feel free to hop on [#rust-gamedev](http://chat.mibbit.com/?server=irc.
 
 ### Directory Structure 
 
-* _examples_ : GFX's examples
-* _tests_ : GFX's tests
-* _info_ : Information and documentation
-* _src_ : gfx_app, an application framework for GFX
-* _src/core_ : gfx_core, core structures and the interface that backends must provide
-* _src/backend_ : The backends implementations
-* _src/render_ : The main gfx package
+* _src/backend_ : The different backends GFX supports.
+* _src/core_ : core structures and the interface that backends must provide
+* _src/corell_ : contains low-level graphics implementation (no resource management overhead).
+* _src/macros_ : Macros used internally by GFX.
+* _src/support_ : Support code that is used by GFX examples. This package contains all of the
+  non-essential functionality for running the GFX examples. Feel free to use this code in your own
+  project.
+* _info_ : Information and documentation.
+* _src/render_ : The main gfx package. This is where all user code that uses gfx::* lives.
 * _src/window_ : Different backends to create windows and initialize their graphics
 
 ### Code
