@@ -105,41 +105,57 @@ pub struct Viewport {
 }
 
 
-/// Features that the device supports.
+/// Capabilities of the device and backend.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct Capabilities {
+    /// Device features of the core interface.
+    pub features: Features,
+    /// Limits of the device.
+    pub limits: Limits,
+}
+
+/// Features that the device supports.
+/// These only include features of the core interface and not API extensions.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+pub struct Features {
+    /// Support instanced drawing.
+    pub draw_instanced: bool,
+    /// Support offsets for instanced drawing with base instance.
+    pub draw_instanced_base: bool,
+    /// Support indexed drawing with base vertex.
+    pub draw_indexed_base: bool,
+    /// Support indexed, instanced drawing.
+    pub draw_indexed_instanced: bool,
+    /// Support indexed, instanced drawing with base vertex only.
+    pub draw_indexed_instanced_base_vertex: bool,
+    /// Support indexed, instanced drawing with base vertex and instance.
+    pub draw_indexed_instanced_base: bool,
+    /// Support manually specified vertex attribute rates (divisors).
+    pub instance_rate: bool,
+    /// Support base vertex offset for indexed drawing.
+    pub vertex_base: bool,
+    /// Support sRGB textures and rendertargets.
+    pub srgb_color: bool,
+    /// Support constant buffers.
+    pub constant_buffer: bool,
+    /// Support unordered-access views.
+    pub unordered_access_view: bool,
+    /// Support specifying the blend function and equation for each color target.
+    pub separate_blending_slots: bool,
+    /// Support accelerated buffer copy.
+    pub copy_buffer: bool,
+}
+
+/// Limits of the device.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+pub struct Limits {
     /// Maximum supported texture size.
     pub max_texture_size: usize,
     /// Maximum number of vertices for each patch.
     pub max_patch_size: PatchSize,
-
-    /// Support instanced drawing.
-    pub draw_instanced_supported: bool,
-    /// Support offsets for instanced drawing with base instance.
-    pub draw_instanced_base_supported: bool,
-    /// Support indexed drawing with base vertex.
-    pub draw_indexed_base_supported: bool,
-    /// Support indexed, instanced drawing.
-    pub draw_indexed_instanced_supported: bool,
-    /// Support indexed, instanced drawing with base vertex only.
-    pub draw_indexed_instanced_base_vertex_supported: bool,
-    /// Support indexed, instanced drawing with base vertex and instance.
-    pub draw_indexed_instanced_base_supported: bool,
-    /// Support manually specified vertex attribute rates (divisors).
-    pub instance_rate_supported: bool,
-    /// Support base vertex offset for indexed drawing.
-    pub vertex_base_supported: bool,
-    /// Support sRGB textures and rendertargets.
-    pub srgb_color_supported: bool,
-    /// Support constant buffers.
-    pub constant_buffer_supported: bool,
-    /// Support unordered-access views.
-    pub unordered_access_view_supported: bool,
-    /// Support specifying the blend function and equation for each color target.
-    pub separate_blending_slots_supported: bool,
-    /// Support accelerated buffer copy.
-    pub copy_buffer_supported: bool,
 }
 
 /// Describes what geometric primitives are created from vertex data.
