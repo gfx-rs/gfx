@@ -459,6 +459,10 @@ impl CommandQueue {
 
     fn process(&mut self, cmd: &Command, data_buf: &DataBuffer) {
         match *cmd {
+            Command::BindIndexBuffer(buffer) => {
+                let gl = &self.share.context;
+                unsafe { gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer) };
+            }
             Command::Draw { primitive, start, count, instances } => {
                 let gl = &self.share.context;
                 match instances {
@@ -698,10 +702,6 @@ impl CommandQueue {
             },
             Command::UnbindAttribute(slot) => unsafe {
                 self.share.context.DisableVertexAttribArray(slot as gl::types::GLuint);
-            },
-            Command::BindIndex(buffer) => {
-                let gl = &self.share.context;
-                unsafe { gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer) };
             },
             Command::BindFrameBuffer(point, frame_buffer) => {
                 if self.share.private_caps.frame_buffer_supported {
