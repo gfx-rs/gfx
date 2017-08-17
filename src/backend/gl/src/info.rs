@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::{ffi, fmt, mem, str};
 use gl;
-use core::{Capabilities, Features, IndexCount, Limits, VertexCount};
+use core::{Features, IndexCount, Limits, VertexCount};
 
 /// A version number for a specific component of an OpenGL implementation
 #[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
@@ -237,7 +237,7 @@ impl Info {
 
 /// Load the information pertaining to the driver and the corresponding device
 /// capabilities.
-pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
+pub fn get(gl: &gl::Gl) -> (Info, Features, Limits, PrivateCaps) {
     use self::Requirement::*;
     let info = Info::get(gl);
     let tessellation_supported =           info.is_supported(&[Core(4,0),
@@ -279,10 +279,6 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
                                                                 Ext ("GL_ARB_copy_buffer"),
                                                                 Ext ("GL_NV_copy_buffer")]),
     };
-    let caps = Capabilities {
-        features,
-        limits,
-    };
     let private = PrivateCaps {
         array_buffer_supported:            info.is_supported(&[Core(3,0),
                                                                Es  (3,0),
@@ -308,7 +304,7 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
                                                                Ext ("GL_ARB_sync")]),
     };
 
-    (info, caps, private)
+    (info, features, limits, private)
 }
 
 #[cfg(test)]
