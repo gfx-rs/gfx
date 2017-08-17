@@ -20,7 +20,7 @@
 use std::error::Error;
 use std::{mem, fmt};
 use {buffer, handle, format, mapping, pass, pso, shade, target, texture};
-use {Capabilities, Backend};
+use {Backend, Features, Limits};
 use memory::{Usage, Typed, Pod, cast_slice};
 use memory::{Bind, RENDER_TARGET, DEPTH_STENCIL, SHADER_RESOURCE, UNORDERED_ACCESS};
 
@@ -231,9 +231,12 @@ pub enum WaitFor {
 ///
 #[allow(missing_docs)]
 pub trait Device<B: Backend> {
-    /// Returns the capabilities of this `Device`. This usually depends on the graphics API being
+    /// Returns the features of this `Device`. This usually depends on the graphics API being
     /// used.
-    fn get_capabilities(&self) -> &Capabilities;
+    fn get_features(&self) -> &Features;
+
+    /// Returns the limits of this `Device`.
+    fn get_limits(&self) -> &Limits;
 
     // resource creation
     fn create_buffer_raw(&mut self, buffer::Info) -> Result<handle::RawBuffer<B>, buffer::CreationError>;
