@@ -90,17 +90,6 @@ pub struct Viewport {
     pub far: f32,
 }
 
-
-/// Capabilities of the device and backend.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-pub struct Capabilities {
-    /// Device features of the core interface.
-    pub features: Features,
-    /// Limits of the device.
-    pub limits: Limits,
-}
-
 /// Features that the device supports.
 /// These only include features of the core interface and not API extensions.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
