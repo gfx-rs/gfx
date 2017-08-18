@@ -489,6 +489,9 @@ impl CommandQueue {
             self.state.vao = true
         }
 
+        // Reset indirect draw buffer
+        unsafe { gl.BindBuffer(gl::DRAW_INDIRECT_BUFFER, 0) };
+
         // Unbind index buffers
         match self.state.index_buffer {
             Some(0) => (), // Nothing to do
@@ -852,9 +855,6 @@ impl CommandQueue {
                 }else if false {
                     error!("Separate blending slots are not supported");
                 }
-            },
-            Command::SetBlendColor(color) => {
-                state::set_blend_color(&self.share.context, color);
             },
             Command::SetPatches(num) => {
                 let gl = &self.share.context;
