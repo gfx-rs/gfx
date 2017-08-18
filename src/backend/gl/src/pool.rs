@@ -33,6 +33,7 @@ fn create_fbo_internal(gl: &gl::Gl) -> gl::types::GLuint {
 
 pub struct RawCommandPool {
     fbo: n::FrameBuffer,
+    limits: command::Limits,
     command_buffers: Vec<RawCommandBuffer>,
     next_buffer: usize,
 }
@@ -47,7 +48,7 @@ impl core::RawCommandPool<Backend> for RawCommandPool {
 
     fn reserve(&mut self, additional: usize) {
         for _ in 0..additional {
-            self.command_buffers.push(RawCommandBuffer::new(self.fbo));
+            self.command_buffers.push(RawCommandBuffer::new(self.fbo, self.limits));
         }
     }
 
@@ -57,9 +58,11 @@ impl core::RawCommandPool<Backend> for RawCommandPool {
     {
         let queue = queue.as_ref();
         let fbo = create_fbo_internal(&queue.share.context);
-        let buffers = (0..capacity).map(|_| RawCommandBuffer::new(fbo)).collect();
+        let limits = queue.share.limits.into();
+        let buffers = (0..capacity).map(|_| RawCommandBuffer::new(fbo, limits)).collect();
         RawCommandPool {
             fbo,
+            limits,
             command_buffers: buffers,
             next_buffer: 0,
         }
