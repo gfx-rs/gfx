@@ -687,7 +687,9 @@ impl CommandQueue {
                     unsafe { gl.ScissorArrayv(0, num_scissors as i32, scissors.as_ptr() as *const _) };
                 }
             }
-
+            Command::SetBlendColor(color) => {
+                state::set_blend_color(&self.share.context, color);
+            }
             /*
             Command::Clear(color, depth, stencil) => {
                 let gl = &self.share.context;
