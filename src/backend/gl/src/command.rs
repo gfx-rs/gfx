@@ -21,12 +21,28 @@ use core::command::{BufferCopy, BufferImageCopy, ClearValue, ImageCopy, ImageRes
                     InstanceParams, SubpassContents};
 use core::target::{ColorValue, Depth, Mirror, Rect, Stencil};
 use {native as n, Backend};
+use std::{mem, slice};
 
 /// The place of some data in the data buffer.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct DataPointer {
     offset: u32,
     size: u32,
+}
+
+impl DataPointer {
+    // Append a data pointer, resulting in one data pointer
+    // covering the whole memory region.
+    fn append(&mut self, other: DataPointer) {
+        if self.size == 0 {
+            // Empty or dummy pointer
+            self.offset = other.offset;
+            self.size = other.size;
+        } else {
+            assert_eq!(self.offset + self.size, other.offset);
+            self.size += other.size;
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -37,7 +53,11 @@ impl DataBuffer {
         DataBuffer(Vec::new())
     }
     /// Copy a given vector slice into the buffer.
-    fn add(&mut self, data: &[u8]) -> DataPointer {
+    fn add<T>(&mut self, data: &[T]) -> DataPointer {
+        self.add_raw(unsafe { mem::transmute(data) })
+    }
+    /// Copy a given u8 slice into the buffer.
+    fn add_raw(&mut self, data: &[u8]) -> DataPointer {
         self.0.extend_from_slice(data);
         DataPointer {
             offset: (self.0.len() - data.len()) as u32,
@@ -45,7 +65,13 @@ impl DataBuffer {
         }
     }
     /// Return a reference to a stored data object.
-    pub fn get(&self, ptr: DataPointer) -> &[u8] {
+    pub fn get<T>(&self, ptr: DataPointer) -> &[T] {
+        assert_eq!(ptr.size % mem::size_of::<T>() as u32, 0);
+        let raw_data = self.get_raw(ptr);
+        unsafe { mem::transmute(raw_data) }
+    }
+    /// Return a reference to a stored data object.
+    pub fn get_raw(&self, ptr: DataPointer) -> &[u8] {
         &self.0[ptr.offset as usize..(ptr.offset + ptr.size) as usize]
     }
 }
@@ -70,6 +96,12 @@ pub enum Command {
         instances: Option<InstanceParams>,
     },
     BindIndexBuffer(gl::types::GLuint),
+    BindVertexBuffers(DataPointer),
+    SetViewports {
+        viewport_ptr: DataPointer,
+        depth_range_ptr: DataPointer,
+    },
+    SetScissors(DataPointer),
 }
 
 #[allow(missing_copy_implementations)]
@@ -89,6 +121,7 @@ pub struct SubmitInfo {
 // See the explanation above why this is safe.
 unsafe impl Send for SubmitInfo {}
 
+// Cache current states of the command buffer
 struct Cache {
     // Active primitive topology, set by the current pipeline.
     primitive: Option<gl::types::GLenum>,
@@ -104,6 +137,21 @@ impl Cache {
             primitive: None,
             index_type: None,
             error_state: false,
+        }
+    }
+}
+
+// This is a subset of the device limits stripped down to the ones needed
+// for command buffer validation.
+#[derive(Debug, Clone, Copy)]
+pub struct Limits {
+    max_viewports: usize,
+}
+
+impl From<c::Limits> for Limits {
+    fn from(l: c::Limits) -> Self {
+        Limits {
+            max_viewports: l.max_viewports,
         }
     }
 }
@@ -127,17 +175,19 @@ pub struct RawCommandBuffer {
     /// etc.) so that rendering to it can occur immediately.
     pub display_fb: n::FrameBuffer,
     cache: Cache,
+    limits: Limits,
     active_attribs: usize,
 }
 
 impl RawCommandBuffer {
-    pub(crate) fn new(fbo: n::FrameBuffer) -> Self {
+    pub(crate) fn new(fbo: n::FrameBuffer, limits: Limits) -> Self {
         RawCommandBuffer {
             buf: Vec::new(),
             data: DataBuffer::new(),
-            fbo: fbo,
+            fbo,
             display_fb: 0 as n::FrameBuffer,
             cache: Cache::new(),
+            limits,
             active_attribs: 0,
         }
     }
@@ -223,11 +273,56 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
     fn set_viewports(&mut self, viewports: &[Viewport]) {
-        unimplemented!()
+        match viewports.len() {
+            0 => {
+                error!("Number of viewports can not be zero.");
+                self.cache.error_state = true;
+            }
+            n if n <= self.limits.max_viewports => {
+                // OpenGL has two functions for setting the viewports.
+                // Configuring the rectangle area and setting the depth bounds are separated.
+                //
+                // We try to store everything into a contiguous block of memory,
+                // which allows us to avoid memory allocations when executing the commands.
+                let mut viewport_ptr = DataPointer { offset: 0, size: 0 };
+                let mut depth_range_ptr = DataPointer { offset: 0, size: 0 };
+
+                for viewport in viewports {
+                    let viewport = &[viewport.x as f32, viewport.y as f32, viewport.w as f32, viewport.h as f32];
+                    viewport_ptr.append(self.data.add::<f32>(viewport));
+                }
+                for viewport in viewports {
+                    let depth_range = &[viewport.near as f64, viewport.far as f64];
+                    depth_range_ptr.append(self.data.add::<f64>(depth_range));
+                }
+                self.buf.push(Command::SetViewports { viewport_ptr, depth_range_ptr });
+            }
+            _ => {
+                error!("Number of viewports exceeds the number of maximum viewports");
+                self.cache.error_state = true;
+            }
+        }
     }
 
     fn set_scissors(&mut self, scissors: &[target::Rect]) {
-        unimplemented!()
+        match scissors.len() {
+            0 => {
+                error!("Number of scissors can not be zero.");
+                self.cache.error_state = true;
+            }
+            n if n <= self.limits.max_viewports => {
+                let mut scissors_ptr = DataPointer { offset: 0, size: 0 };
+                for scissor in scissors {
+                    let scissor = &[scissor.x as i32, scissor.y as i32, scissor.w as i32, scissor.h as i32];
+                    scissors_ptr.append(self.data.add::<i32>(scissor));
+                }
+                self.buf.push(Command::SetScissors(scissors_ptr));
+            }
+            _ => {
+                error!("Number of scissors exceeds the number of maximum viewports");
+                self.cache.error_state = true;
+            }
+        }
     }
 
     fn set_ref_values(&mut self, rv: s::RefValues) {

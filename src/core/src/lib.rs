@@ -145,6 +145,8 @@ pub struct Limits {
     pub max_texture_size: usize,
     /// Maximum number of vertices for each patch.
     pub max_patch_size: PatchSize,
+    /// Maximum number of viewports.
+    pub max_viewports: usize,
 }
 
 /// Describes what geometric primitives are created from vertex data.
