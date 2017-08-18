@@ -97,30 +97,6 @@ pub fn bind_draw_color_buffers(gl: &gl::Gl, mask: usize) {
     unimplemented!()
 }
 
-pub fn bind_viewport(gl: &gl::Gl, rect: Rect) {
-    unsafe { gl.Viewport(
-        rect.x as gl::types::GLint,
-        rect.y as gl::types::GLint,
-        rect.w as gl::types::GLint,
-        rect.h as gl::types::GLint
-    )};
-}
-
-pub fn bind_scissor(gl: &gl::Gl, rect: Option<Rect>) {
-    match rect {
-        Some(r) => { unsafe {
-            gl.Enable(gl::SCISSOR_TEST);
-            gl.Scissor(
-                r.x as gl::types::GLint,
-                r.y as gl::types::GLint,
-                r.w as gl::types::GLint,
-                r.h as gl::types::GLint
-            );
-        }},
-        None => unsafe { gl.Disable(gl::SCISSOR_TEST) },
-    }
-}
-
 pub fn map_comparison(cmp: Comparison) -> gl::types::GLenum {
     match cmp {
         Comparison::Never        => gl::NEVER,

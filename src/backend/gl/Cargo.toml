@@ -32,3 +32,4 @@ name = "gfx_device_gl"
 log = "0.3"
 gfx_gl = "0.3.1"
 gfx_core = { path = "../../core", version = "0.7" }
+smallvec = "0.4"
