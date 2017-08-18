@@ -91,7 +91,10 @@ pub trait RawCommandBuffer<B: Backend> {
     fn set_scissors(&mut self, &[target::Rect]);
 
     ///
-    fn set_ref_values(&mut self, state::RefValues);
+    fn set_stencil_reference(&mut self, front: target::Stencil, back: target::Stencil);
+
+    ///
+    fn set_blend_constants(&mut self, target::ColorValue);
 
     ///
     fn begin_renderpass(
