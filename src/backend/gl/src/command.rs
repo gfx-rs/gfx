@@ -88,6 +88,7 @@ pub enum Command {
         depth_range_ptr: DataPointer,
     },
     SetScissors(DataPointer),
+    SetBlendColor(ColorValue),
 }
 
 #[allow(missing_copy_implementations)]
@@ -113,6 +114,10 @@ struct Cache {
     primitive: Option<gl::types::GLenum>,
     // Active index type, set by the current index buffer.
     index_type: Option<c::IndexType>,
+    // Stencil reference values (front, back).
+    stencil_ref: Option<(Stencil, Stencil)>,
+    // Blend color.
+    blend_color: Option<ColorValue>,
     // Indicates that invalid commands have been recorded.
     error_state: bool,
 }
@@ -122,6 +127,8 @@ impl Cache {
         Cache {
             primitive: None,
             index_type: None,
+            stencil_ref: None,
+            blend_color: None,
             error_state: false,
         }
     }
@@ -311,8 +318,18 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn set_ref_values(&mut self, rv: s::RefValues) {
-        unimplemented!()
+    fn set_stencil_reference(&mut self, front: target::Stencil, back: target::Stencil) {
+        // Only cache the stencil references values until
+        // we assembled all the pieces to set the stencil state
+        // from the pipeline.
+        self.cache.stencil_ref = Some((front, back));
+    }
+
+    fn set_blend_constants(&mut self, cv: target::ColorValue) {
+        if self.cache.blend_color != Some(cv) {
+            self.cache.blend_color = Some(cv);
+            self.buf.push(Command::SetBlendColor(cv));
+        }
     }
 
     fn bind_descriptor_heap(&mut self, _: &n::DescriptorHeap) {
