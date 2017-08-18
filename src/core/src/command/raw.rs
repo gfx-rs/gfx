@@ -54,10 +54,42 @@ pub trait RawCommandBuffer<B: Backend> {
     /// Bind vertex buffers.
     fn bind_vertex_buffers(&mut self, pso::VertexBufferSet<B>);
 
+    /// Set the viewport parameters for the rasterizer.
     ///
+    /// Every other viewport, which is not specified in this call,
+    /// will be disabled.
+    ///
+    /// Ensure that the number of set viewports at draw time is equal
+    /// (or higher) to the number specified in the bound pipeline.
+    ///
+    /// # Errors
+    ///
+    /// This function does not return an error. Invalid usage of this function
+    /// will result in an error on `finish`.
+    ///
+    /// - Number of viewports must be between 1 and `max_viewports`.
+    /// - Only queues with graphics capability support this function.
     fn set_viewports(&mut self, &[Viewport]);
+
+    /// Set the scissor rectangles for the rasterizer.
     ///
+    /// Every other scissor, which is not specified in this call,
+    /// will be disabled.
+    ///
+    /// Each scissor corresponds to the viewport with the same index.
+    ///
+    /// Ensure that the number of set scissors at draw time is equal (or higher)
+    /// to the number of viewports specified in the bound pipeline.
+    ///
+    /// # Errors
+    ///
+    /// This function does not return an error. Invalid usage of this function
+    /// will result in an error on `finish`.
+    ///
+    /// - Number of scissors must be between 1 and `max_viewports`.
+    /// - Only queues with graphics capability support this function.
     fn set_scissors(&mut self, &[target::Rect]);
+
     ///
     fn set_ref_values(&mut self, state::RefValues);
 
