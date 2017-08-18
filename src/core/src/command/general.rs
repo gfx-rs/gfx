@@ -86,8 +86,13 @@ impl<'a, B: Backend> GeneralCommandBuffer<'a, B> {
     }
 
     ///
-    pub fn set_ref_values(&mut self, rv: state::RefValues) {
-        self.0.set_ref_values(rv)
+    pub fn set_stencil_reference(&mut self, front: target::Stencil, back: target::Stencil) {
+        self.0.set_stencil_reference(front, back)
+    }
+
+    ///
+    pub fn set_blend_constants(&mut self, cv: target::ColorValue) {
+        self.0.set_blend_constants(cv)
     }
 
     ///
