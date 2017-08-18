@@ -8,14 +8,16 @@
 extern crate log;
 extern crate gfx_gl as gl;
 extern crate gfx_core as core;
+extern crate smallvec;
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use core::{self as c, handle, format, texture as t, memory, command as com, buffer};
+use core::{self as c, handle, format, target, texture as t, memory, command as com, buffer, Viewport};
 use core::QueueType;
 use core::target::{Layer, Level};
 use command::{Command, DataBuffer};
 use device::MappingKind;
+use smallvec::SmallVec;
 
 pub use self::device::Device;
 pub use self::info::{Info, PlatformName, Version};
@@ -328,6 +330,10 @@ struct State {
     // Currently bound index/element buffer.
     // None denotes that we don't know what is currently bound.
     index_buffer: Option<gl::types::GLuint>,
+    // Currently set viewports.
+    num_viewports: usize,
+    // Currently set scissor rects.
+    num_scissors: usize,
 }
 
 impl State {
@@ -337,6 +343,8 @@ impl State {
         State {
             vao: false,
             index_buffer: None,
+            num_viewports: 0,
+            num_scissors: 0,
         }
     }
 
@@ -345,6 +353,9 @@ impl State {
     fn flush(&mut self) {
         self.vao = false;
         self.index_buffer = None;
+
+        // TOOD: reset viewports and scissors
+        //       do we need to clear everything from 0..MAX_VIEWPORTS?
     }
 }
 
@@ -472,6 +483,36 @@ impl CommandQueue {
                 self.state.index_buffer = Some(0);
             }
         }
+
+        // Reset viewports
+        if self.state.num_viewports == 1 {
+            unsafe { gl.Viewport(0, 0, 0, 0) };
+            unsafe { gl.DepthRange(0.0, 1.0) };
+        } else if self.state.num_viewports > 1 {
+            // 16 viewports is a common limit set in drivers.
+            let viewports: SmallVec<[[f32; 4]; 16]> =
+                (0..self.state.num_viewports)
+                    .map(|_| [0.0, 0.0, 0.0, 0.0])
+                    .collect();
+            let depth_ranges: SmallVec<[[f64; 2]; 16]> =
+                (0..self.state.num_viewports)
+                    .map(|_| [0.0, 0.0])
+                    .collect();
+            unsafe { gl.ViewportArrayv(0, viewports.len() as i32, viewports.as_ptr() as *const _)};
+            unsafe { gl.DepthRangeArrayv(0, depth_ranges.len() as i32, depth_ranges.as_ptr() as *const _)};
+        }
+
+        // Reset scissors
+        if self.state.num_scissors == 1 {
+            unsafe { gl.Scissor(0, 0, 0, 0) };
+        } else if self.state.num_scissors > 1 {
+            // 16 viewports is a common limit set in drivers.
+            let scissors: SmallVec<[[i32; 4]; 16]> =
+                (0..self.state.num_scissors)
+                    .map(|_| [0, 0, 0, 0])
+                    .collect();
+            unsafe { gl.ScissorArrayv(0, scissors.len() as i32, scissors.as_ptr() as *const _)};
+        }
     }
 
     fn process(&mut self, cmd: &Command, data_buf: &DataBuffer) {
@@ -480,6 +521,9 @@ impl CommandQueue {
                 let gl = &self.share.context;
                 self.state.index_buffer = Some(buffer);
                 unsafe { gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer) };
+            }
+            Command::BindVertexBuffers(data_ptr) => {
+                unimplemented!()
             }
             Command::Draw { primitive, start, count, instances } => {
                 let gl = &self.share.context;
@@ -605,6 +649,42 @@ impl CommandQueue {
                     gl.BindBuffer(gl::DRAW_INDIRECT_BUFFER, buffer);
                     // TODO: possible integer conversion issue
                     gl.DispatchComputeIndirect(offset as gl::types::GLintptr);
+                }
+            }
+            Command::SetViewports { viewport_ptr, depth_range_ptr } => {
+                let gl = &self.share.context;
+                let viewports = data_buf.get::<[f32; 4]>(viewport_ptr);
+                let depth_ranges = data_buf.get::<[f64; 2]>(depth_range_ptr);
+
+                let num_viewports = viewports.len();
+                assert_eq!(num_viewports, depth_ranges.len());
+                assert!(0 < num_viewports && num_viewports <= self.share.limits.max_viewports);
+
+                if num_viewports == 1 {
+                    let view = viewports[0];
+                    let depth_range  = depth_ranges[0];
+                    unsafe { gl.Viewport(view[0] as i32, view[1] as i32, view[2] as i32, view[3] as i32) };
+                    unsafe { gl.DepthRange(depth_range[0], depth_range[1]) };
+                } else if num_viewports > 1 {
+                    // Support for these functions is coupled with the support
+                    // of multiple viewports.
+                    unsafe { gl.ViewportArrayv(0, num_viewports as i32, viewports.as_ptr() as *const _) };
+                    unsafe { gl.DepthRangeArrayv(0, num_viewports as i32, depth_ranges.as_ptr() as *const _) };
+                }
+            }
+            Command::SetScissors(data_ptr) => {
+                let gl = &self.share.context;
+                let scissors = data_buf.get::<[i32; 4]>(data_ptr);
+                let num_scissors = scissors.len();
+                assert!(0 < num_scissors && num_scissors <= self.share.limits.max_viewports);
+
+                if num_scissors == 1 {
+                    let scissor = scissors[0];
+                    unsafe { gl.Scissor(scissor[0], scissor[1], scissor[2], scissor[3]) };
+                } else {
+                    // Support for this function is coupled with the support
+                    // of multiple viewports.
+                    unsafe { gl.ScissorArrayv(0, num_scissors as i32, scissors.as_ptr() as *const _) };
                 }
             }
 
@@ -740,12 +820,6 @@ impl CommandQueue {
             },
             Command::SetRasterizer(rast) => {
                 state::bind_rasterizer(&self.share.context, &rast, self.share.info.version.is_embedded);
-            },
-            Command::SetViewports(ref rects) => {
-                state::bind_viewports(&self.share.context, rects);
-            },
-            Command::SetScissors(ref rects) => {
-                state::bind_scissors(&self.share.context, rects);
             },
             Command::SetDepthState(depth) => {
                 state::bind_depth(&self.share.context, &depth);
