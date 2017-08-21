@@ -22,7 +22,7 @@ use std::fmt;
 pub enum ResourceViewError { }
 
 impl fmt::Display for ResourceViewError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, _: &mut fmt::Formatter) -> fmt::Result {
         match *self {}
     }
 }

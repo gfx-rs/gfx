@@ -63,7 +63,7 @@ impl fmt::Display for CreateShaderError {
             CreateShaderError::LibrarySourceNotSupported |
             CreateShaderError::CompilationFailed(_) => f.pad(self.description()),
             CreateShaderError::StageNotSupported(ref stage) => {
-                write!("the device does not support the {:?} stage", stage)
+                write!(f, "the device does not support the {:?} stage", stage)
             }
         }
     }
