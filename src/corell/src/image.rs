@@ -217,6 +217,12 @@ pub enum WrapMode {
     Border,
 }
 
+impl Default for WrapMode {
+    fn default() -> Self {
+        WrapMode::Tile
+    }
+}
+
 /// A wrapper for the LOD level of a texture.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Lod(i16);
