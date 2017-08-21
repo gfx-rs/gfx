@@ -14,6 +14,9 @@
 
 //! Shader handling.
 
+use std::error::Error;
+use std::fmt;
+
 /// Shader pipeline stage
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum Stage {
@@ -51,4 +54,28 @@ pub enum CreateShaderError {
     CompilationFailed(String),
     /// Library source type is not supported.
     LibrarySourceNotSupported,
+}
+
+impl fmt::Display for CreateShaderError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            CreateShaderError::ModelNotSupported |
+            CreateShaderError::LibrarySourceNotSupported |
+            CreateShaderError::CompilationFailed(_) => f.pad(self.description()),
+            CreateShaderError::StageNotSupported(ref stage) => {
+                write!(f, "the device does not support the {:?} stage", stage)
+            }
+        }
+    }
+}
+
+impl Error for CreateShaderError {
+    fn description(&self) -> &str {
+        match *self {
+            CreateShaderError::ModelNotSupported => "the device does not support the requested shader model",
+            CreateShaderError::LibrarySourceNotSupported => "the library source type is not supported",
+            CreateShaderError::CompilationFailed(ref err_msg) => err_msg,
+            CreateShaderError::StageNotSupported(_) => "the device does not support the specified stage",
+        }
+    }
 }
