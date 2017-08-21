@@ -14,15 +14,43 @@
 
 use {buffer, format, image, mapping, memory, pass, pso, shade};
 use {HeapType, Resources, SubPass};
+use std::error::Error;
+use std::fmt;
 
 /// Error creating either a ShaderResourceView, or UnorderedAccessView.
 #[derive(Clone, PartialEq, Debug)]
 pub enum ResourceViewError { }
 
+impl fmt::Display for ResourceViewError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {}
+    }
+}
+
+impl Error for ResourceViewError {
+    fn description(&self) -> &str {
+        match *self {}
+    }
+}
+
 /// Error creating either a RenderTargetView, or DepthStencilView.
 #[derive(Clone, PartialEq, Debug)]
 pub enum TargetViewError {
     BadFormat,
+}
+
+impl fmt::Display for TargetViewError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.pad(self.description())
+    }
+}
+
+impl Error for TargetViewError {
+    fn description(&self) -> &str {
+        match *self {
+            TargetViewError::BadFormat => "an incompatible format was requested for the target view",
+        }
+    }
 }
 
 /// Type of the resources that can be allocated on a heap.
@@ -41,6 +69,21 @@ pub enum ResourceHeapError {
     UnsupportedType,
     /// Unable to allocate the specified size.
     OutOfMemory,
+}
+
+impl fmt::Display for ResourceHeapError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.pad(self.description())
+    }
+}
+
+impl Error for ResourceHeapError {
+    fn description(&self) -> &str {
+        match *self {
+            ResourceHeapError::UnsupportedType => "the requested type is not supported",
+            ResourceHeapError::OutOfMemory => "unable to allocate the specified size",
+        }
+    }
 }
 
 /// Type of the descriptor heap.
