@@ -103,6 +103,10 @@ pub enum Command {
     },
     SetScissors(DataPointer),
     SetBlendColor(ColorValue),
+    ClearColor(n::TargetView, command::ClearColor),
+    BindFrameBuffer(FrameBufferTarget, n::FrameBuffer),
+    BindTargetView(FrameBufferTarget, AttachmentPoint, n::TargetView),
+    SetDrawColorBuffers(usize),
 }
 
 #[allow(missing_copy_implementations)]
@@ -122,6 +126,9 @@ pub struct SubmitInfo {
 // See the explanation above why this is safe.
 unsafe impl Send for SubmitInfo {}
 
+pub type FrameBufferTarget = gl::types::GLenum;
+pub type AttachmentPoint = gl::types::GLenum;
+
 // Cache current states of the command buffer
 struct Cache {
     // Active primitive topology, set by the current pipeline.
@@ -132,6 +139,9 @@ struct Cache {
     stencil_ref: Option<(Stencil, Stencil)>,
     // Blend color.
     blend_color: Option<ColorValue>,
+    ///
+    framebuffer: Option<(FrameBufferTarget, n::FrameBuffer)>,
+    ///
     // Indicates that invalid commands have been recorded.
     error_state: bool,
 }
@@ -143,6 +153,7 @@ impl Cache {
             index_type: None,
             stencil_ref: None,
             blend_color: None,
+            framebuffer: None,
             error_state: false,
         }
     }
@@ -200,7 +211,13 @@ impl RawCommandBuffer {
     }
 
     pub(crate) fn reset(&mut self) {
-        unimplemented!()
+        self.buf.clear();
+        self.data.0.clear();
+        self.cache = Cache::new();
+    }
+
+    fn is_main_target(&self, tv: n::TargetView) -> bool {
+        tv == n::TargetView::Surface(0)
     }
 }
 
@@ -241,7 +258,15 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         _: texture::ImageLayout,
         value: command::ClearColor,
     ) {
-        unimplemented!()
+        if self.is_main_target(*rtv) {
+            self.buf.push(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, self.display_fb));
+        } else {
+            self.buf.push(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, self.fbo));
+            self.buf.push(Command::BindTargetView(gl::DRAW_FRAMEBUFFER, gl::COLOR_ATTACHMENT0, *rtv));
+            self.buf.push(Command::SetDrawColorBuffers(1));
+        }
+
+        self.buf.push(Command::ClearColor(*rtv, value));
     }
 
     fn clear_depth_stencil(
@@ -350,7 +375,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         // no-op, OpenGL doesn't have a concept of descriptor heaps
     }
 
-    fn bind_graphics_pipeline(&mut self, pipeline: &n::PipelineState) {
+    fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
         unimplemented!()
     }
 
@@ -363,7 +388,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn bind_compute_pipeline(&mut self, pipeline: &n::PipelineState) {
+    fn bind_compute_pipeline(&mut self, pipeline: &n::ComputePipeline) {
         unimplemented!()
     }
 

@@ -18,7 +18,7 @@ use core::state::{BlendValue, Comparison, CullFace, Equation,
                   Offset, RasterMethod, StencilOp, FrontFace};
 use core::target::{ColorValue, Rect, Stencil};
 use gl;
-
+use smallvec::SmallVec;
 
 pub fn bind_raster_method(gl: &gl::Gl, method: s::RasterMethod, offset: Option<s::Offset>) {
     let (gl_draw, gl_offset) = match method {
@@ -73,28 +73,10 @@ pub fn bind_rasterizer(gl: &gl::Gl, r: &s::Rasterizer, is_embedded: bool) {
     }
 }
 
-pub fn bind_draw_color_buffers(gl: &gl::Gl, mask: usize) {
-    /*
-    let attachments = [
-        gl::COLOR_ATTACHMENT0,  gl::COLOR_ATTACHMENT1,  gl::COLOR_ATTACHMENT2,
-        gl::COLOR_ATTACHMENT3,  gl::COLOR_ATTACHMENT4,  gl::COLOR_ATTACHMENT5,
-        gl::COLOR_ATTACHMENT6,  gl::COLOR_ATTACHMENT7,  gl::COLOR_ATTACHMENT8,
-        gl::COLOR_ATTACHMENT9,  gl::COLOR_ATTACHMENT10, gl::COLOR_ATTACHMENT11,
-        gl::COLOR_ATTACHMENT12, gl::COLOR_ATTACHMENT13, gl::COLOR_ATTACHMENT14,
-        gl::COLOR_ATTACHMENT15];
-    let mut targets = [0; MAX_COLOR_TARGETS];
-    let mut count = 0;
-    let mut i = 0;
-    while mask >> i != 0 {
-        if mask & (1<<i) != 0 {
-            targets[count] = attachments[i];
-            count += 1;
-        }
-        i += 1;
-    }
-    unsafe { gl.DrawBuffers(count as gl::types::GLint, targets.as_ptr()) };
-    */
-    unimplemented!()
+pub fn bind_draw_color_buffers(gl: &gl::Gl, num: usize) {
+    let attachments: SmallVec<[gl::types::GLenum; 16]> =
+        (0..num).map(|x| gl::COLOR_ATTACHMENT0 + x as u32).collect();
+    unsafe { gl.DrawBuffers(num as gl::types::GLint, attachments.as_ptr()) };
 }
 
 pub fn map_comparison(cmp: Comparison) -> gl::types::GLenum {
