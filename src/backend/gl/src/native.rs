@@ -42,16 +42,14 @@ impl ResourceView {
 }
 
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct PipelineState {
-    /*
+#[derive(Clone, Debug, Copy)]
+pub struct GraphicsPipeline {
     program: Program,
-    primitive: c::Primitive,
-    input: Vec<Option<BufferElement>>,
-    scissor: bool,
-    rasterizer: s::Rasterizer,
-    output: OutputMerger,
-    */
+}
+
+#[derive(Clone, Debug, Copy)]
+pub struct ComputePipeline {
+    program: Program,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
