@@ -14,7 +14,7 @@
 
 extern crate env_logger;
 extern crate gfx_corell;
-#[cfg(all(target_os = "windows", not(feature = "vulkan")))]
+#[cfg(feature = "dx12")]
 extern crate gfx_device_dx12ll as back;
 #[cfg(feature = "vulkan")]
 extern crate gfx_device_vulkanll as back;
@@ -60,7 +60,7 @@ const TRIANGLE: [Vertex; 6] = [
     Vertex { a_Pos: [ -0.5,-0.33 ], a_Uv: [0.0, 0.0] },
 ];
 
-#[cfg(any(feature = "vulkan", target_os = "windows", feature = "metal"))]
+#[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
 fn main() {
     env_logger::init().unwrap();
     let mut events_loop = winit::EventsLoop::new();
@@ -93,7 +93,7 @@ fn main() {
 
     // Setup renderpass and pipeline
     // dx12 runtime shader compilation
-    #[cfg(all(target_os = "windows", not(feature = "vulkan")))]
+    #[cfg(feature = "dx12")]
     let shader_lib = factory.create_shader_library_from_source(&[
             (VS, shade::Stage::Vertex, include_bytes!("shader/triangle.hlsl")),
             (PS, shade::Stage::Pixel, include_bytes!("shader/triangle.hlsl")),
@@ -503,7 +503,7 @@ fn main() {
     }
 }
 
-#[cfg(not(any(feature = "vulkan", target_os = "windows", feature = "metal")))]
+#[cfg(not(any(feature = "vulkan", feature = "dx12", feature = "metal")))]
 fn main() {
     println!("You need to enable the native API feature (vulkan/metal) in order to test the LL");
 }

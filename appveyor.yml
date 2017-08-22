@@ -17,41 +17,40 @@ install:
 build_script:
   # No d3d12 support on GNU windows ATM
   # context: https://github.com/gfx-rs/gfx/pull/1417
-  - if (%COMPILER%==gnu) {
-    - >
-      cargo build --all --features vulkan
+  - if %COMPILER%==gnu (
+      cargo build --all
       --exclude gfx_window_glfw
+      --exclude gfx_window_sdl
       --exclude gfx_device_metal
       --exclude gfx_device_metalll
       --exclude gfx_window_metal
       --exclude gfx_device_dx12ll
-    } else {
-      - >
-        cargo build --all --features vulkan
-        --exclude gfx_window_glfw
-        --exclude gfx_device_metal
-        --exclude gfx_device_metalll
-        --exclude gfx_window_metal
-    }
+      --exclude gfx_device_dx12
+      --exclude gfx_window_dxgi
+    ) else (
+      cargo build --all
+      --exclude gfx_window_glfw
+      --exclude gfx_window_sdl
+      --exclude gfx_device_metal
+      --exclude gfx_device_metalll
+      --exclude gfx_window_metal
+    )
 test_script:
-  # re: gfx is gfx_render
-  - cargo test -p gfx -p gfx_core
-  - if (%COMPILER%==gnu) {
-    - >
-      cargo test --all --features vulkan
+  - if %COMPILER%==gnu (
+      cargo test --all
       --exclude gfx_window_glfw
+      --exclude gfx_window_sdl
       --exclude gfx_device_metal
       --exclude gfx_device_metalll
       --exclude gfx_window_metal
       --exclude gfx_device_dx12ll
-    } else {
-      - >
-        cargo test --all --features vulkan
-        --exclude gfx_window_glfw
-        --exclude gfx_device_metal
-        --exclude gfx_device_metalll
-        --exclude gfx_window_metal
-      - cargo test -p gfx -p gfx_core --features dx11
-      - cargo test -p gfx -p gfx_core --features dx12
-      - cargo test -p gfx -p gfx_core --features dx12ll
-    }
+      --exclude gfx_device_dx12
+      --exclude gfx_window_dxgi
+    ) else (
+      cargo test --all
+      --exclude gfx_window_glfw
+      --exclude gfx_window_sdl
+      --exclude gfx_device_metal
+      --exclude gfx_device_metalll
+      --exclude gfx_window_metal
+    )
