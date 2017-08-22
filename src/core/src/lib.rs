@@ -48,7 +48,7 @@ pub use self::pool::{ComputeCommandPool, GeneralCommandPool, GraphicsCommandPool
                      SubpassCommandPool, TransferCommandPool};
 pub use self::queue::{CommandQueue, QueueType, RawSubmission, Submission, QueueFamily,
                       ComputeQueue, GeneralQueue, GraphicsQueue, TransferQueue};
-pub use self::window::{Backbuffer, Frame, FrameSync, Surface, SwapChain, SwapchainConfig,
+pub use self::window::{Backbuffer, Frame, FrameSync, Surface, Swapchain, SwapchainConfig,
                        WindowExt};
 pub use draw_state::{state, target};
 

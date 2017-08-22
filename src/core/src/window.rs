@@ -17,7 +17,7 @@
 //! Screen presentation (fullscreen or window) of images requires two objects:
 //!
 //! * [`Surface`] is the host abstraction of the native screen
-//! * [`SwapChain`] is the device abstraction for a surface, containing multiple presentable images
+//! * [`Swapchain`] is the device abstraction for a surface, containing multiple presentable images
 //!
 //! ## Window
 //!
@@ -27,7 +27,7 @@
 //!
 //! // TODO
 //!
-//! ## SwapChain
+//! ## Swapchain
 //!
 //! The most interesting part of a swapchain are the contained presentable images/backbuffers.
 //! Presentable images are specialized images, which can be presented on the screen. They are
@@ -37,10 +37,10 @@
 //!
 //! ```no_run
 //! use gfx_core::{Device, FrameSync};
-//! # use gfx_core::{GraphicsQueue, SwapChain};
-//! # use gfx_core::dummy::{DummyBackend, DummyDevice, DummyResources, DummySwapChain};
+//! # use gfx_core::{GraphicsQueue, Swapchain};
+//! # use gfx_core::dummy::{DummyBackend, DummyDevice, DummyResources, DummySwapchain};
 //!
-//! # let mut swapchain: DummySwapChain = return;
+//! # let mut swapchain: DummySwapchain = return;
 //! # let mut device: DummyDevice = return;
 //! # let mut present_queue: GraphicsQueue<DummyBackend> = return;
 //! let acquisition_semaphore = device.create_semaphore();
@@ -73,11 +73,11 @@
 //! # // TODO:
 //! ```
 //!
-//! > *Note*: `WindowExt`, `Surface` and `SwapChain` are _not_ part of the `Backend`
+//! > *Note*: `WindowExt`, `Surface` and `Swapchain` are _not_ part of the `Backend`
 //! > to allow support for different window libraries.
 //!
 //! [`Surface`]: trait.Surface.html
-//! [`SwapChain`]: trait.SwapChain.html
+//! [`Swapchain`]: trait.Swapchain.html
 //!
 
 use {Adapter, Backend, Resources};
@@ -87,7 +87,7 @@ use format::Formatted;
 /// A `Surface` abstracts the surface of a native window, which will be presented
 pub trait Surface<B: Backend> {
     ///
-    type SwapChain: SwapChain<B>;
+    type Swapchain: Swapchain<B>;
 
     /// Check if the queue family supports presentation for this surface.
     ///
@@ -120,7 +120,7 @@ pub trait Surface<B: Backend> {
     ///                             .with_color::<Srgba8>();
     /// surface.build_swapchain(swapchain_config, &queue);
     /// ```
-    fn build_swapchain<Q>(&mut self, config: SwapchainConfig, present_queue: &Q) -> Self::SwapChain
+    fn build_swapchain<Q>(&mut self, config: SwapchainConfig, present_queue: &Q) -> Self::Swapchain
     where
         Q: AsRef<B::CommandQueue>;
 }
@@ -139,7 +139,7 @@ impl Frame {
     /// Retrieve frame id.
     ///
     /// The can be used to fetch the currently used backbuffer from
-    /// [`get_backbuffers`](trait.SwapChain.html#tymethod.get_backbuffers)
+    /// [`get_backbuffers`](trait.Swapchain.html#tymethod.get_backbuffers)
     ///
     /// # Examples
     ///
@@ -166,7 +166,7 @@ pub enum FrameSync<'a, R: Resources> {
     Fence(&'a handle::Fence<R>),
 }
 
-/// Allows you to configure a `SwapChain` for creation.
+/// Allows you to configure a `Swapchain` for creation.
 #[derive(Debug, Clone)]
 pub struct SwapchainConfig {
     /// Color format of the backbuffer images.
@@ -204,7 +204,7 @@ impl SwapchainConfig {
 
     /// Specify the depth stencil format for the backbuffer images.
     ///
-    /// The SwapChain will create additional depth-stencil images for each backbuffer.
+    /// The Swapchain will create additional depth-stencil images for each backbuffer.
     ///
     /// # Examples
     ///
@@ -219,13 +219,13 @@ impl SwapchainConfig {
     // TODO: depth-only, stencil-only, swapchain size, present modes, etc.
 }
 
-/// SwapChain backbuffer type (color image, depth-stencil image).
+/// Swapchain backbuffer type (color image, depth-stencil image).
 pub type Backbuffer<B: Backend> = (handle::RawTexture<B::Resources>,
                                    Option<handle::RawTexture<B::Resources>>);
 
-/// The `SwapChain` is the backend representation of the surface.
+/// The `Swapchain` is the backend representation of the surface.
 /// It consists of multiple buffers, which will be presented on the surface.
-pub trait SwapChain<B: Backend> {
+pub trait Swapchain<B: Backend> {
     /// Access the backbuffer color and depth-stencil images.
     ///
     /// *Note*: The number of exposed backbuffers might differ from number of internally used buffers.

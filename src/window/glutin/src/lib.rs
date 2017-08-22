@@ -67,14 +67,14 @@ pub fn update_views_raw(window: &glutin::GlWindow, old_dimensions: texture::Dime
 }
 */
 
-pub struct SwapChain {
+pub struct Swapchain {
     // Underlying window, required for presentation
     window: Rc<glutin::GlWindow>,
     // Single element backbuffer
     backbuffer: [core::Backbuffer<device_gl::Backend>; 1],
 }
 
-impl core::SwapChain<device_gl::Backend> for SwapChain {
+impl core::Swapchain<device_gl::Backend> for Swapchain {
     fn get_backbuffers(&mut self) -> &[core::Backbuffer<device_gl::Backend>] {
         &self.backbuffer
     }
@@ -97,10 +97,10 @@ pub struct Surface {
 }
 
 impl core::Surface<device_gl::Backend> for Surface {
-    type SwapChain = SwapChain;
+    type Swapchain = Swapchain;
 
     fn supports_queue(&self, _: &device_gl::QueueFamily) -> bool { true }
-    fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, present_queue: &Q) -> SwapChain
+    fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, present_queue: &Q) -> Swapchain
         where Q: AsRef<device_gl::CommandQueue>
     {
         use core::handle::Producer;
@@ -129,7 +129,7 @@ impl core::Surface<device_gl::Backend> for Surface {
             )
         });
 
-        SwapChain {
+        Swapchain {
             window: self.window.clone(),
             backbuffer: [(color, ds); 1],
         }

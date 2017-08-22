@@ -20,7 +20,7 @@ extern crate glutin;
 use gfx::format::Formatted;
 use gfx::traits::DeviceExt;
 use gfx::{Adapter, CommandQueue, Device, FrameSync, GraphicsPoolExt,
-          Surface, SwapChain, SwapChainExt, WindowExt};
+          Surface, Swapchain, SwapchainExt, WindowExt};
 
 pub type ColorFormat = gfx::format::Rgba8;
 pub type DepthFormat = gfx::format::DepthStencil;

@@ -361,10 +361,10 @@ impl Surface {
 
 impl core::Surface for Surface {
     type Queue = CommandQueue;
-    type SwapChain = SwapChain;
+    type Swapchain = Swapchain;
 
     fn build_swapchain<T: core::format::RenderFormat>(&self,
-                    present_queue: &CommandQueue) -> SwapChain {
+                    present_queue: &CommandQueue) -> Swapchain {
         let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
         let loader = vk::SwapchainFn::load(|name| {
                 unsafe {
@@ -445,7 +445,7 @@ impl core::Surface for Surface {
 
         // TODO: set initial resource states to Present
 
-        SwapChain {
+        Swapchain {
             inner: swapchain,
             present_queue: present_queue.inner.clone(),
             device: present_queue.device.clone(),
@@ -456,7 +456,7 @@ impl core::Surface for Surface {
     }
 }
 
-pub struct SwapChain {
+pub struct Swapchain {
     inner: vk::SwapchainKHR,
     device: Arc<DeviceInner>,
     present_queue: CommandQueueInner,
@@ -467,7 +467,7 @@ pub struct SwapChain {
     frame_queue: VecDeque<usize>,
 }
 
-impl core::SwapChain for SwapChain {
+impl core::Swapchain for Swapchain {
     type Image = native::Image;
     type R = Resources;
 
@@ -519,7 +519,7 @@ impl core::SwapChain for SwapChain {
     }
 }
 
-impl Drop for SwapChain {
+impl Drop for Swapchain {
     fn drop(&mut self) {
         unsafe {
             self.swapchain_fn.destroy_swapchain_khr(
@@ -729,7 +729,7 @@ impl core::Backend for Backend {
     type Adapter = Adapter;
     type Resources = Resources;
     type Surface = Surface;
-    type SwapChain = SwapChain;
+    type Swapchain = Swapchain;
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
