@@ -1,7 +1,10 @@
 use ash::vk;
-use core::pso;
+use ash::version::DeviceV1_0;
+use core;
 use core::texture::SubresourceRange;
 use std::collections::BTreeMap;
+use std::sync::Arc;
+use {Backend, RawDevice};
 
 #[derive(Debug, Hash)]
 pub struct Semaphore(pub vk::Semaphore);
@@ -56,7 +59,7 @@ pub struct PipelineLayout {
 #[derive(Debug, Eq, Hash, PartialEq)]
 pub struct ShaderLib {
     // TODO: merge SPIR-V modules
-    pub shaders: BTreeMap<pso::EntryPoint, vk::ShaderModule>,
+    pub shaders: BTreeMap<core::pso::EntryPoint, vk::ShaderModule>,
 }
 
 #[derive(Debug, Hash, Clone, PartialEq, Eq)]
@@ -80,6 +83,22 @@ pub struct DescriptorHeap {
 }
 
 #[derive(Debug)]
-pub struct DescriptorSetPool {
+pub struct DescriptorPool {
     pub(crate) raw: vk::DescriptorPool,
+    device: Arc<RawDevice>,
+}
+
+impl core::DescriptorPool<Backend> for DescriptorPool {
+    fn allocate_sets(&mut self, layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
+        unimplemented!()
+    }
+
+    fn reset(&mut self) {
+        assert_eq!(Ok(()), unsafe {
+            self.device.0.reset_descriptor_pool(
+                self.raw,
+                vk::DescriptorPoolResetFlags::empty(),
+            )
+        });
+    }
 }
