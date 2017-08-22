@@ -21,7 +21,6 @@ use super::output_merger::{ColorInfo, DepthStencilDesc};
 
 // Vulkan:
 //  - SpecializationInfo not provided per shader
-//  - TODO: infer rasterization discard from shaders?
 //
 // D3D12:
 //  - rootSignature specified outside
@@ -92,13 +91,15 @@ pub struct Rasterizer {
     pub depth_bias: Option<DepthBias>,
     ///
     pub conservative_rasterization: bool,
+    /// Discard primitives before the rasterizer.
+    pub rasterizer_discard: bool,
 }
 
 ///
 pub enum BlendTargets {
-    ///
+    /// All attachments share the same blend state.
     Single(ColorInfo),
-    ///
+    /// All attachments have independt blend states.
     Independent(Vec<ColorInfo>),
 }
 
