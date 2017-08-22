@@ -95,6 +95,8 @@ pub struct Viewport {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct Features {
+    /// Support indirect drawing and dispatching.
+    pub indirect_execution: bool,
     /// Support instanced drawing.
     pub draw_instanced: bool,
     /// Support offsets for instanced drawing with base instance.

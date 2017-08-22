@@ -250,17 +250,19 @@ pub fn get(gl: &gl::Gl) -> (Info, Features, Limits, PrivateCaps) {
         max_viewports: if multi_viewports_supported { get_usize(gl, gl::MAX_VIEWPORTS) } else {1},
     };
     let features = Features {
+        indirect_execution:                 info.is_supported(&[Core(4,3),
+                                                                Es  (3,1)]), // TODO: extension
         draw_instanced:                     info.is_supported(&[Core(3,1),
                                                                 Es  (3,0),
                                                                 Ext ("GL_ARB_draw_instanced")]),
         draw_instanced_base:                info.is_supported(&[Core(4,2),
                                                                 Ext ("GL_ARB_base_instance")]),
-        draw_indexed_base:                  info.is_supported(&[Core(3, 2)]), // TODO: extension
-        draw_indexed_instanced:             info.is_supported(&[Core(3, 1),
-                                                                Es  (3, 0)]), // TODO: extension
+        draw_indexed_base:                  info.is_supported(&[Core(3,2)]), // TODO: extension
+        draw_indexed_instanced:             info.is_supported(&[Core(3,1),
+                                                                Es  (3,0)]), // TODO: extension
 
-        draw_indexed_instanced_base_vertex: info.is_supported(&[Core(3, 2)]), // TODO: extension
-        draw_indexed_instanced_base:        info.is_supported(&[Core(4, 2)]) , // TODO: extension
+        draw_indexed_instanced_base_vertex: info.is_supported(&[Core(3,2)]), // TODO: extension
+        draw_indexed_instanced_base:        info.is_supported(&[Core(4,2)]), // TODO: extension
 
         instance_rate:                      info.is_supported(&[Core(3,3),
                                                                 Es  (3,0),
