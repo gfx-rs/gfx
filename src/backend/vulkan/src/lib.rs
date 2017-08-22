@@ -29,7 +29,7 @@ use ash::version::{EntryV1_0, DeviceV1_0, InstanceV1_0, V1_0};
 use ash::vk;
 use core::{command as com, handle, memory};
 use core::{FrameSync, QueueType};
-use std::{mem, ptr};
+use std::{fmt, mem, ptr};
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
 use std::collections::VecDeque;
@@ -348,6 +348,11 @@ impl core::Adapter<Backend> for Adapter {
 
 #[doc(hidden)]
 pub struct RawDevice(pub ash::Device<V1_0>);
+impl fmt::Debug for RawDevice {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        unimplemented!()
+    }
+}
 impl Drop for RawDevice {
     fn drop(&mut self) {
         unsafe { self.0.destroy_device(None); }
@@ -449,7 +454,7 @@ impl core::Backend for Backend {
     type RenderPass = native::RenderPass;
     type FrameBuffer = native::FrameBuffer;
     type DescriptorSetLayout = native::DescriptorSetLayout;
-    type DescriptorSetPool = native::DescriptorSetPool;
+    type DescriptorPool = native::DescriptorPool;
     type DescriptorHeap = native::DescriptorHeap;
 }
 
