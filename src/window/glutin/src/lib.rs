@@ -23,7 +23,7 @@ pub use headless::Headless;
 
 use core::{format, handle, texture};
 use core::memory;
-use device_gl::Resources as R;
+use device_gl::{native as n, Backend as B};
 use glutin::GlContext;
 use std::rc::Rc;
 
@@ -71,20 +71,20 @@ pub struct SwapChain {
     // Underlying window, required for presentation
     window: Rc<glutin::GlWindow>,
     // Single element backbuffer
-    backbuffer: [core::Backbuffer<device_gl::Backend>; 1],
+    backbuffer: [core::Backbuffer<B>; 1],
 }
 
-impl core::SwapChain<device_gl::Backend> for SwapChain {
-    fn get_backbuffers(&mut self) -> &[core::Backbuffer<device_gl::Backend>] {
+impl core::SwapChain<B> for SwapChain {
+    fn get_backbuffers(&mut self) -> &[core::Backbuffer<B>] {
         &self.backbuffer
     }
 
-    fn acquire_frame(&mut self, sync: core::FrameSync<device_gl::Resources>) -> core::Frame {
+    fn acquire_frame(&mut self, sync: core::FrameSync<B>) -> core::Frame {
         // TODO: sync
         core::Frame::new(0)
     }
 
-    fn present<Q>(&mut self, _: &mut Q, _: &[&handle::Semaphore<device_gl::Resources>])
+    fn present<Q>(&mut self, _: &mut Q, _: &[&handle::Semaphore<B>])
         where Q: AsMut<device_gl::CommandQueue>
     {
         self.window.swap_buffers();
@@ -93,10 +93,10 @@ impl core::SwapChain<device_gl::Backend> for SwapChain {
 
 pub struct Surface {
     window: Rc<glutin::GlWindow>,
-    manager: handle::Manager<R>,
+    manager: handle::Manager<B>,
 }
 
-impl core::Surface<device_gl::Backend> for Surface {
+impl core::Surface<B> for Surface {
     type SwapChain = SwapChain;
 
     fn supports_queue(&self, _: &device_gl::QueueFamily) -> bool { true }
@@ -105,8 +105,8 @@ impl core::Surface<device_gl::Backend> for Surface {
     {
         use core::handle::Producer;
         let dim = get_window_dimensions(&self.window);
-        let color = self.manager.make_texture(
-            device_gl::NewTexture::Surface(0),
+        let color = self.manager.make_image(
+            n::Image::Surface(0),
             texture::Info {
                 levels: 1,
                 kind: texture::Kind::D2(dim.0, dim.1, dim.3),
@@ -117,8 +117,8 @@ impl core::Surface<device_gl::Backend> for Surface {
         );
 
         let ds = config.depth_stencil_format.map(|ds_format| {
-            self.manager.make_texture(
-                device_gl::NewTexture::Surface(0),
+            self.manager.make_image(
+                n::Image::Surface(0),
                 texture::Info {
                     levels: 1,
                     kind: texture::Kind::D2(dim.0, dim.1, dim.3),
@@ -164,7 +164,7 @@ impl Window {
         &self.0
     }
 }
-impl core::WindowExt<device_gl::Backend> for Window {
+impl core::WindowExt<B> for Window {
     type Surface = Surface;
     type Adapter = device_gl::Adapter;
 
