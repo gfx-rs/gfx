@@ -6,7 +6,8 @@ use {Backend as B, Device};
 
 // TODO: dummy only
 impl d::Device<B> for Device {
-    fn get_capabilities(&self) -> &c::Capabilities { unimplemented!() }
+    fn get_features(&self) -> &c::Features { unimplemented!() }
+    fn get_limits(&self) -> &c::Limits { unimplemented!() }
 
     fn create_buffer_raw(&mut self, _: buffer::Info) -> Result<handle::RawBuffer<B>, buffer::CreationError> { unimplemented!() }
     fn create_buffer_immutable_raw(&mut self, data: &[u8], stride: usize, _: buffer::Role, _: Bind)
@@ -25,11 +26,7 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn create_descriptor_set_pool(&mut self, heap: &n::DescriptorHeap, max_sets: usize, offset: usize, descriptor_pools: &[pso::DescriptorPoolDesc]) -> handle::DescriptorSetPool<B> {
-        unimplemented!()
-    }
-
-    fn create_descriptor_sets(&mut self, set_pool: &mut n::DescriptorSetPool, layout: &[&n::DescriptorSetLayout]) -> Vec<handle::DescriptorSet<B>> {
+    fn create_descriptor_pool(&mut self, heap: &n::DescriptorHeap, max_sets: usize, offset: usize, descriptor_pools: &[pso::DescriptorPoolDesc]) -> n::DescriptorPool {
         unimplemented!()
     }
 

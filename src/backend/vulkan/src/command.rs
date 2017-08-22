@@ -192,7 +192,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                         region.src_subresource,
                         region.num_layers,
                     ),
-                    src_offset: offset,
+                    src_offset: offset.clone(),
                     dst_subresource: data::map_subresource_with_layers(
                         vk::IMAGE_ASPECT_COLOR_BIT, // Specs [1.0.42] 18.6
                         region.dst_subresource,
@@ -285,30 +285,34 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_ref_values(&mut self, rv: state::RefValues) {
+    fn set_stencil_reference(&mut self, front: target::Stencil, back: target::Stencil) {
         unsafe {
-            self.device.0.cmd_set_blend_constants(self.raw, rv.blend);
-
-            if rv.stencil.0 == rv.stencil.1 {
+            if front == back {
                 // set front _and_ back
                 self.device.0.cmd_set_stencil_reference(
                     self.raw,
                     vk::STENCIL_FRONT_AND_BACK,
-                    rv.stencil.0 as u32,
+                    front as u32,
                 );
             } else {
                 // set both individually
                 self.device.0.cmd_set_stencil_reference(
                     self.raw,
                     vk::STENCIL_FACE_FRONT_BIT,
-                    rv.stencil.0 as u32,
+                    front as u32,
                 );
                 self.device.0.cmd_set_stencil_reference(
                     self.raw,
                     vk::STENCIL_FACE_BACK_BIT,
-                    rv.stencil.1 as u32,
+                    back as u32,
                 );
             }
+        }
+    }
+
+    fn set_blend_constants(&mut self, color: target::ColorValue) {
+        unsafe {
+            self.device.0.cmd_set_blend_constants(self.raw, color);
         }
     }
 
