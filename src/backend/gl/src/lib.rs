@@ -474,7 +474,9 @@ impl CommandQueue {
         }
 
         // Reset indirect draw buffer
-        unsafe { gl.BindBuffer(gl::DRAW_INDIRECT_BUFFER, 0) };
+        if self.share.features.indirect_execution {
+            unsafe { gl.BindBuffer(gl::DRAW_INDIRECT_BUFFER, 0) };
+        }
 
         // Unbind index buffers
         match self.state.index_buffer {
