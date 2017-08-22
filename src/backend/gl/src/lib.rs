@@ -25,7 +25,7 @@ pub use self::info::{Info, PlatformName, Version};
 mod command;
 mod device;
 mod info;
-mod native;
+pub mod native;
 mod pool;
 mod state;
 mod texture;
@@ -56,8 +56,8 @@ impl c::Backend for Backend {
     type Semaphore           = (); // TODO
     type Mapping             = device::MappingGate;
     type Image               = native::Image;
-    type ComputePipeline     = native::PipelineState;
-    type GraphicsPipeline    = native::PipelineState;
+    type ComputePipeline     = native::ComputePipeline;
+    type GraphicsPipeline    = native::GraphicsPipeline;
     type PipelineLayout = ();
     type DescriptorSet       = native::DescriptorSet;
     type ShaderLib = ();
@@ -66,22 +66,6 @@ impl c::Backend for Backend {
     type FrameBuffer = ();
     type DescriptorHeap      = native::DescriptorHeap;
 }
-
-/*
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct BufferElement {
-    pub desc: c::pso::VertexBufferDesc,
-    pub elem: c::pso::Element<format::Format>,
-}
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct OutputMerger {
-    pub draw_mask: u32,
-    pub stencil: Option<s::Stencil>,
-    pub depth: Option<s::Depth>,
-    pub colors: Vec<s::Color>,
-}
-*/
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Error {
@@ -693,72 +677,53 @@ impl CommandQueue {
             Command::SetBlendColor(color) => {
                 state::set_blend_color(&self.share.context, color);
             }
-            /*
-            Command::Clear(color, depth, stencil) => {
+            Command::ClearColor(texture, c) => {
                 let gl = &self.share.context;
+                state::unlock_color_mask(gl);
                 if self.share.private_caps.clear_buffer_supported {
-                    if let Some(c) = color {
-                        let slot = 0; //TODO?
-                        state::unlock_color_mask(gl);
+                    // Render target view bound to the framebuffer at attachment slot 0.
+                    unsafe {
                         match c {
-                            com::ClearColor::Float(v) => unsafe {
-                                gl.ClearBufferfv(gl::COLOR, slot, &v[0]);
-                            },
-                            com::ClearColor::Int(v) => unsafe {
-                                gl.ClearBufferiv(gl::COLOR, slot, &v[0]);
-                            },
-                            com::ClearColor::Uint(v) => unsafe {
-                                gl.ClearBufferuiv(gl::COLOR, slot, &v[0]);
-                            },
-                        }
-                    }
-                    if let Some(ref d) = depth {
-                        unsafe {
-                            gl.DepthMask(gl::TRUE);
-                            gl.ClearBufferfv(gl::DEPTH, 0, d);
-                        }
-                    }
-                    if let Some(s) = stencil {
-                        let v = s as gl::types::GLint;
-                        unsafe {
-                            gl.StencilMask(gl::types::GLuint::max_value());
-                            gl.ClearBufferiv(gl::STENCIL, 0, &v);
+                            com::ClearColor::Float(v) => {
+                                gl.ClearBufferfv(gl::COLOR, 0, &v[0]);
+                            }
+                            com::ClearColor::Int(v) => {
+                                gl.ClearBufferiv(gl::COLOR, 0, &v[0]);
+                            }
+                            com::ClearColor::Uint(v) => {
+                                gl.ClearBufferuiv(gl::COLOR, 0, &v[0]);
+                            }
                         }
                     }
                 } else {
-                    let mut flags = 0;
-                    if let Some(col) = color {
-                        flags |= gl::COLOR_BUFFER_BIT;
-                        let v = if let com::ClearColor::Float(v) = col {
-                            v
-                        } else {
-                            warn!("Integer clears are not supported on GL2");
-                            [0.0, 0.0, 0.0, 0.0]
-                        };
-                        state::unlock_color_mask(gl);
-                        unsafe {
-                            gl.ClearColor(v[0], v[1], v[2], v[3]);
-                        }
-                    }
-                    if let Some(d) = depth {
-                        flags |= gl::DEPTH_BUFFER_BIT;
-                        unsafe  {
-                            gl.DepthMask(gl::TRUE);
-                            gl.ClearDepth(d as gl::types::GLdouble);
-                        }
-                    }
-                    if let Some(s) = stencil {
-                        flags |= gl::STENCIL_BUFFER_BIT;
-                        unsafe  {
-                            gl.StencilMask(gl::types::GLuint::max_value());
-                            gl.ClearStencil(s as gl::types::GLint);
-                        }
-                    }
+                    let v = if let com::ClearColor::Float(v) = c {
+                        v
+                    } else {
+                        warn!("Integer clears are not supported on GL2");
+                        [0.0, 0.0, 0.0, 0.0]
+                    };
+
                     unsafe {
-                        gl.Clear(flags);
+                        gl.ClearColor(v[0], v[1], v[2], v[3]);
+                        gl.Clear(gl::COLOR_BUFFER_BIT);
                     }
                 }
-            },
+            }
+            Command::BindFrameBuffer(point, frame_buffer) => {
+                if self.share.private_caps.frame_buffer_supported {
+                    let gl = &self.share.context;
+                    unsafe { gl.BindFramebuffer(point, frame_buffer) };
+                } else if frame_buffer != 0 {
+                    error!("Tried to bind FBO {} without FBO support!", frame_buffer);
+                }
+            }
+            Command::BindTargetView(point, attachment, view) => {
+                self.bind_target(point, attachment, &view)
+            }
+            Command::SetDrawColorBuffers(num) => {
+                state::bind_draw_color_buffers(&self.share.context, num);
+            }
+            /*
             Command::BindProgram(program) => unsafe {
                 self.share.context.UseProgram(program);
             },
@@ -807,21 +772,9 @@ impl CommandQueue {
             Command::UnbindAttribute(slot) => unsafe {
                 self.share.context.DisableVertexAttribArray(slot as gl::types::GLuint);
             },
-            Command::BindFrameBuffer(point, frame_buffer) => {
-                if self.share.private_caps.frame_buffer_supported {
-                    let gl = &self.share.context;
-                    unsafe { gl.BindFramebuffer(point, frame_buffer) };
-                } else if frame_buffer != 0 {
-                    error!("Tried to bind FBO {} without FBO support!", frame_buffer);
-                }
-            },
             Command::BindUniform(loc, uniform) => {
                 let gl = &self.share.context;
                 shade::bind_uniform(gl, loc as gl::types::GLint, uniform);
-            },
-            Command::SetDrawColorBuffers(num) => {
-                let mask = (1 << (num as usize)) - 1;
-                state::bind_draw_color_buffers(&self.share.context, mask);
             },
             Command::SetRasterizer(rast) => {
                 state::bind_rasterizer(&self.share.context, &rast, self.share.info.version.is_embedded);
