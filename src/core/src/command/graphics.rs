@@ -16,7 +16,7 @@ use {Backend, Viewport};
 use {memory, pso, state, target, texture};
 use buffer::IndexBufferView;
 use queue::capability::{Capability, Graphics};
-use super::{BufferCopy, BufferImageCopy, CommandBufferShim, ImageCopy, RawCommandBuffer, Submit};
+use super::{BufferCopy, BufferImageCopy, ClearColor, CommandBufferShim, ImageCopy, RawCommandBuffer, Submit};
 
 /// Command buffer with graphics and transfer functionality.
 pub struct GraphicsCommandBuffer<'a, B: Backend>(pub(crate) &'a mut B::RawCommandBuffer)
@@ -48,6 +48,11 @@ where
     ///
     pub fn pipeline_barrier(&mut self, barriers: &[memory::Barrier]) {
         self.0.pipeline_barrier(barriers)
+    }
+
+    ///
+    pub fn clear_color(&mut self, rtv: &B::RenderTargetView, layout: texture::ImageLayout, clear_value: ClearColor) {
+        self.0.clear_color(rtv, layout, clear_value)
     }
 
     ///

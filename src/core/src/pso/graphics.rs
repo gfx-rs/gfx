@@ -15,10 +15,19 @@
 //! Graphics pipeline descriptor.
 
 use {state as s};
-use Primitive;
 use super::EntryPoint;
-use super::input_assembler::{AttributeDesc, VertexBufferDesc};
-use super::output_merger::{ColorTargetDesc, DepthStencilDesc};
+use super::input_assembler::{AttributeDesc, InputAssemblerDesc, VertexBufferDesc};
+use super::output_merger::{ColorInfo, DepthStencilDesc};
+
+// Vulkan:
+//  - SpecializationInfo not provided per shader
+//  - TODO: infer rasterization discard from shaders?
+//
+// D3D12:
+//  - rootSignature specified outside
+//  - logicOp can be set for each RTV
+//  - streamOutput not included
+//  - IA: semantic name and index extracted from shader reflection
 
 /// A complete set of shaders to build a graphics pipeline.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -37,10 +46,8 @@ pub struct GraphicsShaderSet {
 
 ///
 pub struct GraphicsPipelineDesc {
-    /// Type of the primitive
-    pub primitive: Primitive,
     /// Rasterizer setup
-    pub rasterizer: s::Rasterizer,
+    pub rasterizer: Rasterizer,
     /// Shader entry points
     pub shader_entries: GraphicsShaderSet,
 
@@ -48,24 +55,95 @@ pub struct GraphicsPipelineDesc {
     pub vertex_buffers: Vec<VertexBufferDesc>,
     /// Vertex attributes (IA)
     pub attributes: Vec<AttributeDesc>,
+    ///
+    pub input_assembler: InputAssemblerDesc,
 
-    /// Render target views (RTV)
-    pub color_targets: Vec<ColorTargetDesc>,
+    ///
+    pub blending: Vec<BlendDesc>,
     /// Depth stencil (DSV)
     pub depth_stencil: Option<DepthStencilDesc>,
 }
 
-impl GraphicsPipelineDesc {
-    /// Create a new empty PSO descriptor.
-    pub fn new(primitive: Primitive, rasterizer: s::Rasterizer, shader_entries: GraphicsShaderSet) -> GraphicsPipelineDesc {
-        GraphicsPipelineDesc {
-            primitive: primitive,
-            rasterizer: rasterizer,
-            depth_stencil: None,
-            shader_entries: shader_entries,
-            color_targets: Vec::new(),
-            vertex_buffers: Vec::new(),
-            attributes: Vec::new(),
-        }
-    }
+///
+#[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+pub struct DepthBias {
+    ///
+    pub const_factor: f32,
+    ///
+    pub clamp: f32,
+    ///
+    pub slope_factor: f32,
+}
+
+/// Rasterization state.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+pub struct Rasterizer {
+    /// How to rasterize this primitive.
+    pub polgyon_mode: s::RasterMethod,
+    /// Which face should be culled.
+    pub cull_mode: s::CullFace,
+    /// Which vertex winding is considered to be the front face for culling.
+    pub front_face: s::FrontFace,
+    ///
+    pub depth_clamping: bool,
+    ///
+    pub depth_bias: Option<DepthBias>,
+    ///
+    pub conservative_rasterization: bool,
+}
+
+///
+pub enum BlendTargets {
+    ///
+    Single(ColorInfo),
+    ///
+    Independent(Vec<ColorInfo>),
+}
+
+///
+pub struct BlendDesc {
+    ///
+    pub alpha_coverage: bool,
+    ///
+    pub logic_op: Option<LogicOp>,
+    ///
+    pub blend_targets: BlendTargets,
+}
+
+///
+pub enum LogicOp {
+    ///
+    Clear,
+    ///
+    And,
+    ///
+    AndReverse,
+    ///
+    AndInverted,
+    ///
+    Copy,
+    ///
+    CopyInverted,
+    ///
+    NoOp,
+    ///
+    Xor,
+    ///
+    Nor,
+    ///
+    Or,
+    ///
+    OrReverse,
+    ///
+    OrInverted,
+    ///
+    Equivalent,
+    ///
+    Invert,
+    ///
+    Nand,
+    ///
+    Set,
 }

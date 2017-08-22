@@ -56,11 +56,31 @@ pub struct VertexBufferDesc {
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct AttributeDesc {
     /// Attribute binding location in the shader.
-    location: Location,
+    pub location: Location,
     /// Index of the associated vertex buffer descriptor.
-    binding: BufferIndex,
+    pub binding: BufferIndex,
     /// Attribute element description.
-    element: Element<format::Format>,
+    pub element: Element<format::Format>,
+}
+
+///
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+pub enum PrimitiveRestart {
+    ///
+    Disabled,
+    ///
+    U16,
+    ///
+    U32,
+}
+
+///
+pub struct InputAssemblerDesc {
+    /// Type of the primitive
+    pub primitive: Primitive,
+    ///
+    pub primitive_restart: PrimitiveRestart,
 }
 
 /// A complete set of vertex buffers to be used for vertex import in PSO.
