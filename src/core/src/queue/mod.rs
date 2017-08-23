@@ -15,7 +15,6 @@ pub mod capability;
 pub mod submission;
 
 use Backend;
-use command::{AccessInfo};
 use pool::{GeneralCommandPool, GraphicsCommandPool, ComputeCommandPool,
            TransferCommandPool, RawCommandPool};
 
@@ -77,7 +76,6 @@ pub trait CommandQueue<B: Backend> {
         &mut self,
         submit_infos: I,
         fence: Option<&B::Fence>,
-        access: &AccessInfo<B>,
     ) where I: Iterator<Item=RawSubmission<'a, B>>;
 }
 
@@ -92,9 +90,8 @@ macro_rules! define_queue {
             unsafe fn submit_raw<'a, I>(&mut self,
                 submit_infos: I,
                 fence: Option<&B::Fence>,
-                access: &AccessInfo<B>,
             ) where I: Iterator<Item=RawSubmission<'a, B>> {
-                self.0.submit_raw(submit_infos, fence, access)
+                self.0.submit_raw(submit_infos, fence)
             }
         }
 
@@ -109,12 +106,12 @@ macro_rules! define_queue {
                 &mut self,
                 submit_infos: &[Submission<B, C>],
                 fence: Option<&B::Fence>,
-                access: &AccessInfo<B>)
+            )
             where
                 C: SupportedBy<$capability>
             {
                 unsafe {
-                    self.submit_raw(submit_infos.iter().map(|submit| submit.as_raw()), fence, access)
+                    self.submit_raw(submit_infos.iter().map(|submit| submit.as_raw()), fence)
                 }
             }
         }
