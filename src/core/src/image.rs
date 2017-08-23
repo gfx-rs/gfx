@@ -24,7 +24,7 @@
 use std::error::Error;
 use std::{fmt, cmp, hash};
 use std::ops::Range;
-use memory::{Bind, Usage};
+use memory::Bind;
 use {format, state, target, Backend};
 pub use target::{Layer, Level};
 
@@ -315,6 +315,22 @@ impl Kind {
     }
 }
 
+bitflags!(
+    /// Image usage flags
+    pub flags Usage: u8 {
+        ///
+        const TRANSFER_SRC    = 0x1,
+        ///
+        const TRANSFER_DST    = 0x2,
+        ///
+        const COLOR_ATTACHMENT  = 0x4,
+        ///
+        const DEPTH_STENCIL_ATTACHMENT = 0x8,
+        ///
+        const SAMPLED = 0x10,
+        // TODO
+    }
+);
 
 /// Describes a subvolume of a texture, which image data can be uploaded into.
 #[allow(missing_docs)]

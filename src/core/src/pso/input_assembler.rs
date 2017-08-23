@@ -14,7 +14,7 @@
 
 //! Input Assembler(IA) stage description.
 
-use {format, state as s};
+use format;
 use {Backend, Primitive};
 
 /// Shader binding location.

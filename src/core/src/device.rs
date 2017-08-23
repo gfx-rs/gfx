@@ -18,11 +18,33 @@
 //! includes several items to facilitate this.
 
 use std::error::Error;
-use std::{mem, fmt};
-use {buffer, handle, format, mapping, pass, pso, shade, target, texture};
-use {Backend, Features, Limits};
-use memory::{Usage, Typed, Pod, cast_slice};
-use memory::{Bind, RENDER_TARGET, DEPTH_STENCIL, SHADER_RESOURCE, UNORDERED_ACCESS};
+use std::fmt;
+use {buffer, format, image, mapping, pass, pso, target};
+use {Backend, Features, HeapType, Limits, SubPass};
+use memory::Requirements;
+
+
+/// Type of the resources that can be allocated on a heap.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ResourceHeapType {
+    ///
+    Any,
+    ///
+    Buffers,
+    ///
+    Images,
+    ///
+    Targets,
+}
+
+/// Error creating a resource heap.
+#[derive(Clone, PartialEq, Debug)]
+pub enum ResourceHeapError {
+    /// Requested `ResourceHeapType::Any` is not supported.
+    UnsupportedType,
+    /// Unable to allocate the specified size.
+    OutOfMemory,
+}
 
 /// Error creating either a ShaderResourceView, or UnorderedAccessView.
 #[derive(Clone, Debug, PartialEq)]
@@ -32,7 +54,7 @@ pub enum ResourceViewError {
     /// Selected channel type is not supported for this texture.
     Channel(format::ChannelType),
     /// Selected layer can not be viewed for this texture.
-    Layer(texture::LayerError),
+    Layer(image::LayerError),
     /// The backend was refused for some reason.
     Unsupported,
 }
@@ -74,7 +96,7 @@ pub enum TargetViewError {
     /// Selected mip level doesn't exist.
     Level(target::Level),
     /// Selected array layer doesn't exist.
-    Layer(texture::LayerError),
+    Layer(image::LayerError),
     /// Selected channel type is not supported for this texture.
     Channel(format::ChannelType),
     /// The backend was refused for some reason.
@@ -126,7 +148,7 @@ impl Error for TargetViewError {
 #[derive(Clone, Debug, PartialEq)]
 pub enum CombinedError {
     /// Failed to create the raw texture.
-    Texture(texture::CreationError),
+    Texture(image::CreationError),
     /// Failed to create SRV or UAV.
     Resource(ResourceViewError),
     /// Failed to create RTV or DSV.
@@ -161,8 +183,8 @@ impl Error for CombinedError {
     }
 }
 
-impl From<texture::CreationError> for CombinedError {
-    fn from(e: texture::CreationError) -> CombinedError {
+impl From<image::CreationError> for CombinedError {
+    fn from(e: image::CreationError) -> CombinedError {
         CombinedError::Texture(e)
     }
 }
@@ -238,82 +260,93 @@ pub trait Device<B: Backend> {
     /// Returns the limits of this `Device`.
     fn get_limits(&self) -> &Limits;
 
-    // resource creation
-    fn create_buffer_raw(&mut self, buffer::Info) -> Result<handle::RawBuffer<B>, buffer::CreationError>;
-    fn create_buffer_immutable_raw(&mut self, data: &[u8], stride: usize, buffer::Role, Bind)
-                                   -> Result<handle::RawBuffer<B>, buffer::CreationError>;
-    fn create_buffer_immutable<T: Pod>(&mut self, data: &[T], role: buffer::Role, bind: Bind)
-                                       -> Result<handle::Buffer<B, T>, buffer::CreationError> {
-        self.create_buffer_immutable_raw(cast_slice(data), mem::size_of::<T>(), role, bind)
-            .map(|raw| Typed::new(raw))
-    }
-    fn create_buffer<T>(&mut self, num: usize, role: buffer::Role, usage: Usage, bind: Bind)
-                        -> Result<handle::Buffer<B, T>, buffer::CreationError> {
-        let stride = mem::size_of::<T>();
-        let info = buffer::Info {
-            role: role,
-            usage: usage,
-            bind: bind,
-            size: num * stride,
-            stride: stride,
-        };
-        self.create_buffer_raw(info).map(|raw| Typed::new(raw))
-    }
+    /// Create an heap of a specific type.
+    ///
+    /// There is only a limited amount of allocations allowed depending on the implementation!
+    fn create_heap(&mut self, heap_type: &HeapType, resource_type: ResourceHeapType, size: u64) -> Result<B::Heap, ResourceHeapError>;
 
     ///
-    fn create_renderpass(
-        &mut self,
-        attachments: &[pass::Attachment],
-        subpasses: &[pass::SubpassDesc],
-        dependencies: &[pass::SubpassDependency]
-    ) -> handle::RenderPass<B>;
-
-    /// Create a descriptor heap.
-    fn create_descriptor_heap(&mut self, num_srv_cbv_uav: usize, num_samplers: usize) -> handle::DescriptorHeap<B>;
-
-    /// Create a descriptor pool inside an heap.
-    ///
-    /// Descriptor pools allow allocation of descriptor sets by allocating space inside the heap.
-    /// The heap can't be modified directly, only trough updating descriptor sets.
-    ///
-    /// Pools reserve a contiguous range in the heap. The application _must_ keep track of the used ranges.
-    /// Using overlapping ranges at the same time results in undefined behavior, depending on the backend implementation.
-    fn create_descriptor_pool(&mut self, heap: &B::DescriptorHeap, max_sets: usize, offset: usize, descriptor_pools: &[pso::DescriptorPoolDesc]) -> B::DescriptorPool;
-
-    /// Create a descriptor set layout.
-    fn create_descriptor_set_layout(&mut self, bindings: &[pso::DescriptorSetLayoutBinding]) -> handle::DescriptorSetLayout<B>;
+    fn create_renderpass(&mut self, attachments: &[pass::Attachment], subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> B::RenderPass;
 
     ///
-    fn create_pipeline_layout(&mut self, sets: &[&B::DescriptorSetLayout]) -> handle::PipelineLayout<B>;
+    fn create_pipeline_layout(&mut self, sets: &[&B::DescriptorSetLayout]) -> B::PipelineLayout;
 
     /// Create graphics pipelines.
-    fn create_graphics_pipelines(&mut self, &[(&B::ShaderLib, &B::PipelineLayout, pass::SubPass<B>, &pso::GraphicsPipelineDesc)])
-            -> Vec<Result<handle::GraphicsPipeline<B>, pso::CreationError>>;
+    fn create_graphics_pipelines<'a>(&mut self, &[(&B::ShaderLib, &B::PipelineLayout, SubPass<'a, B>, &pso::GraphicsPipelineDesc)])
+            -> Vec<Result<B::GraphicsPipeline, pso::CreationError>>;
 
     /// Create compute pipelines.
-    fn create_compute_pipelines(&mut self, &[(&B::ShaderLib, pso::EntryPoint, &B::PipelineLayout)]) -> Vec<Result<handle::ComputePipeline<B>, pso::CreationError>>;
+    fn create_compute_pipelines(&mut self, &[(&B::ShaderLib, pso::EntryPoint, &B::PipelineLayout)]) -> Vec<Result<B::ComputePipeline, pso::CreationError>>;
 
     ///
-    fn create_sampler(&mut self, texture::SamplerInfo) -> handle::Sampler<B>;
+    fn create_framebuffer(&mut self, renderpass: &B::RenderPass,
+        color_attachments: &[&B::RenderTargetView], depth_stencil_attachments: &[&B::DepthStencilView],
+        width: u32, height: u32, layers: u32
+    ) -> B::FrameBuffer;
 
     ///
-    fn create_semaphore(&mut self) -> handle::Semaphore<B>;
+    fn create_sampler(&mut self, image::SamplerInfo) -> B::Sampler;
+
+    /// Create a new buffer (unbound).
+    ///
+    /// The created buffer won't have associated memory until `bind_buffer_memory` is called.
+    fn create_buffer(&mut self, size: u64, stride: u64, usage: buffer::Usage) -> Result<B::UnboundBuffer, buffer::CreationError>;
 
     ///
-    fn create_fence(&mut self, signalled: bool) -> handle::Fence<B>;
+    fn get_buffer_requirements(&mut self, buffer: &B::UnboundBuffer) -> Requirements;
+
+    /// Bind heap memory to a buffer.
+    ///
+    /// The unbound buffer will be consumed because the binding is *immutable*.
+    /// Be sure to check that there is enough memory available for the buffer.
+    /// Use `get_buffer_requirements` to acquire the memory requirements.
+    fn bind_buffer_memory(&mut self, heap: &B::Heap, offset: u64, buffer: B::UnboundBuffer) -> Result<B::Buffer, buffer::CreationError>;
 
     ///
-    fn reset_fences(&mut self, fences: &[&handle::Fence<B>]);
+    fn create_image(&mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
+         -> Result<B::UnboundImage, image::CreationError>;
 
-    /// Blocks until all or one of the given fences are signalled.
-    /// Returns true if fences were signalled before the timeout.
-    fn wait_for_fences(&mut self, fences: &[&handle::Fence<B>], wait: WaitFor, timeout_ms: u32) -> bool;
+    ///
+    fn get_image_requirements(&mut self, image: &B::UnboundImage) -> Requirements;
+
+    ///
+    fn bind_image_memory(&mut self, heap: &B::Heap, offset: u64, image: B::UnboundImage) -> Result<B::Image, image::CreationError>;
+
+    ///
+    fn view_buffer_as_constant(&mut self, buffer: &B::Buffer, offset: usize, size: usize) -> Result<B::ConstantBufferView, TargetViewError>;
+
+    ///
+    fn view_image_as_render_target(&mut self, image: &B::Image, format: format::Format) -> Result<B::RenderTargetView, TargetViewError>;
+
+    ///
+    fn view_image_as_shader_resource(&mut self, image: &B::Image, format: format::Format) -> Result<B::ShaderResourceView, TargetViewError>;
+
+    ///
+    fn view_image_as_unordered_access(&mut self, image: &B::Image, format: format::Format) -> Result<B::UnorderedAccessView, TargetViewError>;
+
+    /// Create a descriptor pool.
+    ///
+    /// Descriptor pools allow allocation of descriptor sets.
+    /// The pool can't be modified directly, only trough updating descriptor sets.
+    fn create_descriptor_pool(&mut self, max_sets: usize, offset: usize, descriptor_ranges: &[pso::DescriptorRangeDesc]) -> B::DescriptorPool;
+
+    /// Create a descriptor set layout.
+    fn create_descriptor_set_layout(&mut self, bindings: &[pso::DescriptorSetLayoutBinding]) -> B::DescriptorSetLayout;
+
+    ///
+    // TODO: copies
+    fn update_descriptor_sets(&mut self, writes: &[pso::DescriptorSetWrite<B>]);
+
+    // TODO: mapping requires further looking into.
+    // vulkan requires non-coherent mapping to round the range delimiters
+    // Nested mapping is not allowed in vulkan.
+    // How to handle it properly for backends? Explicit synchronization?
 
     /// Acquire a mapping Reader
     ///
     /// See `write_mapping` for more information.
-    fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<B, T>)
-                               -> Result<mapping::Reader<'b, B, T>,
+    fn read_mapping<'a, T>(&self, buf: &'a B::Buffer, offset: u64, size: u64)
+                               -> Result<mapping::Reader<'a, B, T>,
                                          mapping::Error>
         where T: Copy;
 
@@ -324,206 +357,94 @@ pub trait Device<B: Backend> {
     /// Submitting commands involving this buffer to the device
     /// implicitly requires exclusive access. Additionally,
     /// further access will be stalled until execution completion.
-    fn write_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<B, T>)
-                                -> Result<mapping::Writer<'b, B, T>,
+
+    fn write_mapping<'a, 'b, T>(&mut self, buf: &'a B::Buffer, offset: u64, size: u64)
+                                -> Result<mapping::Writer<'a, B, T>,
                                           mapping::Error>
         where T: Copy;
 
-    /// Create a new empty raw texture with no data. The channel type parameter is a hint,
-    /// required to assist backends that have no concept of typeless formats (OpenGL).
-    /// The initial data, if given, has to be provided for all mip levels and slices:
-    /// Slice0.Mip0, Slice0.Mip1, ..., Slice1.Mip0, ...
-    fn create_texture_raw(&mut self, texture::Info, Option<format::ChannelType>, Option<&[&[u8]]>)
-                          -> Result<handle::RawTexture<B>, texture::CreationError>;
+    ///
+    fn create_semaphore(&mut self) -> B::Semaphore;
 
-    fn view_buffer_as_shader_resource_raw(&mut self, &handle::RawBuffer<B>, format::Format)
-        -> Result<handle::RawShaderResourceView<B>, ResourceViewError>;
-    fn view_buffer_as_unordered_access_raw(&mut self, &handle::RawBuffer<B>)
-        -> Result<handle::RawUnorderedAccessView<B>, ResourceViewError>;
-    fn view_texture_as_shader_resource_raw(&mut self, &handle::RawTexture<B>, texture::ResourceDesc)
-        -> Result<handle::RawShaderResourceView<B>, ResourceViewError>;
-    fn view_texture_as_unordered_access_raw(&mut self, &handle::RawTexture<B>)
-        -> Result<handle::RawUnorderedAccessView<B>, ResourceViewError>;
-    fn view_texture_as_render_target_raw(&mut self, &handle::RawTexture<B>, texture::RenderDesc)
-        -> Result<handle::RawRenderTargetView<B>, TargetViewError>;
-    fn view_texture_as_depth_stencil_raw(&mut self, &handle::RawTexture<B>, texture::DepthStencilDesc)
-        -> Result<handle::RawDepthStencilView<B>, TargetViewError>;
+    ///
+    fn create_fence(&mut self, signaled: bool) -> B::Fence;
 
-    fn create_texture<S>(&mut self, kind: texture::Kind, levels: target::Level,
-                      bind: Bind, usage: Usage, channel_hint: Option<format::ChannelType>)
-                      -> Result<handle::Texture<B, S>, texture::CreationError>
-    where S: format::SurfaceTyped
-    {
-        let desc = texture::Info {
-            kind: kind,
-            levels: levels,
-            format: S::get_surface_type(),
-            bind: bind,
-            usage: usage,
-        };
-        let raw = try!(self.create_texture_raw(desc, channel_hint, None));
-        Ok(Typed::new(raw))
-    }
+    ///
+    fn reset_fences(&mut self, fences: &[&B::Fence]);
 
-    fn view_buffer_as_shader_resource<T: format::Formatted>(&mut self, buf: &handle::Buffer<B, T>)
-                                      -> Result<handle::ShaderResourceView<B, T>, ResourceViewError>
-    {
-        //TODO: check bind flags
-        self.view_buffer_as_shader_resource_raw(buf.raw(), T::get_format()).map(Typed::new)
-    }
+    /// Blocks until all or one of the given fences are signalled.
+    /// Returns true if fences were signalled before the timeout.
+    fn wait_for_fences(&mut self, fences: &[&B::Fence], wait: WaitFor, timeout_ms: u32) -> bool;
 
-    fn view_buffer_as_unordered_access<T>(&mut self, buf: &handle::Buffer<B, T>)
-                                      -> Result<handle::UnorderedAccessView<B, T>, ResourceViewError>
-    {
-        //TODO: check bind flags
-        self.view_buffer_as_unordered_access_raw(buf.raw()).map(Typed::new)
-    }
+    ///
+    fn destroy_heap(&mut self, B::Heap);
 
-    fn view_texture_as_shader_resource<T: format::TextureFormat>(&mut self, tex: &handle::Texture<B, T::Surface>,
-                                       levels: (target::Level, target::Level), swizzle: format::Swizzle)
-                                       -> Result<handle::ShaderResourceView<B, T::View>, ResourceViewError>
-    {
-        if !tex.get_info().bind.contains(SHADER_RESOURCE) {
-            return Err(ResourceViewError::NoBindFlag)
-        }
-        assert!(levels.0 <= levels.1);
-        let desc = texture::ResourceDesc {
-            channel: <T::Channel as format::ChannelTyped>::get_channel_type(),
-            layer: None,
-            min: levels.0,
-            max: levels.1,
-            swizzle: swizzle,
-        };
-        self.view_texture_as_shader_resource_raw(tex.raw(), desc)
-            .map(Typed::new)
-    }
+    ///
+    fn destroy_shader_lib(&mut self, B::ShaderLib);
 
-    fn view_texture_as_unordered_access<T: format::TextureFormat>(&mut self, tex: &handle::Texture<B, T::Surface>)
-                                        -> Result<handle::UnorderedAccessView<B, T::View>, ResourceViewError>
-    {
-        if !tex.get_info().bind.contains(UNORDERED_ACCESS) {
-            return Err(ResourceViewError::NoBindFlag)
-        }
-        self.view_texture_as_unordered_access_raw(tex.raw())
-            .map(Typed::new)
-    }
+    ///
+    fn destroy_renderpass(&mut self, B::RenderPass);
 
-    fn view_texture_as_render_target<T: format::RenderFormat>(&mut self, tex: &handle::Texture<B, T::Surface>,
-                                     level: target::Level, layer: Option<target::Layer>)
-                                     -> Result<handle::RenderTargetView<B, T>, TargetViewError>
-    {
-        if !tex.get_info().bind.contains(RENDER_TARGET) {
-            return Err(TargetViewError::NoBindFlag)
-        }
-        let desc = texture::RenderDesc {
-            channel: <T::Channel as format::ChannelTyped>::get_channel_type(),
-            level: level,
-            layer: layer,
-        };
-        self.view_texture_as_render_target_raw(tex.raw(), desc)
-            .map(Typed::new)
-    }
+    ///
+    fn destroy_pipeline_layout(&mut self, B::PipelineLayout);
 
-    fn view_texture_as_depth_stencil<T: format::DepthFormat>(&mut self, tex: &handle::Texture<B, T::Surface>,
-                                     level: target::Level, layer: Option<target::Layer>, flags: texture::DepthStencilFlags)
-                                     -> Result<handle::DepthStencilView<B, T>, TargetViewError>
-    {
-        if !tex.get_info().bind.contains(DEPTH_STENCIL) {
-            return Err(TargetViewError::NoBindFlag)
-        }
-        let desc = texture::DepthStencilDesc {
-            level: level,
-            layer: layer,
-            flags: flags,
-        };
-        self.view_texture_as_depth_stencil_raw(tex.raw(), desc)
-            .map(Typed::new)
-    }
+    /// Destroys a graphics pipeline.
+    ///
+    /// The graphics pipeline shouldn't be destroy before any submitted command buffer,
+    /// which references the graphics pipeline, has finished execution.
+    fn destroy_graphics_pipeline(&mut self, B::GraphicsPipeline);
 
-    fn view_texture_as_depth_stencil_trivial<T: format::DepthFormat>(&mut self, tex: &handle::Texture<B, T::Surface>)
-                                            -> Result<handle::DepthStencilView<B, T>, TargetViewError>
-    {
-        self.view_texture_as_depth_stencil(tex, 0, None, texture::DepthStencilFlags::empty())
-    }
+    /// Destroys a compute pipeline.
+    ///
+    /// The compute pipeline shouldn't be destroy before any submitted command buffer,
+    /// which references the compute pipeline, has finished execution.
+    fn destroy_compute_pipeline(&mut self, B::ComputePipeline);
 
-    fn create_texture_immutable_u8<T: format::TextureFormat>(&mut self, kind: texture::Kind, data: &[&[u8]])
-                                   -> Result<(handle::Texture<B, T::Surface>,
-                                              handle::ShaderResourceView<B, T::View>),
-                                             CombinedError>
-    {
-        let surface = <T::Surface as format::SurfaceTyped>::get_surface_type();
-        let num_slices = kind.get_num_slices().unwrap_or(1) as usize;
-        let num_faces = if kind.is_cube() {6} else {1};
-        let desc = texture::Info {
-            kind: kind,
-            levels: (data.len() / (num_slices * num_faces)) as texture::Level,
-            format: surface,
-            bind: SHADER_RESOURCE,
-            usage: Usage::Data,
-        };
-        let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let raw = try!(self.create_texture_raw(desc, Some(cty), Some(data)));
-        let levels = (0, raw.get_info().levels - 1);
-        let tex = Typed::new(raw);
-        let view = try!(self.view_texture_as_shader_resource::<T>(&tex, levels, format::Swizzle::new()));
-        Ok((tex, view))
-    }
+    /// Destroys a framebuffer.
+    ///
+    /// The framebuffer shouldn't be destroy before any submitted command buffer,
+    /// which references the framebuffer, has finished execution.
+    fn destroy_framebuffer(&mut self, B::FrameBuffer);
 
-    fn create_texture_immutable<T: format::TextureFormat>(
-        &mut self,
-        kind: texture::Kind,
-        data: &[&[<T::Surface as format::SurfaceTyped>::DataType]])
-        -> Result<(handle::Texture<B, T::Surface>, handle::ShaderResourceView<B, T::View>),
-                  CombinedError>
-    {
-        // we can use cast_slice on a 2D slice, have to use a temporary array of slices
-        let mut raw_data: [&[u8]; 0x100] = [&[]; 0x100];
-        assert!(data.len() <= raw_data.len());
-        for (rd, d) in raw_data.iter_mut().zip(data.iter()) {
-            *rd = cast_slice(*d);
-        }
-        self.create_texture_immutable_u8::<T>(kind, &raw_data[.. data.len()])
-    }
+    /// Destroys a buffer.
+    ///
+    /// The buffer shouldn't be destroy before any submitted command buffer,
+    /// which references the images, has finished execution.
+    fn destroy_buffer(&mut self, B::Buffer);
 
-    fn create_render_target<T: format::RenderFormat + format::TextureFormat>
-                           (&mut self, width: texture::Size, height: texture::Size)
-                            -> Result<(handle::Texture<B, T::Surface>,
-                                       handle::ShaderResourceView<B, T::View>,
-                                       handle::RenderTargetView<B, T>
-                                ), CombinedError>
-    {
-        let kind = texture::Kind::D2(width, height, texture::AaMode::Single);
-        let levels = 1;
-        let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let tex = try!(self.create_texture(kind, levels, SHADER_RESOURCE | RENDER_TARGET, Usage::Data, Some(cty)));
-        let resource = try!(self.view_texture_as_shader_resource::<T>(&tex, (0, levels-1), format::Swizzle::new()));
-        let target = try!(self.view_texture_as_render_target(&tex, 0, None));
-        Ok((tex, resource, target))
-    }
+    /// Destroys an image.
+    ///
+    /// The image shouldn't be destroy before any submitted command buffer,
+    /// which references the images, has finished execution.
+    fn destroy_image(&mut self, B::Image);
 
-    fn create_depth_stencil<T: format::DepthFormat + format::TextureFormat>
-                           (&mut self, width: texture::Size, height: texture::Size)
-                            -> Result<(handle::Texture<B, T::Surface>,
-                                       handle::ShaderResourceView<B, T::View>,
-                                       handle::DepthStencilView<B, T>
-                                ), CombinedError>
-    {
-        let kind = texture::Kind::D2(width, height, texture::AaMode::Single);
-        let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let tex = try!(self.create_texture(kind, 1, SHADER_RESOURCE | DEPTH_STENCIL, Usage::Data, Some(cty)));
-        let resource = try!(self.view_texture_as_shader_resource::<T>(&tex, (0, 0), format::Swizzle::new()));
-        let target = try!(self.view_texture_as_depth_stencil_trivial(&tex));
-        Ok((tex, resource, target))
-    }
+    ///
+    fn destroy_render_target_view(&mut self, B::RenderTargetView);
 
-    fn create_depth_stencil_view_only<T: format::DepthFormat + format::TextureFormat>
-                                     (&mut self, width: texture::Size, height: texture::Size)
-                                      -> Result<handle::DepthStencilView<B, T>, CombinedError>
-    {
-        let kind = texture::Kind::D2(width, height, texture::AaMode::Single);
-        let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let tex = try!(self.create_texture(kind, 1, DEPTH_STENCIL, Usage::Data, Some(cty)));
-        let target = try!(self.view_texture_as_depth_stencil_trivial(&tex));
-        Ok(target)
-    }
+    ///
+    fn destroy_depth_stencil_view(&mut self, B::DepthStencilView);
+
+    ///
+    fn destroy_constant_buffer_view(&mut self, B::ConstantBufferView);
+
+    ///
+    fn destroy_shader_resource_view(&mut self, B::ShaderResourceView);
+
+    ///
+    fn destroy_unordered_access_view(&mut self, B::UnorderedAccessView);
+
+    ///
+    fn destroy_sampler(&mut self, B::Sampler);
+
+    ///
+    fn destroy_descriptor_pool(&mut self, B::DescriptorPool);
+
+    ///
+    fn destroy_descriptor_set_layout(&mut self, B::DescriptorSetLayout);
+
+    ///
+    fn destroy_fence(&mut self, B::Fence);
+
+    ///
+    fn destroy_semaphore(&mut self, B::Semaphore);
 }
