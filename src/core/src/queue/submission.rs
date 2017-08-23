@@ -16,7 +16,7 @@
 //!
 //! // TODO
 
-use {handle, pso, Backend};
+use {pso, Backend};
 use command::{Submit};
 use super::capability::{Transfer, Supports, Upper};
 use std::marker::PhantomData;
@@ -27,16 +27,16 @@ pub struct RawSubmission<'a, B: Backend + 'a> {
     /// Command buffers to submit.
     pub cmd_buffers: &'a [B::SubmitInfo],
     /// Semaphores to wait being signalled before submission.
-    pub wait_semaphores: &'a [(&'a handle::Semaphore<B>, pso::PipelineStage)],
+    pub wait_semaphores: &'a [(&'a B::Semaphore, pso::PipelineStage)],
     /// Semaphores which get signalled after submission.
-    pub signal_semaphores: &'a [&'a handle::Semaphore<B>],
+    pub signal_semaphores: &'a [&'a B::Semaphore],
 }
 
 /// Submission information for a command queue.
 pub struct Submission<'a, B: Backend, C> {
     cmd_buffers: SmallVec<[B::SubmitInfo; 16]>,
-    wait_semaphores: SmallVec<[(&'a handle::Semaphore<B>, pso::PipelineStage); 16]>,
-    signal_semaphores: SmallVec<[&'a handle::Semaphore<B>; 16]>,
+    wait_semaphores: SmallVec<[(&'a B::Semaphore, pso::PipelineStage); 16]>,
+    signal_semaphores: SmallVec<[&'a B::Semaphore; 16]>,
     marker: PhantomData<C>,
 }
 
@@ -59,13 +59,13 @@ where
     B: Backend
 {
     /// Set semaphores which will waited on to be signalled before the submission will be executed.
-    pub fn wait_on(mut self, semaphores: &[(&'a handle::Semaphore<B>, pso::PipelineStage)]) -> Self {
+    pub fn wait_on(mut self, semaphores: &[(&'a B::Semaphore, pso::PipelineStage)]) -> Self {
         self.wait_semaphores.extend_from_slice(semaphores);
         self
     }
 
     /// Set semaphores which will be signalled once this submission has finished executing.
-    pub fn signal(mut self, semaphores: &[&'a handle::Semaphore<B>]) -> Self {
+    pub fn signal(mut self, semaphores: &[&'a B::Semaphore]) -> Self {
         self.signal_semaphores.extend_from_slice(semaphores);
         self
     }
