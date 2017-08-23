@@ -58,7 +58,7 @@ pub struct GraphicsPipelineDesc {
     pub input_assembler: InputAssemblerDesc,
 
     ///
-    pub blending: Vec<BlendDesc>,
+    pub blender: BlendDesc,
     /// Depth stencil (DSV)
     pub depth_stencil: Option<DepthStencilDesc>,
 }
@@ -96,21 +96,13 @@ pub struct Rasterizer {
 }
 
 ///
-pub enum BlendTargets {
-    /// All attachments share the same blend state.
-    Single(ColorInfo),
-    /// All attachments have independt blend states.
-    Independent(Vec<ColorInfo>),
-}
-
-///
 pub struct BlendDesc {
     ///
     pub alpha_coverage: bool,
     ///
     pub logic_op: Option<LogicOp>,
     ///
-    pub blend_targets: BlendTargets,
+    pub targets: Vec<ColorInfo>,
 }
 
 ///

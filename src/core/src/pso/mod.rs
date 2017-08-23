@@ -29,6 +29,7 @@ pub mod output_merger;
 pub use self::descriptor::*;
 pub use self::graphics::GraphicsPipelineDesc;
 pub use self::input_assembler::*;
+pub use self::output_merger::*;
 
 /// Error types happening upon PSO creation on the device side.
 #[derive(Clone, Debug, PartialEq)]

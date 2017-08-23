@@ -1,14 +1,13 @@
-use std::ops::DerefMut;
 use std::ptr;
 use std::sync::Arc;
 use ash::vk;
 use ash::version::DeviceV1_0;
 
-use core::{self, pool};
-use core::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
+use core::pool;
 use command::{CommandBuffer, SubpassCommandBuffer};
 use core::command::{GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer};
 use {Backend, CommandQueue, RawDevice};
+
 
 pub struct RawCommandPool {
     pool: vk::CommandPool,
@@ -49,7 +48,7 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
             p_inheritance_info: ptr::null(),
         };
 
-        unsafe { self.device.0.begin_command_buffer(buffer.raw, &info); } // TODO: error handling
+        self.device.0.begin_command_buffer(buffer.raw, &info); // TODO: error handling
         buffer
     }
 
@@ -66,10 +65,9 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
             queue_family_index: queue.family_index,
         };
 
-        let command_pool = unsafe {
-            queue.device.0.create_command_pool(&info, None)
-                        .expect("Error on command pool creation") // TODO: better error handling
-        };
+        let command_pool = queue.device.0
+            .create_command_pool(&info, None)
+            .expect("Error on command pool creation"); // TODO: better error handling
 
         // Allocate initial command buffers
         let info = vk::CommandBufferAllocateInfo {
@@ -80,10 +78,10 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
             command_buffer_count: capacity as u32,
         };
 
-        let command_buffers = unsafe {
-            queue.device.0.allocate_command_buffers(&info)
-                            .expect("Error on command buffer allocation") // TODO: better error handling
-        };
+        let command_buffers = queue.device.0
+            .allocate_command_buffers(&info)
+            .expect("Error on command buffer allocation"); // TODO: better error handling
+
         let command_buffers = command_buffers.into_iter().map(|buffer| {
             CommandBuffer {
                 raw: buffer,

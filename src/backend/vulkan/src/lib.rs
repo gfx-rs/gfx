@@ -13,18 +13,18 @@ extern crate kernel32;
 use ash::{Entry, LoadingError};
 use ash::version::{EntryV1_0, DeviceV1_0, InstanceV1_0, V1_0};
 use ash::vk;
-use core::{command as com, handle, memory};
-use core::{FrameSync, QueueType};
+use core::{command as com, memory};
+use core::QueueType;
 use std::{fmt, mem, ptr};
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
-use std::collections::VecDeque;
 
 mod command;
-pub mod data;
+mod conversions;
 mod device;
 pub mod native;
 mod pool;
+
 
 const SURFACE_EXTENSIONS: &'static [&'static str] = &[
     vk::VK_KHR_SURFACE_EXTENSION_NAME,
@@ -335,7 +335,7 @@ impl core::Adapter<Backend> for Adapter {
 #[doc(hidden)]
 pub struct RawDevice(pub ash::Device<V1_0>);
 impl fmt::Debug for RawDevice {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, _formatter: &mut fmt::Formatter) -> fmt::Result {
         unimplemented!()
     }
 }
@@ -352,9 +352,6 @@ pub struct CommandQueue {
     raw: RawCommandQueue,
     device: Arc<RawDevice>,
     family_index: u32,
-
-    frame_handles: handle::Manager<Backend>,
-    max_resource_count: Option<usize>,
 }
 
 impl CommandQueue {
@@ -378,28 +375,9 @@ impl core::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit_raw<'a, I>(
         &mut self,
         submit_infos: I,
-        fence: Option<&handle::Fence<Backend>>,
-        access: &com::AccessInfo<Backend>,
+        fence: Option<&native::Fence>,
     ) where I: Iterator<Item=core::RawSubmission<'a, Backend>> {
         unimplemented!()
-    }
-
-    fn pin_submitted_resources(&mut self, man: &handle::Manager<Backend>) {
-        self.frame_handles.extend(man);
-        match self.max_resource_count {
-            Some(c) if self.frame_handles.count() > c => {
-                error!("Way too many resources in the current frame. Did you call Device::cleanup()?");
-                self.max_resource_count = None;
-            },
-            _ => (),
-        }
-    }
-
-    fn cleanup(&mut self) {
-        use core::handle::Producer;
-
-        self.frame_handles.clear();
-        // TODO
     }
 }
 
@@ -411,54 +389,42 @@ pub struct Device {
 pub enum Backend {}
 impl core::Backend for Backend {
     type Adapter = Adapter;
+    type Device = Device;
+
     type CommandQueue = CommandQueue;
     type RawCommandBuffer = command::CommandBuffer;
     type SubpassCommandBuffer = command::SubpassCommandBuffer;
     type SubmitInfo = command::SubmitInfo;
-    type Device = Device;
     type QueueFamily = QueueFamily;
 
+    type Heap = native::Heap;
+    type Mapping = device::Mapping;
     type RawCommandPool = pool::RawCommandPool;
     type SubpassCommandPool = pool::SubpassCommandPool;
 
-    type Buffer = native::Buffer;
-    type ShaderResourceView = ();
-    type UnorderedAccessView = ();
-    type RenderTargetView = native::RenderTargetView;
-    type DepthStencilView = native::DepthStencilView;
-    type Sampler = ();
-    type Fence = native::Fence;
-    type Semaphore = native::Semaphore;
-    type Mapping = Mapping;
-
-    type Image = native::Image;
-    type ComputePipeline = native::ComputePipeline;
-    type GraphicsPipeline = native::GraphicsPipeline;
-    type PipelineLayout = native::PipelineLayout;
-    type DescriptorSet = native::DescriptorSet;
     type ShaderLib = native::ShaderLib;
     type RenderPass = native::RenderPass;
     type FrameBuffer = native::FrameBuffer;
+
+    type UnboundBuffer = device::UnboundBuffer;
+    type Buffer = native::Buffer;
+    type UnboundImage = device::UnboundImage;
+    type Image = native::Image;
+    type Sampler = native::Sampler;
+
+    type ConstantBufferView = native::ConstantBufferView;
+    type ShaderResourceView = native::ShaderResourceView;
+    type UnorderedAccessView = native::UnorderedAccessView;
+    type RenderTargetView = native::RenderTargetView;
+    type DepthStencilView = native::DepthStencilView;
+
+    type ComputePipeline = native::ComputePipeline;
+    type GraphicsPipeline = native::GraphicsPipeline;
+    type PipelineLayout = native::PipelineLayout;
     type DescriptorSetLayout = native::DescriptorSetLayout;
     type DescriptorPool = native::DescriptorPool;
-    type DescriptorHeap = native::DescriptorHeap;
+    type DescriptorSet = native::DescriptorSet;
+
+    type Fence = native::Fence;
+    type Semaphore = native::Semaphore;
 }
-
-// TODO: temporary
-#[derive(Debug, Eq, Hash, PartialEq)]
-pub struct Mapping;
-
-impl core::mapping::Gate<Backend> for Mapping {
-    unsafe fn set<T>(&self, index: usize, val: T) {
-        unimplemented!()
-    }
-
-    unsafe fn slice<'a, 'b, T>(&'a self, len: usize) -> &'b [T] {
-        unimplemented!()
-    }
-
-    unsafe fn mut_slice<'a, 'b, T>(&'a self, len: usize) -> &'b mut [T] {
-        unimplemented!()
-    }
-}
-
