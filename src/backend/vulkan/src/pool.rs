@@ -5,7 +5,7 @@ use ash::version::DeviceV1_0;
 
 use core::pool;
 use command::{CommandBuffer, SubpassCommandBuffer};
-use core::command::{GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer};
+//use core::command::{GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer};
 use {Backend, CommandQueue, RawDevice};
 
 
