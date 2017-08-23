@@ -83,6 +83,16 @@ pub struct InputAssemblerDesc {
     pub primitive_restart: PrimitiveRestart,
 }
 
+impl InputAssemblerDesc {
+    /// Create a new IA descriptor without primitive restart
+    pub fn new(primitive: Primitive) -> Self {
+        InputAssemblerDesc {
+            primitive,
+            primitive_restart: PrimitiveRestart::Disabled,
+        }
+    }
+}
+
 /// A complete set of vertex buffers to be used for vertex import in PSO.
 #[derive(Clone, Debug)]
 pub struct VertexBufferSet<'a, B: Backend>(
