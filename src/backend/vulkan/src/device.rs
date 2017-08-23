@@ -4,7 +4,7 @@ use core::{buffer, device as d, format, image, mapping, shade, pass, pso};
 use core::{Features, Limits, HeapType, SubPass};
 use core::memory::Requirements;
 use native as n;
-use std::{mem, ptr};
+use std::{mem, ptr, slice};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -22,18 +22,9 @@ pub struct UnboundImage(n::Image);
 pub struct Mapping {
     device: Arc<RawDevice>,
     memory: vk::DeviceMemory,
-    data: *mut vk::types::c_void,
 }
-
 unsafe impl Sync for Mapping {}
 unsafe impl Send for Mapping {}
-
-impl mapping::Gate<B> for Mapping {
-    unsafe fn set<T>(&self, index: usize, val: T) {unimplemented!()}
-    unsafe fn slice<'a, 'b, T>(&'a self, len: usize) -> &'b [T] {unimplemented!()}
-    unsafe fn mut_slice<'a, 'b, T>(&'a self, len: usize) -> &'b mut [T] {unimplemented!()}
-}
-
 impl Drop for Mapping {
     fn drop(&mut self) {
         unsafe { self.device.0.unmap_memory(self.memory) }
@@ -41,18 +32,21 @@ impl Drop for Mapping {
 }
 
 impl Device {
-    fn map(&self, buf: &buffer::Raw<B>, offset: u64, size: u64) -> Result<Mapping, mapping::Error> {
-        let memory = buf.resource().memory;
+    fn map_buffer(&self,
+        buf: &n::Buffer,
+        offset: u64,
+        size: u64,
+    ) -> Result<(*mut vk::types::c_void, Mapping), mapping::Error>
+    {
         let result = unsafe {
-            self.raw.0.map_memory(memory, offset, size, vk::MemoryMapFlags::empty())
+            self.raw.0.map_memory(buf.memory, offset, size, vk::MemoryMapFlags::empty())
         };
 
         match result {
-            Ok(data) =>Ok(Mapping {
+            Ok(data) =>Ok((data, Mapping {
                 device: self.raw.clone(),
-                memory,
-                data,
-            }),
+                memory: buf.memory,
+            })),
             Err(error) => {
                 error!("Mapping failed with {:?}", error);
                 Err(mapping::Error::AccessOverlap) //TODO
@@ -792,8 +786,9 @@ impl d::Device<B> for Device {
     }
 
     fn bind_buffer_memory(&mut self, heap: &n::Heap, offset: u64, buffer: UnboundBuffer) -> Result<n::Buffer, buffer::CreationError> {
-        // TODO: error handling
-        unsafe { self.raw.0.bind_buffer_memory((buffer.0).raw, heap.0, offset); }
+        assert_eq!(Ok(()), unsafe {
+            self.raw.0.bind_buffer_memory((buffer.0).raw, heap.0, offset)
+        });
 
         let buffer = n::Buffer {
             raw: buffer.0.raw,
@@ -1120,33 +1115,35 @@ impl d::Device<B> for Device {
     }
 
     /// Acquire a mapping Reader.
-    fn read_mapping<'a, T>(&self, buf: &'a mut buffer::Raw<B>, offset: u64, size: u64)
+    fn read_mapping<'a, T>(&self, buf: &'a n::Buffer, offset: u64, size: u64)
                            -> Result<mapping::Reader<'a, B, T>, mapping::Error>
         where T: Copy
     {
-        if buf.is_mapped() {
-            return Err(mapping::Error::AccessOverlap) //TODO?
-        }
-        let mapping = try!(self.map(buf, offset, size));
-        buf.map(mapping);
-        unsafe {
-            mapping::read(buf, |_| {}) //TODO
-        }
+        self.map_buffer(buf, offset, size)
+            .map(|(ptr, mapping)| {
+                let slice = unsafe {
+                    slice::from_raw_parts(ptr as *const T, size as usize / mem::size_of::<T>())
+                };
+                unsafe {
+                    mapping::Reader::new(slice, mapping)
+                }
+            })
     }
 
     /// Acquire a mapping Writer
-    fn write_mapping<'a, 'b, T>(&mut self, buf: &'a mut buffer::Raw<B>, offset: u64, size: u64)
+    fn write_mapping<'a, 'b, T>(&mut self, buf: &'a n::Buffer, offset: u64, size: u64)
                                 -> Result<mapping::Writer<'a, B, T>, mapping::Error>
         where T: Copy
     {
-        if buf.is_mapped() {
-            return Err(mapping::Error::AccessOverlap) //TODO?
-        }
-        let mapping = try!(self.map(buf, offset, size));
-        buf.map(mapping);
-        unsafe {
-            mapping::write(buf, |_| {}) //TODO
-        }
+        self.map_buffer(buf, offset, size)
+            .map(|(ptr, mapping)| {
+                let slice = unsafe {
+                    slice::from_raw_parts_mut(ptr as *mut T, size as usize / mem::size_of::<T>())
+                };
+                unsafe {
+                    mapping::Writer::new(slice, mapping)
+                }
+            })
     }
 
     fn create_semaphore(&mut self) -> n::Semaphore {
