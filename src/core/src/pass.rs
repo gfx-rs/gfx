@@ -15,7 +15,7 @@
 //! RenderPass handling.
 
 use format::Format;
-use texture::{ImageAccess, ImageLayout};
+use image::{ImageAccess, ImageLayout};
 use pso::PipelineStage;
 use Backend;
 

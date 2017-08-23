@@ -186,3 +186,12 @@ pub enum Barrier {
     ///
     Image,
 }
+
+#[derive(Clone, Copy, Debug)]
+/// Memory requirements for a certain resource (buffer/image).
+pub struct Requirements {
+    /// Size in the memory.
+    pub size: u64,
+    /// Memory alignment.
+    pub alignment: u64,
+}

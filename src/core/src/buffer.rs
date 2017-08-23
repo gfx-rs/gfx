@@ -152,3 +152,21 @@ pub struct IndexBufferView<'a, B: Backend> {
     ///
     pub index_type: IndexType,
 }
+
+bitflags!(
+    /// Buffer usage flags.
+    pub flags Usage: u16 {
+        ///
+        const TRANSFER_SRC  = 0x1,
+        ///
+        const TRANSFER_DST = 0x2,
+        ///
+        const CONSTANT    = 0x4,
+        ///
+        const INDEX = 0x8,
+        ///
+        const INDIRECT = 0x10,
+        ///
+        const VERTEX = 0x20,
+    }
+);

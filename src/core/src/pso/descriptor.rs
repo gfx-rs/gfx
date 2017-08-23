@@ -15,6 +15,7 @@
 //! Descriptor sets and layouts.
 
 use {shade, Backend};
+use image::ImageLayout;
 
 ///
 // TODO: Grasping and remembering the differences between these
@@ -66,10 +67,10 @@ pub struct DescriptorSetLayoutBinding {
     // TODO: immutable samplers?
 }
 
-/// Pool of descriptors of a specific type.
+/// Set of descriptors of a specific type.
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-pub struct DescriptorPoolDesc {
+pub struct DescriptorRangeDesc {
     /// Type of the stored descriptors.
     pub ty: DescriptorType,
     /// Amount of space.
@@ -88,4 +89,24 @@ pub trait DescriptorPool<B: Backend> {
 
     ///
     fn reset(&mut self);
+}
+
+#[allow(missing_docs)] //TODO
+pub struct DescriptorSetWrite<'a, 'b, B: Backend> {
+    pub set: &'a B::DescriptorSet,
+    pub binding: usize,
+    pub array_offset: usize,
+    pub write: DescriptorWrite<'b, B>,
+}
+
+#[allow(missing_docs)] //TODO
+pub enum DescriptorWrite<'a, B: Backend> {
+    Sampler(Vec<&'a B::Sampler>),
+    SampledImage(Vec<(&'a B::ShaderResourceView, ImageLayout)>),
+    StorageImage(Vec<(&'a B::ShaderResourceView, ImageLayout)>),
+    UniformTexelBuffer,
+    StorageTexelBuffer,
+    ConstantBuffer(Vec<&'a B::ConstantBufferView>),
+    StorageBuffer,
+    InputAttachment(Vec<(&'a B::ShaderResourceView, ImageLayout)>),
 }
