@@ -34,7 +34,7 @@ use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
 mod command;
-mod conversions;
+pub mod conversions;
 mod device;
 pub mod native;
 mod pool;
@@ -57,8 +57,15 @@ lazy_static! {
     pub static ref VK_ENTRY: Result<Entry<V1_0>, LoadingError> = Entry::new();
 }
 
+pub struct RawInstance(pub ash::Instance<V1_0>);
+impl Drop for RawInstance {
+    fn drop(&mut self) {
+        unsafe { self.0.destroy_instance(None); }
+    }
+}
+
 pub struct Instance {
-    pub raw: ash::Instance<ash::version::V1_0>,
+    pub raw: Arc<RawInstance>,
 
     /// Supported surface extensions of this instance.
     pub surface_extensions: Vec<&'static str>,
@@ -80,9 +87,9 @@ fn map_queue_type(flags: vk::QueueFlags) -> QueueType {
 }
 
 impl Instance {
-    pub fn create() -> Instance {
+    pub fn create() -> Self {
         // TODO: return errors instead of panic
-        let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
+        let entry = VK_ENTRY.as_ref().expect("Unable to load Vulkan entry points");
 
         let app_info = vk::ApplicationInfo {
             s_type: vk::StructureType::ApplicationInfo,
@@ -124,21 +131,21 @@ impl Instance {
                 pp_enabled_extension_names: str_pointers.as_ptr(),
             };
 
-            entry.create_instance(&create_info, None).expect("Unable to create vulkan instance")
+            entry.create_instance(&create_info, None).expect("Unable to create Vulkan instance")
         };
 
         Instance {
-            raw: instance,
+            raw: Arc::new(RawInstance(instance)),
             surface_extensions: surface_extensions,
         }
     }
 
-    pub fn enumerate_adapters(instance: Arc<Instance>) -> Vec<Adapter> {
-        instance.raw.enumerate_physical_devices()
+    pub fn enumerate_adapters(&self) -> Vec<Adapter> {
+        self.raw.0.enumerate_physical_devices()
             .expect("Unable to enumerate adapter")
             .iter()
             .map(|&device| {
-                let properties = instance.raw.get_physical_device_properties(device);
+                let properties = self.raw.0.get_physical_device_properties(device);
                 let name = unsafe {
                     CStr::from_ptr(properties.device_name.as_ptr())
                             .to_str()
@@ -154,7 +161,7 @@ impl Instance {
                 };
 
                 let queue_families =
-                    instance.raw.get_physical_device_queue_family_properties(device)
+                    self.raw.0.get_physical_device_queue_family_properties(device)
                         .iter()
                         .enumerate()
                         .map(|(i, queue_family)| {
@@ -170,10 +177,10 @@ impl Instance {
                         }).collect();
 
                 Adapter {
-                    instance: instance.clone(),
+                    instance: self.raw.clone(),
                     handle: device,
-                    queue_families: queue_families,
-                    info: info,
+                    queue_families,
+                    info,
                 }
             })
             .collect()
@@ -217,14 +224,16 @@ impl core::QueueFamily for QueueFamily {
 }
 
 pub struct Adapter {
-    instance: Arc<Instance>,
+    instance: Arc<RawInstance>,
     handle: vk::PhysicalDevice,
     queue_families: Vec<(QueueFamily, QueueType)>,
     info: core::AdapterInfo,
 }
 
 impl core::Adapter<Backend> for Adapter {
-    fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)]) -> core::Gpu<Backend>
+    fn open(&self,
+        queue_descs: &[(&QueueFamily, QueueType, u32)],
+    ) -> core::Gpu<Backend>
     {
         let mut queue_priorities = Vec::with_capacity(queue_descs.len());
 
@@ -268,7 +277,7 @@ impl core::Adapter<Backend> for Adapter {
             };
 
             unsafe {
-                self.instance.raw.create_device(self.handle, &info, None)
+                self.instance.0.create_device(self.handle, &info, None)
                     .expect("Error on device creation")
             }
         };
@@ -277,7 +286,7 @@ impl core::Adapter<Backend> for Adapter {
             raw: Arc::new(RawDevice(device_raw)),
         };
 
-        let mem_properties =  self.instance.raw.get_physical_device_memory_properties(self.handle);
+        let mem_properties =  self.instance.0.get_physical_device_memory_properties(self.handle);
         let memory_heaps = mem_properties.memory_heaps[..mem_properties.memory_heap_count as usize].iter()
                                 .map(|mem| mem.size).collect::<Vec<_>>();
         let heap_types = mem_properties.memory_types[..mem_properties.memory_type_count as usize].iter().enumerate().map(|(i, mem)| {
