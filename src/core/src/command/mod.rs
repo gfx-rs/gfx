@@ -14,7 +14,7 @@
 
 //!
 
-use {texture, Backend, InstanceCount, VertexCount};
+use {image, Backend, InstanceCount, VertexCount};
 
 use std::marker::PhantomData;
 
@@ -144,30 +144,30 @@ pub struct BufferCopy {
 #[derive(Clone, Debug)]
 pub struct ImageResolve {
     ///
-    pub src_subresource: texture::Subresource,
+    pub src_subresource: image::Subresource,
     ///
-    pub dst_subresource: texture::Subresource,
+    pub dst_subresource: image::Subresource,
     ///
-    pub num_layers: texture::Layer,
+    pub num_layers: image::Layer,
 }
 
 ///
 #[derive(Clone, Debug)]
 pub struct ImageCopy {
     ///
-    pub aspect_mask: texture::ImageAspectFlags,
+    pub aspect_mask: image::ImageAspectFlags,
     ///
-    pub src_subresource: texture::Subresource,
+    pub src_subresource: image::Subresource,
     ///
     pub src_offset: Offset,
     ///
-    pub dst_subresource: texture::Subresource,
+    pub dst_subresource: image::Subresource,
     ///
     pub dst_offset: Offset,
     ///
     pub extent: Extent,
     ///
-    pub num_layers: texture::Layer,
+    pub num_layers: image::Layer,
 }
 
 ///
@@ -180,9 +180,9 @@ pub struct BufferImageCopy {
     ///
     pub buffer_slice_pitch: u32,
     ///
-    pub image_aspect: texture::ImageAspectFlags,
+    pub image_aspect: image::ImageAspectFlags,
     ///
-    pub image_subresource: texture::SubresourceLayers,
+    pub image_subresource: image::SubresourceLayers,
     ///
     pub image_offset: Offset,
     ///
