@@ -8,7 +8,7 @@ use std::cell::UnsafeCell;
 use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{self, AtomicBool};
 use Backend;
-use {memory, buffer, handle};
+use {buffer, memory};
 
 /// Unsafe, backend-provided operations for a buffer mapping
 #[doc(hidden)]
@@ -203,7 +203,7 @@ impl<'a, B: Backend, T: 'a + Copy> DerefMut for Writer<'a, B, T> {
 #[doc(hidden)]
 pub struct Status<B: Backend> {
     cpu_wrote: bool,
-    gpu_access: Option<handle::Fence<B>>,
+    gpu_access: Option<B::Fence>,
 }
 
 #[doc(hidden)]
@@ -216,19 +216,19 @@ impl<B: Backend> Status<B> {
     }
 
     pub fn cpu_access<F>(&mut self, wait_fence: F)
-        where F: FnOnce(handle::Fence<B>)
+        where F: FnOnce(B::Fence)
     {
         self.gpu_access.take().map(wait_fence);
     }
 
     pub fn cpu_write_access<F>(&mut self, wait_fence: F)
-        where F: FnOnce(handle::Fence<B>)
+        where F: FnOnce(B::Fence)
     {
         self.cpu_access(wait_fence);
         self.cpu_wrote = true;
     }
 
-    pub fn gpu_access(&mut self, fence: handle::Fence<B>) {
+    pub fn gpu_access(&mut self, fence: B::Fence) {
         self.gpu_access = Some(fence);
     }
 
