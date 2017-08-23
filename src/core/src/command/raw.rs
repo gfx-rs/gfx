@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use {memory, pso, state, target, texture};
+use {image, memory, pso, target};
 use {Backend, VertexCount, VertexOffset, Viewport};
 use buffer::IndexBufferView;
 use super::{BufferCopy, BufferImageCopy, ClearColor, ClearValue, ImageCopy, ImageResolve,
@@ -27,13 +27,13 @@ pub trait RawCommandBuffer<B: Backend> {
     fn pipeline_barrier(&mut self, &[memory::Barrier]);
 
     ///
-    fn clear_color(&mut self, &B::RenderTargetView, texture::ImageLayout, ClearColor);
+    fn clear_color(&mut self, &B::RenderTargetView, image::ImageLayout, ClearColor);
 
     /// Clear depth-stencil target
     fn clear_depth_stencil(
         &mut self,
         &B::DepthStencilView,
-        texture::ImageLayout,
+        image::ImageLayout,
         Option<target::Depth>,
         Option<target::Stencil>,
     );
@@ -42,9 +42,9 @@ pub trait RawCommandBuffer<B: Backend> {
     fn resolve_image(
         &mut self,
         src: &B::Image,
-        src_layout: texture::ImageLayout,
+        src_layout: image::ImageLayout,
         dst: &B::Image,
-        dst_layout: texture::ImageLayout,
+        dst_layout: image::ImageLayout,
         regions: &[ImageResolve],
     );
 
@@ -110,16 +110,6 @@ pub trait RawCommandBuffer<B: Backend> {
     ///
     fn end_renderpass(&mut self);
 
-    /// Bind a descriptor heap.
-    ///
-    /// Descriptor heaps are split into a CBV/SRV/UAV part and a sampler part.
-    /// Each part represents a slot, which can be filled by *one* heap.
-    /// So at the same time there can be bound, at maximum, either *one* heap having both parts
-    /// or two heaps with only a single type each (one CBV/SRV/UAV and one sampler).
-    ///
-    /// Binding a new descriptor heap will automatically overwrite the currently filled slots.
-    fn bind_descriptor_heap(&mut self, &B::DescriptorHeap);
-
     /// Bind a graphics pipeline.
     ///
     /// There is only *one* pipeline slot for compute and graphics.
@@ -144,9 +134,9 @@ pub trait RawCommandBuffer<B: Backend> {
     fn copy_image(
         &mut self,
         src: &B::Image,
-        src_layout: texture::ImageLayout,
+        src_layout: image::ImageLayout,
         dst: &B::Image,
-        dst_layout: texture::ImageLayout,
+        dst_layout: image::ImageLayout,
         regions: &[ImageCopy],
     );
     ///
@@ -154,7 +144,7 @@ pub trait RawCommandBuffer<B: Backend> {
         &mut self,
         src: &B::Buffer,
         dst: &B::Image,
-        layout: texture::ImageLayout,
+        layout: image::ImageLayout,
         regions: &[BufferImageCopy],
     );
     ///
@@ -162,7 +152,7 @@ pub trait RawCommandBuffer<B: Backend> {
         &mut self,
         src: &B::Image,
         dst: &B::Buffer,
-        layout: texture::ImageLayout,
+        layout: image::ImageLayout,
         regions: &[BufferImageCopy],
     );
     ///

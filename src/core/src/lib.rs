@@ -43,6 +43,7 @@ pub mod command;
 pub mod device;
 pub mod format;
 pub mod handle;
+pub mod image;
 pub mod mapping;
 pub mod memory;
 pub mod pass;
@@ -50,7 +51,6 @@ pub mod pool;
 pub mod pso;
 pub mod queue;
 pub mod shade;
-pub mod texture;
 pub mod window;
 
 /// Draw vertex count.
@@ -192,6 +192,14 @@ pub enum IndexType {
     U32,
 }
 
+/// A sub-pass borrow of a pass.
+pub struct SubPass<'a, B: Backend> {
+    /// Index of the sub pass
+    pub index: usize,
+    /// Main pass borrow.
+    pub main_pass: &'a B::RenderPass,
+}
+
 ///
 #[derive(Copy, Clone, Debug)]
 pub struct HeapType {
@@ -219,20 +227,23 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type RawCommandPool: RawCommandPool<Self>;
     type SubpassCommandPool: SubpassCommandPool<Self>;
 
+    type UnboundBuffer:       Debug + Any + Send + Sync;
     type Buffer:              Debug + Any + Send + Sync + Eq + Hash;
     type ShaderLib:           Debug + Any + Send + Sync;
+    type ConstantBufferView:  Debug + Any + Send + Sync + Clone + Hash + Eq;
     type ShaderResourceView:  Debug + Any + Send + Sync + Clone + Hash + Eq;
     type UnorderedAccessView: Debug + Any + Send + Sync + Clone + Hash + Eq;
     type RenderTargetView:    Debug + Any + Send + Sync + Clone;
     type DepthStencilView:    Debug + Any + Send + Sync + Clone;
     type Sampler:             Debug + Any + Send + Sync;
+    type UnboundImage:        Debug + Any + Send + Sync;
     type Image:               Debug + Any + Send + Sync + Eq + Hash;
     type ComputePipeline:     Debug + Any + Send + Sync;
     type GraphicsPipeline:    Debug + Any + Send + Sync;
     type PipelineLayout:      Debug + Any + Send + Sync;
-    type DescriptorHeap:      Debug + Any;
     type DescriptorSet:       Debug + Any + Send + Sync;
     type DescriptorSetLayout: Debug + Any;
+    type Heap:                Debug + Any;
     type Fence:               Debug + Any + Send + Sync;
     type Semaphore:           Debug + Any + Send + Sync;
     type Mapping:             Debug + Any + Send + Sync + mapping::Gate<Self>;

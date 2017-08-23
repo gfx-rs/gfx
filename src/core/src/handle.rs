@@ -8,7 +8,7 @@
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
-use {buffer, shade, texture, Backend};
+use {buffer, image, Backend};
 use memory::Typed;
 
 /// Untyped buffer handle
@@ -52,10 +52,10 @@ impl<B: Backend, T> Buffer<B, T> {
 
 /// Raw texture handle
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct RawTexture<B: Backend>(Arc<texture::Raw<B>>);
+pub struct RawTexture<B: Backend>(Arc<image::Raw<B>>);
 
 impl<B: Backend> Deref for RawTexture<B> {
-    type Target = texture::Raw<B>;
+    type Target = image::Raw<B>;
     fn deref(&self) -> &Self::Target { &self.0 }
 }
 
@@ -79,7 +79,7 @@ impl<B: Backend, S> Typed for Texture<B, S> {
 
 impl<B: Backend, S> Texture<B, S> {
     /// Get texture descriptor
-    pub fn get_info(&self) -> &texture::Info { self.raw().get_info() }
+    pub fn get_info(&self) -> &image::Info { self.raw().get_info() }
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -135,26 +135,26 @@ impl<B: Backend, T> Typed for UnorderedAccessView<B, T> {
 /// Raw RTV
 // TODO: Arc it all
 #[derive(Clone, Debug)]
-pub struct RawRenderTargetView<B: Backend>(Arc<B::RenderTargetView>, RawTexture<B>, texture::Dimensions);
+pub struct RawRenderTargetView<B: Backend>(Arc<B::RenderTargetView>, RawTexture<B>, image::Dimensions);
 
 impl<B: Backend> RawRenderTargetView<B> {
     /// Get target dimensions
-    pub fn get_dimensions(&self) -> texture::Dimensions { self.2 }
+    pub fn get_dimensions(&self) -> image::Dimensions { self.2 }
 
-    /// Get the associated texture
+    /// Get the associated image::
     pub fn get_texture(&self) -> &RawTexture<B> { &self.1 }
 }
 
 /// Raw DSV
 // TODO: Arc it all
 #[derive(Clone, Debug)]
-pub struct RawDepthStencilView<B: Backend>(Arc<B::DepthStencilView>, RawTexture<B>, texture::Dimensions);
+pub struct RawDepthStencilView<B: Backend>(Arc<B::DepthStencilView>, RawTexture<B>, image::Dimensions);
 
 impl<B: Backend> RawDepthStencilView<B> {
     /// Get target dimensions
-    pub fn get_dimensions(&self) -> texture::Dimensions { self.2 }
+    pub fn get_dimensions(&self) -> image::Dimensions { self.2 }
 
-    /// Get the associated texture
+    /// Get the associated image::
     pub fn get_texture(&self) -> &RawTexture<B> { &self.1 }
 }
 
@@ -169,7 +169,7 @@ pub struct RenderTargetView<B: Backend, T>(
 
 impl<B: Backend, T> RenderTargetView<B, T> {
     /// Get target dimensions
-    pub fn get_dimensions(&self) -> texture::Dimensions { self.raw().get_dimensions() }
+    pub fn get_dimensions(&self) -> image::Dimensions { self.raw().get_dimensions() }
 }
 
 impl<B: Backend, T> Typed for RenderTargetView<B, T> {
@@ -192,7 +192,7 @@ pub struct DepthStencilView<B: Backend, T>(
 
 impl<B: Backend, T> DepthStencilView<B, T> {
     /// Get target dimensions
-    pub fn get_dimensions(&self) -> texture::Dimensions {
+    pub fn get_dimensions(&self) -> image::Dimensions {
         self.raw().get_dimensions()
     }
 }
@@ -209,11 +209,11 @@ impl<B: Backend, T> Typed for DepthStencilView<B, T> {
 /// Sampler Handle
 // TODO: Arc it all
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Sampler<B: Backend>(Arc<B::Sampler>, texture::SamplerInfo);
+pub struct Sampler<B: Backend>(Arc<B::Sampler>, image::SamplerInfo);
 
 impl<B: Backend> Sampler<B> {
     /// Get sampler info
-    pub fn get_info(&self) -> &texture::SamplerInfo { &self.1 }
+    pub fn get_info(&self) -> &image::SamplerInfo { &self.1 }
 }
 
 /// Fence Handle
@@ -246,7 +246,7 @@ pub struct DescriptorSetLayout<B: Backend>(Arc<B::DescriptorSetLayout>);
 
 ///
 #[derive(Clone, Debug)]
-pub struct DescriptorHeap<B: Backend>(Arc<B::DescriptorHeap>);
+pub struct DescriptorHeap<B: Backend>(Arc<PhantomData<B>>);
 
 /// Stores reference-counted resources used in a command buffer.
 /// Seals actual resource names behind the interface, automatically
@@ -256,7 +256,7 @@ pub struct DescriptorHeap<B: Backend>(Arc<B::DescriptorHeap>);
 #[derive(Debug)]
 pub struct Manager<B: Backend> {
     buffers:       Vec<Arc<buffer::Raw<B>>>,
-    textures:      Vec<Arc<texture::Raw<B>>>,
+    textures:      Vec<Arc<image::Raw<B>>>,
     srvs:          Vec<Arc<B::ShaderResourceView>>,
     uavs:          Vec<Arc<B::UnorderedAccessView>>,
     rtvs:          Vec<Arc<B::RenderTargetView>>,
@@ -269,7 +269,7 @@ pub struct Manager<B: Backend> {
     renderpasses:           Vec<Arc<B::RenderPass>>,
     pipeline_layouts:       Vec<Arc<B::PipelineLayout>>,
     descriptor_set_layouts: Vec<Arc<B::DescriptorSetLayout>>,
-    descriptor_heaps:       Vec<Arc<B::DescriptorHeap>>,
+    descriptor_heaps:       Vec<Arc<PhantomData<B>>>,
 }
 
 /// A service trait to be used by the device implementation
@@ -279,14 +279,14 @@ pub trait Producer<Bd: Backend> {
                    Bd::Buffer,
                    buffer::Info,
                    Option<Bd::Mapping>) -> RawBuffer<Bd>;
-    fn make_image(&mut self, Bd::Image, texture::Info) -> RawTexture<Bd>;
+    fn make_image(&mut self, Bd::Image, image::Info) -> RawTexture<Bd>;
     fn make_buffer_srv(&mut self, Bd::ShaderResourceView, &RawBuffer<Bd>) -> RawShaderResourceView<Bd>;
     fn make_texture_srv(&mut self, Bd::ShaderResourceView, &RawTexture<Bd>) -> RawShaderResourceView<Bd>;
     fn make_buffer_uav(&mut self, Bd::UnorderedAccessView, &RawBuffer<Bd>) -> RawUnorderedAccessView<Bd>;
     fn make_texture_uav(&mut self, Bd::UnorderedAccessView, &RawTexture<Bd>) -> RawUnorderedAccessView<Bd>;
-    fn make_rtv(&mut self, Bd::RenderTargetView, &RawTexture<Bd>, texture::Dimensions) -> RawRenderTargetView<Bd>;
-    fn make_dsv(&mut self, Bd::DepthStencilView, &RawTexture<Bd>, texture::Dimensions) -> RawDepthStencilView<Bd>;
-    fn make_sampler(&mut self, Bd::Sampler, texture::SamplerInfo) -> Sampler<Bd>;
+    fn make_rtv(&mut self, Bd::RenderTargetView, &RawTexture<Bd>, image::Dimensions) -> RawRenderTargetView<Bd>;
+    fn make_dsv(&mut self, Bd::DepthStencilView, &RawTexture<Bd>, image::Dimensions) -> RawDepthStencilView<Bd>;
+    fn make_sampler(&mut self, Bd::Sampler, image::SamplerInfo) -> Sampler<Bd>;
     fn make_fence(&mut self, name: Bd::Fence) -> Fence<Bd>;
     fn make_semaphore(&mut self, Bd::Semaphore) -> Semaphore<Bd>;
     fn make_graphics_pipeline(&mut self, Bd::GraphicsPipeline) -> GraphicsPipeline<Bd>;
@@ -294,7 +294,7 @@ pub trait Producer<Bd: Backend> {
     fn make_renderpass(&mut self, Bd::RenderPass) -> RenderPass<Bd>;
     fn make_pipeline_layout(&mut self, Bd::PipelineLayout) -> PipelineLayout<Bd>;
     fn make_descriptor_set_layout(&mut self, Bd::DescriptorSetLayout) -> DescriptorSetLayout<Bd>;
-    fn make_descriptor_heap(&mut self, Bd::DescriptorHeap) -> DescriptorHeap<Bd>;
+    fn make_descriptor_heap(&mut self) -> DescriptorHeap<Bd>;
 
     /// Walk through all the handles, keep ones that are reference elsewhere
     /// and call the provided delete function (resource-specific) for others
@@ -303,7 +303,7 @@ pub trait Producer<Bd: Backend> {
         B: Fn(&mut T, &mut Bd::GraphicsPipeline),
         C: Fn(&mut T, &mut Bd::ComputePipeline),
         D: Fn(&mut T, &mut Bd::RenderPass),
-        E: Fn(&mut T, &mut texture::Raw<Bd>),
+        E: Fn(&mut T, &mut image::Raw<Bd>),
         F: Fn(&mut T, &mut Bd::ShaderResourceView),
         G: Fn(&mut T, &mut Bd::UnorderedAccessView),
         H: Fn(&mut T, &mut Bd::RenderTargetView),
@@ -313,7 +313,7 @@ pub trait Producer<Bd: Backend> {
         L: Fn(&mut T, &mut Mutex<Bd::Semaphore>),
         M: Fn(&mut T, &mut Bd::DescriptorSetLayout),
         N: Fn(&mut T, &mut Bd::PipelineLayout),
-        O: Fn(&mut T, &mut Bd::DescriptorHeap),
+        O: Fn(&mut T, &mut PhantomData<Bd>),
     >(&mut self, &mut T, A, B, C, D, E, F, G, H, I, J, K, L, M, N, O);
 }
 
@@ -327,8 +327,8 @@ impl<Bd: Backend> Producer<Bd> for Manager<Bd> {
         RawBuffer(r)
     }
 
-    fn make_image(&mut self, res: Bd::Image, info: texture::Info) -> RawTexture<Bd> {
-        let r = Arc::new(texture::Raw::new(res, info));
+    fn make_image(&mut self, res: Bd::Image, info: image::Info) -> RawTexture<Bd> {
+        let r = Arc::new(image::Raw::new(res, info));
         self.textures.push(r.clone());
         RawTexture(r)
     }
@@ -357,19 +357,19 @@ impl<Bd: Backend> Producer<Bd> for Manager<Bd> {
         RawUnorderedAccessView(r, ViewSource::Texture(tex.clone()))
     }
 
-    fn make_rtv(&mut self, res: Bd::RenderTargetView, tex: &RawTexture<Bd>, dim: texture::Dimensions) -> RawRenderTargetView<Bd> {
+    fn make_rtv(&mut self, res: Bd::RenderTargetView, tex: &RawTexture<Bd>, dim: image::Dimensions) -> RawRenderTargetView<Bd> {
         let r = Arc::new(res);
         self.rtvs.push(r.clone());
         RawRenderTargetView(r, tex.clone(), dim)
     }
 
-    fn make_dsv(&mut self, res: Bd::DepthStencilView, tex: &RawTexture<Bd>, dim: texture::Dimensions) -> RawDepthStencilView<Bd> {
+    fn make_dsv(&mut self, res: Bd::DepthStencilView, tex: &RawTexture<Bd>, dim: image::Dimensions) -> RawDepthStencilView<Bd> {
         let r = Arc::new(res);
         self.dsvs.push(r.clone());
         RawDepthStencilView(r, tex.clone(), dim)
     }
 
-    fn make_sampler(&mut self, res: Bd::Sampler, info: texture::SamplerInfo) -> Sampler<Bd> {
+    fn make_sampler(&mut self, res: Bd::Sampler, info: image::SamplerInfo) -> Sampler<Bd> {
         let r = Arc::new(res);
         self.samplers.push(r.clone());
         Sampler(r, info)
@@ -417,8 +417,8 @@ impl<Bd: Backend> Producer<Bd> for Manager<Bd> {
         DescriptorSetLayout(r)
     }
 
-    fn make_descriptor_heap(&mut self, res: Bd::DescriptorHeap) -> DescriptorHeap<Bd> {
-        let r = Arc::new(res);
+    fn make_descriptor_heap(&mut self) -> DescriptorHeap<Bd> {
+        let r = Arc::new(PhantomData);
         self.descriptor_heaps.push(r.clone());
         DescriptorHeap(r)
     }
@@ -428,7 +428,7 @@ impl<Bd: Backend> Producer<Bd> for Manager<Bd> {
         B: Fn(&mut T, &mut Bd::GraphicsPipeline),
         C: Fn(&mut T, &mut Bd::ComputePipeline),
         D: Fn(&mut T, &mut Bd::RenderPass),
-        E: Fn(&mut T, &mut texture::Raw<Bd>),
+        E: Fn(&mut T, &mut image::Raw<Bd>),
         F: Fn(&mut T, &mut Bd::ShaderResourceView),
         G: Fn(&mut T, &mut Bd::UnorderedAccessView),
         H: Fn(&mut T, &mut Bd::RenderTargetView),
@@ -438,7 +438,7 @@ impl<Bd: Backend> Producer<Bd> for Manager<Bd> {
         L: Fn(&mut T, &mut Mutex<Bd::Semaphore>),
         M: Fn(&mut T, &mut Bd::DescriptorSetLayout),
         N: Fn(&mut T, &mut Bd::PipelineLayout),
-        O: Fn(&mut T, &mut Bd::DescriptorHeap),
+        O: Fn(&mut T, &mut PhantomData<Bd>),
     >(&mut self, param: &mut T, fa: A, fb: B, fc: C, fd: D, fe: E, ff: F, fg: G, fh: H, fi: I, fj: J, fk: K, fl: L, fm: M, fn_: N, fo: O) {
         fn clean_vec<X, Param, Fun>(param: &mut Param, vector: &mut Vec<Arc<X>>, fun: Fun)
             where Fun: Fn(&mut Param, &mut X)
@@ -471,7 +471,7 @@ impl<Bd: Backend> Producer<Bd> for Manager<Bd> {
         clean_vec(param, &mut self.semaphores,         fl);
         clean_vec(param, &mut self.descriptor_set_layouts, fm);
         clean_vec(param, &mut self.pipeline_layouts,   fn_);
-        clean_vec(param, &mut self.descriptor_heaps,   fo);
+        //clean_vec(param, &mut self.descriptor_heaps,   fo);
     }
 }
 

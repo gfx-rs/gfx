@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use {Backend, Viewport};
-use {memory, pso, state, target, texture};
+use {image, memory, pso, target};
 use buffer::IndexBufferView;
 use queue::capability::{Capability, General};
 use super::{BufferCopy, BufferImageCopy, CommandBufferShim, ImageCopy, RawCommandBuffer, Submit};
@@ -104,9 +104,9 @@ impl<'a, B: Backend> GeneralCommandBuffer<'a, B> {
     pub fn copy_image(
         &mut self,
         src: &B::Image,
-        src_layout: texture::ImageLayout,
+        src_layout: image::ImageLayout,
         dst: &B::Image,
-        dst_layout: texture::ImageLayout,
+        dst_layout: image::ImageLayout,
         regions: &[ImageCopy],
     ) {
         self.0.copy_image(src, src_layout, dst, dst_layout, regions)
@@ -117,7 +117,7 @@ impl<'a, B: Backend> GeneralCommandBuffer<'a, B> {
         &mut self,
         src: &B::Buffer,
         dst: &B::Image,
-        layout: texture::ImageLayout,
+        layout: image::ImageLayout,
         regions: &[BufferImageCopy],
     ) {
         self.0.copy_buffer_to_image(src, dst, layout, regions)
@@ -128,7 +128,7 @@ impl<'a, B: Backend> GeneralCommandBuffer<'a, B> {
         &mut self,
         src: &B::Image,
         dst: &B::Buffer,
-        layout: texture::ImageLayout,
+        layout: image::ImageLayout,
         regions: &[BufferImageCopy],
     ) {
         self.0.copy_image_to_buffer(src, dst, layout, regions)
