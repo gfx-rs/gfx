@@ -1,7 +1,7 @@
 use ash::vk;
 use ash::version::DeviceV1_0;
 use core;
-use core::texture::SubresourceRange;
+use core::image::SubresourceRange;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use {Backend, RawDevice};
@@ -18,6 +18,9 @@ pub struct GraphicsPipeline(pub vk::Pipeline);
 #[derive(Debug, Hash)]
 pub struct ComputePipeline(pub vk::Pipeline);
 
+#[derive(Debug, Hash)]
+pub struct Heap(pub vk::DeviceMemory);
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Buffer {
     pub raw: vk::Buffer,
@@ -30,6 +33,10 @@ pub struct Image {
     pub bytes_per_texel: u8,
     pub extent: vk::Extent3D,
 }
+
+
+#[derive(Debug, Hash)]
+pub struct Sampler(pub vk::Sampler);
 
 #[derive(Debug, Hash)]
 pub struct RenderPass {
@@ -62,14 +69,33 @@ pub struct ShaderLib {
     pub shaders: BTreeMap<core::pso::EntryPoint, vk::ShaderModule>,
 }
 
-#[derive(Debug, Hash, Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct ConstantBufferView {
+    pub buffer: vk::Buffer,
+    pub offset: usize,
+    pub size: usize,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum ShaderResourceView {
+    Buffer,
+    Image(vk::ImageView),
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum UnorderedAccessView {
+    Buffer,
+    Image(vk::ImageView),
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct RenderTargetView {
     pub image: vk::Image,
     pub view: vk::ImageView,
     pub range: SubresourceRange
 }
 
-#[derive(Debug, Hash, Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct DepthStencilView {
     pub image: vk::Image,
     pub view: vk::ImageView,
@@ -77,20 +103,35 @@ pub struct DepthStencilView {
 }
 
 #[derive(Debug)]
-pub struct DescriptorHeap {
-    pub(crate) num_cbv_srv_uav: usize,
-    pub(crate) num_sampler: usize,
-}
-
-#[derive(Debug)]
 pub struct DescriptorPool {
     pub(crate) raw: vk::DescriptorPool,
-    device: Arc<RawDevice>,
+    pub(crate) device: Arc<RawDevice>,
 }
 
 impl core::DescriptorPool<Backend> for DescriptorPool {
     fn allocate_sets(&mut self, layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
-        unimplemented!()
+        use std::ptr;
+
+        let layouts = layouts.iter().map(|layout| {
+            layout.raw
+        }).collect::<Vec<_>>();
+
+        let info = vk::DescriptorSetAllocateInfo {
+            s_type: vk::StructureType::DescriptorSetAllocateInfo,
+            p_next: ptr::null(),
+            descriptor_pool: self.raw,
+            descriptor_set_count: layouts.len() as u32,
+            p_set_layouts: layouts.as_ptr(),
+        };
+
+        let descriptor_sets = unsafe {
+            self.device.0.allocate_descriptor_sets(&info)
+                         .expect("Error on descriptor sets creation") // TODO
+        };
+
+        descriptor_sets.into_iter().map(|set| {
+            DescriptorSet { raw: set }
+        }).collect::<Vec<_>>()
     }
 
     fn reset(&mut self) {

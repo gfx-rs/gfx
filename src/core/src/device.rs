@@ -302,7 +302,7 @@ pub trait Device<B: Backend> {
     fn view_buffer_as_constant(&mut self, buffer: &B::Buffer, offset: usize, size: usize) -> Result<B::ConstantBufferView, TargetViewError>;
 
     ///
-    fn view_image_as_render_target(&mut self, image: &B::Image, format: format::Format) -> Result<B::RenderTargetView, TargetViewError>;
+    fn view_image_as_render_target(&mut self, image: &B::Image, format: format::Format, range: image::SubresourceRange) -> Result<B::RenderTargetView, TargetViewError>;
 
     ///
     fn view_image_as_shader_resource(&mut self, image: &B::Image, format: format::Format) -> Result<B::ShaderResourceView, TargetViewError>;
@@ -314,7 +314,7 @@ pub trait Device<B: Backend> {
     ///
     /// Descriptor pools allow allocation of descriptor sets.
     /// The pool can't be modified directly, only trough updating descriptor sets.
-    fn create_descriptor_pool(&mut self, max_sets: usize, offset: usize, descriptor_ranges: &[pso::DescriptorRangeDesc]) -> B::DescriptorPool;
+    fn create_descriptor_pool(&mut self, max_sets: usize, descriptor_ranges: &[pso::DescriptorRangeDesc]) -> B::DescriptorPool;
 
     /// Create a descriptor set layout.
     fn create_descriptor_set_layout(&mut self, bindings: &[pso::DescriptorSetLayoutBinding]) -> B::DescriptorSetLayout;
@@ -331,9 +331,8 @@ pub trait Device<B: Backend> {
     /// Acquire a mapping Reader
     ///
     /// See `write_mapping` for more information.
-    fn read_mapping<'a, T>(&self, buf: &'a B::Buffer, offset: u64, size: u64)
-                               -> Result<mapping::Reader<'a, B, T>,
-                                         mapping::Error>
+    fn read_mapping<'a, T>(&self, buf: &'a mut buffer::Raw<B>, offset: u64, size: u64)
+                           -> Result<mapping::Reader<'a, B, T>, mapping::Error>
         where T: Copy;
 
     /// Acquire a mapping Writer
@@ -344,9 +343,8 @@ pub trait Device<B: Backend> {
     /// implicitly requires exclusive access. Additionally,
     /// further access will be stalled until execution completion.
 
-    fn write_mapping<'a, 'b, T>(&mut self, buf: &'a B::Buffer, offset: u64, size: u64)
-                                -> Result<mapping::Writer<'a, B, T>,
-                                          mapping::Error>
+    fn write_mapping<'a, 'b, T>(&mut self, buf: &'a mut buffer::Raw<B>, offset: u64, size: u64)
+                                -> Result<mapping::Writer<'a, B, T>, mapping::Error>
         where T: Copy;
 
     ///

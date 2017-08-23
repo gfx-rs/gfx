@@ -214,49 +214,45 @@ pub struct HeapType {
 #[allow(missing_docs)]
 pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type Adapter: Adapter<Self>;
-    type CommandQueue: CommandQueue<Self>;
     type Device: Device<Self>;
-    type QueueFamily: QueueFamily;
-    type SubmitInfo: Clone + Send;
-    type DescriptorPool: DescriptorPool<Self>;
 
+    type CommandQueue: CommandQueue<Self>;
     type RawCommandBuffer: command::RawCommandBuffer<Self>;
     type SubpassCommandBuffer;
+    type QueueFamily: QueueFamily;
+    type SubmitInfo: Clone + Send;
 
-    type RawCommandPool: RawCommandPool<Self>;
-    type SubpassCommandPool: SubpassCommandPool<Self>;
+    type ShaderLib:           Debug + Any + Send + Sync;
+    type RenderPass:          Debug + Any + Send + Sync;
+    type FrameBuffer:         Debug + Any + Send + Sync;
+
+    type Heap:                Debug + Any;
+    type Mapping:             Debug + Any + Send + Sync + mapping::Gate<Self>;
+    type RawCommandPool:      RawCommandPool<Self>;
+    type SubpassCommandPool:  SubpassCommandPool<Self>;
 
     type UnboundBuffer:       Debug + Any + Send + Sync;
     type Buffer:              Debug + Any + Send + Sync + Eq + Hash;
-    type ShaderLib:           Debug + Any + Send + Sync;
+    type UnboundImage:        Debug + Any + Send + Sync;
+    type Image:               Debug + Any + Send + Sync + Eq + Hash;
+    type Sampler:             Debug + Any + Send + Sync;
+
     type ConstantBufferView:  Debug + Any + Send + Sync + Clone + Hash + Eq;
     type ShaderResourceView:  Debug + Any + Send + Sync + Clone + Hash + Eq;
     type UnorderedAccessView: Debug + Any + Send + Sync + Clone + Hash + Eq;
     type RenderTargetView:    Debug + Any + Send + Sync + Clone;
     type DepthStencilView:    Debug + Any + Send + Sync + Clone;
-    type Sampler:             Debug + Any + Send + Sync;
-    type UnboundImage:        Debug + Any + Send + Sync;
-    type Image:               Debug + Any + Send + Sync + Eq + Hash;
+
     type ComputePipeline:     Debug + Any + Send + Sync;
     type GraphicsPipeline:    Debug + Any + Send + Sync;
     type PipelineLayout:      Debug + Any + Send + Sync;
+    type DescriptorPool: DescriptorPool<Self>;
     type DescriptorSet:       Debug + Any + Send + Sync;
     type DescriptorSetLayout: Debug + Any;
-    type Heap:                Debug + Any;
+
     type Fence:               Debug + Any + Send + Sync;
     type Semaphore:           Debug + Any + Send + Sync;
-    type Mapping:             Debug + Any + Send + Sync + mapping::Gate<Self>;
-    type RenderPass:          Debug + Any + Send + Sync;
-    type FrameBuffer:         Debug + Any + Send + Sync;
 }
-
-/*
-    type UnboundBuffer:       Debug + Any + Send + Sync;
-    type UnboundImage:        Debug + Any + Send + Sync;
-    type ConstantBufferView:  Debug + Any + Send + Sync;
-    type Heap:                Debug + Any;
-}
-*/
 
 #[allow(missing_docs)]
 #[derive(Clone, Debug, PartialEq)]
