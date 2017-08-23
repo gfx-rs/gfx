@@ -204,8 +204,13 @@ impl SwapchainConfig {
     // TODO: depth-only, stencil-only, swapchain size, present modes, etc.
 }
 
-/// Swapchain backbuffer type (color image, depth-stencil image).
-pub type Backbuffer<B: Backend> = (B::Image, Option<B::Image>);
+/// Swapchain backbuffer type
+pub struct Backbuffer<B: Backend> {
+    /// Back buffer color
+    pub color: B::Image,
+    /// Back buffer depth/stencil
+    pub depth_stencil: Option<B::Image>,
+}
 
 /// The `Swapchain` is the backend representation of the surface.
 /// It consists of multiple buffers, which will be presented on the surface.

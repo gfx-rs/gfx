@@ -134,6 +134,12 @@ pub struct Limits {
     pub max_patch_size: PatchSize,
     /// Maximum number of viewports.
     pub max_viewports: usize,
+
+    /// The alignment of the start of the buffer used as a GPU copy source, in bytes, non-zero.
+    pub min_buffer_copy_offset_alignment: u32,
+    /// The alignment of the row pitch of the texture data stored in a buffer that is
+    /// used in a GPU copy operation, in bytes, non-zero.
+    pub min_buffer_copy_pitch_alignment: u32,
 }
 
 /// Describes what geometric primitives are created from vertex data.
@@ -227,7 +233,7 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type FrameBuffer:         Debug + Any + Send + Sync;
 
     type Heap:                Debug + Any;
-    type Mapping:             Debug + Any + Send + Sync + mapping::Gate<Self>;
+    type Mapping:             Debug + Any + Send + Sync;
     type RawCommandPool:      RawCommandPool<Self>;
     type SubpassCommandPool:  SubpassCommandPool<Self>;
 
