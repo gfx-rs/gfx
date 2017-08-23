@@ -50,6 +50,12 @@ impl<B: Backend> Raw<B> {
         self.mapping.is_some()
     }
 
+    /// Set the mapping
+    pub fn map(&mut self, m: B::Mapping) {
+        assert!(!self.is_mapped());
+        self.mapping = Some(mapping::Raw::new(m))
+    }
+
     #[doc(hidden)]
     pub fn mapping(&self) -> Option<&mapping::Raw<B>> {
         self.mapping.as_ref()

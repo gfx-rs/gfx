@@ -14,12 +14,15 @@
 
 use ash::vk;
 use ash::version::DeviceV1_0;
-use core::{command, memory, pso, shade, state, target, texture};
-use core::{IndexType, VertexCount, VertexOffset, Viewport};
+use core::{command, memory, pso, target};
+use core::{VertexCount, VertexOffset, Viewport};
 use core::buffer::IndexBufferView;
-use core::command::{BufferCopy, BufferImageCopy, ClearColor, ClearValue, ImageCopy, ImageResolve,
-                    InstanceParams, SubpassContents};
-use {data, native as n, Backend, RawDevice};
+use core::command::{
+    BufferCopy, BufferImageCopy, ClearColor, ClearValue, ImageCopy, ImageResolve,
+    InstanceParams, SubpassContents,
+};
+use core::image::ImageLayout;
+use {conversions as conv, native as n, Backend, RawDevice};
 use std::{cmp, ptr};
 use std::sync::Arc;
 use smallvec::SmallVec;
@@ -43,9 +46,9 @@ fn map_subpass_contents(contents: SubpassContents) -> vk::SubpassContents {
 
 impl command::RawCommandBuffer<Backend> for CommandBuffer {
     fn finish(&mut self) -> SubmitInfo {
-        unsafe {
-            self.device.0.end_command_buffer(self.raw); // TODO: error handling
-        }
+        assert_eq!(Ok(()), unsafe {
+            self.device.0.end_command_buffer(self.raw)
+        });
 
         SubmitInfo {
             command_buffer: self.raw,
@@ -72,7 +75,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         };
 
         let clear_values: SmallVec<[vk::ClearValue; 16]> =
-            clear_values.iter().map(data::map_clear_value).collect();
+            clear_values.iter().map(conv::map_clear_value).collect();
 
         let info = vk::RenderPassBeginInfo {
             s_type: vk::StructureType::RenderPassBeginInfo,
@@ -114,10 +117,10 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     fn clear_color(
         &mut self,
         rtv: &n::RenderTargetView,
-        layout: texture::ImageLayout,
+        layout: ImageLayout,
         color: ClearColor,
     ) {
-        let clear_value = data::map_clear_color(color);
+        let clear_value = conv::map_clear_color(color);
 
         let range = {
             let (ref mip_levels, ref array_layers) = rtv.range;
@@ -134,7 +137,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
             self.device.0.cmd_clear_color_image(
                 self.raw,
                 rtv.image,
-                data::map_image_layout(layout),
+                conv::map_image_layout(layout),
                 &clear_value,
                 &[range],
             )
@@ -144,7 +147,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     fn clear_depth_stencil(
         &mut self,
         dsv: &n::DepthStencilView,
-        layout: texture::ImageLayout,
+        layout: ImageLayout,
         depth: Option<target::Depth>,
         stencil: Option<target::Stencil>,
     ) {
@@ -176,7 +179,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
             self.device.0.cmd_clear_depth_stencil_image(
                 self.raw,
                 dsv.image,
-                data::map_image_layout(layout),
+                conv::map_image_layout(layout),
                 &clear_value,
                 &[range],
             )
@@ -186,9 +189,9 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     fn resolve_image(
         &mut self,
         src: &n::Image,
-        src_layout: texture::ImageLayout,
+        src_layout: ImageLayout,
         dst: &n::Image,
-        dst_layout: texture::ImageLayout,
+        dst_layout: ImageLayout,
         regions: &[ImageResolve],
     ) {
         let regions: SmallVec<[vk::ImageResolve; 16]> = regions
@@ -201,13 +204,13 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                 };
 
                 vk::ImageResolve {
-                    src_subresource: data::map_subresource_with_layers(
+                    src_subresource: conv::map_subresource_with_layers(
                         vk::IMAGE_ASPECT_COLOR_BIT, // Specs [1.0.42] 18.6
                         region.src_subresource,
                         region.num_layers,
                     ),
                     src_offset: offset.clone(),
-                    dst_subresource: data::map_subresource_with_layers(
+                    dst_subresource: conv::map_subresource_with_layers(
                         vk::IMAGE_ASPECT_COLOR_BIT, // Specs [1.0.42] 18.6
                         region.dst_subresource,
                         region.num_layers,
@@ -225,9 +228,9 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
             self.device.0.cmd_resolve_image(
                 self.raw,
                 src.raw,
-                data::map_image_layout(src_layout),
+                conv::map_image_layout(src_layout),
                 dst.raw,
-                data::map_image_layout(dst_layout),
+                conv::map_image_layout(dst_layout),
                 &regions,
             );
         }
@@ -239,7 +242,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                 self.raw,
                 ibv.buffer.raw,
                 ibv.offset,
-                data::map_index_type(ibv.index_type),
+                conv::map_index_type(ibv.index_type),
             );
         }
     }
@@ -330,10 +333,6 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_descriptor_heap(&mut self, _: &n::DescriptorHeap) {
-
-    }
-
     fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
         unsafe {
             self.device
@@ -412,31 +411,42 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     fn copy_image(
         &mut self,
         src: &n::Image,
-        src_layout: texture::ImageLayout,
+        src_layout: ImageLayout,
         dst: &n::Image,
-        dst_layout: texture::ImageLayout,
+        dst_layout: ImageLayout,
         regions: &[ImageCopy],
     ) {
         let regions: SmallVec<[vk::ImageCopy; 16]> = regions
             .iter()
             .map(|region| {
-                let aspect_mask = data::map_image_aspects(region.aspect_mask);
+                let aspect_mask = conv::map_image_aspects(region.aspect_mask);
                 vk::ImageCopy {
-                    src_subresource: data::map_subresource_with_layers(aspect_mask, region.src_subresource, region.num_layers),
-                    src_offset: data::map_offset(region.src_offset),
-                    dst_subresource: data::map_subresource_with_layers(aspect_mask, region.dst_subresource, region.num_layers),
-                    dst_offset: data::map_offset(region.dst_offset),
-                    extent: data::map_extent(region.extent),
+                    src_subresource: conv::map_subresource_with_layers(aspect_mask, region.src_subresource, region.num_layers),
+                    src_offset: conv::map_offset(region.src_offset),
+                    dst_subresource: conv::map_subresource_with_layers(aspect_mask, region.dst_subresource, region.num_layers),
+                    dst_offset: conv::map_offset(region.dst_offset),
+                    extent: conv::map_extent(region.extent),
                 }
             })
             .collect();
+
+        unsafe {
+            self.device.0.cmd_copy_image(
+                self.raw,
+                src.raw,
+                conv::map_image_layout(src_layout),
+                dst.raw,
+                conv::map_image_layout(dst_layout),
+                &regions,
+            );
+        }
     }
 
     fn copy_buffer_to_image(
         &mut self,
         src: &n::Buffer,
         dst: &n::Image,
-        layout: texture::ImageLayout,
+        layout: ImageLayout,
         regions: &[BufferImageCopy],
     ) {
         fn div(a: u32, b: u32) -> u32 {
@@ -446,9 +456,9 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         let regions: SmallVec<[vk::BufferImageCopy; 16]> = regions
             .iter()
             .map(|region| {
-                let aspect_mask = data::map_image_aspects(region.image_aspect);
+                let aspect_mask = conv::map_image_aspects(region.image_aspect);
                 let subresource_layers =
-                    data::map_subresource_layers(aspect_mask, &region.image_subresource);
+                    conv::map_subresource_layers(aspect_mask, &region.image_subresource);
                 let row_length = div(region.buffer_row_pitch, dst.bytes_per_texel as u32);
                 vk::BufferImageCopy {
                     buffer_offset: region.buffer_offset,
@@ -470,7 +480,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                 self.raw,
                 src.raw,
                 dst.raw,
-                data::map_image_layout(layout),
+                conv::map_image_layout(layout),
                 &regions,
             );
         }
@@ -480,7 +490,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         &mut self,
         src: &n::Image,
         dst: &n::Buffer,
-        layout: texture::ImageLayout,
+        layout: ImageLayout,
         regions: &[BufferImageCopy],
     ) {
         unimplemented!()

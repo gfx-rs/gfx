@@ -13,16 +13,11 @@
 // limitations under the License.
 
 use ash::vk;
-// use core::{buffer, image, shade};
+use core::{buffer, image, pass, pso, shade, state};
 use core::command::{ClearColor, ClearValue, Extent, Offset};
-// use core::factory::DescriptorType;
 use core::format::{SurfaceType, ChannelType};
-use core::texture::{self, ImageAspectFlags, ImageLayout, Layer};
-// use core::image::{FilterMethod, PackedColor, WrapMode};
-// use core::memory::{self, ImageAccess, ImageLayout};
-// use core::pass::{AttachmentLoadOp, AttachmentStoreOp, AttachmentLayout};
-// use core::pso::{self, PipelineStage};
-use core::IndexType;
+use core::{IndexType, Primitive};
+
 
 pub fn map_format(surface: SurfaceType, chan: ChannelType) -> Option<vk::Format> {
     use core::format::SurfaceType::*;
@@ -169,30 +164,31 @@ pub fn map_index_type(index_type: IndexType) -> vk::IndexType {
     }
 }
 
-pub fn map_image_layout(layout: ImageLayout) -> vk::ImageLayout {
+pub fn map_image_layout(layout: image::ImageLayout) -> vk::ImageLayout {
+    use core::image::ImageLayout as Il;
     match layout {
-        ImageLayout::General => vk::ImageLayout::General,
-        ImageLayout::ColorAttachmentOptimal => vk::ImageLayout::ColorAttachmentOptimal,
-        ImageLayout::DepthStencilAttachmentOptimal => vk::ImageLayout::DepthStencilAttachmentOptimal,
-        ImageLayout::DepthStencilReadOnlyOptimal => vk::ImageLayout::DepthStencilReadOnlyOptimal,
-        ImageLayout::ShaderReadOnlyOptimal => vk::ImageLayout::ShaderReadOnlyOptimal,
-        ImageLayout::TransferSrcOptimal => vk::ImageLayout::TransferSrcOptimal,
-        ImageLayout::TransferDstOptimal => vk::ImageLayout::TransferDstOptimal,
-        ImageLayout::Undefined => vk::ImageLayout::Undefined,
-        ImageLayout::Preinitialized => vk::ImageLayout::Preinitialized,
-        ImageLayout::Present => vk::ImageLayout::PresentSrcKhr,
+        Il::General => vk::ImageLayout::General,
+        Il::ColorAttachmentOptimal => vk::ImageLayout::ColorAttachmentOptimal,
+        Il::DepthStencilAttachmentOptimal => vk::ImageLayout::DepthStencilAttachmentOptimal,
+        Il::DepthStencilReadOnlyOptimal => vk::ImageLayout::DepthStencilReadOnlyOptimal,
+        Il::ShaderReadOnlyOptimal => vk::ImageLayout::ShaderReadOnlyOptimal,
+        Il::TransferSrcOptimal => vk::ImageLayout::TransferSrcOptimal,
+        Il::TransferDstOptimal => vk::ImageLayout::TransferDstOptimal,
+        Il::Undefined => vk::ImageLayout::Undefined,
+        Il::Preinitialized => vk::ImageLayout::Preinitialized,
+        Il::Present => vk::ImageLayout::PresentSrcKhr,
     }
 }
 
-pub fn map_image_aspects(aspects: ImageAspectFlags) -> vk::ImageAspectFlags {
+pub fn map_image_aspects(aspects: image::ImageAspectFlags) -> vk::ImageAspectFlags {
     let mut flags = vk::ImageAspectFlags::empty();
-    if aspects.contains(texture::ASPECT_COLOR) {
+    if aspects.contains(image::ASPECT_COLOR) {
         flags |= vk::IMAGE_ASPECT_COLOR_BIT;
     }
-    if aspects.contains(texture::ASPECT_DEPTH) {
+    if aspects.contains(image::ASPECT_DEPTH) {
         flags |= vk::IMAGE_ASPECT_DEPTH_BIT;
     }
-    if aspects.contains(texture::ASPECT_STENCIL) {
+    if aspects.contains(image::ASPECT_STENCIL) {
         flags |= vk::IMAGE_ASPECT_STENCIL_BIT;
     }
     flags
@@ -217,7 +213,6 @@ pub fn map_clear_value(value: &ClearValue) -> vk::ClearValue {
                 depth: dsv.depth,
                 stencil: dsv.stencil,
             };
-
             vk::ClearValue::new_depth_stencil(dsv)
         },
     }
@@ -239,7 +234,7 @@ pub fn map_extent(offset: Extent) -> vk::Extent3D {
     }
 }
 
-pub fn map_subresource_layers(aspect_mask: vk::ImageAspectFlags, subresource: &texture::SubresourceLayers) -> vk::ImageSubresourceLayers {
+pub fn map_subresource_layers(aspect_mask: vk::ImageAspectFlags, subresource: &image::SubresourceLayers) -> vk::ImageSubresourceLayers {
     vk::ImageSubresourceLayers {
         aspect_mask,
         mip_level: subresource.0 as u32,
@@ -248,59 +243,60 @@ pub fn map_subresource_layers(aspect_mask: vk::ImageAspectFlags, subresource: &t
     }
 }
 
-pub fn map_subresource_with_layers(aspect_mask: vk::ImageAspectFlags, subresource: texture::Subresource, layers: Layer) -> vk::ImageSubresourceLayers {
+pub fn map_subresource_with_layers(aspect_mask: vk::ImageAspectFlags, subresource: image::Subresource, layers: image::Layer) -> vk::ImageSubresourceLayers {
     let (mip_level, base_layer) = subresource;
     map_subresource_layers(aspect_mask, &(mip_level, base_layer..base_layer+layers))
 }
 
-/*
-pub fn map_attachment_load_op(op: AttachmentLoadOp) -> vk::AttachmentLoadOp {
+pub fn map_attachment_load_op(op: pass::AttachmentLoadOp) -> vk::AttachmentLoadOp {
+    use core::pass::AttachmentLoadOp as Alo;
     match op {
-        AttachmentLoadOp::Load => vk::AttachmentLoadOp::Load,
-        AttachmentLoadOp::Clear => vk::AttachmentLoadOp::Clear,
-        AttachmentLoadOp::DontCare => vk::AttachmentLoadOp::DontCare,
+        Alo::Load => vk::AttachmentLoadOp::Load,
+        Alo::Clear => vk::AttachmentLoadOp::Clear,
+        Alo::DontCare => vk::AttachmentLoadOp::DontCare,
     }
 }
 
-pub fn map_attachment_store_op(op: AttachmentStoreOp) -> vk::AttachmentStoreOp {
+pub fn map_attachment_store_op(op: pass::AttachmentStoreOp) -> vk::AttachmentStoreOp {
+    use core::pass::AttachmentStoreOp as Aso;
     match op {
-        AttachmentStoreOp::Store => vk::AttachmentStoreOp::Store,
-        AttachmentStoreOp::DontCare => vk::AttachmentStoreOp::DontCare,
+        Aso::Store => vk::AttachmentStoreOp::Store,
+        Aso::DontCare => vk::AttachmentStoreOp::DontCare,
     }
 }
 
-pub fn map_image_access(access: ImageAccess) -> vk::AccessFlags {
+pub fn map_image_access(access: image::ImageAccess) -> vk::AccessFlags {
     let mut flags = vk::AccessFlags::empty();
 
-    if access.contains(memory::RENDER_TARGET_CLEAR) {
+    if access.contains(image::RENDER_TARGET_CLEAR) {
         unimplemented!()
     }
-    if access.contains(memory::RESOLVE_SRC) {
+    if access.contains(image::RESOLVE_SRC) {
         unimplemented!()
     }
-    if access.contains(memory::RESOLVE_DST) {
+    if access.contains(image::RESOLVE_DST) {
         unimplemented!()
     }
-    if access.contains(memory::COLOR_ATTACHMENT_READ) {
+    if access.contains(image::COLOR_ATTACHMENT_READ) {
         flags |= vk::ACCESS_COLOR_ATTACHMENT_READ_BIT;
     }
-    if access.contains(memory::COLOR_ATTACHMENT_WRITE) {
+    if access.contains(image::COLOR_ATTACHMENT_WRITE) {
         flags |= vk::ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
     }
-    if access.contains(memory::TRANSFER_READ) {
+    if access.contains(image::TRANSFER_READ) {
         flags |= vk::ACCESS_TRANSFER_READ_BIT;
     }
-    if access.contains(memory::TRANSFER_WRITE) {
+    if access.contains(image::TRANSFER_WRITE) {
         flags |= vk::ACCESS_TRANSFER_WRITE_BIT;
     }
-    if access.contains(memory::SHADER_READ) {
+    if access.contains(image::SHADER_READ) {
         flags |= vk::ACCESS_SHADER_READ_BIT;
     }
 
     flags
 }
 
-pub fn map_pipeline_stage(stage: PipelineStage) -> vk::PipelineStageFlags {
+pub fn map_pipeline_stage(stage: pso::PipelineStage) -> vk::PipelineStageFlags {
     let mut flags = vk::PipelineStageFlags::empty();
 
     if stage.contains(pso::TOP_OF_PIPE) {
@@ -396,16 +392,17 @@ pub fn map_image_usage(usage: image::Usage) -> vk::ImageUsageFlags {
     flags
 }
 
-pub fn map_descriptor_type(ty: DescriptorType) -> vk::DescriptorType {
+pub fn map_descriptor_type(ty: pso::DescriptorType) -> vk::DescriptorType {
+    use core::pso::DescriptorType as Dt;
     match ty {
-        DescriptorType::Sampler => vk::DescriptorType::Sampler,
-        DescriptorType::SampledImage => vk::DescriptorType::SampledImage,
-        DescriptorType::StorageImage => vk::DescriptorType::StorageImage,
-        DescriptorType::UniformTexelBuffer => vk::DescriptorType::UniformTexelBuffer,
-        DescriptorType::StorageTexelBuffer => vk::DescriptorType::StorageTexelBuffer,
-        DescriptorType::ConstantBuffer => vk::DescriptorType::UniformBuffer,
-        DescriptorType::StorageBuffer => vk::DescriptorType::StorageBuffer,
-        DescriptorType::InputAttachment => vk::DescriptorType::InputAttachment,
+        Dt::Sampler            => vk::DescriptorType::Sampler,
+        Dt::SampledImage       => vk::DescriptorType::SampledImage,
+        Dt::StorageImage       => vk::DescriptorType::StorageImage,
+        Dt::UniformTexelBuffer => vk::DescriptorType::UniformTexelBuffer,
+        Dt::StorageTexelBuffer => vk::DescriptorType::StorageTexelBuffer,
+        Dt::ConstantBuffer     => vk::DescriptorType::UniformBuffer,
+        Dt::StorageBuffer      => vk::DescriptorType::StorageBuffer,
+        Dt::InputAttachment    => vk::DescriptorType::InputAttachment,
     }
 }
 
@@ -439,26 +436,29 @@ pub fn map_stage_flags(stages: shade::StageFlags) -> vk::ShaderStageFlags {
     flags
 }
 
-pub fn map_filter(filter: FilterMethod) -> (vk::Filter, vk::Filter, vk::SamplerMipmapMode, f32) {
+
+pub fn map_filter(filter: image::FilterMethod) -> (vk::Filter, vk::Filter, vk::SamplerMipmapMode, f32) {
+    use core::image::FilterMethod as Fm;
     match filter {
-        FilterMethod::Scale          => (vk::Filter::Nearest, vk::Filter::Nearest, vk::SamplerMipmapMode::Nearest, 0.0),
-        FilterMethod::Mipmap         => (vk::Filter::Nearest, vk::Filter::Nearest, vk::SamplerMipmapMode::Linear,  0.0),
-        FilterMethod::Bilinear       => (vk::Filter::Linear,  vk::Filter::Linear,  vk::SamplerMipmapMode::Nearest, 0.0),
-        FilterMethod::Trilinear      => (vk::Filter::Linear,  vk::Filter::Linear,  vk::SamplerMipmapMode::Linear,  0.0),
-        FilterMethod::Anisotropic(a) => (vk::Filter::Linear,  vk::Filter::Linear,  vk::SamplerMipmapMode::Linear,  a as f32),
+        Fm::Scale          => (vk::Filter::Nearest, vk::Filter::Nearest, vk::SamplerMipmapMode::Nearest, 0.0),
+        Fm::Mipmap         => (vk::Filter::Nearest, vk::Filter::Nearest, vk::SamplerMipmapMode::Linear,  0.0),
+        Fm::Bilinear       => (vk::Filter::Linear,  vk::Filter::Linear,  vk::SamplerMipmapMode::Nearest, 0.0),
+        Fm::Trilinear      => (vk::Filter::Linear,  vk::Filter::Linear,  vk::SamplerMipmapMode::Linear,  0.0),
+        Fm::Anisotropic(a) => (vk::Filter::Linear,  vk::Filter::Linear,  vk::SamplerMipmapMode::Linear,  a as f32),
     }
 }
 
-pub fn map_wrap(wrap: WrapMode) -> vk::SamplerAddressMode {
+pub fn map_wrap(wrap: image::WrapMode) -> vk::SamplerAddressMode {
+    use core::image::WrapMode as Wm;
     match wrap {
-        WrapMode::Tile   => vk::SamplerAddressMode::Repeat,
-        WrapMode::Mirror => vk::SamplerAddressMode::MirroredRepeat,
-        WrapMode::Clamp  => vk::SamplerAddressMode::ClampToEdge,
-        WrapMode::Border => vk::SamplerAddressMode::ClampToBorder,
+        Wm::Tile   => vk::SamplerAddressMode::Repeat,
+        Wm::Mirror => vk::SamplerAddressMode::MirroredRepeat,
+        Wm::Clamp  => vk::SamplerAddressMode::ClampToEdge,
+        Wm::Border => vk::SamplerAddressMode::ClampToBorder,
     }
 }
 
-pub fn map_border_color(col: PackedColor) -> Option<vk::BorderColor> {
+pub fn map_border_color(col: image::PackedColor) -> Option<vk::BorderColor> {
     match col.0 {
         0x00000000 => Some(vk::BorderColor::FloatTransparentBlack),
         0xFF000000 => Some(vk::BorderColor::FloatOpaqueBlack),
@@ -466,4 +466,119 @@ pub fn map_border_color(col: PackedColor) -> Option<vk::BorderColor> {
         _ => None
     }
 }
-*/
+
+pub fn map_topology(prim: Primitive) -> vk::PrimitiveTopology {
+    match prim {
+        Primitive::PointList     => vk::PrimitiveTopology::PointList,
+        Primitive::LineList      => vk::PrimitiveTopology::LineList,
+        Primitive::LineListAdjacency => vk::PrimitiveTopology::LineListWithAdjacency,
+        Primitive::LineStrip     => vk::PrimitiveTopology::LineStrip,
+        Primitive::LineStripAdjacency => vk::PrimitiveTopology::LineStripWithAdjacency,
+        Primitive::TriangleList  => vk::PrimitiveTopology::TriangleList,
+        Primitive::TriangleListAdjacency => vk::PrimitiveTopology::TriangleListWithAdjacency,
+        Primitive::TriangleStrip => vk::PrimitiveTopology::TriangleStrip,
+        Primitive::TriangleStripAdjacency => vk::PrimitiveTopology::TriangleStripWithAdjacency,
+        Primitive::PatchList(_)  => vk::PrimitiveTopology::PatchList,
+    }
+}
+
+pub fn map_polygon_mode(rm: state::RasterMethod) -> (vk::PolygonMode, f32) {
+    match rm {
+        state::RasterMethod::Point   => (vk::PolygonMode::Point, 1.0),
+        state::RasterMethod::Line(w) => (vk::PolygonMode::Line, w as f32),
+        state::RasterMethod::Fill    => (vk::PolygonMode::Fill, 1.0),
+    }
+}
+
+pub fn map_cull_mode(cf: state::CullFace) -> vk::CullModeFlags {
+    match cf {
+        state::CullFace::Nothing => vk::CULL_MODE_NONE,
+        state::CullFace::Front   => vk::CULL_MODE_FRONT_BIT,
+        state::CullFace::Back    => vk::CULL_MODE_BACK_BIT,
+    }
+}
+
+pub fn map_front_face(ff: state::FrontFace) -> vk::FrontFace {
+    match ff {
+        state::FrontFace::Clockwise        => vk::FrontFace::Clockwise,
+        state::FrontFace::CounterClockwise => vk::FrontFace::CounterClockwise,
+    }
+}
+
+pub fn map_comparison(fun: state::Comparison) -> vk::CompareOp {
+    use core::state::Comparison::*;
+    match fun {
+        Never        => vk::CompareOp::Never,
+        Less         => vk::CompareOp::Less,
+        LessEqual    => vk::CompareOp::LessOrEqual,
+        Equal        => vk::CompareOp::Equal,
+        GreaterEqual => vk::CompareOp::GreaterOrEqual,
+        Greater      => vk::CompareOp::Greater,
+        NotEqual     => vk::CompareOp::NotEqual,
+        Always       => vk::CompareOp::Always,
+    }
+}
+
+pub fn map_stencil_op(op: state::StencilOp) -> vk::StencilOp {
+    use core::state::StencilOp::*;
+    match op {
+        Keep           => vk::StencilOp::Keep,
+        Zero           => vk::StencilOp::Zero,
+        Replace        => vk::StencilOp::Replace,
+        IncrementClamp => vk::StencilOp::IncrementAndClamp,
+        IncrementWrap  => vk::StencilOp::IncrementAndWrap,
+        DecrementClamp => vk::StencilOp::DecrementAndClamp,
+        DecrementWrap  => vk::StencilOp::DecrementAndWrap,
+        Invert         => vk::StencilOp::Invert,
+    }
+}
+
+pub fn map_stencil_side(side: &state::StencilSide) -> vk::StencilOpState {
+    vk::StencilOpState {
+        fail_op: map_stencil_op(side.op_fail),
+        pass_op: map_stencil_op(side.op_pass),
+        depth_fail_op: map_stencil_op(side.op_depth_fail),
+        compare_op: map_comparison(side.fun),
+        compare_mask: side.mask_read as u32,
+        write_mask: side.mask_write as u32,
+        reference: 0,
+    }
+}
+
+pub fn map_blend_factor(factor: state::Factor, scalar: bool) -> vk::BlendFactor {
+    use core::state::BlendValue::*;
+    use core::state::Factor::*;
+    match factor {
+        Zero => vk::BlendFactor::Zero,
+        One => vk::BlendFactor::One,
+        SourceAlphaSaturated => vk::BlendFactor::SrcAlphaSaturate,
+        ZeroPlus(SourceColor) if !scalar => vk::BlendFactor::SrcColor,
+        ZeroPlus(SourceAlpha) => vk::BlendFactor::SrcAlpha,
+        ZeroPlus(DestColor) if !scalar => vk::BlendFactor::DstColor,
+        ZeroPlus(DestAlpha) => vk::BlendFactor::DstAlpha,
+        ZeroPlus(ConstColor) if !scalar => vk::BlendFactor::ConstantColor,
+        ZeroPlus(ConstAlpha) => vk::BlendFactor::ConstantAlpha,
+        OneMinus(SourceColor) if !scalar => vk::BlendFactor::OneMinusSrcColor,
+        OneMinus(SourceAlpha) => vk::BlendFactor::OneMinusSrcAlpha,
+        OneMinus(DestColor) if !scalar => vk::BlendFactor::OneMinusDstColor,
+        OneMinus(DestAlpha) => vk::BlendFactor::OneMinusDstAlpha,
+        OneMinus(ConstColor) if !scalar => vk::BlendFactor::OneMinusConstantColor,
+        OneMinus(ConstAlpha) => vk::BlendFactor::OneMinusConstantAlpha,
+        _ => {
+            error!("Invalid blend factor requested for {}: {:?}",
+                if scalar {"alpha"} else {"color"}, factor);
+            vk::BlendFactor::Zero
+        }
+    }
+}
+
+pub fn map_blend_op(equation: state::Equation) -> vk::BlendOp {
+    use core::state::Equation::*;
+    match equation {
+        Add => vk::BlendOp::Add,
+        Sub => vk::BlendOp::Subtract,
+        RevSub => vk::BlendOp::ReverseSubtract,
+        Min => vk::BlendOp::Min,
+        Max => vk::BlendOp::Max,
+    }
+}

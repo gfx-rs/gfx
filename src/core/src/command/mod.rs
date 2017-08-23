@@ -18,7 +18,6 @@ use {image, Backend, InstanceCount, VertexCount};
 
 use std::marker::PhantomData;
 
-mod access;
 mod compute;
 mod general;
 mod graphics;
@@ -26,7 +25,6 @@ mod raw;
 mod renderpass;
 mod transfer;
 
-pub use self::access::{AccessGuard, AccessInfo};
 pub use self::compute::ComputeCommandBuffer;
 pub use self::general::GeneralCommandBuffer;
 pub use self::graphics::GraphicsCommandBuffer;
