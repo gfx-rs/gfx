@@ -14,7 +14,7 @@
 
 //! Graphics pipeline descriptor.
 
-use {state as s};
+use {state as s, Primitive};
 use super::EntryPoint;
 use super::input_assembler::{AttributeDesc, InputAssemblerDesc, VertexBufferDesc};
 use super::output_merger::{ColorInfo, DepthStencilDesc};
@@ -63,6 +63,21 @@ pub struct GraphicsPipelineDesc {
     pub depth_stencil: Option<DepthStencilDesc>,
 }
 
+impl GraphicsPipelineDesc {
+    /// Create a new empty PSO descriptor.
+    pub fn new(primitive: Primitive, rasterizer: Rasterizer, shader_entries: GraphicsShaderSet) -> Self {
+        GraphicsPipelineDesc {
+            rasterizer,
+            shader_entries,
+            vertex_buffers: Vec::new(),
+            attributes: Vec::new(),
+            input_assembler: InputAssemblerDesc::new(primitive),
+            blender: BlendDesc::new(),
+            depth_stencil: None,
+        }
+    }
+}
+
 ///
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
@@ -95,6 +110,21 @@ pub struct Rasterizer {
     pub rasterizer_discard: bool,
 }
 
+impl Rasterizer {
+    /// Create a new polygon-filling rasterizer state
+    pub fn new_fill() -> Self {
+        Rasterizer {
+            polgyon_mode: s::RasterMethod::Fill,
+            cull_mode: s::CullFace::Nothing,
+            front_face: s::FrontFace::CounterClockwise,
+            depth_clamping: true,
+            depth_bias: None,
+            conservative_rasterization: false,
+            rasterizer_discard: false,
+        }
+    }
+}
+
 ///
 pub struct BlendDesc {
     ///
@@ -103,6 +133,17 @@ pub struct BlendDesc {
     pub logic_op: Option<LogicOp>,
     ///
     pub targets: Vec<ColorInfo>,
+}
+
+impl BlendDesc {
+    /// Create a new empty blend descriptor
+    pub fn new() -> Self {
+        BlendDesc {
+            alpha_coverage: false,
+            logic_op: None,
+            targets: Vec::new(),
+        }
+    }
 }
 
 ///

@@ -21,13 +21,13 @@
 use std::error::Error;
 use std::fmt;
 
-pub mod descriptor;
-pub mod graphics;
-pub mod input_assembler;
-pub mod output_merger;
+mod descriptor;
+mod graphics;
+mod input_assembler;
+mod output_merger;
 
 pub use self::descriptor::*;
-pub use self::graphics::GraphicsPipelineDesc;
+pub use self::graphics::*;
 pub use self::input_assembler::*;
 pub use self::output_merger::*;
 
