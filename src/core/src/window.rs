@@ -67,8 +67,7 @@
 //!
 
 use {Adapter, Backend};
-use {format, handle};
-use format::Formatted;
+use format::{self, Formatted};
 
 /// A `Surface` abstracts the surface of a native window, which will be presented
 pub trait Surface<B: Backend> {
@@ -144,12 +143,12 @@ pub enum FrameSync<'a, B: Backend> {
     /// Semaphore used for synchronization.
     ///
     /// Will be signaled once the frame backbuffer is available.
-    Semaphore(&'a handle::Semaphore<B>),
+    Semaphore(&'a B::Semaphore),
 
     /// Fence used for synchronization.
     ///
     /// Will be signaled once the frame backbuffer is available.
-    Fence(&'a handle::Fence<B>),
+    Fence(&'a B::Fence),
 }
 
 /// Allows you to configure a `Swapchain` for creation.
@@ -206,8 +205,7 @@ impl SwapchainConfig {
 }
 
 /// Swapchain backbuffer type (color image, depth-stencil image).
-pub type Backbuffer<B: Backend> = (handle::RawTexture<B>,
-                                   Option<handle::RawTexture<B>>);
+pub type Backbuffer<B: Backend> = (B::Image, Option<B::Image>);
 
 /// The `Swapchain` is the backend representation of the surface.
 /// It consists of multiple buffers, which will be presented on the surface.
@@ -253,7 +251,7 @@ pub trait Swapchain<B: Backend> {
     fn present<Q: AsMut<B::CommandQueue>>(
         &mut self,
         present_queue: &mut Q,
-        wait_semaphores: &[&handle::Semaphore<B>],
+        wait_semaphores: &[&B::Semaphore],
     );
 }
 

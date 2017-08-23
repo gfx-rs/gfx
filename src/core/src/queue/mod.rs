@@ -14,7 +14,7 @@
 pub mod capability;
 pub mod submission;
 
-use {Backend, handle};
+use Backend;
 use command::{AccessInfo};
 use pool::{GeneralCommandPool, GraphicsCommandPool, ComputeCommandPool,
            TransferCommandPool, RawCommandPool};
@@ -76,17 +76,9 @@ pub trait CommandQueue<B: Backend> {
     unsafe fn submit_raw<'a, I>(
         &mut self,
         submit_infos: I,
-        fence: Option<&handle::Fence<B>>,
+        fence: Option<&B::Fence>,
         access: &AccessInfo<B>,
     ) where I: Iterator<Item=RawSubmission<'a, B>>;
-
-    /// Pin everything from this handle manager to live for a frame.
-    // TODO: legacy (handle API)
-    fn pin_submitted_resources(&mut self, &handle::Manager<B>);
-
-    /// Cleanup unused resources. This should be called between frames.
-    // TODO: legacy (handle API)
-    fn cleanup(&mut self);
 }
 
 macro_rules! define_queue {
@@ -99,18 +91,10 @@ macro_rules! define_queue {
         impl<B: Backend> CommandQueue<B> for $queue<B> {
             unsafe fn submit_raw<'a, I>(&mut self,
                 submit_infos: I,
-                fence: Option<&handle::Fence<B>>,
+                fence: Option<&B::Fence>,
                 access: &AccessInfo<B>,
             ) where I: Iterator<Item=RawSubmission<'a, B>> {
                 self.0.submit_raw(submit_infos, fence, access)
-            }
-
-            fn pin_submitted_resources(&mut self, handles: &handle::Manager<B>) {
-                self.0.pin_submitted_resources(handles)
-            }
-
-            fn cleanup(&mut self) {
-                self.0.cleanup()
             }
         }
 
@@ -124,7 +108,7 @@ macro_rules! define_queue {
             pub fn submit<C>(
                 &mut self,
                 submit_infos: &[Submission<B, C>],
-                fence: Option<&handle::Fence<B>>,
+                fence: Option<&B::Fence>,
                 access: &AccessInfo<B>)
             where
                 C: SupportedBy<$capability>

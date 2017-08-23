@@ -42,7 +42,6 @@ pub mod command;
 // pub mod dummy;
 pub mod device;
 pub mod format;
-pub mod handle;
 pub mod image;
 pub mod mapping;
 pub mod memory;
