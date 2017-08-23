@@ -137,12 +137,15 @@ impl<'a, B: Backend> Drop for Guard<'a, B> {
     }
 }
 
-fn take_access_checked<B>(access: memory::Access, buffer: &buffer::Raw<B>)
-                          -> Result<Guard<B>, Error>
+fn take_access_checked<B>(
+    access: memory::Access,
+    buffer: &buffer::Raw<B>,
+) -> Result<Guard<B>, Error>
     where B: Backend
 {
-    let usage = buffer.get_info().usage;
     use memory::Usage::*;
+
+    let usage = buffer.get_info().usage;
     match usage {
         Upload if access == memory::WRITE => (),
         Download if access == memory::READ => (),
@@ -153,8 +156,10 @@ fn take_access_checked<B>(access: memory::Access, buffer: &buffer::Raw<B>)
 }
 
 #[doc(hidden)]
-pub unsafe fn read<B, T, S>(buffer: &buffer::Raw<B>, sync: S)
-                            -> Result<Reader<B, T>, Error>
+pub unsafe fn read<B, T, S>(
+    buffer: &buffer::Raw<B>,
+    sync: S,
+) -> Result<Reader<B, T>, Error>
     where B: Backend, T: Copy, S: FnOnce(&mut B::Mapping)
 {
     let mut mapping = try!(take_access_checked(memory::READ, buffer));
@@ -162,13 +167,15 @@ pub unsafe fn read<B, T, S>(buffer: &buffer::Raw<B>, sync: S)
 
     Ok(Reader {
         slice: mapping.slice(buffer.len::<T>()),
-        mapping: mapping,
+        _mapping: mapping,
     })
 }
 
 #[doc(hidden)]
-pub unsafe fn write<B, T, S>(buffer: &buffer::Raw<B>, sync: S)
-                             -> Result<Writer<B, T>, Error>
+pub unsafe fn write<B, T, S>(
+    buffer: &buffer::Raw<B>,
+    sync: S,
+) -> Result<Writer<B, T>, Error>
     where B: Backend, T: Copy, S: FnOnce(&mut B::Mapping)
 {
     let mut mapping = try!(take_access_checked(memory::WRITE, buffer));
@@ -176,7 +183,7 @@ pub unsafe fn write<B, T, S>(buffer: &buffer::Raw<B>, sync: S)
 
     Ok(Writer {
         slice: mapping.mut_slice(buffer.len::<T>()),
-        mapping: mapping,
+        _mapping: mapping,
     })
 }
 
@@ -184,7 +191,7 @@ pub unsafe fn write<B, T, S>(buffer: &buffer::Raw<B>, sync: S)
 #[derive(Debug)]
 pub struct Reader<'a, B: Backend, T: 'a + Copy> {
     slice: &'a [T],
-    #[allow(dead_code)] mapping: Guard<'a, B>,
+    _mapping: Guard<'a, B>,
 }
 
 impl<'a, B: Backend, T: 'a + Copy> Deref for Reader<'a, B, T> {
@@ -199,7 +206,7 @@ impl<'a, B: Backend, T: 'a + Copy> Deref for Reader<'a, B, T> {
 #[derive(Debug)]
 pub struct Writer<'a, B: Backend, T: 'a + Copy> {
     slice: &'a mut [T],
-    #[allow(dead_code)] mapping: Guard<'a, B>,
+    _mapping: Guard<'a, B>,
 }
 
 impl<'a, B: Backend, T: 'a + Copy> Deref for Writer<'a, B, T> {
