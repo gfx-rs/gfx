@@ -14,7 +14,6 @@
 
 // TODO: move this into render in the long-term
 
-use {handle};
 use {Backend, SubmissionError, SubmissionResult};
 
 use std::collections::hash_set::{self, HashSet};
@@ -23,8 +22,8 @@ use std::ops::Deref;
 /// Informations about what is accessed by a bunch of commands.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AccessInfo<B: Backend> {
-    mapped_reads: HashSet<handle::RawBuffer<B>>,
-    mapped_writes: HashSet<handle::RawBuffer<B>>,
+    mapped_reads: HashSet<B::Buffer>,
+    mapped_writes: HashSet<B::Buffer>,
 }
 
 impl<B: Backend> AccessInfo<B> {
@@ -43,17 +42,17 @@ impl<B: Backend> AccessInfo<B> {
     }
 
     /// Register a buffer read access
-    pub fn buffer_read(&mut self, buffer: &handle::RawBuffer<B>) {
-        if buffer.is_mapped() {
+    pub fn buffer_read(&mut self, buffer: &B::Buffer) {
+        /*if buffer.is_mapped() {
             self.mapped_reads.insert(buffer.clone());
-        }
+        }*/
     }
 
     /// Register a buffer write access
-    pub fn buffer_write(&mut self, buffer: &handle::RawBuffer<B>) {
-        if buffer.is_mapped() {
+    pub fn buffer_write(&mut self, buffer: &B::Buffer) {
+        /*if buffer.is_mapped() {
             self.mapped_writes.insert(buffer.clone());
-        }
+        }*/
     }
 
     /// Returns the mapped buffers that The GPU will read from
@@ -79,18 +78,18 @@ impl<B: Backend> AccessInfo<B> {
     /// Takes all the accesses necessary for submission
     pub fn take_accesses(&self) -> SubmissionResult<AccessGuard<B>> {
         for buffer in self.mapped_reads().chain(self.mapped_writes()) {
-            unsafe {
+            /*unsafe {
                 if !buffer.mapping().unwrap().take_access() {
                     return Err(SubmissionError::AccessOverlap);
                 }
-            }
+            }*/
         }
         Ok(AccessGuard { inner: self })
     }
 }
 
 #[allow(missing_docs)]
-pub type AccessInfoBuffers<'a, B> = hash_set::Iter<'a, handle::RawBuffer<B>>;
+pub type AccessInfoBuffers<'a, B: Backend> = hash_set::Iter<'a, B::Buffer>;
 
 #[allow(missing_docs)]
 #[derive(Debug)]
@@ -134,9 +133,9 @@ impl<'a, B: Backend> Deref for AccessGuard<'a, B> {
 impl<'a, B: Backend> Drop for AccessGuard<'a, B> {
     fn drop(&mut self) {
         for buffer in self.inner.mapped_reads().chain(self.inner.mapped_writes()) {
-            unsafe {
+            /*unsafe {
                 buffer.mapping().unwrap().release_access();
-            }
+            }*/
         }
     }
 }
@@ -148,12 +147,14 @@ pub struct AccessGuardBuffers<'a, B: Backend> {
 }
 
 impl<'a, B: Backend> Iterator for AccessGuardBuffers<'a, B> {
-    type Item = (&'a handle::RawBuffer<B>, &'a mut B::Mapping);
+    type Item = (&'a B::Buffer, &'a mut B::Mapping);
 
     fn next(&mut self) -> Option<Self::Item> {
+        /*
         self.buffers.next().map(|buffer| unsafe {
             (buffer, buffer.mapping().unwrap().use_access())
-        })
+        })*/
+        None
     }
 }
 
@@ -165,12 +166,15 @@ pub struct AccessGuardBuffersChain<'a, B: Backend> {
 }
 
 impl<'a, B: Backend> Iterator for AccessGuardBuffersChain<'a, B> {
-    type Item = (&'a handle::RawBuffer<B>, &'a mut B::Mapping);
+    type Item = (&'a B::Buffer, &'a mut B::Mapping);
 
     fn next(&mut self) -> Option<Self::Item> {
+        /*
         self.fst.next().or_else(|| self.snd.next())
             .map(|buffer| unsafe {
                 (buffer, buffer.mapping().unwrap().use_access())
             })
+        */
+        None
     }
 }
