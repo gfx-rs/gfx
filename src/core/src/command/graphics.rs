@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use {Backend, Viewport};
-use {memory, pso, state, target, texture};
+use {image, memory, pso, target};
 use buffer::IndexBufferView;
 use queue::capability::{Capability, Graphics};
 use super::{BufferCopy, BufferImageCopy, ClearColor, CommandBufferShim, ImageCopy, RawCommandBuffer, Submit};
@@ -51,7 +51,7 @@ where
     }
 
     ///
-    pub fn clear_color(&mut self, rtv: &B::RenderTargetView, layout: texture::ImageLayout, clear_value: ClearColor) {
+    pub fn clear_color(&mut self, rtv: &B::RenderTargetView, layout: image::ImageLayout, clear_value: ClearColor) {
         self.0.clear_color(rtv, layout, clear_value)
     }
 
@@ -59,7 +59,7 @@ where
     pub fn clear_depth_stencil(
         &mut self,
         dsv: &B::DepthStencilView,
-        layout: texture::ImageLayout,
+        layout: image::ImageLayout,
         depth_value: Option<target::Depth>,
         stencil_value: Option<target::Stencil>,
     ) {
@@ -83,9 +83,9 @@ where
     pub fn copy_image(
         &mut self,
         src: &B::Image,
-        src_layout: texture::ImageLayout,
+        src_layout: image::ImageLayout,
         dst: &B::Image,
-        dst_layout: texture::ImageLayout,
+        dst_layout: image::ImageLayout,
         regions: &[ImageCopy],
     ) {
         self.0.copy_image(src, src_layout, dst, dst_layout, regions)
@@ -96,7 +96,7 @@ where
         &mut self,
         src: &B::Buffer,
         dst: &B::Image,
-        layout: texture::ImageLayout,
+        layout: image::ImageLayout,
         regions: &[BufferImageCopy],
     ) {
         self.0.copy_buffer_to_image(src, dst, layout, regions)
@@ -107,7 +107,7 @@ where
         &mut self,
         src: &B::Image,
         dst: &B::Buffer,
-        layout: texture::ImageLayout,
+        layout: image::ImageLayout,
         regions: &[BufferImageCopy],
     ) {
         self.0.copy_image_to_buffer(src, dst, layout, regions)

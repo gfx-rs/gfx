@@ -18,22 +18,17 @@
 //! will want to use the typed and safe `PipelineState`. See the `pso` module inside the `gfx`
 //! crate.
 
-use {ConstantBufferSlot, ColorSlot, ResourceViewSlot,
-     UnorderedViewSlot, SamplerSlot,
-     Primitive, Backend};
-use {format, state as s, texture};
-use shade::Usage;
 use std::error::Error;
 use std::fmt;
 
-pub mod descriptor_set;
+pub mod descriptor;
 pub mod graphics;
 pub mod input_assembler;
 pub mod output_merger;
 
-pub use self::descriptor_set::{DescriptorType, DescriptorSetLayoutBinding, DescriptorPool, DescriptorPoolDesc};
+pub use self::descriptor::*;
 pub use self::graphics::GraphicsPipelineDesc;
-pub use self::input_assembler::{BufferOffset, Element, VertexBufferDesc, VertexBufferSet};
+pub use self::input_assembler::*;
 
 /// Error types happening upon PSO creation on the device side.
 #[derive(Clone, Debug, PartialEq)]

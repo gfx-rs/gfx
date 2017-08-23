@@ -2,9 +2,9 @@
 
 #![allow(missing_docs)]
 
-use std::{fmt, cmp, hash};
+use std::fmt;
 use std::error::Error;
-use {AttributeSlot, Backend, ColorSlot, ConstantBufferSlot, ResourceViewSlot, SamplerSlot, UnorderedViewSlot};
+use {AttributeSlot, ColorSlot, ConstantBufferSlot, ResourceViewSlot, SamplerSlot, UnorderedViewSlot};
 
 #[cfg(feature = "mint")]
 use mint;
