@@ -10,7 +10,7 @@ metal = ["gfx_device_metal", "gfx_window_metal", "gfx_device_metalll"]
 metal_argument_buffer = ["gfx_device_metalll/argument_buffer"]
 gl = ["gfx_device_gl", "gfx_window_glutin"]
 dx11 = ["gfx_device_dx11", "gfx_window_dxgi"]
-dx12 = ["gfx_device_dx12", "gfx_window_dxgi"]
+dx12 = ["gfx_device_dx12", "gfx_device_dx12ll", "gfx_window_dxgi"]
 vulkan = ["gfx_device_vulkan", "gfx_device_vulkanll", "gfx_window_vulkan"]
 sdl = ["gfx_window_sdl"]
 serialize = ["gfx/serialize", "gfx_core/serialize"]
@@ -82,7 +82,7 @@ gfx_window_sdl = { path = "../src/window/sdl", version = "0.7" }
 gfx_device_dx11 = { path = "../src/backend/dx11", version = "0.6", optional = true }
 gfx_device_dx12 = { path = "../src/backend/dx12", version = "0.1", optional = true }
 gfx_window_dxgi = { path = "../src/window/dxgi", version = "0.9", optional = true }
-gfx_device_dx12ll = { path = "../src/backend/dx12ll", version = "0.1" }
+gfx_device_dx12ll = { path = "../src/backend/dx12ll", version = "0.1", optional = true }
 
 # Support examples.
 [[bin]]
