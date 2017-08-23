@@ -345,7 +345,7 @@ pub trait Device<B: Backend> {
     /// Acquire a mapping Reader
     ///
     /// See `write_mapping` for more information.
-    fn read_mapping<'a, T>(&self, buf: &'a mut buffer::Raw<B>, offset: u64, size: u64)
+    fn read_mapping<'a, T>(&self, buf: &'a B::Buffer, offset: u64, size: u64)
                            -> Result<mapping::Reader<'a, B, T>, mapping::Error>
         where T: Copy;
 
@@ -357,7 +357,7 @@ pub trait Device<B: Backend> {
     /// implicitly requires exclusive access. Additionally,
     /// further access will be stalled until execution completion.
 
-    fn write_mapping<'a, 'b, T>(&mut self, buf: &'a mut buffer::Raw<B>, offset: u64, size: u64)
+    fn write_mapping<'a, 'b, T>(&mut self, buf: &'a B::Buffer, offset: u64, size: u64)
                                 -> Result<mapping::Writer<'a, B, T>, mapping::Error>
         where T: Copy;
 

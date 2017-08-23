@@ -59,6 +59,7 @@ impl<B: Backend> GeneralCommandPool<B> {
         unsafe { GeneralCommandBuffer(self.0.acquire_command_buffer()) }
     }
 }
+
 ///
 pub struct GraphicsCommandPool<B: Backend>(pub(crate) B::RawCommandPool);
 impl<B: Backend> GraphicsCommandPool<B> {
@@ -79,6 +80,7 @@ impl<B: Backend> GraphicsCommandPool<B> {
         unsafe { GraphicsCommandBuffer(self.0.acquire_command_buffer()) }
     }
 }
+
 ///
 pub struct ComputeCommandPool<B: Backend>(pub(crate) B::RawCommandPool);
 impl<B: Backend> ComputeCommandPool<B> {
@@ -99,6 +101,7 @@ impl<B: Backend> ComputeCommandPool<B> {
         unsafe { ComputeCommandBuffer(self.0.acquire_command_buffer()) }
     }
 }
+
 ///
 pub struct TransferCommandPool<B: Backend>(pub(crate) B::RawCommandPool);
 impl<B: Backend> TransferCommandPool<B> {
