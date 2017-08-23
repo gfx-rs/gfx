@@ -20,5 +20,6 @@ members = [
     "src/window/metal",
     "src/window/sdl",
     "src/window/vulkan",
-    "examples"
+    "examples",
+    "examples/core/quad"
 ]

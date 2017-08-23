@@ -141,6 +141,11 @@ path = "support/particle/main.rs"
 name = "triangle"
 path = "support/triangle/main.rs"
 
+# core examples
+#[[bin]]
+#name = "quad"
+#path = "core/quad/main.rs"
+
 # corell examples
 [[bin]]
 name = "trianglell"
