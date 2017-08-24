@@ -71,12 +71,7 @@ pub trait CommandQueue<B: Backend> {
     /// Unsafe because it's not checked that the queue can process the submitted command buffers.
     /// Trying to submit compute commands to a graphics queue will result in undefined behavior.
     /// Each queue implements safe wrappers according to their supported functionalities!
-    // TODO: `access` legacy (handle API)
-    unsafe fn submit_raw<'a, I>(
-        &mut self,
-        submit_infos: I,
-        fence: Option<&B::Fence>,
-    ) where I: Iterator<Item=RawSubmission<'a, B>>;
+    unsafe fn submit_raw(&mut self, RawSubmission<B>, Option<&B::Fence>);
 }
 
 macro_rules! define_queue {
@@ -87,11 +82,11 @@ macro_rules! define_queue {
         pub struct $queue<B: Backend>(B::CommandQueue);
 
         impl<B: Backend> CommandQueue<B> for $queue<B> {
-            unsafe fn submit_raw<'a, I>(&mut self,
-                submit_infos: I,
+            unsafe fn submit_raw(&mut self,
+                submission: RawSubmission<B>,
                 fence: Option<&B::Fence>,
-            ) where I: Iterator<Item=RawSubmission<'a, B>> {
-                self.0.submit_raw(submit_infos, fence)
+            ) {
+                self.0.submit_raw(submission, fence)
             }
         }
 
@@ -104,14 +99,14 @@ macro_rules! define_queue {
             ///
             pub fn submit<C>(
                 &mut self,
-                submit_infos: &[Submission<B, C>],
+                submission: Submission<B, C>,
                 fence: Option<&B::Fence>,
             )
             where
                 C: SupportedBy<$capability>
             {
                 unsafe {
-                    self.submit_raw(submit_infos.iter().map(|submit| submit.as_raw()), fence)
+                    self.submit_raw(submission.as_raw(), fence)
                 }
             }
         }
