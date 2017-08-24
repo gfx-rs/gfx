@@ -71,8 +71,8 @@ pub fn main() {
     let views = swap_chain.create_color_views(&mut device);
 
     let pso = device.create_pipeline_simple(
-        include_bytes!("shader/triangle_120.glslv"),
-        include_bytes!("shader/triangle_120.glslf"),
+        include_bytes!("shader/triangle_150.glslv"),
+        include_bytes!("shader/triangle_150.glslf"),
         pipe::new()
     ).unwrap();
     let (vertex_buffer, slice) = device.create_vertex_buffer_with_slice(&TRIANGLE, ());
