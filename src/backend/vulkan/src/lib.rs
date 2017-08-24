@@ -13,8 +13,8 @@ extern crate kernel32;
 use ash::{Entry, LoadingError};
 use ash::version::{EntryV1_0, DeviceV1_0, InstanceV1_0, V1_0};
 use ash::vk;
-use core::{command as com, memory};
-use core::QueueType;
+use core::memory;
+use core::{Features, Limits, PatchSize, QueueType};
 use std::{fmt, mem, ptr};
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
@@ -155,7 +155,6 @@ impl Instance {
                             QueueFamily {
                                 device: device,
                                 family_index: i as u32,
-                                queue_type: queue_family.queue_flags,
                                 queue_count: queue_family.queue_count,
                             },
                             map_queue_type(queue_family.queue_flags),
@@ -165,6 +164,7 @@ impl Instance {
                 Adapter {
                     instance: self.raw.clone(),
                     handle: device,
+                    properties,
                     queue_families,
                     info,
                 }
@@ -176,7 +176,6 @@ impl Instance {
 pub struct QueueFamily {
     device: vk::PhysicalDevice,
     family_index: u32,
-    queue_type: vk::QueueFlags,
     queue_count: u32,
 }
 
@@ -186,7 +185,6 @@ impl QueueFamily {
         QueueFamily {
             device: device,
             family_index: index,
-            queue_type: properties.queue_flags,
             queue_count: properties.queue_count,
         }
     }
@@ -212,6 +210,7 @@ impl core::QueueFamily for QueueFamily {
 pub struct Adapter {
     instance: Arc<RawInstance>,
     handle: vk::PhysicalDevice,
+    properties: vk::PhysicalDeviceProperties,
     queue_families: Vec<(QueueFamily, QueueType)>,
     info: core::AdapterInfo,
 }
@@ -267,9 +266,33 @@ impl core::Adapter<Backend> for Adapter {
                     .expect("Error on device creation")
             }
         };
+        let limits = &self.properties.limits;
 
         let device = Device {
             raw: Arc::new(RawDevice(device_raw)),
+            features: Features { //TODO
+                indirect_execution: limits.max_draw_indirect_count != 0,
+                draw_instanced: false,
+                draw_instanced_base: false,
+                draw_indexed_base: false,
+                draw_indexed_instanced: false,
+                draw_indexed_instanced_base_vertex: false,
+                draw_indexed_instanced_base: false,
+                instance_rate: false,
+                vertex_base: false,
+                srgb_color: false,
+                constant_buffer: false,
+                unordered_access_view: false,
+                separate_blending_slots: false,
+                copy_buffer: false,
+            },
+            limits: Limits {
+                max_texture_size: limits.max_image_dimension3d as usize,
+                max_patch_size: limits.max_tessellation_patch_size as PatchSize,
+                max_viewports: limits.max_viewports as usize,
+                min_buffer_copy_offset_alignment: limits.optimal_buffer_copy_offset_alignment as usize,
+                min_buffer_copy_pitch_alignment: limits.optimal_buffer_copy_row_pitch_alignment as usize,
+            },
         };
 
         let mem_properties =  self.instance.0.get_physical_device_memory_properties(self.handle);
@@ -304,20 +327,17 @@ impl core::Adapter<Backend> for Adapter {
         // Create associated command queues for each queue type
         let queues = queue_infos.iter().flat_map(|info| {
             (0..info.queue_count).map(|id| {
-                let queue = unsafe {
+                let queue_raw = unsafe {
                     device.raw.0.get_device_queue(info.queue_family_index, id)
                 };
-                unimplemented!()
-                /*
-                // TODO:
+                let queue = CommandQueue {
+                    raw: Arc::new(queue_raw),
+                    device: device.raw.clone(),
+                    family_index: info.queue_family_index,
+                };
                 unsafe {
-                    core::GeneralQueue::new(CommandQueue {
-                        inner: CommandQueueInner(Rc::new(RefCell::new(queue))),
-                        device: device.device.clone(),
-                        family_index: info.queue_family_index,
-                    })
+                    core::GeneralQueue::new(queue)
                 }
-                */
             }).collect::<Vec<_>>()
         }).collect();
 
@@ -383,8 +403,8 @@ impl CommandQueue {
 impl core::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit_raw<'a, I>(
         &mut self,
-        submit_infos: I,
-        fence: Option<&native::Fence>,
+        _submit_infos: I,
+        _fence: Option<&native::Fence>,
     ) where I: Iterator<Item=core::RawSubmission<'a, Backend>> {
         unimplemented!()
     }
@@ -392,6 +412,8 @@ impl core::CommandQueue<Backend> for CommandQueue {
 
 pub struct Device {
     raw: Arc<RawDevice>,
+    features: Features,
+    limits: Limits,
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]

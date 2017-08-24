@@ -187,13 +187,14 @@ impl core::Surface<backend::Backend> for Surface {
         };
 
         let swapchain = unsafe {
-            let mut swapchain = mem::uninitialized();
+            let mut swapchain = mem::zeroed();
             assert_eq!(vk::Result::Success,
                 loader.create_swapchain_khr(
                     present_queue.device_handle(),
                     &info,
                     ptr::null(),
-                    &mut swapchain));
+                    &mut swapchain)
+            );
             swapchain
         };
 

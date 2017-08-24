@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use Backend;
-use {image, memory};
+use image::ImageLayout;
+use memory::Barrier;
 use queue::capability::{Capability, Transfer};
 use super::{BufferCopy, BufferImageCopy, CommandBufferShim, ImageCopy, RawCommandBuffer, Submit};
 
@@ -42,7 +43,7 @@ impl<'a, B: Backend> TransferCommandBuffer<'a, B> {
     }
 
     ///
-    pub fn pipeline_barrier(&mut self, barriers: &[memory::Barrier]) {
+    pub fn pipeline_barrier(&mut self, barriers: &[Barrier<B>]) {
         self.0.pipeline_barrier(barriers)
     }
 
@@ -55,9 +56,9 @@ impl<'a, B: Backend> TransferCommandBuffer<'a, B> {
     pub fn copy_image(
         &mut self,
         src: &B::Image,
-        src_layout: image::ImageLayout,
+        src_layout: ImageLayout,
         dst: &B::Image,
-        dst_layout: image::ImageLayout,
+        dst_layout: ImageLayout,
         regions: &[ImageCopy],
     ) {
         self.0.copy_image(src, src_layout, dst, dst_layout, regions)
@@ -68,7 +69,7 @@ impl<'a, B: Backend> TransferCommandBuffer<'a, B> {
         &mut self,
         src: &B::Buffer,
         dst: &B::Image,
-        layout: image::ImageLayout,
+        layout: ImageLayout,
         regions: &[BufferImageCopy],
     ) {
         self.0.copy_buffer_to_image(src, dst, layout, regions)
@@ -79,7 +80,7 @@ impl<'a, B: Backend> TransferCommandBuffer<'a, B> {
         &mut self,
         src: &B::Image,
         dst: &B::Buffer,
-        layout: image::ImageLayout,
+        layout: ImageLayout,
         regions: &[BufferImageCopy],
     ) {
         self.0.copy_image_to_buffer(src, dst, layout, regions)

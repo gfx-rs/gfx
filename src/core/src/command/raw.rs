@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use {image, memory, pso, target};
+use {pso, target};
 use {Backend, VertexCount, VertexOffset, Viewport};
 use buffer::IndexBufferView;
+use image::ImageLayout;
+use memory::Barrier;
 use super::{BufferCopy, BufferImageCopy, ClearColor, ClearValue, ImageCopy, ImageResolve,
             InstanceParams, SubpassContents};
 
@@ -24,16 +26,16 @@ pub trait RawCommandBuffer<B: Backend> {
     fn finish(&mut self) -> B::SubmitInfo;
 
     ///
-    fn pipeline_barrier(&mut self, &[memory::Barrier]);
+    fn pipeline_barrier(&mut self, &[Barrier<B>]);
 
     ///
-    fn clear_color(&mut self, &B::RenderTargetView, image::ImageLayout, ClearColor);
+    fn clear_color(&mut self, &B::RenderTargetView, ImageLayout, ClearColor);
 
     /// Clear depth-stencil target
     fn clear_depth_stencil(
         &mut self,
         &B::DepthStencilView,
-        image::ImageLayout,
+        ImageLayout,
         Option<target::Depth>,
         Option<target::Stencil>,
     );
@@ -42,9 +44,9 @@ pub trait RawCommandBuffer<B: Backend> {
     fn resolve_image(
         &mut self,
         src: &B::Image,
-        src_layout: image::ImageLayout,
+        src_layout: ImageLayout,
         dst: &B::Image,
-        dst_layout: image::ImageLayout,
+        dst_layout: ImageLayout,
         regions: &[ImageResolve],
     );
 
@@ -134,9 +136,9 @@ pub trait RawCommandBuffer<B: Backend> {
     fn copy_image(
         &mut self,
         src: &B::Image,
-        src_layout: image::ImageLayout,
+        src_layout: ImageLayout,
         dst: &B::Image,
-        dst_layout: image::ImageLayout,
+        dst_layout: ImageLayout,
         regions: &[ImageCopy],
     );
     ///
@@ -144,7 +146,7 @@ pub trait RawCommandBuffer<B: Backend> {
         &mut self,
         src: &B::Buffer,
         dst: &B::Image,
-        layout: image::ImageLayout,
+        layout: ImageLayout,
         regions: &[BufferImageCopy],
     );
     ///
@@ -152,7 +154,7 @@ pub trait RawCommandBuffer<B: Backend> {
         &mut self,
         src: &B::Image,
         dst: &B::Buffer,
-        layout: image::ImageLayout,
+        layout: ImageLayout,
         regions: &[BufferImageCopy],
     );
     ///
