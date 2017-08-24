@@ -5,8 +5,6 @@
 
 #[macro_use]
 extern crate bitflags;
-#[macro_use]
-extern crate derivative;
 extern crate draw_state;
 extern crate log;
 extern crate smallvec;
@@ -136,10 +134,10 @@ pub struct Limits {
     pub max_viewports: usize,
 
     /// The alignment of the start of the buffer used as a GPU copy source, in bytes, non-zero.
-    pub min_buffer_copy_offset_alignment: u32,
+    pub min_buffer_copy_offset_alignment: usize,
     /// The alignment of the row pitch of the texture data stored in a buffer that is
     /// used in a GPU copy operation, in bytes, non-zero.
-    pub min_buffer_copy_pitch_alignment: u32,
+    pub min_buffer_copy_pitch_alignment: usize,
 }
 
 /// Describes what geometric primitives are created from vertex data.

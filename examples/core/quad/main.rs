@@ -70,7 +70,8 @@ fn main() {
     let pixel_height = window_size.1 as u16;
 
     // instantiate backend
-    let (mut surface, adapters) = win::Window(window).get_surface_and_adapters();
+    let mut vk_window = win::Window(window);
+    let (mut surface, adapters) = vk_window.get_surface_and_adapters();
     for adapter in &adapters {
         println!("{:?}", adapter.get_info());
     }
@@ -160,7 +161,7 @@ fn main() {
             dst_pass: pass::SubpassRef::Pass(0),
             src_stage: pso::COLOR_ATTACHMENT_OUTPUT,
             dst_stage: pso::COLOR_ATTACHMENT_OUTPUT,
-            src_access: i::ImageAccess::empty(),
+            src_access: i::Access::empty(),
             dst_access: i::COLOR_ATTACHMENT_READ | i::COLOR_ATTACHMENT_WRITE,
         };
 
@@ -270,7 +271,7 @@ fn main() {
     let img = image::load(Cursor::new(&img_data[..]), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
     let kind = i::Kind::D2(width as i::Size, height as i::Size, i::AaMode::Single);
-    let row_alignment_mask = device.get_limits().min_buffer_copy_pitch_alignment - 1;
+    let row_alignment_mask = device.get_limits().min_buffer_copy_pitch_alignment as u32 - 1;
     let image_stride = 4usize;
     let row_pitch = (width * image_stride as u32 + row_alignment_mask) & !row_alignment_mask;
     let upload_size = (height * row_pitch) as u64;
@@ -344,11 +345,12 @@ fn main() {
         let submit = {
             let mut cmd_buffer = graphics_pool.acquire_command_buffer();
 
-            let image_barrier = m::Barrier::Image;/*ImageBarrier {
-                state_src: m::ImageStateSrc::State(ImageAccess::empty(), ImageLayout::Undefined),
-                state_dst: ImageStateDst::State(m::TRANSFER_WRITE, ImageLayout::TransferDstOptimal),
-                image: &image_logo,
-            };*/
+            let image_barrier = m::Barrier::Image {
+                state_src: (i::Access::empty(), i::ImageLayout::Undefined),
+                state_dst: (i::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal),
+                target: &image_logo,
+                range: (0..1, 0..1),
+            };
             cmd_buffer.pipeline_barrier(&[image_barrier]);
 
             cmd_buffer.copy_buffer_to_image(
@@ -365,11 +367,12 @@ fn main() {
                     image_extent: command::Extent { width, height, depth: 1 },
                 }]);
 
-            let image_barrier = m::Barrier::Image; /*ImageBarrier {
-                state_src: ImageStateSrc::State(m::TRANSFER_WRITE, ImageLayout::TransferDstOptimal),
-                state_dst: ImageStateDst::State(m::SHADER_READ, ImageLayout::ShaderReadOnlyOptimal),
-                image: &image_logo,
-            };*/
+            let image_barrier = m::Barrier::Image {
+                state_src: (i::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal),
+                state_dst: (i::SHADER_READ, i::ImageLayout::ShaderReadOnlyOptimal),
+                target: &image_logo,
+                range: (0..1, 0..1),
+            };
             cmd_buffer.pipeline_barrier(&[image_barrier]);
 
             cmd_buffer.finish()
@@ -401,18 +404,19 @@ fn main() {
 
         device.reset_fences(&[&frame_fence]);
         graphics_pool.reset();
-        //let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&mut frame_semaphore));
+        let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&mut frame_semaphore));
 
         // Rendering
         let submit = {
             let mut cmd_buffer = graphics_pool.acquire_command_buffer();
 
-            //let rtv = &swap_chain.get_backbuffers()[frame.id()].color;
-            let rtv_target_barrier = m::Barrier::Image;/*ImageBarrier {
-                state_src: ImageStateSrc::State(ImageAccess::empty(), m::ImageLayout::Undefined),
-                state_dst: ImageStateDst::State(m::COLOR_ATTACHMENT_WRITE, m::ImageLayout::ColorAttachmentOptimal),
-                image: rtv,
-            };*/
+            let rtv = &swap_chain.get_backbuffers()[frame.id()].color;
+            let rtv_target_barrier = m::Barrier::Image {
+                state_src: (i::Access::empty(), i::ImageLayout::Undefined),
+                state_dst: (i::COLOR_ATTACHMENT_WRITE, i::ImageLayout::ColorAttachmentOptimal),
+                target: rtv,
+                range: (0..1, 0..1),
+            };
             cmd_buffer.pipeline_barrier(&[rtv_target_barrier]);
 
             cmd_buffer.set_viewports(&[viewport]);
@@ -431,11 +435,12 @@ fn main() {
                 encoder.draw(0, 6, None);
             }*/
 
-            let rtv_present_barrier = m::Barrier::Image;/*ImageBarrier {
-                state_src: ImageStateSrc::State(m::COLOR_ATTACHMENT_WRITE, m::ImageLayout::ColorAttachmentOptimal),
-                state_dst: ImageStateDst::Present,
-                image: rtv,
-            };*/
+            let rtv_present_barrier = m::Barrier::Image {
+                state_src: (i::COLOR_ATTACHMENT_WRITE, i::ImageLayout::ColorAttachmentOptimal),
+                state_dst: (i::Access::empty(), i::ImageLayout::Present),
+                target: rtv,
+                range: (0..1, 0..1),
+            };
             cmd_buffer.pipeline_barrier(&[rtv_present_barrier]);
 
             cmd_buffer.finish()
