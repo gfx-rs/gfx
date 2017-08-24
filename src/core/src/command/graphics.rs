@@ -13,12 +13,15 @@
 // limitations under the License.
 
 use {pso, target};
-use {Backend, Viewport};
+use {Backend, IndexCount, VertexCount, VertexOffset, Viewport};
 use buffer::IndexBufferView;
 use image::ImageLayout;
 use memory::Barrier;
 use queue::capability::{Capability, Graphics};
-use super::{BufferCopy, BufferImageCopy, ClearColor, CommandBufferShim, ImageCopy, RawCommandBuffer, Submit};
+use super::{BufferCopy, BufferImageCopy, ImageCopy,
+    ClearColor, ClearValue, CommandBufferShim, RawCommandBuffer,
+    InstanceParams, Submit, SubpassContents,
+};
 
 /// Command buffer with graphics and transfer functionality.
 pub struct GraphicsCommandBuffer<'a, B: Backend>(pub(crate) &'a mut B::RawCommandBuffer)
@@ -45,6 +48,25 @@ where
     /// The command pool must be reset to able to re-record commands.
     pub fn finish(mut self) -> Submit<B, Graphics> {
         Submit::new(self.0.finish())
+    }
+
+    ///
+    pub fn begin_renderpass_inline(
+        &mut self,
+        render_pass: &B::RenderPass,
+        frame_buffer: &B::FrameBuffer,
+        render_area: target::Rect,
+        clear_values: &[ClearValue],
+    ) {
+        self.0.begin_renderpass(render_pass, frame_buffer, render_area, clear_values, SubpassContents::Inline)
+    }
+    ///
+    pub fn next_subpass_inline(&mut self) {
+        self.0.next_subpass(SubpassContents::Inline)
+    }
+    ///
+    pub fn end_renderpass(&mut self) {
+        self.0.end_renderpass()
     }
 
     ///
@@ -134,6 +156,16 @@ where
     }
 
     ///
+    pub fn bind_graphics_descriptor_sets(
+        &mut self,
+        layout: &B::PipelineLayout,
+        first_set: usize,
+        sets: &[&B::DescriptorSet],
+    ) {
+        self.0.bind_graphics_descriptor_sets(layout, first_set, sets)
+    }
+
+    ///
     pub fn set_viewports(&mut self, viewports: &[Viewport]) {
         self.0.set_viewports(viewports)
     }
@@ -151,5 +183,25 @@ where
     ///
     pub fn set_blend_constants(&mut self, cv: target::ColorValue) {
         self.0.set_blend_constants(cv)
+    }
+
+    ///
+    pub fn draw(&mut self,
+        start: VertexCount,
+        count: VertexCount,
+        instance: Option<InstanceParams>,
+    ) {
+        self.0.draw(start, count, instance)
+    }
+
+    ///
+    pub fn draw_indexed(
+        &mut self,
+        start: IndexCount,
+        count: IndexCount,
+        base: VertexOffset,
+        instance: Option<InstanceParams>,
+    ) {
+        self.0.draw_indexed(start, count, base, instance)
     }
 }
