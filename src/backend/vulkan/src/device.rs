@@ -118,8 +118,8 @@ impl Device {
 }
 
 impl d::Device<B> for Device {
-    fn get_features(&self) -> &Features { unimplemented!() }
-    fn get_limits(&self) -> &Limits { unimplemented!() }
+    fn get_features(&self) -> &Features { &self.features }
+    fn get_limits(&self) -> &Limits { &self.limits }
 
     fn create_heap(&mut self, heap_type: &HeapType, _resource_type: d::ResourceHeapType, size: u64) -> Result<n::Heap, d::ResourceHeapError> {
         let info = vk::MemoryAllocateInfo {

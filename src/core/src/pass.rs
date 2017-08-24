@@ -15,7 +15,7 @@
 //! RenderPass handling.
 
 use format::Format;
-use image::{ImageAccess, ImageLayout};
+use image;
 use pso::PipelineStage;
 use Backend;
 
@@ -40,7 +40,7 @@ pub enum AttachmentStoreOp {
 }
 
 /// Image layout of an attachment.
-pub type AttachmentLayout = ImageLayout;
+pub type AttachmentLayout = image::ImageLayout;
 
 ///
 #[derive(Clone, Debug, Hash)]
@@ -84,9 +84,9 @@ pub struct SubpassDependency {
     ///
     pub dst_stage: PipelineStage,
     ///
-    pub src_access: ImageAccess,
+    pub src_access: image::Access,
     ///
-    pub dst_access: ImageAccess,
+    pub dst_access: image::Access,
 }
 
 /// Description of a subpass for renderpass creation.
