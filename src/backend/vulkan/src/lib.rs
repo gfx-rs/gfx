@@ -46,7 +46,7 @@ const SURFACE_EXTENSIONS: &'static [&'static str] = &[
     // Platform-specific WSI extensions
     vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
     vk::VK_KHR_XCB_SURFACE_EXTENSION_NAME,
-    vk::VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME,
+    //vk::VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME, //RenderDoc fails with this
     vk::VK_KHR_MIR_SURFACE_EXTENSION_NAME,
     vk::VK_KHR_ANDROID_SURFACE_EXTENSION_NAME,
     vk::VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
@@ -87,22 +87,23 @@ fn map_queue_type(flags: vk::QueueFlags) -> QueueType {
 }
 
 impl Instance {
-    pub fn create() -> Self {
+    pub fn create(name: &str, version: u32) -> Self {
         // TODO: return errors instead of panic
         let entry = VK_ENTRY.as_ref().expect("Unable to load Vulkan entry points");
 
         let app_info = vk::ApplicationInfo {
             s_type: vk::StructureType::ApplicationInfo,
             p_next: ptr::null(),
-            p_application_name: "vulkan_ll".as_ptr() as *const _, // TODO:
-            application_version: 0,
+            p_application_name: name.as_ptr() as *const _,
+            application_version: version,
             p_engine_name: "gfx-rs".as_ptr() as *const _,
-            engine_version: 0, //TODO
+            engine_version: 1,
             api_version: 0, //TODO
         };
 
-        let instance_extensions = entry.enumerate_instance_extension_properties()
-                                       .expect("Unable to enumerate instance extensions");
+        let instance_extensions = entry
+            .enumerate_instance_extension_properties()
+            .expect("Unable to enumerate instance extensions");
 
         // Check our surface extensions against the available extensions
         let surface_extensions = SURFACE_EXTENSIONS.iter().filter_map(|ext| {
@@ -112,13 +113,15 @@ impl Instance {
         }).collect::<Vec<&str>>();
 
         let instance = {
-            let cstrings = surface_extensions.iter()
-                                    .map(|&s| CString::new(s).unwrap())
-                                    .collect::<Vec<_>>();
+            let cstrings = surface_extensions
+                .iter()
+                .map(|&s| CString::new(s).unwrap())
+                .collect::<Vec<_>>();
 
-            let str_pointers = cstrings.iter()
-                                    .map(|s| s.as_ptr())
-                                    .collect::<Vec<_>>();
+            let str_pointers = cstrings
+                .iter()
+                .map(|s| s.as_ptr())
+                .collect::<Vec<_>>();
 
             let create_info = vk::InstanceCreateInfo {
                 s_type: vk::StructureType::InstanceCreateInfo,
@@ -131,12 +134,13 @@ impl Instance {
                 pp_enabled_extension_names: str_pointers.as_ptr(),
             };
 
-            entry.create_instance(&create_info, None).expect("Unable to create Vulkan instance")
+            entry.create_instance(&create_info, None)
+                .expect("Unable to create Vulkan instance")
         };
 
         Instance {
             raw: Arc::new(RawInstance(instance)),
-            surface_extensions: surface_extensions,
+            surface_extensions,
         }
     }
 
@@ -148,20 +152,21 @@ impl Instance {
                 let properties = self.raw.0.get_physical_device_properties(device);
                 let name = unsafe {
                     CStr::from_ptr(properties.device_name.as_ptr())
-                            .to_str()
-                            .expect("Invalid UTF-8 string")
-                            .to_owned()
+                        .to_str()
+                        .expect("Invalid UTF-8 string")
+                        .to_owned()
                 };
 
                 let info = core::AdapterInfo {
-                    name: name,
+                    name,
                     vendor: properties.vendor_id as usize,
                     device: properties.device_id as usize,
                     software_rendering: properties.device_type == vk::PhysicalDeviceType::Cpu,
                 };
 
                 let queue_families =
-                    self.raw.0.get_physical_device_queue_family_properties(device)
+                    self.raw.0
+                        .get_physical_device_queue_family_properties(device)
                         .iter()
                         .enumerate()
                         .map(|(i, queue_family)| {
