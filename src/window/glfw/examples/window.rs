@@ -17,7 +17,7 @@ extern crate gfx_core;
 extern crate gfx_window_glfw;
 extern crate glfw;
 
-use gfx_core::{Adapter, Surface, SwapChain, QueueFamily, WindowExt};
+use gfx_core::{Adapter, Surface, Swapchain, QueueFamily, WindowExt};
 use glfw::{Action, Context, Key};
 
 pub fn main() {

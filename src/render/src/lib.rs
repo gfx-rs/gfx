@@ -117,7 +117,7 @@ pub use draw_state::target::*;
 
 // public re-exports
 pub use core::{Adapter, Backend, CommandQueue, Gpu, Frame, FrameSync, Headless, Primitive, QueueFamily, QueueType,
-               Resources, SubmissionError, SubmissionResult, Surface, SwapChain, SwapchainConfig, WindowExt};
+               Resources, SubmissionError, SubmissionResult, Surface, Swapchain, SwapchainConfig, WindowExt};
 pub use core::{VertexCount, InstanceCount};
 pub use core::{ShaderSet, VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
 pub use core::{GeneralCommandPool, GraphicsCommandPool, ComputeCommandPool, SubpassCommandPool};
@@ -132,7 +132,7 @@ pub use encoder::{CopyBufferResult, CopyBufferTextureResult, CopyError,
                   CopyTextureBufferResult, GraphicsEncoder, UpdateError, GraphicsPoolExt};
 pub use device::PipelineStateError;
 pub use slice::{Slice, IntoIndexBuffer, IndexBuffer};
-pub use swapchain::SwapChainExt;
+pub use swapchain::SwapchainExt;
 pub use pso::{PipelineState};
 pub use pso::buffer::{VertexBuffer, InstanceBuffer, RawVertexBuffer,
                       ConstantBuffer, RawConstantBuffer, Global, RawGlobal};

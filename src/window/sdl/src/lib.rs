@@ -102,14 +102,14 @@ fn get_window_dimensions(window: &sdl2::video::Window) -> texture::Dimensions {
     (width as texture::Size, height as texture::Size, 1, aa.into())
 }
 
-pub struct SwapChain {
+pub struct Swapchain {
     // Underlying window, required for presentation
     window: Rc<sdl2::video::Window>,
     // Single element backbuffer
     backbuffer: [core::Backbuffer<Backend>; 1],
 }
 
-impl core::SwapChain<Backend> for SwapChain {
+impl core::Swapchain<Backend> for Swapchain {
     fn get_backbuffers(&mut self) -> &[core::Backbuffer<Backend>] {
         &self.backbuffer
     }
@@ -132,10 +132,10 @@ pub struct Surface {
 }
 
 impl core::Surface<Backend> for Surface {
-    type SwapChain = SwapChain;
+    type Swapchain = Swapchain;
 
     fn supports_queue(&self, _: &device_gl::QueueFamily) -> bool { true }
-    fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, _: &Q) -> SwapChain
+    fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, _: &Q) -> Swapchain
         where Q: AsRef<device_gl::CommandQueue>
     {
         use core::handle::Producer;
@@ -164,7 +164,7 @@ impl core::Surface<Backend> for Surface {
             )
         });
 
-        SwapChain {
+        Swapchain {
             window: self.window.clone(),
             backbuffer: [(color, ds); 1],
         }

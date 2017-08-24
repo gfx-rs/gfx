@@ -231,10 +231,10 @@ pub trait CommandPool {
 /// A `Surface` abstracts the surface of a native window, which will be presented
 pub trait Surface {
     type Queue;
-    type SwapChain: SwapChain;
+    type Swapchain: Swapchain;
 
     fn build_swapchain<T: format::RenderFormat>(&self, present_queue: &Self::Queue)
-        -> Self::SwapChain;
+        -> Self::Swapchain;
 }
 
 /// Handle to a backbuffer of the swapchain.
@@ -257,9 +257,9 @@ pub enum FrameSync<'a, R: Resources> {
     Fence(&'a R::Fence)
 }
 
-/// The `SwapChain` is the backend representation of the surface.
+/// The `Swapchain` is the backend representation of the surface.
 /// It consists of multiple buffers, which will be presented on the surface.
-pub trait SwapChain {
+pub trait Swapchain {
     type Image;
     type R: Resources;
 
@@ -309,7 +309,7 @@ pub trait Backend {
     type Adapter: Adapter;
     type Resources: Resources;
     type Surface: Surface;
-    type SwapChain: SwapChain;
+    type Swapchain: Swapchain;
 }
 
 #[macro_export]

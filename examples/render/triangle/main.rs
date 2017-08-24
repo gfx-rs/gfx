@@ -18,7 +18,7 @@ extern crate gfx_window_glutin;
 extern crate glutin;
 
 use gfx::{Adapter, CommandQueue, Device, FrameSync, GraphicsPoolExt,
-          Surface, SwapChain, SwapChainExt, WindowExt};
+          Surface, Swapchain, SwapchainExt, WindowExt};
 use gfx::traits::DeviceExt;
 
 pub type ColorFormat = gfx::format::Rgba8;

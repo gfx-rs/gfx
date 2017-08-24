@@ -154,13 +154,13 @@ impl Drop for SurfaceInner {
 }
 
 impl core::Surface<device_metal::Backend> for Surface {
-    type SwapChain = SwapChain;
+    type Swapchain = Swapchain;
 
     fn supports_queue(&self, queue_family: &device_metal::QueueFamily) -> bool {
         true
     }
 
-    fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, present_queue: &Q) -> Self::SwapChain
+    fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, present_queue: &Q) -> Self::Swapchain
         where Q: AsRef<device_metal::CommandQueue>
     {
         let (mtl_format, cv_format) = match config.color_format {
@@ -228,7 +228,7 @@ impl core::Surface<device_metal::Backend> for Surface {
                 (color, None)
             }).collect();
 
-            SwapChain {
+            Swapchain {
                 surface: self.raw.clone(),
                 pixel_width,
                 pixel_height,
@@ -242,7 +242,7 @@ impl core::Surface<device_metal::Backend> for Surface {
     }
 }
 
-pub struct SwapChain {
+pub struct Swapchain {
     surface: Rc<SurfaceInner>,
     pixel_width: u64,
     pixel_height: u64,
@@ -253,7 +253,7 @@ pub struct SwapChain {
     present_index: usize,
 }
 
-impl core::SwapChain<device_metal::Backend> for SwapChain {
+impl core::Swapchain<device_metal::Backend> for Swapchain {
     fn get_backbuffers(&mut self) -> &[core::Backbuffer<device_metal::Backend>] {
         &self.backbuffers
     }

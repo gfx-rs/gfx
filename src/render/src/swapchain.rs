@@ -14,16 +14,16 @@
 
 //! Swapchain extension.
 //!
-//! This module serves as an extension to the `SwapChain` trait from the core. This module
+//! This module serves as an extension to the `Swapchain` trait from the core. This module
 //! exposes extension functions and shortcuts to aid with handling the swapchain.
 
-use {format, handle, texture, Backend, Device, SwapChain};
+use {format, handle, texture, Backend, Device, Swapchain};
 use memory::Typed;
 
-/// Extension trait for SwapChains
+/// Extension trait for Swapchains
 ///
-/// Every `SwapChain` automatically implements `SwapChainExt`.
-pub trait SwapChainExt<B: Backend>: SwapChain<B> {
+/// Every `Swapchain` automatically implements `SwapchainExt`.
+pub trait SwapchainExt<B: Backend>: Swapchain<B> {
     /// Create color RTVs for all backbuffer images.
     // TODO: error handling
     fn create_color_views<T: format::RenderFormat>(&mut self, device: &mut B::Device) -> Vec<handle::RenderTargetView<B::Resources, T>> {
@@ -43,4 +43,4 @@ pub trait SwapChainExt<B: Backend>: SwapChain<B> {
     }
 }
 
-impl <T, B: Backend> SwapChainExt<B> for T where T: SwapChain<B> { }
+impl <T, B: Backend> SwapchainExt<B> for T where T: Swapchain<B> { }

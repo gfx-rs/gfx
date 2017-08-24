@@ -56,14 +56,14 @@ use core::{handle, memory};
 use core::texture::{self, AaMode, Size};
 use glfw::Context;
 
-pub struct SwapChain {
+pub struct Swapchain {
     // Underlying window, required for presentation
     window: Rc<RefCell<glfw::Window>>,
     // Single element backbuffer
     backbuffer: [core::Backbuffer<device_gl::Backend>; 1],
 }
 
-impl<'a> core::SwapChain<device_gl::Backend> for SwapChain {
+impl<'a> core::Swapchain<device_gl::Backend> for Swapchain {
     fn get_backbuffers(&mut self) -> &[core::Backbuffer<device_gl::Backend>] {
         &self.backbuffer
     }
@@ -86,10 +86,10 @@ pub struct Surface {
 }
 
 impl<'a> core::Surface<device_gl::Backend> for Surface {
-    type SwapChain = SwapChain;
+    type Swapchain = Swapchain;
 
     fn supports_queue(&self, _: &device_gl::QueueFamily) -> bool { true }
-    fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, _: &Q) -> SwapChain
+    fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, _: &Q) -> Swapchain
         where Q: AsRef<device_gl::CommandQueue>
     {
         use core::handle::Producer;
@@ -119,7 +119,7 @@ impl<'a> core::Surface<device_gl::Backend> for Surface {
             )
         });
 
-        SwapChain {
+        Swapchain {
             window: self.window.clone(),
             backbuffer: [(color, ds); 1],
         }

@@ -45,7 +45,7 @@ extern crate gfx_window_vulkan;
 use gfx::memory::Typed;
 use gfx::queue::GraphicsQueue;
 use gfx::{Adapter, Backend, CommandQueue, FrameSync, GraphicsCommandPool,
-          SwapChain, QueueType, WindowExt};
+          Swapchain, QueueType, WindowExt};
 
 pub mod shade;
 

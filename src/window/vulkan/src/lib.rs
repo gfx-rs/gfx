@@ -144,7 +144,7 @@ impl Surface {
 }
 
 impl core::Surface<device_vulkan::Backend> for Surface {
-    type SwapChain = SwapChain;
+    type Swapchain = Swapchain;
 
     fn supports_queue(&self, queue_family: &device_vulkan::QueueFamily) -> bool {
         unsafe {
@@ -158,7 +158,7 @@ impl core::Surface<device_vulkan::Backend> for Surface {
         }
     }
 
-    fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, present_queue: &Q) -> Self::SwapChain
+    fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, present_queue: &Q) -> Self::Swapchain
         where Q: AsRef<device_vulkan::CommandQueue>
     {
         let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
@@ -233,7 +233,7 @@ impl core::Surface<device_vulkan::Backend> for Surface {
                     .collect::<Vec<_>>()
         };
 
-        SwapChain::from_raw(
+        Swapchain::from_raw(
             swapchain,
             present_queue,
             loader,
@@ -241,7 +241,7 @@ impl core::Surface<device_vulkan::Backend> for Surface {
     }
 }
 
-pub struct SwapChain {
+pub struct Swapchain {
     raw: vk::SwapchainKHR,
     device: Arc<device_vulkan::RawDevice>,
     swapchain_fn: vk::SwapchainFn,
@@ -251,13 +251,13 @@ pub struct SwapChain {
     frame_queue: VecDeque<usize>,
 }
 
-impl SwapChain {
+impl Swapchain {
     fn from_raw(raw: vk::SwapchainKHR,
                 queue: &CommandQueue,
                 swapchain_fn: vk::SwapchainFn,
                 images: Vec<native::Image>) -> Self
     {
-        SwapChain {
+        Swapchain {
             raw: raw,
             device: queue.device(),
             swapchain_fn: swapchain_fn,
@@ -267,7 +267,7 @@ impl SwapChain {
     }
 }
 
-impl core::SwapChain<device_vulkan::Backend> for SwapChain {
+impl core::Swapchain<device_vulkan::Backend> for Swapchain {
     fn get_backbuffers(&mut self) -> &[core::Backbuffer<device_vulkan::Backend>] {
         // TODO
         unimplemented!()

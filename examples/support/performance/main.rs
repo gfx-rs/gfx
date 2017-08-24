@@ -22,7 +22,7 @@ extern crate gfx_window_glutin;
 extern crate glutin;
 
 use gfx::{Adapter, CommandQueue, GraphicsPoolExt, Device, FrameSync,
-    Surface, SwapChain, SwapChainExt, WindowExt};
+    Surface, Swapchain, SwapchainExt, WindowExt};
 use gfx::format::Rgba8 as ColorFormat;
 
 use cgmath::{Deg, Matrix, Matrix3, Matrix4, Point3, Vector3, Vector4, SquareMatrix};
@@ -94,7 +94,7 @@ trait Renderer: Drop {
 struct GFX {
     dimension: i16,
     window: gfx_window_glutin::Window,
-    swap_chain: gfx_window_glutin::SwapChain,
+    swap_chain: gfx_window_glutin::Swapchain,
     device: gfx_device_gl::Device,
     queue: gfx::queue::GraphicsQueue<B>,
     pool: gfx::GraphicsCommandPool<B>,

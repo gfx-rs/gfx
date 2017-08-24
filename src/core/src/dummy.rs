@@ -16,7 +16,7 @@
 //! outside of the graphics development environment.
 
 use {Adapter, AdapterInfo, Backend, Capabilities, Resources, IndexType, VertexCount, QueueType,
-     Gpu, Device, CommandQueue, QueueFamily, ShaderSet, Surface, SwapChain,
+     Gpu, Device, CommandQueue, QueueFamily, ShaderSet, Surface, Swapchain,
      Frame, FrameSync, SwapchainConfig, Backbuffer, WindowExt, RawSubmission};
 use {buffer, format, state, target, handle, mapping, pool, pso, shade, texture};
 use command::{self, AccessInfo};
@@ -369,13 +369,13 @@ impl command::Buffer<DummyResources> for DummyCommandBuffer {
 /// Dummy surface.
 pub struct DummySurface;
 impl Surface<DummyBackend> for DummySurface {
-    type SwapChain = DummySwapChain;
+    type Swapchain = DummySwapchain;
 
     fn supports_queue(&self, _: &DummyFamily) -> bool {
         unimplemented!()
     }
 
-    fn build_swapchain<Q>(&mut self, _: SwapchainConfig, _: &Q) -> Self::SwapChain
+    fn build_swapchain<Q>(&mut self, _: SwapchainConfig, _: &Q) -> Self::Swapchain
     where
         Q: AsRef<DummyQueue>,
     {
@@ -384,8 +384,8 @@ impl Surface<DummyBackend> for DummySurface {
 }
 
 /// Dummy swapchain.
-pub struct DummySwapChain;
-impl SwapChain<DummyBackend> for DummySwapChain {
+pub struct DummySwapchain;
+impl Swapchain<DummyBackend> for DummySwapchain {
     fn get_backbuffers(&mut self) -> &[Backbuffer<DummyBackend>] {
         unimplemented!()
     }

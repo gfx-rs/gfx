@@ -19,7 +19,7 @@ extern crate sdl2;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use gfx::format::{Formatted, Rgba8, DepthStencil};
-use gfx_core::{Adapter, Surface, QueueFamily, SwapChain, WindowExt};
+use gfx_core::{Adapter, Surface, QueueFamily, Swapchain, WindowExt};
 
 const CLEAR_COLOR: [f32; 4] = [0.1, 0.2, 0.3, 1.0];
 

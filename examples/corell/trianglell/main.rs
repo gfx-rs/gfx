@@ -27,7 +27,7 @@ extern crate image;
 use gfx_corell::{buffer, command, format, pass, pso, shade, state, target,
     Device, CommandPool, GraphicsCommandPool,
     GraphicsCommandBuffer, ProcessingCommandBuffer, TransferCommandBuffer, PrimaryCommandBuffer,
-    Primitive, Instance, Adapter, Surface, SwapChain, QueueFamily, QueueSubmit, Factory, SubPass, FrameSync};
+    Primitive, Instance, Adapter, Surface, Swapchain, QueueFamily, QueueSubmit, Factory, SubPass, FrameSync};
 use gfx_corell::format::Formatted;
 use gfx_corell::memory::{self, ImageBarrier, ImageStateSrc, ImageStateDst, ImageLayout, ImageAccess};
 use gfx_corell::factory::{DescriptorHeapType, DescriptorPoolDesc, DescriptorType,

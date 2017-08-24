@@ -84,7 +84,7 @@ impl Drop for SurfaceInner {
     }
 }
 
-pub struct SwapChain {
+pub struct Swapchain {
     surface: Rc<SurfaceInner>,
     pixel_width: u64,
     pixel_height: u64,
@@ -95,7 +95,7 @@ pub struct SwapChain {
     present_index: usize,
 }
 
-impl Drop for SwapChain {
+impl Drop for Swapchain {
     fn drop(&mut self) {
         unsafe {
             for image in self.images.drain(..) {
@@ -238,9 +238,9 @@ impl core::Adapter for Adapter {
 
 impl core::Surface for Surface {
     type Queue = CommandQueue;
-    type SwapChain = SwapChain;
+    type Swapchain = Swapchain;
 
-    fn build_swapchain<T: format::RenderFormat>(&self, queue: &CommandQueue) -> SwapChain {
+    fn build_swapchain<T: format::RenderFormat>(&self, queue: &CommandQueue) -> Swapchain {
         let (mtl_format, cv_format) = match T::get_format() {
             format::Format(SurfaceType::R8_G8_B8_A8, ChannelType::Srgb) => (MTLPixelFormat::RGBA8Unorm_sRGB, native::kCVPixelFormatType_32RGBA),
             _ => panic!("unsupported backbuffer format"), // TODO: more formats
@@ -290,7 +290,7 @@ impl core::Surface for Surface {
                 native::Image(mapped_texture)
             }).collect();
 
-            SwapChain {
+            Swapchain {
                 surface: self.0.clone(),
                 pixel_width,
                 pixel_height,
@@ -304,7 +304,7 @@ impl core::Surface for Surface {
     }
 }
 
-impl core::SwapChain for SwapChain {
+impl core::Swapchain for Swapchain {
     type R = Resources;
     type Image = native::Image;
 
