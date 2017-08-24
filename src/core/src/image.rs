@@ -607,7 +607,7 @@ pub enum ImageLayout {
 bitflags!(
     ///
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-    pub flags ImageAspectFlags: u8 {
+    pub flags AspectFlags: u8 {
         /// Color aspect.
         const ASPECT_COLOR = 0x1,
         /// Depth aspect.
@@ -619,25 +619,28 @@ bitflags!(
 
 bitflags!(
     ///
-    pub flags ImageAccess: u16 {
+    pub flags Access: u16 {
         ///
-        const RENDER_TARGET_CLEAR = 0x20,
+        const RENDER_TARGET_CLEAR    = 0x20,
         ///
-        const RESOLVE_SRC         = 0x100,
+        const RESOLVE_SRC            = 0x100,
         ///
-        const RESOLVE_DST         = 0x200,
+        const RESOLVE_DST            = 0x200,
         ///
-        const COLOR_ATTACHMENT_READ = 0x1,
+        const COLOR_ATTACHMENT_READ  = 0x1,
         ///
         const COLOR_ATTACHMENT_WRITE = 0x2,
         ///
-        const TRANSFER_READ      = 0x4,
+        const TRANSFER_READ          = 0x4,
         ///
-        const TRANSFER_WRITE      = 0x8,
+        const TRANSFER_WRITE         = 0x8,
         ///
-        const SHADER_READ = 0x10,
+        const SHADER_READ           = 0x10,
     }
 );
+
+/// Image state
+pub type State = (Access, ImageLayout);
 
 ///
 pub type Subresource = (Level, Layer);

@@ -17,9 +17,8 @@ use std::sync::Arc;
 use ash::vk;
 use ash::version::DeviceV1_0;
 
-use core::pool;
 use command::{CommandBuffer, SubpassCommandBuffer};
-//use core::command::{GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer};
+use core::pool;
 use {Backend, CommandQueue, RawDevice};
 
 
@@ -42,7 +41,7 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         }
     }
 
-    fn reserve(&mut self, additional: usize) {
+    fn reserve(&mut self, _additional: usize) {
         unimplemented!()
     }
 
@@ -62,11 +61,13 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
             p_inheritance_info: ptr::null(),
         };
 
-        self.device.0.begin_command_buffer(buffer.raw, &info); // TODO: error handling
+        assert_eq!(Ok(()),
+            self.device.0.begin_command_buffer(buffer.raw, &info)
+        );
         buffer
     }
 
-    unsafe fn from_queue<Q>(mut queue: Q, capacity: usize) -> RawCommandPool
+    unsafe fn from_queue<Q>(queue: Q, capacity: usize) -> RawCommandPool
         where Q: AsRef<CommandQueue>
     {
         let queue = queue.as_ref();
@@ -113,10 +114,10 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
 }
 
 pub struct SubpassCommandPool {
-    pool: vk::CommandPool,
-    command_buffers: Vec<SubpassCommandBuffer>,
-    next_buffer: usize,
-    device: Arc<RawDevice>,
+    _pool: vk::CommandPool,
+    _command_buffers: Vec<SubpassCommandBuffer>,
+    _next_buffer: usize,
+    _device: Arc<RawDevice>,
 }
 
 impl pool::SubpassCommandPool<Backend> for SubpassCommandPool {

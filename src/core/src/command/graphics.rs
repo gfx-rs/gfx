@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use {pso, target};
 use {Backend, Viewport};
-use {image, memory, pso, target};
 use buffer::IndexBufferView;
+use image::ImageLayout;
+use memory::Barrier;
 use queue::capability::{Capability, Graphics};
 use super::{BufferCopy, BufferImageCopy, ClearColor, CommandBufferShim, ImageCopy, RawCommandBuffer, Submit};
 
@@ -46,12 +48,12 @@ where
     }
 
     ///
-    pub fn pipeline_barrier(&mut self, barriers: &[memory::Barrier]) {
+    pub fn pipeline_barrier(&mut self, barriers: &[Barrier<B>]) {
         self.0.pipeline_barrier(barriers)
     }
 
     ///
-    pub fn clear_color(&mut self, rtv: &B::RenderTargetView, layout: image::ImageLayout, clear_value: ClearColor) {
+    pub fn clear_color(&mut self, rtv: &B::RenderTargetView, layout: ImageLayout, clear_value: ClearColor) {
         self.0.clear_color(rtv, layout, clear_value)
     }
 
@@ -59,7 +61,7 @@ where
     pub fn clear_depth_stencil(
         &mut self,
         dsv: &B::DepthStencilView,
-        layout: image::ImageLayout,
+        layout: ImageLayout,
         depth_value: Option<target::Depth>,
         stencil_value: Option<target::Stencil>,
     ) {
@@ -83,9 +85,9 @@ where
     pub fn copy_image(
         &mut self,
         src: &B::Image,
-        src_layout: image::ImageLayout,
+        src_layout: ImageLayout,
         dst: &B::Image,
-        dst_layout: image::ImageLayout,
+        dst_layout: ImageLayout,
         regions: &[ImageCopy],
     ) {
         self.0.copy_image(src, src_layout, dst, dst_layout, regions)
@@ -96,7 +98,7 @@ where
         &mut self,
         src: &B::Buffer,
         dst: &B::Image,
-        layout: image::ImageLayout,
+        layout: ImageLayout,
         regions: &[BufferImageCopy],
     ) {
         self.0.copy_buffer_to_image(src, dst, layout, regions)
@@ -107,7 +109,7 @@ where
         &mut self,
         src: &B::Image,
         dst: &B::Buffer,
-        layout: image::ImageLayout,
+        layout: ImageLayout,
         regions: &[BufferImageCopy],
     ) {
         self.0.copy_image_to_buffer(src, dst, layout, regions)
