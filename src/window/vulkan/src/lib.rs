@@ -7,21 +7,15 @@ extern crate gfx_device_vulkan as backend;
 extern crate kernel32;
 
 use ash::vk;
-use ash::version::EntryV1_0;
+use ash::extensions as ext;
 use std::collections::VecDeque;
-use std::{mem, ptr};
+use std::ptr;
 use std::sync::Arc;
 use core::FrameSync;
 use backend::{conversions as conv, native,
-    CommandQueue, Instance, RawInstance, VK_ENTRY,
+    Instance, VK_ENTRY,
 };
 
-/*
-#[cfg(unix)]
-use winit::os::unix::WindowExt;
-#[cfg(target_os = "windows")]
-use winit::os::windows::WindowExt;
-*/
 
 pub struct Surface {
     // Vk (EXT) specs [29.2.7 Platform-Independent Information]
@@ -32,33 +26,29 @@ pub struct Surface {
 }
 
 pub struct RawSurface {
-    instance: Arc<RawInstance>,
-    pub handle: vk::SurfaceKHR,
-    pub loader: vk::SurfaceFn,
+    handle: vk::SurfaceKHR,
+    functor: ext::Surface,
+    instance: Arc<backend::RawInstance>,
 }
 
 impl Drop for RawSurface {
     fn drop(&mut self) {
-        unsafe { self.loader.destroy_surface_khr(self.instance.0.handle(), self.handle, ptr::null()); }
+        unsafe {
+            self.functor.destroy_surface_khr(self.handle, None);
+        }
     }
 }
 
 impl Surface {
     fn from_raw(instance: &Instance, surface: vk::SurfaceKHR, (width, height): (u32, u32)) -> Surface {
-        let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
-
-        let loader = vk::SurfaceFn::load(|name| {
-                unsafe {
-                    mem::transmute(entry.get_instance_proc_addr(
-                        instance.raw.0.handle(),
-                        name.as_ptr()))
-                }
-            }).expect("Unable to load surface functions");
+        let entry = VK_ENTRY.as_ref().expect("Unable to load Vulkan entry points");
+        let functor = ext::Surface::new(entry, &instance.raw.0)
+            .expect("Unable to load surface functions");
 
         let raw = Arc::new(RawSurface {
-            instance: instance.raw.clone(),
             handle: surface,
-            loader,
+            functor,
+            instance: instance.raw.clone(),
         });
 
         Surface {
@@ -109,7 +99,7 @@ impl Surface {
         use winit::os::windows::WindowExt;
         let entry = VK_ENTRY.as_ref().expect("Unable to load Vulkan entry points");
         let win32_loader = ash::extensions::Win32Surface::new(entry, &instance.raw)
-                        .expect("Unable to load win32 surface functions");
+            .expect("Unable to load win32 surface functions");
 
         let surface = unsafe {
             let info = vk::Win32SurfaceCreateInfoKHR {
@@ -124,7 +114,7 @@ impl Surface {
                 .expect("Error on surface creation")
         };
 
-        Surface::from_raw(instance, surface, window.get_inner_size_pixels().unwrap())
+        Self::from_raw(instance, surface, window.get_inner_size_pixels().unwrap())
     }
 }
 
@@ -132,32 +122,23 @@ impl core::Surface<backend::Backend> for Surface {
     type Swapchain = Swapchain;
 
     fn supports_queue(&self, queue_family: &backend::QueueFamily) -> bool {
-        unsafe {
-            let mut support = mem::uninitialized();
-            self.raw.loader.get_physical_device_surface_support_khr(
-                queue_family.device(),
-                queue_family.family_index(),
-                self.raw.handle,
-                &mut support);
-            support == vk::VK_TRUE
-        }
+        self.raw.functor.get_physical_device_surface_support_khr(
+            queue_family.device(),
+            queue_family.family_index(), //Note: should be queue index?
+            self.raw.handle,
+        )
     }
 
     fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, present_queue: &Q) -> Self::Swapchain
         where Q: AsRef<backend::CommandQueue>
     {
-        let entry = VK_ENTRY.as_ref().expect("Unable to load vulkan entry points");
-        let loader = vk::SwapchainFn::load(|name| {
-                unsafe {
-                    mem::transmute(entry.get_instance_proc_addr(
-                        self.raw.instance.0.handle(),
-                        name.as_ptr()))
-                }
-            }).expect("Unable to load swapchain functions");
+        let functor = ext::Swapchain::new(
+            &self.raw.instance.0,
+            &present_queue.as_ref().device().0,
+            ).expect("Unable to query swapchain function");
 
         // TODO: check for better ones if available
         let present_mode = vk::PresentModeKHR::Fifo; // required to be supported
-        let present_queue = present_queue.as_ref();
 
         // TODO: handle depth stencil
         let format = config.color_format;
@@ -187,35 +168,16 @@ impl core::Surface<backend::Backend> for Surface {
         };
 
         let swapchain = unsafe {
-            let mut swapchain = mem::zeroed();
-            assert_eq!(vk::Result::Success,
-                loader.create_swapchain_khr(
-                    present_queue.device_handle(),
-                    &info,
-                    ptr::null(),
-                    &mut swapchain)
-            );
-            swapchain
-        };
+            functor.create_swapchain_khr(&info, None)
+        }.expect("Unable to create a swapchain");
 
-        let backbuffers = unsafe {
-            // TODO: error handling
-            let mut count = 0;
-            loader.get_swapchain_images_khr(
-                present_queue.device_handle(),
-                swapchain,
-                &mut count,
-                ptr::null_mut());
+        let backbuffer_images = {
+            functor.get_swapchain_images_khr(swapchain)
+        }.expect("Unable to get swapchain images");
 
-            let mut v = Vec::with_capacity(count as vk::size_t);
-            loader.get_swapchain_images_khr(
-                present_queue.device_handle(),
-                swapchain,
-                &mut count,
-                v.as_mut_ptr());
-
-            v.set_len(count as vk::size_t);
-            v.into_iter().map(|image| {
+        let backbuffers = backbuffer_images
+            .into_iter()
+            .map(|image| {
                 core::Backbuffer {
                     color: native::Image {
                         raw: image,
@@ -228,44 +190,25 @@ impl core::Surface<backend::Backend> for Surface {
                     },
                     depth_stencil: None,
                 }
-            }).collect()
-        };
+            }).collect();
 
-        Swapchain::from_raw(
-            swapchain,
-            present_queue,
-            loader,
-            backbuffers,
-        )
-    }
-}
-
-pub struct Swapchain {
-    raw: vk::SwapchainKHR,
-    device: Arc<backend::RawDevice>,
-    swapchain_fn: vk::SwapchainFn,
-    backbuffers: Vec<core::Backbuffer<backend::Backend>>,
-    // Queued up frames for presentation
-    frame_queue: VecDeque<usize>,
-}
-
-impl Swapchain {
-    fn from_raw(
-        raw: vk::SwapchainKHR,
-        queue: &CommandQueue,
-        swapchain_fn: vk::SwapchainFn,
-        backbuffers: Vec<core::Backbuffer<backend::Backend>>,
-    ) -> Self
-    {
         Swapchain {
-            raw,
-            device: queue.device(),
-            swapchain_fn,
+            raw: swapchain,
+            functor,
             backbuffers,
             frame_queue: VecDeque::new(),
         }
     }
 }
+
+pub struct Swapchain {
+    raw: vk::SwapchainKHR,
+    functor: ext::Swapchain,
+    backbuffers: Vec<core::Backbuffer<backend::Backend>>,
+    // Queued up frames for presentation
+    frame_queue: VecDeque<usize>,
+}
+
 
 impl core::Swapchain<backend::Backend> for Swapchain {
     fn get_backbuffers(&mut self) -> &[core::Backbuffer<backend::Backend>] {
@@ -273,37 +216,29 @@ impl core::Swapchain<backend::Backend> for Swapchain {
     }
 
     fn acquire_frame(&mut self, sync: FrameSync<backend::Backend>) -> core::Frame {
-        let index = {
-            let acquire = |semaphore, fence| {
-                unsafe {
-                    let mut index = mem::uninitialized();
-                    self.swapchain_fn.acquire_next_image_khr(
-                            self.device.0.handle(),
-                            self.raw,
-                            std::u64::MAX, // will block if no image is available
-                            semaphore,
-                            fence,
-                            &mut index);
-                    index
-                }
-            };
-
-            match sync {
-                FrameSync::Semaphore(semaphore) => {
-                    acquire(semaphore.0, vk::Fence::null())
-                }
-                FrameSync::Fence(fence) => {
-                    acquire(vk::Semaphore::null(), fence.0)
-                }
+        let (semaphore, fence) = match sync {
+            FrameSync::Semaphore(semaphore) => {
+                (semaphore.0, vk::Fence::null())
+            }
+            FrameSync::Fence(fence) => {
+                (vk::Semaphore::null(), fence.0)
             }
         };
+
+        let index = unsafe {
+            // will block if no image is available
+            self.functor.acquire_next_image_khr(self.raw, std::u64::MAX, semaphore, fence)
+        }.expect("Unable to acquire a swapchain image");
 
         self.frame_queue.push_back(index as usize);
         core::Frame::new(index as usize)
     }
 
-    fn present<Q>(&mut self, present_queue: &mut Q, wait_semaphores: &[&native::Semaphore])
-        where Q: AsMut<backend::CommandQueue>
+    fn present<Q>(&mut self,
+        present_queue: &mut Q,
+        wait_semaphores: &[&native::Semaphore],
+    ) where
+        Q: AsMut<backend::CommandQueue>
     {
         let frame = self.frame_queue
             .pop_front()
@@ -326,9 +261,9 @@ impl core::Swapchain<backend::Backend> for Swapchain {
             p_results: ptr::null_mut(),
         };
 
-        unsafe {
-            self.swapchain_fn.queue_present_khr(*present_queue.as_mut().raw(), &info);
-        }
+        assert_eq!(Ok(()), unsafe {
+            self.functor.queue_present_khr(*present_queue.as_mut().raw(), &info)
+        });
         // TODO: handle result and return code
     }
 }
@@ -340,7 +275,7 @@ impl core::WindowExt<backend::Backend> for Window {
     type Adapter = backend::Adapter;
 
     fn get_surface_and_adapters(&mut self) -> (Surface, Vec<backend::Adapter>) {
-        let instance = Instance::create();
+        let instance = Instance::create("gfx-rs demo", 0);
         let surface = Surface::from_window(&self.0, &instance);
         let adapters = Instance::enumerate_adapters(&instance);
         (surface, adapters)
