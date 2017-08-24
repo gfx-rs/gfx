@@ -197,7 +197,7 @@ fn main() {
         binding: 0,
         element: pso::Element {
             format: <Vec2<f32> as Formatted>::get_format(),
-            offset: 8
+            offset: 0,
         },
     });
     pipeline_desc.attributes.push(pso::AttributeDesc {
@@ -259,11 +259,9 @@ fn main() {
     };
 
     // TODO: check transitions: read/write mapping and vertex buffer read
-
-    {
-        let mut mapping = device.write_mapping::<Vertex>(&vertex_buffer, 0, buffer_len).unwrap();
-        mapping.copy_from_slice(&QUAD);
-    }
+    device.write_mapping::<Vertex>(&vertex_buffer, 0, buffer_len)
+          .unwrap()
+          .copy_from_slice(&QUAD);
 
     // Image
     let img_data = include_bytes!("data/logo.png");

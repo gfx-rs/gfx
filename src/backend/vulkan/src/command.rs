@@ -5,7 +5,7 @@ use ash::vk;
 use ash::version::DeviceV1_0;
 
 use core::{command, memory, pso, target};
-use core::{VertexCount, VertexOffset, Viewport};
+use core::{IndexCount, VertexCount, VertexOffset, Viewport};
 use core::buffer::IndexBufferView;
 use core::command::{
     BufferCopy, BufferImageCopy, ClearColor, ClearValue, ImageCopy, ImageResolve,
@@ -306,9 +306,12 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
             vbs.0.iter().map(|&(_, offset)| offset as u64).collect();
 
         unsafe {
-            self.device
-                .0
-                .cmd_bind_vertex_buffers(self.raw, 0, &buffers, &offsets);
+            self.device.0.cmd_bind_vertex_buffers(
+                self.raw,
+                0,
+                &buffers,
+                &offsets,
+            );
         }
     }
 
@@ -387,9 +390,11 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
         unsafe {
-            self.device
-                .0
-                .cmd_bind_pipeline(self.raw, vk::PipelineBindPoint::Graphics, pipeline.0)
+            self.device.0.cmd_bind_pipeline(
+                self.raw,
+                vk::PipelineBindPoint::Graphics,
+                pipeline.0,
+            )
         }
     }
 
@@ -416,9 +421,11 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn bind_compute_pipeline(&mut self, pipeline: &n::ComputePipeline) {
         unsafe {
-            self.device
-                .0
-                .cmd_bind_pipeline(self.raw, vk::PipelineBindPoint::Compute, pipeline.0)
+            self.device.0.cmd_bind_pipeline(
+                self.raw,
+                vk::PipelineBindPoint::Compute,
+                pipeline.0,
+            )
         }
     }
 
@@ -435,9 +442,11 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: u64) {
         unsafe {
-            self.device
-                .0
-                .cmd_dispatch_indirect(self.raw, buffer.raw, offset)
+            self.device.0.cmd_dispatch_indirect(
+                self.raw,
+                buffer.raw,
+                offset,
+            )
         }
     }
 
@@ -454,9 +463,12 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
             .collect();
 
         unsafe {
-            self.device
-                .0
-                .cmd_copy_buffer(self.raw, src.raw, dst.raw, &regions)
+            self.device.0.cmd_copy_buffer(
+                self.raw,
+                src.raw,
+                dst.raw,
+                &regions,
+            )
         }
     }
 
@@ -566,15 +578,12 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn draw_indexed(
         &mut self,
-        start: VertexCount,
-        count: VertexCount,
+        start: IndexCount,
+        count: IndexCount,
         base: VertexOffset,
         instances: Option<InstanceParams>,
     ) {
-        let (num_instances, start_instance) = match instances {
-            Some((num_instances, start_instance)) => (num_instances, start_instance),
-            None => (1, 0),
-        };
+        let (num_instances, start_instance) = instances.unwrap_or((1, 0));
 
         unsafe {
             self.device.0.cmd_draw_indexed(
