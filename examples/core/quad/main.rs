@@ -380,7 +380,7 @@ fn main() {
 
         let submission = Submission::new()
             .submit(&[submit]);
-        queue.submit(&[submission], Some(&mut frame_fence));
+        queue.submit(submission, Some(&mut frame_fence));
 
         device.wait_for_fences(&[&frame_fence], d::WaitFor::All, !0);
     }
@@ -423,17 +423,16 @@ fn main() {
             cmd_buffer.set_scissors(&[scissor]);
             cmd_buffer.bind_graphics_pipeline(&pipelines[0].as_ref().unwrap());
             cmd_buffer.bind_vertex_buffers(pso::VertexBufferSet(vec![(&vertex_buffer, 0)]));
-            //cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, &[&set0[0], &set1[0]]); //TODO
+            cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, &[&set0[0], &set1[0]]); //TODO
 
-            /*{
-                let mut encoder = cmd_buffer.begin_render_pass_inline(
-                    &render_pass,
-                    &framebuffers[frame.id()],
-                    Rect { x: 0, y: 0, w: pixel_width, h: pixel_height },
-                    &[command::ClearValue::Color(command::ClearColor::Float([0.8, 0.8, 0.8, 1.0]))]);
-
-                encoder.draw(0, 6, None);
-            }*/
+            cmd_buffer.begin_renderpass_inline(
+                &render_pass,
+                &framebuffers[frame.id()],
+                Rect { x: 0, y: 0, w: pixel_width, h: pixel_height },
+                &[command::ClearValue::Color(command::ClearColor::Float([0.8, 0.8, 0.8, 1.0]))],
+            );
+            cmd_buffer.draw(0, 6, None);
+            cmd_buffer.end_renderpass();
 
             let rtv_present_barrier = m::Barrier::Image {
                 state_src: (i::COLOR_ATTACHMENT_WRITE, i::ImageLayout::ColorAttachmentOptimal),
@@ -449,7 +448,7 @@ fn main() {
         let submission = Submission::new()
             .wait_on(&[(&mut frame_semaphore, pso::BOTTOM_OF_PIPE)])
             .submit(&[submit]);
-        queue.submit(&[submission], Some(&mut frame_fence));
+        queue.submit(submission, Some(&mut frame_fence));
 
         // TODO: replace with semaphore
         device.wait_for_fences(&[&frame_fence], d::WaitFor::All, !0);

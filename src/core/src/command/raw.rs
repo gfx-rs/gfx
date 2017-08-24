@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use {pso, target};
-use {Backend, VertexCount, VertexOffset, Viewport};
+use {Backend, IndexCount, VertexCount, VertexOffset, Viewport};
 use buffer::IndexBufferView;
 use image::ImageLayout;
 use memory::Barrier;
@@ -158,12 +158,16 @@ pub trait RawCommandBuffer<B: Backend> {
         regions: &[BufferImageCopy],
     );
     ///
-    fn draw(&mut self, start: VertexCount, count: VertexCount, instance: Option<InstanceParams>);
+    fn draw(&mut self,
+        start: VertexCount,
+        count: VertexCount,
+        instance: Option<InstanceParams>,
+    );
     ///
     fn draw_indexed(
         &mut self,
-        start: VertexCount,
-        count: VertexCount,
+        start: IndexCount,
+        count: IndexCount,
         base: VertexOffset,
         instance: Option<InstanceParams>,
     );
