@@ -70,7 +70,7 @@ bitflags!(
     }
 );
 
-///
+/// Buffer state
 pub type State = Access;
 
 /// Index buffer view for `bind_index_buffer`.

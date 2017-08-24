@@ -401,12 +401,46 @@ impl CommandQueue {
 }
 
 impl core::CommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw<'a, I>(
-        &mut self,
-        _submit_infos: I,
-        _fence: Option<&native::Fence>,
-    ) where I: Iterator<Item=core::RawSubmission<'a, Backend>> {
-        unimplemented!()
+    unsafe fn submit_raw(&mut self,
+        submission: core::RawSubmission<Backend>,
+        fence: Option<&native::Fence>,
+    ){
+        let buffers = submission.cmd_buffers
+            .iter()
+            .map(|cmd| cmd.command_buffer)
+            .collect::<Vec<_>>();
+        let waits = submission.wait_semaphores
+            .iter()
+            .map(|&(ref semaphore, _)| semaphore.0)
+            .collect::<Vec<_>>();
+        let stages = submission.wait_semaphores
+            .iter()
+            .map(|&(_, stage)| conversions::map_pipeline_stage(stage))
+            .collect::<Vec<_>>();
+        let signals = submission.signal_semaphores
+            .iter()
+            .map(|semaphore| semaphore.0)
+            .collect::<Vec<_>>();
+
+        let info = vk::SubmitInfo {
+            s_type: vk::StructureType::SubmitInfo,
+            p_next: ptr::null(),
+            wait_semaphore_count: waits.len() as u32,
+            p_wait_semaphores: waits.as_ptr(),
+            // If count is zero, AMD driver crashes if nullptr is not set for stage masks
+            p_wait_dst_stage_mask: if stages.is_empty() { ptr::null() } else { stages.as_ptr() },
+            command_buffer_count: buffers.len() as u32,
+            p_command_buffers: buffers.as_ptr(),
+            signal_semaphore_count: signals.len() as u32,
+            p_signal_semaphores: signals.as_ptr(),
+        };
+
+        let fence_raw = fence
+            .map(|fence| fence.0)
+            .unwrap_or(vk::Fence::null());
+
+        let result = self.device.0.queue_submit(*self.raw, &[info], fence_raw);
+        assert_eq!(Ok(()), result);
     }
 }
 
