@@ -70,6 +70,22 @@ bitflags!(
     }
 );
 
+bitflags!(
+    /// Buffer state flags.
+    pub flags Access: u16 {
+        ///
+        const INDEX_BUFFER_READ      = 0x1,
+        ///
+        const VERTEX_BUFFER_READ     = 0x2,
+        ///
+        const CONSTANT_BUFFER_READ   = 0x4,
+        ///
+        const INDIRECT_COMMAND_READ  = 0x8,
+    }
+);
+
+///
+pub type State = Access;
 
 /// Index buffer view for `bind_index_buffer`.
 pub struct IndexBufferView<'a, B: Backend> {

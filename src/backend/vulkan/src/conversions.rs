@@ -180,7 +180,7 @@ pub fn map_image_layout(layout: image::ImageLayout) -> vk::ImageLayout {
     }
 }
 
-pub fn map_image_aspects(aspects: image::ImageAspectFlags) -> vk::ImageAspectFlags {
+pub fn map_image_aspects(aspects: image::AspectFlags) -> vk::ImageAspectFlags {
     let mut flags = vk::ImageAspectFlags::empty();
     if aspects.contains(image::ASPECT_COLOR) {
         flags |= vk::IMAGE_ASPECT_COLOR_BIT;
@@ -234,18 +234,40 @@ pub fn map_extent(offset: Extent) -> vk::Extent3D {
     }
 }
 
-pub fn map_subresource_layers(aspect_mask: vk::ImageAspectFlags, subresource: &image::SubresourceLayers) -> vk::ImageSubresourceLayers {
+pub fn map_subresource_layers(
+    aspect_mask: vk::ImageAspectFlags,
+    &(level, ref layers): &image::SubresourceLayers,
+) -> vk::ImageSubresourceLayers
+{
     vk::ImageSubresourceLayers {
         aspect_mask,
-        mip_level: subresource.0 as u32,
-        base_array_layer: subresource.1.start as u32,
-        layer_count: subresource.1.end as u32,
+        mip_level: level as u32,
+        base_array_layer: layers.start as u32,
+        layer_count: (layers.end - layers.start) as u32,
     }
 }
 
-pub fn map_subresource_with_layers(aspect_mask: vk::ImageAspectFlags, subresource: image::Subresource, layers: image::Layer) -> vk::ImageSubresourceLayers {
-    let (mip_level, base_layer) = subresource;
+pub fn map_subresource_with_layers(
+    aspect_mask: vk::ImageAspectFlags,
+    (mip_level, base_layer): image::Subresource,
+    layers: image::Layer,
+) -> vk::ImageSubresourceLayers
+{
     map_subresource_layers(aspect_mask, &(mip_level, base_layer..base_layer+layers))
+}
+
+pub fn map_subresource_range(
+    aspect_mask: vk::ImageAspectFlags,
+    &(ref levels, ref layers): &image::SubresourceRange,
+) -> vk::ImageSubresourceRange
+{
+    vk::ImageSubresourceRange {
+        aspect_mask,
+        base_mip_level: levels.start as u32,
+        level_count: (levels.end - levels.start) as u32,
+        base_array_layer: layers.start as u32,
+        layer_count: (layers.end - layers.start) as u32,
+    }
 }
 
 pub fn map_attachment_load_op(op: pass::AttachmentLoadOp) -> vk::AttachmentLoadOp {
@@ -265,7 +287,26 @@ pub fn map_attachment_store_op(op: pass::AttachmentStoreOp) -> vk::AttachmentSto
     }
 }
 
-pub fn map_image_access(access: image::ImageAccess) -> vk::AccessFlags {
+pub fn map_buffer_access(access: buffer::Access) -> vk::AccessFlags {
+    let mut flags = vk::AccessFlags::empty();
+
+    if access.contains(buffer::INDEX_BUFFER_READ) {
+        flags |= vk::ACCESS_INDEX_READ_BIT;
+    }
+    if access.contains(buffer::VERTEX_BUFFER_READ) {
+        flags |= vk::ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+    }
+    if access.contains(buffer::CONSTANT_BUFFER_READ) {
+        flags |= vk::ACCESS_UNIFORM_READ_BIT;
+    }
+    if access.contains(buffer::INDIRECT_COMMAND_READ) {
+        flags |= vk::ACCESS_INDIRECT_COMMAND_READ_BIT;
+    }
+
+    flags
+}
+
+pub fn map_image_access(access: image::Access) -> vk::AccessFlags {
     let mut flags = vk::AccessFlags::empty();
 
     if access.contains(image::RENDER_TARGET_CLEAR) {

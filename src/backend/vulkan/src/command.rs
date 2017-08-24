@@ -12,8 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{cmp, ptr};
+use std::sync::Arc;
+use smallvec::SmallVec;
 use ash::vk;
 use ash::version::DeviceV1_0;
+
 use core::{command, memory, pso, target};
 use core::{VertexCount, VertexOffset, Viewport};
 use core::buffer::IndexBufferView;
@@ -22,10 +26,9 @@ use core::command::{
     InstanceParams, SubpassContents,
 };
 use core::image::ImageLayout;
-use {conversions as conv, native as n, Backend, RawDevice};
-use std::{cmp, ptr};
-use std::sync::Arc;
-use smallvec::SmallVec;
+use {conversions as conv, native as n};
+use {Backend, RawDevice};
+
 
 #[derive(Clone)]
 pub struct SubmitInfo {
@@ -110,8 +113,71 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn pipeline_barrier(&mut self, _barriers: &[memory::Barrier]) {
-        unimplemented!()
+    fn pipeline_barrier(&mut self, barriers: &[memory::Barrier<Backend>]) {
+        let mut memory_bars: SmallVec<[vk::MemoryBarrier; 4]> = SmallVec::new();
+        let mut buffer_bars: SmallVec<[vk::BufferMemoryBarrier; 4]> = SmallVec::new();
+        let mut image_bars: SmallVec<[vk::ImageMemoryBarrier; 4]> = SmallVec::new();
+
+        for barrier in barriers {
+            match *barrier {
+                memory::Barrier::AllBuffers { access_src, access_dst } => {
+                    memory_bars.push(vk::MemoryBarrier {
+                        s_type: vk::StructureType::MemoryBarrier,
+                        p_next: ptr::null(),
+                        src_access_mask: conv::map_buffer_access(access_src),
+                        dst_access_mask: conv::map_buffer_access(access_dst),
+                    });
+                }
+                memory::Barrier::AllImages { access_src, access_dst } => {
+                    memory_bars.push(vk::MemoryBarrier {
+                        s_type: vk::StructureType::MemoryBarrier,
+                        p_next: ptr::null(),
+                        src_access_mask: conv::map_image_access(access_src),
+                        dst_access_mask: conv::map_image_access(access_dst),
+                    });
+                }
+                memory::Barrier::Buffer { state_src, state_dst, target, ref range } => {
+                    buffer_bars.push(vk::BufferMemoryBarrier {
+                        s_type: vk::StructureType::BufferMemoryBarrier,
+                        p_next: ptr::null(),
+                        src_access_mask: conv::map_buffer_access(state_src),
+                        dst_access_mask: conv::map_buffer_access(state_dst),
+                        src_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
+                        dst_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
+                        buffer: target.raw,
+                        offset: range.start,
+                        size: range.end - range.start,
+                    });
+                }
+                memory::Barrier::Image { state_src, state_dst, target, ref range } => {
+                    let subresource_range = conv::map_subresource_range(vk::IMAGE_ASPECT_COLOR_BIT, range);
+                    image_bars.push(vk::ImageMemoryBarrier {
+                        s_type: vk::StructureType::ImageMemoryBarrier,
+                        p_next: ptr::null(),
+                        src_access_mask: conv::map_image_access(state_src.0),
+                        dst_access_mask: conv::map_image_access(state_dst.0),
+                        old_layout: conv::map_image_layout(state_src.1),
+                        new_layout: conv::map_image_layout(state_dst.1),
+                        src_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
+                        dst_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
+                        image: target.raw,
+                        subresource_range,
+                    });
+                }
+            }
+        }
+
+        unsafe {
+            self.device.0.cmd_pipeline_barrier(
+                self.raw, // commandBuffer
+                vk::PIPELINE_STAGE_ALL_GRAPHICS_BIT, // srcStageMask // TODO
+                vk::PIPELINE_STAGE_ALL_GRAPHICS_BIT, // dstStageMask // TODO
+                vk::DependencyFlags::empty(), // dependencyFlags // TODO
+                &memory_bars,
+                &buffer_bars,
+                &image_bars,
+            );
+        }
     }
 
     fn clear_color(
@@ -457,14 +523,13 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
             .iter()
             .map(|region| {
                 let aspect_mask = conv::map_image_aspects(region.image_aspect);
-                let subresource_layers =
-                    conv::map_subresource_layers(aspect_mask, &region.image_subresource);
                 let row_length = div(region.buffer_row_pitch, dst.bytes_per_texel as u32);
+                let image_subresource = conv::map_subresource_layers(aspect_mask, &region.image_subresource);
                 vk::BufferImageCopy {
                     buffer_offset: region.buffer_offset,
                     buffer_row_length: row_length,
                     buffer_image_height: div(region.buffer_slice_pitch, row_length),
-                    image_subresource: subresource_layers,
+                    image_subresource,
                     image_offset: vk::Offset3D {
                         x: region.image_offset.x,
                         y: region.image_offset.y,
@@ -488,10 +553,10 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn copy_image_to_buffer(
         &mut self,
-        src: &n::Image,
-        dst: &n::Buffer,
-        layout: ImageLayout,
-        regions: &[BufferImageCopy],
+        _src: &n::Image,
+        _dst: &n::Buffer,
+        _layout: ImageLayout,
+        _regions: &[BufferImageCopy],
     ) {
         unimplemented!()
     }

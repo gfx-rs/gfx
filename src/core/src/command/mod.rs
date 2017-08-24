@@ -153,7 +153,7 @@ pub struct ImageResolve {
 #[derive(Clone, Debug)]
 pub struct ImageCopy {
     ///
-    pub aspect_mask: image::ImageAspectFlags,
+    pub aspect_mask: image::AspectFlags,
     ///
     pub src_subresource: image::Subresource,
     ///
@@ -178,7 +178,7 @@ pub struct BufferImageCopy {
     ///
     pub buffer_slice_pitch: u32,
     ///
-    pub image_aspect: image::ImageAspectFlags,
+    pub image_aspect: image::AspectFlags,
     ///
     pub image_subresource: image::SubresourceLayers,
     ///

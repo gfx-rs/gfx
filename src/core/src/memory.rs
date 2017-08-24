@@ -14,7 +14,9 @@
 
 //! Types to describe the properties of memory allocated for gfx resources.
 
-use std::mem;
+use std::{mem, ops};
+use {buffer, image};
+use Backend;
 
 // TODO: It would be useful to document what parameters these map to in D3D, vulkan, etc.
 
@@ -176,15 +178,29 @@ bitflags!(
     }
 );
 
-///
-#[derive(Clone, Copy, Debug)]
-pub enum Barrier {
-    ///
-    Memory,
-    ///
-    Buffer,
-    ///
-    Image,
+#[allow(missing_docs)] //TODO
+#[derive(Clone, Debug)]
+pub enum Barrier<'a, B: Backend> {
+    AllBuffers {
+        access_src: buffer::Access,
+        access_dst: buffer::Access,
+    },
+    AllImages {
+        access_src: image::Access,
+        access_dst: image::Access,
+    },
+    Buffer {
+        state_src: buffer::State,
+        state_dst: buffer::State,
+        target: &'a B::Buffer,
+        range: ops::Range<u64>,
+    },
+    Image {
+        state_src: image::State,
+        state_dst: image::State,
+        target: &'a B::Image,
+        range: image::SubresourceRange,
+    },
 }
 
 #[derive(Clone, Copy, Debug)]
