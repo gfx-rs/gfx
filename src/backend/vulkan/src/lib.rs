@@ -355,7 +355,7 @@ impl core::Adapter<Backend> for Adapter {
                     family_index: info.queue_family_index,
                 };
                 unsafe {
-                    core::GeneralQueue::new(queue)
+                    core::CommandQueue::new(queue)
                 }
             }).collect::<Vec<_>>()
         }).collect();
@@ -419,7 +419,7 @@ impl CommandQueue {
     }
 }
 
-impl core::CommandQueue<Backend> for CommandQueue {
+impl core::RawCommandQueue<Backend> for CommandQueue {
     unsafe fn submit_raw(&mut self,
         submission: core::RawSubmission<Backend>,
         fence: Option<&native::Fence>,

@@ -37,14 +37,17 @@ use std::fmt::{self, Debug};
 use std::hash::Hash;
 
 pub use self::adapter::{Adapter, AdapterInfo};
+pub use self::command::{RawCommandBuffer};
 pub use self::device::Device;
-pub use self::pool::{ComputeCommandPool, GeneralCommandPool, GraphicsCommandPool, RawCommandPool,
-                     SubpassCommandPool, TransferCommandPool};
+pub use self::pool::{CommandPool, RawCommandPool, SubpassCommandPool};
 pub use self::pso::{DescriptorPool};
-pub use self::queue::{CommandQueue, QueueType, RawSubmission, Submission, QueueFamily,
-                      ComputeQueue, GeneralQueue, GraphicsQueue, TransferQueue};
-pub use self::window::{Backbuffer, Frame, FrameSync, Surface, SwapChain, SwapchainConfig,
-                       WindowExt};
+pub use self::queue::{
+    CommandQueue, QueueFamily, QueueType, RawCommandQueue, RawSubmission, Submission,
+    General, Graphics, Compute, Transfer,
+};
+pub use self::window::{
+    Backbuffer, Frame, FrameSync, Surface, SwapChain, SwapchainConfig, WindowExt,
+};
 pub use draw_state::{state, target};
 
 pub mod adapter;
@@ -229,14 +232,14 @@ pub struct HeapType {
 /// Different types of a specific API.
 #[allow(missing_docs)]
 pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
-    type Adapter: Adapter<Self>;
-    type Device: Device<Self>;
+    type Adapter:            Adapter<Self>;
+    type Device:             Device<Self>;
 
-    type CommandQueue: CommandQueue<Self>;
-    type RawCommandBuffer: command::RawCommandBuffer<Self>;
+    type CommandQueue:       RawCommandQueue<Self>;
+    type RawCommandBuffer:   RawCommandBuffer<Self>;
     type SubpassCommandBuffer;
-    type QueueFamily: QueueFamily;
-    type SubmitInfo: Clone + Send;
+    type QueueFamily:        QueueFamily;
+    type SubmitInfo:         Clone + Send;
 
     type ShaderLib:           Debug + Any + Send + Sync;
     type RenderPass:          Debug + Any + Send + Sync;
@@ -262,7 +265,7 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type ComputePipeline:     Debug + Any + Send + Sync;
     type GraphicsPipeline:    Debug + Any + Send + Sync;
     type PipelineLayout:      Debug + Any + Send + Sync;
-    type DescriptorPool: DescriptorPool<Self>;
+    type DescriptorPool:      DescriptorPool<Self>;
     type DescriptorSet:       Debug + Any + Send + Sync;
     type DescriptorSetLayout: Debug + Any;
 
@@ -303,13 +306,13 @@ pub struct Gpu<B: Backend> {
     /// Logical device.
     pub device: B::Device,
     /// General command queues.
-    pub general_queues: Vec<GeneralQueue<B>>,
+    pub general_queues: Vec<CommandQueue<B, General>>,
     /// Graphics command queues.
-    pub graphics_queues: Vec<GraphicsQueue<B>>,
+    pub graphics_queues: Vec<CommandQueue<B, Graphics>>,
     /// Compute command queues.
-    pub compute_queues: Vec<ComputeQueue<B>>,
+    pub compute_queues: Vec<CommandQueue<B, Compute>>,
     /// Transfer command queues.
-    pub transfer_queues: Vec<TransferQueue<B>>,
+    pub transfer_queues: Vec<CommandQueue<B, Transfer>>,
     /// Types of memory heaps.
     pub heap_types: Vec<HeapType>,
     /// Memory heaps.
