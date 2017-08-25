@@ -13,85 +13,23 @@
 // limitations under the License.
 
 use Backend;
-use image;
-use queue::capability::{Capability, Compute};
-use super::{BufferCopy, BufferImageCopy, CommandBufferShim, ImageCopy, RawCommandBuffer, Submit};
+use queue::capability::{Compute, Supports};
+use super::{CommandBuffer, RawCommandBuffer};
 
-/// Command buffer with compute and transfer functionality.
-pub struct ComputeCommandBuffer<'a, B: Backend>(pub(crate) &'a mut B::RawCommandBuffer)
-where
-    B::RawCommandBuffer: 'a;
 
-impl<'a, B: Backend> Capability for ComputeCommandBuffer<'a, B> {
-    type Capability = Compute;
-}
-
-impl<'a, B: Backend> CommandBufferShim<'a, B> for ComputeCommandBuffer<'a, B> {
-    fn raw(&'a mut self) -> &'a mut B::RawCommandBuffer {
-        &mut self.0
-    }
-}
-
-impl<'a, B: Backend> ComputeCommandBuffer<'a, B> {
-    /// Finish recording commands to the command buffers.
-    ///
-    /// The command buffer will be consumed and can't be modified further.
-    /// The command pool must be reset to able to re-record commands.
-    pub fn finish(self) -> Submit<B, Compute> {
-        Submit::new(self.0.finish())
-    }
-
+impl<'a, B: Backend, C: Supports<Compute>> CommandBuffer<'a, B, C> {
     ///
     pub fn bind_compute_pipeline(&mut self, pipeline: &B::ComputePipeline) {
-        self.0.bind_compute_pipeline(pipeline)
+        self.raw.bind_compute_pipeline(pipeline)
     }
 
     ///
     pub fn dispatch(&mut self, x: u32, y: u32, z: u32) {
-        self.0.dispatch(x, y, z)
+        self.raw.dispatch(x, y, z)
     }
 
     ///
     pub fn dispatch_indirect(&mut self, buffer: &B::Buffer, offset: u64) {
-        self.0.dispatch_indirect(buffer, offset)
-    }
-
-    ///
-    pub fn copy_buffer(&mut self, src: &B::Buffer, dst: &B::Buffer, regions: &[BufferCopy]) {
-        self.0.copy_buffer(src, dst, regions)
-    }
-
-    ///
-    pub fn copy_image(
-        &mut self,
-        src: &B::Image,
-        src_layout: image::ImageLayout,
-        dst: &B::Image,
-        dst_layout: image::ImageLayout,
-        regions: &[ImageCopy],
-    ) {
-        self.0.copy_image(src, src_layout, dst, dst_layout, regions)
-    }
-
-    ///
-    pub fn copy_buffer_to_image(
-        &mut self,
-        src: &B::Buffer,
-        dst: &B::Image,
-        layout: image::ImageLayout,
-        regions: &[BufferImageCopy],
-    ) {
-        self.0.copy_buffer_to_image(src, dst, layout, regions)
-    }
-
-    ///
-    pub fn copy_image_to_buffer(
-        &mut self,
-        src: &B::Image,
-        dst: &B::Buffer,
-        layout: image::ImageLayout,
-        regions: &[BufferImageCopy],
-    ) {
-        self.0.copy_image_to_buffer(src, dst, layout, regions)
+        self.raw.dispatch_indirect(buffer, offset)
     }
 }

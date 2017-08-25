@@ -32,7 +32,7 @@ use Backend;
 use pool::{GeneralCommandPool, GraphicsCommandPool, ComputeCommandPool,
            TransferCommandPool, RawCommandPool};
 
-pub use self::capability::{Capability, Compute, Graphics, General, Transfer, Supports, SupportedBy};
+pub use self::capability::{Compute, Graphics, General, Transfer, Supports, SupportedBy};
 pub use self::submission::{RawSubmission, Submission};
 
 ///
