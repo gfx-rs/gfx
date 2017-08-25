@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use {pso, target};
-use {Backend, IndexCount, InstanceCount, VertexCount, VertexOffset, Viewport};
+use {Backend, InstanceCount, VertexCount, Viewport};
 use buffer::IndexBufferView;
 use image::ImageLayout;
 use queue::capability::{Graphics, Supports};
-use super::{CommandBuffer, RawCommandBuffer, SubpassContents};
+use super::{CommandBuffer, RawCommandBuffer, RenderPassInlineEncoder};
 
 
 /// A universal clear color supporting integet formats
@@ -105,16 +105,9 @@ impl<'a, B: Backend, C: Supports<Graphics>> CommandBuffer<'a, B, C> {
         frame_buffer: &B::FrameBuffer,
         render_area: target::Rect,
         clear_values: &[ClearValue],
-    ) {
-        self.raw.begin_renderpass(render_pass, frame_buffer, render_area, clear_values, SubpassContents::Inline)
-    }
-    ///
-    pub fn next_subpass_inline(&mut self) {
-        self.raw.next_subpass(SubpassContents::Inline)
-    }
-    ///
-    pub fn end_renderpass(&mut self) {
-        self.raw.end_renderpass()
+    ) -> RenderPassInlineEncoder<B>
+    {
+        RenderPassInlineEncoder::new(self, render_pass, frame_buffer, render_area, clear_values)
     }
 
     ///
@@ -179,25 +172,5 @@ impl<'a, B: Backend, C: Supports<Graphics>> CommandBuffer<'a, B, C> {
     ///
     pub fn set_blend_constants(&mut self, cv: target::ColorValue) {
         self.raw.set_blend_constants(cv)
-    }
-
-    ///
-    pub fn draw(&mut self,
-        start: VertexCount,
-        count: VertexCount,
-        instance: Option<InstanceParams>,
-    ) {
-        self.raw.draw(start, count, instance)
-    }
-
-    ///
-    pub fn draw_indexed(
-        &mut self,
-        start: IndexCount,
-        count: IndexCount,
-        base: VertexOffset,
-        instance: Option<InstanceParams>,
-    ) {
-        self.raw.draw_indexed(start, count, base, instance)
     }
 }

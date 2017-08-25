@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use {pso, target, Backend, VertexCount, VertexOffset};
+use {pso, target, Backend, IndexCount, VertexCount, VertexOffset};
 use buffer::IndexBufferView;
 use queue::{Supports, Graphics};
 use super::{ClearValue, CommandBuffer, InstanceParams, RawCommandBuffer};
+
 
 /// Specifies how commands for the following renderpasses will be recorded.
 pub enum SubpassContents {
@@ -29,10 +30,7 @@ pub enum SubpassContents {
 pub struct RenderPassInlineEncoder<'a, B: Backend>(pub(crate) &'a mut B::RawCommandBuffer)
 where B::RawCommandBuffer: 'a;
 
-impl<'a, B> RenderPassInlineEncoder<'a, B>
-where
-    B: Backend,
-{
+impl<'a, B: Backend> RenderPassInlineEncoder<'a, B> {
     ///
     pub fn new<C>(
         cmd_buffer: &'a mut CommandBuffer<B, C>,
@@ -64,7 +62,7 @@ where
         self.0.draw(start, count, instance)
     }
     ///
-    pub fn draw_indexed(&mut self, start: VertexCount, count: VertexCount, base: VertexOffset, instance: Option<InstanceParams>) {
+    pub fn draw_indexed(&mut self, start: IndexCount, count: IndexCount, base: VertexOffset, instance: Option<InstanceParams>) {
         self.0.draw_indexed(start, count, base, instance)
     }
     ///
