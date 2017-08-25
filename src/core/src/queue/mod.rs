@@ -88,22 +88,15 @@ pub trait RawCommandQueue<B: Backend> {
 /// Stronger-typed and safer `CommandQueue` wraps around `RawCommandQueue`.
 pub struct CommandQueue<B: Backend, C>(B::CommandQueue, PhantomData<C>);
 
-impl<B: Backend, C> AsRef<B::CommandQueue> for CommandQueue<B, C> {
-    fn as_ref(&self) -> &B::CommandQueue {
-        &self.0
-    }
-}
-
-impl<B: Backend, C> AsMut<B::CommandQueue> for CommandQueue<B, C> {
-    fn as_mut(&mut self) -> &mut B::CommandQueue {
-        &mut self.0
-    }
-}
-
 impl<B: Backend, C> CommandQueue<B, C> {
     #[doc(hidden)]
     pub unsafe fn new(raw: B::CommandQueue) -> Self {
         CommandQueue(raw, PhantomData)
+    }
+
+    /// Get a reference to the raw command queue
+    pub fn raw(&self) -> &B::CommandQueue {
+        &self.0
     }
 
     ///
