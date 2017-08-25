@@ -41,7 +41,7 @@ impl<B: Backend, C> CommandPool<B, C> {
     ) -> Self
     {
         let raw = unsafe {
-            B::RawCommandPool::from_queue(queue.as_ref(), capacity)
+            B::RawCommandPool::from_queue(queue.raw(), capacity)
         };
         CommandPool(raw, PhantomData)
     }
