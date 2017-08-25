@@ -143,12 +143,14 @@ impl core::Surface<backend::Backend> for Surface {
         )
     }
 
-    fn build_swapchain<Q>(&mut self, config: core::SwapchainConfig, present_queue: &Q) -> Self::SwapChain
-        where Q: AsRef<backend::CommandQueue>
+    fn build_swapchain<C>(&mut self,
+        config: core::SwapchainConfig,
+        present_queue: &core::CommandQueue<backend::Backend, C>,
+    ) -> Self::SwapChain
     {
         let functor = ext::Swapchain::new(
             &self.raw.instance.0,
-            &present_queue.as_ref().device().0,
+            &present_queue.raw().device().0,
             ).expect("Unable to query swapchain function");
 
         // TODO: check for better ones if available
@@ -247,12 +249,10 @@ impl core::SwapChain<backend::Backend> for SwapChain {
         core::Frame::new(index as usize)
     }
 
-    fn present<Q>(&mut self,
-        present_queue: &mut Q,
+    fn present<C>(&mut self,
+        present_queue: &mut core::CommandQueue<backend::Backend, C>,
         wait_semaphores: &[&native::Semaphore],
-    ) where
-        Q: AsMut<backend::CommandQueue>
-    {
+    ) {
         let frame = self.frame_queue
             .pop_front()
             .expect("No frame currently queued up. Need to acquire a frame first.");
@@ -275,7 +275,7 @@ impl core::SwapChain<backend::Backend> for SwapChain {
         };
 
         assert_eq!(Ok(()), unsafe {
-            self.functor.queue_present_khr(*present_queue.as_mut().raw(), &info)
+            self.functor.queue_present_khr(*present_queue.raw().raw(), &info)
         });
         // TODO: handle result and return code
     }

@@ -82,6 +82,7 @@
 
 use {Adapter, Backend};
 use format::{self, Formatted};
+use queue::CommandQueue;
 
 /// A `Surface` abstracts the surface of a native window, which will be presented
 pub trait Surface<B: Backend> {
@@ -119,9 +120,10 @@ pub trait Surface<B: Backend> {
     ///                             .with_color::<Srgba8>();
     /// surface.build_swapchain(swapchain_config, &queue);
     /// ```
-    fn build_swapchain<Q>(&mut self, config: SwapchainConfig, present_queue: &Q) -> Self::SwapChain
-    where
-        Q: AsRef<B::CommandQueue>;
+    fn build_swapchain<C>(&mut self,
+        config: SwapchainConfig,
+        present_queue: &CommandQueue<B, C>,
+    ) -> Self::SwapChain;
 }
 
 /// Handle to a backbuffer of the swapchain.
@@ -267,9 +269,9 @@ pub trait SwapChain<B: Backend> {
     /// ```no_run
     ///
     /// ```
-    fn present<Q: AsMut<B::CommandQueue>>(
+    fn present<C>(
         &mut self,
-        present_queue: &mut Q,
+        present_queue: &mut CommandQueue<B, C>,
         wait_semaphores: &[&B::Semaphore],
     );
 }
