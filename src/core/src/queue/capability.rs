@@ -1,13 +1,13 @@
 //! Type system encoded queue capabilities.
 
 /// General capability, supporting graphics, compute and transfer operations.
-pub struct General;
+pub enum General {}
 /// Graphics capability, supporting graphics and transfer operations.
-pub struct Graphics;
+pub enum Graphics {}
 /// Compute capability, supporting compute and transfer operations.
-pub struct Compute;
+pub enum Compute {}
 /// Transfer capability, supporting only transfer operations.
-pub struct Transfer;
+pub enum Transfer {}
 
 ///
 pub trait Supports<T> { }
@@ -17,10 +17,6 @@ impl Supports<Compute> for General { }
 impl Supports<Transfer> for General { }
 impl Supports<Transfer> for Graphics { }
 impl Supports<Transfer> for Compute { }
-
-///
-pub trait SupportedBy<T> { }
-impl<U, T> SupportedBy<T> for U where T: Supports<U> { }
 
 /// Encoding the minimal capability to support a combination of other capabilities.
 pub trait Upper {

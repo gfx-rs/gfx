@@ -15,7 +15,7 @@
 //!
 
 use Backend;
-use pool::RawCommandPool;
+use pool::{RawCommandPool};
 use std::marker::PhantomData;
 
 mod compute;
