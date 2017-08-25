@@ -6,14 +6,13 @@
 #[macro_use]
 extern crate bitflags;
 extern crate draw_state;
-extern crate log;
+//#[macro_use]
+//extern crate log;
 extern crate smallvec;
 
 #[cfg(feature = "mint")]
 extern crate mint;
 
-#[cfg(feature = "serialize")]
-extern crate serde;
 #[cfg(feature = "serialize")]
 #[macro_use]
 extern crate serde_derive;
@@ -37,7 +36,6 @@ pub use draw_state::{state, target};
 pub mod adapter;
 pub mod buffer;
 pub mod command;
-// pub mod dummy;
 pub mod device;
 pub mod format;
 pub mod image;
