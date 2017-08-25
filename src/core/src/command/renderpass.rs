@@ -14,8 +14,8 @@
 
 use {pso, target, Backend, VertexCount, VertexOffset};
 use buffer::IndexBufferView;
-use queue::{Capability, Supports, Graphics};
-use super::{ClearValue, CommandBufferShim, InstanceParams, RawCommandBuffer};
+use queue::{Supports, Graphics};
+use super::{ClearValue, CommandBuffer, InstanceParams, RawCommandBuffer};
 
 /// Specifies how commands for the following renderpasses will be recorded.
 pub enum SubpassContents {
@@ -35,23 +35,22 @@ where
 {
     ///
     pub fn new<C>(
-        cmd_buffer: &'a mut C,
+        cmd_buffer: &'a mut CommandBuffer<B, C>,
         render_pass: &B::RenderPass,
         frame_buffer: &B::FrameBuffer,
         render_area: target::Rect,
         clear_values: &[ClearValue],
     ) -> Self
     where
-        C: Capability + RawCommandBuffer<B> + CommandBufferShim<'a, B>,
-        C::Capability: Supports<Graphics>,
+        C: Supports<Graphics>,
     {
-        cmd_buffer.begin_renderpass(
+        cmd_buffer.raw.begin_renderpass(
             render_pass,
             frame_buffer,
             render_area,
             clear_values,
             SubpassContents::Inline);
-        RenderPassInlineEncoder(cmd_buffer.raw())
+        RenderPassInlineEncoder(&mut cmd_buffer.raw)
     }
 
     ///
