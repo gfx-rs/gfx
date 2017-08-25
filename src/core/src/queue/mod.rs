@@ -37,6 +37,7 @@ pub use self::submission::{RawSubmission, Submission};
 
 ///
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub enum QueueType {
     ///
     General,

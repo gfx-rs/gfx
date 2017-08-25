@@ -317,6 +317,7 @@ impl Kind {
 
 bitflags!(
     /// Image usage flags
+    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
     pub flags Usage: u8 {
         ///
         const TRANSFER_SRC    = 0x1,
