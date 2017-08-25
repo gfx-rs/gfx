@@ -55,7 +55,7 @@ where
     }
 
     ///
-    pub fn next_subpass_inline(mut self) -> Self {
+    pub fn next_subpass_inline(self) -> Self {
         self.0.next_subpass(SubpassContents::Inline);
         self
     }

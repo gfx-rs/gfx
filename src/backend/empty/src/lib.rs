@@ -1,13 +1,17 @@
 //! Dummy backend implementation to test the code for compile errors
 //! outside of the graphics development environment.
 
-use {Adapter, AdapterInfo, Backend, Capabilities, Resources, IndexType, VertexCount, QueueType,
-     Gpu, Device, CommandQueue, QueueFamily, ShaderSet, Surface, Swapchain,
-     Frame, FrameSync, SwapchainConfig, Backbuffer, WindowExt, RawSubmission};
-use {buffer, format, state, target, handle, mapping, pool, pso, shade, texture};
-use command::{self, AccessInfo};
-use device::{ResourceViewError, TargetViewError, WaitFor};
-use memory::Bind;
+extern crate gfx_core;
+
+use gfx_core::{
+    Adapter, AdapterInfo, Backend, Capabilities, Resources, IndexType, VertexCount, QueueType,
+    Gpu, Device, CommandQueue, QueueFamily, ShaderSet, Surface, SwapChain,
+    Frame, FrameSync, SwapchainConfig, Backbuffer, WindowExt, RawSubmission,
+};
+use gfx_core::{buffer, format, state, target, handle, mapping, pool, pso, shade, texture};
+use gfx_core::command::{self, AccessInfo};
+use gfx_core::device::{ResourceViewError, TargetViewError, WaitFor};
+use gfx_core::memory::Bind;
 
 /// Dummy backend.
 pub enum DummyBackend { }

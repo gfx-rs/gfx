@@ -1,0 +1,12 @@
+[package]
+name = "empty"
+version = "0.1.0"
+description = "Empty backend for gfx-rs"
+publish = false
+workspace = "../../.."
+
+[lib]
+name = "empty"
+
+[dependencies]
+gfx_core = { path = "../../core", version = "0.7" }
