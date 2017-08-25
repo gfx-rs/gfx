@@ -46,7 +46,7 @@ where
     ///
     /// The command buffer will be consumed and can't be modified further.
     /// The command pool must be reset to able to re-record commands.
-    pub fn finish(mut self) -> Submit<B, Graphics> {
+    pub fn finish(self) -> Submit<B, Graphics> {
         Submit::new(self.0.finish())
     }
 
