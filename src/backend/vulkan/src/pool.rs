@@ -25,13 +25,11 @@ use {Backend, CommandQueue, RawDevice};
 pub struct RawCommandPool {
     pool: vk::CommandPool,
     command_buffers: Vec<CommandBuffer>,
-    next_buffer: usize,
     device: Arc<RawDevice>,
 }
 
 impl pool::RawCommandPool<Backend> for RawCommandPool {
     fn reset(&mut self) {
-        self.next_buffer = 0;
         unsafe {
             self.device.0.fp_v1_0().reset_command_pool(
                 self.device.0.handle(),
@@ -41,18 +39,38 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         }
     }
 
-    fn reserve(&mut self, _additional: usize) {
-        unimplemented!()
+    fn reserve(&mut self, additional: usize) {
+        let info = vk::CommandBufferAllocateInfo {
+            s_type: vk::StructureType::CommandBufferAllocateInfo,
+            p_next: ptr::null(),
+            command_pool: self.pool,
+            level: vk::CommandBufferLevel::Primary,
+            command_buffer_count: additional as u32,
+        };
+
+        let device = &self.device;
+        let cbufs_raw = unsafe {
+            device.0.allocate_command_buffers(&info)
+        }.expect("Error on command buffer allocation");
+
+        let cbufs = cbufs_raw
+            .into_iter()
+            .map(|buffer| {
+                CommandBuffer {
+                    raw: buffer,
+                    device: device.clone(),
+                }
+            });
+
+        self.command_buffers.extend(cbufs);
     }
 
-    unsafe fn acquire_command_buffer<'a>(&'a mut self) -> &mut CommandBuffer {
-        let available_buffers = self.command_buffers.len() as isize - self.next_buffer as isize;
-        if available_buffers <= 0 {
-            self.reserve((-available_buffers) as usize + 1);
+    unsafe fn acquire_command_buffer(&mut self) -> CommandBuffer {
+        if self.command_buffers.is_empty() {
+            self.reserve(1);
         }
 
-        let buffer = &mut self.command_buffers[self.next_buffer];
-        self.next_buffer += 1;
+        let buffer = self.command_buffers.pop().unwrap();
 
         let info = vk::CommandBufferBeginInfo {
             s_type: vk::StructureType::CommandBufferBeginInfo,
@@ -65,6 +83,10 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
             self.device.0.begin_command_buffer(buffer.raw, &info)
         );
         buffer
+    }
+
+    unsafe fn return_command_buffer(&mut self, cbuf: CommandBuffer) {
+        self.command_buffers.push(cbuf)
     }
 
     unsafe fn from_queue<Q>(queue: Q, capacity: usize) -> RawCommandPool
@@ -80,36 +102,18 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
             queue_family_index: queue.family_index,
         };
 
-        let command_pool = queue.device.0
+        let command_pool_raw = queue.device.0
             .create_command_pool(&info, None)
             .expect("Error on command pool creation"); // TODO: better error handling
 
-        // Allocate initial command buffers
-        let info = vk::CommandBufferAllocateInfo {
-            s_type: vk::StructureType::CommandBufferAllocateInfo,
-            p_next: ptr::null(),
-            command_pool: command_pool,
-            level: vk::CommandBufferLevel::Primary,
-            command_buffer_count: capacity as u32,
+        let mut command_pool = RawCommandPool {
+            pool: command_pool_raw,
+            command_buffers: Vec::new(),
+            device: queue.device.clone(),
         };
 
-        let command_buffers = queue.device.0
-            .allocate_command_buffers(&info)
-            .expect("Error on command buffer allocation"); // TODO: better error handling
-
-        let command_buffers = command_buffers.into_iter().map(|buffer| {
-            CommandBuffer {
-                raw: buffer,
-                device: queue.device.clone(),
-            }
-        }).collect();
-
-        RawCommandPool {
-            pool: command_pool,
-            command_buffers: command_buffers,
-            next_buffer: 0,
-            device: queue.device.clone(),
-        }
+        command_pool.reserve(capacity);
+        command_pool
     }
 }
 
