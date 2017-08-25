@@ -89,11 +89,7 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         self.command_buffers.push(cbuf)
     }
 
-    unsafe fn from_queue<Q>(queue: Q, capacity: usize) -> RawCommandPool
-        where Q: AsRef<CommandQueue>
-    {
-        let queue = queue.as_ref();
-
+    unsafe fn from_queue(queue: &CommandQueue, capacity: usize) -> RawCommandPool {
         // Create command pool
         let info = vk::CommandPoolCreateInfo {
             s_type: vk::StructureType::CommandPoolCreateInfo,

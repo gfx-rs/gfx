@@ -12,27 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Command queues.
-//!
-//! Queues are the execution paths of the graphical processing units. These process
-//! submitted commands buffers.
-//!
-//! There are different types of queues, which can only handle associated command buffers.
-//! Queues are differed by there functionality: graphics, compute and transfer.
-//!
-//! * `GeneralQueue` supports graphics, compute and transfer.
-//! * `GraphicsQueue` supports graphics and transfer.
-//! * `ComputeQueue` supports compute and transfer.
-//! * `TransferQueue` supports transfer.
-//!
+/*! Command queues.
+
+    Queues are the execution paths of the graphical processing units. These process
+    submitted commands buffers.
+
+    There are different types of queues, which can only handle associated command buffers.
+    `CommandQueue<B, C>` has the capability defined by `C`: graphics, compute and transfer.
+!*/
+
 pub mod capability;
 pub mod submission;
 
 use Backend;
-use pool::{GeneralCommandPool, GraphicsCommandPool, ComputeCommandPool,
-           TransferCommandPool, RawCommandPool};
+use pool::CommandPool;
+use std::marker::PhantomData;
 
-pub use self::capability::{Compute, Graphics, General, Transfer, Supports, SupportedBy};
+pub use self::capability::{Compute, Graphics, General, Transfer, Supports};
 pub use self::submission::{RawSubmission, Submission};
 
 ///
@@ -77,9 +73,9 @@ pub trait QueueFamily: 'static {
     fn num_queues(&self) -> u32;
 }
 
-/// `CommandQueues` are abstractions to the internal GPU execution engines.
+/// `RawCommandQueue` are abstractions to the internal GPU execution engines.
 /// Commands are executed on the the device by submitting command buffers to queues.
-pub trait CommandQueue<B: Backend> {
+pub trait RawCommandQueue<B: Backend> {
     /// Submit command buffers to queue for execution.
     /// `fence` will be signalled after submission and _must_ be unsignalled.
     ///
@@ -89,83 +85,76 @@ pub trait CommandQueue<B: Backend> {
     unsafe fn submit_raw(&mut self, RawSubmission<B>, Option<&B::Fence>);
 }
 
-macro_rules! define_queue {
-    () => ();
-    // Bare queue definitions
-    ($queue:ident $capability:ident $($tail:ident)*) => (
-        ///
-        pub struct $queue<B: Backend>(B::CommandQueue);
+/// Stronger-typed and safer `CommandQueue` wraps around `RawCommandQueue`.
+pub struct CommandQueue<B: Backend, C>(B::CommandQueue, PhantomData<C>);
 
-        impl<B: Backend> CommandQueue<B> for $queue<B> {
-            unsafe fn submit_raw(&mut self,
-                submission: RawSubmission<B>,
-                fence: Option<&B::Fence>,
-            ) {
-                self.0.submit_raw(submission, fence)
-            }
-        }
-
-        impl<B: Backend> $queue<B> {
-            #[doc(hidden)]
-            pub unsafe fn new(queue: B::CommandQueue) -> Self {
-                $queue(queue)
-            }
-
-            ///
-            pub fn submit<C>(
-                &mut self,
-                submission: Submission<B, C>,
-                fence: Option<&B::Fence>,
-            )
-            where
-                C: SupportedBy<$capability>
-            {
-                unsafe {
-                    self.submit_raw(submission.as_raw(), fence)
-                }
-            }
-        }
-
-        impl<B: Backend> AsRef<B::CommandQueue> for $queue<B> {
-            fn as_ref(&self) -> &B::CommandQueue {
-                &self.0
-            }
-        }
-
-        impl<B: Backend> AsMut<B::CommandQueue> for $queue<B> {
-            fn as_mut(&mut self) -> &mut B::CommandQueue {
-                &mut self.0
-            }
-        }
-
-        define_queue! { $($tail)* }
-    );
+impl<B: Backend, C> AsRef<B::CommandQueue> for CommandQueue<B, C> {
+    fn as_ref(&self) -> &B::CommandQueue {
+        &self.0
+    }
 }
 
-define_queue! {
-    GeneralQueue General
-    GraphicsQueue Graphics
-    ComputeQueue Compute
-    TransferQueue Transfer
+impl<B: Backend, C> AsMut<B::CommandQueue> for CommandQueue<B, C> {
+    fn as_mut(&mut self) -> &mut B::CommandQueue {
+        &mut self.0
+    }
 }
 
-// Command pool creation implementations
-macro_rules! impl_create_pool {
-    ($func:ident $pool:ident for) => ();
-    ($func:ident $pool:ident for $queue:ident $($tail:ident)*) => (
-        impl<B: Backend> $queue<B> {
-            /// Create a new command pool with given number of command buffers.
-            pub fn $func(&self, capacity: usize) -> $pool<B> {
-                $pool(unsafe { B::RawCommandPool::from_queue(self, capacity) })
-            }
+impl<B: Backend, C> CommandQueue<B, C> {
+    #[doc(hidden)]
+    pub unsafe fn new(raw: B::CommandQueue) -> Self {
+        CommandQueue(raw, PhantomData)
+    }
+
+    ///
+    pub fn submit<D>(&mut self,
+        submission: Submission<B, D>,
+        fence: Option<&B::Fence>,
+    ) where
+        C: Supports<D>
+    {
+        unsafe {
+            self.0.submit_raw(submission.as_raw(), fence)
         }
+    }
 
-        impl_create_pool!($func $pool for $($tail)*);
-    );
+    ///
+    pub fn create_general_pool(&self,
+        capacity: usize,
+    ) -> CommandPool<B, General>
+    where
+        C: Supports<General>
+    {
+        CommandPool::from_queue(self, capacity)
+    }
+
+    ///
+    pub fn create_graphics_pool(&self,
+        capacity: usize,
+    ) -> CommandPool<B, Graphics>
+    where
+        C: Supports<Graphics>
+    {
+        CommandPool::from_queue(self, capacity)
+    }
+
+    ///
+    pub fn create_compute_pool(&self,
+        capacity: usize,
+    ) -> CommandPool<B, Compute>
+    where
+        C: Supports<Compute>
+    {
+        CommandPool::from_queue(self, capacity)
+    }
+
+    ///
+    pub fn create_transfer_pool(&self,
+        capacity: usize,
+    ) -> CommandPool<B, Transfer>
+    where
+        C: Supports<Transfer>
+    {
+        CommandPool::from_queue(self, capacity)
+    }
 }
-
-impl_create_pool!(create_general_pool GeneralCommandPool for GeneralQueue);
-impl_create_pool!(create_graphics_pool GraphicsCommandPool for GeneralQueue GraphicsQueue);
-impl_create_pool!(create_compute_pool ComputeCommandPool for GeneralQueue ComputeQueue);
-impl_create_pool!(create_transfer_pool TransferCommandPool for GeneralQueue GraphicsQueue ComputeQueue TransferQueue);
-// impl_create_pool!(create_subpass_pool SubpassCommandPool for GeneralQueue GraphicsQueue);
