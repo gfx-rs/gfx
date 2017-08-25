@@ -14,181 +14,21 @@
 
 //!
 
-use {image, Backend, InstanceCount, VertexCount};
-
+use Backend;
+use pool::RawCommandPool;
 use std::marker::PhantomData;
 
 mod compute;
-mod general;
 mod graphics;
 mod raw;
 mod renderpass;
 mod transfer;
 
-pub use self::compute::ComputeCommandBuffer;
-pub use self::general::GeneralCommandBuffer;
-pub use self::graphics::GraphicsCommandBuffer;
+pub use self::graphics::*;
 pub use self::raw::RawCommandBuffer;
-pub use self::renderpass::{RenderPassInlineEncoder, SubpassContents};
-pub use self::transfer::TransferCommandBuffer;
+pub use self::renderpass::*;
+pub use self::transfer::*;
 
-/// A universal clear color supporting integet formats
-/// as well as the standard floating-point.
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-pub enum ClearColor {
-    /// Standard floating-point vec4 color
-    Float([f32; 4]),
-    /// Integer vector to clear ivec4 targets.
-    Int([i32; 4]),
-    /// Unsigned int vector to clear uvec4 targets.
-    Uint([u32; 4]),
-}
-
-macro_rules! impl_clear {
-    { $( $ty:ty = $sub:ident[$a:expr, $b:expr, $c:expr, $d:expr], )* } => {
-        $(
-            impl From<$ty> for ClearColor {
-                fn from(v: $ty) -> ClearColor {
-                    ClearColor::$sub([v[$a], v[$b], v[$c], v[$d]])
-                }
-            }
-        )*
-    }
-}
-
-impl_clear! {
-    [f32; 4] = Float[0, 1, 2, 3],
-    [f32; 3] = Float[0, 1, 2, 0],
-    [f32; 2] = Float[0, 1, 0, 0],
-    [i32; 4] = Int  [0, 1, 2, 3],
-    [i32; 3] = Int  [0, 1, 2, 0],
-    [i32; 2] = Int  [0, 1, 0, 0],
-    [u32; 4] = Uint [0, 1, 2, 3],
-    [u32; 3] = Uint [0, 1, 2, 0],
-    [u32; 2] = Uint [0, 1, 0, 0],
-}
-
-impl From<f32> for ClearColor {
-    fn from(v: f32) -> ClearColor {
-        ClearColor::Float([v, 0.0, 0.0, 0.0])
-    }
-}
-impl From<i32> for ClearColor {
-    fn from(v: i32) -> ClearColor {
-        ClearColor::Int([v, 0, 0, 0])
-    }
-}
-impl From<u32> for ClearColor {
-    fn from(v: u32) -> ClearColor {
-        ClearColor::Uint([v, 0, 0, 0])
-    }
-}
-
-/// Depth-stencil target clear values.
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-pub struct ClearDepthStencil {
-    ///
-    pub depth: f32,
-    ///
-    pub stencil: u32,
-}
-
-/// General clear values for attachments (color or depth-stencil).
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-pub enum ClearValue {
-    ///
-    Color(ClearColor),
-    ///
-    DepthStencil(ClearDepthStencil),
-}
-
-///
-#[derive(Clone, Copy, Debug)]
-pub struct Offset {
-    ///
-    pub x: i32,
-    ///
-    pub y: i32,
-    ///
-    pub z: i32,
-}
-
-///
-#[derive(Clone, Copy, Debug)]
-pub struct Extent {
-    ///
-    pub width: u32,
-    ///
-    pub height: u32,
-    ///
-    pub depth: u32,
-}
-
-/// Region of two buffers for copying.
-#[derive(Clone, Copy, Debug)]
-pub struct BufferCopy {
-    /// Buffer region source offset.
-    pub src: u64,
-    /// Buffer region destionation offset.
-    pub dst: u64,
-    /// Region size.
-    pub size: u64,
-}
-
-///
-#[derive(Clone, Debug)]
-pub struct ImageResolve {
-    ///
-    pub src_subresource: image::Subresource,
-    ///
-    pub dst_subresource: image::Subresource,
-    ///
-    pub num_layers: image::Layer,
-}
-
-///
-#[derive(Clone, Debug)]
-pub struct ImageCopy {
-    ///
-    pub aspect_mask: image::AspectFlags,
-    ///
-    pub src_subresource: image::Subresource,
-    ///
-    pub src_offset: Offset,
-    ///
-    pub dst_subresource: image::Subresource,
-    ///
-    pub dst_offset: Offset,
-    ///
-    pub extent: Extent,
-    ///
-    pub num_layers: image::Layer,
-}
-
-///
-#[derive(Clone, Debug)]
-pub struct BufferImageCopy {
-    ///
-    pub buffer_offset: u64,
-    ///
-    pub buffer_row_pitch: u32,
-    ///
-    pub buffer_slice_pitch: u32,
-    ///
-    pub image_aspect: image::AspectFlags,
-    ///
-    pub image_subresource: image::SubresourceLayers,
-    ///
-    pub image_offset: Offset,
-    ///
-    pub image_extent: Extent,
-}
-
-/// Optional instance parameters: (instance count, buffer offset)
-pub type InstanceParams = (InstanceCount, VertexCount);
 
 /// Thread-safe finished command buffer for submission.
 pub struct Submit<B: Backend, C>(B::SubmitInfo, PhantomData<C>);
@@ -212,8 +52,32 @@ impl<B: Backend, C> Submit<B, C> {
     }
 }
 
-#[doc(hidden)]
-pub trait CommandBufferShim<'a, B: Backend> {
-    #[doc(hidden)]
-    fn raw(&'a mut self) -> &'a mut B::RawCommandBuffer;
+/// Command buffer with compute, graphics and transfer functionality.
+pub struct CommandBuffer<'a, B: 'a + Backend, C> {
+    pub(crate) raw: B::RawCommandBuffer,
+    pool: &'a mut B::RawCommandPool,
+    _capability: PhantomData<C>,
+}
+
+impl<'a, B: Backend, C> CommandBuffer<'a, B, C> {
+    /// Create a new typed command buffer from a raw command pool.
+    pub unsafe fn new(pool: &'a mut B::RawCommandPool) -> Self {
+        CommandBuffer {
+            raw: pool.acquire_command_buffer(),
+            pool,
+            _capability: PhantomData,
+        }
+    }
+
+    /// Finish recording commands to the command buffers.
+    ///
+    /// The command buffer will be consumed and can't be modified further.
+    /// The command pool must be reset to able to re-record commands.
+    pub fn finish(mut self) -> Submit<B, C> {
+        let submit = self.raw.finish();
+        unsafe {
+            self.pool.return_command_buffer(self.raw)
+        };
+        Submit::new(submit)
+    }
 }
