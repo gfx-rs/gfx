@@ -54,6 +54,7 @@ impl Error for CreationError {
 
 bitflags!(
     /// Buffer usage flags.
+    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
     pub flags Usage: u16 {
         ///
         const TRANSFER_SRC  = 0x1,
