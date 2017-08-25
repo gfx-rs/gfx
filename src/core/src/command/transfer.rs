@@ -13,55 +13,123 @@
 // limitations under the License.
 
 use Backend;
-use image::ImageLayout;
+use image;
 use memory::Barrier;
-use queue::capability::{Capability, Transfer};
-use super::{BufferCopy, BufferImageCopy, CommandBufferShim, ImageCopy, RawCommandBuffer, Submit};
+use queue::capability::{Supports, Transfer};
+use super::{CommandBuffer, RawCommandBuffer};
 
-/// Command buffer with transfer functionality.
-pub struct TransferCommandBuffer<'a, B: Backend>(pub(crate) &'a mut B::RawCommandBuffer)
-where
-    B::RawCommandBuffer: 'a;
 
-impl<'a, B: Backend> Capability for TransferCommandBuffer<'a, B> {
-    type Capability = Transfer;
-}
-
-impl<'a, B: Backend> CommandBufferShim<'a, B> for TransferCommandBuffer<'a, B> {
-    fn raw(&'a mut self) -> &'a mut B::RawCommandBuffer {
-        &mut self.0
-    }
-}
-
-impl<'a, B: Backend> TransferCommandBuffer<'a, B> {
-    /// Finish recording commands to the command buffers.
+///
+#[derive(Clone, Copy, Debug)]
+pub struct Offset {
     ///
-    /// The command buffer will be consumed and can't be modified further.
-    /// The command pool must be reset to able to re-record commands.
-    pub fn finish(self) -> Submit<B, Transfer> {
-        Submit::new(self.0.finish())
-    }
+    pub x: i32,
+    ///
+    pub y: i32,
+    ///
+    pub z: i32,
+}
 
+///
+#[derive(Clone, Copy, Debug)]
+pub struct Extent {
+    ///
+    pub width: u32,
+    ///
+    pub height: u32,
+    ///
+    pub depth: u32,
+}
+
+/// Region of two buffers for copying.
+#[derive(Clone, Copy, Debug)]
+pub struct BufferCopy {
+    /// Buffer region source offset.
+    pub src: u64,
+    /// Buffer region destionation offset.
+    pub dst: u64,
+    /// Region size.
+    pub size: u64,
+}
+
+///
+#[derive(Clone, Debug)]
+pub struct ImageResolve {
+    ///
+    pub src_subresource: image::Subresource,
+    ///
+    pub dst_subresource: image::Subresource,
+    ///
+    pub num_layers: image::Layer,
+}
+
+///
+#[derive(Clone, Debug)]
+pub struct ImageCopy {
+    ///
+    pub aspect_mask: image::AspectFlags,
+    ///
+    pub src_subresource: image::Subresource,
+    ///
+    pub src_offset: Offset,
+    ///
+    pub dst_subresource: image::Subresource,
+    ///
+    pub dst_offset: Offset,
+    ///
+    pub extent: Extent,
+    ///
+    pub num_layers: image::Layer,
+}
+
+///
+#[derive(Clone, Debug)]
+pub struct BufferImageCopy {
+    ///
+    pub buffer_offset: u64,
+    ///
+    pub buffer_row_pitch: u32,
+    ///
+    pub buffer_slice_pitch: u32,
+    ///
+    pub image_aspect: image::AspectFlags,
+    ///
+    pub image_subresource: image::SubresourceLayers,
+    ///
+    pub image_offset: Offset,
+    ///
+    pub image_extent: Extent,
+}
+
+
+impl<'a, B: Backend, C: Supports<Transfer>> CommandBuffer<'a, B, C> {
     ///
     pub fn pipeline_barrier(&mut self, barriers: &[Barrier<B>]) {
-        self.0.pipeline_barrier(barriers)
+        self.raw.pipeline_barrier(barriers)
     }
 
     ///
     pub fn copy_buffer(&mut self, src: &B::Buffer, dst: &B::Buffer, regions: &[BufferCopy]) {
-        self.0.copy_buffer(src, dst, regions)
+        self.raw.copy_buffer(src, dst, regions)
     }
+
+    /*
+    ///
+    pub fn update_buffer(&mut self, buffer: &B::Buffer, data: &[u8], offset: usize) {
+        self.raw.update_buffer(buffer, data, offset)
+    }
+    */
 
     ///
     pub fn copy_image(
         &mut self,
         src: &B::Image,
-        src_layout: ImageLayout,
+        src_layout: image::ImageLayout,
         dst: &B::Image,
-        dst_layout: ImageLayout,
+        dst_layout: image::ImageLayout,
         regions: &[ImageCopy],
     ) {
-        self.0.copy_image(src, src_layout, dst, dst_layout, regions)
+        self.raw.copy_image(src, src_layout, dst, dst_layout, regions)
     }
 
     ///
@@ -69,10 +137,10 @@ impl<'a, B: Backend> TransferCommandBuffer<'a, B> {
         &mut self,
         src: &B::Buffer,
         dst: &B::Image,
-        layout: ImageLayout,
+        layout: image::ImageLayout,
         regions: &[BufferImageCopy],
     ) {
-        self.0.copy_buffer_to_image(src, dst, layout, regions)
+        self.raw.copy_buffer_to_image(src, dst, layout, regions)
     }
 
     ///
@@ -80,9 +148,9 @@ impl<'a, B: Backend> TransferCommandBuffer<'a, B> {
         &mut self,
         src: &B::Image,
         dst: &B::Buffer,
-        layout: ImageLayout,
+        layout: image::ImageLayout,
         regions: &[BufferImageCopy],
     ) {
-        self.0.copy_image_to_buffer(src, dst, layout, regions)
+        self.raw.copy_image_to_buffer(src, dst, layout, regions)
     }
 }

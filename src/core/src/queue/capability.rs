@@ -9,12 +9,6 @@ pub struct Compute;
 /// Transfer capability, supporting only transfer operations.
 pub struct Transfer;
 
-/// Tag trait, annotating the capability to a certain struct (e.g Submission).
-pub trait Capability {
-    ///
-    type Capability;
-}
-
 ///
 pub trait Supports<T> { }
 impl<T> Supports<T> for T { }

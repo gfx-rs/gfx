@@ -1,8 +1,8 @@
 //! Command pools
 
 use {Backend};
-use command::{ComputeCommandBuffer, GeneralCommandBuffer,
-    GraphicsCommandBuffer, TransferCommandBuffer};
+use command::CommandBuffer;
+use queue::capability as cap;
 pub use queue::{ComputeQueue, GeneralQueue, GraphicsQueue, TransferQueue};
 
 /// `CommandPool` can allocate command buffers of a specific type only.
@@ -21,8 +21,10 @@ pub trait RawCommandPool<B: Backend>: Send {
     where Q: AsRef<B::CommandQueue>;
 
     #[doc(hidden)]
-    unsafe fn acquire_command_buffer(&mut self)
-        -> &mut B::RawCommandBuffer;
+    unsafe fn acquire_command_buffer(&mut self) -> B::RawCommandBuffer;
+
+    #[doc(hidden)]
+    unsafe fn return_command_buffer(&mut self, B::RawCommandBuffer);
 }
 
 ///
@@ -41,8 +43,8 @@ impl<B: Backend> GeneralCommandPool<B> {
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
-    pub fn acquire_command_buffer(&mut self) -> GeneralCommandBuffer<B> {
-        unsafe { GeneralCommandBuffer(self.0.acquire_command_buffer()) }
+    pub fn acquire_command_buffer(&mut self) -> CommandBuffer<B, cap::General> {
+        unsafe { CommandBuffer::new(&mut self.0) }
     }
 }
 
@@ -62,8 +64,8 @@ impl<B: Backend> GraphicsCommandPool<B> {
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
-    pub fn acquire_command_buffer(&mut self) -> GraphicsCommandBuffer<B> {
-        unsafe { GraphicsCommandBuffer(self.0.acquire_command_buffer()) }
+    pub fn acquire_command_buffer(&mut self) -> CommandBuffer<B, cap::Graphics> {
+        unsafe { CommandBuffer::new(&mut self.0) }
     }
 }
 
@@ -83,8 +85,8 @@ impl<B: Backend> ComputeCommandPool<B> {
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
-    pub fn acquire_command_buffer(&mut self) -> ComputeCommandBuffer<B> {
-        unsafe { ComputeCommandBuffer(self.0.acquire_command_buffer()) }
+    pub fn acquire_command_buffer<'a>(&'a mut self) -> CommandBuffer<'a, B, cap::Compute> {
+        unsafe { CommandBuffer::new(&mut self.0) }
     }
 }
 
@@ -104,8 +106,8 @@ impl<B: Backend> TransferCommandPool<B> {
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
-    pub fn acquire_command_buffer(&mut self) -> TransferCommandBuffer<B> {
-        unsafe { TransferCommandBuffer(self.0.acquire_command_buffer()) }
+    pub fn acquire_command_buffer(&mut self) -> CommandBuffer<B, cap::Transfer> {
+        unsafe { CommandBuffer::new(&mut self.0) }
     }
 }
 
