@@ -144,7 +144,7 @@ impl core::Surface<backend::Backend> for Surface {
         config: core::SwapchainConfig,
         present_queue: &core::CommandQueue<backend::Backend, C>,
     ) -> Self::Swapchain {
-        let functor = ext::Swapchain::new(&self.raw.instance.0, &present_queue.raw().device().0)
+        let functor = ext::Swapchain::new(&self.raw.instance.0, &present_queue.as_raw().device().0)
             .expect("Unable to query swapchain function");
 
         // TODO: check for better ones if available
@@ -265,7 +265,7 @@ impl core::Swapchain<backend::Backend> for Swapchain {
 
         assert_eq!(Ok(()), unsafe {
             self.functor
-                .queue_present_khr(*present_queue.raw().raw(), &info)
+                .queue_present_khr(*present_queue.as_raw().raw(), &info)
         });
         // TODO: handle result and return code
     }
