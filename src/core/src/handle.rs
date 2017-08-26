@@ -1,6 +1,9 @@
 #![deny(missing_docs, missing_copy_implementations)]
 
-//! Resource handles
+//! Handles to resources on the GPU.
+//! 
+//! This module contains handles to resources that exist on the GPU. The creaton of these resources
+//! is done using a `Device`. 
 
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -17,7 +20,7 @@ impl<R: Resources> Deref for RawBuffer<R> {
     fn deref(&self) -> &Self::Target { &self.0 }
 }
 
-/// Type-safe buffer handle
+/// Type-safe handle to a buffer located on the GPU.
 #[derive(Derivative)]
 #[derivative(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Buffer<R: Resources, T>(
