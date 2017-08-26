@@ -27,8 +27,8 @@ pub enum SubpassContents {
 }
 
 ///
-pub struct RenderPassInlineEncoder<'a, B: Backend>(pub(crate) &'a mut B::RawCommandBuffer)
-where B::RawCommandBuffer: 'a;
+pub struct RenderPassInlineEncoder<'a, B: Backend>(pub(crate) &'a mut B::CommandBuffer)
+where B::CommandBuffer: 'a;
 
 impl<'a, B: Backend> RenderPassInlineEncoder<'a, B> {
     ///

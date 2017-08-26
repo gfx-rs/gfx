@@ -36,7 +36,7 @@ unsafe impl<B: Backend, C> Send for Submit<B, C> {}
 
 impl<B: Backend, C> Submit<B, C> {
     ///
-    pub(self) fn new(info: B::SubmitInfo) -> Self {
+    pub unsafe fn new(info: B::SubmitInfo) -> Self {
         Submit(info, PhantomData)
     }
 
@@ -54,14 +54,14 @@ impl<B: Backend, C> Submit<B, C> {
 
 /// Command buffer with compute, graphics and transfer functionality.
 pub struct CommandBuffer<'a, B: 'a + Backend, C> {
-    pub(crate) raw: B::RawCommandBuffer,
-    pool: &'a mut B::RawCommandPool,
+    pub(crate) raw: B::CommandBuffer,
+    pool: &'a mut B::CommandPool,
     _capability: PhantomData<C>,
 }
 
 impl<'a, B: Backend, C> CommandBuffer<'a, B, C> {
     /// Create a new typed command buffer from a raw command pool.
-    pub unsafe fn new(pool: &'a mut B::RawCommandPool) -> Self {
+    pub unsafe fn new(pool: &'a mut B::CommandPool) -> Self {
         CommandBuffer {
             raw: pool.acquire_command_buffer(),
             pool,
@@ -76,8 +76,8 @@ impl<'a, B: Backend, C> CommandBuffer<'a, B, C> {
     pub fn finish(mut self) -> Submit<B, C> {
         let submit = self.raw.finish();
         unsafe {
-            self.pool.return_command_buffer(self.raw)
-        };
-        Submit::new(submit)
+            self.pool.return_command_buffer(self.raw);
+            Submit::new(submit)
+        }
     }
 }
