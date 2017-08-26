@@ -476,14 +476,14 @@ impl core::Backend for Backend {
     type Device = Device;
 
     type CommandQueue = CommandQueue;
-    type RawCommandBuffer = command::CommandBuffer;
+    type CommandBuffer = command::CommandBuffer;
     type SubpassCommandBuffer = command::SubpassCommandBuffer;
     type SubmitInfo = command::SubmitInfo;
     type QueueFamily = QueueFamily;
 
     type Heap = native::Heap;
     type Mapping = device::Mapping;
-    type RawCommandPool = pool::RawCommandPool;
+    type CommandPool = pool::RawCommandPool;
     type SubpassCommandPool = pool::SubpassCommandPool;
 
     type ShaderLib = native::ShaderLib;

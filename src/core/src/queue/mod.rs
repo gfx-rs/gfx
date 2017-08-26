@@ -95,8 +95,13 @@ impl<B: Backend, C> CommandQueue<B, C> {
     }
 
     /// Get a reference to the raw command queue
-    pub fn raw(&self) -> &B::CommandQueue {
+    pub fn as_raw(&self) -> &B::CommandQueue {
         &self.0
+    }
+
+    /// Get a mutable reference to the raw command queue
+    pub fn as_mut(&mut self) -> &mut B::CommandQueue {
+        &mut self.0
     }
 
     ///

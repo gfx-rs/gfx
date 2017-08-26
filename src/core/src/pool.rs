@@ -35,17 +35,14 @@ pub trait RawCommandPool<B: Backend>: Send {
     unsafe fn from_queue(queue: &B::CommandQueue, capacity: usize) -> Self;
 
     #[doc(hidden)]
-    unsafe fn acquire_command_buffer(&mut self) -> B::RawCommandBuffer;
+    unsafe fn acquire_command_buffer(&mut self) -> B::CommandBuffer;
 
     #[doc(hidden)]
-    unsafe fn return_command_buffer(&mut self, B::RawCommandBuffer);
+    unsafe fn return_command_buffer(&mut self, B::CommandBuffer);
 }
 
 ///
-pub struct CommandPool<B: Backend, C>(
-    B::RawCommandPool,
-    PhantomData<C>,
-);
+pub struct CommandPool<B: Backend, C>(B::CommandPool, PhantomData<C>);
 
 impl<B: Backend, C> CommandPool<B, C> {
     /// Create a pool for a specific command queue
@@ -55,7 +52,7 @@ impl<B: Backend, C> CommandPool<B, C> {
     ) -> Self
     {
         let raw = unsafe {
-            B::RawCommandPool::from_queue(queue.raw(), capacity)
+            B::CommandPool::from_queue(queue.as_raw(), capacity)
         };
         CommandPool(raw, PhantomData)
     }

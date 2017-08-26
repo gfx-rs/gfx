@@ -236,7 +236,7 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type Device:             Device<Self>;
 
     type CommandQueue:       RawCommandQueue<Self>;
-    type RawCommandBuffer:   RawCommandBuffer<Self>;
+    type CommandBuffer:      RawCommandBuffer<Self>;
     type SubpassCommandBuffer;
     type QueueFamily:        QueueFamily;
     type SubmitInfo:         Clone + Send;
@@ -247,7 +247,7 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
 
     type Heap:                Debug + Any;
     type Mapping:             Debug + Any + Send + Sync;
-    type RawCommandPool:      RawCommandPool<Self>;
+    type CommandPool:         RawCommandPool<Self>;
     type SubpassCommandPool:  SubpassCommandPool<Self>;
 
     type UnboundBuffer:       Debug + Any + Send + Sync;
