@@ -115,7 +115,8 @@ pub use core::command::{Buffer as CommandBuffer, InstanceParams};
 pub use core::shade::{ProgramInfo, UniformValue};
 
 pub use encoder::{CopyBufferResult, CopyBufferTextureResult, CopyError,
-                  CopyTextureBufferResult, GraphicsEncoder, UpdateError, GraphicsPoolExt};
+                  CopyTextureBufferResult, GraphicsEncoder, GraphicsSubmission, UpdateError, 
+                  GraphicsPoolExt, };
 pub use device::PipelineStateError;
 pub use slice::{Slice, IntoIndexBuffer, IndexBuffer};
 pub use swapchain::SwapchainExt;
