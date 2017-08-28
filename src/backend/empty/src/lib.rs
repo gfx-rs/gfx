@@ -1,211 +1,276 @@
 //! Dummy backend implementation to test the code for compile errors
 //! outside of the graphics development environment.
 
-extern crate gfx_core;
+extern crate gfx_core as core;
 
-use gfx_core::{
-    Adapter, AdapterInfo, Backend, Capabilities, Resources, IndexType, VertexCount, QueueType,
-    Gpu, Device, CommandQueue, QueueFamily, ShaderSet, Surface, SwapChain,
-    Frame, FrameSync, SwapchainConfig, Backbuffer, WindowExt, RawSubmission,
-};
-use gfx_core::{buffer, format, state, target, handle, mapping, pool, pso, shade, texture};
-use gfx_core::command::{self, AccessInfo};
-use gfx_core::device::{ResourceViewError, TargetViewError, WaitFor};
-use gfx_core::memory::Bind;
+use core::{buffer, command, device, format, image, target, mapping, memory, pass, pso};
+use core::device::{TargetViewError};
 
 /// Dummy backend.
-pub enum DummyBackend { }
-impl Backend for DummyBackend {
-    type Adapter = DummyAdapter;
-    type CommandQueue = DummyQueue;
-    type Device = DummyDevice;
-    type QueueFamily = DummyFamily;
-    type Resources = DummyResources;
-    type SubmitInfo = DummySubmitInfo;
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Backend { }
+impl core::Backend for Backend {
+    type Adapter = Adapter;
+    type Device = Device;
 
-    type RawCommandBuffer = DummyCommandBuffer;
-    type SubpassCommandBuffer = DummySubpassCommandBuffer;
+    type CommandQueue = CommandQueue;
+    type RawCommandBuffer = RawCommandBuffer;
+    type SubpassCommandBuffer = SubpassCommandBuffer;
+    type SubmitInfo = SubmitInfo;
+    type QueueFamily = QueueFamily;
 
-    type RawCommandPool = DummyRawCommandPool;
-    type SubpassCommandPool = DummySubpassCommandPool;
+    type Heap = ();
+    type Mapping = ();
+    type RawCommandPool = RawCommandPool;
+    type SubpassCommandPool = SubpassCommandPool;
+
+    type ShaderLib = ();
+    type RenderPass = ();
+    type FrameBuffer = ();
+
+    type UnboundBuffer = ();
+    type Buffer = ();
+    type UnboundImage = ();
+    type Image = ();
+    type Sampler = ();
+
+    type ConstantBufferView = ();
+    type ShaderResourceView = ();
+    type UnorderedAccessView = ();
+    type RenderTargetView = ();
+    type DepthStencilView = ();
+
+    type ComputePipeline = ();
+    type GraphicsPipeline = ();
+    type PipelineLayout = ();
+    type DescriptorSetLayout = ();
+    type DescriptorPool = DescriptorPool;
+    type DescriptorSet = ();
+
+    type Fence = ();
+    type Semaphore = ();
 }
 
 /// Dummy adapter.
-pub struct DummyAdapter;
-impl Adapter<DummyBackend> for DummyAdapter {
-    fn open(&self, _: &[(&DummyFamily, QueueType, u32)]) -> Gpu<DummyBackend> {
+pub struct Adapter;
+impl core::Adapter<Backend> for Adapter {
+    fn open(&self, _: &[(&QueueFamily, core::QueueType, u32)]) -> core::Gpu<Backend> {
         unimplemented!()
     }
 
-    fn get_info(&self) -> &AdapterInfo {
+    fn get_info(&self) -> &core::AdapterInfo {
         unimplemented!()
     }
 
-    fn get_queue_families(&self) -> &[(DummyFamily, QueueType)] {
+    fn get_queue_families(&self) -> &[(QueueFamily, core::QueueType)] {
         unimplemented!()
     }
 }
 
 /// Dummy command queue doing nothing.
-pub struct DummyQueue;
-impl CommandQueue<DummyBackend> for DummyQueue {
-    unsafe fn submit_raw<'a, I>(
-        &mut self,
-        _: I,
-        _: Option<&handle::Fence<DummyResources>>,
-        _: &AccessInfo<DummyResources>,
-    ) where I: Iterator<Item=RawSubmission<'a, DummyBackend>> {
-        unimplemented!()
-    }
-
-    fn pin_submitted_resources(&mut self, _: &handle::Manager<DummyResources>) {
-        unimplemented!()
-    }
-
-    fn cleanup(&mut self) {
+pub struct CommandQueue;
+impl core::RawCommandQueue<Backend> for CommandQueue {
+    unsafe fn submit_raw(&mut self, _: core::RawSubmission<Backend>, _: Option<&()>) {
         unimplemented!()
     }
 }
 
 /// Dummy device doing nothing.
-pub struct DummyDevice;
-impl Device<DummyResources> for DummyDevice {
-    fn get_capabilities(&self) -> &Capabilities {
-        unimplemented!()
-    }
-    fn create_buffer_raw(
-        &mut self,
-        _: buffer::Info,
-    ) -> Result<handle::RawBuffer<DummyResources>, buffer::CreationError> {
-        unimplemented!()
-    }
-    fn create_buffer_immutable_raw(
-        &mut self,
-        _: &[u8],
-        _: usize,
-        _: buffer::Role,
-        _: Bind,
-    ) -> Result<handle::RawBuffer<DummyResources>, buffer::CreationError> {
-        unimplemented!()
-    }
-    fn create_pipeline_state_raw(
-        &mut self,
-        _: &handle::Program<DummyResources>,
-        _: &pso::Descriptor,
-    ) -> Result<handle::RawPipelineState<DummyResources>, pso::CreationError> {
+pub struct Device;
+impl core::Device<Backend> for Device {
+    fn get_features(&self) -> &core::Features {
         unimplemented!()
     }
 
-    fn create_program(
-        &mut self,
-        _: &ShaderSet<DummyResources>,
-    ) -> Result<handle::Program<DummyResources>, shade::CreateProgramError> {
+    fn get_limits(&self) -> &core::Limits {
         unimplemented!()
     }
 
-    fn create_shader(
-        &mut self,
-        _: shade::Stage,
-        _: &[u8],
-    ) -> Result<handle::Shader<DummyResources>, shade::CreateShaderError> {
+    fn create_heap(&mut self, _: &core::HeapType, _: device::ResourceHeapType, _: u64) -> Result<(), device::ResourceHeapError> {
         unimplemented!()
     }
 
-    fn create_sampler(&mut self, _: texture::SamplerInfo) -> handle::Sampler<DummyResources> {
-        unimplemented!()
-    }
-    fn create_semaphore(&mut self) -> handle::Semaphore<DummyResources> {
-        unimplemented!()
-    }
-    fn create_fence(&mut self, _: bool) -> handle::Fence<DummyResources> {
-        unimplemented!()
-    }
-    fn reset_fences(&mut self, _: &[&handle::Fence<DummyResources>]) {
-        unimplemented!()
-    }
-    fn wait_for_fences(
-        &mut self,
-        _: &[&handle::Fence<DummyResources>],
-        _: WaitFor,
-        _: u32,
-    ) -> bool {
+    fn create_renderpass(&mut self, _: &[pass::Attachment], _: &[pass::SubpassDesc], _: &[pass::SubpassDependency]) -> () {
         unimplemented!()
     }
 
-    fn read_mapping<'a, 'b, T>(
-        &'a mut self,
-        _: &'b handle::Buffer<DummyResources, T>,
-    ) -> Result<mapping::Reader<'b, DummyResources, T>, mapping::Error>
-    where
-        T: Copy,
-    {
+    fn create_pipeline_layout(&mut self, _: &[&()]) -> () {
         unimplemented!()
     }
 
-    fn write_mapping<'a, 'b, T>(
-        &'a mut self,
-        _: &'b handle::Buffer<DummyResources, T>,
-    ) -> Result<mapping::Writer<'b, DummyResources, T>, mapping::Error>
-    where
-        T: Copy,
-    {
+    fn create_graphics_pipelines<'a>(&mut self, _: &[(&(), &(), pass::SubPass<'a, Backend>, &pso::GraphicsPipelineDesc)])
+            -> Vec<Result<(), pso::CreationError>> {
+                unimplemented!()
+            }
+
+    fn create_compute_pipelines(&mut self, _: &[(&(), pso::EntryPoint, &())]) -> Vec<Result<(), pso::CreationError>> {
         unimplemented!()
     }
 
-    fn create_texture_raw(
-        &mut self,
-        _: texture::Info,
-        _: Option<format::ChannelType>,
-        _: Option<&[&[u8]]>,
-    ) -> Result<handle::RawTexture<DummyResources>, texture::CreationError> {
+    fn create_framebuffer(&mut self, _: &(),
+        _: &[&()], _: &[&()],
+        _: u32, _: u32, _: u32
+    ) -> () {
         unimplemented!()
     }
 
-    fn view_buffer_as_shader_resource_raw(
-        &mut self,
-        _: &handle::RawBuffer<DummyResources>,
-        _: format::Format,
-    ) -> Result<handle::RawShaderResourceView<DummyResources>, ResourceViewError> {
+    fn create_sampler(&mut self, _: image::SamplerInfo) -> () {
         unimplemented!()
     }
-    fn view_buffer_as_unordered_access_raw(
-        &mut self,
-        _: &handle::RawBuffer<DummyResources>,
-    ) -> Result<handle::RawUnorderedAccessView<DummyResources>, ResourceViewError> {
+    fn create_buffer(&mut self, _: u64, _: u64, _: buffer::Usage) -> Result<(), buffer::CreationError> {
         unimplemented!()
     }
-    fn view_texture_as_shader_resource_raw(
-        &mut self,
-        _: &handle::RawTexture<DummyResources>,
-        _: texture::ResourceDesc,
-    ) -> Result<handle::RawShaderResourceView<DummyResources>, ResourceViewError> {
+
+    fn get_buffer_requirements(&mut self, _: &()) -> memory::Requirements {
         unimplemented!()
     }
-    fn view_texture_as_unordered_access_raw(
-        &mut self,
-        _: &handle::RawTexture<DummyResources>,
-    ) -> Result<handle::RawUnorderedAccessView<DummyResources>, ResourceViewError> {
+
+    fn bind_buffer_memory(&mut self, _: &(), _: u64, _: ()) -> Result<(), buffer::CreationError> {
         unimplemented!()
     }
-    fn view_texture_as_render_target_raw(
-        &mut self,
-        _: &handle::RawTexture<DummyResources>,
-        _: texture::RenderDesc,
-    ) -> Result<handle::RawRenderTargetView<DummyResources>, TargetViewError> {
+
+    fn create_image(&mut self, _: image::Kind, _: image::Level, _: format::Format, _: image::Usage)
+         -> Result<(), image::CreationError> {
+            unimplemented!()
+         }
+
+    fn get_image_requirements(&mut self, _: &()) -> memory::Requirements {
         unimplemented!()
     }
-    fn view_texture_as_depth_stencil_raw(
-        &mut self,
-        _: &handle::RawTexture<DummyResources>,
-        _: texture::DepthStencilDesc,
-    ) -> Result<handle::RawDepthStencilView<DummyResources>, TargetViewError> {
+
+    fn bind_image_memory(&mut self, _: &(), _: u64, _: ()) -> Result<(), image::CreationError> {
+        unimplemented!()
+    }
+
+    fn view_buffer_as_constant(&mut self, _: &(), _: usize, _: usize) -> Result<(), TargetViewError> {
+        unimplemented!()
+    }
+
+    fn view_image_as_render_target(&mut self, _: &(), _: format::Format, _: image::SubresourceRange) -> Result<(), TargetViewError> {
+        unimplemented!()
+    }
+
+    fn view_image_as_shader_resource(&mut self, _: &(), _: format::Format) -> Result<(), TargetViewError> {
+        unimplemented!()
+    }
+
+    fn view_image_as_unordered_access(&mut self, _: &(), _: format::Format) -> Result<(), TargetViewError> {
+        unimplemented!()
+    }
+    fn create_descriptor_pool(&mut self, _: usize, _: &[pso::DescriptorRangeDesc]) -> DescriptorPool {
+        unimplemented!()
+    }
+    fn create_descriptor_set_layout(&mut self, _: &[pso::DescriptorSetLayoutBinding]) -> () {
+        unimplemented!()
+    }
+
+
+    fn update_descriptor_sets(&mut self, _: &[pso::DescriptorSetWrite<Backend>]) {
+        unimplemented!()
+    }
+
+    fn read_mapping<'a, T>(&self, _: &'a (), _: u64, _: u64)
+                           -> Result<mapping::Reader<'a, Backend, T>, mapping::Error>
+        where T: Copy {
+            unimplemented!()
+        }
+
+    fn write_mapping<'a, 'b, T>(&mut self, _: &'a (), _: u64, _: u64)
+                                -> Result<mapping::Writer<'a, Backend, T>, mapping::Error>
+        where T: Copy {
+            unimplemented!()
+        }
+
+    fn create_semaphore(&mut self) -> () {
+        unimplemented!()
+    }
+
+    fn create_fence(&mut self, _: bool) -> () {
+        unimplemented!()
+    }
+
+    fn reset_fences(&mut self, _: &[&()]) {
+        unimplemented!()
+    }
+    fn wait_for_fences(&mut self, _: &[&()], _: device::WaitFor, _: u32) -> bool {
+        unimplemented!()
+    }
+
+    fn destroy_heap(&mut self, _: ()) {
+        unimplemented!()
+    }
+
+    fn destroy_shader_lib(&mut self, _: ()) {
+        unimplemented!()
+    }
+
+    fn destroy_renderpass(&mut self, _: ()) {
+        unimplemented!()
+    }
+
+    fn destroy_pipeline_layout(&mut self, _: ()) {
+        unimplemented!()
+    }
+    fn destroy_graphics_pipeline(&mut self, _: ()) {
+        unimplemented!()
+    }
+    fn destroy_compute_pipeline(&mut self, _: ()) {
+        unimplemented!()
+    }
+    fn destroy_framebuffer(&mut self, _: ()) {
+        unimplemented!()
+    }
+    fn destroy_buffer(&mut self, _: ()) {
+        unimplemented!()
+    }
+    fn destroy_image(&mut self, _: ()) {
+        unimplemented!()
+    }
+
+    fn destroy_render_target_view(&mut self, _: ()) {
+        unimplemented!()
+    }
+
+    fn destroy_depth_stencil_view(&mut self, _: ()) {
+        unimplemented!()
+    }
+
+    fn destroy_constant_buffer_view(&mut self, _: ()) {
+        unimplemented!()
+    }
+
+    fn destroy_shader_resource_view(&mut self, _: ()) {
+        unimplemented!()
+    }
+
+    fn destroy_unordered_access_view(&mut self, _: ()) {
+        unimplemented!()
+    }
+
+    fn destroy_sampler(&mut self, _: ()) {
+        unimplemented!()
+    }
+
+    fn destroy_descriptor_pool(&mut self, _: DescriptorPool) {
+        unimplemented!()
+    }
+
+    fn destroy_descriptor_set_layout(&mut self, _: ()) {
+        unimplemented!()
+    }
+
+    fn destroy_fence(&mut self, _: ()) {
+        unimplemented!()
+    }
+
+    fn destroy_semaphore(&mut self, _: ()) {
         unimplemented!()
     }
 }
 
 /// Dummy queue family;
-pub struct DummyFamily;
-impl QueueFamily for DummyFamily {
+pub struct QueueFamily;
+impl core::QueueFamily for QueueFamily {
     fn num_queues(&self) -> u32 {
         unimplemented!()
     }
@@ -213,19 +278,14 @@ impl QueueFamily for DummyFamily {
 
 /// Dummy submit info containing nothing.
 #[derive(Clone)]
-pub struct DummySubmitInfo;
+pub struct SubmitInfo;
 
 /// Dummy subpass command buffer.
-pub struct DummySubpassCommandBuffer;
-impl command::CommandBuffer<DummyBackend> for DummySubpassCommandBuffer {
-    unsafe fn end(&mut self) -> DummySubmitInfo {
-        unimplemented!()
-    }
-}
+pub struct SubpassCommandBuffer;
 
 /// Dummy raw command pool.
-pub struct DummyRawCommandPool;
-impl pool::RawCommandPool<DummyBackend> for DummyRawCommandPool {
+pub struct RawCommandPool;
+impl core::RawCommandPool<Backend> for RawCommandPool {
     fn reset(&mut self) {
         unimplemented!()
     }
@@ -234,172 +294,257 @@ impl pool::RawCommandPool<DummyBackend> for DummyRawCommandPool {
         unimplemented!()
     }
 
-    unsafe fn from_queue<Q>(_: Q, _: usize) -> Self
-    where
-        Q: AsRef<DummyQueue>,
-    {
+    unsafe fn from_queue(_: &CommandQueue, _: usize) -> Self {
         unimplemented!()
     }
 
-    unsafe fn acquire_command_buffer(&mut self) -> &mut DummyCommandBuffer {
+    unsafe fn acquire_command_buffer(&mut self) -> RawCommandBuffer {
+        unimplemented!()
+    }
+
+    unsafe fn return_command_buffer(&mut self, _: RawCommandBuffer) {
         unimplemented!()
     }
 }
 
 /// Dummy subpass command pool.
-pub struct DummySubpassCommandPool;
-impl pool::SubpassCommandPool<DummyBackend> for DummySubpassCommandPool {}
+pub struct SubpassCommandPool;
+impl core::SubpassCommandPool<Backend> for SubpassCommandPool {
 
-/// Dummy resources phantom type
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum DummyResources {}
-
-impl Resources for DummyResources {
-    type Buffer               = ();
-    type Shader               = ();
-    type Program              = ();
-    type PipelineStateObject  = ();
-    type Texture              = ();
-    type ShaderResourceView   = ();
-    type UnorderedAccessView  = ();
-    type RenderTargetView     = ();
-    type DepthStencilView     = ();
-    type Sampler              = ();
-    type Semaphore            = ();
-    type Fence                = DummyFence;
-    type Mapping              = DummyMapping;
-}
-
-/// Dummy fence that does nothing.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct DummyFence;
-
-/// Dummy mapping which will crash on use.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct DummyMapping;
-
-impl mapping::Gate<DummyResources> for DummyMapping {
-    unsafe fn set<T>(&self, _index: usize, _val: T) {
-        unimplemented!()
-    }
-    unsafe fn slice<'a, 'b, T>(&'a self, _len: usize) -> &'b [T] {
-        unimplemented!()
-    }
-    unsafe fn mut_slice<'a, 'b, T>(&'a self, _len: usize) -> &'b mut [T] {
-        unimplemented!()
-    }
 }
 
 /// Dummy command buffer, which ignores all the calls.
-pub struct DummyCommandBuffer;
-impl command::CommandBuffer<DummyBackend> for DummyCommandBuffer {
-    unsafe fn end(&mut self) -> DummySubmitInfo {
+pub struct RawCommandBuffer;
+impl core::RawCommandBuffer<Backend> for RawCommandBuffer {
+
+    fn finish(&mut self) -> SubmitInfo {
+        unimplemented!()
+    }
+
+
+    fn pipeline_barrier(&mut self, _: &[memory::Barrier<Backend>]) {
+        unimplemented!()
+    }
+
+
+    fn clear_color(&mut self, _: &(), _: image::ImageLayout, _: command::ClearColor) {
+        unimplemented!()
+    }
+
+    fn clear_depth_stencil(
+        &mut self,
+        _: &(),
+        _: image::ImageLayout,
+        _: Option<target::Depth>,
+        _: Option<target::Stencil>,
+    ) {
+        unimplemented!()
+    }
+
+
+    fn resolve_image(
+        &mut self,
+        _: &(),
+        _: image::ImageLayout,
+        _: &(),
+        _: image::ImageLayout,
+        _: &[command::ImageResolve],
+    ) {
+        unimplemented!()
+    }
+
+    fn bind_index_buffer(&mut self, _: buffer::IndexBufferView<Backend>) {
+        unimplemented!()
+    }
+
+    fn bind_vertex_buffers(&mut self, _: pso::VertexBufferSet<Backend>) {
+        unimplemented!()
+    }
+
+    fn set_viewports(&mut self, _: &[core::Viewport]) {
+
+    }
+
+    fn set_scissors(&mut self, _: &[target::Rect]) {
+        unimplemented!()
+    }
+
+
+    fn set_stencil_reference(&mut self, _: target::Stencil, _: target::Stencil) {
+        unimplemented!()
+    }
+
+
+    fn set_blend_constants(&mut self, _: target::ColorValue) {
+        unimplemented!()
+    }
+
+
+    fn begin_renderpass(
+        &mut self,
+        _: &(),
+        _: &(),
+        _: target::Rect,
+        _: &[command::ClearValue],
+        _: command::SubpassContents,
+    ) {
+        unimplemented!()
+    }
+
+    fn next_subpass(&mut self, _: command::SubpassContents) {
+        unimplemented!()
+    }
+
+    fn end_renderpass(&mut self) {
+        unimplemented!()
+    }
+
+    fn bind_graphics_pipeline(&mut self, _: &()) {
+        unimplemented!()
+    }
+
+    fn bind_graphics_descriptor_sets(
+        &mut self,
+        _: &(),
+        _: usize,
+        _: &[&()],
+    ) {
+        unimplemented!()
+    }
+
+    fn bind_compute_pipeline(&mut self, _: &()) {
+        unimplemented!()
+    }
+
+    fn dispatch(&mut self, _: u32, _: u32, _: u32) {
+        unimplemented!()
+    }
+
+    fn dispatch_indirect(&mut self, _: &(), _: u64) {
+        unimplemented!()
+    }
+
+    fn copy_buffer(&mut self, _: &(), _: &(), _: &[command::BufferCopy]) {
+        unimplemented!()
+    }
+
+    fn copy_image(
+        &mut self,
+        _: &(),
+        _: image::ImageLayout,
+        _: &(),
+        _: image::ImageLayout,
+        _: &[command::ImageCopy],
+    ) {
+        unimplemented!()
+    }
+
+    fn copy_buffer_to_image(
+        &mut self,
+        _: &(),
+        _: &(),
+        _: image::ImageLayout,
+        _: &[command::BufferImageCopy],
+    ) {
+        unimplemented!()
+    }
+
+    fn copy_image_to_buffer(
+        &mut self,
+        _: &(),
+        _: &(),
+        _: image::ImageLayout,
+        _: &[command::BufferImageCopy],
+    ) {
+        unimplemented!()
+    }
+
+    fn draw(&mut self,
+        _: core::VertexCount,
+        _: core::VertexCount,
+        _: Option<command::InstanceParams>,
+    ) {
+        unimplemented!()
+    }
+
+    fn draw_indexed(
+        &mut self,
+        _: core::IndexCount,
+        _: core::IndexCount,
+        _: core::VertexOffset,
+        _: Option<command::InstanceParams>,
+    ) {
+        unimplemented!()
+    }
+
+    fn draw_indirect(&mut self, _: &(), _: u64, _: u32, _: u32) {
+        unimplemented!()
+    }
+
+    fn draw_indexed_indirect(
+        &mut self,
+        _: &(),
+        _: u64,
+        _: u32,
+        _: u32,
+    ) {
         unimplemented!()
     }
 }
-impl command::Buffer<DummyResources> for DummyCommandBuffer {
-    fn reset(&mut self) {}
-    fn bind_pipeline_state(&mut self, _: ()) {}
-    fn bind_vertex_buffers(&mut self, _: pso::VertexBufferSet<DummyResources>) {}
-    fn bind_constant_buffers(&mut self, _: &[pso::ConstantBufferParam<DummyResources>]) {}
-    fn bind_global_constant(&mut self, _: shade::Location, _: shade::UniformValue) {}
-    fn bind_resource_views(&mut self, _: &[pso::ResourceViewParam<DummyResources>]) {}
-    fn bind_unordered_views(&mut self, _: &[pso::UnorderedViewParam<DummyResources>]) {}
-    fn bind_samplers(&mut self, _: &[pso::SamplerParam<DummyResources>]) {}
-    fn bind_pixel_targets(&mut self, _: pso::PixelTargetSet<DummyResources>) {}
-    fn bind_index(&mut self, _: (), _: IndexType) {}
-    fn set_scissor(&mut self, _: target::Rect) {}
-    fn set_ref_values(&mut self, _: state::RefValues) {}
-    fn copy_buffer(&mut self, _: (), _: (), _: usize, _: usize, _: usize) {}
-    fn copy_buffer_to_texture(
-        &mut self,
-        _: (),
-        _: usize,
-        _: (),
-        _: texture::Kind,
-        _: Option<texture::CubeFace>,
-        _: texture::RawImageInfo,
-    ) {
+
+// Dummy descriptor pool.
+pub struct DescriptorPool;
+impl core::DescriptorPool<Backend> for DescriptorPool {
+    fn allocate_sets(&mut self, _: &[&()]) -> Vec<()> {
+        unimplemented!()
     }
-    fn copy_texture_to_buffer(
-        &mut self,
-        _: (),
-        _: texture::Kind,
-        _: Option<texture::CubeFace>,
-        _: texture::RawImageInfo,
-        _: (),
-        _: usize,
-    ) {
-    }
-    fn update_buffer(&mut self, _: (), _: &[u8], _: usize) {}
-    fn update_texture(
-        &mut self,
-        _: (),
-        _: texture::Kind,
-        _: Option<texture::CubeFace>,
-        _: &[u8],
-        _: texture::RawImageInfo,
-    ) {
-    }
-    fn generate_mipmap(&mut self, _: ()) {}
-    fn clear_color(&mut self, _: (), _: command::ClearColor) {}
-    fn clear_depth_stencil(&mut self, _: (), _: Option<target::Depth>, _: Option<target::Stencil>) {
-    }
-    fn call_draw(&mut self, _: VertexCount, _: VertexCount, _: Option<command::InstanceParams>) {}
-    fn call_draw_indexed(
-        &mut self,
-        _: VertexCount,
-        _: VertexCount,
-        _: VertexCount,
-        _: Option<command::InstanceParams>,
-    ) {
+
+    fn reset(&mut self) {
+        unimplemented!()
     }
 }
 
 /// Dummy surface.
-pub struct DummySurface;
-impl Surface<DummyBackend> for DummySurface {
-    type Swapchain = DummySwapchain;
+pub struct Surface;
+impl core::Surface<Backend> for Surface {
+    type Swapchain = Swapchain;
 
-    fn supports_queue(&self, _: &DummyFamily) -> bool {
+    fn supports_queue(&self, _: &QueueFamily) -> bool {
         unimplemented!()
     }
 
-    fn build_swapchain<Q>(&mut self, _: SwapchainConfig, _: &Q) -> Self::Swapchain
-    where
-        Q: AsRef<DummyQueue>,
-    {
+    fn build_swapchain<C>(&mut self, _: core::SwapchainConfig, _: &core::CommandQueue<Backend, C>)-> Self::Swapchain {
         unimplemented!()
     }
 }
 
 /// Dummy swapchain.
-pub struct DummySwapchain;
-impl Swapchain<DummyBackend> for DummySwapchain {
-    fn get_backbuffers(&mut self) -> &[Backbuffer<DummyBackend>] {
+pub struct Swapchain;
+impl core::Swapchain<Backend> for Swapchain {
+    fn get_backbuffers(&mut self) -> &[core::Backbuffer<Backend>] {
         unimplemented!()
     }
 
-    fn acquire_frame(&mut self, sync: FrameSync<DummyResources>) -> Frame {
+    fn acquire_frame(&mut self, _: core::FrameSync<Backend>) -> core::Frame {
         unimplemented!()
     }
 
-    fn present<Q: AsMut<DummyQueue>>(
+    fn present<C>(
         &mut self,
-        _: &mut Q,
-        _: &[&handle::Semaphore<DummyResources>],
+        _: &mut core::CommandQueue<Backend, C>,
+        _: &[&()],
     ) {
         unimplemented!()
     }
 }
 
 /// Dummy window.
-pub struct DummyWindow;
-impl WindowExt<DummyBackend> for DummyWindow {
-    type Surface = DummySurface;
-    type Adapter = DummyAdapter;
+pub struct Window;
+impl core::WindowExt<Backend> for Window {
+    type Surface = Surface;
+    type Adapter = Adapter;
 
-    fn get_surface_and_adapters(&mut self) -> (DummySurface, Vec<DummyAdapter>) {
+    fn get_surface_and_adapters(&mut self) -> (Surface, Vec<Adapter>) {
         unimplemented!()
     }
 }

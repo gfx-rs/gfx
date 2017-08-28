@@ -95,10 +95,10 @@ pub struct SubpassDesc<'a> {
     pub color_attachments: &'a [AttachmentRef],
 }
 
-/// Reference to a subpass of a renderpass by index.
+/// A sub-pass borrow of a pass.
 pub struct SubPass<'a, B: Backend> {
-    ///
+    /// Index of the sub pass
     pub index: usize,
-    /// Parent renderpass.
+    /// Main pass borrow.
     pub main_pass: &'a B::RenderPass,
 }
