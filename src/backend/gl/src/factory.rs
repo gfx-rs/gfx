@@ -70,7 +70,6 @@ pub fn update_sub_buffer(gl: &gl::Gl, buffer: Buffer, address: *const u8,
 /// GL resource factory.
 pub struct Factory {
     share: Rc<Share>,
-    frame_handles: handle::Manager<R>,
 }
 
 impl Clone for Factory {
@@ -84,7 +83,6 @@ impl Factory {
     pub fn new(share: Rc<Share>) -> Factory {
         Factory {
             share: share,
-            frame_handles: handle::Manager::new(),
         }
     }
 
@@ -206,26 +204,26 @@ impl Factory {
     fn create_program_raw(&mut self, shader_set: &d::ShaderSet<R>)
                           -> Result<(gl::types::GLuint, d::shade::ProgramInfo), d::shade::CreateProgramError> {
         use shade::create_program;
-        let frame_handles = &mut self.frame_handles;
+        let mut handler = handle::Manager::new();
         let mut shaders = [0; 5];
         let usage = shader_set.get_usage();
         let shader_slice = match shader_set {
             &d::ShaderSet::Simple(ref vs, ref ps) => {
-                shaders[0] = *vs.reference(frame_handles);
-                shaders[1] = *ps.reference(frame_handles);
+                shaders[0] = *vs.reference(&mut handler);
+                shaders[1] = *ps.reference(&mut handler);
                 &shaders[..2]
             },
             &d::ShaderSet::Geometry(ref vs, ref gs, ref ps) => {
-                shaders[0] = *vs.reference(frame_handles);
-                shaders[1] = *gs.reference(frame_handles);
-                shaders[2] = *ps.reference(frame_handles);
+                shaders[0] = *vs.reference(&mut handler);
+                shaders[1] = *gs.reference(&mut handler);
+                shaders[2] = *ps.reference(&mut handler);
                 &shaders[..3]
             },
             &d::ShaderSet::Tessellated(ref vs, ref hs, ref ds, ref ps) => {
-                shaders[0] = *vs.reference(frame_handles);
-                shaders[1] = *hs.reference(frame_handles);
-                shaders[2] = *ds.reference(frame_handles);
-                shaders[3] = *ps.reference(frame_handles);
+                shaders[0] = *vs.reference(&mut handler);
+                shaders[1] = *hs.reference(&mut handler);
+                shaders[2] = *ds.reference(&mut handler);
+                shaders[3] = *ps.reference(&mut handler);
                 &shaders[..4]
             },
         };
@@ -239,7 +237,7 @@ impl Factory {
 
     fn view_texture_as_target(&mut self, htex: &handle::RawTexture<R>, level: Level, layer: Option<Layer>)
                               -> Result<TargetView, f::TargetViewError> {
-        match (self.frame_handles.ref_texture(htex), layer) {
+        match (htex.resource(), layer) {
             (&NewTexture::Surface(_), Some(_)) => Err(f::TargetViewError::Unsupported),
             (&NewTexture::Surface(_), None) if level != 0 => Err(f::TargetViewError::Unsupported),
             (&NewTexture::Surface(s), None) => Ok(TargetView::Surface(s)),
@@ -389,7 +387,7 @@ impl f::Factory<R> for Factory {
             });
         }
         let pso = PipelineState {
-            program: *self.frame_handles.ref_program(program),
+            program: *program.resource(),
             primitive: desc.primitive,
             input: inputs,
             scissor: desc.scissor,
@@ -440,7 +438,7 @@ impl f::Factory<R> for Factory {
                                       -> Result<handle::RawShaderResourceView<R>, f::ResourceViewError> {
         let gl = &self.share.context;
         let mut name = 0 as gl::types::GLuint;
-        let buf_name = *self.frame_handles.ref_buffer(hbuf);
+        let buf_name = *hbuf.resource();
         let format = gl::R8; //TODO: get from the buffer handle
         unsafe {
             gl.GenTextures(1, &mut name);
@@ -461,7 +459,7 @@ impl f::Factory<R> for Factory {
 
     fn view_texture_as_shader_resource_raw(&mut self, htex: &handle::RawTexture<R>, _desc: t::ResourceDesc)
                                        -> Result<handle::RawShaderResourceView<R>, f::ResourceViewError> {
-        match self.frame_handles.ref_texture(htex) {
+        match htex.resource() {
             &NewTexture::Surface(_) => Err(f::ResourceViewError::NoBindFlag),
             &NewTexture::Texture(t) => {
                 //TODO: use the view descriptor
@@ -516,11 +514,10 @@ impl f::Factory<R> for Factory {
         where T: Copy
     {
         let gl = &self.share.context;
-        let handles = &mut self.frame_handles;
         unsafe {
             mapping::read(buf.raw(), |mapping| match mapping.kind {
                 MappingKind::Persistent(ref mut status) =>
-                    status.cpu_access(|fence| wait_fence(&handles.ref_fence(&fence), gl)),
+                    status.cpu_access(|fence| wait_fence(fence.resource(), gl)),
                 MappingKind::Temporary =>
                     temporary_ensure_mapped(&mut mapping.pointer,
                                             role_to_target(buf.get_info().role),
@@ -537,11 +534,10 @@ impl f::Factory<R> for Factory {
         where T: Copy
     {
         let gl = &self.share.context;
-        let handles = &mut self.frame_handles;
         unsafe {
             mapping::write(buf.raw(), |mapping| match mapping.kind {
                 MappingKind::Persistent(ref mut status) =>
-                    status.cpu_write_access(|fence| wait_fence(&handles.ref_fence(&fence), gl)),
+                    status.cpu_write_access(|fence| wait_fence(fence.resource(), gl)),
                 MappingKind::Temporary =>
                     temporary_ensure_mapped(&mut mapping.pointer,
                                             role_to_target(buf.get_info().role),

@@ -248,6 +248,12 @@ impl<R: Resources> Sampler<R> {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Fence<R: Resources>(Arc<R::Fence>);
 
+impl<R: Resources> Fence<R> {
+    #[doc(hidden)]
+    pub fn resource(&self) -> &R::Fence { &self.0 }
+}
+
+
 /// Stores reference-counted resources used in a command buffer.
 /// Seals actual resource names behind the interface, automatically
 /// referencing them both by the Factory on resource creation
@@ -546,6 +552,6 @@ impl<R: Resources> Manager<R> {
     /// Reference a fence
     pub fn ref_fence<'a>(&mut self, fence: &'a Fence<R>) -> &'a R::Fence {
         self.fences.push(fence.0.clone());
-        &fence.0
+        fence.resource()
     }
 }
