@@ -28,8 +28,9 @@ extern crate image;
 
 use core::{buffer, command, device as d, image as i, memory as m, pass, pso, shade, state};
 use core::{Adapter, Device, QueueFamily, SwapChain, WindowExt};
-use core::{DescriptorPool, Gpu, FrameSync, Primitive, SubPass, Surface, SwapchainConfig};
+use core::{DescriptorPool, Gpu, FrameSync, Primitive, Surface, SwapchainConfig};
 use core::format::{Formatted, Srgba8 as ColorFormat, Vec2};
+use core::pass::SubPass;
 use core::queue::Submission;
 use core::target::Rect;
 
