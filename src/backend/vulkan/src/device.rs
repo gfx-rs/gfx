@@ -15,7 +15,7 @@
 use ash::vk;
 use ash::version::DeviceV1_0;
 use core::{buffer, device as d, format, image, mapping, shade, pass, pso};
-use core::{Features, Limits, HeapType, SubPass};
+use core::{Features, Limits, HeapType};
 use core::memory::Requirements;
 use native as n;
 use std::{mem, ptr, slice};
@@ -261,8 +261,9 @@ impl d::Device<B> for Device {
         n::PipelineLayout { raw }
     }
 
-    fn create_graphics_pipelines<'a>(&mut self, descs: &[(&n::ShaderLib, &n::PipelineLayout, SubPass<'a, B>, &pso::GraphicsPipelineDesc)])
-        -> Vec<Result<n::GraphicsPipeline, pso::CreationError>>
+    fn create_graphics_pipelines<'a>(&mut self,
+        descs: &[(&n::ShaderLib, &n::PipelineLayout, pass::SubPass<'a, B>, &pso::GraphicsPipelineDesc)],
+    ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>>
     {
         use core::state as s;
 
