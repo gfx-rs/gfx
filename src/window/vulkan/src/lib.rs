@@ -107,7 +107,7 @@ impl Surface {
         let entry = VK_ENTRY
             .as_ref()
             .expect("Unable to load Vulkan entry points");
-        let win32_loader = ash::extensions::Win32Surface::new(entry, &instance.raw)
+        let win32_loader = ash::extensions::Win32Surface::new(entry, &instance.raw.0)
             .expect("Unable to load win32 surface functions");
 
         let surface = unsafe {
