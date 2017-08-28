@@ -26,10 +26,7 @@ use std::collections::VecDeque;
 use std::ptr;
 use std::sync::Arc;
 use core::FrameSync;
-use backend::{conversions as conv, native,
-    Instance, VK_ENTRY,
-};
-
+use backend::{conversions as conv, native, Instance, VK_ENTRY};
 
 pub struct Surface {
     // Vk (EXT) specs [29.2.7 Platform-Independent Information]
@@ -54,10 +51,16 @@ impl Drop for RawSurface {
 }
 
 impl Surface {
-    fn from_raw(instance: &Instance, surface: vk::SurfaceKHR, (width, height): (u32, u32)) -> Surface {
-        let entry = VK_ENTRY.as_ref().expect("Unable to load Vulkan entry points");
-        let functor = ext::Surface::new(entry, &instance.raw.0)
-            .expect("Unable to load surface functions");
+    fn from_raw(
+        instance: &Instance,
+        surface: vk::SurfaceKHR,
+        (width, height): (u32, u32),
+    ) -> Surface {
+        let entry = VK_ENTRY
+            .as_ref()
+            .expect("Unable to load Vulkan entry points");
+        let functor =
+            ext::Surface::new(entry, &instance.raw.0).expect("Unable to load surface functions");
 
         let raw = Arc::new(RawSurface {
             handle: surface,
@@ -65,45 +68,49 @@ impl Surface {
             instance: instance.raw.clone(),
         });
 
-        Surface {
-            raw,
-            width,
-            height,
-        }
+        Surface { raw, width, height }
     }
 
     #[cfg(not(target_os = "windows"))]
     fn from_window(window: &winit::Window, instance: &Instance) -> Surface {
-        let entry = VK_ENTRY.as_ref().expect("Unable to load Vulkan entry points");
+        let entry = VK_ENTRY
+            .as_ref()
+            .expect("Unable to load Vulkan entry points");
 
-        let surface = instance.surface_extensions.iter().map(|&extension| {
-            match extension {
-                vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME => {
-                    use winit::os::unix::WindowExt;
-                    let xlib_loader = if let Ok(loader) = ash::extensions::XlibSurface::new(entry, &instance.raw.0) {
-                        loader
-                    } else {
-                        return None;
-                    };
-
-                    unsafe {
-                        let info = vk::XlibSurfaceCreateInfoKHR {
-                            s_type: vk::StructureType::XlibSurfaceCreateInfoKhr,
-                            p_next: ptr::null(),
-                            flags: vk::XlibSurfaceCreateFlagsKHR::empty(),
-                            window: window.get_xlib_window().unwrap() as *const _,
-                            dpy: window.get_xlib_display().unwrap() as *mut _,
+        let surface = instance
+            .surface_extensions
+            .iter()
+            .map(|&extension| {
+                match extension {
+                    vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME => {
+                        use winit::os::unix::WindowExt;
+                        let xlib_loader = if let Ok(loader) =
+                            ash::extensions::XlibSurface::new(entry, &instance.raw.0)
+                        {
+                            loader
+                        } else {
+                            return None;
                         };
 
-                        xlib_loader.create_xlib_surface_khr(&info, None).ok()
+                        unsafe {
+                            let info = vk::XlibSurfaceCreateInfoKHR {
+                                s_type: vk::StructureType::XlibSurfaceCreateInfoKhr,
+                                p_next: ptr::null(),
+                                flags: vk::XlibSurfaceCreateFlagsKHR::empty(),
+                                window: window.get_xlib_window().unwrap() as *const _,
+                                dpy: window.get_xlib_display().unwrap() as *mut _,
+                            };
+
+                            xlib_loader.create_xlib_surface_khr(&info, None).ok()
+                        }
                     }
-                },
-                // TODO: other platforms
-                _ => None,
-            }
-        }).find(|x| x.is_some())
-          .expect("Unable to find a surface implementation.")
-          .unwrap();
+                    // TODO: other platforms
+                    _ => None,
+                }
+            })
+            .find(|x| x.is_some())
+            .expect("Unable to find a surface implementation.")
+            .unwrap();
 
         Self::from_raw(instance, surface, window.get_inner_size_pixels().unwrap())
     }
@@ -111,7 +118,9 @@ impl Surface {
     #[cfg(target_os = "windows")]
     fn from_window(window: &winit::Window, instance: &Instance) -> Surface {
         use winit::os::windows::WindowExt;
-        let entry = VK_ENTRY.as_ref().expect("Unable to load Vulkan entry points");
+        let entry = VK_ENTRY
+            .as_ref()
+            .expect("Unable to load Vulkan entry points");
         let win32_loader = ash::extensions::Win32Surface::new(entry, &instance.raw)
             .expect("Unable to load win32 surface functions");
 
@@ -120,11 +129,12 @@ impl Surface {
                 s_type: vk::StructureType::Win32SurfaceCreateInfoKhr,
                 p_next: ptr::null(),
                 flags: vk::Win32SurfaceCreateFlagsKHR::empty(),
-                hinstance: unsafe { kernel32::GetModuleHandleW(ptr::null()) } as *mut _,
+                hinstance: kernel32::GetModuleHandleW(ptr::null()) as *mut _,
                 hwnd: window.get_hwnd() as *mut _,
             };
 
-            win32_loader.create_win32_surface_khr(&info, None)
+            win32_loader
+                .create_win32_surface_khr(&info, None)
                 .expect("Error on surface creation")
         };
 
@@ -143,15 +153,13 @@ impl core::Surface<backend::Backend> for Surface {
         )
     }
 
-    fn build_swapchain<C>(&mut self,
+    fn build_swapchain<C>(
+        &mut self,
         config: core::SwapchainConfig,
         present_queue: &core::CommandQueue<backend::Backend, C>,
-    ) -> Self::SwapChain
-    {
-        let functor = ext::Swapchain::new(
-            &self.raw.instance.0,
-            &present_queue.raw().device().0,
-            ).expect("Unable to query swapchain function");
+    ) -> Self::SwapChain {
+        let functor = ext::Swapchain::new(&self.raw.instance.0, &present_queue.raw().device().0)
+            .expect("Unable to query swapchain function");
 
         // TODO: check for better ones if available
         let present_mode = vk::PresentModeKHR::Fifo; // required to be supported
@@ -183,13 +191,11 @@ impl core::Surface<backend::Backend> for Surface {
             old_swapchain: vk::SwapchainKHR::null(),
         };
 
-        let swapchain = unsafe {
-            functor.create_swapchain_khr(&info, None)
-        }.expect("Unable to create a swapchain");
+        let swapchain = unsafe { functor.create_swapchain_khr(&info, None) }
+            .expect("Unable to create a swapchain");
 
-        let backbuffer_images = {
-            functor.get_swapchain_images_khr(swapchain)
-        }.expect("Unable to get swapchain images");
+        let backbuffer_images = { functor.get_swapchain_images_khr(swapchain) }
+            .expect("Unable to get swapchain images");
 
         let backbuffers = backbuffer_images
             .into_iter()
@@ -206,7 +212,8 @@ impl core::Surface<backend::Backend> for Surface {
                     },
                     depth_stencil: None,
                 }
-            }).collect();
+            })
+            .collect();
 
         SwapChain {
             raw: swapchain,
@@ -232,35 +239,30 @@ impl core::SwapChain<backend::Backend> for SwapChain {
 
     fn acquire_frame(&mut self, sync: FrameSync<backend::Backend>) -> core::Frame {
         let (semaphore, fence) = match sync {
-            FrameSync::Semaphore(semaphore) => {
-                (semaphore.0, vk::Fence::null())
-            }
-            FrameSync::Fence(fence) => {
-                (vk::Semaphore::null(), fence.0)
-            }
+            FrameSync::Semaphore(semaphore) => (semaphore.0, vk::Fence::null()),
+            FrameSync::Fence(fence) => (vk::Semaphore::null(), fence.0),
         };
 
         let index = unsafe {
             // will block if no image is available
-            self.functor.acquire_next_image_khr(self.raw, std::u64::MAX, semaphore, fence)
+            self.functor
+                .acquire_next_image_khr(self.raw, std::u64::MAX, semaphore, fence)
         }.expect("Unable to acquire a swapchain image");
 
         self.frame_queue.push_back(index as usize);
         core::Frame::new(index as usize)
     }
 
-    fn present<C>(&mut self,
+    fn present<C>(
+        &mut self,
         present_queue: &mut core::CommandQueue<backend::Backend, C>,
         wait_semaphores: &[&native::Semaphore],
     ) {
-        let frame = self.frame_queue
-            .pop_front()
-            .expect("No frame currently queued up. Need to acquire a frame first.");
+        let frame = self.frame_queue.pop_front().expect(
+            "No frame currently queued up. Need to acquire a frame first.",
+        );
 
-        let semaphores = wait_semaphores
-            .iter()
-            .map(|sem| sem.0)
-            .collect::<Vec<_>>();
+        let semaphores = wait_semaphores.iter().map(|sem| sem.0).collect::<Vec<_>>();
 
         // TODO: wait semaphores
         let info = vk::PresentInfoKHR {
@@ -275,7 +277,8 @@ impl core::SwapChain<backend::Backend> for SwapChain {
         };
 
         assert_eq!(Ok(()), unsafe {
-            self.functor.queue_present_khr(*present_queue.raw().raw(), &info)
+            self.functor
+                .queue_present_khr(*present_queue.raw().raw(), &info)
         });
         // TODO: handle result and return code
     }
