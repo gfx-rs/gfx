@@ -195,14 +195,6 @@ pub enum IndexType {
     U32,
 }
 
-/// A sub-pass borrow of a pass.
-pub struct SubPass<'a, B: Backend> {
-    /// Index of the sub pass
-    pub index: usize,
-    /// Main pass borrow.
-    pub main_pass: &'a B::RenderPass,
-}
-
 ///
 #[derive(Copy, Clone, Debug)]
 pub struct HeapType {
