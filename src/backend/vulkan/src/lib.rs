@@ -226,6 +226,32 @@ impl core::QueueFamily for QueueFamily {
     }
 }
 
+/// Create associated command queues for a specific queue type
+fn collect_queues<C>(
+     queue_descs: &[(&QueueFamily, QueueType, u32)],
+     device_raw: &Arc<RawDevice>,
+     collect_type: QueueType,
+) -> Vec<core::CommandQueue<Backend, C>> {
+    queue_descs.iter()
+        .filter(|&&(_, qtype, _)| qtype == collect_type)
+        .flat_map(|&(qfamily, _, qcount)| {
+            let family_index = qfamily.family_index;
+            (0..qcount).map(move |id| {
+                let queue_raw = unsafe {
+                    device_raw.0.get_device_queue(family_index, id)
+                };
+                let queue = CommandQueue {
+                    raw: Arc::new(queue_raw),
+                    device: device_raw.clone(),
+                    family_index,
+                };
+                unsafe {
+                    core::CommandQueue::new(queue)
+                }
+            })
+        }).collect()
+}
+
 pub struct Adapter {
     instance: Arc<RawInstance>,
     handle: vk::PhysicalDevice,
@@ -249,7 +275,7 @@ impl core::Adapter<Backend> for Adapter {
                     p_next: ptr::null(),
                     flags: vk::DeviceQueueCreateFlags::empty(),
                     queue_family_index: family.family_index,
-                    queue_count: queue_count,
+                    queue_count,
                     p_queue_priorities: queue_priorities.last().unwrap().as_ptr(),
                 }
             }).collect::<Vec<_>>();
@@ -343,29 +369,13 @@ impl core::Adapter<Backend> for Adapter {
             }
         }).collect::<Vec<_>>();
 
-        // Create associated command queues for each queue type
-        let queues = queue_infos.iter().flat_map(|info| {
-            (0..info.queue_count).map(|id| {
-                let queue_raw = unsafe {
-                    device.raw.0.get_device_queue(info.queue_family_index, id)
-                };
-                let queue = CommandQueue {
-                    raw: Arc::new(queue_raw),
-                    device: device.raw.clone(),
-                    family_index: info.queue_family_index,
-                };
-                unsafe {
-                    core::CommandQueue::new(queue)
-                }
-            }).collect::<Vec<_>>()
-        }).collect();
-
+        let device_arc = device.raw.clone();
         core::Gpu {
             device,
-            general_queues: queues,
-            graphics_queues: Vec::new(),
-            compute_queues: Vec::new(),
-            transfer_queues: Vec::new(),
+            general_queues: collect_queues(queue_descs, &device_arc, QueueType::General),
+            graphics_queues: collect_queues(queue_descs, &device_arc, QueueType::Graphics),
+            compute_queues: collect_queues(queue_descs, &device_arc, QueueType::Compute),
+            transfer_queues: collect_queues(queue_descs, &device_arc, QueueType::Transfer),
             heap_types,
             memory_heaps,
         }
