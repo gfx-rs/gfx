@@ -25,16 +25,19 @@ pub trait Adapter<B: Backend>: Sized {
     /// # Examples
     ///
     /// ```no_run
+    /// # extern crate empty;
+    /// # extern crate gfx_core;
+    /// # fn main() {
     /// use gfx_core::{Adapter, QueueFamily};
-    /// # use gfx_core::dummy::DummyAdapter;
     ///
-    /// # let adapter: DummyAdapter = return;
+    /// # let adapter: empty::Adapter = return;
     /// let queue_desc = adapter.get_queue_families()
     ///                         .iter()
     ///                         .map(|&(ref family, ty)|
     ///                             (family, ty, family.num_queues()))
     ///                         .collect::<Vec<_>>();
     /// let gpu = adapter.open(&queue_desc);
+    /// # }
     /// ```
     fn open(&self, queue_descs: &[(&B::QueueFamily, QueueType, u32)]) -> Gpu<B>;
 
@@ -46,17 +49,19 @@ pub trait Adapter<B: Backend>: Sized {
     /// # Examples
     ///
     /// ```no_run
+    /// # extern crate empty;
+    /// # extern crate gfx_core;
+    /// # fn main() {
     /// use gfx_core::{Adapter, QueueType, Surface};
-    /// # use gfx_core::dummy::{DummyAdapter, DummySurface};
     ///
-    /// # let adapter: DummyAdapter = return;
-    /// # let surface: DummySurface = return;
+    /// # let adapter: empty::Adapter = return;
+    /// # let surface: empty::Surface = return;
     /// // Open a gpu with a graphics queue, which can be used for presentation.
     /// // GeneralQueues will be downcasted to GraphicsQueues.
     /// let gpu = adapter.open_with(|family, ty| {
     ///     ((ty.supports_graphics() && surface.supports_queue(&family)) as u32, QueueType::Graphics)
     /// });
-    ///
+    /// # }
     /// ```
     fn open_with<F>(&self, mut f: F) -> Gpu<B>
     where
@@ -81,10 +86,14 @@ pub trait Adapter<B: Backend>: Sized {
     /// # Examples
     ///
     /// ```no_run
+    /// # extern crate empty;
+    /// # extern crate gfx_core;
+    /// # fn main() {
     /// use gfx_core::Adapter;
     ///
-    /// # let adapter: gfx_core::dummy::DummyAdapter = return;
+    /// # let adapter: empty::Adapter = return;
     /// println!("Adapter info: {:?}", adapter.get_info());
+    /// # }
     /// ```
     fn get_info(&self) -> &AdapterInfo;
 
@@ -96,12 +105,16 @@ pub trait Adapter<B: Backend>: Sized {
     /// # Examples
     ///
     /// ```no_run
+    /// # extern crate empty;
+    /// # extern crate gfx_core;
+    /// # fn main() {
     /// use gfx_core::Adapter;
     ///
-    /// # let adapter: gfx_core::dummy::DummyAdapter = return;
+    /// # let adapter: empty::Adapter = return;
     /// for (i, &(_, ty)) in adapter.get_queue_families().into_iter().enumerate() {
     ///     println!("Queue family ({:?}) type: {:?}", i, ty);
     /// }
+    /// # }
     /// ```
     fn get_queue_families(&self) -> &[(B::QueueFamily, QueueType)];
 }
