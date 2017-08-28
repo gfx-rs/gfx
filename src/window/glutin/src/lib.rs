@@ -1,3 +1,27 @@
+//! Window creation using glutin for gfx.
+//!
+//! # Examples
+//! The following code creates a `gfx::WindowExt` using glutin.
+//!
+//! ```no_run
+//! extern crate glutin;
+//! extern crate gfx_device_gl;
+//! extern crate gfx_window_glutin;
+//! 
+//! fn main() {
+//!     use gfx_window_glutin::Window;
+//!     use glutin::{EventsLoop, WindowBuilder, ContextBuilder, GlWindow};
+//! 
+//!     // First create a window using glutin.
+//!     let mut events_loop = EventsLoop::new();
+//!     let wb = WindowBuilder::new();
+//!     let cb = ContextBuilder::new().with_vsync(true);
+//!     let glutin_window = GlWindow::new(wb, cb, &events_loop).unwrap();
+//! 
+//!     // Then use the glutin window to create a gfx window.
+//!     let window = Window::new(glutin_window);
+//! }
+//! ```
 #[deny(missing_docs)]
 
 extern crate gfx_core as core;

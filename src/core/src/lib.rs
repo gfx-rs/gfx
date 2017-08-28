@@ -325,7 +325,9 @@ impl Error for SubmissionError {
 #[allow(missing_docs)]
 pub type SubmissionResult<T> = Result<T, SubmissionError>;
 
+/// Represents a handle to a physical device. 
 ///
+/// This structure is typically created using an `Adapter`.
 pub struct Gpu<B: Backend> {
     /// Logical device.
     pub device: B::Device,

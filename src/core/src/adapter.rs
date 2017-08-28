@@ -5,6 +5,9 @@
 use {Backend, Gpu, QueueType};
 
 /// Represents a physical or virtual device, which is capable of running the backend.
+///
+/// The `Adapter` is typically obtained from objects implementing `gfx::WindowExt` or
+/// `gfx::Headless`. How these types are created is backend-specific.
 pub trait Adapter<B: Backend>: Sized {
     /// Create a new logical gpu with the specified queues.
     ///
