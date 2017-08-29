@@ -40,20 +40,6 @@ impl<B: Backend> Raw<B> {
     pub fn get_info(&self) -> &Info { &self.info }
 }
 
-impl<B: Backend + cmp::PartialEq> cmp::PartialEq for Raw<B> {
-    fn eq(&self, other: &Self) -> bool {
-        self.resource().eq(other.resource())
-    }
-}
-
-impl<B: Backend + cmp::Eq> cmp::Eq for Raw<B> {}
-
-impl<B: Backend + hash::Hash> hash::Hash for Raw<B> {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.resource().hash(state);
-    }
-}
-
 /// Pure texture object creation error.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CreationError {
