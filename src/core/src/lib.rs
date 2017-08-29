@@ -62,7 +62,6 @@ pub mod pass;
 pub mod pool;
 pub mod pso;
 pub mod queue;
-pub mod shade;
 pub mod window;
 
 /// Draw vertex count.

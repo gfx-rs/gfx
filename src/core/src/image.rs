@@ -22,7 +22,7 @@
 //! texels.
 
 use std::error::Error;
-use std::{fmt, cmp, hash};
+use std::fmt;
 use std::ops::Range;
 use memory::Bind;
 use {format, state, target, Backend};
