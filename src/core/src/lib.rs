@@ -208,14 +208,13 @@ pub struct HeapType {
 /// Different types of a specific API.
 #[allow(missing_docs)]
 pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
-    type Adapter:            Adapter<Self>;
-    type Device:             Device<Self>;
+    type Adapter:             Adapter<Self>;
+    type Device:              Device<Self>;
 
-    type CommandQueue:       RawCommandQueue<Self>;
-    type CommandBuffer:      RawCommandBuffer<Self>;
+    type CommandQueue:        RawCommandQueue<Self>;
+    type CommandBuffer:       RawCommandBuffer<Self>;
     type SubpassCommandBuffer;
-    type QueueFamily:        QueueFamily;
-    type SubmitInfo:         Clone + Send;
+    type QueueFamily:         QueueFamily;
 
     type ShaderLib:           Debug + Any + Send + Sync;
     type RenderPass:          Debug + Any + Send + Sync;
