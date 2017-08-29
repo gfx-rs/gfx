@@ -26,7 +26,7 @@ extern crate gfx_device_metal as back;
 extern crate winit;
 extern crate image;
 
-use core::{buffer, command, device as d, image as i, memory as m, pass, pso, shade, state};
+use core::{buffer, command, device as d, image as i, memory as m, pass, pso, state};
 use core::{Adapter, Device, QueueFamily, SwapChain, WindowExt};
 use core::{DescriptorPool, Gpu, FrameSync, Primitive, Surface, SwapchainConfig};
 use core::format::{Formatted, Srgba8 as ColorFormat, Vec2};
@@ -125,7 +125,7 @@ fn main() {
                 binding: 0,
                 ty: pso::DescriptorType::SampledImage,
                 count: 1,
-                stage_flags: shade::STAGE_PIXEL,
+                stage_flags: pso::STAGE_PIXEL,
             }
         ],
     );
@@ -135,7 +135,7 @@ fn main() {
                 binding: 0,
                 ty: pso::DescriptorType::Sampler,
                 count: 1,
-                stage_flags: shade::STAGE_PIXEL,
+                stage_flags: pso::STAGE_PIXEL,
             }
         ],
     );

@@ -14,8 +14,9 @@
 
 //! Descriptor sets and layouts.
 
-use {shade, Backend};
+use {Backend};
 use image::ImageLayout;
+use super::ShaderStageFlags;
 
 ///
 // TODO: Grasping and remembering the differences between these
@@ -62,7 +63,7 @@ pub struct DescriptorSetLayoutBinding {
     /// Number of descriptors bound.
     pub count: usize,
     /// Valid shader stages.
-    pub stage_flags: shade::StageFlags,
+    pub stage_flags: ShaderStageFlags,
 
     // TODO: immutable samplers?
 }
