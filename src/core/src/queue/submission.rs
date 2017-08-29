@@ -25,7 +25,7 @@ use smallvec::SmallVec;
 /// Raw submission information for a command queue.
 pub struct RawSubmission<'a, B: Backend + 'a> {
     /// Command buffers to submit.
-    pub cmd_buffers: &'a [B::SubmitInfo],
+    pub cmd_buffers: &'a [B::CommandBuffer],
     /// Semaphores to wait being signalled before submission.
     pub wait_semaphores: &'a [(&'a B::Semaphore, pso::PipelineStage)],
     /// Semaphores which get signalled after submission.
@@ -34,7 +34,7 @@ pub struct RawSubmission<'a, B: Backend + 'a> {
 
 /// Submission information for a command queue.
 pub struct Submission<'a, B: Backend, C> {
-    cmd_buffers: SmallVec<[B::SubmitInfo; 16]>,
+    cmd_buffers: SmallVec<[B::CommandBuffer; 16]>,
     wait_semaphores: SmallVec<[(&'a B::Semaphore, pso::PipelineStage); 16]>,
     signal_semaphores: SmallVec<[&'a B::Semaphore; 16]>,
     marker: PhantomData<C>,
@@ -88,7 +88,7 @@ where
     where
         (C, S): Upper
     {
-        self.cmd_buffers.extend(submits.iter().map(|submit| unsafe { submit.get_info().clone() }));
+        self.cmd_buffers.extend(submits.iter().map(|submit| submit.0.clone()));
         Submission {
             cmd_buffers: self.cmd_buffers,
             wait_semaphores: self.wait_semaphores,
