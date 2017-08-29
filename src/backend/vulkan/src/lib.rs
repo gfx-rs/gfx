@@ -422,7 +422,7 @@ impl core::RawCommandQueue<Backend> for CommandQueue {
     ){
         let buffers = submission.cmd_buffers
             .iter()
-            .map(|cmd| cmd.command_buffer)
+            .map(|cmd| cmd.raw)
             .collect::<Vec<_>>();
         let waits = submission.wait_semaphores
             .iter()
@@ -474,7 +474,6 @@ impl core::Backend for Backend {
     type CommandQueue = CommandQueue;
     type CommandBuffer = command::CommandBuffer;
     type SubpassCommandBuffer = command::SubpassCommandBuffer;
-    type SubmitInfo = command::SubmitInfo;
     type QueueFamily = QueueFamily;
 
     type Heap = native::Heap;
