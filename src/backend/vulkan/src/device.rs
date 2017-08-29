@@ -1,6 +1,6 @@
 use ash::vk;
 use ash::version::DeviceV1_0;
-use core::{buffer, device as d, format, image, mapping, shade, pass, pso};
+use core::{buffer, device as d, format, image, mapping, pass, pso};
 use core::{Features, Limits, HeapType};
 use core::memory::Requirements;
 use native as n;
@@ -43,7 +43,7 @@ impl Device {
         };
 
         match result {
-            Ok(data) =>Ok((data, Mapping {
+            Ok(data) => Ok((data, Mapping {
                 device: self.raw.clone(),
                 memory: buf.memory,
             })),
@@ -56,7 +56,7 @@ impl Device {
 
     pub fn create_shader_library(&mut self,
         shaders: &[(pso::EntryPoint, &[u8])],
-    ) -> Result<n::ShaderLib, shade::CreateShaderError>
+    ) -> Result<n::ShaderLib, pso::CreateShaderError>
     {
         let mut shader_map = BTreeMap::new();
         // TODO: handle entry points with the same name
