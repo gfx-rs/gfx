@@ -14,14 +14,13 @@ impl core::Backend for Backend {
     type Device = Device;
 
     type CommandQueue = CommandQueue;
-    type RawCommandBuffer = RawCommandBuffer;
+    type CommandBuffer = RawCommandBuffer;
     type SubpassCommandBuffer = SubpassCommandBuffer;
-    type SubmitInfo = SubmitInfo;
     type QueueFamily = QueueFamily;
 
     type Heap = ();
     type Mapping = ();
-    type RawCommandPool = RawCommandPool;
+    type CommandPool = RawCommandPool;
     type SubpassCommandPool = SubpassCommandPool;
 
     type ShaderLib = ();
@@ -276,10 +275,6 @@ impl core::QueueFamily for QueueFamily {
     }
 }
 
-/// Dummy submit info containing nothing.
-#[derive(Clone)]
-pub struct SubmitInfo;
-
 /// Dummy subpass command buffer.
 pub struct SubpassCommandBuffer;
 
@@ -290,19 +285,15 @@ impl core::RawCommandPool<Backend> for RawCommandPool {
         unimplemented!()
     }
 
-    fn reserve(&mut self, _: usize) {
+    unsafe fn from_queue(_: &CommandQueue) -> Self {
         unimplemented!()
     }
 
-    unsafe fn from_queue(_: &CommandQueue, _: usize) -> Self {
+    fn allocate(&mut self, _: usize) -> Vec<RawCommandBuffer> {
         unimplemented!()
     }
 
-    unsafe fn acquire_command_buffer(&mut self) -> RawCommandBuffer {
-        unimplemented!()
-    }
-
-    unsafe fn return_command_buffer(&mut self, _: RawCommandBuffer) {
+    unsafe fn free(&mut self, _: Vec<RawCommandBuffer>) {
         unimplemented!()
     }
 }
@@ -314,10 +305,14 @@ impl core::SubpassCommandPool<Backend> for SubpassCommandPool {
 }
 
 /// Dummy command buffer, which ignores all the calls.
+#[derive(Clone)]
 pub struct RawCommandBuffer;
 impl core::RawCommandBuffer<Backend> for RawCommandBuffer {
+    fn begin(&mut self) {
+        unimplemented!()
+    }
 
-    fn finish(&mut self) -> SubmitInfo {
+    fn finish(&mut self) {
         unimplemented!()
     }
 
