@@ -10,61 +10,65 @@ extern crate gfx_gl as gl;
 extern crate gfx_core as core;
 extern crate smallvec;
 
-use std::cell::RefCell;
 use std::rc::Rc;
-use core::{self as c, handle, format, target, texture as t, memory, command as com, buffer, Viewport};
+use core::{self as c, image as i, command as com};
 use core::QueueType;
-use core::target::{Layer, Level};
 use command::{Command, DataBuffer};
-use device::MappingKind;
 use smallvec::SmallVec;
 
 pub use self::device::Device;
 pub use self::info::{Info, PlatformName, Version};
 
 mod command;
+mod conv;
 mod device;
 mod info;
 pub mod native;
 mod pool;
 mod state;
-mod texture;
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Backend {}
 impl c::Backend for Backend {
     type Adapter = Adapter;
+    type Device = Device;
+
     type CommandQueue = CommandQueue;
-    type RawCommandBuffer = command::RawCommandBuffer;
+    type CommandBuffer = command::RawCommandBuffer;
     type SubpassCommandBuffer = command::SubpassCommandBuffer;
     type SubmitInfo = command::SubmitInfo;
-    type Device = Device;
     type QueueFamily = QueueFamily;
 
-    type RawCommandPool = pool::RawCommandPool;
+    type Heap = native::Heap;
+    type Mapping = device::Mapping;
+    type CommandPool = pool::RawCommandPool;
     type SubpassCommandPool = pool::SubpassCommandPool;
 
-    type DescriptorPool = pool:: DescriptorPool;
+    type ShaderLib = native::ShaderLib;
+    type RenderPass = native::RenderPass;
+    type FrameBuffer = native::FrameBuffer;
 
-    type Buffer              = native::Buffer;
-    type RenderTargetView    = native::TargetView;
-    type DepthStencilView    = native::TargetView;
-    type ShaderResourceView  = native::ResourceView;
-    type UnorderedAccessView = ();
-    type Sampler             = native::FatSampler;
-    type Fence               = native::Fence;
-    type Semaphore           = (); // TODO
-    type Mapping             = device::MappingGate;
-    type Image               = native::Image;
-    type ComputePipeline     = native::ComputePipeline;
-    type GraphicsPipeline    = native::GraphicsPipeline;
-    type PipelineLayout = ();
-    type DescriptorSet       = native::DescriptorSet;
-    type ShaderLib = ();
+    type UnboundBuffer = device::UnboundBuffer;
+    type Buffer = native::Buffer;
+    type UnboundImage = device::UnboundImage;
+    type Image = native::Image;
+    type Sampler = native::Sampler;
+
+    type ConstantBufferView = native::ConstantBufferView;
+    type ShaderResourceView = native::ShaderResourceView;
+    type UnorderedAccessView = native::UnorderedAccessView;
+    type RenderTargetView = native::RenderTargetView;
+    type DepthStencilView = native::DepthStencilView;
+
+    type ComputePipeline = native::ComputePipeline;
+    type GraphicsPipeline = native::GraphicsPipeline;
+    type PipelineLayout = native::PipelineLayout;
     type DescriptorSetLayout = native::DescriptorSetLayout;
-    type RenderPass = ();
-    type FrameBuffer = ();
-    type DescriptorHeap      = native::DescriptorHeap;
+    type DescriptorPool = native::DescriptorPool;
+    type DescriptorSet = native::DescriptorSet;
+
+    type Fence = native::Fence;
+    type Semaphore = native::Semaphore;
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -94,14 +98,14 @@ impl Error {
 
 type ArrayBuffer = gl::types::GLuint;
 
+/*
 /// Create the proxy target views (RTV and DSV) for the attachments of the
 /// main framebuffer. These have GL names equal to 0.
 /// Not supposed to be used by the users directly.
 pub fn create_main_targets_raw(dim: t::Dimensions, color_format: format::SurfaceType, depth_format: format::SurfaceType)
                                -> (handle::RawRenderTargetView<Backend>, handle::RawDepthStencilView<Backend>) {
     use core::handle::Producer;
-    let mut temp = handle::Manager::new();
-    let color_tex = temp.make_image(
+    let color_tex =
         native::Image::Surface(0),
         t::Info {
             levels: 1,
@@ -125,6 +129,7 @@ pub fn create_main_targets_raw(dim: t::Dimensions, color_format: format::Surface
     let m_ds = temp.make_dsv(native::TargetView::Surface(0), &depth_tex, dim);
     (m_color, m_ds)
 }
+*/
 
 /// Internal struct of shared data between the device and its factories.
 #[doc(hidden)]
@@ -134,7 +139,6 @@ pub struct Share {
     features: c::Features,
     limits: c::Limits,
     private_caps: info::PrivateCaps,
-    handles: RefCell<handle::Manager<Backend>>,
 }
 
 impl Share {
@@ -192,14 +196,12 @@ impl Adapter {
         };
 
         // create the shared context
-        let handles = handle::Manager::new();
         let share = Share {
             context: gl,
             info,
             features,
             limits,
             private_caps,
-            handles: RefCell::new(handles),
         };
 
         Adapter {
@@ -255,8 +257,6 @@ impl c::Adapter<Backend> for Adapter {
                 share: self.share.clone(),
                 vao,
                 state: State::new(),
-                frame_handles: handle::Manager::new(),
-                max_resource_count: Some(999999),
             }
         };
 
@@ -265,16 +265,16 @@ impl c::Adapter<Backend> for Adapter {
             unsafe {
                 match queue_type {
                     QueueType::General => {
-                        gpu.general_queues.push(c::GeneralQueue::new(raw_queue()));
+                        gpu.general_queues.push(c::CommandQueue::new(raw_queue()));
                     }
                     QueueType::Graphics => {
-                        gpu.graphics_queues.push(c::GraphicsQueue::new(raw_queue()));
+                        gpu.graphics_queues.push(c::CommandQueue::new(raw_queue()));
                     }
                     QueueType::Compute => {
-                        gpu.compute_queues.push(c::ComputeQueue::new(raw_queue()));
+                        gpu.compute_queues.push(c::CommandQueue::new(raw_queue()));
                     }
                     QueueType::Transfer => {
-                        gpu.transfer_queues.push(c::TransferQueue::new(raw_queue()));
+                        gpu.transfer_queues.push(c::CommandQueue::new(raw_queue()));
                     }
                 }
             }
@@ -296,8 +296,6 @@ pub struct CommandQueue {
     share: Rc<Share>,
     vao: ArrayBuffer,
     state: State,
-    frame_handles: handle::Manager<Backend>,
-    max_resource_count: Option<usize>,
 }
 
 // State caching system for command queue.
@@ -854,188 +852,33 @@ impl CommandQueue {
             panic!("Error {:?} executing command: {:?}", err, cmd)
         }
     }
-
-    fn before_submit<'a>(&mut self, gpu_access: &'a com::AccessInfo<Backend>)
-                         -> c::SubmissionResult<com::AccessGuard<'a, Backend>> {
-        let mut gpu_access = try!(gpu_access.take_accesses());
-        if self.share.private_caps.buffer_storage_supported {
-            // MappingKind::Persistent
-            self.ensure_mappings_flushed(&mut gpu_access);
-        } else {
-            // MappingKind::Temporary
-            self.ensure_mappings_unmapped(&mut gpu_access);
-        }
-        Ok(gpu_access)
-    }
-
-    // MappingKind::Persistent
-    fn ensure_mappings_flushed(&mut self, gpu_access: &mut com::AccessGuard<Backend>) {
-        let gl = &self.share.context;
-        for (buffer, mapping) in gpu_access.access_mapped_reads() {
-            let target = device::role_to_target(buffer.get_info().role);
-            let status = match &mut mapping.kind {
-                &mut MappingKind::Persistent(ref mut status) => status,
-                _ => unreachable!(),
-            };
-
-            status.ensure_flushed(|| unsafe {
-                gl.BindBuffer(target, *buffer.resource());
-                let size = buffer.get_info().size as isize;
-                gl.FlushMappedBufferRange(target, 0, size);
-            });
-        }
-    }
-
-    // MappingKind::Temporary
-    fn ensure_mappings_unmapped(&mut self, gpu_access: &mut com::AccessGuard<Backend>) {
-        for (buffer, mapping) in gpu_access.access_mapped() {
-            let target = device::role_to_target(buffer.get_info().role);
-            device::temporary_ensure_unmapped(&mut mapping.pointer,
-                                               target,
-                                               *buffer.resource(),
-                                               &self.share.context);
-        }
-    }
-
-    fn after_submit(&mut self, gpu_access: &mut com::AccessGuard<Backend>) {
-        if self.share.private_caps.buffer_storage_supported {
-            // MappingKind::Persistent
-            if gpu_access.has_mapped_reads() || gpu_access.has_mapped_writes() {
-                if gpu_access.has_mapped_writes() {
-                    self.place_memory_barrier();
-                }
-
-                let fence = self.place_fence(); // TODO: do we need a fence here?
-                self.track_mapped_gpu_access(gpu_access, &fence);
-            }
-        }
-    }
-
-    fn place_memory_barrier(&mut self) {
-        let gl = &self.share.context;
-        // TODO: other flags ?
-        unsafe { gl.MemoryBarrier(gl::CLIENT_MAPPED_BUFFER_BARRIER_BIT); }
-    }
-
-    fn place_fence(&mut self) -> handle::Fence<Backend> {
-        use core::handle::Producer;
-
-        let gl = &self.share.context;
-        let fence = unsafe {
-            gl.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0)
-        };
-        self.frame_handles.make_fence(native::Fence(fence))
-    }
-
-    fn signal_fence(&mut self, fence: &handle::Fence<Backend>) {
+    fn signal_fence(&mut self, fence: &native::Fence) {
         if self.share.private_caps.sync_supported {
             let gl = &self.share.context;
             let sync = unsafe {
                 gl.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0)
             };
 
-            self.frame_handles.ref_fence(&fence).lock().unwrap().0 = sync;
+            fence.0.set(sync);
         }
-    }
-
-    // MappingKind::Persistent
-    fn track_mapped_gpu_access(&mut self,
-                               gpu_access: &mut com::AccessGuard<Backend>,
-                               fence: &handle::Fence<Backend>) {
-        for (_, mapping) in gpu_access.access_mapped() {
-            let status = match &mut mapping.kind {
-                &mut MappingKind::Persistent(ref mut status) => status,
-                _ => unreachable!(),
-            };
-            status.gpu_access(fence.clone());
-        }
-    }
-
-    fn wait_fence(&mut self, fence: &handle::Fence<Backend>) {
-        device::wait_fence(
-            &*self.frame_handles.ref_fence(&fence).lock().unwrap(),
-            &self.share.context,
-            1_000_000);
     }
 }
 
-impl c::CommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw<'a, I>(
+impl c::RawCommandQueue<Backend> for CommandQueue {
+    unsafe fn submit_raw(
         &mut self,
-        submit_infos: I,
-        fence: Option<&handle::Fence<Backend>>,
-        access: &com::AccessInfo<Backend>,
-    ) where I: Iterator<Item=c::RawSubmission<'a, Backend>> {
-        let mut access = self.before_submit(access).unwrap();
-        for submit in submit_infos {
-            for cb in submit.cmd_buffers {
+        submit_info: c::RawSubmission<Backend>,
+        fence: Option<&native::Fence>,
+    ) {
+        {
+            for cb in submit_info.cmd_buffers {
                 self.reset_state();
                 for com in &*cb.buf {
                     self.process(com, &*cb.data);
                 }
             }
         }
-        self.after_submit(&mut access);
         fence.map(|fence| self.signal_fence(fence));
-    }
-
-    fn pin_submitted_resources(&mut self, man: &handle::Manager<Backend>) {
-        self.frame_handles.extend(man);
-        match self.max_resource_count {
-            Some(c) if self.frame_handles.count() > c => {
-                error!("Way too many resources in the current frame. Did you call Device::cleanup()?");
-                self.max_resource_count = None;
-            },
-            _ => (),
-        }
-    }
-
-    fn cleanup(&mut self) {
-        use core::handle::Producer;
-        self.frame_handles.clear();
-        self.share.handles.borrow_mut().clean_with(&mut &self.share.context,
-            |gl, buffer| {
-                buffer.mapping().map(|raw| {
-                    // we have exclusive access because it's the last reference
-                    let mapping = unsafe { raw.use_access() };
-                    match mapping.kind {
-                        MappingKind::Persistent(_) => (),
-                        MappingKind::Temporary => {
-                            let target = device::role_to_target(buffer.get_info().role);
-                            device::temporary_ensure_unmapped(&mut mapping.pointer,
-                                                               target,
-                                                               *buffer.resource(),
-                                                               gl);
-                        }
-                    }
-                });
-                unsafe { gl.DeleteBuffers(1, buffer.resource()) }
-            },
-            |gl, pipeline| {}, // TODO: graphics pipeline
-            |gl, pipeline| {}, // TODO: compute pipeline
-            |gl, renderpass| {}, // TODO: render pass
-            /*
-            |gl, v| unsafe { gl.DeleteShader(*v) },
-            |gl, program| unsafe { gl.DeleteProgram(*program.resource()) },
-            |_, _| {}, //PSO
-            */
-            |gl, raw_texture| match raw_texture.resource() {
-                &native::Image::Surface(ref suf) => unsafe { gl.DeleteRenderbuffers(1, suf) },
-                &native::Image::Texture(ref tex) => unsafe { gl.DeleteTextures(1, tex) },
-            }, // new texture
-            |gl, v| if v.owned {
-                unsafe { gl.DeleteTextures(1, &v.object) }
-            }, //SRV
-            |_, _| {}, //UAV
-            |_, _| {}, //RTV
-            |_, _| {}, //DSV
-            |gl, v| unsafe { if v.object != 0 { gl.DeleteSamplers(1, &v.object) }},
-            |gl, fence| { fence.get_mut().map(|fence| unsafe { gl.DeleteSync(fence.0) }); },
-            |_, _| {}, // Semaphore
-            |gl, layout| {}, // TODO: descriptor set layout
-            |gl, layout| {}, // TODO: pipeline layout
-            |gl, heap| {}, // TODO: descriptor heap
-        );
     }
 }
 

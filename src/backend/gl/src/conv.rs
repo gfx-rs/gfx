@@ -1,0 +1,28 @@
+
+use core::image as i;
+use gl;
+use gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
+
+pub fn image_kind_to_gl(kind: i::Kind) -> GLenum {
+    match kind {
+        i::Kind::D1(_) => gl::TEXTURE_1D,
+        i::Kind::D1Array(_, _) => gl::TEXTURE_1D_ARRAY,
+        i::Kind::D2(_, _, i::AaMode::Single) => gl::TEXTURE_2D,
+        i::Kind::D2(_, _, _) => gl::TEXTURE_2D_MULTISAMPLE,
+        i::Kind::D2Array(_, _, _, i::AaMode::Single) => gl::TEXTURE_2D_ARRAY,
+        i::Kind::D2Array(_, _, _, _) => gl::TEXTURE_2D_MULTISAMPLE_ARRAY,
+        i::Kind::D3(_, _, _) => gl::TEXTURE_3D,
+        i::Kind::Cube(_) => gl::TEXTURE_CUBE_MAP,
+        i::Kind::CubeArray(_, _) => gl::TEXTURE_CUBE_MAP_ARRAY,
+    }
+}
+
+pub fn filter_to_gl(f: i::FilterMethod) -> (GLenum, GLenum) {
+    match f {
+        i::FilterMethod::Scale => (gl::NEAREST, gl::NEAREST),
+        i::FilterMethod::Mipmap => (gl::NEAREST_MIPMAP_NEAREST, gl::NEAREST),
+        i::FilterMethod::Bilinear => (gl::LINEAR, gl::LINEAR),
+        i::FilterMethod::Trilinear => (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR),
+        i::FilterMethod::Anisotropic(..) => (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR),
+    }
+}
