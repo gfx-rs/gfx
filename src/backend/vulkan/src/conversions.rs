@@ -1,5 +1,5 @@
 use ash::vk;
-use core::{buffer, image, pass, pso, shade, state};
+use core::{buffer, image, pass, pso, state};
 use core::command::{ClearColor, ClearValue, Extent, Offset};
 use core::format::{SurfaceType, ChannelType};
 use core::{IndexType, Primitive};
@@ -433,30 +433,30 @@ pub fn map_descriptor_type(ty: pso::DescriptorType) -> vk::DescriptorType {
     }
 }
 
-pub fn map_stage_flags(stages: shade::StageFlags) -> vk::ShaderStageFlags {
+pub fn map_stage_flags(stages: pso::ShaderStageFlags) -> vk::ShaderStageFlags {
     let mut flags = vk::ShaderStageFlags::empty();
 
-    if stages.contains(shade::STAGE_VERTEX) {
+    if stages.contains(pso::STAGE_VERTEX) {
         flags |= vk::SHADER_STAGE_VERTEX_BIT;
     }
 
-    if stages.contains(shade::STAGE_HULL) {
+    if stages.contains(pso::STAGE_HULL) {
         flags |= vk::SHADER_STAGE_TESSELLATION_CONTROL_BIT;
     }
 
-    if stages.contains(shade::STAGE_DOMAIN) {
+    if stages.contains(pso::STAGE_DOMAIN) {
         flags |= vk::SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
     }
 
-    if stages.contains(shade::STAGE_GEOMETRY) {
+    if stages.contains(pso::STAGE_GEOMETRY) {
         flags |= vk::SHADER_STAGE_GEOMETRY_BIT;
     }
 
-    if stages.contains(shade::STAGE_PIXEL) {
+    if stages.contains(pso::STAGE_PIXEL) {
         flags |= vk::SHADER_STAGE_FRAGMENT_BIT;
     }
 
-    if stages.contains(shade::STAGE_COMPUTE) {
+    if stages.contains(pso::STAGE_COMPUTE) {
         flags |= vk::SHADER_STAGE_COMPUTE_BIT;
     }
 
