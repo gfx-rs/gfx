@@ -48,7 +48,7 @@ impl<'a, B: Backend> RenderPassInlineEncoder<'a, B> {
             render_area,
             clear_values,
             SubpassContents::Inline);
-        RenderPassInlineEncoder(&mut cmd_buffer.raw)
+        RenderPassInlineEncoder(cmd_buffer.raw)
     }
 
     ///
