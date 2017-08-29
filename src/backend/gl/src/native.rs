@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use conv;
+use core;
 use core::target::{Layer, Level};
-use core::texture as t;
-use texture;
+use core::image as i;
 use gl;
+use Backend;
+use std::cell::Cell;
 
 pub type Buffer      = gl::types::GLuint;
 pub type Shader      = gl::types::GLuint;
@@ -25,8 +28,8 @@ pub type Surface     = gl::types::GLuint;
 pub type Texture     = gl::types::GLuint;
 pub type Sampler     = gl::types::GLuint;
 
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Fence(pub gl::types::GLsync);
+#[derive(Debug)]
+pub struct Fence(pub Cell<gl::types::GLsync>);
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 
@@ -38,10 +41,10 @@ pub struct ResourceView {
 }
 
 impl ResourceView {
-    pub fn new_texture(t: Texture, kind: t::Kind) -> ResourceView {
+    pub fn new_texture(t: Texture, kind: i::Kind) -> ResourceView {
         ResourceView {
             object: t,
-            bind: texture::kind_to_gl(kind),
+            bind: conv::image_kind_to_gl(kind),
             owned: false,
         }
     }
@@ -74,7 +77,7 @@ pub enum Image {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct FatSampler {
     pub(crate) object: Sampler,
-    pub(crate) info: t::SamplerInfo,
+    pub(crate) info: i::SamplerInfo,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -85,10 +88,53 @@ pub enum TargetView {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct DescriptorHeap;
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct DescriptorSetLayout;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct DescriptorSet;
+
+#[allow(missing_copy_implementations)]
+pub struct DescriptorPool {}
+
+impl core::DescriptorPool<Backend> for DescriptorPool {
+    fn allocate_sets(&mut self, layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
+        unimplemented!()
+    }
+
+    fn reset(&mut self) {
+        unimplemented!()
+    }
+}
+
+#[derive(Debug)]
+#[allow(missing_copy_implementations)]
+pub struct Heap;
+#[derive(Debug)]
+#[allow(missing_copy_implementations)]
+pub struct ShaderLib;
+#[derive(Debug)]
+#[allow(missing_copy_implementations)]
+pub struct RenderPass;
+#[derive(Debug)]
+#[allow(missing_copy_implementations)]
+pub struct ConstantBufferView;
+#[derive(Debug)]
+#[allow(missing_copy_implementations)]
+pub struct ShaderResourceView;
+#[derive(Debug)]
+#[allow(missing_copy_implementations)]
+pub struct UnorderedAccessView;
+#[derive(Debug)]
+#[allow(missing_copy_implementations)]
+pub struct RenderTargetView {
+    pub view: TargetView,
+}
+#[derive(Debug)]
+#[allow(missing_copy_implementations)]
+pub struct DepthStencilView;
+#[derive(Debug)]
+#[allow(missing_copy_implementations)]
+pub struct PipelineLayout;
+#[derive(Debug)]
+#[allow(missing_copy_implementations)]
+pub struct Semaphore;
