@@ -16,6 +16,7 @@ use std::ptr;
 use std::sync::Arc;
 use ash::vk;
 use ash::version::DeviceV1_0;
+use smallvec::SmallVec;
 
 use command::{CommandBuffer, SubpassCommandBuffer};
 use core::pool;
@@ -24,7 +25,6 @@ use {Backend, CommandQueue, RawDevice};
 
 pub struct RawCommandPool {
     pool: vk::CommandPool,
-    command_buffers: Vec<CommandBuffer>,
     device: Arc<RawDevice>,
 }
 
@@ -39,13 +39,13 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         }
     }
 
-    fn reserve(&mut self, additional: usize) {
+    fn allocate(&mut self, num: usize) -> Vec<CommandBuffer> {
         let info = vk::CommandBufferAllocateInfo {
             s_type: vk::StructureType::CommandBufferAllocateInfo,
             p_next: ptr::null(),
             command_pool: self.pool,
             level: vk::CommandBufferLevel::Primary,
-            command_buffer_count: additional as u32,
+            command_buffer_count: num as u32,
         };
 
         let device = &self.device;
@@ -53,43 +53,25 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
             device.0.allocate_command_buffers(&info)
         }.expect("Error on command buffer allocation");
 
-        let cbufs = cbufs_raw
+        cbufs_raw
             .into_iter()
             .map(|buffer| {
                 CommandBuffer {
                     raw: buffer,
                     device: device.clone(),
                 }
-            });
-
-        self.command_buffers.extend(cbufs);
+            }).collect()
     }
 
-    unsafe fn acquire_command_buffer(&mut self) -> CommandBuffer {
-        if self.command_buffers.is_empty() {
-            self.reserve(1);
-        }
-
-        let buffer = self.command_buffers.pop().unwrap();
-
-        let info = vk::CommandBufferBeginInfo {
-            s_type: vk::StructureType::CommandBufferBeginInfo,
-            p_next: ptr::null(),
-            flags: vk::COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-            p_inheritance_info: ptr::null(),
-        };
-
-        assert_eq!(Ok(()),
-            self.device.0.begin_command_buffer(buffer.raw, &info)
-        );
-        buffer
+    unsafe fn free(&mut self, cbufs: Vec<CommandBuffer>) {
+        let buffers: SmallVec<[vk::CommandBuffer; 16]> =
+            cbufs.into_iter()
+                 .map(|buffer| buffer.raw)
+                 .collect();
+        self.device.0.free_command_buffers(self.pool, &buffers);
     }
 
-    unsafe fn return_command_buffer(&mut self, cbuf: CommandBuffer) {
-        self.command_buffers.push(cbuf)
-    }
-
-    unsafe fn from_queue(queue: &CommandQueue, capacity: usize) -> RawCommandPool {
+    unsafe fn from_queue(queue: &CommandQueue) -> RawCommandPool {
         // Create command pool
         let info = vk::CommandPoolCreateInfo {
             s_type: vk::StructureType::CommandPoolCreateInfo,
@@ -102,14 +84,10 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
             .create_command_pool(&info, None)
             .expect("Error on command pool creation"); // TODO: better error handling
 
-        let mut command_pool = RawCommandPool {
+        RawCommandPool {
             pool: command_pool_raw,
-            command_buffers: Vec::new(),
             device: queue.device.clone(),
-        };
-
-        command_pool.reserve(capacity);
-        command_pool
+        }
     }
 }
 

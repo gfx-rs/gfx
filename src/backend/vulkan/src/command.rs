@@ -29,12 +29,7 @@ use core::image::ImageLayout;
 use {conversions as conv, native as n};
 use {Backend, RawDevice};
 
-
 #[derive(Clone)]
-pub struct SubmitInfo {
-    pub command_buffer: vk::CommandBuffer,
-}
-
 pub struct CommandBuffer {
     pub raw: vk::CommandBuffer,
     pub device: Arc<RawDevice>,
@@ -48,14 +43,23 @@ fn map_subpass_contents(contents: SubpassContents) -> vk::SubpassContents {
 }
 
 impl command::RawCommandBuffer<Backend> for CommandBuffer {
-    fn finish(&mut self) -> SubmitInfo {
+    fn begin(&mut self) {
+        let info = vk::CommandBufferBeginInfo {
+            s_type: vk::StructureType::CommandBufferBeginInfo,
+            p_next: ptr::null(),
+            flags: vk::COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+            p_inheritance_info: ptr::null(),
+        };
+
+        assert_eq!(Ok(()),
+            unsafe { self.device.0.begin_command_buffer(self.raw, &info) }
+        );
+    }
+
+    fn finish(&mut self)  {
         assert_eq!(Ok(()), unsafe {
             self.device.0.end_command_buffer(self.raw)
         });
-
-        SubmitInfo {
-            command_buffer: self.raw,
-        }
     }
 
     fn begin_renderpass(
