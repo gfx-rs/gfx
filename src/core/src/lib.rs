@@ -243,16 +243,16 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type SubpassCommandPool:  SubpassCommandPool<Self>;
 
     type UnboundBuffer:       Debug + Any + Send + Sync;
-    type Buffer:              Debug + Any + Send + Sync + Eq + Hash;
+    type Buffer:              Debug + Any + Send + Sync;
     type UnboundImage:        Debug + Any + Send + Sync;
-    type Image:               Debug + Any + Send + Sync + Eq + Hash;
+    type Image:               Debug + Any + Send + Sync;
     type Sampler:             Debug + Any + Send + Sync;
 
-    type ConstantBufferView:  Debug + Any + Send + Sync + Clone + Hash + Eq;
-    type ShaderResourceView:  Debug + Any + Send + Sync + Clone + Hash + Eq;
-    type UnorderedAccessView: Debug + Any + Send + Sync + Clone + Hash + Eq;
-    type RenderTargetView:    Debug + Any + Send + Sync + Clone;
-    type DepthStencilView:    Debug + Any + Send + Sync + Clone;
+    type ConstantBufferView:  Debug + Any + Send + Sync;
+    type ShaderResourceView:  Debug + Any + Send + Sync;
+    type UnorderedAccessView: Debug + Any + Send + Sync;
+    type RenderTargetView:    Debug + Any + Send + Sync;
+    type DepthStencilView:    Debug + Any + Send + Sync;
 
     type ComputePipeline:     Debug + Any + Send + Sync;
     type GraphicsPipeline:    Debug + Any + Send + Sync;

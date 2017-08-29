@@ -262,6 +262,10 @@ pub fn get(gl: &gl::Gl) -> (Info, Features, Limits, PrivateCaps) {
         max_texture_size: get_usize(gl, gl::MAX_TEXTURE_SIZE),
         max_patch_size: if tessellation_supported { get_usize(gl, gl::MAX_PATCH_VERTICES) as u8 } else {0},
         max_viewports: if multi_viewports_supported { get_usize(gl, gl::MAX_VIEWPORTS) } else {1},
+
+        min_buffer_copy_offset_alignment: 1,
+        min_buffer_copy_pitch_alignment: 1,
+
     };
     let features = Features {
         indirect_execution:                 info.is_supported(&[Core(4,3),

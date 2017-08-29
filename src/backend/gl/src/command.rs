@@ -15,13 +15,13 @@
 #![allow(missing_docs)]
 
 use gl;
-use core::{self as c, command, memory, state as s, target, texture, Viewport};
+use core::{self as c, command, image, memory, state as s, target, Viewport};
 use core::buffer::IndexBufferView;
 use core::command::{BufferCopy, BufferImageCopy, ClearValue, ImageCopy, ImageResolve,
                     InstanceParams, SubpassContents};
-use core::target::{ColorValue, Depth, Mirror, Rect, Stencil};
+use core::target::{ColorValue, Stencil};
 use {native as n, Backend};
-use std::{mem, slice};
+use std::{mem};
 
 /// The place of some data in the data buffer.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -229,14 +229,14 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn pipeline_barrier(&mut self, barries: &[memory::Barrier]) {
+    fn pipeline_barrier(&mut self, barries: &[memory::Barrier<Backend>]) {
         unimplemented!()
     }
 
     fn begin_renderpass(
         &mut self,
-        render_pass: &(),
-        frame_buffer: &(),
+        render_pass: &n::RenderPass,
+        frame_buffer: &n::FrameBuffer,
         render_area: target::Rect,
         clear_values: &[ClearValue],
         first_subpass: SubpassContents,
@@ -254,25 +254,25 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     fn clear_color(
         &mut self,
-        rtv: &n::TargetView,
-        _: texture::ImageLayout,
+        rtv: &n::RenderTargetView,
+        _: image::ImageLayout,
         value: command::ClearColor,
     ) {
-        if self.is_main_target(*rtv) {
+        if self.is_main_target(rtv.view) {
             self.buf.push(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, self.display_fb));
         } else {
             self.buf.push(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, self.fbo));
-            self.buf.push(Command::BindTargetView(gl::DRAW_FRAMEBUFFER, gl::COLOR_ATTACHMENT0, *rtv));
+            self.buf.push(Command::BindTargetView(gl::DRAW_FRAMEBUFFER, gl::COLOR_ATTACHMENT0, rtv.view));
             self.buf.push(Command::SetDrawColorBuffers(1));
         }
 
-        self.buf.push(Command::ClearColor(*rtv, value));
+        self.buf.push(Command::ClearColor(rtv.view, value));
     }
 
     fn clear_depth_stencil(
         &mut self,
-        dsv: &n::TargetView,
-        _: texture::ImageLayout,
+        dsv: &n::DepthStencilView,
+        _: image::ImageLayout,
         depth: Option<target::Depth>,
         stencil: Option<target::Stencil>,
     ) {
@@ -282,9 +282,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn resolve_image(
         &mut self,
         src: &n::Image,
-        src_layout: texture::ImageLayout,
+        src_layout: image::ImageLayout,
         dst: &n::Image,
-        dst_layout: texture::ImageLayout,
+        dst_layout: image::ImageLayout,
         regions: &[ImageResolve],
     ) {
         unimplemented!()
@@ -371,17 +371,13 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn bind_descriptor_heap(&mut self, _: &n::DescriptorHeap) {
-        // no-op, OpenGL doesn't have a concept of descriptor heaps
-    }
-
     fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
         unimplemented!()
     }
 
     fn bind_graphics_descriptor_sets(
         &mut self,
-        layout: &(),
+        layout: &n::PipelineLayout,
         first_set: usize,
         sets: &[&n::DescriptorSet],
     ) {
@@ -407,9 +403,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn copy_image(
         &mut self,
         src: &n::Image,
-        src_layout: texture::ImageLayout,
+        src_layout: image::ImageLayout,
         dst: &n::Image,
-        dst_layout: texture::ImageLayout,
+        dst_layout: image::ImageLayout,
         regions: &[ImageCopy],
     ) {
         unimplemented!()
@@ -419,7 +415,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         &mut self,
         src: &n::Buffer,
         dst: &n::Image,
-        layout: texture::ImageLayout,
+        layout: image::ImageLayout,
         regions: &[BufferImageCopy],
     ) {
         unimplemented!()
@@ -429,7 +425,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         &mut self,
         src: &n::Image,
         dst: &n::Buffer,
-        layout: texture::ImageLayout,
+        layout: image::ImageLayout,
         regions: &[BufferImageCopy],
     ) {
         unimplemented!()
