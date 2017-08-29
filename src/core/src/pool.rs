@@ -28,7 +28,7 @@ pub trait RawCommandPool<B: Backend>: Send {
     fn reset(&mut self);
 
     #[doc(hidden)]
-    unsafe fn from_queue(queue: &B::CommandQueue, capacity: usize) -> Self;
+    unsafe fn from_queue(queue: &B::CommandQueue) -> Self;
 
     /// Allocate new command buffers from the pool.
     fn allocate(&mut self, num: usize) -> Vec<B::CommandBuffer>;
@@ -58,14 +58,16 @@ impl<B: Backend, C> CommandPool<B, C> {
     ) -> Self
     {
         let raw = unsafe {
-            B::CommandPool::from_queue(queue.as_raw(), capacity)
+            B::CommandPool::from_queue(queue.as_raw())
         };
-        CommandPool {
+        let mut pool = CommandPool {
             buffers: Vec::new(),
             pool: raw,
             next_buffer: 0,
             _capability: PhantomData,
-        }
+        };
+        pool.reserve(capacity);
+        pool
     }
 
     /// Reset the command pool and the corresponding command buffers.
@@ -98,6 +100,13 @@ impl<B: Backend, C> CommandPool<B, C> {
             buffer.begin();
             CommandBuffer::new(buffer)
         }
+    }
+}
+
+impl<B: Backend, C> Drop for CommandPool<B, C> {
+    fn drop(&mut self) {
+        let free_list = self.buffers.drain(..).collect::<Vec<_>>();
+        unsafe { self.pool.free(free_list); }
     }
 }
 
