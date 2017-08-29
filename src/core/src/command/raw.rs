@@ -21,9 +21,12 @@ use super::{BufferCopy, BufferImageCopy, ClearColor, ClearValue, ImageCopy, Imag
             InstanceParams, SubpassContents};
 
 ///
-pub trait RawCommandBuffer<B: Backend> {
+pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     ///
-    fn finish(&mut self) -> B::SubmitInfo;
+    fn begin(&mut self);
+
+    ///
+    fn finish(&mut self);
 
     ///
     fn pipeline_barrier(&mut self, &[Barrier<B>]);
