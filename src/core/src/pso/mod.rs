@@ -89,3 +89,73 @@ bitflags!(
         const HOST = 0x4000,
     }
 );
+
+bitflags!(
+    /// Combination of different shader pipeline stages.
+    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+    pub flags ShaderStageFlags: u16 {
+        /// Vertex shader stage.
+        const STAGE_VERTEX   = 0x1,
+        /// Hull (tessellation) shader stage.
+        const STAGE_HULL     = 0x2,
+        /// Domain (tessellation) shader stage.
+        const STAGE_DOMAIN   = 0x4,
+        /// Geometry shader stage.
+        const STAGE_GEOMETRY = 0x8,
+        /// Pixel shader stage.
+        const STAGE_PIXEL    = 0x10,
+        /// Compute shader stage.
+        const STAGE_COMPUTE  = 0x20,
+        /// All graphics pipeline shader stages.
+        const STAGE_GRAPHICS = STAGE_VERTEX.bits | STAGE_HULL.bits |
+            STAGE_DOMAIN.bits | STAGE_GEOMETRY.bits | STAGE_PIXEL.bits,
+        /// All shader stages.
+        const STAGE_ALL      = STAGE_GRAPHICS.bits | STAGE_COMPUTE.bits,
+    }
+);
+
+/// Which program stage this shader represents.
+#[allow(missing_docs)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[repr(u8)]
+pub enum Stage {
+    Vertex,
+    Hull,
+    Domain,
+    Geometry,
+    Pixel,
+    Compute
+}
+
+/// An error type for creating shaders.
+#[derive(Clone, Debug, PartialEq)]
+pub enum CreateShaderError {
+    /// The device does not support the requested shader model.
+    ModelNotSupported,
+    /// The device does not support the shader stage.
+    StageNotSupported(Stage),
+    /// The shader failed to compile.
+    CompilationFailed(String),
+}
+
+impl fmt::Display for CreateShaderError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let desc = self.description();
+        match *self {
+            CreateShaderError::StageNotSupported(ref stage) => write!(f, "{}: {:?}", desc, stage),
+            CreateShaderError::CompilationFailed(ref string) => write!(f, "{}: {}", desc, string),
+            _ => write!(f, "{}", desc),
+        }
+    }
+}
+
+impl Error for CreateShaderError {
+    fn description(&self) -> &str {
+        match *self {
+            CreateShaderError::ModelNotSupported => "The device does not support the requested shader model",
+            CreateShaderError::StageNotSupported(_) => "The device does not support the shader stage",
+            CreateShaderError::CompilationFailed(_) => "The shader failed to compile",
+        }
+    }
+}
