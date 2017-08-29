@@ -1,7 +1,4 @@
 use core::{self, pool};
-use core::command::{ComputeCommandBuffer, GeneralCommandBuffer, GraphicsCommandBuffer,
-                    TransferCommandBuffer};
-use core::queue::{ComputeQueue, GeneralQueue, GraphicsQueue, TransferQueue};
 use command::{self, RawCommandBuffer, SubpassCommandBuffer};
 use native as n;
 use {Backend, CommandQueue, Share};
@@ -21,12 +18,10 @@ pub struct RawCommandPool {
     fbo: n::FrameBuffer,
     limits: command::Limits,
     command_buffers: Vec<RawCommandBuffer>,
-    next_buffer: usize,
 }
 
 impl core::RawCommandPool<Backend> for RawCommandPool {
     fn reset(&mut self) {
-        self.next_buffer = 0;
         for cb in &mut self.command_buffers {
             cb.reset();
         }
@@ -38,11 +33,7 @@ impl core::RawCommandPool<Backend> for RawCommandPool {
         }
     }
 
-    unsafe fn from_queue<'a, Q>(mut queue: Q, capacity: usize) -> Self
-    where
-        Q: AsRef<CommandQueue>,
-    {
-        let queue = queue.as_ref();
+    unsafe fn from_queue(mut queue: &CommandQueue, capacity: usize) -> Self {
         let fbo = create_fbo_internal(&queue.share.context);
         let limits = queue.share.limits.into();
         let buffers = (0..capacity).map(|_| RawCommandBuffer::new(fbo, limits)).collect();
@@ -50,73 +41,25 @@ impl core::RawCommandPool<Backend> for RawCommandPool {
             fbo,
             limits,
             command_buffers: buffers,
-            next_buffer: 0,
         }
     }
 
-    unsafe fn acquire_command_buffer(&mut self) -> &mut RawCommandBuffer {
-        let available_buffers = self.command_buffers.len() as isize - self.next_buffer as isize;
-        if available_buffers <= 0 {
-            self.reserve((-available_buffers) as usize + 1);
+    unsafe fn acquire_command_buffer(&mut self) -> RawCommandBuffer {
+        // TODO: rewrite _without_ usage of 'unwrap'
+        if self.command_buffers.len() <= 0 {
+            self.reserve(1);
         }
 
-        let buffer = &mut self.command_buffers[self.next_buffer];
-        self.next_buffer += 1;
-        buffer
+        self.command_buffers.pop().unwrap()
+    }
+
+    unsafe fn return_command_buffer(&mut self, buffer: RawCommandBuffer) {
+        self.command_buffers.push(buffer)
     }
 }
 
 pub struct SubpassCommandPool {
     command_buffers: Vec<SubpassCommandBuffer>,
-    next_buffer: usize,
 }
 
-impl pool::SubpassCommandPool<Backend> for SubpassCommandPool {
-    /*
-    fn reset(&mut self) {
-        self.next_buffer = 0;
-    }
-
-    fn reserve(&mut self, additional: usize) {
-        for _ in 0..additional {
-            self.command_buffers.push(SubpassCommandBuffer::new());
-        }
-    }
-
-    fn from_queue<'a, Q>(mut _queue: Q, capacity: usize) -> Self
-        where Q: Compatible<GraphicsQueue<Backend>> + AsRef<CommandQueue>
-    {
-        let buffers = (0..capacity).map(|_| SubpassCommandBuffer::new())
-                                   .collect();
-        SubpassCommandPool {
-            command_buffers: buffers,
-            next_buffer: 0,
-        }
-    }
-
-    fn acquire_command_buffer<'a>(&'a mut self) -> Encoder<'a, Backend, SubpassCommandBuffer> {
-        let available_buffers = self.command_buffers.len() as isize - self.next_buffer as isize;
-        if available_buffers <= 0 {
-            self.reserve((-available_buffers) as usize + 1);
-        }
-
-        let buffer = &mut self.command_buffers[self.next_buffer];
-        self.next_buffer += 1;
-
-        unsafe { Encoder::new(buffer) }
-    }
-    */
-}
-
-#[allow(missing_copy_implementations)]
-pub struct DescriptorPool {}
-
-impl core::DescriptorPool<Backend> for DescriptorPool {
-    fn allocate_sets(&mut self, layouts: &[&n::DescriptorSetLayout]) -> Vec<n::DescriptorSet> {
-        unimplemented!()
-    }
-
-    fn reset(&mut self) {
-        unimplemented!()
-    }
-}
+impl pool::SubpassCommandPool<Backend> for SubpassCommandPool { }
