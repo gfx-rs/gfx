@@ -81,11 +81,11 @@ pub enum Image {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-// Additionally storing the `SamplerInfo` for older OpenGL versions, which
-// don't support separate sampler objects.
-pub struct FatSampler {
-    pub(crate) object: Sampler,
-    pub(crate) info: i::SamplerInfo,
+/// Additionally storing the `SamplerInfo` for older OpenGL versions, which
+/// don't support separate sampler objects.
+pub enum FatSampler {
+    Sampler(Sampler),
+    Info(i::SamplerInfo),
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
