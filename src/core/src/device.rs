@@ -187,6 +187,7 @@ impl From<TargetViewError> for CombinedError {
 
 /// Specifies the waiting targets.
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub enum WaitFor {
     /// Wait for any target.
     Any,
