@@ -3,7 +3,7 @@
 
 extern crate gfx_core as core;
 
-use core::{buffer, command, device, format, image, target, mapping, memory, pass, pso};
+use core::{buffer, command, device, format, image, target, mapping, memory, pass, pool, pso};
 use core::device::{TargetViewError};
 
 /// Dummy backend.
@@ -285,7 +285,7 @@ impl core::RawCommandPool<Backend> for RawCommandPool {
         unimplemented!()
     }
 
-    unsafe fn from_queue(_: &CommandQueue) -> Self {
+    unsafe fn from_queue(_: &CommandQueue, _: pool::CommandPoolCreateFlags) -> Self {
         unimplemented!()
     }
 
@@ -316,6 +316,9 @@ impl core::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
+    fn reset(&mut self, _: bool) {
+        unimplemented!()
+    }
 
     fn pipeline_barrier(&mut self, _: &[memory::Barrier<Backend>]) {
         unimplemented!()
