@@ -59,6 +59,7 @@ bitflags!(
 
 bitflags!(
     /// Buffer state flags.
+    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
     pub flags Access: u16 {
         ///
         const INDEX_BUFFER_READ      = 0x1,

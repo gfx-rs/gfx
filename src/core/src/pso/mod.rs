@@ -55,6 +55,7 @@ bitflags!(
     ///
     /// The pipeline is structured as given the by the ordering of the flags.
     /// Some stages are queue type dependent.
+    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
     pub flags PipelineStage: u32 {
         /// Beginning of the command queue.
         const TOP_OF_PIPE = 0x1,
