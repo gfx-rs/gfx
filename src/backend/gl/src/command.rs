@@ -95,27 +95,11 @@ pub enum Command {
     SetDrawColorBuffers(usize),
 }
 
-#[allow(missing_copy_implementations)]
-#[derive(Clone)]
-pub struct SubmitInfo {
-    // Raw pointer optimization:
-    // Command buffers are stored inside the command pools.
-    // We are using raw pointers here to avoid costly clones
-    // and to circumvent the borrow checker. This is safe because
-    // the command buffers are only reused after calling reset.
-    // Reset also resets the command buffers and implies that all
-    // submit infos are either consumed or thrown away.
-    pub(crate) buf: *const Vec<Command>,
-    pub(crate) data: *const DataBuffer,
-}
-
-// See the explanation above why this is safe.
-unsafe impl Send for SubmitInfo {}
-
 pub type FrameBufferTarget = gl::types::GLenum;
 pub type AttachmentPoint = gl::types::GLenum;
 
 // Cache current states of the command buffer
+#[derive(Clone)]
 struct Cache {
     // Active primitive topology, set by the current pipeline.
     primitive: Option<gl::types::GLenum>,
@@ -164,6 +148,7 @@ impl From<c::Limits> for Limits {
 ///
 /// If you want to display your rendered results to a framebuffer created externally, see the
 /// `display_fb` field.
+#[derive(Clone)]
 pub struct RawCommandBuffer {
     pub buf: Vec<Command>,
     pub data: DataBuffer,
@@ -208,11 +193,12 @@ impl RawCommandBuffer {
 }
 
 impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
-    fn finish(&mut self) -> SubmitInfo {
-        SubmitInfo {
-            buf: &self.buf,
-            data: &self.data,
-        }
+    fn begin(&mut self) {
+        // no-op
+    }
+
+    fn finish(&mut self) {
+        // no-op
     }
 
     fn pipeline_barrier(&mut self, barries: &[memory::Barrier<Backend>]) {
