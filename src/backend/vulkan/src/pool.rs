@@ -71,12 +71,19 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         self.device.0.free_command_buffers(self.pool, &buffers);
     }
 
-    unsafe fn from_queue(queue: &CommandQueue) -> RawCommandPool {
-        // Create command pool
+    unsafe fn from_queue(queue: &CommandQueue, create_flags: pool::CommandPoolCreateFlags) -> RawCommandPool {
+        let mut flags = vk::CommandPoolCreateFlags::empty();
+        if create_flags.contains(pool::TRANSIENT) {
+            flags |= vk::COMMAND_POOL_CREATE_TRANSIENT_BIT;
+        }
+        if create_flags.contains(pool::RESET_INDIVIDUAL) {
+            flags |= vk::COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        }
+
         let info = vk::CommandPoolCreateInfo {
             s_type: vk::StructureType::CommandPoolCreateInfo,
             p_next: ptr::null(),
-            flags: vk::CommandPoolCreateFlags::empty(),
+            flags,
             queue_family_index: queue.family_index,
         };
 
@@ -98,73 +105,4 @@ pub struct SubpassCommandPool {
     _device: Arc<RawDevice>,
 }
 
-impl pool::SubpassCommandPool<Backend> for SubpassCommandPool {
-    /*
-    fn reset(&mut self) {
-        self.next_buffer = 0;
-        unsafe {
-            self.device.0.fp_v1_0().reset_command_pool(
-                self.device.0.handle(),
-                self.pool,
-                vk::CommandPoolResetFlags::empty()
-            );
-        }
-    }
-
-    fn reserve(&mut self, additional: usize) {
-        unimplemented!()
-    }
-
-    fn acquire_command_buffer<'a>(&'a mut self) -> Encoder<'a, Backend, SubpassCommandBuffer> {
-        unimplemented!()
-    }
-
-    fn from_queue<Q>(mut queue: Q, capacity: usize) -> SubpassCommandPool
-        where Q: Compatible<GraphicsQueue<Backend>> + AsRef<CommandQueue>
-    {
-        let queue = queue.as_ref();
-
-        // Create command pool
-        let info = vk::CommandPoolCreateInfo {
-            s_type: vk::StructureType::CommandPoolCreateInfo,
-            p_next: ptr::null(),
-            flags: vk::CommandPoolCreateFlags::empty(),
-            queue_family_index: queue.family_index,
-        };
-
-        let command_pool = unsafe {
-            queue.device.0.create_command_pool(&info, None)
-                        .expect("Error on command pool creation") // TODO: better error handling
-        };
-
-        // Allocate initial command buffers
-        let info = vk::CommandBufferAllocateInfo {
-            s_type: vk::StructureType::CommandBufferAllocateInfo,
-            p_next: ptr::null(),
-            command_pool: command_pool,
-            level: vk::CommandBufferLevel::Secondary,
-            command_buffer_count: capacity as u32,
-        };
-
-        let command_buffers = unsafe {
-            queue.device.0.allocate_command_buffers(&info)
-                          .expect("Error on command buffer allocation") // TODO: better error handling
-        };
-        let command_buffers = command_buffers.into_iter().map(|buffer| {
-            SubpassCommandBuffer(
-                CommandBuffer {
-                    raw: buffer,
-                    device: queue.device.clone(),
-                }
-            )
-        }).collect();
-
-        SubpassCommandPool {
-            pool: command_pool,
-            command_buffers: command_buffers,
-            next_buffer: 0,
-            device: queue.device.clone(),
-        }
-    }
-    */
-}
+impl pool::SubpassCommandPool<Backend> for SubpassCommandPool { }
