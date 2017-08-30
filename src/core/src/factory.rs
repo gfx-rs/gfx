@@ -314,7 +314,7 @@ pub trait Factory<R: Resources> {
 	/// The mipmap parameter states if and in what way the texture should be mipmapped.
     /// The initial data, if given, has to be provided for all mip levels and slices:
     /// Slice0.Mip0, Slice0.Mip1, ..., Slice1.Mip0, ...
-    fn create_texture_raw(&mut self, texture::Info, Option<format::ChannelType>, Option<texture::Mipmap>, Option<&[&[u8]]>)
+    fn create_texture_raw(&mut self, texture::Info, texture::Mipmap, Option<format::ChannelType>, Option<&[&[u8]]>)
                           -> Result<handle::RawTexture<R>, texture::CreationError>;
 
     fn view_buffer_as_shader_resource_raw(&mut self, &handle::RawBuffer<R>, format::Format)
@@ -331,7 +331,7 @@ pub trait Factory<R: Resources> {
         -> Result<handle::RawDepthStencilView<R>, TargetViewError>;
 
     fn create_texture<S>(&mut self, kind: texture::Kind, levels: target::Level,
-                      bind: Bind, usage: Usage, channel_hint: Option<format::ChannelType>, mipmap: Option<texture::Mipmap>)
+                      bind: Bind, usage: Usage, mipmap: texture::Mipmap, channel_hint: Option<format::ChannelType>)
                       -> Result<handle::Texture<R, S>, texture::CreationError>
     where S: format::SurfaceTyped
     {
@@ -342,7 +342,7 @@ pub trait Factory<R: Resources> {
             bind: bind,
             usage: usage,
         };
-        let raw = try!(self.create_texture_raw(desc, channel_hint, mipmap, None));
+        let raw = try!(self.create_texture_raw(desc, mipmap, channel_hint, None));
         Ok(Typed::new(raw))
     }
 
@@ -427,7 +427,7 @@ pub trait Factory<R: Resources> {
         self.view_texture_as_depth_stencil(tex, 0, None, texture::DepthStencilFlags::empty())
     }
 	
-	fn create_texture_immutable_u8_mipmapped<T: format::TextureFormat>(&mut self, kind: texture::Kind, data: &[&[u8]], mipmap: Option<texture::Mipmap>)
+	fn create_texture_immutable_u8_mipmapped<T: format::TextureFormat>(&mut self, kind: texture::Kind, mipmap: texture::Mipmap, data: &[&[u8]])
                                    -> Result<(handle::Texture<R, T::Surface>,
                                               handle::ShaderResourceView<R, T::View>),
                                              CombinedError>
@@ -443,7 +443,7 @@ pub trait Factory<R: Resources> {
             usage: Usage::Data,
         };
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let raw = try!(self.create_texture_raw(desc, Some(cty), mipmap, Some(data)));
+        let raw = try!(self.create_texture_raw(desc, mipmap, Some(cty), Some(data)));
         let levels = (0, raw.get_info().levels - 1);
         let tex = Typed::new(raw);
         let view = try!(self.view_texture_as_shader_resource::<T>(&tex, levels, format::Swizzle::new()));
@@ -455,7 +455,7 @@ pub trait Factory<R: Resources> {
                                               handle::ShaderResourceView<R, T::View>),
                                              CombinedError>
     {
-        self.create_texture_immutable_u8_mipmapped::<T>(kind, data, None)
+        self.create_texture_immutable_u8_mipmapped::<T>(kind, texture::Mipmap::Provided, data)
     }
 
     fn create_texture_immutable<T: format::TextureFormat>(
@@ -484,7 +484,7 @@ pub trait Factory<R: Resources> {
         let kind = texture::Kind::D2(width, height, texture::AaMode::Single);
         let levels = 1;
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let tex = try!(self.create_texture(kind, levels, SHADER_RESOURCE | RENDER_TARGET, Usage::Data, Some(cty), None));
+        let tex = try!(self.create_texture(kind, levels, SHADER_RESOURCE | RENDER_TARGET, Usage::Data, texture::Mipmap::Provided, Some(cty)));
         let resource = try!(self.view_texture_as_shader_resource::<T>(&tex, (0, levels-1), format::Swizzle::new()));
         let target = try!(self.view_texture_as_render_target(&tex, 0, None));
         Ok((tex, resource, target))
@@ -499,7 +499,7 @@ pub trait Factory<R: Resources> {
     {
         let kind = texture::Kind::D2(width, height, texture::AaMode::Single);
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let tex = try!(self.create_texture(kind, 1, SHADER_RESOURCE | DEPTH_STENCIL, Usage::Data, Some(cty), None));
+        let tex = try!(self.create_texture(kind, 1, SHADER_RESOURCE | DEPTH_STENCIL, Usage::Data, texture::Mipmap::Provided, Some(cty)));
         let resource = try!(self.view_texture_as_shader_resource::<T>(&tex, (0, 0), format::Swizzle::new()));
         let target = try!(self.view_texture_as_depth_stencil_trivial(&tex));
         Ok((tex, resource, target))
@@ -511,7 +511,7 @@ pub trait Factory<R: Resources> {
     {
         let kind = texture::Kind::D2(width, height, texture::AaMode::Single);
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let tex = try!(self.create_texture(kind, 1, DEPTH_STENCIL, Usage::Data, Some(cty), None));
+        let tex = try!(self.create_texture(kind, 1, DEPTH_STENCIL, Usage::Data, texture::Mipmap::Provided, Some(cty)));
         let target = try!(self.view_texture_as_depth_stencil_trivial(&tex));
         Ok(target)
     }

@@ -315,7 +315,6 @@ impl Kind {
 }
 
 /// The marker for the texture initializer to generate extra space for the mipmap generation.
-#[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[repr(u8)]

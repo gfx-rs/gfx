@@ -220,11 +220,11 @@ pub fn format_to_glfull(format: NewFormat) -> Result<GLenum, ()> {
     })
 }
 
-fn determine_mipmap_level(desc: &t::Info, mip: Option<t::Mipmap>) -> t::Level {
+fn get_num_levels(desc: &t::Info, mip: t::Mipmap) -> t::Level {
     use std::cmp::{min, max};
     
     match mip {
-        Some(t::Mipmap::Allocated) => {
+        t::Mipmap::Allocated => {
             fn mip_level1(w: u16) -> u8 {
                 ((w as f32).log2() + 1.0) as u8
             }
@@ -242,18 +242,13 @@ fn determine_mipmap_level(desc: &t::Info, mip: Option<t::Mipmap>) -> t::Level {
                 _ => desc.levels,
             }
         },
-        _ => desc.levels
+        t::Mipmap::Provided => desc.levels
     }
 }
 
 fn set_mipmap_range(gl: &gl::Gl, target: GLenum, (base, max): (u8, u8)) { unsafe {
     gl.TexParameteri(target, gl::TEXTURE_BASE_LEVEL, base as GLint);
     gl.TexParameteri(target, gl::TEXTURE_MAX_LEVEL, max as GLint);
-}}
-fn set_mipmap_creation_parameters(gl: &gl::Gl, target: GLenum) { unsafe {
-    // TODO Currently hardcoded to Trilinear filter, parameterize?    
-    gl.TexParameteri(target, gl::TEXTURE_MAG_FILTER, gl::LINEAR as i32);
-    gl.TexParameteri(target, gl::TEXTURE_MIN_FILTER, gl::LINEAR_MIPMAP_LINEAR as i32);
 }}
 
 fn make_surface_impl(gl: &gl::Gl, format: GLenum, dim: t::Dimensions)
@@ -305,7 +300,7 @@ pub fn make_surface(gl: &gl::Gl, desc: &t::Info, cty: ChannelType) ->
 }
 
 fn make_without_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLint, pix: GLenum, typ: GLenum,
-                            levels: t::Level, fixed_sample_locations: bool, mip: Option<t::Mipmap>)
+                            levels: t::Level, fixed_sample_locations: bool)
                             -> Result<Texture, t::CreationError> {
     let (name, target) = make_texture(gl, kind);
     match kind {
@@ -419,15 +414,11 @@ fn make_without_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLint, pix: GLe
     }
 
     set_mipmap_range(gl, target, (0, levels - 1));
-    if let Some(t::Mipmap::Allocated) = mip {
-        set_mipmap_creation_parameters(gl, target);
-    }
-    
     Ok(name)
 }
 
 /// Create a texture, using the descriptor, assuming TexStorage* isn't available.
-pub fn make_without_storage(gl: &gl::Gl, desc: &t::Info, cty: ChannelType, mip: Option<t::Mipmap>) ->
+pub fn make_without_storage(gl: &gl::Gl, desc: &t::Info, cty: ChannelType, mip: t::Mipmap) ->
                             Result<Texture, t::CreationError> {
     let format = NewFormat(desc.format, cty);
     let gl_format = match format_to_glfull(format) {
@@ -440,15 +431,15 @@ pub fn make_without_storage(gl: &gl::Gl, desc: &t::Info, cty: ChannelType, mip: 
         Err(_) => return Err(t::CreationError::Format(desc.format, Some(cty))),
     };
     
-    let levels = determine_mipmap_level(desc, mip);
+    let levels = get_num_levels(desc, mip);
     let fixed_loc = desc.bind.contains(SHADER_RESOURCE);
     make_without_storage_impl(gl, desc.kind, gl_format, gl_pixel_format, gl_data_type,
-                             levels, fixed_loc, mip)
+                             levels, fixed_loc)
 }
 
 /// Create a texture, assuming TexStorage is available.
 fn make_with_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLenum,
-                          levels: t::Level, fixed_sample_locations: bool, mip: Option<t::Mipmap>)
+                          levels: t::Level, fixed_sample_locations: bool)
                           -> Result<Texture, t::CreationError> {
     let (name, target) = make_texture(gl, kind);
     match kind {
@@ -543,24 +534,20 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLenum,
     }
 
     set_mipmap_range(gl, target, (0, levels - 1));
-    if let Some(t::Mipmap::Allocated) = mip {
-        set_mipmap_creation_parameters(gl, target);
-    }
-    
     Ok(name)
 }
 
 /// Create a texture, using the descriptor, assuming TexStorage is available.
-pub fn make_with_storage(gl: &gl::Gl, desc: &t::Info, cty: ChannelType, mip: Option<t::Mipmap>) ->
+pub fn make_with_storage(gl: &gl::Gl, desc: &t::Info, cty: ChannelType, mip: t::Mipmap) ->
                          Result<Texture, t::CreationError> {
     let format = NewFormat(desc.format, cty);
     let gl_format = match format_to_glfull(format) {
         Ok(f) => f,
         Err(_) => return Err(t::CreationError::Format(desc.format, Some(cty))),
     };
-    let levels = determine_mipmap_level(desc, mip);
+    let levels = get_num_levels(desc, mip);
     let fixed_loc = desc.bind.contains(SHADER_RESOURCE);
-    make_with_storage_impl(gl, desc.kind, gl_format, levels, fixed_loc, mip)
+    make_with_storage_impl(gl, desc.kind, gl_format, levels, fixed_loc)
 }
 
 /// Bind a sampler using a given binding anchor.
