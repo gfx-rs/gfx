@@ -125,66 +125,64 @@ impl d::Device<B> for Device {
     }
 
     fn create_sampler(&mut self, info: i::SamplerInfo) -> n::FatSampler {
-        let object = if self.share.features.sampler_objects {
-            let gl = &self.share.context;
-            let mut name = 0 as n::Sampler;
+        if !self.share.features.sampler_objects {
+            return n::FatSampler::Info(info);
+        }
 
-            let (min, mag) = conv::filter_to_gl(info.filter);
+        let gl = &self.share.context;
+        let mut name = 0 as n::Sampler;
 
-            unsafe {
-                gl.GenSamplers(1, &mut name);
+        let (min, mag) = conv::filter_to_gl(info.filter);
 
-                match info.filter{
-                    i::FilterMethod::Anisotropic(fac) if fac > 1 => {
-                        if self.share.private_caps.sampler_anisotropy_ext {
-                            gl.SamplerParameterf(name, gl::TEXTURE_MAX_ANISOTROPY_EXT, fac as GLfloat);
-                        } else if self.share.features.sampler_anisotropy {
-                            // TODO: Uncomment once `gfx_gl` supports GL 4.6
-                            // gl.SamplerParameterf(name, gl::TEXTURE_MAX_ANISOTROPY, fac as GLfloat);
-                        }
-                    }
-                    _ => ()
-                }
+        unsafe {
+            gl.GenSamplers(1, &mut name);
 
-                gl.SamplerParameteri(name, gl::TEXTURE_MIN_FILTER, min as GLint);
-                gl.SamplerParameteri(name, gl::TEXTURE_MAG_FILTER, mag as GLint);
-
-                let (s, t, r) = info.wrap_mode;
-                gl.SamplerParameteri(name, gl::TEXTURE_WRAP_S, conv::wrap_to_gl(s) as GLint);
-                gl.SamplerParameteri(name, gl::TEXTURE_WRAP_T, conv::wrap_to_gl(t) as GLint);
-                gl.SamplerParameteri(name, gl::TEXTURE_WRAP_R, conv::wrap_to_gl(r) as GLint);
-
-                if self.share.features.sampler_lod_bias {
-                    gl.SamplerParameterf(name, gl::TEXTURE_LOD_BIAS, info.lod_bias.into());
-                }
-                if self.share.features.sampler_border_color {
-                    let border: [f32; 4] = info.border.into();
-                    gl.SamplerParameterfv(name, gl::TEXTURE_BORDER_COLOR, &border[0]);
-                }
-
-                let (min, max) = info.lod_range;
-                gl.SamplerParameterf(name, gl::TEXTURE_MIN_LOD, min.into());
-                gl.SamplerParameterf(name, gl::TEXTURE_MAX_LOD, max.into());
-
-                match info.comparison {
-                    None => gl.SamplerParameteri(name, gl::TEXTURE_COMPARE_MODE, gl::NONE as GLint),
-                    Some(cmp) => {
-                        gl.SamplerParameteri(name, gl::TEXTURE_COMPARE_MODE, gl::COMPARE_REF_TO_TEXTURE as GLint);
-                        gl.SamplerParameteri(name, gl::TEXTURE_COMPARE_FUNC, state::map_comparison(cmp) as GLint);
+            match info.filter{
+                i::FilterMethod::Anisotropic(fac) if fac > 1 => {
+                    if self.share.private_caps.sampler_anisotropy_ext {
+                        gl.SamplerParameterf(name, gl::TEXTURE_MAX_ANISOTROPY_EXT, fac as GLfloat);
+                    } else if self.share.features.sampler_anisotropy {
+                        // TODO: Uncomment once `gfx_gl` supports GL 4.6
+                        // gl.SamplerParameterf(name, gl::TEXTURE_MAX_ANISOTROPY, fac as GLfloat);
                     }
                 }
+                _ => ()
             }
 
-            name
-        } else {
-            0
-        };
+            gl.SamplerParameteri(name, gl::TEXTURE_MIN_FILTER, min as GLint);
+            gl.SamplerParameteri(name, gl::TEXTURE_MAG_FILTER, mag as GLint);
+
+            let (s, t, r) = info.wrap_mode;
+            gl.SamplerParameteri(name, gl::TEXTURE_WRAP_S, conv::wrap_to_gl(s) as GLint);
+            gl.SamplerParameteri(name, gl::TEXTURE_WRAP_T, conv::wrap_to_gl(t) as GLint);
+            gl.SamplerParameteri(name, gl::TEXTURE_WRAP_R, conv::wrap_to_gl(r) as GLint);
+
+            if self.share.features.sampler_lod_bias {
+                gl.SamplerParameterf(name, gl::TEXTURE_LOD_BIAS, info.lod_bias.into());
+            }
+            if self.share.features.sampler_border_color {
+                let border: [f32; 4] = info.border.into();
+                gl.SamplerParameterfv(name, gl::TEXTURE_BORDER_COLOR, &border[0]);
+            }
+
+            let (min, max) = info.lod_range;
+            gl.SamplerParameterf(name, gl::TEXTURE_MIN_LOD, min.into());
+            gl.SamplerParameterf(name, gl::TEXTURE_MAX_LOD, max.into());
+
+            match info.comparison {
+                None => gl.SamplerParameteri(name, gl::TEXTURE_COMPARE_MODE, gl::NONE as GLint),
+                Some(cmp) => {
+                    gl.SamplerParameteri(name, gl::TEXTURE_COMPARE_MODE, gl::COMPARE_REF_TO_TEXTURE as GLint);
+                    gl.SamplerParameteri(name, gl::TEXTURE_COMPARE_FUNC, state::map_comparison(cmp) as GLint);
+                }
+            }
+        }
 
         if let Err(err) = self.share.check() {
             panic!("Error {:?} creating sampler: {:?}", err, info)
         }
 
-        n::FatSampler { object, info }
+        n::FatSampler::Sampler(name)
     }
 
     fn create_buffer(&mut self, _: u64, _: u64, _: buffer::Usage) -> Result<device::UnboundBuffer, buffer::CreationError> {
