@@ -29,6 +29,9 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     fn finish(&mut self);
 
     ///
+    fn reset(&mut self, release_resources: bool);
+
+    ///
     fn pipeline_barrier(&mut self, &[Barrier<B>]);
 
     ///
