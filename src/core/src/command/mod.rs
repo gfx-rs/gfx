@@ -58,10 +58,13 @@ impl<'a, B: Backend, C> CommandBuffer<'a, B, C> {
     ///
     /// The command buffer will be consumed and can't be modified further.
     /// The command pool must be reset to able to re-record commands.
-    pub fn finish(mut self) -> Submit<B, C> {
+    pub fn finish(self) -> Submit<B, C> {
+        unsafe { Submit::new(self) }
+    }
+}
+
+impl<'a, B: Backend, C> Drop for CommandBuffer<'a, B, C> {
+    fn drop(&mut self) {
         self.raw.finish();
-        unsafe {
-            Submit::new(self)
-        }
     }
 }
