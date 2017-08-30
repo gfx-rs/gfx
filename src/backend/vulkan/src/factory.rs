@@ -766,8 +766,8 @@ impl core::Factory<R> for Factory {
         Ok(self.share.handles.lock().unwrap().make_pso(pso, program))
     }
 
-    fn create_texture_raw(&mut self, desc: texture::Info, _: texture::Mipmap, hint: Option<core::format::ChannelType>,
-                          _data_opt: Option<&[&[u8]]>) -> Result<h::RawTexture<R>, texture::CreationError> {
+    fn create_texture_raw(&mut self, desc: texture::Info, hint: Option<core::format::ChannelType>,
+                          _data_opt: Option<(&[&[u8]], texture::Mipmap)>) -> Result<h::RawTexture<R>, texture::CreationError> {
         // TODO implement mipmap generation
         use core::handle::Producer;
 

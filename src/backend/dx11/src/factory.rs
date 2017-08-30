@@ -598,8 +598,8 @@ impl core::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
     }
 
-    fn create_texture_raw(&mut self, desc: texture::Info, _: texture::Mipmap, hint: Option<core::format::ChannelType>,
-                          data_opt: Option<&[&[u8]]>) -> Result<h::RawTexture<R>, texture::CreationError> {
+    fn create_texture_raw(&mut self, desc: texture::Info, hint: Option<core::format::ChannelType>,
+                          data_opt: Option<(&[&[u8]], texture::Mipmap)>) -> Result<h::RawTexture<R>, texture::CreationError> {
         use core::texture::{AaMode, CreationError, Kind};
         use data::{map_bind, map_usage, map_surface, map_format};
 
@@ -626,7 +626,7 @@ impl core::Factory<R> for Factory {
 
         self.sub_data_array.clear();
         if let Some(data) = data_opt {
-            for sub in data.iter() {
+            for sub in data.0.iter() {
                 self.sub_data_array.push(winapi::D3D11_SUBRESOURCE_DATA {
                     pSysMem: sub.as_ptr() as *const c_void,
                     SysMemPitch: 0,

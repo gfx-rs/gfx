@@ -221,27 +221,8 @@ pub fn format_to_glfull(format: NewFormat) -> Result<GLenum, ()> {
 }
 
 fn get_num_levels(desc: &t::Info, mip: t::Mipmap) -> t::Level {
-    use std::cmp::{min, max};
-    
     match mip {
-        t::Mipmap::Allocated => {
-            fn mip_level1(w: u16) -> u8 {
-                ((w as f32).log2() + 1.0) as u8
-            }
-            fn mip_level2(w: u16, h: u16) -> u8 {
-                ((max(w, h) as f32).log2() + 1.0) as u8
-            }
-            fn mip_level3(w: u16, h: u16, d: u16) -> u8 {
-                ((max(w, max(h, d)) as f32).log2() + 1.0) as u8
-            }
-            match desc.kind {
-                t::Kind::D1(w) | t::Kind::D1Array(w, ..) => mip_level1(w),
-                t::Kind::D2(w, h, t::AaMode::Single) | t::Kind::D2Array(w, h, ..) => mip_level2(w, h),
-                t::Kind::D3(w, h, d) => min(desc.levels, mip_level3(w, h, d)),
-                t::Kind::Cube(w) | t::Kind::CubeArray(w, ..) => mip_level2(w, w),
-                _ => desc.levels,
-            }
-        },
+        t::Mipmap::Allocated => desc.kind.get_num_levels(),
         t::Mipmap::Provided => desc.levels
     }
 }
