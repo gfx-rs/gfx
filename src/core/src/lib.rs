@@ -134,6 +134,14 @@ pub struct Features {
     pub separate_blending_slots: bool,
     /// Support accelerated buffer copy.
     pub copy_buffer: bool,
+    /// Support separation of textures and samplers.
+    pub sampler_objects: bool,
+    /// Support sampler LOD bias.
+    pub sampler_lod_bias: bool,
+    /// Support anisotropic filtering.
+    pub sampler_anisotropy: bool,
+    /// Support setting border texel colors.
+    pub sampler_border_color: bool,
 }
 
 /// Limits of the device.

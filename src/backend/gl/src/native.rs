@@ -33,6 +33,12 @@ pub struct Fence(pub Cell<gl::types::GLsync>);
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 
+impl Fence {
+    pub fn new(sync: gl::types::GLsync) -> Self {
+        Fence(Cell::new(sync))
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct ResourceView {
     pub(crate) object: Texture,
@@ -75,6 +81,8 @@ pub enum Image {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+// Additionally storing the `SamplerInfo` for older OpenGL versions, which
+// don't support separate sampler objects.
 pub struct FatSampler {
     pub(crate) object: Sampler,
     pub(crate) info: i::SamplerInfo,
@@ -135,6 +143,8 @@ pub struct DepthStencilView;
 #[derive(Debug)]
 #[allow(missing_copy_implementations)]
 pub struct PipelineLayout;
+
 #[derive(Debug)]
 #[allow(missing_copy_implementations)]
+// No inter-queue synchronization required for GL.
 pub struct Semaphore;

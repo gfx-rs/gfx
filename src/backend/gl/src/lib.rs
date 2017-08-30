@@ -65,7 +65,7 @@ impl c::Backend for Backend {
     type Buffer = native::Buffer;
     type UnboundImage = device::UnboundImage;
     type Image = native::Image;
-    type Sampler = native::Sampler;
+    type Sampler = native::FatSampler;
 
     type ConstantBufferView = native::ConstantBufferView;
     type ShaderResourceView = native::ShaderResourceView;
