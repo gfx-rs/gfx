@@ -20,6 +20,17 @@ use queue::CommandQueue;
 use queue::capability::Supports;
 use std::marker::PhantomData;
 
+bitflags!(
+    /// Command pool creation flags.
+    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+    pub flags CommandPoolCreateFlags: u8 {
+        /// Indicates short-lived command buffers.
+        /// Memory optimization hint for implementations.
+        const TRANSIENT = 0x1,
+        /// Allow command buffers to be reset individually.
+        const RESET_INDIVIDUAL = 0x2
+    }
+);
 /// The allocated command buffers are associated with the creating command queue.
 pub trait RawCommandPool<B: Backend>: Send {
     /// Reset the command pool and the corresponding command buffers.
@@ -28,7 +39,7 @@ pub trait RawCommandPool<B: Backend>: Send {
     fn reset(&mut self);
 
     #[doc(hidden)]
-    unsafe fn from_queue(queue: &B::CommandQueue) -> Self;
+    unsafe fn from_queue(queue: &B::CommandQueue, flags: CommandPoolCreateFlags) -> Self;
 
     /// Allocate new command buffers from the pool.
     fn allocate(&mut self, num: usize) -> Vec<B::CommandBuffer>;
@@ -55,10 +66,11 @@ impl<B: Backend, C> CommandPool<B, C> {
     pub fn from_queue<D: Supports<C>>(
         queue: &CommandQueue<B, D>,
         capacity: usize,
+        flags: CommandPoolCreateFlags,
     ) -> Self
     {
         let raw = unsafe {
-            B::CommandPool::from_queue(queue.as_raw())
+            B::CommandPool::from_queue(queue.as_raw(), flags)
         };
         let mut pool = CommandPool {
             buffers: Vec::new(),
