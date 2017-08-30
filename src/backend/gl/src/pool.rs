@@ -28,47 +28,32 @@ fn create_fbo_internal(gl: &gl::Gl) -> gl::types::GLuint {
     name
 }
 
+#[allow(missing_copy_implementations)]
 pub struct RawCommandPool {
     fbo: n::FrameBuffer,
     limits: command::Limits,
-    command_buffers: Vec<RawCommandBuffer>,
 }
 
 impl core::RawCommandPool<Backend> for RawCommandPool {
     fn reset(&mut self) {
-        for cb in &mut self.command_buffers {
-            cb.reset();
-        }
+        unimplemented!()
     }
 
-    fn reserve(&mut self, additional: usize) {
-        for _ in 0..additional {
-            self.command_buffers.push(RawCommandBuffer::new(self.fbo, self.limits));
-        }
-    }
-
-    unsafe fn from_queue(mut queue: &CommandQueue, capacity: usize) -> Self {
+    unsafe fn from_queue(mut queue: &CommandQueue) -> Self {
         let fbo = create_fbo_internal(&queue.share.context);
         let limits = queue.share.limits.into();
-        let buffers = (0..capacity).map(|_| RawCommandBuffer::new(fbo, limits)).collect();
         RawCommandPool {
             fbo,
             limits,
-            command_buffers: buffers,
         }
     }
 
-    unsafe fn acquire_command_buffer(&mut self) -> RawCommandBuffer {
-        // TODO: rewrite _without_ usage of 'unwrap'
-        if self.command_buffers.len() <= 0 {
-            self.reserve(1);
-        }
-
-        self.command_buffers.pop().unwrap()
+    fn allocate(&mut self, num: usize) -> Vec<RawCommandBuffer> {
+        (0..num).map(|_| RawCommandBuffer::new(self.fbo, self.limits)).collect()
     }
 
-    unsafe fn return_command_buffer(&mut self, buffer: RawCommandBuffer) {
-        self.command_buffers.push(buffer)
+    unsafe fn free(&mut self, buffer: Vec<RawCommandBuffer>) {
+        // no-op
     }
 }
 
