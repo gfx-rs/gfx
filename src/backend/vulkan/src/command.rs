@@ -42,10 +42,22 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         );
     }
 
-    fn finish(&mut self)  {
+    fn finish(&mut self) {
         assert_eq!(Ok(()), unsafe {
             self.device.0.end_command_buffer(self.raw)
         });
+    }
+
+    fn reset(&mut self, release_resources: bool) {
+        let flags = if release_resources {
+            vk::COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT
+        } else {
+            vk::CommandBufferResetFlags ::empty()
+        };
+
+        assert_eq!(Ok(()),
+            unsafe { self.device.0.reset_command_buffer(self.raw, flags) }
+        );
     }
 
     fn begin_renderpass(
