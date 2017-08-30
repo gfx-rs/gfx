@@ -7,19 +7,31 @@ use core::command::{BufferCopy, BufferImageCopy, ClearValue, ImageCopy, ImageRes
                     InstanceParams, SubpassContents};
 use core::target::{ColorValue, Stencil};
 use {native as n, Backend};
-use std::{mem};
+use pool::BufferMemory;
+use std::mem;
+use std::slice::Iter;
 
-/// The place of some data in the data buffer.
+// Command buffer implementation details:
+//
+// The underlying commands and data are stored inside the associated command pool.
+// See the comments for further safety requirements.
+// Each command buffer holds a (growable) slice of the buffers (`CommandBuffer`
+// and `DataBuffer`) in the pool.
+//
+// Command buffers are recorded one-after-another for each command pool.
+// Actual storage depends on the resetting behavior of the pool.
+
+/// The place of some data in a buffer.
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub struct DataPointer {
+pub struct BufferSlice {
     offset: u32,
     size: u32,
 }
 
-impl DataPointer {
+impl BufferSlice {
     // Append a data pointer, resulting in one data pointer
     // covering the whole memory region.
-    fn append(&mut self, other: DataPointer) {
+    fn append(&mut self, other: BufferSlice) {
         if self.size == 0 {
             // Empty or dummy pointer
             self.offset = other.offset;
@@ -29,36 +41,102 @@ impl DataPointer {
             self.size += other.size;
         }
     }
+
+    fn contains(&self, other: BufferSlice) -> bool {
+        self.offset <= other.offset &&
+        self.offset + self.size >= other.offset + other.size
+    }
 }
 
 #[derive(Clone)]
-pub struct DataBuffer(Vec<u8>);
-impl DataBuffer {
-    /// Create a new empty data buffer.
-    pub fn new() -> DataBuffer {
-        DataBuffer(Vec::new())
+#[allow(missing_copy_implementations)]
+// Owned slice of a (growable) vector owned by a pool.
+pub struct Buffer<T> {
+    buffer: *mut Vec<T>,
+    slice: BufferSlice,
+}
+
+unsafe impl<T> Send for Buffer<T> where T: Send {}
+
+impl<T> Buffer<T> {
+    /// Create a new empty buffer.
+    pub fn new(buffer: &mut Vec<T>) -> Self {
+        Buffer {
+            buffer: buffer as *mut _,
+            slice: BufferSlice { offset: 0, size: 0 },
+        }
     }
+
+    // Only set the reserved slice length to 0.
+    // Doesn't clear the actual data.
+    fn soft_reset(&mut self) {
+        self.slice = BufferSlice { offset: 0, size: 0 };
+    }
+
+    // Soft resets the buffer and additionally clears the _whole_ internal buffer.
+    fn reset(&mut self) {
+        self.soft_reset();
+        unsafe { (*self.buffer).clear(); }
+    }
+}
+
+pub type CommandBuffer = Buffer<Command>;
+pub type DataBuffer = Buffer<u8>;
+
+impl CommandBuffer {
+    fn push(&mut self, cmd: Command) {
+        unsafe {
+            (*self.buffer).push(cmd);
+            self.slice.append(
+                BufferSlice {
+                    offset: (*self.buffer).len() as u32 - 1,
+                    size: 1,
+                });
+        }
+    }
+}
+
+impl<'a> IntoIterator for &'a CommandBuffer {
+    type Item = &'a Command;
+    type IntoIter = Iter<'a, Command>;
+    fn into_iter(self) -> Self::IntoIter {
+        unsafe {
+            assert!((*self.buffer).len() >= (self.slice.offset+self.slice.size) as usize);
+            (*self.buffer)[self.slice.offset as usize..(self.slice.offset+self.slice.size) as usize].into_iter()
+        }
+    }
+}
+
+impl DataBuffer {
     /// Copy a given vector slice into the buffer.
-    fn add<T>(&mut self, data: &[T]) -> DataPointer {
+    fn add<T>(&mut self, data: &[T]) -> BufferSlice {
         self.add_raw(unsafe { mem::transmute(data) })
     }
     /// Copy a given u8 slice into the buffer.
-    fn add_raw(&mut self, data: &[u8]) -> DataPointer {
-        self.0.extend_from_slice(data);
-        DataPointer {
-            offset: (self.0.len() - data.len()) as u32,
-            size: data.len() as u32,
-        }
+    fn add_raw(&mut self, data: &[u8]) -> BufferSlice {
+        let slice = unsafe {
+            (*self.buffer).extend_from_slice(data);
+            BufferSlice {
+                offset: ((*self.buffer).len() - data.len()) as u32,
+                size: data.len() as u32,
+            }
+        };
+        self.slice.append(slice);
+        slice
     }
     /// Return a reference to a stored data object.
-    pub fn get<T>(&self, ptr: DataPointer) -> &[T] {
+    pub fn get<T>(&self, ptr: BufferSlice) -> &[T] {
         assert_eq!(ptr.size % mem::size_of::<T>() as u32, 0);
         let raw_data = self.get_raw(ptr);
         unsafe { mem::transmute(raw_data) }
     }
     /// Return a reference to a stored data object.
-    pub fn get_raw(&self, ptr: DataPointer) -> &[u8] {
-        &self.0[ptr.offset as usize..(ptr.offset + ptr.size) as usize]
+    pub fn get_raw(&self, ptr: BufferSlice) -> &[u8] {
+        assert!(self.slice.contains(ptr));
+        unsafe {
+            assert!((*self.buffer).len() >= (ptr.offset + ptr.size) as usize);
+            &(*self.buffer)[ptr.offset as usize..(ptr.offset + ptr.size) as usize]
+        }
     }
 }
 
@@ -82,12 +160,12 @@ pub enum Command {
         instances: Option<InstanceParams>,
     },
     BindIndexBuffer(gl::types::GLuint),
-    BindVertexBuffers(DataPointer),
+    BindVertexBuffers(BufferSlice),
     SetViewports {
-        viewport_ptr: DataPointer,
-        depth_range_ptr: DataPointer,
+        viewport_ptr: BufferSlice,
+        depth_range_ptr: BufferSlice,
     },
-    SetScissors(DataPointer),
+    SetScissors(BufferSlice),
     SetBlendColor(ColorValue),
     ClearColor(n::TargetView, command::ClearColor),
     BindFrameBuffer(FrameBufferTarget, n::FrameBuffer),
@@ -150,8 +228,12 @@ impl From<c::Limits> for Limits {
 /// `display_fb` field.
 #[derive(Clone)]
 pub struct RawCommandBuffer {
-    pub buf: Vec<Command>,
-    pub data: DataBuffer,
+    pub(crate) buf: CommandBuffer,
+    pub(crate) data: DataBuffer,
+    // Buffer id for the owning command pool.
+    // Only relevant if individual resets are allowed.
+    pub(crate) id: u64,
+
     fbo: n::FrameBuffer,
     /// The framebuffer to use for rendering to the main targets (0 by default).
     ///
@@ -169,10 +251,30 @@ pub struct RawCommandBuffer {
 }
 
 impl RawCommandBuffer {
-    pub(crate) fn new(fbo: n::FrameBuffer, limits: Limits) -> Self {
+    pub(crate) fn new(
+        fbo: n::FrameBuffer,
+        limits: Limits,
+        memory: &mut BufferMemory,
+    ) -> Self {
+        let (buf, data, id) = match *memory {
+            BufferMemory::Linear { ref mut commands, ref mut data } => {
+                (CommandBuffer::new(commands), DataBuffer::new(data), 0)
+            }
+            BufferMemory::Individual { ref mut storage, ref mut next_buffer_id } => {
+                // Add a new pair of buffers
+                storage.insert(*next_buffer_id, (Vec::new(), Vec::new()));
+                let id = *next_buffer_id;
+                *next_buffer_id += 1;
+
+                let &mut (ref mut commands, ref mut data) = storage.get_mut(&id).unwrap();
+                (CommandBuffer::new(commands), DataBuffer::new(data), id)
+            }
+        };
+
         RawCommandBuffer {
-            buf: Vec::new(),
-            data: DataBuffer::new(),
+            buf,
+            data,
+            id,
             fbo,
             display_fb: 0 as n::FrameBuffer,
             cache: Cache::new(),
@@ -181,9 +283,11 @@ impl RawCommandBuffer {
         }
     }
 
-    pub(crate) fn reset(&mut self) {
-        self.buf.clear();
-        self.data.0.clear();
+    // Soft reset only the buffers, but doesn't free any memory or clears memory
+    // of the owning pool.
+    pub(crate) fn soft_reset(&mut self) {
+        self.buf.soft_reset();
+        self.data.soft_reset();
         self.cache = Cache::new();
     }
 
@@ -199,6 +303,16 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     fn finish(&mut self) {
         // no-op
+    }
+
+    fn reset(&mut self, _release_resources: bool) {
+        // TODO: error when calling this for linear memory storage
+        //       Currently works under the assumption that the user
+        //       calls this function API conform.
+        // TODO: should use the `release_resources` and shrink the buffers?
+        self.buf.reset();
+        self.data.reset();
+        self.cache = Cache::new();
     }
 
     fn pipeline_barrier(&mut self, barries: &[memory::Barrier<Backend>]) {
@@ -288,8 +402,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                 //
                 // We try to store everything into a contiguous block of memory,
                 // which allows us to avoid memory allocations when executing the commands.
-                let mut viewport_ptr = DataPointer { offset: 0, size: 0 };
-                let mut depth_range_ptr = DataPointer { offset: 0, size: 0 };
+                let mut viewport_ptr = BufferSlice { offset: 0, size: 0 };
+                let mut depth_range_ptr = BufferSlice { offset: 0, size: 0 };
 
                 for viewport in viewports {
                     let viewport = &[viewport.x as f32, viewport.y as f32, viewport.w as f32, viewport.h as f32];
@@ -315,7 +429,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                 self.cache.error_state = true;
             }
             n if n <= self.limits.max_viewports => {
-                let mut scissors_ptr = DataPointer { offset: 0, size: 0 };
+                let mut scissors_ptr = BufferSlice { offset: 0, size: 0 };
                 for scissor in scissors {
                     let scissor = &[scissor.x as i32, scissor.y as i32, scissor.w as i32, scissor.h as i32];
                     scissors_ptr.append(self.data.add::<i32>(scissor));
@@ -479,16 +593,5 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 }
 
 /// A subpass command buffer abstraction for OpenGL
-pub struct SubpassCommandBuffer {
-    pub buf: Vec<Command>,
-    pub data: DataBuffer,
-}
-
-impl SubpassCommandBuffer {
-    pub fn new() -> Self {
-        SubpassCommandBuffer {
-            buf: Vec::new(),
-            data: DataBuffer::new(),
-        }
-    }
-}
+#[allow(missing_copy_implementations)]
+pub struct SubpassCommandBuffer;
