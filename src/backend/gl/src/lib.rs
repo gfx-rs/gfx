@@ -36,7 +36,6 @@ impl c::Backend for Backend {
     type CommandQueue = CommandQueue;
     type CommandBuffer = command::RawCommandBuffer;
     type SubpassCommandBuffer = command::SubpassCommandBuffer;
-    type SubmitInfo = command::SubmitInfo;
     type QueueFamily = QueueFamily;
 
     type Heap = native::Heap;
@@ -873,8 +872,8 @@ impl c::RawCommandQueue<Backend> for CommandQueue {
         {
             for cb in submit_info.cmd_buffers {
                 self.reset_state();
-                for com in &*cb.buf {
-                    self.process(com, &*cb.data);
+                for com in &cb.buf {
+                    self.process(com, &cb.data);
                 }
             }
         }
