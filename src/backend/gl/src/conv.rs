@@ -26,3 +26,12 @@ pub fn filter_to_gl(f: i::FilterMethod) -> (GLenum, GLenum) {
         i::FilterMethod::Anisotropic(..) => (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR),
     }
 }
+
+pub fn wrap_to_gl(w: i::WrapMode) -> GLenum {
+    match w {
+        i::WrapMode::Tile   => gl::REPEAT,
+        i::WrapMode::Mirror => gl::MIRRORED_REPEAT,
+        i::WrapMode::Clamp  => gl::CLAMP_TO_EDGE,
+        i::WrapMode::Border => gl::CLAMP_TO_BORDER,
+    }
+}
