@@ -330,6 +330,10 @@ impl core::Adapter<Backend> for Adapter {
                 unordered_access_view: false,
                 separate_blending_slots: false,
                 copy_buffer: false,
+                sampler_anisotropy: false,
+                sampler_border_color: false,
+                sampler_lod_bias: false,
+                sampler_objects: false,
             },
             limits: Limits {
                 max_texture_size: limits.max_image_dimension3d as usize,
