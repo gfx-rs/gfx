@@ -397,7 +397,7 @@ impl f::Factory<R> for Factory {
         Ok(self.share.handles.borrow_mut().make_pso(pso, program))
     }
 
-    fn create_texture_raw(&mut self, desc: t::Info, hint: Option<ChannelType>, data_opt: Option<&[&[u8]]>)
+    fn create_texture_raw(&mut self, desc: t::Info, hint: Option<ChannelType>, mipmap: Option<t::Mipmap>, data_opt: Option<&[&[u8]]>)
                           -> Result<handle::RawTexture<R>, t::CreationError> {
         use core::texture::CreationError;
         let caps = &self.share.private_caps;
@@ -416,9 +416,9 @@ impl f::Factory<R> for Factory {
         let gl = &self.share.context;
         let object = if desc.bind.intersects(SHADER_RESOURCE | UNORDERED_ACCESS) || data_opt.is_some() {
             let name = if caps.immutable_storage_supported {
-                try!(tex::make_with_storage(gl, &desc, cty))
+                try!(tex::make_with_storage(gl, &desc, cty, mipmap))
             } else {
-                try!(tex::make_without_storage(gl, &desc, cty))
+                try!(tex::make_without_storage(gl, &desc, cty, mipmap))
             };
             if let Some(data) = data_opt {
                 try!(tex::init_texture_data(gl, name, desc, cty, data));

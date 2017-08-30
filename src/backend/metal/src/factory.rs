@@ -484,6 +484,7 @@ impl core::Factory<Resources> for Factory {
         (&mut self,
          desc: core::texture::Info,
          hint: Option<core::format::ChannelType>,
+         _: Option<t::Mipmap>,
          data_opt: Option<&[&[u8]]>)
          -> Result<handle::RawTexture<Resources>, core::texture::CreationError> {
         use core::texture::{AaMode, Kind};

@@ -767,7 +767,8 @@ impl core::Factory<R> for Factory {
     }
 
     fn create_texture_raw(&mut self, desc: texture::Info, hint: Option<core::format::ChannelType>,
-                          _data_opt: Option<&[&[u8]]>) -> Result<h::RawTexture<R>, texture::CreationError> {
+                          _: Option<t::Mipmap>, _data_opt: Option<&[&[u8]]>) -> Result<h::RawTexture<R>, texture::CreationError> {
+        // TODO implement mipmap generation
         use core::handle::Producer;
 
         let (w, h, d, aa) = desc.kind.get_dimensions();

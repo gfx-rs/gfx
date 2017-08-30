@@ -314,6 +314,18 @@ impl Kind {
     }
 }
 
+/// The marker for the texture initializer to generate extra space for the mipmap generation.
+#[allow(missing_docs)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[repr(u8)]
+pub enum Mipmap {
+	/// The mipmap data is provided as a part of bitmap data.
+	Provided,
+	/// The mipmap data is not provided, but the memory for it should be allocated
+	/// for the later generation/
+	Allocated, // TODO parameterize mipmap generation here?
+}
 
 /// Describes a subvolume of a texture, which image data can be uploaded into.
 #[allow(missing_docs)]
