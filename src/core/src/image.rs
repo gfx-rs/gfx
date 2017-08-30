@@ -554,6 +554,7 @@ impl From<RenderDesc> for DepthStencilDesc {
 
 ///
 #[derive(Copy, Clone, Debug, Hash)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub enum ImageLayout {
     ///
     General,
@@ -592,6 +593,7 @@ bitflags!(
 
 bitflags!(
     ///
+    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
     pub flags Access: u16 {
         ///
         const RENDER_TARGET_CLEAR    = 0x20,
