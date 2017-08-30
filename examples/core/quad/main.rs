@@ -26,7 +26,7 @@ extern crate gfx_device_metal as back;
 extern crate winit;
 extern crate image;
 
-use core::{buffer, command, device as d, image as i, memory as m, pass, pso, state};
+use core::{buffer, command, device as d, image as i, memory as m, pass, pso, pool, state};
 use core::{Adapter, Device, QueueFamily, SwapChain, WindowExt};
 use core::{DescriptorPool, Gpu, FrameSync, Primitive, Surface, SwapchainConfig};
 use core::format::{Formatted, Srgba8 as ColorFormat, Vec2};
@@ -337,7 +337,7 @@ fn main() {
 
     let mut frame_semaphore = device.create_semaphore();
     let mut frame_fence = device.create_fence(false); // TODO: remove
-    let mut graphics_pool = queue.create_graphics_pool(16);
+    let mut graphics_pool = queue.create_graphics_pool(16, pool::CommandPoolCreateFlags::empty());
 
     // copy buffer to texture
     {
