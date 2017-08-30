@@ -11,7 +11,7 @@ pub mod capability;
 pub mod submission;
 
 use Backend;
-use pool::CommandPool;
+use pool::{CommandPool, CommandPoolCreateFlags};
 use std::marker::PhantomData;
 
 pub use self::capability::{Compute, Graphics, General, Transfer, Supports};
@@ -103,42 +103,50 @@ impl<B: Backend, C> CommandQueue<B, C> {
     }
 
     ///
-    pub fn create_general_pool(&self,
+    pub fn create_general_pool(
+        &self,
         capacity: usize,
+        flags: CommandPoolCreateFlags,
     ) -> CommandPool<B, General>
     where
         C: Supports<General>
     {
-        CommandPool::from_queue(self, capacity)
+        CommandPool::from_queue(self, capacity, flags)
     }
 
     ///
-    pub fn create_graphics_pool(&self,
+    pub fn create_graphics_pool(
+        &self,
         capacity: usize,
+        flags: CommandPoolCreateFlags,
     ) -> CommandPool<B, Graphics>
     where
         C: Supports<Graphics>
     {
-        CommandPool::from_queue(self, capacity)
+        CommandPool::from_queue(self, capacity, flags)
     }
 
     ///
-    pub fn create_compute_pool(&self,
+    pub fn create_compute_pool(
+        &self,
         capacity: usize,
+        flags: CommandPoolCreateFlags,
     ) -> CommandPool<B, Compute>
     where
         C: Supports<Compute>
     {
-        CommandPool::from_queue(self, capacity)
+        CommandPool::from_queue(self, capacity, flags)
     }
 
     ///
-    pub fn create_transfer_pool(&self,
+    pub fn create_transfer_pool(
+        &self,
         capacity: usize,
+        flags: CommandPoolCreateFlags,
     ) -> CommandPool<B, Transfer>
     where
         C: Supports<Transfer>
     {
-        CommandPool::from_queue(self, capacity)
+        CommandPool::from_queue(self, capacity, flags)
     }
 }
