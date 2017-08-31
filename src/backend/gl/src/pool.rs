@@ -17,8 +17,9 @@ use command::{self, Command, RawCommandBuffer, SubpassCommandBuffer};
 use native as n;
 use {Backend, CommandQueue, Share};
 use gl;
+use std::cell::{BorrowError, RefCell};
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::sync::Arc;
 
 fn create_fbo_internal(gl: &gl::Gl) -> gl::types::GLuint {
     let mut name = 0 as n::FrameBuffer;
@@ -27,6 +28,20 @@ fn create_fbo_internal(gl: &gl::Gl) -> gl::types::GLuint {
     }
     info!("\tCreated frame buffer {}", name);
     name
+}
+
+pub struct OwnedBuffer {
+    pub(crate) commands: Vec<Command>,
+    pub(crate) data: Vec<u8>,
+}
+
+impl OwnedBuffer {
+    pub fn new() -> Self {
+        OwnedBuffer {
+            commands: Vec::new(),
+            data: Vec::new(),
+        }
+    }
 }
 
 // Storage of command buffer memory.
@@ -46,14 +61,11 @@ pub enum BufferMemory {
     //
     // Reseting the pool will free all data and commands recorded. Therefore it's
     // crucial that all submits have been finished **before** calling `reset`.
-    Linear {
-        commands: Vec<Command>,
-        data: Vec<u8>,
-    },
+    Linear(Arc<RefCell<OwnedBuffer>>),
     // Storing the memory for each command buffer separately to allow individual
     // command buffer resets.
     Individual {
-        storage: HashMap<u64, (Vec<Command>, Vec<u8>)>,
+        storage: HashMap<u64, Arc<RefCell<OwnedBuffer>>>,
         next_buffer_id: u64,
     },
 }
@@ -64,23 +76,30 @@ pub struct RawCommandPool {
     memory: BufferMemory,
 }
 
+unsafe impl Send for RawCommandPool {}
+
 impl core::RawCommandPool<Backend> for RawCommandPool {
     fn reset(&mut self) {
         match self.memory {
-            BufferMemory::Linear { ref mut commands, ref mut data } => {
-                commands.clear();
-                data.clear();
+            BufferMemory::Linear(ref mut buffer) => {
+                let mut buf = buffer.borrow_mut();
+                buf.commands.clear();
+                buf.data.clear();
             }
             BufferMemory::Individual { ref mut storage, .. } => {
-                for (_, &mut (ref mut commands, ref mut data)) in storage {
-                    commands.clear();
-                    data.clear();
+                for (_, ref mut buffer) in storage {
+                    let mut buf = buffer.borrow_mut();
+                    buf.commands.clear();
+                    buf.data.clear();
                 }
             }
         }
     }
 
-    unsafe fn from_queue(mut queue: &CommandQueue, flags: pool::CommandPoolCreateFlags) -> Self {
+    unsafe fn from_queue(
+        mut queue: &CommandQueue,
+        flags: pool::CommandPoolCreateFlags,
+    ) -> Self {
         let fbo = create_fbo_internal(&queue.share.context);
         let limits = queue.share.limits.into();
         let memory = if flags.contains(pool::RESET_INDIVIDUAL) {
@@ -89,10 +108,7 @@ impl core::RawCommandPool<Backend> for RawCommandPool {
                 next_buffer_id: 0,
             }
         } else {
-            BufferMemory::Linear {
-                commands: Vec::new(),
-                data: Vec::new(),
-            }
+            BufferMemory::Linear(Arc::new(RefCell::new(OwnedBuffer::new())))
         };
 
         // Ignoring `TRANSIENT` hint, unsure how to make use of this.
