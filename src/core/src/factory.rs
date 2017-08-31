@@ -331,7 +331,7 @@ pub trait Factory<R: Resources> {
         -> Result<handle::RawDepthStencilView<R>, TargetViewError>;
 
     fn create_texture<S>(&mut self, kind: texture::Kind, levels: target::Level,
-                      bind: Bind, usage: Usage, channel_hint: Option<format::ChannelType>)                      
+                      bind: Bind, usage: Usage, channel_hint: Option<format::ChannelType>)
                       -> Result<handle::Texture<R, S>, texture::CreationError>
     where S: format::SurfaceTyped
     {
