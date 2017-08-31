@@ -425,8 +425,8 @@ pub trait Factory<R: Resources> {
     {
         self.view_texture_as_depth_stencil(tex, 0, None, texture::DepthStencilFlags::empty())
     }
-
-    fn create_texture_immutable_u8<T: format::TextureFormat>(&mut self, kind: texture::Kind, data: &[&[u8]])
+    
+    fn create_texture_immutable_u8<T: format::TextureFormat>(&mut self, kind: texture::Kind, mipmap: texture::Mipmap, data: &[&[u8]])
                                    -> Result<(handle::Texture<R, T::Surface>,
                                               handle::ShaderResourceView<R, T::View>),
                                              CombinedError>
@@ -434,9 +434,13 @@ pub trait Factory<R: Resources> {
         let surface = <T::Surface as format::SurfaceTyped>::get_surface_type();
         let num_slices = kind.get_num_slices().unwrap_or(1) as usize;
         let num_faces = if kind.is_cube() {6} else {1};
+        let texture_level = match mipmap {
+	        texture::Mipmap::Provided => (data.len() / (num_slices * num_faces)) as texture::Level,
+	        texture::Mipmap::Allocated => kind.get_num_levels(),
+        };
         let desc = texture::Info {
             kind: kind,
-            levels: (data.len() / (num_slices * num_faces)) as texture::Level,
+            levels: texture_level,
             format: surface,
             bind: SHADER_RESOURCE,
             usage: Usage::Data,
@@ -462,7 +466,7 @@ pub trait Factory<R: Resources> {
         for (rd, d) in raw_data.iter_mut().zip(data.iter()) {
             *rd = cast_slice(*d);
         }
-        self.create_texture_immutable_u8::<T>(kind, &raw_data[.. data.len()])
+        self.create_texture_immutable_u8::<T>(kind, texture::Mipmap::Provided, &raw_data[.. data.len()])
     }
 
     fn create_render_target<T: format::RenderFormat + format::TextureFormat>
