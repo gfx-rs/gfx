@@ -155,7 +155,6 @@ impl From<c::Limits> for Limits {
 pub struct RawCommandBuffer {
     pub(crate) memory: Arc<RefCell<pool::OwnedBuffer>>,
     pub(crate) buf: BufferSlice,
-    pub(crate) data: BufferSlice,
     // Buffer id for the owning command pool.
     // Only relevant if individual resets are allowed.
     pub(crate) id: u64,
@@ -201,7 +200,6 @@ impl RawCommandBuffer {
         RawCommandBuffer {
             memory,
             buf: BufferSlice::new(),
-            data: BufferSlice::new(),
             id,
             fbo,
             display_fb: 0 as n::FrameBuffer,
@@ -215,7 +213,6 @@ impl RawCommandBuffer {
     // of the owning pool.
     pub(crate) fn soft_reset(&mut self) {
         self.buf = BufferSlice::new();
-        self.data = BufferSlice::new();
         self.cache = Cache::new();
     }
 
@@ -236,15 +233,11 @@ impl RawCommandBuffer {
     /// Copy a given u8 slice into the data buffer.
     fn add_raw(&mut self, data: &[u8]) -> BufferSlice {
         let mut data_buffer = &mut self.memory.borrow_mut().data;
-        let slice = {
-            data_buffer.extend_from_slice(data);
-            BufferSlice {
-                offset: (data_buffer.len() - data.len()) as u32,
-                size: data.len() as u32,
-            }
-        };
-        self.data.append(slice);
-        slice
+        data_buffer.extend_from_slice(data);
+        BufferSlice {
+            offset: (data_buffer.len() - data.len()) as u32,
+            size: data.len() as u32,
+        }
     }
 
     fn is_main_target(&self, tv: n::TargetView) -> bool {
