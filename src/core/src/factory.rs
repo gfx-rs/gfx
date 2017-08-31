@@ -434,10 +434,10 @@ pub trait Factory<R: Resources> {
         let surface = <T::Surface as format::SurfaceTyped>::get_surface_type();
         let num_slices = kind.get_num_slices().unwrap_or(1) as usize;
         let num_faces = if kind.is_cube() {6} else {1};
-        let texture_level = match mipmap {
-	        texture::Mipmap::Provided => (data.len() / (num_slices * num_faces)) as texture::Level,
-	        texture::Mipmap::Allocated => kind.get_num_levels(),
-        };
+        let mut texture_level = (data.len() / (num_slices * num_faces)) as texture::Level;
+        if let texture::Mipmap::Allocated = mipmap {
+	        texture_level *= kind.get_num_levels();
+        }
         let desc = texture::Info {
             kind: kind,
             levels: texture_level,
