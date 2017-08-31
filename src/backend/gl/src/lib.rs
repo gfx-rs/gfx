@@ -24,10 +24,11 @@ extern crate gfx_gl as gl;
 extern crate gfx_core as core;
 extern crate smallvec;
 
+use std::mem;
 use std::rc::Rc;
 use core::{self as c, image as i, command as com};
 use core::QueueType;
-use command::{Command, DataBuffer};
+use command::Command;
 use smallvec::SmallVec;
 
 pub use self::device::Device;
@@ -456,6 +457,18 @@ impl CommandQueue {
         unsafe { gl.FramebufferTexture(point, attachment, 0, 0) };
     }
 
+    /// Return a reference to a stored data object.
+    fn get<T>(data: &[u8], ptr: command::BufferSlice) -> &[T] {
+        assert_eq!(ptr.size % mem::size_of::<T>() as u32, 0);
+        let raw_data = Self::get_raw(data, ptr);
+        unsafe { mem::transmute(raw_data) }
+    }
+    /// Return a reference to a stored data object.
+    fn get_raw(data: &[u8], ptr: command::BufferSlice) -> &[u8] {
+        assert!(data.len() >= (ptr.offset + ptr.size) as usize);
+        &data[ptr.offset as usize..(ptr.offset + ptr.size) as usize]
+    }
+
     // Reset the state to match our _expected_ state before executing
     // a command buffer.
     fn reset_state(&mut self) {
@@ -515,7 +528,7 @@ impl CommandQueue {
         }
     }
 
-    fn process(&mut self, cmd: &Command, data_buf: &DataBuffer) {
+    fn process(&mut self, cmd: &Command, data_buf: &[u8]) {
         match *cmd {
             Command::BindIndexBuffer(buffer) => {
                 let gl = &self.share.context;
@@ -653,8 +666,8 @@ impl CommandQueue {
             }
             Command::SetViewports { viewport_ptr, depth_range_ptr } => {
                 let gl = &self.share.context;
-                let viewports = data_buf.get::<[f32; 4]>(viewport_ptr);
-                let depth_ranges = data_buf.get::<[f64; 2]>(depth_range_ptr);
+                let viewports = Self::get::<[f32; 4]>(data_buf, viewport_ptr);
+                let depth_ranges = Self::get::<[f64; 2]>(data_buf, depth_range_ptr);
 
                 let num_viewports = viewports.len();
                 assert_eq!(num_viewports, depth_ranges.len());
@@ -674,7 +687,7 @@ impl CommandQueue {
             }
             Command::SetScissors(data_ptr) => {
                 let gl = &self.share.context;
-                let scissors = data_buf.get::<[i32; 4]>(data_ptr);
+                let scissors = Self::get::<[i32; 4]>(data_buf, data_ptr);
                 let num_scissors = scissors.len();
                 assert!(0 < num_scissors && num_scissors <= self.share.limits.max_viewports);
 
@@ -885,9 +898,13 @@ impl c::RawCommandQueue<Backend> for CommandQueue {
     ) {
         {
             for cb in submit_info.cmd_buffers {
+                let buffer = cb.memory.borrow_mut();
+
+                assert!(buffer.commands.len() >= (cb.buf.offset+cb.buf.size) as usize);
+                let commands = &buffer.commands[cb.buf.offset as usize..(cb.buf.offset+cb.buf.size) as usize];
                 self.reset_state();
-                for com in &cb.buf {
-                    self.process(com, &cb.data);
+                for com in commands {
+                    self.process(com, &buffer.data);
                 }
             }
         }
