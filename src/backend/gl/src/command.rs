@@ -1,15 +1,16 @@
 #![allow(missing_docs)]
 
 use gl;
-use core::{self as c, command, image, memory, state as s, target, Viewport};
+use core::{self as c, command, image, memory, target, Viewport};
 use core::buffer::IndexBufferView;
 use core::command::{BufferCopy, BufferImageCopy, ClearValue, ImageCopy, ImageResolve,
                     InstanceParams, SubpassContents};
 use core::target::{ColorValue, Stencil};
 use {native as n, Backend};
-use pool::BufferMemory;
+use pool::{self, BufferMemory};
+use std::cell::RefCell;
 use std::mem;
-use std::slice::Iter;
+use std::sync::Arc;
 
 // Command buffer implementation details:
 //
@@ -24,11 +25,18 @@ use std::slice::Iter;
 /// The place of some data in a buffer.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct BufferSlice {
-    offset: u32,
-    size: u32,
+    pub offset: u32,
+    pub size: u32,
 }
 
 impl BufferSlice {
+    fn new() -> Self {
+        BufferSlice {
+            offset: 0,
+            size: 0,
+        }
+    }
+
     // Append a data pointer, resulting in one data pointer
     // covering the whole memory region.
     fn append(&mut self, other: BufferSlice) {
@@ -39,103 +47,6 @@ impl BufferSlice {
         } else {
             assert_eq!(self.offset + self.size, other.offset);
             self.size += other.size;
-        }
-    }
-
-    fn contains(&self, other: BufferSlice) -> bool {
-        self.offset <= other.offset &&
-        self.offset + self.size >= other.offset + other.size
-    }
-}
-
-#[derive(Clone)]
-#[allow(missing_copy_implementations)]
-// Owned slice of a (growable) vector owned by a pool.
-pub struct Buffer<T> {
-    buffer: *mut Vec<T>,
-    slice: BufferSlice,
-}
-
-unsafe impl<T> Send for Buffer<T> where T: Send {}
-
-impl<T> Buffer<T> {
-    /// Create a new empty buffer.
-    pub fn new(buffer: &mut Vec<T>) -> Self {
-        Buffer {
-            buffer: buffer as *mut _,
-            slice: BufferSlice { offset: 0, size: 0 },
-        }
-    }
-
-    // Only set the reserved slice length to 0.
-    // Doesn't clear the actual data.
-    fn soft_reset(&mut self) {
-        self.slice = BufferSlice { offset: 0, size: 0 };
-    }
-
-    // Soft resets the buffer and additionally clears the _whole_ internal buffer.
-    fn reset(&mut self) {
-        self.soft_reset();
-        unsafe { (*self.buffer).clear(); }
-    }
-}
-
-pub type CommandBuffer = Buffer<Command>;
-pub type DataBuffer = Buffer<u8>;
-
-impl CommandBuffer {
-    fn push(&mut self, cmd: Command) {
-        unsafe {
-            (*self.buffer).push(cmd);
-            self.slice.append(
-                BufferSlice {
-                    offset: (*self.buffer).len() as u32 - 1,
-                    size: 1,
-                });
-        }
-    }
-}
-
-impl<'a> IntoIterator for &'a CommandBuffer {
-    type Item = &'a Command;
-    type IntoIter = Iter<'a, Command>;
-    fn into_iter(self) -> Self::IntoIter {
-        unsafe {
-            assert!((*self.buffer).len() >= (self.slice.offset+self.slice.size) as usize);
-            (*self.buffer)[self.slice.offset as usize..(self.slice.offset+self.slice.size) as usize].into_iter()
-        }
-    }
-}
-
-impl DataBuffer {
-    /// Copy a given vector slice into the buffer.
-    fn add<T>(&mut self, data: &[T]) -> BufferSlice {
-        self.add_raw(unsafe { mem::transmute(data) })
-    }
-    /// Copy a given u8 slice into the buffer.
-    fn add_raw(&mut self, data: &[u8]) -> BufferSlice {
-        let slice = unsafe {
-            (*self.buffer).extend_from_slice(data);
-            BufferSlice {
-                offset: ((*self.buffer).len() - data.len()) as u32,
-                size: data.len() as u32,
-            }
-        };
-        self.slice.append(slice);
-        slice
-    }
-    /// Return a reference to a stored data object.
-    pub fn get<T>(&self, ptr: BufferSlice) -> &[T] {
-        assert_eq!(ptr.size % mem::size_of::<T>() as u32, 0);
-        let raw_data = self.get_raw(ptr);
-        unsafe { mem::transmute(raw_data) }
-    }
-    /// Return a reference to a stored data object.
-    pub fn get_raw(&self, ptr: BufferSlice) -> &[u8] {
-        assert!(self.slice.contains(ptr));
-        unsafe {
-            assert!((*self.buffer).len() >= (ptr.offset + ptr.size) as usize);
-            &(*self.buffer)[ptr.offset as usize..(ptr.offset + ptr.size) as usize]
         }
     }
 }
@@ -228,8 +139,9 @@ impl From<c::Limits> for Limits {
 /// `display_fb` field.
 #[derive(Clone)]
 pub struct RawCommandBuffer {
-    pub(crate) buf: CommandBuffer,
-    pub(crate) data: DataBuffer,
+    pub(crate) memory: Arc<RefCell<pool::OwnedBuffer>>,
+    pub(crate) buf: BufferSlice,
+    pub(crate) data: BufferSlice,
     // Buffer id for the owning command pool.
     // Only relevant if individual resets are allowed.
     pub(crate) id: u64,
@@ -250,30 +162,32 @@ pub struct RawCommandBuffer {
     active_attribs: usize,
 }
 
+unsafe impl Send for RawCommandBuffer { }
+
 impl RawCommandBuffer {
     pub(crate) fn new(
         fbo: n::FrameBuffer,
         limits: Limits,
         memory: &mut BufferMemory,
     ) -> Self {
-        let (buf, data, id) = match *memory {
-            BufferMemory::Linear { ref mut commands, ref mut data } => {
-                (CommandBuffer::new(commands), DataBuffer::new(data), 0)
+        let (memory, id) = match *memory {
+            BufferMemory::Linear(ref buffer) => {
+                (buffer.clone(), 0)
             }
             BufferMemory::Individual { ref mut storage, ref mut next_buffer_id } => {
                 // Add a new pair of buffers
-                storage.insert(*next_buffer_id, (Vec::new(), Vec::new()));
+                let buffer = Arc::new(RefCell::new(pool::OwnedBuffer::new()));
+                storage.insert(*next_buffer_id, buffer.clone());
                 let id = *next_buffer_id;
                 *next_buffer_id += 1;
-
-                let &mut (ref mut commands, ref mut data) = storage.get_mut(&id).unwrap();
-                (CommandBuffer::new(commands), DataBuffer::new(data), id)
+                (buffer, id)
             }
         };
 
         RawCommandBuffer {
-            buf,
-            data,
+            memory,
+            buf: BufferSlice::new(),
+            data: BufferSlice::new(),
             id,
             fbo,
             display_fb: 0 as n::FrameBuffer,
@@ -286,9 +200,37 @@ impl RawCommandBuffer {
     // Soft reset only the buffers, but doesn't free any memory or clears memory
     // of the owning pool.
     pub(crate) fn soft_reset(&mut self) {
-        self.buf.soft_reset();
-        self.data.soft_reset();
+        self.buf = BufferSlice::new();
+        self.data = BufferSlice::new();
         self.cache = Cache::new();
+    }
+
+    fn push_cmd(&mut self, cmd: Command) {
+        let mut cmd_buffer = &mut self.memory.borrow_mut().commands;
+        cmd_buffer.push(cmd);
+        self.buf.append(
+            BufferSlice {
+                offset: cmd_buffer.len() as u32 - 1,
+                size: 1,
+            });
+    }
+
+    /// Copy a given vector slice into the data buffer.
+    fn add<T>(&mut self, data: &[T]) -> BufferSlice {
+        self.add_raw(unsafe { mem::transmute(data) })
+    }
+    /// Copy a given u8 slice into the data buffer.
+    fn add_raw(&mut self, data: &[u8]) -> BufferSlice {
+        let mut data_buffer = &mut self.memory.borrow_mut().data;
+        let slice = {
+            data_buffer.extend_from_slice(data);
+            BufferSlice {
+                offset: (data_buffer.len() - data.len()) as u32,
+                size: data.len() as u32,
+            }
+        };
+        self.data.append(slice);
+        slice
     }
 
     fn is_main_target(&self, tv: n::TargetView) -> bool {
@@ -310,9 +252,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         //       Currently works under the assumption that the user
         //       calls this function API conform.
         // TODO: should use the `release_resources` and shrink the buffers?
-        self.buf.reset();
-        self.data.reset();
-        self.cache = Cache::new();
+        self.soft_reset();
+        let mut buffer = self.memory.borrow_mut();
+        buffer.commands.clear();
+        buffer.data.clear();
     }
 
     fn pipeline_barrier(&mut self, barries: &[memory::Barrier<Backend>]) {
@@ -345,14 +288,16 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         value: command::ClearColor,
     ) {
         if self.is_main_target(rtv.view) {
-            self.buf.push(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, self.display_fb));
+            let fbo = self.display_fb;
+            self.push_cmd(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, fbo));
         } else {
-            self.buf.push(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, self.fbo));
-            self.buf.push(Command::BindTargetView(gl::DRAW_FRAMEBUFFER, gl::COLOR_ATTACHMENT0, rtv.view));
-            self.buf.push(Command::SetDrawColorBuffers(1));
+            let fbo = self.fbo;
+            self.push_cmd(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, fbo));
+            self.push_cmd(Command::BindTargetView(gl::DRAW_FRAMEBUFFER, gl::COLOR_ATTACHMENT0, rtv.view));
+            self.push_cmd(Command::SetDrawColorBuffers(1));
         }
 
-        self.buf.push(Command::ClearColor(rtv.view, value));
+        self.push_cmd(Command::ClearColor(rtv.view, value));
     }
 
     fn clear_depth_stencil(
@@ -383,7 +328,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
 
         self.cache.index_type = Some(ibv.index_type);
-        self.buf.push(Command::BindIndexBuffer(*ibv.buffer));
+        self.push_cmd(Command::BindIndexBuffer(*ibv.buffer));
     }
 
     fn bind_vertex_buffers(&mut self, vbs: c::pso::VertexBufferSet<Backend>) {
@@ -407,13 +352,13 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
                 for viewport in viewports {
                     let viewport = &[viewport.x as f32, viewport.y as f32, viewport.w as f32, viewport.h as f32];
-                    viewport_ptr.append(self.data.add::<f32>(viewport));
+                    viewport_ptr.append(self.add::<f32>(viewport));
                 }
                 for viewport in viewports {
                     let depth_range = &[viewport.near as f64, viewport.far as f64];
-                    depth_range_ptr.append(self.data.add::<f64>(depth_range));
+                    depth_range_ptr.append(self.add::<f64>(depth_range));
                 }
-                self.buf.push(Command::SetViewports { viewport_ptr, depth_range_ptr });
+                self.push_cmd(Command::SetViewports { viewport_ptr, depth_range_ptr });
             }
             _ => {
                 error!("Number of viewports exceeds the number of maximum viewports");
@@ -432,9 +377,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                 let mut scissors_ptr = BufferSlice { offset: 0, size: 0 };
                 for scissor in scissors {
                     let scissor = &[scissor.x as i32, scissor.y as i32, scissor.w as i32, scissor.h as i32];
-                    scissors_ptr.append(self.data.add::<i32>(scissor));
+                    scissors_ptr.append(self.add::<i32>(scissor));
                 }
-                self.buf.push(Command::SetScissors(scissors_ptr));
+                self.push_cmd(Command::SetScissors(scissors_ptr));
             }
             _ => {
                 error!("Number of scissors exceeds the number of maximum viewports");
@@ -453,7 +398,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn set_blend_constants(&mut self, cv: target::ColorValue) {
         if self.cache.blend_color != Some(cv) {
             self.cache.blend_color = Some(cv);
-            self.buf.push(Command::SetBlendColor(cv));
+            self.push_cmd(Command::SetBlendColor(cv));
         }
     }
 
@@ -475,11 +420,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
     fn dispatch(&mut self, x: u32, y: u32, z: u32) {
-        self.buf.push(Command::Dispatch(x, y, z));
+        self.push_cmd(Command::Dispatch(x, y, z));
     }
 
     fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: u64) {
-        self.buf.push(Command::DispatchIndirect(*buffer, offset));
+        self.push_cmd(Command::DispatchIndirect(*buffer, offset));
     }
 
     fn copy_buffer(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: &[BufferCopy]) {
@@ -525,7 +470,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     ) {
         match self.cache.primitive {
             Some(primitive) => {
-                self.buf.push(
+                self.push_cmd(
                     Command::Draw {
                         primitive,
                         start,
@@ -559,7 +504,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         };
         match self.cache.primitive {
             Some(primitive) => {
-                self.buf.push(
+                self.push_cmd(
                     Command::DrawIndexed {
                         primitive,
                         index_type,
