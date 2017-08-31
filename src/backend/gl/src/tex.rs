@@ -220,6 +220,13 @@ pub fn format_to_glfull(format: NewFormat) -> Result<GLenum, ()> {
     })
 }
 
+fn get_num_levels(desc: &t::Info, mip: t::Mipmap) -> t::Level {
+    match mip {
+        t::Mipmap::Allocated => desc.kind.get_num_levels(),
+        t::Mipmap::Provided => desc.levels
+    }
+}
+
 fn set_mipmap_range(gl: &gl::Gl, target: GLenum, (base, max): (u8, u8)) { unsafe {
     gl.TexParameteri(target, gl::TEXTURE_BASE_LEVEL, base as GLint);
     gl.TexParameteri(target, gl::TEXTURE_MAX_LEVEL, max as GLint);
@@ -273,7 +280,7 @@ pub fn make_surface(gl: &gl::Gl, desc: &t::Info, cty: ChannelType) ->
         .map_err(|_| format_error)
 }
 
-fn make_widout_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLint, pix: GLenum, typ: GLenum,
+fn make_without_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLint, pix: GLenum, typ: GLenum,
                             levels: t::Level, fixed_sample_locations: bool)
                             -> Result<Texture, t::CreationError> {
     let (name, target) = make_texture(gl, kind);
@@ -392,7 +399,7 @@ fn make_widout_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLint, pix: GLen
 }
 
 /// Create a texture, using the descriptor, assuming TexStorage* isn't available.
-pub fn make_without_storage(gl: &gl::Gl, desc: &t::Info, cty: ChannelType) ->
+pub fn make_without_storage(gl: &gl::Gl, desc: &t::Info, cty: ChannelType, mip: t::Mipmap) ->
                             Result<Texture, t::CreationError> {
     let format = NewFormat(desc.format, cty);
     let gl_format = match format_to_glfull(format) {
@@ -404,37 +411,23 @@ pub fn make_without_storage(gl: &gl::Gl, desc: &t::Info, cty: ChannelType) ->
         Ok(t) => t,
         Err(_) => return Err(t::CreationError::Format(desc.format, Some(cty))),
     };
-
+    
+    let levels = get_num_levels(desc, mip);
     let fixed_loc = desc.bind.contains(SHADER_RESOURCE);
-    make_widout_storage_impl(gl, desc.kind, gl_format, gl_pixel_format, gl_data_type,
-                             desc.levels, fixed_loc)
+    make_without_storage_impl(gl, desc.kind, gl_format, gl_pixel_format, gl_data_type,
+                             levels, fixed_loc)
 }
 
 /// Create a texture, assuming TexStorage is available.
 fn make_with_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLenum,
                           levels: t::Level, fixed_sample_locations: bool)
                           -> Result<Texture, t::CreationError> {
-    use std::cmp::max;
-
-    fn min(a: u8, b: u8) -> GLint {
-        ::std::cmp::min(a, b) as GLint
-    }
-    fn mip_level1(w: u16) -> u8 {
-        ((w as f32).log2() + 1.0) as u8
-    }
-    fn mip_level2(w: u16, h: u16) -> u8 {
-        ((max(w, h) as f32).log2() + 1.0) as u8
-    }
-    fn mip_level3(w: u16, h: u16, d: u16) -> u8 {
-        ((max(w, max(h, d)) as f32).log2() + 1.0) as u8
-    }
-
     let (name, target) = make_texture(gl, kind);
     match kind {
         t::Kind::D1(w) => unsafe {
             gl.TexStorage1D(
                 target,
-                min(levels, mip_level1(w)),
+                levels as i32,
                 format,
                 w as GLsizei
             );
@@ -442,7 +435,7 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLenum,
         t::Kind::D1Array(w, a) => unsafe {
             gl.TexStorage2D(
                 target,
-                min(levels, mip_level1(w)),
+                levels as i32,
                 format,
                 w as GLsizei,
                 a as GLsizei
@@ -451,7 +444,7 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLenum,
         t::Kind::D2(w, h, t::AaMode::Single) => unsafe {
             gl.TexStorage2D(
                 target,
-                min(levels, mip_level2(w, h)),
+                levels as i32,
                 format,
                 w as GLsizei,
                 h as GLsizei
@@ -460,7 +453,7 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLenum,
         t::Kind::D2Array(w, h, a, t::AaMode::Single) => unsafe {
             gl.TexStorage3D(
                 target,
-                min(levels, mip_level2(w, h)),
+                levels as i32,
                 format,
                 w as GLsizei,
                 h as GLsizei,
@@ -491,7 +484,7 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLenum,
         t::Kind::D3(w, h, d) => unsafe {
             gl.TexStorage3D(
                 target,
-                min(levels, mip_level3(w, h, d)),
+                levels as i32,
                 format,
                 w as GLsizei,
                 h as GLsizei,
@@ -501,7 +494,7 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLenum,
         t::Kind::Cube(w) => unsafe {
             gl.TexStorage2D(
                 target,
-                min(levels, mip_level2(w, w)),
+                levels as i32,
                 format,
                 w as GLsizei,
                 w as GLsizei
@@ -510,7 +503,7 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLenum,
         t::Kind::CubeArray(w, d) => unsafe {
             gl.TexStorage3D(
                 target,
-                min(levels, mip_level2(w, w)),
+                levels as i32,
                 format,
                 w as GLsizei,
                 w as GLsizei,
@@ -522,20 +515,20 @@ fn make_with_storage_impl(gl: &gl::Gl, kind: t::Kind, format: GLenum,
     }
 
     set_mipmap_range(gl, target, (0, levels - 1));
-
     Ok(name)
 }
 
 /// Create a texture, using the descriptor, assuming TexStorage is available.
-pub fn make_with_storage(gl: &gl::Gl, desc: &t::Info, cty: ChannelType) ->
+pub fn make_with_storage(gl: &gl::Gl, desc: &t::Info, cty: ChannelType, mip: t::Mipmap) ->
                          Result<Texture, t::CreationError> {
     let format = NewFormat(desc.format, cty);
     let gl_format = match format_to_glfull(format) {
         Ok(f) => f,
         Err(_) => return Err(t::CreationError::Format(desc.format, Some(cty))),
     };
+    let levels = get_num_levels(desc, mip);
     let fixed_loc = desc.bind.contains(SHADER_RESOURCE);
-    make_with_storage_impl(gl, desc.kind, gl_format, desc.levels, fixed_loc)
+    make_with_storage_impl(gl, desc.kind, gl_format, levels, fixed_loc)
 }
 
 /// Bind a sampler using a given binding anchor.
