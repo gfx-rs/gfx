@@ -91,11 +91,11 @@ unsafe impl Send for RawCommandPool {}
 
 impl RawCommandPool {
     fn take_access(&self) -> bool {
-        self.accessible.swap(false, atomic::Ordering::SeqCst)
+        self.accessible.swap(false, atomic::Ordering::Acquire)
     }
 
     fn release_access(&self) {
-        self.accessible.store(true, atomic::Ordering::SeqCst)
+        self.accessible.store(true, atomic::Ordering::Release)
     }
 }
 

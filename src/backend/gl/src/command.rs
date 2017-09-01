@@ -218,12 +218,12 @@ impl RawCommandBuffer {
 
     /// Try to take access of the pool and shared memory.
     pub(crate) fn take_access(&self) -> bool {
-        self.accessible.swap(false, atomic::Ordering::SeqCst)
+        self.accessible.swap(false, atomic::Ordering::Acquire)
     }
 
     /// Release access of the pool and shared memory.
     pub(crate) fn release_access(&self) {
-        self.accessible.store(true, atomic::Ordering::SeqCst)
+        self.accessible.store(true, atomic::Ordering::Release)
     }
 
     // Soft reset only the buffers, but doesn't free any memory or clears memory
