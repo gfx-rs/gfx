@@ -1,4 +1,4 @@
-// Copyright 2016 The Gfx-rs Developers.
+// Copyright 2017 The Gfx-rs Developers.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,10 +39,8 @@ macro_rules! impl_channel_type {
             #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
             pub enum $name {}
             impl ChannelTyped for $name {
+                const SELF: ChannelType = ChannelType::$name;
                 type ShaderType = $shader_type;
-                fn get_channel_type() -> ChannelType {
-                    ChannelType::$name
-                }
             }
             $(
                 impl $imp_trait for $name {}
@@ -94,10 +92,8 @@ macro_rules! impl_formats {
             #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
             pub enum $name {}
             impl SurfaceTyped for $name {
+                const SELF: SurfaceType = SurfaceType::$name;
                 type DataType = $data_type;
-                fn get_surface_type() -> SurfaceType {
-                    SurfaceType::$name
-                }
             }
             $(
                 impl $imp_trait for $name {}
@@ -178,10 +174,8 @@ pub enum ChannelSource {
 pub struct Swizzle(pub ChannelSource, pub ChannelSource, pub ChannelSource, pub ChannelSource);
 
 impl Swizzle {
-    /// Create a new swizzle where each channel is unmapped.
-    pub fn new() -> Swizzle {
-        Swizzle(ChannelSource::X, ChannelSource::Y, ChannelSource::Z, ChannelSource::W)
-    }
+    /// A trivially non-swizzling configuration.
+    pub const NO: Swizzle = Swizzle(ChannelSource::X, ChannelSource::Y, ChannelSource::Z, ChannelSource::W);
 }
 
 /// Complete run-time surface format.
@@ -189,12 +183,13 @@ impl Swizzle {
 #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
 pub struct Format(pub SurfaceType, pub ChannelType);
 
+
 /// Compile-time surface type trait.
 pub trait SurfaceTyped {
+    /// Associated run-time value of the type.
+    const SELF: SurfaceType;
     /// The corresponding data type to be passed from CPU.
     type DataType: Pod;
-    /// Return the run-time value of the type.
-    fn get_surface_type() -> SurfaceType;
 }
 /// An ability of a surface type to be used for vertex buffers.
 pub trait BufferSurface: SurfaceTyped {}
@@ -209,11 +204,11 @@ pub trait StencilSurface: SurfaceTyped {}
 
 /// Compile-time channel type trait.
 pub trait ChannelTyped {
+    /// Associated run-time value of the type.
+    const SELF: ChannelType;
     /// Shader-visible type that corresponds to this channel.
     /// For example, normalized integers are visible as floats.
     type ShaderType;
-    /// Return the run-time value of the type.
-    fn get_channel_type() -> ChannelType;
 }
 /// An ability of a channel type to be used for textures.
 pub trait TextureChannel: ChannelTyped {}
@@ -224,18 +219,14 @@ pub trait BlendChannel: RenderChannel {}
 
 /// Compile-time full format trait.
 pub trait Formatted {
+    /// Associated run-time value of the type.
+    const SELF: Format = Format(Self::Surface::SELF, Self::Channel::SELF);
     /// Associated surface type.
     type Surface: SurfaceTyped;
     /// Associated channel type.
     type Channel: ChannelTyped;
     /// Shader view type of this format.
     type View;
-    /// Return the run-time value of the type.
-    fn get_format() -> Format {
-        Format(
-            Self::Surface::get_surface_type(),
-            Self::Channel::get_channel_type())
-    }
 }
 /// Ability to be used for vertex buffers.
 pub trait BufferFormat: Formatted {}
@@ -360,6 +351,7 @@ pub type Depth = (D24, Unorm);
 pub type DepthStencil = (D24_S8, Unorm);
 /// Standard 32-bit floating-point depth format.
 pub type Depth32F = (D32, Float);
+
 
 macro_rules! impl_simple_formats {
     { $( $container:ident< $ty:ty > = $channel:ident $surface:ident, )* } => {
