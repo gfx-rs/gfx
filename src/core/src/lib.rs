@@ -32,7 +32,7 @@ pub use self::queue::{
     General, Graphics, Compute, Transfer,
 };
 pub use self::window::{
-    Backbuffer, Frame, FrameSync, Surface, Swapchain, SwapchainConfig, WindowExt,
+    Backbuffer, Frame, FrameSync, Surface, Swapchain, SwapchainConfig, WindowExt};
 pub use draw_state::{state, target};
 
 pub mod adapter;
@@ -284,7 +284,7 @@ impl Error for SubmissionError {
 #[allow(missing_docs)]
 pub type SubmissionResult<T> = Result<T, SubmissionError>;
 
-/// Represents a handle to a physical device. 
+/// Represents a handle to a physical device.
 ///
 /// This structure is typically created using an `Adapter`.
 pub struct Gpu<B: Backend> {
