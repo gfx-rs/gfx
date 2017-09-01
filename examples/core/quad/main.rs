@@ -17,8 +17,6 @@ extern crate gfx_core as core;
 #[cfg(feature = "dx12")]
 extern crate gfx_device_dx12 as back;
 #[cfg(feature = "vulkan")]
-extern crate gfx_device_vulkan as back;
-#[cfg(feature = "vulkan")]
 extern crate gfx_window_vulkan as win;
 #[cfg(feature = "metal")]
 extern crate gfx_device_metal as back;
@@ -144,7 +142,7 @@ fn main() {
 
     let render_pass = {
         let attachment = pass::Attachment {
-            format: ColorFormat::get_format(),
+            format: ColorFormat::SELF,
             load_op: pass::AttachmentLoadOp::Clear,
             store_op: pass::AttachmentStoreOp::Store,
             stencil_load_op: pass::AttachmentLoadOp::DontCare,
@@ -197,7 +195,7 @@ fn main() {
         location: 1,
         binding: 0,
         element: pso::Element {
-            format: <Vec2<f32> as Formatted>::get_format(),
+            format: <Vec2<f32> as Formatted>::SELF,
             offset: 0,
         },
     });
@@ -205,7 +203,7 @@ fn main() {
         location: 0,
         binding: 0,
         element: pso::Element {
-            format: <Vec2<f32> as Formatted>::get_format(),
+            format: <Vec2<f32> as Formatted>::SELF,
             offset: 8
         },
     });
@@ -232,7 +230,7 @@ fn main() {
 
     // Framebuffer and render target creation
     let frame_rtvs = swap_chain.get_backbuffers().iter().map(|bb| {
-        device.view_image_as_render_target(&bb.color, ColorFormat::get_format(), (0..1, 0..1)).unwrap()
+        device.view_image_as_render_target(&bb.color, ColorFormat::SELF, (0..1, 0..1)).unwrap()
     }).collect::<Vec<_>>();
 
     let framebuffers = frame_rtvs.iter().map(|frame_rtv| {
@@ -292,7 +290,7 @@ fn main() {
         }
     }
 
-    let image = device.create_image(kind, 1, ColorFormat::get_format(), i::TRANSFER_DST | i::SAMPLED).unwrap(); // TODO: usage
+    let image = device.create_image(kind, 1, ColorFormat::SELF, i::TRANSFER_DST | i::SAMPLED).unwrap(); // TODO: usage
     println!("{:?}", image);
     let image_req = device.get_image_requirements(&image);
 
@@ -300,7 +298,7 @@ fn main() {
     let image_heap = device.create_heap(device_heap, d::ResourceHeapType::Images, image_req.size).unwrap();
 
     let image_logo = device.bind_image_memory(&image_heap, 0, image).unwrap();
-    let image_srv = device.view_image_as_shader_resource(&image_logo, ColorFormat::get_format()).unwrap();
+    let image_srv = device.view_image_as_shader_resource(&image_logo, ColorFormat::SELF).unwrap();
 
     let sampler = device.create_sampler(
         i::SamplerInfo::new(
