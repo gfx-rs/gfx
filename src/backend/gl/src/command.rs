@@ -22,16 +22,16 @@ use core::command::{BufferCopy, BufferImageCopy, ClearValue, ImageCopy, ImageRes
 use core::target::{ColorValue, Stencil};
 use {native as n, Backend};
 use pool::{self, BufferMemory};
-use std::cell::RefCell;
+use std::cell::UnsafeCell;
 use std::mem;
 use std::sync::Arc;
+use std::sync::atomic::{self, AtomicBool};
 
 // Command buffer implementation details:
 //
 // The underlying commands and data are stored inside the associated command pool.
 // See the comments for further safety requirements.
-// Each command buffer holds a (growable) slice of the buffers (`CommandBuffer`
-// and `DataBuffer`) in the pool.
+// Each command buffer holds a (growable) slice of the buffers in the pool.
 //
 // Command buffers are recorded one-after-another for each command pool.
 // Actual storage depends on the resetting behavior of the pool.
@@ -153,11 +153,15 @@ impl From<c::Limits> for Limits {
 /// `display_fb` field.
 #[derive(Clone)]
 pub struct RawCommandBuffer {
-    pub(crate) memory: Arc<RefCell<pool::OwnedBuffer>>,
+    pub(crate) memory: Arc<pool::SharedBuffer>,
     pub(crate) buf: BufferSlice,
     // Buffer id for the owning command pool.
     // Only relevant if individual resets are allowed.
     pub(crate) id: u64,
+    // Associated pool and shared buffer is accessible.
+    // Mainly for safety reasons, not necessary but otherwise could result in weird crashes.
+    accessible: Arc<AtomicBool>,
+    individual_reset: bool,
 
     fbo: n::FrameBuffer,
     /// The framebuffer to use for rendering to the main targets (0 by default).
@@ -182,18 +186,19 @@ impl RawCommandBuffer {
         fbo: n::FrameBuffer,
         limits: Limits,
         memory: &mut BufferMemory,
+        accessible: Arc<AtomicBool>,
     ) -> Self {
-        let (memory, id) = match *memory {
+        let (memory, id, individual_reset) = match *memory {
             BufferMemory::Linear(ref buffer) => {
-                (buffer.clone(), 0)
+                (buffer.clone(), 0, false)
             }
             BufferMemory::Individual { ref mut storage, ref mut next_buffer_id } => {
                 // Add a new pair of buffers
-                let buffer = Arc::new(RefCell::new(pool::OwnedBuffer::new()));
+                let buffer = Arc::new(UnsafeCell::new(pool::OwnedBuffer::new()));
                 storage.insert(*next_buffer_id, buffer.clone());
                 let id = *next_buffer_id;
                 *next_buffer_id += 1;
-                (buffer, id)
+                (buffer, id, true)
             }
         };
 
@@ -201,12 +206,24 @@ impl RawCommandBuffer {
             memory,
             buf: BufferSlice::new(),
             id,
+            accessible,
+            individual_reset,
             fbo,
             display_fb: 0 as n::FrameBuffer,
             cache: Cache::new(),
             limits,
             active_attribs: 0,
         }
+    }
+
+    /// Try to take access of the pool and shared memory.
+    pub(crate) fn take_access(&self) -> bool {
+        self.accessible.swap(false, atomic::Ordering::SeqCst)
+    }
+
+    /// Release access of the pool and shared memory.
+    pub(crate) fn release_access(&self) {
+        self.accessible.store(true, atomic::Ordering::SeqCst)
     }
 
     // Soft reset only the buffers, but doesn't free any memory or clears memory
@@ -217,13 +234,18 @@ impl RawCommandBuffer {
     }
 
     fn push_cmd(&mut self, cmd: Command) {
-        let mut cmd_buffer = &mut self.memory.borrow_mut().commands;
-        cmd_buffer.push(cmd);
-        self.buf.append(
-            BufferSlice {
-                offset: cmd_buffer.len() as u32 - 1,
-                size: 1,
-            });
+        if self.take_access() {
+            let mut cmd_buffer = unsafe { &mut (*self.memory.get()).commands };
+            cmd_buffer.push(cmd);
+            self.buf.append(
+                BufferSlice {
+                    offset: cmd_buffer.len() as u32 - 1,
+                    size: 1,
+                });
+            self.release_access();
+        } else {
+            error!("Pushing commands while pool is in access.")
+        };
     }
 
     /// Copy a given vector slice into the data buffer.
@@ -232,11 +254,18 @@ impl RawCommandBuffer {
     }
     /// Copy a given u8 slice into the data buffer.
     fn add_raw(&mut self, data: &[u8]) -> BufferSlice {
-        let mut data_buffer = &mut self.memory.borrow_mut().data;
-        data_buffer.extend_from_slice(data);
-        BufferSlice {
-            offset: (data_buffer.len() - data.len()) as u32,
-            size: data.len() as u32,
+        if self.take_access() {
+            let mut data_buffer = unsafe { &mut (*self.memory.get()).data };
+            data_buffer.extend_from_slice(data);
+            let slice = BufferSlice {
+                offset: (data_buffer.len() - data.len()) as u32,
+                size: data.len() as u32,
+            };
+            self.release_access();
+            slice
+        } else {
+            error!("Pushing data while pool is in access.");
+            BufferSlice::new()
         }
     }
 
@@ -247,7 +276,10 @@ impl RawCommandBuffer {
 
 impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn begin(&mut self) {
-        // no-op
+        // Implicit buffer reset when individual reset is set.
+        if self.individual_reset {
+            self.reset(false);
+        }
     }
 
     fn finish(&mut self) {
@@ -255,14 +287,22 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
     fn reset(&mut self, _release_resources: bool) {
-        // TODO: error when calling this for linear memory storage
-        //       Currently works under the assumption that the user
-        //       calls this function API conform.
         // TODO: should use the `release_resources` and shrink the buffers?
-        self.soft_reset();
-        let mut buffer = self.memory.borrow_mut();
-        buffer.commands.clear();
-        buffer.data.clear();
+        if !self.individual_reset {
+            error!("Associated pool must allow individual resets.");
+            return
+        }
+
+        if self.take_access() {
+            self.soft_reset();
+            let mut buf = unsafe { &mut *self.memory.get() };
+            buf.commands.clear();
+            buf.data.clear();
+            self.release_access();
+        } else {
+            error!("Trying to reset command buffer while in access!");
+        }
+
     }
 
     fn pipeline_barrier(&mut self, barries: &[memory::Barrier<Backend>]) {

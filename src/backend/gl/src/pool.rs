@@ -17,9 +17,10 @@ use command::{self, Command, RawCommandBuffer, SubpassCommandBuffer};
 use native as n;
 use {Backend, CommandQueue, Share};
 use gl;
-use std::cell::{BorrowError, RefCell};
+use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{self, AtomicBool};
 
 fn create_fbo_internal(gl: &gl::Gl) -> gl::types::GLuint {
     let mut name = 0 as n::FrameBuffer;
@@ -44,6 +45,9 @@ impl OwnedBuffer {
     }
 }
 
+// Shared command buffer/pool memory.
+pub type SharedBuffer = UnsafeCell<OwnedBuffer>;
+
 // Storage of command buffer memory.
 // Depends on the reset model chosen when creating the command pool.
 pub enum BufferMemory {
@@ -61,36 +65,60 @@ pub enum BufferMemory {
     //
     // Reseting the pool will free all data and commands recorded. Therefore it's
     // crucial that all submits have been finished **before** calling `reset`.
-    Linear(Arc<RefCell<OwnedBuffer>>),
+    Linear(Arc<SharedBuffer>),
     // Storing the memory for each command buffer separately to allow individual
     // command buffer resets.
     Individual {
-        storage: HashMap<u64, Arc<RefCell<OwnedBuffer>>>,
+        storage: HashMap<u64, Arc<SharedBuffer>>,
         next_buffer_id: u64,
     },
+}
+
+impl BufferMemory {
+
 }
 
 pub struct RawCommandPool {
     fbo: n::FrameBuffer,
     limits: command::Limits,
     memory: BufferMemory,
+    // Indicate if the pool or the associated memory can be accessed.
+    // Trying to prevent errors due to non-API conformant usage.
+    accessible: Arc<AtomicBool>,
 }
 
 unsafe impl Send for RawCommandPool {}
 
+impl RawCommandPool {
+    fn take_access(&self) -> bool {
+        self.accessible.swap(false, atomic::Ordering::SeqCst)
+    }
+
+    fn release_access(&self) {
+        self.accessible.store(true, atomic::Ordering::SeqCst)
+    }
+}
+
 impl core::RawCommandPool<Backend> for RawCommandPool {
     fn reset(&mut self) {
-        match self.memory {
-            BufferMemory::Linear(ref mut buffer) => {
-                let mut buf = buffer.borrow_mut();
+        let clear = |shared: &SharedBuffer| {
+            if self.take_access() {
+                let mut buf = unsafe { &mut *shared.get() };
                 buf.commands.clear();
                 buf.data.clear();
+                self.release_access();
+            } else {
+                error!("Trying to reset command pool while in access!");
             }
-            BufferMemory::Individual { ref mut storage, .. } => {
-                for (_, ref mut buffer) in storage {
-                    let mut buf = buffer.borrow_mut();
-                    buf.commands.clear();
-                    buf.data.clear();
+        };
+
+        match self.memory {
+            BufferMemory::Linear(ref shared) => {
+                clear(shared);
+            }
+            BufferMemory::Individual { ref storage, .. } => {
+                for (_, ref mut shared) in storage {
+                    clear(shared);
                 }
             }
         }
@@ -108,7 +136,7 @@ impl core::RawCommandPool<Backend> for RawCommandPool {
                 next_buffer_id: 0,
             }
         } else {
-            BufferMemory::Linear(Arc::new(RefCell::new(OwnedBuffer::new())))
+            BufferMemory::Linear(Arc::new(UnsafeCell::new(OwnedBuffer::new())))
         };
 
         // Ignoring `TRANSIENT` hint, unsure how to make use of this.
@@ -117,27 +145,43 @@ impl core::RawCommandPool<Backend> for RawCommandPool {
             fbo,
             limits,
             memory,
+            accessible: Arc::new(AtomicBool::new(true)),
         }
     }
 
     fn allocate(&mut self, num: usize) -> Vec<RawCommandBuffer> {
-        (0..num).map(|_|
-                    RawCommandBuffer::new(
-                        self.fbo,
-                        self.limits,
-                        &mut self.memory))
-                .collect()
+        if self.take_access() {
+            let buffers =
+                (0..num).map(|_|
+                        RawCommandBuffer::new(
+                            self.fbo,
+                            self.limits,
+                            &mut self.memory,
+                            self.accessible.clone()))
+                        .collect();
+            self.release_access();
+            buffers
+        } else {
+            error!("Trying to allocate command buffers while in access!");
+            Vec::new()
+        }
     }
 
     unsafe fn free(&mut self, buffers: Vec<RawCommandBuffer>) {
-        if let BufferMemory::Individual { ref mut storage, .. } = self.memory {
-            // Expecting that the buffers actually are allocated from this pool.
-            for buffer in buffers {
-                storage.remove(&buffer.id);
+        if self.take_access() {
+            if let BufferMemory::Individual { ref mut storage, .. } = self.memory {
+                // Expecting that the buffers actually are allocated from this pool.
+                for buffer in buffers {
+                    storage.remove(&buffer.id);
+                }
             }
+            // Linear: Freeing doesn't really matter here as everything is backed by
+            //         only one Vec.
+
+            self.release_access();
+        } else {
+            error!("Trying to free command buffers while in access!")
         }
-        // Linear: Freeing doesn't really matter here as everything is backed by
-        //         only one Vec.
     }
 }
 

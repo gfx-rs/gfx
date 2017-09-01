@@ -898,13 +898,18 @@ impl c::RawCommandQueue<Backend> for CommandQueue {
     ) {
         {
             for cb in submit_info.cmd_buffers {
-                let buffer = cb.memory.borrow_mut();
+                if cb.take_access() {
+                    let buffer = &*cb.memory.get();
 
-                assert!(buffer.commands.len() >= (cb.buf.offset+cb.buf.size) as usize);
-                let commands = &buffer.commands[cb.buf.offset as usize..(cb.buf.offset+cb.buf.size) as usize];
-                self.reset_state();
-                for com in commands {
-                    self.process(com, &buffer.data);
+                    assert!(buffer.commands.len() >= (cb.buf.offset+cb.buf.size) as usize);
+                    let commands = &buffer.commands[cb.buf.offset as usize..(cb.buf.offset+cb.buf.size) as usize];
+                    self.reset_state();
+                    for com in commands {
+                        self.process(com, &buffer.data);
+                    }
+                    cb.release_access();
+                } else {
+                    error!("Trying to process command buffer while in access!");
                 }
             }
         }
