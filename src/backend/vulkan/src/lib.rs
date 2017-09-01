@@ -11,6 +11,7 @@ extern crate smallvec;
 extern crate kernel32;
 
 use ash::{Entry, LoadingError};
+use ash::extensions as ext;
 use ash::version::{EntryV1_0, DeviceV1_0, InstanceV1_0, V1_0};
 use ash::vk;
 use core::memory;
@@ -25,7 +26,17 @@ mod device;
 pub mod native;
 mod pool;
 
-
+const LAYERS: &'static [&'static str] = &[
+    #[cfg(debug_assertions)]
+    "VK_LAYER_LUNARG_standard_validation",
+];
+const EXTENSIONS: &'static [&'static str] = &[
+    #[cfg(debug_assertions)]
+    "VK_EXT_debug_report",
+];
+const DEVICE_EXTENSIONS: &'static [&'static str] = &[
+    vk::VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+];
 const SURFACE_EXTENSIONS: &'static [&'static str] = &[
     vk::VK_KHR_SURFACE_EXTENSION_NAME,
 
@@ -55,6 +66,8 @@ pub struct Instance {
 
     /// Supported surface extensions of this instance.
     pub surface_extensions: Vec<&'static str>,
+
+    _debug_report: Option<(ext::DebugReport, vk::DebugReportCallbackEXT)>,
 }
 
 fn map_queue_type(flags: vk::QueueFlags) -> QueueType {
@@ -69,6 +82,30 @@ fn map_queue_type(flags: vk::QueueFlags) -> QueueType {
     } else {
         // TODO: present only queues?
         unimplemented!()
+    }
+}
+
+
+extern "system" fn callback(
+    type_: vk::DebugReportFlagsEXT,
+    _: vk::DebugReportObjectTypeEXT,
+    _object: u64,
+    _location: usize,
+    _msg_code: i32,
+    layer_prefix: *const vk::types::c_char,
+    description: *const vk::types::c_char,
+    _user_data: *mut vk::types::c_void,
+) -> vk::Bool32 {
+    unsafe {
+        let level = match type_ {
+            vk::DEBUG_REPORT_ERROR_BIT_EXT => log::LogLevel::Error,
+            vk::DEBUG_REPORT_DEBUG_BIT_EXT => log::LogLevel::Debug,
+            _ => log::LogLevel::Warn,
+        };
+        let layer_prefix = CStr::from_ptr(layer_prefix).to_str().unwrap();
+        let description = CStr::from_ptr(description).to_str().unwrap();
+        log!(level, "[{}] {}", layer_prefix, description);
+        vk::VK_FALSE
     }
 }
 
@@ -99,8 +136,10 @@ impl Instance {
         }).collect::<Vec<&str>>();
 
         let instance = {
-            let cstrings = surface_extensions
+            let cstrings = LAYERS
                 .iter()
+                .chain(EXTENSIONS.iter())
+                .chain(surface_extensions.iter())
                 .map(|&s| CString::new(s).unwrap())
                 .collect::<Vec<_>>();
 
@@ -114,19 +153,40 @@ impl Instance {
                 p_next: ptr::null(),
                 flags: vk::InstanceCreateFlags::empty(),
                 p_application_info: &app_info,
-                enabled_layer_count: 0,
-                pp_enabled_layer_names: ptr::null(),
-                enabled_extension_count: str_pointers.len() as u32,
-                pp_enabled_extension_names: str_pointers.as_ptr(),
+                enabled_layer_count: LAYERS.len() as _,
+                pp_enabled_layer_names: str_pointers.as_ptr(),
+                enabled_extension_count: (EXTENSIONS.len() + surface_extensions.len()) as _,
+                pp_enabled_extension_names: str_pointers[LAYERS.len()..].as_ptr(),
             };
 
             entry.create_instance(&create_info, None)
                 .expect("Unable to create Vulkan instance")
         };
 
+        #[cfg(debug_assertions)]
+        let debug_report = {
+            let ext = ext::DebugReport::new(entry, &instance).unwrap();
+            let info = vk::DebugReportCallbackCreateInfoEXT {
+                s_type: vk::StructureType::DebugReportCallbackCreateInfoExt,
+                p_next: ptr::null(),
+                flags: vk::DEBUG_REPORT_WARNING_BIT_EXT |
+                       vk::DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT |
+                       vk::DEBUG_REPORT_ERROR_BIT_EXT,
+                pfn_callback: callback,
+                p_user_data: ptr::null_mut(),
+            };
+            let handle = unsafe {
+                ext.create_debug_report_callback_ext(&info, None)
+            }.unwrap();
+            Some((ext, handle))
+        };
+        #[cfg(not(debug_assertions))]
+        let debug_report = None;
+
         Instance {
             raw: Arc::new(RawInstance(instance)),
             surface_extensions,
+            _debug_report: debug_report,
         }
     }
 
@@ -267,16 +327,16 @@ impl core::Adapter<Backend> for Adapter {
             }).collect::<Vec<_>>();
 
         // Create device
-        let device_extensions = &[vk::VK_KHR_SWAPCHAIN_EXTENSION_NAME,];
-
         let device_raw = {
-            let cstrings = device_extensions.iter()
-                                    .map(|&s| CString::new(s).unwrap())
-                                    .collect::<Vec<_>>();
+            let cstrings = DEVICE_EXTENSIONS
+                .iter()
+                .map(|&s| CString::new(s).unwrap())
+                .collect::<Vec<_>>();
 
-            let str_pointers = cstrings.iter()
-                                    .map(|s| s.as_ptr())
-                                    .collect::<Vec<_>>();
+            let str_pointers = cstrings
+                .iter()
+                .map(|s| s.as_ptr())
+                .collect::<Vec<_>>();
 
             let features = unsafe { mem::zeroed() };
             let info = vk::DeviceCreateInfo {
