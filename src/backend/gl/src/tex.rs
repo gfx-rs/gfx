@@ -739,10 +739,13 @@ pub fn update_texture(gl: &gl::Gl, name: Texture,
 }
 
 pub fn init_texture_data(gl: &gl::Gl, name: Texture, desc: t::Info, channel: ChannelType,
-                         data: &[&[u8]]) -> Result<(), t::CreationError> {
+                         data: (&[&[u8]], t::Mipmap)) -> Result<(), t::CreationError> {
     let opt_slices = desc.kind.get_num_slices();
     let num_slices = opt_slices.unwrap_or(1) as usize;
-    let num_mips = desc.levels as usize;
+    let num_mips = match data.1 {
+	    t::Mipmap::Provided => desc.levels as usize,
+	    t::Mipmap::Allocated => 1,
+    };
     let mut cube_faces = [None; 6];
     let faces: &[_] = if desc.kind.is_cube() {
         for (cf, orig) in cube_faces.iter_mut().zip(t::CUBE_FACES.iter()) {
@@ -752,16 +755,16 @@ pub fn init_texture_data(gl: &gl::Gl, name: Texture, desc: t::Info, channel: Cha
     } else {
         &cube_faces[..1]
     };
-    if data.len() != num_slices * faces.len() * num_mips {
+    if data.0.len() != num_slices * faces.len() * num_mips {
         error!("Texture expects {} slices {} faces {} mips, given {} data chunks instead",
-            num_slices, faces.len(), num_mips, data.len());
+            num_slices, faces.len(), num_mips, data.0.len());
         return Err(t::CreationError::Data(0))
     }
 
     for i in 0 .. num_slices {
         for (f, &face) in faces.iter().enumerate() {
             for m in 0 .. num_mips {
-                let sub = data[(i*faces.len() + f)*num_mips + m];
+                let sub = data.0[(i*faces.len() + f)*num_mips + m];
                 let mut image = desc.to_raw_image_info(channel, m as t::Level);
                 if opt_slices.is_some() {
                     image.zoffset = i as t::Size;

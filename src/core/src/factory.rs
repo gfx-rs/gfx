@@ -313,7 +313,7 @@ pub trait Factory<R: Resources> {
     /// required to assist backends that have no concept of typeless formats (OpenGL).
     /// The initial data, if given, has to be provided for all mip levels and slices:
     /// Slice0.Mip0, Slice0.Mip1, ..., Slice1.Mip0, ...
-    fn create_texture_raw(&mut self, texture::Info, Option<format::ChannelType>, Option<&[&[u8]]>)
+    fn create_texture_raw(&mut self, texture::Info, Option<format::ChannelType>, Option<(&[&[u8]], texture::Mipmap)>)
                           -> Result<handle::RawTexture<R>, texture::CreationError>;
 
     fn view_buffer_as_shader_resource_raw(&mut self, &handle::RawBuffer<R>, format::Format)
@@ -446,7 +446,7 @@ pub trait Factory<R: Resources> {
             usage: Usage::Data,
         };
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let raw = try!(self.create_texture_raw(desc, Some(cty), Some(data)));
+        let raw = try!(self.create_texture_raw(desc, Some(cty), Some((data, mipmap))));
         let levels = (0, raw.get_info().levels - 1);
         let tex = Typed::new(raw);
         let view = try!(self.view_texture_as_shader_resource::<T>(&tex, levels, format::Swizzle::new()));
