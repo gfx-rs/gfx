@@ -10,35 +10,11 @@
 use std::error::Error;
 use std::fmt;
 use std::ops::Range;
-use memory::Bind;
 use {format, state, target, Backend};
 pub use target::{Layer, Level};
 
 /// Maximum accessible mipmap level of a image.
 pub const MAX_LEVEL: Level = 15;
-
-/// Untyped image
-#[derive(Debug)]
-pub struct Raw<B: Backend> {
-    resource: B::Image,
-    info: Info,
-}
-
-impl<B: Backend> Raw<B> {
-    #[doc(hidden)]
-    pub fn new(resource: B::Image, info: Info) -> Self {
-        Raw {
-            resource: resource,
-            info: info,
-        }
-    }
-
-    #[doc(hidden)]
-    pub fn resource(&self) -> &B::Image { &self.resource }
-
-    /// Get texture descriptor
-    pub fn get_info(&self) -> &Info { &self.info }
-}
 
 /// Pure texture object creation error.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -459,41 +435,6 @@ impl SamplerInfo {
             comparison: None,
             border: PackedColor(0),
         }
-    }
-}
-
-/// Texture storage descriptor.
-#[allow(missing_docs)]
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-pub struct Info {
-    pub kind: Kind,
-    pub levels: Level,
-    pub format: format::SurfaceType,
-    pub bind: Bind,
-    pub usage: Usage,
-}
-
-impl Info {
-    /// Get image info for a given mip.
-    pub fn to_image_info(&self, mip: Level) -> NewImageInfo {
-        let (w, h, d, _) = self.kind.get_level_dimensions(mip);
-        ImageInfoCommon {
-            xoffset: 0,
-            yoffset: 0,
-            zoffset: 0,
-            width: w,
-            height: h,
-            depth: d,
-            format: (),
-            mipmap: mip,
-        }
-    }
-
-    /// Get the raw image info for a given mip and a channel type.
-    pub fn to_raw_image_info(&self, cty: format::ChannelType, mip: Level) -> RawImageInfo {
-        let format = format::Format(self.format, cty.into());
-        self.to_image_info(mip).convert(format)
     }
 }
 

@@ -1,20 +1,14 @@
-//! Device extension.
-//!
-//! This module serves as an extension to the `device` module in the `gfx_core` crate. This module
-//! exposes extension functions and shortcuts to aid with creating and managing graphics resources.
-//! See the `DeviceExt` trait for more information.
+// use std::error::Error;
+// use std::fmt;
+// use core::{self, buffer, format, state};
+use core::{Backend, Primitive, HeapType};
+// use core::pso::{CreationError, Descriptor};
+// use core::memory::{self, Bind, Pod};
+// use pso;
+// use shade::ProgramError;
+use handle::GarbageSender;
 
-use std::error::Error;
-use std::fmt;
-use core::{buffer, format, handle, texture, state};
-use core::{Backend, Primitive, ShaderSet};
-use core::device::Device;
-use core::pso::{CreationError, Descriptor};
-use core::memory::{self, Bind, Pod};
-use slice::{Slice, IndexBuffer, IntoIndexBuffer};
-use pso;
-use shade::ProgramError;
-
+/*
 /// Error creating a PipelineState
 #[derive(Clone, PartialEq, Debug)]
 pub enum PipelineStateError<S> {
@@ -82,10 +76,36 @@ impl<S> From<CreationError> for PipelineStateError<S> {
         PipelineStateError::DeviceCreate(e)
     }
 }
+*/
 
-/// This trait is responsible for creating and managing graphics resources, much like the `Device`
-/// trait in the `gfx_core` crate. Every `Device` automatically implements `DeviceExt`.
-pub trait DeviceExt<B: Backend>: Device<B> {
+#[derive(Clone)]
+pub struct Device<B: Backend> {
+    raw: B::Device,
+    // TODO: could be shared instead of cloned
+    heap_types: Vec<HeapType>,
+    memory_heaps: Vec<u64>,
+    garbage: GarbageSender<B>,
+}
+
+impl<B: Backend> Device<B> {
+    pub(crate) fn new(
+        raw: B::Device,
+        heap_types: Vec<HeapType>,
+        memory_heaps: Vec<u64>,
+        garbage: GarbageSender<B>) -> Self
+    {
+        Device { raw, heap_types, memory_heaps, garbage }
+    }
+
+    pub fn ref_raw(&self) -> &B::Device {
+        &self.raw
+    }
+
+    pub fn mut_raw(&mut self) -> &mut B::Device {
+        &mut self.raw
+    }
+
+/*
     /// Creates an immutable vertex buffer from the supplied vertices.
     /// A `Slice` will have to manually be constructed.
     fn create_vertex_buffer<T>(&mut self, vertices: &[T])
@@ -276,6 +296,5 @@ pub trait DeviceExt<B: Backend>: Device<B> {
             texture::WrapMode::Clamp,
         ))
     }
+    */
 }
-
-impl<B: Backend, F: Device<B>> DeviceExt<B> for F {}
