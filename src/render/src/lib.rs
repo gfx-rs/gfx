@@ -1,4 +1,4 @@
-#![deny(missing_docs)]
+// #![deny(missing_docs)] TODO
 
 // TODO(doc) clarify the different type of queues and what is accessible from the high-level API
 // vs what belongs to core-ll. There doesn't seem to be a "ComputeEncoder" can I submit something
@@ -85,16 +85,12 @@ extern crate mint;
 
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate derivative;
 extern crate draw_state;
 extern crate gfx_core as core;
 
 /// public re-exported traits
 pub mod traits {
-    pub use core::{Device};
     pub use core::memory::Pod;
-    pub use device::DeviceExt;
 }
 
 // draw state re-exports
@@ -102,22 +98,24 @@ pub use draw_state::{preset, state};
 pub use draw_state::target::*;
 
 // public re-exports
-pub use core::{Adapter, Backend, CommandQueue, Gpu, Frame, FrameSync, Headless, Primitive, QueueFamily, QueueType,
+pub use core::memory;
+pub use core::{Adapter, Backend, CommandQueue, Frame, FrameSync, Headless, Primitive, QueueFamily, QueueType,
                SubmissionError, SubmissionResult, Surface, Swapchain, SwapchainConfig, WindowExt};
+/*
 pub use core::{VertexCount, InstanceCount};
 pub use core::{ShaderSet, VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
 pub use core::{GeneralCommandPool, GraphicsCommandPool, ComputeCommandPool, SubpassCommandPool};
-pub use core::{buffer, format, handle, texture, mapping, queue};
-pub use core::device::{Device, ResourceViewError, TargetViewError, CombinedError, WaitFor};
-pub use core::memory::{self, Bind, TRANSFER_SRC, TRANSFER_DST, RENDER_TARGET,
-                       DEPTH_STENCIL, SHADER_RESOURCE, UNORDERED_ACCESS};
+pub use core::{format, mapping, queue};
+pub use core::device::{ResourceViewError, TargetViewError, CombinedError, WaitFor};
 pub use core::command::{InstanceParams};
 pub use core::shade::{ProgramInfo, UniformValue};
 
 pub use encoder::{CopyBufferResult, CopyBufferTextureResult, CopyError,
                   CopyTextureBufferResult, GraphicsEncoder, GraphicsSubmission, UpdateError, 
                   GraphicsPoolExt, };
-pub use device::PipelineStateError;
+*/
+pub use device::{Device};
+/*
 pub use slice::{Slice, IntoIndexBuffer, IndexBuffer};
 pub use swapchain::SwapchainExt;
 pub use pso::{PipelineState};
@@ -128,13 +126,16 @@ pub use pso::resource::{ShaderResource, RawShaderResource, UnorderedAccess,
 pub use pso::target::{DepthStencilTarget, DepthTarget, StencilTarget,
                       RenderTarget, RawRenderTarget, BlendTarget, BlendRef, Scissor};
 pub use pso::bundle::{Bundle};
+*/
 
 /// Render commands encoder
-mod encoder;
+pub mod handle;
 /// Device extensions
 mod device;
-/// Slices
-mod slice;
+// pub mod encoder;
+pub mod buffer;
+pub mod image;
+/*
 /// Swapchain extensions
 mod swapchain;
 // Pipeline states
@@ -143,3 +144,83 @@ pub mod pso;
 pub mod shade;
 /// Convenience macros
 pub mod macros;
+*/
+
+pub(crate) enum Queue<B: Backend> {
+    General(CommandQueue<B, core::General>),
+    Graphics(CommandQueue<B, core::Graphics>),
+}
+
+pub struct Gpu<B: Backend> {
+    device: Device<B>,
+    queue: Queue<B>,
+    garbage: handle::GarbageReceiver<B>,
+}
+
+impl<B: Backend> Gpu<B> {
+    pub fn new<A: core::Adapter<B>>(adapter: &A) -> Self {
+        // TODO: filter for queues which can be used for presentation with the display surface.
+        // TODO: use shorter core helpers
+        let queue_descs = adapter.get_queue_families()
+            .iter()
+            .map(|&(ref family, qtype)| (family, qtype, family.num_queues()) )
+            .collect::<Vec<_>>();
+        
+        let core::Gpu {
+            device,
+            mut general_queues,
+            mut graphics_queues,
+            heap_types,
+            memory_heaps,
+            ..
+        } = adapter.open(&queue_descs);
+        
+        let queue = if general_queues.is_empty() {
+            Queue::Graphics(graphics_queues.remove(0))
+        } else {
+            Queue::General(general_queues.remove(0))
+        };
+
+        let (garbage_sender, garbage_receiver) = handle::garbage_channel();
+
+        Gpu {
+            device: Device::new(device, heap_types, memory_heaps, garbage_sender),
+            queue,
+            garbage: garbage_receiver,
+        }
+    }
+
+    pub fn cleanup(&mut self) {
+        use core::Device;
+
+        let dev = self.device.mut_raw();
+        for garbage in self.garbage.try_iter() {
+            use handle::Garbage::*;
+            match garbage {
+                // ShaderLib(sl) => dev.destroy_shader_lib(sl),
+                Buffer(b) => dev.destroy_buffer(b),
+                Image(i) => dev.destroy_image(i),
+                // RenderTargetView(rtv) => dev.destroy_render_target_view(rtv),
+                // DepthStencilView(dsv) => dev.destroy_depth_stencil_view(dsv),
+                // ConstantBufferView(cbv) => dev.destroy_constant_buffer_view(cbv),
+                // ShaderResourceView(srv) => dev.destroy_shader_resource_view(srv),
+                // UnorderedAccessView(uav) => dev.destroy_unordered_access_view(uav),
+                // Sampler(s) => dev.destroy_sampler(s),
+            }
+        }
+    }
+
+    pub fn ref_device(&self) -> &Device<B> {
+        &self.device
+    }
+
+    pub fn mut_device(&mut self) -> &mut Device<B> {
+        &mut self.device
+    }
+}
+
+impl<B: Backend> Drop for Gpu<B> {
+    fn drop(&mut self) {
+        self.cleanup();
+    }
+}
