@@ -435,13 +435,13 @@ pub trait Factory<R: Resources> {
         let num_slices = kind.get_num_slices().unwrap_or(1) as usize;
         let num_faces = if kind.is_cube() {6} else {1};
         let levels = match mipmap {
-		    texture::Mipmap::Allocated => if data.len() != num_slices * num_faces {
+            texture::Mipmap::Allocated => if data.len() != num_slices * num_faces {
                 return Err(CombinedError::Texture(texture::CreationError::Level((num_slices * num_faces) as texture::Level)));
             } else {
                 kind.get_num_levels()
             },
             texture::Mipmap::Provided => (data.len() / (num_slices * num_faces)) as texture::Level
-		};
+        };
         let desc = texture::Info {
             kind: kind,
             levels: levels,
