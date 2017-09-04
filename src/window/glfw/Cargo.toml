@@ -16,7 +16,7 @@ name = "gfx_window_glfw"
 
 [dependencies]
 glfw = "0.15"
-gfx_core = { path = "../../core", version = "0.7" }
+gfx_core = { path = "../../core", version = "0.10" }
 gfx_device_gl = { path = "../../backend/gl", version = "0.14" }
 
 # Currently there is an issue with cargo and dev-dependencies:

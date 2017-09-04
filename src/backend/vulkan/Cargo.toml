@@ -1,6 +1,6 @@
 [package]
-name = "gfx_device_vulkan"
-version = "0.2.0"
+name = "gfx_backend_vulkan"
+version = "0.1.0"
 description = "Vulkan API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -12,14 +12,14 @@ documentation = "https://docs.rs/gfx_device_vulkan"
 workspace = "../../.."
 
 [lib]
-name = "gfx_device_vulkan"
+name = "gfx_backend_vulkan"
 
 [dependencies]
 log = "0.3"
 lazy_static = "0.2"
 shared_library = "0.1"
 ash = "0.18"
-gfx_core = { path = "../../core", version = "0.7" }
+gfx_core = { path = "../../core", version = "0.10" }
 smallvec = "0.4"
 winit = "0.7"
 
