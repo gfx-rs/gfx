@@ -3,7 +3,7 @@ extern crate gfx_core as core;
 #[cfg(feature = "dx12")]
 extern crate gfx_device_dx12 as back;
 #[cfg(feature = "vulkan")]
-extern crate gfx_device_vulkan as back;
+extern crate gfx_backend_vulkan as back;
 #[cfg(feature = "metal")]
 extern crate gfx_device_metal as back;
 

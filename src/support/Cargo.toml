@@ -22,14 +22,14 @@ metal = ["gfx_device_metal", "gfx_window_metal"]
 gl = ["gfx_device_gl", "gfx_window_glutin"]
 dx11 = ["gfx_device_dx11", "gfx_window_dxgi"]
 dx12 = ["gfx_device_dx12", "gfx_window_dxgi"]
-vulkan = ["gfx_device_vulkan"]
+vulkan = ["gfx_backend_vulkan"]
 serialize = ["gfx/serialize", "gfx_core/serialize"]
 headless = ["gfx_window_glutin/headless"]
 unstable = []
 
-[dependencies.gfx_device_vulkan]
+[dependencies.gfx_backend_vulkan]
 path = "../backend/vulkan"
-version = "0.2"
+version = "0.1"
 optional = true
 
 [dependencies.gfx_device_metal]
@@ -59,7 +59,7 @@ log = "0.3"
 env_logger = "0.4"
 glutin = "0.9"
 winit = "0.7"
-gfx_core = { path = "../core", version = "0.7.1" }
+gfx_core = { path = "../core", version = "0.10" }
 gfx = { path = "../render", version = "0.16" }
 
 gfx_device_gl = { path = "../backend/gl", version = "0.14", optional = true }
