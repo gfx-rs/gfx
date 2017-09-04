@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use {Backend as B, Device, RawDevice};
-use conversions as conv;
+use conv;
 
 
 #[derive(Debug)]

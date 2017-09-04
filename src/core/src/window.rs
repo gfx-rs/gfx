@@ -47,32 +47,9 @@
 //!
 //! ### Recreation
 //!
-//! // TODO
-//!
-//! # Examples
-//!
-//! Initializing a swapchain and device from a window:
-//!
-//! ```no_run
-//! # extern crate empty;
-//! # extern crate gfx_core;
-//! # fn main() {
-//! use gfx_core::{Adapter, Surface, WindowExt};
-//!
-//! # let mut window: empty::Window = return;
-//! let (mut surface, adapters) = window.get_surface_and_adapters();
-//! # // TODO:
-//! # }
-//! ```
-//!
-//! > *Note*: `WindowExt`, `Surface` and `Swapchain` are _not_ part of the `Backend`
-//! > to allow support for different window libraries.
-//!
-//! [`Surface`]: trait.Surface.html
-//! [`Swapchain`]: trait.Swapchain.html
-//!
+//! //TODO
 
-use {Adapter, Backend};
+use Backend;
 use format::{self, Formatted};
 use queue::CommandQueue;
 
@@ -269,22 +246,4 @@ pub trait Swapchain<B: Backend> {
         present_queue: &mut CommandQueue<B, C>,
         wait_semaphores: &[&B::Semaphore],
     );
-}
-
-/// Extension for windows.
-/// Main entry point for backend initialization from a window.
-pub trait WindowExt<B: Backend> {
-    /// Associated `Surface` type.
-    type Surface: Surface<B>;
-    /// Associated `Adapter` type.
-    type Adapter: Adapter<B>;
-
-    /// Create window surface and enumerate all available adapters.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    ///
-    /// ```
-    fn get_surface_and_adapters(&mut self) -> (Self::Surface, Vec<Self::Adapter>);
 }
