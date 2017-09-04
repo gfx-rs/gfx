@@ -4,8 +4,6 @@ extern crate gfx_core as core;
 extern crate gfx_device_dx12 as back;
 #[cfg(feature = "vulkan")]
 extern crate gfx_device_vulkan as back;
-#[cfg(feature = "vulkan")]
-extern crate gfx_window_vulkan as win;
 #[cfg(feature = "metal")]
 extern crate gfx_device_metal as back;
 
@@ -13,8 +11,8 @@ extern crate winit;
 extern crate image;
 
 use core::{buffer, command, device as d, image as i, memory as m, pass, pso, pool, state};
-use core::{Adapter, Device, QueueFamily, Swapchain, WindowExt};
-use core::{DescriptorPool, Gpu, FrameSync, Primitive, Surface, SwapchainConfig};
+use core::{Adapter, Device, QueueType};
+use core::{DescriptorPool, Gpu, FrameSync, Primitive, Surface, Swapchain, SwapchainConfig};
 use core::format::{Formatted, Srgba8 as ColorFormat, Vec2};
 use core::pass::SubPass;
 use core::queue::Submission;
@@ -57,20 +55,24 @@ fn main() {
     let pixel_height = window_size.1 as u16;
 
     // instantiate backend
-    let mut vk_window = win::Window(window);
-    let (mut surface, adapters) = vk_window.get_surface_and_adapters();
+    let instance = back::Instance::create("gfx-rs quad", 1);
+    let mut surface = instance.create_surface(&window);
+    let adapters = instance.enumerate_adapters();
     for adapter in &adapters {
         println!("{:?}", adapter.get_info());
     }
     let adapter = &adapters[0];
-    let queue_descs = adapter.get_queue_families()
-        .iter()
-        .map(|&(ref family, qtype)| (family, qtype, family.num_queues()) )
-        .collect::<Vec<_>>();
 
     // Build a new device and associated command queues
-    let Gpu { mut device, mut general_queues, heap_types, .. } = adapter.open(&queue_descs);
-    let mut queue = general_queues.remove(0);
+    let Gpu { mut device, mut graphics_queues, heap_types, .. } =
+        adapter.open_with(|ref family, qtype| {
+            if qtype.supports_graphics() && surface.supports_queue(family) {
+                (1, QueueType::Graphics)
+            } else {
+                (0, QueueType::Transfer)
+            }
+        });
+    let mut queue = graphics_queues.remove(0);
     let swap_config = SwapchainConfig::new()
         .with_color::<ColorFormat>();
     let mut swap_chain = surface.build_swapchain(swap_config, &queue);
