@@ -602,6 +602,10 @@ impl core::Factory<R> for Factory {
                           data_opt: Option<(&[&[u8]], texture::Mipmap)>) -> Result<h::RawTexture<R>, texture::CreationError> {
         use core::texture::{AaMode, CreationError, Kind};
         use data::{map_bind, map_usage, map_surface, map_format};
+        
+        if let Some((_, texture::Mipmap::Allocated)) = data_opt {
+        	return Err(texture::CreationError::Mipmap);
+        }
 
         let (usage, cpu_access) = map_usage(desc.usage, desc.bind);
         let tparam = TextureParam {

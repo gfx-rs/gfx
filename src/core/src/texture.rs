@@ -82,6 +82,10 @@ pub enum CreationError {
     Data(usize),
     /// The mentioned usage mode is not supported
     Usage(Usage),
+    /// The requested mipmap creation parameter is unsupported.
+    Mipmap,
+    /// The requested mipmap level count does not match the provided data.
+    Level(Level),
 }
 
 impl fmt::Display for CreationError {
@@ -107,6 +111,8 @@ impl Error for CreationError {
             CreationError::Size(_) => "Unsupported size in one of the dimensions",
             CreationError::Data(_) => "The given data has a different size than the target texture slice",
             CreationError::Usage(_) => "The expected texture usage mode is not supported by a graphic API",
+            CreationError::Mipmap => "The requested mipmap creation parameter is unsupported",
+            CreationError::Level(_) => "The requested mipmap level count does not match the provided data",
         }
     }
 }
