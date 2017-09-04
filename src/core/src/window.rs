@@ -22,7 +22,7 @@
 //! The common steps for presentation of a frame are acquisition and presentation:
 //!
 //! ```no_run
-//! # extern crate empty;
+//! # extern crate gfx_backend_empty as empty;
 //! # extern crate gfx_core;
 //! # fn main() {
 //! use gfx_core::{Device, FrameSync};
@@ -78,7 +78,7 @@ pub trait Surface<B: Backend> {
     /// # Examples
     ///
     /// ```no_run
-    /// # extern crate empty;
+    /// # extern crate gfx_backend_empty as empty;
     /// # extern crate gfx_core;
     /// # fn main() {
     /// use gfx_core::{Surface, SwapchainConfig};

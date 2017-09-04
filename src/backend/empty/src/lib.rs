@@ -13,6 +13,9 @@ impl core::Backend for Backend {
     type Adapter = Adapter;
     type Device = Device;
 
+    type Surface = Surface;
+    type Swapchain = Swapchain;
+
     type CommandQueue = CommandQueue;
     type CommandBuffer = RawCommandBuffer;
     type SubpassCommandBuffer = SubpassCommandBuffer;
@@ -532,17 +535,6 @@ impl core::Swapchain<Backend> for Swapchain {
         _: &mut core::CommandQueue<Backend, C>,
         _: &[&()],
     ) {
-        unimplemented!()
-    }
-}
-
-/// Dummy window.
-pub struct Window;
-impl core::WindowExt<Backend> for Window {
-    type Surface = Surface;
-    type Adapter = Adapter;
-
-    fn get_surface_and_adapters(&mut self) -> (Surface, Vec<Adapter>) {
         unimplemented!()
     }
 }
