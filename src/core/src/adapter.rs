@@ -14,7 +14,7 @@ pub trait Adapter<B: Backend>: Sized {
     /// # Examples
     ///
     /// ```no_run
-    /// # extern crate empty;
+    /// # extern crate gfx_backend_empty as empty;
     /// # extern crate gfx_core;
     /// # fn main() {
     /// use gfx_core::{Adapter, QueueFamily};
@@ -38,7 +38,7 @@ pub trait Adapter<B: Backend>: Sized {
     /// # Examples
     ///
     /// ```no_run
-    /// # extern crate empty;
+    /// # extern crate gfx_backend_empty as empty;
     /// # extern crate gfx_core;
     /// # fn main() {
     /// use gfx_core::{Adapter, QueueType, Surface};
@@ -75,7 +75,7 @@ pub trait Adapter<B: Backend>: Sized {
     /// # Examples
     ///
     /// ```no_run
-    /// # extern crate empty;
+    /// # extern crate gfx_backend_empty as empty;
     /// # extern crate gfx_core;
     /// # fn main() {
     /// use gfx_core::Adapter;
@@ -94,7 +94,7 @@ pub trait Adapter<B: Backend>: Sized {
     /// # Examples
     ///
     /// ```no_run
-    /// # extern crate empty;
+    /// # extern crate gfx_backend_empty as empty;
     /// # extern crate gfx_core;
     /// # fn main() {
     /// use gfx_core::Adapter;
