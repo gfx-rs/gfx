@@ -16,7 +16,7 @@ name = "gfx_device_dx11"
 
 [dependencies]
 log = "0.3"
-gfx_core = { path = "../../core", version = "0.7" }
+gfx_core = { path = "../../core", version = "0.10" }
 d3d11-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
 d3dcompiler-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
 dxgi-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }

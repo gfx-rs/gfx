@@ -9,4 +9,4 @@ workspace = "../../.."
 name = "empty"
 
 [dependencies]
-gfx_core = { path = "../../core", version = "0.7" }
+gfx_core = { path = "../../core", version = "0.10" }
