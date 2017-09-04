@@ -7,12 +7,12 @@ workspace = ".."
 [features]
 default = ["gl"]
 mint = ["gfx/mint", "gfx_core/mint"]
-metal = ["gfx_device_metal", "gfx_window_metal", "gfx_device_metalll"]
-metal_argument_buffer = ["gfx_device_metalll/argument_buffer"]
+metal = ["gfx_device_metal", "gfx_window_metal"]
+#metal_argument_buffer = ["gfx_device_metalll/argument_buffer"]
 gl = ["gfx_device_gl", "gfx_window_glutin"]
 dx11 = ["gfx_device_dx11", "gfx_window_dxgi"]
-dx12 = ["gfx_device_dx12", "gfx_device_dx12ll", "gfx_window_dxgi"]
-vulkan = ["gfx_device_vulkan", "gfx_device_vulkanll", "gfx_window_vulkan"]
+dx12 = ["gfx_device_dx12", "gfx_window_dxgi"]
+vulkan = ["gfx_device_vulkan"]
 sdl = ["gfx_window_sdl"]
 serialize = ["gfx/serialize", "gfx_core/serialize"]
 headless = ["gfx_window_glutin/headless"]
@@ -33,7 +33,6 @@ image = "0.15"
 
 gfx = { path = "../src/render", version = "0.16" }
 gfx_core = { path = "../src/core", version = "0.7.1" }
-gfx_corell = { path = "../src/corell", version = "0.1" }
 gfx_support = { path = "../src/support", version = "0.7" }
 
 gfx_device_gl = { path = "../src/backend/gl", version = "0.14", optional = true }
@@ -42,16 +41,6 @@ gfx_window_glutin = { path = "../src/window/glutin", version = "0.17", optional 
 [dependencies.gfx_device_vulkan]
 path = "../src/backend/vulkan"
 version = "0.2"
-optional = true
-
-[dependencies.gfx_device_vulkanll]
-path = "../src/backend/vulkanll"
-version = "0.1"
-optional = true
-
-[dependencies.gfx_window_vulkan]
-path = "../src/window/vulkan"
-version = "0.3"
 optional = true
 
 [dependencies.gfx_device_metal]
@@ -64,10 +53,10 @@ path = "../src/window/metal"
 version = "0.4"
 optional = true
 
-[dependencies.gfx_device_metalll]
-path = "../src/backend/metalll"
-version = "0.2"
-optional = true
+#[dependencies.gfx_device_metalll]
+#path = "../src/backend/metalll"
+#version = "0.2"
+#optional = true
 #features = ["native_fence"]
 
 [dependencies.gfx_window_sdl]
@@ -83,7 +72,7 @@ gfx_window_sdl = { path = "../src/window/sdl", version = "0.7" }
 gfx_device_dx11 = { path = "../src/backend/dx11", version = "0.6", optional = true }
 gfx_device_dx12 = { path = "../src/backend/dx12", version = "0.1", optional = true }
 gfx_window_dxgi = { path = "../src/window/dxgi", version = "0.9", optional = true }
-gfx_device_dx12ll = { path = "../src/backend/dx12ll", version = "0.1", optional = true }
+#gfx_device_dx12ll = { path = "../src/backend/dx12ll", version = "0.1", optional = true }
 
 # Support examples.
 [[bin]]
@@ -146,11 +135,6 @@ path = "support/triangle/main.rs"
 #[[bin]]
 #name = "quad"
 #path = "core/quad/main.rs"
-
-# corell examples
-[[bin]]
-name = "trianglell"
-path = "corell/trianglell/main.rs"
 
 # render examples
 [[bin]]
