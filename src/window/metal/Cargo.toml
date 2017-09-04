@@ -22,6 +22,6 @@ objc = "0.2"
 io-surface = "0.7"
 winit = "0.7"
 metal-rs = "0.4"
-gfx_core = { path = "../../core", version = "0.7" }
+gfx_core = { path = "../../core", version = "0.10" }
 gfx_device_metal = { path = "../../backend/metal", version = "0.3" }
 scopeguard = "0.3"
