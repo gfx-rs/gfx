@@ -12,6 +12,7 @@ use memory::Requirements;
 
 /// Type of the resources that can be allocated on a heap.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub enum ResourceHeapType {
     ///
     Any,

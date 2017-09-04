@@ -1,14 +1,13 @@
 #[macro_use]
 extern crate log;
-
 extern crate ash;
 extern crate gfx_core as core;
 #[macro_use]
 extern crate lazy_static;
 extern crate smallvec;
-
 #[cfg(target_os = "windows")]
 extern crate kernel32;
+extern crate winit;
 
 use ash::{Entry, LoadingError};
 use ash::extensions as ext;
@@ -21,10 +20,12 @@ use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
 mod command;
-pub mod conversions;
+mod conv;
 mod device;
-pub mod native;
+mod native;
 mod pool;
+mod window;
+
 
 const LAYERS: &'static [&'static str] = &[
     #[cfg(debug_assertions)]
@@ -67,6 +68,7 @@ pub struct Instance {
     /// Supported surface extensions of this instance.
     pub surface_extensions: Vec<&'static str>,
 
+    //TODO: move into `RawInstance`, destroy in `drop`
     _debug_report: Option<(ext::DebugReport, vk::DebugReportCallbackEXT)>,
 }
 
@@ -127,6 +129,8 @@ impl Instance {
         let instance_extensions = entry
             .enumerate_instance_extension_properties()
             .expect("Unable to enumerate instance extensions");
+
+        //println!("Extensions: {:?}", instance_extensions);
 
         // Check our surface extensions against the available extensions
         let surface_extensions = SURFACE_EXTENSIONS.iter().filter_map(|ext| {
@@ -494,7 +498,7 @@ impl core::RawCommandQueue<Backend> for CommandQueue {
             .collect::<Vec<_>>();
         let stages = submission.wait_semaphores
             .iter()
-            .map(|&(_, stage)| conversions::map_pipeline_stage(stage))
+            .map(|&(_, stage)| conv::map_pipeline_stage(stage))
             .collect::<Vec<_>>();
         let signals = submission.signal_semaphores
             .iter()
@@ -534,6 +538,9 @@ pub enum Backend {}
 impl core::Backend for Backend {
     type Adapter = Adapter;
     type Device = Device;
+
+    type Surface = window::Surface;
+    type Swapchain = window::Swapchain;
 
     type CommandQueue = CommandQueue;
     type CommandBuffer = command::CommandBuffer;

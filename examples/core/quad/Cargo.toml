@@ -10,7 +10,7 @@ metal = ["gfx_device_metal", "gfx_window_metal"]
 gl = ["gfx_device_gl", "gfx_window_glutin"]
 dx11 = ["gfx_device_dx11", "gfx_window_dxgi"]
 dx12 = ["gfx_device_dx12", "gfx_window_dxgi"]
-vulkan = ["gfx_device_vulkan", "gfx_window_vulkan"]
+vulkan = ["gfx_device_vulkan"]
 headless = ["gfx_window_glutin/headless"]
 unstable = []
 
@@ -33,11 +33,6 @@ gfx_window_glutin = { path = "../../../src/window/glutin", version = "0.17", opt
 [dependencies.gfx_device_vulkan]
 path = "../../../src/backend/vulkan"
 version = "0.2"
-optional = true
-
-[dependencies.gfx_window_vulkan]
-path = "../../../src/window/vulkan"
-version = "0.3"
 optional = true
 
 [dependencies.gfx_device_metal]

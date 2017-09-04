@@ -12,7 +12,7 @@ use core::command::{
     InstanceParams, SubpassContents,
 };
 use core::image::ImageLayout;
-use {conversions as conv, native as n};
+use {conv, native as n};
 use {Backend, RawDevice};
 
 #[derive(Clone)]
