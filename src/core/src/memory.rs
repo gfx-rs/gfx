@@ -136,6 +136,7 @@ pub fn cast_slice<A: Pod, B: Pod>(slice: &[A]) -> &[B] {
 
 bitflags!(
     /// Heap property flags.
+    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
     pub flags HeapProperties: u16 {
         /// Device local heaps are located on the GPU.
         const DEVICE_LOCAL   = 0x1,

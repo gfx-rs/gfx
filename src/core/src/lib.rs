@@ -32,7 +32,7 @@ pub use self::queue::{
     General, Graphics, Compute, Transfer,
 };
 pub use self::window::{
-    Backbuffer, Frame, FrameSync, Surface, Swapchain, SwapchainConfig, WindowExt};
+    Backbuffer, Frame, FrameSync, Surface, Swapchain, SwapchainConfig};
 pub use draw_state::{state, target};
 
 pub mod adapter;
@@ -48,6 +48,7 @@ pub mod pool;
 pub mod pso;
 pub mod queue;
 pub mod window;
+
 
 /// Draw vertex count.
 pub type VertexCount = u32;
@@ -218,6 +219,9 @@ pub struct HeapType {
 pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type Adapter:             Adapter<Self>;
     type Device:              Device<Self>;
+
+    type Surface:             Surface<Self>;
+    type Swapchain:           Swapchain<Self>;
 
     type CommandQueue:        RawCommandQueue<Self>;
     type CommandBuffer:       RawCommandBuffer<Self>;
