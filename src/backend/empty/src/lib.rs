@@ -508,13 +508,11 @@ impl core::DescriptorPool<Backend> for DescriptorPool {
 /// Dummy surface.
 pub struct Surface;
 impl core::Surface<Backend> for Surface {
-    type Swapchain = Swapchain;
-
     fn supports_queue(&self, _: &QueueFamily) -> bool {
         unimplemented!()
     }
 
-    fn build_swapchain<C>(&mut self, _: core::SwapchainConfig, _: &core::CommandQueue<Backend, C>)-> Self::Swapchain {
+    fn build_swapchain<C>(&mut self, _: core::SwapchainConfig, _: &core::CommandQueue<Backend, C>)-> Swapchain {
         unimplemented!()
     }
 }
@@ -536,5 +534,12 @@ impl core::Swapchain<Backend> for Swapchain {
         _: &[&()],
     ) {
         unimplemented!()
+    }
+}
+
+pub struct Instance;
+impl core::Instance<Backend> for Instance {
+    fn enumerate_adapters(&self) -> Vec<Adapter> {
+        Vec::new()
     }
 }
