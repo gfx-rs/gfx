@@ -406,7 +406,7 @@ impl core::Factory<R> for Factory {
 
             // Setup pipeline description
             let pso_desc = winapi::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
-                pRootSignature: signature.inner.as_mut_ptr(), // TODO
+                pRootSignature: unsafe { signature.inner.as_mut_ptr() }, // TODO
                 VS: vs, PS: ps, GS: gs, DS: ds, HS: hs,
                 StreamOutput: winapi::D3D12_STREAM_OUTPUT_DESC {
                     pSODeclaration: ptr::null(),
