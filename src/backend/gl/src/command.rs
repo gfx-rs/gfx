@@ -291,7 +291,12 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     }
 
-    fn pipeline_barrier(&mut self, barries: &[memory::Barrier<Backend>]) {
+    fn pipeline_barrier(
+        &mut self,
+        _src_stages: c::pso::PipelineStage,
+        _dst_stages: c::pso::PipelineStage,
+        _barries: &[memory::Barrier<Backend>],
+    ) {
         unimplemented!()
     }
 

@@ -117,7 +117,11 @@ pub fn map_format(surface: SurfaceType, chan: ChannelType) -> Option<vk::Format>
             _ => return None,
         },
         B8_G8_R8_A8 => match chan {
+            Int   => vk::Format::B8g8r8a8Sint,
+            Uint  => vk::Format::B8g8r8a8Uint,
+            Inorm => vk::Format::B8g8r8a8Snorm,
             Unorm => vk::Format::B8g8r8a8Unorm,
+            Srgb  => vk::Format::B8g8r8a8Srgb,
             _ => return None,
         },
         D16 => match chan {
@@ -276,6 +280,12 @@ pub fn map_attachment_store_op(op: pass::AttachmentStoreOp) -> vk::AttachmentSto
 pub fn map_buffer_access(access: buffer::Access) -> vk::AccessFlags {
     let mut flags = vk::AccessFlags::empty();
 
+    if access.contains(buffer::TRANSFER_READ) {
+        flags |= vk::ACCESS_TRANSFER_READ_BIT;
+    }
+    if access.contains(buffer::TRANSFER_WRITE) {
+        flags |= vk::ACCESS_TRANSFER_WRITE_BIT;
+    }
     if access.contains(buffer::INDEX_BUFFER_READ) {
         flags |= vk::ACCESS_INDEX_READ_BIT;
     }
@@ -367,6 +377,9 @@ pub fn map_pipeline_stage(stage: pso::PipelineStage) -> vk::PipelineStageFlags {
     }
     if stage.contains(pso::BOTTOM_OF_PIPE) {
         flags |= vk::PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    }
+    if stage.contains(pso::HOST) {
+        flags |= vk::PIPELINE_STAGE_HOST_BIT;
     }
 
     flags
