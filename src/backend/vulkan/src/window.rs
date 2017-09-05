@@ -110,8 +110,6 @@ impl Instance {
 }
 
 impl core::Surface<Backend> for Surface {
-    type Swapchain = Swapchain;
-
     fn supports_queue(&self, queue_family: &QueueFamily) -> bool {
         self.raw.functor.get_physical_device_surface_support_khr(
             queue_family.device(),
