@@ -10,7 +10,7 @@
 use std::error::Error;
 use std::fmt;
 use std::ops::Range;
-use {format, state, target, Backend};
+use {format, state, target};
 pub use target::{Layer, Level};
 
 /// Maximum accessible mipmap level of a image.

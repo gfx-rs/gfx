@@ -9,10 +9,12 @@ extern crate log;
 extern crate gfx_gl as gl;
 extern crate gfx_core as core;
 extern crate smallvec;
+#[cfg(feature = "glutin")]
+extern crate glutin;
 
 use std::mem;
 use std::rc::Rc;
-use core::{self as c, image as i, command as com};
+use core::{self as c, command as com};
 use core::QueueType;
 use command::Command;
 use smallvec::SmallVec;
@@ -24,15 +26,22 @@ mod command;
 mod conv;
 mod device;
 mod info;
-pub mod native;
+mod window;
+mod native;
 mod pool;
 mod state;
+
+#[cfg(feature = "glutin")]
+pub use window::glutin::{Surface, Swapchain};
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Backend {}
 impl c::Backend for Backend {
     type Adapter = Adapter;
     type Device = Device;
+
+    type Surface = Surface;
+    type Swapchain = Swapchain;
 
     type CommandQueue = CommandQueue;
     type CommandBuffer = command::RawCommandBuffer;
