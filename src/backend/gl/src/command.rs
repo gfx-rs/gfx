@@ -466,31 +466,31 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     fn copy_image(
         &mut self,
-        src: &n::Image,
-        src_layout: image::ImageLayout,
-        dst: &n::Image,
-        dst_layout: image::ImageLayout,
-        regions: &[ImageCopy],
+        _src: &n::Image,
+        _src_layout: image::ImageLayout,
+        _dst: &n::Image,
+        _dst_layout: image::ImageLayout,
+        _regions: &[ImageCopy],
     ) {
         unimplemented!()
     }
 
     fn copy_buffer_to_image(
         &mut self,
-        src: &n::Buffer,
-        dst: &n::Image,
-        layout: image::ImageLayout,
-        regions: &[BufferImageCopy],
+        _src: &n::Buffer,
+        _dst: &n::Image,
+        _dst_layout: image::ImageLayout,
+        _regions: &[BufferImageCopy],
     ) {
         unimplemented!()
     }
 
     fn copy_image_to_buffer(
         &mut self,
-        src: &n::Image,
-        dst: &n::Buffer,
-        layout: image::ImageLayout,
-        regions: &[BufferImageCopy],
+        _src: &n::Image,
+        _src_layout: image::ImageLayout,
+        _dst: &n::Buffer,
+        _regions: &[BufferImageCopy],
     ) {
         unimplemented!()
     }

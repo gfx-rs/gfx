@@ -453,8 +453,8 @@ impl core::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn copy_image_to_buffer(
         &mut self,
         _: &(),
-        _: &(),
         _: image::ImageLayout,
+        _: &(),
         _: &[command::BufferImageCopy],
     ) {
         unimplemented!()

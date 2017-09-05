@@ -116,12 +116,13 @@ impl Instance {
         // TODO: return errors instead of panic
         let entry = VK_ENTRY.as_ref().expect("Unable to load Vulkan entry points");
 
+        let app_name = CString::new(name).unwrap();
         let app_info = vk::ApplicationInfo {
             s_type: vk::StructureType::ApplicationInfo,
             p_next: ptr::null(),
-            p_application_name: name.as_ptr() as *const _,
+            p_application_name: app_name.as_ptr(),
             application_version: version,
-            p_engine_name: "gfx-rs".as_ptr() as *const _,
+            p_engine_name: b"gfx-rs\0".as_ptr() as *const _,
             engine_version: 1,
             api_version: 0, //TODO
         };
