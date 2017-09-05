@@ -82,6 +82,10 @@ pub enum CreationError {
     Data(usize),
     /// The mentioned usage mode is not supported
     Usage(Usage),
+    /// The requested mipmap creation parameter is unsupported.
+    Mipmap,
+    /// The requested mipmap level count does not match the provided data.
+    Level(Level),
 }
 
 impl fmt::Display for CreationError {
@@ -107,6 +111,8 @@ impl Error for CreationError {
             CreationError::Size(_) => "Unsupported size in one of the dimensions",
             CreationError::Data(_) => "The given data has a different size than the target texture slice",
             CreationError::Usage(_) => "The expected texture usage mode is not supported by a graphic API",
+            CreationError::Mipmap => "The requested mipmap creation parameter is unsupported",
+            CreationError::Level(_) => "The requested mipmap level count does not match the provided data",
         }
     }
 }
@@ -314,6 +320,17 @@ impl Kind {
     }
 }
 
+/// The marker for the texture initializer to generate extra space for the mipmap generation.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[repr(u8)]
+pub enum Mipmap {
+	/// The mipmap data is provided as a part of bitmap data.
+	Provided,
+	/// The mipmap data is not provided, but the memory for it should be allocated
+	/// for the later generation/
+	Allocated, // TODO parameterize mipmap generation here?
+}
 
 /// Describes a subvolume of a texture, which image data can be uploaded into.
 #[allow(missing_docs)]
