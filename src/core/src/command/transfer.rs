@@ -2,6 +2,7 @@
 use Backend;
 use image;
 use memory::Barrier;
+use pso::PipelineStage;
 use queue::capability::{Supports, Transfer};
 use super::{CommandBuffer, RawCommandBuffer};
 
@@ -97,8 +98,13 @@ pub struct BufferImageCopy {
 
 impl<'a, B: Backend, C: Supports<Transfer>> CommandBuffer<'a, B, C> {
     ///
-    pub fn pipeline_barrier(&mut self, barriers: &[Barrier<B>]) {
-        self.raw.pipeline_barrier(barriers)
+    pub fn pipeline_barrier(
+        &mut self,
+        src_stages: PipelineStage,
+        dst_stages: PipelineStage,
+        barriers: &[Barrier<B>],
+    ) {
+        self.raw.pipeline_barrier(src_stages, dst_stages, barriers)
     }
 
     ///

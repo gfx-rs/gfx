@@ -145,7 +145,12 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn pipeline_barrier(&mut self, barriers: &[memory::Barrier<Backend>]) {
+    fn pipeline_barrier(
+        &mut self,
+        src_stages: pso::PipelineStage,
+        dst_stages: pso::PipelineStage,
+        barriers: &[memory::Barrier<Backend>],
+    ) {
         let mut memory_bars: SmallVec<[vk::MemoryBarrier; 4]> = SmallVec::new();
         let mut buffer_bars: SmallVec<[vk::BufferMemoryBarrier; 4]> = SmallVec::new();
         let mut image_bars: SmallVec<[vk::ImageMemoryBarrier; 4]> = SmallVec::new();
@@ -202,8 +207,8 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         unsafe {
             self.device.0.cmd_pipeline_barrier(
                 self.raw, // commandBuffer
-                vk::PIPELINE_STAGE_ALL_GRAPHICS_BIT, // srcStageMask // TODO
-                vk::PIPELINE_STAGE_ALL_GRAPHICS_BIT, // dstStageMask // TODO
+                conv::map_pipeline_stage(src_stages),
+                conv::map_pipeline_stage(dst_stages),
                 vk::DependencyFlags::empty(), // dependencyFlags // TODO
                 &memory_bars,
                 &buffer_bars,
@@ -582,15 +587,12 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         let regions = map_buffer_image_regions(src, regions);
 
         unsafe {
-            //TODO: https://github.com/MaikKlein/ash/issues/28
-            self.device.0.fp_v1_0().cmd_copy_image_to_buffer(
+            self.device.0.cmd_copy_image_to_buffer(
                 self.raw,
                 src.raw,
                 conv::map_image_layout(src_layout),
                 dst.raw,
-                //&regions,
-                regions.len() as _,
-                regions.as_ptr(),
+                &regions,
             );
         }
     }
