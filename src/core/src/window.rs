@@ -55,8 +55,6 @@ use queue::CommandQueue;
 
 /// A `Surface` abstracts the surface of a native window, which will be presented
 pub trait Surface<B: Backend> {
-    ///
-    type Swapchain: Swapchain<B>;
 
     /// Check if the queue family supports presentation for this surface.
     ///
@@ -95,7 +93,7 @@ pub trait Surface<B: Backend> {
     fn build_swapchain<C>(&mut self,
         config: SwapchainConfig,
         present_queue: &CommandQueue<B, C>,
-    ) -> Self::Swapchain;
+    ) -> B::Swapchain;
 }
 
 /// Handle to a backbuffer of the swapchain.
