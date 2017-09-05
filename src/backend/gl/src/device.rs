@@ -47,7 +47,7 @@ impl Clone for Device {
 
 impl Device {
     /// Create a new `Device`.
-    pub fn new(share: Rc<Share>) -> Device {
+    pub(crate) fn new(share: Rc<Share>) -> Device {
         Device {
             share: share,
         }
