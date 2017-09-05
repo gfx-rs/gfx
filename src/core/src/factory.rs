@@ -460,6 +460,7 @@ pub trait Factory<R: Resources> {
     fn create_texture_immutable<T: format::TextureFormat>(
         &mut self,
         kind: texture::Kind,
+        mipmap: texture::Mipmap,
         data: &[&[<T::Surface as format::SurfaceTyped>::DataType]])
         -> Result<(handle::Texture<R, T::Surface>, handle::ShaderResourceView<R, T::View>),
                   CombinedError>
@@ -470,7 +471,7 @@ pub trait Factory<R: Resources> {
         for (rd, d) in raw_data.iter_mut().zip(data.iter()) {
             *rd = cast_slice(*d);
         }
-        self.create_texture_immutable_u8::<T>(kind, texture::Mipmap::Provided, &raw_data[.. data.len()])
+        self.create_texture_immutable_u8::<T>(kind, mipmap, &raw_data[.. data.len()])
     }
 
     fn create_render_target<T: format::RenderFormat + format::TextureFormat>
