@@ -8,6 +8,7 @@ use super::{CommandBuffer, RawCommandBuffer};
 
 ///
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct Offset {
     ///
     pub x: i32,
@@ -19,6 +20,7 @@ pub struct Offset {
 
 ///
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct Extent {
     ///
     pub width: u32,
@@ -30,6 +32,7 @@ pub struct Extent {
 
 /// Region of two buffers for copying.
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct BufferCopy {
     /// Buffer region source offset.
     pub src: u64,
@@ -41,6 +44,7 @@ pub struct BufferCopy {
 
 ///
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct ImageResolve {
     ///
     pub src_subresource: image::Subresource,
@@ -52,6 +56,7 @@ pub struct ImageResolve {
 
 ///
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct ImageCopy {
     ///
     pub aspect_mask: image::AspectFlags,
@@ -71,6 +76,7 @@ pub struct ImageCopy {
 
 ///
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct BufferImageCopy {
     ///
     pub buffer_offset: u64,
@@ -124,20 +130,20 @@ impl<'a, B: Backend, C: Supports<Transfer>> CommandBuffer<'a, B, C> {
         &mut self,
         src: &B::Buffer,
         dst: &B::Image,
-        layout: image::ImageLayout,
+        dst_layout: image::ImageLayout,
         regions: &[BufferImageCopy],
     ) {
-        self.raw.copy_buffer_to_image(src, dst, layout, regions)
+        self.raw.copy_buffer_to_image(src, dst, dst_layout, regions)
     }
 
     ///
     pub fn copy_image_to_buffer(
         &mut self,
         src: &B::Image,
+        src_layout: image::ImageLayout,
         dst: &B::Buffer,
-        layout: image::ImageLayout,
         regions: &[BufferImageCopy],
     ) {
-        self.raw.copy_image_to_buffer(src, dst, layout, regions)
+        self.raw.copy_image_to_buffer(src, src_layout, dst, regions)
     }
 }
