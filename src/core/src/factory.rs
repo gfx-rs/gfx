@@ -313,7 +313,7 @@ pub trait Factory<R: Resources> {
     /// required to assist backends that have no concept of typeless formats (OpenGL).
     /// The initial data, if given, has to be provided for all mip levels and slices:
     /// Slice0.Mip0, Slice0.Mip1, ..., Slice1.Mip0, ...
-    fn create_texture_raw(&mut self, texture::Info, Option<format::ChannelType>, Option<&[&[u8]]>)
+    fn create_texture_raw(&mut self, texture::Info, Option<format::ChannelType>, Option<(&[&[u8]], texture::Mipmap)>)
                           -> Result<handle::RawTexture<R>, texture::CreationError>;
 
     fn view_buffer_as_shader_resource_raw(&mut self, &handle::RawBuffer<R>, format::Format)
@@ -425,8 +425,8 @@ pub trait Factory<R: Resources> {
     {
         self.view_texture_as_depth_stencil(tex, 0, None, texture::DepthStencilFlags::empty())
     }
-
-    fn create_texture_immutable_u8<T: format::TextureFormat>(&mut self, kind: texture::Kind, data: &[&[u8]])
+    
+    fn create_texture_immutable_u8<T: format::TextureFormat>(&mut self, kind: texture::Kind, mipmap: texture::Mipmap, data: &[&[u8]])
                                    -> Result<(handle::Texture<R, T::Surface>,
                                               handle::ShaderResourceView<R, T::View>),
                                              CombinedError>
@@ -434,15 +434,23 @@ pub trait Factory<R: Resources> {
         let surface = <T::Surface as format::SurfaceTyped>::get_surface_type();
         let num_slices = kind.get_num_slices().unwrap_or(1) as usize;
         let num_faces = if kind.is_cube() {6} else {1};
+        let levels = match mipmap {
+            texture::Mipmap::Allocated => if data.len() != num_slices * num_faces {
+                return Err(CombinedError::Texture(texture::CreationError::Level((num_slices * num_faces) as texture::Level)));
+            } else {
+                kind.get_num_levels()
+            },
+            texture::Mipmap::Provided => (data.len() / (num_slices * num_faces)) as texture::Level
+        };
         let desc = texture::Info {
             kind: kind,
-            levels: (data.len() / (num_slices * num_faces)) as texture::Level,
+            levels: levels,
             format: surface,
             bind: SHADER_RESOURCE,
             usage: Usage::Data,
         };
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let raw = try!(self.create_texture_raw(desc, Some(cty), Some(data)));
+        let raw = try!(self.create_texture_raw(desc, Some(cty), Some((data, mipmap))));
         let levels = (0, raw.get_info().levels - 1);
         let tex = Typed::new(raw);
         let view = try!(self.view_texture_as_shader_resource::<T>(&tex, levels, format::Swizzle::new()));
@@ -452,6 +460,7 @@ pub trait Factory<R: Resources> {
     fn create_texture_immutable<T: format::TextureFormat>(
         &mut self,
         kind: texture::Kind,
+        mipmap: texture::Mipmap,
         data: &[&[<T::Surface as format::SurfaceTyped>::DataType]])
         -> Result<(handle::Texture<R, T::Surface>, handle::ShaderResourceView<R, T::View>),
                   CombinedError>
@@ -462,7 +471,7 @@ pub trait Factory<R: Resources> {
         for (rd, d) in raw_data.iter_mut().zip(data.iter()) {
             *rd = cast_slice(*d);
         }
-        self.create_texture_immutable_u8::<T>(kind, &raw_data[.. data.len()])
+        self.create_texture_immutable_u8::<T>(kind, mipmap, &raw_data[.. data.len()])
     }
 
     fn create_render_target<T: format::RenderFormat + format::TextureFormat>
