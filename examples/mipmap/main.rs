@@ -97,6 +97,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
         let (_, texture_view) = factory.create_texture_immutable::<ColorFormat>(
             texture::Kind::D2(4, 4, texture::AaMode::Single),
+            texture::Mipmap::Provided,
             &[&L0_DATA, &L1_DATA, &L2_DATA]
             ).unwrap();
 

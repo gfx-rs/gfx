@@ -131,7 +131,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
         let texels = [[0x20, 0xA0, 0xC0, 0x00]];
         let (_, texture_view) = factory.create_texture_immutable::<gfx::format::Rgba8>(
-            texture::Kind::D2(1, 1, texture::AaMode::Single), &[&texels]
+            texture::Kind::D2(1, 1, texture::AaMode::Single), texture::Mipmap::Provided, &[&texels]
             ).unwrap();
 
         let sinfo = texture::SamplerInfo::new(
