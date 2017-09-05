@@ -28,6 +28,36 @@ fn map_subpass_contents(contents: SubpassContents) -> vk::SubpassContents {
     }
 }
 
+fn map_buffer_image_regions(
+    image: &n::Image,
+    regions: &[BufferImageCopy],
+) -> SmallVec<[vk::BufferImageCopy; 16]> {
+    fn div(a: u32, b: u32) -> u32 {
+        assert_eq!(a % b, 0);
+        a / b
+    };
+    regions
+        .iter()
+        .map(|region| {
+            let aspect_mask = conv::map_image_aspects(region.image_aspect);
+            let row_length = div(region.buffer_row_pitch, image.bytes_per_texel as u32);
+            let image_subresource = conv::map_subresource_layers(aspect_mask, &region.image_subresource);
+            vk::BufferImageCopy {
+                buffer_offset: region.buffer_offset,
+                buffer_row_length: row_length,
+                buffer_image_height: div(region.buffer_slice_pitch, row_length),
+                image_subresource,
+                image_offset: vk::Offset3D {
+                    x: region.image_offset.x,
+                    y: region.image_offset.y,
+                    z: region.image_offset.z,
+                },
+                image_extent: image.extent.clone(),
+            }
+        })
+        .collect()
+}
+
 impl command::RawCommandBuffer<Backend> for CommandBuffer {
     fn begin(&mut self) {
         let info = vk::CommandBufferBeginInfo {
@@ -526,40 +556,17 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         &mut self,
         src: &n::Buffer,
         dst: &n::Image,
-        layout: ImageLayout,
+        dst_layout: ImageLayout,
         regions: &[BufferImageCopy],
     ) {
-        fn div(a: u32, b: u32) -> u32 {
-            assert_eq!(a % b, 0);
-            a / b
-        };
-        let regions: SmallVec<[vk::BufferImageCopy; 16]> = regions
-            .iter()
-            .map(|region| {
-                let aspect_mask = conv::map_image_aspects(region.image_aspect);
-                let row_length = div(region.buffer_row_pitch, dst.bytes_per_texel as u32);
-                let image_subresource = conv::map_subresource_layers(aspect_mask, &region.image_subresource);
-                vk::BufferImageCopy {
-                    buffer_offset: region.buffer_offset,
-                    buffer_row_length: row_length,
-                    buffer_image_height: div(region.buffer_slice_pitch, row_length),
-                    image_subresource,
-                    image_offset: vk::Offset3D {
-                        x: region.image_offset.x,
-                        y: region.image_offset.y,
-                        z: region.image_offset.z,
-                    },
-                    image_extent: dst.extent.clone(),
-                }
-            })
-            .collect();
+        let regions = map_buffer_image_regions(dst, regions);
 
         unsafe {
             self.device.0.cmd_copy_buffer_to_image(
                 self.raw,
                 src.raw,
                 dst.raw,
-                conv::map_image_layout(layout),
+                conv::map_image_layout(dst_layout),
                 &regions,
             );
         }
@@ -567,12 +574,25 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn copy_image_to_buffer(
         &mut self,
-        _src: &n::Image,
-        _dst: &n::Buffer,
-        _layout: ImageLayout,
-        _regions: &[BufferImageCopy],
+        src: &n::Image,
+        src_layout: ImageLayout,
+        dst: &n::Buffer,
+        regions: &[BufferImageCopy],
     ) {
-        unimplemented!()
+        let regions = map_buffer_image_regions(src, regions);
+
+        unsafe {
+            //TODO: https://github.com/MaikKlein/ash/issues/28
+            self.device.0.fp_v1_0().cmd_copy_image_to_buffer(
+                self.raw,
+                src.raw,
+                conv::map_image_layout(src_layout),
+                dst.raw,
+                //&regions,
+                regions.len() as _,
+                regions.as_ptr(),
+            );
+        }
     }
 
     fn draw(&mut self, start: VertexCount, count: VertexCount, instances: Option<InstanceParams>) {
