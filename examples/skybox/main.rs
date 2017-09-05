@@ -75,7 +75,7 @@ fn load_cubemap<R, F>(factory: &mut F, data: CubemapData) -> Result<gfx::handle:
     }).collect::<Vec<_>>();
     let data: [&[u8]; 6] = [&images[0], &images[1], &images[2], &images[3], &images[4], &images[5]];
     let kind = texture::Kind::Cube(images[0].dimensions().0 as u16);
-    match factory.create_texture_immutable_u8::<Rgba8>(kind, &data) {
+    match factory.create_texture_immutable_u8::<Rgba8>(kind, texture::Mipmap::Provided, &data) {
         Ok((_, view)) => Ok(view),
         Err(_) => Err("Unable to create an immutable cubemap texture".to_owned()),
     }
