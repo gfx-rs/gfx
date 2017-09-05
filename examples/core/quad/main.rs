@@ -338,7 +338,7 @@ fn main() {
                 target: &image_logo,
                 range: (0..1, 0..1),
             };
-            cmd_buffer.pipeline_barrier(&[image_barrier]);
+            cmd_buffer.pipeline_barrier(pso::TOP_OF_PIPE, pso::TRANSFER, &[image_barrier]);
 
             cmd_buffer.copy_buffer_to_image(
                 &image_upload_buffer,
@@ -360,7 +360,7 @@ fn main() {
                 target: &image_logo,
                 range: (0..1, 0..1),
             };
-            cmd_buffer.pipeline_barrier(&[image_barrier]);
+            cmd_buffer.pipeline_barrier(pso::TRANSFER, pso::BOTTOM_OF_PIPE, &[image_barrier]);
 
             cmd_buffer.finish()
         };
@@ -372,6 +372,9 @@ fn main() {
         device.wait_for_fences(&[&frame_fence], d::WaitFor::All, !0);
     }
 
+    // not really needed, the transitions are covered by the render pass
+    //Note: the actual stages are unlikely correct, need verifying
+    let do_barriers = false;
     //
     let mut running = true;
     while running {
@@ -398,13 +401,15 @@ fn main() {
             let mut cmd_buffer = graphics_pool.acquire_command_buffer();
 
             let rtv = &swap_chain.get_backbuffers()[frame.id()].color;
-            let rtv_target_barrier = m::Barrier::Image {
-                state_src: (i::Access::empty(), i::ImageLayout::Undefined),
-                state_dst: (i::COLOR_ATTACHMENT_WRITE, i::ImageLayout::ColorAttachmentOptimal),
-                target: rtv,
-                range: (0..1, 0..1),
-            };
-            cmd_buffer.pipeline_barrier(&[rtv_target_barrier]);
+            if do_barriers {
+                let rtv_target_barrier = m::Barrier::Image {
+                    state_src: (i::Access::empty(), i::ImageLayout::Undefined),
+                    state_dst: (i::COLOR_ATTACHMENT_WRITE, i::ImageLayout::ColorAttachmentOptimal),
+                    target: rtv,
+                    range: (0..1, 0..1),
+                };
+                cmd_buffer.pipeline_barrier(pso::TRANSFER, pso::PIXEL_SHADER, &[rtv_target_barrier]);
+            }
 
             cmd_buffer.set_viewports(&[viewport]);
             cmd_buffer.set_scissors(&[scissor]);
@@ -422,13 +427,15 @@ fn main() {
                 encoder.draw(0, 6, None);
             }
 
-            let rtv_present_barrier = m::Barrier::Image {
-                state_src: (i::COLOR_ATTACHMENT_WRITE, i::ImageLayout::ColorAttachmentOptimal),
-                state_dst: (i::Access::empty(), i::ImageLayout::Present),
-                target: rtv,
-                range: (0..1, 0..1),
-            };
-            cmd_buffer.pipeline_barrier(&[rtv_present_barrier]);
+            if do_barriers {
+                let rtv_present_barrier = m::Barrier::Image {
+                    state_src: (i::COLOR_ATTACHMENT_WRITE, i::ImageLayout::ColorAttachmentOptimal),
+                    state_dst: (i::Access::empty(), i::ImageLayout::Present),
+                    target: rtv,
+                    range: (0..1, 0..1),
+                };
+                cmd_buffer.pipeline_barrier(pso::PIXEL_SHADER, pso::TRANSFER, &[rtv_present_barrier]);
+            }
 
             cmd_buffer.finish()
         };
