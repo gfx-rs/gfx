@@ -15,7 +15,6 @@ dx12 = ["gfx_device_dx12", "gfx_window_dxgi"]
 vulkan = ["gfx_backend_vulkan"]
 #sdl = ["gfx_window_sdl"]
 serialize = ["gfx/serialize", "gfx_core/serialize"]
-#headless = ["gfx_window_glutin/headless"]
 unstable = []
 
 [dependencies]
@@ -35,7 +34,10 @@ gfx = { path = "../src/render", version = "0.16" }
 gfx_core = { path = "../src/core", version = "0.10" }
 gfx_support = { path = "../src/support", version = "0.7" }
 
-gfx_backend_gl = { path = "../src/backend/gl", version = "0.1", optional = true }
+[dependencies.gfx_backend_gl]
+path = "../src/backend/gl"
+version = "0.1"
+optional = true
 
 [dependencies.gfx_backend_vulkan]
 path = "../src/backend/vulkan"
