@@ -193,8 +193,10 @@ impl Instance {
             _debug_report: debug_report,
         }
     }
+}
 
-    pub fn enumerate_adapters(&self) -> Vec<Adapter> {
+impl core::Instance<Backend> for Instance {
+    fn enumerate_adapters(&self) -> Vec<Adapter> {
         self.raw.0.enumerate_physical_devices()
             .expect("Unable to enumerate adapter")
             .iter()

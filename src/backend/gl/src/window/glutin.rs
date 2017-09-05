@@ -8,7 +8,7 @@
 //! extern crate gfx_backend_gl;
 //!
 //! fn main() {
-//!     use gfx_window_glutin::Window;
+//!     use gfx_backend_gl::Surface;
 //!     use glutin::{EventsLoop, WindowBuilder, ContextBuilder, GlWindow};
 //!
 //!     // First create a window using glutin.
@@ -17,14 +17,14 @@
 //!     let cb = ContextBuilder::new().with_vsync(true);
 //!     let glutin_window = GlWindow::new(wb, cb, &events_loop).unwrap();
 //!
-//!     // Then use the glutin window to create a gfx window.
-//!     let window = Window::new(glutin_window);
+//!     // Then use the glutin window to create a gfx surface.
+//!     let surface = Surface::from_window(glutin_window);
 //! }
 //! ```
 
 use core::{self, format, image, memory};
 
-use {native as n, Adapter, Backend as B, CommandQueue, QueueFamily};
+use {native as n, Adapter, Backend as B, QueueFamily};
 
 use glutin::{self, GlContext};
 use std::rc::Rc;
@@ -84,7 +84,7 @@ impl core::Swapchain<B> for Swapchain {
     }
 
     fn present<C>(&mut self, _: &mut core::CommandQueue<B, C>, _: &[&n::Semaphore]) {
-        self.window.swap_buffers();
+        self.window.swap_buffers().unwrap();
     }
 }
 
@@ -105,8 +105,8 @@ impl core::Surface<B> for Surface {
 
     fn build_swapchain<C>(
         &mut self,
-        config: core::SwapchainConfig,
-        present_queue: &core::CommandQueue<B, C>,
+        _config: core::SwapchainConfig,
+        _: &core::CommandQueue<B, C>,
     ) -> Swapchain {
         let backbuffer = core::Backbuffer {
             color: n::Image::Surface(0),
@@ -117,6 +117,14 @@ impl core::Surface<B> for Surface {
             window: self.window.clone(),
             backbuffer: [backbuffer; 1],
         }
+    }
+}
+
+impl core::Instance<B> for Surface {
+    fn enumerate_adapters(&self) -> Vec<Adapter> {
+        unsafe { self.window.make_current().unwrap() };
+        let adapter = Adapter::new(|s| self.window.get_proc_address(s) as *const _);
+        vec![adapter]
     }
 }
 
@@ -135,20 +143,30 @@ pub fn config_context(
         .with_srgb(color_format.1 == format::ChannelType::Srgb)
 }
 
-/*
-impl core::WindowExt<B> for Window {
-    type Surface = Surface;
-    type Adapter = Adapter;
 
-    fn get_surface_and_adapters(&mut self) -> (Surface, Vec<Adapter>) {
+pub struct Headless(pub glutin::HeadlessContext);
+
+impl core::Instance<B> for Headless {
+    fn enumerate_adapters(&self) -> Vec<Adapter> {
         unsafe { self.0.make_current().unwrap() };
-        let adapter = Adapter::new(|s| self.0.get_proc_address(s) as *const std::os::raw::c_void);
-        let surface = Surface {
-            window: self.0.clone(),
-            manager: handle::Manager::new(),
-        };
-
-        (surface, vec![adapter])
+        let adapter = Adapter::new(|s| self.0.get_proc_address(s) as *const _);
+        vec![adapter]
     }
 }
-*/
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_headless() {
+        use core::Instance;
+        use glutin::{HeadlessRendererBuilder};
+        let context = HeadlessRendererBuilder::new(256, 256)
+            .build()
+            .expect("Failed to build headless context");
+
+        let headless = Headless(context);
+        let _adapters = headless.enumerate_adapters();
+    }
+}

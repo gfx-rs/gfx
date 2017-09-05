@@ -11,8 +11,8 @@ extern crate winit;
 extern crate image;
 
 use core::{buffer, command, device as d, image as i, memory as m, pass, pso, pool, state};
-use core::{Adapter, Device, QueueType};
-use core::{DescriptorPool, Gpu, FrameSync, Primitive, Surface, Swapchain, SwapchainConfig};
+use core::{Adapter, Device, Instance};
+use core::{DescriptorPool, Gpu, FrameSync, Primitive, QueueType, Surface, Swapchain, SwapchainConfig};
 use core::format::{Formatted, Srgba8 as ColorFormat, Vec2};
 use core::pass::SubPass;
 use core::queue::Submission;
