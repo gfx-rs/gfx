@@ -122,7 +122,7 @@ impl core::Surface<Backend> for Surface {
         &mut self,
         config: core::SwapchainConfig,
         present_queue: &core::CommandQueue<Backend, C>,
-    ) -> Self::Swapchain {
+    ) -> Swapchain {
         let functor = ext::Swapchain::new(&self.raw.instance.0, &present_queue.as_raw().device().0)
             .expect("Unable to query swapchain function");
 

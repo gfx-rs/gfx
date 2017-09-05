@@ -214,9 +214,16 @@ pub struct HeapType {
     pub heap_index: usize,
 }
 
+/// Basic backend instance trait.
+pub trait Instance<B: Backend> {
+    /// Enumerate all available adapters.
+    fn enumerate_adapters(&self) -> Vec<B::Adapter>;
+}
+
 /// Different types of a specific API.
 #[allow(missing_docs)]
 pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
+    //type Instance:          Instance<Self>;
     type Adapter:             Adapter<Self>;
     type Device:              Device<Self>;
 
@@ -306,13 +313,4 @@ pub struct Gpu<B: Backend> {
     pub heap_types: Vec<HeapType>,
     /// Memory heaps.
     pub memory_heaps: Vec<u64>,
-}
-
-/// Main entry point for window-less backend initialization.
-pub trait Headless<B: Backend> {
-    /// Associated `Adapter` type.
-    type Adapter: Adapter<B>;
-
-    /// Enumerate all available adapters.
-    fn get_adapters(&mut self) -> Vec<Self::Adapter>;
 }

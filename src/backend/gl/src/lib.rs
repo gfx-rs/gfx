@@ -32,7 +32,7 @@ mod pool;
 mod state;
 
 #[cfg(feature = "glutin")]
-pub use window::glutin::{Surface, Swapchain};
+pub use window::glutin::{Headless, Surface, Swapchain};
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Backend {}
@@ -141,8 +141,7 @@ pub fn create_main_targets_raw(dim: t::Dimensions, color_format: format::Surface
 */
 
 /// Internal struct of shared data between the device and its factories.
-#[doc(hidden)]
-pub struct Share {
+struct Share {
     context: gl::Gl,
     info: Info,
     features: c::Features,
@@ -171,8 +170,7 @@ pub struct Adapter {
 }
 
 impl Adapter {
-    #[doc(hidden)]
-    pub fn new<F>(fn_proc: F) -> Self where
+    fn new<F>(fn_proc: F) -> Self where
         F: FnMut(&str) -> *const std::os::raw::c_void
     {
         let gl = gl::Gl::load_with(fn_proc);
