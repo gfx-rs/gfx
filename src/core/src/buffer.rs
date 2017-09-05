@@ -62,13 +62,17 @@ bitflags!(
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
     pub flags Access: u16 {
         ///
-        const INDEX_BUFFER_READ      = 0x1,
+        const TRANSFER_READ          = 0x01,
         ///
-        const VERTEX_BUFFER_READ     = 0x2,
+        const TRANSFER_WRITE         = 0x02,
         ///
-        const CONSTANT_BUFFER_READ   = 0x4,
+        const INDEX_BUFFER_READ      = 0x10,
         ///
-        const INDIRECT_COMMAND_READ  = 0x8,
+        const VERTEX_BUFFER_READ     = 0x20,
+        ///
+        const CONSTANT_BUFFER_READ   = 0x40,
+        ///
+        const INDIRECT_COMMAND_READ  = 0x80,
     }
 );
 

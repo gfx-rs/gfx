@@ -19,7 +19,12 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     fn reset(&mut self, release_resources: bool);
 
     ///
-    fn pipeline_barrier(&mut self, &[Barrier<B>]);
+    fn pipeline_barrier(
+        &mut self,
+        src_stages: pso::PipelineStage,
+        dst_stages: pso::PipelineStage,
+        barriers: &[Barrier<B>],
+    );
 
     ///
     fn clear_color(&mut self, &B::RenderTargetView, ImageLayout, ClearColor);
