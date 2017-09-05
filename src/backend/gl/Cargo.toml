@@ -1,6 +1,6 @@
 [package]
-name = "gfx_device_gl"
-version = "0.14.0"
+name = "gfx_backend_gl"
+version = "0.1.0"
 description = "OpenGL backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -12,10 +12,15 @@ documentation = "https://docs.rs/gfx_device_gl"
 workspace = "../../.."
 
 [lib]
-name = "gfx_device_gl"
+name = "gfx_backend_gl"
+
+[features]
+default = ["glutin"]
+headless = ["glutin"]
 
 [dependencies]
 log = "0.3"
 gfx_gl = "0.3.1"
 gfx_core = { path = "../../core", version = "0.10" }
 smallvec = "0.4"
+glutin = { version = "0.9", optional = true }

@@ -12,10 +12,10 @@ members = [
     "src/render",
     "src/support",
     "src/window/dxgi",
-    "src/window/glfw",
-    "src/window/glutin",
+    #"src/window/glfw",
+    #"src/window/glutin",
     "src/window/metal",
-    "src/window/sdl",
+    #"src/window/sdl",
     "examples",
     "examples/core/quad"
 ]
