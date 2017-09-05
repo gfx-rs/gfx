@@ -24,7 +24,6 @@ dx11 = ["gfx_device_dx11", "gfx_window_dxgi"]
 dx12 = ["gfx_device_dx12", "gfx_window_dxgi"]
 vulkan = ["gfx_backend_vulkan"]
 serialize = ["gfx/serialize", "gfx_core/serialize"]
-#headless = ["gfx_window_glutin/headless"]
 unstable = []
 
 [dependencies.gfx_backend_vulkan]
@@ -62,7 +61,10 @@ winit = "0.7"
 gfx_core = { path = "../core", version = "0.10" }
 gfx = { path = "../render", version = "0.16" }
 
-gfx_backend_gl = { path = "../backend/gl", version = "0.1", optional = true }
+[dependencies.gfx_backend_gl]
+path = "../backend/gl"
+version = "0.1"
+optional = true
 
 [dev-dependencies]
 cgmath = "0.15"
