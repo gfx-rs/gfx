@@ -6,10 +6,55 @@ use gl;
 use gl::types::{GLint, GLfloat};
 use core::{self as c, device as d, image as i, memory, pass, pso, buffer, mapping};
 use core::format::Format;
+use std::iter::repeat;
 
 use {Backend as B, Share};
 use {conv, device, native as n, state};
 
+
+fn get_shader_iv(gl: &gl::Gl, name: n::Shader, query: gl::types::GLenum) -> gl::types::GLint {
+    let mut iv = 0;
+    unsafe { gl.GetShaderiv(name, query, &mut iv) };
+    iv
+}
+
+fn get_program_iv(gl: &gl::Gl, name: n::Program, query: gl::types::GLenum) -> gl::types::GLint {
+    let mut iv = 0;
+    unsafe { gl.GetProgramiv(name, query, &mut iv) };
+    iv
+}
+
+fn get_shader_log(gl: &gl::Gl, name: n::Shader) -> String {
+    let mut length = get_shader_iv(gl, name, gl::INFO_LOG_LENGTH);
+    if length > 0 {
+        let mut log = String::with_capacity(length as usize);
+        log.extend(repeat('\0').take(length as usize));
+        unsafe {
+            gl.GetShaderInfoLog(name, length, &mut length,
+                (&log[..]).as_ptr() as *mut gl::types::GLchar);
+        }
+        log.truncate(length as usize);
+        log
+    } else {
+        String::new()
+    }
+}
+
+pub fn get_program_log(gl: &gl::Gl, name: n::Program) -> String {
+    let mut length  = get_program_iv(gl, name, gl::INFO_LOG_LENGTH);
+    if length > 0 {
+        let mut log = String::with_capacity(length as usize);
+        log.extend(repeat('\0').take(length as usize));
+        unsafe {
+            gl.GetProgramInfoLog(name, length, &mut length,
+                (&log[..]).as_ptr() as *mut gl::types::GLchar);
+        }
+        log.truncate(length as usize);
+        log
+    } else {
+        String::new()
+    }
+}
 
 #[derive(Debug)]
 #[allow(missing_copy_implementations)]
@@ -51,7 +96,49 @@ pub struct Mapping {
 unsafe impl Send for Mapping {}
 unsafe impl Sync for Mapping {}
 
+impl Device {
+    pub fn create_shader_library_from_source(
+        &mut self,
+        shaders: &[(pso::EntryPoint, pso::Stage, &[u8])],
+    ) -> Result<n::ShaderLib, pso::CreateShaderError> {
+        let gl = &self.share.context;
+        let mut shader_lib = n::ShaderLib::new();
 
+        for &(entry_point, stage, data) in shaders {
+            let target = match stage {
+                pso::Stage::Vertex   => gl::VERTEX_SHADER,
+                pso::Stage::Hull     => gl::TESS_CONTROL_SHADER,
+                pso::Stage::Domain   => gl::TESS_EVALUATION_SHADER,
+                pso::Stage::Geometry => gl::GEOMETRY_SHADER,
+                pso::Stage::Pixel    => gl::FRAGMENT_SHADER,
+                pso::Stage::Compute  => gl::COMPUTE_SHADER,
+            };
+
+            let name = unsafe { gl.CreateShader(target) };
+            unsafe {
+                gl.ShaderSource(name, 1,
+                    &(data.as_ptr() as *const gl::types::GLchar),
+                    &(data.len() as gl::types::GLint));
+                gl.CompileShader(name);
+            }
+            info!("\tCompiled shader {}", name);
+
+            let status = get_shader_iv(gl, name, gl::COMPILE_STATUS);
+            let log = get_shader_log(gl, name);
+            if status != 0 {
+                if !log.is_empty() {
+                    warn!("\tLog: {}", log);
+                }
+                shader_lib.shaders.insert(entry_point, name);
+            } else {
+                return Err(pso::CreateShaderError::CompilationFailed(log))
+            }
+        }
+
+        Ok(shader_lib)
+    }
+
+}
 impl d::Device<B> for Device {
     fn get_features(&self) -> &c::Features {
         &self.share.features
@@ -66,18 +153,75 @@ impl d::Device<B> for Device {
     }
 
     fn create_renderpass(&mut self, _: &[pass::Attachment], _: &[pass::SubpassDesc], _: &[pass::SubpassDependency]) -> n::RenderPass {
-        unimplemented!()
+        n::RenderPass
     }
 
     fn create_pipeline_layout(&mut self, _: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
-        unimplemented!()
+        n::PipelineLayout
     }
 
     fn create_graphics_pipelines<'a>(
         &mut self,
         _descs: &[(&n::ShaderLib, &n::PipelineLayout, pass::SubPass<'a, B>, &pso::GraphicsPipelineDesc)],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
-        unimplemented!()
+        let gl = &self.share.context;
+        let priv_caps = &self.share.private_caps;
+        descs.iter()
+             .map(|&(shader_lib, layout, ref subpass, desc)| {
+                let program = {
+                    let name = unsafe { gl.CreateProgram() };
+
+                    let attach_shader = |shader: Option<pso::EntryPoint>| {
+                        if let Some(shader) = shader {
+                            match shader_lib.shaders.get(&desc.shader_entries.vertex_shader) {
+                                Some(&shader) => unsafe { gl.AttachShader(name, shader); },
+                                None => return Err(pso::CreationError),
+                            }
+                        }
+
+                        Ok(())
+                    };
+
+                    let entries = &desc.shader_entries;
+                    attach_shader(Some(entries.vertex_shader))?;
+                    attach_shader(entries.hull_shader)?;
+                    attach_shader(entries.domain_shader)?;
+                    attach_shader(entries.geometry_shader)?;
+                    attach_shader(entries.pixel_shader)?;
+
+                    // TODO:
+                    /*
+                    if !priv_caps.program_interface_supported && priv_caps.frag_data_location_supported {
+                        for i in 0..c::MAX_COLOR_TARGETS {
+                            let color_name = format!("Target{}\0", i);
+                            unsafe {
+                                gl.BindFragDataLocation(name, i as u32, (&color_name[..]).as_ptr() as *mut gl::types::GLchar);
+                            }
+                         }
+                    }
+                    */
+
+                    unsafe { gl.LinkProgram(name) };
+                    info!("\tLinked program {}", name);
+
+                    let status = get_program_iv(gl, name, gl::LINK_STATUS);
+                    let log = get_program_log(gl, name);
+                    if status != 0 {
+                        if !log.is_empty() {
+                            warn!("\tLog: {}", log);
+                        }
+                    } else {
+                        return Err(pso::CreationError);
+                    }
+
+                    name
+                };
+
+                Ok(n::GraphicsPipeline {
+                    program,
+                })
+             })
+             .collect()
     }
 
     fn create_compute_pipelines(
@@ -199,22 +343,28 @@ impl d::Device<B> for Device {
     }
 
     fn create_descriptor_pool(&mut self, _: usize, _: &[pso::DescriptorRangeDesc]) -> n::DescriptorPool {
-        unimplemented!()
+        n::DescriptorPool { }
     }
 
     fn create_descriptor_set_layout(&mut self, _: &[pso::DescriptorSetLayoutBinding]) -> n::DescriptorSetLayout {
-        unimplemented!()
+        n::DescriptorSetLayout
     }
 
     fn update_descriptor_sets(&mut self, _: &[pso::DescriptorSetWrite<B>]) {
         unimplemented!()
     }
 
-    fn read_mapping<'a, T>(&self, _: &'a n::Buffer, _: u64, _: u64)
-                           -> Result<mapping::Reader<'a, B, T>, mapping::Error>
-        where T: Copy {
-            unimplemented!()
-        }
+    fn read_mapping<'a, T>(
+        &self,
+        _: &'a n::Buffer,
+        _: u64,
+        _: u64,
+    ) -> Result<mapping::Reader<'a, B, T>, mapping::Error>
+    where
+        T: Copy,
+    {
+        unimplemented!()
+    }
 
     fn write_mapping<'a, 'b, T>(&mut self, _: &'a n::Buffer, _: u64, _: u64)
                                 -> Result<mapping::Writer<'a, B, T>, mapping::Error>
