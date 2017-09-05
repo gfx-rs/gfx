@@ -99,6 +99,11 @@ fn main() {
             include_str!("shader/quad.metal"),
             back::LanguageVersion::new(1, 1),
         ).expect("Error on creating shader lib");
+    #[cfg(feature = "gl")]
+    let shader_lib = device.create_shader_library_from_source(&[
+            (VS, pso::Stage::Vertex, include_bytes!("shader/quad_450.glslv")),
+            (PS, pso::Stage::Pixel, include_bytes!("shader/quad_450.glslf")),
+        ]).expect("Error on creating shader lib");
 
     let shader_entries = pso::GraphicsShaderSet {
         vertex_shader: VS,

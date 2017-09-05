@@ -1,11 +1,12 @@
 
 use conv;
-use core;
+use core::{self, pso};
 use core::target::{Layer, Level};
 use core::image as i;
 use gl;
 use Backend;
 use std::cell::Cell;
+use std::collections::BTreeMap;
 
 pub type Buffer      = gl::types::GLuint;
 pub type Shader      = gl::types::GLuint;
@@ -28,7 +29,7 @@ impl Fence {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct ResourceView {
-    pub(crate) object: Texture,
+    pub object: Texture,
     pub(crate) bind: gl::types::GLenum,
     pub(crate) owned: bool,
 }
@@ -53,12 +54,12 @@ impl ResourceView {
 
 #[derive(Clone, Debug, Copy)]
 pub struct GraphicsPipeline {
-    program: Program,
+    pub program: Program,
 }
 
 #[derive(Clone, Debug, Copy)]
 pub struct ComputePipeline {
-    program: Program,
+    pub program: Program,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -93,7 +94,7 @@ pub struct DescriptorPool {}
 
 impl core::DescriptorPool<Backend> for DescriptorPool {
     fn allocate_sets(&mut self, _layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
-        unimplemented!()
+        layouts.iter().map(|_| DescriptorSet).collect()
     }
 
     fn reset(&mut self) {
@@ -101,12 +102,22 @@ impl core::DescriptorPool<Backend> for DescriptorPool {
     }
 }
 
+#[derive(Clone, Debug, Hash)]
+pub struct ShaderLib {
+    pub shaders: BTreeMap<pso::EntryPoint, Shader>,
+}
+
+impl ShaderLib {
+    pub fn new() -> Self {
+        ShaderLib {
+            shaders: BTreeMap::new(),
+        }
+    }
+}
+
 #[derive(Debug)]
 #[allow(missing_copy_implementations)]
 pub struct Heap;
-#[derive(Debug)]
-#[allow(missing_copy_implementations)]
-pub struct ShaderLib;
 #[derive(Debug)]
 #[allow(missing_copy_implementations)]
 pub struct RenderPass;
