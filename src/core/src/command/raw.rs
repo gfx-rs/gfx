@@ -139,15 +139,15 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         &mut self,
         src: &B::Buffer,
         dst: &B::Image,
-        layout: ImageLayout,
+        dst_layout: ImageLayout,
         regions: &[BufferImageCopy],
     );
     ///
     fn copy_image_to_buffer(
         &mut self,
         src: &B::Image,
+        src_layout: ImageLayout,
         dst: &B::Buffer,
-        layout: ImageLayout,
         regions: &[BufferImageCopy],
     );
     ///
