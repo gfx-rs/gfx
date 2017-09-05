@@ -68,7 +68,7 @@ impl CommandBuffer {
                     Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
                     Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
                     u: winapi::D3D12_RESOURCE_TRANSITION_BARRIER {
-                        pResource: barrier.image.resource.as_mut_ptr(),
+                        pResource: unsafe { barrier.image.resource.as_mut_ptr() },
                         Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
                         StateBefore: state_src,
                         StateAfter: state_dst,
@@ -126,12 +126,12 @@ impl CommandBuffer {
                             _layout: memory::ImageLayout, regions: &[command::BufferImageCopy]) {
         //TODO: handle layout?
         let mut src = winapi::D3D12_TEXTURE_COPY_LOCATION {
-            pResource: buffer.resource.as_mut_ptr(),
+            pResource: unsafe { buffer.resource.as_mut_ptr() },
             Type: winapi::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
             u: unsafe { mem::zeroed() },
         };
         let mut dest = winapi::D3D12_TEXTURE_COPY_LOCATION {
-            pResource: image.resource.as_mut_ptr(),
+            pResource: unsafe { image.resource.as_mut_ptr() },
             Type: winapi::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
             u: unsafe { mem::zeroed() },
         };
@@ -206,11 +206,11 @@ impl CommandBuffer {
         let mut heaps = [ptr::null_mut(); 2];
         let mut count = 0;
         if let Some(heap) = srv_cbv_uav {
-            heaps[count] = heap.inner.as_mut_ptr();
+            heaps[count] = unsafe { heap.inner.as_mut_ptr() };
             count += 1;
         }
         if let Some(heap) = samplers {
-            heaps[count] = heap.inner.as_mut_ptr();
+            heaps[count] = unsafe { heap.inner.as_mut_ptr() };
             count += 1;
         }
         unsafe {
