@@ -511,7 +511,7 @@ pub enum ImageLayout {
     ///
     TransferDstOptimal,
     ///
-    Undefined,
+    Undefined, //TODO: consider Option<> instead?
     ///
     Preinitialized,
     ///

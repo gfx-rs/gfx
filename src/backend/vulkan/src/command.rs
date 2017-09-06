@@ -157,28 +157,28 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
 
         for barrier in barriers {
             match *barrier {
-                memory::Barrier::AllBuffers { access_src, access_dst } => {
+                memory::Barrier::AllBuffers(ref access) => {
                     memory_bars.push(vk::MemoryBarrier {
                         s_type: vk::StructureType::MemoryBarrier,
                         p_next: ptr::null(),
-                        src_access_mask: conv::map_buffer_access(access_src),
-                        dst_access_mask: conv::map_buffer_access(access_dst),
+                        src_access_mask: conv::map_buffer_access(access.start),
+                        dst_access_mask: conv::map_buffer_access(access.end),
                     });
                 }
-                memory::Barrier::AllImages { access_src, access_dst } => {
+                memory::Barrier::AllImages(ref access) => {
                     memory_bars.push(vk::MemoryBarrier {
                         s_type: vk::StructureType::MemoryBarrier,
                         p_next: ptr::null(),
-                        src_access_mask: conv::map_image_access(access_src),
-                        dst_access_mask: conv::map_image_access(access_dst),
+                        src_access_mask: conv::map_image_access(access.start),
+                        dst_access_mask: conv::map_image_access(access.end),
                     });
                 }
-                memory::Barrier::Buffer { state_src, state_dst, target, ref range } => {
+                memory::Barrier::Buffer { ref states, target, ref range } => {
                     buffer_bars.push(vk::BufferMemoryBarrier {
                         s_type: vk::StructureType::BufferMemoryBarrier,
                         p_next: ptr::null(),
-                        src_access_mask: conv::map_buffer_access(state_src),
-                        dst_access_mask: conv::map_buffer_access(state_dst),
+                        src_access_mask: conv::map_buffer_access(states.start),
+                        dst_access_mask: conv::map_buffer_access(states.end),
                         src_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
                         dst_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
                         buffer: target.raw,
@@ -186,15 +186,15 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                         size: range.end - range.start,
                     });
                 }
-                memory::Barrier::Image { state_src, state_dst, target, ref range } => {
+                memory::Barrier::Image { ref states, target, ref range } => {
                     let subresource_range = conv::map_subresource_range(vk::IMAGE_ASPECT_COLOR_BIT, range);
                     image_bars.push(vk::ImageMemoryBarrier {
                         s_type: vk::StructureType::ImageMemoryBarrier,
                         p_next: ptr::null(),
-                        src_access_mask: conv::map_image_access(state_src.0),
-                        dst_access_mask: conv::map_image_access(state_dst.0),
-                        old_layout: conv::map_image_layout(state_src.1),
-                        new_layout: conv::map_image_layout(state_dst.1),
+                        src_access_mask: conv::map_image_access(states.start.0),
+                        dst_access_mask: conv::map_image_access(states.end.0),
+                        old_layout: conv::map_image_layout(states.start.1),
+                        new_layout: conv::map_image_layout(states.end.1),
                         src_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
                         dst_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
                         image: target.raw,

@@ -133,12 +133,9 @@ fn main() {
     let render_pass = {
         let attachment = pass::Attachment {
             format: ColorFormat::get_format(),
-            load_op: pass::AttachmentLoadOp::Clear,
-            store_op: pass::AttachmentStoreOp::Store,
-            stencil_load_op: pass::AttachmentLoadOp::DontCare,
-            stencil_store_op: pass::AttachmentStoreOp::DontCare,
-            src_layout: i::ImageLayout::Undefined, // TODO: maybe Option<_> here?
-            dst_layout: i::ImageLayout::Present,
+            ops: pass::AttachmentOps::new(pass::AttachmentLoadOp::Clear, pass::AttachmentStoreOp::Store),
+            stencil_ops: pass::AttachmentOps::DONT_CARE,
+            layouts: i::ImageLayout::Undefined .. i::ImageLayout::Present,
         };
 
         let subpass = pass::SubpassDesc {
@@ -146,12 +143,9 @@ fn main() {
         };
 
         let dependency = pass::SubpassDependency {
-            src_pass: pass::SubpassRef::External,
-            dst_pass: pass::SubpassRef::Pass(0),
-            src_stage: pso::COLOR_ATTACHMENT_OUTPUT,
-            dst_stage: pso::COLOR_ATTACHMENT_OUTPUT,
-            src_access: i::Access::empty(),
-            dst_access: i::COLOR_ATTACHMENT_READ | i::COLOR_ATTACHMENT_WRITE,
+            passes: pass::SubpassRef::External .. pass::SubpassRef::Pass(0),
+            stages: pso::COLOR_ATTACHMENT_OUTPUT .. pso::COLOR_ATTACHMENT_OUTPUT,
+            accesses: i::Access::empty() .. (i::COLOR_ATTACHMENT_READ | i::COLOR_ATTACHMENT_WRITE),
         };
 
         device.create_renderpass(&[attachment], &[subpass], &[dependency])
@@ -334,8 +328,8 @@ fn main() {
             let mut cmd_buffer = graphics_pool.acquire_command_buffer();
 
             let image_barrier = m::Barrier::Image {
-                state_src: (i::Access::empty(), i::ImageLayout::Undefined),
-                state_dst: (i::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal),
+                states: (i::Access::empty(), i::ImageLayout::Undefined) ..
+                        (i::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal),
                 target: &image_logo,
                 range: (0..1, 0..1),
             };
@@ -356,8 +350,8 @@ fn main() {
                 }]);
 
             let image_barrier = m::Barrier::Image {
-                state_src: (i::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal),
-                state_dst: (i::SHADER_READ, i::ImageLayout::ShaderReadOnlyOptimal),
+                states: (i::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal) ..
+                        (i::SHADER_READ, i::ImageLayout::ShaderReadOnlyOptimal),
                 target: &image_logo,
                 range: (0..1, 0..1),
             };
@@ -404,8 +398,8 @@ fn main() {
             let rtv = &swap_chain.get_backbuffers()[frame.id()].color;
             if do_barriers {
                 let rtv_target_barrier = m::Barrier::Image {
-                    state_src: (i::Access::empty(), i::ImageLayout::Undefined),
-                    state_dst: (i::COLOR_ATTACHMENT_WRITE, i::ImageLayout::ColorAttachmentOptimal),
+                    states: (i::Access::empty(), i::ImageLayout::Undefined) ..
+                            (i::COLOR_ATTACHMENT_WRITE, i::ImageLayout::ColorAttachmentOptimal),
                     target: rtv,
                     range: (0..1, 0..1),
                 };
@@ -430,8 +424,8 @@ fn main() {
 
             if do_barriers {
                 let rtv_present_barrier = m::Barrier::Image {
-                    state_src: (i::COLOR_ATTACHMENT_WRITE, i::ImageLayout::ColorAttachmentOptimal),
-                    state_dst: (i::Access::empty(), i::ImageLayout::Present),
+                    states: (i::COLOR_ATTACHMENT_WRITE, i::ImageLayout::ColorAttachmentOptimal) ..
+                            (i::Access::empty(), i::ImageLayout::Present),
                     target: rtv,
                     range: (0..1, 0..1),
                 };
