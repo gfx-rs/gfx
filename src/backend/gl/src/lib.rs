@@ -528,7 +528,7 @@ impl CommandQueue {
                 self.state.index_buffer = Some(buffer);
                 unsafe { gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer) };
             }
-            Command::BindVertexBuffers(data_ptr) => {
+            Command::BindVertexBuffers(_data_ptr) => {
                 unimplemented!()
             }
             Command::Draw { primitive, ref vertices, ref instances } => {
@@ -697,7 +697,8 @@ impl CommandQueue {
             Command::SetBlendColor(color) => {
                 state::set_blend_color(&self.share.context, color);
             }
-            Command::ClearColor(texture, c) => {
+            Command::ClearColor(_texture, c) => {
+                //TODO: check texture?
                 let gl = &self.share.context;
                 state::unlock_color_mask(gl);
                 if self.share.private_caps.clear_buffer_supported {

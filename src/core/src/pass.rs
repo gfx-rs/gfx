@@ -4,6 +4,7 @@ use format::Format;
 use image;
 use pso::PipelineStage;
 use Backend;
+use std::ops::Range;
 
 /// Specifies the operation which will be applied at the beginning of a subpass.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
@@ -30,24 +31,43 @@ pub enum AttachmentStoreOp {
 /// Image layout of an attachment.
 pub type AttachmentLayout = image::ImageLayout;
 
+/// Attachment operations.
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+pub struct AttachmentOps {
+    ///
+    pub load: AttachmentLoadOp,
+    ///
+    pub store: AttachmentStoreOp,
+}
+
+impl AttachmentOps {
+    ///
+    pub const DONT_CARE: Self = AttachmentOps {
+        load: AttachmentLoadOp::DontCare,
+        store: AttachmentStoreOp::DontCare,
+    };
+    ///
+    pub fn new(load: AttachmentLoadOp, store: AttachmentStoreOp) -> Self {
+        AttachmentOps {
+            load,
+            store,
+        }
+    }
+}
+
 ///
 #[derive(Clone, Debug, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct Attachment {
     ///
     pub format: Format,
-    ///
-    pub load_op: AttachmentLoadOp,
-    ///
-    pub store_op: AttachmentStoreOp,
-    ///
-    pub stencil_load_op: AttachmentLoadOp,
-    ///
-    pub stencil_store_op:AttachmentStoreOp,
-    /// Initial image layout in the beginning of the renderpass.
-    pub src_layout: AttachmentLayout,
-    /// Final image layout at the end of the renderpass.
-    pub dst_layout: AttachmentLayout,
+    /// load and store operations of the attachment
+    pub ops: AttachmentOps,
+    /// load and store operations of the stencil aspect, if any
+    pub stencil_ops: AttachmentOps,
+    /// Initial and final image layouts of the renderpass.
+    pub layouts: Range<AttachmentLayout>,
 }
 
 /// Reference to an attachment by index and expected image layout.
@@ -64,21 +84,15 @@ pub enum SubpassRef {
 }
 
 /// Specifies dependencies between subpasses.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct SubpassDependency {
     ///
-    pub src_pass: SubpassRef,
+    pub passes: Range<SubpassRef>,
     ///
-    pub dst_pass: SubpassRef,
+    pub stages: Range<PipelineStage>,
     ///
-    pub src_stage: PipelineStage,
-    ///
-    pub dst_stage: PipelineStage,
-    ///
-    pub src_access: image::Access,
-    ///
-    pub dst_access: image::Access,
+    pub accesses: Range<image::Access>,
 }
 
 /// Description of a subpass for renderpass creation.
