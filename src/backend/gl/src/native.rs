@@ -67,7 +67,7 @@ pub enum Image {
     Texture(Texture),
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 /// Additionally storing the `SamplerInfo` for older OpenGL versions, which
 /// don't support separate sampler objects.
 pub enum FatSampler {

@@ -1,6 +1,7 @@
 use ash::vk;
 use core::{buffer, image, pass, pso, state};
-use core::command::{ClearColor, ClearValue, Extent, Offset};
+use core::command::{ClearColor, ClearValue, Offset};
+use core::device::Extent;
 use core::format::{SurfaceType, ChannelType};
 use core::{IndexType, Primitive};
 

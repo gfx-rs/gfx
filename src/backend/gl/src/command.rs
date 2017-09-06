@@ -3,13 +3,16 @@
 use gl;
 use core::{self as c, command, image, memory, target, Viewport};
 use core::buffer::IndexBufferView;
-use core::command::{BufferCopy, BufferImageCopy, ClearValue, ImageCopy, ImageResolve,
-                    InstanceParams, SubpassContents};
+use core::command::{
+    BufferCopy, BufferImageCopy, ClearValue, ImageCopy, ImageResolve, SubpassContents,
+};
 use core::target::{ColorValue, Stencil};
 use {native as n, Backend};
 use pool::{self, BufferMemory};
-use std::cell::UnsafeCell;
+
 use std::mem;
+use std::cell::UnsafeCell;
+use std::ops::Range;
 use std::sync::Arc;
 use std::sync::atomic::{self, AtomicBool};
 
@@ -52,23 +55,22 @@ impl BufferSlice {
 }
 
 ///
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum Command {
     Dispatch(u32, u32, u32),
     DispatchIndirect(gl::types::GLuint, u64),
     Draw {
         primitive: gl::types::GLenum,
-        start: c::VertexCount,
-        count: c::VertexCount,
-        instances: Option<InstanceParams>,
+        vertices: Range<c::VertexCount>,
+        instances: Range<c::InstanceCount>,
     },
     DrawIndexed {
         primitive: gl::types::GLenum,
         index_type: gl::types::GLenum,
-        start: c::VertexCount,
-        count: c::VertexCount,
-        base: c::VertexOffset,
-        instances: Option<InstanceParams>,
+        index_count: c::IndexCount,
+        index_buffer_offset: u64,
+        base_vertex: c::VertexOffset,
+        instances: Range<c::InstanceCount>,
     },
     BindIndexBuffer(gl::types::GLuint),
     BindVertexBuffers(BufferSlice),
@@ -293,25 +295,32 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     fn pipeline_barrier(
         &mut self,
-        _src_stages: c::pso::PipelineStage,
-        _dst_stages: c::pso::PipelineStage,
+        _stages: Range<c::pso::PipelineStage>,
         _barries: &[memory::Barrier<Backend>],
     ) {
         unimplemented!()
     }
 
+    fn fill_buffer(&mut self, _buffer: &n::Buffer, _range: Range<u64>, _data: u32) {
+        unimplemented!()
+    }
+
+    fn update_buffer(&mut self, _buffer: &n::Buffer, _offset: u64, _data: &[u8]) {
+        unimplemented!()
+    }
+
     fn begin_renderpass(
         &mut self,
-        render_pass: &n::RenderPass,
-        frame_buffer: &n::FrameBuffer,
-        render_area: target::Rect,
-        clear_values: &[ClearValue],
-        first_subpass: SubpassContents,
+        _render_pass: &n::RenderPass,
+        _frame_buffer: &n::FrameBuffer,
+        _render_area: target::Rect,
+        _clear_values: &[ClearValue],
+        _first_subpass: SubpassContents,
     ) {
         unimplemented!()
     }
 
-    fn next_subpass(&mut self, contents: SubpassContents) {
+    fn next_subpass(&mut self, _contents: SubpassContents) {
         unimplemented!()
     }
 
@@ -340,21 +349,21 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     fn clear_depth_stencil(
         &mut self,
-        dsv: &n::DepthStencilView,
+        _dsv: &n::DepthStencilView,
         _: image::ImageLayout,
-        depth: Option<target::Depth>,
-        stencil: Option<target::Stencil>,
+        _depth: Option<target::Depth>,
+        _stencil: Option<target::Stencil>,
     ) {
         unimplemented!()
     }
 
     fn resolve_image(
         &mut self,
-        src: &n::Image,
-        src_layout: image::ImageLayout,
-        dst: &n::Image,
-        dst_layout: image::ImageLayout,
-        regions: &[ImageResolve],
+        _src: &n::Image,
+        _src_layout: image::ImageLayout,
+        _dst: &n::Image,
+        _dst_layout: image::ImageLayout,
+        _regions: &[ImageResolve],
     ) {
         unimplemented!()
     }
@@ -369,7 +378,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         self.push_cmd(Command::BindIndexBuffer(*ibv.buffer));
     }
 
-    fn bind_vertex_buffers(&mut self, vbs: c::pso::VertexBufferSet<Backend>) {
+    fn bind_vertex_buffers(&mut self, _vbs: c::pso::VertexBufferSet<Backend>) {
         unimplemented!()
     }
 
@@ -502,17 +511,15 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     fn draw(
         &mut self,
-        start: c::VertexCount,
-        count: c::VertexCount,
-        instances: Option<InstanceParams>,
+        vertices: Range<c::VertexCount>,
+        instances: Range<c::InstanceCount>,
     ) {
         match self.cache.primitive {
             Some(primitive) => {
                 self.push_cmd(
                     Command::Draw {
                         primitive,
-                        start,
-                        count,
+                        vertices,
                         instances,
                     }
                 );
@@ -526,14 +533,13 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     fn draw_indexed(
         &mut self,
-        start: c::VertexCount,
-        count: c::VertexCount,
-        base: c::VertexOffset,
-        instances: Option<InstanceParams>,
+        indices: Range<c::IndexCount>,
+        base_vertex: c::VertexOffset,
+        instances: Range<c::InstanceCount>,
     ) {
         let (start, index_type) = match self.cache.index_type {
-            Some(c::IndexType::U16) => (start * 2u32, gl::UNSIGNED_SHORT),
-            Some(c::IndexType::U32) => (start * 4u32, gl::UNSIGNED_INT),
+            Some(c::IndexType::U16) => (indices.start * 2, gl::UNSIGNED_SHORT),
+            Some(c::IndexType::U32) => (indices.start * 4, gl::UNSIGNED_INT),
             None => {
                 warn!("No index type bound. An index buffer needs to be bound before calling `draw_indexed`.");
                 self.cache.error_state = true;
@@ -546,9 +552,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                     Command::DrawIndexed {
                         primitive,
                         index_type,
-                        start,
-                        count,
-                        base,
+                        index_count: indices.end - indices.start,
+                        index_buffer_offset: start as _,
+                        base_vertex,
                         instances,
                     }
                 );

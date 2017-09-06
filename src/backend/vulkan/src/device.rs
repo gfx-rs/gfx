@@ -6,6 +6,7 @@ use core::memory::Requirements;
 use native as n;
 use std::{mem, ptr, slice};
 use std::collections::BTreeMap;
+use std::ops::Range;
 use std::sync::Arc;
 
 use {Backend as B, Device, RawDevice};
@@ -678,21 +679,21 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_framebuffer(&mut self, renderpass: &n::RenderPass,
-        color_attachments: &[&n::RenderTargetView], depth_stencil_attachments: &[&n::DepthStencilView],
-        width: u32, height: u32, layers: u32) -> n::FrameBuffer
-    {
-        let attachments = {
-            let mut views = color_attachments.iter()
+    fn create_framebuffer(
+        &mut self,
+        renderpass: &n::RenderPass,
+        color_attachments: &[&n::RenderTargetView],
+        depth_stencil_attachments: &[&n::DepthStencilView],
+        extent: d::Extent,
+    ) -> n::FrameBuffer {
+        let attachments = color_attachments
+            .iter()
+            .map(|attachment| attachment.view)
+            .chain(depth_stencil_attachments
+                .iter()
                 .map(|attachment| attachment.view)
-                .collect::<Vec<_>>();
-
-            views.extend(depth_stencil_attachments.iter()
-                .map(|attachment| attachment.view)
-                .collect::<Vec<_>>());
-
-            views
-        };
+            )
+            .collect::<Vec<_>>();
 
         let info = vk::FramebufferCreateInfo {
             s_type: vk::StructureType::FramebufferCreateInfo,
@@ -701,9 +702,9 @@ impl d::Device<B> for Device {
             render_pass: renderpass.raw,
             attachment_count: attachments.len() as u32,
             p_attachments: attachments.as_ptr(),
-            width: width,
-            height: height,
-            layers: layers,
+            width: extent.width,
+            height: extent.height,
+            layers: extent.depth,
         };
 
         let framebuffer = unsafe {
@@ -717,14 +718,14 @@ impl d::Device<B> for Device {
     fn create_sampler(&mut self, sampler_info: image::SamplerInfo) -> n::Sampler {
         use core::state::Comparison;
 
-        let (min, mag, mip, aniso) = conv::map_filter(sampler_info.filter);
+        let (min_filter, mag_filter, mipmap_mode, aniso) = conv::map_filter(sampler_info.filter);
         let info = vk::SamplerCreateInfo {
             s_type: vk::StructureType::SamplerCreateInfo,
             p_next: ptr::null(),
             flags: vk::SamplerCreateFlags::empty(),
-            mag_filter: mag,
-            min_filter: min,
-            mipmap_mode: mip,
+            mag_filter,
+            min_filter,
+            mipmap_mode,
             address_mode_u: conv::map_wrap(sampler_info.wrap_mode.0),
             address_mode_v: conv::map_wrap(sampler_info.wrap_mode.1),
             address_mode_w: conv::map_wrap(sampler_info.wrap_mode.2),
@@ -733,8 +734,8 @@ impl d::Device<B> for Device {
             max_anisotropy: aniso,
             compare_enable: if sampler_info.comparison.is_some() { vk::VK_TRUE } else { vk::VK_FALSE },
             compare_op: conv::map_comparison(sampler_info.comparison.unwrap_or(Comparison::Never)),
-            min_lod: sampler_info.lod_range.0.into(),
-            max_lod: sampler_info.lod_range.1.into(),
+            min_lod: sampler_info.lod_range.start.into(),
+            max_lod: sampler_info.lod_range.end.into(),
             border_color: match conv::map_border_color(sampler_info.border) {
                 Some(bc) => bc,
                 None => {
@@ -908,11 +909,10 @@ impl d::Device<B> for Device {
         Ok(image.0)
     }
 
-    fn view_buffer_as_constant(&mut self, buffer: &n::Buffer, offset: usize, size: usize) -> Result<n::ConstantBufferView, d::TargetViewError> {
+    fn view_buffer_as_constant(&mut self, buffer: &n::Buffer, range: Range<u64>) -> Result<n::ConstantBufferView, d::TargetViewError> {
         Ok(n::ConstantBufferView {
             buffer: buffer.raw,
-            offset: offset,
-            size: size,
+            range,
         })
     }
 
@@ -1042,8 +1042,8 @@ impl d::Device<B> for Device {
                     for cbv in cbvs {
                         buffer_infos.push(vk::DescriptorBufferInfo {
                             buffer: cbv.buffer,
-                            offset: cbv.offset as u64,
-                            range: cbv.size as u64,
+                            offset: cbv.range.start,
+                            range: cbv.range.end - cbv.range.start,
                         });
                     }
                 }
