@@ -22,7 +22,7 @@
 //! }
 //! ```
 
-use core::{self, format, image, memory};
+use core::{self, format, image};
 
 use {native as n, Adapter, Backend as B, QueueFamily};
 

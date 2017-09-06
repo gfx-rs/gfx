@@ -20,7 +20,7 @@ impl Supports<Transfer> for Compute { }
 
 /// Encoding the minimal capability to support a combination of other capabilities.
 pub trait Upper {
-    /// Resulting mininmal required capability.
+    /// Resulting minimal required capability.
     type Result;
 }
 

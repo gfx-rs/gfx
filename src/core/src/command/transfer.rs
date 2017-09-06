@@ -1,6 +1,7 @@
-
+use std::ops::Range;
 use Backend;
 use image;
+use device::Extent;
 use memory::Barrier;
 use pso::PipelineStage;
 use queue::capability::{Supports, Transfer};
@@ -17,18 +18,6 @@ pub struct Offset {
     pub y: i32,
     ///
     pub z: i32,
-}
-
-///
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-pub struct Extent {
-    ///
-    pub width: u32,
-    ///
-    pub height: u32,
-    ///
-    pub depth: u32,
 }
 
 /// Region of two buffers for copying.
@@ -100,24 +89,42 @@ impl<'a, B: Backend, C: Supports<Transfer>> CommandBuffer<'a, B, C> {
     ///
     pub fn pipeline_barrier(
         &mut self,
-        src_stages: PipelineStage,
-        dst_stages: PipelineStage,
+        stages: Range<PipelineStage>,
         barriers: &[Barrier<B>],
     ) {
-        self.raw.pipeline_barrier(src_stages, dst_stages, barriers)
+        self.raw.pipeline_barrier(stages, barriers)
+    }
+
+
+    ///
+    pub fn fill_buffer(
+        &mut self,
+        buffer: &B::Buffer,
+        range: Range<u64>,
+        data: u32,
+    ) {
+        self.raw.fill_buffer(buffer, range, data)
     }
 
     ///
-    pub fn copy_buffer(&mut self, src: &B::Buffer, dst: &B::Buffer, regions: &[BufferCopy]) {
+    pub fn copy_buffer(
+        &mut self,
+        src: &B::Buffer,
+        dst: &B::Buffer,
+        regions: &[BufferCopy],
+    ) {
         self.raw.copy_buffer(src, dst, regions)
     }
 
-    /*
     ///
-    pub fn update_buffer(&mut self, buffer: &B::Buffer, data: &[u8], offset: usize) {
-        self.raw.update_buffer(buffer, data, offset)
+    pub fn update_buffer(
+        &mut self,
+        buffer: &B::Buffer,
+        offset: u64,
+        data: &[u8],
+    ) {
+        self.raw.update_buffer(buffer, offset, data)
     }
-    */
 
     ///
     pub fn copy_image(

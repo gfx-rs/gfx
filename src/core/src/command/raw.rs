@@ -1,11 +1,12 @@
 
+use std::ops::Range;
 use {pso, target};
-use {Backend, IndexCount, VertexCount, VertexOffset, Viewport};
+use {Backend, IndexCount, InstanceCount, VertexCount, VertexOffset, Viewport};
 use buffer::IndexBufferView;
 use image::ImageLayout;
 use memory::Barrier;
 use super::{BufferCopy, BufferImageCopy, ClearColor, ClearValue, ImageCopy, ImageResolve,
-            InstanceParams, SubpassContents};
+    SubpassContents};
 
 ///
 pub trait RawCommandBuffer<B: Backend>: Clone + Send {
@@ -21,13 +22,33 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     ///
     fn pipeline_barrier(
         &mut self,
-        src_stages: pso::PipelineStage,
-        dst_stages: pso::PipelineStage,
+        stages: Range<pso::PipelineStage>,
         barriers: &[Barrier<B>],
     );
 
     ///
-    fn clear_color(&mut self, &B::RenderTargetView, ImageLayout, ClearColor);
+    fn fill_buffer(
+        &mut self,
+        buffer: &B::Buffer,
+        range: Range<u64>,
+        data: u32,
+    );
+
+    ///
+    fn update_buffer(
+        &mut self,
+        buffer: &B::Buffer,
+        offset: u64,
+        data: &[u8],
+    );
+
+    ///
+    fn clear_color(
+        &mut self,
+        &B::RenderTargetView,
+        ImageLayout,
+        ClearColor,
+    );
 
     /// Clear depth-stencil target
     fn clear_depth_stencil(
@@ -129,7 +150,12 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     ///
     fn dispatch_indirect(&mut self, buffer: &B::Buffer, offset: u64);
     ///
-    fn copy_buffer(&mut self, src: &B::Buffer, dst: &B::Buffer, regions: &[BufferCopy]);
+    fn copy_buffer(
+        &mut self,
+        src: &B::Buffer,
+        dst: &B::Buffer,
+        regions: &[BufferCopy],
+    );
     ///
     fn copy_image(
         &mut self,
@@ -156,21 +182,26 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         regions: &[BufferImageCopy],
     );
     ///
-    fn draw(&mut self,
-        start: VertexCount,
-        count: VertexCount,
-        instance: Option<InstanceParams>,
+    fn draw(
+        &mut self,
+        vertices: Range<VertexCount>,
+        instances: Range<InstanceCount>,
     );
     ///
     fn draw_indexed(
         &mut self,
-        start: IndexCount,
-        count: IndexCount,
-        base: VertexOffset,
-        instance: Option<InstanceParams>,
+        indeces: Range<IndexCount>,
+        base_vertex: VertexOffset,
+        instances: Range<InstanceCount>,
     );
     ///
-    fn draw_indirect(&mut self, buffer: &B::Buffer, offset: u64, draw_count: u32, stride: u32);
+    fn draw_indirect(
+        &mut self,
+        buffer: &B::Buffer,
+        offset: u64,
+        draw_count: u32,
+        stride: u32,
+    );
     ///
     fn draw_indexed_indirect(
         &mut self,

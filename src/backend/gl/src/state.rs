@@ -2,7 +2,7 @@ use core::{ColorSlot};
 use core::state as s;
 use core::state::{BlendValue, Comparison, CullFace, Equation,
                   Offset, RasterMethod, StencilOp, FrontFace};
-use core::target::{ColorValue, Rect, Stencil};
+use core::target::{ColorValue, Stencil};
 use gl;
 use smallvec::SmallVec;
 

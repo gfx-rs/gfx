@@ -1,5 +1,5 @@
 use {pso, target};
-use {Backend, InstanceCount, VertexCount, Viewport};
+use {Backend, Viewport};
 use buffer::IndexBufferView;
 use image::ImageLayout;
 use queue::capability::{Graphics, Supports};
@@ -79,10 +79,6 @@ pub enum ClearValue {
     DepthStencil(ClearDepthStencil),
 }
 
-/// Optional instance parameters: (instance count, buffer offset)
-pub type InstanceParams = (InstanceCount, VertexCount);
-
-
 impl<'a, B: Backend, C: Supports<Graphics>> CommandBuffer<'a, B, C> {
     ///
     pub fn begin_renderpass_inline(
@@ -97,7 +93,12 @@ impl<'a, B: Backend, C: Supports<Graphics>> CommandBuffer<'a, B, C> {
     }
 
     ///
-    pub fn clear_color(&mut self, rtv: &B::RenderTargetView, layout: ImageLayout, clear_value: ClearColor) {
+    pub fn clear_color(
+        &mut self,
+        rtv: &B::RenderTargetView,
+        layout: ImageLayout,
+        clear_value: ClearColor,
+    ) {
         self.raw.clear_color(rtv, layout, clear_value)
     }
 

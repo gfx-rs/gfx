@@ -3,6 +3,7 @@ use ash::version::DeviceV1_0;
 use core;
 use core::image::SubresourceRange;
 use std::collections::BTreeMap;
+use std::ops::Range;
 use std::sync::Arc;
 use {Backend, RawDevice};
 
@@ -72,8 +73,7 @@ pub struct ShaderLib {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ConstantBufferView {
     pub buffer: vk::Buffer,
-    pub offset: usize,
-    pub size: usize,
+    pub range: Range<u64>,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]

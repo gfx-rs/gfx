@@ -403,7 +403,7 @@ impl Into<[f32; 4]> for PackedColor {
 
 /// Specifies how to sample from a texture.
 // TODO: document the details of sampling.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct SamplerInfo {
     /// Filter method to use.
@@ -416,7 +416,7 @@ pub struct SamplerInfo {
     /// use mipmap level 3.
     pub lod_bias: Lod,
     /// This range is used to clamp LOD level used for sampling.
-    pub lod_range: (Lod, Lod),
+    pub lod_range: Range<Lod>,
     /// Comparison mode, used primary for a shadow map.
     pub comparison: Option<state::Comparison>,
     /// Border color is used when one of the wrap modes is set to border.
@@ -431,7 +431,7 @@ impl SamplerInfo {
             filter: filter,
             wrap_mode: (wrap, wrap, wrap),
             lod_bias: Lod(0),
-            lod_range: (Lod(-8000), Lod(8000)),
+            lod_range: Lod(-8000)..Lod(8000),
             comparison: None,
             border: PackedColor(0),
         }
@@ -440,19 +440,18 @@ impl SamplerInfo {
 
 /// Texture resource view descriptor.
 #[allow(missing_docs)]
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct ResourceDesc {
     pub channel: format::ChannelType,
     pub layer: Option<Layer>,
-    pub min: Level,
-    pub max: Level,
+    pub levels: Range<Level>,
     pub swizzle: format::Swizzle,
 }
 
 /// Texture render view descriptor.
 #[allow(missing_docs)]
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct RenderDesc {
     pub channel: format::ChannelType,
