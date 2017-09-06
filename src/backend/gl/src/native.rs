@@ -92,7 +92,7 @@ pub struct DescriptorSet;
 pub struct DescriptorPool {}
 
 impl core::DescriptorPool<Backend> for DescriptorPool {
-    fn allocate_sets(&mut self, layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
+    fn allocate_sets(&mut self, _layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
         unimplemented!()
     }
 

@@ -4,8 +4,7 @@ use std::rc::Rc;
 
 use gl;
 use gl::types::{GLint, GLfloat};
-use core::{self as c, device as d, image as i, pass, pso, buffer, mapping};
-use core::memory::{self, Typed};
+use core::{self as c, device as d, image as i, memory, pass, pso, buffer, mapping};
 use core::format::Format;
 
 use {Backend as B, Share};
@@ -62,7 +61,7 @@ impl d::Device<B> for Device {
         &self.share.limits
     }
 
-    fn create_heap(&mut self, heap_type: &c::HeapType, resource_type: d::ResourceHeapType, size: u64) -> Result<n::Heap, d::ResourceHeapError> {
+    fn create_heap(&mut self, _: &c::HeapType, _: d::ResourceHeapType, _: u64) -> Result<n::Heap, d::ResourceHeapError> {
         Ok(n::Heap)
     }
 
@@ -76,12 +75,15 @@ impl d::Device<B> for Device {
 
     fn create_graphics_pipelines<'a>(
         &mut self,
-        descs: &[(&n::ShaderLib, &n::PipelineLayout, pass::SubPass<'a, B>, &pso::GraphicsPipelineDesc)],
+        _descs: &[(&n::ShaderLib, &n::PipelineLayout, pass::SubPass<'a, B>, &pso::GraphicsPipelineDesc)],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         unimplemented!()
     }
 
-    fn create_compute_pipelines(&mut self, _: &[(&n::ShaderLib, pso::EntryPoint, &n::PipelineLayout)]) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
+    fn create_compute_pipelines(
+        &mut self,
+        _descs: &[(&n::ShaderLib, pso::EntryPoint, &n::PipelineLayout)],
+    ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
         unimplemented!()
     }
 
@@ -274,7 +276,7 @@ impl d::Device<B> for Device {
                 true
             },
             d::WaitFor::Any => {
-                let mut waiting = |timeout_ms: u32| {
+                let mut waiting = |_timeout_ms: u32| {
                     for fence in fences {
                         match wait_fence(fence, &self.share.context, 0) {
                             gl::ALREADY_SIGNALED | gl::CONDITION_SATISFIED => return true,

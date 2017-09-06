@@ -566,16 +566,22 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn draw_indirect(&mut self, buffer: &n::Buffer, offset: u64, draw_count: u32, stride: u32) {
+    fn draw_indirect(
+        &mut self,
+        _buffer: &n::Buffer,
+        _offset: u64,
+        _draw_count: u32,
+        _stride: u32,
+    ) {
         unimplemented!()
     }
 
     fn draw_indexed_indirect(
         &mut self,
-        buffer: &n::Buffer,
-        offset: u64,
-        draw_count: u32,
-        stride: u32,
+        _buffer: &n::Buffer,
+        _offset: u64,
+        _draw_count: u32,
+        _stride: u32,
     ) {
         unimplemented!()
     }
