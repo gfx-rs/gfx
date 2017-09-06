@@ -1,8 +1,9 @@
 use core::{self, pool};
 use command::{self, Command, RawCommandBuffer, SubpassCommandBuffer};
 use native as n;
-use {Backend, CommandQueue, Share};
+use {Backend, CommandQueue};
 use gl;
+
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::sync::Arc;

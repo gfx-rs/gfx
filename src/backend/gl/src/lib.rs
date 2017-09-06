@@ -531,112 +531,113 @@ impl CommandQueue {
             Command::BindVertexBuffers(data_ptr) => {
                 unimplemented!()
             }
-            Command::Draw { primitive, start, count, instances } => {
+            Command::Draw { primitive, ref vertices, ref instances } => {
                 let gl = &self.share.context;
                 let features = &self.share.features;
-                match instances {
-                    Some((num, base)) => unsafe {
-                        if features.draw_instanced {
-                            if features.draw_instanced_base {
-                                gl.DrawArraysInstancedBaseInstance(
-                                    primitive,
-                                    start as gl::types::GLsizei,
-                                    count as gl::types::GLsizei,
-                                    num as gl::types::GLsizei,
-                                    base as gl::types::GLuint,
-                                );
-                            } else if base == 0 {
-                                gl.DrawArraysInstanced(
-                                    primitive,
-                                    start as gl::types::GLsizei,
-                                    count as gl::types::GLsizei,
-                                    num as gl::types::GLsizei,
-                                );
-                            } else {
-                                error!("Instanced draw calls with non-zero base instance are not supported");
-                            }
-                        } else {
-                            error!("Instanced draw calls are not supported");
-                        }
-                    },
-                    None => unsafe {
+                if instances == &(0u32..1) {
+                    unsafe {
                         gl.DrawArrays(
                             primitive,
-                            start as gl::types::GLsizei,
-                            count as gl::types::GLsizei
+                            vertices.start as _,
+                            (vertices.end - vertices.start) as _,
                         );
-                    },
+                    }
+                } else if features.draw_instanced {
+                    if instances.start == 0 {
+                        unsafe {
+                            gl.DrawArraysInstanced(
+                                primitive,
+                                vertices.start as _,
+                                (vertices.end - vertices.start) as _,
+                                instances.end as _,
+                            );
+                        }
+                    } else if features.draw_instanced_base {
+                        unsafe {
+                            gl.DrawArraysInstancedBaseInstance(
+                                primitive,
+                                vertices.start as _,
+                                (vertices.end - vertices.start) as _,
+                                (instances.end - instances.start) as _,
+                                instances.start as _,
+                            );
+                        }
+                    } else {
+                        error!("Instanced draw calls with non-zero base instance are not supported");
+                    }
+                } else {
+                    error!("Instanced draw calls are not supported");
                 }
             }
-            Command::DrawIndexed { primitive, index_type, start, count, base: base_vertex, instances } => {
+            Command::DrawIndexed { primitive, index_type, index_count, index_buffer_offset, base_vertex, ref instances } => {
                 let gl = &self.share.context;
                 let features = &self.share.features;
-                let offset = start as *const gl::types::GLvoid;
+                let offset = index_buffer_offset as *const gl::types::GLvoid;
 
-                match instances {
-                    Some((num, base_instance)) => unsafe {
-                        if features.draw_indexed_instanced_base {
-                            // fully compatible
-                            gl.DrawElementsInstancedBaseVertexBaseInstance(
-                                primitive,
-                                count as gl::types::GLsizei,
-                                index_type,
-                                offset,
-                                num as gl::types::GLsizei,
-                                base_vertex as gl::types::GLint,
-                                base_instance as gl::types::GLuint,
-                            );
-                        } else if base_instance != 0 {
-                            error!("Instance bases with instanced indexed drawing is not supported")
-                        } else {
-                            // No base instance
-                            if features.draw_indexed_instanced_base_vertex {
-                                gl.DrawElementsInstancedBaseVertex(
-                                    primitive,
-                                    count as gl::types::GLsizei,
-                                    index_type,
-                                    offset,
-                                    num as gl::types::GLsizei,
-                                    base_vertex as gl::types::GLint,
-                                );
-                            } else if base_vertex != 0 {
-                                error!("Base vertex with instanced indexed drawing is not supported")
-                            } else {
-                                // No base instance and base vertex
-                                if features.draw_indexed_instanced {
-                                    gl.DrawElementsInstanced(
-                                        primitive,
-                                        count as gl::types::GLsizei,
-                                        index_type,
-                                        offset,
-                                        num as gl::types::GLsizei,
-                                    );
-                                } else {
-                                    error!("Instanced indexed drawing is not supported")
-                                }
-                            }
-                        }
-                    },
-                    None => unsafe {
-                        if features.draw_indexed_base {
-                            gl.DrawElementsBaseVertex(
-                                primitive,
-                                count as gl::types::GLsizei,
-                                index_type,
-                                offset,
-                                base_vertex as gl::types::GLint,
-                            );
-                        } else if base_vertex == 0 {
+                if instances == &(0u32..1) {
+                    if base_vertex == 0 {
+                        unsafe {
                             gl.DrawElements(
                                 primitive,
-                                count as gl::types::GLsizei,
+                                index_count as _,
                                 index_type,
                                 offset,
                             );
-                        } else {
-                            error!("Base vertex with indexed drawing not supported");
                         }
-                    },
+                    } else if features.draw_indexed_base {
+                        unsafe {
+                            gl.DrawElementsBaseVertex(
+                                primitive,
+                                index_count as _,
+                                index_type,
+                                offset,
+                                base_vertex as _,
+                            );
+                        }
+                    } else {
+                        error!("Base vertex with indexed drawing not supported");
+                    }
+                } else if features.draw_indexed_instanced {
+                    if base_vertex == 0 && instances.start == 0 {
+                        unsafe {
+                            gl.DrawElementsInstanced(
+                                primitive,
+                                index_count as _,
+                                index_type,
+                                offset,
+                                instances.end as _,
+                            );
+                        }
+                    } else if instances.start == 0 && features.draw_indexed_instanced_base_vertex {
+                        unsafe {
+                            gl.DrawElementsInstancedBaseVertex(
+                                primitive,
+                                index_count as _,
+                                index_type,
+                                offset,
+                                instances.end as _,
+                                base_vertex as _,
+                            );
+                        }
+                    } else if instances.start == 0 {
+                        error!("Base vertex with instanced indexed drawing is not supported");
+                    } else if features.draw_indexed_instanced_base {
+                        unsafe {
+                            gl.DrawElementsInstancedBaseVertexBaseInstance(
+                                primitive,
+                                index_count as _,
+                                index_type,
+                                offset,
+                                (instances.end - instances.start) as _,
+                                base_vertex as _,
+                                instances.start as _,
+                            );
+                        }
+                    } else {
+                        error!("Instance bases with instanced indexed drawing is not supported");
+                    }
+                } else {
+                    error!("Instanced indexed drawing is not supported");
                 }
             }
             Command::Dispatch(x, y, z) => {

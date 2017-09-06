@@ -1,9 +1,8 @@
 
 use core::image as i;
-use gl;
-use gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
+use gl::{self, types as t};
 
-pub fn image_kind_to_gl(kind: i::Kind) -> GLenum {
+pub fn image_kind_to_gl(kind: i::Kind) -> t::GLenum {
     match kind {
         i::Kind::D1(_) => gl::TEXTURE_1D,
         i::Kind::D1Array(_, _) => gl::TEXTURE_1D_ARRAY,
@@ -17,7 +16,7 @@ pub fn image_kind_to_gl(kind: i::Kind) -> GLenum {
     }
 }
 
-pub fn filter_to_gl(f: i::FilterMethod) -> (GLenum, GLenum) {
+pub fn filter_to_gl(f: i::FilterMethod) -> (t::GLenum, t::GLenum) {
     match f {
         i::FilterMethod::Scale => (gl::NEAREST, gl::NEAREST),
         i::FilterMethod::Mipmap => (gl::NEAREST_MIPMAP_NEAREST, gl::NEAREST),
@@ -27,7 +26,7 @@ pub fn filter_to_gl(f: i::FilterMethod) -> (GLenum, GLenum) {
     }
 }
 
-pub fn wrap_to_gl(w: i::WrapMode) -> GLenum {
+pub fn wrap_to_gl(w: i::WrapMode) -> t::GLenum {
     match w {
         i::WrapMode::Tile   => gl::REPEAT,
         i::WrapMode::Mirror => gl::MIRRORED_REPEAT,

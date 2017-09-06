@@ -30,7 +30,7 @@ impl<'a, B: Backend> Submission<'a, B, Transfer> {
     /// Create a new empty (transfer) submission.
     ///
     /// Transfer is the minimum supported capability by all queues.
-    pub fn new() -> Submission<'a, B, Transfer> {
+    pub fn new() -> Self {
         Submission {
             cmd_buffers: SmallVec::new(),
             wait_semaphores: SmallVec::new(),

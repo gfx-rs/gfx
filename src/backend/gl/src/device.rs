@@ -1,31 +1,16 @@
+use std::ptr;
+use std::ops::Range;
 use std::rc::Rc;
-use std::{slice, ptr};
 
 use gl;
-use gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
+use gl::types::{GLint, GLfloat};
 use core::{self as c, device as d, image as i, pass, pso, buffer, mapping};
-use core::memory::{self, Bind, SHADER_RESOURCE, UNORDERED_ACCESS, Typed};
-use core::format::{ChannelType, Format};
-use core::target::{Layer, Level};
+use core::memory::{self, Typed};
+use core::format::Format;
 
-use {Info, Backend as B, Share};
-use {conv, device, native as n, pool, state};
+use {Backend as B, Share};
+use {conv, device, native as n, state};
 
-fn access_to_map_bits(access: memory::Access) -> gl::types::GLenum {
-    let mut r = 0;
-    if access.contains(memory::READ) { r |= gl::MAP_READ_BIT; }
-    if access.contains(memory::WRITE) { r |= gl::MAP_WRITE_BIT; }
-    r
-}
-
-fn access_to_gl(access: memory::Access) -> gl::types::GLenum {
-    match access {
-        memory::RW => gl::READ_WRITE,
-        memory::READ => gl::READ_ONLY,
-        memory::WRITE => gl::WRITE_ONLY,
-        _ => unreachable!(),
-    }
-}
 
 #[derive(Debug)]
 #[allow(missing_copy_implementations)]
@@ -105,7 +90,7 @@ impl d::Device<B> for Device {
         _: &n::RenderPass,
         _: &[&n::RenderTargetView],
         _: &[&n::DepthStencilView],
-        _: u32, _: u32, _: u32
+        _: d::Extent,
     ) -> n::FrameBuffer {
         unimplemented!()
     }
@@ -151,9 +136,8 @@ impl d::Device<B> for Device {
                 gl.SamplerParameterfv(name, gl::TEXTURE_BORDER_COLOR, &border[0]);
             }
 
-            let (min, max) = info.lod_range;
-            gl.SamplerParameterf(name, gl::TEXTURE_MIN_LOD, min.into());
-            gl.SamplerParameterf(name, gl::TEXTURE_MAX_LOD, max.into());
+            gl.SamplerParameterf(name, gl::TEXTURE_MIN_LOD, info.lod_range.start.into());
+            gl.SamplerParameterf(name, gl::TEXTURE_MAX_LOD, info.lod_range.end.into());
 
             match info.comparison {
                 None => gl.SamplerParameteri(name, gl::TEXTURE_COMPARE_MODE, gl::NONE as GLint),
@@ -196,7 +180,7 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn view_buffer_as_constant(&mut self, _: &n::Buffer, _: usize, _: usize) -> Result<n::ConstantBufferView, d::TargetViewError> {
+    fn view_buffer_as_constant(&mut self, _: &n::Buffer, _: Range<u64>) -> Result<n::ConstantBufferView, d::TargetViewError> {
         unimplemented!()
     }
 

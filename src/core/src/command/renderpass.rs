@@ -1,8 +1,8 @@
-
-use {pso, target, Backend, IndexCount, VertexCount, VertexOffset};
+use std::ops::Range;
+use {pso, target, Backend, IndexCount, InstanceCount, VertexCount, VertexOffset};
 use buffer::IndexBufferView;
 use queue::{Supports, Graphics};
-use super::{ClearValue, CommandBuffer, InstanceParams, RawCommandBuffer};
+use super::{ClearValue, CommandBuffer, RawCommandBuffer};
 
 
 /// Specifies how commands for the following renderpasses will be recorded.
@@ -45,12 +45,12 @@ impl<'a, B: Backend> RenderPassInlineEncoder<'a, B> {
     }
 
     ///
-    pub fn draw(&mut self, start: VertexCount, count: VertexCount, instance: Option<InstanceParams>) {
-        self.0.draw(start, count, instance)
+    pub fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {
+        self.0.draw(vertices, instances)
     }
     ///
-    pub fn draw_indexed(&mut self, start: IndexCount, count: IndexCount, base: VertexOffset, instance: Option<InstanceParams>) {
-        self.0.draw_indexed(start, count, base, instance)
+    pub fn draw_indexed(&mut self, indices: Range<IndexCount>, base_vertex: VertexOffset, instances: Range<InstanceCount>) {
+        self.0.draw_indexed(indices, base_vertex, instances)
     }
     ///
     pub fn draw_indirect(&mut self, buffer: &B::Buffer, offset: u64, draw_count: u32, stride: u32) {
