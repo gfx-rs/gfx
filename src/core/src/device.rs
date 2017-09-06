@@ -3,8 +3,9 @@
 //! This module exposes the `Device` trait, used for creating and managing graphics resources, and
 //! includes several items to facilitate this.
 
-use std::error::Error;
 use std::fmt;
+use std::error::Error;
+use std::ops::Range;
 use {buffer, format, image, mapping, pass, pso, target};
 use {Backend, Features, HeapType, Limits};
 use memory::Requirements;
@@ -196,6 +197,18 @@ pub enum WaitFor {
     All,
 }
 
+///
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+pub struct Extent {
+    ///
+    pub width: u32,
+    ///
+    pub height: u32,
+    ///
+    pub depth: u32,
+}
+
 /// # Overview
 ///
 /// A `Device` is responsible for creating and managing resources for the physical device
@@ -264,12 +277,18 @@ pub trait Device<B: Backend> {
             -> Vec<Result<B::GraphicsPipeline, pso::CreationError>>;
 
     /// Create compute pipelines.
-    fn create_compute_pipelines(&mut self, &[(&B::ShaderLib, pso::EntryPoint, &B::PipelineLayout)]) -> Vec<Result<B::ComputePipeline, pso::CreationError>>;
+    fn create_compute_pipelines(
+        &mut self,
+        &[(&B::ShaderLib, pso::EntryPoint, &B::PipelineLayout)],
+    ) -> Vec<Result<B::ComputePipeline, pso::CreationError>>;
 
     ///
-    fn create_framebuffer(&mut self, renderpass: &B::RenderPass,
-        color_attachments: &[&B::RenderTargetView], depth_stencil_attachments: &[&B::DepthStencilView],
-        width: u32, height: u32, layers: u32
+    fn create_framebuffer(
+        &mut self,
+        renderpass: &B::RenderPass,
+        color_attachments: &[&B::RenderTargetView],
+        depth_stencil_attachments: &[&B::DepthStencilView],
+        extent: Extent,
     ) -> B::FrameBuffer;
 
     ///
@@ -301,7 +320,7 @@ pub trait Device<B: Backend> {
     fn bind_image_memory(&mut self, heap: &B::Heap, offset: u64, image: B::UnboundImage) -> Result<B::Image, image::CreationError>;
 
     ///
-    fn view_buffer_as_constant(&mut self, buffer: &B::Buffer, offset: usize, size: usize) -> Result<B::ConstantBufferView, TargetViewError>;
+    fn view_buffer_as_constant(&mut self, buffer: &B::Buffer, range: Range<u64>) -> Result<B::ConstantBufferView, TargetViewError>;
 
     ///
     fn view_image_as_render_target(&mut self, image: &B::Image, format: format::Format, range: image::SubresourceRange) -> Result<B::RenderTargetView, TargetViewError>;
@@ -334,7 +353,7 @@ pub trait Device<B: Backend> {
     ///
     /// See `write_mapping` for more information.
     fn read_mapping<'a, T>(&self, buf: &'a B::Buffer, offset: u64, size: u64)
-                           -> Result<mapping::Reader<'a, B, T>, mapping::Error>
+                    -> Result<mapping::Reader<'a, B, T>, mapping::Error>
         where T: Copy;
 
     /// Acquire a mapping Writer
@@ -345,8 +364,8 @@ pub trait Device<B: Backend> {
     /// implicitly requires exclusive access. Additionally,
     /// further access will be stalled until execution completion.
 
-    fn write_mapping<'a, 'b, T>(&mut self, buf: &'a B::Buffer, offset: u64, size: u64)
-                                -> Result<mapping::Writer<'a, B, T>, mapping::Error>
+    fn write_mapping<'a, T>(&mut self, buf: &'a B::Buffer, offset: u64, size: u64)
+                     -> Result<mapping::Writer<'a, B, T>, mapping::Error>
         where T: Copy;
 
     ///
@@ -358,8 +377,8 @@ pub trait Device<B: Backend> {
     ///
     fn reset_fences(&mut self, fences: &[&B::Fence]);
 
-    /// Blocks until all or one of the given fences are signalled.
-    /// Returns true if fences were signalled before the timeout.
+    /// Blocks until all or one of the given fences are signaled.
+    /// Returns true if fences were signaled before the timeout.
     fn wait_for_fences(&mut self, fences: &[&B::Fence], wait: WaitFor, timeout_ms: u32) -> bool;
 
     ///

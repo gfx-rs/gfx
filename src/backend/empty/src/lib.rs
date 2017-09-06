@@ -3,8 +3,8 @@
 
 extern crate gfx_core as core;
 
+use std::ops::Range;
 use core::{buffer, command, device, format, image, target, mapping, memory, pass, pool, pso};
-use core::device::{TargetViewError};
 
 /// Dummy backend.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -100,18 +100,24 @@ impl core::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_graphics_pipelines<'a>(&mut self, _: &[(&(), &(), pass::SubPass<'a, Backend>, &pso::GraphicsPipelineDesc)])
-            -> Vec<Result<(), pso::CreationError>> {
-                unimplemented!()
-            }
-
-    fn create_compute_pipelines(&mut self, _: &[(&(), pso::EntryPoint, &())]) -> Vec<Result<(), pso::CreationError>> {
+    fn create_graphics_pipelines<'a>(
+        &mut self,
+        _: &[(&(), &(), pass::SubPass<'a, Backend>, &pso::GraphicsPipelineDesc)],
+    ) -> Vec<Result<(), pso::CreationError>> {
         unimplemented!()
     }
 
-    fn create_framebuffer(&mut self, _: &(),
+    fn create_compute_pipelines(
+        &mut self,
+        _: &[(&(), pso::EntryPoint, &())],
+    ) -> Vec<Result<(), pso::CreationError>> {
+        unimplemented!()
+    }
+
+    fn create_framebuffer(
+        &mut self, _: &(),
         _: &[&()], _: &[&()],
-        _: u32, _: u32, _: u32
+        _: device::Extent,
     ) -> () {
         unimplemented!()
     }
@@ -144,19 +150,19 @@ impl core::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn view_buffer_as_constant(&mut self, _: &(), _: usize, _: usize) -> Result<(), TargetViewError> {
+    fn view_buffer_as_constant(&mut self, _: &(), _: Range<u64>) -> Result<(), device::TargetViewError> {
         unimplemented!()
     }
 
-    fn view_image_as_render_target(&mut self, _: &(), _: format::Format, _: image::SubresourceRange) -> Result<(), TargetViewError> {
+    fn view_image_as_render_target(&mut self, _: &(), _: format::Format, _: image::SubresourceRange) -> Result<(), device::TargetViewError> {
         unimplemented!()
     }
 
-    fn view_image_as_shader_resource(&mut self, _: &(), _: format::Format) -> Result<(), TargetViewError> {
+    fn view_image_as_shader_resource(&mut self, _: &(), _: format::Format) -> Result<(), device::TargetViewError> {
         unimplemented!()
     }
 
-    fn view_image_as_unordered_access(&mut self, _: &(), _: format::Format) -> Result<(), TargetViewError> {
+    fn view_image_as_unordered_access(&mut self, _: &(), _: format::Format) -> Result<(), device::TargetViewError> {
         unimplemented!()
     }
     fn create_descriptor_pool(&mut self, _: usize, _: &[pso::DescriptorRangeDesc]) -> DescriptorPool {
@@ -325,13 +331,19 @@ impl core::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     fn pipeline_barrier(
         &mut self,
-        _: pso::PipelineStage,
-        _: pso::PipelineStage,
+        _: Range<pso::PipelineStage>,
         _: &[memory::Barrier<Backend>],
     ) {
         unimplemented!()
     }
 
+    fn fill_buffer(&mut self, _: &(), _: Range<u64>, _: u32) {
+        unimplemented!()
+    }
+
+    fn update_buffer(&mut self, _: &(), _: u64, _: &[u8]) {
+        unimplemented!()
+    }
 
     fn clear_color(&mut self, _: &(), _: image::ImageLayout, _: command::ClearColor) {
         unimplemented!()
@@ -466,19 +478,17 @@ impl core::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
     fn draw(&mut self,
-        _: core::VertexCount,
-        _: core::VertexCount,
-        _: Option<command::InstanceParams>,
+        _: Range<core::VertexCount>,
+        _: Range<core::InstanceCount>,
     ) {
         unimplemented!()
     }
 
     fn draw_indexed(
         &mut self,
-        _: core::IndexCount,
-        _: core::IndexCount,
+        _: Range<core::IndexCount>,
         _: core::VertexOffset,
-        _: Option<command::InstanceParams>,
+        _: Range<core::InstanceCount>,
     ) {
         unimplemented!()
     }

@@ -1,15 +1,16 @@
 use std::{cmp, ptr};
+use std::ops::Range;
 use std::sync::Arc;
 use smallvec::SmallVec;
 use ash::vk;
 use ash::version::DeviceV1_0;
 
 use core::{command, memory, pso, target};
-use core::{IndexCount, VertexCount, VertexOffset, Viewport};
+use core::{IndexCount, InstanceCount, VertexCount, VertexOffset, Viewport};
 use core::buffer::IndexBufferView;
 use core::command::{
     BufferCopy, BufferImageCopy, ClearColor, ClearValue, ImageCopy, ImageResolve,
-    InstanceParams, SubpassContents,
+    SubpassContents,
 };
 use core::image::ImageLayout;
 use {conv, native as n};
@@ -147,8 +148,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn pipeline_barrier(
         &mut self,
-        src_stages: pso::PipelineStage,
-        dst_stages: pso::PipelineStage,
+        stages: Range<pso::PipelineStage>,
         barriers: &[memory::Barrier<Backend>],
     ) {
         let mut memory_bars: SmallVec<[vk::MemoryBarrier; 4]> = SmallVec::new();
@@ -207,12 +207,45 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         unsafe {
             self.device.0.cmd_pipeline_barrier(
                 self.raw, // commandBuffer
-                conv::map_pipeline_stage(src_stages),
-                conv::map_pipeline_stage(dst_stages),
+                conv::map_pipeline_stage(stages.start),
+                conv::map_pipeline_stage(stages.end),
                 vk::DependencyFlags::empty(), // dependencyFlags // TODO
                 &memory_bars,
                 &buffer_bars,
                 &image_bars,
+            );
+        }
+    }
+
+    fn fill_buffer(
+        &mut self,
+        buffer: &n::Buffer,
+        range: Range<u64>,
+        data: u32,
+    ) {
+        unsafe {
+            self.device.0.cmd_fill_buffer(
+                self.raw,
+                buffer.raw,
+                range.start,
+                range.end - range.start,
+                data,
+            );
+        }
+    }
+
+    fn update_buffer(
+        &mut self,
+        buffer: &n::Buffer,
+        offset: u64,
+        data: &[u8],
+    ) {
+        unsafe {
+            self.device.0.cmd_update_buffer(
+                self.raw,
+                buffer.raw,
+                offset,
+                data,
             );
         }
     }
@@ -597,45 +630,43 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn draw(&mut self, start: VertexCount, count: VertexCount, instances: Option<InstanceParams>) {
-        let (num_instances, start_instance) = match instances {
-            Some((num_instances, start_instance)) => (num_instances, start_instance),
-            None => (1, 0),
-        };
-
+    fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {
         unsafe {
             self.device.0.cmd_draw(
                 self.raw,
-                count,
-                num_instances,
-                start,
-                start_instance,
+                vertices.end - vertices.start,
+                instances.end - instances.start,
+                vertices.start,
+                instances.start,
             )
         }
     }
 
     fn draw_indexed(
         &mut self,
-        start: IndexCount,
-        count: IndexCount,
-        base: VertexOffset,
-        instances: Option<InstanceParams>,
+        indices: Range<IndexCount>,
+        base_vertex: VertexOffset,
+        instances: Range<InstanceCount>,
     ) {
-        let (num_instances, start_instance) = instances.unwrap_or((1, 0));
-
         unsafe {
             self.device.0.cmd_draw_indexed(
                 self.raw,
-                count,
-                num_instances,
-                start,
-                base,
-                start_instance,
+                indices.end - indices.start,
+                instances.end - instances.start,
+                indices.start,
+                base_vertex,
+                instances.start,
             )
         }
     }
 
-    fn draw_indirect(&mut self, buffer: &n::Buffer, offset: u64, draw_count: u32, stride: u32) {
+    fn draw_indirect(
+        &mut self,
+        buffer: &n::Buffer,
+        offset: u64,
+        draw_count: u32,
+        stride: u32,
+    ) {
         unsafe {
             self.device.0.cmd_draw_indirect(
                 self.raw,

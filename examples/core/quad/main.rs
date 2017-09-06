@@ -224,7 +224,8 @@ fn main() {
     }).collect::<Vec<_>>();
 
     let framebuffers = frame_rtvs.iter().map(|frame_rtv| {
-        device.create_framebuffer(&render_pass, &[&frame_rtv], &[], pixel_width as u32, pixel_height as u32, 1)
+        let extent = d::Extent { width: pixel_width as _, height: pixel_height as _, depth: 1 };
+        device.create_framebuffer(&render_pass, &[&frame_rtv], &[], extent)
     }).collect::<Vec<_>>();
 
 
@@ -338,7 +339,7 @@ fn main() {
                 target: &image_logo,
                 range: (0..1, 0..1),
             };
-            cmd_buffer.pipeline_barrier(pso::TOP_OF_PIPE, pso::TRANSFER, &[image_barrier]);
+            cmd_buffer.pipeline_barrier(pso::TOP_OF_PIPE .. pso::TRANSFER, &[image_barrier]);
 
             cmd_buffer.copy_buffer_to_image(
                 &image_upload_buffer,
@@ -351,7 +352,7 @@ fn main() {
                     image_aspect: i::ASPECT_COLOR,
                     image_subresource: (0, 0..1),
                     image_offset: command::Offset { x: 0, y: 0, z: 0 },
-                    image_extent: command::Extent { width, height, depth: 1 },
+                    image_extent: d::Extent { width, height, depth: 1 },
                 }]);
 
             let image_barrier = m::Barrier::Image {
@@ -360,7 +361,7 @@ fn main() {
                 target: &image_logo,
                 range: (0..1, 0..1),
             };
-            cmd_buffer.pipeline_barrier(pso::TRANSFER, pso::BOTTOM_OF_PIPE, &[image_barrier]);
+            cmd_buffer.pipeline_barrier(pso::TRANSFER .. pso::BOTTOM_OF_PIPE, &[image_barrier]);
 
             cmd_buffer.finish()
         };
@@ -408,7 +409,7 @@ fn main() {
                     target: rtv,
                     range: (0..1, 0..1),
                 };
-                cmd_buffer.pipeline_barrier(pso::TRANSFER, pso::PIXEL_SHADER, &[rtv_target_barrier]);
+                cmd_buffer.pipeline_barrier(pso::TRANSFER .. pso::PIXEL_SHADER, &[rtv_target_barrier]);
             }
 
             cmd_buffer.set_viewports(&[viewport]);
@@ -424,7 +425,7 @@ fn main() {
                     Rect { x: 0, y: 0, w: pixel_width, h: pixel_height },
                     &[command::ClearValue::Color(command::ClearColor::Float([0.8, 0.8, 0.8, 1.0]))],
                 );
-                encoder.draw(0, 6, None);
+                encoder.draw(0..6, 0..1);
             }
 
             if do_barriers {
@@ -434,7 +435,7 @@ fn main() {
                     target: rtv,
                     range: (0..1, 0..1),
                 };
-                cmd_buffer.pipeline_barrier(pso::PIXEL_SHADER, pso::TRANSFER, &[rtv_present_barrier]);
+                cmd_buffer.pipeline_barrier(pso::PIXEL_SHADER .. pso::TRANSFER, &[rtv_present_barrier]);
             }
 
             cmd_buffer.finish()

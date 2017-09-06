@@ -5,14 +5,13 @@
 use std::{fmt, ops};
 use std::error::Error as StdError;
 use Backend;
-use memory;
 
 
 /// Error accessing a mapping.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Error {
     /// The requested mapping access did not match the expected usage.
-    InvalidAccess(memory::Access, memory::Usage),
+    InvalidAccess,
     /// The requested mapping access overlaps with another.
     AccessOverlap,
 }
@@ -21,8 +20,8 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use self::Error::*;
         match *self {
-            InvalidAccess(ref access, ref usage) => {
-                write!(f, "{}: access = {:?}, usage = {:?}", self.description(), access, usage)
+            InvalidAccess => {
+                write!(f, "{}", self.description())
             }
             AccessOverlap => write!(f, "{}", self.description())
         }
@@ -33,7 +32,7 @@ impl StdError for Error {
     fn description(&self) -> &str {
         use self::Error::*;
         match *self {
-            InvalidAccess(..) => "The requested mapping access did not match the expected usage",
+            InvalidAccess => "The requested mapping access did not match the expected usage",
             AccessOverlap => "The requested mapping access overlaps with another"
         }
     }
