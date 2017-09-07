@@ -11,10 +11,8 @@ use {native as n, Backend};
 use pool::{self, BufferMemory};
 
 use std::mem;
-use std::cell::UnsafeCell;
 use std::ops::Range;
-use std::sync::Arc;
-use std::sync::atomic::{self, AtomicBool};
+use std::sync::{Arc, Mutex};
 
 // Command buffer implementation details:
 //
@@ -141,14 +139,11 @@ impl From<c::Limits> for Limits {
 /// `display_fb` field.
 #[derive(Clone)]
 pub struct RawCommandBuffer {
-    pub(crate) memory: Arc<pool::SharedBuffer>,
+    pub(crate) memory: Arc<Mutex<BufferMemory>>,
     pub(crate) buf: BufferSlice,
     // Buffer id for the owning command pool.
     // Only relevant if individual resets are allowed.
     pub(crate) id: u64,
-    // Associated pool and shared buffer is accessible.
-    // Mainly for safety reasons, not necessary but otherwise could result in weird crashes.
-    accessible: Arc<AtomicBool>,
     individual_reset: bool,
 
     fbo: n::FrameBuffer,
@@ -167,26 +162,23 @@ pub struct RawCommandBuffer {
     active_attribs: usize,
 }
 
-unsafe impl Send for RawCommandBuffer { }
-
 impl RawCommandBuffer {
     pub(crate) fn new(
         fbo: n::FrameBuffer,
         limits: Limits,
-        memory: &mut BufferMemory,
-        accessible: Arc<AtomicBool>,
+        memory: Arc<Mutex<BufferMemory>>,
     ) -> Self {
-        let (memory, id, individual_reset) = match *memory {
-            BufferMemory::Linear(ref buffer) => {
-                (buffer.clone(), 0, false)
-            }
-            BufferMemory::Individual { ref mut storage, ref mut next_buffer_id } => {
-                // Add a new pair of buffers
-                let buffer = Arc::new(UnsafeCell::new(pool::OwnedBuffer::new()));
-                storage.insert(*next_buffer_id, buffer.clone());
-                let id = *next_buffer_id;
-                *next_buffer_id += 1;
-                (buffer, id, true)
+        let (id, individual_reset) = {
+            let mut memory = memory.lock().unwrap();
+            match *memory {
+                BufferMemory::Linear(_) => (0, false),
+                BufferMemory::Individual { ref mut storage, ref mut next_buffer_id } => {
+                    // Add a new pair of buffers
+                    storage.insert(*next_buffer_id, pool::OwnedBuffer::new());
+                    let id = *next_buffer_id;
+                    *next_buffer_id += 1;
+                    (id, true)
+                }
             }
         };
 
@@ -194,7 +186,6 @@ impl RawCommandBuffer {
             memory,
             buf: BufferSlice::new(),
             id,
-            accessible,
             individual_reset,
             fbo,
             display_fb: 0 as n::FrameBuffer,
@@ -202,16 +193,6 @@ impl RawCommandBuffer {
             limits,
             active_attribs: 0,
         }
-    }
-
-    /// Try to take access of the pool and shared memory.
-    pub(crate) fn take_access(&self) -> bool {
-        self.accessible.swap(false, atomic::Ordering::Acquire)
-    }
-
-    /// Release access of the pool and shared memory.
-    pub(crate) fn release_access(&self) {
-        self.accessible.store(true, atomic::Ordering::Release)
     }
 
     // Soft reset only the buffers, but doesn't free any memory or clears memory
@@ -222,18 +203,21 @@ impl RawCommandBuffer {
     }
 
     fn push_cmd(&mut self, cmd: Command) {
-        if self.take_access() {
-            let mut cmd_buffer = unsafe { &mut (*self.memory.get()).commands };
+        let slice = {
+            let mut memory = self.memory.lock().unwrap();
+            let mut cmd_buffer = match *memory {
+                BufferMemory::Linear(ref mut buffer) => &mut buffer.commands,
+                BufferMemory::Individual { ref mut storage, .. } => {
+                    &mut storage.get_mut(&self.id).unwrap().commands
+                }
+            };
             cmd_buffer.push(cmd);
-            self.buf.append(
-                BufferSlice {
-                    offset: cmd_buffer.len() as u32 - 1,
-                    size: 1,
-                });
-            self.release_access();
-        } else {
-            error!("Pushing commands while pool is in access.")
+            BufferSlice {
+                offset: cmd_buffer.len() as u32 - 1,
+                size: 1,
+            }
         };
+        self.buf.append(slice);
     }
 
     /// Copy a given vector slice into the data buffer.
@@ -242,19 +226,19 @@ impl RawCommandBuffer {
     }
     /// Copy a given u8 slice into the data buffer.
     fn add_raw(&mut self, data: &[u8]) -> BufferSlice {
-        if self.take_access() {
-            let mut data_buffer = unsafe { &mut (*self.memory.get()).data };
-            data_buffer.extend_from_slice(data);
-            let slice = BufferSlice {
-                offset: (data_buffer.len() - data.len()) as u32,
-                size: data.len() as u32,
-            };
-            self.release_access();
-            slice
-        } else {
-            error!("Pushing data while pool is in access.");
-            BufferSlice::new()
-        }
+        let mut memory = self.memory.lock().unwrap();
+        let mut data_buffer = match *memory {
+            BufferMemory::Linear(ref mut buffer) => &mut buffer.data,
+            BufferMemory::Individual { ref mut storage, .. } => {
+                &mut storage.get_mut(&self.id).unwrap().data
+            }
+        };
+        data_buffer.extend_from_slice(data);
+        let slice = BufferSlice {
+            offset: (data_buffer.len() - data.len()) as u32,
+            size: data.len() as u32,
+        };
+        slice
     }
 
     fn is_main_target(&self, tv: n::TargetView) -> bool {
@@ -275,20 +259,25 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
     fn reset(&mut self, _release_resources: bool) {
-        // TODO: should use the `release_resources` and shrink the buffers?
         if !self.individual_reset {
             error!("Associated pool must allow individual resets.");
             return
         }
 
-        if self.take_access() {
-            self.soft_reset();
-            let mut buf = unsafe { &mut *self.memory.get() };
-            buf.commands.clear();
-            buf.data.clear();
-            self.release_access();
-        } else {
-            error!("Trying to reset command buffer while in access!");
+        self.soft_reset();
+        let mut memory = self.memory.lock().unwrap();
+        match *memory {
+            // Linear` can't have individual reset ability.
+            BufferMemory::Linear(_) => unreachable!(),
+            BufferMemory::Individual { ref mut storage, .. } => {
+                // TODO: should use the `release_resources` and shrink the buffers?
+                storage
+                    .get_mut(&self.id)
+                    .map(|buffer| {
+                        buffer.commands.clear();
+                        buffer.data.clear();
+                    });
+            }
         }
 
     }
@@ -449,20 +438,20 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
+    fn bind_graphics_pipeline(&mut self, _pipeline: &n::GraphicsPipeline) {
         unimplemented!()
     }
 
     fn bind_graphics_descriptor_sets(
         &mut self,
-        layout: &n::PipelineLayout,
-        first_set: usize,
-        sets: &[&n::DescriptorSet],
+        _layout: &n::PipelineLayout,
+        _first_set: usize,
+        _sets: &[&n::DescriptorSet],
     ) {
         unimplemented!()
     }
 
-    fn bind_compute_pipeline(&mut self, pipeline: &n::ComputePipeline) {
+    fn bind_compute_pipeline(&mut self, _pipeline: &n::ComputePipeline) {
         unimplemented!()
     }
 
@@ -474,7 +463,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         self.push_cmd(Command::DispatchIndirect(*buffer, offset));
     }
 
-    fn copy_buffer(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: &[BufferCopy]) {
+    fn copy_buffer(&mut self, _src: &n::Buffer, _dst: &n::Buffer, _regions: &[BufferCopy]) {
         unimplemented!()
     }
 

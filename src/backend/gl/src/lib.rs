@@ -891,20 +891,22 @@ impl c::RawCommandQueue<Backend> for CommandQueue {
         submit_info: c::RawSubmission<Backend>,
         fence: Option<&native::Fence>,
     ) {
+        use pool::BufferMemory;
         {
             for cb in submit_info.cmd_buffers {
-                if cb.take_access() {
-                    let buffer = &*cb.memory.get();
-
-                    assert!(buffer.commands.len() >= (cb.buf.offset+cb.buf.size) as usize);
-                    let commands = &buffer.commands[cb.buf.offset as usize..(cb.buf.offset+cb.buf.size) as usize];
-                    self.reset_state();
-                    for com in commands {
-                        self.process(com, &buffer.data);
+                let memory = cb.memory.lock().unwrap();
+                let buffer = match *memory {
+                    BufferMemory::Linear(ref buffer) => buffer,
+                    BufferMemory::Individual { ref storage, .. } => {
+                        storage.get(&cb.id).unwrap()
                     }
-                    cb.release_access();
-                } else {
-                    error!("Trying to process command buffer while in access!");
+                };
+
+                assert!(buffer.commands.len() >= (cb.buf.offset+cb.buf.size) as usize);
+                let commands = &buffer.commands[cb.buf.offset as usize..(cb.buf.offset+cb.buf.size) as usize];
+                self.reset_state();
+                for com in commands {
+                    self.process(com, &buffer.data);
                 }
             }
         }
