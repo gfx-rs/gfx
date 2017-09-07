@@ -5,18 +5,6 @@ use std::ops::Range;
 use {buffer, image};
 use Backend;
 
-/// A service trait used to get the raw data out of strong types.
-/// Not meant for public use.
-#[doc(hidden)]
-pub trait Typed: Sized {
-    /// The raw type behind the phantom.
-    type Raw;
-    /// Crete a new phantom from the raw type.
-    fn new(raw: Self::Raw) -> Self;
-    /// Get an internal reference to the raw type.
-    fn raw(&self) -> &Self::Raw;
-}
-
 /// A trait for plain-old-data types.
 ///
 /// A POD type does not have invalid bit patterns and can be safely

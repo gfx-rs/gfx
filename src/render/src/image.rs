@@ -1,8 +1,10 @@
 use core;
-use core::memory;
+use memory;
 
 pub use core::image::{
-    Kind, Level, Usage, ImageInfoCommon, RawImageInfo, NewImageInfo
+    CreationError, Kind, AaMode, Size, Level, Layer, Usage, Dimensions,
+    ImageInfoCommon, RawImageInfo, NewImageInfo,
+    SamplerInfo, SubresourceRange
 };
 
 /// Texture storage descriptor.
@@ -14,7 +16,8 @@ pub struct Info {
     pub levels: Level,
     pub format: core::format::SurfaceType,
     pub bind: memory::Bind,
-    pub usage: Usage,
+    pub usage: memory::Usage,
+    // TODO: do we need things from image::Usage ?
 }
 
 impl Info {

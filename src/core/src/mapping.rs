@@ -2,41 +2,13 @@
 
 //! Memory mapping
 
-use std::{fmt, ops};
-use std::error::Error as StdError;
+use std::ops;
 use Backend;
 
-
+// TODO
 /// Error accessing a mapping.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum Error {
-    /// The requested mapping access did not match the expected usage.
-    InvalidAccess,
-    /// The requested mapping access overlaps with another.
-    AccessOverlap,
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use self::Error::*;
-        match *self {
-            InvalidAccess => {
-                write!(f, "{}", self.description())
-            }
-            AccessOverlap => write!(f, "{}", self.description())
-        }
-    }
-}
-
-impl StdError for Error {
-    fn description(&self) -> &str {
-        use self::Error::*;
-        match *self {
-            InvalidAccess => "The requested mapping access did not match the expected usage",
-            AccessOverlap => "The requested mapping access overlaps with another"
-        }
-    }
-}
+pub struct Error;
 
 /// Mapping reader
 pub struct Reader<'a, B: Backend, T: 'a + Copy> {
