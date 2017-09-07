@@ -65,10 +65,10 @@ impl Drop for RawInstance {
 pub struct Instance {
     pub raw: Arc<RawInstance>,
 
-    /// Supported surface extensions of this instance.
-    pub surface_extensions: Vec<&'static str>,
+    /// Supported extensions of this instance.
+    pub extensions: Vec<&'static str>,
 
-    //TODO: move into `RawInstance`, destroy in `drop`
+    // TODO: move into `RawInstance`, destroy in `drop`
     _debug_report: Option<(ext::DebugReport, vk::DebugReportCallbackEXT)>,
 }
 
@@ -131,20 +131,51 @@ impl Instance {
             .enumerate_instance_extension_properties()
             .expect("Unable to enumerate instance extensions");
 
-        //println!("Extensions: {:?}", instance_extensions);
+        let instance_layers = entry
+            .enumerate_instance_layer_properties()
+            .expect("Unable to enumerate instance layers");
 
-        // Check our surface extensions against the available extensions
-        let surface_extensions = SURFACE_EXTENSIONS.iter().filter_map(|ext| {
-            instance_extensions.iter().find(|inst_ext| {
-                unsafe { CStr::from_ptr(inst_ext.extension_name.as_ptr()) == CStr::from_ptr(ext.as_ptr() as *const i8) }
-            }).and_then(|_| Some(*ext))
-        }).collect::<Vec<&str>>();
+        // Check our xtensions against the available extensions
+        let extensions = SURFACE_EXTENSIONS
+            .iter()
+            .chain(EXTENSIONS.iter())
+            .filter_map(|&ext| {
+                instance_extensions
+                    .iter()
+                    .find(|inst_ext| unsafe {
+                        CStr::from_ptr(inst_ext.extension_name.as_ptr()) ==
+                            CStr::from_ptr(ext.as_ptr() as *const i8)
+                    })
+                    .map(|_| ext)
+                    .or_else(|| {
+                        warn!("Unable to find extension: {}", ext);
+                        None
+                    })
+            })
+            .collect::<Vec<&str>>();
+
+        // Check requested layers against the available layers
+        let layers = LAYERS
+            .iter()
+            .filter_map(|&layer| {
+                instance_layers
+                    .iter()
+                    .find(|inst_layer| unsafe {
+                        CStr::from_ptr(inst_layer.layer_name.as_ptr()) ==
+                            CStr::from_ptr(layer.as_ptr() as *const i8)
+                    })
+                    .map(|_| layer)
+                    .or_else(|| {
+                        warn!("Unable to find layer: {}", layer);
+                        None
+                    })
+            })
+            .collect::<Vec<&str>>();
 
         let instance = {
-            let cstrings = LAYERS
+            let cstrings = layers
                 .iter()
-                .chain(EXTENSIONS.iter())
-                .chain(surface_extensions.iter())
+                .chain(extensions.iter())
                 .map(|&s| CString::new(s).unwrap())
                 .collect::<Vec<_>>();
 
@@ -158,10 +189,10 @@ impl Instance {
                 p_next: ptr::null(),
                 flags: vk::InstanceCreateFlags::empty(),
                 p_application_info: &app_info,
-                enabled_layer_count: LAYERS.len() as _,
+                enabled_layer_count: layers.len() as _,
                 pp_enabled_layer_names: str_pointers.as_ptr(),
-                enabled_extension_count: (EXTENSIONS.len() + surface_extensions.len()) as _,
-                pp_enabled_extension_names: str_pointers[LAYERS.len()..].as_ptr(),
+                enabled_extension_count: extensions.len() as _,
+                pp_enabled_extension_names: str_pointers[layers.len()..].as_ptr(),
             };
 
             entry.create_instance(&create_info, None)
@@ -190,7 +221,7 @@ impl Instance {
 
         Instance {
             raw: Arc::new(RawInstance(instance)),
-            surface_extensions,
+            extensions,
             _debug_report: debug_report,
         }
     }

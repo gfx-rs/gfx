@@ -41,7 +41,7 @@ impl Instance {
             .expect("Unable to load Vulkan entry points");
 
         let surface = self
-            .surface_extensions
+            .extensions
             .iter()
             .map(|&extension| {
                 match extension {
