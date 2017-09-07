@@ -26,7 +26,7 @@ impl d::Device<B> for Device {
 
     fn create_graphics_pipelines(
         &mut self,
-        descs: &[(&n::ShaderLib, &n::PipelineLayout, pass::SubPass<B>, &pso::GraphicsPipelineDesc)],
+        descs: &[(&n::ShaderLib, &n::PipelineLayout, pass::Subpass<B>, &pso::GraphicsPipelineDesc)],
     ) -> Vec<Result<handle::GraphicsPipeline<B>, pso::CreationError>> {
         unimplemented!()
     }

@@ -1,6 +1,6 @@
 
 use conv;
-use core::{self, pso};
+use core::{self, pass, pso};
 use core::target::{Layer, Level};
 use core::image as i;
 use gl;
@@ -93,7 +93,7 @@ pub struct DescriptorSet;
 pub struct DescriptorPool {}
 
 impl core::DescriptorPool<Backend> for DescriptorPool {
-    fn allocate_sets(&mut self, _layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
+    fn allocate_sets(&mut self, layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
         layouts.iter().map(|_| DescriptorSet).collect()
     }
 
@@ -118,9 +118,18 @@ impl ShaderLib {
 #[derive(Debug)]
 #[allow(missing_copy_implementations)]
 pub struct Heap;
+
 #[derive(Debug)]
-#[allow(missing_copy_implementations)]
-pub struct RenderPass;
+pub struct RenderPass {
+    pub attachments: Vec<pass::Attachment>,
+    pub subpasses: Vec<SubpassDesc>,
+}
+
+#[derive(Debug)]
+pub struct SubpassDesc {
+    pub color_attachments: Vec<usize>,
+}
+
 #[derive(Debug)]
 #[allow(missing_copy_implementations)]
 pub struct ConstantBufferView;
