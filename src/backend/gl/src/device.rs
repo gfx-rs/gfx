@@ -389,8 +389,7 @@ impl d::Device<B> for Device {
     fn read_mapping<'a, T>(
         &self,
         _: &'a n::Buffer,
-        _: u64,
-        _: u64,
+        _: Range<u64>,
     ) -> Result<mapping::Reader<'a, B, T>, mapping::Error>
     where
         T: Copy,
@@ -398,11 +397,16 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn write_mapping<'a, 'b, T>(&mut self, _: &'a n::Buffer, _: u64, _: u64)
-                                -> Result<mapping::Writer<'a, B, T>, mapping::Error>
-        where T: Copy {
-            unimplemented!()
-        }
+    fn write_mapping<'a, 'b, T>(
+        &mut self,
+        _: &'a n::Buffer,
+        _: Range<u64>,
+    ) -> Result<mapping::Writer<'a, B, T>, mapping::Error>
+    where
+        T: Copy,
+    {
+        unimplemented!()
+    }
 
     fn create_semaphore(&mut self) -> n::Semaphore {
         n::Semaphore
