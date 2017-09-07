@@ -1,0 +1,53 @@
+[package]
+name = "quad_render"
+version = "0.1.0"
+publish = false
+workspace = "../../.."
+
+[features]
+default = ["vulkan"]
+#metal = ["gfx_device_metal", "gfx_window_metal"]
+gl = ["glutin", "gfx_backend_gl"]
+#dx11 = ["gfx_device_dx11", "gfx_window_dxgi"]
+#dx12 = ["gfx_device_dx12", "gfx_window_dxgi"]
+vulkan = ["gfx_backend_vulkan"]
+unstable = []
+
+[[bin]]
+name = "quad_render"
+path = "main.rs"
+
+[dependencies]
+env_logger = "0.4"
+glutin = { version = "0.9", optional = true }
+image = "0.15"
+log = "0.3"
+winit = "0.7"
+gfx_core = { path = "../../../src/core", version = "0.10" }
+gfx = { path = "../../../src/render", version = "0.17" }
+
+[dependencies.gfx_backend_gl]
+path = "../../../src/backend/gl"
+version = "0.1"
+optional = true
+
+[dependencies.gfx_backend_vulkan]
+path = "../../../src/backend/vulkan"
+version = "0.1"
+optional = true
+
+#[dependencies.gfx_device_metal]
+#path = "../../../src/backend/metal"
+#version = "0.3"
+#optional = true
+
+#[dependencies.gfx_window_metal]
+#path = "../../../src/window/metal"
+#version = "0.4"
+#optional = true
+
+#[target.'cfg(windows)'.dependencies]
+#gfx_device_dx11 = { path = "../../../src/backend/dx11", version = "0.6", optional = true }
+#gfx_device_dx12 = { path = "../../../src/backend/dx12", version = "0.1", optional = true }
+#gfx_window_dxgi = { path = "../../../src/window/dxgi", version = "0.9", optional = true }
+

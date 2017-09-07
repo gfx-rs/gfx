@@ -174,65 +174,97 @@ impl<B: Backend, C> Queue<B, C> {
     }
 }
 
-/* TODO
-pub(crate) enum Queue<B: Backend> {
-    General(CommandQueue<B, core::General>),
-    Graphics(CommandQueue<B, core::Graphics>),
-}
-*/
-
-// TODO: could be named Instance too ?
-pub struct Context<B: Backend> {
+pub struct Context<B: Backend, C>
+    where C: core::queue::Supports<core::Transfer>
+{
     surface: B::Surface,
     device: Device<B>,
-    queue: Queue<B, core::Graphics>,
+    queue: Queue<B, C>,
     swapchain: B::Swapchain,
-    frame_bundles: VecDeque<FrameBundle<B>>,
-    frame_acquired: Option<FrameBundle<B>>,
+    frame_bundles: VecDeque<FrameBundle<B, C>>,
+    frame_acquired: Option<FrameBundle<B, C>>,
     garbage: handle::GarbageReceiver<B>,
 }
 
 pub struct Backbuffer<B: Backend, Cf: RenderFormat> {
-    color: handle::RenderTargetView<B, Cf>,
+    pub color: handle::RenderTargetView<B, Cf>,
     // TODO: depth
 }
 
-use self::SyncState::*;
+use self::Signal::*;
 #[derive(PartialEq)]
-enum SyncState {
-    Unreached,
+enum Signal {
+    // A signal is pending and can be waited for
+    Pending,
+    // No signal is pending or it is already waited for
     Reached,
 }
 
 struct Sync<T> {
     inner: T,
-    state: SyncState,
+    signal: Signal,
 }
 
 impl<T> Sync<T> {
     fn reached(inner: T) -> Self {
-        Sync { inner, state: Reached }
+        Sync { inner, signal: Reached }
     }
 }
 
-struct FrameBundle<B: Backend> {
+struct FrameBundle<B: Backend, C> {
     handles: handle::Bag<B>,
-    scopes: Vec<encoder::ScopeDependency<B, core::Graphics>>,
+    scopes: Vec<encoder::ScopeDependency<B, C>>,
     // wait until the backbuffer image is ready
-    wait_semaphore: Sync<B::Semaphore>,
+    wait_semaphore: B::Semaphore,
     // signal when the frame is done
-    signal_semaphore: Sync<B::Semaphore>,
+    signal_semaphore: B::Semaphore,
     signal_fence: Sync<B::Fence>,
 }
 
-impl<B: Backend> Context<B> {
-    pub fn init<Cf>(mut surface: B::Surface, adapter: B::Adapter)
-        -> (Self, Vec<Backbuffer<B, Cf>>)
-        where Cf: RenderFormat
-    {
+trait Capability: Sized {
+    fn open<B: Backend>(
+        surface: &B::Surface,
+        adapter: &B::Adapter,
+        garbage: handle::GarbageSender<B>
+    ) -> (Device<B>, Queue<B, Self>);
+}
+
+impl Capability for core::General {
+    fn open<B: Backend>(
+        surface: &B::Surface,
+        adapter: &B::Adapter,
+        garbage: handle::GarbageSender<B>
+    ) -> (Device<B>, Queue<B, Self>) {
         let core::Gpu {
             mut device,
             mut general_queues,
+            heap_types,
+            memory_heaps,
+            ..
+        } = adapter.open_with(|ref family, qtype| {
+            if qtype.supports_graphics()
+               && qtype.supports_compute()
+               && surface.supports_queue(family) {
+                (1, QueueType::General)
+            } else {
+                (0, QueueType::Transfer)
+            }
+        });
+
+        let device = Device::new(device, heap_types, memory_heaps, garbage);
+        let queue = Queue::new(general_queues.remove(0));
+        (device, queue)
+    }
+}
+
+impl Capability for core::Graphics {
+    fn open<B: Backend>(
+        surface: &B::Surface,
+        adapter: &B::Adapter,
+        garbage: handle::GarbageSender<B>
+    ) -> (Device<B>, Queue<B, Self>) {
+        let core::Gpu {
+            mut device,
             mut graphics_queues,
             heap_types,
             memory_heaps,
@@ -244,26 +276,58 @@ impl<B: Backend> Context<B> {
                 (0, QueueType::Transfer)
             }
         });
-        
+
+        let device = Device::new(device, heap_types, memory_heaps, garbage);
         let queue = Queue::new(graphics_queues.remove(0));
+        (device, queue)
+    }
+}
+
+impl<B: Backend> Context<B, core::General> {
+    pub fn init_general<Cf>(
+        surface: B::Surface,
+        adapter: &B::Adapter
+    ) -> (Self, Vec<Backbuffer<B, Cf>>)
+        where Cf: RenderFormat
+    {
+        Context::init(surface, adapter)
+    }
+}
+
+impl<B: Backend> Context<B, core::Graphics> {
+    pub fn init_graphics<Cf>(
+        surface: B::Surface,
+        adapter: &B::Adapter
+    ) -> (Self, Vec<Backbuffer<B, Cf>>)
+        where Cf: RenderFormat
+    {
+        Context::init(surface, adapter)
+    }
+}
+
+impl<B: Backend, C> Context<B, C>
+    where C: core::queue::Supports<core::Transfer>
+{
+    fn init<Cf>(mut surface: B::Surface, adapter: &B::Adapter)
+        -> (Self, Vec<Backbuffer<B, Cf>>)
+        where Cf: RenderFormat, C: Capability
+    {
+        let (garbage_sender, garbage_receiver) = handle::garbage_channel();
+        let (mut device, queue) = Capability::open(&surface, adapter, garbage_sender);
 
         let swap_config = core::SwapchainConfig::new()
             .with_color::<Cf>();
-        // TODO: call supports_queue
-        let mut swapchain = surface.build_swapchain(swap_config, &queue.inner);
-        let backbuffers = swapchain.take_backbuffers();
+        let (swapchain, backbuffers) = surface.build_swapchain(swap_config, &queue.inner);
 
         let frame_bundles = backbuffers.iter()
             .map(|_| FrameBundle {
                 handles: handle::Bag::new(),
                 scopes: Vec::new(),
-                wait_semaphore: Sync::reached(device.create_semaphore()),
-                signal_semaphore: Sync::reached(device.create_semaphore()),
-                signal_fence: Sync::reached(device.create_fence(true)),
+                wait_semaphore: device.mut_raw().create_semaphore(),
+                signal_semaphore: device.mut_raw().create_semaphore(),
+                signal_fence: Sync::reached(
+                    device.mut_raw().create_fence(true)),
             }).collect();
-
-        let (garbage_sender, garbage_receiver) = handle::garbage_channel();
-        let mut device = Device::new(device, heap_types, memory_heaps, garbage_sender);
 
         let backbuffers = backbuffers.into_iter()
             .map(|raw| {
@@ -271,11 +335,10 @@ impl<B: Backend> Context<B> {
                     color: Typed::new(device
                         .view_backbuffer_as_render_target_raw(
                             raw.color,
-                            unimplemented!(),
-                            unimplemented!(),
+                            surface.get_kind(),
                             Cf::get_format(),
                             (0..1, 0..1)
-                        ).unwrap()
+                        ).expect("backbuffer RTV")
                     )
                 }
             }).collect::<Vec<_>>();
@@ -294,9 +357,10 @@ impl<B: Backend> Context<B> {
     pub fn acquire_frame(&mut self) -> Frame {
         assert!(self.frame_acquired.is_none());
 
-        let mut bundle = self.frame_bundles.pop_front().unwrap();
+        let mut bundle = self.frame_bundles.pop_front()
+            .expect("no frame bundles");
 
-        if bundle.signal_fence.state == Unreached {
+        if bundle.signal_fence.signal == Pending {
             self.device.mut_raw()
                 .wait_for_fences(
                     &[&bundle.signal_fence.inner],
@@ -304,28 +368,28 @@ impl<B: Backend> Context<B> {
                     !0);
         }
         self.device.mut_raw().reset_fences(&[&bundle.signal_fence.inner]);
-        bundle.signal_fence.state = Reached;
+        bundle.signal_fence.signal = Reached;
 
         bundle.handles.clear();
         bundle.scopes.clear();
 
         let frame = self.swapchain.acquire_frame(
-            core::FrameSync::Semaphore(&mut bundle.wait_semaphore.inner)
+            core::FrameSync::Semaphore(&mut bundle.wait_semaphore)
         );
-        bundle.wait_semaphore.state = Unreached;
         self.frame_acquired = Some(bundle);
 
         self.cleanup();
         frame
     }
 
-    pub fn acquire_graphics_scope(&mut self) -> encoder::Scope<B, core::Graphics> {
+    pub fn acquire_encoder_scope(&mut self) -> encoder::Scope<B, C> {
         self.queue.acquire_encoder_scope()
     }
 
     // TODO: allow submissions before present
-    pub fn present(&mut self, submits: Vec<encoder::Submit<B, core::Graphics>>) {
-        let mut bundle = self.frame_acquired.take().unwrap();
+    pub fn present(&mut self, submits: Vec<encoder::Submit<B, C>>) {
+        let mut bundle = self.frame_acquired.take()
+            .expect("no acquired frame");
 
         let inner_submits: Vec<_> = submits.into_iter()
             .map(|mut submit| {
@@ -336,20 +400,17 @@ impl<B: Backend> Context<B> {
 
         {
             let submission = core::Submission::new()
-                .wait_on(&[(&bundle.wait_semaphore.inner, pso::BOTTOM_OF_PIPE)])
-                .signal(&[&bundle.signal_semaphore.inner])
+                .wait_on(&[(&bundle.wait_semaphore, pso::BOTTOM_OF_PIPE)])
+                .signal(&[&bundle.signal_semaphore])
+                .promote::<C>()
                 .submit(&inner_submits);
-            self.queue.inner.submit(submission, Some(&bundle.signal_fence.inner));
+            self.queue.inner.submit::<C>(submission, Some(&bundle.signal_fence.inner));
         }
-        bundle.wait_semaphore.state = Reached;
-        bundle.signal_semaphore.state = Unreached;
-        bundle.signal_fence.state = Unreached;
+        bundle.signal_fence.signal = Pending;
 
         self.swapchain.present(
             &mut self.queue.inner,
-            &[&bundle.signal_semaphore.inner]);
-        // looks useless here but meant for multiple submissions
-        bundle.signal_semaphore.state = Reached;
+            &[&bundle.signal_semaphore]);
 
         self.frame_bundles.push_back(bundle);
     }
@@ -382,7 +443,7 @@ impl<B: Backend> Context<B> {
                 // self will be the one receiving the garbage afterwards
                 bundle.handles.clear();
                 bundle.scopes.clear();
-                if bundle.signal_fence.state == Unreached {
+                if bundle.signal_fence.signal == Pending {
                     Some(&bundle.signal_fence.inner)
                 } else {
                     None
@@ -400,9 +461,16 @@ impl<B: Backend> Context<B> {
     pub fn mut_device(&mut self) -> &mut Device<B> {
         &mut self.device
     }
+
+    // TODO: remove
+    pub fn mut_queue(&mut self) -> &mut CommandQueue<B, C> {
+        &mut self.queue.inner
+    }
 }
 
-impl<B: Backend> Drop for Context<B> {
+impl<B: Backend, C> Drop for Context<B, C>
+    where C: core::queue::Supports<core::Transfer>
+{
     fn drop(&mut self) {
         self.wait_idle();
         // FIXME?: leak if handles are still in use outside
@@ -410,8 +478,8 @@ impl<B: Backend> Drop for Context<B> {
 
         let device = self.device.mut_raw();
         for bundle in self.frame_bundles.drain(..) {
-            device.destroy_semaphore(bundle.wait_semaphore.inner);
-            device.destroy_semaphore(bundle.signal_semaphore.inner);
+            device.destroy_semaphore(bundle.wait_semaphore);
+            device.destroy_semaphore(bundle.signal_semaphore);
             device.destroy_fence(bundle.signal_fence.inner);
         }
     }

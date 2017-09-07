@@ -17,5 +17,6 @@ members = [
     #"src/window/metal",
     #"src/window/sdl",
     #"examples",
-    "examples/core/quad"
+    "examples/core/quad",
+    "examples/render/quad_render",
 ]

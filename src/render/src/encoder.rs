@@ -14,7 +14,7 @@ use core::command::CommandBuffer;
 use memory::{self, cast_slice, Typed, Pod, Usage};
 use {handle, image};
 
-// This is the unique owner of the inner UnsafeCell.
+// This is the unique owner of the inner struct.
 pub struct Scope<B: Backend, C>(Arc<UnsafeCell<ScopeInner<B, C>>>);
 // Keep-alive without any access (only Drop if last one).
 pub(crate) struct ScopeDependency<B: Backend, C>(Arc<UnsafeCell<ScopeInner<B, C>>>);
@@ -229,6 +229,10 @@ impl<B: Backend, C> Submit<B, C> {
 }
 
 impl<'a, B: Backend, C> Encoder<'a, B, C> {
+    pub fn mut_buffer(&mut self) -> &mut CommandBuffer<'a, B, C> {
+        &mut self.buffer
+    }
+
     pub fn finish(self) -> Submit<B, C> {
         Submit {
             inner: self.buffer.finish(),

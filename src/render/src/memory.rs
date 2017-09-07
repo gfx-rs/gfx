@@ -1,4 +1,4 @@
-pub use core::memory::{Access, Pod, cast_slice};
+pub use core::memory::{Pod, cast_slice};
 
 use std::marker::PhantomData;
 use std::{ops, cmp, hash};
