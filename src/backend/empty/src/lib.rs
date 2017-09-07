@@ -177,13 +177,13 @@ impl core::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn read_mapping<'a, T>(&self, _: &'a (), _: u64, _: u64)
+    fn read_mapping<'a, T>(&self, _: &'a (), _: Range<u64>)
                            -> Result<mapping::Reader<'a, Backend, T>, mapping::Error>
         where T: Copy {
             unimplemented!()
         }
 
-    fn write_mapping<'a, 'b, T>(&mut self, _: &'a (), _: u64, _: u64)
+    fn write_mapping<'a, 'b, T>(&mut self, _: &'a (), _: Range<u64>)
                                 -> Result<mapping::Writer<'a, Backend, T>, mapping::Error>
         where T: Copy {
             unimplemented!()
