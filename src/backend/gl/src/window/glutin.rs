@@ -90,15 +90,9 @@ pub fn update_views_raw(window: &glutin::GlWindow, old_dimensions: image::Dimens
 pub struct Swapchain {
     // Underlying window, required for presentation
     window: Rc<glutin::GlWindow>,
-    // Single element backbuffer
-    backbuffer: [core::Backbuffer<B>; 1],
 }
 
 impl core::Swapchain<B> for Swapchain {
-    fn get_backbuffers(&mut self) -> &[core::Backbuffer<B>] {
-        &self.backbuffer
-    }
-
     fn acquire_frame(&mut self, _sync: core::FrameSync<B>) -> core::Frame {
         // TODO: sync
         core::Frame::new(0)
@@ -122,22 +116,26 @@ impl Surface {
 }
 
 impl core::Surface<B> for Surface {
+    fn get_kind(&self) -> core::image::Kind {
+        let (w, h, _, a) = get_window_dimensions(&self.window);
+        core::image::Kind::D2(w, h, a)
+    }
+
     fn supports_queue(&self, _: &QueueFamily) -> bool { true }
 
     fn build_swapchain<C>(
         &mut self,
         _config: core::SwapchainConfig,
         _: &core::CommandQueue<B, C>,
-    ) -> Swapchain {
+    ) -> (Swapchain, Vec<core::Backbuffer<B>>) {
         let backbuffer = core::Backbuffer {
             color: n::Image::Surface(0),
             depth_stencil: Some(n::Image::Surface(0)),
         };
 
-        Swapchain {
+        (Swapchain {
             window: self.window.clone(),
-            backbuffer: [backbuffer; 1],
-        }
+        }, vec![backbuffer])
     }
 }
 
