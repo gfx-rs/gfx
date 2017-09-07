@@ -55,7 +55,6 @@ use queue::CommandQueue;
 
 /// A `Surface` abstracts the surface of a native window, which will be presented
 pub trait Surface<B: Backend> {
-
     /// Check if the queue family supports presentation for this surface.
     ///
     /// # Examples

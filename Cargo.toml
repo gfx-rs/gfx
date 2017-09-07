@@ -9,7 +9,7 @@ members = [
     "src/backend/vulkan",
     "src/core",
     #"src/macros",
-    #"src/render",
+    "src/render",
     #"src/support",
     #"src/window/dxgi",
     #"src/window/glfw",
