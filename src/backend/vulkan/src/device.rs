@@ -276,7 +276,7 @@ impl d::Device<B> for Device {
 
                 // Vertex stage
                 let vs_module = if let Some(module) = shader_lib.shaders.get(&desc.shader_entries.vertex_shader)
-                    { module } else { return Err(pso::CreationError) };
+                    { module } else { return Err(pso::CreationError::Other) };
                 stages.push(vk::PipelineShaderStageCreateInfo {
                     s_type: vk::StructureType::PipelineShaderStageCreateInfo,
                     p_next: ptr::null(),
@@ -290,7 +290,7 @@ impl d::Device<B> for Device {
                 // Pixel stage
                 if let Some(pixel_shader) = desc.shader_entries.pixel_shader {
                     let ps_module = if let Some(module) = shader_lib.shaders.get(&pixel_shader)
-                        { module } else { return Err(pso::CreationError) };
+                        { module } else { return Err(pso::CreationError::Other) };
                     stages.push(vk::PipelineShaderStageCreateInfo {
                         s_type: vk::StructureType::PipelineShaderStageCreateInfo,
                         p_next: ptr::null(),
@@ -305,7 +305,7 @@ impl d::Device<B> for Device {
                 // Geometry stage
                 if let Some(geometry_shader) = desc.shader_entries.geometry_shader {
                     let gs_module = if let Some(module) = shader_lib.shaders.get(&geometry_shader)
-                        { module } else { return Err(pso::CreationError) };
+                        { module } else { return Err(pso::CreationError::Other) };
                     stages.push(vk::PipelineShaderStageCreateInfo {
                         s_type: vk::StructureType::PipelineShaderStageCreateInfo,
                         p_next: ptr::null(),
@@ -320,7 +320,7 @@ impl d::Device<B> for Device {
                 // Domain stage
                 if let Some(domain_shader) = desc.shader_entries.domain_shader {
                     let ds_module = if let Some(module) = shader_lib.shaders.get(&domain_shader)
-                        { module } else { return Err(pso::CreationError) };
+                        { module } else { return Err(pso::CreationError::Other) };
                     stages.push(vk::PipelineShaderStageCreateInfo {
                         s_type: vk::StructureType::PipelineShaderStageCreateInfo,
                         p_next: ptr::null(),
@@ -335,7 +335,7 @@ impl d::Device<B> for Device {
                 // Hull stage
                 if let Some(hull_shader) = desc.shader_entries.hull_shader {
                     let hs_module = if let Some(module) = shader_lib.shaders.get(&hull_shader)
-                        { module } else { return Err(pso::CreationError) };
+                        { module } else { return Err(pso::CreationError::Other) };
                     stages.push(vk::PipelineShaderStageCreateInfo {
                         s_type: vk::StructureType::PipelineShaderStageCreateInfo,
                         p_next: ptr::null(),
@@ -374,7 +374,7 @@ impl d::Device<B> for Device {
                         binding: attr.binding as u32,
                         format: match conv::map_format(attr.element.format.0, attr.element.format.1) {
                             Some(fm) => fm,
-                            None => return Err(pso::CreationError),
+                            None => return Err(pso::CreationError::Other),
                         },
                         offset: attr.element.offset as u32,
                     });
@@ -592,7 +592,7 @@ impl d::Device<B> for Device {
 
                             // Check if pipeline compiled correctly
                             if pipeline == vk::Pipeline::null() {
-                                Err(pso::CreationError) // TODO
+                                Err(pso::CreationError::Other) // TODO
                             } else {
                                 Ok(n::GraphicsPipeline(pipeline))
                             }
@@ -610,7 +610,7 @@ impl d::Device<B> for Device {
     {
         let infos = descs.iter().map(|&(shader_lib, entry_point, layout)| {
             let cs_module = if let Some(module) = shader_lib.shaders.get(&entry_point)
-                    { module } else { return Err(pso::CreationError) };
+                    { module } else { return Err(pso::CreationError::Other) };
             let stage = vk::PipelineShaderStageCreateInfo {
                 s_type: vk::StructureType::PipelineShaderStageCreateInfo,
                 p_next: ptr::null(),
@@ -667,7 +667,7 @@ impl d::Device<B> for Device {
 
                             // Check if pipeline compiled correctly
                             if pipeline == vk::Pipeline::null() {
-                                Err(pso::CreationError) // TODO
+                                Err(pso::CreationError::Other) // TODO
                             } else {
                                 Ok(n::ComputePipeline(pipeline))
                             }
