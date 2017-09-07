@@ -101,10 +101,13 @@ pub struct SubpassDesc<'a> {
     pub color_attachments: &'a [AttachmentRef],
 }
 
+/// Index of a subpass.
+pub type SubpassId = usize;
+
 /// A sub-pass borrow of a pass.
-pub struct SubPass<'a, B: Backend> {
-    /// Index of the sub pass
-    pub index: usize,
+pub struct Subpass<'a, B: Backend> {
+    /// Index of the subpass
+    pub index: SubpassId,
     /// Main pass borrow.
     pub main_pass: &'a B::RenderPass,
 }

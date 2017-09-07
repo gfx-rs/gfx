@@ -273,7 +273,7 @@ pub trait Device<B: Backend> {
     fn create_pipeline_layout(&mut self, sets: &[&B::DescriptorSetLayout]) -> B::PipelineLayout;
 
     /// Create graphics pipelines.
-    fn create_graphics_pipelines<'a>(&mut self, &[(&B::ShaderLib, &B::PipelineLayout, pass::SubPass<'a, B>, &pso::GraphicsPipelineDesc)])
+    fn create_graphics_pipelines<'a>(&mut self, &[(&B::ShaderLib, &B::PipelineLayout, pass::Subpass<'a, B>, &pso::GraphicsPipelineDesc)])
             -> Vec<Result<B::GraphicsPipeline, pso::CreationError>>;
 
     /// Create compute pipelines.
