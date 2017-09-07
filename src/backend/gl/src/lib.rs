@@ -894,7 +894,11 @@ impl c::RawCommandQueue<Backend> for CommandQueue {
         use pool::BufferMemory;
         {
             for cb in submit_info.cmd_buffers {
-                let memory = cb.memory.lock().unwrap();
+                let memory = cb
+                    .memory
+                    .try_lock()
+                    .expect("Trying to submit a command buffers, while memory is in-use.");
+
                 let buffer = match *memory {
                     BufferMemory::Linear(ref buffer) => buffer,
                     BufferMemory::Individual { ref storage, .. } => {
