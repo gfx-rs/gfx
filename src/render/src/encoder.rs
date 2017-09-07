@@ -1,19 +1,91 @@
 //! Graphics commands encoder.
 
-#![deny(missing_docs)]
-
 use draw_state::target::{Depth, Stencil};
 use std::error::Error;
 use std::any::Any;
 use std::{fmt, mem};
+use std::cell::UnsafeCell;
+use std::sync::{mpsc, Arc};
 
-use core::{Backend, CommandQueue, GraphicsCommandPool, GraphicsQueue,
+use core::{Backend, CommandQueue, CommandPool,
            IndexType, SubmissionResult, VertexCount};
-use core::{self, command, format, handle, texture};
-use core::command::{GraphicsCommandBuffer, Submit};
-use core::memory::{self, cast_slice, Typed, Pod, Usage};
-use slice;
-use pso;
+use core::{self, command, format};
+use core::command::CommandBuffer;
+use memory::{self, cast_slice, Typed, Pod, Usage};
+use {handle, image};
+
+// This is the unique owner of the inner UnsafeCell.
+pub struct Scope<B: Backend, C>(Arc<UnsafeCell<ScopeInner<B, C>>>);
+// Keep-alive without any access (only Drop if last one).
+pub(crate) struct ScopeDependency<B: Backend, C>(Arc<UnsafeCell<ScopeInner<B, C>>>);
+
+impl<B: Backend, C> Scope<B, C> {
+    pub(crate) fn new(
+        pool: CommandPool<B, C>,
+        sender: CommandPoolSender<B, C>
+    ) -> Self {
+        Scope(Arc::new(UnsafeCell::new(ScopeInner {
+            pool: Some(pool), sender
+        })))
+    }
+
+    pub fn reserve(&mut self, additional: usize) {
+        let inner = unsafe { &mut *self.0.get() };
+        inner.mut_pool().reserve(additional);
+    }
+
+    pub fn acquire_encoder<'a>(&'a mut self) -> Encoder<'a, B, C> {
+        let inner = unsafe { &mut *self.0.get() };
+        Encoder {
+            buffer: inner.mut_pool().acquire_command_buffer(),
+            // raw_data: pso::RawDataSet::new(),
+            // access_info: command::AccessInfo::new(),
+            handles: handle::Bag::new(),
+            scope: ScopeDependency(self.0.clone())
+        }
+    }
+}
+
+struct ScopeInner<B: Backend, C> {
+    // option for owned drop
+    pool: Option<CommandPool<B, C>>,
+    sender: CommandPoolSender<B, C>,
+}
+
+impl<B: Backend, C> ScopeInner<B, C> {
+    fn mut_pool(&mut self) -> &mut CommandPool<B, C> {
+        self.pool.as_mut().unwrap()
+    }
+}
+
+impl<B: Backend, C> Drop for ScopeInner<B, C> {
+    fn drop(&mut self) {
+        // simply will not be recycled if the channel is down, should be ok.
+        let _ = self.sender.send(self.pool.take().unwrap());
+    }
+}
+
+pub(crate) type CommandPoolSender<B, C> = mpsc::Sender<CommandPool<B, C>>;
+pub(crate) type CommandPoolReceiver<B, C> = mpsc::Receiver<CommandPool<B, C>>;
+pub(crate) fn command_pool_channel<B: Backend, C>()
+    -> (CommandPoolSender<B, C>, CommandPoolReceiver<B, C>) {
+    mpsc::channel()
+}
+
+pub struct Encoder<'a, B: Backend, C> {
+    buffer: CommandBuffer<'a, B, C>,
+    // raw_data: pso::RawDataSet<B>,
+    // access_info: command::AccessInfo<B>,
+    handles: handle::Bag<B>,
+    scope: ScopeDependency<B, C>
+}
+
+pub struct Submit<B: Backend, C> {
+    pub(crate) inner: core::command::Submit<B, C>,
+    // access_info: command::AccessInfo<B>,
+    pub(crate) handles: handle::Bag<B>,
+    pub(crate) scope: ScopeDependency<B, C>
+}
 
 /// An error occuring in memory copies.
 #[allow(missing_docs)]
@@ -39,11 +111,11 @@ pub enum CopyError<S, D> {
 /// Result type returned when copying a buffer into another buffer.
 pub type CopyBufferResult = Result<(), CopyError<usize, usize>>;
 
-/// Result type returned when copying buffer data into a texture.
-pub type CopyBufferTextureResult = Result<(), CopyError<usize, [texture::Size; 3]>>;
+/// Result type returned when copying buffer data into an image.
+pub type CopyBufferImageResult = Result<(), CopyError<usize, [image::Size; 3]>>;
 
-/// Result type returned when copying texture data into a buffer.
-pub type CopyTextureBufferResult = Result<(), CopyError<[texture::Size; 3], usize>>;
+/// Result type returned when copying image data into a buffer.
+pub type CopyImageBufferResult = Result<(), CopyError<[image::Size; 3], usize>>;
 
 impl<S, D> fmt::Display for CopyError<S, D>
     where S: fmt::Debug + fmt::Display, D: fmt::Debug + fmt::Display
@@ -80,7 +152,7 @@ impl<S, D> Error for CopyError<S, D>
     }
 }
 
-/// An error occuring in buffer/texture updates.
+/// An error occuring in buffer and image updates.
 #[allow(missing_docs)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum UpdateError<T> {
@@ -96,7 +168,7 @@ pub enum UpdateError<T> {
 }
 
 fn check_update_usage<T>(usage: Usage) -> Result<(), UpdateError<T>> {
-    if usage == Usage::Dynamic {
+    if usage == Usage::Data {
         Ok(())
     } else {
         Err(UpdateError::InvalidUsage(usage))
@@ -126,53 +198,9 @@ impl<T: Any + fmt::Debug + fmt::Display> Error for UpdateError<T> {
     }
 }
 
-/// Extension for graphics command buffer pools to acquire a graphics encoder.
-pub trait GraphicsPoolExt<B: Backend> {
-    /// Acquire a `GraphicsEncoder` from the pool.
-    fn acquire_graphics_encoder(&mut self) -> GraphicsEncoder<B>;
-}
-
-impl<B: Backend> GraphicsPoolExt<B> for GraphicsCommandPool<B> {
-    fn acquire_graphics_encoder(&mut self) -> GraphicsEncoder<B> {
-        GraphicsEncoder::from(self.acquire_command_buffer())
-    }
-}
-
-/// Graphics Command Encoder
-///
-/// # Overview
-/// The `GraphicsEncoder` is a wrapper structure around a `CommandBuffer`. It is responsible for sending
-/// commands to the `CommandBuffer`.
-///
-/// The encoder exposes multiple functions that add commands to its internal `CommandBuffer`. To
-/// submit these commands to the GPU so they can be rendered, call `flush` or `synced_flush`.
-pub struct GraphicsEncoder<'a, B: Backend + 'a> {
-    command_buffer: GraphicsCommandBuffer<'a, B>,
-    raw_pso_data: pso::RawDataSet<B>,
-    access_info: command::AccessInfo<B>,
-    handles: handle::Manager<B>,
-}
-
-impl<'a, B: Backend> From<GraphicsCommandBuffer<'a, B>> for GraphicsEncoder<'a, B> {
-    fn from(combuf: GraphicsCommandBuffer<B>) -> GraphicsEncoder<B> {
-        GraphicsEncoder {
-            command_buffer: combuf,
-            raw_pso_data: pso::RawDataSet::new(),
-            access_info: command::AccessInfo::new(),
-            handles: handle::Manager::new(),
-        }
-    }
-}
-
-///
-pub struct GraphicsSubmission<B: Backend> {
-    submission: Submit<B, core::queue::Graphics>,
-    access_info: command::AccessInfo<B>,
-    handles: handle::Manager<B>,
-}
-
-impl<B: Backend> GraphicsSubmission<B> {
-     /// Submits the commands in the internal `CommandBuffer` to the GPU, so they can
+impl<B: Backend, C> Submit<B, C> {
+    /*
+    /// Submits the commands in the internal `CommandBuffer` to the GPU, so they can
     /// be executed.
     pub fn synced_flush(self,
                         queue: &mut GraphicsQueue<B>,
@@ -197,9 +225,20 @@ impl<B: Backend> GraphicsSubmission<B> {
 
         Ok(()) // TODO
     }
+    */
 }
 
-impl<'a, B: Backend> GraphicsEncoder<'a, B> {
+impl<'a, B: Backend, C> Encoder<'a, B, C> {
+    pub fn finish(self) -> Submit<B, C> {
+        Submit {
+            inner: self.buffer.finish(),
+            // access_info: self.access_info,
+            handles: self.handles,
+            scope: self.scope,
+        }
+    }
+
+    /*
     /// Submits the internal `CommandBuffer` to the GPU, so it can be executed.
     ///
     /// Calling `flush` before swapping buffers is critical as without it the commands of the
@@ -218,15 +257,6 @@ impl<'a, B: Backend> GraphicsEncoder<'a, B> {
                         signal_semaphores: &[&handle::Semaphore<B>],
                         fence: Option<&handle::Fence<B>>) -> SubmissionResult<()> {
         self.finish().synced_flush(queue, wait_semaphores, signal_semaphores, fence)
-    }
-
-    ///
-    pub fn finish(self) -> GraphicsSubmission<B> {
-        GraphicsSubmission {
-            submission: self.command_buffer.finish(),
-            access_info: self.access_info,
-            handles: self.handles,
-        }
     }
 
     /// Copy part of a buffer to another
@@ -513,4 +543,5 @@ impl<'a, B: Backend> GraphicsEncoder<'a, B> {
         let srv = self.handles.ref_srv(view).clone();
         self.command_buffer.generate_mipmap(srv);
     }
+    */
 }

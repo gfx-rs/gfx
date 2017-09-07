@@ -1,37 +1,11 @@
 //! Memory buffers
 
-use std::fmt;
-use std::error::Error;
 use {IndexType, Backend};
 
-
+// TODO
 /// Error creating a buffer.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum CreationError {
-    /// Unknown other error.
-    Other,
-    /// Usage mode is not supported
-    UnsupportedUsage(Usage),
-    // TODO: unsupported role
-}
-
-impl fmt::Display for CreationError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            CreationError::UnsupportedUsage(usage) => write!(f, "{}: {:?}", self.description(), usage),
-            _ => write!(f, "{}", self.description()),
-        }
-    }
-}
-
-impl Error for CreationError {
-    fn description(&self) -> &str {
-        match *self {
-            CreationError::Other => "An unknown error occurred",
-            CreationError::UnsupportedUsage(_) => "Requested memory usage mode is not supported",
-        }
-    }
-}
+pub struct CreationError;
 
 bitflags!(
     /// Buffer usage flags.
