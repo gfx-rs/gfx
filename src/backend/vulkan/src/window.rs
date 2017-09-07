@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use ash::vk;
 use ash::extensions as ext;
+use kernel32;
 
 use {core, winit};
 
@@ -70,7 +71,7 @@ impl Instance {
                     #[cfg(target_os = "windows")]
                     vk::VK_KHR_WIN32_SURFACE_EXTENSION_NAME => {
                         use winit::os::windows::WindowExt;
-                        let win32_loader = ext::Win32Surface::new(entry, &instance.raw.0)
+                        let win32_loader = ext::Win32Surface::new(entry, &self.raw.0)
                             .expect("Unable to load win32 surface functions");
 
                         unsafe {
@@ -82,9 +83,7 @@ impl Instance {
                                 hwnd: window.get_hwnd() as *mut _,
                             };
 
-                            win32_loader
-                                .create_win32_surface_khr(&info, None)
-                                .expect("Error on surface creation")
+                            win32_loader.create_win32_surface_khr(&info, None).ok()
                         }
                     }
                     // TODO: other platforms
