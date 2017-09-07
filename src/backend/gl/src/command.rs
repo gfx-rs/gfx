@@ -169,7 +169,10 @@ impl RawCommandBuffer {
         memory: Arc<Mutex<BufferMemory>>,
     ) -> Self {
         let (id, individual_reset) = {
-            let mut memory = memory.lock().unwrap();
+            let mut memory = memory
+                .try_lock()
+                .expect("Trying to allocate a command buffers, while memory is in-use.");
+
             match *memory {
                 BufferMemory::Linear(_) => (0, false),
                 BufferMemory::Individual { ref mut storage, ref mut next_buffer_id } => {
@@ -204,7 +207,11 @@ impl RawCommandBuffer {
 
     fn push_cmd(&mut self, cmd: Command) {
         let slice = {
-            let mut memory = self.memory.lock().unwrap();
+            let mut memory = self
+                .memory
+                .try_lock()
+                .expect("Trying to record a command buffers, while memory is in-use.");
+
             let mut cmd_buffer = match *memory {
                 BufferMemory::Linear(ref mut buffer) => &mut buffer.commands,
                 BufferMemory::Individual { ref mut storage, .. } => {
@@ -226,7 +233,11 @@ impl RawCommandBuffer {
     }
     /// Copy a given u8 slice into the data buffer.
     fn add_raw(&mut self, data: &[u8]) -> BufferSlice {
-        let mut memory = self.memory.lock().unwrap();
+        let mut memory = self
+                .memory
+                .try_lock()
+                .expect("Trying to record a command buffers, while memory is in-use.");
+
         let mut data_buffer = match *memory {
             BufferMemory::Linear(ref mut buffer) => &mut buffer.data,
             BufferMemory::Individual { ref mut storage, .. } => {
@@ -265,7 +276,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
 
         self.soft_reset();
-        let mut memory = self.memory.lock().unwrap();
+        let mut memory = self
+                .memory
+                .try_lock()
+                .expect("Trying to reset a command buffers, while memory is in-use.");
+
         match *memory {
             // Linear` can't have individual reset ability.
             BufferMemory::Linear(_) => unreachable!(),

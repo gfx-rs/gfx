@@ -70,7 +70,11 @@ pub struct RawCommandPool {
 
 impl core::RawCommandPool<Backend> for RawCommandPool {
     fn reset(&mut self) {
-        let mut memory = self.memory.lock().unwrap();
+        let mut memory = self
+            .memory
+            .try_lock()
+            .expect("Trying to reset command pool, while memory is still in-use.");
+
         match *memory {
             BufferMemory::Linear(ref mut buffer) => {
                 buffer.clear();
@@ -117,7 +121,11 @@ impl core::RawCommandPool<Backend> for RawCommandPool {
     }
 
     unsafe fn free(&mut self, buffers: Vec<RawCommandBuffer>) {
-        let mut memory = self.memory.lock().unwrap();
+        let mut memory = self
+            .memory
+            .try_lock()
+            .expect("Trying to free command buffers, while memory is still in-use.");
+
         if let BufferMemory::Individual { ref mut storage, .. } = *memory {
             // Expecting that the buffers actually are allocated from this pool.
             for buffer in buffers {
