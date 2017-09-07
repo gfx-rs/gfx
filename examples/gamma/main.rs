@@ -16,9 +16,12 @@
 extern crate gfx;
 extern crate gfx_window_glutin;
 extern crate glutin;
+extern crate image;
 
-use gfx::traits::FactoryExt;
+use gfx::traits::{Factory, FactoryExt};
 use gfx::Device;
+use gfx::memory::Typed;
+use gfx::format::{Formatted, SurfaceTyped};
 use glutin::GlContext;
 
 pub type ColorFormat = gfx::format::Rgba8;
@@ -45,6 +48,8 @@ const QUAD: [Vertex; 4] = [
 
 const CLEAR_COLOR: [f32; 4] = [0.5, 0.5, 0.5, 1.0];
 
+type SurfaceData = <<ColorFormat as Formatted>::Surface as SurfaceTyped>::DataType;
+
 pub fn main() {
     let mut events_loop = glutin::EventsLoop::new();
     let window_builder = glutin::WindowBuilder::new()
@@ -66,6 +71,11 @@ pub fn main() {
         out: main_color
     };
 
+    let mut screenshot = false;
+    let (w, h, _, _) = data.out.get_dimensions();
+    let mut download = factory.create_download_buffer::<SurfaceData>(w as usize * h as usize)
+        .unwrap();
+
     let mut running = true;
     while running {
         events_loop.poll_events(|event| {
@@ -80,11 +90,57 @@ pub fn main() {
                     glutin::WindowEvent::Resized(width, height) => {
                         window.resize(width, height);
                         gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
+                        download = factory.create_download_buffer(width as usize * height as usize)
+                            .unwrap();
                     },
+                    glutin::WindowEvent::KeyboardInput {
+                        input: glutin::KeyboardInput {
+                            virtual_keycode: Some(glutin::VirtualKeyCode::S),
+                            state: glutin::ElementState::Released,
+                            ..
+                        },
+                        ..
+                    } => screenshot = true,
                     _ => (),
                 }
             }
         });
+
+        if screenshot {
+            println!("taking screenshot");
+            let (w, h, _, _) = data.out.get_dimensions();
+            encoder.copy_texture_to_buffer_raw(
+                data.out.raw().get_texture(),
+                None,
+                gfx::texture::RawImageInfo {
+                    xoffset: 0,
+                    yoffset: 0,
+                    zoffset: 0,
+                    width: w,
+                    height: h,
+                    depth: 0,
+                    format: ColorFormat::get_format(),
+                    mipmap: 0,
+                },
+                download.raw(),
+                0
+            ).unwrap();
+            encoder.flush(&mut device);
+
+            let path = "screen.png";
+            println!("saving screenshot to {}", path);
+            let reader = factory.read_mapping(&download).unwrap();
+            // intermediary buffer only to avoid casting
+            let mut data = Vec::with_capacity(w as usize * h as usize * 4);
+            for pixel in reader.iter() {
+                data.extend(pixel);
+            }
+            image::save_buffer(path, &data, w as u32, h as u32, image::ColorType::RGBA(8))
+                .unwrap();
+
+            println!("done!");
+            screenshot = false;
+        }
 
         // draw a frame
         encoder.clear(&data.out, CLEAR_COLOR);

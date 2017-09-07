@@ -10,3 +10,5 @@ target/
 # Service
 Cargo.lock
 *.swp
+
+screen.png
