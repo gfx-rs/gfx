@@ -386,25 +386,19 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn read_mapping<'a, T>(
-        &self,
-        _: &'a n::Buffer,
-        _: Range<u64>,
-    ) -> Result<mapping::Reader<'a, B, T>, mapping::Error>
-    where
-        T: Copy,
+    fn read_mapping_raw(&mut self, _: &n::Buffer, _: Range<u64>)
+        -> Result<(*const u8, Mapping), mapping::Error>
     {
         unimplemented!()
     }
 
-    fn write_mapping<'a, 'b, T>(
-        &mut self,
-        _: &'a n::Buffer,
-        _: Range<u64>,
-    ) -> Result<mapping::Writer<'a, B, T>, mapping::Error>
-    where
-        T: Copy,
+    fn write_mapping_raw(&mut self, _: &n::Buffer, _: Range<u64>)
+        -> Result<(*mut u8, Mapping), mapping::Error>
     {
+        unimplemented!()
+    }
+
+    fn unmap_mapping_raw(&mut self, _: Mapping) {
         unimplemented!()
     }
 
