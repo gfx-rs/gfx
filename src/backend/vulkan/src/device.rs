@@ -53,7 +53,7 @@ impl Device {
             })),
             Err(error) => {
                 error!("Mapping failed with {:?}", error);
-                Err(mapping::Error::AccessOverlap) //TODO
+                Err(mapping::Error) //TODO
             }
         }
     }

@@ -1,12 +1,11 @@
-// use std::error::Error;
-// use std::fmt;
-// use core::{self, buffer, format, state};
-use core::{Backend, Primitive, HeapType};
-// use core::pso::{CreationError, Descriptor};
-// use core::memory::{self, Bind, Pod};
-// use pso;
-// use shade::ProgramError;
-use handle::GarbageSender;
+use std::mem;
+use core::{Device as CoreDevice, HeapType};
+use core::device::TargetViewError;
+
+use memory::{self, Typed, Pod};
+use handle::{self, GarbageSender};
+use {buffer, image, format};
+use Backend;
 
 /*
 /// Error creating a PipelineState
@@ -76,6 +75,37 @@ impl<S> From<CreationError> for PipelineStateError<S> {
         PipelineStateError::DeviceCreate(e)
     }
 }
+
+/// Error accessing a mapping.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum Error {
+    /// The requested mapping access did not match the expected usage.
+    InvalidAccess(memory::Access, memory::Usage),
+    /// The requested mapping access overlaps with another.
+    AccessOverlap,
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::Error::*;
+        match *self {
+            InvalidAccess(ref access, ref usage) => {
+                write!(f, "{}: access = {:?}, usage = {:?}", self.description(), access, usage)
+            }
+            AccessOverlap => write!(f, "{}", self.description())
+        }
+    }
+}
+
+impl StdError for Error {
+    fn description(&self) -> &str {
+        use self::Error::*;
+        match *self {
+            InvalidAccess(..) => "The requested mapping access did not match the expected usage",
+            AccessOverlap => "The requested mapping access overlaps with another"
+        }
+    }
+}
 */
 
 #[derive(Clone)]
@@ -103,6 +133,198 @@ impl<B: Backend> Device<B> {
 
     pub fn mut_raw(&mut self) -> &mut B::Device {
         &mut self.raw
+    }
+
+    pub(crate) fn garbage(&self) -> GarbageSender<B> {
+        self.garbage.clone()
+    }
+
+    #[allow(unused_variables)]
+    pub fn create_buffer_raw(&mut self,
+        role: buffer::Role,
+        usage: memory::Usage,
+        bind: memory::Bind,
+        size: usize,
+        stride: usize
+    ) -> Result<handle::raw::Buffer<B>, buffer::CreationError>
+    {
+        unimplemented!()
+    }
+
+    pub fn create_buffer<T: Pod>(&mut self,
+        role: buffer::Role,
+        usage: memory::Usage,
+        bind: memory::Bind,
+        size: usize
+    ) -> Result<handle::Buffer<B, T>, buffer::CreationError>
+    {
+        let stride = mem::size_of::<T>();
+        self.create_buffer_raw(
+            role,
+            usage,
+            bind,
+            size * stride,
+            stride
+        ).map(|raw| Typed::new(raw))
+    }
+
+    #[allow(unused_variables)]
+    pub fn create_image_raw(&mut self,
+        kind: image::Kind,
+        mip_levels: image::Level,
+        format: format::Format,
+        bind: memory::Bind,
+        usage: memory::Usage
+    ) -> Result<handle::raw::Image<B>, image::CreationError>
+    {
+        unimplemented!()
+    }
+
+    // FIXME?: used to be format::SurfaceTyped
+    pub fn create_image<F>(&mut self,
+        kind: image::Kind,
+        mip_levels: image::Level,
+        bind: memory::Bind,
+        usage: memory::Usage
+    ) -> Result<handle::Image<B, F>, image::CreationError>
+        where F: format::Formatted
+    {
+        self.create_image_raw(
+            kind,
+            mip_levels,
+            F::get_format(),
+            bind,
+            usage
+        ).map(|raw| Typed::new(raw))
+    }
+
+    pub fn create_sampler(&mut self, info: image::SamplerInfo)
+        -> handle::Sampler<B>
+    {
+        handle::inner::Sampler::new(
+            self.raw.create_sampler(info), info, self.garbage.clone()
+        ).into()
+    }
+
+    pub fn view_buffer_as_constant_raw(&mut self,
+        buffer: &handle::raw::Buffer<B>,
+        range: Range<u64>,
+    ) -> Result<handle::raw::ConstantBufferView<B>, TargetViewError>
+    {
+        use handle::inner::*;
+        self.raw.view_buffer_as_constant(buffer.resource(), range)
+            .map(|cbv| ConstantBufferView::new(
+                cbv,
+                buffer.clone(),
+                self.garbage.clone()
+            ).into())
+    }
+
+    pub fn view_buffer_as_constant<T>(&mut self,
+        buffer: &handle::Buffer<B, T>,
+        range: Range<u64>,
+    ) -> Result<handle::ConstantBufferView<B, T>, TargetViewError>
+    {
+        self.view_buffer_as_constant_raw(buffer, range)
+            .map(|raw| Typed::new(raw))
+    }
+
+    pub(crate) fn view_backbuffer_as_render_target_raw(&mut self,
+        image: B::Image,
+        kind: image::Kind,
+        bind: memory::Bind,
+        format: format::Format,
+        range: image::SubresourceRange
+    ) -> Result<handle::raw::RenderTargetView<B>, TargetViewError> {
+        use handle::inner::*;
+        let info = image::Info {
+            kind,
+            levels: 1,
+            format: format.0,
+            bind,
+            usage: memory::Usage::Data,
+        };
+        self.raw.view_image_as_render_target(&image, format, range)
+            .map(|rtv| RenderTargetView::new(
+                rtv,
+                handle::ViewSource::Backbuffer(image, info),
+                self.garbage.clone()
+            ).into())
+    }
+
+    // TODO
+    // pub(crate) fn view_backbuffer_as_depth_stencil_raw
+    // pub(crate) fn view_image_as_depth_stencil_raw
+    // pub fn view_image_as_depth_stencil
+
+    pub fn view_image_as_render_target_raw(&mut self,
+        image: &handle::raw::Image<B>,
+        format: format::Format,
+        range: image::SubresourceRange
+    ) -> Result<handle::raw::RenderTargetView<B>, TargetViewError>
+    {
+        use handle::inner::*;
+        self.raw.view_image_as_render_target(image.resource(), format, range)
+            .map(|rtv| RenderTargetView::new(
+                rtv,
+                image.into(),
+                self.garbage.clone()
+            ).into())
+    }
+
+    pub fn view_image_as_render_target<F>(&mut self,
+        image: &handle::Image<B, F>,
+        range: image::SubresourceRange
+    ) -> Result<handle::RenderTargetView<B, F>, TargetViewError>
+        where F: format::RenderFormat
+    {
+        self.view_image_as_render_target_raw(image, F::get_format(), range)
+            .map(|raw| Typed::new(raw))
+    }
+    
+    pub fn view_image_as_shader_resource_raw(&mut self,
+        image: &handle::raw::Image<B>,
+        format: format::Format
+    ) -> Result<handle::raw::ShaderResourceView<B>, TargetViewError>
+    {
+        use handle::inner::*;
+        self.raw.view_image_as_shader_resource(image.resource(), format)
+            .map(|srv| ShaderResourceView::new(
+                srv,
+                image.into(),
+                self.garbage.clone()
+            ).into())
+    }
+
+    // TODO: rename to simply ViewError ?
+    pub fn view_image_as_shader_resource<F>(&mut self, image: &handle::Image<B, F>)
+        -> Result<handle::ShaderResourceView<B, F>, TargetViewError>
+        where F: format::TextureFormat
+    {
+        self.view_image_as_shader_resource_raw(image, F::get_format())
+            .map(|raw| Typed::new(raw))
+    }
+
+    pub fn view_image_as_unordered_access_raw(&mut self,
+        image: &handle::raw::Image<B>,
+        format: format::Format
+    ) -> Result<handle::raw::UnorderedAccessView<B>, TargetViewError>
+    {
+        use handle::inner::*;
+        self.raw.view_image_as_unordered_access(image.resource(), format)
+            .map(|uav| UnorderedAccessView::new(
+                uav,
+                image.into(),
+                self.garbage.clone()
+            ).into())
+    }
+
+    pub fn view_image_as_unordered_access<F>(&mut self, image: &handle::Image<B, F>)
+        -> Result<handle::UnorderedAccessView<B, F>, TargetViewError>
+        where F: format::TextureFormat
+    {
+        self.view_image_as_unordered_access_raw(image, F::get_format())
+            .map(|raw| Typed::new(raw))
     }
 
 /*

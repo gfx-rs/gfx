@@ -78,8 +78,11 @@ impl<B: Backend, C> CommandPool<B, C> {
 
     /// Reserve an additional amount of command buffers.
     pub fn reserve(&mut self, additional: usize) {
-        let buffers = self.pool.allocate(additional);
-        self.buffers.extend(buffers);
+        let available = self.buffers.len() - self.next_buffer;
+        if additional > available {
+            let buffers = self.pool.allocate(additional - available);
+            self.buffers.extend(buffers);
+        }
     }
 
     /// Get a command buffer for recording.
@@ -88,9 +91,7 @@ impl<B: Backend, C> CommandPool<B, C> {
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
     pub fn acquire_command_buffer<'a>(&'a mut self) -> CommandBuffer<'a, B, C> {
-        if self.buffers.len() <= self.next_buffer {
-            self.reserve(1);
-        }
+        self.reserve(1);
 
         let buffer = &mut self.buffers[self.next_buffer];
         self.next_buffer += 1;

@@ -1,7 +1,6 @@
-use std::marker::PhantomData;
-use std::{ops, cmp, hash};
 use std::sync::mpsc;
 
+use memory::Typed;
 use Backend;
 
 pub(crate) type GarbageSender<B> = mpsc::Sender<Garbage<B>>;
@@ -16,6 +15,11 @@ macro_rules! define_resources {
             $( $name(B::$name), )*
         }
 
+        #[derive(Clone)]
+        pub enum Any<B: Backend> {
+            $( $name(self::raw::$name<B>), )*
+        }
+
         pub mod inner {
             use Backend;
             use super::{Garbage, GarbageSender};
@@ -23,8 +27,9 @@ macro_rules! define_resources {
 
             $(
             
-            #[derive(Clone, Debug)]
+            #[derive(Debug)]
             pub struct $name<B: Backend> {
+                // option for owned drop
                 resource: Option<B::$name>,
                 info: $info,
                 garbage: GarbageSender<B>
@@ -86,7 +91,16 @@ macro_rules! define_resources {
 
         pub mod raw {
             use std::sync::Arc;
-            $( pub type $name<B> = Arc<super::inner::$name<B>>; )*
+            use Backend;
+            $(
+                pub type $name<B> = Arc<super::inner::$name<B>>;
+
+                impl<B: Backend> From<$name<B>> for super::Any<B> {
+                    fn from(h: $name<B>) -> Self {
+                        super::Any::$name(h)
+                    }
+                }
+            )*
         }
     }
 }
@@ -101,12 +115,12 @@ define_resources! {
     // FrameBuffer
     Buffer: ::buffer::Info,
     Image: ::image::Info,
-    // RenderTargetView,
-    // DepthStencilView,
-    // ConstantBufferView,
-    // ShaderResourceView,
-    // UnorderedAccessView,
-    // Sampler,
+    RenderTargetView: ::handle::ViewSource<B>,
+    DepthStencilView: ::handle::ViewSource<B>,
+    ConstantBufferView: ::handle::raw::Buffer<B>,
+    ShaderResourceView: ::handle::ViewSource<B>,
+    UnorderedAccessView: ::handle::ViewSource<B>,
+    Sampler: ::image::SamplerInfo,
     // DescriptorPool
     // DescriptorSetLayout
     // Fence
@@ -114,59 +128,54 @@ define_resources! {
 }
 
 pub type Buffer<B, T> = Typed<raw::Buffer<B>, T>;
-pub type Image<B, S> = Typed<raw::Image<B>, S>;
+pub type Image<B, F> = Typed<raw::Image<B>, F>;
+pub type RenderTargetView<B, F> = Typed<raw::RenderTargetView<B>, F>;
+pub type DepthStencilView<B, F> = Typed<raw::DepthStencilView<B>, F>;
+pub type ConstantBufferView<B, T> = Typed<raw::ConstantBufferView<B>, T>;
+pub type ShaderResourceView<B, T> = Typed<raw::ShaderResourceView<B>, T>;
+pub type UnorderedAccessView<B, T> = Typed<raw::UnorderedAccessView<B>, T>;
 
-#[derive(Debug)]
-pub struct Typed<I, T> {
-    inner: I,
-    phantom: PhantomData<T>,
+pub use self::raw::Sampler;
+
+#[derive(Debug, Clone)]
+pub enum ViewSource<B: Backend> {
+    Image(raw::Image<B>),
+    Buffer(raw::Buffer<B>),
+    Backbuffer(B::Image, ::image::Info),
 }
 
-impl<I, T> Typed<I, T> {
-    pub fn new(inner: I) -> Self {
-        Typed {
-            inner,
-            phantom: PhantomData,
-        }
+impl<'a, B: Backend> From<&'a raw::Image<B>> for ViewSource<B> {
+    fn from(image: &'a raw::Image<B>) -> Self {
+        ViewSource::Image(image.clone())
     }
 }
 
-impl<I: Clone, T> Clone for Typed<I, T> {
-    fn clone(&self) -> Self {
-        Self::new(self.inner.clone())
+impl<'a, B: Backend> From<&'a raw::Buffer<B>> for ViewSource<B> {
+    fn from(buffer: &'a raw::Buffer<B>) -> Self {
+        ViewSource::Buffer(buffer.clone())
     }
 }
 
-impl<I, T> cmp::PartialEq for Typed<I, T>
-    where I: cmp::PartialEq
-{
-    fn eq(&self, other: &Typed<I, T>) -> bool {
-        self.inner.eq(&other.inner)
+pub(crate) struct Bag<B: Backend>(Vec<Any<B>>);
+
+impl<B: Backend> Bag<B> {
+    pub fn new() -> Self {
+        Bag(Vec::new())
     }
-}
 
-impl<I, T> cmp::Eq for Typed<I, T>
-    where I: cmp::Eq
-{}
-
-impl<I, T> hash::Hash for Typed<I, T>
-    where I: hash::Hash
-{
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.inner.hash(state)
+    pub fn add<H: Into<Any<B>>>(&mut self, handle: H) {
+        self.0.push(handle.into());
     }
-}
 
-impl<I, T> ops::Deref for Typed<I, T> {
-    type Target = I;
-
-    fn deref(&self) -> &I {
-        &self.inner
+    pub fn extend(&mut self, other: &Bag<B>) {
+        self.0.extend_from_slice(&other.0);
     }
-}
 
-impl<I, T> ops::DerefMut for Typed<I, T> {
-    fn deref_mut(&mut self) -> &mut I {
-        &mut self.inner
+    pub fn append(&mut self, other: &mut Bag<B>) {
+        self.0.append(&mut other.0);
+    }
+
+    pub fn clear(&mut self) {
+        self.0.clear();
     }
 }

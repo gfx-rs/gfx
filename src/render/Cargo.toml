@@ -21,6 +21,7 @@ serialize = ["gfx_core/serialize", "draw_state/serialize"]
 unstable = []
 
 [dependencies]
+bitflags = "0.8"
 mint = { version = "0.4.1", optional = true }
 draw_state = "0.7"
 gfx_core = { path = "../core", version = "0.10" }

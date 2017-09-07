@@ -80,6 +80,9 @@
 //!  - See [the blog](http://gfx-rs.github.io/) for more explanations and annotated examples.
 //!
 
+#[macro_use]
+extern crate bitflags;
+
 #[cfg(feature = "mint")]
 extern crate mint;
 
@@ -98,26 +101,20 @@ pub use draw_state::{preset, state};
 pub use draw_state::target::*;
 
 // public re-exports
-pub use core::memory;
-pub use core::{Adapter, Backend, CommandQueue, Frame, FrameSync, Headless, Primitive, QueueFamily, QueueType,
-               SubmissionError, SubmissionResult, Surface, Swapchain, SwapchainConfig, WindowExt};
+pub use core::{format, pso};
+pub use core::{Adapter, Backend, Primitive, Frame};
 /*
 pub use core::{VertexCount, InstanceCount};
 pub use core::{ShaderSet, VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
-pub use core::{GeneralCommandPool, GraphicsCommandPool, ComputeCommandPool, SubpassCommandPool};
-pub use core::{format, mapping, queue};
 pub use core::device::{ResourceViewError, TargetViewError, CombinedError, WaitFor};
 pub use core::command::{InstanceParams};
 pub use core::shade::{ProgramInfo, UniformValue};
 
 pub use encoder::{CopyBufferResult, CopyBufferTextureResult, CopyError,
-                  CopyTextureBufferResult, GraphicsEncoder, GraphicsSubmission, UpdateError, 
-                  GraphicsPoolExt, };
+                  CopyTextureBufferResult, UpdateError};
 */
-pub use device::{Device};
+pub use device::Device;
 /*
-pub use slice::{Slice, IntoIndexBuffer, IndexBuffer};
-pub use swapchain::SwapchainExt;
 pub use pso::{PipelineState};
 pub use pso::buffer::{VertexBuffer, InstanceBuffer, RawVertexBuffer,
                       ConstantBuffer, RawConstantBuffer, Global, RawGlobal};
@@ -128,16 +125,13 @@ pub use pso::target::{DepthStencilTarget, DepthTarget, StencilTarget,
 pub use pso::bundle::{Bundle};
 */
 
-/// Render commands encoder
 pub mod handle;
-/// Device extensions
 mod device;
-// pub mod encoder;
+pub mod encoder;
+pub mod memory;
 pub mod buffer;
 pub mod image;
 /*
-/// Swapchain extensions
-mod swapchain;
 // Pipeline states
 pub mod pso;
 /// Shaders
@@ -146,53 +140,221 @@ pub mod shade;
 pub mod macros;
 */
 
+use std::collections::VecDeque;
+use core::{CommandQueue, QueueType, Surface, Swapchain, Device as CoreDevice};
+use core::pool::{CommandPool, CommandPoolCreateFlags};
+use core::format::RenderFormat;
+use memory::Typed;
+
+struct Queue<B: Backend, C> {
+    inner: CommandQueue<B, C>,
+    command_pool_receiver: encoder::CommandPoolReceiver<B, C>,
+    command_pool_sender: encoder::CommandPoolSender<B, C>,
+}
+
+impl<B: Backend, C> Queue<B, C> {
+    fn new(inner: CommandQueue<B, C>) -> Self {
+        let (command_pool_sender, command_pool_receiver) =
+            encoder::command_pool_channel();
+        Queue { inner, command_pool_sender, command_pool_receiver }
+    }
+
+    fn acquire_encoder_scope(&mut self) -> encoder::Scope<B, C> {
+        let initial_capacity = 4;
+        let flags = CommandPoolCreateFlags::empty();
+        let pool = self.command_pool_receiver.try_recv()
+            .map(|mut recycled| {
+                recycled.reset();
+                recycled
+            })
+            .unwrap_or_else(|_| {
+                CommandPool::from_queue(&self.inner, initial_capacity, flags)
+            });
+        encoder::Scope::new(pool, self.command_pool_sender.clone())
+    }
+}
+
+/* TODO
 pub(crate) enum Queue<B: Backend> {
     General(CommandQueue<B, core::General>),
     Graphics(CommandQueue<B, core::Graphics>),
 }
+*/
 
-pub struct Gpu<B: Backend> {
+// TODO: could be named Instance too ?
+pub struct Context<B: Backend> {
+    surface: B::Surface,
     device: Device<B>,
-    queue: Queue<B>,
+    queue: Queue<B, core::Graphics>,
+    swapchain: B::Swapchain,
+    frame_bundles: VecDeque<FrameBundle<B>>,
+    frame_acquired: Option<FrameBundle<B>>,
     garbage: handle::GarbageReceiver<B>,
 }
 
-impl<B: Backend> Gpu<B> {
-    pub fn new<A: core::Adapter<B>>(adapter: &A) -> Self {
-        // TODO: filter for queues which can be used for presentation with the display surface.
-        // TODO: use shorter core helpers
-        let queue_descs = adapter.get_queue_families()
-            .iter()
-            .map(|&(ref family, qtype)| (family, qtype, family.num_queues()) )
-            .collect::<Vec<_>>();
-        
+pub struct Backbuffer<B: Backend, Cf: RenderFormat> {
+    color: handle::RenderTargetView<B, Cf>,
+    // TODO: depth
+}
+
+use self::SyncState::*;
+#[derive(PartialEq)]
+enum SyncState {
+    Unreached,
+    Reached,
+}
+
+struct Sync<T> {
+    inner: T,
+    state: SyncState,
+}
+
+impl<T> Sync<T> {
+    fn reached(inner: T) -> Self {
+        Sync { inner, state: Reached }
+    }
+}
+
+struct FrameBundle<B: Backend> {
+    handles: handle::Bag<B>,
+    scopes: Vec<encoder::ScopeDependency<B, core::Graphics>>,
+    // wait until the backbuffer image is ready
+    wait_semaphore: Sync<B::Semaphore>,
+    // signal when the frame is done
+    signal_semaphore: Sync<B::Semaphore>,
+    signal_fence: Sync<B::Fence>,
+}
+
+impl<B: Backend> Context<B> {
+    pub fn init<Cf>(mut surface: B::Surface, adapter: B::Adapter)
+        -> (Self, Vec<Backbuffer<B, Cf>>)
+        where Cf: RenderFormat
+    {
         let core::Gpu {
-            device,
+            mut device,
             mut general_queues,
             mut graphics_queues,
             heap_types,
             memory_heaps,
             ..
-        } = adapter.open(&queue_descs);
+        } = adapter.open_with(|ref family, qtype| {
+            if qtype.supports_graphics() && surface.supports_queue(family) {
+                (1, QueueType::Graphics)
+            } else {
+                (0, QueueType::Transfer)
+            }
+        });
         
-        let queue = if general_queues.is_empty() {
-            Queue::Graphics(graphics_queues.remove(0))
-        } else {
-            Queue::General(general_queues.remove(0))
-        };
+        let queue = Queue::new(graphics_queues.remove(0));
+
+        let swap_config = core::SwapchainConfig::new()
+            .with_color::<Cf>();
+        // TODO: call supports_queue
+        let mut swapchain = surface.build_swapchain(swap_config, &queue.inner);
+        let backbuffers = swapchain.take_backbuffers();
+
+        let frame_bundles = backbuffers.iter()
+            .map(|_| FrameBundle {
+                handles: handle::Bag::new(),
+                scopes: Vec::new(),
+                wait_semaphore: Sync::reached(device.create_semaphore()),
+                signal_semaphore: Sync::reached(device.create_semaphore()),
+                signal_fence: Sync::reached(device.create_fence(true)),
+            }).collect();
 
         let (garbage_sender, garbage_receiver) = handle::garbage_channel();
+        let mut device = Device::new(device, heap_types, memory_heaps, garbage_sender);
 
-        Gpu {
-            device: Device::new(device, heap_types, memory_heaps, garbage_sender),
+        let backbuffers = backbuffers.into_iter()
+            .map(|raw| {
+                Backbuffer {
+                    color: Typed::new(device
+                        .view_backbuffer_as_render_target_raw(
+                            raw.color,
+                            unimplemented!(),
+                            unimplemented!(),
+                            Cf::get_format(),
+                            (0..1, 0..1)
+                        ).unwrap()
+                    )
+                }
+            }).collect::<Vec<_>>();
+
+        (Context {
+            surface,
+            device,
             queue,
+            swapchain,
+            frame_bundles,
+            frame_acquired: None,
             garbage: garbage_receiver,
-        }
+        }, backbuffers)
     }
 
-    pub fn cleanup(&mut self) {
-        use core::Device;
+    pub fn acquire_frame(&mut self) -> Frame {
+        assert!(self.frame_acquired.is_none());
 
+        let mut bundle = self.frame_bundles.pop_front().unwrap();
+
+        if bundle.signal_fence.state == Unreached {
+            self.device.mut_raw()
+                .wait_for_fences(
+                    &[&bundle.signal_fence.inner],
+                    core::device::WaitFor::All,
+                    !0);
+        }
+        self.device.mut_raw().reset_fences(&[&bundle.signal_fence.inner]);
+        bundle.signal_fence.state = Reached;
+
+        bundle.handles.clear();
+        bundle.scopes.clear();
+
+        let frame = self.swapchain.acquire_frame(
+            core::FrameSync::Semaphore(&mut bundle.wait_semaphore.inner)
+        );
+        bundle.wait_semaphore.state = Unreached;
+        self.frame_acquired = Some(bundle);
+
+        self.cleanup();
+        frame
+    }
+
+    pub fn acquire_graphics_scope(&mut self) -> encoder::Scope<B, core::Graphics> {
+        self.queue.acquire_encoder_scope()
+    }
+
+    // TODO: allow submissions before present
+    pub fn present(&mut self, submits: Vec<encoder::Submit<B, core::Graphics>>) {
+        let mut bundle = self.frame_acquired.take().unwrap();
+
+        let inner_submits: Vec<_> = submits.into_iter()
+            .map(|mut submit| {
+                bundle.handles.append(&mut submit.handles);
+                bundle.scopes.push(submit.scope);
+                submit.inner
+            }).collect();
+
+        {
+            let submission = core::Submission::new()
+                .wait_on(&[(&bundle.wait_semaphore.inner, pso::BOTTOM_OF_PIPE)])
+                .signal(&[&bundle.signal_semaphore.inner])
+                .submit(&inner_submits);
+            self.queue.inner.submit(submission, Some(&bundle.signal_fence.inner));
+        }
+        bundle.wait_semaphore.state = Reached;
+        bundle.signal_semaphore.state = Unreached;
+        bundle.signal_fence.state = Unreached;
+
+        self.swapchain.present(
+            &mut self.queue.inner,
+            &[&bundle.signal_semaphore.inner]);
+        // looks useless here but meant for multiple submissions
+        bundle.signal_semaphore.state = Reached;
+
+        self.frame_bundles.push_back(bundle);
+    }
+
+    fn cleanup(&mut self) {
         let dev = self.device.mut_raw();
         for garbage in self.garbage.try_iter() {
             use handle::Garbage::*;
@@ -200,14 +362,35 @@ impl<B: Backend> Gpu<B> {
                 // ShaderLib(sl) => dev.destroy_shader_lib(sl),
                 Buffer(b) => dev.destroy_buffer(b),
                 Image(i) => dev.destroy_image(i),
-                // RenderTargetView(rtv) => dev.destroy_render_target_view(rtv),
-                // DepthStencilView(dsv) => dev.destroy_depth_stencil_view(dsv),
-                // ConstantBufferView(cbv) => dev.destroy_constant_buffer_view(cbv),
-                // ShaderResourceView(srv) => dev.destroy_shader_resource_view(srv),
-                // UnorderedAccessView(uav) => dev.destroy_unordered_access_view(uav),
-                // Sampler(s) => dev.destroy_sampler(s),
+                RenderTargetView(rtv) => dev.destroy_render_target_view(rtv),
+                DepthStencilView(dsv) => dev.destroy_depth_stencil_view(dsv),
+                ConstantBufferView(cbv) => dev.destroy_constant_buffer_view(cbv),
+                ShaderResourceView(srv) => dev.destroy_shader_resource_view(srv),
+                UnorderedAccessView(uav) => dev.destroy_unordered_access_view(uav),
+                Sampler(s) => dev.destroy_sampler(s),
             }
         }
+    }
+
+    fn wait_idle(&mut self) {
+        assert!(self.frame_acquired.is_none());
+
+        // TODO?: WaitIdle on queue instead
+        let fences: Vec<_> = self.frame_bundles.iter_mut()
+            .filter_map(|bundle| {
+                // self can drop the handles before waiting because
+                // self will be the one receiving the garbage afterwards
+                bundle.handles.clear();
+                bundle.scopes.clear();
+                if bundle.signal_fence.state == Unreached {
+                    Some(&bundle.signal_fence.inner)
+                } else {
+                    None
+                }
+            }).collect();
+        
+        self.device.mut_raw()
+            .wait_for_fences(&fences, core::device::WaitFor::All, !0);
     }
 
     pub fn ref_device(&self) -> &Device<B> {
@@ -219,8 +402,17 @@ impl<B: Backend> Gpu<B> {
     }
 }
 
-impl<B: Backend> Drop for Gpu<B> {
+impl<B: Backend> Drop for Context<B> {
     fn drop(&mut self) {
+        self.wait_idle();
+        // FIXME?: leak if handles are still in use outside
         self.cleanup();
+
+        let device = self.device.mut_raw();
+        for bundle in self.frame_bundles.drain(..) {
+            device.destroy_semaphore(bundle.wait_semaphore.inner);
+            device.destroy_semaphore(bundle.signal_semaphore.inner);
+            device.destroy_fence(bundle.signal_fence.inner);
+        }
     }
 }
