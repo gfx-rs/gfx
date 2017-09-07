@@ -325,6 +325,8 @@ pub trait Device<B: Backend> {
     ///
     fn view_image_as_render_target(&mut self, image: &B::Image, format: format::Format, range: image::SubresourceRange) -> Result<B::RenderTargetView, TargetViewError>;
 
+    // TODO: view_image_as_depth_stencil
+
     ///
     fn view_image_as_shader_resource(&mut self, image: &B::Image, format: format::Format) -> Result<B::ShaderResourceView, TargetViewError>;
 
