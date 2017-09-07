@@ -249,7 +249,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_graphics_pipelines<'a>(&mut self,
-        descs: &[(&n::ShaderLib, &n::PipelineLayout, pass::SubPass<'a, B>, &pso::GraphicsPipelineDesc)],
+        descs: &[(&n::ShaderLib, &n::PipelineLayout, pass::Subpass<'a, B>, &pso::GraphicsPipelineDesc)],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>>
     {
         use core::state as s;

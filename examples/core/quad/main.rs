@@ -6,6 +6,8 @@ extern crate gfx_device_dx12 as back;
 extern crate gfx_backend_vulkan as back;
 #[cfg(feature = "metal")]
 extern crate gfx_device_metal as back;
+#[cfg(feature = "gl")]
+extern crate gfx_backend_gl as back;
 
 extern crate winit;
 extern crate image;
@@ -14,7 +16,7 @@ use core::{buffer, command, device as d, image as i, memory as m, pass, pso, poo
 use core::{Adapter, Device, Instance};
 use core::{DescriptorPool, Gpu, FrameSync, Primitive, QueueType, Surface, Swapchain, SwapchainConfig};
 use core::format::{Formatted, Srgba8 as ColorFormat, Vec2};
-use core::pass::SubPass;
+use core::pass::Subpass;
 use core::queue::Submission;
 use core::target::Rect;
 
@@ -199,7 +201,7 @@ fn main() {
 
     //
     let pipelines = device.create_graphics_pipelines(&[
-        (&shader_lib, &pipeline_layout, SubPass { index: 0, main_pass: &render_pass }, &pipeline_desc)
+        (&shader_lib, &pipeline_layout, Subpass { index: 0, main_pass: &render_pass }, &pipeline_desc)
     ]);
 
     println!("pipelines: {:?}", pipelines);
