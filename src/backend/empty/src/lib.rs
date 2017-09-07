@@ -102,7 +102,7 @@ impl core::Device<Backend> for Device {
 
     fn create_graphics_pipelines<'a>(
         &mut self,
-        _: &[(&(), &(), pass::SubPass<'a, Backend>, &pso::GraphicsPipelineDesc)],
+        _: &[(&(), &(), pass::Subpass<'a, Backend>, &pso::GraphicsPipelineDesc)],
     ) -> Vec<Result<(), pso::CreationError>> {
         unimplemented!()
     }

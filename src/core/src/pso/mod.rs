@@ -4,6 +4,7 @@
 //! will want to use the typed and safe `PipelineState`. See the `pso` module inside the `gfx`
 //! crate.
 
+use pass;
 use std::error::Error;
 use std::fmt;
 
@@ -19,17 +20,28 @@ pub use self::output_merger::*;
 
 /// Error types happening upon PSO creation on the device side.
 #[derive(Clone, Debug, PartialEq)]
-pub struct CreationError;
+pub enum CreationError {
+    /// Unknown other error.
+    Other,
+    /// Invalid subpass (not part of renderpass).
+    InvalidSubpass(pass::SubpassId),
+}
 
 impl fmt::Display for CreationError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.description())
+        match *self {
+            CreationError::InvalidSubpass(id) => write!(f, "{}: {:?}", self.description(), id),
+            _ => write!(f, "{}", self.description()),
+        }
     }
 }
 
 impl Error for CreationError {
     fn description(&self) -> &str {
-        "Could not create PSO on device."
+        match *self {
+            CreationError::Other => "Unknown other error.",
+            CreationError::InvalidSubpass(_) => "Invalid subpass index.",
+        }
     }
 }
 

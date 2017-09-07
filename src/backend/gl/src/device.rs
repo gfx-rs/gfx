@@ -152,8 +152,33 @@ impl d::Device<B> for Device {
         Ok(n::Heap)
     }
 
-    fn create_renderpass(&mut self, _: &[pass::Attachment], _: &[pass::SubpassDesc], _: &[pass::SubpassDependency]) -> n::RenderPass {
-        n::RenderPass
+    fn create_renderpass(
+        &mut self,
+        attachments: &[pass::Attachment],
+        subpasses: &[pass::SubpassDesc],
+        _dependencies: &[pass::SubpassDependency],
+    ) -> n::RenderPass {
+        let subpasses =
+            subpasses
+                .iter()
+                .map(|subpass| {
+                    let color_attachments =
+                        subpass
+                            .color_attachments
+                            .iter()
+                            .map(|&(index, _)| index)
+                            .collect();
+
+                    n::SubpassDesc {
+                        color_attachments,
+                    }
+                })
+                .collect();
+
+        n::RenderPass {
+            attachments: attachments.into(),
+            subpasses,
+        }
     }
 
     fn create_pipeline_layout(&mut self, _: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
@@ -162,12 +187,21 @@ impl d::Device<B> for Device {
 
     fn create_graphics_pipelines<'a>(
         &mut self,
-        _descs: &[(&n::ShaderLib, &n::PipelineLayout, pass::SubPass<'a, B>, &pso::GraphicsPipelineDesc)],
+        descs: &[(&n::ShaderLib, &n::PipelineLayout, pass::Subpass<'a, B>, &pso::GraphicsPipelineDesc)],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         let gl = &self.share.context;
         let priv_caps = &self.share.private_caps;
         descs.iter()
              .map(|&(shader_lib, layout, ref subpass, desc)| {
+                let subpass = {
+                    let pass::Subpass { index, main_pass } = *subpass;
+                    if let Some(subpass) = main_pass.subpasses.get(index) {
+                        subpass
+                    } else {
+                        return Err(pso::CreationError::InvalidSubpass(index))
+                    }
+                };
+
                 let program = {
                     let name = unsafe { gl.CreateProgram() };
 
@@ -175,13 +209,14 @@ impl d::Device<B> for Device {
                         if let Some(shader) = shader {
                             match shader_lib.shaders.get(&desc.shader_entries.vertex_shader) {
                                 Some(&shader) => unsafe { gl.AttachShader(name, shader); },
-                                None => return Err(pso::CreationError),
+                                None => return Err(pso::CreationError::Other),
                             }
                         }
 
                         Ok(())
                     };
 
+                    // Attach shaders to program
                     let entries = &desc.shader_entries;
                     attach_shader(Some(entries.vertex_shader))?;
                     attach_shader(entries.hull_shader)?;
@@ -189,17 +224,14 @@ impl d::Device<B> for Device {
                     attach_shader(entries.geometry_shader)?;
                     attach_shader(entries.pixel_shader)?;
 
-                    // TODO:
-                    /*
                     if !priv_caps.program_interface_supported && priv_caps.frag_data_location_supported {
-                        for i in 0..c::MAX_COLOR_TARGETS {
+                        for i in 0..subpass.color_attachments.len() {
                             let color_name = format!("Target{}\0", i);
                             unsafe {
                                 gl.BindFragDataLocation(name, i as u32, (&color_name[..]).as_ptr() as *mut gl::types::GLchar);
                             }
                          }
                     }
-                    */
 
                     unsafe { gl.LinkProgram(name) };
                     info!("\tLinked program {}", name);
@@ -211,7 +243,7 @@ impl d::Device<B> for Device {
                             warn!("\tLog: {}", log);
                         }
                     } else {
-                        return Err(pso::CreationError);
+                        return Err(pso::CreationError::Other);
                     }
 
                     name
