@@ -40,18 +40,8 @@ impl StdError for Error {
 
 /// Mapping reader
 pub struct Reader<'a, B: Backend, T: 'a + Copy> {
-    slice: &'a [T],
-    _mapping: B::Mapping,
-}
-
-impl<'a, B: Backend, T: 'a + Copy> Reader<'a, B, T> {
-    /// Create a new mapping reader
-    pub unsafe fn new(slice: &'a [T], mapping: B::Mapping) -> Self {
-        Reader {
-            slice,
-            _mapping: mapping,
-        }
-    }
+    pub(crate) slice: &'a [T],
+    pub(crate) _mapping: B::Mapping,
 }
 
 impl<'a, B: Backend, T: 'a + Copy> ops::Deref for Reader<'a, B, T> {
@@ -64,18 +54,8 @@ impl<'a, B: Backend, T: 'a + Copy> ops::Deref for Reader<'a, B, T> {
 /// Currently is not possible to make write-only slice so while it is technically possible
 /// to read from Writer, it will lead to an undefined behavior. Please do not read from it.
 pub struct Writer<'a, B: Backend, T: 'a + Copy> {
-    slice: &'a mut [T],
-    _mapping: B::Mapping,
-}
-
-impl<'a, B: Backend, T: 'a + Copy> Writer<'a, B, T> {
-    /// Create a new mapping reader
-    pub unsafe fn new(slice: &'a mut [T], mapping: B::Mapping) -> Self {
-        Writer {
-            slice,
-            _mapping: mapping,
-        }
-    }
+    pub(crate) slice: &'a mut [T],
+    pub(crate) _mapping: B::Mapping,
 }
 
 impl<'a, B: Backend, T: 'a + Copy> ops::Deref for Writer<'a, B, T> {

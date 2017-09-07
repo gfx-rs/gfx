@@ -3,7 +3,7 @@
 //! This module exposes the `Device` trait, used for creating and managing graphics resources, and
 //! includes several items to facilitate this.
 
-use std::fmt;
+use std::{fmt, mem, slice};
 use std::error::Error;
 use std::ops::Range;
 use {buffer, format, image, mapping, pass, pso, target};
@@ -349,12 +349,32 @@ pub trait Device<B: Backend> {
     // Nested mapping is not allowed in vulkan.
     // How to handle it properly for backends? Explicit synchronization?
 
+    /// Map a buffer and obtain a raw pointer for reading.
+    fn read_mapping_raw(&mut self, buf: &B::Buffer, range: Range<u64>)
+        -> Result<(*const u8, B::Mapping), mapping::Error>;
+
+    /// Map a buffer and obtain a raw pointer for writing.
+    fn write_mapping_raw(&mut self, buf: &B::Buffer, range: Range<u64>)
+        -> Result<(*mut u8, B::Mapping), mapping::Error>;
+
+    /// Unmap a read/write buffer mapping manually.
+    fn unmap_mapping_raw(&mut self, mapping: B::Mapping);
+
     /// Acquire a mapping Reader
     ///
     /// See `write_mapping` for more information.
-    fn read_mapping<'a, T>(&self, buf: &'a B::Buffer, range: Range<u64>)
-                    -> Result<mapping::Reader<'a, B, T>, mapping::Error>
-        where T: Copy;
+    fn read_mapping<'a, T>(&mut self, buf: &'a B::Buffer, range: Range<u64>)
+        -> Result<mapping::Reader<'a, B, T>, mapping::Error>
+    where
+        T: Copy,
+    {
+        let count = (range.end - range.start) as usize / mem::size_of::<T>();
+        self.read_mapping_raw(buf, range)
+            .map(|(ptr, mapping)| mapping::Reader {
+                slice: unsafe { slice::from_raw_parts(ptr as *const _, count) },
+                _mapping: mapping,
+            })
+    }
 
     /// Acquire a mapping Writer
     ///
@@ -363,10 +383,18 @@ pub trait Device<B: Backend> {
     /// Submitting commands involving this buffer to the device
     /// implicitly requires exclusive access. Additionally,
     /// further access will be stalled until execution completion.
-
     fn write_mapping<'a, T>(&mut self, buf: &'a B::Buffer, range: Range<u64>)
-                     -> Result<mapping::Writer<'a, B, T>, mapping::Error>
-        where T: Copy;
+        -> Result<mapping::Writer<'a, B, T>, mapping::Error>
+    where
+        T: Copy,
+    {
+        let count = (range.end - range.start) as usize / mem::size_of::<T>();
+        self.write_mapping_raw(buf, range)
+            .map(|(ptr, mapping)| mapping::Writer {
+                slice: unsafe { slice::from_raw_parts_mut(ptr as *mut _, count) },
+                _mapping: mapping,
+            })
+    }
 
     ///
     fn create_semaphore(&mut self) -> B::Semaphore;
