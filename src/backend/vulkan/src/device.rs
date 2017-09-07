@@ -34,19 +34,22 @@ impl Drop for Mapping {
 
 impl Device {
     fn map_buffer(&self,
-        buf: &n::Buffer,
-        offset: u64,
-        size: u64,
-    ) -> Result<(*mut vk::types::c_void, Mapping), mapping::Error>
-    {
+        buffer: &n::Buffer,
+        range: Range<u64>,
+    ) -> Result<(*mut vk::types::c_void, Mapping), mapping::Error> {
         let result = unsafe {
-            self.raw.0.map_memory(buf.memory, offset, size, vk::MemoryMapFlags::empty())
+            self.raw.0.map_memory(
+                buffer.memory,
+                range.start,
+                range.end - range.start,
+                vk::MemoryMapFlags::empty(),
+            )
         };
 
         match result {
             Ok(data) => Ok((data, Mapping {
                 device: self.raw.clone(),
-                memory: buf.memory,
+                memory: buffer.memory,
             })),
             Err(error) => {
                 error!("Mapping failed with {:?}", error);
@@ -57,8 +60,7 @@ impl Device {
 
     pub fn create_shader_library(&mut self,
         shaders: &[(pso::EntryPoint, &[u8])],
-    ) -> Result<n::ShaderLib, pso::CreateShaderError>
-    {
+    ) -> Result<n::ShaderLib, pso::CreateShaderError> {
         let mut shader_map = BTreeMap::new();
         // TODO: handle entry points with the same name
         for &(entry_point, byte_code) in shaders {
@@ -1116,34 +1118,28 @@ impl d::Device<B> for Device {
     }
 
     /// Acquire a mapping Reader.
-    fn read_mapping<'a, T>(&self, buf: &'a n::Buffer, offset: u64, size: u64)
-                           -> Result<mapping::Reader<'a, B, T>, mapping::Error>
+    fn read_mapping<'a, T>(&self, buf: &'a n::Buffer, range: Range<u64>)
+                    -> Result<mapping::Reader<'a, B, T>, mapping::Error>
         where T: Copy
     {
-        self.map_buffer(buf, offset, size)
-            .map(|(ptr, mapping)| {
-                let slice = unsafe {
-                    slice::from_raw_parts(ptr as *const T, size as usize / mem::size_of::<T>())
-                };
-                unsafe {
-                    mapping::Reader::new(slice, mapping)
-                }
+        let count = (range.end - range.start) as usize / mem::size_of::<T>();
+        self.map_buffer(buf, range)
+            .map(|(ptr, mapping)| unsafe {
+                let slice = slice::from_raw_parts(ptr as *const T, count);
+                mapping::Reader::new(slice, mapping)
             })
     }
 
     /// Acquire a mapping Writer
-    fn write_mapping<'a, 'b, T>(&mut self, buf: &'a n::Buffer, offset: u64, size: u64)
-                                -> Result<mapping::Writer<'a, B, T>, mapping::Error>
+    fn write_mapping<'a, 'b, T>(&mut self, buf: &'a n::Buffer, range: Range<u64>)
+                     -> Result<mapping::Writer<'a, B, T>, mapping::Error>
         where T: Copy
     {
-        self.map_buffer(buf, offset, size)
-            .map(|(ptr, mapping)| {
-                let slice = unsafe {
-                    slice::from_raw_parts_mut(ptr as *mut T, size as usize / mem::size_of::<T>())
-                };
-                unsafe {
-                    mapping::Writer::new(slice, mapping)
-                }
+        let count = (range.end - range.start) as usize / mem::size_of::<T>();
+        self.map_buffer(buf, range)
+            .map(|(ptr, mapping)| unsafe {
+                let slice = slice::from_raw_parts_mut(ptr as *mut T, count);
+                mapping::Writer::new(slice, mapping)
             })
     }
 

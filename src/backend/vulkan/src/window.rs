@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use ash::vk;
 use ash::extensions as ext;
-use kernel32;
 
 use {core, winit};
 
@@ -48,6 +47,7 @@ impl Instance {
                     #[cfg(not(target_os = "windows"))]
                     vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME => {
                         use winit::os::unix::WindowExt;
+
                         let xlib_loader = match ext::XlibSurface::new(entry, &self.raw.0) {
                             Ok(loader) => loader,
                             Err(e) => {
@@ -70,7 +70,9 @@ impl Instance {
                     }
                     #[cfg(target_os = "windows")]
                     vk::VK_KHR_WIN32_SURFACE_EXTENSION_NAME => {
+                        use kernel32;
                         use winit::os::windows::WindowExt;
+
                         let win32_loader = ext::Win32Surface::new(entry, &self.raw.0)
                             .expect("Unable to load win32 surface functions");
 
