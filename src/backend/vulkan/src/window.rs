@@ -111,6 +111,13 @@ impl Instance {
 }
 
 impl core::Surface<Backend> for Surface {
+    fn get_kind(&self) -> core::image::Kind {
+        use core::image::Size;
+
+        let aa = core::image::AaMode::Single; // TODO
+        core::image::Kind::D2(self.width as Size, self.height as Size, aa)
+    }
+
     fn supports_queue(&self, queue_family: &QueueFamily) -> bool {
         self.raw.functor.get_physical_device_surface_support_khr(
             queue_family.device(),
@@ -123,7 +130,7 @@ impl core::Surface<Backend> for Surface {
         &mut self,
         config: core::SwapchainConfig,
         present_queue: &core::CommandQueue<Backend, C>,
-    ) -> Swapchain {
+    ) -> (Swapchain, Vec<core::Backbuffer<Backend>>) {
         let functor = ext::Swapchain::new(&self.raw.instance.0, &present_queue.as_raw().device().0)
             .expect("Unable to query swapchain function");
 
@@ -181,29 +188,23 @@ impl core::Surface<Backend> for Surface {
             })
             .collect();
 
-        Swapchain {
+        (Swapchain {
             raw: swapchain,
             functor,
-            backbuffers,
             frame_queue: VecDeque::new(),
-        }
+        }, backbuffers)
     }
 }
 
 pub struct Swapchain {
     raw: vk::SwapchainKHR,
     functor: ext::Swapchain,
-    backbuffers: Vec<core::Backbuffer<Backend>>,
     // Queued up frames for presentation
     frame_queue: VecDeque<usize>,
 }
 
 
 impl core::Swapchain<Backend> for Swapchain {
-    fn get_backbuffers(&mut self) -> &[core::Backbuffer<Backend>] {
-        &self.backbuffers
-    }
-
     fn acquire_frame(&mut self, sync: core::FrameSync<Backend>) -> core::Frame {
         let (semaphore, fence) = match sync {
             core::FrameSync::Semaphore(semaphore) => (semaphore.0, vk::Fence::null()),

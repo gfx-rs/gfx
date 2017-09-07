@@ -50,11 +50,15 @@
 //! //TODO
 
 use Backend;
+use image;
 use format::{self, Formatted};
 use queue::CommandQueue;
 
 /// A `Surface` abstracts the surface of a native window, which will be presented
 pub trait Surface<B: Backend> {
+    /// Retrieve the surface image kind.
+    fn get_kind(&self) -> image::Kind;
+
     /// Check if the queue family supports presentation for this surface.
     ///
     /// # Examples
@@ -65,6 +69,8 @@ pub trait Surface<B: Backend> {
     fn supports_queue(&self, queue_family: &B::QueueFamily) -> bool;
 
     /// Create a new swapchain from a surface and a queue.
+    ///
+    /// *Note*: The number of exposed backbuffers might differ from number of internally used buffers.
     ///
     /// # Safety
     ///
@@ -92,7 +98,7 @@ pub trait Surface<B: Backend> {
     fn build_swapchain<C>(&mut self,
         config: SwapchainConfig,
         present_queue: &CommandQueue<B, C>,
-    ) -> B::Swapchain;
+    ) -> (B::Swapchain, Vec<Backbuffer<B>>);
 }
 
 /// Handle to a backbuffer of the swapchain.
@@ -200,17 +206,6 @@ pub struct Backbuffer<B: Backend> {
 /// The `Swapchain` is the backend representation of the surface.
 /// It consists of multiple buffers, which will be presented on the surface.
 pub trait Swapchain<B: Backend> {
-    /// Access the backbuffer color and depth-stencil images.
-    ///
-    /// *Note*: The number of exposed backbuffers might differ from number of internally used buffers.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    ///
-    /// ```
-    fn get_backbuffers(&mut self) -> &[Backbuffer<B>];
-
     /// Acquire a new frame for rendering. This needs to be called before presenting.
     ///
     /// # Synchronization

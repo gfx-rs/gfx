@@ -1,4 +1,5 @@
 extern crate env_logger;
+extern crate gfx;
 extern crate gfx_core as core;
 #[cfg(feature = "dx12")]
 extern crate gfx_device_dx12 as back;
@@ -14,7 +15,7 @@ extern crate image;
 
 use core::{buffer, command, device as d, image as i, memory as m, pass, pso, pool, state};
 use core::{Adapter, Device, Instance};
-use core::{DescriptorPool, Gpu, FrameSync, Primitive, QueueType, Surface, Swapchain, SwapchainConfig};
+use core::{DescriptorPool, Primitive};
 use core::format::{Formatted, Srgba8 as ColorFormat, Vec2};
 use core::pass::Subpass;
 use core::queue::Submission;
@@ -43,7 +44,7 @@ const QUAD: [Vertex; 6] = [
     Vertex { a_Pos: [ -0.5,-0.33 ], a_Uv: [0.0, 0.0] },
 ];
 
-#[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]
+#[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
 fn main() {
     env_logger::init().unwrap();
     let mut events_loop = winit::EventsLoop::new();
@@ -58,53 +59,46 @@ fn main() {
 
     // instantiate backend
     let instance = back::Instance::create("gfx-rs quad", 1);
-    let mut surface = instance.create_surface(&window);
+    let surface = instance.create_surface(&window);
     let adapters = instance.enumerate_adapters();
     for adapter in &adapters {
         println!("{:?}", adapter.get_info());
     }
     let adapter = &adapters[0];
 
-    // Build a new device and associated command queues
-    let Gpu { mut device, mut graphics_queues, heap_types, .. } =
-        adapter.open_with(|ref family, qtype| {
-            if qtype.supports_graphics() && surface.supports_queue(family) {
-                (1, QueueType::Graphics)
-            } else {
-                (0, QueueType::Transfer)
-            }
-        });
-    let mut queue = graphics_queues.remove(0);
-    let swap_config = SwapchainConfig::new()
-        .with_color::<ColorFormat>();
-    let (mut swap_chain, backbuffers) = surface.build_swapchain(swap_config, &queue);
+    type Context<C> = gfx::Context<back::Backend, C>;
+    let (mut context, backbuffers) =
+        Context::init_graphics::<ColorFormat>(surface, adapter);
+
+    let mut render_device = (*context.ref_device()).clone();
+    let device: &mut back::Device = render_device.mut_raw();
 
     // Setup renderpass and pipeline
     // dx12 runtime shader compilation
     #[cfg(feature = "dx12")]
     let shader_lib = device.create_shader_library_from_source(&[
-            (VS, shade::Stage::Vertex, include_bytes!("shader/quad.hlsl")),
-            (PS, shade::Stage::Pixel, include_bytes!("shader/quad.hlsl")),
+            (VS, shade::Stage::Vertex, include_bytes!("../../core/quad/shader/quad.hlsl")),
+            (PS, shade::Stage::Pixel, include_bytes!("../../core/quad/shader/quad.hlsl")),
         ]).expect("Error on creating shader lib");
     #[cfg(feature = "vulkan")]
     let shader_lib = device.create_shader_library(&[
-            (VS, include_bytes!("data/vs_main.spv")),
-            (PS, include_bytes!("data/ps_main.spv")),
+            (VS, include_bytes!("../../core/quad/data/vs_main.spv")),
+            (PS, include_bytes!("../../core/quad/data/ps_main.spv")),
         ]).expect("Error on creating shader lib");
     #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
     let shader_lib = device.create_shader_library_from_source(
-            include_str!("shader/quad_indirect.metal"),
+            include_str!("../../core/quad/shader/quad_indirect.metal"),
             back::LanguageVersion::new(2, 0),
         ).expect("Error on creating shader lib");
     #[cfg(all(feature = "metal", not(feature = "metal_argument_buffer")))]
     let shader_lib = device.create_shader_library_from_source(
-            include_str!("shader/quad.metal"),
+            include_str!("../../core/quad/shader/quad.metal"),
             back::LanguageVersion::new(1, 1),
         ).expect("Error on creating shader lib");
     #[cfg(feature = "gl")]
     let shader_lib = device.create_shader_library_from_source(&[
-            (VS, pso::Stage::Vertex, include_bytes!("shader/quad_450.glslv")),
-            (PS, pso::Stage::Pixel, include_bytes!("shader/quad_450.glslf")),
+            (VS, pso::Stage::Vertex, include_bytes!("../../core/quad/shader/quad_450.glslv")),
+            (PS, pso::Stage::Pixel, include_bytes!("../../core/quad/shader/quad_450.glslf")),
         ]).expect("Error on creating shader lib");
 
     let shader_entries = pso::GraphicsShaderSet {
@@ -219,27 +213,24 @@ fn main() {
     );
     let set1 = sampler_pool.allocate_sets(&[&set1_layout]);
 
-    // Framebuffer and render target creation
-    let frame_rtvs = backbuffers.iter().map(|bb| {
-        device.view_image_as_render_target(&bb.color, ColorFormat::get_format(), (0..1, 0..1)).unwrap()
-    }).collect::<Vec<_>>();
-
-    let framebuffers = frame_rtvs.iter().map(|frame_rtv| {
+    // Framebuffer creation
+    let framebuffers = backbuffers.iter().map(|backbuffer| {
+        let frame_rtv = backbuffer.color.resource();
         let extent = d::Extent { width: pixel_width as _, height: pixel_height as _, depth: 1 };
-        device.create_framebuffer(&render_pass, &[&frame_rtv], &[], extent)
+        device.create_framebuffer(&render_pass, &[frame_rtv], &[], extent)
     }).collect::<Vec<_>>();
-
 
     let upload_heap =
-        heap_types.iter().find(|&&heap_type| {
+        context.ref_device().heap_types().iter().find(|&&heap_type| {
             heap_type.properties.contains(m::CPU_VISIBLE | m::COHERENT)
         })
+        .cloned()
         .unwrap();
 
     // Buffer allocations
-    println!("Memory heaps: {:?}", heap_types);
+    println!("Memory heaps: {:?}", context.ref_device().heap_types());
 
-    let heap = device.create_heap(upload_heap, d::ResourceHeapType::Buffers, 1024).unwrap();
+    let heap = device.create_heap(&upload_heap, d::ResourceHeapType::Buffers, 1024).unwrap();
     let buffer_stride = std::mem::size_of::<Vertex>() as u64;
     let buffer_len = QUAD.len() as u64 * buffer_stride;
 
@@ -250,12 +241,12 @@ fn main() {
     };
 
     // TODO: check transitions: read/write mapping and vertex buffer read
-    device.write_mapping::<Vertex>(&vertex_buffer, 0..buffer_len)
-        .unwrap()
-        .copy_from_slice(&QUAD);
+    device.write_mapping::<Vertex>(&vertex_buffer, 0, buffer_len)
+          .unwrap()
+          .copy_from_slice(&QUAD);
 
     // Image
-    let img_data = include_bytes!("data/logo.png");
+    let img_data = include_bytes!("../../core/quad/data/logo.png");
 
     let img = image::load(Cursor::new(&img_data[..]), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
@@ -266,14 +257,15 @@ fn main() {
     let upload_size = (height * row_pitch) as u64;
     println!("upload row pitch {}, total size {}", row_pitch, upload_size);
 
-    let image_upload_heap = device.create_heap(upload_heap, d::ResourceHeapType::Buffers, upload_size).unwrap();
+    let image_upload_heap = device.create_heap(&upload_heap, d::ResourceHeapType::Buffers, upload_size).unwrap();
     let image_upload_buffer = {
         let buffer = device.create_buffer(upload_size, image_stride as u64, buffer::TRANSFER_SRC).unwrap();
         device.bind_buffer_memory(&image_upload_heap, 0, buffer).unwrap()
     };
 
     // copy image data into staging buffer
-    if let Ok(mut mapping) = device.write_mapping::<u8>(&image_upload_buffer, 0..upload_size) {
+    {
+        let mut mapping = device.write_mapping::<u8>(&image_upload_buffer, 0, upload_size).unwrap();
         for y in 0 .. height as usize {
             let row = &(*img)[y*(width as usize)*image_stride .. (y+1)*(width as usize)*image_stride];
             let dest_base = y * row_pitch as usize;
@@ -285,8 +277,11 @@ fn main() {
     println!("{:?}", image);
     let image_req = device.get_image_requirements(&image);
 
-    let device_heap = heap_types.iter().find(|&&heap_type| heap_type.properties.contains(m::DEVICE_LOCAL)).unwrap();
-    let image_heap = device.create_heap(device_heap, d::ResourceHeapType::Images, image_req.size).unwrap();
+    let device_heap = context.ref_device().heap_types().iter()
+        .find(|&&heap_type| heap_type.properties.contains(m::DEVICE_LOCAL))
+        .cloned()
+        .unwrap();
+    let image_heap = device.create_heap(&device_heap, d::ResourceHeapType::Images, image_req.size).unwrap();
 
     let image_logo = device.bind_image_memory(&image_heap, 0, image).unwrap();
     let image_srv = device.view_image_as_shader_resource(&image_logo, ColorFormat::get_format()).unwrap();
@@ -324,9 +319,8 @@ fn main() {
         w: pixel_width, h: pixel_height,
     };
 
-    let mut frame_semaphore = device.create_semaphore();
-    let mut frame_fence = device.create_fence(false); // TODO: remove
-    let mut graphics_pool = queue.create_graphics_pool(16, pool::CommandPoolCreateFlags::empty());
+    let mut fence = device.create_fence(false);
+    let mut graphics_pool = context.mut_queue().create_graphics_pool(16, pool::CommandPoolCreateFlags::empty());
 
     // copy buffer to texture
     {
@@ -368,10 +362,12 @@ fn main() {
 
         let submission = Submission::new()
             .submit(&[submit]);
-        queue.submit(submission, Some(&mut frame_fence));
+        context.mut_queue().submit(submission, Some(&mut fence));
 
-        device.wait_for_fences(&[&frame_fence], d::WaitFor::All, !0);
+        device.wait_for_fences(&[&fence], d::WaitFor::All, !0);
     }
+
+    device.destroy_fence(fence);
 
     // not really needed, the transitions are covered by the render pass
     //Note: the actual stages are unlikely correct, need verifying
@@ -393,15 +389,19 @@ fn main() {
             }
         });
 
-        device.reset_fences(&[&frame_fence]);
-        graphics_pool.reset();
-        let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&mut frame_semaphore));
+        let frame = context.acquire_frame();
+        let mut scope = context.acquire_encoder_scope();
 
         // Rendering
         let submit = {
-            let mut cmd_buffer = graphics_pool.acquire_command_buffer();
+            let mut encoder = scope.acquire_encoder();
+            {
+            let cmd_buffer = encoder.mut_buffer();
 
-            let rtv = &backbuffers[frame.id()].color;
+            let rtv = match backbuffers[frame.id()].color.info() {
+                &gfx::handle::ViewSource::Backbuffer(ref img, _) => img,
+                _ => unreachable!(),
+            };
             if do_barriers {
                 let rtv_target_barrier = m::Barrier::Image {
                     states: (i::Access::empty(), i::ImageLayout::Undefined) ..
@@ -438,19 +438,11 @@ fn main() {
                 cmd_buffer.pipeline_barrier(pso::PIXEL_SHADER .. pso::TRANSFER, &[rtv_present_barrier]);
             }
 
-            cmd_buffer.finish()
+            }
+            encoder.finish()
         };
 
-        let submission = Submission::new()
-            .wait_on(&[(&mut frame_semaphore, pso::BOTTOM_OF_PIPE)])
-            .submit(&[submit]);
-        queue.submit(submission, Some(&mut frame_fence));
-
-        // TODO: replace with semaphore
-        device.wait_for_fences(&[&frame_fence], d::WaitFor::All, !0);
-
-        // present frame
-        swap_chain.present(&mut queue, &[]);
+        context.present(vec![submit]);
     }
 
     // cleanup!
@@ -469,8 +461,6 @@ fn main() {
     device.destroy_image(image_logo);
     device.destroy_shader_resource_view(image_srv);
     device.destroy_sampler(sampler);
-    device.destroy_fence(frame_fence);
-    device.destroy_semaphore(frame_semaphore);
     for pipeline in pipelines {
         if let Ok(pipeline) = pipeline {
             device.destroy_graphics_pipeline(pipeline);
@@ -479,12 +469,9 @@ fn main() {
     for framebuffer in framebuffers {
         device.destroy_framebuffer(framebuffer);
     }
-    for rtv in frame_rtvs {
-        device.destroy_render_target_view(rtv);
-    }
 }
 
-#[cfg(not(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl")))]
+#[cfg(not(any(feature = "vulkan", feature = "dx12", feature = "metal")))]
 fn main() {
     println!("You need to enable the native API feature (vulkan/metal) in order to test the LL");
 }

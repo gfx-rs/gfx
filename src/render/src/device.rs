@@ -1,9 +1,11 @@
 use std::mem;
+use std::ops::Range;
 use core::{Device as CoreDevice, HeapType};
 use core::device::TargetViewError;
 
 use memory::{self, Typed, Pod};
 use handle::{self, GarbageSender};
+use handle::inner::*;
 use {buffer, image, format};
 use Backend;
 
@@ -127,16 +129,22 @@ impl<B: Backend> Device<B> {
         Device { raw, heap_types, memory_heaps, garbage }
     }
 
+    // TODO: remove
+    pub fn heap_types(&self) -> &[HeapType] {
+        &self.heap_types
+    }
+
+    // TODO: remove
+    pub fn memory_heaps(&self) -> &[u64] {
+        &self.memory_heaps
+    }
+
     pub fn ref_raw(&self) -> &B::Device {
         &self.raw
     }
 
     pub fn mut_raw(&mut self) -> &mut B::Device {
         &mut self.raw
-    }
-
-    pub(crate) fn garbage(&self) -> GarbageSender<B> {
-        self.garbage.clone()
     }
 
     #[allow(unused_variables)]
@@ -165,7 +173,7 @@ impl<B: Backend> Device<B> {
             bind,
             size * stride,
             stride
-        ).map(|raw| Typed::new(raw))
+        ).map(Typed::new)
     }
 
     #[allow(unused_variables)]
@@ -180,7 +188,6 @@ impl<B: Backend> Device<B> {
         unimplemented!()
     }
 
-    // FIXME?: used to be format::SurfaceTyped
     pub fn create_image<F>(&mut self,
         kind: image::Kind,
         mip_levels: image::Level,
@@ -195,14 +202,14 @@ impl<B: Backend> Device<B> {
             F::get_format(),
             bind,
             usage
-        ).map(|raw| Typed::new(raw))
+        ).map(Typed::new)
     }
 
     pub fn create_sampler(&mut self, info: image::SamplerInfo)
         -> handle::Sampler<B>
     {
         handle::inner::Sampler::new(
-            self.raw.create_sampler(info), info, self.garbage.clone()
+            self.raw.create_sampler(info.clone()), info, self.garbage.clone()
         ).into()
     }
 
@@ -211,7 +218,6 @@ impl<B: Backend> Device<B> {
         range: Range<u64>,
     ) -> Result<handle::raw::ConstantBufferView<B>, TargetViewError>
     {
-        use handle::inner::*;
         self.raw.view_buffer_as_constant(buffer.resource(), range)
             .map(|cbv| ConstantBufferView::new(
                 cbv,
@@ -226,22 +232,20 @@ impl<B: Backend> Device<B> {
     ) -> Result<handle::ConstantBufferView<B, T>, TargetViewError>
     {
         self.view_buffer_as_constant_raw(buffer, range)
-            .map(|raw| Typed::new(raw))
+            .map(Typed::new)
     }
 
     pub(crate) fn view_backbuffer_as_render_target_raw(&mut self,
         image: B::Image,
         kind: image::Kind,
-        bind: memory::Bind,
         format: format::Format,
         range: image::SubresourceRange
     ) -> Result<handle::raw::RenderTargetView<B>, TargetViewError> {
-        use handle::inner::*;
         let info = image::Info {
             kind,
             levels: 1,
             format: format.0,
-            bind,
+            bind: memory::RENDER_TARGET | memory::TRANSFER_SRC,
             usage: memory::Usage::Data,
         };
         self.raw.view_image_as_render_target(&image, format, range)
@@ -254,7 +258,7 @@ impl<B: Backend> Device<B> {
 
     // TODO
     // pub(crate) fn view_backbuffer_as_depth_stencil_raw
-    // pub(crate) fn view_image_as_depth_stencil_raw
+    // pub fn view_image_as_depth_stencil_raw
     // pub fn view_image_as_depth_stencil
 
     pub fn view_image_as_render_target_raw(&mut self,
@@ -263,7 +267,6 @@ impl<B: Backend> Device<B> {
         range: image::SubresourceRange
     ) -> Result<handle::raw::RenderTargetView<B>, TargetViewError>
     {
-        use handle::inner::*;
         self.raw.view_image_as_render_target(image.resource(), format, range)
             .map(|rtv| RenderTargetView::new(
                 rtv,
@@ -279,7 +282,7 @@ impl<B: Backend> Device<B> {
         where F: format::RenderFormat
     {
         self.view_image_as_render_target_raw(image, F::get_format(), range)
-            .map(|raw| Typed::new(raw))
+            .map(Typed::new)
     }
     
     pub fn view_image_as_shader_resource_raw(&mut self,
@@ -287,7 +290,6 @@ impl<B: Backend> Device<B> {
         format: format::Format
     ) -> Result<handle::raw::ShaderResourceView<B>, TargetViewError>
     {
-        use handle::inner::*;
         self.raw.view_image_as_shader_resource(image.resource(), format)
             .map(|srv| ShaderResourceView::new(
                 srv,
@@ -302,7 +304,7 @@ impl<B: Backend> Device<B> {
         where F: format::TextureFormat
     {
         self.view_image_as_shader_resource_raw(image, F::get_format())
-            .map(|raw| Typed::new(raw))
+            .map(Typed::new)
     }
 
     pub fn view_image_as_unordered_access_raw(&mut self,
@@ -310,7 +312,6 @@ impl<B: Backend> Device<B> {
         format: format::Format
     ) -> Result<handle::raw::UnorderedAccessView<B>, TargetViewError>
     {
-        use handle::inner::*;
         self.raw.view_image_as_unordered_access(image.resource(), format)
             .map(|uav| UnorderedAccessView::new(
                 uav,
@@ -324,7 +325,7 @@ impl<B: Backend> Device<B> {
         where F: format::TextureFormat
     {
         self.view_image_as_unordered_access_raw(image, F::get_format())
-            .map(|raw| Typed::new(raw))
+            .map(Typed::new)
     }
 
 /*
