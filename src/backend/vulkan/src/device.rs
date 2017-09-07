@@ -4,7 +4,7 @@ use core::{buffer, device as d, format, image, mapping, pass, pso};
 use core::{Features, Limits, HeapType};
 use core::memory::Requirements;
 use native as n;
-use std::{mem, ptr, slice};
+use std::{mem, ptr};
 use std::collections::BTreeMap;
 use std::ops::Range;
 use std::sync::Arc;
@@ -1117,30 +1117,22 @@ impl d::Device<B> for Device {
         }
     }
 
-    /// Acquire a mapping Reader.
-    fn read_mapping<'a, T>(&self, buf: &'a n::Buffer, range: Range<u64>)
-                    -> Result<mapping::Reader<'a, B, T>, mapping::Error>
-        where T: Copy
+    fn read_mapping_raw(&mut self, buf: &n::Buffer, range: Range<u64>)
+        -> Result<(*const u8, Mapping), mapping::Error>
     {
-        let count = (range.end - range.start) as usize / mem::size_of::<T>();
         self.map_buffer(buf, range)
-            .map(|(ptr, mapping)| unsafe {
-                let slice = slice::from_raw_parts(ptr as *const T, count);
-                mapping::Reader::new(slice, mapping)
-            })
+            .map(|(ptr, mapping)| (ptr as *const _ as *const _, mapping))
     }
 
-    /// Acquire a mapping Writer
-    fn write_mapping<'a, 'b, T>(&mut self, buf: &'a n::Buffer, range: Range<u64>)
-                     -> Result<mapping::Writer<'a, B, T>, mapping::Error>
-        where T: Copy
+    fn write_mapping_raw(&mut self, buf: &n::Buffer, range: Range<u64>)
+        -> Result<(*mut u8, Mapping), mapping::Error>
     {
-        let count = (range.end - range.start) as usize / mem::size_of::<T>();
         self.map_buffer(buf, range)
-            .map(|(ptr, mapping)| unsafe {
-                let slice = slice::from_raw_parts_mut(ptr as *mut T, count);
-                mapping::Writer::new(slice, mapping)
-            })
+            .map(|(ptr, mapping)| (ptr as *mut _, mapping))
+    }
+
+    fn unmap_mapping_raw(&mut self, _mapping: Mapping) {
+        //let it drop
     }
 
     fn create_semaphore(&mut self) -> n::Semaphore {

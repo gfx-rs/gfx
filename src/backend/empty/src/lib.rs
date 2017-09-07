@@ -172,22 +172,25 @@ impl core::Device<Backend> for Device {
         unimplemented!()
     }
 
-
     fn update_descriptor_sets(&mut self, _: &[pso::DescriptorSetWrite<Backend>]) {
         unimplemented!()
     }
 
-    fn read_mapping<'a, T>(&self, _: &'a (), _: Range<u64>)
-                           -> Result<mapping::Reader<'a, Backend, T>, mapping::Error>
-        where T: Copy {
-            unimplemented!()
-        }
+    fn read_mapping_raw(&mut self, _: &(), _: Range<u64>)
+        -> Result<(*const u8, ()), mapping::Error>
+    {
+        unimplemented!()
+    }
 
-    fn write_mapping<'a, 'b, T>(&mut self, _: &'a (), _: Range<u64>)
-                                -> Result<mapping::Writer<'a, Backend, T>, mapping::Error>
-        where T: Copy {
-            unimplemented!()
-        }
+    fn write_mapping_raw(&mut self, _: &(), _: Range<u64>)
+        -> Result<(*mut u8, ()), mapping::Error>
+    {
+        unimplemented!()
+    }
+
+    fn unmap_mapping_raw(&mut self, _: ()) {
+        unimplemented!()
+    }
 
     fn create_semaphore(&mut self) -> () {
         unimplemented!()
