@@ -607,7 +607,7 @@ impl core::Factory<Resources> for Factory {
             raw_tex.replace_region(region,
                                    0,
                                    4 * region.size.width,
-                                   data[0].as_ptr() as *const _);
+                                   data.0[0].as_ptr() as *const _);
         }
 
         let tex = Texture(native::Texture(Box::into_raw(Box::new(raw_tex))),
