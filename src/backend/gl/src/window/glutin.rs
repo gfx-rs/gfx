@@ -1,6 +1,7 @@
 //! Window creation using glutin for gfx.
 //!
 //! # Examples
+//!
 //! The following code creates a `gfx::Surface` using glutin.
 //!
 //! ```no_run
@@ -19,6 +20,26 @@
 //!
 //!     // Then use the glutin window to create a gfx surface.
 //!     let surface = Surface::from_window(glutin_window);
+//! }
+//! ```
+//!
+//! Headless initialization without a window.
+//!
+//! ```no_run
+//! extern crate glutin;
+//! extern crate gfx_backend_gl;
+//! extern crate gfx_core as core;
+//!
+//! use core::Instance;
+//! use gfx_backend_gl::Headless;
+//! use glutin::{HeadlessRendererBuilder};
+//!
+//! fn main() {
+//!     let context = HeadlessRendererBuilder::new(256, 256)
+//!         .build()
+//!         .expect("Failed to build headless context");
+//!     let headless = Headless(context);
+//!     let _adapters = headless.enumerate_adapters();
 //! }
 //! ```
 
@@ -151,22 +172,5 @@ impl core::Instance<B> for Headless {
         unsafe { self.0.make_current().unwrap() };
         let adapter = Adapter::new(|s| self.0.get_proc_address(s) as *const _);
         vec![adapter]
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_headless() {
-        use core::Instance;
-        use glutin::{HeadlessRendererBuilder};
-        let context = HeadlessRendererBuilder::new(256, 256)
-            .build()
-            .expect("Failed to build headless context");
-
-        let headless = Headless(context);
-        let _adapters = headless.enumerate_adapters();
     }
 }
