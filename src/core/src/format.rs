@@ -232,7 +232,7 @@ pub trait StencilFormat: Formatted {}
 /// Ability to be used for depth+stencil targets.
 pub trait DepthStencilFormat: DepthFormat + StencilFormat {}
 /// Ability to be used for textures.
-pub trait TextureFormat: Formatted {}
+pub trait ImageFormat: Formatted {}
 /// Ability to be used for render targets.
 pub trait RenderFormat: Formatted {}
 /// Ability to be used for blended render targets.
@@ -256,7 +256,7 @@ impl<F> StencilFormat for F where
 impl<F> DepthStencilFormat for F where
     F: DepthFormat + StencilFormat
 {}
-impl<F> TextureFormat for F where
+impl<F> ImageFormat for F where
     F: Formatted,
     F::Surface: TextureSurface,
     F::Channel: TextureChannel,
