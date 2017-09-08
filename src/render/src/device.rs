@@ -301,7 +301,7 @@ impl<B: Backend> Device<B> {
     // TODO: rename to simply ViewError ?
     pub fn view_image_as_shader_resource<F>(&mut self, image: &handle::Image<B, F>)
         -> Result<handle::ShaderResourceView<B, F>, TargetViewError>
-        where F: format::TextureFormat
+        where F: format::ImageFormat
     {
         self.view_image_as_shader_resource_raw(image, F::get_format())
             .map(Typed::new)
@@ -322,7 +322,7 @@ impl<B: Backend> Device<B> {
 
     pub fn view_image_as_unordered_access<F>(&mut self, image: &handle::Image<B, F>)
         -> Result<handle::UnorderedAccessView<B, F>, TargetViewError>
-        where F: format::TextureFormat
+        where F: format::ImageFormat
     {
         self.view_image_as_unordered_access_raw(image, F::get_format())
             .map(Typed::new)
