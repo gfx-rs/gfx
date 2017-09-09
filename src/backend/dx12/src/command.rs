@@ -1,17 +1,14 @@
 use wio::com::ComPtr;
-use core::{command, memory, pso, shade, state, target, texture};
-use core::{IndexType, VertexCount, VertexOffset, Viewport};
+use core::{command, memory, image, pso, state, target};
+use core::{IndexType, VertexCount, VertexOffset, Viewport, InstanceCount, IndexCount};
 use core::buffer::IndexBufferView;
 use core::command::{BufferCopy, BufferImageCopy, ClearColor, ClearValue, ImageCopy, ImageResolve,
-                    InstanceParams, SubpassContents};
-use winapi::{self, UINT8, FLOAT, UINT, UINT64};
+                    SubpassContents};
+use winapi::{self, UINT, UINT64};
 use {native as n, Backend};
 use smallvec::SmallVec;
 use std::{cmp, mem, ptr};
-
-#[derive(Clone)]
-pub struct SubmitInfo(pub(crate) ComPtr<winapi::ID3D12GraphicsCommandList>);
-unsafe impl Send for SubmitInfo {}
+use std::ops::Range;
 
 fn get_rect(rect: &target::Rect) -> winapi::D3D12_RECT {
     winapi::D3D12_RECT {
@@ -22,6 +19,7 @@ fn get_rect(rect: &target::Rect) -> winapi::D3D12_RECT {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct RenderPassCache {
     render_pass: n::RenderPass,
     frame_buffer: n::FrameBuffer,
@@ -30,13 +28,15 @@ pub struct RenderPassCache {
     clear_values: Vec<ClearValue>,
 }
 
+#[derive(Clone)]
 pub struct CommandBuffer {
     pub(crate) raw: ComPtr<winapi::ID3D12GraphicsCommandList>,
 
     // Cache renderpasses for graphics operations
-    // TODO: Use pointers to the actual resources to minimize memory overhead.
     pub(crate) pass_cache: Option<RenderPassCache>,
 }
+
+unsafe impl Send for CommandBuffer { }
 
 impl CommandBuffer {
     fn begin_subpass(&mut self) {
@@ -49,11 +49,16 @@ impl CommandBuffer {
 }
 
 impl command::RawCommandBuffer<Backend> for CommandBuffer {
-    fn finish(&mut self) -> SubmitInfo {
-        unsafe {
-            self.raw.Close();
-        }
-        SubmitInfo(self.raw.clone())
+    fn begin(&mut self) {
+        unimplemented!()
+    }
+
+    fn finish(&mut self) {
+        unsafe { self.raw.Close(); }
+    }
+
+    fn reset(&mut self, release_resources: bool) {
+        unimplemented!()
     }
 
     fn begin_renderpass(
@@ -84,14 +89,18 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn pipeline_barrier(&mut self, _barries: &[memory::Barrier]) {
+    fn pipeline_barrier(
+        &mut self,
+        _stages: Range<pso::PipelineStage>,
+        _barriers: &[memory::Barrier<Backend>],
+    ) {
         unimplemented!()
     }
 
     fn clear_color(
         &mut self,
         rtv: &n::RenderTargetView,
-        _: texture::ImageLayout,
+        _: image::ImageLayout,
         color: ClearColor,
     ) {
         match color {
@@ -109,7 +118,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     fn clear_depth_stencil(
         &mut self,
         dsv: &n::DepthStencilView,
-        layout: texture::ImageLayout,
+        layout: image::ImageLayout,
         depth: Option<target::Depth>,
         stencil: Option<target::Stencil>,
     ) {
@@ -125,8 +134,8 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
             self.raw.ClearDepthStencilView(
                 dsv.handle,
                 flags,
-                depth.unwrap_or_default() as FLOAT,
-                stencil.unwrap_or_default() as UINT8,
+                depth.unwrap_or_default() as _,
+                stencil.unwrap_or_default() as _,
                 0,
                 ptr::null(),
             );
@@ -136,13 +145,13 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     fn resolve_image(
         &mut self,
         src: &n::Image,
-        src_layout: texture::ImageLayout,
+        src_layout: image::ImageLayout,
         dst: &n::Image,
-        dst_layout: texture::ImageLayout,
+        dst_layout: image::ImageLayout,
         regions: &[ImageResolve],
     ) {
         for region in regions {
-            for l in 0..region.num_layers as UINT {
+            for l in 0..region.num_layers as _ {
                 unsafe {
                     self.raw.ResolveSubresource(
                         src.resource,
@@ -189,7 +198,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
 
         unsafe {
             self.raw
-                .IASetVertexBuffers(0, vbs.0.len() as UINT, buffers.as_ptr());
+                .IASetVertexBuffers(0, vbs.0.len() as _, buffers.as_ptr());
         }
     }
 
@@ -198,10 +207,10 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
             .iter()
             .map(|viewport| {
                 winapi::D3D12_VIEWPORT {
-                    TopLeftX: viewport.x as FLOAT,
-                    TopLeftY: viewport.y as FLOAT,
-                    Width: viewport.w as FLOAT,
-                    Height: viewport.h as FLOAT,
+                    TopLeftX: viewport.x as _,
+                    TopLeftY: viewport.y as _,
+                    Width: viewport.w as _,
+                    Height: viewport.h as _,
                     MinDepth: viewport.near,
                     MaxDepth: viewport.far,
                 }
@@ -210,7 +219,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
 
         unsafe {
             self.raw.RSSetViewports(
-                viewports.len() as UINT,
+                viewports.len() as _,
                 viewports.as_ptr(),
             );
         }
@@ -220,23 +229,24 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         let rects: SmallVec<[winapi::D3D12_RECT; 16]> = scissors.iter().map(get_rect).collect();
         unsafe {
             self.raw
-                .RSSetScissorRects(rects.len() as UINT, rects.as_ptr())
+                .RSSetScissorRects(rects.len() as _, rects.as_ptr())
         };
     }
 
-    fn set_ref_values(&mut self, rv: state::RefValues) {
-        if rv.stencil.0 != rv.stencil.1 {
+    fn set_blend_constants(&mut self, color: target::ColorValue) {
+        unsafe { self.raw.OMSetBlendFactor(&color); }
+    }
+
+    fn set_stencil_reference(&mut self, front: target::Stencil, back: target::Stencil) {
+        if front != back {
             error!(
                 "Unable to set different stencil ref values for front ({}) and back ({})",
-                rv.stencil.0,
-                rv.stencil.1
+                front,
+                back,
             );
         }
 
-        unsafe {
-            self.raw.OMSetStencilRef(rv.stencil.0 as UINT);
-            self.raw.OMSetBlendFactor(&rv.blend);
-        }
+        unsafe { self.raw.OMSetStencilRef(front as _); }
     }
 
     fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
@@ -250,7 +260,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         &mut self,
         layout: &n::PipelineLayout,
         first_set: usize,
-        sets: &[&()],
+        sets: &[&n::DescriptorSet],
     ) {
         unimplemented!()
     }
@@ -271,16 +281,34 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
+    fn fill_buffer(
+        &mut self,
+        buffer: &n::Buffer,
+        range: Range<u64>,
+        data: u32,
+    ) {
+        unimplemented!()
+    }
+
+    fn update_buffer(
+        &mut self,
+        buffer: &n::Buffer,
+        offset: u64,
+        data: &[u8],
+    ) {
+        unimplemented!()
+    }
+
     fn copy_buffer(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: &[BufferCopy]) {
         // copy each region
         for region in regions {
             unsafe {
                 self.raw.CopyBufferRegion(
                     dst.resource,
-                    region.dst as UINT64,
+                    region.dst as _,
                     src.resource,
-                    region.src as UINT64,
-                    region.size as UINT64,
+                    region.src as _,
+                    region.size as _,
                 );
             }
         }
@@ -291,9 +319,9 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     fn copy_image(
         &mut self,
         src: &n::Image,
-        _: texture::ImageLayout,
+        _: image::ImageLayout,
         dst: &n::Image,
-        _: texture::ImageLayout,
+        _: image::ImageLayout,
         regions: &[ImageCopy],
     ) {
         let mut src_image = winapi::D3D12_TEXTURE_COPY_LOCATION {
@@ -311,24 +339,24 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         for region in regions {
             for layer in 0..region.num_layers {
                 *unsafe { src_image.SubresourceIndex_mut() } =
-                    src.calc_subresource(region.src_subresource.0 as UINT, (region.src_subresource.1 + layer) as UINT);
+                    src.calc_subresource(region.src_subresource.0 as _, (region.src_subresource.1 + layer) as _);
                 *unsafe { dst_image.SubresourceIndex_mut() } =
-                    dst.calc_subresource(region.dst_subresource.0 as UINT, (region.dst_subresource.1 + layer) as UINT);
+                    dst.calc_subresource(region.dst_subresource.0 as _, (region.dst_subresource.1 + layer) as _);
 
                 let src_box = winapi::D3D12_BOX {
-                    left: region.src_offset.x as UINT,
-                    top: region.src_offset.y as UINT,
-                    right: (region.src_offset.x + region.extent.width as i32) as UINT,
-                    bottom: (region.src_offset.y + region.extent.height as i32) as UINT,
-                    front: region.src_offset.z as UINT,
-                    back: (region.src_offset.z + region.extent.depth as i32) as UINT,
+                    left: region.src_offset.x as _,
+                    top: region.src_offset.y as _,
+                    right: (region.src_offset.x + region.extent.width as i32) as _,
+                    bottom: (region.src_offset.y + region.extent.height as i32) as _,
+                    front: region.src_offset.z as _,
+                    back: (region.src_offset.z + region.extent.depth as i32) as _,
                 };
                 unsafe {
                     self.raw.CopyTextureRegion(
                         &dst_image,
-                        region.dst_offset.x as UINT,
-                        region.dst_offset.y as UINT,
-                        region.dst_offset.z as UINT,
+                        region.dst_offset.x as _,
+                        region.dst_offset.y as _,
+                        region.dst_offset.z as _,
                         &src_image,
                         &src_box,
                     );
@@ -341,7 +369,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         &mut self,
         buffer: &n::Buffer,
         image: &n::Image,
-        _: texture::ImageLayout,
+        _: image::ImageLayout,
         regions: &[BufferImageCopy],
     ) {
         let mut src = winapi::D3D12_TEXTURE_COPY_LOCATION {
@@ -363,36 +391,36 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                 assert_eq!(region.buffer_row_pitch % winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32, 0);
                 assert!(region.buffer_row_pitch >= width as u32 * image.bits_per_texel as u32 / 8);
 
-                let height = cmp::max(1, height as UINT);
-                let depth = cmp::max(1, depth as UINT);
+                let height = cmp::max(1, height as _);
+                let depth = cmp::max(1, depth as _);
 
                 // Advance buffer offset with each layer
                 *unsafe { src.PlacedFootprint_mut() } = winapi::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
                     Offset: region.buffer_offset as UINT64 + (layer as u32 * region.buffer_row_pitch * height * depth) as UINT64,
                     Footprint: winapi::D3D12_SUBRESOURCE_FOOTPRINT {
                         Format: image.dxgi_format,
-                        Width: width as UINT,
+                        Width: width as _,
                         Height: height,
                         Depth: depth,
                         RowPitch: region.buffer_row_pitch,
                     },
                 };
                 *unsafe { dst.SubresourceIndex_mut() } =
-                    image.calc_subresource(region.image_subresource.0 as UINT, layer as UINT);
+                    image.calc_subresource(region.image_subresource.0 as _, layer as _);
                 let src_box = winapi::D3D12_BOX {
                     left: 0,
                     top: 0,
-                    right: region.image_extent.width as UINT,
-                    bottom: region.image_extent.height as UINT,
+                    right: region.image_extent.width as _,
+                    bottom: region.image_extent.height as _,
                     front: 0,
-                    back: region.image_extent.depth as UINT,
+                    back: region.image_extent.depth as _,
                 };
                 unsafe {
                     self.raw.CopyTextureRegion(
                         &dst,
-                        region.image_offset.x as UINT,
-                        region.image_offset.y as UINT,
-                        region.image_offset.z as UINT,
+                        region.image_offset.x as _,
+                        region.image_offset.y as _,
+                        region.image_offset.z as _,
                         &src,
                         &src_box,
                     );
@@ -404,40 +432,38 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     fn copy_image_to_buffer(
         &mut self,
         src: &n::Image,
+        layout: image::ImageLayout,
         dst: &n::Buffer,
-        layout: texture::ImageLayout,
         regions: &[BufferImageCopy],
     ) {
         unimplemented!()
     }
 
-    fn draw(&mut self, start: VertexCount, count: VertexCount, instances: Option<InstanceParams>) {
-        let (num_instances, start_instance) = match instances {
-            Some((num_instances, start_instance)) => (num_instances, start_instance),
-            None => (1, 0),
-        };
-
+    fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {
         unsafe {
-            self.raw
-                .DrawInstanced(count, num_instances, start, start_instance);
+            self.raw.DrawInstanced(
+                vertices.end - vertices.start,
+                instances.end - instances.start,
+                vertices.start,
+                instances.start,
+            );
         }
     }
 
     fn draw_indexed(
         &mut self,
-        start: VertexCount,
-        count: VertexCount,
-        base: VertexOffset,
-        instances: Option<InstanceParams>,
+        indices: Range<IndexCount>,
+        base_vertex: VertexOffset,
+        instances: Range<InstanceCount>,
     ) {
-        let (num_instances, start_instance) = match instances {
-            Some((num_instances, start_instance)) => (num_instances, start_instance),
-            None => (1, 0),
-        };
-
         unsafe {
-            self.raw
-                .DrawIndexedInstanced(count, num_instances, start, base, start_instance);
+            self.raw.DrawIndexedInstanced(
+                indices.end - indices.start,
+                instances.end - instances.start,
+                indices.start,
+                base_vertex,
+                instances.start,
+            );
         }
     }
 

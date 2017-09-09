@@ -9,12 +9,13 @@ extern crate winapi;
 extern crate wio;
 
 mod command;
-pub mod data;
+mod data;
 mod device;
 mod native;
 mod pool;
+mod window;
 
-use core::{command as com, handle, QueueType};
+use core::{command as com, Features, Limits, QueueType};
 use wio::com::ComPtr;
 
 use std::ptr;
@@ -29,6 +30,55 @@ pub struct QueueFamily;
 
 impl core::QueueFamily for QueueFamily {
     fn num_queues(&self) -> u32 { 1 } // TODO: infinite software queues actually
+}
+
+/// Create associated command queues for a specific queue type
+fn collect_queues<C>(
+     queue_descs: &[(&QueueFamily, QueueType, u32)],
+     device_raw: ComPtr<winapi::ID3D12Device>,
+     collect_type: QueueType,
+) -> Vec<core::CommandQueue<Backend, C>> {
+    queue_descs.iter()
+        .filter(|&&(_, qtype, _)| qtype == collect_type)
+        .flat_map(|&(qfamily, _, qcount)| {
+            (0..qcount).map(move |id| {
+                let mut queue = unsafe { ComPtr::<winapi::ID3D12CommandQueue>::new(ptr::null_mut()) };
+                let qtype = match collect_type {
+                    QueueType::General | QueueType::Graphics => winapi::D3D12_COMMAND_LIST_TYPE_DIRECT,
+                    QueueType::Compute => winapi::D3D12_COMMAND_LIST_TYPE_COMPUTE,
+                    QueueType::Transfer => winapi::D3D12_COMMAND_LIST_TYPE_COPY,
+                };
+
+                let queue_desc = winapi::D3D12_COMMAND_QUEUE_DESC {
+                    Type: qtype,
+                    Priority: 0,
+                    Flags: winapi::D3D12_COMMAND_QUEUE_FLAG_NONE,
+                    NodeMask: 0,
+                };
+
+                let hr = unsafe {
+                    device_raw.CreateCommandQueue(
+                        &queue_desc,
+                        &dxguid::IID_ID3D12CommandQueue,
+                        &mut queue.as_mut() as *mut &mut _ as *mut *mut c_void,
+                    )
+                };
+
+                if !winapi::SUCCEEDED(hr) {
+                    error!("error on queue creation: {:x}", hr);
+                }
+
+                unsafe {
+                    core::CommandQueue::new(
+                        CommandQueue {
+                            raw: queue,
+                            device: device_raw.clone(),
+                            list_type: qtype,
+                        }
+                    )
+                }
+            })
+        }).collect()
 }
 
 #[derive(Clone)]
@@ -55,54 +105,14 @@ impl core::Adapter<Backend> for Adapter {
             error!("error on device creation: {:x}", hr);
         }
 
-        // TODO: other queue types
-        // Create command queues
-        let mut general_queues = queue_descs.iter().flat_map(|&(_family, _ty, queue_count)| {
-            (0..queue_count).map(|_| {
-                let mut queue = unsafe { ComPtr::<winapi::ID3D12CommandQueue>::new(ptr::null_mut()) };
-                let queue_desc = winapi::D3D12_COMMAND_QUEUE_DESC {
-                    Type: winapi::D3D12_COMMAND_LIST_TYPE_DIRECT, // TODO: correct queue type
-                    Priority: 0,
-                    Flags: winapi::D3D12_COMMAND_QUEUE_FLAG_NONE,
-                    NodeMask: 0,
-                };
-
-                let hr = unsafe {
-                    device.CreateCommandQueue(
-                        &queue_desc,
-                        &dxguid::IID_ID3D12CommandQueue,
-                        &mut queue.as_mut() as *mut &mut _ as *mut *mut c_void,
-                    )
-                };
-
-                if !winapi::SUCCEEDED(hr) {
-                    error!("error on queue creation: {:x}", hr);
-                }
-
-                unsafe {
-                    core::GeneralQueue::new(
-                        CommandQueue {
-                            raw: queue,
-                            device: device.clone(),
-                            list_type: winapi::D3D12_COMMAND_LIST_TYPE_DIRECT, // TODO
-                            frame_handles: handle::Manager::new(),
-                            max_resource_count: Some(999999),
-                        }
-                    )
-                }
-            }).collect::<Vec<_>>()
-        }).collect();
-
-        let device = Device::new(device);
-
         core::Gpu {
-            device,
-            general_queues,
-            graphics_queues: Vec::new(),
-            compute_queues: Vec::new(),
-            transfer_queues: Vec::new(),
+            general_queues: collect_queues(queue_descs, &device, QueueType::General),
+            graphics_queues: collect_queues(queue_descs, &device, QueueType::Graphics),
+            compute_queues: collect_queues(queue_descs, &device, QueueType::Compute),
+            transfer_queues: collect_queues(queue_descs, &device, QueueType::Transfer),
             heap_types: Vec::new(), // TODO
             memory_heaps: Vec::new(), // TODO
+            device: Device::new(device),
         }
     }
 
@@ -116,52 +126,57 @@ impl core::Adapter<Backend> for Adapter {
 }
 
 pub struct CommandQueue {
-    #[doc(hidden)]
-    pub raw: ComPtr<winapi::ID3D12CommandQueue>,
+    pub(crate) raw: ComPtr<winapi::ID3D12CommandQueue>,
     device: ComPtr<winapi::ID3D12Device>,
     list_type: winapi::D3D12_COMMAND_LIST_TYPE,
-
-    frame_handles: handle::Manager<Backend>,
-    max_resource_count: Option<usize>,
 }
 
-impl core::CommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw<'a, I>(
-        &mut self,
-        submit_infos: I,
-        fence: Option<&handle::Fence<Backend>>,
-        access: &com::AccessInfo<Backend>,
-    ) where I: Iterator<Item=core::RawSubmission<'a, Backend>> {
+impl core::RawCommandQueue<Backend> for CommandQueue {
+    unsafe fn submit_raw(&mut self,
+        submission: core::RawSubmission<Backend>,
+        fence: Option<&native::Fence>,
+    ) {
         unimplemented!()
-    }
-
-    fn pin_submitted_resources(&mut self, man: &handle::Manager<Backend>) {
-        self.frame_handles.extend(man);
-        match self.max_resource_count {
-            Some(c) if self.frame_handles.count() > c => {
-                error!("Way too many resources in the current frame. Did you call Device::cleanup()?");
-                self.max_resource_count = None;
-            },
-            _ => (),
-        }
-    }
-
-    fn cleanup(&mut self) {
-        use core::handle::Producer;
-
-        self.frame_handles.clear();
-        // TODO
     }
 }
 
 pub struct Device {
     device: ComPtr<winapi::ID3D12Device>,
+    features: core::Features,
+    limits: core::Limits,
 }
 
 impl Device {
     fn new(device: ComPtr<winapi::ID3D12Device>) -> Device {
         Device {
             device: device,
+            features: Features { // TODO
+                indirect_execution: true,
+                draw_instanced: true,
+                draw_instanced_base: true,
+                draw_indexed_base: true,
+                draw_indexed_instanced: true,
+                draw_indexed_instanced_base_vertex: true,
+                draw_indexed_instanced_base: true,
+                instance_rate: false,
+                vertex_base: false,
+                srgb_color: false,
+                constant_buffer: false,
+                unordered_access_view: false,
+                separate_blending_slots: false,
+                copy_buffer: false,
+                sampler_anisotropy: false,
+                sampler_border_color: false,
+                sampler_lod_bias: false,
+                sampler_objects: false,
+            },
+            limits: Limits { // TODO
+                max_texture_size: 0,
+                max_patch_size: 0,
+                max_viewports: 0,
+                min_buffer_copy_offset_alignment: 0,
+                min_buffer_copy_pitch_alignment: 0,
+            },
         }
     }
 
@@ -171,44 +186,8 @@ impl Device {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Backend {}
-impl core::Backend for Backend {
-    type Adapter = Adapter;
-    type CommandQueue = CommandQueue;
-    type RawCommandBuffer = command::CommandBuffer;
-    type SubpassCommandBuffer = command::SubpassCommandBuffer;
-    type SubmitInfo = command::SubmitInfo;
-    type Device = Device;
-    type QueueFamily = QueueFamily;
-
-    type RawCommandPool = pool::RawCommandPool;
-    type SubpassCommandPool = pool::SubpassCommandPool;
-
-    type Buffer = native::Buffer;
-    type ShaderResourceView = ();
-    type UnorderedAccessView = ();
-    type RenderTargetView = native::RenderTargetView;
-    type DepthStencilView = native::DepthStencilView;
-    type Sampler = ();
-    type Fence = ();
-    type Semaphore = ();
-    type Mapping = Mapping;
-
-    type ShaderLib = native::ShaderLib;
-    type Image = native::Image;
-    type ComputePipeline = native::ComputePipeline;
-    type GraphicsPipeline = native::GraphicsPipeline;
-    type PipelineLayout = native::PipelineLayout;
-    type DescriptorSet = ();
-    type DescriptorSetLayout = native::DescriptorSetLayout;
-    type RenderPass = native::RenderPass;
-    type FrameBuffer = native::FrameBuffer;
-}
-
 pub struct Instance {
-    #[doc(hidden)]
-    pub factory: ComPtr<winapi::IDXGIFactory4>,
+    pub(crate) factory: ComPtr<winapi::IDXGIFactory4>,
 }
 
 impl Instance {
@@ -309,20 +288,48 @@ impl Instance {
     }
 }
 
-// TODO: temporary
-#[derive(Debug, Eq, Hash, PartialEq)]
-pub struct Mapping;
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+pub enum Backend {}
+impl core::Backend for Backend {
+    type Adapter = Adapter;
+    type Device = Device;
 
-impl core::mapping::Gate<Backend> for Mapping {
-    unsafe fn set<T>(&self, index: usize, val: T) {
-        unimplemented!()
-    }
+    type Surface = window::Surface;
+    type Swapchain = window::Swapchain;
 
-    unsafe fn slice<'a, 'b, T>(&'a self, len: usize) -> &'b [T] {
-        unimplemented!()
-    }
+    type CommandQueue = CommandQueue;
+    type CommandBuffer = command::CommandBuffer;
+    type SubpassCommandBuffer = command::SubpassCommandBuffer;
+    type QueueFamily = QueueFamily;
 
-    unsafe fn mut_slice<'a, 'b, T>(&'a self, len: usize) -> &'b mut [T] {
-        unimplemented!()
-    }
+    type Heap = native::Heap;
+    type Mapping = device::Mapping;
+    type CommandPool = pool::RawCommandPool;
+    type SubpassCommandPool = pool::SubpassCommandPool;
+
+    type ShaderLib = native::ShaderLib;
+    type RenderPass = native::RenderPass;
+    type FrameBuffer = native::FrameBuffer;
+
+    type UnboundBuffer = device::UnboundBuffer;
+    type Buffer = native::Buffer;
+    type UnboundImage = device::UnboundImage;
+    type Image = native::Image;
+    type Sampler = native::Sampler;
+
+    type ConstantBufferView = native::ConstantBufferView;
+    type ShaderResourceView = native::ShaderResourceView;
+    type UnorderedAccessView = native::UnorderedAccessView;
+    type RenderTargetView = native::RenderTargetView;
+    type DepthStencilView = native::DepthStencilView;
+
+    type ComputePipeline = native::ComputePipeline;
+    type GraphicsPipeline = native::GraphicsPipeline;
+    type PipelineLayout = native::PipelineLayout;
+    type DescriptorSetLayout = native::DescriptorSetLayout;
+    type DescriptorPool = native::DescriptorPool;
+    type DescriptorSet = native::DescriptorSet;
+
+    type Fence = native::Fence;
+    type Semaphore = native::Semaphore;
 }
