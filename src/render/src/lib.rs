@@ -159,7 +159,7 @@ impl<B: Backend, C> Queue<B, C> {
         Queue { inner, command_pool_sender, command_pool_receiver }
     }
 
-    fn acquire_encoder_scope(&mut self) -> encoder::Scope<B, C> {
+    fn acquire_encoder_pool(&mut self) -> encoder::Pool<B, C> {
         let initial_capacity = 4;
         let flags = CommandPoolCreateFlags::empty();
         let pool = self.command_pool_receiver.try_recv()
@@ -170,7 +170,7 @@ impl<B: Backend, C> Queue<B, C> {
             .unwrap_or_else(|_| {
                 CommandPool::from_queue(&self.inner, initial_capacity, flags)
             });
-        encoder::Scope::new(pool, self.command_pool_sender.clone())
+        encoder::Pool::new(pool, self.command_pool_sender.clone())
     }
 }
 
@@ -213,7 +213,7 @@ impl<T> Sync<T> {
 
 struct FrameBundle<B: Backend, C> {
     handles: handle::Bag<B>,
-    scopes: Vec<encoder::ScopeDependency<B, C>>,
+    encoder_pools: Vec<encoder::PoolDependency<B, C>>,
     // wait until the backbuffer image is ready
     wait_semaphore: B::Semaphore,
     // signal when the frame is done
@@ -236,7 +236,7 @@ impl Capability for core::General {
         garbage: handle::GarbageSender<B>
     ) -> (Device<B>, Queue<B, Self>) {
         let core::Gpu {
-            mut device,
+            device,
             mut general_queues,
             heap_types,
             memory_heaps,
@@ -264,7 +264,7 @@ impl Capability for core::Graphics {
         garbage: handle::GarbageSender<B>
     ) -> (Device<B>, Queue<B, Self>) {
         let core::Gpu {
-            mut device,
+            device,
             mut graphics_queues,
             heap_types,
             memory_heaps,
@@ -322,7 +322,7 @@ impl<B: Backend, C> Context<B, C>
         let frame_bundles = backbuffers.iter()
             .map(|_| FrameBundle {
                 handles: handle::Bag::new(),
-                scopes: Vec::new(),
+                encoder_pools: Vec::new(),
                 wait_semaphore: device.mut_raw().create_semaphore(),
                 signal_semaphore: device.mut_raw().create_semaphore(),
                 signal_fence: Sync::reached(
@@ -371,7 +371,7 @@ impl<B: Backend, C> Context<B, C>
         bundle.signal_fence.signal = Reached;
 
         bundle.handles.clear();
-        bundle.scopes.clear();
+        bundle.encoder_pools.clear();
 
         let frame = self.swapchain.acquire_frame(
             core::FrameSync::Semaphore(&mut bundle.wait_semaphore)
@@ -382,8 +382,8 @@ impl<B: Backend, C> Context<B, C>
         frame
     }
 
-    pub fn acquire_encoder_scope(&mut self) -> encoder::Scope<B, C> {
-        self.queue.acquire_encoder_scope()
+    pub fn acquire_encoder_pool(&mut self) -> encoder::Pool<B, C> {
+        self.queue.acquire_encoder_pool()
     }
 
     // TODO: allow submissions before present
@@ -394,7 +394,7 @@ impl<B: Backend, C> Context<B, C>
         let inner_submits: Vec<_> = submits.into_iter()
             .map(|mut submit| {
                 bundle.handles.append(&mut submit.handles);
-                bundle.scopes.push(submit.scope);
+                bundle.encoder_pools.push(submit.pool);
                 submit.inner
             }).collect();
 
@@ -442,7 +442,7 @@ impl<B: Backend, C> Context<B, C>
                 // self can drop the handles before waiting because
                 // self will be the one receiving the garbage afterwards
                 bundle.handles.clear();
-                bundle.scopes.clear();
+                bundle.encoder_pools.clear();
                 if bundle.signal_fence.signal == Pending {
                     Some(&bundle.signal_fence.inner)
                 } else {
