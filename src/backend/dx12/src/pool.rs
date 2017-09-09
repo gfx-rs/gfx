@@ -2,11 +2,10 @@ use wio::com::ComPtr;
 use dxguid;
 use std::ptr;
 use std::os::raw::c_void;
-use std::ops::DerefMut;
 use winapi;
 
-use core::{self, pool};
-use command::{CommandBuffer, SubpassCommandBuffer};
+use core::pool;
+use command::CommandBuffer;
 use {Backend, CommandQueue};
 
 pub struct RawCommandPool {
@@ -63,28 +62,27 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
             .collect()
     }
 
-    unsafe fn free(&mut self, cbufs: Vec<CommandBuffer>) {
+    unsafe fn free(&mut self, _cbufs: Vec<CommandBuffer>) {
         // Just let the command buffers drop
     }
 
     unsafe fn from_queue(queue: &CommandQueue, _create_flags: pool::CommandPoolCreateFlags) -> RawCommandPool {
         // create command allocator
         let mut command_allocator: *mut winapi::ID3D12CommandAllocator = ptr::null_mut();
-        let hr = unsafe {
-            // Note: ID3D12Device interface is free-threaded, therefore this call is safe
-            queue.device.as_mut().CreateCommandAllocator(
+        let hr = queue.device
+            .as_mut()
+            .CreateCommandAllocator(
                 queue.list_type,
                 &dxguid::IID_ID3D12CommandAllocator,
                 &mut command_allocator as *mut *mut _ as *mut *mut c_void,
-            )
-        };
+            );
         // TODO: error handling
         if !winapi::SUCCEEDED(hr) {
             error!("error on command allocator creation: {:x}", hr);
         }
 
         RawCommandPool {
-            inner: unsafe { ComPtr::new(command_allocator) },
+            inner: ComPtr::new(command_allocator),
             device: queue.device.clone(),
             list_type: queue.list_type,
         }
