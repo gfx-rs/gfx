@@ -15,53 +15,55 @@ use memory::{self, cast_slice, Typed, Pod, Usage};
 use {handle, image};
 
 // This is the unique owner of the inner struct.
-pub struct Scope<B: Backend, C>(Arc<UnsafeCell<ScopeInner<B, C>>>);
+pub struct Pool<B: Backend, C>(Arc<UnsafeCell<PoolInner<B, C>>>);
 // Keep-alive without any access (only Drop if last one).
-pub(crate) struct ScopeDependency<B: Backend, C>(Arc<UnsafeCell<ScopeInner<B, C>>>);
+pub(crate) struct PoolDependency<B: Backend, C>(Arc<UnsafeCell<PoolInner<B, C>>>);
 
-impl<B: Backend, C> Scope<B, C> {
+impl<B: Backend, C> Pool<B, C> {
     pub(crate) fn new(
-        pool: CommandPool<B, C>,
+        inner: CommandPool<B, C>,
         sender: CommandPoolSender<B, C>
     ) -> Self {
-        Scope(Arc::new(UnsafeCell::new(ScopeInner {
-            pool: Some(pool), sender
+        Pool(Arc::new(UnsafeCell::new(PoolInner {
+            inner: Some(inner), sender
         })))
     }
 
+    fn mut_inner<'a>(&'a mut self) -> &'a mut CommandPool<B, C> {
+        unsafe { &mut *self.0.get() }.get_mut()
+    }
+
     pub fn reserve(&mut self, additional: usize) {
-        let inner = unsafe { &mut *self.0.get() };
-        inner.mut_pool().reserve(additional);
+        self.mut_inner().reserve(additional);
     }
 
     pub fn acquire_encoder<'a>(&'a mut self) -> Encoder<'a, B, C> {
-        let inner = unsafe { &mut *self.0.get() };
         Encoder {
-            buffer: inner.mut_pool().acquire_command_buffer(),
+            pool: PoolDependency(self.0.clone()),
+            buffer: self.mut_inner().acquire_command_buffer(),
             // raw_data: pso::RawDataSet::new(),
             // access_info: command::AccessInfo::new(),
             handles: handle::Bag::new(),
-            scope: ScopeDependency(self.0.clone())
         }
     }
 }
 
-struct ScopeInner<B: Backend, C> {
+struct PoolInner<B: Backend, C> {
     // option for owned drop
-    pool: Option<CommandPool<B, C>>,
+    inner: Option<CommandPool<B, C>>,
     sender: CommandPoolSender<B, C>,
 }
 
-impl<B: Backend, C> ScopeInner<B, C> {
-    fn mut_pool(&mut self) -> &mut CommandPool<B, C> {
-        self.pool.as_mut().unwrap()
+impl<B: Backend, C> PoolInner<B, C> {
+    fn get_mut(&mut self) -> &mut CommandPool<B, C> {
+        self.inner.as_mut().unwrap()
     }
 }
 
-impl<B: Backend, C> Drop for ScopeInner<B, C> {
+impl<B: Backend, C> Drop for PoolInner<B, C> {
     fn drop(&mut self) {
         // simply will not be recycled if the channel is down, should be ok.
-        let _ = self.sender.send(self.pool.take().unwrap());
+        let _ = self.sender.send(self.inner.take().unwrap());
     }
 }
 
@@ -77,14 +79,14 @@ pub struct Encoder<'a, B: Backend, C> {
     // raw_data: pso::RawDataSet<B>,
     // access_info: command::AccessInfo<B>,
     handles: handle::Bag<B>,
-    scope: ScopeDependency<B, C>
+    pool: PoolDependency<B, C>
 }
 
 pub struct Submit<B: Backend, C> {
     pub(crate) inner: core::command::Submit<B, C>,
     // access_info: command::AccessInfo<B>,
     pub(crate) handles: handle::Bag<B>,
-    pub(crate) scope: ScopeDependency<B, C>
+    pub(crate) pool: PoolDependency<B, C>
 }
 
 /// An error occuring in memory copies.
@@ -238,7 +240,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C> {
             inner: self.buffer.finish(),
             // access_info: self.access_info,
             handles: self.handles,
-            scope: self.scope,
+            pool: self.pool,
         }
     }
 
