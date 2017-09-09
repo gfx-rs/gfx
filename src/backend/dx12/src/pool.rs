@@ -6,46 +6,16 @@ use std::ops::DerefMut;
 use winapi;
 
 use core::{self, pool};
-use core::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
 use command::{CommandBuffer, SubpassCommandBuffer};
-use core::command::{GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer};
 use {Backend, CommandQueue};
 
-struct CommandAllocator {
+pub struct RawCommandPool {
     inner: ComPtr<winapi::ID3D12CommandAllocator>,
     device: ComPtr<winapi::ID3D12Device>,
     list_type: winapi::D3D12_COMMAND_LIST_TYPE,
 }
 
-impl CommandAllocator {
-    fn from_queue(queue: &CommandQueue) -> CommandAllocator {
-        // create command allocator
-        let mut command_allocator: *mut winapi::ID3D12CommandAllocator = ptr::null_mut();
-        let hr = unsafe {
-            // Note: ID3D12Device interface is free-threaded, therefore this call is safe
-            queue.device.as_mut().CreateCommandAllocator(
-                queue.list_type,
-                &dxguid::IID_ID3D12CommandAllocator,
-                &mut command_allocator as *mut *mut _ as *mut *mut c_void,
-            )
-        };
-        // TODO: error handling
-        if !winapi::SUCCEEDED(hr) {
-            error!("error on command allocator creation: {:x}", hr);
-        }
-
-        CommandAllocator {
-            inner: unsafe { ComPtr::new(command_allocator) },
-            device: queue.device.clone(),
-            list_type: queue.list_type,
-        }
-    }
-
-    // Reset command allocator
-    fn reset(&mut self) {
-        unsafe { self.inner.Reset(); }
-    }
-
+impl RawCommandPool {
     fn create_command_list(&mut self) -> ComPtr<winapi::ID3D12GraphicsCommandList> {
         // allocate command lists
         let mut command_list = {
@@ -77,85 +47,49 @@ impl CommandAllocator {
     }
 }
 
-unsafe impl Send for CommandAllocator { }
-
-pub struct RawCommandPool {
-    allocator: CommandAllocator,
-    command_lists: Vec<CommandBuffer>,
-    next_list: usize,
-}
-
 unsafe impl Send for RawCommandPool { }
 
 impl pool::RawCommandPool<Backend> for RawCommandPool {
     fn reset(&mut self) {
-        // reset only allocator, as command lists will be reset on acquire.
-        self.allocator.reset();
+        unsafe { self.inner.Reset(); }
     }
 
-    fn reserve(&mut self, additional: usize) {
-        self.command_lists.reserve(additional);
-        for _ in 0..additional {
-            let command_list = self.allocator.create_command_list();
-            self.command_lists.push(
-                CommandBuffer {
-                    raw : command_list,
-                    pass_cache: None,
-                });
-        }
+    fn allocate(&mut self, num: usize) -> Vec<CommandBuffer> {
+        (0..num)
+            .map(|_| CommandBuffer {
+                raw: self.create_command_list(),
+                pass_cache: None,
+            })
+            .collect()
     }
 
-    unsafe fn from_queue<Q>(mut queue: Q, capacity: usize) -> RawCommandPool
-    where Q: AsRef<CommandQueue>
-    {
-        let mut pool = RawCommandPool {
-            allocator: CommandAllocator::from_queue(queue.as_ref()),
-            command_lists: Vec::new(),
-            next_list: 0,
+    unsafe fn free(&mut self, cbufs: Vec<CommandBuffer>) {
+        // Just let the command buffers drop
+    }
+
+    unsafe fn from_queue(queue: &CommandQueue, _create_flags: pool::CommandPoolCreateFlags) -> RawCommandPool {
+        // create command allocator
+        let mut command_allocator: *mut winapi::ID3D12CommandAllocator = ptr::null_mut();
+        let hr = unsafe {
+            // Note: ID3D12Device interface is free-threaded, therefore this call is safe
+            queue.device.as_mut().CreateCommandAllocator(
+                queue.list_type,
+                &dxguid::IID_ID3D12CommandAllocator,
+                &mut command_allocator as *mut *mut _ as *mut *mut c_void,
+            )
         };
-
-        pool.reserve(capacity);
-        pool
-    }
-
-    unsafe fn acquire_command_buffer(&mut self) -> &mut CommandBuffer {
-        let available_lists = self.command_lists.len() as isize - self.next_list as isize;
-        if available_lists <= 0 {
-            self.reserve((-available_lists) as usize + 1);
+        // TODO: error handling
+        if !winapi::SUCCEEDED(hr) {
+            error!("error on command allocator creation: {:x}", hr);
         }
 
-        let mut list = &mut self.command_lists[self.next_list];
-        self.next_list += 1;
-
-        // reset to initial state
-        unsafe { list.raw.as_mut().Reset(self.allocator.inner.as_mut() as *mut _, ptr::null_mut()); }
-        list
+        RawCommandPool {
+            inner: unsafe { ComPtr::new(command_allocator) },
+            device: queue.device.clone(),
+            list_type: queue.list_type,
+        }
     }
 }
 
-
-pub struct SubpassCommandPool {
-
-}
-
-impl pool::SubpassCommandPool<Backend> for SubpassCommandPool {
-    /*
-    fn reset(&mut self) {
-        unimplemented!()
-    }
-
-    fn reserve(&mut self, additional: usize) {
-        unimplemented!()
-    }
-
-    fn acquire_command_buffer<'a>(&'a mut self) -> Encoder<'a, Backend, SubpassCommandBuffer> {
-        unimplemented!()
-    }
-
-    fn from_queue<Q>(mut queue: Q, capacity: usize) -> SubpassCommandPool
-        where Q: Compatible<GraphicsQueue<Backend>> + AsRef<CommandQueue>
-    {
-        unimplemented!()
-    }
-    */
-}
+pub struct SubpassCommandPool;
+impl pool::SubpassCommandPool<Backend> for SubpassCommandPool {}

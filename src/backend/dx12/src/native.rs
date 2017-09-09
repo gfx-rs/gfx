@@ -1,7 +1,8 @@
 
 use core::pass::Attachment;
-use core::{pso, texture};
+use core::{self, image, pso};
 use winapi::{self, UINT};
+use Backend;
 
 use std::collections::BTreeMap;
 
@@ -59,10 +60,10 @@ unsafe impl Sync for Buffer { }
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Image {
     pub resource: *mut winapi::ID3D12Resource,
-    pub kind: texture::Kind,
+    pub kind: image::Kind,
     pub dxgi_format: winapi::DXGI_FORMAT,
     pub bits_per_texel: u8,
-    pub levels: texture::Level,
+    pub levels: image::Level,
 }
 unsafe impl Send for Image { }
 unsafe impl Sync for Image { }
@@ -87,3 +88,33 @@ pub struct DepthStencilView {
 pub struct DescriptorSetLayout {
     // pub bindings: Vec<d::DescriptorSetLayoutBinding>,
 }
+
+#[derive(Debug)]
+pub struct Fence;
+#[derive(Debug)]
+pub struct Semaphore;
+#[derive(Debug)]
+pub struct Heap;
+#[derive(Debug)]
+pub struct ConstantBufferView;
+#[derive(Debug)]
+pub struct ShaderResourceView;
+#[derive(Debug)]
+pub struct UnorderedAccessView;
+#[derive(Debug)]
+pub struct DescriptorSet;
+#[derive(Debug)]
+pub struct DescriptorPool;
+
+impl core::DescriptorPool<Backend> for DescriptorPool {
+    fn allocate_sets(&mut self, layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
+        unimplemented!()
+    }
+
+    fn reset(&mut self) {
+        unimplemented!()
+    }
+}
+
+#[derive(Debug)]
+pub struct Sampler;
