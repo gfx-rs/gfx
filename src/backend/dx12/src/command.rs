@@ -1,10 +1,10 @@
 use wio::com::ComPtr;
-use core::{command, memory, image, pso, state, target};
-use core::{IndexType, VertexCount, VertexOffset, Viewport, InstanceCount, IndexCount};
+use core::{command, image, memory, pso, target};
+use core::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, Viewport};
 use core::buffer::IndexBufferView;
 use core::command::{BufferCopy, BufferImageCopy, ClearColor, ClearValue, ImageCopy, ImageResolve,
                     SubpassContents};
-use winapi::{self, UINT, UINT64};
+use winapi::{self, UINT64, UINT};
 use {native as n, Backend};
 use smallvec::SmallVec;
 use std::{cmp, mem, ptr};
@@ -57,7 +57,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         unsafe { self.raw.Close(); }
     }
 
-    fn reset(&mut self, release_resources: bool) {
+    fn reset(&mut self, _release_resources: bool) {
         unimplemented!()
     }
 
@@ -67,7 +67,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         frame_buffer: &n::FrameBuffer,
         render_area: target::Rect,
         clear_values: &[ClearValue],
-        first_subpass: SubpassContents,
+        _first_subpass: SubpassContents,
     ) {
         let area = get_rect(&render_area);
         self.pass_cache = Some(RenderPassCache {
@@ -81,7 +81,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         self.begin_subpass();
     }
 
-    fn next_subpass(&mut self, _: SubpassContents) {
+    fn next_subpass(&mut self, _contents: SubpassContents) {
         self.begin_subpass();
     }
 
@@ -118,7 +118,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     fn clear_depth_stencil(
         &mut self,
         dsv: &n::DepthStencilView,
-        layout: image::ImageLayout,
+        _layout: image::ImageLayout,
         depth: Option<target::Depth>,
         stencil: Option<target::Stencil>,
     ) {
@@ -145,9 +145,9 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     fn resolve_image(
         &mut self,
         src: &n::Image,
-        src_layout: image::ImageLayout,
+        _: image::ImageLayout,
         dst: &n::Image,
-        dst_layout: image::ImageLayout,
+        _: image::ImageLayout,
         regions: &[ImageResolve],
     ) {
         for region in regions {
@@ -258,9 +258,9 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn bind_graphics_descriptor_sets(
         &mut self,
-        layout: &n::PipelineLayout,
-        first_set: usize,
-        sets: &[&n::DescriptorSet],
+        _: &n::PipelineLayout,
+        _first_set: usize,
+        _sets: &[&n::DescriptorSet],
     ) {
         unimplemented!()
     }
@@ -277,24 +277,24 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: u64) {
+    fn dispatch_indirect(&mut self, _buffer: &n::Buffer, _offset: u64) {
         unimplemented!()
     }
 
     fn fill_buffer(
         &mut self,
-        buffer: &n::Buffer,
-        range: Range<u64>,
-        data: u32,
+        _buffer: &n::Buffer,
+        _range: Range<u64>,
+        _data: u32,
     ) {
         unimplemented!()
     }
 
     fn update_buffer(
         &mut self,
-        buffer: &n::Buffer,
-        offset: u64,
-        data: &[u8],
+        _buffer: &n::Buffer,
+        _offset: u64,
+        _data: &[u8],
     ) {
         unimplemented!()
     }
@@ -431,10 +431,10 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn copy_image_to_buffer(
         &mut self,
-        src: &n::Image,
-        layout: image::ImageLayout,
-        dst: &n::Buffer,
-        regions: &[BufferImageCopy],
+        _src: &n::Image,
+        _: image::ImageLayout,
+        _dst: &n::Buffer,
+        _regions: &[BufferImageCopy],
     ) {
         unimplemented!()
     }
@@ -467,16 +467,22 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn draw_indirect(&mut self, buffer: &n::Buffer, offset: u64, draw_count: u32, stride: u32) {
+    fn draw_indirect(
+        &mut self,
+        _buffer: &n::Buffer,
+        _offset: u64,
+        _draw_count: u32,
+        _stride: u32,
+    ) {
         unimplemented!()
     }
 
     fn draw_indexed_indirect(
         &mut self,
-        buffer: &n::Buffer,
-        offset: u64,
-        draw_count: u32,
-        stride: u32,
+        _buffer: &n::Buffer,
+        _offset: u64,
+        _draw_count: u32,
+        _stride: u32,
     ) {
         unimplemented!()
     }
