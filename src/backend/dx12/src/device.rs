@@ -1,8 +1,7 @@
-use core::{self as c, device as d, format, image, pass, pso, buffer, mapping};
-use core::{Features, Limits, HeapType};
+use core::{buffer, device as d, format, image, mapping, pass, pso};
+use core::{Features, HeapType, Limits};
 use core::memory::Requirements;
 use std::ops::Range;
-use std::sync::Arc;
 use {native as n, Backend as B, Device};
 
 #[derive(Debug, Eq, Hash, PartialEq)]
@@ -22,116 +21,147 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn create_renderpass(&mut self, attachments: &[pass::Attachment],
-        subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> n::RenderPass
-    {
+    fn create_renderpass(
+        &mut self,
+        _attachments: &[pass::Attachment],
+        _subpasses: &[pass::SubpassDesc],
+        _dependencies: &[pass::SubpassDependency],
+    ) -> n::RenderPass {
         unimplemented!()
     }
 
-    fn create_pipeline_layout(&mut self, sets: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
+    fn create_pipeline_layout(&mut self, _sets: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
         unimplemented!()
     }
 
-    fn create_graphics_pipelines<'a>(&mut self,
-        descs: &[(&n::ShaderLib, &n::PipelineLayout, pass::Subpass<'a, B>, &pso::GraphicsPipelineDesc)],
-    ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>>
-    {
+    fn create_graphics_pipelines<'a>(
+        &mut self,
+        _descs: &[(&n::ShaderLib, &n::PipelineLayout, pass::Subpass<'a, B>, &pso::GraphicsPipelineDesc)],
+    ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         unimplemented!()
     }
 
-    fn create_compute_pipelines(&mut self,
-        descs: &[(&n::ShaderLib, pso::EntryPoint, &n::PipelineLayout)],
-    ) -> Vec<Result<n::ComputePipeline, pso::CreationError>>
-    {
+    fn create_compute_pipelines(
+        &mut self,
+        _descs: &[(&n::ShaderLib, pso::EntryPoint, &n::PipelineLayout)],
+    ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
         unimplemented!()
     }
 
     fn create_framebuffer(
         &mut self,
-        renderpass: &n::RenderPass,
-        color_attachments: &[&n::RenderTargetView],
-        depth_stencil_attachments: &[&n::DepthStencilView],
-        extent: d::Extent,
+        _renderpass: &n::RenderPass,
+        _color_attachments: &[&n::RenderTargetView],
+        _depth_stencil_attachments: &[&n::DepthStencilView],
+        _extent: d::Extent,
     ) -> n::FrameBuffer {
         unimplemented!()
     }
 
-    fn create_sampler(&mut self, sampler_info: image::SamplerInfo) -> n::Sampler {
+    fn create_sampler(&mut self, _sampler_info: image::SamplerInfo) -> n::Sampler {
         unimplemented!()
     }
 
-    fn create_buffer(&mut self, size: u64, _stride: u64, usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
+    fn create_buffer(&mut self, _size: u64, _stride: u64, _usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
         unimplemented!()
     }
 
-    fn get_buffer_requirements(&mut self, buffer: &UnboundBuffer) -> Requirements {
+    fn get_buffer_requirements(&mut self, _buffer: &UnboundBuffer) -> Requirements {
         unimplemented!()
     }
 
-    fn bind_buffer_memory(&mut self, heap: &n::Heap, offset: u64, buffer: UnboundBuffer) -> Result<n::Buffer, buffer::CreationError> {
+    fn bind_buffer_memory(&mut self, _heap: &n::Heap, _offset: u64, _buffer: UnboundBuffer) -> Result<n::Buffer, buffer::CreationError> {
         unimplemented!()
     }
 
-    fn create_image(&mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
-         -> Result<UnboundImage, image::CreationError>
-    {
+    fn create_image(
+        &mut self,
+        _kind: image::Kind,
+        _mip_levels: image::Level,
+        _format: format::Format,
+        _usage: image::Usage,
+    ) -> Result<UnboundImage, image::CreationError> {
         unimplemented!()
     }
 
-    fn get_image_requirements(&mut self, image: &UnboundImage) -> Requirements {
+    fn get_image_requirements(&mut self, _image: &UnboundImage) -> Requirements {
         unimplemented!()
     }
 
-    fn bind_image_memory(&mut self, heap: &n::Heap, offset: u64, image: UnboundImage) -> Result<n::Image, image::CreationError> {
+    fn bind_image_memory(
+        &mut self,
+        _heap: &n::Heap,
+        _offset: u64,
+        _image: UnboundImage,
+    ) -> Result<n::Image, image::CreationError> {
         unimplemented!()
     }
 
-    fn view_buffer_as_constant(&mut self, buffer: &n::Buffer, range: Range<u64>) -> Result<n::ConstantBufferView, d::TargetViewError> {
+    fn view_buffer_as_constant(
+        &mut self,
+        _buffer: &n::Buffer,
+        _range: Range<u64>,
+    ) -> Result<n::ConstantBufferView, d::TargetViewError> {
         unimplemented!()
     }
 
     fn view_image_as_render_target(&mut self,
-        image: &n::Image,
-        format: format::Format,
-        range: image::SubresourceRange,
+        _image: &n::Image,
+        _format: format::Format,
+        _range: image::SubresourceRange,
     ) -> Result<n::RenderTargetView, d::TargetViewError>
     {
         unimplemented!()
     }
 
-    fn view_image_as_shader_resource(&mut self, image: &n::Image, format: format::Format) -> Result<n::ShaderResourceView, d::TargetViewError> {
+    fn view_image_as_shader_resource(
+        &mut self,
+        _image: &n::Image,
+        _format: format::Format,
+    ) -> Result<n::ShaderResourceView, d::TargetViewError> {
         unimplemented!()
     }
 
-    fn view_image_as_unordered_access(&mut self, image: &n::Image, format: format::Format) -> Result<n::UnorderedAccessView, d::TargetViewError> {
+    fn view_image_as_unordered_access(
+        &mut self,
+        _image: &n::Image,
+        _format: format::Format,
+    ) -> Result<n::UnorderedAccessView, d::TargetViewError> {
         unimplemented!()
     }
 
     fn create_descriptor_pool(&mut self,
-        max_sets: usize,
-        descriptor_pools: &[pso::DescriptorRangeDesc],
+        _max_sets: usize,
+        _descriptor_pools: &[pso::DescriptorRangeDesc],
     ) -> n::DescriptorPool
     {
         unimplemented!()
     }
 
-    fn create_descriptor_set_layout(&mut self, bindings: &[pso::DescriptorSetLayoutBinding])-> n::DescriptorSetLayout {
+    fn create_descriptor_set_layout(
+        &mut self,
+        _bindings: &[pso::DescriptorSetLayoutBinding],
+    )-> n::DescriptorSetLayout {
         unimplemented!()
     }
 
-    fn update_descriptor_sets(&mut self, writes: &[pso::DescriptorSetWrite<B>]) {
+    fn update_descriptor_sets(&mut self, _writes: &[pso::DescriptorSetWrite<B>]) {
         unimplemented!()
     }
 
-    fn read_mapping_raw(&mut self, buf: &n::Buffer, range: Range<u64>)
-        -> Result<(*const u8, Mapping), mapping::Error>
-    {
+    fn read_mapping_raw(
+        &mut self,
+        _buf: &n::Buffer,
+        _range: Range<u64>,
+    ) -> Result<(*const u8, Mapping), mapping::Error> {
         unimplemented!()
     }
 
-    fn write_mapping_raw(&mut self, buf: &n::Buffer, range: Range<u64>)
-        -> Result<(*mut u8, Mapping), mapping::Error>
-    {
+    fn write_mapping_raw(
+        &mut self,
+        _buf: &n::Buffer,
+        _range: Range<u64>,
+    ) -> Result<(*mut u8, Mapping), mapping::Error> {
         unimplemented!()
     }
 
@@ -143,59 +173,59 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn create_fence(&mut self, signaled: bool) -> n::Fence {
+    fn create_fence(&mut self, _signaled: bool) -> n::Fence {
         unimplemented!()
     }
 
-    fn reset_fences(&mut self, fences: &[&n::Fence]) {
+    fn reset_fences(&mut self, _fences: &[&n::Fence]) {
         unimplemented!()
     }
 
-    fn wait_for_fences(&mut self, fences: &[&n::Fence], wait: d::WaitFor, timeout_ms: u32) -> bool {
+    fn wait_for_fences(&mut self, _fences: &[&n::Fence], _wait: d::WaitFor, _timeout_ms: u32) -> bool {
         unimplemented!()
     }
 
-    fn destroy_heap(&mut self, heap: n::Heap) {
+    fn destroy_heap(&mut self, _heap: n::Heap) {
         unimplemented!()
     }
 
-    fn destroy_shader_lib(&mut self, shader_lib: n::ShaderLib) {
+    fn destroy_shader_lib(&mut self, _shader_lib: n::ShaderLib) {
         unimplemented!()
     }
 
-    fn destroy_renderpass(&mut self, rp: n::RenderPass) {
+    fn destroy_renderpass(&mut self, _rp: n::RenderPass) {
         unimplemented!()
     }
 
-    fn destroy_pipeline_layout(&mut self, pl: n::PipelineLayout) {
+    fn destroy_pipeline_layout(&mut self, _pl: n::PipelineLayout) {
         unimplemented!()
     }
 
-    fn destroy_graphics_pipeline(&mut self, pipeline: n::GraphicsPipeline) {
+    fn destroy_graphics_pipeline(&mut self, _pipeline: n::GraphicsPipeline) {
         unimplemented!()
     }
 
-    fn destroy_compute_pipeline(&mut self, pipeline: n::ComputePipeline) {
+    fn destroy_compute_pipeline(&mut self, _pipeline: n::ComputePipeline) {
         unimplemented!()
     }
 
-    fn destroy_framebuffer(&mut self, fb: n::FrameBuffer) {
+    fn destroy_framebuffer(&mut self, _fb: n::FrameBuffer) {
         unimplemented!()
     }
 
-    fn destroy_buffer(&mut self, buffer: n::Buffer) {
+    fn destroy_buffer(&mut self, _buffer: n::Buffer) {
         unimplemented!()
     }
 
-    fn destroy_image(&mut self, image: n::Image) {
+    fn destroy_image(&mut self, _image: n::Image) {
         unimplemented!()
     }
 
-    fn destroy_render_target_view(&mut self, rtv: n::RenderTargetView) {
+    fn destroy_render_target_view(&mut self, _rtv: n::RenderTargetView) {
         unimplemented!()
     }
 
-    fn destroy_depth_stencil_view(&mut self, dsv: n::DepthStencilView) {
+    fn destroy_depth_stencil_view(&mut self, _dsv: n::DepthStencilView) {
         unimplemented!()
     }
 
@@ -203,31 +233,31 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn destroy_shader_resource_view(&mut self, srv: n::ShaderResourceView) {
+    fn destroy_shader_resource_view(&mut self, _srv: n::ShaderResourceView) {
         unimplemented!()
     }
 
-    fn destroy_unordered_access_view(&mut self, uav: n::UnorderedAccessView) {
+    fn destroy_unordered_access_view(&mut self, _uav: n::UnorderedAccessView) {
         unimplemented!()
     }
 
-    fn destroy_sampler(&mut self, sampler: n::Sampler) {
+    fn destroy_sampler(&mut self, _sampler: n::Sampler) {
         unimplemented!()
     }
 
-    fn destroy_descriptor_pool(&mut self, pool: n::DescriptorPool) {
+    fn destroy_descriptor_pool(&mut self, _pool: n::DescriptorPool) {
         unimplemented!()
     }
 
-    fn destroy_descriptor_set_layout(&mut self, layout: n::DescriptorSetLayout) {
+    fn destroy_descriptor_set_layout(&mut self, _layout: n::DescriptorSetLayout) {
         unimplemented!()
     }
 
-    fn destroy_fence(&mut self, fence: n::Fence) {
+    fn destroy_fence(&mut self, _fence: n::Fence) {
         unimplemented!()
     }
 
-    fn destroy_semaphore(&mut self, semaphore: n::Semaphore) {
+    fn destroy_semaphore(&mut self, _semaphore: n::Semaphore) {
         unimplemented!()
     }
 }

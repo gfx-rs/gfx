@@ -117,12 +117,12 @@ impl core::Swapchain<Backend> for Swapchain {
 
         // TODO:
         let index = unsafe { self.inner.GetCurrentBackBufferIndex() };
-        unsafe { core::Frame::new(index as usize) }
+        core::Frame::new(index as usize)
     }
 
     fn present<C>(
         &mut self,
-        present_queue: &mut core::CommandQueue<Backend, C>,
+        _: &mut core::CommandQueue<Backend, C>,
         wait_semaphores: &[&n::Semaphore],
     ) {
         // TODO: wait semaphores

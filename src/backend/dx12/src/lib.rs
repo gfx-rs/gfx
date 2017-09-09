@@ -15,7 +15,7 @@ mod native;
 mod pool;
 mod window;
 
-use core::{command as com, Features, Limits, QueueType};
+use core::{Features, Limits, QueueType};
 use wio::com::ComPtr;
 
 use std::ptr;
@@ -35,14 +35,15 @@ impl core::QueueFamily for QueueFamily {
 /// Create associated command queues for a specific queue type
 fn collect_queues<C>(
      queue_descs: &[(&QueueFamily, QueueType, u32)],
-     device_raw: ComPtr<winapi::ID3D12Device>,
+     device_raw: &ComPtr<winapi::ID3D12Device>,
      collect_type: QueueType,
 ) -> Vec<core::CommandQueue<Backend, C>> {
     queue_descs.iter()
         .filter(|&&(_, qtype, _)| qtype == collect_type)
-        .flat_map(|&(qfamily, _, qcount)| {
-            (0..qcount).map(move |id| {
-                let mut queue = unsafe { ComPtr::<winapi::ID3D12CommandQueue>::new(ptr::null_mut()) };
+        .flat_map(|&(_, _, qcount)| {
+            (0..qcount).map(|_| {
+                let mut device = device_raw.clone();
+                let queue = unsafe { ComPtr::<winapi::ID3D12CommandQueue>::new(ptr::null_mut()) };
                 let qtype = match collect_type {
                     QueueType::General | QueueType::Graphics => winapi::D3D12_COMMAND_LIST_TYPE_DIRECT,
                     QueueType::Compute => winapi::D3D12_COMMAND_LIST_TYPE_COMPUTE,
@@ -57,7 +58,7 @@ fn collect_queues<C>(
                 };
 
                 let hr = unsafe {
-                    device_raw.CreateCommandQueue(
+                    device.CreateCommandQueue(
                         &queue_desc,
                         &dxguid::IID_ID3D12CommandQueue,
                         &mut queue.as_mut() as *mut &mut _ as *mut *mut c_void,
@@ -72,7 +73,7 @@ fn collect_queues<C>(
                     core::CommandQueue::new(
                         CommandQueue {
                             raw: queue,
-                            device: device_raw.clone(),
+                            device,
                             list_type: qtype,
                         }
                     )
@@ -92,7 +93,7 @@ impl core::Adapter<Backend> for Adapter {
     fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)]) -> core::Gpu<Backend>
     {
         // Create D3D12 device
-        let mut device = unsafe { ComPtr::<winapi::ID3D12Device>::new(ptr::null_mut()) };
+        let device = unsafe { ComPtr::<winapi::ID3D12Device>::new(ptr::null_mut()) };
         let hr = unsafe {
             d3d12::D3D12CreateDevice(
                 self.adapter.as_mut() as *mut _ as *mut winapi::IUnknown,
@@ -132,9 +133,10 @@ pub struct CommandQueue {
 }
 
 impl core::RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw(&mut self,
-        submission: core::RawSubmission<Backend>,
-        fence: Option<&native::Fence>,
+    unsafe fn submit_raw(
+        &mut self,
+        _submission: core::RawSubmission<Backend>,
+        _fence: Option<&native::Fence>,
     ) {
         unimplemented!()
     }
