@@ -390,11 +390,11 @@ fn main() {
         });
 
         let frame = context.acquire_frame();
-        let mut scope = context.acquire_encoder_scope();
+        let mut encoder_pool = context.acquire_encoder_pool();
 
         // Rendering
         let submit = {
-            let mut encoder = scope.acquire_encoder();
+            let mut encoder = encoder_pool.acquire_encoder();
             {
             let cmd_buffer = encoder.mut_buffer();
 
