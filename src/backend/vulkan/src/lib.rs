@@ -521,7 +521,7 @@ impl core::RawCommandQueue<Backend> for CommandQueue {
     unsafe fn submit_raw(&mut self,
         submission: core::RawSubmission<Backend>,
         fence: Option<&native::Fence>,
-    ){
+    ) {
         let buffers = submission.cmd_buffers
             .iter()
             .map(|cmd| cmd.raw)
