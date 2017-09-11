@@ -111,3 +111,22 @@ pub struct Subpass<'a, B: Backend> {
     /// Main pass borrow.
     pub main_pass: &'a B::RenderPass,
 }
+
+impl<'a, B: Backend> Clone for Subpass<'a, B> {
+    fn clone(&self) -> Self {
+        Subpass {
+            index: self.index,
+            main_pass: self.main_pass,
+        }
+    }
+}
+
+impl<'a, B: Backend> PartialEq for Subpass<'a, B> {
+    fn eq(&self, other: &Self) -> bool {
+        self.index == other.index &&
+        self.main_pass as *const _ == other.main_pass as *const _
+    }
+}
+
+impl<'a, B: Backend> Copy for Subpass<'a, B> {}
+impl<'a, B: Backend> Eq for Subpass<'a, B> {}

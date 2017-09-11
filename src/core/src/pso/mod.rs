@@ -18,6 +18,8 @@ pub use self::graphics::*;
 pub use self::input_assembler::*;
 pub use self::output_merger::*;
 
+use Backend;
+
 /// Error types happening upon PSO creation on the device side.
 #[derive(Clone, Debug, PartialEq)]
 pub enum CreationError {
@@ -44,9 +46,6 @@ impl Error for CreationError {
         }
     }
 }
-
-/// Shader entry point.
-pub type EntryPoint = &'static str;
 
 bitflags!(
     /// Stages of the logical pipeline.
@@ -127,34 +126,30 @@ pub enum Stage {
     Compute
 }
 
-/// An error type for creating shaders.
-#[derive(Clone, Debug, PartialEq)]
-pub enum CreateShaderError {
-    /// The device does not support the requested shader model.
-    ModelNotSupported,
-    /// The device does not support the shader stage.
-    StageNotSupported(Stage),
-    /// The shader failed to compile.
-    CompilationFailed(String),
+/// Shader entry point.
+#[derive(Debug)]
+pub struct EntryPoint<'a, B: Backend> {
+    /// Entry point name.
+    pub entry: &'a str,
+    /// Shader module reference.
+    pub module: &'a B::ShaderModule,
 }
 
-impl fmt::Display for CreateShaderError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let desc = self.description();
-        match *self {
-            CreateShaderError::StageNotSupported(ref stage) => write!(f, "{}: {:?}", desc, stage),
-            CreateShaderError::CompilationFailed(ref string) => write!(f, "{}: {}", desc, string),
-            _ => write!(f, "{}", desc),
+impl<'a, B: Backend> Clone for EntryPoint<'a, B> {
+    fn clone(&self) -> Self {
+        EntryPoint {
+            entry: self.entry,
+            module: self.module,
         }
     }
 }
 
-impl Error for CreateShaderError {
-    fn description(&self) -> &str {
-        match *self {
-            CreateShaderError::ModelNotSupported => "The device does not support the requested shader model",
-            CreateShaderError::StageNotSupported(_) => "The device does not support the shader stage",
-            CreateShaderError::CompilationFailed(_) => "The shader failed to compile",
-        }
+impl<'a, B: Backend> PartialEq for EntryPoint<'a, B> {
+    fn eq(&self, other: &Self) -> bool {
+        self.entry.as_ptr() == other.entry.as_ptr() &&
+        self.module as *const _ == other.module as *const _
     }
 }
+
+impl<'a, B: Backend> Copy for EntryPoint<'a, B> {}
+impl<'a, B: Backend> Eq for EntryPoint<'a, B> {}

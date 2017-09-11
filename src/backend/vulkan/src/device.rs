@@ -5,7 +5,7 @@ use core::{Features, Limits, HeapType};
 use core::memory::Requirements;
 use native as n;
 use std::{mem, ptr};
-use std::collections::BTreeMap;
+use std::ffi::CString;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -56,32 +56,6 @@ impl Device {
                 Err(mapping::Error) //TODO
             }
         }
-    }
-
-    pub fn create_shader_library(&mut self,
-        shaders: &[(pso::EntryPoint, &[u8])],
-    ) -> Result<n::ShaderLib, pso::CreateShaderError> {
-        let mut shader_map = BTreeMap::new();
-        // TODO: handle entry points with the same name
-        for &(entry_point, byte_code) in shaders {
-            // TODO
-            // TODO: check code size length (multiple of 4)
-            let info = vk::ShaderModuleCreateInfo {
-                s_type: vk::StructureType::ShaderModuleCreateInfo,
-                p_next: ptr::null(),
-                flags: vk::ShaderModuleCreateFlags::empty(),
-                code_size: byte_code.len(),
-                p_code: byte_code as *const _ as *const u32,
-            };
-
-            let module = unsafe {
-                self.raw.0.create_shader_module(&info, None)
-                            .expect("Error on shader module creation") // TODO: error handling
-            };
-
-            shader_map.insert(entry_point, module);
-        }
-        Ok(n::ShaderLib { shaders: shader_map })
     }
 
     fn create_image_view(&mut self, image: &n::Image, format: format::Format) -> vk::ImageView {
@@ -250,10 +224,10 @@ impl d::Device<B> for Device {
         n::PipelineLayout { raw }
     }
 
-    fn create_graphics_pipelines<'a>(&mut self,
-        descs: &[(&n::ShaderLib, &n::PipelineLayout, pass::Subpass<'a, B>, &pso::GraphicsPipelineDesc)],
-    ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>>
-    {
+    fn create_graphics_pipelines<'a>(
+        &mut self,
+        descs: &[(pso::GraphicsShaderSet<'a, B>, &n::PipelineLayout, pass::Subpass<'a, B>, &pso::GraphicsPipelineDesc)],
+    ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         use core::state as s;
 
         // Store pipeline parameters to avoid stack usage
@@ -271,89 +245,46 @@ impl d::Device<B> for Device {
         let mut color_attachments          = Vec::with_capacity(descs.len());
 
         let dynamic_states = [vk::DynamicState::Viewport, vk::DynamicState::Scissor];
+        let mut c_strings = Vec::new(); // hold the C strings temporarily
+        let mut make_stage = |stage, source: pso::EntryPoint<'a, B>| {
+            let string = CString::new(source.entry).unwrap();
+            let p_name = string.as_ptr();
+            c_strings.push(string);
+            vk::PipelineShaderStageCreateInfo {
+                s_type: vk::StructureType::PipelineShaderStageCreateInfo,
+                p_next: ptr::null(),
+                flags: vk::PipelineShaderStageCreateFlags::empty(),
+                stage,
+                module: source.module.raw,
+                p_name,
+                p_specialization_info: ptr::null(),
+            }
+        };
 
-        let infos = descs.iter().map(|&(shader_lib, signature, ref subpass, desc)| {
-            let stages = {
-                let mut stages = Vec::new();
-
-                // Vertex stage
-                let vs_module = if let Some(module) = shader_lib.shaders.get(&desc.shader_entries.vertex_shader)
-                    { module } else { return Err(pso::CreationError::Other) };
-                stages.push(vk::PipelineShaderStageCreateInfo {
-                    s_type: vk::StructureType::PipelineShaderStageCreateInfo,
-                    p_next: ptr::null(),
-                    flags: vk::PipelineShaderStageCreateFlags::empty(),
-                    stage: vk::SHADER_STAGE_VERTEX_BIT,
-                    module: *vs_module,
-                    p_name: b"main\0".as_ptr() as *const i8, // TODO: GLSL source language // desc.shader_entries.vertex_shader.as_bytes().as_ptr() as *const i8,
-                    p_specialization_info: ptr::null(),
-                });
-
-                // Pixel stage
-                if let Some(pixel_shader) = desc.shader_entries.pixel_shader {
-                    let ps_module = if let Some(module) = shader_lib.shaders.get(&pixel_shader)
-                        { module } else { return Err(pso::CreationError::Other) };
-                    stages.push(vk::PipelineShaderStageCreateInfo {
-                        s_type: vk::StructureType::PipelineShaderStageCreateInfo,
-                        p_next: ptr::null(),
-                        flags: vk::PipelineShaderStageCreateFlags::empty(),
-                        stage: vk::SHADER_STAGE_FRAGMENT_BIT,
-                        module: *ps_module,
-                        p_name: b"main\0".as_ptr() as *const i8, // TODO: GLSL source language // pixel_shader.as_bytes().as_ptr() as *const i8,
-                        p_specialization_info: ptr::null(),
-                    });
-                }
-
-                // Geometry stage
-                if let Some(geometry_shader) = desc.shader_entries.geometry_shader {
-                    let gs_module = if let Some(module) = shader_lib.shaders.get(&geometry_shader)
-                        { module } else { return Err(pso::CreationError::Other) };
-                    stages.push(vk::PipelineShaderStageCreateInfo {
-                        s_type: vk::StructureType::PipelineShaderStageCreateInfo,
-                        p_next: ptr::null(),
-                        flags: vk::PipelineShaderStageCreateFlags::empty(),
-                        stage: vk::SHADER_STAGE_GEOMETRY_BIT,
-                        module: *gs_module,
-                        p_name: b"main\0".as_ptr() as *const i8, // TODO: GLSL source language // geometry_shader.as_bytes().as_ptr() as *const i8,
-                        p_specialization_info: ptr::null(),
-                    });
-                }
-
-                // Domain stage
-                if let Some(domain_shader) = desc.shader_entries.domain_shader {
-                    let ds_module = if let Some(module) = shader_lib.shaders.get(&domain_shader)
-                        { module } else { return Err(pso::CreationError::Other) };
-                    stages.push(vk::PipelineShaderStageCreateInfo {
-                        s_type: vk::StructureType::PipelineShaderStageCreateInfo,
-                        p_next: ptr::null(),
-                        flags: vk::PipelineShaderStageCreateFlags::empty(),
-                        stage: vk::SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
-                        module: *ds_module,
-                        p_name: b"main\0".as_ptr() as *const i8, // TODO: GLSL source language // domain_shader.as_bytes().as_ptr() as *const i8,
-                        p_specialization_info: ptr::null(),
-                    });
-                }
-
-                // Hull stage
-                if let Some(hull_shader) = desc.shader_entries.hull_shader {
-                    let hs_module = if let Some(module) = shader_lib.shaders.get(&hull_shader)
-                        { module } else { return Err(pso::CreationError::Other) };
-                    stages.push(vk::PipelineShaderStageCreateInfo {
-                        s_type: vk::StructureType::PipelineShaderStageCreateInfo,
-                        p_next: ptr::null(),
-                        flags: vk::PipelineShaderStageCreateFlags::empty(),
-                        stage: vk::SHADER_STAGE_TESSELLATION_CONTROL_BIT,
-                        module: *hs_module,
-                        p_name: b"main\0".as_ptr() as *const i8, // TODO: GLSL source language // hull_shader.as_bytes().as_ptr() as *const i8,
-                        p_specialization_info: ptr::null(),
-                    });
-                }
-
-                stages
-            };
+        let infos = descs.iter().map(|&(shaders, layout, subpass, desc)| {
+            let mut stages = Vec::new();
+            // Vertex stage
+            if true { //vertex shader is required
+                stages.push(make_stage(vk::SHADER_STAGE_VERTEX_BIT, shaders.vertex));
+            }
+            // Pixel stage
+            if let Some(entry) = shaders.pixel {
+                stages.push(make_stage(vk::SHADER_STAGE_FRAGMENT_BIT, entry));
+            }
+            // Geometry stage
+            if let Some(entry) = shaders.geometry {
+                stages.push(make_stage(vk::SHADER_STAGE_GEOMETRY_BIT, entry));
+            }
+            // Domain stage
+            if let Some(entry) = shaders.domain {
+                stages.push(make_stage(vk::SHADER_STAGE_TESSELLATION_EVALUATION_BIT, entry));
+            }
+            // Hull stage
+            if let Some(entry) = shaders.hull {
+                stages.push(make_stage(vk::SHADER_STAGE_TESSELLATION_CONTROL_BIT, entry));
+            }
 
             let (polygon_mode, line_width) = conv::map_polygon_mode(desc.rasterizer.polgyon_mode);
-
             info_stages.push(stages);
 
             {
@@ -421,9 +352,8 @@ impl d::Device<B> for Device {
                 line_width: line_width,
             });
 
-            if desc.shader_entries.hull_shader.is_some() &&
-               desc.shader_entries.domain_shader.is_some()
-            {
+            let is_tessellated = shaders.hull.is_some() && shaders.domain.is_some();
+            if is_tessellated {
                 info_tessellation_states.push(vk::PipelineTessellationStateCreateInfo {
                     s_type: vk::StructureType::PipelineTessellationStateCreateInfo,
                     p_next: ptr::null(),
@@ -543,15 +473,13 @@ impl d::Device<B> for Device {
                 p_vertex_input_state: info_vertex_input_states.last().unwrap(),
                 p_input_assembly_state: info_input_assembly_states.last().unwrap(),
                 p_rasterization_state: info_rasterization_states.last().unwrap(),
-                p_tessellation_state: if desc.shader_entries.hull_shader.is_some() &&
-                                         desc.shader_entries.domain_shader.is_some()
-                    { info_tessellation_states.last().unwrap() } else { ptr::null() },
+                p_tessellation_state: if is_tessellated { info_tessellation_states.last().unwrap() } else { ptr::null() },
                 p_viewport_state: info_viewport_states.last().unwrap(),
                 p_multisample_state: info_multisample_states.last().unwrap(),
                 p_depth_stencil_state: info_depth_stencil_states.last().unwrap(),
                 p_color_blend_state: info_color_blend_states.last().unwrap(),
                 p_dynamic_state: info_dynamic_states.last().unwrap(),
-                layout: signature.raw,
+                layout: layout.raw,
                 render_pass: subpass.main_pass.raw,
                 subpass: subpass.index as u32,
                 base_pipeline_handle: vk::Pipeline::null(),
@@ -573,53 +501,41 @@ impl d::Device<B> for Device {
         };
 
         match result {
-            Ok(pipelines) => {
-                let mut pipelines = pipelines.iter();
-                infos.iter().map(|ref info| {
-                    match **info {
-                        Ok(_) => {
-                            let pipeline = *pipelines.next().unwrap();
-                            Ok(n::GraphicsPipeline(pipeline))
+            Ok(pipelines) |
+            Err((pipelines, _))=> {
+                let mut psos = pipelines.into_iter();
+                infos
+                    .into_iter()
+                    .map(|result| result.and_then(|_| {
+                        let pso = psos.next().unwrap();
+                        if pso == vk::Pipeline::null() {
+                            Err(pso::CreationError::Other)
+                        } else {
+                            Ok(n::GraphicsPipeline(pso))
                         }
-                        Err(ref err) => Err(err.clone()),
-                    }
-                }).collect::<Vec<_>>()
-            }
-            Err((pipelines, _err)) => {
-                let mut pipelines = pipelines.iter();
-                infos.iter().map(|ref info| {
-                    match **info {
-                        Ok(_) => {
-                            let pipeline = *pipelines.next().unwrap();
-
-                            // Check if pipeline compiled correctly
-                            if pipeline == vk::Pipeline::null() {
-                                Err(pso::CreationError::Other) // TODO
-                            } else {
-                                Ok(n::GraphicsPipeline(pipeline))
-                            }
-                        }
-                        Err(ref err) => Err(err.clone()),
-                    }
-                }).collect::<Vec<_>>()
+                    }))
+                    .collect()
             }
         }
     }
 
-    fn create_compute_pipelines(&mut self,
-        descs: &[(&n::ShaderLib, pso::EntryPoint, &n::PipelineLayout)],
-    ) -> Vec<Result<n::ComputePipeline, pso::CreationError>>
-    {
-        let infos = descs.iter().map(|&(shader_lib, entry_point, layout)| {
-            let cs_module = if let Some(module) = shader_lib.shaders.get(&entry_point)
-                    { module } else { return Err(pso::CreationError::Other) };
+    fn create_compute_pipelines<'a>(
+        &mut self,
+        descs: &[(pso::EntryPoint<'a, B>, &n::PipelineLayout)],
+    ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
+        let mut c_strings = Vec::new(); // hold the C strings temporarily
+        let infos = descs.iter().map(|&(entry_point, layout)| {
+            let string = CString::new(entry_point.entry).unwrap();
+            let p_name = string.as_ptr();
+            c_strings.push(string);
+
             let stage = vk::PipelineShaderStageCreateInfo {
                 s_type: vk::StructureType::PipelineShaderStageCreateInfo,
                 p_next: ptr::null(),
                 flags: vk::PipelineShaderStageCreateFlags::empty(),
                 stage: vk::SHADER_STAGE_COMPUTE_BIT,
-                module: *cs_module,
-                p_name: b"main\0".as_ptr() as *const i8, // TODO: GLSL source language
+                module: entry_point.module.raw,
+                p_name,
                 p_specialization_info: ptr::null(),
             };
 
@@ -627,7 +543,7 @@ impl d::Device<B> for Device {
                 s_type: vk::StructureType::ComputePipelineCreateInfo,
                 p_next: ptr::null(),
                 flags: vk::PipelineCreateFlags::empty(),
-                stage: stage,
+                stage,
                 layout: layout.raw,
                 base_pipeline_handle: vk::Pipeline::null(),
                 base_pipeline_index: -1,
@@ -648,35 +564,20 @@ impl d::Device<B> for Device {
         };
 
         match result {
-            Ok(pipelines) => {
-                let mut pipelines = pipelines.iter();
-                infos.iter().map(|ref info| {
-                    match **info {
-                        Ok(_) => {
-                            let pipeline = *pipelines.next().unwrap();
-                            Ok(n::ComputePipeline(pipeline))
+            Ok(pipelines) |
+            Err((pipelines, _))=> {
+                let mut psos = pipelines.into_iter();
+                infos
+                    .into_iter()
+                    .map(|result| result.and_then(|_| {
+                        let pso = psos.next().unwrap();
+                        if pso == vk::Pipeline::null() {
+                            Err(pso::CreationError::Other)
+                        } else {
+                            Ok(n::ComputePipeline(pso))
                         }
-                        Err(ref err) => Err(err.clone()),
-                    }
-                }).collect::<Vec<_>>()
-            }
-            Err((pipelines, _err)) => {
-                let mut pipelines = pipelines.iter();
-                infos.iter().map(|ref info| {
-                    match **info {
-                        Ok(_) => {
-                            let pipeline = *pipelines.next().unwrap();
-
-                            // Check if pipeline compiled correctly
-                            if pipeline == vk::Pipeline::null() {
-                                Err(pso::CreationError::Other) // TODO
-                            } else {
-                                Ok(n::ComputePipeline(pipeline))
-                            }
-                        }
-                        Err(ref err) => Err(err.clone()),
-                    }
-                }).collect::<Vec<_>>()
+                    }))
+                    .collect()
             }
         }
     }
@@ -711,10 +612,34 @@ impl d::Device<B> for Device {
 
         let framebuffer = unsafe {
             self.raw.0.create_framebuffer(&info, None)
-                        .expect("error on framebuffer creation")
-        };
+        }.expect("error on framebuffer creation");
 
         n::FrameBuffer { raw: framebuffer }
+    }
+
+    fn create_shader_module(&mut self, spirv_data: &[u8]) -> Result<n::ShaderModule, d::ShaderError> {
+        // spec requires "codeSize must be a multiple of 4"
+        assert_eq!(spirv_data.len() & 3, 0);
+
+        let info = vk::ShaderModuleCreateInfo {
+            s_type: vk::StructureType::ShaderModuleCreateInfo,
+            p_next: ptr::null(),
+            flags: vk::ShaderModuleCreateFlags::empty(),
+            code_size: spirv_data.len(),
+            p_code: spirv_data as *const _ as *const u32,
+        };
+
+        let module = unsafe {
+            self.raw.0.create_shader_module(&info, None)
+        };
+
+        match module {
+            Ok(raw) => Ok(n::ShaderModule { raw }),
+            Err(e) => {
+                error!("Shader module error {:?}", e);
+                Err(d::ShaderError)
+            }
+        }
     }
 
     fn create_sampler(&mut self, sampler_info: image::SamplerInfo) -> n::Sampler {
@@ -1196,10 +1121,8 @@ impl d::Device<B> for Device {
         unsafe { self.raw.0.free_memory(heap.0, None); }
     }
 
-    fn destroy_shader_lib(&mut self, shader_lib: n::ShaderLib) {
-        for shader in shader_lib.shaders.into_iter() {
-            unsafe { self.raw.0.destroy_shader_module(shader.1, None); }
-        }
+    fn destroy_shader_module(&mut self, module: n::ShaderModule) {
+        unsafe { self.raw.0.destroy_shader_module(module.raw, None); }
     }
 
     fn destroy_renderpass(&mut self, rp: n::RenderPass) {

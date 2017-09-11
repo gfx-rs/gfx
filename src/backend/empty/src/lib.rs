@@ -26,7 +26,7 @@ impl core::Backend for Backend {
     type CommandPool = RawCommandPool;
     type SubpassCommandPool = SubpassCommandPool;
 
-    type ShaderLib = ();
+    type ShaderModule = ();
     type RenderPass = ();
     type FrameBuffer = ();
 
@@ -102,14 +102,14 @@ impl core::Device<Backend> for Device {
 
     fn create_graphics_pipelines<'a>(
         &mut self,
-        _: &[(&(), &(), pass::Subpass<'a, Backend>, &pso::GraphicsPipelineDesc)],
+        _: &[(pso::GraphicsShaderSet<'a, Backend>, &(), pass::Subpass<'a, Backend>, &pso::GraphicsPipelineDesc)],
     ) -> Vec<Result<(), pso::CreationError>> {
         unimplemented!()
     }
 
-    fn create_compute_pipelines(
+    fn create_compute_pipelines<'a>(
         &mut self,
-        _: &[(&(), pso::EntryPoint, &())],
+        _: &[(pso::EntryPoint<'a, Backend>, &())],
     ) -> Vec<Result<(), pso::CreationError>> {
         unimplemented!()
     }
@@ -119,6 +119,10 @@ impl core::Device<Backend> for Device {
         _: &[&()], _: &[&()],
         _: device::Extent,
     ) -> () {
+        unimplemented!()
+    }
+
+    fn create_shader_module(&mut self, _: &[u8]) -> Result<(), device::ShaderError> {
         unimplemented!()
     }
 
@@ -211,7 +215,7 @@ impl core::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn destroy_shader_lib(&mut self, _: ()) {
+    fn destroy_shader_module(&mut self, _: ()) {
         unimplemented!()
     }
 

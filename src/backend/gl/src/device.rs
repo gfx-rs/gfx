@@ -97,45 +97,41 @@ unsafe impl Send for Mapping {}
 unsafe impl Sync for Mapping {}
 
 impl Device {
-    pub fn create_shader_library_from_source(
+    pub fn create_shader_module_from_source(
         &mut self,
-        shaders: &[(pso::EntryPoint, pso::Stage, &[u8])],
-    ) -> Result<n::ShaderLib, pso::CreateShaderError> {
+        stage: pso::Stage,
+        data: &[u8],
+    ) -> Result<n::ShaderModule, d::ShaderError> {
         let gl = &self.share.context;
-        let mut shader_lib = n::ShaderLib::new();
 
-        for &(entry_point, stage, data) in shaders {
-            let target = match stage {
-                pso::Stage::Vertex   => gl::VERTEX_SHADER,
-                pso::Stage::Hull     => gl::TESS_CONTROL_SHADER,
-                pso::Stage::Domain   => gl::TESS_EVALUATION_SHADER,
-                pso::Stage::Geometry => gl::GEOMETRY_SHADER,
-                pso::Stage::Pixel    => gl::FRAGMENT_SHADER,
-                pso::Stage::Compute  => gl::COMPUTE_SHADER,
-            };
+        let target = match stage {
+            pso::Stage::Vertex   => gl::VERTEX_SHADER,
+            pso::Stage::Hull     => gl::TESS_CONTROL_SHADER,
+            pso::Stage::Domain   => gl::TESS_EVALUATION_SHADER,
+            pso::Stage::Geometry => gl::GEOMETRY_SHADER,
+            pso::Stage::Pixel    => gl::FRAGMENT_SHADER,
+            pso::Stage::Compute  => gl::COMPUTE_SHADER,
+        };
 
-            let name = unsafe { gl.CreateShader(target) };
-            unsafe {
-                gl.ShaderSource(name, 1,
-                    &(data.as_ptr() as *const gl::types::GLchar),
-                    &(data.len() as gl::types::GLint));
-                gl.CompileShader(name);
-            }
-            info!("\tCompiled shader {}", name);
-
-            let status = get_shader_iv(gl, name, gl::COMPILE_STATUS);
-            let log = get_shader_log(gl, name);
-            if status != 0 {
-                if !log.is_empty() {
-                    warn!("\tLog: {}", log);
-                }
-                shader_lib.shaders.insert(entry_point, name);
-            } else {
-                return Err(pso::CreateShaderError::CompilationFailed(log))
-            }
+        let name = unsafe { gl.CreateShader(target) };
+        unsafe {
+            gl.ShaderSource(name, 1,
+                &(data.as_ptr() as *const gl::types::GLchar),
+                &(data.len() as gl::types::GLint));
+            gl.CompileShader(name);
         }
+        info!("\tCompiled shader {}", name);
 
-        Ok(shader_lib)
+        let status = get_shader_iv(gl, name, gl::COMPILE_STATUS);
+        let log = get_shader_log(gl, name);
+        if status != 0 {
+            if !log.is_empty() {
+                warn!("\tLog: {}", log);
+            }
+            Ok(n::ShaderModule { raw: name })
+        } else {
+            Err(d::ShaderError)
+        }
     }
 
 }
@@ -187,42 +183,33 @@ impl d::Device<B> for Device {
 
     fn create_graphics_pipelines<'a>(
         &mut self,
-        descs: &[(&n::ShaderLib, &n::PipelineLayout, pass::Subpass<'a, B>, &pso::GraphicsPipelineDesc)],
+        descs: &[(pso::GraphicsShaderSet<'a, B>, &n::PipelineLayout, pass::Subpass<'a, B>, &pso::GraphicsPipelineDesc)],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         let gl = &self.share.context;
         let priv_caps = &self.share.private_caps;
         descs.iter()
-             .map(|&(shader_lib, layout, ref subpass, desc)| {
-                let subpass = {
-                    let pass::Subpass { index, main_pass } = *subpass;
-                    if let Some(subpass) = main_pass.subpasses.get(index) {
-                        subpass
-                    } else {
-                        return Err(pso::CreationError::InvalidSubpass(index))
-                    }
+             .map(|&(shaders, layout, subpass, desc)| {
+                let subpass = match subpass.main_pass.subpasses.get(subpass.index) {
+                    Some(sp) => sp,
+                    None => return Err(pso::CreationError::InvalidSubpass(subpass.index)),
                 };
 
                 let program = {
                     let name = unsafe { gl.CreateProgram() };
 
-                    let attach_shader = |shader: Option<pso::EntryPoint>| {
-                        if let Some(shader) = shader {
-                            match shader_lib.shaders.get(&desc.shader_entries.vertex_shader) {
-                                Some(&shader) => unsafe { gl.AttachShader(name, shader); },
-                                None => return Err(pso::CreationError::Other),
-                            }
+                    let attach_shader = |point_maybe: Option<pso::EntryPoint<B>>| {
+                        if let Some(point) = point_maybe {
+                            assert_eq!(point.entry, "main");
+                            unsafe { gl.AttachShader(name, point.module.raw); }
                         }
-
-                        Ok(())
                     };
 
                     // Attach shaders to program
-                    let entries = &desc.shader_entries;
-                    attach_shader(Some(entries.vertex_shader))?;
-                    attach_shader(entries.hull_shader)?;
-                    attach_shader(entries.domain_shader)?;
-                    attach_shader(entries.geometry_shader)?;
-                    attach_shader(entries.pixel_shader)?;
+                    attach_shader(Some(shaders.vertex));
+                    attach_shader(shaders.hull);
+                    attach_shader(shaders.domain);
+                    attach_shader(shaders.geometry);
+                    attach_shader(shaders.pixel);
 
                     if !priv_caps.program_interface_supported && priv_caps.frag_data_location_supported {
                         for i in 0..subpass.color_attachments.len() {
@@ -256,9 +243,9 @@ impl d::Device<B> for Device {
              .collect()
     }
 
-    fn create_compute_pipelines(
+    fn create_compute_pipelines<'a>(
         &mut self,
-        _descs: &[(&n::ShaderLib, pso::EntryPoint, &n::PipelineLayout)],
+        _descs: &[(pso::EntryPoint<'a, B>, &n::PipelineLayout)],
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
         unimplemented!()
     }
@@ -270,6 +257,14 @@ impl d::Device<B> for Device {
         _: &[&n::DepthStencilView],
         _: d::Extent,
     ) -> n::FrameBuffer {
+        unimplemented!()
+    }
+
+    fn create_shader_module(
+        &mut self,
+        _data: &[u8],
+    ) -> Result<n::ShaderModule, d::ShaderError> {
+        //TODO: SPIRV loading or conversion to GLSL
         unimplemented!()
     }
 
@@ -485,7 +480,7 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn destroy_shader_lib(&mut self, _: n::ShaderLib) {
+    fn destroy_shader_module(&mut self, _: n::ShaderModule) {
         unimplemented!()
     }
 
