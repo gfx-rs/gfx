@@ -11,7 +11,7 @@ extern crate winit;
 extern crate image;
 
 use gfx_corell::{buffer, command, format, pass, pso, shade, state, target,
-    Device, CommandPool, GraphicsCommandPool,
+    Device, CommandPool, GraphicsCommandPool, IndexType,
     GraphicsCommandBuffer, ProcessingCommandBuffer, TransferCommandBuffer, PrimaryCommandBuffer,
     Primitive, Instance, Adapter, Surface, Swapchain, QueueFamily, QueueSubmit, Factory, SubPass, FrameSync};
 use gfx_corell::format::Formatted;
@@ -23,7 +23,7 @@ use gfx_corell::factory::{DescriptorHeapType, DescriptorPoolDesc, DescriptorType
 use std::io::Cursor;
 use gfx_corell::image as i;
 
-
+const USE_INDEX_BUFFER: bool = false;
 type ColorFormat = gfx_corell::format::Srgba8;
 
 const VS: &str = "vs_main";
@@ -70,8 +70,6 @@ fn main() {
     let surface = instance.create_surface(&window);
 
     let queue_descs = adapter.get_queue_families().map(|family| (family, family.num_queues()) );
-
-
 
     // Build a new device and associated command queues
     let Device { mut factory, mut general_queues, heap_types, caps, .. } = adapter.open(queue_descs);
@@ -159,7 +157,7 @@ fn main() {
 
     //
     let mut pipeline_desc = pso::GraphicsPipelineDesc::new(
-        Primitive::TriangleList,
+        if USE_INDEX_BUFFER { Primitive::TriangleStrip } else { Primitive::TriangleList },
         state::Rasterizer::new_fill(),
         shader_entries);
 
@@ -239,7 +237,7 @@ fn main() {
     // Buffer allocations
     println!("Memory heaps: {:?}", heap_types);
 
-    let heap = factory.create_heap(upload_heap, ResourceHeapType::Buffers, 1024).unwrap();
+    let heap = factory.create_heap(upload_heap, ResourceHeapType::Buffers, 0x20000).unwrap();
     let buffer_stride = std::mem::size_of::<Vertex>() as u64;
     let buffer_len = TRIANGLE.len() as u64 * buffer_stride;
 
@@ -249,12 +247,28 @@ fn main() {
         factory.bind_buffer_memory(&heap, 0, buffer).unwrap()
     };
 
+    type Index = u16;
+    let index_stride = std::mem::size_of::<Index>() as u64;
+    let indices = [0 as Index, 1, 2, !0, 3, 4, 5];
+    let index_buffer = if USE_INDEX_BUFFER {
+        let index_len = index_stride * indices.len() as u64;
+        let unbound_buffer = factory.create_buffer(index_len, index_stride, buffer::INDEX).unwrap();
+        println!("{:?}", unbound_buffer);
+        let offset = (buffer_len | 0xFFFF) + 1; //TODO: respect D3D12 alignment
+        let buffer = factory.bind_buffer_memory(&heap, offset, unbound_buffer).unwrap();
+        factory.write_mapping::<Index>(&buffer, 0, index_len)
+            .unwrap()
+            .copy_from_slice(&indices);
+        Some(buffer)
+    } else {
+        None
+    };
+
     // TODO: check transitions: read/write mapping and vertex buffer read
 
-    {
-        let mut mapping = factory.write_mapping::<Vertex>(&vertex_buffer, 0, buffer_len).unwrap();
-        mapping.copy_from_slice(&TRIANGLE);
-    }
+    factory.write_mapping::<Vertex>(&vertex_buffer, 0, buffer_len)
+        .unwrap()
+        .copy_from_slice(&TRIANGLE);
 
     // Image
     let img_data = include_bytes!("data/logo.png");
@@ -414,6 +428,17 @@ fn main() {
             cmd_buffer.set_viewports(&[viewport]);
             cmd_buffer.set_scissors(&[scissor]);
             cmd_buffer.bind_graphics_pipeline(&pipelines[0].as_ref().unwrap());
+            if let Some(ref ibuf) = index_buffer {
+                cmd_buffer.bind_index_buffer(buffer::IndexBufferView {
+                    buffer: ibuf,
+                    offset: 0,
+                    index_type: match index_stride {
+                        2 => IndexType::U16,
+                        4 => IndexType::U32,
+                        _ => unreachable!()
+                    },
+                });
+            };
             cmd_buffer.bind_vertex_buffers(pso::VertexBufferSet(vec![(&vertex_buffer, 0)]));
             cmd_buffer.bind_descriptor_heaps(Some(&heap_srv), Some(&heap_sampler));
             cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, &[&set0[0], &set1[0]]);
@@ -425,7 +450,11 @@ fn main() {
                     target::Rect { x: 0, y: 0, w: pixel_width, h: pixel_height },
                     &[command::ClearValue::Color(command::ClearColor::Float([0.8, 0.8, 0.8, 1.0]))]);
 
-                encoder.draw(0, 6, None);
+                if USE_INDEX_BUFFER {
+                    encoder.draw_indexed(0, indices.len() as _, 0, None);
+                } else {
+                    encoder.draw(0, 6, None);
+                }
             }
 
             let rtv_present_barrier = ImageBarrier {
