@@ -636,7 +636,7 @@ macro_rules! impl_render_pass_inline_buffer {
             }
 
             fn draw_indexed(encoder: &mut RenderPassInlineEncoder<$graphics_buffer, R>, start: VertexCount, count: VertexCount, base: VertexOffset, instance: Option<command::InstanceParams>) {
-                unimplemented!()
+                encoder.command_buffer.0.draw_indexed(start, count, base, instance)
             }
 
             fn draw_indirect(encoder: &mut RenderPassInlineEncoder<$graphics_buffer, R>) {
@@ -648,11 +648,11 @@ macro_rules! impl_render_pass_inline_buffer {
             }
 
             fn bind_index_buffer(encoder: &mut RenderPassInlineEncoder<$graphics_buffer, R>, ibv: IndexBufferView<R>) {
-                unimplemented!()
+                encoder.command_buffer.0.bind_index_buffer(ibv)
             }
 
             fn bind_vertex_buffers(encoder: &mut RenderPassInlineEncoder<$graphics_buffer, R>, vbs: pso::VertexBufferSet<R>) {
-                unimplemented!()
+                encoder.command_buffer.0.bind_vertex_buffers(vbs)
             }
 
             fn set_viewports(encoder: &mut RenderPassInlineEncoder<$graphics_buffer, R>, viewports: &[target::Rect]) {

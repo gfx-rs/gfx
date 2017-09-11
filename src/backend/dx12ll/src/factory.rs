@@ -421,7 +421,8 @@ impl core::Factory<R> for Factory {
                     pInputElementDescs: input_element_descs.as_ptr(),
                     NumElements: input_element_descs.len() as u32,
                 },
-                IBStripCutValue: winapi::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED,
+                //IBStripCutValue: winapi::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED,
+                IBStripCutValue: winapi::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFFFFFF, //note: this works with U16 too!
                 PrimitiveTopologyType: state::map_topology_type(desc.primitive),
                 NumRenderTargets: num_rtvs,
                 RTVFormats: rtvs,
