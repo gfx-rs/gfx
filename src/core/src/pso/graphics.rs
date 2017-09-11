@@ -1,6 +1,6 @@
 //! Graphics pipeline descriptor.
 
-use {state as s, Primitive};
+use {state as s, Backend, Primitive};
 use super::EntryPoint;
 use super::input_assembler::{AttributeDesc, InputAssemblerDesc, VertexBufferDesc};
 use super::output_merger::{ColorInfo, DepthStencilDesc};
@@ -15,26 +15,24 @@ use super::output_merger::{ColorInfo, DepthStencilDesc};
 //  - IA: semantic name and index extracted from shader reflection
 
 /// A complete set of shaders to build a graphics pipeline.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct GraphicsShaderSet {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct GraphicsShaderSet<'a, B: Backend> {
     ///
-    pub vertex_shader: EntryPoint,
+    pub vertex: EntryPoint<'a, B>,
     ///
-    pub hull_shader: Option<EntryPoint>,
+    pub hull: Option<EntryPoint<'a, B>>,
     ///
-    pub domain_shader: Option<EntryPoint>,
+    pub domain: Option<EntryPoint<'a, B>>,
     ///
-    pub geometry_shader: Option<EntryPoint>,
+    pub geometry: Option<EntryPoint<'a, B>>,
     ///
-    pub pixel_shader: Option<EntryPoint>,
+    pub pixel: Option<EntryPoint<'a, B>>,
 }
 
 ///
 pub struct GraphicsPipelineDesc {
     /// Rasterizer setup
     pub rasterizer: Rasterizer,
-    /// Shader entry points
-    pub shader_entries: GraphicsShaderSet,
 
     /// Vertex buffers (IA)
     pub vertex_buffers: Vec<VertexBufferDesc>,
@@ -51,10 +49,9 @@ pub struct GraphicsPipelineDesc {
 
 impl GraphicsPipelineDesc {
     /// Create a new empty PSO descriptor.
-    pub fn new(primitive: Primitive, rasterizer: Rasterizer, shader_entries: GraphicsShaderSet) -> Self {
+    pub fn new(primitive: Primitive, rasterizer: Rasterizer) -> Self {
         GraphicsPipelineDesc {
             rasterizer,
-            shader_entries,
             vertex_buffers: Vec::new(),
             attributes: Vec::new(),
             input_assembler: InputAssemblerDesc::new(primitive),

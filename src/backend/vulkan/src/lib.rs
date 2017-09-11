@@ -587,7 +587,7 @@ impl core::Backend for Backend {
     type CommandPool = pool::RawCommandPool;
     type SubpassCommandPool = pool::SubpassCommandPool;
 
-    type ShaderLib = native::ShaderLib;
+    type ShaderModule = native::ShaderModule;
     type RenderPass = native::RenderPass;
     type FrameBuffer = native::FrameBuffer;
 
