@@ -1,12 +1,11 @@
 
 use conv;
-use core::{self, pass, pso};
+use core::{self, pass};
 use core::target::{Layer, Level};
 use core::image as i;
 use gl;
 use Backend;
 use std::cell::Cell;
-use std::collections::BTreeMap;
 
 pub type Buffer      = gl::types::GLuint;
 pub type Shader      = gl::types::GLuint;
@@ -102,17 +101,9 @@ impl core::DescriptorPool<Backend> for DescriptorPool {
     }
 }
 
-#[derive(Clone, Debug, Hash)]
-pub struct ShaderLib {
-    pub shaders: BTreeMap<pso::EntryPoint, Shader>,
-}
-
-impl ShaderLib {
-    pub fn new() -> Self {
-        ShaderLib {
-            shaders: BTreeMap::new(),
-        }
-    }
+#[derive(Clone, Copy, Debug, Hash)]
+pub struct ShaderModule {
+    pub raw: Shader,
 }
 
 #[derive(Debug)]

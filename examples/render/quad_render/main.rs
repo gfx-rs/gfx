@@ -23,10 +23,6 @@ use core::target::Rect;
 
 use std::io::Cursor;
 
-
-const VS: &str = "vs_main";
-const PS: &str = "ps_main";
-
 #[derive(Debug, Clone, Copy)]
 #[allow(non_snake_case)]
 struct Vertex {
@@ -81,10 +77,9 @@ fn main() {
             (PS, shade::Stage::Pixel, include_bytes!("../../core/quad/shader/quad.hlsl")),
         ]).expect("Error on creating shader lib");
     #[cfg(feature = "vulkan")]
-    let shader_lib = device.create_shader_library(&[
-            (VS, include_bytes!("../../core/quad/data/vs_main.spv")),
-            (PS, include_bytes!("../../core/quad/data/ps_main.spv")),
-        ]).expect("Error on creating shader lib");
+    let vs_module = device.create_shader_module(include_bytes!("../../core/quad/data/vs_main.spv")).unwrap();
+    #[cfg(feature = "vulkan")]
+    let fs_module = device.create_shader_module(include_bytes!("../../core/quad/data/ps_main.spv")).unwrap();
     #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
     let shader_lib = device.create_shader_library_from_source(
             include_str!("../../core/quad/shader/quad_indirect.metal"),
@@ -100,14 +95,6 @@ fn main() {
             (VS, pso::Stage::Vertex, include_bytes!("../../core/quad/shader/quad_450.glslv")),
             (PS, pso::Stage::Pixel, include_bytes!("../../core/quad/shader/quad_450.glslf")),
         ]).expect("Error on creating shader lib");
-
-    let shader_entries = pso::GraphicsShaderSet {
-        vertex_shader: VS,
-        hull_shader: None,
-        domain_shader: None,
-        geometry_shader: None,
-        pixel_shader: Some(PS),
-    };
 
     let set0_layout = device.create_descriptor_set_layout(&[
             pso::DescriptorSetLayoutBinding {
@@ -156,7 +143,6 @@ fn main() {
     let mut pipeline_desc = pso::GraphicsPipelineDesc::new(
         Primitive::TriangleList,
         pso::Rasterizer::new_fill(),
-        shader_entries,
     );
     pipeline_desc.blender.targets.push(pso::ColorInfo {
         mask: state::MASK_ALL,
@@ -194,9 +180,19 @@ fn main() {
     });
 
     //
-    let pipelines = device.create_graphics_pipelines(&[
-        (&shader_lib, &pipeline_layout, Subpass { index: 0, main_pass: &render_pass }, &pipeline_desc)
-    ]);
+    let pipelines = {
+        let shader_entries = pso::GraphicsShaderSet {
+            vertex: pso::EntryPoint { entry: "main", module: &vs_module },
+            hull: None,
+            domain: None,
+            geometry: None,
+            pixel: Some(pso::EntryPoint { entry: "main", module: &fs_module },),
+        };
+        let subpass = Subpass { index: 0, main_pass: &render_pass };
+        device.create_graphics_pipelines(&[
+            (shader_entries, &pipeline_layout, subpass, &pipeline_desc)
+        ])
+    };
 
     println!("pipelines: {:?}", pipelines);
 
@@ -450,7 +446,8 @@ fn main() {
     device.destroy_descriptor_pool(sampler_pool);
     device.destroy_descriptor_set_layout(set0_layout);
     device.destroy_descriptor_set_layout(set1_layout);
-    device.destroy_shader_lib(shader_lib);
+    device.destroy_shader_module(vs_module);
+    device.destroy_shader_module(fs_module);
     device.destroy_pipeline_layout(pipeline_layout);
     device.destroy_renderpass(render_pass);
     device.destroy_heap(heap);
