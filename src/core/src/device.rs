@@ -132,61 +132,6 @@ impl Error for TargetViewError {
     }
 }
 
-/// An error from creating textures with views at the same time.
-#[derive(Clone, Debug, PartialEq)]
-pub enum CombinedError {
-    /// Failed to create the raw texture.
-    Texture(image::CreationError),
-    /// Failed to create SRV or UAV.
-    Resource(ResourceViewError),
-    /// Failed to create RTV or DSV.
-    Target(TargetViewError),
-}
-
-impl fmt::Display for CombinedError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            CombinedError::Texture(ref e) => write!(f, "{}: {}", self.description(), e),
-            CombinedError::Resource(ref e) => write!(f, "{}: {}", self.description(), e),
-            CombinedError::Target(ref e) => write!(f, "{}: {}", self.description(), e),
-        }
-    }
-}
-
-impl Error for CombinedError {
-    fn description(&self) -> &str {
-        match *self {
-            CombinedError::Texture(_) => "Failed to create the raw texture",
-            CombinedError::Resource(_) => "Failed to create SRV or UAV",
-            CombinedError::Target(_) => "Failed to create RTV or DSV",
-        }
-    }
-
-    fn cause(&self) -> Option<&Error> {
-        match *self {
-            CombinedError::Texture(ref e) => Some(e),
-            CombinedError::Resource(ref e) => Some(e),
-            CombinedError::Target(ref e) => Some(e),
-        }
-    }
-}
-
-impl From<image::CreationError> for CombinedError {
-    fn from(e: image::CreationError) -> CombinedError {
-        CombinedError::Texture(e)
-    }
-}
-impl From<ResourceViewError> for CombinedError {
-    fn from(e: ResourceViewError) -> CombinedError {
-        CombinedError::Resource(e)
-    }
-}
-impl From<TargetViewError> for CombinedError {
-    fn from(e: TargetViewError) -> CombinedError {
-        CombinedError::Target(e)
-    }
-}
-
 /// Specifies the waiting targets.
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
@@ -208,6 +153,10 @@ pub struct Extent {
     ///
     pub depth: u32,
 }
+
+/// An error from creating a shader module.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ShaderError;
 
 /// # Overview
 ///
@@ -273,13 +222,15 @@ pub trait Device<B: Backend> {
     fn create_pipeline_layout(&mut self, sets: &[&B::DescriptorSetLayout]) -> B::PipelineLayout;
 
     /// Create graphics pipelines.
-    fn create_graphics_pipelines<'a>(&mut self, &[(&B::ShaderLib, &B::PipelineLayout, pass::Subpass<'a, B>, &pso::GraphicsPipelineDesc)])
-            -> Vec<Result<B::GraphicsPipeline, pso::CreationError>>;
+    fn create_graphics_pipelines<'a>(
+        &mut self,
+        &[(pso::GraphicsShaderSet<'a, B>, &B::PipelineLayout, pass::Subpass<'a, B>, &pso::GraphicsPipelineDesc)],
+    ) -> Vec<Result<B::GraphicsPipeline, pso::CreationError>>;
 
     /// Create compute pipelines.
-    fn create_compute_pipelines(
+    fn create_compute_pipelines<'a>(
         &mut self,
-        &[(&B::ShaderLib, pso::EntryPoint, &B::PipelineLayout)],
+        &[(pso::EntryPoint<'a, B>, &B::PipelineLayout)],
     ) -> Vec<Result<B::ComputePipeline, pso::CreationError>>;
 
     ///
@@ -290,6 +241,9 @@ pub trait Device<B: Backend> {
         depth_stencil_attachments: &[&B::DepthStencilView],
         extent: Extent,
     ) -> B::FrameBuffer;
+
+    ///
+    fn create_shader_module(&mut self, spirv_data: &[u8]) -> Result<B::ShaderModule, ShaderError>;
 
     ///
     fn create_sampler(&mut self, image::SamplerInfo) -> B::Sampler;
@@ -415,7 +369,7 @@ pub trait Device<B: Backend> {
     fn destroy_heap(&mut self, B::Heap);
 
     ///
-    fn destroy_shader_lib(&mut self, B::ShaderLib);
+    fn destroy_shader_module(&mut self, B::ShaderModule);
 
     ///
     fn destroy_renderpass(&mut self, B::RenderPass);

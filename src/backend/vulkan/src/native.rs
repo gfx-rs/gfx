@@ -2,7 +2,6 @@ use ash::vk;
 use ash::version::DeviceV1_0;
 use core;
 use core::image::SubresourceRange;
-use std::collections::BTreeMap;
 use std::ops::Range;
 use std::sync::Arc;
 use {Backend, RawDevice};
@@ -65,9 +64,8 @@ pub struct PipelineLayout {
 }
 
 #[derive(Debug, Eq, Hash, PartialEq)]
-pub struct ShaderLib {
-    // TODO: merge SPIR-V modules
-    pub shaders: BTreeMap<core::pso::EntryPoint, vk::ShaderModule>,
+pub struct ShaderModule {
+    pub raw: vk::ShaderModule,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
