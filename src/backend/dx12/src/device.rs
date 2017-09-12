@@ -10,7 +10,7 @@ use std::cmp;
 use std::collections::BTreeMap;
 use std::ops::Range;
 use std::{ffi, mem, ptr, slice};
-use {native as n, shade, Backend as B, Device};
+use {free_list, native as n, shade, Backend as B, Device};
 use winapi;
 use wio::com::ComPtr;
 
@@ -147,6 +147,8 @@ impl Device {
             device.GetDescriptorHandleIncrementSize(heap_type) as u64
         };
 
+        let allocator = free_list::Allocator::new(capacity as _);
+
         n::DescriptorHeap {
             raw: unsafe { ComPtr::new(heap) },
             handle_size: descriptor_size,
@@ -155,6 +157,7 @@ impl Device {
                 cpu: cpu_handle,
                 gpu: gpu_handle,
             },
+            allocator,
         }
     }
 }
@@ -790,15 +793,35 @@ impl d::Device<B> for Device {
         max_sets: usize,
         descriptor_pools: &[pso::DescriptorRangeDesc],
     ) -> n::DescriptorPool {
-        let offset = 0; // TODO
-        warn!("Heap slice allocation not implemented for descriptor pools!");
+        let mut num_srv_cbv_uav = 0;
+        let mut num_samplers = 0;
+
+        for desc in descriptor_pools {
+            match desc.ty {
+                pso::DescriptorType::Sampler => {
+                    num_samplers += desc.count as _;
+                }
+                _ => {
+                    num_srv_cbv_uav += desc.count as _;
+                }
+            }
+        }
+
+        let heap_srv_cbv_uav = n::DescriptorHeapSlice {
+            heap: self.heap_srv_cbv_uav.raw.clone(),
+            range: self.heap_srv_cbv_uav.allocator.allocate(num_srv_cbv_uav).unwrap(), // TODO: error/resize
+        };
+
+        let heap_sampler = n::DescriptorHeapSlice {
+            heap: self.heap_sampler.raw.clone(),
+            range: self.heap_sampler.allocator.allocate(num_samplers).unwrap(), // TODO: error/resize
+        };
 
         n::DescriptorPool {
-            heap_srv_cbv_uav: self.heap_srv_cbv_uav.clone(),
-            heap_sampler: self.heap_sampler.clone(),
+            heap_srv_cbv_uav,
+            heap_sampler,
             pools: descriptor_pools.to_vec(),
             max_size: max_sets as _,
-            offset: offset as _,
         }
     }
 
