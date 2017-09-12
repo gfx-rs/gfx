@@ -30,6 +30,8 @@ pub struct GraphicsShaderSet<'a, B: Backend> {
 }
 
 ///
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
 pub struct GraphicsPipelineDesc {
     /// Rasterizer setup
     pub rasterizer: Rasterizer,
@@ -62,7 +64,7 @@ impl GraphicsPipelineDesc {
 }
 
 ///
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
 pub struct DepthBias {
     ///
@@ -74,7 +76,7 @@ pub struct DepthBias {
 }
 
 /// Rasterization state.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
 pub struct Rasterizer {
     /// How to rasterize this primitive.
@@ -109,6 +111,8 @@ impl Rasterizer {
 }
 
 ///
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
 pub struct BlendDesc {
     ///
     pub alpha_coverage: bool,
@@ -130,6 +134,8 @@ impl BlendDesc {
 }
 
 ///
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
 pub enum LogicOp {
     ///
     Clear,
