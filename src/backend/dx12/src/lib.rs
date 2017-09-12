@@ -14,6 +14,7 @@ extern crate wio;
 mod command;
 mod conv;
 mod device;
+mod free_list;
 mod native;
 mod pool;
 mod shade;
