@@ -1,5 +1,5 @@
 //! Memory buffers
-
+use memory;
 use {IndexType, Backend};
 
 // TODO
@@ -63,4 +63,24 @@ pub struct IndexBufferView<'a, B: Backend> {
     pub offset: u64,
     ///
     pub index_type: IndexType,
+}
+
+/// Retrieve the complete memory requirements for this buffer,
+/// taking usage and device limits into account
+pub fn complete_requirements<B: Backend>(
+    device: &mut B::Device,
+    buffer: &B::UnboundBuffer,
+    usage: Usage,
+) -> memory::Requirements {
+    use std::cmp::max;
+    use device::Device;
+
+    let mut requirements = device.get_buffer_requirements(buffer);
+    if usage.can_transfer() {
+        let limits = device.get_limits();
+        requirements.alignment = max(
+            limits.min_buffer_copy_offset_alignment as u64,
+            requirements.alignment);
+    }
+    requirements
 }
