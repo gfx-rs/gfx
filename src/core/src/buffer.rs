@@ -26,6 +26,13 @@ bitflags!(
     }
 );
 
+impl Usage {
+    /// Can this buffer be used in transfer operations ?
+    pub fn can_transfer(&self) -> bool {
+        self.intersects(TRANSFER_SRC | TRANSFER_DST)
+    }
+}
+
 bitflags!(
     /// Buffer state flags.
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]

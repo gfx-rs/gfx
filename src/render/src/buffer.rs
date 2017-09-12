@@ -1,6 +1,10 @@
 use memory::Memory;
 
-pub use core::buffer::CreationError;
+pub use core::buffer::{CreationError};
+pub use core::buffer::{Usage,
+    TRANSFER_SRC, TRANSFER_DST, CONSTANT, INDEX, INDIRECT, VERTEX
+};
+
 /* TODO
 /// Error creating a buffer.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -38,8 +42,8 @@ impl Error for CreationError {
 /// An information block that is immutable and associated to each buffer.
 #[derive(Debug)]
 pub struct Info {
-    /// Role
-    pub role: Role,
+    /// Usage
+    pub usage: Usage,
     /// Memory
     pub memory: Memory,
     /// Size in bytes
@@ -47,21 +51,5 @@ pub struct Info {
     /// Stride of a single element, in bytes. Only used for structured buffers
     /// that you use via shader resource / unordered access views.
     pub stride: u64,
-    // TODO: do we need things from buffer::Usage ?
     // TODO: mapping stuff
-}
-
-/// Role of the memory buffer.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-#[repr(u8)]
-pub enum Role {
-    /// Generic vertex buffer
-    Vertex,
-    /// Index buffer
-    Index,
-    /// Constant buffer
-    Constant,
-    /// Staging buffer
-    Staging,
 }
