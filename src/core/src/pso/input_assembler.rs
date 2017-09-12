@@ -62,6 +62,8 @@ pub enum PrimitiveRestart {
 }
 
 ///
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
 pub struct InputAssemblerDesc {
     /// Type of the primitive
     pub primitive: Primitive,
