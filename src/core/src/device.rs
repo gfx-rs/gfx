@@ -90,7 +90,9 @@ pub enum TargetViewError {
     /// The backend was refused for some reason.
     Unsupported,
     /// The RTV cannot be changed due to the references to it existing.
-    NotDetached
+    NotDetached,
+    ///
+    BadFormat,
 }
 
 impl fmt::Display for TargetViewError {
@@ -120,6 +122,8 @@ impl Error for TargetViewError {
                 "The backend was refused for some reason",
             TargetViewError::NotDetached =>
                 "The RTV cannot be changed due to the references to it existing",
+            TargetViewError::BadFormat =>
+                "An incompatible format was requested for the target view"
         }
     }
 

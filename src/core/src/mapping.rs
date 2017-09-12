@@ -8,7 +8,31 @@ use Backend;
 // TODO
 /// Error accessing a mapping.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct Error;
+pub enum Error {
+    /// The requested mapping access did not match the expected usage.
+    InvalidAccess,
+    /// The requested mapping access overlaps with another.
+    AccessOverlap,
+    /// The requested mapping range is outside of the resource.
+    OutOfBounds,
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.description())
+    }
+}
+
+impl StdError for Error {
+    fn description(&self) -> &str {
+        use self::Error::*;
+        match *self {
+            InvalidAccess => "The requested mapping access did not match the expected usage",
+            AccessOverlap => "The requested mapping access overlaps with another",
+            OutOfBounds => "The requested mapping range is outside of the resource",
+        }
+    }
+}
 
 /// Mapping reader
 pub struct Reader<'a, B: Backend, T: 'a + Copy> {

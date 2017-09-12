@@ -301,9 +301,9 @@ impl d::Device<B> for Device {
                     });
                 }
                 let mut vertex_attributes = Vec::new();
-                for (i, attr) in desc.attributes.iter().enumerate() {
+                for attr in desc.attributes.iter() {
                     vertex_attributes.push(vk::VertexInputAttributeDescription {
-                        location: i as u32,
+                        location: attr.location as u32,
                         binding: attr.binding as u32,
                         format: match conv::map_format(attr.element.format.0, attr.element.format.1) {
                             Some(fm) => fm,

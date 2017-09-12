@@ -4,8 +4,9 @@ use core::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, View
 use core::buffer::IndexBufferView;
 use core::command::{BufferCopy, BufferImageCopy, ClearColor, ClearValue, ImageCopy, ImageResolve,
                     SubpassContents};
+use core::pass::{Attachment, AttachmentLoadOp, AttachmentOps};
 use winapi::{self, UINT64, UINT};
-use {native as n, Backend};
+use {conv, native as n, Backend};
 use smallvec::SmallVec;
 use std::{cmp, mem, ptr};
 use std::ops::Range;
@@ -31,6 +32,7 @@ pub struct RenderPassCache {
 #[derive(Clone)]
 pub struct CommandBuffer {
     pub(crate) raw: ComPtr<winapi::ID3D12GraphicsCommandList>,
+    pub(crate) allocator: ComPtr<winapi::ID3D12CommandAllocator>,
 
     // Cache renderpasses for graphics operations
     pub(crate) pass_cache: Option<RenderPassCache>,
@@ -50,7 +52,7 @@ impl CommandBuffer {
 
 impl command::RawCommandBuffer<Backend> for CommandBuffer {
     fn begin(&mut self) {
-        unimplemented!()
+        unsafe { self.raw.Reset(self.allocator.as_mut(), ptr::null_mut()); }
     }
 
     fn finish(&mut self) {
@@ -64,20 +66,71 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     fn begin_renderpass(
         &mut self,
         render_pass: &n::RenderPass,
-        frame_buffer: &n::FrameBuffer,
+        framebuffer: &n::FrameBuffer,
         render_area: target::Rect,
         clear_values: &[ClearValue],
         _first_subpass: SubpassContents,
     ) {
+        let color_views = framebuffer.color.iter().map(|view| view.handle).collect::<Vec<_>>();
+        assert!(framebuffer.depth_stencil.len() <= 1);
+        assert_eq!(framebuffer.color.len() + framebuffer.depth_stencil.len(), render_pass.attachments.len());
+
+        let ds_view = match framebuffer.depth_stencil.first() {
+            Some(ref view) => &view.handle as *const _,
+            None => ptr::null(),
+        };
+        unsafe {
+            self.raw.OMSetRenderTargets(
+                color_views.len() as UINT,
+                color_views.as_ptr(),
+                winapi::FALSE,
+                ds_view,
+            );
+        }
+
         let area = get_rect(&render_area);
+
+        let mut clear_iter = clear_values.iter();
+        for (color, attachment) in framebuffer.color.iter().zip(render_pass.attachments.iter()) {
+            if attachment.ops.load == AttachmentLoadOp::Clear {
+                match clear_iter.next() {
+                    Some(&command::ClearValue::Color(value)) => {
+                        let data = match value {
+                            command::ClearColor::Float(v) => v,
+                            _ => {
+                                error!("Integer clear is not implemented yet");
+                                [0.0; 4]
+                            }
+                        };
+                        unsafe {
+                            self.raw.ClearRenderTargetView(color.handle, &data, 1, &area);
+                        }
+                    },
+                    other => error!("Invalid clear value for view {:?}: {:?}", color, other),
+                }
+            }
+        }
+        if let (Some(depth), Some(&Attachment{ ops: AttachmentOps { load: AttachmentLoadOp::Clear, .. }, ..})) = (framebuffer.depth_stencil.first(), render_pass.attachments.last()) {
+            match clear_iter.next() {
+                Some(&command::ClearValue::DepthStencil(value)) => {
+                    unsafe {
+                        self.raw.ClearDepthStencilView(depth.handle,
+                            winapi::D3D12_CLEAR_FLAG_DEPTH | winapi::D3D12_CLEAR_FLAG_STENCIL,
+                            value.depth, value.stencil as u8, 1, &area);
+                    }
+                },
+                other => error!("Invalid clear value for view {:?}: {:?}",
+                    framebuffer.depth_stencil[0], other),
+            }
+        }
+
         self.pass_cache = Some(RenderPassCache {
             render_pass: render_pass.clone(),
-            frame_buffer: frame_buffer.clone(),
+            frame_buffer: framebuffer.clone(),
             render_area: area,
             clear_values: clear_values.into(),
             next_subpass: 0,
         });
-
         self.begin_subpass();
     }
 
@@ -86,15 +139,59 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn end_renderpass(&mut self) {
-        unimplemented!()
+        warn!("end renderpass unimplemented")
     }
 
     fn pipeline_barrier(
         &mut self,
         _stages: Range<pso::PipelineStage>,
-        _barriers: &[memory::Barrier<Backend>],
+        barriers: &[memory::Barrier<Backend>],
     ) {
-        unimplemented!()
+        // TODO: very much WIP
+        warn!("pipeline barriers unimplemented");
+
+        let mut transition_barriers = Vec::new();
+
+        for barrier in barriers {
+            match *barrier {
+                memory::Barrier::Image { ref states, target, ref range } => {
+                    let state_src = match states.start {
+                        (_, image::ImageLayout::Present) => winapi::D3D12_RESOURCE_STATE_PRESENT,
+                        (access, layout) => conv::map_image_resource_state(access, layout)
+                    };
+                    let state_dst = match states.end {
+                        (_, image::ImageLayout::Present) => winapi::D3D12_RESOURCE_STATE_PRESENT,
+                        (access, layout) => conv::map_image_resource_state(access, layout)
+                    };
+
+                    if state_src == state_dst {
+                        warn!("Image pipeline barrier requested with no effect: {:?}", barrier);
+                        continue;
+                    }
+
+                    transition_barriers.push(
+                        winapi::D3D12_RESOURCE_BARRIER {
+                            Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+                            Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                            u: winapi::D3D12_RESOURCE_TRANSITION_BARRIER {
+                                pResource: target.resource,
+                                Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                                StateBefore: state_src,
+                                StateAfter: state_dst,
+                            },
+                        }
+                    );
+                }
+                _ => {}
+            }
+        }
+
+        unsafe {
+            self.raw.ResourceBarrier(
+                transition_barriers.len() as _,
+                transition_barriers.as_ptr(),
+            );
+        }
     }
 
     fn clear_color(
@@ -258,11 +355,23 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn bind_graphics_descriptor_sets(
         &mut self,
-        _: &n::PipelineLayout,
-        _first_set: usize,
-        _sets: &[&n::DescriptorSet],
+        layout: &n::PipelineLayout,
+        first_set: usize,
+        sets: &[&n::DescriptorSet],
     ) {
-        unimplemented!()
+        unsafe {
+            self.raw.SetGraphicsRootSignature(layout.raw);
+        }
+        warn!("graphic descriptor set binding partially unimplemented")
+        // TODO:
+        /*
+        for i in 0 .. sets.len() {
+            let handle = sets[i].ranges[0].handle.gpu;
+            unsafe {
+                self.raw.SetGraphicsRootDescriptorTable((first_set + i) as UINT, handle)
+            }
+        }
+        */
     }
 
     fn bind_compute_pipeline(&mut self, pipeline: &n::ComputePipeline) {
