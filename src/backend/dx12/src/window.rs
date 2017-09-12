@@ -3,9 +3,24 @@ use core::{self, image};
 use dxguid;
 use std::collections::VecDeque;
 use std::ptr;
+use winit;
 use winapi;
 use wio::com::ComPtr;
-use {data, native as n, Backend, QueueFamily};
+use {conv, native as n, Backend, Instance, QueueFamily};
+
+use winit::os::windows::WindowExt;
+
+impl Instance {
+    pub fn create_surface(&self, window: &winit::Window) -> Surface {
+        let (width, height) = window.get_inner_size_pixels().unwrap();
+        Surface {
+            factory: self.factory.clone(),
+            wnd_handle: window.get_hwnd() as *mut _,
+            width: width,
+            height: height,
+        }
+    }
+}
 
 pub struct Surface {
     factory: ComPtr<winapi::IDXGIFactory4>,
@@ -23,7 +38,14 @@ impl core::Surface<Backend> for Surface {
     ) -> Swapchain {
         let mut swap_chain: *mut winapi::IDXGISwapChain1 = ptr::null_mut();
         let buffer_count = 2; // TODO: user-defined value
-        let format = data::map_format(config.color_format, true).unwrap(); // TODO: error handling
+        let mut format = config.color_format;
+        if format.1 == core::format::ChannelType::Srgb {
+            // Apparently, swap chain doesn't like sRGB, but the RTV can still have some:
+            // https://www.gamedev.net/forums/topic/670546-d3d12srgb-buffer-format-for-swap-chain/
+            // [15716] DXGI ERROR: IDXGIFactory::CreateSwapchain: Flip model swapchains (DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL and DXGI_SWAP_EFFECT_FLIP_DISCARD) only support the following Formats: (DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R10G10B10A2_UNORM), assuming the underlying Device does as well.
+            format.1 = core::format::ChannelType::Unorm;
+        }
+        let format = conv::map_format(format, true).unwrap(); // TODO: error handling
 
         // TODO: double-check values
         let desc = winapi::DXGI_SWAP_CHAIN_DESC1 {
@@ -55,7 +77,7 @@ impl core::Surface<Backend> for Surface {
         };
 
         if !winapi::SUCCEEDED(hr) {
-            error!("error on swapchain creation {:x}", hr);
+            error!("error on swapchain creation 0x{:x}", hr);
         }
 
         let mut swap_chain = unsafe { ComPtr::<winapi::IDXGISwapChain3>::new(swap_chain as *mut winapi::IDXGISwapChain3) };
