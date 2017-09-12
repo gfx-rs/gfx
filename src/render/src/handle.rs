@@ -1,16 +1,78 @@
 use std::sync::mpsc;
 
-use memory::Typed;
+use memory::{Typed, DropDelayed, DropDelayer};
 use Backend;
 
-pub(crate) type GarbageSender<B> = mpsc::Sender<Garbage<B>>;
-pub(crate) type GarbageReceiver<B> = mpsc::Receiver<Garbage<B>>;
-pub(crate) fn garbage_channel<B: Backend>() -> (GarbageSender<B>, GarbageReceiver<B>) {
-    mpsc::channel()
+pub(crate) fn garbage<B: Backend>(device: &B::Device)
+    -> (GarbageSender<B>, GarbageCollector<B>)
+{
+    let (sender, receiver) = mpsc::channel();
+    let delayed = DropDelayed::new(InnerGarbageCollector {
+        device: (*device).clone(),
+        receiver,
+    });
+    let delayer = delayed.drop_delayer();
+    (GarbageSender { sender, delayer }, GarbageCollector(delayed))
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct GarbageSender<B: Backend> {
+    sender: mpsc::Sender<Garbage<B>>,
+    delayer: DropDelayer<InnerGarbageCollector<B>>,
+}
+
+pub(crate) struct GarbageCollector<B: Backend>(DropDelayed<InnerGarbageCollector<B>>);
+
+struct InnerGarbageCollector<B: Backend> {
+    device: B::Device,
+    receiver: mpsc::Receiver<Garbage<B>>,
+}
+
+impl<B: Backend> GarbageSender<B> {
+    pub fn send(&self, garbage: Garbage<B>)
+        -> Result<(), mpsc::SendError<Garbage<B>>>
+    {
+        self.sender.send(garbage)
+    }
+}
+
+impl<B: Backend> GarbageCollector<B> {
+    pub fn collect(&mut self) {
+        self.0.collect();
+    }
+}
+
+impl<B: Backend> InnerGarbageCollector<B> {
+    fn collect(&mut self) {
+        use core::Device;
+
+        let dev = &mut self.device;
+        for garbage in self.receiver.try_iter() {
+            use self::Garbage::*;
+            match garbage {
+                // ShaderLib(sl) => dev.destroy_shader_lib(sl),
+                Buffer(b) => dev.destroy_buffer(b),
+                Image(i) => dev.destroy_image(i),
+                RenderTargetView(rtv) => dev.destroy_render_target_view(rtv),
+                DepthStencilView(dsv) => dev.destroy_depth_stencil_view(dsv),
+                ConstantBufferView(cbv) => dev.destroy_constant_buffer_view(cbv),
+                ShaderResourceView(srv) => dev.destroy_shader_resource_view(srv),
+                UnorderedAccessView(uav) => dev.destroy_unordered_access_view(uav),
+                Sampler(s) => dev.destroy_sampler(s),
+            }
+        }
+    }
+}
+
+impl<B: Backend> Drop for InnerGarbageCollector<B> {
+    fn drop(&mut self) {
+        self.collect();
+    }
 }
 
 macro_rules! define_resources {
     ($($name:ident: $info:path,)*) => {
+        #[derive(Debug)]
         pub enum Garbage<B: Backend> {
             $( $name(B::$name), )*
         }
@@ -141,7 +203,7 @@ pub use self::raw::Sampler;
 pub enum ViewSource<B: Backend> {
     Image(raw::Image<B>),
     Buffer(raw::Buffer<B>),
-    Backbuffer(B::Image, ::image::Info),
+    Backbuffer(B::Image, ::image::Kind, ::format::Format),
 }
 
 impl<'a, B: Backend> From<&'a raw::Image<B>> for ViewSource<B> {

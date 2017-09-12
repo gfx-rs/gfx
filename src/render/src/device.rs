@@ -2,8 +2,11 @@ use std::mem;
 use std::ops::Range;
 use core::{Device as CoreDevice, HeapType};
 use core::device::TargetViewError;
+use core::memory::{HeapProperties,
+    DEVICE_LOCAL, COHERENT, CPU_VISIBLE, CPU_CACHED, WRITE_COMBINED
+};
 
-use memory::{self, Typed, Pod};
+use memory::{self, Allocator, Typed};
 use handle::{self, GarbageSender};
 use handle::inner::*;
 use {buffer, image, format};
@@ -124,17 +127,16 @@ impl<B: Backend> Device<B> {
         raw: B::Device,
         heap_types: Vec<HeapType>,
         memory_heaps: Vec<u64>,
-        garbage: GarbageSender<B>) -> Self
+    ) -> (Self, handle::GarbageCollector<B>)
     {
-        Device { raw, heap_types, memory_heaps, garbage }
+        let (garbage, collector) = handle::garbage(&raw);
+        (Device { raw, heap_types, memory_heaps, garbage }, collector)
     }
 
-    // TODO: remove
     pub fn heap_types(&self) -> &[HeapType] {
         &self.heap_types
     }
 
-    // TODO: remove
     pub fn memory_heaps(&self) -> &[u64] {
         &self.memory_heaps
     }
@@ -147,27 +149,102 @@ impl<B: Backend> Device<B> {
         &mut self.raw
     }
 
-    #[allow(unused_variables)]
-    pub fn create_buffer_raw(&mut self,
-        role: buffer::Role,
-        usage: memory::Usage,
-        bind: memory::Bind,
-        size: usize,
-        stride: usize
-    ) -> Result<handle::raw::Buffer<B>, buffer::CreationError>
+    pub fn find_heap<P>(&self, predicate: P) -> Option<HeapType>
+        where P: Fn(HeapProperties) -> bool
     {
-        unimplemented!()
+        self.heap_types.iter()
+            .find(|heap_type| predicate(heap_type.properties))
+            .cloned()
     }
 
-    pub fn create_buffer<T: Pod>(&mut self,
+    pub fn find_usage_heap(&self, usage: memory::Usage) -> Option<HeapType> {
+        use memory::Usage::*;
+        match usage {
+            Data => self.find_data_heap(),
+            Upload => self.find_upload_heap(),
+            Download => self.find_download_heap(),
+        }
+    }
+
+    // TODO: shouldn't need coherency if we handle invalidation/flush
+
+    pub fn find_data_heap(&self) -> Option<HeapType> {
+        self.find_heap(|props| {
+            props.contains(DEVICE_LOCAL) && !props.contains(CPU_VISIBLE)
+        }).or_else(|| self.find_heap(|props| {
+            props.contains(DEVICE_LOCAL)
+        }))
+    }
+
+    pub fn find_upload_heap(&self) -> Option<HeapType> {
+        self.find_heap(|props| {
+            props.contains(CPU_VISIBLE | WRITE_COMBINED | COHERENT)
+            && !props.contains(CPU_CACHED)
+        }).or_else(|| self.find_heap(|props| {
+            props.contains(CPU_VISIBLE | COHERENT)
+        }))
+    }
+
+    pub fn find_download_heap(&self) -> Option<HeapType> {
+        self.find_heap(|props| {
+            props.contains(CPU_VISIBLE | CPU_CACHED | COHERENT)
+            && !props.contains(WRITE_COMBINED)
+        }).or_else(|| self.find_heap(|props| {
+            props.contains(CPU_VISIBLE | COHERENT)
+        }))
+    }
+
+    pub fn create_buffer_raw<A>(&mut self,
+        allocator: &mut A,
         role: buffer::Role,
         usage: memory::Usage,
         bind: memory::Bind,
-        size: usize
-    ) -> Result<handle::Buffer<B, T>, buffer::CreationError>
+        size: u64,
+        stride: u64
+    ) -> Result<handle::raw::Buffer<B>, buffer::CreationError>
+        where A: Allocator<B>
     {
-        let stride = mem::size_of::<T>();
+        use core::buffer as cb;
+
+        let mut buffer_usage = cb::Usage::empty();
+
+        use buffer::Role::*;
+        match role {
+            Vertex => buffer_usage |= cb::VERTEX,
+            Index => buffer_usage |= cb::INDEX,
+            Constant => buffer_usage |= cb::CONSTANT,
+            Staging => {}
+        }
+
+        assert!(!bind.contains(memory::RENDER_TARGET));
+        assert!(!bind.contains(memory::DEPTH_STENCIL));
+        assert!(!bind.contains(memory::SHADER_RESOURCE)); // TODO
+        assert!(!bind.contains(memory::UNORDERED_ACCESS)); // TODO
+        if bind.contains(memory::TRANSFER_SRC) {
+            buffer_usage |= cb::TRANSFER_SRC;
+        }
+        if bind.contains(memory::TRANSFER_DST) {
+            buffer_usage |= cb::TRANSFER_DST;
+        }
+
+        let buffer = self.raw.create_buffer(size, stride, buffer_usage)?;
+        let (buffer, memory) = allocator.allocate_buffer(self, usage, bind, buffer);
+        let info = buffer::Info { role, memory, size, stride };
+        Ok(Buffer::new(buffer, info, self.garbage.clone()).into())
+    }
+
+    pub fn create_buffer<T, A>(&mut self,
+        allocator: &mut A,
+        role: buffer::Role,
+        usage: memory::Usage,
+        bind: memory::Bind,
+        size: u64
+    ) -> Result<handle::Buffer<B, T>, buffer::CreationError>
+        where T: Copy, A: Allocator<B>
+    {
+        let stride = mem::size_of::<T>() as u64;
         self.create_buffer_raw(
+            allocator,
             role,
             usage,
             bind,
@@ -176,32 +253,59 @@ impl<B: Backend> Device<B> {
         ).map(Typed::new)
     }
 
-    #[allow(unused_variables)]
-    pub fn create_image_raw(&mut self,
+    pub fn create_image_raw<A>(&mut self,
+        allocator: &mut A,
         kind: image::Kind,
         mip_levels: image::Level,
         format: format::Format,
-        bind: memory::Bind,
-        usage: memory::Usage
+        usage: memory::Usage,
+        bind: memory::Bind
     ) -> Result<handle::raw::Image<B>, image::CreationError>
+        where A: Allocator<B>
     {
-        unimplemented!()
+        use core::image as ci;
+
+        let mut image_usage = ci::Usage::empty();
+
+        if bind.contains(memory::RENDER_TARGET) {
+            image_usage |= ci::COLOR_ATTACHMENT;
+        }
+        if bind.contains(memory::DEPTH_STENCIL) {
+            image_usage |= ci::DEPTH_STENCIL_ATTACHMENT;
+        }
+        if bind.contains(memory::SHADER_RESOURCE) {
+            image_usage |= ci::SAMPLED; // FIXME?
+        }
+        assert!(!bind.contains(memory::UNORDERED_ACCESS)); // TODO
+        if bind.contains(memory::TRANSFER_SRC) {
+            image_usage |= ci::TRANSFER_SRC;
+        }
+        if bind.contains(memory::TRANSFER_DST) {
+            image_usage |= ci::TRANSFER_DST;
+        }
+
+        let image = self.raw.create_image(kind, mip_levels, format, image_usage)?;
+        let (image, memory) = allocator.allocate_image(self, usage, bind, image);
+        let info = image::Info { kind, mip_levels, format, memory };
+        Ok(Image::new(image, info, self.garbage.clone()).into())
     }
 
-    pub fn create_image<F>(&mut self,
+    pub fn create_image<F, A>(&mut self,
+        allocator: &mut A,
         kind: image::Kind,
         mip_levels: image::Level,
-        bind: memory::Bind,
-        usage: memory::Usage
+        usage: memory::Usage,
+        bind: memory::Bind
     ) -> Result<handle::Image<B, F>, image::CreationError>
-        where F: format::Formatted
+        where F: format::Formatted, A: Allocator<B>
     {
         self.create_image_raw(
+            allocator,
             kind,
             mip_levels,
             F::get_format(),
-            bind,
-            usage
+            usage,
+            bind
         ).map(Typed::new)
     }
 
@@ -241,17 +345,10 @@ impl<B: Backend> Device<B> {
         format: format::Format,
         range: image::SubresourceRange
     ) -> Result<handle::raw::RenderTargetView<B>, TargetViewError> {
-        let info = image::Info {
-            kind,
-            levels: 1,
-            format: format.0,
-            bind: memory::RENDER_TARGET | memory::TRANSFER_SRC,
-            usage: memory::Usage::Data,
-        };
         self.raw.view_image_as_render_target(&image, format, range)
             .map(|rtv| RenderTargetView::new(
                 rtv,
-                handle::ViewSource::Backbuffer(image, info),
+                handle::ViewSource::Backbuffer(image, kind, format),
                 self.garbage.clone()
             ).into())
     }

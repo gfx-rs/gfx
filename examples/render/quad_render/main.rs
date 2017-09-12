@@ -13,7 +13,7 @@ extern crate gfx_backend_gl as back;
 extern crate winit;
 extern crate image;
 
-use core::{buffer, command, device as d, image as i, memory as m, pass, pso, pool, state};
+use core::{command, device as d, image as i, memory as m, pass, pso, pool, state};
 use core::{Adapter, Device, Instance};
 use core::{DescriptorPool, Primitive};
 use core::format::{Formatted, Srgba8 as ColorFormat, Vec2};
@@ -216,34 +216,25 @@ fn main() {
         device.create_framebuffer(&render_pass, &[frame_rtv], &[], extent)
     }).collect::<Vec<_>>();
 
-    let upload_heap =
-        context.ref_device().heap_types().iter().find(|&&heap_type| {
-            heap_type.properties.contains(m::CPU_VISIBLE | m::COHERENT)
-        })
-        .cloned()
-        .unwrap();
+    let mut allocator = gfx::allocators::BoxedAllocator::new(&context.ref_device());
+    println!("Memory types: {:?}", context.ref_device().heap_types());
+    println!("Memory heaps: {:?}", context.ref_device().memory_heaps());
 
-    // Buffer allocations
-    println!("Memory heaps: {:?}", context.ref_device().heap_types());
-
-    let heap = device.create_heap(&upload_heap, d::ResourceHeapType::Buffers, 1024).unwrap();
     let buffer_stride = std::mem::size_of::<Vertex>() as u64;
     let buffer_len = QUAD.len() as u64 * buffer_stride;
+    let vertex_buffer = context.mut_device().create_buffer::<Vertex, _>(
+        &mut allocator,
+        gfx::buffer::Role::Vertex,
+        gfx::memory::Usage::Upload,
+        gfx::memory::Bind::empty(),
+        QUAD.len() as u64
+    ).unwrap();
 
-    let vertex_buffer = {
-        let buffer = device.create_buffer(buffer_len, buffer_stride, buffer::VERTEX).unwrap();
-        println!("{:?}", buffer);
-        device.bind_buffer_memory(&heap, 0, buffer).unwrap()
-    };
-
-    // TODO: check transitions: read/write mapping and vertex buffer read
-    device.write_mapping::<Vertex>(&vertex_buffer, 0..buffer_len)
+    device.write_mapping::<Vertex>(vertex_buffer.resource(), 0..buffer_len)
           .unwrap()
           .copy_from_slice(&QUAD);
 
-    // Image
     let img_data = include_bytes!("../../core/quad/data/logo.png");
-
     let img = image::load(Cursor::new(&img_data[..]), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
     let kind = i::Kind::D2(width as i::Size, height as i::Size, i::AaMode::Single);
@@ -253,15 +244,18 @@ fn main() {
     let upload_size = (height * row_pitch) as u64;
     println!("upload row pitch {}, total size {}", row_pitch, upload_size);
 
-    let image_upload_heap = device.create_heap(&upload_heap, d::ResourceHeapType::Buffers, upload_size).unwrap();
-    let image_upload_buffer = {
-        let buffer = device.create_buffer(upload_size, image_stride as u64, buffer::TRANSFER_SRC).unwrap();
-        device.bind_buffer_memory(&image_upload_heap, 0, buffer).unwrap()
-    };
+    let image_upload_buffer = context.mut_device().create_buffer_raw(
+        &mut allocator,
+        gfx::buffer::Role::Staging,
+        gfx::memory::Usage::Upload,
+        gfx::memory::TRANSFER_SRC,
+        upload_size,
+        image_stride as u64
+    ).unwrap();
 
-    // copy image data into staging buffer
+    println!("copy image data into staging buffer");
     {
-        let mut mapping = device.write_mapping::<u8>(&image_upload_buffer, 0..upload_size).unwrap();
+        let mut mapping = device.write_mapping::<u8>(image_upload_buffer.resource(), 0..upload_size).unwrap();
         for y in 0 .. height as usize {
             let row = &(*img)[y*(width as usize)*image_stride .. (y+1)*(width as usize)*image_stride];
             let dest_base = y * row_pitch as usize;
@@ -269,20 +263,19 @@ fn main() {
         }
     }
 
-    let image = device.create_image(kind, 1, ColorFormat::get_format(), i::TRANSFER_DST | i::SAMPLED).unwrap(); // TODO: usage
-    println!("{:?}", image);
-    let image_req = device.get_image_requirements(&image);
+    let image = context.mut_device().create_image::<ColorFormat, _>(
+        &mut allocator,
+        kind,
+        1,
+        gfx::memory::Usage::Data,
+        gfx::memory::TRANSFER_DST | gfx::memory::SHADER_RESOURCE,
+    ).unwrap();
 
-    let device_heap = context.ref_device().heap_types().iter()
-        .find(|&&heap_type| heap_type.properties.contains(m::DEVICE_LOCAL))
-        .cloned()
+    let image_srv = context.mut_device()
+        .view_image_as_shader_resource(&image)
         .unwrap();
-    let image_heap = device.create_heap(&device_heap, d::ResourceHeapType::Images, image_req.size).unwrap();
 
-    let image_logo = device.bind_image_memory(&image_heap, 0, image).unwrap();
-    let image_srv = device.view_image_as_shader_resource(&image_logo, ColorFormat::get_format()).unwrap();
-
-    let sampler = device.create_sampler(
+    let sampler = context.mut_device().create_sampler(
         i::SamplerInfo::new(
             i::FilterMethod::Bilinear,
             i::WrapMode::Clamp,
@@ -294,13 +287,13 @@ fn main() {
             set: &set0[0],
             binding: 0,
             array_offset: 0,
-            write: pso::DescriptorWrite::SampledImage(vec![(&image_srv, i::ImageLayout::Undefined)]),
+            write: pso::DescriptorWrite::SampledImage(vec![(image_srv.resource(), i::ImageLayout::Undefined)]),
         },
         pso::DescriptorSetWrite {
             set: &set1[0],
             binding: 0,
             array_offset: 0,
-            write: pso::DescriptorWrite::Sampler(vec![&sampler]),
+            write: pso::DescriptorWrite::Sampler(vec![sampler.resource()]),
         },
     ]);
 
@@ -316,9 +309,10 @@ fn main() {
     };
 
     let mut fence = device.create_fence(false);
-    let mut graphics_pool = context.mut_queue().create_graphics_pool(16, pool::CommandPoolCreateFlags::empty());
+    let mut graphics_pool = context.mut_queue()
+        .create_graphics_pool(16, pool::CommandPoolCreateFlags::empty());
 
-    // copy buffer to texture
+    println!("copy buffer to texture");
     {
         let submit = {
             let mut cmd_buffer = graphics_pool.acquire_command_buffer();
@@ -326,14 +320,14 @@ fn main() {
             let image_barrier = m::Barrier::Image {
                 states: (i::Access::empty(), i::ImageLayout::Undefined) ..
                         (i::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal),
-                target: &image_logo,
+                target: image.resource(),
                 range: (0..1, 0..1),
             };
             cmd_buffer.pipeline_barrier(pso::TOP_OF_PIPE .. pso::TRANSFER, &[image_barrier]);
 
             cmd_buffer.copy_buffer_to_image(
-                &image_upload_buffer,
-                &image_logo,
+                image_upload_buffer.resource(),
+                image.resource(),
                 i::ImageLayout::TransferDstOptimal,
                 &[command::BufferImageCopy {
                     buffer_offset: 0,
@@ -348,7 +342,7 @@ fn main() {
             let image_barrier = m::Barrier::Image {
                 states: (i::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal) ..
                         (i::SHADER_READ, i::ImageLayout::ShaderReadOnlyOptimal),
-                target: &image_logo,
+                target: image.resource(),
                 range: (0..1, 0..1),
             };
             cmd_buffer.pipeline_barrier(pso::TRANSFER .. pso::BOTTOM_OF_PIPE, &[image_barrier]);
@@ -365,10 +359,6 @@ fn main() {
 
     device.destroy_fence(fence);
 
-    // not really needed, the transitions are covered by the render pass
-    //Note: the actual stages are unlikely correct, need verifying
-    let do_barriers = false;
-    //
     let mut running = true;
     while running {
         events_loop.poll_events(|event| {
@@ -394,24 +384,10 @@ fn main() {
             {
             let cmd_buffer = encoder.mut_buffer();
 
-            let rtv = match backbuffers[frame.id()].color.info() {
-                &gfx::handle::ViewSource::Backbuffer(ref img, _) => img,
-                _ => unreachable!(),
-            };
-            if do_barriers {
-                let rtv_target_barrier = m::Barrier::Image {
-                    states: (i::Access::empty(), i::ImageLayout::Undefined) ..
-                            (i::COLOR_ATTACHMENT_WRITE, i::ImageLayout::ColorAttachmentOptimal),
-                    target: rtv,
-                    range: (0..1, 0..1),
-                };
-                cmd_buffer.pipeline_barrier(pso::TRANSFER .. pso::PIXEL_SHADER, &[rtv_target_barrier]);
-            }
-
             cmd_buffer.set_viewports(&[viewport]);
             cmd_buffer.set_scissors(&[scissor]);
             cmd_buffer.bind_graphics_pipeline(&pipelines[0].as_ref().unwrap());
-            cmd_buffer.bind_vertex_buffers(pso::VertexBufferSet(vec![(&vertex_buffer, 0)]));
+            cmd_buffer.bind_vertex_buffers(pso::VertexBufferSet(vec![(vertex_buffer.resource(), 0)]));
             cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, &[&set0[0], &set1[0]]); //TODO
 
             {
@@ -424,16 +400,6 @@ fn main() {
                 encoder.draw(0..6, 0..1);
             }
 
-            if do_barriers {
-                let rtv_present_barrier = m::Barrier::Image {
-                    states: (i::COLOR_ATTACHMENT_WRITE, i::ImageLayout::ColorAttachmentOptimal) ..
-                            (i::Access::empty(), i::ImageLayout::Present),
-                    target: rtv,
-                    range: (0..1, 0..1),
-                };
-                cmd_buffer.pipeline_barrier(pso::PIXEL_SHADER .. pso::TRANSFER, &[rtv_present_barrier]);
-            }
-
             }
             encoder.finish()
         };
@@ -441,7 +407,7 @@ fn main() {
         context.present(vec![submit]);
     }
 
-    // cleanup!
+    println!("cleanup!");
     device.destroy_descriptor_pool(srv_pool);
     device.destroy_descriptor_pool(sampler_pool);
     device.destroy_descriptor_set_layout(set0_layout);
@@ -450,14 +416,6 @@ fn main() {
     device.destroy_shader_module(fs_module);
     device.destroy_pipeline_layout(pipeline_layout);
     device.destroy_renderpass(render_pass);
-    device.destroy_heap(heap);
-    device.destroy_heap(image_heap);
-    device.destroy_heap(image_upload_heap);
-    device.destroy_buffer(vertex_buffer);
-    device.destroy_buffer(image_upload_buffer);
-    device.destroy_image(image_logo);
-    device.destroy_shader_resource_view(image_srv);
-    device.destroy_sampler(sampler);
     for pipeline in pipelines {
         if let Ok(pipeline) = pipeline {
             device.destroy_graphics_pipeline(pipeline);

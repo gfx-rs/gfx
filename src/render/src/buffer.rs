@@ -1,8 +1,7 @@
-use std::fmt;
-use std::error::Error;
+use memory::Memory;
 
-use memory;
-
+pub use core::buffer::CreationError;
+/* TODO
 /// Error creating a buffer.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum CreationError {
@@ -34,22 +33,20 @@ impl Error for CreationError {
         }
     }
 }
+*/
 
 /// An information block that is immutable and associated to each buffer.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[derive(Debug)]
 pub struct Info {
     /// Role
     pub role: Role,
-    /// Usage
-    pub usage: memory::Usage,
-    /// Bind flags
-    pub bind: memory::Bind,
+    /// Memory
+    pub memory: Memory,
     /// Size in bytes
-    pub size: usize,
+    pub size: u64,
     /// Stride of a single element, in bytes. Only used for structured buffers
     /// that you use via shader resource / unordered access views.
-    pub stride: usize,
+    pub stride: u64,
     // TODO: do we need things from buffer::Usage ?
     // TODO: mapping stuff
 }

@@ -202,7 +202,7 @@ pub struct ShaderError;
 /// - [Device::view_buffer_as_unordered_access](trait.Device.html#method.view_buffer_as_unordered_access).
 ///
 #[allow(missing_docs)]
-pub trait Device<B: Backend> {
+pub trait Device<B: Backend>: Clone {
     /// Returns the features of this `Device`. This usually depends on the graphics API being
     /// used.
     fn get_features(&self) -> &Features;
