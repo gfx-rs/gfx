@@ -78,6 +78,7 @@ impl core::RawCommandQueue<Backend> for CommandQueue {
 }
 
 /// Dummy device doing nothing.
+#[derive(Clone)]
 pub struct Device;
 impl core::Device<Backend> for Device {
     fn get_features(&self) -> &core::Features {
