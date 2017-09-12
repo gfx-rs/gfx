@@ -116,13 +116,13 @@ impl fmt::Debug for Memory {
 pub trait Allocator<B: Backend> {
     fn allocate_buffer(&mut self,
         device: &mut Device<B>,
-        usage: &buffer::Usage,
+        usage: buffer::Usage,
         buffer: B::UnboundBuffer
     ) -> (B::Buffer, Memory);
     
     fn allocate_image(&mut self,
         device: &mut Device<B>,
-        usage: &image::Usage,
+        usage: image::Usage,
         image: B::UnboundImage
     ) -> (B::Image, Memory);
 }
