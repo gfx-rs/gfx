@@ -281,6 +281,18 @@ bitflags!(
     }
 );
 
+impl Usage {
+    /// Can this image be used in transfer operations ?
+    pub fn can_transfer(&self) -> bool {
+        self.intersects(TRANSFER_SRC | TRANSFER_DST)
+    }
+
+    /// Can this image be used as a target ?
+    pub fn can_target(&self) -> bool {
+        self.intersects(COLOR_ATTACHMENT | DEPTH_STENCIL_ATTACHMENT)
+    }
+}
+
 /// Describes a subvolume of a texture, which image data can be uploaded into.
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]

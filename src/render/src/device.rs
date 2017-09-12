@@ -167,6 +167,7 @@ impl<B: Backend> Device<B> {
     }
 
     // TODO: shouldn't need coherency if we handle invalidation/flush
+    // TODO: fallbacks when out of memory
 
     pub fn find_data_heap(&self) -> Option<HeapType> {
         self.find_heap(|props| {
@@ -196,48 +197,21 @@ impl<B: Backend> Device<B> {
 
     pub fn create_buffer_raw<A>(&mut self,
         allocator: &mut A,
-        role: buffer::Role,
-        usage: memory::Usage,
-        bind: memory::Bind,
+        usage: buffer::Usage,
         size: u64,
         stride: u64
     ) -> Result<handle::raw::Buffer<B>, buffer::CreationError>
         where A: Allocator<B>
     {
-        use core::buffer as cb;
-
-        let mut buffer_usage = cb::Usage::empty();
-
-        use buffer::Role::*;
-        match role {
-            Vertex => buffer_usage |= cb::VERTEX,
-            Index => buffer_usage |= cb::INDEX,
-            Constant => buffer_usage |= cb::CONSTANT,
-            Staging => {}
-        }
-
-        assert!(!bind.contains(memory::RENDER_TARGET));
-        assert!(!bind.contains(memory::DEPTH_STENCIL));
-        assert!(!bind.contains(memory::SHADER_RESOURCE)); // TODO
-        assert!(!bind.contains(memory::UNORDERED_ACCESS)); // TODO
-        if bind.contains(memory::TRANSFER_SRC) {
-            buffer_usage |= cb::TRANSFER_SRC;
-        }
-        if bind.contains(memory::TRANSFER_DST) {
-            buffer_usage |= cb::TRANSFER_DST;
-        }
-
-        let buffer = self.raw.create_buffer(size, stride, buffer_usage)?;
-        let (buffer, memory) = allocator.allocate_buffer(self, usage, bind, buffer);
-        let info = buffer::Info { role, memory, size, stride };
+        let buffer = self.raw.create_buffer(size, stride, usage)?;
+        let (buffer, memory) = allocator.allocate_buffer(self, &usage, buffer);
+        let info = buffer::Info { usage, memory, size, stride };
         Ok(Buffer::new(buffer, info, self.garbage.clone()).into())
     }
 
     pub fn create_buffer<T, A>(&mut self,
         allocator: &mut A,
-        role: buffer::Role,
-        usage: memory::Usage,
-        bind: memory::Bind,
+        usage: buffer::Usage,
         size: u64
     ) -> Result<handle::Buffer<B, T>, buffer::CreationError>
         where T: Copy, A: Allocator<B>
@@ -245,9 +219,7 @@ impl<B: Backend> Device<B> {
         let stride = mem::size_of::<T>() as u64;
         self.create_buffer_raw(
             allocator,
-            role,
             usage,
-            bind,
             size * stride,
             stride
         ).map(Typed::new)
@@ -255,57 +227,33 @@ impl<B: Backend> Device<B> {
 
     pub fn create_image_raw<A>(&mut self,
         allocator: &mut A,
+        usage: image::Usage,
         kind: image::Kind,
         mip_levels: image::Level,
-        format: format::Format,
-        usage: memory::Usage,
-        bind: memory::Bind
+        format: format::Format
     ) -> Result<handle::raw::Image<B>, image::CreationError>
         where A: Allocator<B>
     {
-        use core::image as ci;
-
-        let mut image_usage = ci::Usage::empty();
-
-        if bind.contains(memory::RENDER_TARGET) {
-            image_usage |= ci::COLOR_ATTACHMENT;
-        }
-        if bind.contains(memory::DEPTH_STENCIL) {
-            image_usage |= ci::DEPTH_STENCIL_ATTACHMENT;
-        }
-        if bind.contains(memory::SHADER_RESOURCE) {
-            image_usage |= ci::SAMPLED; // FIXME?
-        }
-        assert!(!bind.contains(memory::UNORDERED_ACCESS)); // TODO
-        if bind.contains(memory::TRANSFER_SRC) {
-            image_usage |= ci::TRANSFER_SRC;
-        }
-        if bind.contains(memory::TRANSFER_DST) {
-            image_usage |= ci::TRANSFER_DST;
-        }
-
-        let image = self.raw.create_image(kind, mip_levels, format, image_usage)?;
-        let (image, memory) = allocator.allocate_image(self, usage, bind, image);
-        let info = image::Info { kind, mip_levels, format, memory };
+        let image = self.raw.create_image(kind, mip_levels, format, usage)?;
+        let (image, memory) = allocator.allocate_image(self, &usage, image);
+        let info = image::Info { usage, kind, mip_levels, format, memory };
         Ok(Image::new(image, info, self.garbage.clone()).into())
     }
 
     pub fn create_image<F, A>(&mut self,
         allocator: &mut A,
+        usage: image::Usage,
         kind: image::Kind,
         mip_levels: image::Level,
-        usage: memory::Usage,
-        bind: memory::Bind
     ) -> Result<handle::Image<B, F>, image::CreationError>
         where F: format::Formatted, A: Allocator<B>
     {
         self.create_image_raw(
             allocator,
+            usage,
             kind,
             mip_levels,
-            F::get_format(),
-            usage,
-            bind
+            F::get_format()
         ).map(Typed::new)
     }
 
