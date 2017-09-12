@@ -1,7 +1,7 @@
 extern crate env_logger;
 extern crate gfx_core as core;
 #[cfg(feature = "dx12")]
-extern crate gfx_device_dx12 as back;
+extern crate gfx_backend_dx12 as back;
 #[cfg(feature = "vulkan")]
 extern crate gfx_backend_vulkan as back;
 #[cfg(feature = "metal")]
@@ -47,19 +47,47 @@ const QUAD: [Vertex; 6] = [
 fn main() {
     env_logger::init().unwrap();
     let mut events_loop = winit::EventsLoop::new();
-    let window = winit::WindowBuilder::new()
+    let wb = winit::WindowBuilder::new()
         .with_dimensions(1024, 768)
         .with_title("quad".to_string())
+
+    #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
+    let window = wb
         .build(&events_loop)
         .unwrap();
+    #[cfg(feature = "gl")]
+    let window = {
+        use core::format::ChannelType;
+
+        let color_format = ColorFormat::get_format();
+        let color_total_bits = color_format.0.get_total_bits();
+        let alpha_bits = color_format.0.get_alpha_stencil_bits();
+        let builder = glutin::ContextBuilder::new()
+            .with_vsync(true)
+            .with_pixel_format(color_total_bits - alpha_bits, alpha_bits)
+            .with_srgb(color_format.1 == ChannelType::Srgb);
+        glutin::GlWindow::new(wb, builder, &events_loop).unwrap()
+    };
+
     let window_size = window.get_inner_size_pixels().unwrap();
     let pixel_width = window_size.0 as u16;
     let pixel_height = window_size.1 as u16;
 
     // instantiate backend
-    let instance = back::Instance::create("gfx-rs quad", 1);
-    let mut surface = instance.create_surface(&window);
-    let adapters = instance.enumerate_adapters();
+    #[cfg(any(feature = "vulkan", feature = "dx12"))]
+    let (_instance, adapters, mut surface) = {
+        let instance = back::Instance::create("gfx-rs quad", 1);
+        let surface = instance.create_surface(&window);
+        let adapters = instance.enumerate_adapters();
+        (instance, adapters, surface)
+    };
+    #[cfg(feature = "gl")]
+    let (adapters, mut surface) = {
+        let surface = back::Surface::from_window(window);
+        let adapters = surface.enumerate_adapters();
+        (adapters, surface)
+    };
+
     for adapter in &adapters {
         println!("{:?}", adapter.get_info());
     }
@@ -173,7 +201,7 @@ fn main() {
     });
 
     pipeline_desc.attributes.push(pso::AttributeDesc {
-        location: 1,
+        location: 0,
         binding: 0,
         element: pso::Element {
             format: <Vec2<f32> as Formatted>::get_format(),
@@ -181,7 +209,7 @@ fn main() {
         },
     });
     pipeline_desc.attributes.push(pso::AttributeDesc {
-        location: 0,
+        location: 1,
         binding: 0,
         element: pso::Element {
             format: <Vec2<f32> as Formatted>::get_format(),
@@ -298,6 +326,8 @@ fn main() {
         )
     );
 
+    // TODO:
+    /*
     device.update_descriptor_sets(&[
         pso::DescriptorSetWrite {
             set: &set0[0],
@@ -312,6 +342,7 @@ fn main() {
             write: pso::DescriptorWrite::Sampler(vec![&sampler]),
         },
     ]);
+    */
 
     // Rendering setup
     let viewport = core::Viewport {
@@ -374,7 +405,7 @@ fn main() {
     }
 
     // not really needed, the transitions are covered by the render pass
-    //Note: the actual stages are unlikely correct, need verifying
+    // Note: the actual stages are unlikely correct, need verifying
     let do_barriers = false;
     //
     let mut running = true;

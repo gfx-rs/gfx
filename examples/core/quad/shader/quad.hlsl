@@ -6,7 +6,7 @@ struct VsOutput {
     float2 uv: TEXCOORD;
 };
 
-VsOutput vs_main(float2 pos: a_Pos, float2 uv: a_Uv) {
+VsOutput vs_main(float2 pos: ATTRIB0, float2 uv: ATTRIB1) {
     // Texture coordinates are in OpenGL/Vulkan (origin bottom left)
     // convert them to HLSL (origin top left)
     VsOutput output = {
