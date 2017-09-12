@@ -26,47 +26,6 @@ pub enum Usage {
 }
 
 bitflags!(
-    /// Flags providing information about the usage of a resource.
-    ///
-    /// A `Bind` value can be a combination of the following bit patterns:
-    ///
-    /// - [`RENDER_TARGET`](constant.RENDER_TARGET.html)
-    /// - [`DEPTH_STENCIL`](constant.DEPTH_STENCIL.html)
-    /// - [`SHADER_RESOURCE`](constant.SHADER_RESOURCE.html)
-    /// - [`UNORDERED_ACCESS`](constant.UNORDERED_ACCESS.html)
-    /// - [`TRANSFER_SRC`](constant.TRANSFER_SRC.html)
-    /// - [`TRANSFER_DST`](constant.TRANSFER_DST.html)
-    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-    pub flags Bind: u8 {
-        /// Can be rendered into.
-        const RENDER_TARGET    = 0x1,
-        /// Can serve as a depth/stencil target.
-        const DEPTH_STENCIL    = 0x2,
-        /// Can be bound to the shader for reading.
-        const SHADER_RESOURCE  = 0x4,
-        /// Can be bound to the shader for writing.
-        const UNORDERED_ACCESS = 0x8,
-        /// Can be transfered from.
-        const TRANSFER_SRC     = 0x10,
-        /// Can be transfered into.
-        const TRANSFER_DST     = 0x20,
-    }
-);
-
-impl Bind {
-    /// Is this memory bound to be a target ?
-    pub fn is_target(&self) -> bool {
-        self.intersects(RENDER_TARGET | DEPTH_STENCIL)
-    }
-
-    /// Is this memory bound to be mutated ?
-    pub fn is_mutable(&self) -> bool {
-        let mutable = TRANSFER_DST | UNORDERED_ACCESS | RENDER_TARGET | DEPTH_STENCIL;
-        self.intersects(mutable)
-    }
-}
-
-bitflags!(
     /// Flags providing information about the type of memory access to a resource.
     ///
     /// An `Access` value can be a combination of the the following bit patterns:
