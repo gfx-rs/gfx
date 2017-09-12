@@ -506,6 +506,9 @@ impl Device {
                         self.unbind_target(point, att);
                     }
                 }
+                if pts.depth.is_none() || pts.stencil.is_none() {
+                    self.unbind_target(point, gl::DEPTH_STENCIL_ATTACHMENT);
+                }
                 if let Some(ref depth) = pts.depth {
                     self.bind_target(point, gl::DEPTH_ATTACHMENT, depth);
                 }
