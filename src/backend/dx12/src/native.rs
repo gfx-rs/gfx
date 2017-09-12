@@ -2,11 +2,13 @@
 use core::pass::{Attachment, AttachmentRef};
 use core::pso::DescriptorSetLayoutBinding;
 use core::{self, image, pso, HeapType};
+use free_list;
 use winapi::{self, UINT};
 use wio::com::ComPtr;
 use Backend;
 
 use std::collections::BTreeMap;
+use std::ops::Range;
 
 #[derive(Debug, Hash)]
 pub struct ShaderModule {
@@ -134,12 +136,13 @@ pub struct DualHandle {
     pub gpu: winapi::D3D12_GPU_DESCRIPTOR_HANDLE,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct DescriptorHeap {
     pub raw: ComPtr<winapi::ID3D12DescriptorHeap>,
     pub handle_size: u64,
     pub total_handles: u64,
     pub start: DualHandle,
+    pub allocator: free_list::Allocator,
 }
 
 impl DescriptorHeap {
@@ -169,12 +172,19 @@ impl DescriptorCpuPool {
     }
 }
 
+/// Slice of an descriptor heap, which is allocated for a pool.
+/// Pools will create descriptor sets inside this slice.
+#[derive(Debug)]
+pub struct DescriptorHeapSlice {
+    pub heap: ComPtr<winapi::ID3D12DescriptorHeap>,
+    pub range: Range<u64>,
+}
+
 #[derive(Debug)]
 pub struct DescriptorPool {
-    pub heap_srv_cbv_uav: DescriptorHeap,
-    pub heap_sampler: DescriptorHeap,
+    pub heap_srv_cbv_uav: DescriptorHeapSlice,
+    pub heap_sampler: DescriptorHeapSlice,
     pub pools: Vec<pso::DescriptorRangeDesc>,
-    pub offset: u64,
     pub max_size: u64,
 }
 
