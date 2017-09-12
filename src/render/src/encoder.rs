@@ -1,4 +1,4 @@
-//! Graphics commands encoder.
+//! Commands encoder.
 
 use std::error::Error;
 use std::any::Any;
@@ -7,20 +7,20 @@ use std::sync::mpsc;
 
 use core::{self, CommandPool};
 use core::command::CommandBuffer;
-use memory::{Usage, DropDelayed, DropDelayer};
+use memory::{Usage, Provider, Dependency};
 use {handle, image, Backend};
 
-pub struct Pool<B: Backend, C>(DropDelayed<PoolInner<B, C>>);
+pub struct Pool<B: Backend, C>(Provider<PoolInner<B, C>>);
 
 #[derive(Clone)]
-pub(crate) struct PoolDependency<B: Backend, C>(DropDelayer<PoolInner<B, C>>);
+pub(crate) struct PoolDependency<B: Backend, C>(Dependency<PoolInner<B, C>>);
 
 impl<B: Backend, C> Pool<B, C> {
     pub(crate) fn new(
         inner: CommandPool<B, C>,
         sender: CommandPoolSender<B, C>
     ) -> Self {
-        Pool(DropDelayed::new(PoolInner { inner: Some(inner), sender }))
+        Pool(Provider::new(PoolInner { inner: Some(inner), sender }))
     }
 
     fn mut_inner<'a>(&'a mut self) -> &'a mut CommandPool<B, C> {
@@ -33,7 +33,7 @@ impl<B: Backend, C> Pool<B, C> {
 
     pub fn acquire_encoder<'a>(&'a mut self) -> Encoder<'a, B, C> {
         Encoder {
-            pool: PoolDependency(self.0.drop_delayer()),
+            pool: PoolDependency(self.0.dependency()),
             buffer: self.mut_inner().acquire_command_buffer(),
             // raw_data: pso::RawDataSet::new(),
             // access_info: command::AccessInfo::new(),
