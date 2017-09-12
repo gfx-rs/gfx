@@ -204,7 +204,7 @@ impl<B: Backend> Device<B> {
         where A: Allocator<B>
     {
         let buffer = self.raw.create_buffer(size, stride, usage)?;
-        let (buffer, memory) = allocator.allocate_buffer(self, &usage, buffer);
+        let (buffer, memory) = allocator.allocate_buffer(self, usage, buffer);
         let info = buffer::Info { usage, memory, size, stride };
         Ok(Buffer::new(buffer, info, self.garbage.clone()).into())
     }
@@ -235,7 +235,7 @@ impl<B: Backend> Device<B> {
         where A: Allocator<B>
     {
         let image = self.raw.create_image(kind, mip_levels, format, usage)?;
-        let (image, memory) = allocator.allocate_image(self, &usage, image);
+        let (image, memory) = allocator.allocate_image(self, usage, image);
         let info = image::Info { usage, kind, mip_levels, format, memory };
         Ok(Image::new(image, info, self.garbage.clone()).into())
     }
