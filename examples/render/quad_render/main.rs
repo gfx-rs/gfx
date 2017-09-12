@@ -20,6 +20,7 @@ use core::format::{Formatted, Srgba8 as ColorFormat, Vec2};
 use core::pass::Subpass;
 use core::queue::Submission;
 use core::target::Rect;
+use gfx::allocators::BoxedAllocator as Allocator;
 
 use std::io::Cursor;
 
@@ -216,17 +217,20 @@ fn main() {
         device.create_framebuffer(&render_pass, &[frame_rtv], &[], extent)
     }).collect::<Vec<_>>();
 
-    let mut allocator = gfx::allocators::BoxedAllocator::new(&context.ref_device());
+    let mut upload = Allocator::new(
+        gfx::memory::Usage::Upload,
+        &context.ref_device());
+    let mut data = Allocator::new(
+        gfx::memory::Usage::Data,
+        &context.ref_device());
     println!("Memory types: {:?}", context.ref_device().heap_types());
     println!("Memory heaps: {:?}", context.ref_device().memory_heaps());
 
     let buffer_stride = std::mem::size_of::<Vertex>() as u64;
     let buffer_len = QUAD.len() as u64 * buffer_stride;
     let vertex_buffer = context.mut_device().create_buffer::<Vertex, _>(
-        &mut allocator,
-        gfx::buffer::Role::Vertex,
-        gfx::memory::Usage::Upload,
-        gfx::memory::Bind::empty(),
+        &mut upload,
+        gfx::buffer::VERTEX,
         QUAD.len() as u64
     ).unwrap();
 
@@ -245,10 +249,8 @@ fn main() {
     println!("upload row pitch {}, total size {}", row_pitch, upload_size);
 
     let image_upload_buffer = context.mut_device().create_buffer_raw(
-        &mut allocator,
-        gfx::buffer::Role::Staging,
-        gfx::memory::Usage::Upload,
-        gfx::memory::TRANSFER_SRC,
+        &mut upload,
+        gfx::buffer::TRANSFER_SRC,
         upload_size,
         image_stride as u64
     ).unwrap();
@@ -264,11 +266,10 @@ fn main() {
     }
 
     let image = context.mut_device().create_image::<ColorFormat, _>(
-        &mut allocator,
+        &mut data,
+        gfx::image::TRANSFER_DST | gfx::image::SAMPLED,
         kind,
         1,
-        gfx::memory::Usage::Data,
-        gfx::memory::TRANSFER_DST | gfx::memory::SHADER_RESOURCE,
     ).unwrap();
 
     let image_srv = context.mut_device()
