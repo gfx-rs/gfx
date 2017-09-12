@@ -129,6 +129,7 @@ pub mod handle;
 mod device;
 pub mod encoder;
 pub mod memory;
+pub mod allocators;
 pub mod buffer;
 pub mod image;
 /*
@@ -183,7 +184,7 @@ pub struct Context<B: Backend, C>
     swapchain: B::Swapchain,
     frame_bundles: VecDeque<FrameBundle<B, C>>,
     frame_acquired: Option<FrameBundle<B, C>>,
-    garbage: handle::GarbageReceiver<B>,
+    garbage: handle::GarbageCollector<B>,
 }
 
 pub struct Backbuffer<B: Backend, Cf: RenderFormat> {
@@ -225,16 +226,14 @@ trait Capability: Sized {
     fn open<B: Backend>(
         surface: &B::Surface,
         adapter: &B::Adapter,
-        garbage: handle::GarbageSender<B>
-    ) -> (Device<B>, Queue<B, Self>);
+    ) -> (Device<B>, Queue<B, Self>, handle::GarbageCollector<B>);
 }
 
 impl Capability for core::General {
     fn open<B: Backend>(
         surface: &B::Surface,
         adapter: &B::Adapter,
-        garbage: handle::GarbageSender<B>
-    ) -> (Device<B>, Queue<B, Self>) {
+    ) -> (Device<B>, Queue<B, Self>, handle::GarbageCollector<B>) {
         let core::Gpu {
             device,
             mut general_queues,
@@ -251,9 +250,9 @@ impl Capability for core::General {
             }
         });
 
-        let device = Device::new(device, heap_types, memory_heaps, garbage);
+        let (device, garbage) = Device::new(device, heap_types, memory_heaps);
         let queue = Queue::new(general_queues.remove(0));
-        (device, queue)
+        (device, queue, garbage)
     }
 }
 
@@ -261,8 +260,7 @@ impl Capability for core::Graphics {
     fn open<B: Backend>(
         surface: &B::Surface,
         adapter: &B::Adapter,
-        garbage: handle::GarbageSender<B>
-    ) -> (Device<B>, Queue<B, Self>) {
+    ) -> (Device<B>, Queue<B, Self>, handle::GarbageCollector<B>) {
         let core::Gpu {
             device,
             mut graphics_queues,
@@ -277,9 +275,9 @@ impl Capability for core::Graphics {
             }
         });
 
-        let device = Device::new(device, heap_types, memory_heaps, garbage);
+        let (device, garbage) = Device::new(device, heap_types, memory_heaps);
         let queue = Queue::new(graphics_queues.remove(0));
-        (device, queue)
+        (device, queue, garbage)
     }
 }
 
@@ -312,8 +310,7 @@ impl<B: Backend, C> Context<B, C>
         -> (Self, Vec<Backbuffer<B, Cf>>)
         where Cf: RenderFormat, C: Capability
     {
-        let (garbage_sender, garbage_receiver) = handle::garbage_channel();
-        let (mut device, queue) = Capability::open(&surface, adapter, garbage_sender);
+        let (mut device, queue, garbage) = Capability::open(&surface, adapter);
 
         let swap_config = core::SwapchainConfig::new()
             .with_color::<Cf>();
@@ -350,7 +347,7 @@ impl<B: Backend, C> Context<B, C>
             swapchain,
             frame_bundles,
             frame_acquired: None,
-            garbage: garbage_receiver,
+            garbage,
         }, backbuffers)
     }
 
@@ -378,7 +375,7 @@ impl<B: Backend, C> Context<B, C>
         );
         self.frame_acquired = Some(bundle);
 
-        self.cleanup();
+        self.garbage.collect();
         frame
     }
 
@@ -413,24 +410,6 @@ impl<B: Backend, C> Context<B, C>
             &[&bundle.signal_semaphore]);
 
         self.frame_bundles.push_back(bundle);
-    }
-
-    fn cleanup(&mut self) {
-        let dev = self.device.mut_raw();
-        for garbage in self.garbage.try_iter() {
-            use handle::Garbage::*;
-            match garbage {
-                // ShaderLib(sl) => dev.destroy_shader_lib(sl),
-                Buffer(b) => dev.destroy_buffer(b),
-                Image(i) => dev.destroy_image(i),
-                RenderTargetView(rtv) => dev.destroy_render_target_view(rtv),
-                DepthStencilView(dsv) => dev.destroy_depth_stencil_view(dsv),
-                ConstantBufferView(cbv) => dev.destroy_constant_buffer_view(cbv),
-                ShaderResourceView(srv) => dev.destroy_shader_resource_view(srv),
-                UnorderedAccessView(uav) => dev.destroy_unordered_access_view(uav),
-                Sampler(s) => dev.destroy_sampler(s),
-            }
-        }
     }
 
     fn wait_idle(&mut self) {
@@ -473,8 +452,7 @@ impl<B: Backend, C> Drop for Context<B, C>
 {
     fn drop(&mut self) {
         self.wait_idle();
-        // FIXME?: leak if handles are still in use outside
-        self.cleanup();
+        self.garbage.collect();
 
         let device = self.device.mut_raw();
         for bundle in self.frame_bundles.drain(..) {

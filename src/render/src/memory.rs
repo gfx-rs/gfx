@@ -1,7 +1,11 @@
 pub use core::memory::{Pod, cast_slice};
 
 use std::marker::PhantomData;
-use std::{ops, cmp, hash};
+use std::{ops, cmp, fmt, hash};
+use std::sync::Arc;
+use std::cell::UnsafeCell;
+
+use {Backend, Device};
 
 /// How this memory will be used regarding GPU-CPU data flow.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -17,6 +21,7 @@ pub enum Usage {
     /// GPU to CPU data flow with mapping.
     /// Used for staging for download from GPU.
     Download,
+    // TODO: Hybrid,
 }
 
 bitflags!(
@@ -48,6 +53,11 @@ bitflags!(
 );
 
 impl Bind {
+    /// Is this memory bound to be a target ?
+    pub fn is_target(&self) -> bool {
+        self.intersects(RENDER_TARGET | DEPTH_STENCIL)
+    }
+
     /// Is this memory bound to be mutated ?
     pub fn is_mutable(&self) -> bool {
         let mutable = TRANSFER_DST | UNORDERED_ACCESS | RENDER_TARGET | DEPTH_STENCIL;
@@ -76,6 +86,52 @@ bitflags!(
         const RW    = 0x3,
     }
 );
+
+pub type ReleaseFn = Box<FnMut()>; // TODO?: FnOnce
+pub struct Memory {
+    release: ReleaseFn,
+    pub usage: Usage,
+    pub bind: Bind,
+}
+
+impl Memory {
+    pub fn new(
+        release: ReleaseFn,
+        usage: Usage,
+        bind: Bind
+    ) -> Self {
+        Memory { release, usage, bind }
+    }
+}
+
+impl Drop for Memory {
+    fn drop(&mut self) {
+        (self.release)();
+    }
+}
+
+impl fmt::Debug for Memory {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "Memory {{ usage: {:?}, bind: {:?}, .. }}", self.usage, self.bind)
+    }
+}
+
+// TODO: errors
+pub trait Allocator<B: Backend> {
+    fn allocate_buffer(&mut self,
+        device: &mut Device<B>,
+        usage: Usage,
+        bind: Bind,
+        buffer: B::UnboundBuffer
+    ) -> (B::Buffer, Memory);
+    
+    fn allocate_image(&mut self,
+        device: &mut Device<B>,
+        usage: Usage,
+        bind: Bind,
+        image: B::UnboundImage
+    ) -> (B::Image, Memory);
+}
 
 #[derive(Debug)]
 pub struct Typed<I, T> {
@@ -129,5 +185,42 @@ impl<I, T> ops::Deref for Typed<I, T> {
 impl<I, T> ops::DerefMut for Typed<I, T> {
     fn deref_mut(&mut self) -> &mut I {
         &mut self.inner
+    }
+}
+
+/// This is the unique owner of the inner struct.
+#[derive(Debug)]
+pub struct DropDelayed<T>(Arc<UnsafeCell<T>>);
+/// Keep-alive without any access (only Drop if last one).
+pub struct DropDelayer<T>(Arc<UnsafeCell<T>>);
+
+impl<T> DropDelayed<T> {
+    pub fn new(inner: T) -> Self {
+        DropDelayed(Arc::new(UnsafeCell::new(inner)))
+    }
+
+    pub fn drop_delayer(&self) -> DropDelayer<T> {
+        DropDelayer(self.0.clone())
+    }
+}
+
+impl<T> ops::Deref for DropDelayed<T> {
+    type Target = T;
+    fn deref(&self) -> &T { unsafe { &*self.0.get() } }
+}
+
+impl<T> ops::DerefMut for DropDelayed<T> {
+    fn deref_mut(&mut self) -> &mut T { unsafe { &mut *self.0.get() } }
+}
+
+impl<T> Clone for DropDelayer<T> {
+    fn clone(&self) -> Self {
+        DropDelayer(self.0.clone())
+    }
+}
+
+impl<T> fmt::Debug for DropDelayer<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "DropDelayer")
     }
 }

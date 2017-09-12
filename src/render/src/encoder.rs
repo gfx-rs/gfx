@@ -1,36 +1,30 @@
 //! Graphics commands encoder.
 
-use draw_state::target::{Depth, Stencil};
 use std::error::Error;
 use std::any::Any;
-use std::{fmt, mem};
-use std::cell::UnsafeCell;
-use std::sync::{mpsc, Arc};
+use std::fmt;
+use std::sync::mpsc;
 
-use core::{Backend, CommandQueue, CommandPool,
-           IndexType, SubmissionResult, VertexCount};
-use core::{self, command, format};
+use core::{self, CommandPool};
 use core::command::CommandBuffer;
-use memory::{self, cast_slice, Typed, Pod, Usage};
-use {handle, image};
+use memory::{Usage, DropDelayed, DropDelayer};
+use {handle, image, Backend};
 
-// This is the unique owner of the inner struct.
-pub struct Pool<B: Backend, C>(Arc<UnsafeCell<PoolInner<B, C>>>);
-// Keep-alive without any access (only Drop if last one).
-pub(crate) struct PoolDependency<B: Backend, C>(Arc<UnsafeCell<PoolInner<B, C>>>);
+pub struct Pool<B: Backend, C>(DropDelayed<PoolInner<B, C>>);
+
+#[derive(Clone)]
+pub(crate) struct PoolDependency<B: Backend, C>(DropDelayer<PoolInner<B, C>>);
 
 impl<B: Backend, C> Pool<B, C> {
     pub(crate) fn new(
         inner: CommandPool<B, C>,
         sender: CommandPoolSender<B, C>
     ) -> Self {
-        Pool(Arc::new(UnsafeCell::new(PoolInner {
-            inner: Some(inner), sender
-        })))
+        Pool(DropDelayed::new(PoolInner { inner: Some(inner), sender }))
     }
 
     fn mut_inner<'a>(&'a mut self) -> &'a mut CommandPool<B, C> {
-        unsafe { &mut *self.0.get() }.get_mut()
+        self.0.get_mut()
     }
 
     pub fn reserve(&mut self, additional: usize) {
@@ -39,7 +33,7 @@ impl<B: Backend, C> Pool<B, C> {
 
     pub fn acquire_encoder<'a>(&'a mut self) -> Encoder<'a, B, C> {
         Encoder {
-            pool: PoolDependency(self.0.clone()),
+            pool: PoolDependency(self.0.drop_delayer()),
             buffer: self.mut_inner().acquire_command_buffer(),
             // raw_data: pso::RawDataSet::new(),
             // access_info: command::AccessInfo::new(),
