@@ -114,7 +114,7 @@ impl core::Surface<Backend> for Surface {
     fn get_kind(&self) -> core::image::Kind {
         use core::image::Size;
 
-        let aa = core::image::AaMode::Single; // TODO
+        let aa = core::image::AaMode::Single;
         core::image::Kind::D2(self.width as Size, self.height as Size, aa)
     }
 

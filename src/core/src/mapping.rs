@@ -1,8 +1,8 @@
 #![deny(missing_docs, missing_copy_implementations)]
 
 //! Memory mapping
-
-use std::ops;
+use std::error::Error as StdError;
+use std::{error, fmt, ops};
 use Backend;
 
 // TODO
