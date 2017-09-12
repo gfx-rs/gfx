@@ -31,11 +31,18 @@ pub struct Surface {
 
 impl core::Surface<Backend> for Surface {
     fn supports_queue(&self, _queue_family: &QueueFamily) -> bool { true }
+    fn get_kind(&self) -> core::image::Kind {
+        use core::image::Size;
+
+        let aa = core::image::AaMode::Single;
+        core::image::Kind::D2(self.width as Size, self.height as Size, aa)
+    }
+
     fn build_swapchain<C>(
         &mut self,
         config: core::SwapchainConfig,
         present_queue: &core::CommandQueue<Backend, C>,
-    ) -> Swapchain {
+    ) -> (Swapchain, Vec<core::Backbuffer<Backend>>) {
         let mut swap_chain: *mut winapi::IDXGISwapChain1 = ptr::null_mut();
         let buffer_count = 2; // TODO: user-defined value
         let mut format = config.color_format;
@@ -107,12 +114,13 @@ impl core::Surface<Backend> for Surface {
             }
         }).collect::<Vec<_>>();
 
-        Swapchain {
+        let swapchain = Swapchain {
             inner: swap_chain,
             next_frame: 0,
             frame_queue: VecDeque::new(),
-            images: backbuffers,
-        }
+        };
+
+        (swapchain, backbuffers)
     }
 }
 
@@ -120,14 +128,9 @@ pub struct Swapchain {
     inner: ComPtr<winapi::IDXGISwapChain3>,
     next_frame: usize,
     frame_queue: VecDeque<usize>,
-    images: Vec<core::Backbuffer<Backend>>,
 }
 
 impl core::Swapchain<Backend> for Swapchain {
-    fn get_backbuffers(&mut self) -> &[core::Backbuffer<Backend>] {
-        &self.images
-    }
-
     fn acquire_frame(&mut self, sync: core::FrameSync<Backend>) -> core::Frame {
         // TODO: sync
         // TODO: we need to block this at some point? (running out of backbuffers)

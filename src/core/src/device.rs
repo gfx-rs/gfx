@@ -160,7 +160,10 @@ pub struct Extent {
 
 /// An error from creating a shader module.
 #[derive(Clone, Debug, PartialEq)]
-pub struct ShaderError;
+pub enum ShaderError {
+    /// The shader failed to compile.
+    CompilationFailed(String),
+}
 
 /// # Overview
 ///
