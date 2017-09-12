@@ -184,37 +184,37 @@ impl<I, T> ops::DerefMut for Typed<I, T> {
 
 /// This is the unique owner of the inner struct.
 #[derive(Debug)]
-pub struct DropDelayed<T>(Arc<UnsafeCell<T>>);
+pub struct Provider<T>(Arc<UnsafeCell<T>>);
 /// Keep-alive without any access (only Drop if last one).
-pub struct DropDelayer<T>(Arc<UnsafeCell<T>>);
+pub struct Dependency<T>(Arc<UnsafeCell<T>>);
 
-impl<T> DropDelayed<T> {
+impl<T> Provider<T> {
     pub fn new(inner: T) -> Self {
-        DropDelayed(Arc::new(UnsafeCell::new(inner)))
+        Provider(Arc::new(UnsafeCell::new(inner)))
     }
 
-    pub fn drop_delayer(&self) -> DropDelayer<T> {
-        DropDelayer(self.0.clone())
+    pub fn dependency(&self) -> Dependency<T> {
+        Dependency(self.0.clone())
     }
 }
 
-impl<T> ops::Deref for DropDelayed<T> {
+impl<T> ops::Deref for Provider<T> {
     type Target = T;
     fn deref(&self) -> &T { unsafe { &*self.0.get() } }
 }
 
-impl<T> ops::DerefMut for DropDelayed<T> {
+impl<T> ops::DerefMut for Provider<T> {
     fn deref_mut(&mut self) -> &mut T { unsafe { &mut *self.0.get() } }
 }
 
-impl<T> Clone for DropDelayer<T> {
+impl<T> Clone for Dependency<T> {
     fn clone(&self) -> Self {
-        DropDelayer(self.0.clone())
+        Dependency(self.0.clone())
     }
 }
 
-impl<T> fmt::Debug for DropDelayer<T> {
+impl<T> fmt::Debug for Dependency<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "DropDelayer")
+        write!(f, "Dependency")
     }
 }

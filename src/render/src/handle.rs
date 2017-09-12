@@ -1,27 +1,27 @@
 use std::sync::mpsc;
 
-use memory::{Typed, DropDelayed, DropDelayer};
+use memory::{Typed, Provider, Dependency};
 use Backend;
 
 pub(crate) fn garbage<B: Backend>(device: &B::Device)
     -> (GarbageSender<B>, GarbageCollector<B>)
 {
     let (sender, receiver) = mpsc::channel();
-    let delayed = DropDelayed::new(InnerGarbageCollector {
+    let provider = Provider::new(InnerGarbageCollector {
         device: (*device).clone(),
         receiver,
     });
-    let delayer = delayed.drop_delayer();
-    (GarbageSender { sender, delayer }, GarbageCollector(delayed))
+    let dependency = provider.dependency();
+    (GarbageSender { sender, dependency }, GarbageCollector(provider))
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct GarbageSender<B: Backend> {
     sender: mpsc::Sender<Garbage<B>>,
-    delayer: DropDelayer<InnerGarbageCollector<B>>,
+    dependency: Dependency<InnerGarbageCollector<B>>,
 }
 
-pub(crate) struct GarbageCollector<B: Backend>(DropDelayed<InnerGarbageCollector<B>>);
+pub(crate) struct GarbageCollector<B: Backend>(Provider<InnerGarbageCollector<B>>);
 
 struct InnerGarbageCollector<B: Backend> {
     device: B::Device,
