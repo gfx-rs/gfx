@@ -142,6 +142,8 @@ pub struct Features {
     pub sampler_anisotropy: bool,
     /// Support setting border texel colors.
     pub sampler_border_color: bool,
+    /// Resource heaps can contain any type of resources, as opposed to be locked to one.
+    pub heterogeneous_resource_heaps: bool,
 }
 
 /// Limits of the device.

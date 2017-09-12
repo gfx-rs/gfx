@@ -57,6 +57,7 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         (0..num)
             .map(|_| CommandBuffer {
                 raw: self.create_command_list(),
+                allocator: self.inner.clone(),
                 pass_cache: None,
             })
             .collect()
