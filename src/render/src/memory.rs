@@ -5,6 +5,7 @@ use std::{ops, cmp, fmt, hash};
 use std::sync::Arc;
 use std::cell::UnsafeCell;
 
+use {buffer, image};
 use {Backend, Device};
 
 /// How this memory will be used regarding GPU-CPU data flow.
@@ -91,16 +92,11 @@ pub type ReleaseFn = Box<FnMut()>; // TODO?: FnOnce
 pub struct Memory {
     release: ReleaseFn,
     pub usage: Usage,
-    pub bind: Bind,
 }
 
 impl Memory {
-    pub fn new(
-        release: ReleaseFn,
-        usage: Usage,
-        bind: Bind
-    ) -> Self {
-        Memory { release, usage, bind }
+    pub fn new(release: ReleaseFn, usage: Usage) -> Self {
+        Memory { release, usage }
     }
 }
 
@@ -112,7 +108,7 @@ impl Drop for Memory {
 
 impl fmt::Debug for Memory {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "Memory {{ usage: {:?}, bind: {:?}, .. }}", self.usage, self.bind)
+        write!(f, "Memory({:?})", self.usage)
     }
 }
 
@@ -120,15 +116,13 @@ impl fmt::Debug for Memory {
 pub trait Allocator<B: Backend> {
     fn allocate_buffer(&mut self,
         device: &mut Device<B>,
-        usage: Usage,
-        bind: Bind,
+        usage: &buffer::Usage,
         buffer: B::UnboundBuffer
     ) -> (B::Buffer, Memory);
     
     fn allocate_image(&mut self,
         device: &mut Device<B>,
-        usage: Usage,
-        bind: Bind,
+        usage: &image::Usage,
         image: B::UnboundImage
     ) -> (B::Image, Memory);
 }

@@ -1,17 +1,21 @@
 use std::sync::mpsc;
-use std::collections::HashMap;
 
-use core::{Device as CoreDevice, HeapType};
+use core::{Device as CoreDevice};
 use core::device::ResourceHeapType;
 use core::memory::Requirements;
 use memory::{self, Allocator, Memory, ReleaseFn, DropDelayed, DropDelayer};
+use {buffer, image};
 use {Backend, Device};
 
 pub struct StackAllocator<B: Backend>(DropDelayed<InnerStackAllocator<B>>);
 
 pub struct InnerStackAllocator<B: Backend> {
     device: B::Device,
-    heap_chunks: HashMap<memory::Usage, HeapChunks<B>>,
+    usage: memory::Usage,
+    // TODO: Any support ?
+    buffers: ChunkStack<B>,
+    images: ChunkStack<B>,
+    targets: ChunkStack<B>,
     chunk_size: u64,
 }
 
@@ -21,43 +25,23 @@ impl<B: Backend> Drop for InnerStackAllocator<B> {
     }
 }
 
-struct HeapChunks<B: Backend> {
-    // TODO: Any support ?
-    buffers: ChunkStack<B>,
-    images: ChunkStack<B>,
-    targets: ChunkStack<B>,
-}
-
-impl<B: Backend> HeapChunks<B> {
-    fn new(heap_type: HeapType) -> Self {
-        HeapChunks {
-            buffers: ChunkStack::new(heap_type, ResourceHeapType::Buffers),
-            images: ChunkStack::new(heap_type, ResourceHeapType::Images),
-            targets: ChunkStack::new(heap_type, ResourceHeapType::Targets),
-        }
-    }
-}
-
 impl<B: Backend> StackAllocator<B> {
-    pub fn new(device: &Device<B>) -> Self {
+    pub fn new(usage: memory::Usage, device: &Device<B>) -> Self {
         let mega = 1 << 20;
-        Self::with_chunk_size(device, 128 * mega)
+        Self::with_chunk_size(usage, device, 128 * mega)
     }
 
-    pub fn with_chunk_size(device: &Device<B>, chunk_size: u64) -> Self {
-        let mut heap_chunks = HashMap::new();
-        if let Some(data_heap) = device.find_data_heap() {
-            heap_chunks.insert(memory::Usage::Data, HeapChunks::new(data_heap));
-        }
-        if let Some(upload_heap) = device.find_upload_heap() {
-            heap_chunks.insert(memory::Usage::Upload, HeapChunks::new(upload_heap));
-        }
-        if let Some(download_heap) = device.find_download_heap() {
-            heap_chunks.insert(memory::Usage::Download, HeapChunks::new(download_heap));
-        }
+    pub fn with_chunk_size(
+        usage: memory::Usage,
+        device: &Device<B>,
+        chunk_size: u64
+    ) -> Self {
         StackAllocator(DropDelayed::new(InnerStackAllocator {
             device: (*device.ref_raw()).clone(),
-            heap_chunks,
+            usage,
+            buffers: ChunkStack::new(ResourceHeapType::Buffers),
+            images: ChunkStack::new(ResourceHeapType::Images),
+            targets: ChunkStack::new(ResourceHeapType::Targets),
             chunk_size,
         }))
     }
@@ -69,70 +53,63 @@ impl<B: Backend> StackAllocator<B> {
 
 impl<B: Backend> InnerStackAllocator<B> {
     fn shrink(&mut self) {
-        let device = &mut self.device;
-        for (_, chunks) in &mut self.heap_chunks {
-            chunks.buffers.shrink(device);
-            chunks.images.shrink(device);
-            chunks.targets.shrink(device);
-        }
+        self.buffers.shrink(&mut self.device);
+        self.images.shrink(&mut self.device);
+        self.targets.shrink(&mut self.device);
     }
 }
 
 impl<B: Backend> Allocator<B> for StackAllocator<B> {
     fn allocate_buffer(&mut self,
-        _: &mut Device<B>,
-        usage: memory::Usage,
-        bind: memory::Bind,
+        device: &mut Device<B>,
+        usage: &buffer::Usage,
         buffer: B::UnboundBuffer
     ) -> (B::Buffer, Memory) {
         let drop_delayer = self.0.drop_delayer();
         let inner: &mut InnerStackAllocator<B> = &mut self.0;
-        let device = &mut inner.device;
-        let requirements = device.get_buffer_requirements(&buffer);
-        let stack = &mut inner.heap_chunks.get_mut(&usage).unwrap().buffers;
-        let (heap, offset, release) = stack.allocate(
+        let requirements = device.mut_raw().get_buffer_requirements(&buffer);
+        // TODO: alignement when usage.can_transfer()
+        let (heap, offset, release) = inner.buffers.allocate(
             device,
+            inner.usage,
             inner.chunk_size,
             requirements,
             drop_delayer,
         );
         println!("bind buffer memory to {:?}, offset {:?}", heap, offset);
-        let buffer = device.bind_buffer_memory(heap, offset, buffer)
+        let buffer = device.mut_raw().bind_buffer_memory(heap, offset, buffer)
             .unwrap();
-        (buffer, Memory::new(release, usage, bind))
+        (buffer, Memory::new(release, inner.usage))
     }
     
     fn allocate_image(&mut self,
-        _: &mut Device<B>,
-        usage: memory::Usage,
-        bind: memory::Bind,
+        device: &mut Device<B>,
+        usage: &image::Usage,
         image: B::UnboundImage
     ) -> (B::Image, Memory) {
         let drop_delayer = self.0.drop_delayer();
         let inner: &mut InnerStackAllocator<B> = &mut self.0;
-        let device = &mut inner.device;
-        let requirements = device.get_image_requirements(&image);
-        let chunks = inner.heap_chunks.get_mut(&usage).unwrap();
-        let stack = if bind.is_target() {
-            &mut chunks.targets
+        let requirements = device.mut_raw().get_image_requirements(&image);
+        let stack = if usage.can_target() {
+            &mut inner.targets
         } else {
-            &mut chunks.images
+            &mut inner.images
         };
         let (heap, offset, release) = stack.allocate(
             device,
+            inner.usage,
             inner.chunk_size,
             requirements,
             drop_delayer,
         );
         println!("bind image memory to {:?}, offset {:?}", heap, offset);
-        let image = device.bind_image_memory(heap, offset, image)
+        let image = device.mut_raw().bind_image_memory(heap, offset, image)
             .unwrap();
-        (image, Memory::new(release, usage, bind))
+        (image, Memory::new(release, inner.usage))
     }
 }
 
 struct ChunkStack<B: Backend> {
-    heap_type: HeapType,
     resource_type: ResourceHeapType,
     chunks: Vec<B::Heap>,
     allocs: Vec<StackAlloc>,
@@ -147,11 +124,10 @@ struct StackAlloc {
 }
 
 impl<B: Backend> ChunkStack<B> {
-    fn new(heap_type: HeapType, resource_type: ResourceHeapType) -> Self {
+    fn new(resource_type: ResourceHeapType) -> Self {
         let (sender, receiver) = mpsc::channel();
 
         ChunkStack {
-            heap_type,
             resource_type,
             chunks: Vec::new(),
             allocs: Vec::new(),
@@ -161,7 +137,8 @@ impl<B: Backend> ChunkStack<B> {
     }
 
     fn allocate(&mut self,
-        device: &mut B::Device,
+        device: &mut Device<B>,
+        usage: memory::Usage,
         chunk_size: u64,
         req: Requirements,
         drop_delayer: DropDelayer<InnerStackAllocator<B>>,
@@ -189,7 +166,7 @@ impl<B: Backend> ChunkStack<B> {
             };
 
         if chunk_index == self.chunks.len() {
-            self.grow(device, chunk_size);
+            self.grow(device, usage, chunk_size);
         }
 
         let alloc_index = self.allocs.len();
@@ -209,9 +186,15 @@ impl<B: Backend> ChunkStack<B> {
         }))
     }
 
-    fn grow(&mut self, device: &mut B::Device, chunk_size: u64) {
-        println!("create chunk of {} bytes on {:?} ({:?})", chunk_size, self.heap_type, self.resource_type);
-        let heap = device.create_heap(&self.heap_type, self.resource_type, chunk_size)
+    fn grow(&mut self,
+        device: &mut Device<B>,
+        usage: memory::Usage,
+        chunk_size: u64
+    ) {
+        let heap_type = device.find_usage_heap(usage).unwrap();
+        println!("create chunk of {} bytes on {:?} ({:?})", chunk_size, heap_type, self.resource_type);
+        let heap = device.mut_raw()
+            .create_heap(&heap_type, self.resource_type, chunk_size)
             .unwrap();
         self.chunks.push(heap);
     }
@@ -224,7 +207,7 @@ impl<B: Backend> ChunkStack<B> {
             .unwrap_or(0);
 
         for heap in self.chunks.drain(drain_beg..) {
-            println!("destroy chunk on {:?} ({:?})", self.heap_type, self.resource_type);
+            println!("destroy chunk of {:?}", self.resource_type);
             device.destroy_heap(heap);
         }
     }
