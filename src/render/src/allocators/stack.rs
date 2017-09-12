@@ -3,11 +3,11 @@ use std::sync::mpsc;
 use core::{Device as CoreDevice};
 use core::device::ResourceHeapType;
 use core::memory::Requirements;
-use memory::{self, Allocator, Memory, ReleaseFn, DropDelayed, DropDelayer};
+use memory::{self, Allocator, Memory, ReleaseFn, Provider, Dependency};
 use {buffer, image};
 use {Backend, Device};
 
-pub struct StackAllocator<B: Backend>(DropDelayed<InnerStackAllocator<B>>);
+pub struct StackAllocator<B: Backend>(Provider<InnerStackAllocator<B>>);
 
 pub struct InnerStackAllocator<B: Backend> {
     device: B::Device,
@@ -36,7 +36,7 @@ impl<B: Backend> StackAllocator<B> {
         device: &Device<B>,
         chunk_size: u64
     ) -> Self {
-        StackAllocator(DropDelayed::new(InnerStackAllocator {
+        StackAllocator(Provider::new(InnerStackAllocator {
             device: (*device.ref_raw()).clone(),
             usage,
             buffers: ChunkStack::new(ResourceHeapType::Buffers),
@@ -65,7 +65,7 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
         usage: &buffer::Usage,
         buffer: B::UnboundBuffer
     ) -> (B::Buffer, Memory) {
-        let drop_delayer = self.0.drop_delayer();
+        let dependency = self.0.dependency();
         let inner: &mut InnerStackAllocator<B> = &mut self.0;
         let requirements = device.mut_raw().get_buffer_requirements(&buffer);
         // TODO: alignement when usage.can_transfer()
@@ -74,7 +74,7 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
             inner.usage,
             inner.chunk_size,
             requirements,
-            drop_delayer,
+            dependency,
         );
         println!("bind buffer memory to {:?}, offset {:?}", heap, offset);
         let buffer = device.mut_raw().bind_buffer_memory(heap, offset, buffer)
@@ -87,7 +87,7 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
         usage: &image::Usage,
         image: B::UnboundImage
     ) -> (B::Image, Memory) {
-        let drop_delayer = self.0.drop_delayer();
+        let dependency = self.0.dependency();
         let inner: &mut InnerStackAllocator<B> = &mut self.0;
         let requirements = device.mut_raw().get_image_requirements(&image);
         let stack = if usage.can_target() {
@@ -100,7 +100,7 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
             inner.usage,
             inner.chunk_size,
             requirements,
-            drop_delayer,
+            dependency,
         );
         println!("bind image memory to {:?}, offset {:?}", heap, offset);
         let image = device.mut_raw().bind_image_memory(heap, offset, image)
@@ -141,7 +141,7 @@ impl<B: Backend> ChunkStack<B> {
         usage: memory::Usage,
         chunk_size: u64,
         req: Requirements,
-        drop_delayer: DropDelayer<InnerStackAllocator<B>>,
+        dependency: Dependency<InnerStackAllocator<B>>,
     ) -> (&B::Heap, u64, ReleaseFn)
     {
         self.update_allocs();
@@ -179,7 +179,7 @@ impl<B: Backend> ChunkStack<B> {
         println!("allocated #{:?} {:?}..{:?}) from chunk {:?}", alloc_index, beg, end, chunk_index);
         let sender = self.sender.clone();
         (&self.chunks[chunk_index], beg, Box::new(move || {
-            let _ = drop_delayer;
+            let _ = dependency;
             sender.send(alloc_index).unwrap_or_else(|_| {
                 error!("could not release StackAllocator's memory")
             });
