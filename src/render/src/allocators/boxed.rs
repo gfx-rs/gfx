@@ -29,7 +29,7 @@ impl<B: Backend> BoxedAllocator<B> {
 impl<B: Backend> Allocator<B> for BoxedAllocator<B> {
     fn allocate_buffer(&mut self,
         device: &mut Device<B>,
-        _: &buffer::Usage,
+        _: buffer::Usage,
         buffer: B::UnboundBuffer
     ) -> (B::Buffer, Memory) {
         let heap_type = device.find_usage_heap(self.usage).unwrap();
@@ -46,7 +46,7 @@ impl<B: Backend> Allocator<B> for BoxedAllocator<B> {
     
     fn allocate_image(&mut self,
         device: &mut Device<B>,
-        usage: &image::Usage,
+        usage: image::Usage,
         image: B::UnboundImage
     ) -> (B::Image, Memory) {
         let heap_type = device.find_usage_heap(self.usage).unwrap();

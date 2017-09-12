@@ -1,6 +1,6 @@
 use std::sync::mpsc;
 
-use core::{Device as CoreDevice};
+use core::{self, Device as CoreDevice};
 use core::device::ResourceHeapType;
 use core::memory::Requirements;
 use memory::{self, Allocator, Memory, ReleaseFn, Provider, Dependency};
@@ -62,13 +62,13 @@ impl<B: Backend> InnerStackAllocator<B> {
 impl<B: Backend> Allocator<B> for StackAllocator<B> {
     fn allocate_buffer(&mut self,
         device: &mut Device<B>,
-        usage: &buffer::Usage,
+        usage: buffer::Usage,
         buffer: B::UnboundBuffer
     ) -> (B::Buffer, Memory) {
         let dependency = self.0.dependency();
         let inner: &mut InnerStackAllocator<B> = &mut self.0;
-        let requirements = device.mut_raw().get_buffer_requirements(&buffer);
-        // TODO: alignement when usage.can_transfer()
+        let requirements = core::buffer::complete_requirements::<B>(
+            device.mut_raw(), &buffer, usage);
         let (heap, offset, release) = inner.buffers.allocate(
             device,
             inner.usage,
@@ -84,7 +84,7 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
     
     fn allocate_image(&mut self,
         device: &mut Device<B>,
-        usage: &image::Usage,
+        usage: image::Usage,
         image: B::UnboundImage
     ) -> (B::Image, Memory) {
         let dependency = self.0.dependency();
