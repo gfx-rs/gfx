@@ -292,7 +292,7 @@ impl Usage {
         self.intersects(COLOR_ATTACHMENT | DEPTH_STENCIL_ATTACHMENT)
     }
 }
-
+/*
 /// Describes a subvolume of a texture, which image data can be uploaded into.
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -356,7 +356,7 @@ impl RawImageInfo {
         self.get_texel_count() * (texel_bytes as usize)
     }
 }
-
+*/
 /// Specifies how texture coordinates outside the range `[0, 1]` are handled.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]

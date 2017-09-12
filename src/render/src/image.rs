@@ -3,7 +3,6 @@ use memory::Memory;
 
 pub use core::image::{
     CreationError, Kind, AaMode, Size, Level, Layer, Dimensions,
-    ImageInfoCommon, RawImageInfo, NewImageInfo,
     SamplerInfo, SubresourceRange
 };
 pub use core::image::{Usage,
@@ -22,7 +21,7 @@ pub struct Info {
     pub format: core::format::Format,
     pub memory: Memory,
 }
-
+/*
 impl Info {
     /// Get image info for a given mip.
     pub fn to_image_info(&self, mip: Level) -> NewImageInfo {
@@ -44,3 +43,4 @@ impl Info {
         self.to_image_info(mip).convert(self.format)
     }
 }
+*/
