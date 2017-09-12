@@ -35,13 +35,14 @@ pub struct UnboundImage {
 }
 
 impl Device {
-    pub fn create_shader_library(
+    /*
+    pub fn create_shader_module(
         &mut self,
-        shaders: &[(pso::EntryPoint, &[u8])],
-    ) -> Result<n::ShaderLib, pso::CreateShaderError> {
+        shaders: &[(String, &[u8])],
+    ) -> Result<n::ShaderModule, d::ShaderError> {
         let mut shader_map = BTreeMap::new();
         // TODO: handle entry points with the same name
-        for &(entry_point, byte_code) in shaders {
+        for &(ref entry_point, byte_code) in shaders {
             let mut blob: *mut winapi::ID3DBlob = ptr::null_mut();
             let hr = unsafe {
                 d3dcompiler::D3DCreateBlob(
@@ -51,7 +52,7 @@ impl Device {
             if !winapi::SUCCEEDED(hr) {
                 error!("D3DCreateBlob error {:x}", hr);
                 let message = "D3DCreateBlob fail".to_string();
-                return Err(pso::CreateShaderError::CompilationFailed(message))
+                return Err(d::ShaderError::CompilationFailed(message))
             }
 
             unsafe {
@@ -60,15 +61,19 @@ impl Device {
                     (*blob).GetBufferPointer() as *mut u8,
                     byte_code.len());
             }
-            shader_map.insert(entry_point, blob);
+            shader_map.insert(entry_point.clone(), blob);
         }
-        Ok(n::ShaderLib { shaders: shader_map })
+        Ok(n::ShaderModule { shaders: shader_map })
     }
+    */
 
-    pub fn create_shader_library_from_source(
+    pub fn create_shader_module_from_source(
         &mut self,
-        shaders: &[(pso::EntryPoint, pso::Stage, &[u8])],
-    ) -> Result<n::ShaderLib, pso::CreateShaderError> {
+        stage: pso::Stage,
+        hlsl_entry: &str,
+        entry_point: &str,
+        byte_code: &[u8],
+    ) -> Result<n::ShaderModule, d::ShaderError> {
         let stage_to_str = |stage| {
             match stage {
                 pso::Stage::Vertex => "vs_5_0\0",
@@ -78,40 +83,37 @@ impl Device {
         };
 
         let mut shader_map = BTreeMap::new();
-        // TODO: handle entry points with the same name
-        for &(entry_point, stage, byte_code) in shaders {
-            let mut blob = ptr::null_mut();
-            let mut error = ptr::null_mut();
-            let entry = ffi::CString::new(entry_point).unwrap();
-            let hr = unsafe {
-                d3dcompiler::D3DCompile(
-                    byte_code.as_ptr() as *const _,
-                    byte_code.len() as u64,
-                    ptr::null(),
-                    ptr::null(),
-                    ptr::null_mut(),
-                    entry.as_ptr() as *const _,
-                    stage_to_str(stage).as_ptr() as *const i8,
-                    1,
-                    0,
-                    &mut blob as *mut *mut _,
-                    &mut error as *mut *mut _)
+        let mut blob = ptr::null_mut();
+        let mut error = ptr::null_mut();
+        let entry = ffi::CString::new(hlsl_entry).unwrap();
+        let hr = unsafe {
+            d3dcompiler::D3DCompile(
+                byte_code.as_ptr() as *const _,
+                byte_code.len() as u64,
+                ptr::null(),
+                ptr::null(),
+                ptr::null_mut(),
+                entry.as_ptr() as *const _,
+                stage_to_str(stage).as_ptr() as *const i8,
+                1,
+                0,
+                &mut blob as *mut *mut _,
+                &mut error as *mut *mut _)
+        };
+        if !winapi::SUCCEEDED(hr) {
+            error!("D3DCompile error {:x}", hr);
+            let mut error = unsafe { ComPtr::<winapi::ID3DBlob>::new(error) };
+            let message = unsafe {
+                let pointer = error.GetBufferPointer();
+                let size = error.GetBufferSize();
+                let slice = slice::from_raw_parts(pointer as *const u8, size as usize);
+                String::from_utf8_lossy(slice).into_owned()
             };
-            if !winapi::SUCCEEDED(hr) {
-                error!("D3DCompile error {:x}", hr);
-                let mut error = unsafe { ComPtr::<winapi::ID3DBlob>::new(error) };
-                let message = unsafe {
-                    let pointer = error.GetBufferPointer();
-                    let size = error.GetBufferSize();
-                    let slice = slice::from_raw_parts(pointer as *const u8, size as usize);
-                    String::from_utf8_lossy(slice).into_owned()
-                };
-                return Err(pso::CreateShaderError::CompilationFailed(message))
-            }
-
-            shader_map.insert(entry_point, blob);
+            return Err(d::ShaderError::CompilationFailed(message))
         }
-        Ok(n::ShaderLib { shaders: shader_map })
+
+        shader_map.insert(entry_point.into(), blob);
+        Ok(n::ShaderModule { shaders: shader_map })
     }
 
     pub fn create_descriptor_heap_impl(
@@ -298,12 +300,12 @@ impl d::Device<B> for Device {
 
     fn create_graphics_pipelines<'a>(
         &mut self,
-        descs: &[(&n::ShaderLib, &n::PipelineLayout, pass::Subpass<'a, B>, &pso::GraphicsPipelineDesc)],
+        descs: &[(pso::GraphicsShaderSet<'a, B>, &n::PipelineLayout, pass::Subpass<'a, B>, &pso::GraphicsPipelineDesc)],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
-        descs.iter().map(|&(shader_lib, ref signature, ref subpass, ref desc)| {
-            let build_shader = |lib: &n::ShaderLib, entry: Option<pso::EntryPoint>| {
+        descs.iter().map(|&(shaders, ref signature, ref subpass, ref desc)| {
+            let build_shader = |source: Option<pso::EntryPoint<'a, B>>| {
                 // TODO: better handle case where looking up shader fails
-                let shader = entry.and_then(|entry| lib.shaders.get(entry));
+                let shader = source.and_then(|src| src.module.shaders.get(src.entry));
                 match shader {
                     Some(shader) => {
                         winapi::D3D12_SHADER_BYTECODE {
@@ -320,11 +322,11 @@ impl d::Device<B> for Device {
                 }
             };
 
-            let vs = build_shader(shader_lib, Some(desc.shader_entries.vertex_shader));
-            let ps = build_shader(shader_lib, desc.shader_entries.pixel_shader);
-            let gs = build_shader(shader_lib, desc.shader_entries.geometry_shader);
-            let ds = build_shader(shader_lib, desc.shader_entries.domain_shader);
-            let hs = build_shader(shader_lib, desc.shader_entries.hull_shader);
+            let vs = build_shader(Some(shaders.vertex));
+            let ps = build_shader(shaders.pixel);
+            let gs = build_shader(shaders.geometry);
+            let ds = build_shader(shaders.domain);
+            let hs = build_shader(shaders.hull);
 
             // Define input element descriptions
             let mut vs_reflect = shade::reflect_shader(&vs);
@@ -463,9 +465,9 @@ impl d::Device<B> for Device {
         }).collect()
     }
 
-    fn create_compute_pipelines(
+    fn create_compute_pipelines<'a>(
         &mut self,
-        _descs: &[(&n::ShaderLib, pso::EntryPoint, &n::PipelineLayout)],
+        _descs: &[(pso::EntryPoint<'a, B>, &n::PipelineLayout)],
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
         unimplemented!()
     }
@@ -481,6 +483,10 @@ impl d::Device<B> for Device {
             color: color_attachments.iter().map(|rtv| **rtv).collect(),
             depth_stencil: depth_stencil_attachments.iter().map(|dsv| **dsv).collect(),
         }
+    }
+
+    fn create_shader_module(&mut self, spirv_data: &[u8]) -> Result<n::ShaderModule, d::ShaderError> {
+        unimplemented!()
     }
 
     fn create_sampler(&mut self, info: image::SamplerInfo) -> n::Sampler {
@@ -542,7 +548,7 @@ impl d::Device<B> for Device {
         buffer: UnboundBuffer,
     ) -> Result<n::Buffer, buffer::CreationError> {
         if offset + buffer.requirements.size > heap.size {
-            return Err(buffer::CreationError::Other)
+            return Err(buffer::CreationError)
         }
 
         let mut resource = ptr::null_mut();
@@ -911,7 +917,7 @@ impl d::Device<B> for Device {
         unsafe { (*heap.raw).Release(); }
     }
 
-    fn destroy_shader_lib(&mut self, _shader_lib: n::ShaderLib) {
+    fn destroy_shader_module(&mut self, _shader_lib: n::ShaderModule) {
         unimplemented!()
     }
 

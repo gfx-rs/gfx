@@ -9,11 +9,11 @@ use Backend;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Hash)]
-pub struct ShaderLib {
-    pub shaders: BTreeMap<pso::EntryPoint, *mut winapi::ID3DBlob>,
+pub struct ShaderModule {
+    pub shaders: BTreeMap<String, *mut winapi::ID3DBlob>,
 }
-unsafe impl Send for ShaderLib { }
-unsafe impl Sync for ShaderLib { }
+unsafe impl Send for ShaderModule { }
+unsafe impl Sync for ShaderModule { }
 
 #[derive(Debug, Hash, Clone)]
 pub struct SubpassDesc {

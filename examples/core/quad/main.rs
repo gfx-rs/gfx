@@ -49,8 +49,7 @@ fn main() {
     let mut events_loop = winit::EventsLoop::new();
     let wb = winit::WindowBuilder::new()
         .with_dimensions(1024, 768)
-        .with_title("quad".to_string())
-
+        .with_title("quad".to_string());
     #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
     let window = wb
         .build(&events_loop)
@@ -110,10 +109,21 @@ fn main() {
     // Setup renderpass and pipeline
     // dx12 runtime shader compilation
     #[cfg(feature = "dx12")]
-    let shader_lib = device.create_shader_library_from_source(&[
-            (VS, shade::Stage::Vertex, include_bytes!("shader/quad.hlsl")),
-            (PS, shade::Stage::Fragment, include_bytes!("shader/quad.hlsl")),
-        ]).expect("Error on creating shader lib");
+    let vs_module = device
+        .create_shader_module_from_source(
+            shade::Stage::Vertex,
+            "vs_main",
+            "main",
+            include_bytes!("shader/quad.hlsl"))
+        .unwrap();
+    #[cfg(feature = "dx12")]
+    let fs_module = device
+        .create_shader_module_from_source(
+            shade::Stage::Fragment,
+            "ps_main",
+            "main",
+            include_bytes!("shader/quad.hlsl"))
+        .unwrap();
     #[cfg(feature = "vulkan")]
     let vs_module = device.create_shader_module(include_bytes!("data/vs_main.spv")).unwrap();
     #[cfg(feature = "vulkan")]
