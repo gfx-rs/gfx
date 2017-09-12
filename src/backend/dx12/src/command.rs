@@ -155,14 +155,8 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         for barrier in barriers {
             match *barrier {
                 memory::Barrier::Image { ref states, target, ref range } => {
-                    let state_src = match states.start {
-                        (_, image::ImageLayout::Present) => winapi::D3D12_RESOURCE_STATE_PRESENT,
-                        (access, layout) => conv::map_image_resource_state(access, layout)
-                    };
-                    let state_dst = match states.end {
-                        (_, image::ImageLayout::Present) => winapi::D3D12_RESOURCE_STATE_PRESENT,
-                        (access, layout) => conv::map_image_resource_state(access, layout)
-                    };
+                    let state_src = conv::map_image_resource_state(states.start.0, states.start.1);
+                    let state_dst = conv::map_image_resource_state(states.end.0, states.end.1);
 
                     if state_src == state_dst {
                         warn!("Image pipeline barrier requested with no effect: {:?}", barrier);
