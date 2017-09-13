@@ -358,7 +358,7 @@ pub fn map_pipeline_stage(stage: pso::PipelineStage) -> vk::PipelineStageFlags {
     if stage.contains(pso::GEOMETRY_SHADER) {
         flags |= vk::PIPELINE_STAGE_GEOMETRY_SHADER_BIT;
     }
-    if stage.contains(pso::PIXEL_SHADER) {
+    if stage.contains(pso::FRAGMENT_SHADER) {
         flags |= vk::PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
     }
     if stage.contains(pso::EARLY_FRAGMENT_TESTS) {
@@ -466,7 +466,7 @@ pub fn map_stage_flags(stages: pso::ShaderStageFlags) -> vk::ShaderStageFlags {
         flags |= vk::SHADER_STAGE_GEOMETRY_BIT;
     }
 
-    if stages.contains(pso::STAGE_PIXEL) {
+    if stages.contains(pso::STAGE_FRAGMENT) {
         flags |= vk::SHADER_STAGE_FRAGMENT_BIT;
     }
 

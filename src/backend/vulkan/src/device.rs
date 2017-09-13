@@ -268,7 +268,7 @@ impl d::Device<B> for Device {
                 stages.push(make_stage(vk::SHADER_STAGE_VERTEX_BIT, shaders.vertex));
             }
             // Pixel stage
-            if let Some(entry) = shaders.pixel {
+            if let Some(entry) = shaders.fragment {
                 stages.push(make_stage(vk::SHADER_STAGE_FRAGMENT_BIT, entry));
             }
             // Geometry stage
@@ -340,8 +340,8 @@ impl d::Device<B> for Device {
                 s_type: vk::StructureType::PipelineRasterizationStateCreateInfo,
                 p_next: ptr::null(),
                 flags: vk::PipelineRasterizationStateCreateFlags::empty(),
-                depth_clamp_enable: vk::VK_TRUE, // TODO
-                rasterizer_discard_enable: vk::VK_FALSE, // TODO
+                depth_clamp_enable: if desc.rasterizer.depth_clamping { vk::VK_TRUE } else { vk::VK_FALSE },
+                rasterizer_discard_enable: if shaders.fragment.is_none() { vk::VK_TRUE } else { vk::VK_FALSE },
                 polygon_mode: polygon_mode,
                 cull_mode: conv::map_cull_mode(desc.rasterizer.cull_mode),
                 front_face: conv::map_front_face(desc.rasterizer.front_face),
