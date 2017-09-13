@@ -68,8 +68,8 @@ bitflags!(
         const DOMAIN_SHADER = 0x20,
         /// Geometry shader execution.
         const GEOMETRY_SHADER = 0x40,
-        /// Pixel shader execution.
-        const PIXEL_SHADER = 0x80,
+        /// Fragment shader execution.
+        const FRAGMENT_SHADER = 0x80,
         /// Stage of early depth and stencil test.
         const EARLY_FRAGMENT_TESTS = 0x100,
         /// Stage of late depth and stencil test.
@@ -100,13 +100,13 @@ bitflags!(
         const STAGE_DOMAIN   = 0x4,
         /// Geometry shader stage.
         const STAGE_GEOMETRY = 0x8,
-        /// Pixel shader stage.
-        const STAGE_PIXEL    = 0x10,
+        /// Fragment shader stage.
+        const STAGE_FRAGMENT = 0x10,
         /// Compute shader stage.
         const STAGE_COMPUTE  = 0x20,
         /// All graphics pipeline shader stages.
         const STAGE_GRAPHICS = STAGE_VERTEX.bits | STAGE_HULL.bits |
-            STAGE_DOMAIN.bits | STAGE_GEOMETRY.bits | STAGE_PIXEL.bits,
+            STAGE_DOMAIN.bits | STAGE_GEOMETRY.bits | STAGE_FRAGMENT.bits,
         /// All shader stages.
         const STAGE_ALL      = STAGE_GRAPHICS.bits | STAGE_COMPUTE.bits,
     }
@@ -122,7 +122,7 @@ pub enum Stage {
     Hull,
     Domain,
     Geometry,
-    Pixel,
+    Fragment,
     Compute
 }
 
