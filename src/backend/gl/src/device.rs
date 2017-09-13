@@ -109,7 +109,7 @@ impl Device {
             pso::Stage::Hull     => gl::TESS_CONTROL_SHADER,
             pso::Stage::Domain   => gl::TESS_EVALUATION_SHADER,
             pso::Stage::Geometry => gl::GEOMETRY_SHADER,
-            pso::Stage::Pixel    => gl::FRAGMENT_SHADER,
+            pso::Stage::Fragment => gl::FRAGMENT_SHADER,
             pso::Stage::Compute  => gl::COMPUTE_SHADER,
         };
 
@@ -209,7 +209,7 @@ impl d::Device<B> for Device {
                     attach_shader(shaders.hull);
                     attach_shader(shaders.domain);
                     attach_shader(shaders.geometry);
-                    attach_shader(shaders.pixel);
+                    attach_shader(shaders.fragment);
 
                     if !priv_caps.program_interface_supported && priv_caps.frag_data_location_supported {
                         for i in 0..subpass.color_attachments.len() {

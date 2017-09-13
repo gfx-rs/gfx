@@ -75,7 +75,7 @@ fn main() {
     #[cfg(feature = "dx12")]
     let shader_lib = device.create_shader_library_from_source(&[
             (VS, shade::Stage::Vertex, include_bytes!("../../core/quad/shader/quad.hlsl")),
-            (PS, shade::Stage::Pixel, include_bytes!("../../core/quad/shader/quad.hlsl")),
+            (PS, shade::Stage::Fragment, include_bytes!("../../core/quad/shader/quad.hlsl")),
         ]).expect("Error on creating shader lib");
     #[cfg(feature = "vulkan")]
     let vs_module = device.create_shader_module(include_bytes!("../../core/quad/data/vs_main.spv")).unwrap();
@@ -94,7 +94,7 @@ fn main() {
     #[cfg(feature = "gl")]
     let shader_lib = device.create_shader_library_from_source(&[
             (VS, pso::Stage::Vertex, include_bytes!("../../core/quad/shader/quad_450.glslv")),
-            (PS, pso::Stage::Pixel, include_bytes!("../../core/quad/shader/quad_450.glslf")),
+            (PS, pso::Stage::Fragment, include_bytes!("../../core/quad/shader/quad_450.glslf")),
         ]).expect("Error on creating shader lib");
 
     let set0_layout = device.create_descriptor_set_layout(&[
@@ -102,7 +102,7 @@ fn main() {
                 binding: 0,
                 ty: pso::DescriptorType::SampledImage,
                 count: 1,
-                stage_flags: pso::STAGE_PIXEL,
+                stage_flags: pso::STAGE_FRAGMENT,
             }
         ],
     );
@@ -112,7 +112,7 @@ fn main() {
                 binding: 0,
                 ty: pso::DescriptorType::Sampler,
                 count: 1,
-                stage_flags: pso::STAGE_PIXEL,
+                stage_flags: pso::STAGE_FRAGMENT,
             }
         ],
     );
@@ -187,7 +187,7 @@ fn main() {
             hull: None,
             domain: None,
             geometry: None,
-            pixel: Some(pso::EntryPoint { entry: "main", module: &fs_module },),
+            fragment: Some(pso::EntryPoint { entry: "main", module: &fs_module },),
         };
         let subpass = Subpass { index: 0, main_pass: &render_pass };
         device.create_graphics_pipelines(&[

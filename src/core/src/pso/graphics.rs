@@ -26,7 +26,7 @@ pub struct GraphicsShaderSet<'a, B: Backend> {
     ///
     pub geometry: Option<EntryPoint<'a, B>>,
     ///
-    pub pixel: Option<EntryPoint<'a, B>>,
+    pub fragment: Option<EntryPoint<'a, B>>,
 }
 
 ///
@@ -90,9 +90,7 @@ pub struct Rasterizer {
     ///
     pub depth_bias: Option<DepthBias>,
     ///
-    pub conservative_rasterization: bool,
-    /// Discard primitives before the rasterizer.
-    pub rasterizer_discard: bool,
+    pub conservative: bool,
 }
 
 impl Rasterizer {
@@ -104,8 +102,7 @@ impl Rasterizer {
             front_face: s::FrontFace::CounterClockwise,
             depth_clamping: true,
             depth_bias: None,
-            conservative_rasterization: false,
-            rasterizer_discard: false,
+            conservative: false,
         }
     }
 }
