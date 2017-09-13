@@ -87,6 +87,20 @@ pub struct Viewport {
     pub far: f32,
 }
 
+impl Viewport {
+    /// Construct a viewport from rectangle.
+    pub fn from_rect(rect: target::Rect, near: f32, far: f32) -> Self {
+        Viewport {
+            x: rect.x,
+            y: rect.y,
+            w: rect.w,
+            h: rect.h,
+            near,
+            far,
+        }
+    }
+}
+
 /// Features that the device supports.
 /// These only include features of the core interface and not API extensions.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
