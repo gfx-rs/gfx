@@ -9,7 +9,7 @@ use core::memory::{HeapProperties,
 use memory::{self, Allocator, Typed};
 use handle::{self, GarbageSender};
 use handle::inner::*;
-use {buffer, image, format};
+use {buffer, image, format, mapping};
 use Backend;
 
 /*
@@ -78,37 +78,6 @@ impl<S> From<pso::InitError<S>> for PipelineStateError<S> {
 impl<S> From<CreationError> for PipelineStateError<S> {
     fn from(e: CreationError) -> Self {
         PipelineStateError::DeviceCreate(e)
-    }
-}
-
-/// Error accessing a mapping.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum Error {
-    /// The requested mapping access did not match the expected usage.
-    InvalidAccess(memory::Access, memory::Usage),
-    /// The requested mapping access overlaps with another.
-    AccessOverlap,
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use self::Error::*;
-        match *self {
-            InvalidAccess(ref access, ref usage) => {
-                write!(f, "{}: access = {:?}, usage = {:?}", self.description(), access, usage)
-            }
-            AccessOverlap => write!(f, "{}", self.description())
-        }
-    }
-}
-
-impl StdError for Error {
-    fn description(&self) -> &str {
-        use self::Error::*;
-        match *self {
-            InvalidAccess(..) => "The requested mapping access did not match the expected usage",
-            AccessOverlap => "The requested mapping access overlaps with another"
-        }
     }
 }
 */
@@ -205,7 +174,8 @@ impl<B: Backend> Device<B> {
     {
         let buffer = self.raw.create_buffer(size, stride, usage)?;
         let (buffer, memory) = allocator.allocate_buffer(self, usage, buffer);
-        let info = buffer::Info { usage, memory, size, stride };
+        let mapping = None; // TODO
+        let info = buffer::Info { usage, memory, size, stride, mapping };
         Ok(Buffer::new(buffer, info, self.garbage.clone()).into())
     }
 
@@ -223,6 +193,73 @@ impl<B: Backend> Device<B> {
             size * stride,
             stride
         ).map(Typed::new)
+    }
+
+    /// Acquire a mapping Reader.
+    ///
+    /// The accessible slice will correspond to the specified range (in elements).
+    /// See `acquire_mapping_writer` for more information.
+    pub fn acquire_mapping_reader<'a, MTB>(&mut self,
+        buffer: &'a MTB,
+        range: Range<u64>,
+    ) -> Result<mapping::Reader<'a, B, MTB::Data>, mapping::Error>
+        where MTB: MaybeTypedBuffer<B>
+    {
+        let (resource, info) = buffer.as_raw().resource_info();
+        Ok(mapping::Reader {
+            inner: self.raw.acquire_mapping_reader(
+                resource,
+                range_in_bytes::<MTB::Data>(range)
+            )?,
+            info,
+        })
+    }
+
+    /// Release a mapping Reader.
+    ///
+    /// See `acquire_mapping_writer` for more information.
+    pub fn release_mapping_reader<'a, T>(&mut self,
+        reader: mapping::Reader<'a, B, T>
+    )
+        where T: Copy
+    {
+        self.raw.release_mapping_reader(reader.inner);
+    }
+
+    /// Acquire a mapping Writer.
+    ///
+    /// The accessible slice will correspond to the specified range (in elements).
+    ///
+    /// While holding this access, you hold CPU-side exclusive access.
+    /// Any access overlap will result in an error.
+    /// Submitting commands involving this buffer to the device
+    /// implicitly requires exclusive access. Additionally,
+    /// further access will be stalled until execution completion.
+    pub fn acquire_mapping_writer<'a, MTB>(&mut self,
+        buffer: &'a MTB,
+        range: Range<u64>,
+    ) -> Result<mapping::Writer<'a, B, MTB::Data>, mapping::Error>
+        where MTB: MaybeTypedBuffer<B>
+    {
+        let (resource, info) = buffer.as_raw().resource_info();
+        Ok(mapping::Writer {
+            inner: self.raw.acquire_mapping_writer(
+                resource,
+                range_in_bytes::<MTB::Data>(range)
+            )?,
+            info,
+        })
+    }
+
+    /// Release a mapping Writer.
+    ///
+    /// See `acquire_mapping_writer` for more information.
+    pub fn release_mapping_writer<'a, T>(&mut self,
+        writer: mapping::Writer<'a, B, T>
+    )
+        where T: Copy
+    {
+        self.raw.release_mapping_writer(writer.inner);
     }
 
     pub fn create_image_raw<A>(&mut self,
@@ -565,4 +602,24 @@ impl<B: Backend> Device<B> {
         ))
     }
     */
+}
+
+pub trait MaybeTypedBuffer<B: Backend> {
+    type Data: Copy;
+    fn as_raw(&self) -> &handle::raw::Buffer<B>;
+}
+
+impl<B: Backend> MaybeTypedBuffer<B> for handle::raw::Buffer<B> {
+    type Data = u8;
+    fn as_raw(&self) -> &handle::raw::Buffer<B> { &self }
+}
+
+impl<B: Backend, T: Copy> MaybeTypedBuffer<B> for handle::Buffer<B, T> {
+    type Data = T;
+    fn as_raw(&self) -> &handle::raw::Buffer<B> { &self }
+}
+
+fn range_in_bytes<T>(elements: Range<u64>) -> Range<u64> {
+    let stride = mem::size_of::<T>() as u64;
+    (elements.start * stride)..(elements.end * stride)
 }

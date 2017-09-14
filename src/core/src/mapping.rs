@@ -3,6 +3,8 @@
 //! Memory mapping
 use std::{fmt, ops};
 use std::error::Error as StdError;
+use std::fmt;
+use std::ops::{self, Range};
 use Backend;
 
 // TODO
@@ -40,7 +42,14 @@ impl StdError for Error {
 /// Mapping reader
 pub struct Reader<'a, B: Backend, T: 'a + Copy> {
     pub(crate) slice: &'a [T],
-    pub(crate) _mapping: B::Mapping,
+    pub(crate) buffer: &'a B::Buffer,
+    pub(crate) released: bool,
+}
+
+impl<'a, B: Backend, T: 'a + Copy> Drop for Reader<'a, B, T> {
+    fn drop(&mut self) {
+        if !self.released { panic!("a mapping reader was not released"); }
+    }
 }
 
 impl<'a, B: Backend, T: 'a + Copy> ops::Deref for Reader<'a, B, T> {
@@ -54,7 +63,15 @@ impl<'a, B: Backend, T: 'a + Copy> ops::Deref for Reader<'a, B, T> {
 /// to read from Writer, it will lead to an undefined behavior. Please do not read from it.
 pub struct Writer<'a, B: Backend, T: 'a + Copy> {
     pub(crate) slice: &'a mut [T],
-    pub(crate) _mapping: B::Mapping,
+    pub(crate) buffer: &'a B::Buffer,
+    pub(crate) range: Range<u64>,
+    pub(crate) released: bool,
+}
+
+impl<'a, B: Backend, T: 'a + Copy> Drop for Writer<'a, B, T> {
+    fn drop(&mut self) {
+        if !self.released { panic!("a mapping writer was not released"); }
+    }
 }
 
 impl<'a, B: Backend, T: 'a + Copy> ops::Deref for Writer<'a, B, T> {
