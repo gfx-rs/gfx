@@ -355,17 +355,39 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     ) {
         unsafe {
             self.raw.SetGraphicsRootSignature(layout.raw);
+
+            // Bind descriptor heaps
+            // TODO: Can we bind them always or only once?
+            //       Resize while recording?
+            let mut heaps = [
+                sets[0].heap_srv_cbv_uav.as_mut() as *mut _,
+                sets[0].heap_samplers.as_mut() as *mut _
+            ];
+            self.raw.SetDescriptorHeaps(2, heaps.as_mut_ptr())
         }
-        warn!("graphic descriptor set binding partially unimplemented")
-        // TODO:
-        /*
-        for i in 0 .. sets.len() {
-            let handle = sets[i].ranges[0].handle.gpu;
-            unsafe {
-                self.raw.SetGraphicsRootDescriptorTable((first_set + i) as UINT, handle)
+
+        let mut table_id = 0;
+        for (i, table) in layout.tables.iter().enumerate() {
+            if first_set <= i {
+                sets[i-first_set].ranges_srv_cbv_uav.get(0).map(|range| unsafe {
+                    assert!(table.contains(n::SRV_CBV_UAV));
+                    self.raw.SetGraphicsRootDescriptorTable(table_id, range.handle.gpu);
+                    table_id += 1;
+                });
+                sets[i-first_set].ranges_samplers.get(0).map(|range| unsafe {
+                    assert!(table.contains(n::SAMPLERS));
+                    self.raw.SetGraphicsRootDescriptorTable(table_id, range.handle.gpu);
+                    table_id += 1;
+                });
+            } else {
+                if table.contains(n::SRV_CBV_UAV) {
+                    table_id += 1;
+                }
+                if table.contains(n::SAMPLERS) {
+                    table_id += 1;
+                }
             }
         }
-        */
     }
 
     fn bind_compute_pipeline(&mut self, pipeline: &n::ComputePipeline) {

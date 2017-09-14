@@ -336,8 +336,6 @@ fn main() {
         )
     );
 
-    // TODO:
-    /*
     device.update_descriptor_sets(&[
         pso::DescriptorSetWrite {
             set: &set0[0],
@@ -352,7 +350,6 @@ fn main() {
             write: pso::DescriptorWrite::Sampler(vec![&sampler]),
         },
     ]);
-    */
 
     // Rendering setup
     let viewport = core::Viewport {
