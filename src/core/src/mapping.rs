@@ -15,6 +15,8 @@ pub enum Error {
     AccessOverlap,
     /// The requested mapping range is outside of the resource.
     OutOfBounds,
+    ///
+    OutOfMemory,
 }
 
 impl fmt::Display for Error {
@@ -30,6 +32,7 @@ impl StdError for Error {
             InvalidAccess => "The requested mapping access did not match the expected usage",
             AccessOverlap => "The requested mapping access overlaps with another",
             OutOfBounds => "The requested mapping range is outside of the resource",
+            OutOfMemory => "Not enough physical or virtual memory",
         }
     }
 }

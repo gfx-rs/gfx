@@ -181,6 +181,7 @@ impl core::RawCommandQueue<Backend> for CommandQueue {
     }
 }
 
+#[derive(Clone)]
 pub struct Device {
     device: ComPtr<winapi::ID3D12Device>,
     features: core::Features,

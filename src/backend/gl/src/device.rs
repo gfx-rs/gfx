@@ -130,7 +130,7 @@ impl Device {
             }
             Ok(n::ShaderModule { raw: name })
         } else {
-            Err(d::ShaderError)
+            Err(d::ShaderError::CompilationFailed(String::new())) // TODO
         }
     }
 
