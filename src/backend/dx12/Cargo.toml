@@ -15,6 +15,7 @@ workspace = "../../.."
 name = "gfx_backend_dx12"
 
 [dependencies]
+bitflags = "0.8"
 log = "0.3"
 gfx_core = { path = "../../core", version = "0.10" }
 d3d12-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }

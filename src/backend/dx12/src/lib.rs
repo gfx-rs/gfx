@@ -1,3 +1,6 @@
+
+#[macro_use]
+extern crate bitflags;
 extern crate d3d12;
 extern crate d3dcompiler;
 extern crate dxguid;
@@ -250,7 +253,7 @@ impl Device {
 
         let heap_sampler = Self::create_descriptor_heap_impl(
             &mut device,
-            winapi::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+            winapi::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
             true,
             max_samplers,
         );
