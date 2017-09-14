@@ -53,7 +53,7 @@ impl Device {
             })),
             Err(error) => {
                 error!("Mapping failed with {:?}", error);
-                Err(mapping::Error) //TODO
+                Err(mapping::Error::OutOfMemory) //TODO
             }
         }
     }
@@ -637,7 +637,7 @@ impl d::Device<B> for Device {
             Ok(raw) => Ok(n::ShaderModule { raw }),
             Err(e) => {
                 error!("Shader module error {:?}", e);
-                Err(d::ShaderError)
+                Err(d::ShaderError::CompilationFailed(String::new())) // TODO
             }
         }
     }

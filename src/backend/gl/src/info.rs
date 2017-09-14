@@ -295,6 +295,7 @@ pub fn get(gl: &gl::Gl) -> (Info, Features, Limits, PrivateCaps) {
                                                                 Ext ("GL_ARB_texture_filter_anisotropic"),
                                                                 Ext ("GL_EXT_texture_filter_anisotropic")]),
         sampler_border_color:               info.is_supported(&[Core(3,3)]), // TODO: extensions
+        heterogeneous_resource_heaps:       true, // TODO
     };
     let private = PrivateCaps {
         array_buffer_supported:             info.is_supported(&[Core(3,0),
