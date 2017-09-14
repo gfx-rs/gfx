@@ -30,6 +30,7 @@ use std::{mem, ptr};
 use std::os::raw::c_void;
 use std::os::windows::ffi::OsStringExt;
 use std::ffi::OsString;
+use std::sync::{Arc, Mutex};
 
 pub type ShaderModel = u16;
 
@@ -187,12 +188,12 @@ pub struct Device {
     features: core::Features,
     limits: core::Limits,
     // CPU only pools
-    rtv_pool: native::DescriptorCpuPool,
-    srv_pool: native::DescriptorCpuPool,
-    sampler_pool: native::DescriptorCpuPool,
+    rtv_pool: Arc<Mutex<native::DescriptorCpuPool>>,
+    srv_pool: Arc<Mutex<native::DescriptorCpuPool>>,
+    sampler_pool: Arc<Mutex<native::DescriptorCpuPool>>,
     // CPU/GPU descriptor heaps
-    heap_srv_cbv_uav: native::DescriptorHeap,
-    heap_sampler: native::DescriptorHeap,
+    heap_srv_cbv_uav: Arc<Mutex<native::DescriptorHeap>>,
+    heap_sampler: Arc<Mutex<native::DescriptorHeap>>,
     events: Vec<winapi::HANDLE>,
 }
 
@@ -290,11 +291,11 @@ impl Device {
                 min_buffer_copy_offset_alignment: winapi::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as _,
                 min_buffer_copy_pitch_alignment: winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as _,
             },
-            rtv_pool,
-            srv_pool,
-            sampler_pool,
-            heap_srv_cbv_uav,
-            heap_sampler,
+            rtv_pool: Arc::new(Mutex::new(rtv_pool)),
+            srv_pool: Arc::new(Mutex::new(srv_pool)),
+            sampler_pool: Arc::new(Mutex::new(sampler_pool)),
+            heap_srv_cbv_uav: Arc::new(Mutex::new(heap_srv_cbv_uav)),
+            heap_sampler: Arc::new(Mutex::new(heap_sampler)),
             events: Vec::new(),
         }
     }
