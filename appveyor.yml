@@ -24,8 +24,7 @@ build_script:
       --exclude gfx_device_metal
       --exclude gfx_device_metalll
       --exclude gfx_window_metal
-      --exclude gfx_device_dx12ll
-      --exclude gfx_device_dx12
+      --exclude gfx_backend_dx12
       --exclude gfx_window_dxgi
     ) else (
       cargo build --all
@@ -43,8 +42,7 @@ test_script:
       --exclude gfx_device_metal
       --exclude gfx_device_metalll
       --exclude gfx_window_metal
-      --exclude gfx_device_dx12ll
-      --exclude gfx_device_dx12
+      --exclude gfx_backend_dx12
       --exclude gfx_window_dxgi
     ) else (
       cargo test --all
