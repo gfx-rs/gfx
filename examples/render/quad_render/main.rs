@@ -1,14 +1,7 @@
 extern crate env_logger;
 extern crate gfx;
 extern crate gfx_core as core;
-#[cfg(feature = "dx12")]
-extern crate gfx_device_dx12 as back;
-#[cfg(feature = "vulkan")]
 extern crate gfx_backend_vulkan as back;
-#[cfg(feature = "metal")]
-extern crate gfx_device_metal as back;
-#[cfg(feature = "gl")]
-extern crate gfx_backend_gl as back;
 
 extern crate winit;
 extern crate image;
@@ -20,7 +13,7 @@ use core::format::{Formatted, Srgba8 as ColorFormat, Vec2};
 use core::pass::Subpass;
 use core::queue::Submission;
 use core::target::Rect;
-use gfx::allocators::BoxedAllocator as Allocator;
+use gfx::allocators::StackAllocator as Allocator;
 
 use std::io::Cursor;
 
@@ -41,7 +34,6 @@ const QUAD: [Vertex; 6] = [
     Vertex { a_Pos: [ -0.5,-0.33 ], a_Uv: [0.0, 0.0] },
 ];
 
-#[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
 fn main() {
     env_logger::init().unwrap();
     let mut events_loop = winit::EventsLoop::new();
@@ -71,31 +63,8 @@ fn main() {
     let device: &mut back::Device = render_device.mut_raw();
 
     // Setup renderpass and pipeline
-    // dx12 runtime shader compilation
-    #[cfg(feature = "dx12")]
-    let shader_lib = device.create_shader_library_from_source(&[
-            (VS, shade::Stage::Vertex, include_bytes!("../../core/quad/shader/quad.hlsl")),
-            (PS, shade::Stage::Fragment, include_bytes!("../../core/quad/shader/quad.hlsl")),
-        ]).expect("Error on creating shader lib");
-    #[cfg(feature = "vulkan")]
     let vs_module = device.create_shader_module(include_bytes!("../../core/quad/data/vs_main.spv")).unwrap();
-    #[cfg(feature = "vulkan")]
     let fs_module = device.create_shader_module(include_bytes!("../../core/quad/data/ps_main.spv")).unwrap();
-    #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
-    let shader_lib = device.create_shader_library_from_source(
-            include_str!("../../core/quad/shader/quad_indirect.metal"),
-            back::LanguageVersion::new(2, 0),
-        ).expect("Error on creating shader lib");
-    #[cfg(all(feature = "metal", not(feature = "metal_argument_buffer")))]
-    let shader_lib = device.create_shader_library_from_source(
-            include_str!("../../core/quad/shader/quad.metal"),
-            back::LanguageVersion::new(1, 1),
-        ).expect("Error on creating shader lib");
-    #[cfg(feature = "gl")]
-    let shader_lib = device.create_shader_library_from_source(&[
-            (VS, pso::Stage::Vertex, include_bytes!("../../core/quad/shader/quad_450.glslv")),
-            (PS, pso::Stage::Fragment, include_bytes!("../../core/quad/shader/quad_450.glslf")),
-        ]).expect("Error on creating shader lib");
 
     let set0_layout = device.create_descriptor_set_layout(&[
             pso::DescriptorSetLayoutBinding {
@@ -164,7 +133,7 @@ fn main() {
     });
 
     pipeline_desc.attributes.push(pso::AttributeDesc {
-        location: 1,
+        location: 0,
         binding: 0,
         element: pso::Element {
             format: <Vec2<f32> as Formatted>::get_format(),
@@ -172,7 +141,7 @@ fn main() {
         },
     });
     pipeline_desc.attributes.push(pso::AttributeDesc {
-        location: 0,
+        location: 1,
         binding: 0,
         element: pso::Element {
             format: <Vec2<f32> as Formatted>::get_format(),
@@ -226,17 +195,20 @@ fn main() {
     println!("Memory types: {:?}", context.ref_device().heap_types());
     println!("Memory heaps: {:?}", context.ref_device().memory_heaps());
 
-    let buffer_stride = std::mem::size_of::<Vertex>() as u64;
-    let buffer_len = QUAD.len() as u64 * buffer_stride;
+    let vertex_count = QUAD.len() as u64;
     let vertex_buffer = context.mut_device().create_buffer::<Vertex, _>(
         &mut upload,
         gfx::buffer::VERTEX,
-        QUAD.len() as u64
+        vertex_count
     ).unwrap();
 
-    device.write_mapping::<Vertex>(vertex_buffer.resource(), 0..buffer_len)
-          .unwrap()
-          .copy_from_slice(&QUAD);
+    {
+        let mut vertices = context.mut_device()
+            .acquire_mapping_writer(&vertex_buffer, 0..vertex_count)
+            .unwrap();
+        vertices.copy_from_slice(&QUAD);
+        context.mut_device().release_mapping_writer(vertices);
+    }
 
     let img_data = include_bytes!("../../core/quad/data/logo.png");
     let img = image::load(Cursor::new(&img_data[..]), image::PNG).unwrap().to_rgba();
@@ -256,13 +228,17 @@ fn main() {
     ).unwrap();
 
     println!("copy image data into staging buffer");
+
     {
-        let mut mapping = device.write_mapping::<u8>(image_upload_buffer.resource(), 0..upload_size).unwrap();
+        let mut data = context.mut_device()
+            .acquire_mapping_writer(&image_upload_buffer, 0..upload_size)
+            .unwrap();
         for y in 0 .. height as usize {
             let row = &(*img)[y*(width as usize)*image_stride .. (y+1)*(width as usize)*image_stride];
             let dest_base = y * row_pitch as usize;
-            mapping[dest_base .. dest_base + row.len()].copy_from_slice(row);
+            data[dest_base .. dest_base + row.len()].copy_from_slice(row);
         }
+        context.mut_device().release_mapping_writer(data);
     }
 
     let image = context.mut_device().create_image::<ColorFormat, _>(
@@ -425,9 +401,4 @@ fn main() {
     for framebuffer in framebuffers {
         device.destroy_framebuffer(framebuffer);
     }
-}
-
-#[cfg(not(any(feature = "vulkan", feature = "dx12", feature = "metal")))]
-fn main() {
-    println!("You need to enable the native API feature (vulkan/metal) in order to test the LL");
 }

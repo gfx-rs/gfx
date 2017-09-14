@@ -257,7 +257,6 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type FrameBuffer:         Debug + Any + Send + Sync;
 
     type Heap:                Debug + Any;
-    type Mapping:             Debug + Any + Send + Sync;
     type CommandPool:         RawCommandPool<Self>;
     type SubpassCommandPool:  SubpassCommandPool<Self>;
 

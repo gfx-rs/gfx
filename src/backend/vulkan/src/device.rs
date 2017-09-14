@@ -7,10 +7,9 @@ use native as n;
 use std::{mem, ptr};
 use std::ffi::CString;
 use std::ops::Range;
-use std::sync::Arc;
 
 use {Backend as B, Device, RawDevice};
-use conv;
+use {conv, memory};
 
 
 #[derive(Debug)]
@@ -19,45 +18,7 @@ pub struct UnboundBuffer(n::Buffer);
 #[derive(Debug)]
 pub struct UnboundImage(n::Image);
 
-#[derive(Debug)]
-pub struct Mapping {
-    device: Arc<RawDevice>,
-    memory: vk::DeviceMemory,
-}
-unsafe impl Sync for Mapping {}
-unsafe impl Send for Mapping {}
-impl Drop for Mapping {
-    fn drop(&mut self) {
-        unsafe { self.device.0.unmap_memory(self.memory) }
-    }
-}
-
 impl Device {
-    fn map_buffer(&self,
-        buffer: &n::Buffer,
-        range: Range<u64>,
-    ) -> Result<(*mut vk::types::c_void, Mapping), mapping::Error> {
-        let result = unsafe {
-            self.raw.0.map_memory(
-                buffer.memory,
-                range.start,
-                range.end - range.start,
-                vk::MemoryMapFlags::empty(),
-            )
-        };
-
-        match result {
-            Ok(data) => Ok((data, Mapping {
-                device: self.raw.clone(),
-                memory: buffer.memory,
-            })),
-            Err(error) => {
-                error!("Mapping failed with {:?}", error);
-                Err(mapping::Error::OutOfMemory) //TODO
-            }
-        }
-    }
-
     fn create_image_view(&mut self, image: &n::Image, format: format::Format) -> vk::ImageView {
         // TODO
         let components = vk::ComponentMapping {
@@ -110,8 +71,21 @@ impl d::Device<B> for Device {
             self.raw.0.allocate_memory(&info, None)
                         .expect("Error on heap creation") // TODO: error handling
         };
+        
+        let ptr = if heap_type.properties.contains(memory::CPU_VISIBLE) {
+            unsafe {
+                self.raw.0.map_memory(
+                    memory,
+                    0,
+                    size,
+                    vk::MemoryMapFlags::empty(),
+                ).expect("Error on heap mapping") // TODO
+            }
+        } else {
+            ptr::null_mut()
+        } as *mut _;
 
-        Ok(n::Heap(memory))
+        Ok(n::Heap { memory, ptr })
     }
 
     fn create_renderpass(&mut self, attachments: &[pass::Attachment],
@@ -702,6 +676,8 @@ impl d::Device<B> for Device {
         Ok(UnboundBuffer(n::Buffer {
             raw: buffer,
             memory: vk::DeviceMemory::null(),
+            offset: 0,
+            ptr: ptr::null_mut(),
         }))
     }
 
@@ -716,12 +692,14 @@ impl d::Device<B> for Device {
 
     fn bind_buffer_memory(&mut self, heap: &n::Heap, offset: u64, buffer: UnboundBuffer) -> Result<n::Buffer, buffer::CreationError> {
         assert_eq!(Ok(()), unsafe {
-            self.raw.0.bind_buffer_memory((buffer.0).raw, heap.0, offset)
+            self.raw.0.bind_buffer_memory((buffer.0).raw, heap.memory, offset)
         });
 
         let buffer = n::Buffer {
             raw: buffer.0.raw,
-            memory: heap.0,
+            memory: heap.memory,
+            offset,
+            ptr: unsafe { heap.ptr.offset(offset as isize) }
         };
 
         Ok(buffer)
@@ -830,7 +808,7 @@ impl d::Device<B> for Device {
     fn bind_image_memory(&mut self, heap: &n::Heap, offset: u64, image: UnboundImage) -> Result<n::Image, image::CreationError> {
         // TODO: error handling
         assert_eq!(Ok(()), unsafe {
-            self.raw.0.bind_image_memory(image.0.raw, heap.0, offset)
+            self.raw.0.bind_image_memory(image.0.raw, heap.memory, offset)
         });
 
         Ok(image.0)
@@ -1042,22 +1020,39 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn read_mapping_raw(&mut self, buf: &n::Buffer, range: Range<u64>)
-        -> Result<(*const u8, Mapping), mapping::Error>
+    fn acquire_mapping_raw(&mut self, buf: &n::Buffer, read: Option<Range<u64>>)
+        -> Result<*mut u8, mapping::Error>
     {
-        self.map_buffer(buf, range)
-            .map(|(ptr, mapping)| (ptr as *const _ as *const _, mapping))
+        if let Some(read) = read {
+            let range = vk::MappedMemoryRange {
+                s_type: vk::StructureType::MappedMemoryRange,
+                p_next: ptr::null(),
+                memory: buf.memory,
+                offset: buf.offset + read.start,
+                size: read.end - read.start,
+            };
+            unsafe {
+                self.raw.0.invalidate_mapped_memory_ranges(&[range])
+                    .expect("memory invalidation failed"); // TODO
+            }
+        }
+        Ok(buf.ptr)
     }
 
-    fn write_mapping_raw(&mut self, buf: &n::Buffer, range: Range<u64>)
-        -> Result<(*mut u8, Mapping), mapping::Error>
-    {
-        self.map_buffer(buf, range)
-            .map(|(ptr, mapping)| (ptr as *mut _, mapping))
-    }
-
-    fn unmap_mapping_raw(&mut self, _mapping: Mapping) {
-        //let it drop
+    fn release_mapping_raw(&mut self, buf: &n::Buffer, wrote: Option<Range<u64>>) {
+        if let Some(wrote) = wrote {
+            let range = vk::MappedMemoryRange {
+                s_type: vk::StructureType::MappedMemoryRange,
+                p_next: ptr::null(),
+                memory: buf.memory,
+                offset: buf.offset + wrote.start,
+                size: wrote.end - wrote.start,
+            };
+            unsafe {
+                self.raw.0.flush_mapped_memory_ranges(&[range])
+                    .expect("memory flush failed"); // TODO
+            }
+        }
     }
 
     fn create_semaphore(&mut self) -> n::Semaphore {
@@ -1118,7 +1113,10 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_heap(&mut self, heap: n::Heap) {
-        unsafe { self.raw.0.free_memory(heap.0, None); }
+        if !heap.ptr.is_null() {
+            unsafe { self.raw.0.unmap_memory(heap.memory) }
+        }
+        unsafe { self.raw.0.free_memory(heap.memory, None); }
     }
 
     fn destroy_shader_module(&mut self, module: n::ShaderModule) {
