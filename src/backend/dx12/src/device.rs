@@ -578,7 +578,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_sampler(&mut self, info: image::SamplerInfo) -> n::Sampler {
-        let handle = self.sampler_pool.alloc_handles(1).cpu;
+        let handle = self.sampler_pool.lock().unwrap().alloc_handles(1).cpu;
 
         let op = match info.comparison {
             Some(_) => conv::FilterOp::Comparison,
@@ -779,7 +779,7 @@ impl d::Device<B> for Device {
         format: format::Format,
         range: image::SubresourceRange,
     ) -> Result<n::RenderTargetView, d::TargetViewError> {
-        let handle = self.rtv_pool.alloc_handles(1).cpu;
+        let handle = self.rtv_pool.lock().unwrap().alloc_handles(1).cpu;
 
         if image.kind.get_dimensions().3 != image::AaMode::Single {
             error!("No MSAA supported yet!");
@@ -820,7 +820,7 @@ impl d::Device<B> for Device {
         image: &n::Image,
         format: format::Format,
     ) -> Result<n::ShaderResourceView, d::TargetViewError> {
-        let handle = self.srv_pool.alloc_handles(1).cpu;
+        let handle = self.srv_pool.lock().unwrap().alloc_handles(1).cpu;
 
         let dimension = match image.kind {
             image::Kind::D1(..) |
@@ -893,32 +893,40 @@ impl d::Device<B> for Device {
         }
 
         let heap_srv_cbv_uav = {
-            let range = self
+            let mut heap_srv_cbv_uav = self
                 .heap_srv_cbv_uav
+                .lock()
+                .unwrap();
+
+            let range = heap_srv_cbv_uav
                 .allocator
                 .allocate(num_srv_cbv_uav)
                 .unwrap(); // TODO: error/resize
             n::DescriptorHeapSlice {
-                heap: self.heap_srv_cbv_uav.raw.clone(),
-                handle_size: self.heap_srv_cbv_uav.handle_size,
+                heap: heap_srv_cbv_uav.raw.clone(),
+                handle_size: heap_srv_cbv_uav.handle_size,
                 next: range.start,
                 range,
-                start: self.heap_srv_cbv_uav.start,
+                start: heap_srv_cbv_uav.start,
             }
         };
 
         let heap_sampler = {
-            let range = self
+            let mut heap_sampler = self
                 .heap_sampler
+                .lock()
+                .unwrap();
+
+            let range = heap_sampler
                 .allocator
                 .allocate(num_samplers)
                 .unwrap(); // TODO: error/resize
             n::DescriptorHeapSlice {
-                heap: self.heap_sampler.raw.clone(),
-                handle_size: self.heap_sampler.handle_size,
+                heap: heap_sampler.raw.clone(),
+                handle_size: heap_sampler.handle_size,
                 next: range.start,
                 range,
-                start: self.heap_sampler.start,
+                start: heap_sampler.start,
             }
         };
 
