@@ -312,51 +312,78 @@ pub trait Device<B: Backend>: Clone {
     // Nested mapping is not allowed in vulkan.
     // How to handle it properly for backends? Explicit synchronization?
 
-    /// Map a buffer and obtain a raw pointer for reading.
-    fn read_mapping_raw(&mut self, buf: &B::Buffer, range: Range<u64>)
-        -> Result<(*const u8, B::Mapping), mapping::Error>;
+    /// Acquire access to the buffer mapping.
+    ///
+    /// If you will read, you have to specify in which range.
+    ///
+    /// While holding this access, you hold CPU-side exclusive access.
+    /// You must ensure that there is no GPU access to the buffer in the meantime.
+    fn acquire_mapping_raw(&mut self, buf: &B::Buffer, read: Option<Range<u64>>)
+        -> Result<*mut u8, mapping::Error>;
 
-    /// Map a buffer and obtain a raw pointer for writing.
-    fn write_mapping_raw(&mut self, buf: &B::Buffer, range: Range<u64>)
-        -> Result<(*mut u8, B::Mapping), mapping::Error>;
-
-    /// Unmap a read/write buffer mapping manually.
-    fn unmap_mapping_raw(&mut self, mapping: B::Mapping);
+    /// Release access to the buffer mapping.
+    ///
+    /// If you wrote, you have to specify in which range.
+    fn release_mapping_raw(&mut self, buf: &B::Buffer, wrote: Option<Range<u64>>);
 
     /// Acquire a mapping Reader
     ///
-    /// See `write_mapping` for more information.
-    fn read_mapping<'a, T>(&mut self, buf: &'a B::Buffer, range: Range<u64>)
+    /// The accessible slice will correspond to the specified range (in bytes).
+    /// See `acquire_mapping_raw` for more information.
+    fn acquire_mapping_reader<'a, T>(&mut self, buffer: &'a B::Buffer, range: Range<u64>)
         -> Result<mapping::Reader<'a, B, T>, mapping::Error>
     where
         T: Copy,
     {
         let count = (range.end - range.start) as usize / mem::size_of::<T>();
-        self.read_mapping_raw(buf, range)
-            .map(|(ptr, mapping)| mapping::Reader {
-                slice: unsafe { slice::from_raw_parts(ptr as *const _, count) },
-                _mapping: mapping,
+        self.acquire_mapping_raw(buffer, Some(range.clone()))
+            .map(|ptr| {
+                let start_ptr = unsafe { ptr.offset(range.start as isize) } as *const _;
+                mapping::Reader {
+                    slice: unsafe { slice::from_raw_parts(start_ptr, count) },
+                    buffer,
+                    released: false,
+                }
             })
+    }
+
+    /// Release a mapping Reader
+    ///
+    /// See `acquire_mapping_raw` for more information.
+    fn release_mapping_reader<'a, T>(&mut self, mut reader: mapping::Reader<'a, B, T>)
+        where T: Copy
+    {
+        reader.released = true;
+        self.release_mapping_raw(reader.buffer, None);
     }
 
     /// Acquire a mapping Writer
     ///
-    /// While holding this writer, you hold CPU-side exclusive access.
-    /// Any access overlap will result in an error.
-    /// Submitting commands involving this buffer to the device
-    /// implicitly requires exclusive access. Additionally,
-    /// further access will be stalled until execution completion.
-    fn write_mapping<'a, T>(&mut self, buf: &'a B::Buffer, range: Range<u64>)
+    /// The accessible slice will correspond to the specified range (in bytes).
+    /// See `acquire_mapping_raw` for more information.
+    fn acquire_mapping_writer<'a, T>(&mut self, buffer: &'a B::Buffer, range: Range<u64>)
         -> Result<mapping::Writer<'a, B, T>, mapping::Error>
     where
         T: Copy,
     {
         let count = (range.end - range.start) as usize / mem::size_of::<T>();
-        self.write_mapping_raw(buf, range)
-            .map(|(ptr, mapping)| mapping::Writer {
-                slice: unsafe { slice::from_raw_parts_mut(ptr as *mut _, count) },
-                _mapping: mapping,
+        self.acquire_mapping_raw(buffer, None)
+            .map(|ptr| {
+                let start_ptr = unsafe { ptr.offset(range.start as isize) } as *mut _;
+                mapping::Writer {
+                    slice: unsafe { slice::from_raw_parts_mut(start_ptr, count) },
+                    buffer,
+                    range,
+                    released: false,
+                }
             })
+    }
+
+    fn release_mapping_writer<'a, T>(&mut self, mut writer: mapping::Writer<'a, B, T>)
+        where T: Copy
+    {
+        writer.released = true;
+        self.release_mapping_raw(writer.buffer, Some(writer.range.clone()));
     }
 
     ///

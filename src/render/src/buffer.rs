@@ -1,4 +1,5 @@
 use memory::Memory;
+use mapping;
 
 pub use core::buffer::{CreationError};
 pub use core::buffer::{Usage,
@@ -17,5 +18,6 @@ pub struct Info {
     /// Stride of a single element, in bytes. Only used for structured buffers
     /// that you use via shader resource / unordered access views.
     pub stride: u64,
-    // TODO: mapping stuff
+    /// Mapping informations
+    pub mapping: Option<mapping::Info>,
 }

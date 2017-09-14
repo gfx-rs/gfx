@@ -76,7 +76,6 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
             requirements,
             dependency,
         );
-        println!("bind buffer memory to {:?}, offset {:?}", heap, offset);
         let buffer = device.mut_raw().bind_buffer_memory(heap, offset, buffer)
             .unwrap();
         (buffer, Memory::new(release, inner.usage))
@@ -102,7 +101,6 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
             requirements,
             dependency,
         );
-        println!("bind image memory to {:?}, offset {:?}", heap, offset);
         let image = device.mut_raw().bind_image_memory(heap, offset, image)
             .unwrap();
         (image, Memory::new(release, inner.usage))
@@ -176,7 +174,6 @@ impl<B: Backend> ChunkStack<B> {
             released: false,
         });
 
-        println!("allocated #{:?} {:?}..{:?}) from chunk {:?}", alloc_index, beg, end, chunk_index);
         let sender = self.sender.clone();
         (&self.chunks[chunk_index], beg, Box::new(move || {
             let _ = dependency;
@@ -192,7 +189,6 @@ impl<B: Backend> ChunkStack<B> {
         chunk_size: u64
     ) {
         let heap_type = device.find_usage_heap(usage).unwrap();
-        println!("create chunk of {} bytes on {:?} ({:?})", chunk_size, heap_type, self.resource_type);
         let heap = device.mut_raw()
             .create_heap(&heap_type, self.resource_type, chunk_size)
             .unwrap();
@@ -207,7 +203,6 @@ impl<B: Backend> ChunkStack<B> {
             .unwrap_or(0);
 
         for heap in self.chunks.drain(drain_beg..) {
-            println!("destroy chunk of {:?}", self.resource_type);
             device.destroy_heap(heap);
         }
     }

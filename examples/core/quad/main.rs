@@ -288,9 +288,13 @@ fn main() {
     };
 
     // TODO: check transitions: read/write mapping and vertex buffer read
-    device.write_mapping::<Vertex>(&vertex_buffer, 0..buffer_len)
-        .unwrap()
-        .copy_from_slice(&QUAD);
+    {
+        let mut vertices = device
+            .acquire_mapping_writer::<Vertex>(&vertex_buffer, 0..buffer_len)
+            .unwrap();
+        vertices.copy_from_slice(&QUAD);
+        device.release_mapping_writer(vertices);
+    }
 
     // Image
     let img_data = include_bytes!("data/logo.png");
@@ -311,12 +315,16 @@ fn main() {
     };
 
     // copy image data into staging buffer
-    if let Ok(mut mapping) = device.write_mapping::<u8>(&image_upload_buffer, 0..upload_size) {
+    {
+        let mut data = device
+            .acquire_mapping_writer::<u8>(&image_upload_buffer, 0..upload_size)
+            .unwrap();
         for y in 0 .. height as usize {
             let row = &(*img)[y*(width as usize)*image_stride .. (y+1)*(width as usize)*image_stride];
             let dest_base = y * row_pitch as usize;
-            mapping[dest_base .. dest_base + row.len()].copy_from_slice(row);
+            data[dest_base .. dest_base + row.len()].copy_from_slice(row);
         }
+        device.release_mapping_writer(data);
     }
 
     let image = device.create_image(kind, 1, ColorFormat::get_format(), i::TRANSFER_DST | i::SAMPLED).unwrap(); // TODO: usage
