@@ -44,9 +44,19 @@ pub struct ComputePipeline {
 unsafe impl Send for ComputePipeline { }
 unsafe impl Sync for ComputePipeline { }
 
+bitflags! {
+    pub flags SetTableTypes: u8 {
+        const SRV_CBV_UAV = 0x1,
+        const SAMPLERS = 0x2,
+    }
+}
+
 #[derive(Debug, Hash)]
 pub struct PipelineLayout {
     pub raw: *mut winapi::ID3D12RootSignature,
+    // Storing for each associated descriptor set layout, which tables we created
+    // in the root signature. This is required for binding descriptor sets.
+    pub tables: Vec<SetTableTypes>,
 }
 unsafe impl Send for PipelineLayout { }
 unsafe impl Sync for PipelineLayout { }
@@ -127,10 +137,38 @@ pub struct ShaderResourceView {
 }
 #[derive(Debug)]
 pub struct UnorderedAccessView;
-#[derive(Debug)]
-pub struct DescriptorSet;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
+pub struct DescriptorRange {
+    pub handle: DualHandle,
+    pub ty: pso::DescriptorType,
+    pub handle_size: u64,
+    pub count: usize,
+}
+
+impl DescriptorRange {
+    pub fn at(&self, index: usize) -> winapi::D3D12_CPU_DESCRIPTOR_HANDLE {
+        assert!(index < self.count);
+        let ptr = self.handle.cpu.ptr + self.handle_size * index as u64;
+        winapi::D3D12_CPU_DESCRIPTOR_HANDLE { ptr }
+    }
+}
+
+#[derive(Debug)]
+pub struct DescriptorSet {
+    // Required for binding at command buffer
+    pub heap_srv_cbv_uav: ComPtr<winapi::ID3D12DescriptorHeap>,
+    pub heap_samplers: ComPtr<winapi::ID3D12DescriptorHeap>,
+
+    pub ranges_srv_cbv_uav: Vec<DescriptorRange>,
+    pub ranges_samplers: Vec<DescriptorRange>,
+}
+
+// TODO: is this really safe?
+unsafe impl Send for DescriptorSet {}
+unsafe impl Sync for DescriptorSet {}
+
+#[derive(Copy, Clone, Debug)]
 pub struct DualHandle {
     pub cpu: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
     pub gpu: winapi::D3D12_GPU_DESCRIPTOR_HANDLE,
@@ -178,6 +216,21 @@ impl DescriptorCpuPool {
 pub struct DescriptorHeapSlice {
     pub heap: ComPtr<winapi::ID3D12DescriptorHeap>,
     pub range: Range<u64>,
+    pub start: DualHandle,
+    pub handle_size: u64,
+    pub next: u64,
+}
+
+impl DescriptorHeapSlice {
+    pub fn alloc_handles(&mut self, count: u64) -> DualHandle {
+        assert!(self.next + count <= self.range.end);
+        let index = self.next;
+        self.next += count;
+        DualHandle {
+            cpu: winapi::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: self.start.cpu.ptr + self.handle_size * index },
+            gpu: winapi::D3D12_GPU_DESCRIPTOR_HANDLE { ptr: self.start.gpu.ptr + self.handle_size * index },
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -190,8 +243,45 @@ pub struct DescriptorPool {
 
 impl core::DescriptorPool<Backend> for DescriptorPool {
     fn allocate_sets(&mut self, layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
-        // TODO:
-        layouts.iter().map(|_| DescriptorSet).collect()
+        layouts
+            .iter()
+            .map(|layout| {
+                let ranges_srv_cbv_uav = layout.bindings
+                    .iter()
+                    .filter(|binding| binding.ty != pso::DescriptorType::Sampler)
+                    .map(|binding| {
+                        let set_pool = &mut self.heap_srv_cbv_uav;
+                        DescriptorRange {
+                            handle: set_pool.alloc_handles(binding.count as u64),
+                            ty: binding.ty,
+                            count: binding.count,
+                            handle_size: set_pool.handle_size,
+                        }
+                    })
+                    .collect();
+
+                let ranges_samplers = layout.bindings
+                    .iter()
+                    .filter(|binding| binding.ty == pso::DescriptorType::Sampler)
+                    .map(|binding| {
+                        let set_pool = &mut self.heap_sampler;
+                        DescriptorRange {
+                            handle: set_pool.alloc_handles(binding.count as u64),
+                            ty: binding.ty,
+                            count: binding.count,
+                            handle_size: set_pool.handle_size,
+                        }
+                    })
+                    .collect();
+
+                DescriptorSet {
+                    heap_srv_cbv_uav: self.heap_srv_cbv_uav.heap.clone(),
+                    heap_samplers: self.heap_sampler.heap.clone(),
+                    ranges_srv_cbv_uav,
+                    ranges_samplers,
+                }
+            })
+            .collect()
     }
 
     fn reset(&mut self) {

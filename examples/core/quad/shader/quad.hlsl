@@ -1,5 +1,5 @@
-Texture2D u_Texture;
-SamplerState u_Sampler;
+Texture2D u_Texture: register(t0, space0);
+SamplerState u_Sampler: register(s0, space3);
 
 struct VsOutput {
     float4 pos: SV_POSITION;
