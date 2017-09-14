@@ -77,7 +77,7 @@ impl Device {
         let stage_to_str = |stage| {
             match stage {
                 pso::Stage::Vertex => "vs_5_1\0",
-                pso::Stage::Pixel => "ps_5_1\0",
+                pso::Stage::Fragment => "ps_5_1\0",
                 _ => unimplemented!(),
             }
         };
@@ -411,7 +411,7 @@ impl d::Device<B> for Device {
             };
 
             let vs = build_shader(Some(shaders.vertex));
-            let ps = build_shader(shaders.pixel);
+            let fs = build_shader(shaders.fragment);
             let gs = build_shader(shaders.geometry);
             let ds = build_shader(shaders.domain);
             let hs = build_shader(shaders.hull);
@@ -488,7 +488,7 @@ impl d::Device<B> for Device {
             // Setup pipeline description
             let pso_desc = winapi::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
                 pRootSignature: signature.raw,
-                VS: vs, PS: ps, GS: gs, DS: ds, HS: hs,
+                VS: vs, PS: fs, GS: gs, DS: ds, HS: hs,
                 StreamOutput: winapi::D3D12_STREAM_OUTPUT_DESC {
                     pSODeclaration: ptr::null(),
                     NumEntries: 0,
