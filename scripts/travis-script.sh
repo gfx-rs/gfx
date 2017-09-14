@@ -9,8 +9,7 @@ export RUST_BACKTRACE=1
 
 EXCLUDES=""
 EXCLUDES+=" --exclude gfx_device_dx11"
-EXCLUDES+=" --exclude gfx_device_dx12ll"
-EXCLUDES+=" --exclude gfx_device_dx12"
+EXCLUDES+=" --exclude gfx_backend_dx12"
 
 FEATURES=""
 if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
