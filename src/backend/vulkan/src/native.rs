@@ -19,13 +19,21 @@ pub struct GraphicsPipeline(pub vk::Pipeline);
 pub struct ComputePipeline(pub vk::Pipeline);
 
 #[derive(Debug, Hash)]
-pub struct Heap(pub vk::DeviceMemory);
+pub struct Heap {
+    pub memory: vk::DeviceMemory,
+    pub ptr: *mut u8,
+}
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Buffer {
     pub raw: vk::Buffer,
     pub memory: vk::DeviceMemory,
+    pub offset: u64,
+    pub ptr: *mut u8,
 }
+
+unsafe impl Sync for Buffer {}
+unsafe impl Send for Buffer {}
 
 #[derive(Debug, Hash, PartialEq, Eq)]
 pub struct Image {

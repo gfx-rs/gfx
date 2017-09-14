@@ -14,9 +14,6 @@ use {free_list, native as n, shade, Backend as B, Device};
 use winapi;
 use wio::com::ComPtr;
 
-#[derive(Debug, Eq, Hash, PartialEq)]
-pub struct Mapping;
-
 #[derive(Debug)]
 pub struct UnboundBuffer {
     requirements: memory::Requirements,
@@ -966,37 +963,43 @@ impl d::Device<B> for Device {
             });
     }
 
-    fn read_mapping_raw(
-        &mut self,
-        _buf: &n::Buffer,
-        _range: Range<u64>,
-    ) -> Result<(*const u8, Mapping), mapping::Error> {
-        unimplemented!()
-    }
-
-    fn write_mapping_raw(
-        &mut self,
-        buf: &n::Buffer,
-        range: Range<u64>,
-    ) -> Result<(*mut u8, Mapping), mapping::Error> {
-        if (range.end - range.start) > buf.size_in_bytes as _ {
-            return Err(mapping::Error::OutOfBounds);
-        }
-
-        let range = winapi::D3D12_RANGE {
-            Begin: range.start,
-            End: range.end,
+    fn acquire_mapping_raw(&mut self, buf: &n::Buffer, read: Option<Range<u64>>)
+        -> Result<*mut u8, mapping::Error>
+    {
+        let read_range = if let Some(read) = read {
+            winapi::D3D12_RANGE {
+                Begin: read.start,
+                End: read.end,
+            }
+        } else {
+            winapi::D3D12_RANGE {
+                Begin: 0,
+                End: 0,
+            }
         };
+        
         let mut ptr = ptr::null_mut();
         assert_eq!(winapi::S_OK, unsafe {
-            (*buf.resource).Map(0, &range, &mut ptr)
+            (*buf.resource).Map(0, &read_range, &mut ptr)
         });
 
-        Ok((ptr as *mut _, Mapping {}))
+        Ok(ptr as *mut _)
     }
 
-    fn unmap_mapping_raw(&mut self, _mapping: Mapping) {
-        unimplemented!()
+    fn release_mapping_raw(&mut self, buf: &n::Buffer, wrote: Option<Range<u64>>) {
+        let written_range = if let Some(wrote) = wrote {
+            winapi::D3D12_RANGE {
+                Begin: wrote.start,
+                End: wrote.end,
+            }
+        } else {
+            winapi::D3D12_RANGE {
+                Begin: 0,
+                End: 0,
+            }
+        };
+
+        unsafe { (*buf.resource).Unmap(0, &written_range) };
     }
 
     fn create_semaphore(&mut self) -> n::Semaphore {

@@ -22,7 +22,6 @@ impl core::Backend for Backend {
     type QueueFamily = QueueFamily;
 
     type Heap = ();
-    type Mapping = ();
     type CommandPool = RawCommandPool;
     type SubpassCommandPool = SubpassCommandPool;
 
@@ -181,19 +180,13 @@ impl core::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn read_mapping_raw(&mut self, _: &(), _: Range<u64>)
-        -> Result<(*const u8, ()), mapping::Error>
+    fn acquire_mapping_raw(&mut self, _: &(), _: Option<Range<u64>>)
+        -> Result<*mut u8, mapping::Error>
     {
         unimplemented!()
     }
 
-    fn write_mapping_raw(&mut self, _: &(), _: Range<u64>)
-        -> Result<(*mut u8, ()), mapping::Error>
-    {
-        unimplemented!()
-    }
-
-    fn unmap_mapping_raw(&mut self, _: ()) {
+    fn release_mapping_raw(&mut self, _: &(), _: Option<Range<u64>>) {
         unimplemented!()
     }
 

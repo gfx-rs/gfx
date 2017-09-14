@@ -83,19 +83,6 @@ impl Device {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-pub enum MappingKind {}
-
-#[derive(Debug)]
-#[allow(missing_copy_implementations)]
-pub struct Mapping {
-    pub kind: MappingKind,
-    pub pointer: *mut ::std::os::raw::c_void,
-}
-
-unsafe impl Send for Mapping {}
-unsafe impl Sync for Mapping {}
-
 impl Device {
     pub fn create_shader_module_from_source(
         &mut self,
@@ -381,19 +368,13 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn read_mapping_raw(&mut self, _: &n::Buffer, _: Range<u64>)
-        -> Result<(*const u8, Mapping), mapping::Error>
+    fn acquire_mapping_raw(&mut self, buf: &n::Buffer, read: Option<Range<u64>>)
+        -> Result<*mut u8, mapping::Error>
     {
         unimplemented!()
     }
 
-    fn write_mapping_raw(&mut self, _: &n::Buffer, _: Range<u64>)
-        -> Result<(*mut u8, Mapping), mapping::Error>
-    {
-        unimplemented!()
-    }
-
-    fn unmap_mapping_raw(&mut self, _: Mapping) {
+    fn release_mapping_raw(&mut self, buf: &n::Buffer, wrote: Option<Range<u64>>) {
         unimplemented!()
     }
 

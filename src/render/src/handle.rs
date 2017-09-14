@@ -111,11 +111,16 @@ macro_rules! define_resources {
                 }
 
                 pub fn resource(&self) -> &B::$name {
-                    self.resource.as_ref().unwrap()
+                    self.resource_info().0
                 }
 
                 pub fn info(&self) -> &$info {
-                    &self.info
+                    self.resource_info().1
+                }
+
+                pub fn resource_info(&self) -> (&B::$name, &$info) {
+                    (self.resource.as_ref().unwrap(),
+                     &self.info)
                 }
             }
 
