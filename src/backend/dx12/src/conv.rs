@@ -1,6 +1,7 @@
 use core::format::Format;
 use core::{memory, state, pso, Primitive};
 use core::image::{self, FilterMethod, WrapMode};
+use core::pso::DescriptorSetLayoutBinding;
 use core::state::Comparison;
 use std::fmt;
 use winapi::*;
@@ -442,4 +443,21 @@ pub fn map_image_resource_state(access: image::Access, layout: image::ImageLayou
     }
 
     state
+}
+
+pub fn map_descriptor_range(bind: &DescriptorSetLayoutBinding, register_space: u32) -> D3D12_DESCRIPTOR_RANGE {
+    D3D12_DESCRIPTOR_RANGE {
+        RangeType: match bind.ty {
+            pso::DescriptorType::Sampler => D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
+            pso::DescriptorType::SampledImage => D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+            pso::DescriptorType::StorageBuffer |
+            pso::DescriptorType::StorageImage => D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
+            pso::DescriptorType::ConstantBuffer => D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
+            _ => panic!("unsupported binding type {:?}", bind.ty)
+        },
+        NumDescriptors: bind.count as _,
+        BaseShaderRegister: bind.binding as _,
+        RegisterSpace: register_space,
+        OffsetInDescriptorsFromTableStart: D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
+    }
 }

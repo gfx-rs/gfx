@@ -25,6 +25,10 @@ impl Allocator {
     }
 
     pub fn allocate(&mut self, size: u64) -> Option<Range<u64>> {
+        if size == 0 {
+            return Some(Range { start: 0, end: 0 });
+        }
+
         // Find first node which is big enough.
         let mut split_index = None;
         for (index, node) in self.free_list.iter().enumerate() {

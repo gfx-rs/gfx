@@ -76,8 +76,8 @@ impl Device {
     ) -> Result<n::ShaderModule, d::ShaderError> {
         let stage_to_str = |stage| {
             match stage {
-                pso::Stage::Vertex => "vs_5_0\0",
-                pso::Stage::Pixel => "ps_5_0\0",
+                pso::Stage::Vertex => "vs_5_1\0",
+                pso::Stage::Pixel => "ps_5_1\0",
                 _ => unimplemented!(),
             }
         };
@@ -160,6 +160,54 @@ impl Device {
             allocator,
         }
     }
+
+    fn update_descriptor_sets_impl<F>(
+        &mut self,
+        writes: &[pso::DescriptorSetWrite<B>],
+        heap_type: winapi::D3D12_DESCRIPTOR_HEAP_TYPE,
+        fun: F,
+    ) where
+        F: Fn(&pso::DescriptorWrite<B>, &mut Vec<winapi::D3D12_CPU_DESCRIPTOR_HANDLE>),
+    {
+        let mut dst_starts = Vec::new();
+        let mut dst_sizes = Vec::new();
+        let mut src_starts = Vec::new();
+        let mut src_sizes = Vec::new();
+
+        for sw in writes.iter() {
+            let old_count = src_starts.len();
+            fun(&sw.write, &mut src_starts);
+            if old_count != src_starts.len() {
+                for _ in old_count .. src_starts.len() {
+                    src_sizes.push(1);
+                }
+                match heap_type {
+                    winapi::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER => {
+                        dst_starts.push(sw.set.ranges_samplers[sw.binding].at(sw.array_offset));
+                    }
+                    winapi::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV => {
+                        dst_starts.push(sw.set.ranges_srv_cbv_uav[sw.binding].at(sw.array_offset));
+                    }
+                    _ => unreachable!(),
+                }
+                dst_sizes.push((src_starts.len() - old_count) as u32);
+            }
+        }
+
+        if !dst_starts.is_empty() {
+            unsafe {
+                self.device.CopyDescriptors(
+                    dst_starts.len() as u32,
+                    dst_starts.as_ptr(),
+                    dst_sizes.as_ptr(),
+                    src_starts.len() as u32,
+                    src_starts.as_ptr(),
+                    src_sizes.as_ptr(),
+                    heap_type,
+                );
+            }
+        }
+    }
 }
 
 impl d::Device<B> for Device {
@@ -236,38 +284,67 @@ impl d::Device<B> for Device {
     }
 
     fn create_pipeline_layout(&mut self, sets: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
+        // Pipeline layouts are implemented as RootSignature for D3D12.
+        //
+        // Each descriptor set layout will be one table entry of the root signature.
+        // We have the additional restriction that SRV/CBV/UAV and samplers need to be
+        // separated, so each set layout will actually occupy 2 entries!
+
         let total = sets.iter().map(|desc_sec| desc_sec.bindings.len()).sum();
         // guarantees that no re-allocation is done, and our pointers are valid
         let mut ranges = Vec::with_capacity(total);
+        let mut parameters = Vec::with_capacity(sets.len() * 2);
+        let mut set_tables = Vec::with_capacity(sets.len());
 
-        let parameters = sets.iter().map(|desc_set| {
+        for (i, set) in sets.iter().enumerate() {
+            let mut table_type = n::SetTableTypes::empty();
+
             let mut param = winapi::D3D12_ROOT_PARAMETER {
                 ParameterType: winapi::D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
                 ShaderVisibility: winapi::D3D12_SHADER_VISIBILITY_ALL, //TODO
                 .. unsafe { mem::zeroed() }
             };
+
             let range_base = ranges.len();
-            ranges.extend(desc_set.bindings.iter().map(|bind| winapi::D3D12_DESCRIPTOR_RANGE {
-                RangeType: match bind.ty {
-                    pso::DescriptorType::Sampler => winapi::D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
-                    pso::DescriptorType::SampledImage => winapi::D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-                    pso::DescriptorType::StorageBuffer |
-                    pso::DescriptorType::StorageImage => winapi::D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
-                    pso::DescriptorType::ConstantBuffer => winapi::D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
-                    _ => panic!("unsupported binding type {:?}", bind.ty)
-                },
-                NumDescriptors: bind.count as u32,
-                BaseShaderRegister: bind.binding as u32,
-                RegisterSpace: 0, //TODO?
-                OffsetInDescriptorsFromTableStart: winapi::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
-            }));
-            ranges[0].OffsetInDescriptorsFromTableStart = 0; //careful!
-            *unsafe{ param.DescriptorTable_mut() } = winapi::D3D12_ROOT_DESCRIPTOR_TABLE {
-                NumDescriptorRanges: (ranges.len() - range_base) as u32,
-                pDescriptorRanges: ranges[range_base..].as_ptr(),
-            };
-            param
-        }).collect::<Vec<_>>();
+            ranges.extend(set
+                .bindings
+                .iter()
+                .filter(|bind| bind.ty != pso::DescriptorType::Sampler)
+                .map(|bind| conv::map_descriptor_range(bind, 2*i as u32)));
+
+            if ranges.len() - range_base > 0 {
+                *unsafe{ param.DescriptorTable_mut() } = winapi::D3D12_ROOT_DESCRIPTOR_TABLE {
+                    NumDescriptorRanges: (ranges.len() - range_base) as _,
+                    pDescriptorRanges: ranges[range_base..].as_ptr(),
+                };
+
+                parameters.push(param);
+                table_type |= n::SRV_CBV_UAV;
+            }
+
+            let range_base = ranges.len();
+            ranges.extend(set
+                .bindings
+                .iter()
+                .filter(|bind| bind.ty == pso::DescriptorType::Sampler)
+                .map(|bind| conv::map_descriptor_range(bind, (2*i +1) as u32)));
+
+            if ranges.len() - range_base > 0 {
+                *unsafe{ param.DescriptorTable_mut() } = winapi::D3D12_ROOT_DESCRIPTOR_TABLE {
+                    NumDescriptorRanges: (ranges.len() - range_base) as _,
+                    pDescriptorRanges: ranges[range_base..].as_ptr(),
+                };
+
+                parameters.push(param);
+                table_type |= n::SAMPLERS;
+            }
+
+            set_tables.push(table_type);
+        }
+
+        ranges.get_mut(0).map(|range| {
+            range.OffsetInDescriptorsFromTableStart = 0; // careful!
+        });
 
         let desc = winapi::D3D12_ROOT_SIGNATURE_DESC {
             NumParameters: parameters.len() as u32,
@@ -279,15 +356,20 @@ impl d::Device<B> for Device {
 
         let mut signature = ptr::null_mut();
         let mut signature_raw = ptr::null_mut();
+        let mut error = ptr::null_mut();
 
         // TODO: error handling
         unsafe {
-            d3d12::D3D12SerializeRootSignature(
+            let hr = d3d12::D3D12SerializeRootSignature(
                 &desc,
                 winapi::D3D_ROOT_SIGNATURE_VERSION_1,
                 &mut signature_raw,
-                ptr::null_mut(),
+                &mut error,
             );
+
+            if !error.is_null() {
+                let error_output = (*error).GetBufferPointer();
+            }
 
             self.device.CreateRootSignature(
                 0,
@@ -298,7 +380,10 @@ impl d::Device<B> for Device {
         }
         unsafe { (*signature_raw).Release() };
 
-        n::PipelineLayout { raw: signature }
+        n::PipelineLayout {
+            raw: signature,
+            tables: set_tables,
+        }
     }
 
     fn create_graphics_pipelines<'a>(
@@ -807,14 +892,34 @@ impl d::Device<B> for Device {
             }
         }
 
-        let heap_srv_cbv_uav = n::DescriptorHeapSlice {
-            heap: self.heap_srv_cbv_uav.raw.clone(),
-            range: self.heap_srv_cbv_uav.allocator.allocate(num_srv_cbv_uav).unwrap(), // TODO: error/resize
+        let heap_srv_cbv_uav = {
+            let range = self
+                .heap_srv_cbv_uav
+                .allocator
+                .allocate(num_srv_cbv_uav)
+                .unwrap(); // TODO: error/resize
+            n::DescriptorHeapSlice {
+                heap: self.heap_srv_cbv_uav.raw.clone(),
+                handle_size: self.heap_srv_cbv_uav.handle_size,
+                next: range.start,
+                range,
+                start: self.heap_srv_cbv_uav.start,
+            }
         };
 
-        let heap_sampler = n::DescriptorHeapSlice {
-            heap: self.heap_sampler.raw.clone(),
-            range: self.heap_sampler.allocator.allocate(num_samplers).unwrap(), // TODO: error/resize
+        let heap_sampler = {
+            let range = self
+                .heap_sampler
+                .allocator
+                .allocate(num_samplers)
+                .unwrap(); // TODO: error/resize
+            n::DescriptorHeapSlice {
+                heap: self.heap_sampler.raw.clone(),
+                handle_size: self.heap_sampler.handle_size,
+                next: range.start,
+                range,
+                start: self.heap_sampler.start,
+            }
         };
 
         n::DescriptorPool {
@@ -832,8 +937,25 @@ impl d::Device<B> for Device {
         n::DescriptorSetLayout { bindings: bindings.to_vec() }
     }
 
-    fn update_descriptor_sets(&mut self, _writes: &[pso::DescriptorSetWrite<B>]) {
-        unimplemented!()
+    fn update_descriptor_sets(&mut self, writes: &[pso::DescriptorSetWrite<B>]) {
+        self.update_descriptor_sets_impl(writes,
+            winapi::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+            |dw, starts| match *dw {
+                pso::DescriptorWrite::SampledImage(ref images) => {
+                    starts.extend(images.iter().map(|&(ref srv, _layout)| srv.handle))
+                }
+                pso::DescriptorWrite::Sampler(_) => (), // done separately
+                _ => unimplemented!()
+            });
+
+        self.update_descriptor_sets_impl(writes,
+            winapi::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
+            |dw, starts| match *dw {
+                pso::DescriptorWrite::Sampler(ref samplers) => {
+                    starts.extend(samplers.iter().map(|sm| sm.handle))
+                }
+                _ => ()
+            });
     }
 
     fn read_mapping_raw(
