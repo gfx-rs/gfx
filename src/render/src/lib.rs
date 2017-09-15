@@ -215,6 +215,7 @@ impl<T> Sync<T> {
 
 struct FrameBundle<B: Backend, C> {
     handles: handle::Bag<B>,
+    access_info: encoder::AccessInfo<B>,
     encoder_pools: Vec<encoder::PoolDependency<B, C>>,
     // wait until the backbuffer image is ready
     wait_semaphore: B::Semaphore,
@@ -320,6 +321,7 @@ impl<B: Backend, C> Context<B, C>
         let frame_bundles = backbuffers.iter()
             .map(|_| FrameBundle {
                 handles: handle::Bag::new(),
+                access_info: encoder::AccessInfo::new(),
                 encoder_pools: Vec::new(),
                 wait_semaphore: device.mut_raw().create_semaphore(),
                 signal_semaphore: device.mut_raw().create_semaphore(),
@@ -369,6 +371,8 @@ impl<B: Backend, C> Context<B, C>
         bundle.signal_fence.signal = Reached;
 
         bundle.handles.clear();
+        bundle.access_info.release_accesses();
+        bundle.access_info.clear();
         bundle.encoder_pools.clear();
 
         let frame = self.swapchain.acquire_frame(
@@ -392,6 +396,8 @@ impl<B: Backend, C> Context<B, C>
         let inner_submits: Vec<_> = submits.into_iter()
             .map(|mut submit| {
                 bundle.handles.append(&mut submit.handles);
+                submit.access_info.acquire_accesses();
+                bundle.access_info.append(&mut submit.access_info);
                 bundle.encoder_pools.push(submit.pool);
                 submit.inner
             }).collect();

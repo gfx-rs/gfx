@@ -157,14 +157,48 @@ macro_rules! define_resources {
         }
 
         pub mod raw {
+            use std::{ops, cmp, hash};
             use std::sync::Arc;
             use Backend;
+            use super::inner;
             $(
-                pub type $name<B> = Arc<super::inner::$name<B>>;
+                #[derive(Debug, Clone)]
+                pub struct $name<B: Backend>(Arc<inner::$name<B>>);
+
+                impl<B: Backend> From<inner::$name<B>> for $name<B> {
+                    fn from(inner: inner::$name<B>) -> Self {
+                        $name(Arc::new(inner))
+                    }
+                }
 
                 impl<B: Backend> From<$name<B>> for super::Any<B> {
                     fn from(h: $name<B>) -> Self {
                         super::Any::$name(h)
+                    }
+                }
+
+                impl<B: Backend> ops::Deref for $name<B> {
+                    type Target = inner::$name<B>;
+                    fn deref(&self) -> &Self::Target { &self.0 }
+                }
+
+                impl<B: Backend> $name<B> {
+                    fn as_ptr(&self) -> *const inner::$name<B> {
+                        self.0.as_ref()
+                    }
+                }
+
+                impl<B: Backend> cmp::PartialEq for $name<B> {
+                    fn eq(&self, other: &$name<B>) -> bool {
+                        self.as_ptr().eq(&other.as_ptr())
+                    }
+                }
+
+                impl<B: Backend> cmp::Eq for $name<B> {}
+
+                impl<B: Backend> hash::Hash for $name<B> {
+                    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+                        self.as_ptr().hash(state)
                     }
                 }
             )*

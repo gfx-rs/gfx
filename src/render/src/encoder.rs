@@ -4,6 +4,7 @@ use std::error::Error;
 use std::any::Any;
 use std::fmt;
 use std::sync::mpsc;
+use std::collections::HashSet;
 
 use core::{self, CommandPool};
 use core::command::CommandBuffer;
@@ -36,7 +37,7 @@ impl<B: Backend, C> Pool<B, C> {
             pool: PoolDependency(self.0.dependency()),
             buffer: self.mut_inner().acquire_command_buffer(),
             // raw_data: pso::RawDataSet::new(),
-            // access_info: command::AccessInfo::new(),
+            access_info: AccessInfo::new(),
             handles: handle::Bag::new(),
         }
     }
@@ -71,16 +72,62 @@ pub(crate) fn command_pool_channel<B: Backend, C>()
 pub struct Encoder<'a, B: Backend, C> {
     buffer: CommandBuffer<'a, B, C>,
     // raw_data: pso::RawDataSet<B>,
-    // access_info: command::AccessInfo<B>,
+    access_info: AccessInfo<B>,
     handles: handle::Bag<B>,
     pool: PoolDependency<B, C>
 }
 
 pub struct Submit<B: Backend, C> {
     pub(crate) inner: core::command::Submit<B, C>,
-    // access_info: command::AccessInfo<B>,
+    pub(crate) access_info: AccessInfo<B>,
     pub(crate) handles: handle::Bag<B>,
     pub(crate) pool: PoolDependency<B, C>
+}
+
+/// Informations about what is accessed by a submit.
+#[derive(Debug)]
+pub struct AccessInfo<B: Backend> {
+    buffers: HashSet<handle::raw::Buffer<B>>,
+}
+
+impl<B: Backend> AccessInfo<B> {
+    /// Creates empty access informations
+    pub fn new() -> Self {
+        AccessInfo {
+            buffers: HashSet::new(),
+        }
+    }
+
+    /// Clear access informations
+    pub fn clear(&mut self) {
+        self.buffers.clear();
+    }
+
+    /// Register a buffer read access
+    pub fn buffer_read(&mut self, buffer: handle::raw::Buffer<B>) {
+        self.buffers.insert(buffer);
+    }
+
+    /// Register a buffer write access
+    pub fn buffer_write(&mut self, buffer: handle::raw::Buffer<B>) {
+        self.buffers.insert(buffer);
+    }
+
+    pub fn append(&mut self, other: &mut AccessInfo<B>) {
+        self.buffers.extend(other.buffers.drain());
+    }
+
+    pub(crate) fn acquire_accesses(&self) {
+        for buffer in &self.buffers {
+            assert!(buffer.info().acquire_access());
+        }
+    }
+
+    pub(crate) fn release_accesses(&self) {
+        for buffer in &self.buffers {
+            buffer.info().release_access();
+        }
+    }
 }
 
 /// An error occuring in memory copies.
@@ -232,7 +279,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C> {
     pub fn finish(self) -> Submit<B, C> {
         Submit {
             inner: self.buffer.finish(),
-            // access_info: self.access_info,
+            access_info: self.access_info,
             handles: self.handles,
             pool: self.pool,
         }
