@@ -32,8 +32,6 @@ use std::os::windows::ffi::OsStringExt;
 use std::ffi::OsString;
 use std::sync::{Arc, Mutex};
 
-pub type ShaderModel = u16;
-
 #[derive(Clone)]
 pub struct QueueFamily;
 
@@ -299,11 +297,6 @@ impl Device {
             events: Vec::new(),
         }
     }
-
-    /// Return the maximum supported shader model.
-    pub fn get_shader_model(&self) -> ShaderModel {
-        unimplemented!()
-    }
 }
 
 pub struct Instance {
@@ -312,8 +305,9 @@ pub struct Instance {
 
 impl Instance {
     pub fn create(_: &str, _: u32) -> Instance {
-        // Enable debug layer
+        #[cfg(debug_assertions)]
         {
+            // Enable debug layer
             let mut debug_controller: *mut winapi::ID3D12Debug = ptr::null_mut();
             let hr = unsafe {
                 d3d12::D3D12GetDebugInterface(
