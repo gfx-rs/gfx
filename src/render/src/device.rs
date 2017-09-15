@@ -164,7 +164,8 @@ impl<B: Backend> Device<B> {
         }))
     }
 
-    pub fn create_buffer_raw<A>(&mut self,
+    pub fn create_buffer_raw<A>(
+        &mut self,
         allocator: &mut A,
         usage: buffer::Usage,
         size: u64,
@@ -178,7 +179,8 @@ impl<B: Backend> Device<B> {
         Ok(Buffer::new(buffer, info, self.garbage.clone()).into())
     }
 
-    pub fn create_buffer<T, A>(&mut self,
+    pub fn create_buffer<T, A>(
+        &mut self,
         allocator: &mut A,
         usage: buffer::Usage,
         size: u64
@@ -198,7 +200,8 @@ impl<B: Backend> Device<B> {
     ///
     /// The accessible slice will correspond to the specified range (in elements).
     /// See `acquire_mapping_writer` for more information.
-    pub fn acquire_mapping_reader<'a, MTB>(&mut self,
+    pub fn acquire_mapping_reader<'a, MTB>(
+        &mut self,
         buffer: &'a MTB,
         range: Range<u64>,
     ) -> Result<mapping::Reader<'a, B, MTB::Data>, mapping::Error>
@@ -220,11 +223,10 @@ impl<B: Backend> Device<B> {
     /// Release a mapping Reader.
     ///
     /// See `acquire_mapping_writer` for more information.
-    pub fn release_mapping_reader<'a, T>(&mut self,
+    pub fn release_mapping_reader<'a, T>(
+        &mut self,
         reader: mapping::Reader<'a, B, T>
-    )
-        where T: Copy
-    {
+    ) {
         self.raw.release_mapping_reader(reader.inner);
         reader.info.access.release_exclusive();
     }
@@ -238,7 +240,8 @@ impl<B: Backend> Device<B> {
     /// Submitting commands involving this buffer to the device
     /// implicitly requires exclusive access until frame synchronisation
     /// on `acquire_frame`.
-    pub fn acquire_mapping_writer<'a, MTB>(&mut self,
+    pub fn acquire_mapping_writer<'a, MTB>(
+        &mut self,
         buffer: &'a MTB,
         range: Range<u64>,
     ) -> Result<mapping::Writer<'a, B, MTB::Data>, mapping::Error>
@@ -260,16 +263,46 @@ impl<B: Backend> Device<B> {
     /// Release a mapping Writer.
     ///
     /// See `acquire_mapping_writer` for more information.
-    pub fn release_mapping_writer<'a, T>(&mut self,
+    pub fn release_mapping_writer<'a, T>(
+        &mut self,
         writer: mapping::Writer<'a, B, T>
-    )
-        where T: Copy
-    {
+    ) {
         self.raw.release_mapping_writer(writer.inner);
         writer.info.access.release_exclusive();
     }
 
-    pub fn create_image_raw<A>(&mut self,
+    /// Sugar to acquire and release a mapping reader.
+    pub fn read_mapping<'a, MTB>(
+        &'a mut self,
+        buffer: &'a MTB,
+        range: Range<u64>
+    ) -> Result<mapping::ReadScope<'a, B, MTB::Data>, mapping::Error>
+        where MTB: MaybeTypedBuffer<B>
+    {
+        let reader = self.acquire_mapping_reader(buffer, range)?;
+        Ok(mapping::ReadScope {
+            reader: Some(reader),
+            device: self,
+        })
+    }
+
+    /// Sugar to acquire and release a mapping writer.
+    pub fn write_mapping<'a, MTB>(
+        &'a mut self,
+        buffer: &'a MTB,
+        range: Range<u64>
+    ) -> Result<mapping::WriteScope<'a, B, MTB::Data>, mapping::Error>
+        where MTB: MaybeTypedBuffer<B>
+    {
+        let writer = self.acquire_mapping_writer(buffer, range)?;
+        Ok(mapping::WriteScope {
+            writer: Some(writer),
+            device: self,
+        })
+    }
+
+    pub fn create_image_raw<A>(
+        &mut self,
         allocator: &mut A,
         usage: image::Usage,
         kind: image::Kind,
@@ -284,7 +317,8 @@ impl<B: Backend> Device<B> {
         Ok(Image::new(image, info, self.garbage.clone()).into())
     }
 
-    pub fn create_image<F, A>(&mut self,
+    pub fn create_image<F, A>(
+        &mut self,
         allocator: &mut A,
         usage: image::Usage,
         kind: image::Kind,
@@ -309,7 +343,8 @@ impl<B: Backend> Device<B> {
         ).into()
     }
 
-    pub fn view_buffer_as_constant_raw(&mut self,
+    pub fn view_buffer_as_constant_raw(
+        &mut self,
         buffer: &handle::raw::Buffer<B>,
         range: Range<u64>,
     ) -> Result<handle::raw::ConstantBufferView<B>, TargetViewError>
@@ -322,7 +357,8 @@ impl<B: Backend> Device<B> {
             ).into())
     }
 
-    pub fn view_buffer_as_constant<T>(&mut self,
+    pub fn view_buffer_as_constant<T>(
+        &mut self,
         buffer: &handle::Buffer<B, T>,
         range: Range<u64>,
     ) -> Result<handle::ConstantBufferView<B, T>, TargetViewError>
@@ -331,7 +367,8 @@ impl<B: Backend> Device<B> {
             .map(Typed::new)
     }
 
-    pub(crate) fn view_backbuffer_as_render_target_raw(&mut self,
+    pub(crate) fn view_backbuffer_as_render_target_raw(
+        &mut self,
         image: B::Image,
         kind: image::Kind,
         format: format::Format,
@@ -350,7 +387,8 @@ impl<B: Backend> Device<B> {
     // pub fn view_image_as_depth_stencil_raw
     // pub fn view_image_as_depth_stencil
 
-    pub fn view_image_as_render_target_raw(&mut self,
+    pub fn view_image_as_render_target_raw(
+        &mut self,
         image: &handle::raw::Image<B>,
         format: format::Format,
         range: image::SubresourceRange
@@ -364,7 +402,8 @@ impl<B: Backend> Device<B> {
             ).into())
     }
 
-    pub fn view_image_as_render_target<F>(&mut self,
+    pub fn view_image_as_render_target<F>(
+        &mut self,
         image: &handle::Image<B, F>,
         range: image::SubresourceRange
     ) -> Result<handle::RenderTargetView<B, F>, TargetViewError>
@@ -374,7 +413,8 @@ impl<B: Backend> Device<B> {
             .map(Typed::new)
     }
     
-    pub fn view_image_as_shader_resource_raw(&mut self,
+    pub fn view_image_as_shader_resource_raw(
+        &mut self,
         image: &handle::raw::Image<B>,
         format: format::Format
     ) -> Result<handle::raw::ShaderResourceView<B>, TargetViewError>
@@ -396,7 +436,8 @@ impl<B: Backend> Device<B> {
             .map(Typed::new)
     }
 
-    pub fn view_image_as_unordered_access_raw(&mut self,
+    pub fn view_image_as_unordered_access_raw(
+        &mut self,
         image: &handle::raw::Image<B>,
         format: format::Format
     ) -> Result<handle::raw::UnorderedAccessView<B>, TargetViewError>
