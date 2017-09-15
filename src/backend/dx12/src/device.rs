@@ -553,9 +553,53 @@ impl d::Device<B> for Device {
 
     fn create_compute_pipelines<'a>(
         &mut self,
-        _descs: &[(pso::EntryPoint<'a, B>, &n::PipelineLayout)],
+        descs: &[(pso::EntryPoint<'a, B>, &n::PipelineLayout)],
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
-        unimplemented!()
+        descs.iter().map(|&(shader, ref signature)| {
+            let cs = {
+                // TODO: better handle case where looking up shader fails
+                match shader.module.shaders.get(shader.entry) {
+                    Some(shader) => {
+                        winapi::D3D12_SHADER_BYTECODE {
+                            pShaderBytecode: unsafe { (**shader).GetBufferPointer() as *const _ },
+                            BytecodeLength: unsafe { (**shader).GetBufferSize() as u64 },
+                        }
+                    }
+                    None => {
+                        winapi::D3D12_SHADER_BYTECODE {
+                            pShaderBytecode: ptr::null(),
+                            BytecodeLength: 0,
+                        }
+                    }
+                }
+            };
+
+            let pso_desc = winapi::D3D12_COMPUTE_PIPELINE_STATE_DESC {
+                pRootSignature: signature.raw,
+                CS: cs,
+                NodeMask: 0,
+                CachedPSO: winapi::D3D12_CACHED_PIPELINE_STATE {
+                    pCachedBlob: ptr::null(),
+                    CachedBlobSizeInBytes: 0,
+                },
+                Flags: winapi::D3D12_PIPELINE_STATE_FLAG_NONE,
+            };
+
+            // Create PSO
+            let mut pipeline = ptr::null_mut();
+            let hr = unsafe {
+                self.device.CreateComputePipelineState(
+                    &pso_desc,
+                    &dxguid::IID_ID3D12PipelineState,
+                    &mut pipeline as *mut *mut _ as *mut *mut _)
+            };
+
+            if winapi::SUCCEEDED(hr) {
+                Ok(n::ComputePipeline { raw: pipeline })
+            } else {
+                Err(pso::CreationError::Other)
+            }
+        }).collect()
     }
 
     fn create_framebuffer(
@@ -571,7 +615,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_shader_module(&mut self, spirv_data: &[u8]) -> Result<n::ShaderModule, d::ShaderError> {
+    fn create_shader_module(&mut self, _spirv_data: &[u8]) -> Result<n::ShaderModule, d::ShaderError> {
         unimplemented!()
     }
 
@@ -623,8 +667,8 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn get_buffer_requirements(&mut self, _buffer: &UnboundBuffer) -> Requirements {
-        unimplemented!()
+    fn get_buffer_requirements(&mut self, buffer: &UnboundBuffer) -> Requirements {
+        buffer.requirements
     }
 
     fn bind_buffer_memory(
@@ -1080,27 +1124,27 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn destroy_pipeline_layout(&mut self, _pl: n::PipelineLayout) {
-        unimplemented!()
+    fn destroy_pipeline_layout(&mut self, layout: n::PipelineLayout) {
+        unsafe { (*layout.raw).Release(); }
     }
 
-    fn destroy_graphics_pipeline(&mut self, mut pipeline: n::GraphicsPipeline) {
+    fn destroy_graphics_pipeline(&mut self, pipeline: n::GraphicsPipeline) {
         unsafe { (*pipeline.raw).Release(); }
     }
 
-    fn destroy_compute_pipeline(&mut self, _pipeline: n::ComputePipeline) {
-        unimplemented!()
+    fn destroy_compute_pipeline(&mut self, pipeline: n::ComputePipeline) {
+        unsafe { (*pipeline.raw).Release(); }
     }
 
     fn destroy_framebuffer(&mut self, _fb: n::FrameBuffer) {
         unimplemented!()
     }
 
-    fn destroy_buffer(&mut self, mut buffer: n::Buffer) {
+    fn destroy_buffer(&mut self, buffer: n::Buffer) {
         unsafe { (*buffer.resource).Release(); }
     }
 
-    fn destroy_image(&mut self, mut image: n::Image) {
+    fn destroy_image(&mut self, image: n::Image) {
         unsafe { (*image.resource).Release(); }
     }
 
@@ -1133,7 +1177,7 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_descriptor_set_layout(&mut self, _layout: n::DescriptorSetLayout) {
-        unimplemented!()
+        // Just drop
     }
 
     fn destroy_fence(&mut self, _fence: n::Fence) {
