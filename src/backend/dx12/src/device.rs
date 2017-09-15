@@ -285,7 +285,7 @@ impl d::Device<B> for Device {
         //
         // Each descriptor set layout will be one table entry of the root signature.
         // We have the additional restriction that SRV/CBV/UAV and samplers need to be
-        // separated, so each set layout will actually occupy 2 entries!
+        // separated, so each set layout will actually occupy up to 2 entries!
 
         let total = sets.iter().map(|desc_sec| desc_sec.bindings.len()).sum();
         // guarantees that no re-allocation is done, and our pointers are valid
@@ -366,6 +366,7 @@ impl d::Device<B> for Device {
 
             if !error.is_null() {
                 let error_output = (*error).GetBufferPointer();
+                (*error).Release();
             }
 
             self.device.CreateRootSignature(
@@ -373,9 +374,10 @@ impl d::Device<B> for Device {
                 (*signature_raw).GetBufferPointer(),
                 (*signature_raw).GetBufferSize(),
                 &dxguid::IID_ID3D12RootSignature,
-                &mut signature as *mut *mut _ as *mut *mut _);
+                &mut signature as *mut *mut _ as *mut *mut _,
+            );
+            (*signature_raw).Release();
         }
-        unsafe { (*signature_raw).Release() };
 
         n::PipelineLayout {
             raw: signature,
@@ -475,7 +477,6 @@ impl d::Device<B> for Device {
                                              .zip(pass.color_attachments.iter())
                 {
                     let format = subpass.main_pass.attachments[target.0].format;
-                    println!("{:?}", format);
                     *rtv = conv::map_format(format, true).unwrap_or(winapi::DXGI_FORMAT_UNKNOWN);
                     num_rtvs += 1;
                 }
@@ -513,7 +514,7 @@ impl d::Device<B> for Device {
                     pInputElementDescs: input_element_descs.as_ptr(),
                     NumElements: input_element_descs.len() as u32,
                 },
-                IBStripCutValue: winapi::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED,
+                IBStripCutValue: winapi::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED, // TODO
                 PrimitiveTopologyType: conv::map_topology_type(desc.input_assembler.primitive),
                 NumRenderTargets: num_rtvs,
                 RTVFormats: rtvs,
