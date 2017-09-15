@@ -371,7 +371,7 @@ impl<B: Backend, C> Context<B, C>
         bundle.signal_fence.signal = Reached;
 
         bundle.handles.clear();
-        bundle.access_info.release_accesses();
+        bundle.access_info.end_gpu_access();
         bundle.access_info.clear();
         bundle.encoder_pools.clear();
 
@@ -396,11 +396,12 @@ impl<B: Backend, C> Context<B, C>
         let inner_submits: Vec<_> = submits.into_iter()
             .map(|mut submit| {
                 bundle.handles.append(&mut submit.handles);
-                submit.access_info.acquire_accesses();
                 bundle.access_info.append(&mut submit.access_info);
                 bundle.encoder_pools.push(submit.pool);
                 submit.inner
             }).collect();
+
+        assert!(bundle.access_info.start_gpu_access()); // TODO: recovery
 
         {
             let submission = core::Submission::new()
