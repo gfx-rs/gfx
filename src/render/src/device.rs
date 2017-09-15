@@ -3,7 +3,7 @@ use std::ops::Range;
 use core::{Device as CoreDevice, HeapType};
 use core::device::TargetViewError;
 use core::memory::{HeapProperties,
-    DEVICE_LOCAL, COHERENT, CPU_VISIBLE, CPU_CACHED, WRITE_COMBINED
+    DEVICE_LOCAL, CPU_VISIBLE, CPU_CACHED, WRITE_COMBINED
 };
 
 use memory::{self, Allocator, Typed};
@@ -148,19 +148,19 @@ impl<B: Backend> Device<B> {
 
     pub fn find_upload_heap(&self) -> Option<HeapType> {
         self.find_heap(|props| {
-            props.contains(CPU_VISIBLE | WRITE_COMBINED | COHERENT)
+            props.contains(CPU_VISIBLE | WRITE_COMBINED)
             && !props.contains(CPU_CACHED)
         }).or_else(|| self.find_heap(|props| {
-            props.contains(CPU_VISIBLE | COHERENT)
+            props.contains(CPU_VISIBLE)
         }))
     }
 
     pub fn find_download_heap(&self) -> Option<HeapType> {
         self.find_heap(|props| {
-            props.contains(CPU_VISIBLE | CPU_CACHED | COHERENT)
+            props.contains(CPU_VISIBLE | CPU_CACHED)
             && !props.contains(WRITE_COMBINED)
         }).or_else(|| self.find_heap(|props| {
-            props.contains(CPU_VISIBLE | COHERENT)
+            props.contains(CPU_VISIBLE)
         }))
     }
 
@@ -174,8 +174,7 @@ impl<B: Backend> Device<B> {
     {
         let buffer = self.raw.create_buffer(size, stride, usage)?;
         let (buffer, memory) = allocator.allocate_buffer(self, usage, buffer);
-        let mapping = None; // TODO
-        let info = buffer::Info { usage, memory, size, stride, mapping };
+        let info = buffer::Info::new(usage, memory, size, stride);
         Ok(Buffer::new(buffer, info, self.garbage.clone()).into())
     }
 
@@ -206,6 +205,9 @@ impl<B: Backend> Device<B> {
         where MTB: MaybeTypedBuffer<B>
     {
         let (resource, info) = buffer.as_raw().resource_info();
+        if !info.acquire_access() {
+            return Err(mapping::Error::AccessOverlap);
+        }
         Ok(mapping::Reader {
             inner: self.raw.acquire_mapping_reader(
                 resource,
@@ -224,6 +226,7 @@ impl<B: Backend> Device<B> {
         where T: Copy
     {
         self.raw.release_mapping_reader(reader.inner);
+        reader.info.release_access();
     }
 
     /// Acquire a mapping Writer.
@@ -233,8 +236,8 @@ impl<B: Backend> Device<B> {
     /// While holding this access, you hold CPU-side exclusive access.
     /// Any access overlap will result in an error.
     /// Submitting commands involving this buffer to the device
-    /// implicitly requires exclusive access. Additionally,
-    /// further access will be stalled until execution completion.
+    /// implicitly requires exclusive access until frame synchronisation
+    /// on `acquire_frame`.
     pub fn acquire_mapping_writer<'a, MTB>(&mut self,
         buffer: &'a MTB,
         range: Range<u64>,
@@ -242,6 +245,9 @@ impl<B: Backend> Device<B> {
         where MTB: MaybeTypedBuffer<B>
     {
         let (resource, info) = buffer.as_raw().resource_info();
+        if !info.acquire_access() {
+            return Err(mapping::Error::AccessOverlap);
+        }
         Ok(mapping::Writer {
             inner: self.raw.acquire_mapping_writer(
                 resource,
@@ -260,6 +266,7 @@ impl<B: Backend> Device<B> {
         where T: Copy
     {
         self.raw.release_mapping_writer(writer.inner);
+        writer.info.release_access();
     }
 
     pub fn create_image_raw<A>(&mut self,
