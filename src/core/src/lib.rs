@@ -221,6 +221,7 @@ pub enum IndexType {
 
 ///
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct HeapType {
     /// Id of the heap type.
     pub id: usize,
