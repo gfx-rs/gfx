@@ -202,13 +202,10 @@ fn main() {
         vertex_count
     ).unwrap();
 
-    {
-        let mut vertices = context.mut_device()
-            .acquire_mapping_writer(&vertex_buffer, 0..vertex_count)
-            .unwrap();
-        vertices.copy_from_slice(&QUAD);
-        context.mut_device().release_mapping_writer(vertices);
-    }
+    context.mut_device()
+        .write_mapping(&vertex_buffer, 0..vertex_count)
+        .unwrap()
+        .copy_from_slice(&QUAD);
 
     let img_data = include_bytes!("../../core/quad/data/logo.png");
     let img = image::load(Cursor::new(&img_data[..]), image::PNG).unwrap().to_rgba();
@@ -229,16 +226,14 @@ fn main() {
 
     println!("copy image data into staging buffer");
 
+    if let Ok(mut image_data) = context.mut_device()
+        .write_mapping(&image_upload_buffer, 0..upload_size)
     {
-        let mut data = context.mut_device()
-            .acquire_mapping_writer(&image_upload_buffer, 0..upload_size)
-            .unwrap();
         for y in 0 .. height as usize {
             let row = &(*img)[y*(width as usize)*image_stride .. (y+1)*(width as usize)*image_stride];
             let dest_base = y * row_pitch as usize;
-            data[dest_base .. dest_base + row.len()].copy_from_slice(row);
+            image_data[dest_base .. dest_base + row.len()].copy_from_slice(row);
         }
-        context.mut_device().release_mapping_writer(data);
     }
 
     let image = context.mut_device().create_image::<ColorFormat, _>(

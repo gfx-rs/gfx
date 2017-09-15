@@ -1,7 +1,6 @@
 #![deny(missing_docs, missing_copy_implementations)]
 
 //! Memory mapping
-use std::{fmt, ops};
 use std::error::Error as StdError;
 use std::fmt;
 use std::ops::{self, Range};
@@ -40,47 +39,44 @@ impl StdError for Error {
 }
 
 /// Mapping reader
-pub struct Reader<'a, B: Backend, T: 'a + Copy> {
+pub struct Reader<'a, B: Backend, T: 'a> {
     pub(crate) slice: &'a [T],
     pub(crate) buffer: &'a B::Buffer,
     pub(crate) released: bool,
 }
 
-impl<'a, B: Backend, T: 'a + Copy> Drop for Reader<'a, B, T> {
+impl<'a, B: Backend, T: 'a> Drop for Reader<'a, B, T> {
     fn drop(&mut self) {
-        if !self.released { panic!("a mapping reader was not released"); }
+        assert!(self.released, "a mapping reader was not released");
     }
 }
 
-impl<'a, B: Backend, T: 'a + Copy> ops::Deref for Reader<'a, B, T> {
+impl<'a, B: Backend, T: 'a> ops::Deref for Reader<'a, B, T> {
     type Target = [T];
-
     fn deref(&self) -> &[T] { self.slice }
 }
 
 /// Mapping writer.
 /// Currently is not possible to make write-only slice so while it is technically possible
 /// to read from Writer, it will lead to an undefined behavior. Please do not read from it.
-pub struct Writer<'a, B: Backend, T: 'a + Copy> {
+pub struct Writer<'a, B: Backend, T: 'a> {
     pub(crate) slice: &'a mut [T],
     pub(crate) buffer: &'a B::Buffer,
     pub(crate) range: Range<u64>,
     pub(crate) released: bool,
 }
 
-impl<'a, B: Backend, T: 'a + Copy> Drop for Writer<'a, B, T> {
+impl<'a, B: Backend, T: 'a> Drop for Writer<'a, B, T> {
     fn drop(&mut self) {
-        if !self.released { panic!("a mapping writer was not released"); }
+        assert!(self.released, "a mapping writer was not released");
     }
 }
 
-impl<'a, B: Backend, T: 'a + Copy> ops::Deref for Writer<'a, B, T> {
+impl<'a, B: Backend, T: 'a> ops::Deref for Writer<'a, B, T> {
     type Target = [T];
-
     fn deref(&self) -> &[T] { self.slice }
 }
 
-impl<'a, B: Backend, T: 'a + Copy> ops::DerefMut for Writer<'a, B, T> {
+impl<'a, B: Backend, T: 'a> ops::DerefMut for Writer<'a, B, T> {
     fn deref_mut(&mut self) -> &mut [T] { self.slice }
 }
-

@@ -337,10 +337,10 @@ pub trait Device<B: Backend>: Clone {
     {
         let count = (range.end - range.start) as usize / mem::size_of::<T>();
         self.acquire_mapping_raw(buffer, Some(range.clone()))
-            .map(|ptr| {
-                let start_ptr = unsafe { ptr.offset(range.start as isize) } as *const _;
+            .map(|ptr| unsafe {
+                let start_ptr = ptr.offset(range.start as isize) as *const _;
                 mapping::Reader {
-                    slice: unsafe { slice::from_raw_parts(start_ptr, count) },
+                    slice: slice::from_raw_parts(start_ptr, count),
                     buffer,
                     released: false,
                 }
@@ -350,9 +350,7 @@ pub trait Device<B: Backend>: Clone {
     /// Release a mapping Reader
     ///
     /// See `acquire_mapping_raw` for more information.
-    fn release_mapping_reader<'a, T>(&mut self, mut reader: mapping::Reader<'a, B, T>)
-        where T: Copy
-    {
+    fn release_mapping_reader<'a, T>(&mut self, mut reader: mapping::Reader<'a, B, T>) {
         reader.released = true;
         self.release_mapping_raw(reader.buffer, None);
     }
@@ -368,10 +366,10 @@ pub trait Device<B: Backend>: Clone {
     {
         let count = (range.end - range.start) as usize / mem::size_of::<T>();
         self.acquire_mapping_raw(buffer, None)
-            .map(|ptr| {
-                let start_ptr = unsafe { ptr.offset(range.start as isize) } as *mut _;
+            .map(|ptr| unsafe {
+                let start_ptr = ptr.offset(range.start as isize) as *mut _;
                 mapping::Writer {
-                    slice: unsafe { slice::from_raw_parts_mut(start_ptr, count) },
+                    slice: slice::from_raw_parts_mut(start_ptr, count),
                     buffer,
                     range,
                     released: false,
@@ -379,9 +377,7 @@ pub trait Device<B: Backend>: Clone {
             })
     }
 
-    fn release_mapping_writer<'a, T>(&mut self, mut writer: mapping::Writer<'a, B, T>)
-        where T: Copy
-    {
+    fn release_mapping_writer<'a, T>(&mut self, mut writer: mapping::Writer<'a, B, T>) {
         writer.released = true;
         self.release_mapping_raw(writer.buffer, Some(writer.range.clone()));
     }
