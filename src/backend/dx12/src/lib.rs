@@ -250,7 +250,7 @@ impl Device {
             &mut device,
             winapi::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
             true,
-            0x10000,
+            1_000_000, // maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
         );
 
         let heap_sampler = Self::create_descriptor_heap_impl(

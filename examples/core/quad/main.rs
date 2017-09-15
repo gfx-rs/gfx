@@ -111,7 +111,7 @@ fn main() {
     #[cfg(feature = "dx12")]
     let vs_module = device
         .create_shader_module_from_source(
-            shade::Stage::Vertex,
+            pso::Stage::Vertex,
             "vs_main",
             "main",
             include_bytes!("shader/quad.hlsl"))
@@ -119,7 +119,7 @@ fn main() {
     #[cfg(feature = "dx12")]
     let fs_module = device
         .create_shader_module_from_source(
-            shade::Stage::Fragment,
+            pso::Stage::Fragment,
             "ps_main",
             "main",
             include_bytes!("shader/quad.hlsl"))
