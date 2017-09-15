@@ -205,7 +205,7 @@ impl<B: Backend> Device<B> {
         where MTB: MaybeTypedBuffer<B>
     {
         let (resource, info) = buffer.as_raw().resource_info();
-        if !info.acquire_access() {
+        if !info.access.acquire_exclusive() {
             return Err(mapping::Error::AccessOverlap);
         }
         Ok(mapping::Reader {
@@ -226,7 +226,7 @@ impl<B: Backend> Device<B> {
         where T: Copy
     {
         self.raw.release_mapping_reader(reader.inner);
-        reader.info.release_access();
+        reader.info.access.release_exclusive();
     }
 
     /// Acquire a mapping Writer.
@@ -245,7 +245,7 @@ impl<B: Backend> Device<B> {
         where MTB: MaybeTypedBuffer<B>
     {
         let (resource, info) = buffer.as_raw().resource_info();
-        if !info.acquire_access() {
+        if !info.access.acquire_exclusive() {
             return Err(mapping::Error::AccessOverlap);
         }
         Ok(mapping::Writer {
@@ -266,7 +266,7 @@ impl<B: Backend> Device<B> {
         where T: Copy
     {
         self.raw.release_mapping_writer(writer.inner);
-        writer.info.release_access();
+        writer.info.access.release_exclusive();
     }
 
     pub fn create_image_raw<A>(&mut self,

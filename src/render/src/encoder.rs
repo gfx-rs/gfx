@@ -117,15 +117,35 @@ impl<B: Backend> AccessInfo<B> {
         self.buffers.extend(other.buffers.drain());
     }
 
-    pub(crate) fn acquire_accesses(&self) {
-        for buffer in &self.buffers {
-            assert!(buffer.info().acquire_access());
+    pub(crate) fn start_gpu_access(&self) -> bool {
+        let accesses = || self.buffers.iter()
+            .map(|buffer| &buffer.info().access);
+        
+        let mut acquired = 0;
+        for access in accesses() {
+            if access.acquire_cpu() {
+                acquired += 1;
+            } else {
+                // Release everything before notifying of failure.
+                for access in accesses().take(acquired) {
+                    access.release_cpu();
+                }
+                return false;
+            }
         }
+
+        // Everything was acquired, start gpu access and release
+        for access in accesses() {
+            access.gpu_start();
+            access.release_cpu();
+        }
+
+        true
     }
 
-    pub(crate) fn release_accesses(&self) {
+    pub(crate) fn end_gpu_access(&self) {
         for buffer in &self.buffers {
-            buffer.info().release_access();
+            buffer.info().access.gpu_end()
         }
     }
 }

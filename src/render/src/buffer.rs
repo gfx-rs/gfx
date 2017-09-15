@@ -1,4 +1,4 @@
-use std::sync::atomic::{self, AtomicBool};
+use std::sync::atomic::{self, AtomicBool, AtomicUsize};
 
 use memory::Memory;
 
@@ -20,26 +20,63 @@ pub struct Info {
     /// that you use via shader resource / unordered access views.
     pub stride: u64,
     /// Exclusive access
-    pub(crate) access: AtomicBool,
+    pub(crate) access: Access,
 }
 
 impl Info {
     pub(crate) fn new(usage: Usage, memory: Memory, size: u64, stride: u64)
         -> Self
     {
-        let access = AtomicBool::new(false);
+        let access = Access {
+            cpu: AtomicBool::new(false),
+            gpu: AtomicUsize::new(0),
+        };
         Info { usage, memory, size, stride, access }
     }
+}
 
-    pub(crate) fn acquire_access(&self) -> bool {
-        !self.access.swap(true, atomic::Ordering::Acquire)
+#[derive(Debug)]
+pub(crate) struct Access {
+    cpu: AtomicBool,
+    gpu: AtomicUsize,
+}
+
+impl Access {
+    pub(crate) fn acquire_exclusive(&self) -> bool {
+        if self.acquire_cpu() {
+            if self.gpu.load(atomic::Ordering::Relaxed) == 0 {
+                true
+            } else {
+                // Release before notifying of failure
+                self.release_cpu();
+                false
+            }
+        } else {
+            false
+        }
     }
 
-    pub(crate) fn release_access(&self) {
+    pub(crate) fn release_exclusive(&self) {
+        self.release_cpu()
+    }
+
+    pub(crate) fn acquire_cpu(&self) -> bool {
+        !self.cpu.swap(true, atomic::Ordering::Acquire)
+    }
+
+    pub(crate) fn release_cpu(&self) {
         if cfg!(debug) {
-            assert!(self.access.swap(false, atomic::Ordering::Release));
+            assert!(self.cpu.swap(false, atomic::Ordering::Release));
         } else {
-            self.access.store(false, atomic::Ordering::Release);
+            self.cpu.store(false, atomic::Ordering::Release);
         }
+    }
+
+    pub(crate) fn gpu_start(&self) {
+        self.gpu.fetch_add(1, atomic::Ordering::Relaxed);
+    }
+
+    pub(crate) fn gpu_end(&self) {
+        self.gpu.fetch_sub(1, atomic::Ordering::Relaxed);
     }
 }
