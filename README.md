@@ -75,8 +75,9 @@ Shiny screens, including some older projects:
   <img src="https://github.com/kvark/vange-rs/blob/master/etc/shots/Road10-debug-shape.png" height="160" alt="Vange-rs"/>
   <img src="https://github.com/kvark/claymore/raw/master/etc/screens/7-forest.jpg" height="160" alt="Claymore"/>
   <img src="https://camo.githubusercontent.com/fb8c95650fba27061e58e76f17ff8460a41b3312/687474703a2f2f692e696d6775722e636f6d2f504f68534c77682e706e67" height="160" alt="ZoC"/>
-  <img src="https://camo.githubusercontent.com/0038d5e3c73b280cfa5d01b26ccef12be7237af5/687474703a2f2f692e696d6775722e636f6d2f703163654954352e706e67" height="160" alt="Rust-Quake">
-  <img src="https://github.com/itadinanta/rust-oids/raw/master/img/screenshot_007.png" height="160" alt="Rust-oids">
+  <img src="https://camo.githubusercontent.com/0038d5e3c73b280cfa5d01b26ccef12be7237af5/687474703a2f2f692e696d6775722e636f6d2f703163654954352e706e67" height="160" alt="Rust-Quake"/>
+  <img src="https://github.com/itadinanta/rust-oids/raw/master/img/screenshot_007.png" height="160" alt="Rust-oids"/>
+  <img src="https://cloud.githubusercontent.com/assets/19550918/18922767/a6cd5d22-85b2-11e6-99ee-1d26eb85cbc0.png" height="160" alt="Rusty planet"/>
   <!--img src="https://raw.githubusercontent.com/csherratt/petri/master/petri.png" height="160" alt="Petri"/-->
 </p>
 
