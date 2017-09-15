@@ -70,10 +70,3 @@ impl<'a, B: Backend, T: 'a + Copy> ops::Deref for Writer<'a, B, T> {
 impl<'a, B: Backend, T: 'a + Copy> ops::DerefMut for Writer<'a, B, T> {
     fn deref_mut(&mut self) -> &mut [T] { &mut self.inner }
 }
-
-// TODO
-#[derive(Debug)]
-pub struct Info {
-    // cpu_access: AtomicBool,
-    // gpu_access: AtomicBool,
-}
