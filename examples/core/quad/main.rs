@@ -5,7 +5,7 @@ extern crate gfx_backend_dx12 as back;
 #[cfg(feature = "vulkan")]
 extern crate gfx_backend_vulkan as back;
 #[cfg(feature = "metal")]
-extern crate gfx_device_metal as back;
+extern crate gfx_backend_metal as back;
 #[cfg(feature = "gl")]
 extern crate gfx_backend_gl as back;
 
@@ -86,6 +86,13 @@ fn main() {
         let adapters = surface.enumerate_adapters();
         (adapters, surface)
     };
+    #[cfg(feature = "metal")]
+    let (_instance, adapters, mut surface) = {
+        let instance = back::Instance::create();
+        let surface = instance.create_surface(&window);
+        let adapters = instance.enumerate_adapters();
+        (instance, adapters, surface)
+    };
 
     for adapter in &adapters {
         println!("{:?}", adapter.get_info());
@@ -128,6 +135,7 @@ fn main() {
     let vs_module = device.create_shader_module(include_bytes!("data/vs_main.spv")).unwrap();
     #[cfg(feature = "vulkan")]
     let fs_module = device.create_shader_module(include_bytes!("data/ps_main.spv")).unwrap();
+
     #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
     let shader_lib = device.create_shader_library_from_source(
             include_str!("shader/quad_indirect.metal"),
@@ -138,6 +146,7 @@ fn main() {
             include_str!("shader/quad.metal"),
             back::LanguageVersion::new(1, 1),
         ).expect("Error on creating shader lib");
+
     #[cfg(feature = "gl")]
     let shader_lib = device.create_shader_library_from_source(&[
             (VS, pso::Stage::Vertex, include_bytes!("shader/quad_450.glslv")),
@@ -229,12 +238,24 @@ fn main() {
 
     //
     let pipelines = {
+        #[cfg(any(feature = "vulkan", feature = "dx12"))]
+        let (vs_entry, fs_entry) = (
+            pso::EntryPoint { entry: "main", module: &vs_module },
+            pso::EntryPoint { entry: "main", module: &fs_module },
+        );
+
+        #[cfg(feature = "metal")]
+        let (vs_entry, fs_entry) = (
+            pso::EntryPoint { entry: "vs_main", module: &shader_lib },
+            pso::EntryPoint { entry: "ps_main", module: &shader_lib },
+        );
+
         let shader_entries = pso::GraphicsShaderSet {
-            vertex: pso::EntryPoint { entry: "main", module: &vs_module },
+            vertex: vs_entry,
             hull: None,
             domain: None,
             geometry: None,
-            fragment: Some(pso::EntryPoint { entry: "main", module: &fs_module },),
+            fragment: Some(fs_entry),
         };
         let subpass = Subpass { index: 0, main_pass: &render_pass };
         device.create_graphics_pipelines(&[
@@ -500,8 +521,15 @@ fn main() {
     device.destroy_descriptor_pool(sampler_pool);
     device.destroy_descriptor_set_layout(set0_layout);
     device.destroy_descriptor_set_layout(set1_layout);
-    device.destroy_shader_module(vs_module);
-    device.destroy_shader_module(fs_module);
+
+    #[cfg(any(feature = "vulkan", feature = "dx12"))]
+    {
+        device.destroy_shader_module(vs_module);
+        device.destroy_shader_module(fs_module);
+    }
+    #[cfg(feature = "metal")]
+    device.destroy_shader_module(shader_lib);
+
     device.destroy_pipeline_layout(pipeline_layout);
     device.destroy_renderpass(render_pass);
     device.destroy_heap(heap);

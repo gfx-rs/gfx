@@ -1,856 +1,851 @@
-use std::os::raw::c_void;
-use std::sync::{Arc, Mutex};
-use std::{mem, slice, str};
+use {Backend};
+use {native as n, command};
+use conversions::*;
+
+use std::ops::Range;
+use std::cell::Cell;
+use std::cmp;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
+use std::{mem, ptr, slice};
 
-// use cocoa::base::{selector, class};
-// use cocoa::foundation::{NSUInteger};
+use core::{self,
+        image, pass, format, mapping, memory, buffer, pso};
+use core::{Limits, Features, QueueType, Gpu, HeapType};
+use core::device::{WaitFor, ResourceHeapError, ResourceHeapType, TargetViewError};
+use core::device::{ShaderError, Extent};
+use core::pso::{DescriptorSetWrite, DescriptorType, DescriptorSetLayoutBinding, AttributeDesc};
+use core::pass::{Subpass};
 
-use core::{self, buffer, device, mapping, memory};
-use core::handle::{self, Producer};
-use core::memory::Typed;
-
+use cocoa::foundation::{NSRange, NSUInteger};
 use metal::*;
+use objc::runtime::Object as ObjcObject;
 
-use command::RawCommandBuffer;
-
-use MTL_MAX_BUFFER_BINDINGS;
-
-use {Resources, ShaderModel, Share};
-use {mirror, native as n};
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct RawMapping {
-    pointer: *mut c_void,
+pub struct Adapter {
+    pub(crate) device: MTLDevice,
+    pub(crate) adapter_info: core::AdapterInfo,
+    pub(crate) queue_families: [(n::QueueFamily, QueueType); 1],
 }
 
-unsafe impl Send for RawMapping {}
-unsafe impl Sync for RawMapping {}
-
-impl mapping::Gate<Resources> for RawMapping {
-    unsafe fn set<T>(&self, index: usize, val: T) {
-        *(self.pointer as *mut T).offset(index as isize) = val;
-    }
-
-    unsafe fn slice<'a, 'b, T>(&'a self, len: usize) -> &'b [T] {
-        slice::from_raw_parts(self.pointer as *const T, len)
-    }
-
-    unsafe fn mut_slice<'a, 'b, T>(&'a self, len: usize) -> &'b mut [T] {
-        slice::from_raw_parts_mut(self.pointer as *mut T, len)
+impl Drop for Adapter {
+    fn drop(&mut self) {
+        unsafe { self.device.release(); }
     }
 }
-
 
 pub struct Device {
     device: MTLDevice,
-    share: Arc<Share>,
-    frame_handles: handle::Manager<Resources>,
+    private_caps: PrivateCapabilities,
+}
+
+impl Drop for Device {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.release();
+        }
+    }
+}
+
+impl Clone for Device {
+    fn clone(&self) -> Device {
+        unsafe { self.device.retain(); }
+        Device { device: self.device, private_caps: self.private_caps }
+    }
+}
+
+impl core::Adapter<Backend> for Adapter {
+    fn open(&self, queue_descs: &[(&n::QueueFamily, QueueType, u32)]) -> Gpu<Backend> {
+        assert!(queue_descs.len() == 1, "Metal only supports one queue family");
+        let (_, queue_type, queue_count) = queue_descs[0];
+        assert!(queue_type == QueueType::General, "Metal only support general queues");
+
+        let resource_heaps = [
+            MTLFeatureSet::iOS_GPUFamily1_v3,
+            MTLFeatureSet::iOS_GPUFamily2_v3,
+            MTLFeatureSet::iOS_GPUFamily3_v2,
+            MTLFeatureSet::iOS_GPUFamily1_v4,
+            MTLFeatureSet::iOS_GPUFamily2_v4,
+            MTLFeatureSet::iOS_GPUFamily3_v3,
+
+            MTLFeatureSet::tvOS_GPUFamily1_v2,
+            MTLFeatureSet::tvOS_GPUFamily1_v3,
+
+            MTLFeatureSet::macOS_GPUFamily1_v3,
+        ].iter().cloned().any(|x| self.device.supports_feature_set(x));
+
+        unsafe { self.device.retain(); }
+        let device = Device {
+            device: self.device,
+            private_caps: PrivateCapabilities {
+                resource_heaps,
+                indirect_arguments: true, //TEMP
+            },
+        };
+
+        let general_queues = (0..queue_count).map(|_| {
+            unsafe { core::CommandQueue::new(command::CommandQueue::new(self.device)) }
+        }).collect();
+
+        let heap_types = vec![
+            core::HeapType {
+                id: 0,
+                properties: memory::CPU_VISIBLE | memory::CPU_CACHED,
+                heap_index: 0,
+            },
+            core::HeapType {
+                id: 1,
+                properties: memory::CPU_VISIBLE | memory::CPU_CACHED | memory::WRITE_COMBINED,
+                heap_index: 1,
+            },
+            core::HeapType {
+                id: 2,
+                properties: memory::CPU_VISIBLE | memory::COHERENT | memory::CPU_CACHED,
+                heap_index: 2,
+            },
+            core::HeapType {
+                id: 3,
+                properties: memory::CPU_VISIBLE | memory::COHERENT 
+                    | memory::CPU_CACHED | memory::WRITE_COMBINED,
+                heap_index: 3,
+            },
+            core::HeapType {
+                id: 4,
+                properties: memory::DEVICE_LOCAL,
+                heap_index: 4,
+            },
+        ];
+        let memory_heaps = Vec::new();
+
+        Gpu {
+            device,
+            general_queues,
+            graphics_queues: Vec::new(),
+            compute_queues: Vec::new(),
+            transfer_queues: Vec::new(),
+            heap_types,
+            memory_heaps,
+        }
+    }
+
+    fn get_info(&self) -> &core::AdapterInfo {
+        &self.adapter_info
+    }
+
+    fn get_queue_families(&self) -> &[(n::QueueFamily, QueueType)] {
+        &self.queue_families
+    }
+}
+
+#[derive(Clone, Copy)]
+struct PrivateCapabilities {
+    resource_heaps: bool,
+    indirect_arguments: bool,
+}
+
+pub struct LanguageVersion {
+    pub major: u8,
+    pub minor: u8,
+}
+
+impl LanguageVersion {
+    pub fn new(major: u8, minor: u8) -> Self {
+        LanguageVersion { major, minor }
+    }
 }
 
 impl Device {
-    pub fn new(device: MTLDevice, share: Arc<Share>) -> Device {
-        Device {
-            device: device,
-            share: share,
-            frame_handles: handle::Manager::new(),
-        }
+    pub fn create_shader_library_from_file<P>(
+        &mut self,
+        path: P,
+    ) -> Result<n::ShaderModule, ShaderError> where P: AsRef<Path> {
+        unimplemented!()
     }
 
-    pub fn get_shader_model(&self) -> ShaderModel {
-        use metal::MTLFeatureSet::*;
-
-        // TODO: double check if these are correct (and correct way?)
-        // Check support via MSL specs and compare OS versions for feature sets
-        // [Metal Shading Language Specification Section 6.3](https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf)
-        // [Metal Feature Set Tables](https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf)
-        match self.share.feature_set {
-            iOS_GPUFamily1_v1 |
-            iOS_GPUFamily2_v1 => 10,
-            iOS_GPUFamily1_v2 |
-            iOS_GPUFamily2_v2 |
-            iOS_GPUFamily3_v1 |
-            tvOS_GPUFamily1_v1 | // TODO: not enlisted?
-            macOS_GPUFamily1_v1 => 11,
-            iOS_GPUFamily1_v3 |
-            iOS_GPUFamily2_v3 |
-            iOS_GPUFamily3_v2 |
-            tvOS_GPUFamily1_v2 | // TODO: not enlisted?
-            macOS_GPUFamily1_v2 => 12,
-            iOS_GPUFamily1_v4 |
-            iOS_GPUFamily2_v4 |
-            iOS_GPUFamily3_v3 |
-            tvOS_GPUFamily1_v3 | // TODO: not enlisted?
-            macOS_GPUFamily1_v3 => 20,
-            _ => unreachable!(),
-        }
-    }
-
-    fn create_buffer_internal(&self,
-                              info: buffer::Info,
-                              raw_data: Option<*const c_void>)
-                              -> Result<handle::RawBuffer<Resources>, buffer::CreationError> {
-        use map::map_buffer_usage;
-
-        let usage = map_buffer_usage(info.usage, info.bind);
-
-        if info.bind.contains(memory::RENDER_TARGET) | info.bind.contains(memory::DEPTH_STENCIL) {
-            return Err(buffer::CreationError::UnsupportedBind(info.bind));
-        }
-
-        let raw_buf = if let Some(data) = raw_data {
-            self.device
-                .new_buffer_with_data(unsafe { mem::transmute(data) }, info.size as u64, usage)
-        } else {
-            self.device.new_buffer(info.size as u64, usage)
-        };
-
-        let buf = n::Buffer(n::RawBuffer(Box::into_raw(Box::new(raw_buf))), info.usage, info.bind);
-
-        // TODO(fkaa): if we have a way to track buffers in use (added on
-        //             scheduling of command buffers, removed on completion),
-        //             we could block while in use on both sides. would need
-        //             a state for each mode (`in-use` vs. `mapped`).
-        let mapping = None;
-
-        Ok(self.share.handles.borrow_mut().make_buffer(buf, info, mapping))
-    }
-
-    pub fn make_depth_stencil(&self, info: &core::pso::DepthStencilInfo) -> MTLDepthStencilState {
-        use map::{map_function, map_stencil_op};
-
-        let desc = MTLDepthStencilDescriptor::alloc().init();
-        desc.set_depth_write_enabled(match info.depth {
-            Some(ref depth) => depth.write,
-            None => false
+    pub fn create_shader_library_from_source<S>(
+        &mut self,
+        source: S,
+        version: LanguageVersion,
+    ) -> Result<n::ShaderModule, ShaderError> where S: AsRef<str> {
+        let options = MTLCompileOptions::new();
+        options.set_language_version(match version {
+            LanguageVersion { major: 1, minor: 0 } => MTLLanguageVersion::V1_0,
+            LanguageVersion { major: 1, minor: 1 } => MTLLanguageVersion::V1_1,
+            LanguageVersion { major: 1, minor: 2 } => MTLLanguageVersion::V1_2,
+            LanguageVersion { major: 2, minor: 0 } => MTLLanguageVersion::V2_0,
+            _ => return Err(ShaderError::CompilationFailed("shader model not supported".into()))
         });
-        desc.set_depth_compare_function(match info.depth {
-            Some(ref depth) => map_function(depth.fun),
-            None => MTLCompareFunction::Never,
-        });
-
-        if let Some(stencil) = info.front {
-            let front = MTLStencilDescriptor::alloc().init();
-            front.set_stencil_compare_function(map_function(stencil.fun));
-            front.set_stencil_failure_operation(map_stencil_op(stencil.op_fail));
-            front.set_depth_failure_operation(map_stencil_op(stencil.op_depth_fail));
-            front.set_depth_stencil_pass_operation(map_stencil_op(stencil.op_pass));
-
-            // TODO: wrong type?
-            front.set_read_mask(stencil.mask_read as u32);
-            front.set_write_mask(stencil.mask_write as u32);
-
-            desc.set_front_face_stencil(front);
-        };
-
-        if let Some(stencil) = info.back {
-            let back = MTLStencilDescriptor::alloc().init();
-            back.set_stencil_compare_function(map_function(stencil.fun));
-            back.set_stencil_failure_operation(map_stencil_op(stencil.op_fail));
-            back.set_depth_failure_operation(map_stencil_op(stencil.op_depth_fail));
-            back.set_depth_stencil_pass_operation(map_stencil_op(stencil.op_pass));
-
-            // TODO: wrong type?
-            back.set_read_mask(stencil.mask_read as u32);
-            back.set_write_mask(stencil.mask_write as u32);
-
-            desc.set_back_face_stencil(back);
-        };
-
-        self.device.new_depth_stencil_state(desc)
-    }
-
-    pub fn create_library<P: AsRef<Path>>
-        (&mut self,
-         file: P)
-         -> Result<n::ShaderLibrary, core::shade::CreateShaderError> {
-        use core::shade::CreateShaderError;
-
-        match self.device.new_library_with_file(file) {
-            Ok(lib) => Ok(n::ShaderLibrary { lib: lib }),
-            Err(err) => Err(CreateShaderError::CompilationFailed(err.into())),
+        match self.device.new_library_with_source(source.as_ref(), options) { // Returns retained
+            Ok(lib) => Ok(n::ShaderModule(lib)),
+            Err(err) => Err(ShaderError::CompilationFailed(err.into())),
         }
     }
 
-    fn create_shader_from_library<S: AsRef<str>>
-        (&mut self,
-         stage: core::shade::Stage,
-         library: &n::ShaderLibrary,
-         function_name: S)
-         -> Result<handle::Shader<Resources>, core::shade::CreateShaderError> {
-        use core::shade::{CreateShaderError, Stage};
+    fn describe_argument(ty: DescriptorType, index: usize, count: usize) -> MTLArgumentDescriptor {
+        let arg = MTLArgumentDescriptor::new();
+        arg.set_array_length(count as NSUInteger);
 
-        match stage {
-            Stage::Vertex | Stage::Pixel => (),
-            _ => return Err(CreateShaderError::StageNotSupported(stage)),
+        match ty {
+            DescriptorType::Sampler => {
+                arg.set_access(MTLArgumentAccess::ReadOnly);
+                arg.set_data_type(MTLDataType::Sampler);
+                arg.set_index(index as NSUInteger);
+            }
+            DescriptorType::SampledImage => {
+                arg.set_access(MTLArgumentAccess::ReadOnly);
+                arg.set_data_type(MTLDataType::Texture);
+                arg.set_index(index as NSUInteger);
+            }
+            _ => unimplemented!()
         }
 
-        let shader = n::Shader {
-            func: library.lib.get_function(function_name.as_ref()),
-        };
-
-        Ok(self.share.handles.borrow_mut().make_shader(shader))
-    }
-
-    pub fn create_shader_vertex_from_library<S: AsRef<str>>
-        (&mut self,
-         library: &n::ShaderLibrary,
-         function_name: S)
-        -> Result<core::VertexShader<Resources>, core::shade::CreateShaderError> {
-        self.create_shader_from_library(
-            core::shade::Stage::Vertex,
-            library,
-            function_name)
-            .map(|s| core::VertexShader::new(s))
-    }
-
-    pub fn create_shader_pixel_from_library<S: AsRef<str>>
-        (&mut self,
-         library: &n::ShaderLibrary,
-         function_name: S)
-         -> Result<core::PixelShader<Resources>, core::shade::CreateShaderError> {
-        self.create_shader_from_library(
-            core::shade::Stage::Pixel,
-            library,
-            function_name)
-            .map(|s| core::PixelShader::new(s))
+        arg
     }
 }
 
-
-impl core::Device<Resources> for Device {
-    fn get_capabilities(&self) -> &core::Capabilities {
-        &self.share.capabilities
+impl core::Device<Backend> for Device {
+    fn get_features(&self) -> &Features {
+        unimplemented!()
     }
 
-    fn create_buffer_raw(&mut self,
-                         info: buffer::Info)
-                         -> Result<handle::RawBuffer<Resources>, buffer::CreationError> {
-        self.create_buffer_internal(info, None)
+    fn get_limits(&self) -> &Limits {
+        unimplemented!()
     }
 
-    fn create_buffer_immutable_raw
-        (&mut self,
-         data: &[u8],
-         stride: usize,
-         role: buffer::Role,
-         bind: memory::Bind)
-         -> Result<handle::RawBuffer<Resources>, buffer::CreationError> {
-        let info = buffer::Info {
-            role: role,
-            usage: memory::Usage::Data,
-            bind: bind,
-            size: data.len(),
-            stride: stride,
-        };
-        self.create_buffer_internal(info, Some(data.as_ptr() as *const c_void))
-    }
+    fn create_renderpass(&mut self, attachments: &[pass::Attachment], subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> n::RenderPass {
+        unsafe {
+            let pass = MTLRenderPassDescriptor::new(); // Returns retained
+            defer_on_unwind! { pass.release() };
 
-    fn create_shader(&mut self,
-                     stage: core::shade::Stage,
-                     code: &[u8])
-                     -> Result<handle::Shader<Resources>, core::shade::CreateShaderError> {
-        use core::shade::{CreateShaderError, Stage};
+            let mut color_attachment_index = 0;
+            let mut depth_attachment_index = 0;
+            for attachment in attachments {
+                let (format, is_depth) = map_format(attachment.format).expect("unsupported attachment format");
 
-        let lib = match stage {
-            Stage::Vertex | Stage::Pixel => {
-                let src = str::from_utf8(code).unwrap();
-                match self.device.new_library_with_source(src, MTLCompileOptions::nil()) {
-                    Ok(lib) => lib,
-                    Err(err) => return Err(CreateShaderError::CompilationFailed(err.into())),
-                }
-            }
-            _ => return Err(CreateShaderError::StageNotSupported(stage)),
-        };
+                let mtl_attachment: MTLRenderPassAttachmentDescriptor;
+                if !is_depth {
+                    let color_attachment = pass.color_attachments().object_at(color_attachment_index);
 
-        let shader = n::Shader {
-            func: lib.get_function(match stage {
-                Stage::Vertex => "vert",
-                Stage::Pixel => "frag",
-                _ => return Err(CreateShaderError::StageNotSupported(stage)),
-            }),
-        };
-
-        Ok(self.share.handles.borrow_mut().make_shader(shader))
-    }
-
-    fn create_program(&mut self,
-                      shader_set: &core::ShaderSet<Resources>)
-                      -> Result<handle::Program<Resources>, core::shade::CreateProgramError> {
-        use core::shade::{ProgramInfo, Stage};
-
-        let (prog, info) = match shader_set {
-            &core::ShaderSet::Simple(ref vs, ref ps) => {
-                let mut info = ProgramInfo {
-                    vertex_attributes: Vec::new(),
-                    globals: Vec::new(),
-                    constant_buffers: Vec::new(),
-                    textures: Vec::new(),
-                    unordereds: Vec::new(),
-                    samplers: Vec::new(),
-                    outputs: Vec::new(),
-                    output_depth: false,
-                    knows_outputs: false,
-                };
-
-                let fh = &mut self.frame_handles;
-                let (vs, ps) = (vs.reference(fh).func, ps.reference(fh).func);
-
-                let mut reflection = MTLRenderPipelineReflection::nil();
-
-                // since Metal doesn't allow for fetching shader reflection
-                // without creating a PSO, we're creating a "fake" PSO to get
-                // the reflection, and destroying it afterwards.
-                //
-                // Tracking: https://forums.developer.apple.com/thread/46535
-                let pso_descriptor = MTLRenderPipelineDescriptor::alloc().init();
-                pso_descriptor.set_vertex_function(vs);
-                if !ps.is_null() {
-                    pso_descriptor.set_fragment_function(ps);
-                }
-                pso_descriptor.color_attachments()
-                    .object_at(0)
-                    .set_pixel_format(MTLPixelFormat::BGRA8Unorm_sRGB);
-
-                // We need fake depth attachments in case explicit writes to the depth buffer are required
-                pso_descriptor.set_depth_attachment_pixel_format(MTLPixelFormat::Depth32Float_Stencil8);
-                pso_descriptor.set_stencil_attachment_pixel_format(MTLPixelFormat::Depth32Float_Stencil8);
-
-                // TODO: prevent collision between dummy buffers and real
-                //       values
-                let vertex_desc = MTLVertexDescriptor::new();
-
-                let buf = vertex_desc.layouts().object_at((MTL_MAX_BUFFER_BINDINGS - 1) as usize);
-                buf.set_stride(16);
-                buf.set_step_function(MTLVertexStepFunction::Constant);
-                buf.set_step_rate(0);
-
-                mirror::populate_vertex_attributes(&mut info, vs.vertex_attributes());
-
-                for attr in info.vertex_attributes.iter() {
-                    // TODO: handle case when requested vertex format is invalid
-                    let attribute = vertex_desc.attributes().object_at(attr.slot as usize);
-                    attribute.set_format(mirror::map_base_type_to_format(attr.base_type));
-                    attribute.set_offset(0);
-                    attribute.set_buffer_index((MTL_MAX_BUFFER_BINDINGS - 1) as u64);
-                }
-
-                pso_descriptor.set_vertex_descriptor(vertex_desc);
-
-                let _pso = self.device
-                    .new_render_pipeline_state_with_reflection(pso_descriptor, &mut reflection)
-                    .unwrap();
-
-                // fill the `ProgramInfo` struct with goodies
-
-                mirror::populate_info(&mut info, Stage::Vertex, reflection.vertex_arguments());
-                mirror::populate_info(&mut info, Stage::Pixel, reflection.fragment_arguments());
-
-                // destroy PSO & reflection object after we're done with
-                // parsing reflection
-                // unsafe {
-                // pso.release();
-                // reflection.release();
-                // }
-
-                // FIXME: retain functions?
-                let program = n::Program { vs: vs, ps: ps };
-
-                (program, info)
-            }
-
-            // Metal only supports vertex + fragment and has some features from
-            // geometry shaders in vertex (layered rendering)
-            //
-            // Tracking: https://forums.developer.apple.com/message/9495
-            _ => {
-                return Err("Metal only supports vertex + fragment shader programs".into());
-            }
-        };
-
-        Ok(self.share.handles.borrow_mut().make_program(prog, info))
-    }
-
-    fn create_pipeline_state_raw(&mut self, program: &handle::Program<Resources>, desc: &core::pso::Descriptor)
-                                 -> Result<handle::RawPipelineState<Resources>, core::pso::CreationError> {
-        use map::{map_depth_surface, map_vertex_format, map_topology,
-                  map_winding, map_cull, map_fill, map_format, map_blend_op,
-                  map_blend_factor, map_write_mask};
-
-        use core::{MAX_COLOR_TARGETS};
-
-        let vertex_desc = MTLVertexDescriptor::new();
-
-        let mut vb_count = 0;
-        for vb in desc.vertex_buffers.iter() {
-            if let &Some(vbuf) = vb {
-                let buf = vertex_desc.layouts().object_at((MTL_MAX_BUFFER_BINDINGS - 1) as usize - vb_count);
-                buf.set_stride(vbuf.stride as u64);
-                if vbuf.rate > 0 {
-                    buf.set_step_function(MTLVertexStepFunction::PerInstance);
-                    buf.set_step_rate(vbuf.rate as u64);
+                    mtl_attachment = mem::transmute(color_attachment);
                 } else {
-                    buf.set_step_function(MTLVertexStepFunction::PerVertex);
-                    buf.set_step_rate(1);
+                    unimplemented!()
                 }
 
-                vb_count += 1;
-            }
-        }
-        // TODO: find a better way to set the buffer's stride, step func and
-        //       step rate
-
-
-        for (attr, attr_desc) in program.get_info().vertex_attributes.iter().zip(desc.attributes.iter()) {
-            let (idx, elem) = match attr_desc {
-                &Some((idx, el)) => (idx, el),
-                &None => continue,
-            };
-
-            if elem.offset & 1 != 0 {
-                error!("Vertex attribute {} must be aligned to 2 bytes, has offset {}",
-                       attr.name,
-                       elem.offset);
-                return Err(core::pso::CreationError);
+                mtl_attachment.set_load_action(map_load_operation(attachment.ops.load));
+                mtl_attachment.set_store_action(map_store_operation(attachment.ops.store));
             }
 
-            // TODO: handle case when requested vertex format is invalid
-            let attribute = vertex_desc.attributes().object_at(attr.slot as usize);
-            attribute.set_format(map_vertex_format(elem.format).unwrap());
-            attribute.set_offset(elem.offset as u64);
-            attribute.set_buffer_index((MTL_MAX_BUFFER_BINDINGS - 1) as u64 - idx as u64);
+            n::RenderPass(pass)
         }
-
-        let prog = self.frame_handles.ref_program(program);
-
-        let pso_descriptor = MTLRenderPipelineDescriptor::alloc().init();
-        pso_descriptor.set_vertex_function(prog.vs);
-
-        if !prog.ps.is_null() {
-            pso_descriptor.set_fragment_function(prog.ps);
-        }
-        pso_descriptor.set_vertex_descriptor(vertex_desc);
-        pso_descriptor.set_input_primitive_topology(map_topology(desc.primitive));
-
-        for idx in 0..MAX_COLOR_TARGETS {
-            if let Some(color) = desc.color_targets[idx] {
-                let attachment = pso_descriptor.color_attachments().object_at(idx);
-                attachment.set_pixel_format(map_format(color.0, true).unwrap());
-                attachment.set_blending_enabled(color.1.color.is_some() || color.1.alpha.is_some());
-
-                attachment.set_write_mask(map_write_mask(color.1.mask));
-
-                if let Some(blend) = color.1.color {
-                    attachment.set_source_rgb_blend_factor(map_blend_factor(blend.source, false));
-                    attachment.set_destination_rgb_blend_factor(map_blend_factor(blend.destination, false));
-                    attachment.set_rgb_blend_operation(map_blend_op(blend.equation));
-                }
-
-                if let Some(blend) = color.1.alpha {
-                    attachment.set_source_alpha_blend_factor(map_blend_factor(blend.source, true));
-                    attachment.set_destination_alpha_blend_factor(map_blend_factor(blend.destination, true));
-                    attachment.set_alpha_blend_operation(map_blend_op(blend.equation));
-                }
-            }
-        }
-
-        if let Some(depth_desc) = desc.depth_stencil {
-            let (depth_pixel_format, has_stencil) = map_depth_surface((depth_desc.0).0).expect("Unsupported depth format");
-            pso_descriptor.set_depth_attachment_pixel_format(depth_pixel_format);
-            if has_stencil {
-                pso_descriptor.set_stencil_attachment_pixel_format(depth_pixel_format);
-            }
-        }
-
-        let pso = self.device.new_render_pipeline_state(pso_descriptor).unwrap();
-
-        let pso = n::Pipeline {
-            pipeline: pso,
-            depth_stencil: desc.depth_stencil.map(|desc| self.make_depth_stencil(&desc.1)),
-            winding: map_winding(desc.rasterizer.front_face),
-            cull: map_cull(desc.rasterizer.cull_face),
-            fill: map_fill(desc.rasterizer.method),
-            alpha_to_one: false,
-            alpha_to_coverage: false,
-            depth_bias: if let Some(ref offset) = desc.rasterizer.offset {
-                offset.1
-            } else {
-                0
-            },
-            slope_scaled_depth_bias: if let Some(ref offset) = desc.rasterizer.offset {
-                offset.0
-            } else {
-                0
-            },
-            depth_clip: true
-        };
-
-        Ok(self.share.handles.borrow_mut().make_pso(pso, program))
     }
 
-    fn create_texture_raw
-        (&mut self,
-         desc: core::texture::Info,
-         hint: Option<core::format::ChannelType>,
-         data_opt: Option<&[&[u8]]>)
-         -> Result<handle::RawTexture<Resources>, core::texture::CreationError> {
-        use core::texture::{AaMode, Kind};
-        use map::{map_channel_hint, map_texture_bind, map_texture_usage, map_format};
+    fn create_pipeline_layout(&mut self, sets: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
+        n::PipelineLayout {}
+    }
 
-        let (resource, storage) = map_texture_usage(desc.usage, desc.bind);
+    fn create_graphics_pipelines<'a>(
+        &mut self,
+        params: &[(pso::GraphicsShaderSet<'a, Backend>, &n::PipelineLayout, Subpass<'a, Backend>, &pso::GraphicsPipelineDesc)],
+    ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
+        unsafe {
+            params.iter().map(|&(ref shader_set, pipeline_layout, ref pass_descriptor, pipeline_desc)| {
+                let pipeline = MTLRenderPipelineDescriptor::alloc().init(); // Returns retained
+                defer! { pipeline.release() };
 
-        let descriptor = MTLTextureDescriptor::alloc().init();
-        descriptor.set_mipmap_level_count(desc.levels as u64);
-        descriptor.set_resource_options(resource);
-        descriptor.set_storage_mode(storage);
-        descriptor.set_pixel_format(map_format(core::format::Format(desc.format, hint.unwrap_or(map_channel_hint(desc.format).unwrap())), true).unwrap());
-        descriptor.set_usage(map_texture_bind(desc.bind));
+                // FIXME: lots missing
 
-        match desc.kind {
-            Kind::D1(w) => {
-                descriptor.set_width(w as u64);
-                descriptor.set_texture_type(MTLTextureType::D1);
-            }
-            Kind::D1Array(w, d) => {
-                descriptor.set_width(w as u64);
-                descriptor.set_array_length(d as u64);
-                descriptor.set_texture_type(MTLTextureType::D1Array);
-            }
-            Kind::D2(w, h, aa) => {
-                descriptor.set_width(w as u64);
-                descriptor.set_height(h as u64);
-                match aa {
-                    AaMode::Single => {
-                        descriptor.set_texture_type(MTLTextureType::D2);
+                // Shaders
+                let mtl_vertex_function = (shader_set.vertex.module.0)
+                    .get_function(shader_set.vertex.entry); // Returns retained
+                if mtl_vertex_function.is_null() {
+                    error!("invalid vertex shader entry point");
+                    return Err(pso::CreationError::Other);
+                }
+                defer! { mtl_vertex_function.release() };
+                pipeline.set_vertex_function(mtl_vertex_function);
+                if let Some(fragment_entry) = shader_set.fragment {
+                    let mtl_fragment_function = (fragment_entry.module.0)
+                        .get_function(fragment_entry.entry); // Returns retained
+                    if mtl_fragment_function.is_null() {
+                        error!("invalid pixel shader entry point");
+                        return Err(pso::CreationError::Other);
                     }
-                    AaMode::Multi(samples) => {
+                    defer! { mtl_fragment_function.release() };
+                    pipeline.set_fragment_function(mtl_fragment_function);
+                }
+                if shader_set.hull.is_some() {
+                    error!("Metal tesselation shaders are not supported");
+                    return Err(pso::CreationError::Other);
+                }
+                if shader_set.domain.is_some() {
+                    error!("Metal tesselation shaders are not supported");
+                    return Err(pso::CreationError::Other);
+                }
+                if shader_set.geometry.is_some() {
+                    error!("Metal geometry shaders are not supported");
+                    return Err(pso::CreationError::Other);
+                }
 
-                        descriptor.set_texture_type(MTLTextureType::D2Multisample);
-                        descriptor.set_sample_count(samples as u64);
+                unimplemented!();
+                /*// Color targets
+                for (i, &(target_format, color_desc)) in pipeline_desc.color_targets.iter()
+                    .filter_map(|x| x.as_ref()).enumerate()
+                {
+                    let descriptor = pipeline.color_attachments().object_at(i);
+
+                    let (mtl_format, is_depth) = map_format(target_format).expect("unsupported color format for Metal");
+                    if is_depth {
+                        error!("color targets cannot be bound with a depth format");
+                        return Err(pso::CreationError::Other);
                     }
-                    _ => unimplemented!(),
-                };
-            }
-            Kind::D2Array(w, h, d, _aa) => {
-                descriptor.set_width(w as u64);
-                descriptor.set_height(h as u64);
-                descriptor.set_array_length(d as u64);
-                descriptor.set_texture_type(MTLTextureType::D2Array);
-            }
-            Kind::D3(w, h, d) => {
-                descriptor.set_width(w as u64);
-                descriptor.set_height(h as u64);
-                descriptor.set_depth(d as u64);
-                descriptor.set_texture_type(MTLTextureType::D3);
-            }
-            Kind::Cube(w) => {
-                descriptor.set_width(w as u64);
-                descriptor.set_texture_type(MTLTextureType::Cube);
-            }
-            Kind::CubeArray(w, d) => {
-                descriptor.set_width(w as u64);
-                descriptor.set_array_length(d as u64);
-                descriptor.set_texture_type(MTLTextureType::CubeArray);
-            }
-        };
 
-        let raw_tex = self.device.new_texture(descriptor);
+                    descriptor.set_pixel_format(mtl_format);
+                    descriptor.set_write_mask(map_write_mask(color_desc.mask));
+                    descriptor.set_blending_enabled(color_desc.color.is_some() | color_desc.alpha.is_some());
 
-        if let Some(data) = data_opt {
-            let region = match desc.kind {
-                Kind::D1(w) => {
-                    MTLRegion {
-                        origin: MTLOrigin { x: 0, y: 0, z: 0 },
-                        size: MTLSize {
-                            width: w as u64,
-                            height: 1,
-                            depth: 1,
+                    if let Some(blend) = color_desc.color {
+                        descriptor.set_source_rgb_blend_factor(map_blend_factor(blend.source, false));
+                        descriptor.set_destination_rgb_blend_factor(map_blend_factor(blend.destination, false));
+                        descriptor.set_rgb_blend_operation(map_blend_op(blend.equation));
+                    }
+
+                    if let Some(blend) = color_desc.alpha {
+                        descriptor.set_source_alpha_blend_factor(map_blend_factor(blend.source, true));
+                        descriptor.set_destination_alpha_blend_factor(map_blend_factor(blend.destination, true));
+                        descriptor.set_alpha_blend_operation(map_blend_op(blend.equation));
+                    }
+                }*/
+
+                // Vertex buffers
+                let vertex_descriptor = MTLVertexDescriptor::new();
+                defer! { vertex_descriptor.release() };
+                for (i, vertex_buffer) in pipeline_desc.vertex_buffers.iter().enumerate() {
+                    let mtl_buffer_desc = vertex_descriptor.layouts().object_at(i);
+                    mtl_buffer_desc.set_stride(vertex_buffer.stride as u64);
+                    match vertex_buffer.rate {
+                        0 => {
+                            // FIXME: should this use MTLVertexStepFunction::Constant?
+                            mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerVertex);
                         },
+                        1 => {
+                            // FIXME: how to determine instancing in this case?
+                            mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerVertex);
+                        },
+                        c => {
+                            mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerInstance);
+                            mtl_buffer_desc.set_step_rate(c as u64);
+                        }
                     }
                 }
-                Kind::D1Array(w, d) => {
-                    MTLRegion {
-                        origin: MTLOrigin { x: 0, y: 0, z: 0 },
-                        size: MTLSize {
-                            width: w as u64,
-                            height: 1,
-                            depth: d as u64,
-                        },
-                    }
+                for (i, &AttributeDesc { location, binding, element, }) in pipeline_desc.attributes.iter().enumerate() {
+                    let mtl_vertex_format = map_vertex_format(element.format).expect("unsupported vertex format for Metal");
+
+                    let mtl_attribute_desc = vertex_descriptor.attributes().object_at(i);
+                    mtl_attribute_desc.set_buffer_index(location as NSUInteger); // TODO: Might be binding, not location?
+                    mtl_attribute_desc.set_offset(element.offset as NSUInteger);
+                    mtl_attribute_desc.set_format(mtl_vertex_format);
                 }
-                Kind::D2(w, h, _) => {
-                    MTLRegion {
-                        origin: MTLOrigin { x: 0, y: 0, z: 0 },
-                        size: MTLSize {
-                            width: w as u64,
-                            height: h as u64,
-                            depth: 1,
-                        },
-                    }
+
+                pipeline.set_vertex_descriptor(vertex_descriptor);
+
+                let mut err_ptr: *mut ObjcObject = ptr::null_mut();
+                let pso: MTLRenderPipelineState = msg_send![self.device.0, newRenderPipelineStateWithDescriptor:pipeline.0 error: &mut err_ptr];
+                defer! { msg_send![err_ptr, release] };
+
+                if pso.is_null() {
+                    error!("PSO creation failed: {}", n::objc_err_description(err_ptr));
+                    return Err(pso::CreationError::Other);
+                } else {
+                    Ok(n::GraphicsPipeline(pso))
                 }
-                Kind::D2Array(w, h, d, _) => {
-                    MTLRegion {
-                        origin: MTLOrigin { x: 0, y: 0, z: 0 },
-                        size: MTLSize {
-                            width: w as u64,
-                            height: h as u64,
-                            depth: d as u64,
-                        },
-                    }
+            }).collect()
+        }
+    }
+
+    fn create_compute_pipelines<'a>(
+        &mut self,
+        pipelines: &[(pso::EntryPoint<'a, Backend>, &n::PipelineLayout)],
+    ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
+        unimplemented!()
+    }
+
+    fn create_framebuffer(&mut self, renderpass: &n::RenderPass,
+        color_attachments: &[&n::RenderTargetView], depth_stencil_attachments: &[&n::DepthStencilView],
+        extent: Extent,
+    ) -> n::FrameBuffer {
+        unsafe {
+            let descriptor: MTLRenderPassDescriptor = msg_send![(renderpass.0).0, copy]; // Returns retained
+            defer_on_unwind! { descriptor.release() };
+
+            msg_send![descriptor.0, setRenderTargetArrayLength: extent.depth as usize];
+
+            for (i, attachment) in color_attachments.iter().enumerate() {
+                let mtl_attachment = descriptor.color_attachments().object_at(i);
+                mtl_attachment.set_texture(attachment.0);
+            }
+
+            if depth_stencil_attachments.len() > 1 {
+                panic!("Metal does not support multiple depth attachments");
+            }
+
+            if let Some(attachment) = depth_stencil_attachments.get(0) {
+                let mtl_attachment = descriptor.depth_attachment();
+                mtl_attachment.set_texture(attachment.0);
+
+                // TODO: stencil
+            }
+
+            n::FrameBuffer(descriptor)
+        }
+    }
+
+    fn create_shader_module(&mut self, spirv_data: &[u8]) -> Result<n::ShaderModule, ShaderError> {
+        unimplemented!()
+    }
+
+    fn create_sampler(&mut self, info: image::SamplerInfo) -> n::Sampler {
+        unsafe {
+            let descriptor = MTLSamplerDescriptor::new(); // Returns retained
+            defer! { descriptor.release() };
+
+
+            use self::image::FilterMethod::*;
+            let (min_mag, mipmap) = match info.filter {
+                Scale => (MTLSamplerMinMagFilter::Nearest, MTLSamplerMipFilter::NotMipmapped),
+                Mipmap => (MTLSamplerMinMagFilter::Nearest, MTLSamplerMipFilter::Nearest),
+                Bilinear => {
+                    (MTLSamplerMinMagFilter::Linear, MTLSamplerMipFilter::NotMipmapped)
                 }
-                Kind::D3(w, h, d) => {
-                    MTLRegion {
-                        origin: MTLOrigin { x: 0, y: 0, z: 0 },
-                        size: MTLSize {
-                            width: w as u64,
-                            height: h as u64,
-                            depth: d as u64,
-                        },
-                    }
+                Trilinear => (MTLSamplerMinMagFilter::Linear, MTLSamplerMipFilter::Linear),
+                Anisotropic(max) => {
+                    descriptor.set_max_anisotropy(max as u64);
+                    (MTLSamplerMinMagFilter::Linear, MTLSamplerMipFilter::NotMipmapped)
                 }
+            };
+
+            descriptor.set_min_filter(min_mag);
+            descriptor.set_mag_filter(min_mag);
+            descriptor.set_mip_filter(mipmap);
+
+            // FIXME: more state
+
+            n::Sampler(self.device.new_sampler(descriptor))
+        }
+    }
+
+    fn view_buffer_as_constant(&mut self, buffer: &n::Buffer, range: Range<u64>) -> Result<n::ConstantBufferView, TargetViewError> {
+        unimplemented!()
+    }
+
+    fn view_image_as_render_target(&mut self, image: &n::Image, format: format::Format, range: image::SubresourceRange) 
+        -> Result<n::RenderTargetView, TargetViewError>
+    {
+        // TODO: subresource range
+
+        let (mtl_format, _) = map_format(format).ok_or_else(|| {
+            error!("failed to find corresponding Metal format for {:?}", format);
+            panic!(); // TODO: return TargetViewError once it is implemented
+        })?;
+
+        unsafe {
+            Ok(n::RenderTargetView(image.0.new_texture_view(mtl_format))) // Returns retained
+        }
+    }
+
+    fn view_image_as_shader_resource(&mut self, image: &n::Image, format: format::Format) -> Result<n::ShaderResourceView, TargetViewError> {
+        let (mtl_format, _) = map_format(format).ok_or_else(|| {
+            error!("failed to find corresponding Metal format for {:?}", format);
+            panic!(); // TODO: return TargetViewError once it is implemented
+        })?;
+
+        unsafe {
+            Ok(n::ShaderResourceView(image.0.new_texture_view(mtl_format))) // Returns retained
+        }
+    }
+
+    fn view_image_as_unordered_access(&mut self, image: &n::Image, format: format::Format) -> Result<n::UnorderedAccessView, TargetViewError> {
+        unimplemented!()
+    }
+
+    fn read_mapping_raw(&mut self, buf: &n::Buffer, range: Range<u64>)
+        -> Result<(*const u8, n::Mapping), mapping::Error>
+    {
+        unimplemented!()
+    }
+
+    fn write_mapping_raw(&mut self, buf: &n::Buffer, range: Range<u64>)
+        -> Result<(*mut u8, n::Mapping), mapping::Error>
+    {
+        unimplemented!()
+    }
+
+    fn unmap_mapping_raw(&mut self, mapping: n::Mapping) {
+        unimplemented!()
+    }
+    
+    fn create_semaphore(&mut self) -> n::Semaphore {
+        unsafe { n::Semaphore(n::dispatch_semaphore_create(1)) } // Returns retained
+    }
+
+    fn create_descriptor_pool(&mut self, max_sets: usize, descriptor_ranges: &[pso::DescriptorRangeDesc]) 
+        -> n::DescriptorPool
+    {
+        let mut num_samplers = 0;
+        let mut num_textures = 0;
+
+        let mut arguments = descriptor_ranges.iter().map(|desc| {
+            let mut offset_ref = match desc.ty {
+                DescriptorType::Sampler => &mut num_samplers,
+                DescriptorType::SampledImage => &mut num_textures,
+                _ => unimplemented!()
+            };
+            let index = *offset_ref;
+            *offset_ref += desc.count;
+            Self::describe_argument(desc.ty, *offset_ref, desc.count)
+        }).collect::<Vec<_>>();
+
+        let arg_array = NSArray::array_with_objects(&arguments);
+        let encoder = self.device.new_argument_encoder(arg_array);
+
+        let total_size = encoder.encoded_length();
+        let arg_buffer = self.device.new_buffer(total_size, MTLResourceOptions::empty());
+
+        n::DescriptorPool {
+            arg_buffer,
+            total_size,
+            offset: 0,
+        }
+    }
+
+    #[cfg(feature = "argument_buffer")]
+    fn create_descriptor_set_layout(&mut self, bindings: &[DescriptorSetLayoutBinding]) -> n::DescriptorSetLayout {
+        let mut stage_flags = shade::StageFlags::empty();
+        let mut arguments = bindings.iter().map(|desc| {
+            stage_flags |= desc.stage_flags;
+            Self::describe_argument(desc.ty, desc.binding, desc.count)
+        }).collect::<Vec<_>>();
+        let arg_array = NSArray::array_with_objects(&arguments);
+        let encoder = self.device.new_argument_encoder(arg_array);
+
+        n::DescriptorSetLayout {
+            encoder,
+            stage_flags,
+        }
+    }
+
+    #[cfg(not(feature = "argument_buffer"))]
+    fn create_descriptor_set_layout(&mut self, bindings: &[DescriptorSetLayoutBinding]) -> n::DescriptorSetLayout {
+        n::DescriptorSetLayout {
+            bindings: bindings.to_vec(),
+        }
+    }
+    #[cfg(feature = "argument_buffer")]
+    fn update_descriptor_sets(&mut self, writes: &[DescriptorSetWrite<Resources>]) {
+        use core::factory::DescriptorWrite::*;
+
+        let mut mtl_samplers = Vec::new();
+        let mut mtl_textures = Vec::new();
+
+        for write in writes {
+            write.set.encoder.set_argument_buffer(write.set.buffer, write.set.offset);
+            //TODO: range checks, need to keep some layout metadata around
+
+            match write.write {
+                Sampler(ref samplers) => {
+                    mtl_samplers.clear();
+                    mtl_samplers.extend(samplers.iter().map(|sampler| sampler.0.clone()));
+                    write.set.encoder.set_sampler_states(&mtl_samplers, write.array_offset as _);
+                },
+                SampledImage(ref images) => {
+                    mtl_textures.clear();
+                    mtl_textures.extend(images.iter().map(|image| image.0.clone().0));
+                    write.set.encoder.set_textures(&mtl_textures, write.array_offset as _);
+                },
                 _ => unimplemented!(),
-            };
-
-            // TODO: handle the data better
-            raw_tex.replace_region(region,
-                                   0,
-                                   4 * region.size.width as u64,
-                                   data[0].as_ptr() as *const _);
+            }
         }
-
-        let tex = n::Texture(n::RawTexture(Box::into_raw(Box::new(raw_tex))),
-                          desc.usage);
-        Ok(self.share.handles.borrow_mut().make_texture(tex, desc))
     }
 
-    fn view_buffer_as_shader_resource_raw
-        (&mut self,
-         _hbuf: &handle::RawBuffer<Resources>,
-         _: core::format::Format)
-         -> Result<handle::RawShaderResourceView<Resources>, device::ResourceViewError> {
-        unimplemented!()
-        // Err(device::ResourceViewError::Unsupported) //TODO
-    }
+    #[cfg(not(feature = "argument_buffer"))]
+    fn update_descriptor_sets(&mut self, writes: &[DescriptorSetWrite<Backend>]) {
+        use core::pso::DescriptorWrite::*;
 
-    fn view_buffer_as_unordered_access_raw
-        (&mut self,
-         _hbuf: &handle::RawBuffer<Resources>)
-         -> Result<handle::RawUnorderedAccessView<Resources>, device::ResourceViewError> {
-        unimplemented!()
-        // Err(device::ResourceViewError::Unsupported) //TODO
-    }
+        for write in writes {
+            let n::DescriptorSetInner { ref mut bindings, layout: ref set_layout } = *write.set.inner.lock().unwrap();
 
-    fn view_texture_as_shader_resource_raw
-        (&mut self,
-         htex: &handle::RawTexture<Resources>,
-         _desc: core::texture::ResourceDesc)
-         -> Result<handle::RawShaderResourceView<Resources>, device::ResourceViewError> {
-        // use winapi::UINT;
-        // use core::texture::{AaMode, Kind};
-        // use data::map_format;
-        //
-        // let (dim, layers, has_levels) = match htex.get_info().kind {
-        // Kind::D1(_) =>
-        // (winapi::D3D11_SRV_DIMENSION_TEXTURE1D, 1, true),
-        // Kind::D1Array(_, d) =>
-        // (winapi::D3D11_SRV_DIMENSION_TEXTURE1DARRAY, d, true),
-        // Kind::D2(_, _, AaMode::Single) =>
-        // (winapi::D3D11_SRV_DIMENSION_TEXTURE2D, 1, true),
-        // Kind::D2(_, _, _) =>
-        // (winapi::D3D11_SRV_DIMENSION_TEXTURE2DMS, 1, false),
-        // Kind::D2Array(_, _, d, AaMode::Single) =>
-        // (winapi::D3D11_SRV_DIMENSION_TEXTURE2DARRAY, d, true),
-        // Kind::D2Array(_, _, d, _) =>
-        // (winapi::D3D11_SRV_DIMENSION_TEXTURE2DMSARRAY, d, false),
-        // Kind::D3(_, _, _) =>
-        // (winapi::D3D11_SRV_DIMENSION_TEXTURE3D, 1, true),
-        // Kind::Cube(_) =>
-        // (winapi::D3D11_SRV_DIMENSION_TEXTURECUBE, 1, true),
-        // Kind::CubeArray(_, d) =>
-        // (winapi::D3D11_SRV_DIMENSION_TEXTURECUBEARRAY, d, true),
-        // };
-        //
-        // let format = core::format::Format(htex.get_info().format, desc.channel);
-        // let native_desc = winapi::D3D11_SHADER_RESOURCE_VIEW_DESC {
-        // Format: match map_format(format, false) {
-        // Some(fm) => fm,
-        // None => return Err(f::ResourceViewError::Channel(desc.channel)),
-        // },
-        // ViewDimension: dim,
-        // u: if has_levels {
-        // assert!(desc.max >= desc.min);
-        // [desc.min as UINT, (desc.max + 1 - desc.min) as UINT, 0, layers as UINT]
-        // }else {
-        // [0, layers as UINT, 0, 0]
-        // },
-        // };
-        //
-        // let mut raw_view = ptr::null_mut();
-        // let raw_tex = self.frame_handles.ref_texture(htex).as_resource();
-        // let hr = unsafe {
-        // (*self.device).CreateShaderResourceView(raw_tex, &native_desc, &mut raw_view)
-        // };
-        // if !winapi::SUCCEEDED(hr) {
-        // error!("Failed to create SRV from {:#?}, error {:x}", native_desc, hr);
-        // return Err(f::ResourceViewError::Unsupported);
-        // }
-        // Ok(self.share.handles.borrow_mut().make_texture_srv(native::Srv(raw_view), htex))
-        let raw_tex = self.frame_handles.ref_texture(htex).0;
-        Ok(self.share.handles.borrow_mut().make_texture_srv(n::Srv(raw_tex.0), htex))
-    }
+            // Find layout entry
+            let layout = set_layout.iter().find(|layout| layout.binding == write.binding)
+                .expect("invalid descriptor set binding index");
 
-    fn view_texture_as_unordered_access_raw
-        (&mut self,
-         _htex: &handle::RawTexture<Resources>)
-         -> Result<handle::RawUnorderedAccessView<Resources>, device::ResourceViewError> {
-        // Err(device::ResourceViewError::Unsupported) //TODO
-        unimplemented!()
-    }
+            match (&write.write, bindings.get_mut(&write.binding)) {
+                (&Sampler(ref samplers), Some(&mut n::DescriptorSetBinding::Sampler(ref mut vec))) => {
+                    if write.array_offset + samplers.len() > layout.count {
+                        panic!("out of range descriptor write");
+                    }
 
-    fn view_texture_as_render_target_raw
-        (&mut self,
-         htex: &handle::RawTexture<Resources>,
-         desc: core::texture::RenderDesc)
-         -> Result<handle::RawRenderTargetView<Resources>, device::TargetViewError> {
-        let raw_tex = self.frame_handles.ref_texture(htex).0;
-        let size = htex.get_info().kind.get_level_dimensions(desc.level);
-        Ok(self.share.handles.borrow_mut().make_rtv(n::Rtv(raw_tex.0), htex, size))
-    }
+                    let target_iter = vec[write.array_offset..(write.array_offset + samplers.len())].iter_mut();
 
-    fn view_texture_as_depth_stencil_raw
-        (&mut self,
-         htex: &handle::RawTexture<Resources>,
-         desc: core::texture::DepthStencilDesc)
-         -> Result<handle::RawDepthStencilView<Resources>, device::TargetViewError> {
-        // use winapi::UINT;
-        // use core::texture::{AaMode, Kind};
-        // use data::{map_format, map_dsv_flags};
-        //
-        // let level = desc.level as UINT;
-        // let (dim, extra) = match (htex.get_info().kind, desc.layer) {
-        // (Kind::D1(..), None) =>
-        // (winapi::D3D11_DSV_DIMENSION_TEXTURE1D, [level, 0, 0]),
-        // (Kind::D1Array(_, nlayers), Some(lid)) if lid < nlayers =>
-        // (winapi::D3D11_DSV_DIMENSION_TEXTURE1DARRAY, [level, lid as UINT, 1+lid as UINT]),
-        // (Kind::D1Array(_, nlayers), None) =>
-        // (winapi::D3D11_DSV_DIMENSION_TEXTURE1DARRAY, [level, 0, nlayers as UINT]),
-        // (Kind::D2(_, _, AaMode::Single), None) =>
-        // (winapi::D3D11_DSV_DIMENSION_TEXTURE2D, [level, 0, 0]),
-        // (Kind::D2(_, _, _), None) if level == 0 =>
-        // (winapi::D3D11_DSV_DIMENSION_TEXTURE2DMS, [0, 0, 0]),
-        // (Kind::D2Array(_, _, nlayers, AaMode::Single), None) =>
-        // (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 0, nlayers as UINT]),
-        // (Kind::D2Array(_, _, nlayers, AaMode::Single), Some(lid)) if lid < nlayers =>
-        // (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, lid as UINT, 1+lid as UINT]),
-        // (Kind::D2Array(_, _, nlayers, _), None) if level == 0 =>
-        // (winapi::D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY, [0, nlayers as UINT, 0]),
-        // (Kind::D2Array(_, _, nlayers, _), Some(lid)) if level == 0 && lid < nlayers =>
-        // (winapi::D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY, [lid as UINT, 1+lid as UINT, 0]),
-        // (Kind::D3(..), _) => return Err(f::TargetViewError::Unsupported),
-        // (Kind::Cube(..), None) =>
-        // (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6]),
-        // (Kind::Cube(..), Some(lid)) if lid < 6 =>
-        // (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, lid as UINT, 1+lid as UINT]),
-        // (Kind::CubeArray(_, nlayers), None) =>
-        // (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6 * nlayers as UINT]),
-        // (Kind::CubeArray(_, nlayers), Some(lid)) if lid < nlayers =>
-        // (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 6 * lid as UINT, 6 * (1+lid) as UINT]),
-        // (_, None) => return Err(f::TargetViewError::BadLevel(desc.level)),
-        // (_, Some(lid)) => return Err(f::TargetViewError::BadLayer(lid)),
-        // };
-        //
-        // let channel = core::format::ChannelType::Uint; //doesn't matter
-        // let format = core::format::Format(htex.get_info().format, channel);
-        // let native_desc = winapi::D3D11_DEPTH_STENCIL_VIEW_DESC {
-        // Format: match map_format(format, true) {
-        // Some(fm) => fm,
-        // None => return Err(f::TargetViewError::Channel(channel)),
-        // },
-        // ViewDimension: dim,
-        // Flags: map_dsv_flags(desc.flags).0,
-        // u: extra,
-        // };
-        //
-        // let mut raw_view = ptr::null_mut();
-        // let raw_tex = self.frame_handles.ref_texture(htex).as_resource();
-        // let hr = unsafe {
-        // (*self.device).CreateDepthStencilView(raw_tex, &native_desc, &mut raw_view)
-        // };
-        // if !winapi::SUCCEEDED(hr) {
-        // error!("Failed to create DSV from {:#?}, error {:x}", native_desc, hr);
-        // return Err(f::TargetViewError::Unsupported);
-        // }
-        // let dim = htex.get_info().kind.get_level_dimensions(desc.level);
-        // Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_view), htex, dim))
-        let raw_tex = self.frame_handles.ref_texture(htex).0;
-        let size = htex.get_info().kind.get_level_dimensions(desc.level);
-        Ok(self.share.handles.borrow_mut().make_dsv(n::Dsv(raw_tex.0, desc.layer), htex, size))
-    }
+                    for (new, old) in samplers.iter().zip(target_iter) {
+                        unsafe {
+                            new.0.retain();
+                            old.release();
+                        }
+                        *old = new.0;
+                    }
+                },
+                (&SampledImage(ref images), Some(&mut n::DescriptorSetBinding::SampledImage(ref mut vec))) => {
+                    if write.array_offset + images.len() > layout.count {
+                        panic!("out of range descriptor write");
+                    }
 
-    fn create_sampler(&mut self, info: core::texture::SamplerInfo) -> handle::Sampler<Resources> {
-        use core::texture::FilterMethod;
-        use map::{map_function, map_filter, map_wrap};
+                    let target_iter = vec[write.array_offset..(write.array_offset + images.len())].iter_mut();
 
-        let desc = MTLSamplerDescriptor::new();
-
-        let (filter, mip) = map_filter(info.filter);
-        desc.set_min_filter(filter);
-        desc.set_mag_filter(filter);
-        desc.set_mip_filter(mip);
-
-        if let FilterMethod::Anisotropic(anisotropy) = info.filter {
-            desc.set_max_anisotropy(anisotropy as u64);
+                    for (new, old) in images.iter().zip(target_iter) {
+                        unsafe {
+                            (new.0).0.retain();
+                            old.0.release();
+                        }
+                        *old = ((new.0).0, new.1);
+                    }
+                },
+                (&Sampler(_), _) | (&SampledImage(_), _) => panic!("mismatched descriptor set type"),
+                _ => unimplemented!(),
+            }
         }
-
-        desc.set_lod_bias(info.lod_bias.into());
-        desc.set_lod_min_clamp(info.lod_range.0.into());
-        desc.set_lod_max_clamp(info.lod_range.1.into());
-        desc.set_address_mode_s(map_wrap(info.wrap_mode.0));
-        desc.set_address_mode_t(map_wrap(info.wrap_mode.1));
-        desc.set_address_mode_r(map_wrap(info.wrap_mode.2));
-        desc.set_compare_function(map_function(info.comparison.unwrap_or(
-                    core::state::Comparison::Always)));
-
-        let sampler = self.device.new_sampler(desc);
-
-        self.share.handles.borrow_mut().make_sampler(n::Sampler(sampler), info)
     }
 
-    fn create_semaphore(&mut self) -> handle::Semaphore<Resources> {
-        let semaphore = unsafe { n::Semaphore(n::dispatch_semaphore_create(1)) }; // Returns retained
-        self.share.handles.borrow_mut().make_semaphore(semaphore)
+    fn destroy_descriptor_pool(&mut self, pool: n::DescriptorPool) {
     }
 
-    fn create_fence(&mut self, signalled: bool) -> handle::Fence<Resources> {
-        let fence = n::Fence(Arc::new(Mutex::new(signalled)));
-        self.share.handles.borrow_mut().make_fence(fence)
+    fn destroy_descriptor_set_layout(&mut self, layout: n::DescriptorSetLayout) {
     }
 
-    fn reset_fences(&mut self, fences: &[&handle::Fence<Resources>]) {
+    fn destroy_pipeline_layout(&mut self, pipeline_layout: n::PipelineLayout) {
+    }
+
+    fn destroy_shader_module(&mut self, module: n::ShaderModule) {
+        unsafe { module.0.release(); }
+    }
+
+    fn destroy_renderpass(&mut self, pass: n::RenderPass) {
+        unsafe { pass.0.release(); }
+    }
+
+    fn destroy_graphics_pipeline(&mut self, pipeline: n::GraphicsPipeline) {
+        unsafe { pipeline.0.release(); }
+    }
+
+    fn destroy_compute_pipeline(&mut self, pipeline: n::ComputePipeline) {
+        unimplemented!()
+    }
+
+    fn destroy_framebuffer(&mut self, buffer: n::FrameBuffer) {
+        unsafe { buffer.0.release(); }
+    }
+
+    fn destroy_buffer(&mut self, buffer: n::Buffer) {
+        unsafe { buffer.0.release(); }
+    }
+
+    fn destroy_image(&mut self, image: n::Image) {
+        unsafe { image.0.release(); }
+    }
+
+    fn destroy_render_target_view(&mut self, view: n::RenderTargetView) {
+        unsafe { view.0.release(); }
+    }
+
+    fn destroy_depth_stencil_view(&mut self, view: n::DepthStencilView) {
+        unsafe { view.0.release(); }
+    }
+
+    fn destroy_constant_buffer_view(&mut self, view: n::ConstantBufferView) {
+        unimplemented!()
+    }
+
+    fn destroy_shader_resource_view(&mut self, view: n::ShaderResourceView) {
+        unsafe { view.0.release(); }
+    }
+
+    fn destroy_unordered_access_view(&mut self, view: n::UnorderedAccessView) {
+        unimplemented!()
+    }
+
+    fn destroy_sampler(&mut self, sampler: n::Sampler) {
+        unsafe { sampler.0.release(); }
+    }
+
+    fn destroy_semaphore(&mut self, semaphore: n::Semaphore) {
+        unsafe { n::dispatch_release(semaphore.0) }
+    }
+
+    fn create_heap(&mut self, heap_type: &HeapType, _resource_type: ResourceHeapType, size: u64) -> Result<n::Heap, ResourceHeapError> {
+        let (storage, cache) = map_heap_properties_to_storage_and_cache(heap_type.properties);
+
+        // Heaps cannot be used for CPU coherent resources
+        if self.private_caps.resource_heaps && storage != MTLStorageMode::Shared {
+            let descriptor = MTLHeapDescriptor::new();
+            descriptor.set_storage_mode(storage);
+            descriptor.set_cpu_cache_mode(cache);
+            descriptor.set_size(size);
+            Ok(n::Heap::Native(self.device.new_heap(descriptor)))
+        } else {
+            Ok(n::Heap::Emulated { heap_type: *heap_type, size })
+        }
+    }
+
+    fn destroy_heap(&mut self, heap: n::Heap) {
+        match heap {
+            n::Heap::Emulated { .. } => {},
+            n::Heap::Native(heap) => unsafe { heap.release(); },
+        }
+    }
+
+    fn create_buffer(&mut self, size: u64, _stride: u64, _usage: buffer::Usage) -> Result<n::UnboundBuffer, buffer::CreationError> {
+        Ok(n::UnboundBuffer {
+            size
+        })
+    }
+
+    fn get_buffer_requirements(&mut self, buffer: &n::UnboundBuffer) -> memory::Requirements {
+        // We don't know what memory type the user will try to allocate the buffer with, so we test them
+        // all get the most stringent ones. Note we don't check Shared because heaps can't use it
+        let mut max_size = 0;
+        let mut max_alignment = 0;
+        for &options in [
+            MTLResourceStorageModeManaged,
+            MTLResourceStorageModeManaged | MTLResourceCPUCacheModeWriteCombined,
+            MTLResourceStorageModePrivate,
+        ].iter() {
+            let requirements = self.device.heap_buffer_size_and_align(buffer.size, options);
+            max_size = cmp::max(max_size, requirements.size);
+            max_alignment = cmp::max(max_alignment, requirements.align);
+        }
+        memory::Requirements {
+            size: max_size,
+            alignment: max_alignment,
+        }
+    }
+
+    fn bind_buffer_memory(&mut self, heap: &n::Heap, offset: u64, buffer: n::UnboundBuffer) -> Result<n::Buffer, buffer::CreationError> {
+        let bound_buffer = match *heap {
+            n::Heap::Native(ref heap) => {
+                let resource_options = resource_options_from_storage_and_cache(
+                    heap.storage_mode(),
+                    heap.cpu_cache_mode());
+                heap.new_buffer(buffer.size, resource_options)
+            }
+            n::Heap::Emulated { ref heap_type, size: _ } => {
+                // TODO: disable hazard tracking?
+                let resource_options = map_heap_properties_to_options(heap_type.properties);
+                self.device.new_buffer(buffer.size, resource_options)
+            }
+        };
+        if !bound_buffer.is_null() {
+            Ok(n::Buffer(bound_buffer))
+        } else {
+            Err(buffer::CreationError)
+        }
+    }
+
+    fn create_image(&mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
+         -> Result<n::UnboundImage, image::CreationError>
+    {
+        let (mtl_format, _) = map_format(format).ok_or(image::CreationError::Format(format.0, Some(format.1)))?;
+
+        unsafe {
+            let descriptor = MTLTextureDescriptor::new(); // Returns retained
+
+            match kind {
+                image::Kind::D2(width, height, aa) => {
+                    descriptor.set_texture_type(MTLTextureType::D2);
+                    descriptor.set_width(width as u64);
+                    descriptor.set_height(height as u64);
+                },
+                _ => unimplemented!(),
+            }
+
+            descriptor.set_mipmap_level_count(mip_levels as u64);
+            descriptor.set_pixel_format(mtl_format);
+            descriptor.set_usage(map_texture_usage(usage));
+
+            Ok(n::UnboundImage(descriptor))
+        }
+    }
+
+    fn get_image_requirements(&mut self, image: &n::UnboundImage) -> memory::Requirements {
+        // We don't know what memory type the user will try to allocate the image with, so we test them
+        // all get the most stringent ones. Note we don't check Shared because heaps can't use it
+        let mut max_size = 0;
+        let mut max_alignment = 0;
+        for &options in [
+            MTLResourceStorageModeManaged,
+            MTLResourceStorageModeManaged | MTLResourceCPUCacheModeWriteCombined,
+            MTLResourceStorageModePrivate,
+        ].iter() {
+            image.0.set_resource_options(options);
+            let requirements = self.device.heap_texture_size_and_align(image.0);
+            max_size = cmp::max(max_size, requirements.size);
+            max_alignment = cmp::max(max_alignment, requirements.align);
+        }
+        memory::Requirements {
+            size: max_size,
+            alignment: max_alignment,
+        }
+    }
+
+    fn bind_image_memory(&mut self, heap: &n::Heap, offset: u64, image: n::UnboundImage) -> Result<n::Image, image::CreationError> {
+        let bound_image = match *heap {
+            n::Heap::Native(ref heap) => {
+                let resource_options = resource_options_from_storage_and_cache(
+                    heap.storage_mode(),
+                    heap.cpu_cache_mode());
+                image.0.set_resource_options(resource_options);
+                heap.new_texture(image.0)
+            },
+            n::Heap::Emulated { ref heap_type, size: _ } => {
+                // TODO: disable hazard tracking?
+                let resource_options = map_heap_properties_to_options(heap_type.properties);
+                image.0.set_resource_options(resource_options);
+                self.device.new_texture(image.0)
+            }
+        };
+        unsafe { image.0.release(); }
+        if !bound_image.is_null() {
+            Ok(n::Image(bound_image))
+        } else {
+            Err(image::CreationError::OutOfHeap)
+        }
+    }
+
+    // Emulated fence implementations
+    #[cfg(not(feature = "native_fence"))]
+    fn create_fence(&mut self, signaled: bool) -> n::Fence {
+        n::Fence(Arc::new(Mutex::new(signaled)))
+    }
+    fn reset_fences(&mut self, fences: &[&n::Fence]) {
         for fence in fences {
-            let fence = &mut *self.frame_handles.ref_fence(&fence).lock().unwrap();
             *fence.0.lock().unwrap() = false;
         }
     }
-
-    fn wait_for_fences(&mut self, fences: &[&handle::Fence<Resources>], wait: device::WaitFor, timeout_ms: u32) -> bool {
-        warn!("`wait_for_fences` not implemented!");
-        true
+    fn wait_for_fences(&mut self, fences: &[&n::Fence], wait: WaitFor, mut timeout_ms: u32) -> bool {
+        use std::{thread, time};
+        let tick = 1;
+        loop {
+            let done = match wait {
+                WaitFor::Any => fences.iter().any(|fence| *fence.0.lock().unwrap()),
+                WaitFor::All => fences.iter().all(|fence| *fence.0.lock().unwrap()),
+            };
+            if done {
+                return true
+            }
+            if timeout_ms < tick {
+                return false
+            }
+            timeout_ms -= tick;
+            thread::sleep(time::Duration::from_millis(tick as u64));
+        }
     }
-
-    fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<Resources, T>)
-                               -> Result<mapping::Reader<'b, Resources, T>,
-                                         mapping::Error>
-        where T: Copy
-    {
-        unimplemented!()
-    }
-
-    fn write_mapping<'a, 'b, T>(&'a mut self, buf: &'b handle::Buffer<Resources, T>)
-                                -> Result<mapping::Writer<'b, Resources, T>,
-                                          mapping::Error>
-        where T: Copy
-    {
-        unimplemented!()
+    #[cfg(not(feature = "native_fence"))]
+    fn destroy_fence(&mut self, _fence: n::Fence) {
     }
 }
