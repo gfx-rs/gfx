@@ -6,7 +6,7 @@ workspace = "../../.."
 
 [features]
 default = ["vulkan"]
-#metal = ["gfx_device_metal", "gfx_window_metal"]
+metal = ["gfx_backend_metal"]
 gl = ["glutin", "gfx_backend_gl"]
 #dx11 = ["gfx_device_dx11", "gfx_window_dxgi"]
 dx12 = ["gfx_backend_dx12"]
@@ -35,15 +35,10 @@ path = "../../../src/backend/vulkan"
 version = "0.1"
 optional = true
 
-#[dependencies.gfx_device_metal]
-#path = "../../../src/backend/metal"
-#version = "0.3"
-#optional = true
-
-#[dependencies.gfx_window_metal]
-#path = "../../../src/window/metal"
-#version = "0.4"
-#optional = true
+[dependencies.gfx_backend_metal]
+path = "../../../src/backend/metal"
+version = "0.1"
+optional = true
 
 [target.'cfg(windows)'.dependencies]
 #gfx_device_dx11 = { path = "../../../src/backend/dx11", version = "0.6", optional = true }
