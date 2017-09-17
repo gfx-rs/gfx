@@ -1,15 +1,21 @@
 //! Commands encoder.
 
-use std::error::Error;
-use std::any::Any;
-use std::fmt;
+use std::mem;
+use std::ops::Range;
 use std::sync::mpsc;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use core::{self, CommandPool};
 use core::command::CommandBuffer;
-use memory::{Usage, Provider, Dependency};
-use {handle, image, Backend};
+use core::image::ImageLayout;
+use memory::{Provider, Dependency, cast_slice};
+use device::InitToken;
+use {handle, buffer, image, format, Backend};
+
+pub use core::command::{
+    BufferCopy, ImageCopy, BufferImageCopy,
+    ClearColor
+};
 
 pub struct Pool<B: Backend, C>(Provider<PoolInner<B, C>>);
 
@@ -37,8 +43,10 @@ impl<B: Backend, C> Pool<B, C> {
             pool: PoolDependency(self.0.dependency()),
             buffer: self.mut_inner().acquire_command_buffer(),
             // raw_data: pso::RawDataSet::new(),
-            access_info: AccessInfo::new(),
             handles: handle::Bag::new(),
+            pipeline_stage: core::pso::TOP_OF_PIPE,
+            buffer_states: HashMap::new(),
+            image_states: HashMap::new(),
         }
     }
 }
@@ -71,10 +79,12 @@ pub(crate) fn command_pool_channel<B: Backend, C>()
 
 pub struct Encoder<'a, B: Backend, C> {
     buffer: CommandBuffer<'a, B, C>,
-    // raw_data: pso::RawDataSet<B>,
-    access_info: AccessInfo<B>,
     handles: handle::Bag<B>,
-    pool: PoolDependency<B, C>
+    pool: PoolDependency<B, C>,
+    // raw_data: pso::RawDataSet<B>,
+    pipeline_stage: core::pso::PipelineStage,
+    buffer_states: HashMap<handle::raw::Buffer<B>, core::buffer::State>,
+    image_states: HashMap<handle::raw::Image<B>, ImageStates>,
 }
 
 pub struct Submit<B: Backend, C> {
@@ -82,6 +92,41 @@ pub struct Submit<B: Backend, C> {
     pub(crate) access_info: AccessInfo<B>,
     pub(crate) handles: handle::Bag<B>,
     pub(crate) pool: PoolDependency<B, C>
+}
+
+// TODO: coalescing?
+struct ImageStates {
+    states: Vec<core::image::State>,
+    levels: usize,
+}
+
+impl ImageStates {
+    fn new(
+        state: core::image::State,
+        levels: image::Level,
+        layers: image::Layer,
+    ) -> Self {
+        let size = layers as usize * levels as usize;
+        ImageStates {
+            states: (0..size).map(|_| state).collect(),
+            levels: levels as usize,
+        }
+    }
+
+    fn get_mut(
+        &mut self,
+        level: image::Level,
+        layer: image::Layer,
+    ) -> &mut core::image::State {
+        let index = layer as usize * self.levels + level as usize;
+        &mut self.states[index]
+    }
+
+    fn ranges(&self) -> (Range<image::Level>, Range<image::Layer>) {
+        let levels = self.levels as image::Level;
+        let layers = (self.states.len() / self.levels) as image::Layer;
+        (0..levels, 0..layers)
+    }
 }
 
 /// Informations about what is accessed by a submit.
@@ -98,49 +143,30 @@ impl<B: Backend> AccessInfo<B> {
         }
     }
 
+    pub fn from_map<T>(map: HashMap<handle::raw::Buffer<B>, T>) -> Self {
+        AccessInfo {
+            buffers: map.into_iter().map(|(handle, _)| handle).collect()
+        }
+    }
+
     /// Clear access informations
     pub fn clear(&mut self) {
         self.buffers.clear();
-    }
-
-    /// Register a buffer read access
-    pub fn buffer_read(&mut self, buffer: handle::raw::Buffer<B>) {
-        self.buffers.insert(buffer);
-    }
-
-    /// Register a buffer write access
-    pub fn buffer_write(&mut self, buffer: handle::raw::Buffer<B>) {
-        self.buffers.insert(buffer);
     }
 
     pub fn append(&mut self, other: &mut AccessInfo<B>) {
         self.buffers.extend(other.buffers.drain());
     }
 
-    pub(crate) fn start_gpu_access(&self) -> bool {
-        let accesses = || self.buffers.iter()
+    pub(crate) fn start_gpu_access(&self) {
+        let accesses = self.buffers.iter()
             .map(|buffer| &buffer.info().access);
-        
-        let mut acquired = 0;
-        for access in accesses() {
-            if access.acquire_cpu() {
-                acquired += 1;
-            } else {
-                // Release everything before notifying of failure.
-                for access in accesses().take(acquired) {
-                    access.release_cpu();
-                }
-                return false;
-            }
-        }
 
-        // Everything was acquired, start gpu access and release
-        for access in accesses() {
+        for access in accesses {
+            assert!(access.acquire_cpu(), "access overlap on submission");
             access.gpu_start();
             access.release_cpu();
         }
-
-        true
     }
 
     pub(crate) fn end_gpu_access(&self) {
@@ -150,392 +176,424 @@ impl<B: Backend> AccessInfo<B> {
     }
 }
 
-/// An error occuring in memory copies.
-#[allow(missing_docs)]
-#[derive(Clone, Debug, PartialEq)]
-pub enum CopyError<S, D> {
-    OutOfSrcBounds {
-        size: S,
-        copy_end: S,
-    },
-    OutOfDstBounds {
-        size: D,
-        copy_end: D,
-    },
-    Overlap {
-        src_offset: usize,
-        dst_offset: usize,
-        size: usize,
-    },
-    NoSrcBindFlag,
-    NoDstBindFlag,
-}
-
-/// Result type returned when copying a buffer into another buffer.
-pub type CopyBufferResult = Result<(), CopyError<usize, usize>>;
-
-/// Result type returned when copying buffer data into an image.
-pub type CopyBufferImageResult = Result<(), CopyError<usize, [image::Size; 3]>>;
-
-/// Result type returned when copying image data into a buffer.
-pub type CopyImageBufferResult = Result<(), CopyError<[image::Size; 3], usize>>;
-
-impl<S, D> fmt::Display for CopyError<S, D>
-    where S: fmt::Debug + fmt::Display, D: fmt::Debug + fmt::Display
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use self::CopyError::*;
-        match *self {
-            OutOfSrcBounds { ref size, ref copy_end } =>
-                write!(f, "{}: {} / {}", self.description(), copy_end, size),
-            OutOfDstBounds { ref size, ref copy_end } =>
-                write!(f, "{}: {} / {}", self.description(), copy_end, size),
-            Overlap { ref src_offset, ref dst_offset, ref size } =>
-                write!(f, "{}: [{} - {}] to [{} - {}]",
-                       self.description(),
-                       src_offset, src_offset + size,
-                       dst_offset, dst_offset + size),
-            _ => write!(f, "{}", self.description())
-        }
-    }
-}
-
-impl<S, D> Error for CopyError<S, D>
-    where S: fmt::Debug + fmt::Display, D: fmt::Debug + fmt::Display
-{
-    fn description(&self) -> &str {
-        use self::CopyError::*;
-        match *self {
-            OutOfSrcBounds {..} => "Copy source is out of bounds",
-            OutOfDstBounds {..} => "Copy destination is out of bounds",
-            Overlap {..} => "Copy source and destination are overlapping",
-            NoSrcBindFlag => "Copy source is missing `TRANSFER_SRC`",
-            NoDstBindFlag => "Copy destination is missing `TRANSFER_DST`",
-        }
-    }
-}
-
-/// An error occuring in buffer and image updates.
-#[allow(missing_docs)]
-#[derive(Clone, Debug, PartialEq)]
-pub enum UpdateError<T> {
-    OutOfBounds {
-        target: T,
-        source: T,
-    },
-    UnitCountMismatch {
-        target: usize,
-        slice: usize,
-    },
-    InvalidUsage(Usage),
-}
-
-fn check_update_usage<T>(usage: Usage) -> Result<(), UpdateError<T>> {
-    if usage == Usage::Data {
-        Ok(())
-    } else {
-        Err(UpdateError::InvalidUsage(usage))
-    }
-}
-
-impl<T: Any + fmt::Debug + fmt::Display> fmt::Display for UpdateError<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            UpdateError::OutOfBounds {ref target, ref source} =>
-                write!(f, "Write to {} from {} is out of bounds", target, source),
-            UpdateError::UnitCountMismatch {ref target, ref slice} =>
-                write!(f, "{}: expected {}, found {}", self.description(), target, slice),
-            UpdateError::InvalidUsage(usage) =>
-                write!(f, "{}: {:?}", self.description(), usage),
-        }
-    }
-}
-
-impl<T: Any + fmt::Debug + fmt::Display> Error for UpdateError<T> {
-    fn description(&self) -> &str {
-        match *self {
-            UpdateError::OutOfBounds {..} => "Write to data is out of bounds",
-            UpdateError::UnitCountMismatch {..} => "Unit count mismatch",
-            UpdateError::InvalidUsage(_) => "This memory usage does not allow updates",
-        }
-    }
-}
-
-impl<B: Backend, C> Submit<B, C> {
-    /*
-    /// Submits the commands in the internal `CommandBuffer` to the GPU, so they can
-    /// be executed.
-    pub fn synced_flush(self,
-                        queue: &mut GraphicsQueue<B>,
-                        wait_semaphores: &[&handle::Semaphore<B>],
-                        signal_semaphores: &[&handle::Semaphore<B>],
-                        fence: Option<&handle::Fence<B>>) -> SubmissionResult<()> {
-        let wait_semaphores = &wait_semaphores.iter()
-                                              .map(|&wait| (wait, core::pso::BOTTOM_OF_PIPE))
-                                              .collect::<Vec<_>>();
-        queue.pin_submitted_resources(&self.handles);
-        let submission =
-            core::Submission::new()
-                    .wait_on(wait_semaphores)
-                    .submit(&[self.submission])
-                    .signal(signal_semaphores);
-
-        queue.submit(
-            &[submission],
-            fence,
-            &self.access_info
-        );
-
-        Ok(()) // TODO
-    }
-    */
-}
-
 impl<'a, B: Backend, C> Encoder<'a, B, C> {
     pub fn mut_buffer(&mut self) -> &mut CommandBuffer<'a, B, C> {
         &mut self.buffer
     }
+}
 
-    pub fn finish(self) -> Submit<B, C> {
+impl<'a, B: Backend, C> Encoder<'a, B, C>
+    where C: core::queue::Supports<core::Transfer>
+{
+    pub fn finish(mut self) -> Submit<B, C> {
+        self.transition_to_stable_state();
+        self.handles.extend(self.image_states.into_iter().map(|kv| kv.0));
         Submit {
             inner: self.buffer.finish(),
-            access_info: self.access_info,
+            access_info: AccessInfo::from_map(self.buffer_states),
             handles: self.handles,
             pool: self.pool,
         }
     }
 
-    /*
-    /// Submits the internal `CommandBuffer` to the GPU, so it can be executed.
-    ///
-    /// Calling `flush` before swapping buffers is critical as without it the commands of the
-    /// internal ´CommandBuffer´ will not be sent to the GPU, and as a result they will not be
-    /// processed. Calling flush too often however will result in a performance hit. It is
-    /// generally recommended to call flush once per frame, when all draw calls have been made.
-    pub fn flush(self, queue: &mut GraphicsQueue<B>) -> SubmissionResult<()> {
-        self.synced_flush(queue, &[], &[], None)
+    pub fn init_resources(&mut self, tokens: Vec<InitToken<B>>) {
+        let mut barriers = Vec::new();
+        for token in &tokens {
+            match token.handle {
+                handle::Any::Image(ref image) =>
+                    barriers.push(self.init_image(image)),
+                _ => {}
+            }
+        }
+        let stage_transition = self.pipeline_stage..self.pipeline_stage;
+        self.buffer.pipeline_barrier(stage_transition, &barriers[..]);
     }
 
-    /// Submits the commands in the internal `CommandBuffer` to the GPU, so they can
-    /// be executed.
-    pub fn synced_flush(self,
-                        queue: &mut GraphicsQueue<B>,
-                        wait_semaphores: &[&handle::Semaphore<B>],
-                        signal_semaphores: &[&handle::Semaphore<B>],
-                        fence: Option<&handle::Fence<B>>) -> SubmissionResult<()> {
-        self.finish().synced_flush(queue, wait_semaphores, signal_semaphores, fence)
+    fn init_image<'b>(&mut self, image: &'b handle::raw::Image<B>)
+        -> core::memory::Barrier<'b, B>
+    {
+        let creation_state = (core::image::Access::empty(), ImageLayout::Undefined);
+        let levels = image.info().kind.get_num_levels();
+        let layers = image.info().kind.get_num_slices().unwrap_or(1);
+        let stable_state = image.info().stable_state;
+        let states = ImageStates::new(stable_state, levels, layers);
+        self.image_states.insert(image.clone(), states);
+        core::memory::Barrier::Image {
+            states: creation_state..stable_state,
+            target: image.resource(),
+            range: (0..levels, 0..layers)
+        }
     }
+
+    fn require_buffer_state<'b>(
+        &mut self,
+        buffer: &'b handle::raw::Buffer<B>,
+        state: core::buffer::State
+    ) -> Option<core::memory::Barrier<'b, B>> {
+        if !self.buffer_states.contains_key(buffer) {
+            self.buffer_states.insert(buffer.clone(), buffer.info().stable_state);
+        }
+        Self::transition_buffer(
+            buffer,
+            self.buffer_states.get_mut(buffer).unwrap(),
+            state)
+    }
+
+    fn require_image_state<'b>(
+        &mut self,
+        image: &'b handle::raw::Image<B>,
+        level: image::Level,
+        layer: image::Layer,
+        state: core::image::State,
+    ) -> Option<core::memory::Barrier<'b, B>> {
+        if !self.image_states.contains_key(image) {
+            let levels = image.info().kind.get_num_levels();
+            let layers = image.info().kind.get_num_slices().unwrap_or(1);
+            let states = ImageStates::new(image.info().stable_state, levels, layers);
+            self.image_states.insert(image.clone(), states);
+        }
+        Self::transition_image(
+            image,
+            level,
+            layer,
+            self.image_states.get_mut(image).unwrap().get_mut(level, layer),
+            state)
+    }
+
+    fn transition_buffer<'b>(
+        buffer: &'b handle::raw::Buffer<B>,
+        current: &mut core::buffer::State,
+        next: core::buffer::State
+    ) -> Option<core::memory::Barrier<'b, B>> {
+        let state = mem::replace(current, next);
+        if state != next {
+            Some(core::memory::Barrier::Buffer {
+                states: state..next,
+                target: buffer.resource(),
+                range: 0..buffer.info().size,
+            })
+        } else {
+            None
+        }
+    }
+
+    fn transition_image<'b>(
+        image: &'b handle::raw::Image<B>,
+        level: image::Level,
+        layer: image::Layer,
+        current: &mut core::image::State,
+        next: core::image::State,
+    ) -> Option<core::memory::Barrier<'b, B>> {
+        let state = mem::replace(current, next);
+        if state != next {
+            Some(core::memory::Barrier::Image {
+                states: state..next,
+                target: image.resource(),
+                range: (level..(level+1), layer..(layer+1)),
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn require_state(
+        &mut self,
+        stage: core::pso::PipelineStage,
+        buffer_states: &[(&handle::raw::Buffer<B>, core::buffer::State)],
+        image_states: &[(&handle::raw::Image<B>, image::Subresource, core::image::State)],
+    ) {
+        let mut barriers = Vec::new();
+        for &(buffer, state) in buffer_states {
+            barriers.extend(self.require_buffer_state(buffer, state));
+        }
+        for &(image, (level, layer), state) in image_states {
+            barriers.extend(self.require_image_state(image, level, layer, state));
+        }
+        let current_stage = mem::replace(&mut self.pipeline_stage, stage);
+        if (current_stage != stage) || !barriers.is_empty() {
+            self.buffer.pipeline_barrier(current_stage..stage, &barriers[..]);
+        }
+    }
+
+    fn transition_to_stable_state(&mut self) {
+        let mut barriers = Vec::new();
+        for (buffer, state) in &mut self.buffer_states {
+            barriers.extend(Self::transition_buffer(buffer, state, buffer.info().stable_state));
+        }
+        for (image, states) in &mut self.image_states {
+            let (levels, layers) = states.ranges();
+            for level in levels {
+                for layer in layers.clone() {
+                    let state = states.get_mut(level, layer);
+                    barriers.extend(Self::transition_image(image, level, layer, state, image.info().stable_state));
+                }
+            }
+        }
+        let stage_transition = self.pipeline_stage..core::pso::BOTTOM_OF_PIPE;
+        self.buffer.pipeline_barrier(stage_transition, &barriers[..]);
+    }
+
+    // TODO: fill buffer
 
     /// Copy part of a buffer to another
-    pub fn copy_buffer<T: Pod>(&mut self, src: &handle::Buffer<B, T>, dst: &handle::Buffer<B, T>,
-                               src_offset: usize, dst_offset: usize, size: usize) -> CopyBufferResult {
-        if !src.get_info().bind.contains(memory::TRANSFER_SRC) {
-            return Err(CopyError::NoSrcBindFlag);
-        }
-        if !dst.get_info().bind.contains(memory::TRANSFER_DST) {
-            return Err(CopyError::NoDstBindFlag);
-        }
-
-        let size_bytes = mem::size_of::<T>() * size;
-        let src_offset_bytes = mem::size_of::<T>() * src_offset;
-        let src_copy_end = src_offset_bytes + size_bytes;
-        if src_copy_end > src.get_info().size {
-            return Err(CopyError::OutOfSrcBounds {
-                size: src.get_info().size,
-                copy_end: src_copy_end,
-            });
-        }
-        let dst_offset_bytes = mem::size_of::<T>() * dst_offset;
-        let dst_copy_end = dst_offset_bytes + size_bytes;
-        if dst_copy_end > dst.get_info().size {
-            return Err(CopyError::OutOfDstBounds {
-                size: dst.get_info().size,
-                copy_end: dst_copy_end,
-            });
-        }
-        if src == dst &&
-           src_offset_bytes < dst_copy_end &&
-           dst_offset_bytes < src_copy_end
-        {
-            return Err(CopyError::Overlap {
-                src_offset: src_offset_bytes,
-                dst_offset: dst_offset_bytes,
-                size: size_bytes,
-            });
-        }
-        self.access_info.buffer_read(src.raw());
-        self.access_info.buffer_write(dst.raw());
-
-        self.command_buffer.copy_buffer(
-            self.handles.ref_buffer(src.raw()).clone(),
-            self.handles.ref_buffer(dst.raw()).clone(),
-            src_offset_bytes, dst_offset_bytes, size_bytes);
-        Ok(())
-    }
-
-    /// Copy part of a buffer to a texture
-    pub fn copy_buffer_to_texture_raw(
-        &mut self, src: &handle::RawBuffer<B>, src_offset_bytes: usize,
-        dst: &handle::RawTexture<B>, face: Option<texture::CubeFace>, info: texture::RawImageInfo)
-        -> CopyBufferTextureResult
+    pub fn copy_buffer<MTB>(
+        &mut self,
+        src: &MTB,
+        dst: &MTB,
+        regions: &[BufferCopy],
+    )
+        where MTB: buffer::MaybeTyped<B>
     {
-        if !src.get_info().bind.contains(memory::TRANSFER_SRC) {
-            return Err(CopyError::NoSrcBindFlag);
-        }
-        if !dst.get_info().bind.contains(memory::TRANSFER_DST) {
-            return Err(CopyError::NoDstBindFlag);
-        }
+        if regions.is_empty() { return };
+        let src = src.as_raw();
+        let dst = dst.as_raw();
 
-        let size_bytes = info.get_byte_count();
-        let src_copy_end = src_offset_bytes + size_bytes;
-        if src_copy_end > src.get_info().size {
-            return Err(CopyError::OutOfSrcBounds {
-                size: src.get_info().size,
-                copy_end: src_copy_end,
-            });
-        }
+        debug_assert!(src.info().usage.contains(buffer::TRANSFER_SRC),
+            "missing TRANSFER_SRC usage flag");
+        debug_assert!(dst.info().usage.contains(buffer::TRANSFER_DST),
+            "missing TRANSFER_DST usage flag");
 
-        let dim = dst.get_info().kind.get_dimensions();
-        if !info.is_inside(dim) {
-            let (w, h, d, _) = dim;
-            return Err(CopyError::OutOfDstBounds {
-                size: [w, h, d],
-                copy_end: [info.xoffset + info.width,
-                           info.yoffset + info.height,
-                           info.zoffset + info.depth]
-            });
-        }
+        let stride = mem::size_of::<MTB::Data>() as u64;
+        let mut byte_regions: Vec<_> = regions.iter()
+            .map(|region| BufferCopy {
+                src: region.src * stride,
+                dst: region.dst * stride,
+                size: region.size * stride,
+            }).collect();
 
-        self.access_info.buffer_read(src);
+        // TODO: check alignement
+        // TODO: check copy_buffer capability
+        if cfg!(debug) {
+            byte_regions.sort_by(|a, b| a.src.cmp(&b.src));
+            let mut src_range = None;
+            for &BufferCopy { src, size, .. } in &byte_regions {
+                if let Some((_, ref mut end)) = src_range {
+                    assert!(src > *end, "source region overlap");
+                    *end = src + size;
+                } else {
+                    src_range = Some((src, src + size));
+                }
+            }
+            let src_range = src_range.unwrap();
 
-        self.command_buffer.copy_buffer_to_texture(
-            self.handles.ref_buffer(src).clone(), src_offset_bytes,
-            self.handles.ref_texture(dst).clone(), dst.get_info().kind,
-            face, info);
-        Ok(())
-    }
+            byte_regions.sort_by(|a, b| a.dst.cmp(&b.dst));
+            let mut dst_range = None;
+            for &BufferCopy { dst, size, .. } in &byte_regions {
+                if let Some((_, ref mut end)) = dst_range {
+                    assert!(dst > *end, "destination region overlap");
+                    *end = dst + size;
+                } else {
+                    dst_range = Some((dst, dst + size));
+                }
+            }
+            let dst_range = dst_range.unwrap();
 
-    /// Copy part of a texture to a buffer
-    pub fn copy_texture_to_buffer_raw(
-        &mut self, src: &handle::RawTexture<B>,
-        face: Option<texture::CubeFace>, info: texture::RawImageInfo,
-        dst: &handle::RawBuffer<B>, dst_offset_bytes: usize)
-        -> CopyTextureBufferResult
-    {
-        if !src.get_info().bind.contains(memory::TRANSFER_SRC) {
-            return Err(CopyError::NoSrcBindFlag);
-        }
-        if !dst.get_info().bind.contains(memory::TRANSFER_DST) {
-            return Err(CopyError::NoDstBindFlag);
-        }
-
-        let size_bytes = info.get_byte_count();
-        let dst_copy_end = dst_offset_bytes + size_bytes;
-        if dst_copy_end > dst.get_info().size {
-            return Err(CopyError::OutOfDstBounds {
-                size: dst.get_info().size,
-                copy_end: dst_copy_end,
-            });
+            assert!(src_range.1 <= src.info().size, "out of source bounds");
+            assert!(dst_range.1 <= dst.info().size, "out of destination bounds");
+            // TODO: check if src == dst
         }
 
-        let dim = src.get_info().kind.get_dimensions();
-        if !info.is_inside(dim) {
-            let (w, h, d, _) = dim;
-            return Err(CopyError::OutOfSrcBounds {
-                size: [w, h, d],
-                copy_end: [info.xoffset + info.width,
-                           info.yoffset + info.height,
-                           info.zoffset + info.depth]
-            });
-        }
+        self.require_state(
+            core::pso::TRANSFER,
+            &[(src, core::buffer::TRANSFER_READ),
+               (dst, core::buffer::TRANSFER_WRITE)],
+            &[]);
 
-        self.access_info.buffer_write(dst);
-
-        self.command_buffer.copy_texture_to_buffer(
-            self.handles.ref_texture(src).clone(), src.get_info().kind,
-            face, info,
-            self.handles.ref_buffer(dst).clone(), dst_offset_bytes);
-        Ok(())
+        self.buffer.copy_buffer(
+            src.resource(),
+            dst.resource(),
+            &byte_regions[..]);
     }
 
     /// Update a buffer with a slice of data.
-    pub fn update_buffer<T: Pod>(&mut self, buf: &handle::Buffer<B, T>,
-                         data: &[T], offset_elements: usize)
-                         -> Result<(), UpdateError<usize>>
+    pub fn update_buffer<MTB>(
+        &mut self,
+        buffer: &MTB,
+        offset: u64,
+        data: &[MTB::Data],
+    )
+        where MTB: buffer::MaybeTyped<B>
     {
-        if data.is_empty() { return Ok(()); }
-        try!(check_update_usage(buf.raw().get_info().usage));
+        if data.is_empty() { return; }
+        let buffer = buffer.as_raw();
 
-        let elem_size = mem::size_of::<T>();
-        let offset_bytes = elem_size * offset_elements;
-        let bound = data.len().wrapping_mul(elem_size) + offset_bytes;
-        if bound <= buf.get_info().size {
-            self.command_buffer.update_buffer(
-                self.handles.ref_buffer(buf.raw()).clone(),
-                cast_slice(data), offset_bytes);
-            Ok(())
-        } else {
-            Err(UpdateError::OutOfBounds {
-                target: bound,
-                source: buf.get_info().size,
-            })
+        debug_assert!(buffer.info().usage.contains(buffer::TRANSFER_DST),
+            "missing TRANSFER_DST usage flag");
+
+        let stride = mem::size_of::<MTB::Data>() as u64;
+        let start_bytes = offset * stride;
+        let end_bytes = start_bytes + data.len() as u64 * stride;
+        debug_assert!(end_bytes <= buffer.info().size,
+            "out of buffer bounds");
+
+        self.require_state(
+            core::pso::TRANSFER,
+            &[(buffer, core::buffer::TRANSFER_WRITE)],
+            &[]);
+            
+        self.buffer.update_buffer(
+            buffer.resource(),
+            start_bytes,
+            cast_slice(data));
+    }
+
+    pub fn copy_image(
+        &mut self,
+        src: &handle::raw::Image<B>,
+        dst: &handle::raw::Image<B>,
+        regions: &[ImageCopy],
+    ) {
+        if regions.is_empty() { return };
+
+        debug_assert!(src.info().usage.contains(image::TRANSFER_SRC),
+            "missing TRANSFER_SRC usage flag");
+        debug_assert!(dst.info().usage.contains(image::TRANSFER_DST),
+            "missing TRANSFER_DST usage flag");
+
+        // TODO: error handling
+        let src_state = (core::image::TRANSFER_READ, ImageLayout::TransferSrcOptimal);
+        let dst_state = (core::image::TRANSFER_WRITE, ImageLayout::TransferDstOptimal);
+        let mut image_states = Vec::new();
+        for region in regions {
+            image_states.push((src, region.src_subresource, src_state));
+            image_states.push((dst, region.dst_subresource, dst_state));
         }
+        self.require_state(
+            core::pso::TRANSFER,
+            &[],
+            &image_states[..]);
+
+        self.buffer.copy_image(
+            src.resource(), src_state.1,
+            dst.resource(), dst_state.1,
+            regions);
+    }
+    
+    /// Copy part of a buffer to an image
+    pub fn copy_buffer_to_image(
+        &mut self,
+        src: &handle::raw::Buffer<B>,
+        dst: &handle::raw::Image<B>,
+        regions: &[BufferImageCopy],
+    ) {
+        if regions.is_empty() { return };
+
+        debug_assert!(src.info().usage.contains(buffer::TRANSFER_SRC),
+            "missing TRANSFER_SRC usage flag");
+        debug_assert!(dst.info().usage.contains(image::TRANSFER_DST),
+            "missing TRANSFER_DST usage flag");
+
+        // TODO: error handling
+        let dst_state = (core::image::TRANSFER_WRITE, ImageLayout::TransferDstOptimal);
+        let mut image_states = Vec::new();
+        for region in regions {
+            let (level, ref layers) = region.image_subresource;
+            for layer in layers.clone() {
+                image_states.push((dst, (level, layer), dst_state));
+            }
+        }
+        self.require_state(
+            core::pso::TRANSFER,
+            &[(src, core::buffer::TRANSFER_READ)],
+            &image_states[..]);
+
+        self.buffer.copy_buffer_to_image(
+            src.resource(),
+            dst.resource(), dst_state.1,
+            regions);
     }
 
-    /// Update a buffer with a single structure.
-    pub fn update_constant_buffer<T: Copy>(&mut self, buf: &handle::Buffer<B, T>, data: &T) {
-        use std::slice;
+    /// Copy part of an image to a buffer
+    pub fn copy_image_to_buffer(
+        &mut self,
+        src: &handle::raw::Image<B>,
+        dst: &handle::raw::Buffer<B>,
+        regions: &[BufferImageCopy],
+    ) {
+        if regions.is_empty() { return };
 
-        check_update_usage::<usize>(buf.raw().get_info().usage).unwrap();
+        debug_assert!(src.info().usage.contains(image::TRANSFER_SRC),
+            "missing TRANSFER_SRC usage flag");
+        debug_assert!(dst.info().usage.contains(buffer::TRANSFER_DST),
+            "missing TRANSFER_DST usage flag");
 
-        let slice = unsafe {
-            slice::from_raw_parts(data as *const T as *const u8, mem::size_of::<T>())
-        };
-        self.command_buffer.update_buffer(
-            self.handles.ref_buffer(buf.raw()).clone(), slice, 0);
+        // TODO: error handling
+        let src_state = (core::image::TRANSFER_READ, ImageLayout::TransferSrcOptimal);
+        let mut image_states = Vec::new();
+        for region in regions {
+            let (level, ref layers) = region.image_subresource;
+            for layer in layers.clone() {
+                image_states.push((src, (level, layer), src_state));
+            }
+        }
+        self.require_state(
+            core::pso::TRANSFER,
+            &[(dst, core::buffer::TRANSFER_WRITE)],
+            &image_states[..]);
+
+        self.buffer.copy_image_to_buffer(
+            src.resource(), src_state.1,
+            dst.resource(),
+            regions);
+    }
+}
+
+impl<'a, B: Backend, C> Encoder<'a, B, C>
+    where C: core::queue::Supports<core::Transfer> + core::queue::Supports<core::Graphics>
+{
+    fn require_clear_state(&mut self, image: &handle::raw::Image<B>) -> ImageLayout {
+        let levels = image.info().kind.get_num_levels();
+        let layers = image.info().kind.get_num_slices().unwrap_or(1);
+        let state = (core::image::RENDER_TARGET_CLEAR, ImageLayout::ColorAttachmentOptimal);
+        let mut image_states = Vec::new();
+        for level in 0..levels {
+            for layer in 0..layers {
+                image_states.push((image, (level, layer), state));
+            }
+        }
+        self.require_state(
+            core::pso::TRANSFER,
+            &[],
+            &image_states[..]);
+
+        state.1
     }
 
-    /// Update the contents of a texture.
-    pub fn update_texture<S, T>(&mut self, tex: &handle::Texture<B, T::Surface>,
-                          face: Option<texture::CubeFace>,
-                          img: texture::NewImageInfo, data: &[S::DataType])
-                          -> Result<(), UpdateError<[texture::Size; 3]>>
-    where
-        S: format::SurfaceTyped,
-        S::DataType: Copy,
-        T: format::Formatted<Surface = S>,
+    /// Clears `rtv` to `value`.
+    pub fn clear_color_raw(
+        &mut self,
+        rtv: &handle::raw::RenderTargetView<B>,
+        value: ClearColor,
+    ) {
+        let layout = self.require_clear_state(rtv.info());
+        self.handles.add(rtv.clone());
+        self.buffer.clear_color(rtv.resource(), layout, value);
+    }
+
+    /// Clears `rtv` to `value`.
+    pub fn clear_color<F>(
+        &mut self,
+        rtv: &handle::RenderTargetView<B, F>,
+        value: F::View
+    )
+        where F: format::RenderFormat, F::View: Into<ClearColor>
     {
-        if data.is_empty() { return Ok(()); }
-        try!(check_update_usage(tex.raw().get_info().usage));
-
-        let target_count = img.get_texel_count();
-        if target_count != data.len() {
-            return Err(UpdateError::UnitCountMismatch {
-                target: target_count,
-                slice: data.len(),
-            })
-        }
-
-        let dim = tex.get_info().kind.get_dimensions();
-        if !img.is_inside(dim) {
-            let (w, h, d, _) = dim;
-            return Err(UpdateError::OutOfBounds {
-                target: [
-                    img.xoffset + img.width,
-                    img.yoffset + img.height,
-                    img.zoffset + img.depth,
-                ],
-                source: [w, h, d],
-            })
-        }
-
-        self.command_buffer.update_texture(
-            self.handles.ref_texture(tex.raw()).clone(),
-            tex.get_info().kind, face, cast_slice(data),
-            img.convert(T::get_format()));
-        Ok(())
+        self.clear_color_raw(rtv, value.into());
     }
 
+    /// Clears `dsv`'s depth to `depth_value` and stencil to `stencil_value`, if some.
+    pub fn clear_depth_stencil_raw(
+        &mut self,
+        dsv: &handle::raw::DepthStencilView<B>,
+        depth_value: Option<core::target::Depth>,
+        stencil_value: Option<core::target::Stencil>
+    ) {
+        let layout = self.require_clear_state(dsv.info());
+        self.handles.add(dsv.clone());
+        self.buffer.clear_depth_stencil(dsv.resource(), layout, depth_value, stencil_value);
+    }
+
+    /*
     fn draw_indexed<T>(&mut self, buf: &handle::Buffer<B, T>, ty: IndexType,
                     slice: &slice::Slice<B>, base: VertexCount,
                     instances: Option<command::InstanceParams>) {
@@ -553,27 +611,6 @@ impl<'a, B: Backend, C> Encoder<'a, B, C> {
             slice::IndexBuffer::Index32(ref buf) =>
                 self.draw_indexed(buf, IndexType::U32, slice, slice.base_vertex, instances),
         }
-    }
-
-    /// Clears the supplied `RenderTargetView` to the supplied `ClearColor`.
-    pub fn clear<T: format::RenderFormat>(&mut self,
-                 view: &handle::RenderTargetView<B, T>, value: T::View)
-    where T::View: Into<command::ClearColor> {
-        let target = self.handles.ref_rtv(view.raw()).clone();
-        self.command_buffer.clear_color(target, value.into())
-    }
-    /// Clear a depth view with a specified value.
-    pub fn clear_depth<T: format::DepthFormat>(&mut self,
-                       view: &handle::DepthStencilView<B, T>, depth: Depth) {
-        let target = self.handles.ref_dsv(view.raw()).clone();
-        self.command_buffer.clear_depth_stencil(target, Some(depth), None)
-    }
-
-    /// Clear a stencil view with a specified value.
-    pub fn clear_stencil<T: format::StencilFormat>(&mut self,
-                         view: &handle::DepthStencilView<B, T>, stencil: Stencil) {
-        let target = self.handles.ref_dsv(view.raw()).clone();
-        self.command_buffer.clear_depth_stencil(target, None, Some(stencil))
     }
 
     /// Draws a `slice::Slice` using a pipeline state object, and its matching `Data` structure.

@@ -3,7 +3,8 @@ use memory::Memory;
 
 pub use core::image::{
     CreationError, Kind, AaMode, Size, Level, Layer, Dimensions,
-    SamplerInfo, SubresourceLayers, SubresourceRange
+    AspectFlags, SamplerInfo,
+    Subresource, SubresourceLayers, SubresourceRange
 };
 pub use core::image::{Usage,
     TRANSFER_SRC, TRANSFER_DST,
@@ -11,7 +12,6 @@ pub use core::image::{Usage,
     SAMPLED
 };
 
-/// Texture storage descriptor.
 #[allow(missing_docs)]
 #[derive(Debug)]
 pub struct Info {
@@ -19,28 +19,12 @@ pub struct Info {
     pub kind: Kind,
     pub mip_levels: Level,
     pub format: core::format::Format,
-    pub memory: Memory,
+    pub origin: Origin,
+    pub(crate) stable_state: core::image::State,
 }
-/*
-impl Info {
-    /// Get image info for a given mip.
-    pub fn to_image_info(&self, mip: Level) -> NewImageInfo {
-        let (w, h, d, _) = self.kind.get_level_dimensions(mip);
-        ImageInfoCommon {
-            xoffset: 0,
-            yoffset: 0,
-            zoffset: 0,
-            width: w,
-            height: h,
-            depth: d,
-            format: (),
-            mipmap: mip,
-        }
-    }
 
-    /// Get the raw image info for a given mip.
-    pub fn to_raw_image_info(&self, mip: Level) -> RawImageInfo {
-        self.to_image_info(mip).convert(self.format)
-    }
+#[derive(Debug)]
+pub enum Origin {
+    Backbuffer,
+    User(Memory),
 }
-*/

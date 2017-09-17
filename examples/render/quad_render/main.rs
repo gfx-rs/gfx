@@ -6,16 +6,16 @@ extern crate gfx_backend_vulkan as back;
 extern crate winit;
 extern crate image;
 
-use core::{command, device as d, image as i, memory as m, pass, pso, pool, state};
+use std::mem;
+use std::io::Cursor;
+
+use core::{command, device as d, image as i, memory as m, pass, pso, state};
 use core::{Adapter, Device, Instance};
 use core::{DescriptorPool, Primitive};
 use core::format::{Formatted, Srgba8 as ColorFormat, Vec2};
 use core::pass::Subpass;
-use core::queue::Submission;
 use core::target::Rect;
 use gfx::allocators::StackAllocator as Allocator;
-
-use std::io::Cursor;
 
 #[derive(Debug, Clone, Copy)]
 #[allow(non_snake_case)]
@@ -23,6 +23,8 @@ struct Vertex {
     a_Pos: [f32; 2],
     a_Uv: [f32; 2],
 }
+
+unsafe impl m::Pod for Vertex {}
 
 const QUAD: [Vertex; 6] = [
     Vertex { a_Pos: [ -0.5, 0.33 ], a_Uv: [0.0, 1.0] },
@@ -182,8 +184,12 @@ fn main() {
     let set1 = sampler_pool.allocate_sets(&[&set1_layout]);
 
     // Framebuffer creation
-    let framebuffers = backbuffers.iter().map(|backbuffer| {
-        let frame_rtv = backbuffer.color.resource();
+    let frame_rtvs = backbuffers.iter().map(|backbuffer| {
+        context.mut_device()
+            .view_image_as_render_target(&backbuffer.color, (0..1, 0..1))
+            .unwrap()
+    }).collect::<Vec<_>>();
+    let framebuffers = frame_rtvs.iter().map(|rtv| {
         let extent = d::Extent { width: pixel_width as _, height: pixel_height as _, depth: 1 };
         device.create_framebuffer(&render_pass, &[frame_rtv], &[], extent).unwrap()
     }).collect::<Vec<_>>();
@@ -197,12 +203,14 @@ fn main() {
     println!("Memory types: {:?}", context.ref_device().memory_types());
     println!("Memory heaps: {:?}", context.ref_device().memory_heaps());
 
+    let mut init_tokens = Vec::new();
     let vertex_count = QUAD.len() as u64;
-    let vertex_buffer = context.mut_device().create_buffer::<Vertex, _>(
+    let (vertex_buffer, token) = context.mut_device().create_buffer::<Vertex, _>(
         &mut upload,
         gfx::buffer::VERTEX,
         vertex_count
     ).unwrap();
+    init_tokens.push(token);
 
     context.mut_device()
         .write_mapping(&vertex_buffer, 0..vertex_count)
@@ -219,12 +227,13 @@ fn main() {
     let upload_size = (height * row_pitch) as u64;
     println!("upload row pitch {}, total size {}", row_pitch, upload_size);
 
-    let image_upload_buffer = context.mut_device().create_buffer_raw(
+    let (image_upload_buffer, token) = context.mut_device().create_buffer_raw(
         &mut upload,
         gfx::buffer::TRANSFER_SRC,
         upload_size,
         image_stride as u64
     ).unwrap();
+    init_tokens.push(token);
 
     println!("copy image data into staging buffer");
 
@@ -238,12 +247,13 @@ fn main() {
         }
     }
 
-    let image = context.mut_device().create_image::<ColorFormat, _>(
+    let (image, token) = context.mut_device().create_image::<ColorFormat, _>(
         &mut data,
         gfx::image::TRANSFER_DST | gfx::image::SAMPLED,
         kind,
         1,
     ).unwrap();
+    init_tokens.push(token);
 
     let image_srv = context.mut_device()
         .view_image_as_shader_resource(&image)
@@ -282,56 +292,33 @@ fn main() {
         w: pixel_width, h: pixel_height,
     };
 
-    let mut fence = device.create_fence(false);
-    let mut graphics_pool = context.mut_queue()
-        .create_graphics_pool(16, pool::CommandPoolCreateFlags::empty());
+    let mut encoder_pool = context.acquire_encoder_pool();
+    let mut init_encoder = encoder_pool.acquire_encoder();
+    init_encoder.init_resources(init_tokens);
+    init_encoder.copy_buffer_to_image(
+        &image_upload_buffer,
+        &image,
+        &[command::BufferImageCopy {
+            buffer_offset: 0,
+            buffer_row_pitch: row_pitch,
+            buffer_slice_pitch: row_pitch * (height as u32),
+            image_aspect: i::ASPECT_COLOR,
+            image_subresource: (0, 0..1),
+            image_offset: command::Offset { x: 0, y: 0, z: 0 },
+            image_extent: d::Extent { width, height, depth: 1 },
+        }]);
 
-    println!("copy buffer to texture");
-    {
-        let submit = {
-            let mut cmd_buffer = graphics_pool.acquire_command_buffer();
+    let init_submit = init_encoder.finish();
+    let mut submits = vec![init_submit];
 
-            let image_barrier = m::Barrier::Image {
-                states: (i::Access::empty(), i::ImageLayout::Undefined) ..
-                        (i::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal),
-                target: image.resource(),
-                range: (0..1, 0..1),
-            };
-            cmd_buffer.pipeline_barrier(pso::TOP_OF_PIPE .. pso::TRANSFER, &[image_barrier]);
-
-            cmd_buffer.copy_buffer_to_image(
-                image_upload_buffer.resource(),
-                image.resource(),
-                i::ImageLayout::TransferDstOptimal,
-                &[command::BufferImageCopy {
-                    buffer_offset: 0,
-                    buffer_row_pitch: row_pitch,
-                    buffer_slice_pitch: row_pitch * (height as u32),
-                    image_aspect: i::ASPECT_COLOR,
-                    image_subresource: (0, 0..1),
-                    image_offset: command::Offset { x: 0, y: 0, z: 0 },
-                    image_extent: d::Extent { width, height, depth: 1 },
-                }]);
-
-            let image_barrier = m::Barrier::Image {
-                states: (i::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal) ..
-                        (i::SHADER_READ, i::ImageLayout::ShaderReadOnlyOptimal),
-                target: image.resource(),
-                range: (0..1, 0..1),
-            };
-            cmd_buffer.pipeline_barrier(pso::TRANSFER .. pso::BOTTOM_OF_PIPE, &[image_barrier]);
-
-            cmd_buffer.finish()
-        };
-
-        let submission = Submission::new()
-            .submit(&[submit]);
-        context.mut_queue().submit(submission, Some(&mut fence));
-
-        device.wait_for_fences(&[&fence], d::WaitFor::All, !0);
-    }
-
-    device.destroy_fence(fence);
+    /* TODO
+    let image_barrier = m::Barrier::Image {
+        states: (i::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal) ..
+                (i::SHADER_READ, i::ImageLayout::ShaderReadOnlyOptimal),
+        target: image.resource(),
+        range: (0..1, 0..1),
+    };
+    */
 
     let mut running = true;
     while running {
@@ -351,16 +338,17 @@ fn main() {
 
         let frame = context.acquire_frame();
         let mut encoder_pool = context.acquire_encoder_pool();
+        let mut encoder = encoder_pool.acquire_encoder();
 
         // Rendering
-        let submit = {
-            let mut encoder = encoder_pool.acquire_encoder();
-            {
+        {
             let cmd_buffer = encoder.mut_buffer();
 
             cmd_buffer.set_viewports(&[viewport]);
             cmd_buffer.set_scissors(&[scissor]);
             cmd_buffer.bind_graphics_pipeline(&pipelines[0].as_ref().unwrap());
+            // TODO: data instead of upload ?
+            // TODO: vertex access ?
             cmd_buffer.bind_vertex_buffers(pso::VertexBufferSet(vec![(vertex_buffer.resource(), 0)]));
             cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, &[&set0[0], &set1[0]]); //TODO
 
@@ -373,12 +361,10 @@ fn main() {
                 );
                 encoder.draw(0..6, 0..1);
             }
-
-            }
-            encoder.finish()
-        };
-
-        context.present(vec![submit]);
+        }
+        
+        submits.push(encoder.finish());
+        context.present(mem::replace(&mut submits, Vec::new()));
     }
 
     println!("cleanup!");

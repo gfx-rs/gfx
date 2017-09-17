@@ -1,6 +1,8 @@
 use std::sync::atomic::{self, AtomicBool, AtomicUsize};
 
-use memory::Memory;
+use {core, handle};
+use memory::{Memory, Pod};
+use Backend;
 
 pub use core::buffer::{CreationError};
 pub use core::buffer::{Usage,
@@ -19,6 +21,7 @@ pub struct Info {
     /// Stride of a single element, in bytes. Only used for structured buffers
     /// that you use via shader resource / unordered access views.
     pub stride: u64,
+    pub(crate) stable_state: core::buffer::State,
     /// Exclusive access
     pub(crate) access: Access,
 }
@@ -27,11 +30,12 @@ impl Info {
     pub(crate) fn new(usage: Usage, memory: Memory, size: u64, stride: u64)
         -> Self
     {
+        let stable_state = core::buffer::Access::empty();
         let access = Access {
             cpu: AtomicBool::new(false),
             gpu: AtomicUsize::new(0),
         };
-        Info { usage, memory, size, stride, access }
+        Info { usage, memory, size, stride, stable_state, access }
     }
 }
 
@@ -79,4 +83,19 @@ impl Access {
     pub(crate) fn gpu_end(&self) {
         self.gpu.fetch_sub(1, atomic::Ordering::Relaxed);
     }
+}
+
+pub trait MaybeTyped<B: Backend> {
+    type Data: Pod;
+    fn as_raw(&self) -> &handle::raw::Buffer<B>;
+}
+
+impl<B: Backend> MaybeTyped<B> for handle::raw::Buffer<B> {
+    type Data = u8;
+    fn as_raw(&self) -> &handle::raw::Buffer<B> { &self }
+}
+
+impl<B: Backend, T: Pod> MaybeTyped<B> for handle::Buffer<B, T> {
+    type Data = T;
+    fn as_raw(&self) -> &handle::raw::Buffer<B> { &self }
 }

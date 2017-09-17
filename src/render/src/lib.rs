@@ -105,18 +105,15 @@ pub use draw_state::{preset, state};
 pub use draw_state::target::*;
 
 // public re-exports
-pub use core::{format, pso};
+pub use core::format;
 pub use core::{Adapter, Backend, Primitive, Frame};
 /*
 pub use core::{VertexCount, InstanceCount};
 pub use core::{ShaderSet, VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
 pub use core::device::{ResourceViewError, TargetViewError, CombinedError, WaitFor};
 pub use core::command::{InstanceParams};
-pub use core::shade::{ProgramInfo, UniformValue};
-
-pub use encoder::{CopyBufferResult, CopyBufferTextureResult, CopyError,
-                  CopyTextureBufferResult, UpdateError};
 */
+pub use encoder::Encoder;
 pub use device::Device;
 /*
 pub use pso::{PipelineState};
@@ -137,9 +134,9 @@ pub mod allocators;
 pub mod buffer;
 pub mod image;
 pub mod mapping;
-/*
-// Pipeline states
+/// Pipeline states
 pub mod pso;
+/*
 /// Shaders
 pub mod shade;
 /// Convenience macros
@@ -193,7 +190,7 @@ pub struct Context<B: Backend, C>
 }
 
 pub struct Backbuffer<B: Backend, Cf: RenderFormat> {
-    pub color: handle::RenderTargetView<B, Cf>,
+    pub color: handle::Image<B, Cf>,
     // TODO: depth
 }
 
@@ -342,15 +339,19 @@ impl<B: Backend, C> Context<B, C>
         let backbuffers = backbuffer_images
             .into_iter()
             .map(|raw| {
+                let usage = image::TRANSFER_SRC | image::COLOR_ATTACHMENT;
+                let kind = surface.get_kind();
+                let mip_levels = 1;
+                let format = Cf::get_format();
+                let origin = image::Origin::Backbuffer;
+                let stable_access = core::image::Access::empty();
+                let stable_layout = core::image::ImageLayout::ColorAttachmentOptimal;
+                let stable_state = (stable_access, stable_layout);
                 Backbuffer {
-                    color: Typed::new(device
-                        .view_backbuffer_as_render_target_raw(
-                            raw,
-                            surface.get_kind(),
-                            Cf::get_format(),
-                            (0, 0..1)
-                        ).expect("backbuffer RTV")
-                    )
+                    color: Typed::new(handle::inner::Image::without_garbage(
+                        raw.color,
+                        image::Info { usage, kind, mip_levels, format, origin, stable_state }
+                    ).into())
                 }
             }).collect();
 
@@ -412,11 +413,11 @@ impl<B: Backend, C> Context<B, C>
                 submit.inner
             }).collect();
 
-        assert!(bundle.access_info.start_gpu_access()); // TODO: recovery
+        bundle.access_info.start_gpu_access();
 
         {
             let submission = core::Submission::new()
-                .wait_on(&[(&bundle.wait_semaphore, pso::BOTTOM_OF_PIPE)])
+                .wait_on(&[(&bundle.wait_semaphore, core::pso::BOTTOM_OF_PIPE)])
                 .signal(&[&bundle.signal_semaphore])
                 .promote::<C>()
                 .submit(&inner_submits);
