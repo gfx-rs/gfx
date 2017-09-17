@@ -56,7 +56,7 @@ impl core::Surface<Backend> for Surface {
     }
 
     fn supports_queue(&self, queue_family: &native::QueueFamily) -> bool {
-        unimplemented!()
+        true // TODO: Not sure this is the case, don't know associativity of IOSurface
     }
 
     fn build_swapchain<C>(&mut self,
