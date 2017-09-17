@@ -109,44 +109,40 @@ impl CommandQueue {
 }
 
 impl core::RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw(&mut self, submission: RawSubmission<Backend>, fence: Option<&native::Fence>) {
-        unimplemented!()
-        /*for submit in submit_infos {
-            // FIXME: wait for semaphores!
+    unsafe fn submit_raw(&mut self, submit: RawSubmission<Backend>, fence: Option<&native::Fence>) {
+        // FIXME: wait for semaphores!
 
-            // FIXME: multiple buffers signaling!
-            let signal_block = if !submit.signal_semaphores.is_empty() {
-                let semaphores_copy: Vec<_> = submit.signal_semaphores.iter().map(|semaphore| {
-                    semaphore.0
-                }).collect();
-                Some(ConcreteBlock::new(move |cb: *mut ()| -> () {
-                    for semaphore in semaphores_copy.iter() {
-                        native::dispatch_semaphore_signal(*semaphore);
-                    }
-                }).copy())
-            } else {
-                None
-            };
+        // FIXME: multiple buffers signaling!
+        let signal_block = if !submit.signal_semaphores.is_empty() {
+            let semaphores_copy: Vec<_> = submit.signal_semaphores.iter().map(|semaphore| {
+                semaphore.0
+            }).collect();
+            Some(ConcreteBlock::new(move |cb: *mut ()| -> () {
+                for semaphore in semaphores_copy.iter() {
+                    native::dispatch_semaphore_signal(*semaphore);
+                }
+            }).copy())
+        } else {
+            None
+        };
 
-            for buffer in submit.cmd_buffers {
-                let command_buffer = buffer.get_info().command_buffer;
-                if let Some(ref signal_block) = signal_block {
-                    msg_send![command_buffer.0, addCompletedHandler: signal_block.deref() as *const _];
-                }
-                // only append the fence handler to the last command buffer
-                if submit as *const _ == submit_infos.last().unwrap() as *const _ &&
-                   buffer as *const _ == submit.cmd_buffers.last().unwrap() as *const _ {
-                    if let Some(ref fence) = fence {
-                        let value_ptr = fence.0.clone();
-                        let fence_block = ConcreteBlock::new(move |cb: *mut ()| -> () {
-                            *value_ptr.lock().unwrap() = true;
-                        }).copy();
-                        msg_send![command_buffer.0, addCompletedHandler: fence_block.deref() as *const _];
-                    }
-                }
-                command_buffer.commit();
+        for buffer in submit.cmd_buffers {
+            let command_buffer = (&mut *(buffer.0).get()).command_buffer;
+            if let Some(ref signal_block) = signal_block {
+                msg_send![command_buffer.0, addCompletedHandler: signal_block.deref() as *const _];
             }
-        }*/
+            // only append the fence handler to the last command buffer
+            if buffer as *const _ == submit.cmd_buffers.last().unwrap() as *const _ {
+                if let Some(ref fence) = fence {
+                    let value_ptr = fence.0.clone();
+                    let fence_block = ConcreteBlock::new(move |cb: *mut ()| -> () {
+                        *value_ptr.lock().unwrap() = true;
+                    }).copy();
+                    msg_send![command_buffer.0, addCompletedHandler: fence_block.deref() as *const _];
+                }
+            }
+            command_buffer.commit();
+        }
     }
 }
 
@@ -156,27 +152,37 @@ impl core::RawCommandPool<Backend> for CommandPool {
     }
 
     unsafe fn from_queue(queue: &CommandQueue, flags: CommandPoolCreateFlags) -> Self {
-        unimplemented!()
+        CommandPool {
+            queue: (queue.0).clone(),
+            active_buffers: Vec::new(),
+        }
     }
 
     fn allocate(&mut self, num: usize) -> Vec<CommandBuffer> {
-        unimplemented!()
-        /*unsafe {
-            // TODO: maybe use unretained command buffer for efficiency?
-            let command_buffer = self.queue.queue.new_command_buffer(); // Returns retained
-            defer_on_unwind! { command_buffer.release() }
+        let mut buffers = Vec::new();
 
-            self.active_buffers.push(CommandBuffer {
-                command_buffer,
-                encoder_state: EncoderState::None,
-                viewport: None,
-                scissors: None,
-                pipeline_state: None,
-                vertex_buffers: Vec::new(),
-                descriptor_sets: Vec::new(),
-            });
-            Encoder::new(self.active_buffers.last_mut().unwrap())
-        }*/
+        for _ in 0..num {
+            unsafe {
+                // TODO: maybe use unretained command buffer for efficiency?
+                let command_buffer = self.queue.queue.new_command_buffer(); // Returns retained
+                defer_on_unwind! { command_buffer.release() }
+
+                let command_buffer = CommandBuffer(Arc::new(UnsafeCell::new(CommandBufferInner {
+                    command_buffer,
+                    encoder_state: EncoderState::None,
+                    viewport: None,
+                    scissors: None,
+                    pipeline_state: None,
+                    vertex_buffers: Vec::new(),
+                    descriptor_sets: Vec::new(),
+                })));
+
+                buffers.push(command_buffer.clone());
+                self.active_buffers.push(command_buffer);
+            }
+        }
+
+        buffers
     }
 
     /// Free command buffers which are allocated from this pool.
@@ -216,7 +222,6 @@ impl CommandBuffer {
 
 impl core::RawCommandBuffer<Backend> for CommandBuffer {
     fn begin(&mut self) {
-        unimplemented!()
     }
 
     fn finish(&mut self) {
@@ -236,7 +241,7 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
         stages: Range<pso::PipelineStage>,
         barriers: &[memory::Barrier<Backend>],
     ) {
-        unimplemented!()
+        // TODO: MTLRenderCommandEncoder.textureBarrier on macOS?
     }
 
     fn fill_buffer(
@@ -340,7 +345,59 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
         clear_values: &[ClearValue],
         first_subpass: SubpassContents,
     ) {
-        unimplemented!()
+        unsafe {
+            let command_buffer = &mut *self.0.get();
+
+            if let EncoderState::Render(_) = command_buffer.encoder_state {
+                panic!("already in a renderpass");
+            }
+
+            // FIXME: subpasses
+
+            let pass_descriptor: MTLRenderPassDescriptor = msg_send![(frame_buffer.0).0, copy]; // Returns retained
+            defer! { pass_descriptor.release() }
+            // TODO: validate number of clear colors
+            for (i, value) in clear_values.iter().enumerate() {
+                let color_desc = pass_descriptor.color_attachments().object_at(i);
+                let mtl_color = match *value {
+                    ClearValue::Color(ClearColor::Float(values)) => MTLClearColor::new(
+                        values[0] as f64,
+                        values[1] as f64,
+                        values[2] as f64,
+                        values[3] as f64,
+                    ),
+                    _ => unimplemented!(),
+                };
+                color_desc.set_clear_color(mtl_color);
+            }
+
+            let render_encoder = command_buffer.command_buffer.new_render_command_encoder(pass_descriptor); // Returns retained
+            defer_on_unwind! { render_encoder.release() };
+
+            // Apply previously bound values for this command buffer
+            if let Some(viewport) = command_buffer.viewport {
+                render_encoder.set_viewport(viewport);
+            }
+            if let Some(scissors) = command_buffer.scissors {
+                render_encoder.set_scissor_rect(scissors);
+            }
+            if let Some(pipeline_state) = command_buffer.pipeline_state {
+                render_encoder.set_render_pipeline_state(pipeline_state);
+            } else {
+                panic!("missing bound pipeline state object");
+            }
+            for (i, &(buffer, offset)) in command_buffer.vertex_buffers.iter().enumerate() {
+                render_encoder.set_vertex_buffer(i as u64, offset as u64, buffer);
+            }
+            // Interpret descriptor sets
+            for (i, set_maybe) in command_buffer.descriptor_sets.iter().enumerate() {
+                if let &Some(ref set) = set_maybe {
+                    Self::bind_descriptor_set(render_encoder, i as u64, set);
+                }
+            }
+
+            command_buffer.encoder_state = EncoderState::Render(render_encoder);
+        }
     }
     
     fn next_subpass(&mut self, contents: SubpassContents) {
@@ -485,18 +542,7 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
     }
 }
 
-/*
-pub struct RenderPassInlineBuffer {
-    render_encoder: MTLRenderCommandEncoder,
-}
-
-impl Drop for RenderPassInlineBuffer {
-    fn drop(&mut self) {
-        unsafe { self.render_encoder.release(); }
-    }
-}
-
-impl RenderPassInlineBuffer {
+impl CommandBuffer {
     #[cfg(feature = "argument_buffer")]
     fn bind_descriptor_set(encoder: MTLRenderCommandEncoder, slot: u64, set: &native::DescriptorSet) {
         if set.stage_flags.contains(shade::STAGE_VERTEX) {
@@ -541,87 +587,4 @@ impl RenderPassInlineBuffer {
             }
         }
     }
-
-    fn begin_renderpass(&mut self,
-                        render_pass: &native::RenderPass,
-                        frame_buffer: &native::FrameBuffer,
-                        render_area: target::Rect,
-                        clear_values: &[ClearValue],
-                        first_subpass: command::SubpassContents,
-    ) {
-        unsafe {
-            // FIXME: subpasses
-
-            let pass_descriptor = frame_buffer.0;
-            // TODO: we may want to copy here because we will modify the Framebuffer (by setting
-            // clear colors)
-            // TODO: validate number of clear colors
-            for (i, value) in clear_values.iter().enumerate() {
-                let color_desc = pass_descriptor.color_attachments().object_at(i);
-                let mtl_color = match *value {
-                    ClearValue::Color(ClearColor::Float(values)) => MTLClearColor::new(
-                        values[0] as f64,
-                        values[1] as f64,
-                        values[2] as f64,
-                        values[3] as f64,
-                    ),
-                    _ => unimplemented!(),
-                };
-                color_desc.set_clear_color(mtl_color);
-            }
-
-            let render_encoder = self.command_buffer.new_render_command_encoder(pass_descriptor);
-            defer_on_unwind! { render_encoder.release() };
-
-            // Apply previously bound values for this command buffer
-            if let Some(viewport) = self.viewport {
-                render_encoder.set_viewport(viewport);
-            }
-            if let Some(scissors) = self.scissors {
-                render_encoder.set_scissor_rect(scissors);
-            }
-            if let Some(pipeline_state) = self.pipeline_state {
-                render_encoder.set_render_pipeline_state(pipeline_state);
-            } else {
-                panic!("missing bound pipeline state object");
-            }
-            for (i, &(buffer, offset)) in self.vertex_buffers.iter().enumerate() {
-                render_encoder.set_vertex_buffer(i as u64, offset as u64, buffer);
-            }
-            // Interpret descriptor sets
-            for (i, set_maybe) in self.descriptor_sets.iter().enumerate() {
-                if let &Some(ref set) = set_maybe {
-                    Self::bind_descriptor_set(render_encoder, i as u64, set);
-                }
-            }
-
-            unimplemented!()
-            /*RenderPassInlineBuffer {
-                render_encoder,
-            }*/
-        }
-    }
-
-    /* renderpass: fn finish(&mut self,
-              command_buffer: &mut CommandBuffer,
-              render_pass: &native::RenderPass,
-              framebuffer: &native::FrameBuffer) {
-        unsafe {
-            self.render_encoder.end_encoding();
-        }
-    }*/
-
-    fn draw(
-        encoder: &mut self,
-        vertices: Range<VertexCount>,
-        instances: Range<InstanceCount>,
-    ) {
-        if let Some(instance) = instance {
-            unimplemented!()
-        } else {
-            // FIXME: primitive type
-            encoder.pass_buffer.render_encoder.draw_primitives(MTLPrimitiveType::Triangle, start as u64, count as u64);
-        }
-    }
 }
-*/
