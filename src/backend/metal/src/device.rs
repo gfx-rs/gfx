@@ -36,6 +36,7 @@ impl Drop for Adapter {
 pub struct Device {
     device: MTLDevice,
     private_caps: PrivateCapabilities,
+    limits: Limits,
 }
 
 impl Drop for Device {
@@ -49,15 +50,32 @@ impl Drop for Device {
 impl Clone for Device {
     fn clone(&self) -> Device {
         unsafe { self.device.retain(); }
-        Device { device: self.device, private_caps: self.private_caps }
+        Device { device: self.device, private_caps: self.private_caps, limits: self.limits }
     }
 }
 
 impl core::Adapter<Backend> for Adapter {
     fn open(&self, queue_descs: &[(&n::QueueFamily, QueueType, u32)]) -> Gpu<Backend> {
+        let mut general_queues = Vec::new();
+        let mut graphics_queues = Vec::new();
+        let mut compute_queues = Vec::new();
+        let mut transfer_queues = Vec::new();
+
+        for &(_, queue_type, count) in queue_descs {
+            match queue_type {
+                QueueType::General => general_queues
+                    .push(unsafe { core::CommandQueue::new(command::CommandQueue::new(self.device)) }),
+                QueueType::Graphics => graphics_queues
+                    .push(unsafe { core::CommandQueue::new(command::CommandQueue::new(self.device)) }),
+                QueueType::Compute => compute_queues
+                    .push(unsafe { core::CommandQueue::new(command::CommandQueue::new(self.device)) }),
+                QueueType::Transfer => transfer_queues
+                    .push(unsafe { core::CommandQueue::new(command::CommandQueue::new(self.device)) }),
+            }
+        }
+
         assert!(queue_descs.len() == 1, "Metal only supports one queue family");
-        let (_, queue_type, queue_count) = queue_descs[0];
-        assert!(queue_type == QueueType::General, "Metal only support general queues");
+        let (_, _, queue_count) = queue_descs[0];
 
         let resource_heaps = [
             MTLFeatureSet::iOS_GPUFamily1_v3,
@@ -80,11 +98,15 @@ impl core::Adapter<Backend> for Adapter {
                 resource_heaps,
                 indirect_arguments: true, //TEMP
             },
-        };
+            limits: Limits {
+                max_texture_size: 4096, // TODO: feature set
+                max_patch_size: 0, // No tesselation
+                max_viewports: 1,
 
-        let general_queues = (0..queue_count).map(|_| {
-            unsafe { core::CommandQueue::new(command::CommandQueue::new(self.device)) }
-        }).collect();
+                min_buffer_copy_offset_alignment: 4, // Lower on iOS
+                min_buffer_copy_pitch_alignment: 4, // TODO: made this up
+            },
+        };
 
         let heap_types = vec![
             core::HeapType {
@@ -119,9 +141,9 @@ impl core::Adapter<Backend> for Adapter {
         Gpu {
             device,
             general_queues,
-            graphics_queues: Vec::new(),
-            compute_queues: Vec::new(),
-            transfer_queues: Vec::new(),
+            graphics_queues,
+            compute_queues,
+            transfer_queues,
             heap_types,
             memory_heaps,
         }
@@ -208,7 +230,7 @@ impl core::Device<Backend> for Device {
     }
 
     fn get_limits(&self) -> &Limits {
-        unimplemented!()
+        &self.limits
     }
 
     fn create_renderpass(&mut self, attachments: &[pass::Attachment], subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> n::RenderPass {
@@ -224,6 +246,7 @@ impl core::Device<Backend> for Device {
                 let mtl_attachment: MTLRenderPassAttachmentDescriptor;
                 if !is_depth {
                     let color_attachment = pass.color_attachments().object_at(color_attachment_index);
+                    color_attachment_index += 1;
 
                     mtl_attachment = mem::transmute(color_attachment);
                 } else {
@@ -234,7 +257,7 @@ impl core::Device<Backend> for Device {
                 mtl_attachment.set_store_action(map_store_operation(attachment.ops.store));
             }
 
-            n::RenderPass(pass)
+            n::RenderPass { desc: pass, attachments: attachments.into() }
         }
     }
 
@@ -248,7 +271,7 @@ impl core::Device<Backend> for Device {
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         unsafe {
             params.iter().map(|&(ref shader_set, pipeline_layout, ref pass_descriptor, pipeline_desc)| {
-                let pipeline = MTLRenderPipelineDescriptor::alloc().init(); // Returns retained
+                let pipeline =  MTLRenderPipelineDescriptor::alloc().init(); // Returns retained
                 defer! { pipeline.release() };
 
                 // FIXME: lots missing
@@ -285,20 +308,22 @@ impl core::Device<Backend> for Device {
                     return Err(pso::CreationError::Other);
                 }
 
-                unimplemented!();
-                /*// Color targets
-                for (i, &(target_format, color_desc)) in pipeline_desc.color_targets.iter()
-                    .filter_map(|x| x.as_ref()).enumerate()
-                {
+                // Copy color target info from Subpass
+                for (i, attachment) in pass_descriptor.main_pass.attachments.iter().enumerate() {
                     let descriptor = pipeline.color_attachments().object_at(i);
 
-                    let (mtl_format, is_depth) = map_format(target_format).expect("unsupported color format for Metal");
+                    let (mtl_format, is_depth) = map_format(attachment.format).expect("unsupported color format for Metal");
                     if is_depth {
-                        error!("color targets cannot be bound with a depth format");
-                        return Err(pso::CreationError::Other);
+                        continue;
                     }
 
                     descriptor.set_pixel_format(mtl_format);
+                }
+
+                // Blending
+                for (i, color_desc) in pipeline_desc.blender.targets.iter().enumerate() {
+                    let descriptor = pipeline.color_attachments().object_at(i);
+
                     descriptor.set_write_mask(map_write_mask(color_desc.mask));
                     descriptor.set_blending_enabled(color_desc.color.is_some() | color_desc.alpha.is_some());
 
@@ -313,7 +338,7 @@ impl core::Device<Backend> for Device {
                         descriptor.set_destination_alpha_blend_factor(map_blend_factor(blend.destination, true));
                         descriptor.set_alpha_blend_operation(map_blend_op(blend.equation));
                     }
-                }*/
+                }
 
                 // Vertex buffers
                 let vertex_descriptor = MTLVertexDescriptor::new();
@@ -340,7 +365,7 @@ impl core::Device<Backend> for Device {
                     let mtl_vertex_format = map_vertex_format(element.format).expect("unsupported vertex format for Metal");
 
                     let mtl_attribute_desc = vertex_descriptor.attributes().object_at(i);
-                    mtl_attribute_desc.set_buffer_index(location as NSUInteger); // TODO: Might be binding, not location?
+                    mtl_attribute_desc.set_buffer_index(binding as NSUInteger); // TODO: Might be binding, not location?
                     mtl_attribute_desc.set_offset(element.offset as NSUInteger);
                     mtl_attribute_desc.set_format(mtl_vertex_format);
                 }
@@ -373,7 +398,7 @@ impl core::Device<Backend> for Device {
         extent: Extent,
     ) -> n::FrameBuffer {
         unsafe {
-            let descriptor: MTLRenderPassDescriptor = msg_send![(renderpass.0).0, copy]; // Returns retained
+            let descriptor: MTLRenderPassDescriptor = msg_send![renderpass.desc.0, copy]; // Returns retained
             defer_on_unwind! { descriptor.release() };
 
             msg_send![descriptor.0, setRenderTargetArrayLength: extent.depth as usize];
@@ -475,17 +500,49 @@ impl core::Device<Backend> for Device {
     fn write_mapping_raw(&mut self, buf: &n::Buffer, range: Range<u64>)
         -> Result<(*mut u8, n::Mapping), mapping::Error>
     {
-        unimplemented!()
+        unsafe {
+            let base_ptr = buf.0.contents() as *mut u8;
+
+            if base_ptr.is_null() {
+                panic!("the buffer is GPU private");
+            }
+
+            if range.end > buf.0.length() {
+                panic!("offset/size out of range");
+            }
+
+            let nsrange = NSRange {
+                location: range.start,
+                length: range.end,
+            };
+
+            (buf.0).retain();
+            Ok((
+                base_ptr.offset(range.start as isize),
+                n::Mapping(n::MappingInner::Write(buf.0, nsrange)),
+            ))
+        }
     }
 
     fn unmap_mapping_raw(&mut self, mapping: n::Mapping) {
-        unimplemented!()
+        unsafe {
+            if let n::MappingInner::Write(buffer, ref range) = mapping.0 {
+                if buffer.storage_mode() != MTLStorageMode::Shared {
+                    buffer.did_modify_range(NSRange {
+                        location: range.location,
+                        length: range.length,
+                    });
+                }
+                buffer.release();
+            }
+        }
     }
     
     fn create_semaphore(&mut self) -> n::Semaphore {
         unsafe { n::Semaphore(n::dispatch_semaphore_create(1)) } // Returns retained
     }
 
+    #[cfg(feature = "argument_buffer")]
     fn create_descriptor_pool(&mut self, max_sets: usize, descriptor_ranges: &[pso::DescriptorRangeDesc]) 
         -> n::DescriptorPool
     {
@@ -514,6 +571,13 @@ impl core::Device<Backend> for Device {
             total_size,
             offset: 0,
         }
+    }
+
+    #[cfg(not(feature = "argument_buffer"))]
+    fn create_descriptor_pool(&mut self, max_sets: usize, descriptor_ranges: &[pso::DescriptorRangeDesc]) 
+        -> n::DescriptorPool
+    {
+        n::DescriptorPool {}
     }
 
     #[cfg(feature = "argument_buffer")]
@@ -627,7 +691,7 @@ impl core::Device<Backend> for Device {
     }
 
     fn destroy_renderpass(&mut self, pass: n::RenderPass) {
-        unsafe { pass.0.release(); }
+        unsafe { pass.desc.release(); }
     }
 
     fn destroy_graphics_pipeline(&mut self, pipeline: n::GraphicsPipeline) {
@@ -772,24 +836,31 @@ impl core::Device<Backend> for Device {
         }
     }
 
-    fn get_image_requirements(&mut self, image: &n::UnboundImage) -> memory::Requirements {
-        // We don't know what memory type the user will try to allocate the image with, so we test them
-        // all get the most stringent ones. Note we don't check Shared because heaps can't use it
-        let mut max_size = 0;
-        let mut max_alignment = 0;
-        for &options in [
-            MTLResourceStorageModeManaged,
-            MTLResourceStorageModeManaged | MTLResourceCPUCacheModeWriteCombined,
-            MTLResourceStorageModePrivate,
-        ].iter() {
-            image.0.set_resource_options(options);
-            let requirements = self.device.heap_texture_size_and_align(image.0);
-            max_size = cmp::max(max_size, requirements.size);
-            max_alignment = cmp::max(max_alignment, requirements.align);
-        }
-        memory::Requirements {
-            size: max_size,
-            alignment: max_alignment,
+    fn get_image_requirements(&mut self, image: &n::UnboundImage) -> memory::Requirements { 
+        if self.private_caps.resource_heaps {
+            // We don't know what memory type the user will try to allocate the image with, so we test them
+            // all get the most stringent ones. Note we don't check Shared because heaps can't use it
+            let mut max_size = 0;
+            let mut max_alignment = 0;
+            for &options in [
+                MTLResourceStorageModeManaged,
+                MTLResourceStorageModeManaged | MTLResourceCPUCacheModeWriteCombined,
+                MTLResourceStorageModePrivate,
+            ].iter() {
+                image.0.set_resource_options(options);
+                let requirements = self.device.heap_texture_size_and_align(image.0);
+                max_size = cmp::max(max_size, requirements.size);
+                max_alignment = cmp::max(max_alignment, requirements.align);
+            }
+            memory::Requirements {
+                size: max_size,
+                alignment: max_alignment,
+            }
+        } else {
+            memory::Requirements {
+                size: 1, // TODO: something sensible
+                alignment: 4,
+            }
         }
     }
 

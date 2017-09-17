@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::os::raw::{c_void, c_long, c_int};
 use std::ptr;
 
-use core::{self, format, memory, image, HeapType};
+use core::{self, format, memory, image, pass, HeapType};
 use core::pso::{ShaderStageFlags, DescriptorSetLayoutBinding, DescriptorType};
 
 use cocoa::foundation::{NSRange, NSUInteger};
@@ -25,7 +25,10 @@ unsafe impl Sync for ShaderModule {
 }
 
 #[derive(Debug)]
-pub struct RenderPass(pub MTLRenderPassDescriptor);
+pub struct RenderPass {
+    pub desc: MTLRenderPassDescriptor,
+    pub attachments: Vec<pass::Attachment>,
+}
 
 unsafe impl Send for RenderPass {
 }
@@ -153,6 +156,9 @@ unsafe impl Sync for Buffer {
 
 #[derive(Debug)]
 pub struct DescriptorHeap {}
+
+
+#[cfg(feature = "argument_buffer")]
 #[derive(Debug)]
 pub struct DescriptorPool {
     pub arg_buffer: MTLBuffer,
@@ -161,6 +167,9 @@ pub struct DescriptorPool {
 }
 
 #[cfg(not(feature = "argument_buffer"))]
+#[derive(Debug)]
+pub struct DescriptorPool {}
+
 impl core::DescriptorPool<Backend> for DescriptorPool {
     #[cfg(feature = "argument_buffer")]
     fn allocate_sets(&mut self, layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
