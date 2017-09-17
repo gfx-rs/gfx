@@ -288,25 +288,17 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
 #[allow(missing_docs)]
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-pub enum SubmissionError {
-    AccessOverlap,
-}
+pub enum SubmissionError {}
 
 impl fmt::Display for SubmissionError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use self::SubmissionError::*;
-        match *self {
-            AccessOverlap => write!(f, "{}", self.description()),
-        }
+        write!(f, "{}", self.description())
     }
 }
 
 impl Error for SubmissionError {
     fn description(&self) -> &str {
-        use self::SubmissionError::*;
-        match *self {
-            AccessOverlap => "A resource access overlaps with another",
-        }
+        "Submission error"
     }
 }
 

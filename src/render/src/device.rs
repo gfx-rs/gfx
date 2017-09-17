@@ -9,7 +9,7 @@ use core::memory::{Properties,
 use memory::{self, Allocator, Typed};
 use handle::{self, GarbageSender};
 use handle::inner::*;
-use {buffer, image, format, mapping};
+use {core, buffer, image, format, mapping};
 use Backend;
 
 /*
@@ -91,6 +91,10 @@ pub struct Device<B: Backend> {
     garbage: GarbageSender<B>,
 }
 
+pub struct InitToken<B: Backend> {
+    pub(crate) handle: handle::Any<B>,
+}
+
 impl<B: Backend> Device<B> {
     pub(crate) fn new(
         raw: B::Device,
@@ -138,7 +142,6 @@ impl<B: Backend> Device<B> {
         }
     }
 
-    // TODO: shouldn't need coherency if we handle invalidation/flush
     // TODO: fallbacks when out of memory
 
     pub fn find_data_memory(&self, type_mask: u64) -> Option<MemoryType> {
@@ -173,13 +176,16 @@ impl<B: Backend> Device<B> {
         usage: buffer::Usage,
         size: u64,
         stride: u64
-    ) -> Result<handle::raw::Buffer<B>, buffer::CreationError>
+    ) -> Result<(handle::raw::Buffer<B>, InitToken<B>), buffer::CreationError>
         where A: Allocator<B>
     {
         let buffer = self.raw.create_buffer(size, stride, usage)?;
         let (buffer, memory) = allocator.allocate_buffer(self, usage, buffer);
         let info = buffer::Info::new(usage, memory, size, stride);
-        Ok(Buffer::new(buffer, info, self.garbage.clone()).into())
+        let handle = handle::raw::Buffer::from(
+            Buffer::new(buffer, info, self.garbage.clone()));
+        let token = InitToken { handle: handle.clone().into() };
+        Ok((handle, token))
     }
 
     pub fn create_buffer<T, A>(
@@ -187,7 +193,7 @@ impl<B: Backend> Device<B> {
         allocator: &mut A,
         usage: buffer::Usage,
         size: u64
-    ) -> Result<handle::Buffer<B, T>, buffer::CreationError>
+    ) -> Result<(handle::Buffer<B, T>, InitToken<B>), buffer::CreationError>
         where T: Copy, A: Allocator<B>
     {
         let stride = mem::size_of::<T>() as u64;
@@ -196,7 +202,7 @@ impl<B: Backend> Device<B> {
             usage,
             size * stride,
             stride
-        ).map(Typed::new)
+        ).map(|(h, t)| (Typed::new(h), t))
     }
 
     /// Acquire a mapping Reader.
@@ -208,12 +214,10 @@ impl<B: Backend> Device<B> {
         buffer: &'a MTB,
         range: Range<u64>,
     ) -> Result<mapping::Reader<'a, B, MTB::Data>, mapping::Error>
-        where MTB: MaybeTypedBuffer<B>
+        where MTB: buffer::MaybeTyped<B>
     {
         let (resource, info) = buffer.as_raw().resource_info();
-        if !info.access.acquire_exclusive() {
-            return Err(mapping::Error::AccessOverlap);
-        }
+        assert!(info.access.acquire_exclusive(), "access overlap on mapping");
         Ok(mapping::Reader {
             inner: self.raw.acquire_mapping_reader(
                 resource,
@@ -239,7 +243,7 @@ impl<B: Backend> Device<B> {
     /// The accessible slice will correspond to the specified range (in elements).
     ///
     /// While holding this access, you hold CPU-side exclusive access.
-    /// Any access overlap will result in an error.
+    /// Any access overlap will panic.
     /// Submitting commands involving this buffer to the device
     /// implicitly requires exclusive access until frame synchronisation
     /// on `acquire_frame`.
@@ -248,12 +252,10 @@ impl<B: Backend> Device<B> {
         buffer: &'a MTB,
         range: Range<u64>,
     ) -> Result<mapping::Writer<'a, B, MTB::Data>, mapping::Error>
-        where MTB: MaybeTypedBuffer<B>
+        where MTB: buffer::MaybeTyped<B>
     {
         let (resource, info) = buffer.as_raw().resource_info();
-        if !info.access.acquire_exclusive() {
-            return Err(mapping::Error::AccessOverlap);
-        }
+        assert!(info.access.acquire_exclusive(), "access overlap on mapping");
         Ok(mapping::Writer {
             inner: self.raw.acquire_mapping_writer(
                 resource,
@@ -280,7 +282,7 @@ impl<B: Backend> Device<B> {
         buffer: &'a MTB,
         range: Range<u64>
     ) -> Result<mapping::ReadScope<'a, B, MTB::Data>, mapping::Error>
-        where MTB: MaybeTypedBuffer<B>
+        where MTB: buffer::MaybeTyped<B>
     {
         let reader = self.acquire_mapping_reader(buffer, range)?;
         Ok(mapping::ReadScope {
@@ -295,7 +297,7 @@ impl<B: Backend> Device<B> {
         buffer: &'a MTB,
         range: Range<u64>
     ) -> Result<mapping::WriteScope<'a, B, MTB::Data>, mapping::Error>
-        where MTB: MaybeTypedBuffer<B>
+        where MTB: buffer::MaybeTyped<B>
     {
         let writer = self.acquire_mapping_writer(buffer, range)?;
         Ok(mapping::WriteScope {
@@ -311,13 +313,38 @@ impl<B: Backend> Device<B> {
         kind: image::Kind,
         mip_levels: image::Level,
         format: format::Format
-    ) -> Result<handle::raw::Image<B>, image::CreationError>
+    ) -> Result<(handle::raw::Image<B>, InitToken<B>), image::CreationError>
         where A: Allocator<B>
     {
+        use image::{
+            COLOR_ATTACHMENT, DEPTH_STENCIL_ATTACHMENT,
+            SAMPLED, TRANSFER_SRC, TRANSFER_DST,
+        };
+        use core::image::ImageLayout;
+
         let image = self.raw.create_image(kind, mip_levels, format, usage)?;
         let (image, memory) = allocator.allocate_image(self, usage, image);
-        let info = image::Info { usage, kind, mip_levels, format, memory };
-        Ok(Image::new(image, info, self.garbage.clone()).into())
+        let origin = image::Origin::User(memory);
+        let stable_access = core::image::Access::empty();
+        let stable_layout = match usage {
+            _ if usage.contains(COLOR_ATTACHMENT) =>
+                ImageLayout::ColorAttachmentOptimal,
+            _ if usage.contains(DEPTH_STENCIL_ATTACHMENT) =>
+                ImageLayout::DepthStencilAttachmentOptimal,
+            _ if usage.contains(SAMPLED) =>
+                ImageLayout::ShaderReadOnlyOptimal,
+            _ if usage.contains(TRANSFER_SRC) =>
+                ImageLayout::TransferSrcOptimal,
+            _ if usage.contains(TRANSFER_DST) =>
+                ImageLayout::TransferDstOptimal,
+            _ => ImageLayout::General,
+        };
+        let stable_state = (stable_access, stable_layout);
+        let info = image::Info { usage, kind, mip_levels, format, origin, stable_state };
+        let handle = handle::raw::Image::from(
+            Image::new(image, info, self.garbage.clone()));
+        let token = InitToken { handle: handle.clone().into() };
+        Ok((handle, token))
     }
 
     pub fn create_image<F, A>(
@@ -326,8 +353,9 @@ impl<B: Backend> Device<B> {
         usage: image::Usage,
         kind: image::Kind,
         mip_levels: image::Level,
-    ) -> Result<handle::Image<B, F>, image::CreationError>
-        where F: format::Formatted, A: Allocator<B>
+    ) -> Result<(handle::Image<B, F>, InitToken<B>), image::CreationError>
+        where F: format::Formatted,
+              A: Allocator<B>
     {
         self.create_image_raw(
             allocator,
@@ -335,7 +363,7 @@ impl<B: Backend> Device<B> {
             kind,
             mip_levels,
             F::get_format()
-        ).map(Typed::new)
+        ).map(|(h, t)| (Typed::new(h), t))
     }
 
     pub fn create_sampler(&mut self, info: image::SamplerInfo)
@@ -370,27 +398,32 @@ impl<B: Backend> Device<B> {
             .map(Typed::new)
     }
 
-    pub(crate) fn view_backbuffer_as_render_target_raw(
+    pub fn view_image_as_render_target_raw(
         &mut self,
-        image: B::Image,
-        kind: image::Kind,
+        image: &handle::raw::Image<B>,
         format: format::Format,
         layers: image::SubresourceLayers
     ) -> Result<handle::raw::RenderTargetView<B>, TargetViewError> {
         self.raw.view_image_as_render_target(&image, format, layers)
             .map(|rtv| RenderTargetView::new(
                 rtv,
-                handle::ViewSource::Backbuffer(image, kind, format),
+                image.clone(),
                 self.garbage.clone()
             ).into())
     }
 
-    // TODO
-    // pub(crate) fn view_backbuffer_as_depth_stencil_raw
-    // pub fn view_image_as_depth_stencil_raw
-    // pub fn view_image_as_depth_stencil
+    pub fn view_image_as_render_target<F>(
+        &mut self,
+        image: &handle::Image<B, F>,
+        range: image::SubresourceRange
+    ) -> Result<handle::RenderTargetView<B, F>, TargetViewError>
+        where F: format::RenderFormat
+    {
+        self.view_image_as_render_target_raw(image, F::get_format(), range)
+            .map(Typed::new)
+    }
 
-    pub fn view_image_as_render_target_raw(
+    pub fn view_image_as_depth_stencil_raw(
         &mut self,
         image: &handle::raw::Image<B>,
         format: format::Format,
@@ -400,12 +433,12 @@ impl<B: Backend> Device<B> {
         self.raw.view_image_as_render_target(image.resource(), format, layers)
             .map(|rtv| RenderTargetView::new(
                 rtv,
-                image.into(),
+                image.clone(),
                 self.garbage.clone()
             ).into())
     }
 
-    pub fn view_image_as_render_target<F>(
+    pub fn view_image_as_depth_stencil<F>(
         &mut self,
         image: &handle::Image<B, F>,
         layers: image::SubresourceLayers,
@@ -462,81 +495,6 @@ impl<B: Backend> Device<B> {
     }
 
 /*
-    /// Creates an immutable vertex buffer from the supplied vertices.
-    /// A `Slice` will have to manually be constructed.
-    fn create_vertex_buffer<T>(&mut self, vertices: &[T])
-                               -> handle::Buffer<B, T>
-        where T: Pod + pso::buffer::Structure<format::Format>
-    {
-        //debug_assert!(nv <= self.get_capabilities().max_vertex_count);
-        self.create_buffer_immutable(vertices, buffer::Role::Vertex, Bind::empty())
-            .unwrap()
-    }
-
-    /// Creates an immutable index buffer from the supplied vertices.
-    ///
-    /// The paramater `indices` is typically a &[u16] or &[u32] slice.
-    fn create_index_buffer<T>(&mut self, indices: T)
-                              -> IndexBuffer<B>
-        where T: IntoIndexBuffer<B>
-    {
-        indices.into_index_buffer(self)
-    }
-
-    /// Creates an immutable vertex buffer from the supplied vertices,
-    /// together with a `Slice` from the supplied indices.
-    fn create_vertex_buffer_with_slice<I, V>(&mut self, vertices: &[V], indices: I)
-                                             -> (handle::Buffer<B, V>, Slice<B>)
-        where V: Pod + pso::buffer::Structure<format::Format>,
-              I: IntoIndexBuffer<B>
-    {
-        let vertex_buffer = self.create_vertex_buffer(vertices);
-        let index_buffer = self.create_index_buffer(indices);
-        let buffer_length = match index_buffer {
-            IndexBuffer::Auto => vertex_buffer.len(),
-            IndexBuffer::Index16(ref ib) => ib.len(),
-            IndexBuffer::Index32(ref ib) => ib.len(),
-        };
-
-        (vertex_buffer, Slice {
-            start: 0,
-            end: buffer_length as u32,
-            base_vertex: 0,
-            instances: None,
-            buffer: index_buffer
-        })
-    }
-
-    /// Creates a constant buffer for `num` identical elements of type `T`.
-    fn create_constant_buffer<T>(&mut self, num: usize) -> handle::Buffer<B, T>
-        where T: Copy
-    {
-        self.create_buffer(num,
-                           buffer::Role::Constant,
-                           memory::Usage::Dynamic,
-                           Bind::empty()).unwrap()
-    }
-
-    /// Creates an upload buffer for `num` elements of type `T`.
-    fn create_upload_buffer<T>(&mut self, num: usize)
-                               -> Result<handle::Buffer<B, T>, buffer::CreationError>
-    {
-        self.create_buffer(num,
-                           buffer::Role::Staging,
-                           memory::Usage::Upload,
-                           memory::TRANSFER_SRC)
-    }
-
-    /// Creates a download buffer for `num` elements of type `T`.
-    fn create_download_buffer<T>(&mut self, num: usize)
-                                 -> Result<handle::Buffer<B, T>, buffer::CreationError>
-    {
-        self.create_buffer(num,
-                           buffer::Role::Staging,
-                           memory::Usage::Download,
-                           memory::TRANSFER_DST)
-    }
-
     /// Creates a `ShaderSet` from the supplied vertex and pixel shader source code.
     fn create_shader_set(&mut self, vs_code: &[u8], ps_code: &[u8])
                          -> Result<ShaderSet<B>, ProgramError> {
@@ -653,21 +611,6 @@ impl<B: Backend> Device<B> {
         ))
     }
     */
-}
-
-pub trait MaybeTypedBuffer<B: Backend> {
-    type Data: Copy;
-    fn as_raw(&self) -> &handle::raw::Buffer<B>;
-}
-
-impl<B: Backend> MaybeTypedBuffer<B> for handle::raw::Buffer<B> {
-    type Data = u8;
-    fn as_raw(&self) -> &handle::raw::Buffer<B> { &self }
-}
-
-impl<B: Backend, T: Copy> MaybeTypedBuffer<B> for handle::Buffer<B, T> {
-    type Data = T;
-    fn as_raw(&self) -> &handle::raw::Buffer<B> { &self }
 }
 
 fn range_in_bytes<T>(elements: Range<u64>) -> Range<u64> {

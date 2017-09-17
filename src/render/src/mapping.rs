@@ -9,8 +9,6 @@ use {Backend, Device};
 pub enum Error {
     /// The requested mapping access did not match the expected usage.
     InvalidAccess(memory::Access, memory::Usage),
-    /// The requested mapping access overlaps with another.
-    AccessOverlap,
     /// Another error reported by GFX's core
     Core(core::mapping::Error)
 }
@@ -28,7 +26,6 @@ impl fmt::Display for Error {
             InvalidAccess(ref access, ref usage) => {
                 write!(f, "{}: access = {:?}, usage = {:?}", self.description(), access, usage)
             }
-            AccessOverlap => write!(f, "{}", self.description()),
             Core(ref c) => c.fmt(f),
         }
     }
@@ -39,7 +36,6 @@ impl StdError for Error {
         use self::Error::*;
         match *self {
             InvalidAccess(..) => "The requested access did not match the expected usage",
-            AccessOverlap => "The requested access overlaps with another",
             Core(ref c) => c.description(),
         }
     }
