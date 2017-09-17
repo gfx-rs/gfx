@@ -25,6 +25,7 @@
 //! After construction an `Encoder` can use the PSO along with a `Data` structure matching that
 //! PSO to process the shader pipeline, for instance, using the `draw` method.
 
+/*
 pub mod buffer;
 pub mod resource;
 pub mod target;
@@ -330,3 +331,4 @@ pub trait DataBind<B: c::Backend> {
                &mut c::handle::Manager<B>,
                &mut AccessInfo<B>);
 }
+*/

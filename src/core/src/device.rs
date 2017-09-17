@@ -289,7 +289,11 @@ pub trait Device<B: Backend>: Clone {
     ///
     fn view_image_as_render_target(&mut self, &B::Image, format::Format, image::SubresourceLayers) -> Result<B::RenderTargetView, TargetViewError>;
 
-    // TODO: view_image_as_depth_stencil
+    ///
+    #[allow(unused_variables)]
+    fn view_image_as_depth_stencil(&mut self, image: &B::Image, format: format::Format, range: image::SubresourceRange) -> Result<B::DepthStencilView, TargetViewError> {
+        unimplemented!()
+    }
 
     ///
     fn view_image_as_shader_resource(&mut self, image: &B::Image, format: format::Format) -> Result<B::ShaderResourceView, TargetViewError>;

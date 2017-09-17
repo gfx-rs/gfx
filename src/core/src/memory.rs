@@ -11,7 +11,7 @@ use Backend;
 /// created from arbitrary bit pattern.
 /// The `Pod` trait is implemented for standard integer and floating point numbers as well as
 /// common arrays of them (for example `[f32; 2]`).
-pub unsafe trait Pod {}
+pub unsafe trait Pod: Copy {}
 
 macro_rules! impl_pod {
     ( ty = $($ty:ty)* ) => { $( unsafe impl Pod for $ty {} )* };

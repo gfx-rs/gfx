@@ -306,71 +306,7 @@ impl Usage {
         self.intersects(COLOR_ATTACHMENT | DEPTH_STENCIL_ATTACHMENT)
     }
 }
-/*
-/// Describes a subvolume of a texture, which image data can be uploaded into.
-#[allow(missing_docs)]
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-pub struct ImageInfoCommon<F> {
-    pub xoffset: Size,
-    pub yoffset: Size,
-    pub zoffset: Size,
-    pub width: Size,
-    pub height: Size,
-    pub depth: Size,
-    /// Format of each texel.
-    pub format: F,
-    /// Which mipmap to select.
-    pub mipmap: Level,
-}
 
-/// New raw image info based on the universal format spec.
-pub type RawImageInfo = ImageInfoCommon<format::Format>;
-/// New image info based on the universal format spec.
-/// The format is suppsed to come from compile-time information
-/// as opposed to run-time enum values.
-pub type NewImageInfo = ImageInfoCommon<()>;
-
-impl<F> ImageInfoCommon<F> {
-    /// Get the total number of texels.
-    pub fn get_texel_count(&self) -> usize {
-        use std::cmp::max;
-        max(1, self.width) as usize *
-        max(1, self.height) as usize *
-        max(1, self.depth) as usize
-    }
-
-    /// Convert into a differently typed format.
-    pub fn convert<T>(&self, new_format: T) -> ImageInfoCommon<T> {
-        ImageInfoCommon {
-            xoffset: self.xoffset,
-            yoffset: self.yoffset,
-            zoffset: self.zoffset,
-            width: self.width,
-            height: self.height,
-            depth: self.depth,
-            format: new_format,
-            mipmap: self.mipmap,
-        }
-    }
-
-    /// Check if it fits inside given dimensions.
-    pub fn is_inside(&self, (w, h, d, aa): Dimensions) -> bool {
-        aa == AaMode::Single &&
-        self.xoffset + self.width <= w &&
-        self.yoffset + self.height <= h &&
-        self.zoffset + self.depth <= d
-    }
-}
-
-impl RawImageInfo {
-    /// Get the total number of bytes.
-    pub fn get_byte_count(&self) -> usize {
-        let texel_bytes = self.format.0.get_total_bits() / 8;
-        self.get_texel_count() * (texel_bytes as usize)
-    }
-}
-*/
 /// Specifies how texture coordinates outside the range `[0, 1]` are handled.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]

@@ -1,4 +1,5 @@
 use std::sync::mpsc;
+use std::iter::Extend;
 
 use memory::{Typed, Provider, Dependency};
 use Backend;
@@ -94,7 +95,7 @@ macro_rules! define_resources {
                 // option for owned drop
                 resource: Option<B::$name>,
                 info: $info,
-                garbage: GarbageSender<B>
+                garbage: Option<GarbageSender<B>>,
             }
 
             impl<B: Backend> $name<B> {
@@ -106,7 +107,19 @@ macro_rules! define_resources {
                     $name {
                         resource: Some(resource),
                         info,
-                        garbage,
+                        garbage: Some(garbage),
+                    }
+                }
+
+                #[allow(unused)]
+                pub(crate) fn without_garbage(
+                    resource: B::$name,
+                    info: $info
+                ) -> Self {
+                    $name {
+                        resource: Some(resource),
+                        info,
+                        garbage: None,
                     }
                 }
 
@@ -147,9 +160,9 @@ macro_rules! define_resources {
             impl<B: Backend> Drop for $name<B> {
                 fn drop(&mut self) {
                     let res = self.resource.take().unwrap();
-                    self.garbage.send(Garbage::$name(res))
+                    self.garbage.as_mut().map(|sender| sender.send(Garbage::$name(res))
                         .unwrap_or_else(|e|
-                            error!("Could not drop {}: {}", stringify!($name), e));
+                            error!("Could not drop {}: {}", stringify!($name), e)));
                 }
             }
 
@@ -207,7 +220,6 @@ macro_rules! define_resources {
 }
 
 define_resources! {
-    // Heap
     // ShaderLib,
     // RenderPass
     // PipelineLayout
@@ -216,8 +228,8 @@ define_resources! {
     // FrameBuffer
     Buffer: ::buffer::Info,
     Image: ::image::Info,
-    RenderTargetView: ::handle::ViewSource<B>,
-    DepthStencilView: ::handle::ViewSource<B>,
+    RenderTargetView: ::handle::raw::Image<B>,
+    DepthStencilView: ::handle::raw::Image<B>,
     ConstantBufferView: ::handle::raw::Buffer<B>,
     ShaderResourceView: ::handle::ViewSource<B>,
     UnorderedAccessView: ::handle::ViewSource<B>,
@@ -242,7 +254,6 @@ pub use self::raw::Sampler;
 pub enum ViewSource<B: Backend> {
     Image(raw::Image<B>),
     Buffer(raw::Buffer<B>),
-    Backbuffer(B::Image, ::image::Kind, ::format::Format),
 }
 
 impl<'a, B: Backend> From<&'a raw::Image<B>> for ViewSource<B> {
@@ -268,15 +279,19 @@ impl<B: Backend> Bag<B> {
         self.0.push(handle.into());
     }
 
-    pub fn extend(&mut self, other: &Bag<B>) {
-        self.0.extend_from_slice(&other.0);
-    }
-
     pub fn append(&mut self, other: &mut Bag<B>) {
         self.0.append(&mut other.0);
     }
 
     pub fn clear(&mut self) {
         self.0.clear();
+    }
+}
+
+impl<'a, B: Backend, H: Into<Any<B>>> Extend<H> for Bag<B> {
+    fn extend<I>(&mut self, iter: I)
+        where I: IntoIterator<Item = H>
+    {
+        self.0.extend(iter.into_iter().map(|handle| handle.into()));
     }
 }
