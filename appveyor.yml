@@ -21,34 +21,26 @@ build_script:
       cargo build --all
       --exclude gfx_window_glfw
       --exclude gfx_window_sdl
-      --exclude gfx_device_metal
-      --exclude gfx_device_metalll
-      --exclude gfx_window_metal
+      --exclude gfx_backend_metal
       --exclude gfx_backend_dx12
       --exclude gfx_window_dxgi
     ) else (
       cargo build --all
       --exclude gfx_window_glfw
       --exclude gfx_window_sdl
-      --exclude gfx_device_metal
-      --exclude gfx_device_metalll
-      --exclude gfx_window_metal
+      --exclude gfx_backend_metal
     )
 test_script:
   - if %COMPILER%==gnu (
       cargo test --all
       --exclude gfx_window_glfw
       --exclude gfx_window_sdl
-      --exclude gfx_device_metal
-      --exclude gfx_device_metalll
-      --exclude gfx_window_metal
+      --exclude gfx_backend_metal
       --exclude gfx_backend_dx12
       --exclude gfx_window_dxgi
     ) else (
       cargo test --all
       --exclude gfx_window_glfw
       --exclude gfx_window_sdl
-      --exclude gfx_device_metal
-      --exclude gfx_device_metalll
-      --exclude gfx_window_metal
+      --exclude gfx_backend_metal
     )

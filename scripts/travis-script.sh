@@ -17,14 +17,13 @@ if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
   export LIBRARY_PATH=$HOME/deps/usr/lib/x86_64-linux-gnu
   export LD_LIBRARY_PATH=$LIBRARY_PATH
 
-  EXCLUDES+=" --exclude gfx_device_metal"
-  EXCLUDES+=" --exclude gfx_device_metalll"
+  EXCLUDES+=" --exclude gfx_backend_metal"
 
   FEATURES+="vulkan"
 elif [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
   EXCLUDES+=" --exclude gfx_backend_vulkan"
 
-  FEATURES+="metal metal_argument_buffer"
+  FEATURES+="metal"
   GLUTIN_HEADLESS_FEATURE="--features headless"
 fi
 
