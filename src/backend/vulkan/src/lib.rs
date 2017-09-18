@@ -396,6 +396,7 @@ impl core::Adapter<Backend> for Adapter {
             }
         };
         let limits = &self.properties.limits;
+        let max_work_group = limits.max_compute_work_group_count;
 
         let device = Device {
             raw: Arc::new(RawDevice(device_raw)),
@@ -421,11 +422,12 @@ impl core::Adapter<Backend> for Adapter {
                 heterogeneous_resource_heaps: true,
             },
             limits: Limits {
-                max_texture_size: limits.max_image_dimension3d as usize,
+                max_texture_size: limits.max_image_dimension3d as _,
                 max_patch_size: limits.max_tessellation_patch_size as PatchSize,
-                max_viewports: limits.max_viewports as usize,
-                min_buffer_copy_offset_alignment: limits.optimal_buffer_copy_offset_alignment as usize,
-                min_buffer_copy_pitch_alignment: limits.optimal_buffer_copy_row_pitch_alignment as usize,
+                max_viewports: limits.max_viewports as _,
+                max_compute_group_size: (max_work_group[0] as _, max_work_group[1] as _, max_work_group[2] as _),
+                min_buffer_copy_offset_alignment: limits.optimal_buffer_copy_offset_alignment as _,
+                min_buffer_copy_pitch_alignment: limits.optimal_buffer_copy_row_pitch_alignment as _,
             },
         };
 
