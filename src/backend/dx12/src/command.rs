@@ -4,7 +4,7 @@ use core::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, View
 use core::buffer::IndexBufferView;
 use core::command::{BufferCopy, BufferImageCopy, ClearColor, ClearValue, ImageCopy, ImageResolve,
                     SubpassContents};
-use core::pass::{Attachment, AttachmentLoadOp, AttachmentOps};
+use core::pass::{Attachment, AttachmentLoadOp, AttachmentOps, SubpassRef};
 use winapi::{self, UINT64, UINT};
 use {conv, native as n, Backend};
 use smallvec::SmallVec;
@@ -24,29 +24,89 @@ fn get_rect(rect: &target::Rect) -> winapi::D3D12_RECT {
 pub struct RenderPassCache {
     render_pass: n::RenderPass,
     frame_buffer: n::FrameBuffer,
-    next_subpass: usize,
     render_area: winapi::D3D12_RECT,
     clear_values: Vec<ClearValue>,
 }
 
 #[derive(Clone)]
 pub struct CommandBuffer {
-    pub(crate) raw: ComPtr<winapi::ID3D12GraphicsCommandList>,
-    pub(crate) allocator: ComPtr<winapi::ID3D12CommandAllocator>,
+    raw: ComPtr<winapi::ID3D12GraphicsCommandList>,
+    allocator: ComPtr<winapi::ID3D12CommandAllocator>,
 
     // Cache renderpasses for graphics operations
-    pub(crate) pass_cache: Option<RenderPassCache>,
+    pass_cache: Option<RenderPassCache>,
+    next_subpass: usize,
 }
 
 unsafe impl Send for CommandBuffer { }
 
 impl CommandBuffer {
-    fn begin_subpass(&mut self) {
-        let mut pass = self.pass_cache.as_mut().unwrap();
-        assert!(pass.next_subpass < pass.render_pass.subpasses.len());
+    pub(crate) fn new(
+        raw: ComPtr<winapi::ID3D12GraphicsCommandList>,
+        allocator: ComPtr<winapi::ID3D12CommandAllocator>,
+    ) -> Self {
+        CommandBuffer {
+            raw,
+            allocator,
+            pass_cache: None,
+            next_subpass: !0,
+        }
+    }
 
-        // TODO
-        pass.next_subpass += 1;
+    pub(crate) unsafe fn as_raw_list(&self) -> *mut winapi::ID3D12CommandList {
+        self.raw.as_mut() as *mut _ as *mut _
+    }
+
+    fn insert_subpass_barriers(&self, subpass: SubpassRef) {
+        let state = self.pass_cache.as_ref().unwrap();
+
+        let mut transition_barriers = Vec::new();
+        for dependency in &state.render_pass.dependencies {
+            if dependency.passes.end != subpass {
+                continue
+            }
+            for (i, att) in state.render_pass.attachments.iter().enumerate() {
+                let state_src = conv::map_image_resource_state(dependency.accesses.start, att.layouts.start);
+                let state_dst = conv::map_image_resource_state(dependency.accesses.end, att.layouts.end);
+
+                if state_src == state_dst {
+                    continue;
+                }
+
+                let resource = match state.frame_buffer.color.get(i) {
+                    Some(view) => view.resource,
+                    None => state.frame_buffer.depth_stencil[0].resource,
+                };
+
+                transition_barriers.push(
+                    winapi::D3D12_RESOURCE_BARRIER {
+                        Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+                        Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                        u: winapi::D3D12_RESOURCE_TRANSITION_BARRIER {
+                            pResource: resource,
+                            Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                            StateBefore: state_src,
+                            StateAfter: state_dst,
+                        },
+                    }
+                );
+            }
+        }
+
+        unsafe {
+            self.raw.clone().ResourceBarrier(
+                transition_barriers.len() as _,
+                transition_barriers.as_ptr(),
+            );
+        }
+    }
+
+    fn begin_subpass(&mut self) {
+        let state = self.pass_cache.as_ref().unwrap();
+        assert!(self.next_subpass < state.render_pass.subpasses.len());
+
+        self.insert_subpass_barriers(SubpassRef::Pass(self.next_subpass));
+        self.next_subpass += 1;
     }
 }
 
@@ -71,24 +131,18 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         clear_values: &[ClearValue],
         _first_subpass: SubpassContents,
     ) {
-        let color_views = framebuffer.color.iter().map(|view| view.handle).collect::<Vec<_>>();
         assert!(framebuffer.depth_stencil.len() <= 1);
         assert_eq!(framebuffer.color.len() + framebuffer.depth_stencil.len(), render_pass.attachments.len());
 
-        let ds_view = match framebuffer.depth_stencil.first() {
-            Some(ref view) => &view.handle as *const _,
-            None => ptr::null(),
-        };
-        unsafe {
-            self.raw.OMSetRenderTargets(
-                color_views.len() as UINT,
-                color_views.as_ptr(),
-                winapi::FALSE,
-                ds_view,
-            );
-        }
-
         let area = get_rect(&render_area);
+        self.pass_cache = Some(RenderPassCache {
+            render_pass: render_pass.clone(),
+            frame_buffer: framebuffer.clone(),
+            render_area: area,
+            clear_values: clear_values.into(),
+        });
+        self.next_subpass = 0;
+        self.begin_subpass();
 
         let mut clear_iter = clear_values.iter();
         for (color, attachment) in framebuffer.color.iter().zip(render_pass.attachments.iter()) {
@@ -124,14 +178,19 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
             }
         }
 
-        self.pass_cache = Some(RenderPassCache {
-            render_pass: render_pass.clone(),
-            frame_buffer: framebuffer.clone(),
-            render_area: area,
-            clear_values: clear_values.into(),
-            next_subpass: 0,
-        });
-        self.begin_subpass();
+        let color_views = framebuffer.color.iter().map(|view| view.handle).collect::<Vec<_>>();
+        let ds_view = match framebuffer.depth_stencil.first() {
+            Some(ref view) => &view.handle as *const _,
+            None => ptr::null(),
+        };
+        unsafe {
+            self.raw.OMSetRenderTargets(
+                color_views.len() as UINT,
+                color_views.as_ptr(),
+                winapi::FALSE,
+                ds_view,
+            );
+        }
     }
 
     fn next_subpass(&mut self, _contents: SubpassContents) {
@@ -139,7 +198,9 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn end_renderpass(&mut self) {
-        warn!("end renderpass unimplemented")
+        self.insert_subpass_barriers(SubpassRef::External);
+        self.pass_cache = None;
+        self.next_subpass = !0;
     }
 
     fn pipeline_barrier(
@@ -155,6 +216,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         for barrier in barriers {
             match *barrier {
                 memory::Barrier::Image { ref states, target, ref range } => {
+                    let _ = range; //TODO: use subresource range
                     let state_src = conv::map_image_resource_state(states.start.0, states.start.1);
                     let state_dst = conv::map_image_resource_state(states.end.0, states.end.1);
 
