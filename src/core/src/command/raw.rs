@@ -88,6 +88,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     /// This function does not return an error. Invalid usage of this function
     /// will result in an error on `finish`.
     ///
+    /// - Command buffer must be in recording state.
     /// - Number of viewports must be between 1 and `max_viewports`.
     /// - Only queues with graphics capability support this function.
     fn set_viewports(&mut self, &[Viewport]);
@@ -107,6 +108,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     /// This function does not return an error. Invalid usage of this function
     /// will result in an error on `finish`.
     ///
+    /// - Command buffer must be in recording state.
     /// - Number of scissors must be between 1 and `max_viewports`.
     /// - Only queues with graphics capability support this function.
     fn set_scissors(&mut self, &[target::Rect]);
@@ -128,14 +130,24 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     );
     ///
     fn next_subpass(&mut self, contents: SubpassContents);
+
     ///
     fn end_renderpass(&mut self);
 
     /// Bind a graphics pipeline.
     ///
     /// There is only *one* pipeline slot for compute and graphics.
-    /// Calling the corresponding `bind_pipeline` functions will override the slot.
+    /// Calling `bind_compute_pipeline` functions will override the slot.
+    ///
+    /// # Errors
+    ///
+    /// This function does not return an error. Invalid usage of this function
+    /// will result in an error on `finish`.
+    ///
+    /// - Command buffer must be in recording state.
+    /// - Only queues with graphics capability support this function.
     fn bind_graphics_pipeline(&mut self, &B::GraphicsPipeline);
+
     ///
     fn bind_graphics_descriptor_sets(
         &mut self,
@@ -143,12 +155,40 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         first_set: usize,
         sets: &[&B::DescriptorSet],
     );
+
+    /// Bind a compute pipeline.
     ///
+    /// There is only *one* pipeline slot for compute and graphics.
+    /// Calling `bind_graphics_pipeline` functions will override the slot.
+    ///
+    /// # Errors
+    ///
+    /// This function does not return an error. Invalid usage of this function
+    /// will result in an error on `finish`.
+    ///
+    /// - Command buffer must be in recording state.
+    /// - Only queues with compute capability support this function.
     fn bind_compute_pipeline(&mut self, &B::ComputePipeline);
+
+    /// Execute a workgroup in the compute pipeline.
     ///
-    fn dispatch(&mut self, u32, u32, u32);
+    /// # Errors
+    ///
+    /// This function does not return an error. Invalid usage of this function
+    /// will result in an error on `finish`.
+    ///
+    /// - Command buffer must be in recording state.
+    /// - A compute pipeline must be bound using `bind_compute_pipeline`.
+    /// - Only queues with compute capability support this function.
+    /// - This function must be called outside of a renderpass.
+    /// - `(x, y, z)` must be less than or equal to `Limits::max_compute_group_size`
+    ///
+    /// TODO:
+    fn dispatch(&mut self, x: u32, y: u32, z: u32);
+
     ///
     fn dispatch_indirect(&mut self, buffer: &B::Buffer, offset: u64);
+
     ///
     fn copy_buffer(
         &mut self,
@@ -156,6 +196,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         dst: &B::Buffer,
         regions: &[BufferCopy],
     );
+
     ///
     fn copy_image(
         &mut self,
@@ -165,6 +206,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         dst_layout: ImageLayout,
         regions: &[ImageCopy],
     );
+
     ///
     fn copy_buffer_to_image(
         &mut self,
@@ -173,6 +215,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         dst_layout: ImageLayout,
         regions: &[BufferImageCopy],
     );
+
     ///
     fn copy_image_to_buffer(
         &mut self,
@@ -181,12 +224,14 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         dst: &B::Buffer,
         regions: &[BufferImageCopy],
     );
+
     ///
     fn draw(
         &mut self,
         vertices: Range<VertexCount>,
         instances: Range<InstanceCount>,
     );
+
     ///
     fn draw_indexed(
         &mut self,
@@ -194,6 +239,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         base_vertex: VertexOffset,
         instances: Range<InstanceCount>,
     );
+
     ///
     fn draw_indirect(
         &mut self,
@@ -202,6 +248,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         draw_count: u32,
         stride: u32,
     );
+
     ///
     fn draw_indexed_indirect(
         &mut self,

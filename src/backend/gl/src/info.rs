@@ -243,11 +243,13 @@ pub fn get(gl: &gl::Gl) -> (Info, Features, Limits, PrivateCaps) {
     let tessellation_supported =           info.is_supported(&[Core(4,0),
                                                                Ext("GL_ARB_tessellation_shader")]);
     let multi_viewports_supported =        info.is_supported(&[Core(4,1)]); // TODO: extension
+    let max_work_group = get_usize(gl, gl::MAX_COMPUTE_WORK_GROUP_COUNT);
 
     let limits = Limits {
         max_texture_size: get_usize(gl, gl::MAX_TEXTURE_SIZE),
         max_patch_size: if tessellation_supported { get_usize(gl, gl::MAX_PATCH_VERTICES) as u8 } else {0},
         max_viewports: if multi_viewports_supported { get_usize(gl, gl::MAX_VIEWPORTS) } else {1},
+        max_compute_group_size: (max_work_group, max_work_group, max_work_group),
 
         min_buffer_copy_offset_alignment: 1,
         min_buffer_copy_pitch_alignment: 1,
