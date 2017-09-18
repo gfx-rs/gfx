@@ -3,10 +3,10 @@ use ::native;
 use ::conversions::*;
 
 use std::ops::{Deref, DerefMut, Range};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 use std::cell::UnsafeCell;
 
-use core::{self, mapping, memory, target, pso, state, pool, queue, command, image};
+use core::{self, memory, target, pso};
 use core::{VertexCount, VertexOffset, InstanceCount, IndexCount, Viewport};
 use core::{RawSubmission};
 use core::buffer::{IndexBufferView};
@@ -18,7 +18,7 @@ use core::pool::{CommandPoolCreateFlags};
 
 use metal::*;
 use cocoa::foundation::NSUInteger;
-use block::{Block, ConcreteBlock};
+use block::{ConcreteBlock};
 
 pub struct QueueFamily {
 }
@@ -42,7 +42,7 @@ impl Drop for QueueInner {
 
 pub struct CommandPool {
     queue: Arc<QueueInner>,
-    active_buffers: Vec<CommandBuffer>,
+    managed: Vec<CommandBuffer>,
 }
 
 unsafe impl Send for CommandPool {
@@ -148,13 +148,16 @@ impl core::RawCommandQueue<Backend> for CommandQueue {
 
 impl core::RawCommandPool<Backend> for CommandPool {
     fn reset(&mut self) {
-        self.active_buffers.clear();
+        for cmd_buffer in &mut self.managed {
+            //TODO: remove old one?
+            cmd_buffer.inner().command_buffer = self.queue.queue.new_command_buffer();
+        }
     }
 
     unsafe fn from_queue(queue: &CommandQueue, flags: CommandPoolCreateFlags) -> Self {
         CommandPool {
             queue: (queue.0).clone(),
-            active_buffers: Vec::new(),
+            managed: Vec::new(),
         }
     }
 
@@ -162,12 +165,12 @@ impl core::RawCommandPool<Backend> for CommandPool {
         let mut buffers = Vec::new();
 
         for _ in 0..num {
-            unsafe {
+            let inner = unsafe {
                 // TODO: maybe use unretained command buffer for efficiency?
                 let command_buffer = self.queue.queue.new_command_buffer(); // Returns retained
                 defer_on_unwind! { command_buffer.release() }
 
-                let command_buffer = CommandBuffer(Arc::new(UnsafeCell::new(CommandBufferInner {
+                UnsafeCell::new(CommandBufferInner {
                     command_buffer,
                     encoder_state: EncoderState::None,
                     viewport: None,
@@ -175,11 +178,12 @@ impl core::RawCommandPool<Backend> for CommandPool {
                     pipeline_state: None,
                     vertex_buffers: Vec::new(),
                     descriptor_sets: Vec::new(),
-                })));
+                })
+            };
 
-                buffers.push(command_buffer.clone());
-                self.active_buffers.push(command_buffer);
-            }
+            let command_buffer = CommandBuffer(Arc::new(inner));
+            buffers.push(command_buffer.clone());
+            self.managed.push(command_buffer);
         }
 
         buffers
@@ -187,7 +191,18 @@ impl core::RawCommandPool<Backend> for CommandPool {
 
     /// Free command buffers which are allocated from this pool.
     unsafe fn free(&mut self, buffers: Vec<CommandBuffer>) {
-        unimplemented!()
+        for mut cmd_buf in buffers {
+            //TODO: what else here?
+            let target = cmd_buf.inner().command_buffer;
+            match self.managed.iter_mut().position(|b| b.inner().command_buffer == target) {
+                Some(index) => {
+                    self.managed.swap_remove(index);
+                }
+                None => {
+                    error!("Unable to free a command buffer!")
+                }
+            }
+        }
     }
 }
 
@@ -353,11 +368,12 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
             }
 
             // FIXME: subpasses
+            println!("framebuffer {:?}", frame_buffer);
 
             let pass_descriptor: MTLRenderPassDescriptor = msg_send![(frame_buffer.0).0, copy]; // Returns retained
             defer! { pass_descriptor.release() }
             // TODO: validate number of clear colors
-            for (i, value) in clear_values.iter().enumerate() {
+            /*for (i, value) in clear_values.iter().enumerate() {
                 let color_desc = pass_descriptor.color_attachments().object_at(i);
                 let mtl_color = match *value {
                     ClearValue::Color(ClearColor::Float(values)) => MTLClearColor::new(
@@ -369,8 +385,9 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
                     _ => unimplemented!(),
                 };
                 color_desc.set_clear_color(mtl_color);
-            }
+            }*/
 
+            println!("descriptor {:?}", pass_descriptor);
             let render_encoder = command_buffer.command_buffer.new_render_command_encoder(pass_descriptor); // Returns retained
             defer_on_unwind! { render_encoder.release() };
 
@@ -405,7 +422,22 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
     }
     
     fn end_renderpass(&mut self) {
-        unimplemented!()
+        match self.inner().encoder_state {
+            EncoderState::None => panic!("Expected to be in encoding state"),
+            EncoderState::Blit(encoder) => {
+                encoder.end_encoding();
+                unsafe {
+                    encoder.release();
+                }
+            }
+            EncoderState::Render(encoder) => {
+                encoder.end_encoding();
+                unsafe {
+                    encoder.release();
+                }
+            }
+        }
+        self.inner().encoder_state = EncoderState::None;
     }
 
     fn bind_graphics_pipeline(&mut self, pipeline: &native::GraphicsPipeline) {
@@ -509,7 +541,19 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
         vertices: Range<VertexCount>,
         instances: Range<InstanceCount>,
     ) {
-        unimplemented!()
+        match self.inner().encoder_state {
+            EncoderState::None |
+            EncoderState::Blit(_) => {
+                panic!("Unexpected encoder type for draw()");
+            }
+            EncoderState::Render(encoder) => {
+                encoder.draw_primitives(
+                    MTLPrimitiveType::Triangle, //TODO
+                    vertices.start as _,
+                    (vertices.end - vertices.start) as _,
+                );
+            }
+        }
     }
     
     fn draw_indexed(
