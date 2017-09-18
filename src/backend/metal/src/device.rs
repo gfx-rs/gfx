@@ -102,8 +102,10 @@ impl core::Adapter<Backend> for Adapter {
                 max_patch_size: 0, // No tesselation
                 max_viewports: 1,
 
-                min_buffer_copy_offset_alignment: 4, // Lower on iOS
+                min_buffer_copy_offset_alignment: 4, // TODO: Lower on iOS
                 min_buffer_copy_pitch_alignment: 4, // TODO: made this up
+
+                max_compute_group_size: (1, 1, 1), // FIXME
             },
         };
 
@@ -490,49 +492,34 @@ impl core::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn read_mapping_raw(&mut self, buf: &n::Buffer, range: Range<u64>)
-        -> Result<(*const u8, n::Mapping), mapping::Error>
-    {
-        unimplemented!()
-    }
-
-    fn write_mapping_raw(&mut self, buf: &n::Buffer, range: Range<u64>)
-        -> Result<(*mut u8, n::Mapping), mapping::Error>
-    {
+    fn acquire_mapping_raw(&mut self, buf: &n::Buffer, read: Option<Range<u64>>)
+        -> Result<*mut u8, mapping::Error> {
         unsafe {
             let base_ptr = buf.0.contents() as *mut u8;
 
             if base_ptr.is_null() {
-                panic!("the buffer is GPU private");
+                return Err(mapping::Error::InvalidAccess);
             }
 
-            if range.end > buf.0.length() {
-                panic!("offset/size out of range");
+            if let Some(range) = read {
+                if range.end > buf.0.length() {
+                    return Err(mapping::Error::OutOfBounds);
+                }
             }
 
-            let nsrange = NSRange {
-                location: range.start,
-                length: range.end,
-            };
-
-            (buf.0).retain();
-            Ok((
-                base_ptr.offset(range.start as isize),
-                n::Mapping(n::MappingInner::Write(buf.0, nsrange)),
-            ))
+            Ok(base_ptr)
         }
     }
 
-    fn unmap_mapping_raw(&mut self, mapping: n::Mapping) {
+    fn release_mapping_raw(&mut self, buffer: &n::Buffer, wrote: Option<Range<u64>>) {
         unsafe {
-            if let n::MappingInner::Write(buffer, ref range) = mapping.0 {
-                if buffer.storage_mode() != MTLStorageMode::Shared {
-                    buffer.did_modify_range(NSRange {
-                        location: range.location,
-                        length: range.length,
+            if let Some(range) = wrote {
+                if buffer.0.storage_mode() != MTLStorageMode::Shared {
+                    buffer.0.did_modify_range(NSRange {
+                        location: range.start as NSUInteger,
+                        length: (range.end - range.start) as NSUInteger,
                     });
                 }
-                buffer.release();
             }
         }
     }

@@ -112,41 +112,6 @@ unsafe impl Sync for Semaphore {
 }
 
 #[derive(Debug)]
-pub struct Mapping(pub MappingInner);
-
-unsafe impl Send for Mapping {
-}
-unsafe impl Sync for Mapping {
-}
-
-pub enum MappingInner {
-    Read,
-    Write(MTLBuffer, NSRange),
-}
-
-impl Drop for Mapping {
-    fn drop(&mut self) {
-        if let MappingInner::Write(buffer, ref range) = self.0 {
-            if buffer.storage_mode() != MTLStorageMode::Shared {
-                buffer.did_modify_range(NSRange {
-                    location: range.location,
-                    length: range.length,
-                });
-            }
-        }
-    }
-}
-
-impl fmt::Debug for MappingInner {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            MappingInner::Read => write!(f, "Read"),
-            MappingInner::Write(_, _) => write!(f, "Write"),
-        }
-    }
-}
-
-#[derive(Debug)]
 pub struct Buffer(pub MTLBuffer);
 
 unsafe impl Send for Buffer {
