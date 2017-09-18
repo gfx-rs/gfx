@@ -19,8 +19,6 @@ use core_foundation::base::TCFType;
 use core_foundation::string::{CFString, CFStringRef};
 use core_foundation::dictionary::CFDictionary;
 use core_foundation::number::{CFNumber, CFNumberRef};
-use cocoa::base::YES;
-use cocoa::appkit::NSWindow;
 use core_graphics::base::CGFloat;
 use core_graphics::geometry::CGRect;
 use io_surface::{self, IOSurface};

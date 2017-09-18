@@ -24,26 +24,15 @@ pub use window::{Surface, Swapchain};
 pub type GraphicsCommandPool = CommandPool;
 
 use std::mem;
-use std::marker::PhantomData;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use core::{format, memory};
 use core::{QueueType};
-use core::format::SurfaceType;
-use core::format::ChannelType;
-use metal::*;
 use winit::os::macos::WindowExt;
 use objc::runtime::{Object, Class};
-use core_foundation::base::TCFType;
-use core_foundation::string::{CFString, CFStringRef};
-use core_foundation::dictionary::CFDictionary;
-use core_foundation::number::{CFNumber, CFNumberRef};
 use cocoa::base::YES;
 use cocoa::appkit::NSWindow;
-use core_graphics::base::CGFloat;
 use core_graphics::geometry::CGRect;
-use io_surface::IOSurface;
 
 pub struct Instance {
 }
