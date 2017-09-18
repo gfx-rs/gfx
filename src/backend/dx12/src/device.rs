@@ -1172,8 +1172,16 @@ impl d::Device<B> for Device {
         // Just drop
     }
 
-    fn destroy_descriptor_pool(&mut self, _pool: n::DescriptorPool) {
-        // Just drop
+    fn destroy_descriptor_pool(&mut self, pool: n::DescriptorPool) {
+        {
+            let mut heap = self.heap_srv_cbv_uav.lock().unwrap();
+            heap.allocator.deallocate(pool.heap_srv_cbv_uav.range);
+        }
+
+        {
+            let mut heap = self.heap_sampler.lock().unwrap();
+            heap.allocator.deallocate(pool.heap_sampler.range);
+        }
     }
 
     fn destroy_descriptor_set_layout(&mut self, _layout: n::DescriptorSetLayout) {
