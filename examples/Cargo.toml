@@ -49,17 +49,6 @@ path = "../src/backend/metal"
 version = "0.3"
 optional = true
 
-[dependencies.gfx_window_metal]
-path = "../src/window/metal"
-version = "0.4"
-optional = true
-
-#[dependencies.gfx_device_metalll]
-#path = "../src/backend/metalll"
-#version = "0.2"
-#optional = true
-#features = ["native_fence"]
-
 #[dependencies.gfx_window_sdl]
 #path = "../src/window/sdl"
 #version = "0.7"

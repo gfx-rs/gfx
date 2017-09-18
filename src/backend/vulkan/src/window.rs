@@ -44,7 +44,7 @@ impl Instance {
             .iter()
             .map(|&extension| {
                 match extension {
-                    #[cfg(not(target_os = "windows"))]
+                    #[cfg(target_os = "unix")]
                     vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME => {
                         use winit::os::unix::WindowExt;
 
