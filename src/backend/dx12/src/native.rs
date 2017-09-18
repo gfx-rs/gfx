@@ -1,5 +1,5 @@
 
-use core::pass::{Attachment, AttachmentRef};
+use core::pass::{Attachment, AttachmentRef, SubpassDependency};
 use core::pso::DescriptorSetLayoutBinding;
 use core::{self, image, pso, HeapType};
 use free_list;
@@ -26,6 +26,7 @@ pub struct SubpassDesc {
 pub struct RenderPass {
     pub attachments: Vec<Attachment>,
     pub subpasses: Vec<SubpassDesc>,
+    pub dependencies: Vec<SubpassDependency>,
 }
 
 #[derive(Debug, Hash)]
@@ -95,13 +96,19 @@ impl Image {
 
 #[derive(Copy, Debug, Hash, Clone)]
 pub struct RenderTargetView {
+    pub resource: *mut winapi::ID3D12Resource,
     pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
 }
+unsafe impl Send for RenderTargetView { }
+unsafe impl Sync for RenderTargetView { }
 
 #[derive(Copy, Debug, Hash, Clone)]
 pub struct DepthStencilView {
+    pub resource: *mut winapi::ID3D12Resource,
     pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
 }
+unsafe impl Send for DepthStencilView { }
+unsafe impl Sync for DepthStencilView { }
 
 #[derive(Debug)]
 pub struct DescriptorSetLayout {

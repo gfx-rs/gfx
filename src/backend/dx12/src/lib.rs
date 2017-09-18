@@ -168,7 +168,7 @@ impl core::RawCommandQueue<Backend> for CommandQueue {
         let mut lists = submission
             .cmd_buffers
             .iter()
-            .map(|buf| buf.raw.as_mut() as *mut _ as *mut _)
+            .map(|buf| buf.as_raw_list())
             .collect::<Vec<_>>();
         self.raw.ExecuteCommandLists(lists.len() as _, lists.as_mut_ptr());
 
