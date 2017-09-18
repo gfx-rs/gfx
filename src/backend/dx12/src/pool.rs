@@ -55,11 +55,7 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
 
     fn allocate(&mut self, num: usize) -> Vec<CommandBuffer> {
         (0..num)
-            .map(|_| CommandBuffer {
-                raw: self.create_command_list(),
-                allocator: self.inner.clone(),
-                pass_cache: None,
-            })
+            .map(|_| CommandBuffer::new(self.create_command_list(), self.inner.clone()))
             .collect()
     }
 

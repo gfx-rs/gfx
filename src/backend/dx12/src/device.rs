@@ -9,10 +9,12 @@ use kernel32;
 use std::cmp;
 use std::collections::BTreeMap;
 use std::ops::Range;
+//use std::os::windows::ffi::OsStringExt;
 use std::{ffi, mem, ptr, slice};
 use {free_list, native as n, shade, Backend as B, Device};
 use winapi;
 use wio::com::ComPtr;
+
 
 #[derive(Debug)]
 pub struct UnboundBuffer {
@@ -261,7 +263,7 @@ impl d::Device<B> for Device {
         &mut self,
         attachments: &[pass::Attachment],
         subpasses: &[pass::SubpassDesc],
-        _dependencies: &[pass::SubpassDependency],
+        dependencies: &[pass::SubpassDependency],
     ) -> n::RenderPass {
         // TODO:
         let subpasses = subpasses
@@ -275,6 +277,7 @@ impl d::Device<B> for Device {
         n::RenderPass {
             attachments: attachments.to_vec(),
             subpasses,
+            dependencies: dependencies.to_vec(),
         }
     }
 
@@ -355,7 +358,7 @@ impl d::Device<B> for Device {
 
         // TODO: error handling
         unsafe {
-            let hr = d3d12::D3D12SerializeRootSignature(
+            let _hr = d3d12::D3D12SerializeRootSignature(
                 &desc,
                 winapi::D3D_ROOT_SIGNATURE_VERSION_1,
                 &mut signature_raw,
@@ -363,7 +366,11 @@ impl d::Device<B> for Device {
             );
 
             if !error.is_null() {
-                let error_output = (*error).GetBufferPointer();
+                //TODO
+                //let error_output = (*error).GetBufferPointer();
+                //let message = <ffi::OsString as OsStringExt>::from_ptr(error_output)
+                //    .to_string_lossy();
+                //error!("D3D12SerializeRootSignature error: {}", message);
                 (*error).Release();
             }
 
@@ -817,8 +824,9 @@ impl d::Device<B> for Device {
     fn view_image_as_render_target(&mut self,
         image: &n::Image,
         format: format::Format,
-        range: image::SubresourceRange,
+        _range: image::SubresourceRange,
     ) -> Result<n::RenderTargetView, d::TargetViewError> {
+        //TODO: use subresource range
         let handle = self.rtv_pool.lock().unwrap().alloc_handles(1).cpu;
 
         if image.kind.get_dimensions().3 != image::AaMode::Single {
@@ -852,7 +860,10 @@ impl d::Device<B> for Device {
             );
         }
 
-        Ok(n::RenderTargetView { handle })
+        Ok(n::RenderTargetView {
+            resource: image.resource,
+            handle,
+        })
     }
 
     fn view_image_as_shader_resource(
@@ -1019,7 +1030,7 @@ impl d::Device<B> for Device {
                 End: 0,
             },
         };
-        
+
         let mut ptr = ptr::null_mut();
         assert_eq!(winapi::S_OK, unsafe {
             (*buf.resource).Map(0, &read_range, &mut ptr)

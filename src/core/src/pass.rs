@@ -74,7 +74,7 @@ pub struct Attachment {
 pub type AttachmentRef = (usize, AttachmentLayout);
 
 ///
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub enum SubpassRef {
     ///
@@ -84,7 +84,7 @@ pub enum SubpassRef {
 }
 
 /// Specifies dependencies between subpasses.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct SubpassDependency {
     ///
