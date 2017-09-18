@@ -3,7 +3,6 @@ use {native as n, command};
 use conversions::*;
 
 use std::ops::Range;
-use std::cell::Cell;
 use std::cmp;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
