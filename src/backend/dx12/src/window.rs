@@ -131,14 +131,17 @@ pub struct Swapchain {
 }
 
 impl core::Swapchain<Backend> for Swapchain {
-    fn acquire_frame(&mut self, sync: core::FrameSync<Backend>) -> core::Frame {
+    fn acquire_frame(&mut self, _sync: core::FrameSync<Backend>) -> core::Frame {
         // TODO: sync
-        // TODO: we need to block this at some point? (running out of backbuffers)
-        // let num_images = self.images.len();
-        // let index = self.next_frame;
-        // self.frame_queue.push_back(index);
-        // self.next_frame = (self.next_frame + 1) % num_images;
-        // unsafe { core::Frame::new(index) };
+
+        if false {
+            // TODO: we need to block this at some point? (running out of backbuffers)
+            //let num_images = self.images.len();
+            let num_images = 1;
+            let index = self.next_frame;
+            self.frame_queue.push_back(index);
+            self.next_frame = (self.next_frame + 1) % num_images;
+        }
 
         // TODO:
         let index = unsafe { self.inner.GetCurrentBackBufferIndex() };
@@ -148,7 +151,7 @@ impl core::Swapchain<Backend> for Swapchain {
     fn present<C>(
         &mut self,
         _: &mut core::CommandQueue<Backend, C>,
-        wait_semaphores: &[&n::Semaphore],
+        _wait_semaphores: &[&n::Semaphore],
     ) {
         // TODO: wait semaphores
         unsafe { self.inner.Present(1, 0); }
