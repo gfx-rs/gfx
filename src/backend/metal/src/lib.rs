@@ -101,7 +101,6 @@ impl core::Backend for Backend {
     type QueueFamily = native::QueueFamily;
 
     type Heap = native::Heap;
-    type Mapping = native::Mapping;
     type CommandPool = command::CommandPool;
     type SubpassCommandPool = command::CommandPool;
 
