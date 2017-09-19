@@ -504,18 +504,18 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
         for region in regions {
             let image_offset = &region.image_offset;
 
-            for layer in region.image_subresource.1 {
-                let offset = region.buffer_offset + region.buffer_slice_pitch * (layer - region.image_subresource.1.start);
+            for layer in region.image_subresource.1.clone() {
+                let offset = region.buffer_offset + region.buffer_slice_pitch as NSUInteger * (layer - region.image_subresource.1.start) as NSUInteger;
                 unsafe {
                     msg_send![encoder.0,
                         copyFromBuffer: (src.0).0
-                        sourceOffset: offset as _
-                        sourceBytesPerRow: region.buffer_row_pitch as _
-                        sourceBytesPerImage: region.buffer_slice_pitch as _
+                        sourceOffset: offset as NSUInteger
+                        sourceBytesPerRow: region.buffer_row_pitch as NSUInteger
+                        sourceBytesPerImage: region.buffer_slice_pitch as NSUInteger
                         sourceSize: extent
                         toTexture: (dst.0).0
-                        destinationSlice: layer as _
-                        destinationLevel: region.image_subresource.0 as _
+                        destinationSlice: layer as NSUInteger
+                        destinationLevel: region.image_subresource.0 as NSUInteger
                         destinationOrigin: MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ }
                     ]
                 }
@@ -540,20 +540,14 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
     ) {
         let encoder = self.except_renderpass();
 
-        if instances == (0..1) {
-            encoder.draw_primitives(
-                MTLPrimitiveType::Triangle, //TODO
-                vertices.start as _,
-                (vertices.end - vertices.start) as _,
-            )
-        } else {
-            encoder.draw_primitives_instanced(
-                MTLPrimitiveType::Triangle, //TODO
-                vertices.start as _,
-                vertices.len() as _,
-                instances.start as _,
-                instances.len() as _,
-            )
+        unsafe {
+            msg_send![encoder.0,
+                drawPrimitives: MTLPrimitiveType::Triangle
+                vertexStart: vertices.start as NSUInteger
+                vertexCount: (vertices.end - vertices.start) as NSUInteger
+                instanceCount: (instances.end - instances.start) as NSUInteger
+                baseInstance: instances.start as NSUInteger
+            ];
         }
     }
     
