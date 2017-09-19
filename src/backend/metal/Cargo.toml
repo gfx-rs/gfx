@@ -19,14 +19,10 @@ gfx_core = { path = "../../core", version = "0.10" }
 log = "0.3"
 winit = "0.7"
 scopeguard = "0.3"
-
 metal-rs = "0.4"
-
 objc = "0.2"
 block = "0.1"
 cocoa = "0.9"
 core-foundation = "0.3"
 core-graphics = "0.9"
 io-surface = "0.7"
-
-

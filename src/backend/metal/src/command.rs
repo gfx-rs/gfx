@@ -508,20 +508,21 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
         for region in regions {
             let image_offset = &region.image_offset;
 
-            // TODO multiple layers
-            assert!((region.image_subresource.1).len() == 1, "multiple layer copies not implemented");
-            unsafe {
-                msg_send![encoder.0,
-                    copyFromBuffer: (src.0).0
-                    sourceOffset: region.buffer_offset as NSUInteger
-                    sourceBytesPerRow: region.buffer_row_pitch as NSUInteger
-                    sourceBytesPerImage: region.buffer_slice_pitch as NSUInteger
-                    sourceSize: extent
-                    toTexture: (dst.0).0
-                    destinationSlice: (region.image_subresource.1).start as NSUInteger // TODO: not sure this is right
-                    destinationLevel: region.image_subresource.0 as NSUInteger
-                    destinationOrigin: MTLOrigin { x: image_offset.x as NSUInteger, y: image_offset.y as NSUInteger, z: image_offset.z as NSUInteger }
-                ]
+            for layer in region.image_subresource.1 {
+                let offset = region.buffer_offset + region.buffer_slice_pitch * (layer - region.image_subresource.1.start);
+                unsafe {
+                    msg_send![encoder.0,
+                        copyFromBuffer: (src.0).0
+                        sourceOffset: offset as _
+                        sourceBytesPerRow: region.buffer_row_pitch as _
+                        sourceBytesPerImage: region.buffer_slice_pitch as _
+                        sourceSize: extent
+                        toTexture: (dst.0).0
+                        destinationSlice: layer as _
+                        destinationLevel: region.image_subresource.0 as _
+                        destinationOrigin: MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ }
+                    ]
+                }
             }
         }
     }
@@ -541,18 +542,26 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
         vertices: Range<VertexCount>,
         instances: Range<InstanceCount>,
     ) {
-        match self.inner().encoder_state {
+        let encoder = match self.inner().encoder_state {
             EncoderState::None |
-            EncoderState::Blit(_) => {
-                panic!("Unexpected encoder type for draw()");
-            }
-            EncoderState::Render(encoder) => {
-                encoder.draw_primitives(
-                    MTLPrimitiveType::Triangle, //TODO
-                    vertices.start as _,
-                    (vertices.end - vertices.start) as _,
-                );
-            }
+            EncoderState::Blit(_) => panic!("Unexpected encoder type for draw()"),
+            EncoderState::Render(encoder) => encoder,
+        };
+
+        if instances == (0..1) {
+            encoder.draw_primitives(
+                MTLPrimitiveType::Triangle, //TODO
+                vertices.start as _,
+                (vertices.end - vertices.start) as _,
+            )
+        } else {
+            encoder.draw_primitives_instanced(
+                MTLPrimitiveType::Triangle, //TODO
+                vertices.start as _,
+                vertices.len() as _,
+                instances.start as _,
+                instances.len() as _,
+            )
         }
     }
     
