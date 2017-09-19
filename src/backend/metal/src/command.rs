@@ -86,16 +86,6 @@ enum EncoderState {
     Render(MTLRenderCommandEncoder),
 }
 
-pub struct SubmitInfo {
-    command_buffer: MTLCommandBuffer
-}
-
-impl Drop for SubmitInfo {
-    fn drop(&mut self) {
-        unsafe { self.command_buffer.release(); }
-    }
-}
-
 impl CommandQueue {
     pub fn new(device: MTLDevice) -> CommandQueue {
         CommandQueue(Arc::new(QueueInner {
@@ -162,10 +152,8 @@ impl core::RawCommandPool<Backend> for CommandPool {
     }
 
     fn allocate(&mut self, num: usize) -> Vec<CommandBuffer> {
-        let mut buffers = Vec::new();
-
-        for _ in 0..num {
-            let inner = unsafe {
+        let buffers: Vec<_> = (0..num).map(|_| {
+            CommandBuffer(Arc::new(unsafe {
                 // TODO: maybe use unretained command buffer for efficiency?
                 let command_buffer = self.queue.queue.new_command_buffer(); // Returns retained
                 defer_on_unwind! { command_buffer.release() }
@@ -179,13 +167,9 @@ impl core::RawCommandPool<Backend> for CommandPool {
                     vertex_buffers: Vec::new(),
                     descriptor_sets: Vec::new(),
                 })
-            };
-
-            let command_buffer = CommandBuffer(Arc::new(inner));
-            buffers.push(command_buffer.clone());
-            self.managed.push(command_buffer);
-        }
-
+            }))
+        }).collect();
+        self.managed.extend(buffers.iter().cloned());
         buffers
     }
 
@@ -222,15 +206,20 @@ impl CommandBuffer {
             match self.inner().encoder_state {
                 EncoderState::None => {},
                 EncoderState::Blit(blit_encoder) => return blit_encoder,
-                EncoderState::Render(render_encoder) => {
-                    render_encoder.end_encoding();
-                    render_encoder.release();
-                }
+                EncoderState::Render(render_encoder) => panic!("invalid inside renderpass"),
             }
 
             let blit_encoder = self.inner().command_buffer.new_blit_command_encoder(); // Returns retained
             self.inner().encoder_state = EncoderState::Blit(blit_encoder);
             blit_encoder
+        }
+    }
+
+    fn except_renderpass(&mut self) -> MTLRenderCommandEncoder {
+        if let EncoderState::Render(encoder) = self.inner().encoder_state {
+            encoder
+        } else {
+            panic!("only valid inside renderpass")
         }
     }
 }
@@ -242,9 +231,16 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
     fn finish(&mut self) {
         match self.inner().encoder_state {
             EncoderState::None => {},
-            EncoderState::Blit(blit_encoder) => blit_encoder.end_encoding(),
-            EncoderState::Render(render_encoder) => render_encoder.end_encoding(),
+            EncoderState::Blit(blit_encoder) => {
+                blit_encoder.end_encoding();
+                unsafe { blit_encoder.release(); }
+            },
+            EncoderState::Render(render_encoder) => {
+                render_encoder.end_encoding();
+                unsafe { render_encoder.release(); }
+            },
         }
+        self.inner().encoder_state = EncoderState::None;
     }
 
     fn reset(&mut self, release_resources: bool) {
@@ -326,8 +322,8 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
             originY: rect.y as f64,
             width: rect.w as f64,
             height: rect.h as f64,
-            znear: 0.0,
-            zfar: 1.0,
+            znear: rect.near as f64,
+            zfar: rect.far as f64,
         });
     }
 
@@ -363,17 +359,22 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
         unsafe {
             let command_buffer = &mut *self.0.get();
 
-            if let EncoderState::Render(_) = command_buffer.encoder_state {
-                panic!("already in a renderpass");
+            match command_buffer.encoder_state {
+                EncoderState::Render(_) => panic!("already in a renderpass"),
+                EncoderState::Blit(blit) => {
+                    blit.end_encoding();
+                    blit.release();
+                    command_buffer.encoder_state = EncoderState::None;
+                },
+                EncoderState::None => {},
             }
 
             // FIXME: subpasses
-            println!("framebuffer {:?}", frame_buffer);
 
             let pass_descriptor: MTLRenderPassDescriptor = msg_send![(frame_buffer.0).0, copy]; // Returns retained
             defer! { pass_descriptor.release() }
             // TODO: validate number of clear colors
-            /*for (i, value) in clear_values.iter().enumerate() {
+            for (i, value) in clear_values.iter().enumerate() {
                 let color_desc = pass_descriptor.color_attachments().object_at(i);
                 let mtl_color = match *value {
                     ClearValue::Color(ClearColor::Float(values)) => MTLClearColor::new(
@@ -385,9 +386,8 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
                     _ => unimplemented!(),
                 };
                 color_desc.set_clear_color(mtl_color);
-            }*/
+            }
 
-            println!("descriptor {:?}", pass_descriptor);
             let render_encoder = command_buffer.command_buffer.new_render_command_encoder(pass_descriptor); // Returns retained
             defer_on_unwind! { render_encoder.release() };
 
@@ -423,19 +423,13 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
     
     fn end_renderpass(&mut self) {
         match self.inner().encoder_state {
-            EncoderState::None => panic!("Expected to be in encoding state"),
-            EncoderState::Blit(encoder) => {
-                encoder.end_encoding();
-                unsafe {
-                    encoder.release();
-                }
-            }
             EncoderState::Render(encoder) => {
                 encoder.end_encoding();
                 unsafe {
                     encoder.release();
                 }
-            }
+            },
+            _ => panic!("not in a renderpass"),
         }
         self.inner().encoder_state = EncoderState::None;
     }
@@ -450,9 +444,11 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
         first_set: usize,
         sets: &[&native::DescriptorSet],
     ) {
-        while self.inner().descriptor_sets.len() < first_set + sets.len() {
-            self.inner().descriptor_sets.push(None);
-        }
+        let descriptor_sets_len = self.inner().descriptor_sets.len();
+        self.inner().descriptor_sets.extend(
+            (descriptor_sets_len..(first_set + sets.len()))
+                .map(|_| None)
+        );
         for (out, &set) in self.inner().descriptor_sets[first_set ..].iter_mut().zip(sets) {
             *out = Some(set.clone());
         }
@@ -542,11 +538,7 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
         vertices: Range<VertexCount>,
         instances: Range<InstanceCount>,
     ) {
-        let encoder = match self.inner().encoder_state {
-            EncoderState::None |
-            EncoderState::Blit(_) => panic!("Unexpected encoder type for draw()"),
-            EncoderState::Render(encoder) => encoder,
-        };
+        let encoder = self.except_renderpass();
 
         if instances == (0..1) {
             encoder.draw_primitives(
