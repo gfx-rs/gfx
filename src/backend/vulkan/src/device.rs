@@ -8,7 +8,7 @@ use std::{mem, ptr};
 use std::ffi::CString;
 use std::ops::Range;
 
-use {Backend as B, Device, RawDevice};
+use {Backend as B, Device};
 use {conv, memory};
 
 
@@ -71,7 +71,7 @@ impl d::Device<B> for Device {
             self.raw.0.allocate_memory(&info, None)
                         .expect("Error on heap creation") // TODO: error handling
         };
-        
+
         let ptr = if heap_type.properties.contains(memory::CPU_VISIBLE) {
             unsafe {
                 self.raw.0.map_memory(
@@ -631,7 +631,7 @@ impl d::Device<B> for Device {
             address_mode_v: conv::map_wrap(sampler_info.wrap_mode.1),
             address_mode_w: conv::map_wrap(sampler_info.wrap_mode.2),
             mip_lod_bias: sampler_info.lod_bias.into(),
-            anisotropy_enable: if aniso > 0.0 { vk::VK_TRUE } else { vk::VK_FALSE },
+            anisotropy_enable: if aniso > 1.0 { vk::VK_TRUE } else { vk::VK_FALSE },
             max_anisotropy: aniso,
             compare_enable: if sampler_info.comparison.is_some() { vk::VK_TRUE } else { vk::VK_FALSE },
             compare_op: conv::map_comparison(sampler_info.comparison.unwrap_or(Comparison::Never)),
