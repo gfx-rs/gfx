@@ -139,7 +139,9 @@ impl core::RawCommandQueue<Backend> for CommandQueue {
 impl core::RawCommandPool<Backend> for CommandPool {
     fn reset(&mut self) {
         for cmd_buffer in &mut self.managed {
-            //TODO: remove old one?
+            let old_buffer = cmd_buffer.inner().command_buffer;
+            cmd_buffer.inner().command_buffer = MTLCommandBuffer::nil();
+            unsafe { old_buffer.release(); }
             cmd_buffer.inner().command_buffer = self.queue.queue.new_command_buffer();
         }
     }
