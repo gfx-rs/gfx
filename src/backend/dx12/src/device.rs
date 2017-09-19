@@ -178,15 +178,13 @@ impl Device {
                 for _ in old_count .. src_starts.len() {
                     src_sizes.push(1);
                 }
-                match heap_type {
-                    winapi::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER => {
-                        dst_starts.push(sw.set.ranges_samplers[sw.binding].at(sw.array_offset));
-                    }
-                    winapi::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV => {
-                        dst_starts.push(sw.set.ranges_srv_cbv_uav[sw.binding].at(sw.array_offset));
-                    }
+                let range_binding = &sw.set.ranges[sw.binding as usize];
+                let range = match (heap_type, range_binding) {
+                    (winapi::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, &n::DescriptorRangeBinding::Sampler(ref range)) => range,
+                    (winapi::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, &n::DescriptorRangeBinding::View(ref range)) => range,
                     _ => unreachable!(),
-                }
+                };
+                dst_starts.push(range.at(sw.array_offset));
                 dst_sizes.push((src_starts.len() - old_count) as u32);
             }
         }
@@ -309,7 +307,7 @@ impl d::Device<B> for Device {
                 .filter(|bind| bind.ty != pso::DescriptorType::Sampler)
                 .map(|bind| conv::map_descriptor_range(bind, 2*i as u32)));
 
-            if ranges.len() - range_base > 0 {
+            if ranges.len() > range_base {
                 *unsafe{ param.DescriptorTable_mut() } = winapi::D3D12_ROOT_DESCRIPTOR_TABLE {
                     NumDescriptorRanges: (ranges.len() - range_base) as _,
                     pDescriptorRanges: ranges[range_base..].as_ptr(),
@@ -326,7 +324,7 @@ impl d::Device<B> for Device {
                 .filter(|bind| bind.ty == pso::DescriptorType::Sampler)
                 .map(|bind| conv::map_descriptor_range(bind, (2*i +1) as u32)));
 
-            if ranges.len() - range_base > 0 {
+            if ranges.len() > range_base {
                 *unsafe{ param.DescriptorTable_mut() } = winapi::D3D12_ROOT_DESCRIPTOR_TABLE {
                     NumDescriptorRanges: (ranges.len() - range_base) as _,
                     pDescriptorRanges: ranges[range_base..].as_ptr(),
