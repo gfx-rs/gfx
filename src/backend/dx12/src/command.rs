@@ -367,26 +367,25 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         }
 
         let mut table_id = 0;
-        for (i, table) in layout.tables.iter().enumerate() {
-            if first_set <= i {
-                sets[i-first_set].ranges_srv_cbv_uav.get(0).map(|range| unsafe {
-                    assert!(table.contains(n::SRV_CBV_UAV));
-                    self.raw.SetGraphicsRootDescriptorTable(table_id, range.handle.gpu);
-                    table_id += 1;
-                });
-                sets[i-first_set].ranges_samplers.get(0).map(|range| unsafe {
-                    assert!(table.contains(n::SAMPLERS));
-                    self.raw.SetGraphicsRootDescriptorTable(table_id, range.handle.gpu);
-                    table_id += 1;
-                });
-            } else {
-                if table.contains(n::SRV_CBV_UAV) {
-                    table_id += 1;
-                }
-                if table.contains(n::SAMPLERS) {
-                    table_id += 1;
-                }
+        for table in &layout.tables[.. first_set] {
+            if table.contains(n::SRV_CBV_UAV) {
+                table_id += 1;
             }
+            if table.contains(n::SAMPLERS) {
+                table_id += 1;
+            }
+        }
+        for (set, table) in sets.iter().zip(layout.tables[first_set..].iter()) {
+            set.first_gpu_view.map(|gpu| unsafe {
+                assert!(table.contains(n::SRV_CBV_UAV));
+                self.raw.SetGraphicsRootDescriptorTable(table_id, gpu);
+                table_id += 1;
+            });
+            set.first_gpu_sampler.map(|gpu| unsafe {
+                assert!(table.contains(n::SAMPLERS));
+                self.raw.SetGraphicsRootDescriptorTable(table_id, gpu);
+                table_id += 1;
+            });
         }
     }
 
