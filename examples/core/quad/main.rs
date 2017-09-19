@@ -271,7 +271,7 @@ fn main() {
 
     // Descriptors
     let mut desc_pool = device.create_descriptor_pool(
-        2, // sets
+        1, // sets
         &[
             pso::DescriptorRangeDesc {
                 ty: pso::DescriptorType::SampledImage,

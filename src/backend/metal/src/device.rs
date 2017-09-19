@@ -550,6 +550,7 @@ impl core::Device<Backend> for Device {
         let encoder = self.device.new_argument_encoder(arg_array);
 
         let total_size = encoder.encoded_length();
+        unsafe { encoder.release() };
         let arg_buffer = self.device.new_buffer(total_size, MTLResourceOptions::empty());
 
         n::DescriptorPool {
@@ -568,7 +569,7 @@ impl core::Device<Backend> for Device {
 
     #[cfg(feature = "argument_buffer")]
     fn create_descriptor_set_layout(&mut self, bindings: &[DescriptorSetLayoutBinding]) -> n::DescriptorSetLayout {
-        let mut stage_flags = shade::StageFlags::empty();
+        let mut stage_flags = pso::ShaderStageFlags::empty();
         let mut arguments = bindings.iter().map(|desc| {
             stage_flags |= desc.stage_flags;
             Self::describe_argument(desc.ty, desc.binding, desc.count)
@@ -589,8 +590,8 @@ impl core::Device<Backend> for Device {
         }
     }
     #[cfg(feature = "argument_buffer")]
-    fn update_descriptor_sets(&mut self, writes: &[DescriptorSetWrite<Resources>]) {
-        use core::factory::DescriptorWrite::*;
+    fn update_descriptor_sets(&mut self, writes: &[DescriptorSetWrite<Backend>]) {
+        use core::pso::DescriptorWrite::*;
 
         let mut mtl_samplers = Vec::new();
         let mut mtl_textures = Vec::new();
@@ -598,17 +599,18 @@ impl core::Device<Backend> for Device {
         for write in writes {
             write.set.encoder.set_argument_buffer(write.set.buffer, write.set.offset);
             //TODO: range checks, need to keep some layout metadata around
+            assert_eq!(write.array_offset, 0); //TODO
 
             match write.write {
                 Sampler(ref samplers) => {
                     mtl_samplers.clear();
                     mtl_samplers.extend(samplers.iter().map(|sampler| sampler.0.clone()));
-                    write.set.encoder.set_sampler_states(&mtl_samplers, write.array_offset as _);
+                    write.set.encoder.set_sampler_states(&mtl_samplers, write.binding as _);
                 },
                 SampledImage(ref images) => {
                     mtl_textures.clear();
                     mtl_textures.extend(images.iter().map(|image| image.0.clone().0));
-                    write.set.encoder.set_textures(&mtl_textures, write.array_offset as _);
+                    write.set.encoder.set_textures(&mtl_textures, write.binding as _);
                 },
                 _ => unimplemented!(),
             }

@@ -130,6 +130,8 @@ pub struct DescriptorPool {
     pub total_size: NSUInteger,
     pub offset: NSUInteger,
 }
+#[cfg(feature = "argument_buffer")]
+unsafe impl Send for DescriptorPool {}
 
 #[cfg(not(feature = "argument_buffer"))]
 #[derive(Debug)]
@@ -188,6 +190,11 @@ pub struct DescriptorSetLayout {
     pub encoder: MTLArgumentEncoder,
     pub stage_flags: ShaderStageFlags,
 }
+#[cfg(feature = "argument_buffer")]
+unsafe impl Send for DescriptorSetLayout {}
+#[cfg(feature = "argument_buffer")]
+unsafe impl Sync for DescriptorSetLayout {}
+
 #[cfg(not(feature = "argument_buffer"))]
 #[derive(Debug)]
 pub struct DescriptorSetLayout {
@@ -202,6 +209,10 @@ pub struct DescriptorSet {
     pub encoder: MTLArgumentEncoder,
     pub stage_flags: ShaderStageFlags,
 }
+#[cfg(feature = "argument_buffer")]
+unsafe impl Send for DescriptorSet {}
+#[cfg(feature = "argument_buffer")]
+unsafe impl Sync for DescriptorSet {}
 
 #[derive(Clone, Debug)]
 #[cfg(not(feature = "argument_buffer"))]
@@ -215,9 +226,8 @@ pub struct DescriptorSetInner {
     pub layout: Vec<DescriptorSetLayoutBinding>, // TODO: maybe don't clone?
     pub bindings: HashMap<usize, DescriptorSetBinding>,
 }
-
-unsafe impl Send for DescriptorSetInner {
-}
+#[cfg(not(feature = "argument_buffer"))]
+unsafe impl Send for DescriptorSetInner {}
 
 #[derive(Debug)]
 pub enum DescriptorSetBinding {

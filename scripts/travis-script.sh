@@ -25,6 +25,8 @@ elif [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
 
   FEATURES+="metal"
   GLUTIN_HEADLESS_FEATURE="--features headless"
+
+  (cd examples/core/quad && cargo build --features metal,metal_argument_buffer)
 fi
 
 cargo build --all --features "$FEATURES" $EXCLUDES

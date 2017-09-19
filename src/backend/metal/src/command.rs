@@ -586,10 +586,10 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
 impl CommandBuffer {
     #[cfg(feature = "argument_buffer")]
     fn bind_descriptor_set(encoder: MTLRenderCommandEncoder, slot: u64, set: &native::DescriptorSet) {
-        if set.stage_flags.contains(shade::STAGE_VERTEX) {
+        if set.stage_flags.contains(pso::STAGE_VERTEX) {
             encoder.set_vertex_buffer(slot, set.offset, set.buffer)
         }
-        if set.stage_flags.contains(shade::STAGE_PIXEL) {
+        if set.stage_flags.contains(pso::STAGE_FRAGMENT) {
             encoder.set_fragment_buffer(slot, set.offset, set.buffer)
         }
     }
