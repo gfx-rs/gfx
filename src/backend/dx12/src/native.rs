@@ -155,13 +155,22 @@ impl DescriptorRange {
 }
 
 #[derive(Debug)]
+pub enum DescriptorRangeBinding {
+    Sampler(DescriptorRange),
+    View(DescriptorRange),
+    Empty,
+}
+
+#[derive(Debug)]
 pub struct DescriptorSet {
     // Required for binding at command buffer
     pub heap_srv_cbv_uav: ComPtr<winapi::ID3D12DescriptorHeap>,
     pub heap_samplers: ComPtr<winapi::ID3D12DescriptorHeap>,
 
-    pub ranges_srv_cbv_uav: Vec<DescriptorRange>,
-    pub ranges_samplers: Vec<DescriptorRange>,
+    pub ranges: Vec<DescriptorRangeBinding>,
+
+    pub first_gpu_sampler: Option<winapi::D3D12_GPU_DESCRIPTOR_HANDLE>,
+    pub first_gpu_view: Option<winapi::D3D12_GPU_DESCRIPTOR_HANDLE>,
 }
 
 // TODO: is this really safe?
@@ -240,45 +249,57 @@ pub struct DescriptorPool {
     pub pools: Vec<pso::DescriptorRangeDesc>,
     pub max_size: u64,
 }
+unsafe impl Send for DescriptorPool { }
 
 impl core::DescriptorPool<Backend> for DescriptorPool {
     fn allocate_sets(&mut self, layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
         layouts
             .iter()
             .map(|layout| {
-                let ranges_srv_cbv_uav = layout.bindings
-                    .iter()
-                    .filter(|binding| binding.ty != pso::DescriptorType::Sampler)
-                    .map(|binding| {
-                        let set_pool = &mut self.heap_srv_cbv_uav;
-                        DescriptorRange {
-                            handle: set_pool.alloc_handles(binding.count as u64),
-                            ty: binding.ty,
-                            count: binding.count,
-                            handle_size: set_pool.handle_size,
-                        }
-                    })
-                    .collect();
+                let mut ranges = Vec::new();
+                let mut first_gpu_sampler = None;
+                let mut first_gpu_view = None;
 
-                let ranges_samplers = layout.bindings
-                    .iter()
-                    .filter(|binding| binding.ty == pso::DescriptorType::Sampler)
-                    .map(|binding| {
-                        let set_pool = &mut self.heap_sampler;
-                        DescriptorRange {
-                            handle: set_pool.alloc_handles(binding.count as u64),
-                            ty: binding.ty,
-                            count: binding.count,
-                            handle_size: set_pool.handle_size,
+                for binding in &layout.bindings {
+                    let range = match binding.ty {
+                        pso::DescriptorType::Sampler => {
+                            let handle = self.heap_sampler.alloc_handles(binding.count as u64);
+                            if first_gpu_sampler.is_none() {
+                                first_gpu_sampler = Some(handle.gpu);
+                            }
+                            DescriptorRangeBinding::Sampler(DescriptorRange {
+                                handle,
+                                ty: binding.ty,
+                                count: binding.count,
+                                handle_size: self.heap_sampler.handle_size,
+                            })
+                        },
+                        _ => {
+                            let handle = self.heap_srv_cbv_uav.alloc_handles(binding.count as u64);
+                            if first_gpu_view.is_none() {
+                                first_gpu_view = Some(handle.gpu);
+                            }
+                            DescriptorRangeBinding::View(DescriptorRange {
+                                handle,
+                                ty: binding.ty,
+                                count: binding.count,
+                                handle_size: self.heap_sampler.handle_size,
+                            })
                         }
-                    })
-                    .collect();
+                    };
+
+                    while ranges.len() <= binding.binding as usize {
+                        ranges.push(DescriptorRangeBinding::Empty);
+                    }
+                    ranges[binding.binding as usize] = range;
+                }
 
                 DescriptorSet {
                     heap_srv_cbv_uav: self.heap_srv_cbv_uav.heap.clone(),
                     heap_samplers: self.heap_sampler.heap.clone(),
-                    ranges_srv_cbv_uav,
-                    ranges_samplers,
+                    ranges,
+                    first_gpu_sampler,
+                    first_gpu_view,
                 }
             })
             .collect()
