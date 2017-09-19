@@ -7,8 +7,8 @@ workspace = ".."
 [features]
 default = ["gl"]
 mint = ["gfx/mint", "gfx_core/mint"]
-metal = ["gfx_device_metal", "gfx_window_metal"]
-#metal_argument_buffer = ["gfx_device_metalll/argument_buffer"]
+metal = ["gfx_backend_metal"]
+metal_argument_buffer = ["gfx_backend_metal/argument_buffer"]
 gl = ["gfx_backend_gl"]
 dx11 = ["gfx_device_dx11", "gfx_window_dxgi"]
 dx12 = ["gfx_device_dx12", "gfx_window_dxgi"]
@@ -44,11 +44,6 @@ path = "../src/backend/vulkan"
 version = "0.1"
 optional = true
 
-[dependencies.gfx_device_metal]
-path = "../src/backend/metal"
-version = "0.3"
-optional = true
-
 #[dependencies.gfx_window_sdl]
 #path = "../src/window/sdl"
 #version = "0.7"
@@ -57,6 +52,9 @@ optional = true
 [target.'cfg(unix)'.dependencies]
 #gfx_window_glfw = { path = "../src/window/glfw", version = "0.15" }
 #gfx_window_sdl = { path = "../src/window/sdl", version = "0.7" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+gfx_backend_metal = { path = "../src/backend/metal", version = "0.1", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 gfx_device_dx11 = { path = "../src/backend/dx11", version = "0.6", optional = true }
