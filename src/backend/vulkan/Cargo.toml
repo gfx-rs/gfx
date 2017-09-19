@@ -11,6 +11,9 @@ readme = "README.md"
 documentation = "https://docs.rs/gfx_device_vulkan"
 workspace = "../../.."
 
+[features]
+default = []
+
 [lib]
 name = "gfx_backend_vulkan"
 
@@ -22,6 +25,7 @@ ash = "0.18.5"
 gfx_core = { path = "../../core", version = "0.10" }
 smallvec = "0.4"
 winit = "0.7"
+glsl-to-spirv = { version = "0.1", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 kernel32-sys = "0.2.2"
