@@ -44,7 +44,7 @@ impl Instance {
             .iter()
             .map(|&extension| {
                 match extension {
-                    #[cfg(target_os = "unix")]
+                    #[cfg(unix)]
                     vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME => {
                         use winit::os::unix::WindowExt;
 
@@ -68,7 +68,7 @@ impl Instance {
                             xlib_loader.create_xlib_surface_khr(&info, None).ok()
                         }
                     }
-                    #[cfg(target_os = "windows")]
+                    #[cfg(windows)]
                     vk::VK_KHR_WIN32_SURFACE_EXTENSION_NAME => {
                         use kernel32;
                         use winit::os::windows::WindowExt;
