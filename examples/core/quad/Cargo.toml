@@ -5,8 +5,9 @@ publish = false
 workspace = "../../.."
 
 [features]
-default = ["vulkan"]
+default = []
 metal = ["gfx_backend_metal"]
+metal_argument_buffer = ["gfx_backend_metal/argument_buffer"]
 gl = ["glutin", "gfx_backend_gl"]
 #dx11 = ["gfx_device_dx11", "gfx_window_dxgi"]
 dx12 = ["gfx_backend_dx12"]

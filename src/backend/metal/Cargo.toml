@@ -11,6 +11,10 @@ readme = "README.md"
 documentation = "https://docs.rs/gfx_backend_metal"
 workspace = "../../.."
 
+[features]
+default = []
+argument_buffer = []
+
 [lib]
 name = "gfx_backend_metal"
 

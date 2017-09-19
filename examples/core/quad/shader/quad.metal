@@ -21,7 +21,7 @@ vertex VsOutput vs_main(VsInput in [[stage_in]]) {
 
 fragment float4 ps_main(VsOutput in [[stage_in]], 
                         texture2d<float> tex2D [[ texture(0) ]],
-                        sampler sampler2D [[ sampler(0) ]]) {
+                        sampler sampler2D [[ sampler(1) ]]) {
   return tex2D.sample(sampler2D, in.uv);
 }
 
