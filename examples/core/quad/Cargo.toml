@@ -34,6 +34,7 @@ optional = true
 path = "../../../src/backend/vulkan"
 version = "0.1"
 optional = true
+features = ["glsl-to-spirv"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
 gfx_backend_metal = { path = "../../../src/backend/metal", version = "0.1", optional = true }

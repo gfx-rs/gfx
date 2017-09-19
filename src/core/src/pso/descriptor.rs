@@ -65,7 +65,7 @@ pub struct DescriptorRangeDesc {
 }
 
 ///
-pub trait DescriptorPool<B: Backend> {
+pub trait DescriptorPool<B: Backend>: Send {
     /// Allocate one or multiple descriptor sets from the pool.
     ///
     /// Each descriptor set will be allocated from the pool according to the corresponding set layout.

@@ -63,8 +63,8 @@ fn main() {
     let device: &mut back::Device = render_device.mut_raw();
 
     // Setup renderpass and pipeline
-    let vs_module = device.create_shader_module(include_bytes!("../../core/quad/data/vs_main.spv")).unwrap();
-    let fs_module = device.create_shader_module(include_bytes!("../../core/quad/data/ps_main.spv")).unwrap();
+    let vs_module = device.create_shader_module(include_bytes!("data/vs_main.spv")).unwrap();
+    let fs_module = device.create_shader_module(include_bytes!("data/ps_main.spv")).unwrap();
 
     let set0_layout = device.create_descriptor_set_layout(&[
             pso::DescriptorSetLayoutBinding {
