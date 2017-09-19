@@ -112,6 +112,7 @@ bitflags!(
     }
 );
 
+//Note: this type is only needed for backends, not used anywhere within gfx_core.
 /// Which program stage this shader represents.
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

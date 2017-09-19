@@ -8,6 +8,8 @@ extern crate smallvec;
 #[cfg(target_os = "windows")]
 extern crate kernel32;
 extern crate winit;
+#[cfg(feature = "glsl-to-spirv")]
+extern crate glsl_to_spirv;
 
 use ash::{Entry, LoadingError};
 use ash::extensions as ext;
