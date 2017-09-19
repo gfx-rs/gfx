@@ -19,16 +19,13 @@ vertex VsOutput vs_main(VsInput in [[stage_in]]) {
   return out;
 }
 
-struct PixelArg0 {
+struct PixelArg {
   texture2d<float> tex2D [[ id(0) ]];
+  sampler sampler2D [[ id(1) ]];
 };
-struct PixelArg1 {
-  sampler sampler2D [[ id(0) ]];
-};
-                        
+
 fragment float4 ps_main(VsOutput in [[stage_in]],
-                        device PixelArg0* pixelArg0 [[ buffer(0) ]],
-                        device PixelArg1* pixelArg1 [[ buffer(1) ]])
+  device PixelArg* pixelArg [[ buffer(0) ]])
 {
-  return pixelArg0->tex2D.sample(pixelArg1->sampler2D, in.uv);
+  return pixelArg->tex2D.sample(pixelArg->sampler2D, in.uv);
 }

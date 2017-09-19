@@ -132,9 +132,17 @@ fn main() {
             include_bytes!("shader/quad.hlsl"))
         .unwrap();
     #[cfg(feature = "vulkan")]
-    let vs_module = device.create_shader_module(include_bytes!("data/vs_main.spv")).unwrap();
+    let vs_module = device
+        .create_shader_module_from_glsl(
+            include_str!("shader/quad.vert"),
+            pso::Stage::Vertex,
+        ).unwrap();
     #[cfg(feature = "vulkan")]
-    let fs_module = device.create_shader_module(include_bytes!("data/ps_main.spv")).unwrap();
+    let fs_module = device
+        .create_shader_module_from_glsl(
+            include_str!("shader/quad.frag"),
+            pso::Stage::Fragment,
+        ).unwrap();
 
     #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
     let shader_lib = device.create_shader_library_from_source(
@@ -153,27 +161,23 @@ fn main() {
             (PS, pso::Stage::Fragment, include_bytes!("shader/quad_450.glslf")),
         ]).expect("Error on creating shader lib");
 
-    let set0_layout = device.create_descriptor_set_layout(&[
+    let set_layout = device.create_descriptor_set_layout(&[
             pso::DescriptorSetLayoutBinding {
                 binding: 0,
                 ty: pso::DescriptorType::SampledImage,
                 count: 1,
                 stage_flags: pso::STAGE_FRAGMENT,
-            }
-        ],
-    );
-
-    let set1_layout = device.create_descriptor_set_layout(&[
+            },
             pso::DescriptorSetLayoutBinding {
-                binding: 0,
+                binding: 1,
                 ty: pso::DescriptorType::Sampler,
                 count: 1,
                 stage_flags: pso::STAGE_FRAGMENT,
-            }
+            },
         ],
     );
 
-    let pipeline_layout = device.create_pipeline_layout(&[&set0_layout, &set1_layout]);
+    let pipeline_layout = device.create_pipeline_layout(&[&set_layout]);
 
     let render_pass = {
         let attachment = pass::Attachment {
@@ -266,17 +270,20 @@ fn main() {
     println!("pipelines: {:?}", pipelines);
 
     // Descriptors
-    let mut srv_pool = device.create_descriptor_pool(
-        1, // sets
-        &[pso::DescriptorRangeDesc { ty: pso::DescriptorType::SampledImage, count: 1 }],
+    let mut desc_pool = device.create_descriptor_pool(
+        2, // sets
+        &[
+            pso::DescriptorRangeDesc {
+                ty: pso::DescriptorType::SampledImage,
+                count: 1,
+            },
+            pso::DescriptorRangeDesc {
+                ty: pso::DescriptorType::Sampler,
+                count: 1,
+            },
+        ],
     );
-    let set0 = srv_pool.allocate_sets(&[&set0_layout]);
-
-    let mut sampler_pool = device.create_descriptor_pool(
-        1, // sets
-        &[pso::DescriptorRangeDesc { ty: pso::DescriptorType::Sampler, count: 1 }],
-    );
-    let set1 = sampler_pool.allocate_sets(&[&set1_layout]);
+    let desc_sets = desc_pool.allocate_sets(&[&set_layout]);
 
     // Framebuffer and render target creation
     let frame_rtvs = backbuffers.iter().map(|bb| {
@@ -367,14 +374,14 @@ fn main() {
 
     device.update_descriptor_sets(&[
         pso::DescriptorSetWrite {
-            set: &set0[0],
+            set: &desc_sets[0],
             binding: 0,
             array_offset: 0,
             write: pso::DescriptorWrite::SampledImage(vec![(&image_srv, i::ImageLayout::Undefined)]),
         },
         pso::DescriptorSetWrite {
-            set: &set1[0],
-            binding: 0,
+            set: &desc_sets[0],
+            binding: 1,
             array_offset: 0,
             write: pso::DescriptorWrite::Sampler(vec![&sampler]),
         },
@@ -483,7 +490,7 @@ fn main() {
             cmd_buffer.set_scissors(&[scissor]);
             cmd_buffer.bind_graphics_pipeline(&pipelines[0].as_ref().unwrap());
             cmd_buffer.bind_vertex_buffers(pso::VertexBufferSet(vec![(&vertex_buffer, 0)]));
-            cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, &[&set0[0], &set1[0]]); //TODO
+            cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, &[&desc_sets[0]]); //TODO
 
             {
                 let mut encoder = cmd_buffer.begin_renderpass_inline(
@@ -521,10 +528,8 @@ fn main() {
     }
 
     // cleanup!
-    device.destroy_descriptor_pool(srv_pool);
-    device.destroy_descriptor_pool(sampler_pool);
-    device.destroy_descriptor_set_layout(set0_layout);
-    device.destroy_descriptor_set_layout(set1_layout);
+    device.destroy_descriptor_pool(desc_pool);
+    device.destroy_descriptor_set_layout(set_layout);
 
     #[cfg(any(feature = "vulkan", feature = "dx12"))]
     {

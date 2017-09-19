@@ -279,7 +279,7 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type PipelineLayout:      Debug + Any + Send + Sync;
     type DescriptorPool:      DescriptorPool<Self>;
     type DescriptorSet:       Debug + Any + Send + Sync;
-    type DescriptorSetLayout: Debug + Any;
+    type DescriptorSetLayout: Debug + Any + Send + Sync;
 
     type Fence:               Debug + Any + Send + Sync;
     type Semaphore:           Debug + Any + Send + Sync;
