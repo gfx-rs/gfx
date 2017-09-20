@@ -189,6 +189,8 @@ fn main() {
 
         let subpass = pass::SubpassDesc {
             color_attachments: &[(0, i::ImageLayout::ColorAttachmentOptimal)],
+            input_attachments: &[],
+            preserve_attachments: &[],
         };
 
         let dependency = pass::SubpassDependency {
@@ -539,11 +541,6 @@ fn main() {
     #[cfg(feature = "metal")]
     device.destroy_shader_module(shader_lib);
 
-    device.destroy_pipeline_layout(pipeline_layout);
-    device.destroy_renderpass(render_pass);
-    device.destroy_heap(heap);
-    device.destroy_heap(image_heap);
-    device.destroy_heap(image_upload_heap);
     device.destroy_buffer(vertex_buffer);
     device.destroy_buffer(image_upload_buffer);
     device.destroy_image(image_logo);
@@ -551,6 +548,11 @@ fn main() {
     device.destroy_sampler(sampler);
     device.destroy_fence(frame_fence);
     device.destroy_semaphore(frame_semaphore);
+    device.destroy_pipeline_layout(pipeline_layout);
+    device.destroy_renderpass(render_pass);
+    device.destroy_heap(heap);
+    device.destroy_heap(image_heap);
+    device.destroy_heap(image_upload_heap);
     for pipeline in pipelines {
         if let Ok(pipeline) = pipeline {
             device.destroy_graphics_pipeline(pipeline);

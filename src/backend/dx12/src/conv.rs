@@ -524,20 +524,20 @@ pub fn map_buffer_flags(_usage: buffer::Usage) -> D3D12_RESOURCE_FLAGS {
 }
 
 pub fn map_image_flags(usage: image::Usage) -> D3D12_RESOURCE_FLAGS {
-    let mut flags = 0;
+    let mut flags = D3D12_RESOURCE_FLAG_NONE;
 
     if usage.contains(image::COLOR_ATTACHMENT) {
-        flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET.0;
+        flags = flags | D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
     }
     if usage.contains(image::DEPTH_STENCIL_ATTACHMENT) {
-        flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL.0;
+        flags = flags | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
     }
     if usage.contains(image::STORAGE) {
-        flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS.0;
+        flags = flags | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
     if usage.contains(image::DEPTH_STENCIL_ATTACHMENT) && !usage.contains(image::SAMPLED) {
-        flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE.0;
+        flags = flags | D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
     }
 
-    D3D12_RESOURCE_FLAGS(flags) //TODO
+    flags
 }
