@@ -98,6 +98,8 @@ fn main() {
 
         let subpass = pass::SubpassDesc {
             color_attachments: &[(0, i::ImageLayout::ColorAttachmentOptimal)],
+            input_attachments: &[],
+            preserve_attachments: &[],
         };
 
         let dependency = pass::SubpassDependency {

@@ -266,20 +266,128 @@ impl d::Device<B> for Device {
         subpasses: &[pass::SubpassDesc],
         dependencies: &[pass::SubpassDependency],
     ) -> n::RenderPass {
-        // TODO:
-        let subpasses = subpasses
-            .iter()
-            .map(|subpass| {
-                n::SubpassDesc {
-                    color_attachments: subpass.color_attachments.iter().cloned().collect(),
-                }
-            }).collect();
-
-        n::RenderPass {
-            attachments: attachments.to_vec(),
-            subpasses,
-            dependencies: dependencies.to_vec(),
+        #[derive(Copy, Clone, Debug, PartialEq)]
+        pub enum SubState {
+            New(winapi::D3D12_RESOURCE_STATES),
+            Preserve,
+            Undefined,
         }
+        struct AttachmentInfo {
+            sub_states: Vec<SubState>,
+            target_state: winapi::D3D12_RESOURCE_STATES,
+            last_state: winapi::D3D12_RESOURCE_STATES,
+            barrier_start_index: usize,
+        }
+
+        let mut att_infos = attachments
+            .iter()
+            .map(|att| AttachmentInfo {
+                sub_states: vec![SubState::Undefined; subpasses.len()],
+                target_state: if att.format.0.is_depth() {
+                    winapi::D3D12_RESOURCE_STATE_DEPTH_WRITE //TODO?
+                } else {
+                    winapi::D3D12_RESOURCE_STATE_RENDER_TARGET
+                },
+                last_state: conv::map_image_resource_state(image::Access::empty(), att.layouts.start),
+                barrier_start_index: 0,
+            })
+            .collect::<Vec<_>>();
+
+        // Fill out subpass known layouts
+        for (sid, sub) in subpasses.iter().enumerate() {
+            for &(id, _layout) in sub.color_attachments {
+                let state = SubState::New(att_infos[id].target_state);
+                let old = mem::replace(&mut att_infos[id].sub_states[sid], state);
+                debug_assert_eq!(SubState::Undefined, old);
+            }
+            for &(id, _layout) in sub.input_attachments {
+                let state = SubState::New(winapi::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+                let old = mem::replace(&mut att_infos[id].sub_states[sid], state);
+                debug_assert_eq!(SubState::Undefined, old);
+            }
+            for &id in sub.preserve_attachments {
+                let old = mem::replace(&mut att_infos[id].sub_states[sid], SubState::Preserve);
+                debug_assert_eq!(SubState::Undefined, old);
+            }
+        }
+
+        let mut deps_left = vec![0u16; subpasses.len()];
+        for dep in dependencies {
+            //Note: self-dependencies are ignored
+            if dep.passes.start != dep.passes.end && dep.passes.start != pass::SubpassRef::External {
+                if let pass::SubpassRef::Pass(sid) = dep.passes.end {
+                    deps_left[sid] += 1;
+                }
+            }
+        }
+
+        let mut rp = n::RenderPass {
+            attachments: attachments.to_vec(),
+            subpasses: Vec::new(),
+            post_barriers: Vec::new(),
+        };
+
+        while let Some(sid) = deps_left.iter().position(|count| *count == 0) {
+            deps_left[sid] = !0; // mark as done
+            for dep in dependencies {
+                if dep.passes.start != dep.passes.end && dep.passes.start == pass::SubpassRef::Pass(sid) {
+                    if let pass::SubpassRef::Pass(other) = dep.passes.end {
+                        deps_left[other] -= 1;
+                    }
+                }
+            }
+
+            let mut pre_barriers = Vec::new();
+            for (att_id, ai) in att_infos.iter_mut().enumerate() {
+                let state_dst = match ai.sub_states[sid] {
+                    SubState::Preserve => {
+                        ai.barrier_start_index = rp.subpasses.len() + 1;
+                        continue;
+                    },
+                    SubState::New(state) if state != ai.last_state => state,
+                    _ => continue,
+                };
+                let barrier = n::BarrierDesc::new(att_id, ai.last_state .. state_dst);
+                match rp.subpasses.get_mut(ai.barrier_start_index) {
+                    Some(past_subpass) => {
+                        let split = barrier.split();
+                        past_subpass.pre_barriers.push(split.start);
+                        pre_barriers.push(split.end);
+                    },
+                    None => pre_barriers.push(barrier),
+                }
+                ai.last_state = state_dst;
+                ai.barrier_start_index = rp.subpasses.len() + 1;
+            }
+
+            rp.subpasses.push(n::SubpassDesc {
+                color_attachments: subpasses[sid].color_attachments.iter().cloned().collect(),
+                input_attachments: subpasses[sid].input_attachments.iter().cloned().collect(),
+                pre_barriers,
+            });
+        }
+        // if this fails, our graph has cycles
+        assert_eq!(rp.subpasses.len(), subpasses.len());
+        assert!(deps_left.into_iter().all(|count| count == !0));
+
+        // take care of the post-pass transitions
+        for (att_id, (ai, att)) in att_infos.iter().zip(attachments.iter()).enumerate() {
+            let state_dst = conv::map_image_resource_state(image::Access::empty(), att.layouts.end);
+            if state_dst == ai.last_state {
+                continue;
+            }
+            let barrier = n::BarrierDesc::new(att_id, ai.last_state .. state_dst);
+            match rp.subpasses.get_mut(ai.barrier_start_index) {
+                Some(past_subpass) => {
+                    let split = barrier.split();
+                    past_subpass.pre_barriers.push(split.start);
+                    rp.post_barriers.push(split.end);
+                },
+                None => rp.post_barriers.push(barrier),
+            }
+        }
+
+        rp
     }
 
     fn create_pipeline_layout(&mut self, sets: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
@@ -1136,16 +1244,18 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn destroy_heap(&mut self, mut heap: n::Heap) {
-        unsafe { (*heap.raw).Release(); }
+    fn destroy_heap(&mut self, _heap: n::Heap) {
+        // Just drop
     }
 
-    fn destroy_shader_module(&mut self, _shader_lib: n::ShaderModule) {
-        unimplemented!()
+    fn destroy_shader_module(&mut self, shader_lib: n::ShaderModule) {
+        for (_, _blob) in shader_lib.shaders {
+            //unsafe { blob.Release(); } //TODO
+        }
     }
 
     fn destroy_renderpass(&mut self, _rp: n::RenderPass) {
-        unimplemented!()
+        // Just drop
     }
 
     fn destroy_pipeline_layout(&mut self, layout: n::PipelineLayout) {
@@ -1161,7 +1271,7 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_framebuffer(&mut self, _fb: n::FrameBuffer) {
-        unimplemented!()
+        // Just drop
     }
 
     fn destroy_buffer(&mut self, buffer: n::Buffer) {
