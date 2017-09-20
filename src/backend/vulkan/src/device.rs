@@ -126,7 +126,6 @@ impl d::Device<B> for Device {
             }
         };
 
-        // TODO: basic implementation only, needs lot of tweaking!
         let attachments = attachments.iter().map(|attachment| {
             vk::AttachmentDescription {
                 flags: vk::AttachmentDescriptionFlags::empty(), // TODO: may even alias!
@@ -145,26 +144,32 @@ impl d::Device<B> for Device {
 
         let subpasses = subpasses.iter().map(|subpass| {
             {
-                let color_attachments = subpass.color_attachments.iter()
-                .map(|&(id, layout)| vk::AttachmentReference { attachment: id as u32, layout: conv::map_image_layout(layout) })
-                .collect::<Vec<_>>();
+                let colors = subpass.color_attachments.iter()
+                    .map(|&(id, layout)| vk::AttachmentReference { attachment: id as u32, layout: conv::map_image_layout(layout) })
+                    .collect::<Vec<_>>();
+                let inputs = subpass.input_attachments.iter()
+                    .map(|&(id, layout)| vk::AttachmentReference { attachment: id as u32, layout: conv::map_image_layout(layout) })
+                    .collect::<Vec<_>>();
+                let preserves = subpass.preserve_attachments.iter()
+                    .map(|&id| id as u32)
+                    .collect::<Vec<_>>();
 
-                attachment_refs.push(color_attachments);
+                attachment_refs.push((colors, inputs, preserves));
             }
 
-            let color_attachments = attachment_refs.last().unwrap();
+            let &(ref color_attachments, ref input_attachments, ref preserve_attachments) = attachment_refs.last().unwrap();
 
             vk::SubpassDescription {
                 flags: vk::SubpassDescriptionFlags::empty(),
                 pipeline_bind_point: vk::PipelineBindPoint::Graphics,
-                input_attachment_count: 0, // TODO
-                p_input_attachments: ptr::null(), // TODO
-                color_attachment_count: color_attachments.len() as u32, // TODO
-                p_color_attachments: color_attachments.as_ptr(), // TODO
+                input_attachment_count: input_attachments.len() as u32,
+                p_input_attachments: input_attachments.as_ptr(),
+                color_attachment_count: color_attachments.len() as u32,
+                p_color_attachments: color_attachments.as_ptr(),
                 p_resolve_attachments: ptr::null(), // TODO
                 p_depth_stencil_attachment: ptr::null(), // TODO
-                preserve_attachment_count: 0, // TODO
-                p_preserve_attachments: ptr::null(), // TODO
+                preserve_attachment_count: preserve_attachments.len() as u32,
+                p_preserve_attachments: preserve_attachments.as_ptr(),
             }
         }).collect::<Vec<_>>();
 
