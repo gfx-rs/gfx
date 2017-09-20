@@ -140,6 +140,20 @@ impl_formats! {
     D32_S8          : Vec1<Unorm, Float, Uint> = (f32, u32) {32} [TextureSurface, DepthSurface, StencilSurface],
 }
 
+impl SurfaceType {
+    /// Return true if it's a depth surface type.
+    pub fn is_depth(self) -> bool {
+        match self {
+            SurfaceType::D16 |
+            SurfaceType::D24 |
+            SurfaceType::D24_S8 |
+            SurfaceType::D32 |
+            SurfaceType::D32_S8 => true,
+            _ => false,
+        }
+    }
+}
+
 
 /// Source channel in a swizzle configuration. Some may redirect onto
 /// different physical channels, some may be hardcoded to 0 or 1.

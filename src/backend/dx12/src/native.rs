@@ -1,7 +1,6 @@
 use core::device::ResourceHeapType;
-use core::pass::{Attachment, AttachmentRef, SubpassDependency};
 use core::pso::DescriptorSetLayoutBinding;
-use core::{self, image, pso, HeapType};
+use core::{self, image, pass, pso, HeapType};
 use free_list;
 use winapi::{self, UINT};
 use wio::com::ComPtr;
@@ -12,21 +11,55 @@ use std::ops::Range;
 
 #[derive(Debug, Hash)]
 pub struct ShaderModule {
-    pub shaders: BTreeMap<String, *mut winapi::ID3DBlob>,
+    pub(crate) shaders: BTreeMap<String, *mut winapi::ID3DBlob>,
 }
 unsafe impl Send for ShaderModule { }
 unsafe impl Sync for ShaderModule { }
 
 #[derive(Debug, Hash, Clone)]
+pub struct BarrierDesc {
+    pub attachment_id: pass::AttachmentId,
+    pub states: Range<winapi::D3D12_RESOURCE_STATES>,
+    pub flags: winapi::D3D12_RESOURCE_BARRIER_FLAGS,
+}
+
+impl BarrierDesc {
+    pub fn new(
+        attachment_id: pass::AttachmentId,
+        states: Range<winapi::D3D12_RESOURCE_STATES>,
+    ) -> Self {
+        BarrierDesc {
+            attachment_id,
+            states,
+            flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+        }
+    }
+
+    pub fn split(self) -> Range<Self> {
+        BarrierDesc {
+            flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_BEGIN_ONLY,
+            .. self.clone()
+        }
+        ..
+        BarrierDesc {
+            flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_END_ONLY,
+            .. self
+        }
+    }
+}
+
+#[derive(Debug, Hash, Clone)]
 pub struct SubpassDesc {
-    pub color_attachments: Vec<AttachmentRef>,
+    pub color_attachments: Vec<pass::AttachmentRef>,
+    pub input_attachments: Vec<pass::AttachmentRef>,
+    pub pre_barriers: Vec<BarrierDesc>,
 }
 
 #[derive(Debug, Hash, Clone)]
 pub struct RenderPass {
-    pub attachments: Vec<Attachment>,
+    pub attachments: Vec<pass::Attachment>,
     pub subpasses: Vec<SubpassDesc>,
-    pub dependencies: Vec<SubpassDependency>,
+    pub post_barriers: Vec<BarrierDesc>,
 }
 
 #[derive(Debug, Hash)]

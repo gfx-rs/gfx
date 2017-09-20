@@ -70,8 +70,10 @@ pub struct Attachment {
     pub layouts: Range<AttachmentLayout>,
 }
 
+/// Index of an attachment within a framebuffer/rebderpass,
+pub type AttachmentId = usize;
 /// Reference to an attachment by index and expected image layout.
-pub type AttachmentRef = (usize, AttachmentLayout);
+pub type AttachmentRef = (AttachmentId, AttachmentLayout);
 
 ///
 #[derive(Copy, Clone, Debug, Hash, PartialEq)]
@@ -99,6 +101,10 @@ pub struct SubpassDependency {
 pub struct SubpassDesc<'a> {
     ///
     pub color_attachments: &'a [AttachmentRef],
+    ///
+    pub input_attachments: &'a [AttachmentRef],
+    ///
+    pub preserve_attachments: &'a [AttachmentId],
 }
 
 /// Index of a subpass.
