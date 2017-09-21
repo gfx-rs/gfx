@@ -271,15 +271,17 @@ bitflags!(
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
     pub flags Usage: u8 {
         ///
-        const TRANSFER_SRC    = 0x1,
+        const TRANSFER_SRC = 0x1,
         ///
-        const TRANSFER_DST    = 0x2,
+        const TRANSFER_DST = 0x2,
         ///
-        const COLOR_ATTACHMENT  = 0x4,
+        const COLOR_ATTACHMENT = 0x4,
         ///
         const DEPTH_STENCIL_ATTACHMENT = 0x8,
         ///
-        const SAMPLED = 0x10,
+        const STORAGE = 0x10,
+        ///
+        const SAMPLED = 0x20,
         // TODO
     }
 );
