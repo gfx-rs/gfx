@@ -1,4 +1,4 @@
-
+use core::device::ResourceHeapType;
 use core::pass::{Attachment, AttachmentRef, SubpassDependency};
 use core::pso::DescriptorSetLayoutBinding;
 use core::{self, image, pso, HeapType};
@@ -134,6 +134,7 @@ pub struct Heap {
     pub raw: ComPtr<winapi::ID3D12Heap>,
     pub ty: HeapType,
     pub size: u64,
+    pub resource_type: ResourceHeapType,
     pub default_state: winapi::D3D12_RESOURCE_STATES,
 }
 #[derive(Debug)]
@@ -256,7 +257,8 @@ pub struct DescriptorPool {
     pub pools: Vec<pso::DescriptorRangeDesc>,
     pub max_size: u64,
 }
-unsafe impl Send for DescriptorPool { }
+unsafe impl Send for DescriptorPool {}
+unsafe impl Sync for DescriptorPool {}
 
 impl core::DescriptorPool<Backend> for DescriptorPool {
     fn allocate_sets(&mut self, layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {

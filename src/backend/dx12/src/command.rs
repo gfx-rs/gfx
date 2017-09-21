@@ -617,12 +617,66 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn copy_image_to_buffer(
         &mut self,
-        _src: &n::Image,
+        image: &n::Image,
         _: image::ImageLayout,
-        _dst: &n::Buffer,
-        _regions: &[BufferImageCopy],
+        buffer: &n::Buffer,
+        regions: &[BufferImageCopy],
     ) {
-        unimplemented!()
+        let mut src = winapi::D3D12_TEXTURE_COPY_LOCATION {
+            pResource: image.resource,
+            Type: winapi::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+            u: unsafe { mem::zeroed() },
+        };
+        let mut dst = winapi::D3D12_TEXTURE_COPY_LOCATION {
+            pResource: buffer.resource,
+            Type: winapi::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+            u: unsafe { mem::zeroed() },
+        };
+        let (width, height, depth, _) = image.kind.get_dimensions();
+        for region in regions {
+            // Copy each layer in the region
+            let layers = region.image_subresource.1.clone();
+            for layer in layers {
+                assert_eq!(region.buffer_offset % winapi::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64, 0);
+                assert_eq!(region.buffer_row_pitch % winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32, 0);
+                assert!(region.buffer_row_pitch >= width as u32 * image.bits_per_texel as u32 / 8);
+
+                let height = cmp::max(1, height as _);
+                let depth = cmp::max(1, depth as _);
+
+                // Advance buffer offset with each layer
+                *unsafe { src.SubresourceIndex_mut() } =
+                    image.calc_subresource(region.image_subresource.0 as _, layer as _);
+                *unsafe { dst.PlacedFootprint_mut() } = winapi::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
+                    Offset: region.buffer_offset as UINT64 + (layer as u32 * region.buffer_row_pitch * height * depth) as UINT64,
+                    Footprint: winapi::D3D12_SUBRESOURCE_FOOTPRINT {
+                        Format: image.dxgi_format,
+                        Width: width as _,
+                        Height: height,
+                        Depth: depth,
+                        RowPitch: region.buffer_row_pitch,
+                    },
+                };
+                let src_box = winapi::D3D12_BOX {
+                    left: 0,
+                    top: 0,
+                    right: region.image_extent.width as _,
+                    bottom: region.image_extent.height as _,
+                    front: 0,
+                    back: region.image_extent.depth as _,
+                };
+                unsafe {
+                    self.raw.CopyTextureRegion(
+                        &dst,
+                        region.image_offset.x as _,
+                        region.image_offset.y as _,
+                        region.image_offset.z as _,
+                        &src,
+                        &src_box,
+                    );
+                }
+            }
+        }
     }
 
     fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {

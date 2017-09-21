@@ -255,6 +255,7 @@ impl d::Device<B> for Device {
             raw: unsafe { ComPtr::new(heap as _) },
             ty: heap_type.clone(),
             size,
+            resource_type,
             default_state,
         })
     }
@@ -478,8 +479,8 @@ impl d::Device<B> for Device {
             let (rtvs, num_rtvs) = {
                 let mut rtvs = [winapi::DXGI_FORMAT_UNKNOWN; 8];
                 let mut num_rtvs = 0;
-                for (mut rtv, target) in rtvs.iter_mut()
-                                             .zip(pass.color_attachments.iter())
+                for (rtv, target) in rtvs.iter_mut()
+                    .zip(pass.color_attachments.iter())
                 {
                     let format = subpass.main_pass.attachments[target.0].format;
                     *rtv = conv::map_format(format, true).unwrap_or(winapi::DXGI_FORMAT_UNKNOWN);
@@ -685,6 +686,11 @@ impl d::Device<B> for Device {
         if offset + buffer.requirements.size > heap.size {
             return Err(buffer::CreationError)
         }
+        match heap.resource_type {
+            d::ResourceHeapType::Any |
+            d::ResourceHeapType::Buffers => (),
+            _ => return Err(buffer::CreationError)
+        }
 
         let mut resource = ptr::null_mut();
         let init_state = heap.default_state; //TODO?
@@ -701,7 +707,7 @@ impl d::Device<B> for Device {
                 Quality: 0,
             },
             Layout: winapi::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-            Flags: winapi::D3D12_RESOURCE_FLAGS(0),
+            Flags: conv::map_buffer_flags(buffer.usage),
         };
 
         assert_eq!(winapi::S_OK, unsafe {
@@ -755,7 +761,7 @@ impl d::Device<B> for Device {
                 Quality: 0,
             },
             Layout: winapi::D3D12_TEXTURE_LAYOUT_UNKNOWN,
-            Flags: winapi::D3D12_RESOURCE_FLAGS(0),
+            Flags: conv::map_image_flags(usage),
         };
 
         let mut alloc_info = unsafe { mem::zeroed() };
@@ -788,6 +794,15 @@ impl d::Device<B> for Device {
     ) -> Result<n::Image, image::CreationError> {
         if offset + image.requirements.size > heap.size {
             return Err(image::CreationError::OutOfHeap)
+        }
+        let is_target =
+            image.usage.contains(image::COLOR_ATTACHMENT) |
+            image.usage.contains(image::DEPTH_STENCIL_ATTACHMENT);
+        match heap.resource_type {
+            d::ResourceHeapType::Any => (),
+            d::ResourceHeapType::Images if !is_target => (),
+            d::ResourceHeapType::Targets if is_target => (),
+            _ => return Err(image::CreationError::OutOfHeap) //TEMP
         }
 
         let mut resource = ptr::null_mut();
