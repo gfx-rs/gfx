@@ -57,36 +57,6 @@ fn get_window_dimensions(window: &glutin::GlWindow) -> image::Dimensions {
     ((width as f32 * window.hidpi_factor()) as image::Size, (height as f32 * window.hidpi_factor()) as image::Size, 1, aa.into())
 }
 
-/*
-/// Update the internal dimensions of the main framebuffer targets. Generic version over the format.
-pub fn update_views<Cf, Df>(window: &glutin::GlWindow, color_view: &mut handle::RenderTargetView<R, Cf>,
-                    ds_view: &mut handle::DepthStencilView<R, Df>)
-where
-    Cf: format::RenderFormat,
-    Df: format::DepthFormat,
-{
-    let dim = color_view.get_dimensions();
-    assert_eq!(dim, ds_view.get_dimensions());
-    if let Some((cv, dv)) = update_views_raw(window, dim, Cf::get_format(), Df::get_format()) {
-        *color_view = Typed::new(cv);
-        *ds_view = Typed::new(dv);
-    }
-}
-
-/// Return new main target views if the window resolution has changed from the old dimensions.
-pub fn update_views_raw(window: &glutin::GlWindow, old_dimensions: image::Dimensions,
-                        color_format: format::Format, ds_format: format::Format)
-                        -> Option<(handle::RawRenderTargetView<R>, handle::RawDepthStencilView<R>)>
-{
-    let dim = get_window_dimensions(window);
-    if dim != old_dimensions {
-        Some(device_gl::create_main_targets_raw(dim, color_format.0, ds_format.0))
-    }else {
-        None
-    }
-}
-*/
-
 pub struct Swapchain {
     // Underlying window, required for presentation
     window: Rc<glutin::GlWindow>,
@@ -119,6 +89,10 @@ impl core::Surface<B> for Surface {
     fn get_kind(&self) -> core::image::Kind {
         let (w, h, _, a) = get_window_dimensions(&self.window);
         core::image::Kind::D2(w, h, a)
+    }
+
+    fn surface_capabilities(&self, _: &Adapter) -> core::SurfaceCapabilities {
+        unimplemented!()
     }
 
     fn supports_queue(&self, _: &QueueFamily) -> bool { true }

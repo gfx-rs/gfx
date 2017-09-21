@@ -106,39 +106,6 @@ impl Error {
 
 type ArrayBuffer = gl::types::GLuint;
 
-/*
-/// Create the proxy target views (RTV and DSV) for the attachments of the
-/// main framebuffer. These have GL names equal to 0.
-/// Not supposed to be used by the users directly.
-pub fn create_main_targets_raw(dim: t::Dimensions, color_format: format::SurfaceType, depth_format: format::SurfaceType)
-                               -> (handle::RawRenderTargetView<Backend>, handle::RawDepthStencilView<Backend>) {
-    use core::handle::Producer;
-    let color_tex =
-        native::Image::Surface(0),
-        t::Info {
-            levels: 1,
-            kind: t::Kind::D2(dim.0, dim.1, dim.3),
-            format: color_format,
-            bind: memory::RENDER_TARGET | memory::TRANSFER_SRC,
-            usage: memory::Usage::Data,
-        },
-    );
-    let depth_tex = temp.make_image(
-        native::Image::Surface(0),
-        t::Info {
-            levels: 1,
-            kind: t::Kind::D2(dim.0, dim.1, dim.3),
-            format: depth_format,
-            bind: memory::DEPTH_STENCIL | memory::TRANSFER_SRC,
-            usage: memory::Usage::Data,
-        },
-    );
-    let m_color = temp.make_rtv(native::TargetView::Surface(0), &color_tex, dim);
-    let m_ds = temp.make_dsv(native::TargetView::Surface(0), &depth_tex, dim);
-    (m_color, m_ds)
-}
-*/
-
 /// Internal struct of shared data between the device and its factories.
 struct Share {
     context: gl::Gl,

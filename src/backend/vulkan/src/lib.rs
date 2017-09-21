@@ -28,7 +28,6 @@ mod native;
 mod pool;
 mod window;
 
-
 const LAYERS: &'static [&'static str] = &[
     #[cfg(debug_assertions)]
     "VK_LAYER_LUNARG_standard_validation",
@@ -88,7 +87,6 @@ fn map_queue_type(flags: vk::QueueFlags) -> QueueType {
         unimplemented!()
     }
 }
-
 
 extern "system" fn callback(
     type_: vk::DebugReportFlagsEXT,
@@ -344,6 +342,12 @@ pub struct Adapter {
     properties: vk::PhysicalDeviceProperties,
     queue_families: Vec<(QueueFamily, QueueType)>,
     info: core::AdapterInfo,
+}
+
+impl Adapter {
+    pub(crate) fn handle(&self) -> vk::PhysicalDevice {
+        self.handle
+    }
 }
 
 impl core::Adapter<Backend> for Adapter {
