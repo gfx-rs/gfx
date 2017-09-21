@@ -53,6 +53,44 @@ use Backend;
 use image;
 use format::{self, Formatted};
 use queue::CommandQueue;
+use std::ops::Range;
+
+///
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+pub struct Extent2d {
+    ///
+    pub width: u32,
+    ///
+    pub height: u32,
+}
+
+///
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+pub struct SurfaceCapabilities {
+    /// Number of presentable images supported by the adapter for a swapchain
+    /// created from this surface.
+    ///
+    /// - `image_count.start` must be at least 1.
+    /// - `image_count.end` must be larger of equal to `image_count.start`.
+    pub image_count: Range<u32>,
+
+    /// Current extent of the surface.
+    ///
+    /// `None` if the surface has no explicit size, depending on the swapchain extent.
+    pub current_extent: Option<Extent2d>,
+
+    /// Range of supported extents.
+    ///
+    /// `current_extent` must be inside this range.
+    pub extents: Range<Extent2d>,
+
+    /// Maximum number of layers supported for presentable images.
+    ///
+    /// Must be at least 1.
+    pub max_image_layers: u32,
+}
 
 /// A `Surface` abstracts the surface of a native window, which will be presented
 pub trait Surface<B: Backend> {
@@ -67,6 +105,11 @@ pub trait Surface<B: Backend> {
     ///
     /// ```
     fn supports_queue(&self, queue_family: &B::QueueFamily) -> bool;
+
+    /// Query surface capabilities for this adapter.
+    ///
+    /// Use this function for configuring your swapchain creation.
+    fn surface_capabilities(&self, adapter: &B::Adapter) -> SurfaceCapabilities;
 
     /// Create a new swapchain from a surface and a queue.
     ///

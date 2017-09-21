@@ -8,7 +8,7 @@ use ash::extensions as ext;
 use {core, winit};
 
 use {conv, native};
-use {VK_ENTRY, Backend, Instance, QueueFamily, RawInstance};
+use {VK_ENTRY, Adapter, Backend, Instance, QueueFamily, RawInstance};
 
 
 pub struct Surface {
@@ -118,6 +118,46 @@ impl core::Surface<Backend> for Surface {
         core::image::Kind::D2(self.width as Size, self.height as Size, aa)
     }
 
+    fn surface_capabilities(&self, adapter: &Adapter) -> core::SurfaceCapabilities {
+        let caps =
+            self.raw.functor.get_physical_device_surface_capabilities_khr(
+                adapter.handle(),
+                self.raw.handle,
+            )
+            .expect("Unable to query surface capabilities");
+
+        // If image count is 0, the support number of images is unlimited.
+        let max_images = if caps.max_image_count == 0 { !0 } else { caps.max_image_count };
+
+        // `0xFFFFFFFF` indicates that the extent depends on the created swapchain.
+        let current_extent =
+            if caps.current_extent.width != 0xFFFFFFFF && caps.current_extent.height != 0xFFFFFFFF {
+                Some(core::window::Extent2d {
+                    width: caps.current_extent.width,
+                    height: caps.current_extent.height,
+                })
+            } else {
+                None
+            };
+
+        let min_extent = core::window::Extent2d {
+            width: caps.min_image_extent.width,
+            height: caps.min_image_extent.height,
+        };
+
+        let max_extent = core::window::Extent2d {
+            width: caps.max_image_extent.width,
+            height: caps.max_image_extent.height,
+        };
+
+        core::SurfaceCapabilities {
+            image_count: caps.min_image_count..max_images,
+            current_extent,
+            extents: min_extent..max_extent,
+            max_image_layers: caps.max_image_array_layers,
+        }
+    }
+
     fn supports_queue(&self, queue_family: &QueueFamily) -> bool {
         self.raw.functor.get_physical_device_surface_support_khr(
             queue_family.device(),
@@ -167,7 +207,7 @@ impl core::Surface<Backend> for Surface {
         let swapchain = unsafe { functor.create_swapchain_khr(&info, None) }
             .expect("Unable to create a swapchain");
 
-        let backbuffer_images = { functor.get_swapchain_images_khr(swapchain) }
+        let backbuffer_images = functor.get_swapchain_images_khr(swapchain)
             .expect("Unable to get swapchain images");
 
         let backbuffers = backbuffer_images

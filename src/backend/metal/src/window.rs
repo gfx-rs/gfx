@@ -1,4 +1,4 @@
-use {Backend};
+use {Adapter, Backend};
 use {native, conversions};
 
 use std::mem;
@@ -50,6 +50,10 @@ const SWAP_CHAIN_IMAGE_COUNT: usize = 3;
 
 impl core::Surface<Backend> for Surface {
     fn get_kind(&self) -> image::Kind {
+        unimplemented!()
+    }
+
+    fn surface_capabilities(&self, _: &Adapter) -> core::SurfaceCapabilities {
         unimplemented!()
     }
 
@@ -107,9 +111,9 @@ impl core::Surface<Backend> for Surface {
 
             // FIXME: depth
             let images = io_surfaces.iter().map(|surface| {
-                let mapped_texture: MTLTexture = msg_send![device.0, 
-                    newTextureWithDescriptor: backbuffer_descriptor.0 
-                    iosurface: surface.obj 
+                let mapped_texture: MTLTexture = msg_send![device.0,
+                    newTextureWithDescriptor: backbuffer_descriptor.0
+                    iosurface: surface.obj
                     plane: 0
                 ]; // Returns retained
                 Backbuffer { color: native::Image(mapped_texture), depth_stencil: None }
