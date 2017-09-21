@@ -32,7 +32,7 @@ pub use self::queue::{
     General, Graphics, Compute, Transfer,
 };
 pub use self::window::{
-    Backbuffer, Frame, FrameSync, Surface, Swapchain, SwapchainConfig};
+    Backbuffer, Frame, FrameSync, Surface, SurfaceCapabilities, Swapchain, SwapchainConfig};
 pub use draw_state::{state, target};
 
 pub mod adapter;
