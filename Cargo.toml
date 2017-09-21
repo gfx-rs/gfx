@@ -143,6 +143,10 @@ path = "examples/particle/main.rs"
 name = "trianglell"
 path = "examples/trianglell/main.rs"
 
+[[example]]
+name = "render_target"
+path = "examples/render_target/main.rs"
+
 [dev-dependencies]
 cgmath = "0.14"
 gfx_gl = "0.3"
