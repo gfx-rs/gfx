@@ -528,6 +528,10 @@ impl core::Surface<Backend> for Surface {
         unimplemented!()
     }
 
+    fn surface_capabilities(&self, _: &Adapter) -> core::SurfaceCapabilities {
+        unimplemented!()
+    }
+
     fn supports_queue(&self, _: &QueueFamily) -> bool {
         unimplemented!()
     }

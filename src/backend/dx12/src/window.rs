@@ -6,7 +6,7 @@ use std::ptr;
 use winit;
 use winapi;
 use wio::com::ComPtr;
-use {conv, native as n, Backend, Instance, QueueFamily};
+use {conv, native as n, Adapter, Backend, Instance, QueueFamily};
 
 use winit::os::windows::WindowExt;
 
@@ -36,6 +36,20 @@ impl core::Surface<Backend> for Surface {
 
         let aa = core::image::AaMode::Single;
         core::image::Kind::D2(self.width as Size, self.height as Size, aa)
+    }
+
+    fn surface_capabilities(&self, _: &Adapter) -> core::SurfaceCapabilities {
+        let extent = core::window::Extent2d {
+            width: self.width,
+            height: self.height,
+        };
+
+        core::SurfaceCapabilities {
+            image_count: 2..16, // we currently use a flip effect which supports 2..16 buffers
+            current_extent: Some(extent),
+            extents: extent..extent,
+            max_image_layers: 1,
+        }
     }
 
     fn build_swapchain<C>(
