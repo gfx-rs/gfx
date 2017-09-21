@@ -1,10 +1,11 @@
 use core::format::Format;
-use core::{memory, state, pso, Primitive};
+use core::{buffer, memory, state, pso, Primitive};
 use core::image::{self, FilterMethod, WrapMode};
 use core::pso::DescriptorSetLayoutBinding;
 use core::state::Comparison;
 use std::fmt;
 use winapi::*;
+
 
 pub fn map_heap_properties(props: memory::HeapProperties) -> D3D12_HEAP_PROPERTIES {
     //TODO: ensure the flags are valid
@@ -110,6 +111,7 @@ pub fn map_format(format: Format, is_target: bool) -> Option<DXGI_FORMAT> {
         },
         B8_G8_R8_A8 => match format.1 {
             Unorm => DXGI_FORMAT_B8G8R8A8_UNORM,
+            Srgb => DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,
             _ => return None,
         },
         D16 => match (is_target, format.1) {
@@ -265,7 +267,7 @@ pub fn map_render_targets(
     };
     let mut targets = [dummy_target; 8];
 
-    for (mut target, desc) in targets.iter_mut().zip(color_targets.iter()) {
+    for (target, desc) in targets.iter_mut().zip(color_targets.iter()) {
         target.RenderTargetWriteMask = desc.mask.bits() as UINT8;
 
         if let Some(ref b) = desc.color {
@@ -460,4 +462,27 @@ pub fn map_descriptor_range(bind: &DescriptorSetLayoutBinding, register_space: u
         RegisterSpace: register_space,
         OffsetInDescriptorsFromTableStart: D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
     }
+}
+
+pub fn map_buffer_flags(_usage: buffer::Usage) -> D3D12_RESOURCE_FLAGS {
+    D3D12_RESOURCE_FLAG_NONE
+}
+
+pub fn map_image_flags(usage: image::Usage) -> D3D12_RESOURCE_FLAGS {
+    let mut flags = 0;
+
+    if usage.contains(image::COLOR_ATTACHMENT) {
+        flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET.0;
+    }
+    if usage.contains(image::DEPTH_STENCIL_ATTACHMENT) {
+        flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL.0;
+    }
+    if usage.contains(image::STORAGE) {
+        flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS.0;
+    }
+    if usage.contains(image::DEPTH_STENCIL_ATTACHMENT) && !usage.contains(image::SAMPLED) {
+        flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE.0;
+    }
+
+    D3D12_RESOURCE_FLAGS(flags) //TODO
 }
