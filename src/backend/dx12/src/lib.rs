@@ -157,6 +157,7 @@ pub struct CommandQueue {
     device: ComPtr<winapi::ID3D12Device>,
     list_type: winapi::D3D12_COMMAND_LIST_TYPE,
 }
+unsafe impl Send for CommandQueue {} //blocked by ComPtr
 
 impl core::RawCommandQueue<Backend> for CommandQueue {
     unsafe fn submit_raw(
@@ -194,6 +195,7 @@ pub struct Device {
     heap_sampler: Arc<Mutex<native::DescriptorHeap>>,
     events: Vec<winapi::HANDLE>,
 }
+unsafe impl Send for Device {} //blocked by ComPtr
 
 impl Device {
     fn new(mut device: ComPtr<winapi::ID3D12Device>) -> Device {

@@ -426,6 +426,9 @@ pub fn map_image_usage(usage: image::Usage) -> vk::ImageUsageFlags {
     if usage.contains(image::DEPTH_STENCIL_ATTACHMENT) {
         flags |= vk::IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     }
+    if usage.contains(image::STORAGE) {
+        flags |= vk::IMAGE_USAGE_STORAGE_BIT;
+    }
     if usage.contains(image::SAMPLED) {
         flags |= vk::IMAGE_USAGE_SAMPLED_BIT;
     }
