@@ -9,78 +9,8 @@ use core::memory::{Properties,
 use memory::{self, Allocator, Typed};
 use handle::{self, GarbageSender};
 use handle::inner::*;
-use {core, buffer, image, format, mapping};
-use Backend;
-
-/*
-/// Error creating a PipelineState
-#[derive(Clone, PartialEq, Debug)]
-pub enum PipelineStateError<S> {
-    /// Shader program failed to link.
-    Program(ProgramError),
-    /// Unable to create PSO descriptor due to mismatched formats.
-    DescriptorInit(pso::InitError<S>),
-    /// Device failed to create the handle give the descriptor.
-    DeviceCreate(CreationError),
-}
-
-impl<'a> From<PipelineStateError<&'a str>> for PipelineStateError<String> {
-    fn from(pse: PipelineStateError<&'a str>) -> PipelineStateError<String> {
-        match pse {
-            PipelineStateError::Program(e) => PipelineStateError::Program(e),
-            PipelineStateError::DescriptorInit(e) => PipelineStateError::DescriptorInit(e.into()),
-            PipelineStateError::DeviceCreate(e) => PipelineStateError::DeviceCreate(e),
-        }
-    }
-}
-
-impl<S: fmt::Debug + fmt::Display> fmt::Display for PipelineStateError<S> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            PipelineStateError::Program(ref e) => write!(f, "{}: {}", self.description(), e),
-            PipelineStateError::DescriptorInit(ref e) => write!(f, "{}: {}", self.description(), e),
-            PipelineStateError::DeviceCreate(ref e) => write!(f, "{}: {}", self.description(), e),
-        }
-    }
-}
-
-impl<S: fmt::Debug + fmt::Display> Error for PipelineStateError<S> {
-    fn description(&self) -> &str {
-        match *self {
-            PipelineStateError::Program(_) => "Shader program failed to link",
-            PipelineStateError::DescriptorInit(_) =>
-                "Unable to create PSO descriptor due to mismatched formats",
-            PipelineStateError::DeviceCreate(_) => "Device failed to create the handle give the descriptor",
-        }
-    }
-
-    fn cause(&self) -> Option<&Error> {
-        match *self {
-            PipelineStateError::Program(ref program_error) => Some(program_error),
-            PipelineStateError::DescriptorInit(ref init_error) => Some(init_error),
-            PipelineStateError::DeviceCreate(ref creation_error) => Some(creation_error),
-        }
-    }
-}
-
-impl<S> From<ProgramError> for PipelineStateError<S> {
-    fn from(e: ProgramError) -> Self {
-        PipelineStateError::Program(e)
-    }
-}
-
-impl<S> From<pso::InitError<S>> for PipelineStateError<S> {
-    fn from(e: pso::InitError<S>) -> Self {
-        PipelineStateError::DescriptorInit(e)
-    }
-}
-
-impl<S> From<CreationError> for PipelineStateError<S> {
-    fn from(e: CreationError) -> Self {
-        PipelineStateError::DeviceCreate(e)
-    }
-}
-*/
+use {core, buffer, image, format, mapping, pso};
+use {Backend, Primitive};
 
 #[derive(Clone)]
 pub struct Device<B: Backend> {
@@ -494,6 +424,96 @@ impl<B: Backend> Device<B> {
             .map(Typed::new)
     }
 
+    // TODO: smarter allocation
+    pub fn create_descriptors<D>(&mut self, count: usize) -> Vec<D>
+        where D: pso::Descriptors<B>
+    {
+        use core::DescriptorPool as CDP;
+
+        let bindings = &D::layout_bindings()[..];
+        let layout = self.create_descriptor_set_layout(bindings);
+        let mut ranges = Vec::new();
+        for binding in bindings {
+            ranges.push(core::pso::DescriptorRangeDesc {
+                ty: binding.ty,
+                count: binding.count * count,
+            });
+        }
+
+        let mut pool = self.raw.create_descriptor_pool(count, &ranges[..]);
+        let sets = {
+            let layout_refs = (0..count).map(|_| layout.resource())
+                .collect::<Vec<_>>();
+            pool.allocate_sets(&layout_refs[..])
+        };
+
+        let pool = handle::raw::DescriptorPool::from(
+            DescriptorPool::new(pool, (), self.garbage.clone()));
+        sets.into_iter().map(|set| {
+            D::from_raw(layout.clone(), pso::RawDescriptorSet {
+                resource: set,
+                pool: pool.clone()
+            })
+        }).collect()
+    }
+
+    fn create_descriptor_set_layout(
+        &mut self,
+        bindings: &[core::pso::DescriptorSetLayoutBinding]
+    ) -> handle::raw::DescriptorSetLayout<B> {
+        let layout = self.raw.create_descriptor_set_layout(bindings);
+        DescriptorSetLayout::new(layout, (), self.garbage.clone()).into()
+    }
+
+    pub fn update_descriptor_sets(&mut self) -> pso::DescriptorSetsUpdate<B> {
+        pso::DescriptorSetsUpdate::new(self)
+    }
+
+    #[doc(hidden)]
+    pub fn create_renderpass_raw(
+        &mut self,
+        attachments: &[core::pass::Attachment],
+        subpasses: &[core::pass::SubpassDesc],
+        dependencies: &[core::pass::SubpassDependency],
+    ) -> handle::raw::RenderPass<B> {
+        let pass = self.raw.create_renderpass(attachments, subpasses, dependencies);
+        RenderPass::new(pass, (), self.garbage.clone()).into()
+    }
+
+    #[doc(hidden)]
+    pub fn create_pipeline_layout_raw(
+        &mut self,
+        layouts: &[&B::DescriptorSetLayout]
+    ) -> handle::raw::PipelineLayout<B> {
+        let layout = self.raw.create_pipeline_layout(layouts);
+        PipelineLayout::new(layout, (), self.garbage.clone()).into()
+    }
+
+    #[doc(hidden)]
+    pub fn create_graphics_pipeline_raw(
+        &mut self,
+        shader_entries: core::pso::GraphicsShaderSet<B>,
+        layout: &B::PipelineLayout,
+        subpass: core::pass::Subpass<B>,
+        desc: &core::pso::GraphicsPipelineDesc,
+    ) -> Result<handle::raw::GraphicsPipeline<B>, pso::CreationError> {
+        let pipeline = self.raw.create_graphics_pipelines(&[
+            (shader_entries, layout, subpass, desc)
+        ]).pop().unwrap()?;
+        Ok(GraphicsPipeline::new(pipeline, (), self.garbage.clone()).into())
+    }
+
+    pub fn create_graphics_pipeline<I>(
+        &mut self,
+        shader_entries: core::pso::GraphicsShaderSet<B>,
+        primitive: Primitive,
+        rasterizer: pso::Rasterizer,
+        init: I
+    ) -> Result<I::Pipeline, pso::CreationError>
+        where I: pso::GraphicsPipelineInit<B>
+    {
+        init.create(self, shader_entries, primitive, rasterizer)
+    }
 /*
     /// Creates a `ShaderSet` from the supplied vertex and pixel shader source code.
     fn create_shader_set(&mut self, vs_code: &[u8], ps_code: &[u8])
@@ -560,47 +580,6 @@ impl<B: Backend> Device<B> {
 
         let set = try!(self.create_shader_set(vs_code, ps_code));
         self.create_program(&set).map_err(|e| ProgramError::Link(e))
-    }
-
-    /// Similar to `create_pipeline_from_program(..)`, but takes a `ShaderSet` as opposed to a
-    /// shader `Program`.
-    fn create_pipeline_state<I: pso::PipelineInit>(&mut self, shaders: &ShaderSet<B>,
-                             primitive: Primitive, rasterizer: state::Rasterizer, init: I)
-                             -> Result<pso::PipelineState<B, I::Meta>, PipelineStateError<String>>
-    {
-        let program = try!(self.create_program(shaders).map_err(|e| ProgramError::Link(e)));
-        self.create_pipeline_from_program(&program, primitive, rasterizer, init).map_err(|error| {
-            use self::PipelineStateError::*;
-            match error {
-                Program(e) => Program(e),
-                DescriptorInit(e) => DescriptorInit(e.into()),
-                DeviceCreate(e) => DeviceCreate(e),
-            }
-        })
-    }
-
-    /// Creates a strongly typed `PipelineState` from its `Init` structure, a shader `Program`, a
-    /// primitive type and a `Rasterizer`.
-    fn create_pipeline_from_program<'a, I: pso::PipelineInit>(&mut self, program: &'a handle::Program<B>,
-                                    primitive: Primitive, rasterizer: state::Rasterizer, init: I)
-                                    -> Result<pso::PipelineState<B, I::Meta>, PipelineStateError<&'a str>>
-    {
-        let mut descriptor = Descriptor::new(primitive, rasterizer);
-        let meta = try!(init.link_to(&mut descriptor, program.get_info()));
-        let raw = try!(self.create_pipeline_state_raw(program, &descriptor));
-
-        Ok(pso::PipelineState::new(raw, primitive, meta))
-    }
-
-    /// Creates a strongly typed `PipelineState` from its `Init` structure. Automatically creates a
-    /// shader `Program` from a vertex and pixel shader source, as well as a `Rasterizer` capable
-    /// of rendering triangle faces without culling.
-    fn create_pipeline_simple<I: pso::PipelineInit>(&mut self, vs: &[u8], ps: &[u8], init: I)
-                              -> Result<pso::PipelineState<B, I::Meta>, PipelineStateError<String>>
-    {
-        let set = try!(self.create_shader_set(vs, ps));
-        self.create_pipeline_state(&set, Primitive::TriangleList, state::Rasterizer::new_fill(),
-                                   init)
     }
 
     /// Create a linear sampler with clamping to border.
