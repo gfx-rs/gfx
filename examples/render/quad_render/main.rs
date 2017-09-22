@@ -1,4 +1,5 @@
 extern crate env_logger;
+#[macro_use]
 extern crate gfx_render as gfx;
 extern crate gfx_core as core;
 extern crate gfx_backend_vulkan as back;
@@ -9,22 +10,19 @@ extern crate image;
 use std::mem;
 use std::io::Cursor;
 
-use core::{command, device as d, image as i, memory as m, pass, pso, state};
-use core::{Adapter, Device, Instance};
-use core::{DescriptorPool, Primitive};
-use core::format::{Formatted, Srgba8 as ColorFormat, Vec2};
-use core::pass::Subpass;
+use core::{command, device as d, image as i, pso, state};
+use core::{Adapter, Device, Instance, Primitive};
+use gfx::format::{Srgba8 as ColorFormat};
 use core::target::Rect;
+use gfx::pso::{Descriptors, GraphicsPipelineMeta};
 use gfx::allocators::StackAllocator as Allocator;
 
-#[derive(Debug, Clone, Copy)]
-#[allow(non_snake_case)]
-struct Vertex {
-    a_Pos: [f32; 2],
-    a_Uv: [f32; 2],
+gfx_buffer_struct! {
+    Vertex {
+        a_Pos: [f32; 2],
+        a_Uv: [f32; 2],
+    }
 }
-
-unsafe impl m::Pod for Vertex {}
 
 const QUAD: [Vertex; 6] = [
     Vertex { a_Pos: [ -0.5, 0.33 ], a_Uv: [0.0, 1.0] },
@@ -35,6 +33,21 @@ const QUAD: [Vertex; 6] = [
     Vertex { a_Pos: [  0.5,-0.33 ], a_Uv: [1.0, 0.0] },
     Vertex { a_Pos: [ -0.5,-0.33 ], a_Uv: [0.0, 0.0] },
 ];
+
+gfx_descriptor_struct! {
+    SampleDesc {
+        sampled_image: gfx::pso::SampledImage,
+        sampler: gfx::pso::Sampler,
+    }
+}
+
+gfx_graphics_pipeline! {
+    pipe {
+        sample: gfx::pso::DescriptorSet<SampleDesc<B>>, // TODO remove <B>
+        color: gfx::pso::RenderTarget<ColorFormat>,
+        vertices: gfx::pso::VertexBuffer<Vertex>,
+    }
+}
 
 fn main() {
     env_logger::init().unwrap();
@@ -68,120 +81,36 @@ fn main() {
     let vs_module = device.create_shader_module(include_bytes!("data/vs_main.spv")).unwrap();
     let fs_module = device.create_shader_module(include_bytes!("data/ps_main.spv")).unwrap();
 
-    let set0_layout = device.create_descriptor_set_layout(&[
-            pso::DescriptorSetLayoutBinding {
-                binding: 0,
-                ty: pso::DescriptorType::SampledImage,
-                count: 1,
-                stage_flags: pso::STAGE_FRAGMENT,
-            }
-        ],
-    );
-
-    let set1_layout = device.create_descriptor_set_layout(&[
-            pso::DescriptorSetLayoutBinding {
-                binding: 0,
-                ty: pso::DescriptorType::Sampler,
-                count: 1,
-                stage_flags: pso::STAGE_FRAGMENT,
-            }
-        ],
-    );
-
-    let pipeline_layout = device.create_pipeline_layout(&[&set0_layout, &set1_layout]);
-
-    let render_pass = {
-        let attachment = pass::Attachment {
-            format: ColorFormat::get_format(),
-            ops: pass::AttachmentOps::new(pass::AttachmentLoadOp::Clear, pass::AttachmentStoreOp::Store),
-            stencil_ops: pass::AttachmentOps::DONT_CARE,
-            layouts: i::ImageLayout::Undefined .. i::ImageLayout::Present,
-        };
-
-        let subpass = pass::SubpassDesc {
-            color_attachments: &[(0, i::ImageLayout::ColorAttachmentOptimal)],
-            input_attachments: &[],
-            preserve_attachments: &[],
-        };
-
-        let dependency = pass::SubpassDependency {
-            passes: pass::SubpassRef::External .. pass::SubpassRef::Pass(0),
-            stages: pso::COLOR_ATTACHMENT_OUTPUT .. pso::COLOR_ATTACHMENT_OUTPUT,
-            accesses: i::Access::empty() .. (i::COLOR_ATTACHMENT_READ | i::COLOR_ATTACHMENT_WRITE),
-        };
-
-        device.create_renderpass(&[attachment], &[subpass], &[dependency])
+    let sample_desc = context.mut_device().create_descriptors(1).pop().unwrap();
+    let pipe_init = pipe::Init {
+        sample: &sample_desc,
+        color: pso::ColorInfo {
+            mask: state::MASK_ALL,
+            color: Some(state::BlendChannel {
+                equation: state::Equation::Add,
+                source: state::Factor::ZeroPlus(state::BlendValue::SourceAlpha),
+                destination: state::Factor::OneMinus(state::BlendValue::SourceAlpha),
+            }),
+            alpha: Some(state::BlendChannel {
+                equation: state::Equation::Add,
+                source: state::Factor::One,
+                destination: state::Factor::One,
+            }),
+        },
+        vertices: (),
     };
-
-    //
-    let mut pipeline_desc = pso::GraphicsPipelineDesc::new(
-        Primitive::TriangleList,
-        pso::Rasterizer::new_fill(),
-    );
-    pipeline_desc.blender.targets.push(pso::ColorInfo {
-        mask: state::MASK_ALL,
-        color: Some(state::BlendChannel {
-            equation: state::Equation::Add,
-            source: state::Factor::ZeroPlus(state::BlendValue::SourceAlpha),
-            destination: state::Factor::OneMinus(state::BlendValue::SourceAlpha),
-        }),
-        alpha: Some(state::BlendChannel {
-            equation: state::Equation::Add,
-            source: state::Factor::One,
-            destination: state::Factor::One,
-        }),
-    });
-    pipeline_desc.vertex_buffers.push(pso::VertexBufferDesc {
-        stride: std::mem::size_of::<Vertex>() as u32,
-        rate: 0,
-    });
-
-    pipeline_desc.attributes.push(pso::AttributeDesc {
-        location: 0,
-        binding: 0,
-        element: pso::Element {
-            format: <Vec2<f32> as Formatted>::get_format(),
-            offset: 0,
-        },
-    });
-    pipeline_desc.attributes.push(pso::AttributeDesc {
-        location: 1,
-        binding: 0,
-        element: pso::Element {
-            format: <Vec2<f32> as Formatted>::get_format(),
-            offset: 8
-        },
-    });
-
-    //
-    let pipelines = {
-        let shader_entries = pso::GraphicsShaderSet {
+    let pipeline = context.mut_device().create_graphics_pipeline(
+        pso::GraphicsShaderSet {
             vertex: pso::EntryPoint { entry: "main", module: &vs_module },
             hull: None,
             domain: None,
             geometry: None,
             fragment: Some(pso::EntryPoint { entry: "main", module: &fs_module },),
-        };
-        let subpass = Subpass { index: 0, main_pass: &render_pass };
-        device.create_graphics_pipelines(&[
-            (shader_entries, &pipeline_layout, subpass, &pipeline_desc)
-        ])
-    };
-
-    println!("pipelines: {:?}", pipelines);
-
-    // Descriptors
-    let mut srv_pool = device.create_descriptor_pool(
-        1, // sets
-        &[pso::DescriptorRangeDesc { ty: pso::DescriptorType::SampledImage, count: 1 }],
-    );
-    let set0 = srv_pool.allocate_sets(&[&set0_layout]);
-
-    let mut sampler_pool = device.create_descriptor_pool(
-        1, // sets
-        &[pso::DescriptorRangeDesc { ty: pso::DescriptorType::Sampler, count: 1 }],
-    );
-    let set1 = sampler_pool.allocate_sets(&[&set1_layout]);
+        },
+        Primitive::TriangleList,
+        pso::Rasterizer::new_fill(),
+        pipe_init,
+    ).unwrap();
 
     // Framebuffer creation
     let frame_rtvs = backbuffers.iter().map(|backbuffer| {
@@ -266,20 +195,10 @@ fn main() {
         )
     );
 
-    device.update_descriptor_sets(&[
-        pso::DescriptorSetWrite {
-            set: &set0[0],
-            binding: 0,
-            array_offset: 0,
-            write: pso::DescriptorWrite::SampledImage(vec![(image_srv.resource(), i::ImageLayout::Undefined)]),
-        },
-        pso::DescriptorSetWrite {
-            set: &set1[0],
-            binding: 0,
-            array_offset: 0,
-            write: pso::DescriptorWrite::Sampler(vec![sampler.resource()]),
-        },
-    ]);
+    context.mut_device().update_descriptor_sets()
+        .write(sample_desc.sampled_image(), 0, vec![&image_srv])
+        .write(sample_desc.sampler(), 0, vec![&sampler])
+        .finish();
 
     // Rendering setup
     let viewport = core::Viewport {
@@ -346,15 +265,15 @@ fn main() {
 
             cmd_buffer.set_viewports(&[viewport]);
             cmd_buffer.set_scissors(&[scissor]);
-            cmd_buffer.bind_graphics_pipeline(&pipelines[0].as_ref().unwrap());
+            cmd_buffer.bind_graphics_pipeline(pipeline.pipeline());
             // TODO: data instead of upload ?
             // TODO: vertex access ?
             cmd_buffer.bind_vertex_buffers(pso::VertexBufferSet(vec![(vertex_buffer.resource(), 0)]));
-            cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, &[&set0[0], &set1[0]]); //TODO
+            cmd_buffer.bind_graphics_descriptor_sets(pipeline.layout(), 0, &[&sample_desc.set()]); // TODO
 
             {
                 let mut encoder = cmd_buffer.begin_renderpass_inline(
-                    &render_pass,
+                    pipeline.render_pass(),
                     &framebuffers[frame.id()],
                     Rect { x: 0, y: 0, w: pixel_width, h: pixel_height },
                     &[command::ClearValue::Color(command::ClearColor::Float([0.8, 0.8, 0.8, 1.0]))],
@@ -368,19 +287,8 @@ fn main() {
     }
 
     println!("cleanup!");
-    device.destroy_descriptor_pool(srv_pool);
-    device.destroy_descriptor_pool(sampler_pool);
-    device.destroy_descriptor_set_layout(set0_layout);
-    device.destroy_descriptor_set_layout(set1_layout);
     device.destroy_shader_module(vs_module);
     device.destroy_shader_module(fs_module);
-    device.destroy_pipeline_layout(pipeline_layout);
-    device.destroy_renderpass(render_pass);
-    for pipeline in pipelines {
-        if let Ok(pipeline) = pipeline {
-            device.destroy_graphics_pipeline(pipeline);
-        }
-    }
     for framebuffer in framebuffers {
         device.destroy_framebuffer(framebuffer);
     }

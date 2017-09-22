@@ -96,6 +96,8 @@ pub struct DescriptorSetLayout;
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct DescriptorSet;
 
+#[allow(missing_copy_implementations)]
+#[derive(Debug)]
 pub struct DescriptorPool {}
 
 impl core::DescriptorPool<Backend> for DescriptorPool {

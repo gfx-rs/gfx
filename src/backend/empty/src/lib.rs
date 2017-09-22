@@ -515,6 +515,7 @@ impl core::RawCommandBuffer<Backend> for RawCommandBuffer {
 }
 
 // Dummy descriptor pool.
+#[derive(Debug)]
 pub struct DescriptorPool;
 impl core::DescriptorPool<Backend> for DescriptorPool {
     fn allocate_sets(&mut self, _: &[&()]) -> Vec<()> {

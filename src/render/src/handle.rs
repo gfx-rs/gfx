@@ -52,6 +52,9 @@ impl<B: Backend> InnerGarbageCollector<B> {
             use self::Garbage::*;
             match garbage {
                 // ShaderLib(sl) => dev.destroy_shader_lib(sl),
+                RenderPass(rp) => dev.destroy_renderpass(rp),
+                PipelineLayout(pl) => dev.destroy_pipeline_layout(pl),
+                GraphicsPipeline(pl) => dev.destroy_graphics_pipeline(pl),
                 Buffer(b) => dev.destroy_buffer(b),
                 Image(i) => dev.destroy_image(i),
                 RenderTargetView(rtv) => dev.destroy_render_target_view(rtv),
@@ -60,6 +63,8 @@ impl<B: Backend> InnerGarbageCollector<B> {
                 ShaderResourceView(srv) => dev.destroy_shader_resource_view(srv),
                 UnorderedAccessView(uav) => dev.destroy_unordered_access_view(uav),
                 Sampler(s) => dev.destroy_sampler(s),
+                DescriptorPool(dp) => dev.destroy_descriptor_pool(dp),
+                DescriptorSetLayout(dsl) => dev.destroy_descriptor_set_layout(dsl),
             }
         }
     }
@@ -72,7 +77,7 @@ impl<B: Backend> Drop for InnerGarbageCollector<B> {
 }
 
 macro_rules! define_resources {
-    ($($name:ident: $info:path,)*) => {
+    ($($name:ident: $info:ty,)*) => {
         #[derive(Debug)]
         pub enum Garbage<B: Backend> {
             $( $name(B::$name), )*
@@ -221,9 +226,9 @@ macro_rules! define_resources {
 
 define_resources! {
     // ShaderLib,
-    // RenderPass
-    // PipelineLayout
-    // GraphicsPipeline
+    RenderPass: (),
+    PipelineLayout: (),
+    GraphicsPipeline: (),
     // ComputePipeline
     // FrameBuffer
     Buffer: ::buffer::Info,
@@ -234,8 +239,8 @@ define_resources! {
     ShaderResourceView: ::handle::ViewSource<B>,
     UnorderedAccessView: ::handle::ViewSource<B>,
     Sampler: ::image::SamplerInfo,
-    // DescriptorPool
-    // DescriptorSetLayout
+    DescriptorPool: (),
+    DescriptorSetLayout: (),
     // Fence
     // Semaphore
 }
