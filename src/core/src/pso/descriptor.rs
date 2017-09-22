@@ -1,5 +1,7 @@
 //! Descriptor sets and layouts.
 
+use std::fmt;
+
 use {Backend};
 use image::ImageLayout;
 use super::ShaderStageFlags;
@@ -65,7 +67,7 @@ pub struct DescriptorRangeDesc {
 }
 
 ///
-pub trait DescriptorPool<B: Backend>: Send {
+pub trait DescriptorPool<B: Backend>: Send + fmt::Debug {
     /// Allocate one or multiple descriptor sets from the pool.
     ///
     /// Each descriptor set will be allocated from the pool according to the corresponding set layout.

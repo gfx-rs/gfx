@@ -1,334 +1,284 @@
-//! A typed high-level graphics pipeline interface.
-//!
-//! # Overview
-//! A `PipelineState` holds all information needed to manage a graphics pipeline. It contains
-//! information about the shaders used, and on how to bind variables to these shaders. A
-//! `PipelineState` manifests itself in the form of a Pipeline State Object, or PSO in short.
-//!
-//! A Pipeline State Object exists out of different components. Every component represents
-//! a resource handle: a shader input or output/target. The types of these components can be found
-//! in this module's submodules, grouped by category.
-//!
-//! Before all, a Pipeline State Object must be defined. This is done using the `gfx_pipeline`
-//! macro. This macro creates three different structures:
-//!
-//! - The `Init` structure contains the location of every PSO component. During shader linking,
-//!   this is used to construct the `Meta` structure.
-//! - The `Meta` structure contains the layout of every PSO. Using the `Meta` structure, the right
-//!   data is mapped to the right components.
-//! - The `Data` structure contains the data of all components, to be sent to the GPU.
-//!
-//! # Construction and Handling
-//! A Pipeline State Object is constructed by a factory, from its `Init` structure, a `Rasterizer`,
-//! a primitive type and a shader program.
-//!
-//! After construction an `Encoder` can use the PSO along with a `Data` structure matching that
-//! PSO to process the shader pipeline, for instance, using the `draw` method.
+//! A typed high-level pipeline interface.
 
-/*
-pub mod buffer;
-pub mod resource;
-pub mod target;
-pub mod bundle;
+use std::mem;
+use std::marker::PhantomData;
 
-use std::default::Default;
-use std::error::Error;
-use std::fmt;
-use core as c;
-pub use core::pso::Descriptor;
-pub use core::command::AccessInfo;
+use {core, handle};
+use core::image::ImageLayout;
+use core::pass::{AttachmentOps, AttachmentLoadOp, AttachmentStoreOp};
+use format::{self, Format};
+use {Backend, Device, Primitive};
 
-/// A complete set of raw data that needs to be specified at run-time
-/// whenever we draw something with a PSO. This is what "data" struct
-/// gets transformed into when we call `encoder.draw(...)` with it.
-/// It doesn't have any typing information, since PSO knows what
-/// format and layout to expect from each resource.
-#[allow(missing_docs)]
-#[derive(Clone, Debug, PartialEq)]
-pub struct RawDataSet<B: c::Backend>{
-    pub vertex_buffers: c::pso::VertexBufferSet<B>,
-    pub constant_buffers: Vec<c::pso::ConstantBufferParam<B>>,
-    pub global_constants: Vec<(c::shade::Location, c::shade::UniformValue)>,
-    pub resource_views: Vec<c::pso::ResourceViewParam<B>>,
-    pub unordered_views: Vec<c::pso::UnorderedViewParam<B>>,
-    pub samplers: Vec<c::pso::SamplerParam<B>>,
-    pub pixel_targets: c::pso::PixelTargetSet<B>,
-    pub ref_values: c::state::RefValues,
-    pub scissor: c::target::Rect,
+pub use core::pso::{Rasterizer, CreationError, InstanceRate};
+
+#[derive(Debug)]
+pub struct RawDescriptorSet<B: Backend> {
+    pub(crate) resource: B::DescriptorSet,
+    pub(crate) pool: handle::raw::DescriptorPool<B>,
 }
 
-impl<B: c::Backend> RawDataSet<B> {
-    /// Create an empty data set.
-    pub fn new() -> RawDataSet<B> {
-        RawDataSet {
-            vertex_buffers: c::pso::VertexBufferSet::new(),
-            constant_buffers: Vec::new(),
-            global_constants: Vec::new(),
-            resource_views: Vec::new(),
-            unordered_views: Vec::new(),
-            samplers: Vec::new(),
-            pixel_targets: c::pso::PixelTargetSet::new(),
-            ref_values: Default::default(),
-            scissor: c::target::Rect{x:0, y:0, w:1, h:1},
-        }
-    }
-    /// Clear all contained data.
-    pub fn clear(&mut self) {
-        self.vertex_buffers = c::pso::VertexBufferSet::new();
-        self.constant_buffers.clear();
-        self.global_constants.clear();
-        self.resource_views.clear();
-        self.unordered_views.clear();
-        self.samplers.clear();
-        self.pixel_targets = c::pso::PixelTargetSet::new();
-        self.ref_values = Default::default();
-        self.scissor = c::target::Rect{x:0, y:0, w:1, h:1};
+impl<B: Backend> RawDescriptorSet<B> {
+    pub fn resource(&self) -> &B::DescriptorSet { &self.resource }
+}
+
+pub trait Descriptors<B: Backend> {
+    fn from_raw(handle::raw::DescriptorSetLayout<B>, RawDescriptorSet<B>) -> Self;
+    fn layout_bindings() -> Vec<core::pso::DescriptorSetLayoutBinding>;
+    fn layout(&self) -> &B::DescriptorSetLayout;
+    fn set(&self) -> &B::DescriptorSet;
+}
+
+pub trait Bind {
+    fn desc_type() -> core::pso::DescriptorType;
+    fn desc_count() -> usize;
+}
+
+pub trait BindWrite<'a, B: Backend> {
+    type Input: 'a;
+    fn write(input: Self::Input) -> core::pso::DescriptorWrite<'a, B>;
+}
+
+macro_rules! define_descriptors {
+    ([$( $array_len:expr ),*] $( $name:ident, )*) => {
+        $(
+            impl<T: Bind> Bind for [T; $array_len] {
+                fn desc_type() -> core::pso::DescriptorType {
+                    T::desc_type()
+                }
+                fn desc_count() -> usize { $array_len * T::desc_count() }
+            }
+            impl<'a, B, T> BindWrite<'a, B> for [T; $array_len]
+                where B: Backend, T: BindWrite<'a, B>
+            {
+                type Input = T::Input;
+                fn write(input: Self::Input) -> core::pso::DescriptorWrite<'a, B> {
+                    T::write(input)
+                }
+            }
+        )*
+        $(
+            pub struct $name;
+            impl Bind for $name {
+                fn desc_type() -> core::pso::DescriptorType {
+                    core::pso::DescriptorType::$name
+                }
+                fn desc_count() -> usize { 1 }
+            }
+        )*
     }
 }
 
-/// Error matching an element inside the constant buffer.
-#[derive(Clone, Debug, PartialEq)]
-pub enum ElementError<S> {
-    /// Element not found.
-    NotFound(S),
-    /// Element offset mismatch.
-    Offset {
-        /// Element name.
-        name: S,
-        /// Element byte offset in the shader-side constant buffer.
-        shader_offset: c::pso::ElemOffset,
-        /// Element byte offset in the code-side constant buffer.
-        code_offset: c::pso::ElemOffset
-    },
-    /// Element format mismatch.
-    Format {
-        /// Element name.
-        name: S,
-        /// Element format in the shader-side constant buffer.
-        shader_format: c::shade::ConstFormat,
-        /// Element format in the code-side constant buffer.
-        code_format: c::shade::ConstFormat,
-    },
+define_descriptors! {
+    [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 ]
+    SampledImage,
+    Sampler,
 }
 
-impl<S: fmt::Debug + fmt::Display> fmt::Display for ElementError<S> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            ElementError::NotFound(ref s) => write!(f, "{}: {:?}", self.description(), s),
-            ElementError::Offset{ ref name, ref shader_offset, ref code_offset } =>
-                write!(f, "{}: ({:?}, {:?}, {:?})", self.description(), name, shader_offset, code_offset),
-            ElementError::Format{ ref name, ref shader_format, ref code_format } =>
-                write!(f, "{}: ({:?}, {:?}, {:?})", self.description(), name, shader_format, code_format),
-        }
+impl<'a, B: Backend> BindWrite<'a, B> for SampledImage {
+    type Input = Vec<&'a handle::raw::ShaderResourceView<B>>;
+    fn write(srvs: Self::Input) -> core::pso::DescriptorWrite<'a, B> {
+        core::pso::DescriptorWrite::SampledImage(srvs.into_iter()
+            .map(|srv| match srv.info() {
+                &handle::ViewSource::Image(_) => {
+                    let layout = ImageLayout::ShaderReadOnlyOptimal;
+                    (srv.resource(), layout)
+                }
+                &handle::ViewSource::Buffer(_) => unreachable!(),
+            }).collect())
     }
 }
 
-impl<S: fmt::Debug + fmt::Display> Error for ElementError<S> {
-    fn description(&self) -> &str {
-        match *self {
-            ElementError::NotFound(_) => "Element not found",
-            ElementError::Offset{..} => "Element offset mismatch",
-            ElementError::Format{..} => "Element format mismatch",
-        }
+impl<'a, B: Backend> BindWrite<'a, B> for Sampler {
+    type Input = Vec<&'a handle::raw::Sampler<B>>;
+    fn write(samplers: Self::Input) -> core::pso::DescriptorWrite<'a, B> {
+        core::pso::DescriptorWrite::Sampler(samplers.into_iter()
+            .map(|sampler| sampler.resource())
+            .collect())
     }
 }
 
-impl<'a> From<ElementError<&'a str>> for ElementError<String> {
-    fn from(other: ElementError<&'a str>) -> ElementError<String> {
-        use self::ElementError::*;
-        match other {
-            NotFound(s) => NotFound(s.to_owned()),
-            Offset{ name, shader_offset, code_offset } => Offset{
-                name: name.to_owned(),
-                shader_offset: shader_offset,
-                code_offset: code_offset,
-            },
-            Format{ name, shader_format, code_format } => Format{
-                name: name.to_owned(),
-                shader_format: shader_format,
-                code_format: code_format,
-            },
-        }
+pub struct DescriptorSetBindRef<'a, B: Backend, T> {
+    pub set: &'a B::DescriptorSet,
+    pub binding: usize,
+    pub phantom: PhantomData<T>,
+}
+
+pub struct DescriptorSetsUpdate<'a, B: Backend> {
+    device: &'a mut Device<B>,
+    writes: Vec<core::pso::DescriptorSetWrite<'a, 'a, B>>,
+}
+
+impl<'a, B: Backend> DescriptorSetsUpdate<'a, B> {
+    pub(crate) fn new(device: &'a mut Device<B>) -> Self {
+        DescriptorSetsUpdate { device, writes: Vec::new() }
+    }
+
+    pub fn write<T: BindWrite<'a, B>>(
+        mut self,
+        bind_ref: DescriptorSetBindRef<'a, B, T>,
+        array_offset: usize,
+        write: T::Input
+    ) -> Self {
+        self.writes.push(core::pso::DescriptorSetWrite {
+            set: bind_ref.set,
+            binding: bind_ref.binding,
+            array_offset,
+            write: T::write(write)
+        });
+        self
+    }
+
+    pub fn finish(self) {
+        use core::Device;
+        self.device.mut_raw().update_descriptor_sets(&self.writes[..]);
     }
 }
 
-/// Failure to initilize the link between the shader and the data.
-#[derive(Clone, Debug, PartialEq)]
-pub enum InitError<S> {
-    /// Vertex attribute mismatch.
-    VertexImport(S, Option<c::format::Format>),
-    /// Constant buffer mismatch.
-    ConstantBuffer(S, Option<ElementError<S>>),
-    /// Global constant mismatch.
-    GlobalConstant(S, Option<c::shade::CompatibilityError>),
-    /// Shader resource view mismatch.
-    ResourceView(S, Option<()>),
-    /// Unordered access view mismatch.
-    UnorderedView(S, Option<()>),
-    /// Sampler mismatch.
-    Sampler(S, Option<()>),
-    /// Pixel target mismatch.
-    PixelExport(S, Option<c::format::Format>),
+pub trait GraphicsPipelineInit<B: Backend> {
+    type Pipeline;
+    fn create(
+        self,
+        &mut Device<B>,
+        core::pso::GraphicsShaderSet<B>,
+        Primitive,
+        Rasterizer
+    ) -> Result<Self::Pipeline, CreationError>;
 }
 
-impl<'a> From<InitError<&'a str>> for InitError<String> {
-    fn from(other: InitError<&'a str>) -> InitError<String> {
-        use self::InitError::*;
-        match other {
-            VertexImport(s, v) => VertexImport(s.to_owned(), v),
-            ConstantBuffer(s, v) => ConstantBuffer(s.to_owned(), v.map(|e| e.into())),
-            GlobalConstant(s, v) => GlobalConstant(s.to_owned(), v),
-            ResourceView(s, v) => ResourceView(s.to_owned(), v),
-            UnorderedView(s, v) => UnorderedView(s.to_owned(), v),
-            Sampler(s, v) => Sampler(s.to_owned(), v),
-            PixelExport(s, v) => PixelExport(s.to_owned(), v),
-        }
-    }
+pub trait GraphicsPipelineMeta<B: Backend> {
+    fn layout(&self) -> &B::PipelineLayout;
+    fn render_pass(&self) -> &B::RenderPass;
+    fn pipeline(&self) -> &B::GraphicsPipeline;
 }
 
-impl<S: fmt::Debug + fmt::Display> fmt::Display for InitError<S> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use self::InitError::*;
-        let desc = self.description();
-        match *self {
-            VertexImport(ref name, format) => write!(f, "{}: ({}, {:?})", desc, name, format),
-            ConstantBuffer(ref name, ref opt) => write!(f, "{}: ({}, {:?})", desc, name, opt),
-            GlobalConstant(ref name, opt) => write!(f, "{}: ({}, {:?})", desc, name, opt),
-            ResourceView(ref name, opt) => write!(f, "{}: ({}, {:?})", desc, name, opt),
-            UnorderedView(ref name, opt) => write!(f, "{}: ({}, {:?})", desc, name, opt),
-            Sampler(ref name, opt) => write!(f, "{}: ({}, {:?})", desc, name, opt),
-            PixelExport(ref name, format) => write!(f, "{}: ({}, {:?})", desc, name, format),
-        }
-    }
+pub trait GraphicsPipelineData<B: Backend> {
+    type Pipeline;
+    fn bind(
+        self,
+        viewport: core::Viewport,
+        scissor: core::target::Rect,
+        pipeline: &Self::Pipeline
+    ); // TODO
 }
 
-impl<S: fmt::Debug + fmt::Display> Error for InitError<S> {
-    fn description(&self) -> &str {
-        use self::InitError::*;
-        match *self {
-            VertexImport(_, None) => "Vertex attribute not found",
-            VertexImport(..) => "Vertex attribute format mismatch",
-            ConstantBuffer(_, None) => "Constant buffer not found",
-            ConstantBuffer(..) => "Constant buffer element mismatch",
-            GlobalConstant(_, None) => "Global constant not found",
-            GlobalConstant(..) => "Global constant format mismatch",
-            ResourceView(_, None) => "Shader resource view not found",
-            ResourceView(..) => "Shader resource view mismatch",
-            UnorderedView(_, None) => "Unordered access view not found",
-            UnorderedView(..) => "Unordered access view mismatch",
-            Sampler(_, None) => "Sampler not found",
-            Sampler(..) => "Sampler mismatch",
-            PixelExport(_, None) => "Pixel target not found",
-            PixelExport(..) => "Pixel target mismatch",
-        }
-    }
-
-    fn cause(&self) -> Option<&Error> {
-        if let InitError::ConstantBuffer(_, Some(ref e)) = *self {
-            Some(e)
-        } else {
-            None
-        }
-    }
-}
-
-
-/// A service trait implemented by the "init" structure of PSO.
-pub trait PipelineInit {
-    /// The associated "meta" struct.
-    type Meta;
-    /// Attempt to map a PSO descriptor to a give shader program,
-    /// represented by `ProgramInfo`. Returns an instance of the
-    /// "meta" struct upon successful mapping.
-    fn link_to<'s>(&self, &mut Descriptor, &'s c::shade::ProgramInfo)
-               -> Result<Self::Meta, InitError<&'s str>>;
-}
-
-/// a service trait implemented the "data" structure of PSO.
-pub trait PipelineData<B: c::Backend> {
-    /// The associated "meta" struct.
-    type Meta;
-    /// Dump all the contained data into the raw data set,
-    /// given the mapping ("meta"), and a handle manager.
-    fn bake_to(&self,
-               &mut RawDataSet<B>,
-               &Self::Meta,
-               &mut c::handle::Manager<B>,
-               &mut AccessInfo<B>);
-}
-
-/// A strongly typed Pipleline State Object. See the module documentation for more information.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct PipelineState<B: c::Backend, M>(c::handle::RawPipelineState<B>,
-                                             c::Primitive, M);
-
-impl<B: c::Backend, M> PipelineState<B, M> {
-    /// Create a new PSO from a raw handle and the "meta" instance.
-    pub fn new(raw: c::handle::RawPipelineState<B>, prim: c::Primitive, meta: M)
-               -> PipelineState<B, M> {
-        PipelineState(raw, prim, meta)
-    }
-    /// Get a raw handle reference.
-    pub fn get_handle(&self) -> &c::handle::RawPipelineState<B> {
-        &self.0
-    }
-    /// Get a "meta" struct reference. Can be used by the user to check
-    /// what resources are actually used and what not.
-    pub fn get_meta(&self) -> &M {
-        &self.2
-    }
-}
-
-/// The "link" logic portion of a PSO component.
-/// Defines the input data for the component.
-pub trait DataLink<'a>: Sized {
-    /// The assotiated "init" type - a member of the PSO "init" struct.
+pub trait Component<'a, B: Backend> {
     type Init: 'a;
-    /// Create a new empty data link.
-    fn new() -> Self;
-    /// Check if this link is actually used by the shader.
-    fn is_active(&self) -> bool;
-    /// Attempt to link with a vertex buffer containing multiple attributes.
-    fn link_vertex_buffer(&mut self, _: c::pso::BufferIndex, _: &Self::Init) ->
-                          Option<c::pso::VertexBufferDesc> { None }
-    /// Attempt to link with a vertex attribute.
-    fn link_input(&mut self, _: &c::shade::AttributeVar, _: &Self::Init) ->
-                  Option<Result<c::pso::AttributeDesc, c::format::Format>> { None }
-    /// Attempt to link with a constant buffer.
-    fn link_constant_buffer<'b>(&mut self, _: &'b c::shade::ConstantBufferVar, _: &Self::Init) ->
-                            Option<Result<c::pso::ConstantBufferDesc, ElementError<&'b str>>> { None }
-    /// Attempt to link with a global constant.
-    fn link_global_constant(&mut self, _: &c::shade::ConstVar, _: &Self::Init) ->
-                            Option<Result<(), c::shade::CompatibilityError>> { None }
-    /// Attempt to link with an output render target (RTV).
-    fn link_output(&mut self, _: &c::shade::OutputVar, _: &Self::Init) ->
-                   Option<Result<c::pso::ColorTargetDesc, c::format::Format>> { None }
-    /// Attempt to link with a depth-stencil target (DSV).
-    fn link_depth_stencil(&mut self, _: &Self::Init) ->
-                          Option<c::pso::DepthStencilDesc> { None }
-    /// Attempt to link with a shader resource (SRV).
-    fn link_resource_view(&mut self, _: &c::shade::TextureVar, _: &Self::Init) ->
-                          Option<Result<c::pso::ResourceViewDesc, c::format::Format>> { None }
-    /// Attempt to link with an unordered access (UAV).
-    fn link_unordered_view(&mut self, _: &c::shade::UnorderedVar, _: &Self::Init) ->
-                           Option<Result<c::pso::UnorderedViewDesc, c::format::Format>> { None }
-    /// Attempt to link with a sampler.
-    fn link_sampler(&mut self, _: &c::shade::SamplerVar, _: &Self::Init)
-                    -> Option<c::pso::SamplerDesc> { None }
-    /// Attempt to enable scissor test.
-    fn link_scissor(&mut self) -> bool { false }
+    type Data: 'a;
+
+    fn descriptor_layout<'b>(&'b Self::Init) -> Option<&'b B::DescriptorSetLayout>
+        where 'a: 'b
+    {
+        None
+    }
+    fn attachment(&Self::Init) -> Option<Attachment> {
+        None
+    }
+    fn append_desc(
+        Self::Init,
+        &mut core::pso::GraphicsPipelineDesc,
+    ) {}
 }
 
-/// The "bind" logic portion of the PSO component.
-/// Defines how the user data translates into the raw data set.
-pub trait DataBind<B: c::Backend> {
-    /// The associated "data" type - a member of the PSO "data" struct.
-    type Data;
-    /// Dump the given data into the raw data set.
-    fn bind_to(&self,
-               &mut RawDataSet<B>,
-               &Self::Data,
-               &mut c::handle::Manager<B>,
-               &mut AccessInfo<B>);
+pub struct DescriptorSet<D>(PhantomData<D>);
+impl<'a, B: Backend, D: 'a + Descriptors<B>> Component<'a, B> for DescriptorSet<D> {
+    type Init = &'a D;
+    type Data = &'a D;
+
+    fn descriptor_layout<'b>(init: &'b Self::Init) -> Option<&'b B::DescriptorSetLayout>
+        where 'a: 'b
+    {
+        Some(init.layout())
+    }
 }
-*/
+
+pub struct Attachment {
+    pub format: Format,
+    pub ops: AttachmentOps,
+    pub stencil_ops: AttachmentOps,
+    pub required_layout: ImageLayout,
+}
+
+pub struct RenderTarget<F: format::RenderFormat>(PhantomData<F>);
+impl<'a, B, F> Component<'a, B> for RenderTarget<F>
+    where B: Backend, F: 'a + format::RenderFormat
+{
+    type Init = core::pso::ColorInfo;
+    type Data = &'a handle::RenderTargetView<B, F>;
+
+    fn attachment(_: &Self::Init) -> Option<Attachment> {
+        Some(Attachment {
+            format: F::get_format(),
+            // TODO: AttachmentLoadOp::Clear
+            ops: AttachmentOps::new(AttachmentLoadOp::Load, AttachmentStoreOp::Store),
+            stencil_ops: AttachmentOps::DONT_CARE,
+            required_layout: ImageLayout::ColorAttachmentOptimal,
+        })
+    }
+
+    fn append_desc(
+        init: Self::Init,
+        pipeline_desc: &mut core::pso::GraphicsPipelineDesc
+    ) {
+        pipeline_desc.blender.targets.push(init);
+    }
+}
+
+pub trait Structure: Sized {
+    fn elements() -> Vec<core::pso::Element<Format>>;
+}
+
+/// Helper trait to support variable instance rate.
+pub trait ToInstanceRate {
+    /// The associated init type for PSO component.
+    type Init;
+    /// Get an actual instance rate value from the init.
+    fn get_rate(init: &Self::Init) -> InstanceRate;
+}
+
+/// Helper phantom type for per-vertex attributes.
+pub enum NonInstanced {}
+/// Helper phantom type for per-instance attributes.
+pub enum Instanced {}
+
+impl ToInstanceRate for InstanceRate {
+    type Init = InstanceRate;
+    fn get_rate(init: &Self::Init) -> InstanceRate { *init }
+}
+impl ToInstanceRate for Instanced {
+    type Init = ();
+    fn get_rate(_: &Self::Init) -> InstanceRate { 1 }
+}
+impl ToInstanceRate for NonInstanced {
+    type Init = ();
+    fn get_rate(_: &Self::Init) -> InstanceRate { 0 }
+}
+
+pub struct VertexBuffer<T: Structure, I=NonInstanced>(PhantomData<(T, I)>);
+impl<'a, B, T, I> Component<'a, B> for VertexBuffer<T, I>
+    where B: Backend, T: 'a + Structure, I: ToInstanceRate, I::Init: 'a
+{
+    type Init = I::Init;
+    type Data = &'a handle::Buffer<B, T>;
+
+    fn append_desc(
+        init: Self::Init,
+        pipeline_desc: &mut core::pso::GraphicsPipelineDesc
+    ) {
+        let binding = pipeline_desc.vertex_buffers.len() as u32;
+        pipeline_desc.vertex_buffers.push(core::pso::VertexBufferDesc {
+            stride: mem::size_of::<T>() as u32,
+            rate: I::get_rate(&init),
+        });
+        let mut location = 0;
+        for element in T::elements() {
+            pipeline_desc.attributes.push(core::pso::AttributeDesc {
+                location,
+                binding,
+                element,
+            });
+            location += 1;
+        }
+    }
+}
+
+pub type InstanceBuffer<T> = VertexBuffer<T, Instanced>;

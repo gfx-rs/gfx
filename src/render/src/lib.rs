@@ -93,7 +93,7 @@ extern crate serde;
 #[macro_use]
 extern crate log;
 extern crate draw_state;
-extern crate gfx_core as core;
+pub extern crate gfx_core as core;
 
 /// public re-exported traits
 pub mod traits {
@@ -106,25 +106,14 @@ pub use draw_state::target::*;
 
 // public re-exports
 pub use core::format;
-pub use core::{Adapter, Backend, Primitive, Frame};
+pub use core::{Adapter, Backend, Frame, Primitive};
 /*
 pub use core::{VertexCount, InstanceCount};
 pub use core::{ShaderSet, VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
-pub use core::device::{ResourceViewError, TargetViewError, CombinedError, WaitFor};
 pub use core::command::{InstanceParams};
 */
 pub use encoder::Encoder;
 pub use device::Device;
-/*
-pub use pso::{PipelineState};
-pub use pso::buffer::{VertexBuffer, InstanceBuffer, RawVertexBuffer,
-                      ConstantBuffer, RawConstantBuffer, Global, RawGlobal};
-pub use pso::resource::{ShaderResource, RawShaderResource, UnorderedAccess,
-                        Sampler, TextureSampler};
-pub use pso::target::{DepthStencilTarget, DepthTarget, StencilTarget,
-                      RenderTarget, RawRenderTarget, BlendTarget, BlendRef, Scissor};
-pub use pso::bundle::{Bundle};
-*/
 
 pub mod handle;
 mod device;
@@ -139,9 +128,9 @@ pub mod pso;
 /*
 /// Shaders
 pub mod shade;
+*/
 /// Convenience macros
 pub mod macros;
-*/
 
 use std::collections::VecDeque;
 use core::{CommandQueue, QueueType, Surface, Swapchain, Device as CoreDevice};
@@ -345,7 +334,7 @@ impl<B: Backend, C> Context<B, C>
                 let format = Cf::get_format();
                 let origin = image::Origin::Backbuffer;
                 let stable_access = core::image::Access::empty();
-                let stable_layout = core::image::ImageLayout::ColorAttachmentOptimal;
+                let stable_layout = core::image::ImageLayout::Present;
                 let stable_state = (stable_access, stable_layout);
                 Backbuffer {
                     color: Typed::new(handle::inner::Image::without_garbage(

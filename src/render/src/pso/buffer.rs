@@ -28,32 +28,6 @@ pub struct VertexBufferCommon<T, I=InstanceRate>(
     PhantomData<(T, I)>
 );
 
-/// Helper trait for `VertexBufferCommon` to support variable instance rate.
-pub trait ToInstanceRate {
-    /// The associated init type for PSO component.
-    type Init;
-    /// Get an actual instance rate value from the init.
-    fn get_rate(init: &Self::Init) -> InstanceRate;
-}
-
-/// Helper phantom type for per-vertex attributes.
-pub enum NonInstanced {}
-/// Helper phantom type for per-instance attributes.
-pub enum Instanced {}
-
-impl ToInstanceRate for InstanceRate {
-    type Init = InstanceRate;
-    fn get_rate(init: &Self::Init) -> InstanceRate { *init }
-}
-impl ToInstanceRate for Instanced {
-    type Init = ();
-    fn get_rate(_: &Self::Init) -> InstanceRate { 1 }
-}
-impl ToInstanceRate for NonInstanced {
-    type Init = ();
-    fn get_rate(_: &Self::Init) -> InstanceRate { 0 }
-}
-
 /// Vertex buffer component. Advanced per vertex.
 ///
 /// - init: `()`
