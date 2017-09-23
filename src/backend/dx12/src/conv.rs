@@ -421,27 +421,82 @@ pub fn map_function(fun: Comparison) -> D3D12_COMPARISON_FUNC {
     }
 }
 
-pub fn map_image_resource_state(access: image::Access, layout: image::ImageLayout) -> D3D12_RESOURCE_STATES {
+pub fn map_buffer_resource_state(access: buffer::Access) -> D3D12_RESOURCE_STATES {
+    // Mutable states
+    if access.contains(buffer::SHADER_WRITE) {
+        return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    }
+    if access.contains(buffer::TRANSFER_WRITE) {
+        // Resolve not relevant for buffers.
+        return D3D12_RESOURCE_STATE_COPY_DEST;
+    }
+
+    // Read-only states
     let mut state = D3D12_RESOURCE_STATE_COMMON;
 
+    if access.contains(buffer::TRANSFER_READ) {
+        state = state | D3D12_RESOURCE_STATE_COPY_SOURCE | D3D12_RESOURCE_STATE_RESOLVE_DEST;
+    }
+    if access.contains(buffer::INDEX_BUFFER_READ) {
+        state = state | D3D12_RESOURCE_STATE_INDEX_BUFFER;
+    }
+    if access.contains(buffer::VERTEX_BUFFER_READ) || access.contains(buffer::CONSTANT_BUFFER_READ) {
+        state = state | D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+    }
+    if access.contains(buffer::INDIRECT_COMMAND_READ) {
+        state = state | D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+    }
+    if access.contains(buffer::SHADER_READ) {
+        // SHADER_READ only allows SRV access
+        state = state | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    }
+
+    state
+}
+
+pub fn map_image_resource_state(access: image::Access, layout: image::ImageLayout) -> D3D12_RESOURCE_STATES {
+    // `D3D12_RESOURCE_STATE_PRESENT` is the same as COMMON (general state)
     if layout == image::ImageLayout::Present {
         return D3D12_RESOURCE_STATE_PRESENT;
     }
 
-    if access.contains(image::RENDER_TARGET_CLEAR) || access.contains(image::COLOR_ATTACHMENT_WRITE) {
-        state = state | D3D12_RESOURCE_STATE_RENDER_TARGET;
+    // Mutable states
+    if access.contains(image::SHADER_WRITE) {
+        return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     }
-    if access.contains(image::RESOLVE_SRC) {
-        state = state | D3D12_RESOURCE_STATE_RESOLVE_SOURCE;
+    if access.contains(image::DEPTH_STENCIL_ATTACHMENT_WRITE) {
+        return D3D12_RESOURCE_STATE_DEPTH_WRITE;
     }
-    if access.contains(image::RESOLVE_DST) {
-        state = state | D3D12_RESOURCE_STATE_RESOLVE_DEST;
+    if access.contains(image::COLOR_ATTACHMENT_READ) || access.contains(image::COLOR_ATTACHMENT_WRITE) {
+        return D3D12_RESOURCE_STATE_RENDER_TARGET;
     }
-    if access.contains(image::TRANSFER_READ) {
-        state = state | D3D12_RESOURCE_STATE_COPY_SOURCE;
-    }
+
+    // `TRANSFER_WRITE` requires special handling as it requires RESOLVE_DEST | COPY_DEST
+    // but only 1 write-only allowed. We do the required translation before the commands.
+    // We currently assume that `COPY_DEST` is more common state than out of renderpass resolves.
+    // Resolve operations need to insert a barrier before and after the command to transition from and
+    // into `COPY_DEST` to have a consistent state for srcAccess.
     if access.contains(image::TRANSFER_WRITE) {
-        state = state | D3D12_RESOURCE_STATE_COPY_DEST;
+        return D3D12_RESOURCE_STATE_COPY_DEST;
+    }
+
+    // Read-only states
+    let mut state = D3D12_RESOURCE_STATE_COMMON;
+
+    if access.contains(image::TRANSFER_READ) {
+        state = state | D3D12_RESOURCE_STATE_COPY_SOURCE | D3D12_RESOURCE_STATE_RESOLVE_DEST;
+    }
+    if access.contains(image::INPUT_ATTACHMENT_READ) {
+        state = state | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    }
+    if access.contains(image::DEPTH_STENCIL_ATTACHMENT_READ) {
+        state = state | D3D12_RESOURCE_STATE_DEPTH_READ;
+    }
+    if access.contains(image::SHADER_READ) {
+        // SHADER_READ only allows SRV access
+        // Already handled the `SHADER_WRITE` write case above.
+        assert!(!access.contains(image::SHADER_WRITE));
+        state = state | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     }
 
     state

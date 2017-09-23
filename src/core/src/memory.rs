@@ -71,12 +71,9 @@ bitflags!(
 #[allow(missing_docs)] //TODO
 #[derive(Clone, Debug)]
 pub enum Barrier<'a, B: Backend> {
-    AllBuffers(Range<buffer::Access>),
-    AllImages(Range<image::Access>),
     Buffer {
         states: Range<buffer::State>,
         target: &'a B::Buffer,
-        range: Range<u64>,
     },
     Image {
         states: Range<image::State>,
