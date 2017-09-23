@@ -299,6 +299,24 @@ pub fn map_buffer_access(access: buffer::Access) -> vk::AccessFlags {
     if access.contains(buffer::INDIRECT_COMMAND_READ) {
         flags |= vk::ACCESS_INDIRECT_COMMAND_READ_BIT;
     }
+    if access.contains(buffer::SHADER_READ) {
+        flags |= vk::ACCESS_SHADER_READ_BIT;
+    }
+    if access.contains(buffer::SHADER_WRITE) {
+        flags |= vk::ACCESS_SHADER_WRITE_BIT;
+    }
+    if access.contains(buffer::HOST_READ) {
+        flags |= vk::ACCESS_HOST_READ_BIT;
+    }
+    if access.contains(buffer::HOST_WRITE) {
+        flags |= vk::ACCESS_HOST_WRITE_BIT;
+    }
+    if access.contains(buffer::MEMORY_READ) {
+        flags |= vk::ACCESS_MEMORY_READ_BIT;
+    }
+    if access.contains(buffer::MEMORY_WRITE) {
+        flags |= vk::ACCESS_MEMORY_WRITE_BIT;
+    }
 
     flags
 }
@@ -306,15 +324,6 @@ pub fn map_buffer_access(access: buffer::Access) -> vk::AccessFlags {
 pub fn map_image_access(access: image::Access) -> vk::AccessFlags {
     let mut flags = vk::AccessFlags::empty();
 
-    if access.contains(image::RENDER_TARGET_CLEAR) {
-        unimplemented!()
-    }
-    if access.contains(image::RESOLVE_SRC) {
-        unimplemented!()
-    }
-    if access.contains(image::RESOLVE_DST) {
-        unimplemented!()
-    }
     if access.contains(image::COLOR_ATTACHMENT_READ) {
         flags |= vk::ACCESS_COLOR_ATTACHMENT_READ_BIT;
     }
@@ -329,6 +338,30 @@ pub fn map_image_access(access: image::Access) -> vk::AccessFlags {
     }
     if access.contains(image::SHADER_READ) {
         flags |= vk::ACCESS_SHADER_READ_BIT;
+    }
+    if access.contains(image::SHADER_WRITE) {
+        flags |= vk::ACCESS_SHADER_WRITE_BIT;
+    }
+    if access.contains(image::DEPTH_STENCIL_ATTACHMENT_READ) {
+        flags |= vk::ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+    }
+    if access.contains(image::DEPTH_STENCIL_ATTACHMENT_WRITE) {
+        flags |= vk::ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    }
+    if access.contains(image::HOST_READ) {
+        flags |= vk::ACCESS_HOST_READ_BIT;
+    }
+    if access.contains(image::HOST_WRITE) {
+        flags |= vk::ACCESS_HOST_WRITE_BIT;
+    }
+    if access.contains(image::MEMORY_READ) {
+        flags |= vk::ACCESS_MEMORY_READ_BIT;
+    }
+    if access.contains(image::MEMORY_WRITE) {
+        flags |= vk::ACCESS_MEMORY_WRITE_BIT;
+    }
+    if access.contains(image::INPUT_ATTACHMENT_READ) {
+        flags |= vk::ACCESS_INPUT_ATTACHMENT_READ_BIT;
     }
 
     flags

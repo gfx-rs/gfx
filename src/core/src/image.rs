@@ -552,22 +552,33 @@ bitflags!(
     ///
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
     pub flags Access: u16 {
-        ///
-        const RENDER_TARGET_CLEAR    = 0x20,
-        ///
-        const RESOLVE_SRC            = 0x100,
-        ///
-        const RESOLVE_DST            = 0x200,
-        ///
-        const COLOR_ATTACHMENT_READ  = 0x1,
-        ///
+        /// Read state but can only be combined with `COLOR_ATTACHMENT_WRITE`.
+        const COLOR_ATTACHMENT_READ = 0x1,
+        /// Write-only state but can be combined with `COLOR_ATTACHMENT_READ`.
         const COLOR_ATTACHMENT_WRITE = 0x2,
         ///
-        const TRANSFER_READ          = 0x4,
+        const TRANSFER_READ = 0x4,
+        /// Write-only state of copy commands.
+        const TRANSFER_WRITE = 0x8,
+        /// Read-only state for SRV access, or combine with `SHADER_WRITE` to have r/w access to UAV.
+        const SHADER_READ = 0x10,
+        /// Write state for UAV access.
+        /// Combine with `SHADER_READ` to have r/w access to UAV.
+        const SHADER_WRITE = 0x20,
         ///
-        const TRANSFER_WRITE         = 0x8,
+        const DEPTH_STENCIL_ATTACHMENT_READ = 0x40,
+        /// Write-only state for depth stencil writes.
+        const DEPTH_STENCIL_ATTACHMENT_WRITE = 0x80,
         ///
-        const SHADER_READ           = 0x10,
+        const HOST_READ = 0x100,
+        ///
+        const HOST_WRITE = 0x200,
+        ///
+        const MEMORY_READ = 0x400,
+        ///
+        const MEMORY_WRITE = 0x800,
+        ///
+        const INPUT_ATTACHMENT_READ = 0x1000,
     }
 );
 

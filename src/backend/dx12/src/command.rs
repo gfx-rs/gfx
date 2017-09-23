@@ -208,24 +208,20 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         _stages: Range<pso::PipelineStage>,
         barriers: &[memory::Barrier<Backend>],
     ) {
-        // TODO: very much WIP
-        warn!("pipeline barriers unimplemented");
+        let mut raw_barriers = Vec::new();
 
-        let mut transition_barriers = Vec::new();
-
+        // transition barriers
         for barrier in barriers {
             match *barrier {
-                memory::Barrier::Image { ref states, target, ref range } => {
-                    let _ = range; //TODO: use subresource range
-                    let state_src = conv::map_image_resource_state(states.start.0, states.start.1);
-                    let state_dst = conv::map_image_resource_state(states.end.0, states.end.1);
+                memory::Barrier::Buffer { ref states, target } => {
+                    let state_src = conv::map_buffer_resource_state(states.start);
+                    let state_dst = conv::map_buffer_resource_state(states.end);
 
                     if state_src == state_dst {
-                        warn!("Image pipeline barrier requested with no effect: {:?}", barrier);
                         continue;
                     }
 
-                    transition_barriers.push(
+                    raw_barriers.push(
                         winapi::D3D12_RESOURCE_BARRIER {
                             Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
                             Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
@@ -238,14 +234,68 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                         }
                     );
                 }
-                _ => {}
+                memory::Barrier::Image { ref states, target, ref range } => {
+                    let _ = range; //TODO: use subresource range
+                    let state_src = conv::map_image_resource_state(states.start.0, states.start.1);
+                    let state_dst = conv::map_image_resource_state(states.end.0, states.end.1);
+
+                    if state_src == state_dst {
+                        continue;
+                    }
+
+                    raw_barriers.push(
+                        winapi::D3D12_RESOURCE_BARRIER {
+                            Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+                            Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                            u: winapi::D3D12_RESOURCE_TRANSITION_BARRIER {
+                                pResource: target.resource,
+                                Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                                StateBefore: state_src,
+                                StateAfter: state_dst,
+                            },
+                        }
+                    );
+                }
             }
+        }
+
+        // UAV barriers
+        //
+        // TODO: Currently always add a global UAV barrier.
+        //       WAR only requires an execution barrier but D3D12 seems to need
+        //       a UAV barrier for this according to docs. Can we make this better?
+        {
+            let mut barrier = winapi::D3D12_RESOURCE_BARRIER {
+                Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_UAV,
+                Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                u: unsafe { mem::zeroed() },
+            };
+            *unsafe { barrier.UAV_mut() } = winapi::D3D12_RESOURCE_UAV_BARRIER {
+                pResource: ptr::null_mut(),
+            };
+            raw_barriers.push(barrier);
+        }
+
+        // Alias barriers
+        //
+        // TODO: Optimize, don't always add an alias barrier
+        {
+            let mut barrier = winapi::D3D12_RESOURCE_BARRIER {
+                Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_ALIASING,
+                Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                u: unsafe { mem::zeroed() },
+            };
+            *unsafe { barrier.Aliasing_mut() } = winapi::D3D12_RESOURCE_ALIASING_BARRIER {
+                pResourceBefore: ptr::null_mut(),
+                        pResourceAfter: ptr::null_mut(),
+            };
+            raw_barriers.push(barrier);
         }
 
         unsafe {
             self.raw.ResourceBarrier(
-                transition_barriers.len() as _,
-                transition_barriers.as_ptr(),
+                raw_barriers.len() as _,
+                raw_barriers.as_ptr(),
             );
         }
     }
@@ -303,6 +353,23 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         _: image::ImageLayout,
         regions: &[ImageResolve],
     ) {
+        {
+            // Insert barrier for `COPY_DEST` to `RESOLVE_DEST` as we only expose
+            // `TRANSFER_WRITE` which is used for all copy commands.
+            let transition_barrier = winapi::D3D12_RESOURCE_BARRIER {
+                Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+                Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                u: winapi::D3D12_RESOURCE_TRANSITION_BARRIER {
+                    pResource: dst.resource,
+                    Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                    StateBefore: winapi::D3D12_RESOURCE_STATE_COPY_DEST,
+                    StateAfter: winapi::D3D12_RESOURCE_STATE_RESOLVE_DEST,
+                },
+            };
+
+            unsafe { self.raw.ResourceBarrier(1, &transition_barrier) };
+        }
+
         for region in regions {
             for l in 0..region.num_layers as _ {
                 unsafe {
@@ -315,6 +382,22 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                     );
                 }
             }
+        }
+
+        {
+            // Insert barrier for back transition from `RESOLVE_DEST` to `COPY_DEST`.
+            let transition_barrier = winapi::D3D12_RESOURCE_BARRIER {
+                Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+                Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                u: winapi::D3D12_RESOURCE_TRANSITION_BARRIER {
+                    pResource: dst.resource,
+                    Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                    StateBefore: winapi::D3D12_RESOURCE_STATE_RESOLVE_DEST,
+                    StateAfter: winapi::D3D12_RESOURCE_STATE_COPY_DEST,
+                },
+            };
+
+            unsafe { self.raw.ResourceBarrier(1, &transition_barrier) };
         }
     }
 
