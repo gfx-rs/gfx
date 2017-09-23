@@ -16,7 +16,7 @@ bitflags!(
         ///
         const TRANSFER_DST = 0x2,
         ///
-        const CONSTANT    = 0x4,
+        const CONSTANT = 0x4,
         ///
         const INDEX = 0x8,
         ///
@@ -49,6 +49,18 @@ bitflags!(
         const CONSTANT_BUFFER_READ   = 0x40,
         ///
         const INDIRECT_COMMAND_READ  = 0x80,
+        ///
+        const SHADER_READ = 0x100,
+        ///
+        const SHADER_WRITE = 0x200,
+        ///
+        const HOST_READ = 0x400,
+        ///
+        const HOST_WRITE = 0x800,
+        ///
+        const MEMORY_READ = 0x1000,
+        ///
+        const MEMORY_WRITE = 0x2000,
     }
 );
 
