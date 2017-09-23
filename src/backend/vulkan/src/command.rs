@@ -151,29 +151,12 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         stages: Range<pso::PipelineStage>,
         barriers: &[memory::Barrier<Backend>],
     ) {
-        let mut memory_bars: SmallVec<[vk::MemoryBarrier; 4]> = SmallVec::new();
         let mut buffer_bars: SmallVec<[vk::BufferMemoryBarrier; 4]> = SmallVec::new();
         let mut image_bars: SmallVec<[vk::ImageMemoryBarrier; 4]> = SmallVec::new();
 
         for barrier in barriers {
             match *barrier {
-                memory::Barrier::AllBuffers(ref access) => {
-                    memory_bars.push(vk::MemoryBarrier {
-                        s_type: vk::StructureType::MemoryBarrier,
-                        p_next: ptr::null(),
-                        src_access_mask: conv::map_buffer_access(access.start),
-                        dst_access_mask: conv::map_buffer_access(access.end),
-                    });
-                }
-                memory::Barrier::AllImages(ref access) => {
-                    memory_bars.push(vk::MemoryBarrier {
-                        s_type: vk::StructureType::MemoryBarrier,
-                        p_next: ptr::null(),
-                        src_access_mask: conv::map_image_access(access.start),
-                        dst_access_mask: conv::map_image_access(access.end),
-                    });
-                }
-                memory::Barrier::Buffer { ref states, target, ref range } => {
+                memory::Barrier::Buffer { ref states, target} => {
                     buffer_bars.push(vk::BufferMemoryBarrier {
                         s_type: vk::StructureType::BufferMemoryBarrier,
                         p_next: ptr::null(),
@@ -182,8 +165,8 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                         src_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
                         dst_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
                         buffer: target.raw,
-                        offset: range.start,
-                        size: range.end - range.start,
+                        offset: 0,
+                        size: vk::VK_WHOLE_SIZE,
                     });
                 }
                 memory::Barrier::Image { ref states, target, ref range } => {
@@ -210,7 +193,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                 conv::map_pipeline_stage(stages.start),
                 conv::map_pipeline_stage(stages.end),
                 vk::DependencyFlags::empty(), // dependencyFlags // TODO
-                &memory_bars,
+                &[],
                 &buffer_bars,
                 &image_bars,
             );
