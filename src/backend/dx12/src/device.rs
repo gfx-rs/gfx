@@ -6,6 +6,7 @@ use d3d12;
 use d3dcompiler;
 use dxguid;
 use kernel32;
+use spirv_cross::compile;
 use std::cmp;
 use std::collections::BTreeMap;
 use std::ops::Range;
@@ -66,13 +67,12 @@ impl Device {
     }
     */
 
-    pub fn create_shader_module_from_source(
-        &mut self,
+    /// Compile a single shader entry point from a HLSL text shader
+    fn compile_shader(
         stage: pso::Stage,
-        hlsl_entry: &str,
-        entry_point: &str,
+        entry: &str,
         byte_code: &[u8],
-    ) -> Result<n::ShaderModule, d::ShaderError> {
+    ) -> Result<*mut winapi::ID3DBlob, d::ShaderError> {
         let stage_to_str = |stage| {
             match stage {
                 pso::Stage::Vertex => "vs_5_1\0",
@@ -81,10 +81,9 @@ impl Device {
             }
         };
 
-        let mut shader_map = BTreeMap::new();
         let mut blob = ptr::null_mut();
         let mut error = ptr::null_mut();
-        let entry = ffi::CString::new(hlsl_entry).unwrap();
+        let entry = ffi::CString::new(entry).unwrap();
         let hr = unsafe {
             d3dcompiler::D3DCompile(
                 byte_code.as_ptr() as *const _,
@@ -108,9 +107,22 @@ impl Device {
                 let slice = slice::from_raw_parts(pointer as *const u8, size as usize);
                 String::from_utf8_lossy(slice).into_owned()
             };
-            return Err(d::ShaderError::CompilationFailed(message))
+            Err(d::ShaderError::CompilationFailed(message))
+        } else {
+            Ok(blob)
         }
+    }
 
+    /// Create a shader module from HLSL with a single entry point
+    pub fn create_shader_module_from_source(
+        &mut self,
+        stage: pso::Stage,
+        hlsl_entry: &str,
+        entry_point: &str,
+        byte_code: &[u8],
+    ) -> Result<n::ShaderModule, d::ShaderError> {
+        let mut shader_map = BTreeMap::new();
+        let blob = Self::compile_shader(stage, hlsl_entry, byte_code)?;
         shader_map.insert(entry_point.into(), blob);
         Ok(n::ShaderModule { shaders: shader_map })
     }
@@ -621,7 +633,30 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_shader_module(&mut self, _spirv_data: &[u8]) -> Result<n::ShaderModule, d::ShaderError> {
+    fn create_shader_module(&mut self, raw_data: &[u8]) -> Result<n::ShaderModule, d::ShaderError> {
+        // spec requires "codeSize must be a multiple of 4"
+        assert_eq!(raw_data.len() & 3, 0);
+
+        let spirv_data = unsafe {
+            slice::from_raw_parts(
+                raw_data.as_ptr() as *const u32,
+                raw_data.len() / mem::size_of::<u32>(),
+            )
+        };
+
+        let module = compile::SpirvModule::new(spirv_data);
+
+        let parse_options = compile::HlslParseOptions::new();
+        let ast = self.hlsl_compiler
+            .parse(&module, &parse_options)
+            .map_err(|_| d::ShaderError::CompilationFailed("Unknown parsing error".into()))?;
+
+        let compile_options = compile::HlslCompileOptions::new();
+        let shader_code = self.hlsl_compiler
+            .compile(&ast, &compile_options)
+            .map_err(|_| d::ShaderError::CompilationFailed("Unknown compile error".into()))?;
+
+        // TODO: Compile HLSL shader for each entry point
         unimplemented!()
     }
 

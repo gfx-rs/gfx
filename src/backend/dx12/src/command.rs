@@ -361,7 +361,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                 Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
                 u: winapi::D3D12_RESOURCE_TRANSITION_BARRIER {
                     pResource: dst.resource,
-                    Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                    Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, // TODO: only affected ranges
                     StateBefore: winapi::D3D12_RESOURCE_STATE_COPY_DEST,
                     StateAfter: winapi::D3D12_RESOURCE_STATE_RESOLVE_DEST,
                 },
@@ -391,7 +391,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                 Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
                 u: winapi::D3D12_RESOURCE_TRANSITION_BARRIER {
                     pResource: dst.resource,
-                    Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                    Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, // TODO: only affected ranges
                     StateBefore: winapi::D3D12_RESOURCE_STATE_RESOLVE_DEST,
                     StateAfter: winapi::D3D12_RESOURCE_STATE_COPY_DEST,
                 },
