@@ -1,8 +1,7 @@
 //! OpenGL implementation of a device, striving to support OpenGL 2.0 with at
 //! least VAOs, but using newer extensions when available.
 
-#![allow(missing_docs)]
-#![deny(missing_copy_implementations)]
+#![allow(missing_docs, missing_copy_implementations)]
 
 #[macro_use]
 extern crate log;
@@ -48,7 +47,7 @@ impl c::Backend for Backend {
     type SubpassCommandBuffer = command::SubpassCommandBuffer;
     type QueueFamily = QueueFamily;
 
-    type Heap = native::Heap;
+    type Memory = native::Memory;
     type CommandPool = pool::RawCommandPool;
     type SubpassCommandPool = pool::SubpassCommandPool;
 
@@ -221,7 +220,7 @@ impl c::Adapter<Backend> for Adapter {
             graphics_queues: Vec::new(),
             compute_queues: Vec::new(),
             transfer_queues: Vec::new(),
-            heap_types: Vec::new(), // TODO
+            memory_types: Vec::new(), // TODO
             memory_heaps: Vec::new(), // TODO
         };
 
@@ -884,7 +883,6 @@ impl c::RawCommandQueue<Backend> for CommandQueue {
     }
 }
 
-#[allow(missing_copy_implementations)]
 pub struct QueueFamily;
 
 impl c::QueueFamily for QueueFamily {
