@@ -1,3 +1,5 @@
+#![cfg(any(windows, all(unix, not(target_os = "macos"), not(target_os = "ios"))))]
+
 #[macro_use]
 extern crate log;
 extern crate ash;
@@ -5,9 +7,16 @@ extern crate gfx_core as core;
 #[macro_use]
 extern crate lazy_static;
 extern crate smallvec;
-#[cfg(target_os = "windows")]
+#[cfg(windows)]
 extern crate kernel32;
+#[cfg(windows)]
+extern crate user32;
+#[cfg(windows)]
+extern crate winapi;
+#[cfg(feature = "winit")]
 extern crate winit;
+#[cfg(all(unix, not(target_os = "android")))]
+extern crate x11;
 #[cfg(feature = "glsl-to-spirv")]
 extern crate glsl_to_spirv;
 
@@ -45,7 +54,7 @@ const SURFACE_EXTENSIONS: &'static [&'static str] = &[
     // Platform-specific WSI extensions
     vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
     vk::VK_KHR_XCB_SURFACE_EXTENSION_NAME,
-    //vk::VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME, //RenderDoc fails with this
+    vk::VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME,
     vk::VK_KHR_MIR_SURFACE_EXTENSION_NAME,
     vk::VK_KHR_ANDROID_SURFACE_EXTENSION_NAME,
     vk::VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
