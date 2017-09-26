@@ -142,8 +142,6 @@ pub struct Features {
     pub sampler_anisotropy: bool,
     /// Support setting border texel colors.
     pub sampler_border_color: bool,
-    /// Resource heaps can contain any type of resources, as opposed to be locked to one.
-    pub heterogeneous_resource_heaps: bool,
 }
 
 /// Limits of the device.
@@ -225,10 +223,10 @@ pub enum IndexType {
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct MemoryType {
-    /// Id of the heap type.
+    /// Id of the memory type.
     pub id: usize,
-    /// Properties of the associated heap memory.
-    pub properties: memory::HeapProperties,
+    /// Properties of the associated memory.
+    pub properties: memory::Properties,
     /// Index to the underlying memory heap in `Gpu::memory_heaps`
     pub heap_index: usize,
 }
@@ -327,9 +325,9 @@ pub struct Gpu<B: Backend> {
     pub compute_queues: Vec<CommandQueue<B, Compute>>,
     /// Transfer command queues.
     pub transfer_queues: Vec<CommandQueue<B, Transfer>>,
-    /// Types of memory heaps.
+    /// Types of memory.
     ///
-    /// Each heap type is associated with one heap of `memory_heaps`.
+    /// Each memory type is associated with one heap of `memory_heaps`.
     /// Multiple types can point to the same heap.
     pub memory_types: Vec<MemoryType>,
     /// Memory heaps with their size in bytes.
