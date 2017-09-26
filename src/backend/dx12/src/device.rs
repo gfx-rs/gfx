@@ -1,6 +1,6 @@
 use conv;
 use core::{buffer, device as d, format, image, mapping, memory, pass, pso, state};
-use core::{Features, HeapType, Limits};
+use core::{Features, Limits, MemoryType};
 use core::memory::Requirements;
 use d3d12;
 use d3dcompiler;
@@ -193,7 +193,7 @@ impl Device {
 
         if !dst_starts.is_empty() {
             unsafe {
-                self.device.CopyDescriptors(
+                self.raw.CopyDescriptors(
                     dst_starts.len() as u32,
                     dst_starts.as_ptr(),
                     dst_sizes.as_ptr(),
@@ -211,51 +211,47 @@ impl d::Device<B> for Device {
     fn get_features(&self) -> &Features { &self.features }
     fn get_limits(&self) -> &Limits { &self.limits }
 
-    fn create_heap(
+    fn allocate_memory(
         &mut self,
-        heap_type: &HeapType,
-        resource_type: d::ResourceHeapType,
+        mem_type: &MemoryType,
         size: u64,
-    ) -> Result<n::Heap, d::ResourceHeapError> {
+    ) -> Result<n::Memory, d::OutOfMemory> {
         let mut heap = ptr::null_mut();
-
-        let flags = match resource_type {
-            d::ResourceHeapType::Any if !self.features.heterogeneous_resource_heaps => return Err(d::ResourceHeapError::UnsupportedType),
-            d::ResourceHeapType::Any => winapi::D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES,
-            d::ResourceHeapType::Buffers => winapi::D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS,
-            d::ResourceHeapType::Images  => winapi::D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES,
-            d::ResourceHeapType::Targets => winapi::D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES,
-        };
 
         let desc = winapi::D3D12_HEAP_DESC {
             SizeInBytes: size,
-            Properties: conv::map_heap_properties(heap_type.properties),
+            Properties: conv::map_heap_properties(mem_type.properties),
             Alignment: 0, //Warning: has to be 4K for MSAA targets
-            Flags: flags,
+            Flags: match mem_type.id >> 2 {
+                0 => winapi::D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES,
+                1 => winapi::D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS,
+                2 => winapi::D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES,
+                3 => winapi::D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES,
+                _ => unreachable!()
+            },
         };
 
         let hr = unsafe {
-            self.device.CreateHeap(&desc, &dxguid::IID_ID3D12Heap, &mut heap)
+            self.raw.CreateHeap(&desc, &dxguid::IID_ID3D12Heap, &mut heap)
         };
         if hr == winapi::E_OUTOFMEMORY {
-            return Err(d::ResourceHeapError::OutOfMemory);
+            return Err(d::OutOfMemory);
         }
         assert_eq!(winapi::S_OK, hr);
 
         //TODO: merge with `map_heap_properties`
-        let default_state = if !heap_type.properties.contains(memory::CPU_VISIBLE) {
+        let default_state = if !mem_type.properties.contains(memory::CPU_VISIBLE) {
             winapi::D3D12_RESOURCE_STATE_COMMON
-        } else if heap_type.properties.contains(memory::COHERENT) {
+        } else if mem_type.properties.contains(memory::COHERENT) {
             winapi::D3D12_RESOURCE_STATE_GENERIC_READ
         } else {
             winapi::D3D12_RESOURCE_STATE_COPY_DEST
         };
 
-        Ok(n::Heap {
-            raw: unsafe { ComPtr::new(heap as _) },
-            ty: heap_type.clone(),
+        Ok(n::Memory {
+            heap: unsafe { ComPtr::new(heap as _) },
+            ty: mem_type.clone(),
             size,
-            resource_type,
             default_state,
         })
     }
@@ -483,7 +479,7 @@ impl d::Device<B> for Device {
                 (*error).Release();
             }
 
-            self.device.CreateRootSignature(
+            self.raw.CreateRootSignature(
                 0,
                 (*signature_raw).GetBufferPointer(),
                 (*signature_raw).GetBufferSize(),
@@ -651,7 +647,7 @@ impl d::Device<B> for Device {
             // Create PSO
             let mut pipeline = ptr::null_mut();
             let hr = unsafe {
-                self.device.CreateGraphicsPipelineState(
+                self.raw.CreateGraphicsPipelineState(
                     &pso_desc,
                     &dxguid::IID_ID3D12PipelineState,
                     &mut pipeline as *mut *mut _ as *mut *mut _)
@@ -702,7 +698,7 @@ impl d::Device<B> for Device {
             // Create PSO
             let mut pipeline = ptr::null_mut();
             let hr = unsafe {
-                self.device.CreateComputePipelineState(
+                self.raw.CreateComputePipelineState(
                     &pso_desc,
                     &dxguid::IID_ID3D12PipelineState,
                     &mut pipeline as *mut *mut _ as *mut *mut _)
@@ -757,7 +753,7 @@ impl d::Device<B> for Device {
         };
 
         unsafe {
-            self.device.CreateSampler(&desc, handle);
+            self.raw.CreateSampler(&desc, handle);
         }
 
         n::Sampler { handle }
@@ -772,6 +768,7 @@ impl d::Device<B> for Device {
         let requirements = memory::Requirements {
             size,
             alignment: winapi::D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT as u64,
+            type_mask: if self.features.heterogeneous_resource_heaps { 0x7 } else { 0x7<<4 },
         };
 
         Ok(UnboundBuffer {
@@ -787,21 +784,21 @@ impl d::Device<B> for Device {
 
     fn bind_buffer_memory(
         &mut self,
-        heap: &n::Heap,
+        memory: &n::Memory,
         offset: u64,
         buffer: UnboundBuffer,
-    ) -> Result<n::Buffer, buffer::CreationError> {
-        if offset + buffer.requirements.size > heap.size {
-            return Err(buffer::CreationError)
+    ) -> Result<n::Buffer, d::BindError> {
+        if buffer.requirements.type_mask & (1 << memory.ty.id) == 0 {
+            error!("Bind memory failure: supported mask 0x{:x}, given id {}",
+                buffer.requirements.type_mask, memory.ty.id);
+            return Err(d::BindError::WrongMemory)
         }
-        match heap.resource_type {
-            d::ResourceHeapType::Any |
-            d::ResourceHeapType::Buffers => (),
-            _ => return Err(buffer::CreationError)
+        if offset + buffer.requirements.size > memory.size {
+            return Err(d::BindError::OutOfBounds)
         }
 
         let mut resource = ptr::null_mut();
-        let init_state = heap.default_state; //TODO?
+        let init_state = memory.default_state; //TODO?
         let desc = winapi::D3D12_RESOURCE_DESC {
             Dimension: winapi::D3D12_RESOURCE_DIMENSION_BUFFER,
             Alignment: 0,
@@ -819,8 +816,8 @@ impl d::Device<B> for Device {
         };
 
         assert_eq!(winapi::S_OK, unsafe {
-            self.device.CreatePlacedResource(
-                heap.raw.as_mut(),
+            self.raw.CreatePlacedResource(
+                memory.heap.as_mut(),
                 offset,
                 &desc,
                 init_state,
@@ -874,7 +871,7 @@ impl d::Device<B> for Device {
 
         let mut alloc_info = unsafe { mem::zeroed() };
         unsafe {
-            self.device.GetResourceAllocationInfo(&mut alloc_info, 0, 1, &desc);
+            self.raw.GetResourceAllocationInfo(&mut alloc_info, 0, 1, &desc);
         }
 
         Ok(UnboundImage {
@@ -882,6 +879,8 @@ impl d::Device<B> for Device {
             requirements: memory::Requirements {
                 size: alloc_info.SizeInBytes,
                 alignment: alloc_info.Alignment,
+                type_mask: if self.features.heterogeneous_resource_heaps { 0x7 }
+                    else if usage.can_target() { 0x7<<12 } else { 0x7<<8 },
             },
             kind,
             usage,
@@ -896,29 +895,25 @@ impl d::Device<B> for Device {
 
     fn bind_image_memory(
         &mut self,
-        heap: &n::Heap,
+        memory: &n::Memory,
         offset: u64,
         image: UnboundImage,
-    ) -> Result<n::Image, image::CreationError> {
-        if offset + image.requirements.size > heap.size {
-            return Err(image::CreationError::OutOfHeap)
+    ) -> Result<n::Image, d::BindError> {
+        if image.requirements.type_mask & (1 << memory.ty.id) == 0 {
+            error!("Bind memory failure: supported mask 0x{:x}, given id {}",
+                image.requirements.type_mask, memory.ty.id);
+            return Err(d::BindError::WrongMemory)
         }
-        let is_target =
-            image.usage.contains(image::COLOR_ATTACHMENT) |
-            image.usage.contains(image::DEPTH_STENCIL_ATTACHMENT);
-        match heap.resource_type {
-            d::ResourceHeapType::Any => (),
-            d::ResourceHeapType::Images if !is_target => (),
-            d::ResourceHeapType::Targets if is_target => (),
-            _ => return Err(image::CreationError::OutOfHeap) //TEMP
+        if offset + image.requirements.size > memory.size {
+            return Err(d::BindError::OutOfBounds)
         }
 
         let mut resource = ptr::null_mut();
-        let init_state = heap.default_state; //TODO?
+        let init_state = memory.default_state; //TODO?
 
         assert_eq!(winapi::S_OK, unsafe {
-            self.device.CreatePlacedResource(
-                heap.raw.as_mut(),
+            self.raw.CreatePlacedResource(
+                memory.heap.as_mut(),
                 offset,
                 &image.desc,
                 init_state,
@@ -976,7 +971,7 @@ impl d::Device<B> for Device {
         };
 
         unsafe {
-            self.device.CreateRenderTargetView(
+            self.raw.CreateRenderTargetView(
                 image.resource,
                 &desc,
                 handle,
@@ -1029,7 +1024,7 @@ impl d::Device<B> for Device {
         }
 
         unsafe {
-            self.device.CreateShaderResourceView(
+            self.raw.CreateShaderResourceView(
                 image.resource,
                 &desc,
                 handle,
@@ -1187,7 +1182,7 @@ impl d::Device<B> for Device {
     fn create_fence(&mut self, _signaled: bool) -> n::Fence {
         let mut handle = ptr::null_mut();
         assert_eq!(winapi::S_OK, unsafe {
-            self.device.CreateFence(
+            self.raw.CreateFence(
                 0,
                 winapi::D3D12_FENCE_FLAGS(0),
                 &dxguid::IID_ID3D12Fence,
@@ -1244,7 +1239,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn destroy_heap(&mut self, _heap: n::Heap) {
+    fn free_memory(&mut self, _memory: n::Memory) {
         // Just drop
     }
 

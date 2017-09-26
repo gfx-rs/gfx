@@ -42,14 +42,14 @@ impl core::QueueFamily for QueueFamily {
 /// Create associated command queues for a specific queue type
 fn collect_queues<C>(
      queue_descs: &[(&QueueFamily, QueueType, u32)],
-     device_raw: &ComPtr<winapi::ID3D12Device>,
+     device: &Device,
      collect_type: QueueType,
 ) -> Vec<core::CommandQueue<Backend, C>> {
     queue_descs.iter()
         .filter(|&&(_, qtype, _)| qtype == collect_type)
         .flat_map(|&(_, _, qcount)| {
             (0..qcount).map(|_| {
-                let mut device = device_raw.clone();
+                let mut device_raw = device.raw.clone();
                 let mut queue = ptr::null_mut();
                 let qtype = match collect_type {
                     QueueType::General | QueueType::Graphics => winapi::D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -65,7 +65,7 @@ fn collect_queues<C>(
                 };
 
                 let hr = unsafe {
-                    device.CreateCommandQueue(
+                    device_raw.CreateCommandQueue(
                         &queue_desc,
                         &dxguid::IID_ID3D12CommandQueue,
                         &mut queue as *mut *mut _ as *mut *mut c_void,
@@ -80,7 +80,7 @@ fn collect_queues<C>(
                     core::CommandQueue::new(
                         CommandQueue {
                             raw: ComPtr::new(queue),
-                            device,
+                            device: device_raw,
                             list_type: qtype,
                         }
                     )
@@ -99,47 +99,66 @@ pub struct Adapter {
 impl core::Adapter<Backend> for Adapter {
     fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)]) -> core::Gpu<Backend> {
         // Create D3D12 device
-        let mut device = ptr::null_mut();
+        let mut device_raw = ptr::null_mut();
         let hr = unsafe {
             d3d12::D3D12CreateDevice(
                 self.adapter.as_mut() as *mut _ as *mut winapi::IUnknown,
                 winapi::D3D_FEATURE_LEVEL_12_0, // TODO: correct feature level?
                 &dxguid::IID_ID3D12Device,
-                &mut device as *mut *mut _ as *mut *mut c_void,
+                &mut device_raw as *mut *mut _ as *mut *mut c_void,
             )
         };
         if !winapi::SUCCEEDED(hr) {
             error!("error on device creation: {:x}", hr);
         }
-        let device = unsafe { ComPtr::<winapi::ID3D12Device>::new(device) };
+        let device = Device::new(unsafe { ComPtr::new(device_raw) });
 
         // https://msdn.microsoft.com/en-us/library/windows/desktop/dn788678(v=vs.85).aspx
-        let heap_types = vec![
-            core::HeapType {
+        let base_memory_types = [
+            core::MemoryType {
                 id: 0,
                 properties: memory::DEVICE_LOCAL,
                 heap_index: 1,
             },
-            core::HeapType {
+            core::MemoryType {
                 id: 1,
                 properties: memory::CPU_VISIBLE | memory::CPU_CACHED,
                 heap_index: 0,
             },
-            core::HeapType {
+            core::MemoryType {
                 id: 2,
                 properties: memory::CPU_VISIBLE | memory::COHERENT,
                 heap_index: 0,
             },
         ];
+        let memory_types = if device.features.heterogeneous_resource_heaps {
+            base_memory_types.to_vec()
+        } else {
+            // the bit pattern of ID becomes 0bTTII, where
+            // TT=1 for buffers, TT=2 for images, and TT=3 for targets
+            // TT=0 is reserved for future use, helps to avoid ambiguity
+            // and II is the same `id` as the `base_memory_types` have
+            let mut types = Vec::new();
+            for &tt in &[1, 2, 3] {
+                types.extend(base_memory_types
+                    .iter()
+                    .map(|&mt| core::MemoryType {
+                        id: mt.id + (tt << 2),
+                        .. mt
+                    })
+                );
+            }
+            types
+        };
 
         core::Gpu {
             general_queues: collect_queues(queue_descs, &device, QueueType::General),
             graphics_queues: collect_queues(queue_descs, &device, QueueType::Graphics),
             compute_queues: collect_queues(queue_descs, &device, QueueType::Compute),
             transfer_queues: collect_queues(queue_descs, &device, QueueType::Transfer),
-            heap_types,
-            memory_heaps: Vec::new(), // TODO
-            device: Device::new(device),
+            memory_types,
+            memory_heaps: vec![!0, !0], // TODO: VRAM sizes
+            device,
         }
     }
 
@@ -183,7 +202,7 @@ impl core::RawCommandQueue<Backend> for CommandQueue {
 
 #[derive(Clone)]
 pub struct Device {
-    device: ComPtr<winapi::ID3D12Device>,
+    raw: ComPtr<winapi::ID3D12Device>,
     features: core::Features,
     limits: core::Limits,
     // CPU only pools
@@ -263,7 +282,7 @@ impl Device {
         let max_thread_groups = winapi::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION as _;
 
         Device {
-            device: device,
+            raw: device,
             features: Features { // TODO
                 indirect_execution: true,
                 draw_instanced: true,
@@ -429,7 +448,7 @@ impl core::Backend for Backend {
     type SubpassCommandBuffer = command::SubpassCommandBuffer;
     type QueueFamily = QueueFamily;
 
-    type Heap = native::Heap;
+    type Memory = native::Memory;
     type CommandPool = pool::RawCommandPool;
     type SubpassCommandPool = pool::SubpassCommandPool;
 
