@@ -131,7 +131,7 @@ impl core::Adapter<Backend> for Adapter {
                 heap_index: 0,
             },
         ];
-        let memory_types = if device.features.heterogeneous_resource_heaps {
+        let memory_types = if device.private_caps.heterogeneous_resource_heaps {
             base_memory_types.to_vec()
         } else {
             // the bit pattern of ID becomes 0bTTII, where
@@ -201,10 +201,16 @@ impl core::RawCommandQueue<Backend> for CommandQueue {
 }
 
 #[derive(Clone)]
+pub struct Capabilities {
+    heterogeneous_resource_heaps: bool,
+}
+
+#[derive(Clone)]
 pub struct Device {
     raw: ComPtr<winapi::ID3D12Device>,
     features: core::Features,
     limits: core::Limits,
+    private_caps: Capabilities,
     // CPU only pools
     rtv_pool: Arc<Mutex<native::DescriptorCpuPool>>,
     srv_pool: Arc<Mutex<native::DescriptorCpuPool>>,
@@ -302,8 +308,6 @@ impl Device {
                 sampler_border_color: false,
                 sampler_lod_bias: false,
                 sampler_objects: false,
-                heterogeneous_resource_heaps:
-                    features.ResourceHeapTier != winapi::D3D12_RESOURCE_HEAP_TIER_1,
             },
             limits: Limits { // TODO
                 max_texture_size: 0,
@@ -316,6 +320,9 @@ impl Device {
                 ),
                 min_buffer_copy_offset_alignment: winapi::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as _,
                 min_buffer_copy_pitch_alignment: winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as _,
+            },
+            private_caps: Capabilities {
+                heterogeneous_resource_heaps: features.ResourceHeapTier != winapi::D3D12_RESOURCE_HEAP_TIER_1,
             },
             rtv_pool: Arc::new(Mutex::new(rtv_pool)),
             srv_pool: Arc::new(Mutex::new(srv_pool)),

@@ -7,7 +7,7 @@ use std::fmt;
 use winapi::*;
 
 
-pub fn map_heap_properties(props: memory::HeapProperties) -> D3D12_HEAP_PROPERTIES {
+pub fn map_heap_properties(props: memory::Properties) -> D3D12_HEAP_PROPERTIES {
     //TODO: ensure the flags are valid
     D3D12_HEAP_PROPERTIES {
         Type: if !props.contains(memory::CPU_VISIBLE) {
