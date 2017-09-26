@@ -438,9 +438,10 @@ impl core::Adapter<Backend> for Adapter {
         };
 
         let mem_properties =  self.instance.0.get_physical_device_memory_properties(self.handle);
-        let memory_heaps = mem_properties.memory_heaps[..mem_properties.memory_heap_count as usize].iter()
-                                .map(|mem| mem.size).collect::<Vec<_>>();
-        let heap_types = mem_properties.memory_types[..mem_properties.memory_type_count as usize].iter().enumerate().map(|(i, mem)| {
+        let memory_heaps = mem_properties.memory_heaps[..mem_properties.memory_heap_count as usize]
+            .iter()
+            .map(|mem| mem.size).collect();
+        let memory_types = mem_properties.memory_types[..mem_properties.memory_type_count as usize].iter().enumerate().map(|(i, mem)| {
             let mut type_flags = memory::HeapProperties::empty();
 
             if mem.property_flags.intersects(vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
@@ -459,12 +460,12 @@ impl core::Adapter<Backend> for Adapter {
                 type_flags |= memory::LAZILY_ALLOCATED;
             }
 
-            core::HeapType {
+            core::MemoryType {
                 id: i,
                 properties: type_flags,
                 heap_index: mem.heap_index as usize,
             }
-        }).collect::<Vec<_>>();
+        }).collect();
 
         let device_arc = device.raw.clone();
         core::Gpu {
@@ -473,7 +474,7 @@ impl core::Adapter<Backend> for Adapter {
             graphics_queues: collect_queues(queue_descs, &device_arc, QueueType::Graphics),
             compute_queues: collect_queues(queue_descs, &device_arc, QueueType::Compute),
             transfer_queues: collect_queues(queue_descs, &device_arc, QueueType::Transfer),
-            heap_types,
+            memory_types,
             memory_heaps,
         }
     }
@@ -591,7 +592,7 @@ impl core::Backend for Backend {
     type SubpassCommandBuffer = command::SubpassCommandBuffer;
     type QueueFamily = QueueFamily;
 
-    type Heap = native::Heap;
+    type Memory = native::Memory;
     type CommandPool = pool::RawCommandPool;
     type SubpassCommandPool = pool::SubpassCommandPool;
 
