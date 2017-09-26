@@ -31,8 +31,6 @@ pub enum CreationError {
     Data(usize),
     /// The mentioned usage mode is not supported
     Usage(Usage),
-    ///
-    OutOfHeap,
 }
 
 impl fmt::Display for CreationError {
@@ -58,7 +56,6 @@ impl Error for CreationError {
             CreationError::Size(_) => "Unsupported size in one of the dimensions",
             CreationError::Data(_) => "The given data has a different size than the target texture slice",
             CreationError::Usage(_) => "The expected texture usage mode is not supported by a graphic API",
-            CreationError::OutOfHeap => "Not enough space in the heap",
         }
     }
 }

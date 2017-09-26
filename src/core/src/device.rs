@@ -7,31 +7,38 @@ use std::{fmt, mem, slice};
 use std::error::Error;
 use std::ops::Range;
 use {buffer, format, image, mapping, pass, pso, target};
-use {Backend, Features, HeapType, Limits};
+use {Backend, Features, Limits, MemoryType};
 use memory::Requirements;
 
 
-/// Type of the resources that can be allocated on a heap.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-pub enum ResourceHeapType {
+/// Error allocating memory.
+#[derive(Clone, PartialEq, Debug)]
+pub struct OutOfMemory;
+
+/// Error binding a resource to memory allocation.
+#[derive(Clone, PartialEq, Debug)]
+pub enum BindError {
     ///
-    Any,
+    WrongMemory,
     ///
-    Buffers,
-    ///
-    Images,
-    ///
-    Targets,
+    OutOfBounds,
 }
 
-/// Error creating a resource heap.
-#[derive(Clone, PartialEq, Debug)]
-pub enum ResourceHeapError {
-    /// Requested `ResourceHeapType::Any` is not supported.
-    UnsupportedType,
-    /// Unable to allocate the specified size.
-    OutOfMemory,
+impl fmt::Display for BindError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            _ => write!(f, "{}", self.description()),
+        }
+    }
+}
+
+impl Error for BindError {
+    fn description(&self) -> &str {
+        match *self {
+            BindError::WrongMemory => "Unsupported memory allocation for the requirements",
+            BindError::OutOfBounds => "Not enough space in the memory allocation",
+        }
+    }
 }
 
 /// Error creating either a ShaderResourceView, or UnorderedAccessView.
@@ -217,10 +224,10 @@ pub trait Device<B: Backend>: Clone {
     /// Returns the limits of this `Device`.
     fn get_limits(&self) -> &Limits;
 
-    /// Create an heap of a specific type.
+    /// Allocate a memory segment of a specified type.
     ///
     /// There is only a limited amount of allocations allowed depending on the implementation!
-    fn create_heap(&mut self, heap_type: &HeapType, resource_type: ResourceHeapType, size: u64) -> Result<B::Heap, ResourceHeapError>;
+    fn allocate_memory(&mut self, mem_type: &MemoryType, size: u64) -> Result<B::Memory, OutOfMemory>;
 
     ///
     fn create_renderpass(&mut self, attachments: &[pass::Attachment], subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> B::RenderPass;
@@ -263,12 +270,12 @@ pub trait Device<B: Backend>: Clone {
     ///
     fn get_buffer_requirements(&mut self, buffer: &B::UnboundBuffer) -> Requirements;
 
-    /// Bind heap memory to a buffer.
+    /// Bind memory to a buffer.
     ///
     /// The unbound buffer will be consumed because the binding is *immutable*.
     /// Be sure to check that there is enough memory available for the buffer.
     /// Use `get_buffer_requirements` to acquire the memory requirements.
-    fn bind_buffer_memory(&mut self, heap: &B::Heap, offset: u64, buffer: B::UnboundBuffer) -> Result<B::Buffer, buffer::CreationError>;
+    fn bind_buffer_memory(&mut self, memory: &B::Memory, offset: u64, buffer: B::UnboundBuffer) -> Result<B::Buffer, BindError>;
 
     ///
     fn create_image(&mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
@@ -278,7 +285,7 @@ pub trait Device<B: Backend>: Clone {
     fn get_image_requirements(&mut self, image: &B::UnboundImage) -> Requirements;
 
     ///
-    fn bind_image_memory(&mut self, heap: &B::Heap, offset: u64, image: B::UnboundImage) -> Result<B::Image, image::CreationError>;
+    fn bind_image_memory(&mut self, memory: &B::Memory, offset: u64, image: B::UnboundImage) -> Result<B::Image, BindError>;
 
     ///
     fn view_buffer_as_constant(&mut self, buffer: &B::Buffer, range: Range<u64>) -> Result<B::ConstantBufferView, TargetViewError>;
@@ -396,7 +403,7 @@ pub trait Device<B: Backend>: Clone {
     fn wait_for_fences(&mut self, fences: &[&B::Fence], wait: WaitFor, timeout_ms: u32) -> bool;
 
     ///
-    fn destroy_heap(&mut self, B::Heap);
+    fn free_memory(&mut self, B::Memory);
 
     ///
     fn destroy_shader_module(&mut self, B::ShaderModule);
