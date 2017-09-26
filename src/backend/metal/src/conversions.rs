@@ -121,7 +121,7 @@ pub fn map_vertex_format(format: Format) -> Option<MTLVertexFormat> {
     })
 }
 
-pub fn map_heap_properties_to_options(properties: memory::HeapProperties) -> MTLResourceOptions {
+pub fn map_memory_properties_to_options(properties: memory::Properties) -> MTLResourceOptions {
     let mut options = MTLResourceOptions::empty();
     if properties.contains(memory::CPU_VISIBLE) {
         if properties.contains(memory::COHERENT) {
@@ -140,7 +140,7 @@ pub fn map_heap_properties_to_options(properties: memory::HeapProperties) -> MTL
     options
 }
 
-pub fn map_heap_properties_to_storage_and_cache(properties: memory::HeapProperties) -> (MTLStorageMode, MTLCPUCacheMode) {
+pub fn map_memory_properties_to_storage_and_cache(properties: memory::Properties) -> (MTLStorageMode, MTLCPUCacheMode) {
     let storage = if properties.contains(memory::CPU_VISIBLE) {
         if properties.contains(memory::COHERENT) {
             MTLStorageMode::Shared

@@ -1,13 +1,12 @@
 use {Backend};
 
 use std::collections::HashMap;
-use std::fmt;
 use std::sync::{Arc, Mutex};
 use std::os::raw::{c_void, c_long, c_int};
 use std::ptr;
 
-use core::{self, format, memory, image, pass, HeapType};
-use core::pso::{ShaderStageFlags, DescriptorSetLayoutBinding, DescriptorType};
+use core::{self, image, pass};
+use core::pso::{DescriptorSetLayoutBinding, DescriptorType};
 
 use cocoa::foundation::{NSRange, NSUInteger};
 use metal::*;
@@ -19,10 +18,8 @@ pub struct QueueFamily {
 #[derive(Debug)]
 pub struct ShaderModule(pub MTLLibrary);
 
-unsafe impl Send for ShaderModule {
-}
-unsafe impl Sync for ShaderModule {
-}
+unsafe impl Send for ShaderModule {}
+unsafe impl Sync for ShaderModule {}
 
 #[derive(Debug)]
 pub struct RenderPass {
@@ -30,18 +27,14 @@ pub struct RenderPass {
     pub attachments: Vec<pass::Attachment>,
 }
 
-unsafe impl Send for RenderPass {
-}
-unsafe impl Sync for RenderPass {
-}
+unsafe impl Send for RenderPass {}
+unsafe impl Sync for RenderPass {}
 
 #[derive(Debug)]
 pub struct FrameBuffer(pub MTLRenderPassDescriptor);
 
-unsafe impl Send for FrameBuffer {
-}
-unsafe impl Sync for FrameBuffer {
-}
+unsafe impl Send for FrameBuffer {}
+unsafe impl Sync for FrameBuffer {}
 
 #[derive(Debug)]
 pub struct PipelineLayout {}
@@ -49,10 +42,8 @@ pub struct PipelineLayout {}
 #[derive(Debug)]
 pub struct GraphicsPipeline(pub MTLRenderPipelineState);
 
-unsafe impl Send for GraphicsPipeline {
-}
-unsafe impl Sync for GraphicsPipeline {
-}
+unsafe impl Send for GraphicsPipeline {}
+unsafe impl Sync for GraphicsPipeline {}
 
 #[derive(Debug)]
 pub struct ComputePipeline {}
@@ -60,10 +51,8 @@ pub struct ComputePipeline {}
 #[derive(Debug)]
 pub struct Image(pub MTLTexture);
 
-unsafe impl Send for Image {
-}
-unsafe impl Sync for Image {
-}
+unsafe impl Send for Image {}
+unsafe impl Sync for Image {}
 
 #[derive(Debug)]
 pub struct ConstantBufferView {}
@@ -71,10 +60,8 @@ pub struct ConstantBufferView {}
 #[derive(Debug)]
 pub struct ShaderResourceView(pub MTLTexture);
 
-unsafe impl Send for ShaderResourceView {
-}
-unsafe impl Sync for ShaderResourceView {
-}
+unsafe impl Send for ShaderResourceView {}
+unsafe impl Sync for ShaderResourceView {}
 
 #[derive(Debug)]
 pub struct UnorderedAccessView {}
@@ -82,45 +69,32 @@ pub struct UnorderedAccessView {}
 #[derive(Debug)]
 pub struct RenderTargetView(pub MTLTexture);
 
-unsafe impl Send for RenderTargetView {
-}
-unsafe impl Sync for RenderTargetView {
-}
+unsafe impl Send for RenderTargetView {}
+unsafe impl Sync for RenderTargetView {}
 
 #[derive(Debug)]
 pub struct DepthStencilView(pub MTLTexture);
 
-unsafe impl Send for DepthStencilView {
-}
-unsafe impl Sync for DepthStencilView {
-}
+unsafe impl Send for DepthStencilView {}
+unsafe impl Sync for DepthStencilView {}
 
 #[derive(Debug)]
 pub struct Sampler(pub MTLSamplerState);
 
-unsafe impl Send for Sampler {
-}
-unsafe impl Sync for Sampler {
-}
+unsafe impl Send for Sampler {}
+unsafe impl Sync for Sampler {}
 
 #[derive(Debug)]
 pub struct Semaphore(pub *mut c_void);
 
-unsafe impl Send for Semaphore {
-}
-unsafe impl Sync for Semaphore {
-}
+unsafe impl Send for Semaphore {}
+unsafe impl Sync for Semaphore {}
 
 #[derive(Debug)]
 pub struct Buffer(pub MTLBuffer);
 
-unsafe impl Send for Buffer {
-}
-unsafe impl Sync for Buffer {
-}
-
-#[derive(Debug)]
-pub struct DescriptorHeap {}
+unsafe impl Send for Buffer {}
+unsafe impl Sync for Buffer {}
 
 
 #[cfg(feature = "argument_buffer")]
@@ -269,8 +243,8 @@ impl Drop for DescriptorSetBinding {
 }
 
 #[derive(Debug)]
-pub enum Heap {
-    Emulated { heap_type: HeapType, size: u64 },
+pub enum Memory {
+    Emulated { memory_type: core::MemoryType, size: u64 },
     Native(MTLHeap),
 }
 
