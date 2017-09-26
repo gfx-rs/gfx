@@ -19,8 +19,8 @@ pub struct GraphicsPipeline(pub vk::Pipeline);
 pub struct ComputePipeline(pub vk::Pipeline);
 
 #[derive(Debug, Hash)]
-pub struct Heap {
-    pub memory: vk::DeviceMemory,
+pub struct Memory {
+    pub inner: vk::DeviceMemory,
     pub ptr: *mut u8,
 }
 

@@ -1,7 +1,7 @@
 use ash::vk;
 use ash::version::DeviceV1_0;
 use core::{buffer, device as d, format, image, mapping, pass, pso};
-use core::{Features, Limits, HeapType};
+use core::{Features, Limits, MemoryType};
 use core::memory::Requirements;
 use native as n;
 use std::{mem, ptr};
@@ -87,20 +87,19 @@ impl d::Device<B> for Device {
     fn get_features(&self) -> &Features { &self.features }
     fn get_limits(&self) -> &Limits { &self.limits }
 
-    fn create_heap(&mut self, heap_type: &HeapType, _resource_type: d::ResourceHeapType, size: u64) -> Result<n::Heap, d::ResourceHeapError> {
+    fn allocate_memory(&mut self, memory_type: &MemoryType, size: u64) -> Result<n::Memory, d::OutOfMemory> {
         let info = vk::MemoryAllocateInfo {
             s_type: vk::StructureType::MemoryAllocateInfo,
             p_next: ptr::null(),
             allocation_size: size,
-            memory_type_index: heap_type.id as u32,
+            memory_type_index: memory_type.id as u32,
         };
 
         let memory = unsafe {
             self.raw.0.allocate_memory(&info, None)
-                        .expect("Error on heap creation") // TODO: error handling
-        };
+        }.expect("Error on memory allocation"); // TODO: error handling
 
-        let ptr = if heap_type.properties.contains(memory::CPU_VISIBLE) {
+        let ptr = if memory_type.properties.contains(memory::CPU_VISIBLE) {
             unsafe {
                 self.raw.0.map_memory(
                     memory,
@@ -113,7 +112,7 @@ impl d::Device<B> for Device {
             ptr::null_mut()
         } as *mut _;
 
-        Ok(n::Heap { memory, ptr })
+        Ok(n::Memory { inner: memory, ptr })
     }
 
     fn create_renderpass(&mut self, attachments: &[pass::Attachment],
@@ -720,19 +719,20 @@ impl d::Device<B> for Device {
         Requirements {
             size: req.size,
             alignment: req.alignment,
+            type_mask: req.memory_type_bits as _,
         }
     }
 
-    fn bind_buffer_memory(&mut self, heap: &n::Heap, offset: u64, buffer: UnboundBuffer) -> Result<n::Buffer, buffer::CreationError> {
+    fn bind_buffer_memory(&mut self, memory: &n::Memory, offset: u64, buffer: UnboundBuffer) -> Result<n::Buffer, d::BindError> {
         assert_eq!(Ok(()), unsafe {
-            self.raw.0.bind_buffer_memory((buffer.0).raw, heap.memory, offset)
+            self.raw.0.bind_buffer_memory((buffer.0).raw, memory.inner, offset)
         });
 
         let buffer = n::Buffer {
             raw: buffer.0.raw,
-            memory: heap.memory,
+            memory: memory.inner,
             offset,
-            ptr: unsafe { heap.ptr.offset(offset as isize) }
+            ptr: unsafe { memory.ptr.offset(offset as _) }
         };
 
         Ok(buffer)
@@ -834,14 +834,16 @@ impl d::Device<B> for Device {
         Requirements {
             size: req.size,
             alignment: req.alignment,
+            type_mask: req.memory_type_bits as _,
         }
     }
 
     ///
-    fn bind_image_memory(&mut self, heap: &n::Heap, offset: u64, image: UnboundImage) -> Result<n::Image, image::CreationError> {
+    fn bind_image_memory(&mut self, memory: &n::Memory, offset: u64, image: UnboundImage) -> Result<n::Image, d::BindError> {
         // TODO: error handling
+        // TODO: check required type
         assert_eq!(Ok(()), unsafe {
-            self.raw.0.bind_image_memory(image.0.raw, heap.memory, offset)
+            self.raw.0.bind_image_memory(image.0.raw, memory.inner, offset)
         });
 
         Ok(image.0)
@@ -1145,11 +1147,11 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn destroy_heap(&mut self, heap: n::Heap) {
-        if !heap.ptr.is_null() {
-            unsafe { self.raw.0.unmap_memory(heap.memory) }
+    fn free_memory(&mut self, memory: n::Memory) {
+        if !memory.ptr.is_null() {
+            unsafe { self.raw.0.unmap_memory(memory.inner) }
         }
-        unsafe { self.raw.0.free_memory(heap.memory, None); }
+        unsafe { self.raw.0.free_memory(memory.inner, None); }
     }
 
     fn destroy_shader_module(&mut self, module: n::ShaderModule) {
