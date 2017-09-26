@@ -100,7 +100,7 @@ impl core::Backend for Backend {
     type SubpassCommandBuffer = command::CommandBuffer;
     type QueueFamily = native::QueueFamily;
 
-    type Heap = native::Heap;
+    type Memory = native::Memory;
     type CommandPool = command::CommandPool;
     type SubpassCommandPool = command::CommandPool;
 

@@ -10,8 +10,8 @@ use std::{mem, ptr, slice};
 
 use core::{self,
         image, pass, format, mapping, memory, buffer, pso};
-use core::{Limits, Features, QueueType, Gpu, HeapType};
-use core::device::{WaitFor, ResourceHeapError, ResourceHeapType, TargetViewError};
+use core::{Limits, Features, QueueType, Gpu, MemoryType};
+use core::device::{WaitFor, BindError, OutOfMemory, TargetViewError};
 use core::device::{ShaderError, Extent};
 use core::pso::{DescriptorSetWrite, DescriptorType, DescriptorSetLayoutBinding, AttributeDesc};
 use core::pass::{Subpass};
@@ -109,35 +109,35 @@ impl core::Adapter<Backend> for Adapter {
             },
         };
 
-        let heap_types = vec![
-            core::HeapType {
+        let memory_types = vec![
+            core::MemoryType {
                 id: 0,
                 properties: memory::CPU_VISIBLE | memory::CPU_CACHED,
                 heap_index: 0,
             },
-            core::HeapType {
+            core::MemoryType {
                 id: 1,
                 properties: memory::CPU_VISIBLE | memory::CPU_CACHED | memory::WRITE_COMBINED,
-                heap_index: 1,
+                heap_index: 0,
             },
-            core::HeapType {
+            core::MemoryType {
                 id: 2,
                 properties: memory::CPU_VISIBLE | memory::COHERENT | memory::CPU_CACHED,
-                heap_index: 2,
+                heap_index: 0,
             },
-            core::HeapType {
+            core::MemoryType {
                 id: 3,
                 properties: memory::CPU_VISIBLE | memory::COHERENT 
                     | memory::CPU_CACHED | memory::WRITE_COMBINED,
-                heap_index: 3,
+                heap_index: 0,
             },
-            core::HeapType {
+            core::MemoryType {
                 id: 4,
                 properties: memory::DEVICE_LOCAL,
-                heap_index: 4,
+                heap_index: 1,
             },
         ];
-        let memory_heaps = Vec::new();
+        let memory_heaps = vec![!0, !0]; //TODO
 
         Gpu {
             device,
@@ -145,7 +145,7 @@ impl core::Adapter<Backend> for Adapter {
             graphics_queues,
             compute_queues,
             transfer_queues,
-            heap_types,
+            memory_types,
             memory_heaps,
         }
     }
@@ -730,8 +730,8 @@ impl core::Device<Backend> for Device {
         unsafe { n::dispatch_release(semaphore.0) }
     }
 
-    fn create_heap(&mut self, heap_type: &HeapType, _resource_type: ResourceHeapType, size: u64) -> Result<n::Heap, ResourceHeapError> {
-        let (storage, cache) = map_heap_properties_to_storage_and_cache(heap_type.properties);
+    fn allocate_memory(&mut self, memory_type: &MemoryType, size: u64) -> Result<n::Memory, OutOfMemory> {
+        let (storage, cache) = map_memory_properties_to_storage_and_cache(memory_type.properties);
 
         // Heaps cannot be used for CPU coherent resources
         if self.private_caps.resource_heaps && storage != MTLStorageMode::Shared {
@@ -739,16 +739,16 @@ impl core::Device<Backend> for Device {
             descriptor.set_storage_mode(storage);
             descriptor.set_cpu_cache_mode(cache);
             descriptor.set_size(size);
-            Ok(n::Heap::Native(self.device.new_heap(descriptor)))
+            Ok(n::Memory::Native(self.device.new_heap(descriptor)))
         } else {
-            Ok(n::Heap::Emulated { heap_type: *heap_type, size })
+            Ok(n::Memory::Emulated { memory_type: *memory_type, size })
         }
     }
 
-    fn destroy_heap(&mut self, heap: n::Heap) {
-        match heap {
-            n::Heap::Emulated { .. } => {},
-            n::Heap::Native(heap) => unsafe { heap.release(); },
+    fn free_memory(&mut self, memory: n::Memory) {
+        match memory {
+            n::Memory::Emulated { .. } => {},
+            n::Memory::Native(heap) => unsafe { heap.release(); },
         }
     }
 
@@ -775,27 +775,28 @@ impl core::Device<Backend> for Device {
         memory::Requirements {
             size: max_size,
             alignment: max_alignment,
+            type_mask: 0x1F, //TODO
         }
     }
 
-    fn bind_buffer_memory(&mut self, heap: &n::Heap, offset: u64, buffer: n::UnboundBuffer) -> Result<n::Buffer, buffer::CreationError> {
-        let bound_buffer = match *heap {
-            n::Heap::Native(ref heap) => {
+    fn bind_buffer_memory(&mut self, memory: &n::Memory, offset: u64, buffer: n::UnboundBuffer) -> Result<n::Buffer, BindError> {
+        let bound_buffer = match *memory {
+            n::Memory::Native(ref heap) => {
                 let resource_options = resource_options_from_storage_and_cache(
                     heap.storage_mode(),
                     heap.cpu_cache_mode());
                 heap.new_buffer(buffer.size, resource_options)
             }
-            n::Heap::Emulated { ref heap_type, size: _ } => {
+            n::Memory::Emulated { ref memory_type, size: _ } => {
                 // TODO: disable hazard tracking?
-                let resource_options = map_heap_properties_to_options(heap_type.properties);
+                let resource_options = map_memory_properties_to_options(memory_type.properties);
                 self.device.new_buffer(buffer.size, resource_options)
             }
         };
         if !bound_buffer.is_null() {
             Ok(n::Buffer(bound_buffer))
         } else {
-            Err(buffer::CreationError)
+            Err(BindError::OutOfBounds)
         }
     }
 
@@ -843,27 +844,29 @@ impl core::Device<Backend> for Device {
             memory::Requirements {
                 size: max_size,
                 alignment: max_alignment,
+                type_mask: 0x1F, //TODO
             }
         } else {
             memory::Requirements {
                 size: 1, // TODO: something sensible
                 alignment: 4,
+                type_mask: 0x1F, //TODO
             }
         }
     }
 
-    fn bind_image_memory(&mut self, heap: &n::Heap, offset: u64, image: n::UnboundImage) -> Result<n::Image, image::CreationError> {
-        let bound_image = match *heap {
-            n::Heap::Native(ref heap) => {
+    fn bind_image_memory(&mut self, memory: &n::Memory, offset: u64, image: n::UnboundImage) -> Result<n::Image, BindError> {
+        let bound_image = match *memory {
+            n::Memory::Native(ref heap) => {
                 let resource_options = resource_options_from_storage_and_cache(
                     heap.storage_mode(),
                     heap.cpu_cache_mode());
                 image.0.set_resource_options(resource_options);
                 heap.new_texture(image.0)
             },
-            n::Heap::Emulated { ref heap_type, size: _ } => {
+            n::Memory::Emulated { ref memory_type, size: _ } => {
                 // TODO: disable hazard tracking?
-                let resource_options = map_heap_properties_to_options(heap_type.properties);
+                let resource_options = map_memory_properties_to_options(memory_type.properties);
                 image.0.set_resource_options(resource_options);
                 self.device.new_texture(image.0)
             }
@@ -872,7 +875,7 @@ impl core::Device<Backend> for Device {
         if !bound_image.is_null() {
             Ok(n::Image(bound_image))
         } else {
-            Err(image::CreationError::OutOfHeap)
+            Err(BindError::OutOfBounds)
         }
     }
 
