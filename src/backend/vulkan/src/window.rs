@@ -1,11 +1,15 @@
 use std::collections::VecDeque;
 use std::ptr;
 use std::sync::Arc;
+use std::os::raw::c_void;
 
 use ash::vk;
 use ash::extensions as ext;
 
-use {core, winit};
+use core;
+
+#[cfg(feature = "winit")]
+use winit;
 
 use {conv, native};
 use {VK_ENTRY, Adapter, Backend, Instance, QueueFamily, RawInstance};
@@ -34,69 +38,118 @@ impl Drop for RawSurface {
 }
 
 impl Instance {
-    pub fn create_surface(&self, window: &winit::Window) -> Surface {
+    #[cfg(unix)]
+    pub fn create_surface_from_xlib(&self, display: *mut c_void, window: usize) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
             .expect("Unable to load Vulkan entry points");
 
-        let surface = self
-            .extensions
-            .iter()
-            .map(|&extension| {
-                match extension {
-                    #[cfg(unix)]
-                    vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME => {
-                        use winit::os::unix::WindowExt;
+        if !self.extensions.contains(&vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME) {
+            panic!("Vulkan driver does not support VK_KHR_XLIB_SURFACE");
+        }
 
-                        let xlib_loader = match ext::XlibSurface::new(entry, &self.raw.0) {
-                            Ok(loader) => loader,
-                            Err(e) => {
-                                error!("XlibSurface failed: {:?}", e);
-                                return None;
-                            }
-                        };
+        let surface = {
+            let xlib_loader = ext::XlibSurface::new(entry, &self.raw.0)
+                                .expect("XlibSurface failed");
 
-                        let info = vk::XlibSurfaceCreateInfoKHR {
-                            s_type: vk::StructureType::XlibSurfaceCreateInfoKhr,
-                            p_next: ptr::null(),
-                            flags: vk::XlibSurfaceCreateFlagsKHR::empty(),
-                            window: window.get_xlib_window().unwrap() as *const _,
-                            dpy: window.get_xlib_display().unwrap() as *mut _,
-                        };
+            let info = vk::XlibSurfaceCreateInfoKHR {
+                s_type: vk::StructureType::XlibSurfaceCreateInfoKhr,
+                p_next: ptr::null(),
+                flags: vk::XlibSurfaceCreateFlagsKHR::empty(),
+                window: window as _,
+                dpy: display as *mut _,
+            };
 
-                        unsafe {
-                            xlib_loader.create_xlib_surface_khr(&info, None).ok()
-                        }
-                    }
-                    #[cfg(windows)]
-                    vk::VK_KHR_WIN32_SURFACE_EXTENSION_NAME => {
-                        use kernel32;
-                        use winit::os::windows::WindowExt;
+            unsafe { xlib_loader.create_xlib_surface_khr(&info, None) }
+                .expect("XlibSurface failed")
+        };
 
-                        let win32_loader = ext::Win32Surface::new(entry, &self.raw.0)
-                            .expect("Unable to load win32 surface functions");
+        let (width, height) = unsafe {
+            use x11::xlib::{XGetWindowAttributes, XWindowAttributes};
+            use std::os::raw::{c_int, c_uint, c_ulong};
+            use std::mem::zeroed;
+            let mut attribs: XWindowAttributes = zeroed();
+            let result = XGetWindowAttributes(display as *mut _, window as _, &mut attribs);
+            if result == 0 {
+                panic!("XGetGeometry failed");
+            }
+            (attribs.width as u32, attribs.height as u32)
+        };
 
-                        unsafe {
-                            let info = vk::Win32SurfaceCreateInfoKHR {
-                                s_type: vk::StructureType::Win32SurfaceCreateInfoKhr,
-                                p_next: ptr::null(),
-                                flags: vk::Win32SurfaceCreateFlagsKHR::empty(),
-                                hinstance: kernel32::GetModuleHandleW(ptr::null()) as *mut _,
-                                hwnd: window.get_hwnd() as *mut _,
-                            };
+        self.create_surface_from_vk_surface_khr(surface, width, height)
+    }
 
-                            win32_loader.create_win32_surface_khr(&info, None).ok()
-                        }
-                    }
-                    // TODO: other platforms
-                    _ => None,
+    #[cfg(windows)]
+    pub fn create_surface_from_hwnd(&self, hwnd: *mut c_void) -> Surface {
+        let entry = VK_ENTRY
+            .as_ref()
+            .expect("Unable to load Vulkan entry points");
+
+        if !self.extensions.contains(&vk::VK_KHR_WIN32_SURFACE_EXTENSION_NAME) {
+            panic!("Vulkan driver does not support VK_KHR_WIN32_SURFACE");
+        }
+
+        let surface = {
+            use kernel32;
+
+            let win32_loader = ext::Win32Surface::new(entry, &self.raw.0)
+                .expect("Unable to load win32 surface functions");
+
+            unsafe {
+                let info = vk::Win32SurfaceCreateInfoKHR {
+                    s_type: vk::StructureType::Win32SurfaceCreateInfoKhr,
+                    p_next: ptr::null(),
+                    flags: vk::Win32SurfaceCreateFlagsKHR::empty(),
+                    hinstance: kernel32::GetModuleHandleW(ptr::null()) as *mut _,
+                    hwnd: hwnd as *mut _,
+                };
+
+                win32_loader.create_win32_surface_khr(&info, None)
+                    .expect("Unable to create Win32 surface")
+            }
+        };
+
+        let (width, height) = unsafe {
+            use winapi::RECT;
+            use user32::GetClientRect;
+            use std::mem::zeroed;
+            let mut rect: RECT = zeroed();
+            if GetClientRect(hwnd as *mut _, &mut rect as *mut RECT) == 0 {
+                panic!("GetClientRect failed");
+            }
+            ((rect.right - rect.left) as u32, (rect.bottom - rect.top) as u32)
+        };
+
+        self.create_surface_from_vk_surface_khr(surface, width, height)
+    }
+
+    #[cfg(feature = "winit")]
+    pub fn create_surface(&self, window: &winit::Window) -> Surface {
+        #[cfg(unix)]
+        {
+            use winit::os::unix::WindowExt;
+
+            if self.extensions.contains(&vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME) {
+                if let Some(display) = window.get_xlib_display() {
+                    let display: *mut c_void = display as *mut _;
+                    let window: usize = window.get_xlib_window().unwrap() as _;
+                    return self.create_surface_from_xlib(display, window);
                 }
-            })
-            .find(|x| x.is_some())
-            .expect("Unable to find a surface implementation.")
-            .unwrap();
+            }
+            panic!("The Vulkan driver does not support surface creation!");
+        }
+        #[cfg(windows)]
+        {
+            use winit::os::windows::WindowExt;
+            self.create_surface_from_hwnd(window.get_hwnd() as *mut _)
+        }
+    }
 
-        let (width, height) = window.get_inner_size_pixels().unwrap();
+    fn create_surface_from_vk_surface_khr(&self, surface: vk::SurfaceKHR, width: u32, height: u32) -> Surface {
+        let entry = VK_ENTRY
+            .as_ref()
+            .expect("Unable to load Vulkan entry points");
+
         let functor = ext::Surface::new(entry, &self.raw.0)
             .expect("Unable to load surface functions");
 
