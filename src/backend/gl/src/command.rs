@@ -592,5 +592,4 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 }
 
 /// A subpass command buffer abstraction for OpenGL
-#[allow(missing_copy_implementations)]
 pub struct SubpassCommandBuffer;

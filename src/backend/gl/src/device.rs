@@ -57,10 +57,8 @@ pub fn get_program_log(gl: &gl::Gl, name: n::Program) -> String {
 }
 
 #[derive(Debug)]
-#[allow(missing_copy_implementations)]
 pub struct UnboundBuffer;
 #[derive(Debug)]
-#[allow(missing_copy_implementations)]
 pub struct UnboundImage;
 
 /// GL device.
@@ -131,8 +129,8 @@ impl d::Device<B> for Device {
         &self.share.limits
     }
 
-    fn create_heap(&mut self, _: &c::HeapType, _: d::ResourceHeapType, _: u64) -> Result<n::Heap, d::ResourceHeapError> {
-        Ok(n::Heap)
+    fn allocate_memory(&mut self, _: &c::MemoryType, _: u64) -> Result<n::Memory, d::OutOfMemory> {
+        Ok(n::Memory)
     }
 
     fn create_renderpass(
@@ -323,7 +321,7 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn bind_buffer_memory(&mut self, _: &n::Heap, _: u64, _: device::UnboundBuffer) -> Result<n::Buffer, buffer::CreationError> {
+    fn bind_buffer_memory(&mut self, _: &n::Memory, _: u64, _: device::UnboundBuffer) -> Result<n::Buffer, d::BindError> {
         unimplemented!()
     }
 
@@ -336,7 +334,7 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn bind_image_memory(&mut self, _: &n::Heap, _: u64, _: device::UnboundImage) -> Result<n::Image, i::CreationError> {
+    fn bind_image_memory(&mut self, _: &n::Memory, _: u64, _: device::UnboundImage) -> Result<n::Image, d::BindError> {
         unimplemented!()
     }
 
@@ -457,7 +455,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn destroy_heap(&mut self, _: n::Heap) {
+    fn free_memory(&mut self, _: n::Memory) {
         unimplemented!()
     }
 
