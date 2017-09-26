@@ -1,8 +1,8 @@
 use std::mem;
 use std::ops::Range;
-use core::{Device as CoreDevice, HeapType};
+use core::{Device as CoreDevice, MemoryType};
 use core::device::TargetViewError;
-use core::memory::{HeapProperties,
+use core::memory::{Properties,
     DEVICE_LOCAL, CPU_VISIBLE, CPU_CACHED, WRITE_COMBINED
 };
 
@@ -86,7 +86,7 @@ impl<S> From<CreationError> for PipelineStateError<S> {
 pub struct Device<B: Backend> {
     raw: B::Device,
     // TODO: could be shared instead of cloned
-    heap_types: Vec<HeapType>,
+    memory_types: Vec<MemoryType>,
     memory_heaps: Vec<u64>,
     garbage: GarbageSender<B>,
 }
@@ -94,16 +94,16 @@ pub struct Device<B: Backend> {
 impl<B: Backend> Device<B> {
     pub(crate) fn new(
         raw: B::Device,
-        heap_types: Vec<HeapType>,
+        memory_types: Vec<MemoryType>,
         memory_heaps: Vec<u64>,
     ) -> (Self, handle::GarbageCollector<B>)
     {
         let (garbage, collector) = handle::garbage(&raw);
-        (Device { raw, heap_types, memory_heaps, garbage }, collector)
+        (Device { raw, memory_types, memory_heaps, garbage }, collector)
     }
 
-    pub fn heap_types(&self) -> &[HeapType] {
-        &self.heap_types
+    pub fn memory_types(&self) -> &[MemoryType] {
+        &self.memory_types
     }
 
     pub fn memory_heaps(&self) -> &[u64] {
@@ -118,48 +118,51 @@ impl<B: Backend> Device<B> {
         &mut self.raw
     }
 
-    pub fn find_heap<P>(&self, predicate: P) -> Option<HeapType>
-        where P: Fn(HeapProperties) -> bool
+    pub fn find_memory<P>(&self, type_mask: u64, predicate: P) -> Option<MemoryType>
+        where P: Fn(Properties) -> bool
     {
-        self.heap_types.iter()
-            .find(|heap_type| predicate(heap_type.properties))
+        self.memory_types.iter()
+            .find(|memory_type| {
+                type_mask & (1 << memory_type.id) != 0 &&
+                predicate(memory_type.properties)
+            })
             .cloned()
     }
 
-    pub fn find_usage_heap(&self, usage: memory::Usage) -> Option<HeapType> {
+    pub fn find_usage_memory(&self, usage: memory::Usage, type_mask: u64) -> Option<MemoryType> {
         use memory::Usage::*;
         match usage {
-            Data => self.find_data_heap(),
-            Upload => self.find_upload_heap(),
-            Download => self.find_download_heap(),
+            Data => self.find_data_memory(type_mask),
+            Upload => self.find_upload_memory(type_mask),
+            Download => self.find_download_memory(type_mask),
         }
     }
 
     // TODO: shouldn't need coherency if we handle invalidation/flush
     // TODO: fallbacks when out of memory
 
-    pub fn find_data_heap(&self) -> Option<HeapType> {
-        self.find_heap(|props| {
+    pub fn find_data_memory(&self, type_mask: u64) -> Option<MemoryType> {
+        self.find_memory(type_mask, |props| {
             props.contains(DEVICE_LOCAL) && !props.contains(CPU_VISIBLE)
-        }).or_else(|| self.find_heap(|props| {
+        }).or_else(|| self.find_memory(type_mask, |props| {
             props.contains(DEVICE_LOCAL)
         }))
     }
 
-    pub fn find_upload_heap(&self) -> Option<HeapType> {
-        self.find_heap(|props| {
+    pub fn find_upload_memory(&self, type_mask: u64) -> Option<MemoryType> {
+        self.find_memory(type_mask, |props| {
             props.contains(CPU_VISIBLE | WRITE_COMBINED)
             && !props.contains(CPU_CACHED)
-        }).or_else(|| self.find_heap(|props| {
+        }).or_else(|| self.find_memory(type_mask, |props| {
             props.contains(CPU_VISIBLE)
         }))
     }
 
-    pub fn find_download_heap(&self) -> Option<HeapType> {
-        self.find_heap(|props| {
+    pub fn find_download_memory(&self, type_mask: u64) -> Option<MemoryType> {
+        self.find_memory(type_mask, |props| {
             props.contains(CPU_VISIBLE | CPU_CACHED)
             && !props.contains(WRITE_COMBINED)
-        }).or_else(|| self.find_heap(|props| {
+        }).or_else(|| self.find_memory(type_mask, |props| {
             props.contains(CPU_VISIBLE)
         }))
     }
@@ -412,7 +415,7 @@ impl<B: Backend> Device<B> {
         self.view_image_as_render_target_raw(image, F::get_format(), range)
             .map(Typed::new)
     }
-    
+
     pub fn view_image_as_shader_resource_raw(
         &mut self,
         image: &handle::raw::Image<B>,

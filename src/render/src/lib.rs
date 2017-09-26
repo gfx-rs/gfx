@@ -239,7 +239,7 @@ impl Capability for core::General {
         let core::Gpu {
             device,
             mut general_queues,
-            heap_types,
+            memory_types,
             memory_heaps,
             ..
         } = adapter.open_with(|ref family, qtype| {
@@ -252,7 +252,7 @@ impl Capability for core::General {
             }
         });
 
-        let (device, garbage) = Device::new(device, heap_types, memory_heaps);
+        let (device, garbage) = Device::new(device, memory_types, memory_heaps);
         let queue = Queue::new(general_queues.remove(0));
         (device, queue, garbage)
     }
@@ -266,7 +266,7 @@ impl Capability for core::Graphics {
         let core::Gpu {
             device,
             mut graphics_queues,
-            heap_types,
+            memory_types,
             memory_heaps,
             ..
         } = adapter.open_with(|ref family, qtype| {
@@ -277,7 +277,7 @@ impl Capability for core::Graphics {
             }
         });
 
-        let (device, garbage) = Device::new(device, heap_types, memory_heaps);
+        let (device, garbage) = Device::new(device, memory_types, memory_heaps);
         let queue = Queue::new(graphics_queues.remove(0));
         (device, queue, garbage)
     }
@@ -436,7 +436,7 @@ impl<B: Backend, C> Context<B, C>
                     None
                 }
             }).collect();
-        
+
         self.device.mut_raw()
             .wait_for_fences(&fences, core::device::WaitFor::All, !0);
     }

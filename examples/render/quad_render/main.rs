@@ -1,5 +1,5 @@
 extern crate env_logger;
-extern crate gfx;
+extern crate gfx_render as gfx;
 extern crate gfx_core as core;
 extern crate gfx_backend_vulkan as back;
 
@@ -194,7 +194,7 @@ fn main() {
     let mut data = Allocator::new(
         gfx::memory::Usage::Data,
         &context.ref_device());
-    println!("Memory types: {:?}", context.ref_device().heap_types());
+    println!("Memory types: {:?}", context.ref_device().memory_types());
     println!("Memory heaps: {:?}", context.ref_device().memory_heaps());
 
     let vertex_count = QUAD.len() as u64;
