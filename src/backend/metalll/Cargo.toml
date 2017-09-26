@@ -14,7 +14,7 @@ argument_buffer = []
 [dependencies]
 log = "0.3"
 gfx_corell = { path = "../../corell", version = "0.1.0" }
-winit = "0.7"
+winit = "0.8"
 cocoa = "0.9"
 objc = "0.2"
 metal-rs = "0.4.2"

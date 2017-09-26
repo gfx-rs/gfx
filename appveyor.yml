@@ -1,21 +1,19 @@
 environment:
+  RUST_BACKTRACE: full
   matrix:
-    - TARGET: 1.20.0-x86_64-pc-windows
-      COMPILER: gnu
-    - TARGET: 1.20.0-x86_64-pc-windows
-      COMPILER: msvc
-    - TARGET: nightly-x86_64-pc-windows
-      COMPILER: msvc
+  - channel: stable
+    target: x86_64-pc-windows-msvc
+  - channel: stable
+    target: x86_64-pc-windows-gnu
+  - channel: nightly
+    target: x86_64-pc-windows-msvc
 install:
-  - if %COMPILER%==gnu choco install -y mingw
-  - ps: Start-FileDownload "https://static.rust-lang.org/dist/rust-${env:TARGET}-${env:COMPILER}.exe" -FileName "rust-install.exe"
-  - ps: .\rust-install.exe /VERYSILENT /NORESTART /DIR="C:\rust" | Out-Null
-  - ps: $env:PATH="$env:PATH;C:\rust\bin;C:\tools\mingw64\bin"
-  - if %COMPILER%==gnu gcc -v
-  - rustc -vV
-  - cargo -vV
-build_script:
-  - cargo build --features vulkan
+- appveyor DownloadFile https://win.rustup.rs/ -FileName rustup-init.exe
+- rustup-init -yv --default-toolchain %channel% --default-host %target%
+- set PATH=%PATH%;%USERPROFILE%\.cargo\bin
+- rustc -vV
+- cargo -vV
+build: false
 test_script:
-  - cargo test --all --features vulkan
-  - cargo test -p gfx -p gfx_core --features "mint serialize"
+- cargo test --all --features vulkan
+- cargo test -p gfx -p gfx_core --features "mint serialize"
