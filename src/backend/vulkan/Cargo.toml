@@ -12,7 +12,7 @@ documentation = "https://docs.rs/gfx_device_vulkan"
 workspace = "../../.."
 
 [features]
-default = []
+default = ["winit"]
 
 [lib]
 name = "gfx_backend_vulkan"
@@ -24,9 +24,13 @@ shared_library = "0.1"
 ash = "0.18.5"
 gfx_core = { path = "../../core", version = "0.10" }
 smallvec = "0.4"
-winit = "0.7"
+winit = { version = "0.7", optional = true }
 glsl-to-spirv = { version = "0.1", optional = true }
 
 [target.'cfg(windows)'.dependencies]
-kernel32-sys = "0.2.2"
+winapi = "0.2"
+kernel32-sys = "0.2"
+user32-sys = "0.2"
 
+[target.'cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))'.dependencies]
+x11 = { version = "2.15", features = ["xlib"]}
