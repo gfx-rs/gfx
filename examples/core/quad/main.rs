@@ -100,7 +100,7 @@ fn main() {
     let adapter = &adapters[0];
 
     // Build a new device and associated command queues
-    let Gpu { mut device, mut graphics_queues, heap_types, .. } =
+    let Gpu { mut device, mut graphics_queues, memory_types, .. } =
         adapter.open_with(|ref family, qtype| {
             if qtype.supports_graphics() && surface.supports_queue(family) {
                 (1, QueueType::Graphics)
@@ -297,25 +297,25 @@ fn main() {
         device.create_framebuffer(&render_pass, &[&frame_rtv], &[], extent)
     }).collect::<Vec<_>>();
 
-
-    let upload_heap =
-        heap_types.iter().find(|&&heap_type| {
-            heap_type.properties.contains(m::CPU_VISIBLE | m::COHERENT)
-        })
-        .unwrap();
-
     // Buffer allocations
-    println!("Memory heaps: {:?}", heap_types);
+    println!("Memory types: {:?}", memory_types);
 
-    let heap = device.create_heap(upload_heap, d::ResourceHeapType::Buffers, 1024).unwrap();
     let buffer_stride = std::mem::size_of::<Vertex>() as u64;
     let buffer_len = QUAD.len() as u64 * buffer_stride;
 
-    let vertex_buffer = {
-        let buffer = device.create_buffer(buffer_len, buffer_stride, buffer::VERTEX).unwrap();
-        println!("{:?}", buffer);
-        device.bind_buffer_memory(&heap, 0, buffer).unwrap()
-    };
+    let buffer_unbound = device.create_buffer(buffer_len, buffer_stride, buffer::VERTEX).unwrap();
+    println!("{:?}", buffer_unbound);
+    let buffer_req = device.get_buffer_requirements(&buffer_unbound);
+
+    let upload_type =
+        memory_types.iter().find(|mem_type| {
+            buffer_req.type_mask & (1 << mem_type.id) != 0 &&
+            mem_type.properties.contains(m::CPU_VISIBLE | m::COHERENT)
+        })
+        .unwrap();
+
+    let buffer_memory = device.allocate_memory(upload_type, 1024).unwrap();
+    let vertex_buffer = device.bind_buffer_memory(&buffer_memory, 0, buffer_unbound).unwrap();
 
     // TODO: check transitions: read/write mapping and vertex buffer read
     {
@@ -338,10 +338,10 @@ fn main() {
     let upload_size = (height * row_pitch) as u64;
     println!("upload row pitch {}, total size {}", row_pitch, upload_size);
 
-    let image_upload_heap = device.create_heap(upload_heap, d::ResourceHeapType::Buffers, upload_size).unwrap();
+    let image_upload_memory = device.allocate_memory(upload_type, upload_size).unwrap();
     let image_upload_buffer = {
         let buffer = device.create_buffer(upload_size, image_stride as u64, buffer::TRANSFER_SRC).unwrap();
-        device.bind_buffer_memory(&image_upload_heap, 0, buffer).unwrap()
+        device.bind_buffer_memory(&image_upload_memory, 0, buffer).unwrap()
     };
 
     // copy image data into staging buffer
@@ -357,14 +357,20 @@ fn main() {
         device.release_mapping_writer(data);
     }
 
-    let image = device.create_image(kind, 1, ColorFormat::get_format(), i::TRANSFER_DST | i::SAMPLED).unwrap(); // TODO: usage
-    println!("{:?}", image);
-    let image_req = device.get_image_requirements(&image);
+    let image_unbound = device.create_image(kind, 1, ColorFormat::get_format(), i::TRANSFER_DST | i::SAMPLED).unwrap(); // TODO: usage
+    println!("{:?}", image_unbound);
+    let image_req = device.get_image_requirements(&image_unbound);
 
-    let device_heap = heap_types.iter().find(|&&heap_type| heap_type.properties.contains(m::DEVICE_LOCAL)).unwrap();
-    let image_heap = device.create_heap(device_heap, d::ResourceHeapType::Images, image_req.size).unwrap();
+    let device_type = memory_types
+        .iter()
+        .find(|memory_type| {
+            image_req.type_mask & (1 << memory_type.id) != 0 && 
+            memory_type.properties.contains(m::DEVICE_LOCAL)
+        })
+        .unwrap();
+    let image_memory = device.allocate_memory(device_type, image_req.size).unwrap();
 
-    let image_logo = device.bind_image_memory(&image_heap, 0, image).unwrap();
+    let image_logo = device.bind_image_memory(&image_memory, 0, image_unbound).unwrap();
     let image_srv = device.view_image_as_shader_resource(&image_logo, ColorFormat::get_format()).unwrap();
 
     let sampler = device.create_sampler(
@@ -550,9 +556,9 @@ fn main() {
     device.destroy_semaphore(frame_semaphore);
     device.destroy_pipeline_layout(pipeline_layout);
     device.destroy_renderpass(render_pass);
-    device.destroy_heap(heap);
-    device.destroy_heap(image_heap);
-    device.destroy_heap(image_upload_heap);
+    device.free_memory(buffer_memory);
+    device.free_memory(image_memory);
+    device.free_memory(image_upload_memory);
     for pipeline in pipelines {
         if let Ok(pipeline) = pipeline {
             device.destroy_graphics_pipeline(pipeline);
