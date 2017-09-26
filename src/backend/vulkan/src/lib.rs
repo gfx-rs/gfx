@@ -425,7 +425,6 @@ impl core::Adapter<Backend> for Adapter {
                 sampler_border_color: false,
                 sampler_lod_bias: false,
                 sampler_objects: false,
-                heterogeneous_resource_heaps: true,
             },
             limits: Limits {
                 max_texture_size: limits.max_image_dimension3d as _,
@@ -442,7 +441,7 @@ impl core::Adapter<Backend> for Adapter {
             .iter()
             .map(|mem| mem.size).collect();
         let memory_types = mem_properties.memory_types[..mem_properties.memory_type_count as usize].iter().enumerate().map(|(i, mem)| {
-            let mut type_flags = memory::HeapProperties::empty();
+            let mut type_flags = memory::Properties::empty();
 
             if mem.property_flags.intersects(vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
                 type_flags |= memory::DEVICE_LOCAL;
