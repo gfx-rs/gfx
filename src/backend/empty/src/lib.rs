@@ -21,7 +21,7 @@ impl core::Backend for Backend {
     type SubpassCommandBuffer = SubpassCommandBuffer;
     type QueueFamily = QueueFamily;
 
-    type Heap = ();
+    type Memory = ();
     type CommandPool = RawCommandPool;
     type SubpassCommandPool = SubpassCommandPool;
 
@@ -88,7 +88,7 @@ impl core::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_heap(&mut self, _: &core::HeapType, _: device::ResourceHeapType, _: u64) -> Result<(), device::ResourceHeapError> {
+    fn allocate_memory(&mut self, _: &core::MemoryType, _: u64) -> Result<(), device::OutOfMemory> {
         unimplemented!()
     }
 
@@ -137,20 +137,21 @@ impl core::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn bind_buffer_memory(&mut self, _: &(), _: u64, _: ()) -> Result<(), buffer::CreationError> {
+    fn bind_buffer_memory(&mut self, _: &(), _: u64, _: ()) -> Result<(), device::BindError> {
         unimplemented!()
     }
 
     fn create_image(&mut self, _: image::Kind, _: image::Level, _: format::Format, _: image::Usage)
-         -> Result<(), image::CreationError> {
-            unimplemented!()
-         }
+         -> Result<(), image::CreationError>
+    {
+        unimplemented!()
+    }
 
     fn get_image_requirements(&mut self, _: &()) -> memory::Requirements {
         unimplemented!()
     }
 
-    fn bind_image_memory(&mut self, _: &(), _: u64, _: ()) -> Result<(), image::CreationError> {
+    fn bind_image_memory(&mut self, _: &(), _: u64, _: ()) -> Result<(), device::BindError> {
         unimplemented!()
     }
 
@@ -205,7 +206,7 @@ impl core::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn destroy_heap(&mut self, _: ()) {
+    fn free_memory(&mut self, _: ()) {
         unimplemented!()
     }
 

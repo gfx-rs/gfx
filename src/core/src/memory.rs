@@ -89,4 +89,6 @@ pub struct Requirements {
     pub size: u64,
     /// Memory alignment.
     pub alignment: u64,
+    /// Supported memory types.
+    pub type_mask: u64,
 }
