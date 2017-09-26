@@ -88,7 +88,6 @@ pub struct DescriptorSetLayout;
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct DescriptorSet;
 
-#[allow(missing_copy_implementations)]
 pub struct DescriptorPool {}
 
 impl core::DescriptorPool<Backend> for DescriptorPool {
@@ -107,8 +106,7 @@ pub struct ShaderModule {
 }
 
 #[derive(Debug)]
-#[allow(missing_copy_implementations)]
-pub struct Heap;
+pub struct Memory;
 
 #[derive(Debug)]
 pub struct RenderPass {
@@ -122,27 +120,20 @@ pub struct SubpassDesc {
 }
 
 #[derive(Debug)]
-#[allow(missing_copy_implementations)]
 pub struct ConstantBufferView;
 #[derive(Debug)]
-#[allow(missing_copy_implementations)]
 pub struct ShaderResourceView;
 #[derive(Debug)]
-#[allow(missing_copy_implementations)]
 pub struct UnorderedAccessView;
 #[derive(Debug)]
-#[allow(missing_copy_implementations)]
 pub struct RenderTargetView {
     pub view: TargetView,
 }
 #[derive(Debug)]
-#[allow(missing_copy_implementations)]
 pub struct DepthStencilView;
 #[derive(Debug)]
-#[allow(missing_copy_implementations)]
 pub struct PipelineLayout;
 
 #[derive(Debug)]
-#[allow(missing_copy_implementations)]
 // No inter-queue synchronization required for GL.
 pub struct Semaphore;
