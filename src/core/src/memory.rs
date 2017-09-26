@@ -38,20 +38,20 @@ pub fn cast_slice<A: Pod, B: Pod>(slice: &[A]) -> &[B] {
 }
 
 bitflags!(
-    /// Heap property flags.
+    /// Memory property flags.
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-    pub flags HeapProperties: u16 {
-        /// Device local heaps are located on the GPU.
+    pub flags Properties: u16 {
+        /// Device local memory on the GPU.
         const DEVICE_LOCAL   = 0x1,
 
         /// CPU-GPU coherent.
         ///
-        /// Non-coherent heaps require explicit flushing.
+        /// Non-coherent memory requires explicit flushing.
         const COHERENT     = 0x2,
 
-        /// Host visible heaps can be accessed by the CPU.
+        /// Host visible memory can be accessed by the CPU.
         ///
-        /// Backends must provide at least one cpu visible heap.
+        /// Backends must provide at least one cpu visible memory.
         const CPU_VISIBLE   = 0x4,
 
         /// Cached memory by the CPU
@@ -60,7 +60,7 @@ bitflags!(
         /// Memory combined writes.
         ///
         /// Buffer writes will be combined for possible larger bus transactions.
-        /// It's not advised to use these heaps for reading back data.
+        /// It's not advised to use these memory allocations for reading back data.
         const WRITE_COMBINED = 0x10,
 
         ///
