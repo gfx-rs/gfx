@@ -25,14 +25,14 @@ name = "gfx_app"
 [dependencies]
 log = "0.3"
 env_logger = "0.4"
-glutin = "0.9"
-winit = "0.7"
+glutin = "0.10"
+winit = "0.8"
 gfx_core = { path = "src/core", version = "0.7.1" }
 gfx_corell = { path = "src/corell", version = "0.1" }
 gfx = { path = "src/render", version = "0.16" }
 gfx_macros = { path = "src/macros", version = "0.2" }
 gfx_device_gl = { path = "src/backend/gl", version = "0.14" }
-gfx_window_glutin = { path = "src/window/glutin", version = "0.17" }
+gfx_window_glutin = { path = "src/window/glutin", version = "0.18" }
 
 [dependencies.gfx_device_vulkan]
 path = "src/backend/vulkan"
