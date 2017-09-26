@@ -1,7 +1,6 @@
 use std::sync::mpsc;
 
 use core::{self, Device as CoreDevice};
-use core::device::ResourceHeapType;
 use core::memory::Requirements;
 use memory::{self, Allocator, Memory, ReleaseFn, Provider, Dependency};
 use {buffer, image};
@@ -39,9 +38,9 @@ impl<B: Backend> StackAllocator<B> {
         StackAllocator(Provider::new(InnerStackAllocator {
             device: (*device.ref_raw()).clone(),
             usage,
-            buffers: ChunkStack::new(ResourceHeapType::Buffers),
-            images: ChunkStack::new(ResourceHeapType::Images),
-            targets: ChunkStack::new(ResourceHeapType::Targets),
+            buffers: ChunkStack::new(),
+            images: ChunkStack::new(),
+            targets: ChunkStack::new(),
             chunk_size,
         }))
     }
@@ -69,18 +68,18 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
         let inner: &mut InnerStackAllocator<B> = &mut self.0;
         let requirements = core::buffer::complete_requirements::<B>(
             device.mut_raw(), &buffer, usage);
-        let (heap, offset, release) = inner.buffers.allocate(
+        let (memory, offset, release) = inner.buffers.allocate(
             device,
             inner.usage,
             inner.chunk_size,
             requirements,
             dependency,
         );
-        let buffer = device.mut_raw().bind_buffer_memory(heap, offset, buffer)
+        let buffer = device.mut_raw().bind_buffer_memory(memory, offset, buffer)
             .unwrap();
         (buffer, Memory::new(release, inner.usage))
     }
-    
+
     fn allocate_image(&mut self,
         device: &mut Device<B>,
         usage: image::Usage,
@@ -94,22 +93,21 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
         } else {
             &mut inner.images
         };
-        let (heap, offset, release) = stack.allocate(
+        let (memory, offset, release) = stack.allocate(
             device,
             inner.usage,
             inner.chunk_size,
             requirements,
             dependency,
         );
-        let image = device.mut_raw().bind_image_memory(heap, offset, image)
+        let image = device.mut_raw().bind_image_memory(memory, offset, image)
             .unwrap();
         (image, Memory::new(release, inner.usage))
     }
 }
 
 struct ChunkStack<B: Backend> {
-    resource_type: ResourceHeapType,
-    chunks: Vec<B::Heap>,
+    chunks: Vec<B::Memory>,
     allocs: Vec<StackAlloc>,
     receiver: mpsc::Receiver<usize>,
     sender: mpsc::Sender<usize>,
@@ -122,11 +120,10 @@ struct StackAlloc {
 }
 
 impl<B: Backend> ChunkStack<B> {
-    fn new(resource_type: ResourceHeapType) -> Self {
+    fn new() -> Self {
         let (sender, receiver) = mpsc::channel();
 
         ChunkStack {
-            resource_type,
             chunks: Vec::new(),
             allocs: Vec::new(),
             receiver,
@@ -140,7 +137,7 @@ impl<B: Backend> ChunkStack<B> {
         chunk_size: u64,
         req: Requirements,
         dependency: Dependency<InnerStackAllocator<B>>,
-    ) -> (&B::Heap, u64, ReleaseFn)
+    ) -> (&B::Memory, u64, ReleaseFn)
     {
         self.update_allocs();
         assert!(req.size <= chunk_size);
@@ -188,11 +185,12 @@ impl<B: Backend> ChunkStack<B> {
         usage: memory::Usage,
         chunk_size: u64
     ) {
-        let heap_type = device.find_usage_heap(usage).unwrap();
-        let heap = device.mut_raw()
-            .create_heap(&heap_type, self.resource_type, chunk_size)
+        let type_mask = 0xFF; //TODO
+        let memory_type = device.find_usage_memory(usage, type_mask).unwrap();
+        let memory = device.mut_raw()
+            .allocate_memory(&memory_type, chunk_size)
             .unwrap();
-        self.chunks.push(heap);
+        self.chunks.push(memory);
     }
 
     fn shrink(&mut self, device: &mut B::Device) {
@@ -202,11 +200,11 @@ impl<B: Backend> ChunkStack<B> {
             .map(|a| a.chunk_index + 1)
             .unwrap_or(0);
 
-        for heap in self.chunks.drain(drain_beg..) {
-            device.destroy_heap(heap);
+        for memory in self.chunks.drain(drain_beg..) {
+            device.free_memory(memory);
         }
     }
-    
+
     fn update_allocs(&mut self) {
         for alloc_index in self.receiver.try_iter() {
             self.allocs[alloc_index].released = true;

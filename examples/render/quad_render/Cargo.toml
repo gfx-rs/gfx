@@ -15,6 +15,6 @@ image = "0.15"
 log = "0.3"
 winit = "0.7"
 gfx_core = { path = "../../../src/core", version = "0.10" }
-gfx = { path = "../../../src/render", version = "0.17" }
+gfx_render = { path = "../../../src/render", version = "0.1" }
 
 gfx_backend_vulkan = { path = "../../../src/backend/vulkan", version = "0.1" }
