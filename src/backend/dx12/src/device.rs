@@ -768,7 +768,7 @@ impl d::Device<B> for Device {
         let requirements = memory::Requirements {
             size,
             alignment: winapi::D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT as u64,
-            type_mask: if self.features.heterogeneous_resource_heaps { 0x7 } else { 0x7<<4 },
+            type_mask: if self.private_caps.heterogeneous_resource_heaps { 0x7 } else { 0x7<<4 },
         };
 
         Ok(UnboundBuffer {
@@ -879,7 +879,7 @@ impl d::Device<B> for Device {
             requirements: memory::Requirements {
                 size: alloc_info.SizeInBytes,
                 alignment: alloc_info.Alignment,
-                type_mask: if self.features.heterogeneous_resource_heaps { 0x7 }
+                type_mask: if self.private_caps.heterogeneous_resource_heaps { 0x7 }
                     else if usage.can_target() { 0x7<<12 } else { 0x7<<8 },
             },
             kind,
