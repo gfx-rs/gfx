@@ -224,12 +224,12 @@ pub enum IndexType {
 ///
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-pub struct HeapType {
+pub struct MemoryType {
     /// Id of the heap type.
     pub id: usize,
     /// Properties of the associated heap memory.
     pub properties: memory::HeapProperties,
-    /// Index to the underlying memory heap.
+    /// Index to the underlying memory heap in `Gpu::memory_heaps`
     pub heap_index: usize,
 }
 
@@ -258,7 +258,7 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type RenderPass:          Debug + Any + Send + Sync;
     type FrameBuffer:         Debug + Any + Send + Sync;
 
-    type Heap:                Debug + Any;
+    type Memory:              Debug + Any;
     type CommandPool:         RawCommandPool<Self>;
     type SubpassCommandPool:  SubpassCommandPool<Self>;
 
@@ -331,7 +331,7 @@ pub struct Gpu<B: Backend> {
     ///
     /// Each heap type is associated with one heap of `memory_heaps`.
     /// Multiple types can point to the same heap.
-    pub heap_types: Vec<HeapType>,
+    pub memory_types: Vec<MemoryType>,
     /// Memory heaps with their size in bytes.
     pub memory_heaps: Vec<u64>,
 }
