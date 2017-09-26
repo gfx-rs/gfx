@@ -1,6 +1,4 @@
-use core::device::ResourceHeapType;
-use core::pso::DescriptorSetLayoutBinding;
-use core::{self, image, pass, pso, HeapType};
+use core::{self, image, pass, pso, MemoryType};
 use free_list;
 use winapi::{self, UINT};
 use wio::com::ComPtr;
@@ -145,7 +143,7 @@ unsafe impl Sync for DepthStencilView { }
 
 #[derive(Debug)]
 pub struct DescriptorSetLayout {
-    pub bindings: Vec<DescriptorSetLayoutBinding>,
+    pub bindings: Vec<pso::DescriptorSetLayoutBinding>,
 }
 
 #[derive(Debug)]
@@ -163,11 +161,10 @@ unsafe impl Send for Semaphore {}
 unsafe impl Sync for Semaphore {}
 
 #[derive(Debug)]
-pub struct Heap {
-    pub raw: ComPtr<winapi::ID3D12Heap>,
-    pub ty: HeapType,
+pub struct Memory {
+    pub heap: ComPtr<winapi::ID3D12Heap>,
+    pub ty: MemoryType,
     pub size: u64,
-    pub resource_type: ResourceHeapType,
     pub default_state: winapi::D3D12_RESOURCE_STATES,
 }
 #[derive(Debug)]
