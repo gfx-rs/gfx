@@ -6,7 +6,8 @@ use d3d12;
 use d3dcompiler;
 use dxguid;
 use kernel32;
-use spirv_cross::compile;
+use spirv_cross::{hlsl, spirv, CompileTarget};
+use spirv_cross::spirv::ExecutionModel;
 use std::cmp;
 use std::collections::BTreeMap;
 use std::ops::Range;
@@ -71,7 +72,7 @@ impl Device {
     fn compile_shader(
         stage: pso::Stage,
         entry: &str,
-        byte_code: &[u8],
+        code: &[u8],
     ) -> Result<*mut winapi::ID3DBlob, d::ShaderError> {
         let stage_to_str = |stage| {
             match stage {
@@ -86,8 +87,8 @@ impl Device {
         let entry = ffi::CString::new(entry).unwrap();
         let hr = unsafe {
             d3dcompiler::D3DCompile(
-                byte_code.as_ptr() as *const _,
-                byte_code.len() as u64,
+                code.as_ptr() as *const _,
+                code.len() as u64,
                 ptr::null(),
                 ptr::null(),
                 ptr::null_mut(),
@@ -119,10 +120,10 @@ impl Device {
         stage: pso::Stage,
         hlsl_entry: &str,
         entry_point: &str,
-        byte_code: &[u8],
+        code: &[u8],
     ) -> Result<n::ShaderModule, d::ShaderError> {
         let mut shader_map = BTreeMap::new();
-        let blob = Self::compile_shader(stage, hlsl_entry, byte_code)?;
+        let blob = Self::compile_shader(stage, hlsl_entry, code)?;
         shader_map.insert(entry_point.into(), blob);
         Ok(n::ShaderModule { shaders: shader_map })
     }
@@ -644,20 +645,30 @@ impl d::Device<B> for Device {
             )
         };
 
-        let module = compile::SpirvModule::new(spirv_data);
+        let module = spirv::Module::new(spirv_data);
 
-        let parse_options = compile::HlslParseOptions::new();
-        let ast = self.hlsl_compiler
+        let parse_options = spirv::ParserOptions::new();
+        let ast = spirv::Parser::new(CompileTarget::Hlsl)
             .parse(&module, &parse_options)
             .map_err(|_| d::ShaderError::CompilationFailed("Unknown parsing error".into()))?;
 
-        let compile_options = compile::HlslCompileOptions::new();
+        let compile_options = hlsl::CompilerOptions::new();
         let shader_code = self.hlsl_compiler
             .compile(&ast, &compile_options)
             .map_err(|_| d::ShaderError::CompilationFailed("Unknown compile error".into()))?;
 
-        // TODO: Compile HLSL shader for each entry point
-        unimplemented!()
+        let mut shader_map = BTreeMap::new();
+        for entry_point in ast.get_entry_points().unwrap() {
+            let stage = match entry_point.execution_model {
+                ExecutionModel::ExecutionModelVertex => pso::Stage::Vertex,
+                ExecutionModel::ExecutionModelFragment => pso::Stage::Fragment,
+                _ => unimplemented!(), // TODO: geometry, tessellation and compute seem to unsupported for now
+            };
+
+            let shader_blob = Self::compile_shader(stage, &entry_point.name, shader_code.as_bytes())?;
+            shader_map.insert(entry_point.name, shader_blob);
+        }
+        Ok(n::ShaderModule { shaders: shader_map })
     }
 
     fn create_sampler(&mut self, info: image::SamplerInfo) -> n::Sampler {
