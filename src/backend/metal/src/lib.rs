@@ -1,5 +1,6 @@
+#![cfg(any(target_os = "macos", target_os = "ios"))]
+
 #[macro_use] extern crate gfx_core as core;
-extern crate winit;
 extern crate cocoa;
 #[macro_use] extern crate objc;
 extern crate io_surface;
@@ -10,6 +11,9 @@ extern crate core_graphics;
 extern crate block;
 
 extern crate metal_rs as metal;
+
+#[cfg(feature = "winit")]
+extern crate winit;
 
 mod device;
 mod window;
@@ -26,9 +30,9 @@ pub type GraphicsCommandPool = CommandPool;
 use std::mem;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::os::raw::c_void;
 
 use core::{QueueType};
-use winit::os::macos::WindowExt;
 use objc::runtime::{Object, Class};
 use cocoa::base::YES;
 use cocoa::appkit::NSWindow;
@@ -61,11 +65,9 @@ impl Instance {
         Instance {}
     }
 
-    pub fn create_surface(&self, window: &winit::Window) -> Surface {
+    pub fn create_surface_from_nsview(&self, nsview: *mut c_void) -> Surface {
         unsafe {
-            let wnd: cocoa::base::id = mem::transmute(window.get_nswindow());
-
-            let view = wnd.contentView();
+            let view: cocoa::base::id = mem::transmute(nsview);
             if view.is_null() {
                 panic!("window does not have a valid contentView");
             }
@@ -83,6 +85,12 @@ impl Instance {
                 render_layer: RefCell::new(render_layer),
             }))
         }
+    }
+
+    #[cfg(feature = "winit")]
+    pub fn create_surface(&self, window: &winit::Window) -> Surface {
+        use winit::os::macos::WindowExt;
+        self.create_surface_from_nsview(window.get_nsview())
     }
 }
 
