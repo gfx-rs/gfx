@@ -12,7 +12,7 @@ documentation = "https://docs.rs/gfx_backend_metal"
 workspace = "../../.."
 
 [features]
-default = []
+default = ["winit"]
 argument_buffer = []
 
 [lib]
@@ -21,7 +21,7 @@ name = "gfx_backend_metal"
 [dependencies]
 gfx_core = { path = "../../core", version = "0.10" }
 log = "0.3"
-winit = "0.7"
+winit = { version = "0.7", optional = true }
 scopeguard = "0.3"
 metal-rs = "0.4"
 objc = "0.2"
