@@ -6,6 +6,8 @@ use d3d12;
 use d3dcompiler;
 use dxguid;
 use kernel32;
+use spirv_cross::{hlsl, spirv, CompileTarget};
+use spirv_cross::spirv::ExecutionModel;
 use std::cmp;
 use std::collections::BTreeMap;
 use std::ops::Range;
@@ -66,13 +68,12 @@ impl Device {
     }
     */
 
-    pub fn create_shader_module_from_source(
-        &mut self,
+    /// Compile a single shader entry point from a HLSL text shader
+    fn compile_shader(
         stage: pso::Stage,
-        hlsl_entry: &str,
-        entry_point: &str,
-        byte_code: &[u8],
-    ) -> Result<n::ShaderModule, d::ShaderError> {
+        entry: &str,
+        code: &[u8],
+    ) -> Result<*mut winapi::ID3DBlob, d::ShaderError> {
         let stage_to_str = |stage| {
             match stage {
                 pso::Stage::Vertex => "vs_5_1\0",
@@ -81,14 +82,13 @@ impl Device {
             }
         };
 
-        let mut shader_map = BTreeMap::new();
         let mut blob = ptr::null_mut();
         let mut error = ptr::null_mut();
-        let entry = ffi::CString::new(hlsl_entry).unwrap();
+        let entry = ffi::CString::new(entry).unwrap();
         let hr = unsafe {
             d3dcompiler::D3DCompile(
-                byte_code.as_ptr() as *const _,
-                byte_code.len() as u64,
+                code.as_ptr() as *const _,
+                code.len() as u64,
                 ptr::null(),
                 ptr::null(),
                 ptr::null_mut(),
@@ -108,9 +108,22 @@ impl Device {
                 let slice = slice::from_raw_parts(pointer as *const u8, size as usize);
                 String::from_utf8_lossy(slice).into_owned()
             };
-            return Err(d::ShaderError::CompilationFailed(message))
+            Err(d::ShaderError::CompilationFailed(message))
+        } else {
+            Ok(blob)
         }
+    }
 
+    /// Create a shader module from HLSL with a single entry point
+    pub fn create_shader_module_from_source(
+        &mut self,
+        stage: pso::Stage,
+        hlsl_entry: &str,
+        entry_point: &str,
+        code: &[u8],
+    ) -> Result<n::ShaderModule, d::ShaderError> {
+        let mut shader_map = BTreeMap::new();
+        let blob = Self::compile_shader(stage, hlsl_entry, code)?;
         shader_map.insert(entry_point.into(), blob);
         Ok(n::ShaderModule { shaders: shader_map })
     }
@@ -725,8 +738,41 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_shader_module(&mut self, _spirv_data: &[u8]) -> Result<n::ShaderModule, d::ShaderError> {
-        unimplemented!()
+    fn create_shader_module(&mut self, raw_data: &[u8]) -> Result<n::ShaderModule, d::ShaderError> {
+        // spec requires "codeSize must be a multiple of 4"
+        assert_eq!(raw_data.len() & 3, 0);
+
+        let spirv_data = unsafe {
+            slice::from_raw_parts(
+                raw_data.as_ptr() as *const u32,
+                raw_data.len() / mem::size_of::<u32>(),
+            )
+        };
+
+        let module = spirv::Module::new(spirv_data);
+
+        let parse_options = spirv::ParserOptions::new();
+        let ast = spirv::Parser::new(CompileTarget::Hlsl)
+            .parse(&module, &parse_options)
+            .map_err(|_| d::ShaderError::CompilationFailed("Unknown parsing error".into()))?;
+
+        let compile_options = hlsl::CompilerOptions::new();
+        let shader_code = self.hlsl_compiler
+            .compile(&ast, &compile_options)
+            .map_err(|_| d::ShaderError::CompilationFailed("Unknown compile error".into()))?;
+
+        let mut shader_map = BTreeMap::new();
+        for entry_point in ast.get_entry_points().unwrap() {
+            let stage = match entry_point.execution_model {
+                ExecutionModel::ExecutionModelVertex => pso::Stage::Vertex,
+                ExecutionModel::ExecutionModelFragment => pso::Stage::Fragment,
+                _ => unimplemented!(), // TODO: geometry, tessellation and compute seem to unsupported for now
+            };
+
+            let shader_blob = Self::compile_shader(stage, &entry_point.name, shader_code.as_bytes())?;
+            shader_map.insert(entry_point.name, shader_blob);
+        }
+        Ok(n::ShaderModule { shaders: shader_map })
     }
 
     fn create_sampler(&mut self, info: image::SamplerInfo) -> n::Sampler {
