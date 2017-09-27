@@ -28,13 +28,13 @@ macro_rules! gfx_impl_struct {
 #[macro_export]
 macro_rules! gfx_impl_struct_meta {
     ($(#[$attr:meta])* impl_struct_meta $runtime_format:ty : $compile_format:path = $root:ident {
-        $( $field:ident: $ty:ty = $name:expr, )*
+        $( $(#[$field_attr:meta])* $field:ident: $ty:ty = $name:expr, )*
     }) => {
         #[allow(missing_docs)]
         #[derive(Clone, Copy, Debug, PartialEq)]
         $(#[$attr])*
         pub struct $root {
-            $( pub $field: $ty, )*
+            $( $(#[$field_attr])* pub $field: $ty, )*
         }
 
         unsafe impl $crate::traits::Pod for $root {}
@@ -90,12 +90,12 @@ macro_rules! gfx_vertex_struct {
 #[macro_export]
 macro_rules! gfx_vertex_struct_meta {
     ($(#[$attr:meta])* vertex_struct_meta $root:ident {
-        $( $field:ident: $ty:ty = $name:expr, )*
+        $( $(#[$field_attr:meta])* $field:ident: $ty:ty = $name:expr, )*
     }) => (gfx_impl_struct_meta!{
         $(#[$attr])* impl_struct_meta
         $crate::format::Format : $crate::format::Formatted =
         $root {
-            $( $field: $ty = $name, )*
+            $( $(#[$field_attr])* $field: $ty = $name, )*
         }
     })
 }
@@ -114,12 +114,12 @@ macro_rules! gfx_constant_struct {
 #[macro_export]
 macro_rules! gfx_constant_struct_meta {
     ($(#[$attr:meta])* constant_struct_meta $root:ident {
-        $( $field:ident: $ty:ty = $name:expr, )*
+        $( $(#[$field_attr:meta])* $field:ident: $ty:ty = $name:expr, )*
     }) => (gfx_impl_struct_meta!{
         $(#[$attr])* impl_struct_meta
         $crate::shade::ConstFormat : $crate::shade::Formatted =
         $root {
-            $( $field: $ty = $name, )*
+            $( $(#[$field_attr])* $field: $ty = $name, )*
         }
     })
 }
