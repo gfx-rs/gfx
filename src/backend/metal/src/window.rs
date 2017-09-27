@@ -13,7 +13,6 @@ use core::format::ChannelType;
 use core::CommandQueue;
 
 use metal::*;
-use winit::os::macos::WindowExt;
 use objc::runtime::{Object, Class};
 use core_foundation::base::TCFType;
 use core_foundation::string::{CFString, CFStringRef};
