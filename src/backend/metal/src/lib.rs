@@ -41,18 +41,6 @@ use core_graphics::geometry::CGRect;
 pub struct Instance {
 }
 
-pub trait NativeWindow {
-    fn get_nsview(&self) -> *mut c_void;
-}
-
-#[cfg(feature = "winit")]
-impl NativeWindow for winit::Window {
-    fn get_nsview(&self) -> *mut c_void {
-        use winit::os::macos::WindowExt;
-        WindowExt::get_nsview(self)
-    }
-}
-
 impl core::Instance<Backend> for Instance {
     fn enumerate_adapters(&self) -> Vec<Adapter> {
         // TODO: enumerate all devices
@@ -77,9 +65,9 @@ impl Instance {
         Instance {}
     }
 
-    pub fn create_surface(&self, window: &NativeWindow) -> Surface {
+    pub fn create_surface_from_nsview(&self, nsview: *mut c_void) -> Surface {
         unsafe {
-            let view: cocoa::base::id = mem::transmute(window.get_nsview());
+            let view: cocoa::base::id = mem::transmute(nsview);
             if view.is_null() {
                 panic!("window does not have a valid contentView");
             }
@@ -97,6 +85,11 @@ impl Instance {
                 render_layer: RefCell::new(render_layer),
             }))
         }
+    }
+
+    pub fn create_surface(&self, window: &winit::Window) -> Surface {
+        use winit::os::macos::WindowExt;
+        self.create_surface_from_nsview(window.get_nsview())
     }
 }
 
