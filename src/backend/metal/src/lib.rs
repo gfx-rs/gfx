@@ -87,6 +87,7 @@ impl Instance {
         }
     }
 
+    #[cfg(feature = "winit")]
     pub fn create_surface(&self, window: &winit::Window) -> Surface {
         use winit::os::macos::WindowExt;
         self.create_surface_from_nsview(window.get_nsview())
