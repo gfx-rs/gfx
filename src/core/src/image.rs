@@ -254,6 +254,18 @@ impl Kind {
             Kind::CubeArray(_, a) => Some(a),
         }
     }
+    /// Return the number of layers.
+    ///
+    /// Each cube face counts as separate layer.
+    pub fn get_num_layers(&self) -> Layer {
+        match *self {
+            Kind::D1(..) | Kind::D2(..) | Kind::D3(..) => 1,
+            Kind::Cube(..) => 6,
+            Kind::D1Array(_, a) => a,
+            Kind::D2Array(_, _, a, _) => a,
+            Kind::CubeArray(_, a) => 6*a,
+        }
+    }
     /// Check if it's one of the cube kinds.
     pub fn is_cube(&self) -> bool {
         match *self {

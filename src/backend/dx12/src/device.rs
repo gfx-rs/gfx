@@ -33,6 +33,7 @@ pub struct UnboundImage {
     usage: image::Usage,
     bits_per_texel: u8,
     levels: image::Level,
+    layers: image::Layer,
 }
 
 impl Device {
@@ -932,6 +933,7 @@ impl d::Device<B> for Device {
             usage,
             bits_per_texel: format.0.get_total_bits(),
             levels: mip_levels,
+            layers: kind.get_num_layers(),
         })
     }
 
@@ -974,6 +976,7 @@ impl d::Device<B> for Device {
             dxgi_format: image.desc.Format,
             bits_per_texel: image.bits_per_texel,
             levels: image.levels,
+            layers: image.layers,
         })
     }
 
