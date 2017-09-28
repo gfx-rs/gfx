@@ -107,7 +107,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn reset(&mut self, _release_resources: bool) {
-        unimplemented!()
+        unsafe { self.raw.Reset(self.allocator.as_mut(), ptr::null_mut()); }
     }
 
     fn begin_renderpass(
@@ -240,18 +240,30 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                         continue;
                     }
 
-                    raw_barriers.push(
-                        winapi::D3D12_RESOURCE_BARRIER {
-                            Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-                            Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
-                            u: winapi::D3D12_RESOURCE_TRANSITION_BARRIER {
-                                pResource: target.resource,
-                                Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-                                StateBefore: state_src,
-                                StateAfter: state_dst,
-                            },
+                    let mut barrier = winapi::D3D12_RESOURCE_BARRIER {
+                        Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+                        Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                        u: winapi::D3D12_RESOURCE_TRANSITION_BARRIER {
+                            pResource: target.resource,
+                            Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                            StateBefore: state_src,
+                            StateAfter: state_dst,
+                        },
+                    };
+
+                    if *range == target.as_subresource_range() {
+                        // Only one barrier if it affects the whole image.
+                        raw_barriers.push(barrier);
+                    } else {
+                        // Generate barrier for each layer/level combination.
+                        let (levels, layers) = range.clone();
+                        for level in levels {
+                            for layer in layers.clone() {
+                                barrier.u.Subresource = target.calc_subresource(level as _, layer as _);
+                                raw_barriers.push(barrier);
+                            }
                         }
-                    );
+                    }
                 }
             }
         }

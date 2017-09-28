@@ -115,11 +115,17 @@ pub struct Image {
     pub dxgi_format: winapi::DXGI_FORMAT,
     pub bits_per_texel: u8,
     pub levels: image::Level,
+    pub layers: image::Layer,
 }
 unsafe impl Send for Image { }
 unsafe impl Sync for Image { }
 
 impl Image {
+    /// Get the SubresourceRange for the whole image.
+    pub fn as_subresource_range(&self) -> image::SubresourceRange {
+        (0..self.levels, 0..self.layers)
+    }
+
     pub fn calc_subresource(&self, mip_level: UINT, layer: UINT) -> UINT {
         mip_level + layer * self.levels as UINT
     }
