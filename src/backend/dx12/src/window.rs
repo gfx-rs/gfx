@@ -120,6 +120,7 @@ impl core::Surface<Backend> for Surface {
                 dxgi_format: format,
                 bits_per_texel: config.color_format.0.get_total_bits(),
                 levels: 1,
+                layers: 1,
             };
 
             core::Backbuffer {
