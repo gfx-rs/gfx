@@ -18,8 +18,6 @@ use ash::vk;
 use core::memory;
 use core::{Features, Limits, PatchSize, QueueType};
 use std::{fmt, mem, ptr};
-#[cfg(feature = "copy")]
-use std::ops;
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
@@ -506,19 +504,24 @@ impl fmt::Debug for RawDevice {
 #[cfg(not(feature = "copy"))]
 pub type CommandQueueRef = Arc<vk::Queue>;
 #[cfg(feature = "copy")]
-#[derive(Clone, Copy)]
-pub struct CommandQueueRef(vk::Queue);
+pub use queue_ref::CommandQueueRef;
 #[cfg(feature = "copy")]
-impl CommandQueueRef {
-    fn new(queue: vk::Queue) -> Self {
-        CommandQueueRef(queue)
+mod queue_ref {
+    use vk;
+    use std::ops;
+
+    #[derive(Clone, Copy)]
+    pub struct CommandQueueRef(vk::Queue);
+    impl CommandQueueRef {
+        pub(crate) fn new(queue: vk::Queue) -> Self {
+            CommandQueueRef(queue)
+        }
     }
-}
-#[cfg(feature = "copy")]
-impl ops::Deref for CommandQueueRef {
-    type Target = vk::Queue;
-    fn deref(&self) -> &vk::Queue {
-        &self.0
+    impl ops::Deref for CommandQueueRef {
+        type Target = vk::Queue;
+        fn deref(&self) -> &vk::Queue {
+            &self.0
+        }
     }
 }
 

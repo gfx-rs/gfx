@@ -26,13 +26,56 @@ mod window;
 
 use core::{memory, Features, Limits, QueueType};
 use spirv_cross::hlsl;
-use wio::com::ComPtr;
+
+#[cfg(not(feature = "copy"))]
+pub use wio::com::ComPtr;
+#[cfg(feature = "copy")]
+use copy_ptr::CopyPtr as ComPtr;
 
 use std::{mem, ptr};
 use std::os::raw::c_void;
 use std::os::windows::ffi::OsStringExt;
 use std::ffi::OsString;
 use std::sync::{Arc, Mutex};
+
+#[cfg(feature = "copy")]
+mod copy_ptr {
+    use std::{fmt, ops};
+
+    pub struct CopyPtr<T>(*mut T);
+    impl<T> CopyPtr<T> {
+        pub(crate) unsafe fn new(ptr: *mut T) -> Self {
+            CopyPtr(ptr)
+        }
+    }
+    impl<T> CopyPtr<T> {
+        pub(crate) unsafe fn as_mut(&self) -> &mut T {
+            &mut *self.0
+        }
+    }
+    impl<T> Clone for CopyPtr<T> {
+        fn clone(&self) -> Self {
+            CopyPtr(self.0)
+        }
+    }
+    impl<T> Copy for CopyPtr<T> {}
+    impl<T> ops::Deref for CopyPtr<T> {
+        type Target = T;
+        fn deref(&self) -> &T {
+            unsafe { &*self.0 }
+        }
+    }
+    impl<T> ops::DerefMut for CopyPtr<T> {
+        fn deref_mut(&mut self) -> &mut T {
+            unsafe { &mut *self.0 }
+        }
+    }
+    impl<T> fmt::Debug for CopyPtr<T> {
+        fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            write!(formatter, "ComPtr({:p})", self.0)
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct QueueFamily;

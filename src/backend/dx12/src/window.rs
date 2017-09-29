@@ -5,8 +5,7 @@ use std::collections::VecDeque;
 use std::ptr;
 use winit;
 use winapi;
-use wio::com::ComPtr;
-use {conv, native as n, Adapter, Backend, Instance, QueueFamily};
+use {conv, native as n, Adapter, Backend, ComPtr, Instance, QueueFamily};
 
 use winit::os::windows::WindowExt;
 
