@@ -361,6 +361,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
+    fn clear_attachments(&mut self, _: &[command::AttachmentClear], _: &[target::Rect]) {
+        unimplemented!()
+    }
+
     fn resolve_image(
         &mut self,
         _src: &n::Image,
