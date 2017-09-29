@@ -14,6 +14,7 @@ workspace = "../../.."
 [features]
 default = ["winit"]
 argument_buffer = []
+copy = ["gfx_core/copy"]
 
 [lib]
 name = "gfx_backend_metal"

@@ -513,8 +513,9 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
 
         for region in regions {
             let image_offset = &region.image_offset;
+            let layers = &region.image_subresource.1;
 
-            for layer in region.image_subresource.1.clone() {
+            for layer in layers.start .. layers.end {
                 let offset = region.buffer_offset + region.buffer_slice_pitch as NSUInteger * (layer - region.image_subresource.1.start) as NSUInteger;
                 unsafe {
                     msg_send![encoder.0,

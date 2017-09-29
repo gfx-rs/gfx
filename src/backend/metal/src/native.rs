@@ -16,6 +16,7 @@ pub struct QueueFamily {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct ShaderModule(pub MTLLibrary);
 
 unsafe impl Send for ShaderModule {}
@@ -31,66 +32,79 @@ unsafe impl Send for RenderPass {}
 unsafe impl Sync for RenderPass {}
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct FrameBuffer(pub MTLRenderPassDescriptor);
 
 unsafe impl Send for FrameBuffer {}
 unsafe impl Sync for FrameBuffer {}
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct PipelineLayout {}
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct GraphicsPipeline(pub MTLRenderPipelineState);
 
 unsafe impl Send for GraphicsPipeline {}
 unsafe impl Sync for GraphicsPipeline {}
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct ComputePipeline {}
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct Image(pub MTLTexture);
 
 unsafe impl Send for Image {}
 unsafe impl Sync for Image {}
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct ConstantBufferView {}
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct ShaderResourceView(pub MTLTexture);
 
 unsafe impl Send for ShaderResourceView {}
 unsafe impl Sync for ShaderResourceView {}
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct UnorderedAccessView {}
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct RenderTargetView(pub MTLTexture);
 
 unsafe impl Send for RenderTargetView {}
 unsafe impl Sync for RenderTargetView {}
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct DepthStencilView(pub MTLTexture);
 
 unsafe impl Send for DepthStencilView {}
 unsafe impl Sync for DepthStencilView {}
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct Sampler(pub MTLSamplerState);
 
 unsafe impl Send for Sampler {}
 unsafe impl Sync for Sampler {}
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct Semaphore(pub *mut c_void);
 
 unsafe impl Send for Semaphore {}
 unsafe impl Sync for Semaphore {}
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct Buffer(pub MTLBuffer);
 
 unsafe impl Send for Buffer {}
@@ -177,6 +191,7 @@ pub struct DescriptorSetLayout {
 
 #[derive(Clone, Debug)]
 #[cfg(feature = "argument_buffer")]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct DescriptorSet {
     pub buffer: MTLBuffer,
     pub offset: NSUInteger,
@@ -243,30 +258,30 @@ impl Drop for DescriptorSetBinding {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub enum Memory {
     Emulated { memory_type: core::MemoryType, size: u64 },
     Native(MTLHeap),
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct UnboundBuffer {
     pub size: u64,
 }
 
-unsafe impl Send for UnboundBuffer {
-}
-unsafe impl Sync for UnboundBuffer {
-}
+unsafe impl Send for UnboundBuffer {}
+unsafe impl Sync for UnboundBuffer {}
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct UnboundImage(pub MTLTextureDescriptor);
 
-unsafe impl Send for UnboundImage {
-}
-unsafe impl Sync for UnboundImage {
-}
+unsafe impl Send for UnboundImage {}
+unsafe impl Sync for UnboundImage {}
 
 #[derive(Debug)]
+//#[cfg_attr(feature = "copy", derive(Clone, Copy))] //TODO
 pub struct Fence(pub Arc<Mutex<bool>>);
 
 impl core::QueueFamily for QueueFamily {
