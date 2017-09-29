@@ -11,7 +11,7 @@ use core::{VertexCount, VertexOffset, InstanceCount, IndexCount, Viewport};
 use core::{RawSubmission};
 use core::buffer::{IndexBufferView};
 use core::image::{ImageLayout};
-use core::command::{ClearColor, ClearValue, BufferImageCopy, BufferCopy};
+use core::command::{AttachmentClear, ClearColor, ClearValue, BufferImageCopy, BufferCopy};
 use core::command::{RenderPassInlineEncoder, ImageCopy, SubpassContents};
 use core::command::{ImageResolve};
 use core::pool::{CommandPoolCreateFlags};
@@ -284,6 +284,14 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
+    fn clear_attachments(
+        &mut self,
+        clears: &[AttachmentClear],
+        rects: &[target::Rect],
+    ) {
+        unimplemented!()
+    }
+
     fn clear_depth_stencil(
         &mut self,
         dsv: &native::DepthStencilView,
@@ -418,11 +426,11 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
             command_buffer.encoder_state = EncoderState::Render(render_encoder);
         }
     }
-    
+
     fn next_subpass(&mut self, contents: SubpassContents) {
         unimplemented!()
     }
-    
+
     fn end_renderpass(&mut self) {
         match self.inner().encoder_state {
             EncoderState::Render(encoder) => {
@@ -459,15 +467,15 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
     fn bind_compute_pipeline(&mut self, pipeline: &native::ComputePipeline) {
         unimplemented!()
     }
-    
+
     fn dispatch(&mut self, x: u32, y: u32, z: u32) {
         unimplemented!()
     }
-    
+
     fn dispatch_indirect(&mut self, buffer: &native::Buffer, offset: u64) {
         unimplemented!()
     }
-    
+
     fn copy_buffer(
         &mut self,
         src: &native::Buffer,
@@ -476,7 +484,7 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
     ) {
         unimplemented!()
     }
-    
+
     fn copy_image(
         &mut self,
         src: &native::Image,
@@ -487,7 +495,7 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
     ) {
         unimplemented!()
     }
-    
+
     fn copy_buffer_to_image(
         &mut self,
         src: &native::Buffer,
@@ -524,7 +532,7 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
             }
         }
     }
-    
+
     fn copy_image_to_buffer(
         &mut self,
         src: &native::Image,
@@ -534,7 +542,7 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
     ) {
         unimplemented!()
     }
-    
+
     fn draw(
         &mut self,
         vertices: Range<VertexCount>,
@@ -552,7 +560,7 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
             ];
         }
     }
-    
+
     fn draw_indexed(
         &mut self,
         indeces: Range<IndexCount>,
@@ -561,7 +569,7 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
     ) {
         unimplemented!()
     }
-    
+
     fn draw_indirect(
         &mut self,
         buffer: &native::Buffer,
@@ -571,7 +579,7 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
     ) {
         unimplemented!()
     }
-    
+
     fn draw_indexed_indirect(
         &mut self,
         buffer: &native::Buffer,

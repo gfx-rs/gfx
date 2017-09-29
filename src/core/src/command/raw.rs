@@ -5,7 +5,7 @@ use {Backend, IndexCount, InstanceCount, VertexCount, VertexOffset, Viewport};
 use buffer::IndexBufferView;
 use image::ImageLayout;
 use memory::Barrier;
-use super::{BufferCopy, BufferImageCopy, ClearColor, ClearValue, ImageCopy, ImageResolve,
+use super::{AttachmentClear, BufferCopy, BufferImageCopy, ClearColor, ClearValue, ImageCopy, ImageResolve,
     SubpassContents};
 
 ///
@@ -49,6 +49,9 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         ImageLayout,
         ClearColor,
     );
+
+    ///
+    fn clear_attachments(&mut self, &[AttachmentClear], &[target::Rect]);
 
     /// Clear depth-stencil target
     fn clear_depth_stencil(

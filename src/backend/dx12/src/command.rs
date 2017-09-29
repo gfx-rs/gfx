@@ -2,8 +2,8 @@ use wio::com::ComPtr;
 use core::{command, image, memory, pass, pso, target};
 use core::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, Viewport};
 use core::buffer::IndexBufferView;
-use core::command::{BufferCopy, BufferImageCopy, ClearColor, ClearValue, ImageCopy, ImageResolve,
-                    SubpassContents};
+use core::command::{AttachmentClear, BufferCopy, BufferImageCopy, ClearColor,
+                    ClearValue, ImageCopy, ImageResolve, SubpassContents};
 use winapi::{self, UINT64, UINT};
 use {conv, native as n, Backend};
 use smallvec::SmallVec;
@@ -95,6 +95,65 @@ impl CommandBuffer {
             }
         }
     }
+
+    fn clear_render_target_view(
+        &mut self,
+        rtv: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
+        color: ClearColor,
+        rects: &[winapi::D3D12_RECT],
+    ) {
+        let num_rects = rects.len() as _;
+        let rects = if num_rects > 0 {
+            rects.as_ptr()
+        } else {
+            ptr::null()
+        };
+
+        match color {
+            ClearColor::Float(ref c) => unsafe {
+                self.raw.ClearRenderTargetView(rtv, c, num_rects, rects);
+            },
+            _ => {
+                // TODO: Can we support uint/int?
+                error!("Unable to clear int/uint target");
+            }
+        }
+    }
+
+    fn clear_depth_stencil_view(
+        &mut self,
+        dsv: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
+        depth: Option<target::Depth>,
+        stencil: Option<target::Stencil>,
+        rects: &[winapi::D3D12_RECT],
+    ) {
+        let mut flags = winapi::D3D12_CLEAR_FLAGS(0);
+        if depth.is_some() {
+            flags = flags | winapi::D3D12_CLEAR_FLAG_DEPTH;
+        }
+        if stencil.is_some() {
+            flags = flags | winapi::D3D12_CLEAR_FLAG_STENCIL;
+        }
+
+        let num_rects = rects.len() as _;
+        let rects = if num_rects > 0 {
+            rects.as_ptr()
+        } else {
+            ptr::null()
+        };
+
+        unsafe {
+            self.raw.ClearDepthStencilView(
+                dsv,
+                flags,
+                depth.unwrap_or_default() as _,
+                stencil.unwrap_or_default() as _,
+                num_rects,
+                rects,
+            );
+        }
+    }
+
 }
 
 impl command::RawCommandBuffer<Backend> for CommandBuffer {
@@ -315,14 +374,40 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         _: image::ImageLayout,
         color: ClearColor,
     ) {
-        match color {
-            ClearColor::Float(ref c) => unsafe {
-                self.raw
-                    .ClearRenderTargetView(rtv.handle, c, 0, ptr::null());
-            },
-            _ => {
-                // TODO: Can we support uint/int?
-                error!("Unable to clear int/uint target");
+        self.clear_render_target_view(rtv.handle, color, &[]);
+    }
+
+    fn clear_attachments(
+        &mut self,
+        clears: &[AttachmentClear],
+        rects: &[target::Rect],
+    ) {
+        assert!(self.pass_cache.is_some(), "`clear_attachments` can only be called inside a renderpass");
+        let rects: SmallVec<[winapi::D3D12_RECT; 16]> = rects.iter().map(get_rect).collect();
+        for clear in clears {
+            match *clear {
+                AttachmentClear::Color(index, cv) => {
+                    let rtv = {
+                        let pass_cache = self.pass_cache.as_ref().unwrap();
+                        let rtv_id = pass_cache
+                            .render_pass
+                            .subpasses[self.cur_subpass]
+                            .color_attachments[index]
+                            .0;
+
+                        pass_cache
+                            .frame_buffer
+                            .color[rtv_id]
+                            .handle
+                    };
+
+                    self.clear_render_target_view(
+                        rtv,
+                        cv,
+                        &rects,
+                    );
+                }
+                _ => unimplemented!(),
             }
         }
     }
@@ -334,24 +419,12 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         depth: Option<target::Depth>,
         stencil: Option<target::Stencil>,
     ) {
-        let mut flags = winapi::D3D12_CLEAR_FLAGS(0);
-        if depth.is_some() {
-            flags = flags | winapi::D3D12_CLEAR_FLAG_DEPTH;
-        }
-        if stencil.is_some() {
-            flags = flags | winapi::D3D12_CLEAR_FLAG_STENCIL;
-        }
-
-        unsafe {
-            self.raw.ClearDepthStencilView(
-                dsv.handle,
-                flags,
-                depth.unwrap_or_default() as _,
-                stencil.unwrap_or_default() as _,
-                0,
-                ptr::null(),
-            );
-        }
+        self.clear_depth_stencil_view(
+            dsv.handle,
+            depth,
+            stencil,
+            &[],
+        );
     }
 
     fn resolve_image(
