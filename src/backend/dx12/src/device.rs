@@ -6,7 +6,8 @@ use d3d12;
 use d3dcompiler;
 use dxguid;
 use kernel32;
-use spirv_cross::{hlsl, spirv, CompileTarget};
+use spirv_cross::{hlsl, spirv};
+use spirv_cross::hlsl::ShaderModel;
 use spirv_cross::spirv::ExecutionModel;
 use std::cmp;
 use std::collections::BTreeMap;
@@ -71,15 +72,25 @@ impl Device {
     /// Compile a single shader entry point from a HLSL text shader
     fn compile_shader(
         stage: pso::Stage,
+        shader_model: ShaderModel,
         entry: &str,
         code: &[u8],
     ) -> Result<*mut winapi::ID3DBlob, d::ShaderError> {
-        let stage_to_str = |stage| {
-            match stage {
-                pso::Stage::Vertex => "vs_5_1\0",
-                pso::Stage::Fragment => "ps_5_1\0",
+        let stage_to_str = |stage, shader_model| {
+            let stage = match stage {
+                pso::Stage::Vertex => "vs",
+                pso::Stage::Fragment => "ps",
                 _ => unimplemented!(),
-            }
+            };
+
+            let model = match shader_model {
+                ShaderModel::V5_0 => "5_0",
+                ShaderModel::V5_1 => "5_1",
+                ShaderModel::V6_0 => "6_0",
+                _ => unimplemented!(),
+            };
+
+            format!("{}_{}\0", stage, model)
         };
 
         let mut blob = ptr::null_mut();
@@ -93,7 +104,7 @@ impl Device {
                 ptr::null(),
                 ptr::null_mut(),
                 entry.as_ptr() as *const _,
-                stage_to_str(stage).as_ptr() as *const i8,
+                stage_to_str(stage, shader_model).as_ptr() as *const i8,
                 1,
                 0,
                 &mut blob as *mut *mut _,
@@ -123,7 +134,7 @@ impl Device {
         code: &[u8],
     ) -> Result<n::ShaderModule, d::ShaderError> {
         let mut shader_map = BTreeMap::new();
-        let blob = Self::compile_shader(stage, hlsl_entry, code)?;
+        let blob = Self::compile_shader(stage, ShaderModel::V5_1, hlsl_entry, code)?;
         shader_map.insert(entry_point.into(), blob);
         Ok(n::ShaderModule { shaders: shader_map })
     }
@@ -751,25 +762,31 @@ impl d::Device<B> for Device {
 
         let module = spirv::Module::new(spirv_data);
 
-        let parse_options = spirv::ParserOptions::new();
-        let ast = spirv::Parser::new(CompileTarget::Hlsl)
+        let parse_options = spirv::ParserOptions::default();
+        let parsed = spirv::Parser::new()
             .parse(&module, &parse_options)
             .map_err(|_| d::ShaderError::CompilationFailed("Unknown parsing error".into()))?;
 
-        let compile_options = hlsl::CompilerOptions::new();
+        let mut compile_options = hlsl::CompilerOptions::default();
+        compile_options.shader_model = ShaderModel::V5_1;
         let shader_code = self.hlsl_compiler
-            .compile(&ast, &compile_options)
+            .compile(&parsed, &compile_options)
             .map_err(|_| d::ShaderError::CompilationFailed("Unknown compile error".into()))?;
 
         let mut shader_map = BTreeMap::new();
-        for entry_point in ast.get_entry_points().unwrap() {
+        for entry_point in parsed.entry_points {
             let stage = match entry_point.execution_model {
-                ExecutionModel::ExecutionModelVertex => pso::Stage::Vertex,
-                ExecutionModel::ExecutionModelFragment => pso::Stage::Fragment,
+                ExecutionModel::Vertex => pso::Stage::Vertex,
+                ExecutionModel::Fragment => pso::Stage::Fragment,
                 _ => unimplemented!(), // TODO: geometry, tessellation and compute seem to unsupported for now
             };
 
-            let shader_blob = Self::compile_shader(stage, &entry_point.name, shader_code.as_bytes())?;
+            let shader_blob = Self::compile_shader(
+                stage,
+                compile_options.shader_model,
+                &entry_point.name,
+                shader_code.as_bytes(),
+            )?;
             shader_map.insert(entry_point.name, shader_blob);
         }
         Ok(n::ShaderModule { shaders: shader_map })
