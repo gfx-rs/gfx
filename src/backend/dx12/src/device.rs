@@ -35,38 +35,6 @@ pub struct UnboundImage {
 }
 
 impl Device {
-    /*
-    pub fn create_shader_module(
-        &mut self,
-        shaders: &[(String, &[u8])],
-    ) -> Result<n::ShaderModule, d::ShaderError> {
-        let mut shader_map = BTreeMap::new();
-        // TODO: handle entry points with the same name
-        for &(ref entry_point, byte_code) in shaders {
-            let mut blob: *mut winapi::ID3DBlob = ptr::null_mut();
-            let hr = unsafe {
-                d3dcompiler::D3DCreateBlob(
-                    byte_code.len() as u64,
-                    &mut blob as *mut *mut _)
-            };
-            if !winapi::SUCCEEDED(hr) {
-                error!("D3DCreateBlob error {:x}", hr);
-                let message = "D3DCreateBlob fail".to_string();
-                return Err(d::ShaderError::CompilationFailed(message))
-            }
-
-            unsafe {
-                ptr::copy(
-                    byte_code.as_ptr(),
-                    (*blob).GetBufferPointer() as *mut u8,
-                    byte_code.len());
-            }
-            shader_map.insert(entry_point.clone(), blob);
-        }
-        Ok(n::ShaderModule { shaders: shader_map })
-    }
-    */
-
     /// Compile a single shader entry point from a HLSL text shader
     fn compile_shader(
         stage: pso::Stage,

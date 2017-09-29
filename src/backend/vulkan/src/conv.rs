@@ -1,6 +1,6 @@
 use ash::vk;
 use core::{buffer, image, pass, pso, state};
-use core::command::{ClearColor, ClearValue, Offset};
+use core::command::{ClearColor, ClearDepthStencil, ClearValue, Offset};
 use core::device::Extent;
 use core::format::{SurfaceType, ChannelType};
 use core::{IndexType, Primitive};
@@ -193,6 +193,13 @@ pub fn map_clear_color(value: ClearColor) -> vk::ClearColorValue {
     }
 }
 
+pub fn map_clear_ds(value: ClearDepthStencil) -> vk::ClearDepthStencilValue {
+    vk::ClearDepthStencilValue {
+        depth: value.depth,
+        stencil: value.stencil,
+    }
+}
+
 pub fn map_clear_value(value: &ClearValue) -> vk::ClearValue {
     match *value {
         ClearValue::Color(cv) => {
@@ -200,10 +207,7 @@ pub fn map_clear_value(value: &ClearValue) -> vk::ClearValue {
             vk::ClearValue::new_color(cv)
         },
         ClearValue::DepthStencil(dsv) => {
-            let dsv = vk::ClearDepthStencilValue {
-                depth: dsv.depth,
-                stencil: dsv.stencil,
-            };
+            let dsv = map_clear_ds(dsv);
             vk::ClearValue::new_depth_stencil(dsv)
         },
     }
