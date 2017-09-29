@@ -1,17 +1,16 @@
 use std::ptr;
-use std::sync::Arc;
 use ash::vk;
 use ash::version::DeviceV1_0;
 use smallvec::SmallVec;
 
 use command::{CommandBuffer, SubpassCommandBuffer};
 use core::pool;
-use {Backend, CommandQueue, RawDevice};
+use {Backend, CommandQueue, DeviceRef};
 
 
 pub struct RawCommandPool {
     pool: vk::CommandPool,
-    device: Arc<RawDevice>,
+    device: DeviceRef,
 }
 
 impl pool::RawCommandPool<Backend> for RawCommandPool {
@@ -88,7 +87,7 @@ pub struct SubpassCommandPool {
     _pool: vk::CommandPool,
     _command_buffers: Vec<SubpassCommandBuffer>,
     _next_buffer: usize,
-    _device: Arc<RawDevice>,
+    _device: DeviceRef,
 }
 
 impl pool::SubpassCommandPool<Backend> for SubpassCommandPool { }

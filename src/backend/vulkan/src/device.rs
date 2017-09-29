@@ -13,9 +13,11 @@ use {conv, memory};
 
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct UnboundBuffer(n::Buffer);
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct UnboundImage(n::Image);
 
 impl Device {
@@ -821,10 +823,10 @@ impl d::Device<B> for Device {
 
         let raw = unsafe {
             self.raw.0.create_image(&info, None)
-                      .expect("Error on image creation") // TODO: error handling
+                .expect("Error on image creation") // TODO: error handling
         };
 
-        Ok(UnboundImage(n::Image{ raw, bytes_per_texel, extent }))
+        Ok(UnboundImage(n::Image{ raw, bytes_per_texel, extent: extent.into() }))
     }
 
     ///
@@ -852,7 +854,7 @@ impl d::Device<B> for Device {
     fn view_buffer_as_constant(&mut self, buffer: &n::Buffer, range: Range<u64>) -> Result<n::ConstantBufferView, d::TargetViewError> {
         Ok(n::ConstantBufferView {
             buffer: buffer.raw,
-            range,
+            range: range.into(),
         })
     }
 
@@ -865,7 +867,7 @@ impl d::Device<B> for Device {
         let rtv = n::RenderTargetView {
             image: image.raw,
             view: self.create_image_view(image, format),
-            range,
+            range: range.into(),
         };
 
         Ok(rtv)
@@ -913,7 +915,7 @@ impl d::Device<B> for Device {
 
         n::DescriptorPool {
             raw: pool,
-            device: self.raw.clone(),
+            device: self.raw.clone().into(),
         }
     }
 

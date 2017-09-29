@@ -18,6 +18,8 @@ use ash::vk;
 use core::memory;
 use core::{Features, Limits, PatchSize, QueueType};
 use std::{fmt, mem, ptr};
+#[cfg(feature = "copy")]
+use std::ops;
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
@@ -313,7 +315,7 @@ impl core::QueueFamily for QueueFamily {
 /// Create associated command queues for a specific queue type
 fn collect_queues<C>(
      queue_descs: &[(&QueueFamily, QueueType, u32)],
-     device_raw: &Arc<RawDevice>,
+     device_raw: &DeviceRef,
      collect_type: QueueType,
 ) -> Vec<core::CommandQueue<Backend, C>> {
     queue_descs.iter()
@@ -325,7 +327,7 @@ fn collect_queues<C>(
                     device_raw.0.get_device_queue(family_index, id)
                 };
                 let queue = CommandQueue {
-                    raw: Arc::new(queue_raw),
+                    raw: CommandQueueRef::new(queue_raw),
                     device: device_raw.clone(),
                     family_index,
                 };
@@ -466,13 +468,13 @@ impl core::Adapter<Backend> for Adapter {
             }
         }).collect();
 
-        let device_arc = device.raw.clone();
+        let device_ref = DeviceRef::from(device.raw.clone());
         core::Gpu {
             device,
-            general_queues: collect_queues(queue_descs, &device_arc, QueueType::General),
-            graphics_queues: collect_queues(queue_descs, &device_arc, QueueType::Graphics),
-            compute_queues: collect_queues(queue_descs, &device_arc, QueueType::Compute),
-            transfer_queues: collect_queues(queue_descs, &device_arc, QueueType::Transfer),
+            general_queues: collect_queues(queue_descs, &device_ref, QueueType::General),
+            graphics_queues: collect_queues(queue_descs, &device_ref, QueueType::Graphics),
+            compute_queues: collect_queues(queue_descs, &device_ref, QueueType::Compute),
+            transfer_queues: collect_queues(queue_descs, &device_ref, QueueType::Transfer),
             memory_types,
             memory_heaps,
         }
@@ -487,43 +489,44 @@ impl core::Adapter<Backend> for Adapter {
     }
 }
 
-#[doc(hidden)]
+//TODO: make private
 pub struct RawDevice(pub ash::Device<V1_0>);
-impl fmt::Debug for RawDevice {
-    fn fmt(&self, _formatter: &mut fmt::Formatter) -> fmt::Result {
-        unimplemented!()
-    }
-}
 impl Drop for RawDevice {
     fn drop(&mut self) {
         unsafe { self.0.destroy_device(None); }
     }
 }
-
-// Need to explicitly synchronize on submission and present.
-pub type RawCommandQueue = Arc<vk::Queue>;
-
-pub struct CommandQueue {
-    raw: RawCommandQueue,
-    device: Arc<RawDevice>,
-    family_index: u32,
+impl fmt::Debug for RawDevice {
+    fn fmt(&self, _formatter: &mut fmt::Formatter) -> fmt::Result {
+        unimplemented!()
+    }
 }
 
-impl CommandQueue {
-    #[doc(hidden)]
-    pub fn raw(&self) -> RawCommandQueue {
-        self.raw.clone()
+// Need to explicitly synchronize on submission and present.
+#[cfg(not(feature = "copy"))]
+pub type CommandQueueRef = Arc<vk::Queue>;
+#[cfg(feature = "copy")]
+#[derive(Clone, Copy)]
+pub struct CommandQueueRef(vk::Queue);
+#[cfg(feature = "copy")]
+impl CommandQueueRef {
+    fn new(queue: vk::Queue) -> Self {
+        CommandQueueRef(queue)
     }
+}
+#[cfg(feature = "copy")]
+impl ops::Deref for CommandQueueRef {
+    type Target = vk::Queue;
+    fn deref(&self) -> &vk::Queue {
+        &self.0
+    }
+}
 
-    #[doc(hidden)]
-    pub fn device(&self) -> Arc<RawDevice> {
-        self.device.clone()
-    }
-
-    #[doc(hidden)]
-    pub fn device_handle(&self) -> vk::Device {
-        self.device.0.handle()
-    }
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
+pub struct CommandQueue {
+    raw: CommandQueueRef,
+    device: DeviceRef,
+    family_index: u32,
 }
 
 impl core::RawCommandQueue<Backend> for CommandQueue {
@@ -569,6 +572,47 @@ impl core::RawCommandQueue<Backend> for CommandQueue {
         assert_eq!(Ok(()), result);
     }
 }
+
+#[cfg(feature = "copy")]
+mod device_ref {
+    use std::{fmt, ops, sync};
+    use RawDevice;
+
+    pub struct DeviceRef(*mut RawDevice);
+    unsafe impl Send for DeviceRef {}
+    unsafe impl Sync for DeviceRef {}
+    impl From<sync::Arc<RawDevice>> for DeviceRef {
+        fn from(arc: sync::Arc<RawDevice>) -> Self {
+            DeviceRef(&arc.0 as *const _ as *mut _)
+        }
+    }
+    impl Clone for DeviceRef {
+        fn clone(&self) -> Self {
+            DeviceRef(self. 0)
+        }
+    }
+    impl Copy for DeviceRef {}
+    impl fmt::Debug for DeviceRef {
+        fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            write!(formatter, "DeviceRef({:p})", self.0)
+        }
+    }
+    impl ops::Deref for DeviceRef {
+        type Target = RawDevice;
+        fn deref(&self) -> &RawDevice {
+            unsafe { &*self.0 }
+        }
+    }
+    impl ops::DerefMut for DeviceRef {
+        fn deref_mut(&mut self) -> &mut RawDevice {
+            unsafe { &mut *self.0 }
+        }
+    }
+}
+#[cfg(feature = "copy")]
+use device_ref::DeviceRef;
+#[cfg(not(feature = "copy"))]
+type DeviceRef = Arc<RawDevice>;
 
 #[derive(Clone)]
 pub struct Device {
