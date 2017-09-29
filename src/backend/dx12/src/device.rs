@@ -6,13 +6,10 @@ use d3d12;
 use d3dcompiler;
 use dxguid;
 use kernel32;
-use spirv_cross::{hlsl, spirv};
-use spirv_cross::hlsl::ShaderModel;
-use spirv_cross::spirv::ExecutionModel;
+use spirv_cross::{hlsl, spirv, ErrorCode as SpirvErrorCode};
 use std::cmp;
 use std::collections::BTreeMap;
 use std::ops::Range;
-//use std::os::windows::ffi::OsStringExt;
 use std::{ffi, mem, ptr, slice};
 use {free_list, native as n, shade, Backend as B, Device};
 use winapi;
@@ -72,7 +69,7 @@ impl Device {
     /// Compile a single shader entry point from a HLSL text shader
     fn compile_shader(
         stage: pso::Stage,
-        shader_model: ShaderModel,
+        shader_model: hlsl::ShaderModel,
         entry: &str,
         code: &[u8],
     ) -> Result<*mut winapi::ID3DBlob, d::ShaderError> {
@@ -84,9 +81,9 @@ impl Device {
             };
 
             let model = match shader_model {
-                ShaderModel::V5_0 => "5_0",
-                ShaderModel::V5_1 => "5_1",
-                ShaderModel::V6_0 => "6_0",
+                hlsl::ShaderModel::V5_0 => "5_0",
+                hlsl::ShaderModel::V5_1 => "5_1",
+                hlsl::ShaderModel::V6_0 => "6_0",
                 _ => unimplemented!(),
             };
 
@@ -134,7 +131,7 @@ impl Device {
         code: &[u8],
     ) -> Result<n::ShaderModule, d::ShaderError> {
         let mut shader_map = BTreeMap::new();
-        let blob = Self::compile_shader(stage, ShaderModel::V5_1, hlsl_entry, code)?;
+        let blob = Self::compile_shader(stage, hlsl::ShaderModel::V5_1, hlsl_entry, code)?;
         shader_map.insert(entry_point.into(), blob);
         Ok(n::ShaderModule { shaders: shader_map })
     }
@@ -765,19 +762,31 @@ impl d::Device<B> for Device {
         let parse_options = spirv::ParserOptions::default();
         let parsed = spirv::Parser::new()
             .parse(&module, &parse_options)
-            .map_err(|_| d::ShaderError::CompilationFailed("Unknown parsing error".into()))?;
+            .map_err(|err| {
+                let msg =  match err {
+                    SpirvErrorCode::CompilationError(msg) => msg,
+                    SpirvErrorCode::Unhandled => "Unknown parsing error".into(),
+                };
+                d::ShaderError::CompilationFailed(msg)
+            })?;
 
         let mut compile_options = hlsl::CompilerOptions::default();
-        compile_options.shader_model = ShaderModel::V5_1;
+        compile_options.shader_model = hlsl::ShaderModel::V5_1;
         let shader_code = self.hlsl_compiler
             .compile(&parsed, &compile_options)
-            .map_err(|_| d::ShaderError::CompilationFailed("Unknown compile error".into()))?;
+            .map_err(|err| {
+                let msg =  match err {
+                    SpirvErrorCode::CompilationError(msg) => msg,
+                    SpirvErrorCode::Unhandled => "Unknown compile error".into(),
+                };
+                d::ShaderError::CompilationFailed(msg)
+            })?;
 
         let mut shader_map = BTreeMap::new();
         for entry_point in parsed.entry_points {
             let stage = match entry_point.execution_model {
-                ExecutionModel::Vertex => pso::Stage::Vertex,
-                ExecutionModel::Fragment => pso::Stage::Fragment,
+                spirv::ExecutionModel::Vertex => pso::Stage::Vertex,
+                spirv::ExecutionModel::Fragment => pso::Stage::Fragment,
                 _ => unimplemented!(), // TODO: geometry, tessellation and compute seem to unsupported for now
             };
 
