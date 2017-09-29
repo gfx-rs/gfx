@@ -466,7 +466,7 @@ impl core::Adapter<Backend> for Adapter {
             }
         }).collect();
 
-        let device_ref = DeviceRef::from(device.raw.clone());
+        let device_ref = device.get_ref();
         core::Gpu {
             device,
             general_queues: collect_queues(queue_descs, &device_ref, QueueType::General),
@@ -577,43 +577,7 @@ impl core::RawCommandQueue<Backend> for CommandQueue {
 }
 
 #[cfg(feature = "copy")]
-mod device_ref {
-    use std::{fmt, ops, sync};
-    use RawDevice;
-
-    pub struct DeviceRef(*mut RawDevice);
-    unsafe impl Send for DeviceRef {}
-    unsafe impl Sync for DeviceRef {}
-    impl From<sync::Arc<RawDevice>> for DeviceRef {
-        fn from(arc: sync::Arc<RawDevice>) -> Self {
-            DeviceRef(&arc.0 as *const _ as *mut _)
-        }
-    }
-    impl Clone for DeviceRef {
-        fn clone(&self) -> Self {
-            DeviceRef(self. 0)
-        }
-    }
-    impl Copy for DeviceRef {}
-    impl fmt::Debug for DeviceRef {
-        fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            write!(formatter, "DeviceRef({:p})", self.0)
-        }
-    }
-    impl ops::Deref for DeviceRef {
-        type Target = RawDevice;
-        fn deref(&self) -> &RawDevice {
-            unsafe { &*self.0 }
-        }
-    }
-    impl ops::DerefMut for DeviceRef {
-        fn deref_mut(&mut self) -> &mut RawDevice {
-            unsafe { &mut *self.0 }
-        }
-    }
-}
-#[cfg(feature = "copy")]
-use device_ref::DeviceRef;
+type DeviceRef = core::copy::Pointer<RawDevice>;
 #[cfg(not(feature = "copy"))]
 type DeviceRef = Arc<RawDevice>;
 

@@ -3,7 +3,7 @@ use ash::version::DeviceV1_0;
 use core;
 use core::image::SubresourceRange;
 #[cfg(feature = "copy")]
-use core::CopyRange as Range;
+use core::copy::Range as Range;
 #[cfg(not(feature = "copy"))]
 use std::ops::Range;
 use {Backend, DeviceRef};

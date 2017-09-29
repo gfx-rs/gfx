@@ -53,7 +53,7 @@ fn map_buffer_image_regions(
                     y: region.image_offset.y,
                     z: region.image_offset.z,
                 },
-                image_extent: image.extent.into(),
+                image_extent: image.extent.clone().into(),
             }
         })
         .collect()

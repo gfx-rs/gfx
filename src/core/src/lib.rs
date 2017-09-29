@@ -21,8 +21,6 @@ use std::any::Any;
 use std::error::Error;
 use std::fmt::{self, Debug};
 use std::hash::Hash;
-#[cfg(feature = "copy")]
-use std::ops::Range;
 
 pub use self::adapter::{Adapter, AdapterInfo};
 pub use self::command::{RawCommandBuffer};
@@ -40,6 +38,8 @@ pub use draw_state::{state, target};
 pub mod adapter;
 pub mod buffer;
 pub mod command;
+#[cfg(feature = "copy")]
+pub mod copy;
 pub mod device;
 pub mod format;
 pub mod image;
@@ -75,25 +75,6 @@ pub type UnorderedViewSlot = u8;
 pub type ColorSlot = u8;
 /// Slot for a sampler.
 pub type SamplerSlot = u8;
-
-/// A copyable range replacement for `std::ops::Range`
-#[cfg(feature = "copy")]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct CopyRange<T> {
-    ///
-    pub start: T,
-    ///
-    pub end: T,
-}
-#[cfg(feature = "copy")]
-impl<T> From<Range<T>> for CopyRange<T> {
-    fn from(other: Range<T>) -> Self {
-        CopyRange {
-            start: other.start,
-            end: other.end,
-        }
-    }
-}
 
 ///
 #[allow(missing_docs)]

@@ -30,6 +30,8 @@ elif [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
   FEATURES+="metal"
   GLUTIN_HEADLESS_FEATURE="--features headless"
 
+  # Test the `copy` feature on metal
+  (cd backend/src/metal && cargo test --features copy)
   # Test the indirect argument buffer path on OSX
   (cd examples/core/quad && cargo build --features metal,metal_argument_buffer)
 fi

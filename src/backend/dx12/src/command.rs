@@ -315,8 +315,8 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                     } else {
                         // Generate barrier for each layer/level combination.
                         let (levels, layers) = range.clone();
-                        for level in levels {
-                            for layer in layers.clone() {
+                        for level in levels.start .. levels.end {
+                            for layer in layers.start .. layers.end {
                                 barrier.u.Subresource = target.calc_subresource(level as _, layer as _);
                                 raw_barriers.push(barrier);
                             }

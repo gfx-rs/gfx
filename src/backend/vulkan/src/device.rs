@@ -8,7 +8,7 @@ use std::{mem, ptr};
 use std::ffi::CString;
 use std::ops::Range;
 
-use {Backend as B, Device};
+use {Backend as B, Device, DeviceRef};
 use {conv, memory};
 
 
@@ -21,6 +21,15 @@ pub struct UnboundBuffer(n::Buffer);
 pub struct UnboundImage(n::Image);
 
 impl Device {
+    #[cfg(feature = "copy")]
+    pub(crate) fn get_ref(&self) -> DeviceRef {
+        unsafe { DeviceRef::new(&self.raw as *const _ as *mut _) }
+    }
+    #[cfg(not(feature = "copy"))]
+    pub(crate) fn get_ref(&self) -> DeviceRef {
+        self.raw.clone()
+    }
+
     fn create_image_view(&mut self, image: &n::Image, format: format::Format) -> vk::ImageView {
         // TODO
         let components = vk::ComponentMapping {
@@ -915,7 +924,7 @@ impl d::Device<B> for Device {
 
         n::DescriptorPool {
             raw: pool,
-            device: self.raw.clone().into(),
+            device: self.get_ref(),
         }
     }
 

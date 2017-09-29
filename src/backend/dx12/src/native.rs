@@ -126,7 +126,7 @@ unsafe impl Sync for Image { }
 impl Image {
     /// Get the SubresourceRange for the whole image.
     pub fn as_subresource_range(&self) -> image::SubresourceRange {
-        (0..self.levels, 0..self.layers)
+        ((0..self.levels).into(), (0..self.layers).into())
     }
 
     pub fn calc_subresource(&self, mip_level: UINT, layer: UINT) -> UINT {

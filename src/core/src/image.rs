@@ -10,7 +10,7 @@
 use std::error::Error;
 use std::fmt;
 #[cfg(feature = "copy")]
-use CopyRange as Range;
+use copy::Range as Range;
 #[cfg(not(feature = "copy"))]
 use std::ops::Range;
 use {format, state, target};
