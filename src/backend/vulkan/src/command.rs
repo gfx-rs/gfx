@@ -9,8 +9,8 @@ use core::{command, memory, pso, target};
 use core::{IndexCount, InstanceCount, VertexCount, VertexOffset, Viewport};
 use core::buffer::IndexBufferView;
 use core::command::{
-    BufferCopy, BufferImageCopy, ClearColor, ClearValue, ImageCopy, ImageResolve,
-    SubpassContents,
+    AttachmentClear, BufferCopy, BufferImageCopy, ClearColor, ClearValue,
+    ImageCopy, ImageResolve, SubpassContents,
 };
 use core::image::ImageLayout;
 use {conv, native as n};
@@ -301,6 +301,79 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                 conv::map_image_layout(layout),
                 &clear_value,
                 &[range],
+            )
+        };
+    }
+
+    fn clear_attachments(
+        &mut self,
+        clears: &[AttachmentClear],
+        rects: &[target::Rect],
+    ) {
+        let clears: SmallVec<[vk::ClearAttachment; 16]> = clears
+            .iter()
+            .map(|clear| {
+                match *clear {
+                    AttachmentClear::Color(index, cv) => {
+                        vk::ClearAttachment {
+                            aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
+                            color_attachment: index as _,
+                            clear_value: vk::ClearValue::new_color(conv::map_clear_color(cv)),
+                        }
+                    }
+                    AttachmentClear::Depth(cv) => {
+                        vk::ClearAttachment {
+                            aspect_mask: vk::IMAGE_ASPECT_DEPTH_BIT,
+                            color_attachment: 0,
+                            clear_value: vk::ClearValue::new_depth_stencil(conv::map_clear_ds(cv)),
+                        }
+                    }
+                    AttachmentClear::Stencil(cv) => {
+                        vk::ClearAttachment {
+                            aspect_mask: vk::IMAGE_ASPECT_STENCIL_BIT,
+                            color_attachment: 0,
+                            clear_value: vk::ClearValue::new_depth_stencil(conv::map_clear_ds(cv)),
+                        }
+                    }
+                    AttachmentClear::DepthStencil(cv) => {
+                        vk::ClearAttachment {
+                            aspect_mask: vk::IMAGE_ASPECT_DEPTH_BIT | vk::IMAGE_ASPECT_STENCIL_BIT,
+                            color_attachment: 0,
+                            clear_value: vk::ClearValue::new_depth_stencil(conv::map_clear_ds(cv)),
+                        }
+                    }
+                }
+
+            })
+            .collect();
+
+        let rects: SmallVec<[vk::ClearRect; 16]> = rects
+            .iter()
+            .map(|rect| {
+                vk::ClearRect {
+                    base_array_layer: 0,
+                    layer_count: vk::VK_REMAINING_ARRAY_LAYERS,
+                    rect: vk::Rect2D {
+                        offset: vk::Offset2D {
+                            x: rect.x as _,
+                            y: rect.y as _,
+                        },
+                        extent: vk::Extent2D {
+                            width: rect.w as _,
+                            height: rect.h as _,
+                        },
+                    },
+                }
+            })
+            .collect();
+
+        unsafe {
+            self.device.0.fp_v1_0().cmd_clear_attachments(
+                self.raw,
+                clears.len() as _,
+                clears.as_ptr(),
+                rects.len() as _,
+                rects.as_ptr(),
             )
         };
     }

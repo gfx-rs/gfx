@@ -351,6 +351,10 @@ impl core::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
+    fn clear_attachments(&mut self, _: &[command::AttachmentClear], _: &[target::Rect]) {
+        unimplemented!()
+    }
+
     fn clear_depth_stencil(
         &mut self,
         _: &(),

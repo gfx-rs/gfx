@@ -79,6 +79,22 @@ pub enum ClearValue {
     DepthStencil(ClearDepthStencil),
 }
 
+/// Attachment clear description for the current subpass.
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+pub enum AttachmentClear {
+    /// Clear color attachment.
+    ///
+    /// First tuple element denotes the index of the color attachment.
+    Color(usize, ClearColor),
+    /// Clear depth component of the attachment.
+    Depth(ClearDepthStencil),
+    /// Clear stencil component of the attachment.
+    Stencil(ClearDepthStencil),
+    /// Clear depth-stencil component of the attachment.
+    DepthStencil(ClearDepthStencil),
+}
+
 impl<'a, B: Backend, C: Supports<Graphics>> CommandBuffer<'a, B, C> {
     ///
     pub fn begin_renderpass_inline(

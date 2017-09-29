@@ -2,7 +2,7 @@ use std::ops::Range;
 use {pso, target, Backend, IndexCount, InstanceCount, VertexCount, VertexOffset};
 use buffer::IndexBufferView;
 use queue::{Supports, Graphics};
-use super::{ClearValue, CommandBuffer, RawCommandBuffer};
+use super::{AttachmentClear, ClearValue, CommandBuffer, RawCommandBuffer};
 
 
 /// Specifies how commands for the following renderpasses will be recorded.
@@ -42,6 +42,11 @@ impl<'a, B: Backend> RenderPassInlineEncoder<'a, B> {
     pub fn next_subpass_inline(self) -> Self {
         self.0.next_subpass(SubpassContents::Inline);
         self
+    }
+
+    ///
+    pub fn clear_attachments(&mut self, clears: &[AttachmentClear], rects: &[target::Rect]) {
+        self.0.clear_attachments(clears, rects)
     }
 
     ///
