@@ -9,6 +9,9 @@
 
 use std::error::Error;
 use std::fmt;
+#[cfg(feature = "copy")]
+use copy::Range as Range;
+#[cfg(not(feature = "copy"))]
 use std::ops::Range;
 use {format, state, target};
 pub use target::{Layer, Level};
@@ -457,7 +460,7 @@ impl SamplerInfo {
             filter: filter,
             wrap_mode: (wrap, wrap, wrap),
             lod_bias: Lod(0),
-            lod_range: Lod(-8000)..Lod(8000),
+            lod_range: (Lod(-8000)..Lod(8000)).into(),
             comparison: None,
             border: PackedColor(0),
         }

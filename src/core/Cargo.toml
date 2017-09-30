@@ -13,6 +13,7 @@ workspace = "../.."
 [features]
 #TODO: switch to pure `serde` feature once `draw_state` is no longer used
 serialize = ["serde", "serde_derive", "draw_state/serialize"]
+copy = []
 unstable = []
 
 [lib]

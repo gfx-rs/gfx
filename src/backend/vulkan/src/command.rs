@@ -1,6 +1,5 @@
 use std::{cmp, ptr};
 use std::ops::Range;
-use std::sync::Arc;
 use smallvec::SmallVec;
 use ash::vk;
 use ash::version::DeviceV1_0;
@@ -14,12 +13,13 @@ use core::command::{
 };
 use core::image::ImageLayout;
 use {conv, native as n};
-use {Backend, RawDevice};
+use {Backend, DeviceRef};
 
 #[derive(Clone)]
+#[cfg_attr(feature = "copy", derive(Copy))]
 pub struct CommandBuffer {
-    pub raw: vk::CommandBuffer,
-    pub device: Arc<RawDevice>,
+    pub(crate) raw: vk::CommandBuffer,
+    pub(crate) device: DeviceRef,
 }
 
 fn map_subpass_contents(contents: SubpassContents) -> vk::SubpassContents {
@@ -53,7 +53,7 @@ fn map_buffer_image_regions(
                     y: region.image_offset.y,
                     z: region.image_offset.z,
                 },
-                image_extent: image.extent.clone(),
+                image_extent: image.extent.clone().into(),
             }
         })
         .collect()

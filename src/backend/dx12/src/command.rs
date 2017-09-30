@@ -1,11 +1,10 @@
-use wio::com::ComPtr;
 use core::{command, image, memory, pass, pso, target};
 use core::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, Viewport};
 use core::buffer::IndexBufferView;
 use core::command::{AttachmentClear, BufferCopy, BufferImageCopy, ClearColor,
                     ClearValue, ImageCopy, ImageResolve, SubpassContents};
 use winapi::{self, UINT64, UINT};
-use {conv, native as n, Backend};
+use {conv, native as n, Backend, ComPtr};
 use smallvec::SmallVec;
 use std::{cmp, mem, ptr};
 use std::ops::Range;
@@ -316,8 +315,8 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                     } else {
                         // Generate barrier for each layer/level combination.
                         let (levels, layers) = range.clone();
-                        for level in levels {
-                            for layer in layers.clone() {
+                        for level in levels.start .. levels.end {
+                            for layer in layers.start .. layers.end {
                                 barrier.u.Subresource = target.calc_subresource(level as _, layer as _);
                                 raw_barriers.push(barrier);
                             }
@@ -736,8 +735,8 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         let (width, height, depth, _) = image.kind.get_dimensions();
         for region in regions {
             // Copy each layer in the region
-            let layers = region.image_subresource.1.clone();
-            for layer in layers {
+            let layers = &region.image_subresource.1;
+            for layer in layers.start .. layers.end {
                 assert_eq!(region.buffer_offset % winapi::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64, 0);
                 assert_eq!(region.buffer_row_pitch % winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32, 0);
                 assert!(region.buffer_row_pitch >= width as u32 * image.bits_per_texel as u32 / 8);
@@ -800,8 +799,8 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         let (width, height, depth, _) = image.kind.get_dimensions();
         for region in regions {
             // Copy each layer in the region
-            let layers = region.image_subresource.1.clone();
-            for layer in layers {
+            let layers = &region.image_subresource.1;
+            for layer in layers.start .. layers.end {
                 assert_eq!(region.buffer_offset % winapi::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64, 0);
                 assert_eq!(region.buffer_row_pitch % winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32, 0);
                 assert!(region.buffer_row_pitch >= width as u32 * image.bits_per_texel as u32 / 8);

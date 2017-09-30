@@ -248,7 +248,8 @@ pub fn map_subresource_with_layers(
     layers: image::Layer,
 ) -> vk::ImageSubresourceLayers
 {
-    map_subresource_layers(aspect_mask, &(mip_level, base_layer..base_layer+layers))
+    let range = (base_layer..base_layer+layers).into();
+    map_subresource_layers(aspect_mask, &(mip_level, range))
 }
 
 pub fn map_subresource_range(

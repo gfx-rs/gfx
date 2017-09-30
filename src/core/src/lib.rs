@@ -38,6 +38,8 @@ pub use draw_state::{state, target};
 pub mod adapter;
 pub mod buffer;
 pub mod command;
+#[cfg(feature = "copy")]
+pub mod copy;
 pub mod device;
 pub mod format;
 pub mod image;

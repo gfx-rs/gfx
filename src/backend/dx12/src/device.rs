@@ -11,12 +11,12 @@ use std::cmp;
 use std::collections::BTreeMap;
 use std::ops::Range;
 use std::{ffi, mem, ptr, slice};
-use {free_list, native as n, shade, Backend as B, Device};
+use {free_list, native as n, shade, Backend as B, ComPtr, Device};
 use winapi;
-use wio::com::ComPtr;
 
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct UnboundBuffer {
     requirements: memory::Requirements,
     stride: u64,
@@ -24,6 +24,7 @@ pub struct UnboundBuffer {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct UnboundImage {
     desc: winapi::D3D12_RESOURCE_DESC,
     requirements: memory::Requirements,
@@ -710,8 +711,8 @@ impl d::Device<B> for Device {
         _extent: d::Extent,
     ) -> n::FrameBuffer {
         n::FrameBuffer {
-            color: color_attachments.iter().map(|rtv| **rtv).collect(),
-            depth_stencil: depth_stencil_attachments.iter().map(|dsv| **dsv).collect(),
+            color: color_attachments.iter().map(|rtv| (*rtv).clone()).collect(),
+            depth_stencil: depth_stencil_attachments.iter().map(|dsv| (*dsv).clone()).collect(),
         }
     }
 

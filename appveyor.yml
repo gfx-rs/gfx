@@ -43,4 +43,6 @@ test_script:
       --exclude gfx_window_glfw
       --exclude gfx_window_sdl
       --exclude gfx_backend_metal
+      &&
+      (cd src/backend/dx12 && cargo test --features copy)
     )

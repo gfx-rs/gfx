@@ -1,8 +1,7 @@
 use core::{self, image, pass, pso, MemoryType};
 use free_list;
 use winapi::{self, UINT};
-use wio::com::ComPtr;
-use Backend;
+use {Backend, ComPtr};
 
 use std::collections::BTreeMap;
 use std::ops::Range;
@@ -61,6 +60,7 @@ pub struct RenderPass {
 }
 
 #[derive(Debug, Hash)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct GraphicsPipeline {
     pub raw: *mut winapi::ID3D12PipelineState,
     pub topology: winapi::D3D12_PRIMITIVE_TOPOLOGY,
@@ -69,6 +69,7 @@ unsafe impl Send for GraphicsPipeline { }
 unsafe impl Sync for GraphicsPipeline { }
 
 #[derive(Debug, Hash)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct ComputePipeline {
     pub raw: *mut winapi::ID3D12PipelineState,
 }
@@ -93,13 +94,14 @@ pub struct PipelineLayout {
 unsafe impl Send for PipelineLayout { }
 unsafe impl Sync for PipelineLayout { }
 
-#[derive(Debug, Hash, Clone)]
+#[derive(Clone, Debug, Hash)]
 pub struct FrameBuffer {
     pub color: Vec<RenderTargetView>,
     pub depth_stencil: Vec<DepthStencilView>,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct Buffer {
     pub resource: *mut winapi::ID3D12Resource,
     pub size_in_bytes: u32,
@@ -108,7 +110,8 @@ pub struct Buffer {
 unsafe impl Send for Buffer { }
 unsafe impl Sync for Buffer { }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct Image {
     pub resource: *mut winapi::ID3D12Resource,
     pub kind: image::Kind,
@@ -123,7 +126,7 @@ unsafe impl Sync for Image { }
 impl Image {
     /// Get the SubresourceRange for the whole image.
     pub fn as_subresource_range(&self) -> image::SubresourceRange {
-        (0..self.levels, 0..self.layers)
+        ((0..self.levels).into(), (0..self.layers).into())
     }
 
     pub fn calc_subresource(&self, mip_level: UINT, layer: UINT) -> UINT {
@@ -131,7 +134,8 @@ impl Image {
     }
 }
 
-#[derive(Copy, Debug, Hash, Clone)]
+#[derive(Clone, Debug, Hash)]
+#[cfg_attr(feature = "copy", derive(Copy))]
 pub struct RenderTargetView {
     pub resource: *mut winapi::ID3D12Resource,
     pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
@@ -139,7 +143,8 @@ pub struct RenderTargetView {
 unsafe impl Send for RenderTargetView { }
 unsafe impl Sync for RenderTargetView { }
 
-#[derive(Copy, Debug, Hash, Clone)]
+#[derive(Debug, Hash, Clone)]
+#[cfg_attr(feature = "copy", derive(Copy))]
 pub struct DepthStencilView {
     pub resource: *mut winapi::ID3D12Resource,
     pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
@@ -153,6 +158,7 @@ pub struct DescriptorSetLayout {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct Fence {
     pub raw: ComPtr<winapi::ID3D12Fence>,
 }
@@ -160,6 +166,7 @@ unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct Semaphore {
     pub raw: ComPtr<winapi::ID3D12Fence>,
 }
@@ -167,6 +174,7 @@ unsafe impl Send for Semaphore {}
 unsafe impl Sync for Semaphore {}
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct Memory {
     pub heap: ComPtr<winapi::ID3D12Heap>,
     pub ty: MemoryType,
@@ -174,12 +182,15 @@ pub struct Memory {
     pub default_state: winapi::D3D12_RESOURCE_STATES,
 }
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct ConstantBufferView;
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct ShaderResourceView {
     pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
 }
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct UnorderedAccessView;
 
 #[derive(Debug)]
@@ -356,6 +367,7 @@ impl core::DescriptorPool<Backend> for DescriptorPool {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "copy", derive(Clone, Copy))]
 pub struct Sampler {
     pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
 }

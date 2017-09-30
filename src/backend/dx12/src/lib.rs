@@ -26,7 +26,11 @@ mod window;
 
 use core::{memory, Features, Limits, QueueType};
 use spirv_cross::hlsl;
+
+#[cfg(not(feature = "copy"))]
 use wio::com::ComPtr;
+#[cfg(feature = "copy")]
+use core::copy::Pointer as ComPtr;
 
 use std::{mem, ptr};
 use std::os::raw::c_void;

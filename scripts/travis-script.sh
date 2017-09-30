@@ -20,12 +20,19 @@ if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
   EXCLUDES+=" --exclude gfx_backend_metal"
 
   FEATURES+="vulkan"
+
+  # Test the `copy` feature on vulkan
+  (cd backend/src/vulkan && cargo test --features copy)
+
 elif [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
   EXCLUDES+=" --exclude gfx_backend_vulkan"
 
   FEATURES+="metal"
   GLUTIN_HEADLESS_FEATURE="--features headless"
 
+  # Test the `copy` feature on metal
+  (cd backend/src/metal && cargo test --features copy)
+  # Test the indirect argument buffer path on OSX
   (cd examples/core/quad && cargo build --features metal,metal_argument_buffer)
 fi
 

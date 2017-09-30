@@ -1,4 +1,3 @@
-use wio::com::ComPtr;
 use dxguid;
 use std::ptr;
 use std::os::raw::c_void;
@@ -6,7 +5,7 @@ use winapi;
 
 use core::pool;
 use command::CommandBuffer;
-use {Backend, CommandQueue};
+use {Backend, CommandQueue, ComPtr};
 
 pub struct RawCommandPool {
     inner: ComPtr<winapi::ID3D12CommandAllocator>,
