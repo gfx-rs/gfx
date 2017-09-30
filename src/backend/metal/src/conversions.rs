@@ -13,6 +13,7 @@ pub fn map_format(format: Format) -> Option<(MTLPixelFormat, bool)> {
         Format(R8_G8_B8_A8, Unorm) => Some((MTLPixelFormat::RGBA8Unorm, false)),
         Format(R8_G8_B8_A8, Srgb) => Some((MTLPixelFormat::RGBA8Unorm_sRGB, false)),
         Format(B8_G8_R8_A8, Unorm) => Some((MTLPixelFormat::BGRA8Unorm, false)),
+        Format(B8_G8_R8_A8, Srgb) => Some((MTLPixelFormat::BGRA8Unorm_sRGB, false)),
         _ => None,
     }
 }
@@ -167,9 +168,9 @@ pub fn resource_options_from_storage_and_cache(storage: MTLStorageMode, cache: M
 }
 
 pub fn map_texture_usage(usage: image::Usage) -> MTLTextureUsage {
-    let mut texture_usage = MTLTextureUsage::empty();
+    let mut texture_usage = MTLTextureUsagePixelFormatView;
     if usage.contains(image::COLOR_ATTACHMENT) || usage.contains(image::DEPTH_STENCIL_ATTACHMENT) {
-        texture_usage |= MTLTextureUsagePixelFormatView;
+        texture_usage |= MTLTextureUsageRenderTarget;
     }
     if usage.contains(image::SAMPLED) {
         texture_usage |= MTLTextureUsageShaderRead;

@@ -29,8 +29,8 @@ struct QueueInner {
     queue: MTLCommandQueue,
 }
 
-unsafe impl Send for QueueInner {
-}
+unsafe impl Send for QueueInner {}
+unsafe impl Sync for QueueInner {}
 
 impl Drop for QueueInner {
     fn drop(&mut self) {
@@ -500,7 +500,7 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
         &mut self,
         src: &native::Buffer,
         dst: &native::Image,
-        dst_layout: ImageLayout,
+        _dst_layout: ImageLayout,
         regions: &[BufferImageCopy],
     ) {
         let encoder = self.encode_blit();
@@ -536,11 +536,38 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
     fn copy_image_to_buffer(
         &mut self,
         src: &native::Image,
-        src_layout: ImageLayout,
+        _src_layout: ImageLayout,
         dst: &native::Buffer,
         regions: &[BufferImageCopy],
     ) {
-        unimplemented!()
+        let encoder = self.encode_blit();
+        let extent = unsafe { MTLSize {
+            width: src.0.width(),
+            height: src.0.height(),
+            depth: src.0.depth(),
+        }};
+        // FIXME: layout
+
+        for region in regions {
+            let image_offset = &region.image_offset;
+
+            for layer in region.image_subresource.1.clone() {
+                let offset = region.buffer_offset + region.buffer_slice_pitch as NSUInteger * (layer - region.image_subresource.1.start) as NSUInteger;
+                unsafe {
+                    msg_send![encoder.0,
+                        copyFromTexture: (src.0).0
+                        sourceSlice: layer as NSUInteger
+                        sourceLevel: region.image_subresource.0 as NSUInteger
+                        sourceOrigin: MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ }
+                        sourceSize: extent
+                        toBuffer: (dst.0).0
+                        destinationOffset: offset as NSUInteger
+                        destinationBytesPerRow: region.buffer_row_pitch as NSUInteger
+                        destinationBytesPerImage: region.buffer_slice_pitch as NSUInteger
+                    ]
+                }
+            }
+        }
     }
 
     fn draw(
