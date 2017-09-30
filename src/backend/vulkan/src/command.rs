@@ -367,15 +367,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
             })
             .collect();
 
-        unsafe {
-            self.device.0.fp_v1_0().cmd_clear_attachments(
-                self.raw,
-                clears.len() as _,
-                clears.as_ptr(),
-                rects.len() as _,
-                rects.as_ptr(),
-            )
-        };
+        unsafe { self.device.0.cmd_clear_attachments(self.raw, &clears, &rects) };
     }
 
     fn resolve_image(
