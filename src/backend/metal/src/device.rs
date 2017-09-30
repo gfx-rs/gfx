@@ -37,6 +37,7 @@ pub struct Device {
     private_caps: PrivateCapabilities,
     limits: Limits,
 }
+unsafe impl Send for Device {}
 
 impl Drop for Device {
     fn drop(&mut self) {
@@ -734,7 +735,8 @@ impl core::Device<Backend> for Device {
         let (storage, cache) = map_heap_properties_to_storage_and_cache(heap_type.properties);
 
         // Heaps cannot be used for CPU coherent resources
-        if self.private_caps.resource_heaps && storage != MTLStorageMode::Shared {
+        //TEMP: MacOS supports Private only, iOS and tvOS can do private/shared
+        if self.private_caps.resource_heaps && storage != MTLStorageMode::Shared && false {
             let descriptor = MTLHeapDescriptor::new();
             descriptor.set_storage_mode(storage);
             descriptor.set_cpu_cache_mode(cache);

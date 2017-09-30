@@ -132,6 +132,8 @@ pub struct DescriptorPool {
 }
 #[cfg(feature = "argument_buffer")]
 unsafe impl Send for DescriptorPool {}
+#[cfg(feature = "argument_buffer")]
+unsafe impl Sync for DescriptorPool {} //TEMP!
 
 #[cfg(not(feature = "argument_buffer"))]
 #[derive(Debug)]
