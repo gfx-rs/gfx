@@ -61,7 +61,7 @@ impl core::Instance<Backend> for Instance {
 }
 
 impl Instance {
-    pub fn create() -> Self {
+    pub fn create(_: &str, _: u32) -> Self {
         Instance {}
     }
 

@@ -59,6 +59,7 @@ struct CommandBufferInner {
     viewport: Option<MTLViewport>,
     scissors: Option<MTLScissorRect>,
     pipeline_state: Option<MTLRenderPipelineState>, // Unretained
+    primitive_type: MTLPrimitiveType,
     vertex_buffers: Vec<(MTLBuffer, pso::BufferOffset)>, // Unretained
     descriptor_sets: Vec<Option<native::DescriptorSet>>,
 }
@@ -166,6 +167,7 @@ impl core::RawCommandPool<Backend> for CommandPool {
                     viewport: None,
                     scissors: None,
                     pipeline_state: None,
+                    primitive_type: MTLPrimitiveType::Point,
                     vertex_buffers: Vec::new(),
                     descriptor_sets: Vec::new(),
                 })
@@ -445,7 +447,10 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn bind_graphics_pipeline(&mut self, pipeline: &native::GraphicsPipeline) {
-        self.inner().pipeline_state = Some(pipeline.0);
+        let inner = self.inner();
+        inner.pipeline_state = Some(pipeline.raw);
+        inner.primitive_type = pipeline.primitive_type;
+        //TODO: render_encoder.set_render_pipeline_state(pipeline_state); ?
     }
 
     fn bind_graphics_descriptor_sets(
@@ -454,12 +459,13 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
         first_set: usize,
         sets: &[&native::DescriptorSet],
     ) {
-        let descriptor_sets_len = self.inner().descriptor_sets.len();
-        self.inner().descriptor_sets.extend(
+        let inner = self.inner();
+        let descriptor_sets_len = inner.descriptor_sets.len();
+        inner.descriptor_sets.extend(
             (descriptor_sets_len..(first_set + sets.len()))
                 .map(|_| None)
         );
-        for (out, &set) in self.inner().descriptor_sets[first_set ..].iter_mut().zip(sets) {
+        for (out, &set) in inner.descriptor_sets[first_set ..].iter_mut().zip(sets) {
             *out = Some(set.clone());
         }
     }
@@ -579,7 +585,7 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
 
         unsafe {
             msg_send![encoder.0,
-                drawPrimitives: MTLPrimitiveType::Triangle
+                drawPrimitives: self.inner().primitive_type
                 vertexStart: vertices.start as NSUInteger
                 vertexCount: (vertices.end - vertices.start) as NSUInteger
                 instanceCount: (instances.end - instances.start) as NSUInteger
