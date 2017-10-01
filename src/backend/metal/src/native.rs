@@ -40,7 +40,10 @@ unsafe impl Sync for FrameBuffer {}
 pub struct PipelineLayout {}
 
 #[derive(Debug)]
-pub struct GraphicsPipeline(pub MTLRenderPipelineState);
+pub struct GraphicsPipeline {
+    pub(crate) raw: MTLRenderPipelineState,
+    pub(crate) primitive_type: MTLPrimitiveType,
+}
 
 unsafe impl Send for GraphicsPipeline {}
 unsafe impl Sync for GraphicsPipeline {}
