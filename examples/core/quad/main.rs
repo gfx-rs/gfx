@@ -73,7 +73,7 @@ fn main() {
     let pixel_height = window_size.1 as u16;
 
     // instantiate backend
-    #[cfg(any(feature = "vulkan", feature = "dx12"))]
+    #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
     let (_instance, adapters, mut surface) = {
         let instance = back::Instance::create("gfx-rs quad", 1);
         let surface = instance.create_surface(&window);
@@ -85,13 +85,6 @@ fn main() {
         let surface = back::Surface::from_window(window);
         let adapters = surface.enumerate_adapters();
         (adapters, surface)
-    };
-    #[cfg(feature = "metal")]
-    let (_instance, adapters, mut surface) = {
-        let instance = back::Instance::create();
-        let surface = instance.create_surface(&window);
-        let adapters = instance.enumerate_adapters();
-        (instance, adapters, surface)
     };
 
     for adapter in &adapters {

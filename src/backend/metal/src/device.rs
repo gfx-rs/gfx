@@ -10,7 +10,6 @@ use std::{mem, ptr, slice};
 
 use core::{self,
         image, pass, format, mapping, memory, buffer, pso};
-use core::{Limits, Features, QueueType, Gpu, HeapType};
 use core::device::{WaitFor, ResourceHeapError, ResourceHeapType, TargetViewError};
 use core::device::{ShaderError, Extent};
 use core::pso::{DescriptorSetWrite, DescriptorType, DescriptorSetLayoutBinding, AttributeDesc};
@@ -23,7 +22,7 @@ use objc::runtime::Object as ObjcObject;
 pub struct Adapter {
     pub(crate) device: MTLDevice,
     pub(crate) adapter_info: core::AdapterInfo,
-    pub(crate) queue_families: [(n::QueueFamily, QueueType); 1],
+    pub(crate) queue_families: [(n::QueueFamily, core::QueueType); 1],
 }
 
 impl Drop for Adapter {
@@ -35,7 +34,7 @@ impl Drop for Adapter {
 pub struct Device {
     device: MTLDevice,
     private_caps: PrivateCapabilities,
-    limits: Limits,
+    limits: core::Limits,
 }
 unsafe impl Send for Device {}
 
@@ -55,7 +54,7 @@ impl Clone for Device {
 }
 
 impl core::Adapter<Backend> for Adapter {
-    fn open(&self, queue_descs: &[(&n::QueueFamily, QueueType, u32)]) -> Gpu<Backend> {
+    fn open(&self, queue_descs: &[(&n::QueueFamily, core::QueueType, u32)]) -> core::Gpu<Backend> {
         let mut general_queues = Vec::new();
         let mut graphics_queues = Vec::new();
         let mut compute_queues = Vec::new();
@@ -63,13 +62,13 @@ impl core::Adapter<Backend> for Adapter {
 
         for &(_, queue_type, count) in queue_descs {
             match queue_type {
-                QueueType::General => general_queues
+                core::QueueType::General => general_queues
                     .push(unsafe { core::CommandQueue::new(command::CommandQueue::new(self.device)) }),
-                QueueType::Graphics => graphics_queues
+                core::QueueType::Graphics => graphics_queues
                     .push(unsafe { core::CommandQueue::new(command::CommandQueue::new(self.device)) }),
-                QueueType::Compute => compute_queues
+                core::QueueType::Compute => compute_queues
                     .push(unsafe { core::CommandQueue::new(command::CommandQueue::new(self.device)) }),
-                QueueType::Transfer => transfer_queues
+                core::QueueType::Transfer => transfer_queues
                     .push(unsafe { core::CommandQueue::new(command::CommandQueue::new(self.device)) }),
             }
         }
@@ -98,7 +97,7 @@ impl core::Adapter<Backend> for Adapter {
                 resource_heaps,
                 indirect_arguments: true, //TEMP
             },
-            limits: Limits {
+            limits: core::Limits {
                 max_texture_size: 4096, // TODO: feature set
                 max_patch_size: 0, // No tesselation
                 max_viewports: 1,
@@ -140,7 +139,7 @@ impl core::Adapter<Backend> for Adapter {
         ];
         let memory_heaps = Vec::new();
 
-        Gpu {
+        core::Gpu {
             device,
             general_queues,
             graphics_queues,
@@ -155,7 +154,7 @@ impl core::Adapter<Backend> for Adapter {
         &self.adapter_info
     }
 
-    fn get_queue_families(&self) -> &[(n::QueueFamily, QueueType)] {
+    fn get_queue_families(&self) -> &[(n::QueueFamily, core::QueueType)] {
         &self.queue_families
     }
 }
@@ -227,11 +226,11 @@ impl Device {
 }
 
 impl core::Device<Backend> for Device {
-    fn get_features(&self) -> &Features {
+    fn get_features(&self) -> &core::Features {
         unimplemented!()
     }
 
-    fn get_limits(&self) -> &Limits {
+    fn get_limits(&self) -> &core::Limits {
         &self.limits
     }
 
@@ -277,6 +276,16 @@ impl core::Device<Backend> for Device {
                 defer! { pipeline.release() };
 
                 // FIXME: lots missing
+
+                let (primitive_class, primitive_type) = match pipeline_desc.input_assembler.primitive {
+                    core::Primitive::PointList => (MTLPrimitiveTopologyClass::Point, MTLPrimitiveType::Point),
+                    core::Primitive::LineList => (MTLPrimitiveTopologyClass::Line, MTLPrimitiveType::Line),
+                    core::Primitive::LineStrip => (MTLPrimitiveTopologyClass::Line, MTLPrimitiveType::LineStrip),
+                    core::Primitive::TriangleList => (MTLPrimitiveTopologyClass::Triangle, MTLPrimitiveType::Triangle),
+                    core::Primitive::TriangleStrip => (MTLPrimitiveTopologyClass::Triangle, MTLPrimitiveType::TriangleStrip),
+                    _ => (MTLPrimitiveTopologyClass::Unspecified, MTLPrimitiveType::Point) //TODO: double-check
+                };
+                pipeline.set_input_primitive_topology(primitive_class);
 
                 // Shaders
                 let mtl_vertex_function = (shader_set.vertex.module.0)
@@ -382,7 +391,10 @@ impl core::Device<Backend> for Device {
                     error!("PSO creation failed: {}", n::objc_err_description(err_ptr));
                     return Err(pso::CreationError::Other);
                 } else {
-                    Ok(n::GraphicsPipeline(pso))
+                    Ok(n::GraphicsPipeline {
+                        raw: pso,
+                        primitive_type,
+                    })
                 }
             }).collect()
         }
@@ -684,7 +696,7 @@ impl core::Device<Backend> for Device {
     }
 
     fn destroy_graphics_pipeline(&mut self, pipeline: n::GraphicsPipeline) {
-        unsafe { pipeline.0.release(); }
+        unsafe { pipeline.raw.release(); }
     }
 
     fn destroy_compute_pipeline(&mut self, pipeline: n::ComputePipeline) {
@@ -731,7 +743,7 @@ impl core::Device<Backend> for Device {
         unsafe { n::dispatch_release(semaphore.0) }
     }
 
-    fn create_heap(&mut self, heap_type: &HeapType, _resource_type: ResourceHeapType, size: u64) -> Result<n::Heap, ResourceHeapError> {
+    fn create_heap(&mut self, heap_type: &core::HeapType, _resource_type: ResourceHeapType, size: u64) -> Result<n::Heap, ResourceHeapError> {
         let (storage, cache) = map_heap_properties_to_storage_and_cache(heap_type.properties);
 
         // Heaps cannot be used for CPU coherent resources

@@ -1,4 +1,4 @@
-#[macro_use] extern crate gfx_core as core;
+extern crate gfx_core as core;
 extern crate winit;
 extern crate cocoa;
 #[macro_use] extern crate objc;
@@ -57,7 +57,7 @@ impl core::Instance<Backend> for Instance {
 }
 
 impl Instance {
-    pub fn create() -> Self {
+    pub fn create(_: &str, _: u32) -> Self {
         Instance {}
     }
 
