@@ -5,8 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::os::raw::{c_void, c_long, c_int};
 use std::ptr;
 
-use core::{self, image, pass};
-use core::pso::{DescriptorSetLayoutBinding, DescriptorType};
+use core::{self, image, pass, pso};
 
 use cocoa::foundation::{NSRange, NSUInteger};
 use metal::*;
@@ -137,10 +136,10 @@ impl core::DescriptorPool<Backend> for DescriptorPool {
         layouts.iter().map(|layout| {
             let bindings = layout.bindings.iter().map(|layout| {
                 let binding = match layout.ty {
-                    DescriptorType::Sampler => {
+                    pso::DescriptorType::Sampler => {
                         DescriptorSetBinding::Sampler((0..layout.count).map(|_| MTLSamplerState::nil()).collect())
                     },
-                    DescriptorType::SampledImage => {
+                    pso::DescriptorType::SampledImage => {
                         DescriptorSetBinding::SampledImage((0..layout.count).map(|_| (MTLTexture::nil(), image::ImageLayout::General)).collect())
                     },
                     _ => unimplemented!(),
@@ -167,7 +166,7 @@ impl core::DescriptorPool<Backend> for DescriptorPool {
 #[derive(Debug)]
 pub struct DescriptorSetLayout {
     pub encoder: MTLArgumentEncoder,
-    pub stage_flags: ShaderStageFlags,
+    pub stage_flags: pso::ShaderStageFlags,
 }
 #[cfg(feature = "argument_buffer")]
 unsafe impl Send for DescriptorSetLayout {}
@@ -177,7 +176,7 @@ unsafe impl Sync for DescriptorSetLayout {}
 #[cfg(not(feature = "argument_buffer"))]
 #[derive(Debug)]
 pub struct DescriptorSetLayout {
-    pub bindings: Vec<DescriptorSetLayoutBinding>,
+    pub bindings: Vec<pso::DescriptorSetLayoutBinding>,
 }
 
 #[derive(Clone, Debug)]
@@ -186,7 +185,7 @@ pub struct DescriptorSet {
     pub buffer: MTLBuffer,
     pub offset: NSUInteger,
     pub encoder: MTLArgumentEncoder,
-    pub stage_flags: ShaderStageFlags,
+    pub stage_flags: pso::ShaderStageFlags,
 }
 #[cfg(feature = "argument_buffer")]
 unsafe impl Send for DescriptorSet {}
@@ -202,7 +201,7 @@ pub struct DescriptorSet {
 #[cfg(not(feature = "argument_buffer"))]
 #[derive(Debug)]
 pub struct DescriptorSetInner {
-    pub layout: Vec<DescriptorSetLayoutBinding>, // TODO: maybe don't clone?
+    pub layout: Vec<pso::DescriptorSetLayoutBinding>, // TODO: maybe don't clone?
     pub bindings: HashMap<usize, DescriptorSetBinding>,
 }
 #[cfg(not(feature = "argument_buffer"))]
