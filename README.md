@@ -21,10 +21,10 @@
       <img src="https://docs.rs/gfx/badge.svg" alt="Documentation on docs.rs">
   </a>
   <a href="https://travis-ci.org/gfx-rs/gfx">
-      <img src="https://img.shields.io/travis/gfx-rs/gfx/master.svg?style=flat-square" alt="Travis Build Status">
+      <img src="https://img.shields.io/travis/gfx-rs/gfx/pre-ll.svg?style=flat-square" alt="Travis Build Status">
   </a>
   <a href="https://ci.appveyor.com/project/kvark/gfx">
-      <img src="https://ci.appveyor.com/api/projects/status/ryn5ee3aumpmbw5l?svg=true" alt="AppVeyor Build Status">
+      <img src="https://ci.appveyor.com/api/projects/status/ryn5ee3aumpmbw5l/branch/pre-ll?svg=true" alt="AppVeyor Build Status">
   </a>
   <a href="https://crates.io/crates/gfx">
       <img src="http://meritbadge.herokuapp.com/gfx?style=flat-square" alt="crates.io">
