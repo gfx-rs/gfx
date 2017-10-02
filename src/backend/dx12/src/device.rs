@@ -1096,10 +1096,10 @@ impl d::Device<B> for Device {
         for desc in descriptor_pools {
             match desc.ty {
                 pso::DescriptorType::Sampler => {
-                    num_samplers += desc.count as _;
+                    num_samplers += desc.count as u64;
                 }
                 _ => {
-                    num_srv_cbv_uav += desc.count as _;
+                    num_srv_cbv_uav += desc.count as u64;
                 }
             }
         }
