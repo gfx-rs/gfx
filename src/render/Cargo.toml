@@ -17,7 +17,7 @@ name = "gfx_render"
 path = "src/lib.rs"
 
 [features]
-serialize = ["gfx_core/serialize", "draw_state/serialize"]
+serialize = ["serde", "gfx_core/serialize", "draw_state/serialize"]
 unstable = []
 
 [dependencies]
@@ -26,4 +26,4 @@ mint = { version = "0.4.1", optional = true }
 draw_state = "0.7"
 gfx_core = { path = "../core", version = "0.10" }
 log = "0.3"
-
+serde = { version = "1.0", features = ["serde_derive"], optional = true }
