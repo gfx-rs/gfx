@@ -1,3 +1,8 @@
+#![cfg_attr(
+    not(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl")),
+    allow(dead_code, unused_extern_crates, unused_imports)
+)]
+
 extern crate env_logger;
 extern crate gfx_core as core;
 #[cfg(feature = "dx12")]
@@ -8,6 +13,8 @@ extern crate gfx_backend_vulkan as back;
 extern crate gfx_backend_metal as back;
 #[cfg(feature = "gl")]
 extern crate gfx_backend_gl as back;
+#[cfg(feature = "gl")]
+extern crate glutin;
 
 extern crate winit;
 extern crate image;
@@ -149,10 +156,17 @@ fn main() {
         ).expect("Error on creating shader lib");
 
     #[cfg(feature = "gl")]
-    let shader_lib = device.create_shader_library_from_source(&[
-            (VS, pso::Stage::Vertex, include_bytes!("shader/quad_450.glslv")),
-            (PS, pso::Stage::Fragment, include_bytes!("shader/quad_450.glslf")),
-        ]).expect("Error on creating shader lib");
+    let vs_module = device
+        .create_shader_module_from_source(
+            include_bytes!("shader/quad_450.glslv"),
+            pso::Stage::Vertex,
+        ).unwrap();
+    #[cfg(feature = "gl")]
+    let fs_module = device
+        .create_shader_module_from_source(
+            include_bytes!("shader/quad_450.glslf"),
+            pso::Stage::Fragment,
+        ).unwrap();
 
     let set_layout = device.create_descriptor_set_layout(&[
             pso::DescriptorSetLayoutBinding {
@@ -237,7 +251,7 @@ fn main() {
 
     //
     let pipelines = {
-        #[cfg(any(feature = "vulkan", feature = "dx12"))]
+        #[cfg(any(feature = "vulkan", feature = "dx12", feature = "gl"))]
         let (vs_entry, fs_entry) = (
             pso::EntryPoint { entry: "main", module: &vs_module },
             pso::EntryPoint { entry: "main", module: &fs_module },
@@ -357,7 +371,7 @@ fn main() {
     let device_type = memory_types
         .iter()
         .find(|memory_type| {
-            image_req.type_mask & (1 << memory_type.id) != 0 && 
+            image_req.type_mask & (1 << memory_type.id) != 0 &&
             memory_type.properties.contains(m::DEVICE_LOCAL)
         })
         .unwrap();
@@ -532,7 +546,7 @@ fn main() {
     device.destroy_descriptor_pool(desc_pool);
     device.destroy_descriptor_set_layout(set_layout);
 
-    #[cfg(any(feature = "vulkan", feature = "dx12"))]
+    #[cfg(any(feature = "vulkan", feature = "dx12", feature = "gl"))]
     {
         device.destroy_shader_module(vs_module);
         device.destroy_shader_module(fs_module);

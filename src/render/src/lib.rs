@@ -86,6 +86,10 @@ extern crate bitflags;
 #[cfg(feature = "mint")]
 extern crate mint;
 
+#[cfg(feature = "serialize")]
+#[macro_use]
+extern crate serde;
+
 #[macro_use]
 extern crate log;
 extern crate draw_state;

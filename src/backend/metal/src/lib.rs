@@ -1,5 +1,3 @@
-#![cfg(any(target_os = "macos", target_os = "ios"))]
-
 #[macro_use] extern crate gfx_core as core;
 extern crate cocoa;
 #[macro_use] extern crate objc;

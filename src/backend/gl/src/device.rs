@@ -84,8 +84,8 @@ impl Device {
 impl Device {
     pub fn create_shader_module_from_source(
         &mut self,
-        stage: pso::Stage,
         data: &[u8],
+        stage: pso::Stage,
     ) -> Result<n::ShaderModule, d::ShaderError> {
         let gl = &self.share.context;
 

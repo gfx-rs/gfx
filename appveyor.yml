@@ -1,46 +1,26 @@
+skip_branch_with_pr: true
+branches:
+  except:
+    - staging.tmp
 environment:
+  global:
+    PATH: '%PATH%;C:\msys64\mingw64\bin;C:\msys64\usr\bin;%USERPROFILE%\.cargo\bin'
+    RUST_BACKTRACE: full
   matrix:
-    - TARGET: 1.20.0-x86_64-pc-windows
-      COMPILER: gnu
-    - TARGET: 1.20.0-x86_64-pc-windows
-      COMPILER: msvc
-    - TARGET: nightly-x86_64-pc-windows
-      COMPILER: msvc
+  - CHANNEL: stable
+    TARGET: x86_64-pc-windows-msvc
+  - CHANNEL: stable
+    TARGET: x86_64-pc-windows-gnu
+  - CHANNEL: nightly
+    TARGET: x86_64-pc-windows-msvc
+
 install:
-  - if %COMPILER%==gnu choco install -y mingw
-  - ps: Start-FileDownload "https://static.rust-lang.org/dist/rust-${env:TARGET}-${env:COMPILER}.exe" -FileName "rust-install.exe"
-  - ps: .\rust-install.exe /VERYSILENT /NORESTART /DIR="C:\rust" | Out-Null
-  - ps: $env:PATH="$env:PATH;C:\rust\bin;C:\tools\mingw64\bin"
-  - if %COMPILER%==gnu gcc -v
+  - curl -sSf -o rustup-init.exe https://win.rustup.rs
+  - rustup-init -yv --default-toolchain %CHANNEL% --default-host %TARGET%
+  #- bash -lc "pacman -S --noconfirm mingw-w64-x86_64-cmake"
   - rustc -vV
   - cargo -vV
-build_script:
-  # No d3d12 support on GNU windows ATM
-  # context: https://github.com/gfx-rs/gfx/pull/1417
-  - if %COMPILER%==gnu (
-      cargo build --all
-      --exclude gfx_window_glfw
-      --exclude gfx_window_sdl
-      --exclude gfx_backend_metal
-      --exclude gfx_backend_dx12
-      --exclude gfx_window_dxgi
-    ) else (
-      cargo build --all
-      --exclude gfx_window_glfw
-      --exclude gfx_window_sdl
-      --exclude gfx_backend_metal
-    )
+
+build: false
 test_script:
-  - if %COMPILER%==gnu (
-      cargo test --all
-      --exclude gfx_window_glfw
-      --exclude gfx_window_sdl
-      --exclude gfx_backend_metal
-      --exclude gfx_backend_dx12
-      --exclude gfx_window_dxgi
-    ) else (
-      cargo test --all
-      --exclude gfx_window_glfw
-      --exclude gfx_window_sdl
-      --exclude gfx_backend_metal
-    )
+  - C:\MinGW\bin\mingw32-make.exe all
