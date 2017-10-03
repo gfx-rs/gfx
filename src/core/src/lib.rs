@@ -15,7 +15,7 @@ extern crate mint;
 
 #[cfg(feature = "serialize")]
 #[macro_use]
-extern crate serde_derive;
+extern crate serde;
 
 use std::any::Any;
 use std::error::Error;

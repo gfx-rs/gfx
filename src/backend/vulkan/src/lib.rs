@@ -1,5 +1,3 @@
-#![cfg(any(windows, all(unix, not(target_os = "macos"), not(target_os = "ios"))))]
-
 #[macro_use]
 extern crate log;
 extern crate ash;

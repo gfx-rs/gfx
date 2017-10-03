@@ -1,4 +1,3 @@
-
 #[macro_use]
 extern crate bitflags;
 extern crate d3d12;
