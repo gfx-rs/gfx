@@ -207,7 +207,7 @@ impl c::Adapter<Backend> for Adapter {
 
         // create main VAO and bind it
         let mut vao = 0;
-        if self.share.private_caps.array_buffer_supported {
+        if self.share.private_caps.array_buffer {
             unsafe {
                 gl.GenVertexArrays(1, &mut vao);
                 gl.BindVertexArray(vao);
@@ -383,7 +383,7 @@ impl CommandQueue {
             C::Srgb => (),
         }
         unsafe { gl.EnableVertexAttribArray(slot as gl::types::GLuint) };
-        if self.share.capabilities.instance_rate_supported {
+        if self.share.capabilities.instance_rate {
             unsafe { gl.VertexAttribDivisor(slot as gl::types::GLuint,
                 bel.desc.rate as gl::types::GLuint) };
         } else if bel.desc.rate != 0 {
@@ -435,7 +435,7 @@ impl CommandQueue {
 
         // Bind default VAO
         if !self.state.vao {
-            if priv_caps.array_buffer_supported {
+            if priv_caps.array_buffer {
                 unsafe { gl.BindVertexArray(self.vao) };
             }
             self.state.vao = true
@@ -666,7 +666,7 @@ impl CommandQueue {
                 //TODO: check texture?
                 let gl = &self.share.context;
                 state::unlock_color_mask(gl);
-                if self.share.private_caps.clear_buffer_supported {
+                if self.share.private_caps.clear_buffer {
                     // Render target view bound to the framebuffer at attachment slot 0.
                     unsafe {
                         match c {
@@ -696,7 +696,7 @@ impl CommandQueue {
                 }
             }
             Command::BindFrameBuffer(point, frame_buffer) => {
-                if self.share.private_caps.frame_buffer_supported {
+                if self.share.private_caps.frame_buffer {
                     let gl = &self.share.context;
                     unsafe { gl.BindFramebuffer(point, frame_buffer) };
                 } else if frame_buffer != 0 {
@@ -723,7 +723,7 @@ impl CommandQueue {
             Command::BindUnorderedView(_uav) => unimplemented!(),
             Command::BindSampler(pso::SamplerParam(sampler, _, slot), bind_opt) => {
                 let gl = &self.share.context;
-                if self.share.private_caps.sampler_objects_supported {
+                if self.share.private_caps.sampler_objects {
                     unsafe { gl.BindSampler(slot as gl::types::GLuint, sampler.object) };
                 } else {
                     assert!(c::MAX_SAMPLERS <= c::MAX_RESOURCE_VIEWS);
@@ -772,7 +772,7 @@ impl CommandQueue {
                 state::bind_stencil(&self.share.context, &stencil, refs, cull);
             },
             Command::SetBlendState(slot, color) => {
-                if self.share.capabilities.separate_blending_slots_supported {
+                if self.share.capabilities.separate_blending_slots {
                     state::bind_blend_slot(&self.share.context, slot, color);
                 }else if slot == 0 {
                     //self.temp.color = color; //TODO
@@ -790,7 +790,7 @@ impl CommandQueue {
             Command::CopyBuffer(src, dst, src_offset, dst_offset, size) => {
                 let gl = &self.share.context;
 
-                if self.share.capabilities.copy_buffer_supported {
+                if self.share.capabilities.copy_buffer {
                     unsafe {
                         gl.BindBuffer(gl::COPY_READ_BUFFER, src);
                         gl.BindBuffer(gl::COPY_WRITE_BUFFER, dst);
@@ -801,7 +801,7 @@ impl CommandQueue {
                                             size);
                     }
                 } else {
-                    debug_assert!(self.share.private_caps.buffer_storage_supported == false);
+                    debug_assert!(self.share.private_caps.buffer_storage == false);
 
                     unsafe {
                         let mut src_ptr = 0 as *mut ::std::os::raw::c_void;
@@ -839,7 +839,7 @@ impl CommandQueue {
         }
     }
     fn signal_fence(&mut self, fence: &native::Fence) {
-        if self.share.private_caps.sync_supported {
+        if self.share.private_caps.sync {
             let gl = &self.share.context;
             let sync = unsafe {
                 gl.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0)
