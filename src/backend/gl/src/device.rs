@@ -57,7 +57,7 @@ pub fn get_program_log(gl: &gl::Gl, name: n::Program) -> String {
 }
 
 #[derive(Debug)]
-pub struct UnboundBuffer;
+pub struct UnboundBuffer(n::Buffer);
 #[derive(Debug)]
 pub struct UnboundImage;
 
@@ -210,7 +210,7 @@ impl d::Device<B> for Device {
                     attach_shader(shaders.geometry);
                     attach_shader(shaders.fragment);
 
-                    if !priv_caps.program_interface_supported && priv_caps.frag_data_location_supported {
+                    if !priv_caps.program_interface && priv_caps.frag_data_location {
                         for i in 0..subpass.color_attachments.len() {
                             let color_name = format!("Target{}\0", i);
                             unsafe {
@@ -358,8 +358,64 @@ impl d::Device<B> for Device {
         n::FatSampler::Sampler(name)
     }
 
-    fn create_buffer(&mut self, _: u64, _: u64, _: buffer::Usage) -> Result<device::UnboundBuffer, buffer::CreationError> {
-        unimplemented!()
+    fn create_buffer(&mut self, size: u64, _stride: u64, usage: buffer::Usage) -> Result<device::UnboundBuffer, buffer::CreationError> {
+        if !self.share.features.constant_buffer && usage.contains(buffer::CONSTANT) {
+            error!("Constant buffers are not supported by this GL version");
+            return Err(buffer::CreationError::Other);
+        }
+        let target = if self.share.private_caps.buffer_role_change {
+            gl::ARRAY_BUFFER
+        } else {
+            match conv::buffer_usage_to_gl_target(usage) {
+                Some(target) => target,
+                None => return Err(buffer::CreationError::Usage(usage)),
+            }
+        };
+
+        let gl = &self.share.context;
+        let mut name = 0;
+        unsafe {
+            gl.GenBuffers(1, &mut name);
+            gl.BindBuffer(target, name);
+        }
+
+        if self.share.private_caps.buffer_storage {
+            let flags = if usage.contains(buffer::HOST) {
+                gl::DYNAMIC_STORAGE_BIT | gl::MAP_PERSISTENT_BIT //TODO: read/write
+            } else {
+                0
+            };
+            unsafe {
+                gl.BufferStorage(target,
+                    size as _,
+                    ptr::null(),
+                    flags,
+                );
+            }
+        }
+        else {
+            let flags = if usage.contains(buffer::HOST | buffer::TRANSFER_SRC) {
+                gl::STREAM_DRAW
+            } else if usage.contains(buffer::HOST | buffer::TRANSFER_DST) {
+                gl::STREAM_READ
+            } else if usage.contains(buffer::HOST) {
+                gl::DYNAMIC_DRAW //TODO
+            } else {
+                gl::STATIC_DRAW
+            };
+            unsafe {
+                gl.BufferData(target,
+                    size as _,
+                    ptr::null(),
+                    flags,
+                );
+            }
+        }
+
+        unsafe {
+            gl.BindBuffer(target, 0);
+        }
+        Ok(device::UnboundBuffer(name))
     }
 
     fn get_buffer_requirements(&mut self, _: &device::UnboundBuffer) -> memory::Requirements {
@@ -448,7 +504,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_fence(&mut self, signalled: bool) -> n::Fence {
-        let sync = if signalled && self.share.private_caps.sync_supported {
+        let sync = if signalled && self.share.private_caps.sync {
             let gl = &self.share.context;
             unsafe { gl.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0) }
         } else {
@@ -458,7 +514,7 @@ impl d::Device<B> for Device {
     }
 
     fn reset_fences(&mut self, fences: &[&n::Fence]) {
-        if !self.share.private_caps.sync_supported {
+        if !self.share.private_caps.sync {
             return
         }
 
@@ -475,7 +531,7 @@ impl d::Device<B> for Device {
     }
 
     fn wait_for_fences(&mut self, fences: &[&n::Fence], wait: d::WaitFor, timeout_ms: u32) -> bool {
-        if !self.share.private_caps.sync_supported {
+        if !self.share.private_caps.sync {
             return true;
         }
 
@@ -510,13 +566,13 @@ impl d::Device<B> for Device {
                             _ => (),
                         }
                     }
-                    // No fence has indicated a postive result
+                    // No fence has indicated a positive result
                     false
                 };
 
                 // Short-circuit:
                 //   Check current state of all fences first,
-                //   else go trough each fence and wait til at least one has finished
+                //   else go trough each fence and wait till at least one has finished
                 waiting(0) || waiting(timeout_ms)
             },
         }

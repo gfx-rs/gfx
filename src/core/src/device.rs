@@ -185,14 +185,6 @@ pub enum ShaderError {
 /// This trait is extended by the [`gfx::DeviceExt` trait](https://docs.rs/gfx/*/gfx/traits/trait.DeviceExt.html).
 /// All types implementing `Device` also implement `DeviceExt`.
 ///
-/// ## Immutable resources
-///
-/// Immutable buffers and textures can only be read by the GPU. They cannot be written by the GPU and
-/// cannot be accessed at all by the CPU.
-///
-/// See:
-///  - [`Device::create_texture_immutable`](trait.Device.html#tymethod.create_texture_immutable),
-///  - [`Device::create_buffer_immutable`](trait.Device.html#tymethod.create_buffer_immutable).
 ///
 /// ## Raw resources
 ///
