@@ -315,11 +315,11 @@ impl Device {
                 max_texture_size: 0,
                 max_patch_size: 0,
                 max_viewports: 0,
-                max_compute_group_size: (
+                max_compute_group_size: [
                     max_thread_groups,
                     max_thread_groups,
                     max_thread_groups,
-                ),
+                ],
                 min_buffer_copy_offset_alignment: winapi::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as _,
                 min_buffer_copy_pitch_alignment: winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as _,
             },
