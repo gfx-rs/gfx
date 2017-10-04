@@ -10,7 +10,9 @@ use core::command::CommandBuffer;
 use core::image::ImageLayout;
 use memory::{Provider, Dependency, cast_slice};
 use device::InitToken;
-use {handle, buffer, image, format, Backend};
+use {handle, buffer, image, format, pso};
+use {Backend, Supports, Transfer, Graphics};
+use {VertexCount};
 
 pub use core::command::{
     BufferCopy, ImageCopy, BufferImageCopy,
@@ -183,7 +185,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C> {
 }
 
 impl<'a, B: Backend, C> Encoder<'a, B, C>
-    where C: core::queue::Supports<core::Transfer>
+    where C: Supports<Transfer>
 {
     pub fn finish(mut self) -> Submit<B, C> {
         self.transition_to_stable_state();
@@ -213,8 +215,8 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         -> core::memory::Barrier<'b, B>
     {
         let creation_state = (core::image::Access::empty(), ImageLayout::Undefined);
-        let levels = image.info().kind.get_num_levels();
-        let layers = image.info().kind.get_num_slices().unwrap_or(1);
+        let levels = image.info().mip_levels;
+        let layers = image.info().kind.get_num_layers();
         let stable_state = image.info().stable_state;
         let states = ImageStates::new(stable_state, levels, layers);
         self.image_states.insert(image.clone(), states);
@@ -247,8 +249,8 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         state: core::image::State,
     ) -> Option<core::memory::Barrier<'b, B>> {
         if !self.image_states.contains_key(image) {
-            let levels = image.info().kind.get_num_levels();
-            let layers = image.info().kind.get_num_slices().unwrap_or(1);
+            let levels = image.info().mip_levels;
+            let layers = image.info().kind.get_num_layers();
             let states = ImageStates::new(image.info().stable_state, levels, layers);
             self.image_states.insert(image.clone(), states);
         }
@@ -270,7 +272,6 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             Some(core::memory::Barrier::Buffer {
                 states: state..next,
                 target: buffer.resource(),
-                range: 0..buffer.info().size,
             })
         } else {
             None
@@ -296,6 +297,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         }
     }
 
+    #[doc(hidden)]
     pub fn require_state(
         &mut self,
         stage: core::pso::PipelineStage,
@@ -313,6 +315,11 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         if (current_stage != stage) || !barriers.is_empty() {
             self.buffer.pipeline_barrier(current_stage..stage, &barriers[..]);
         }
+    }
+
+    #[doc(hidden)]
+    pub fn handles(&mut self) -> &mut handle::Bag<B> {
+        &mut self.handles
     }
 
     fn transition_to_stable_state(&mut self) {
@@ -539,12 +546,12 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
 }
 
 impl<'a, B: Backend, C> Encoder<'a, B, C>
-    where C: core::queue::Supports<core::Transfer> + core::queue::Supports<core::Graphics>
+    where C: Supports<Transfer> + Supports<Graphics>
 {
     fn require_clear_state(&mut self, image: &handle::raw::Image<B>) -> ImageLayout {
-        let levels = image.info().kind.get_num_levels();
-        let layers = image.info().kind.get_num_slices().unwrap_or(1);
-        let state = (core::image::RENDER_TARGET_CLEAR, ImageLayout::ColorAttachmentOptimal);
+        let levels = image.info().mip_levels;
+        let layers = image.info().kind.get_num_layers();
+        let state = (core::image::TRANSFER_WRITE, ImageLayout::TransferDstOptimal);
         let mut image_states = Vec::new();
         for level in 0..levels {
             for layer in 0..layers {
@@ -593,50 +600,19 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         self.buffer.clear_depth_stencil(dsv.resource(), layout, depth_value, stencil_value);
     }
 
-    /*
-    fn draw_indexed<T>(&mut self, buf: &handle::Buffer<B, T>, ty: IndexType,
-                    slice: &slice::Slice<B>, base: VertexCount,
-                    instances: Option<command::InstanceParams>) {
-        self.access_info.buffer_read(buf.raw());
-        self.command_buffer.bind_index(self.handles.ref_buffer(buf.raw()).clone(), ty);
-        self.command_buffer.call_draw_indexed(slice.start, slice.end - slice.start, base, instances);
-    }
-
-    fn draw_slice(&mut self, slice: &slice::Slice<B>, instances: Option<command::InstanceParams>) {
-        match slice.buffer {
-            slice::IndexBuffer::Auto => self.command_buffer.call_draw(
-                slice.start + slice.base_vertex, slice.end - slice.start, instances),
-            slice::IndexBuffer::Index16(ref buf) =>
-                self.draw_indexed(buf, IndexType::U16, slice, slice.base_vertex, instances),
-            slice::IndexBuffer::Index32(ref buf) =>
-                self.draw_indexed(buf, IndexType::U32, slice, slice.base_vertex, instances),
-        }
-    }
-
-    /// Draws a `slice::Slice` using a pipeline state object, and its matching `Data` structure.
-    pub fn draw<D: pso::PipelineData<B>>(&mut self, slice: &slice::Slice<B>,
-                pipeline: &pso::PipelineState<B, D::Meta>, user_data: &D)
+    pub fn draw<D>(
+        &mut self,
+        vertices: Range<VertexCount>,
+        pipeline: &D::Pipeline,
+        data: D
+    )
+        where D: pso::GraphicsPipelineData<B>
     {
-        let (pso, _) = self.handles.ref_pso(pipeline.get_handle());
-        //TODO: make `raw_data` a member to this struct, to re-use the heap allocation
-        self.raw_pso_data.clear();
-        user_data.bake_to(&mut self.raw_pso_data, pipeline.get_meta(), &mut self.handles, &mut self.access_info);
-        self.command_buffer.bind_pixel_targets(self.raw_pso_data.pixel_targets.clone());
-        self.command_buffer.bind_pipeline_state(pso.clone());
-        self.command_buffer.bind_vertex_buffers(self.raw_pso_data.vertex_buffers.clone());
-        self.command_buffer.set_ref_values(self.raw_pso_data.ref_values);
-        self.command_buffer.set_scissor(self.raw_pso_data.scissor);
-        self.command_buffer.bind_constant_buffers(&self.raw_pso_data.constant_buffers);
-        for &(location, value) in &self.raw_pso_data.global_constants {
-            self.command_buffer.bind_global_constant(location, value);
-        }
-        self.command_buffer.bind_unordered_views(&self.raw_pso_data.unordered_views);
-        //Note: it's important to bind RTV, DSV, and UAV before SRV
-        self.command_buffer.bind_resource_views(&self.raw_pso_data.resource_views);
-        self.command_buffer.bind_samplers(&self.raw_pso_data.samplers);
-        self.draw_slice(slice, slice.instances);
+        // TODO: instances
+        data.begin_renderpass(self, pipeline).draw(vertices, 0..1);
     }
 
+/*
     /// Generate a mipmap chain for the given resource view.
     pub fn generate_mipmap<T: format::BlendFormat>(&mut self, view: &handle::ShaderResourceView<B, T>) {
         self.generate_mipmap_raw(view.raw())

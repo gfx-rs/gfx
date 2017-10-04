@@ -107,11 +107,10 @@ pub use draw_state::target::*;
 // public re-exports
 pub use core::format;
 pub use core::{Adapter, Backend, Frame, Primitive};
-/*
+pub use core::queue::{Supports, Transfer, Compute, Graphics, General};
 pub use core::{VertexCount, InstanceCount};
-pub use core::{ShaderSet, VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
-pub use core::command::{InstanceParams};
-*/
+pub use core::device::Extent;
+// pub use core::{ShaderSet, VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
 pub use encoder::Encoder;
 pub use device::Device;
 
@@ -167,7 +166,7 @@ impl<B: Backend, C> Queue<B, C> {
 }
 
 pub struct Context<B: Backend, C>
-    where C: core::queue::Supports<core::Transfer>
+    where C: Supports<Transfer>
 {
     surface: B::Surface,
     device: Device<B>,
@@ -180,7 +179,6 @@ pub struct Context<B: Backend, C>
 
 pub struct Backbuffer<B: Backend, Cf: RenderFormat> {
     pub color: handle::Image<B, Cf>,
-    // TODO: depth
 }
 
 use self::Signal::*;
@@ -296,7 +294,7 @@ impl<B: Backend> Context<B, core::Graphics> {
 }
 
 impl<B: Backend, C> Context<B, C>
-    where C: core::queue::Supports<core::Transfer>
+    where C: Supports<Transfer>
 {
     fn init<Cf>(mut surface: B::Surface, adapter: &B::Adapter)
         -> (Self, Vec<Backbuffer<B, Cf>>)
@@ -338,7 +336,7 @@ impl<B: Backend, C> Context<B, C>
                 let stable_state = (stable_access, stable_layout);
                 Backbuffer {
                     color: Typed::new(handle::inner::Image::without_garbage(
-                        raw.color,
+                        raw,
                         image::Info { usage, kind, mip_levels, format, origin, stable_state }
                     ).into())
                 }
@@ -457,7 +455,7 @@ impl<B: Backend, C> Context<B, C>
 }
 
 impl<B: Backend, C> Drop for Context<B, C>
-    where C: core::queue::Supports<core::Transfer>
+    where C: Supports<Transfer>
 {
     fn drop(&mut self) {
         self.wait_idle();

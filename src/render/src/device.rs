@@ -1,7 +1,6 @@
 use std::mem;
 use std::ops::Range;
 use core::{Device as CoreDevice, MemoryType};
-use core::device::TargetViewError;
 use core::memory::{Properties,
     DEVICE_LOCAL, CPU_VISIBLE, CPU_CACHED, WRITE_COMBINED
 };
@@ -10,7 +9,9 @@ use memory::{self, Allocator, Typed};
 use handle::{self, GarbageSender};
 use handle::inner::*;
 use {core, buffer, image, format, mapping, pso};
-use {Backend, Primitive};
+use {Backend, Primitive, Extent};
+
+pub use core::device::{TargetViewError, FrameBufferError};
 
 #[derive(Clone)]
 pub struct Device<B: Backend> {
@@ -334,7 +335,7 @@ impl<B: Backend> Device<B> {
         format: format::Format,
         layers: image::SubresourceLayers
     ) -> Result<handle::raw::RenderTargetView<B>, TargetViewError> {
-        self.raw.view_image_as_render_target(&image, format, layers)
+        self.raw.view_image_as_render_target(image.resource(), format, layers)
             .map(|rtv| RenderTargetView::new(
                 rtv,
                 image.clone(),
@@ -345,7 +346,7 @@ impl<B: Backend> Device<B> {
     pub fn view_image_as_render_target<F>(
         &mut self,
         image: &handle::Image<B, F>,
-        range: image::SubresourceRange
+        range: image::SubresourceLayers
     ) -> Result<handle::RenderTargetView<B, F>, TargetViewError>
         where F: format::RenderFormat
     {
@@ -425,20 +426,19 @@ impl<B: Backend> Device<B> {
     }
 
     // TODO: smarter allocation
-    pub fn create_descriptors<D>(&mut self, count: usize) -> Vec<D>
+    pub fn create_descriptors<D>(&mut self, count: usize) -> Vec<(D, D::Data)>
         where D: pso::Descriptors<B>
     {
         use core::DescriptorPool as CDP;
 
         let bindings = &D::layout_bindings()[..];
         let layout = self.create_descriptor_set_layout(bindings);
-        let mut ranges = Vec::new();
-        for binding in bindings {
-            ranges.push(core::pso::DescriptorRangeDesc {
+        let ranges = bindings.iter().map(|binding| {
+            core::pso::DescriptorRangeDesc {
                 ty: binding.ty,
                 count: binding.count * count,
-            });
-        }
+            }
+        }).collect::<Vec<_>>();
 
         let mut pool = self.raw.create_descriptor_pool(count, &ranges[..]);
         let sets = {
@@ -513,6 +513,28 @@ impl<B: Backend> Device<B> {
         where I: pso::GraphicsPipelineInit<B>
     {
         init.create(self, shader_entries, primitive, rasterizer)
+    }
+
+    // TODO?: typed
+    pub fn create_framebuffer<P>(
+        &mut self,
+        pipeline: &P,
+        rtvs: &[&handle::raw::RenderTargetView<B>],
+        dsvs: &[&handle::raw::DepthStencilView<B>],
+        extent: Extent,
+    ) -> Result<handle::raw::FrameBuffer<B>, FrameBufferError>
+        where P: pso::GraphicsPipelineMeta<B>
+    {
+        let rtv_res: Vec<_> = rtvs.iter().map(|&rtv| rtv.resource()).collect();
+        let dsv_res: Vec<_> = dsvs.iter().map(|&dsv| dsv.resource()).collect();
+        let buffer = self.raw.create_framebuffer(
+            pipeline.render_pass(), &rtv_res[..], &dsv_res[..], extent)?;
+        let info = handle::FrameBufferInfo {
+            rtvs: rtvs.iter().map(|&rtv| rtv.clone()).collect(),
+            dsvs: dsvs.iter().map(|&dsv| dsv.clone()).collect(),
+            extent,
+        };
+        Ok(FrameBuffer::new(buffer, info, self.garbage.clone()).into())
     }
 /*
     /// Creates a `ShaderSet` from the supplied vertex and pixel shader source code.

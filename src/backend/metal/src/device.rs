@@ -10,7 +10,7 @@ use std::{mem, ptr, slice};
 
 use core::{self,
         image, pass, format, mapping, memory, buffer, pso};
-use core::device::{WaitFor, BindError, OutOfMemory, TargetViewError, FramebufferError, ShaderError, Extent};
+use core::device::{WaitFor, BindError, OutOfMemory, TargetViewError, FrameBufferError, ShaderError, Extent};
 use core::pso::{DescriptorSetWrite, DescriptorType, DescriptorSetLayoutBinding, AttributeDesc};
 use core::pass::{Subpass};
 
@@ -410,7 +410,7 @@ impl core::Device<Backend> for Device {
     fn create_framebuffer(&mut self, renderpass: &n::RenderPass,
         color_attachments: &[&n::RenderTargetView], depth_stencil_attachments: &[&n::DepthStencilView],
         extent: Extent,
-    ) -> Result<n::FrameBuffer, FramebufferError> {
+    ) -> Result<n::FrameBuffer, FrameBufferError> {
         let descriptor = unsafe {
             let desc: MTLRenderPassDescriptor = msg_send![renderpass.desc.0, copy]; // Returns retained
             defer_on_unwind! { desc.release() };
@@ -512,7 +512,7 @@ impl core::Device<Backend> for Device {
             let base_ptr = buf.0.contents() as *mut u8;
 
             if base_ptr.is_null() {
-                return Err(mapping::Error::InvalidAccess);
+                return Err(unimplemented!());
             }
 
             if let Some(range) = read {
