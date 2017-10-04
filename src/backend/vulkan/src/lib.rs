@@ -437,7 +437,7 @@ impl core::Adapter<Backend> for Adapter {
                 max_texture_size: limits.max_image_dimension3d as _,
                 max_patch_size: limits.max_tessellation_patch_size as PatchSize,
                 max_viewports: limits.max_viewports as _,
-                max_compute_group_size: (max_work_group[0] as _, max_work_group[1] as _, max_work_group[2] as _),
+                max_compute_group_size: [max_work_group[0] as usize, max_work_group[1] as usize, max_work_group[2] as usize],
                 min_buffer_copy_offset_alignment: limits.optimal_buffer_copy_offset_alignment as _,
                 min_buffer_copy_pitch_alignment: limits.optimal_buffer_copy_row_pitch_alignment as _,
             },

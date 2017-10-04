@@ -247,16 +247,16 @@ impl c::Adapter<Backend> for Adapter {
             match queue_type {
                 QueueType::General => unsafe {
                     gpu.general_queues.push(c::CommandQueue::new(raw_queue));
-                }
+                },
                 QueueType::Graphics => unsafe {
                     gpu.graphics_queues.push(c::CommandQueue::new(raw_queue));
-                }
+                },
                 QueueType::Compute => unsafe {
                     gpu.compute_queues.push(c::CommandQueue::new(raw_queue));
-                }
+                },
                 QueueType::Transfer => unsafe {
                     gpu.transfer_queues.push(c::CommandQueue::new(raw_queue));
-                }
+                },
             }
         }
 
