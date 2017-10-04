@@ -394,10 +394,10 @@ impl<B: Backend> Device<B> {
         &mut self,
         image: &handle::raw::Image<B>,
         format: format::Format,
-        range: image::SubresourceRange
+        layers: image::SubresourceLayers,
     ) -> Result<handle::raw::RenderTargetView<B>, TargetViewError>
     {
-        self.raw.view_image_as_render_target(image.resource(), format, range)
+        self.raw.view_image_as_render_target(image.resource(), format, layers)
             .map(|rtv| RenderTargetView::new(
                 rtv,
                 image.into(),
@@ -408,11 +408,11 @@ impl<B: Backend> Device<B> {
     pub fn view_image_as_render_target<F>(
         &mut self,
         image: &handle::Image<B, F>,
-        range: image::SubresourceRange
+        layers: image::SubresourceLayers,
     ) -> Result<handle::RenderTargetView<B, F>, TargetViewError>
         where F: format::RenderFormat
     {
-        self.view_image_as_render_target_raw(image, F::get_format(), range)
+        self.view_image_as_render_target_raw(image, F::get_format(), layers)
             .map(Typed::new)
     }
 

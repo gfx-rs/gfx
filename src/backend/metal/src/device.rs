@@ -126,7 +126,7 @@ impl core::Adapter<Backend> for Adapter {
             },
             core::MemoryType {
                 id: 3,
-                properties: memory::CPU_VISIBLE | memory::COHERENT 
+                properties: memory::CPU_VISIBLE | memory::COHERENT
                     | memory::CPU_CACHED | memory::WRITE_COMBINED,
                 heap_index: 0,
             },
@@ -474,10 +474,10 @@ impl core::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn view_image_as_render_target(&mut self, image: &n::Image, format: format::Format, range: image::SubresourceRange) 
+    fn view_image_as_render_target(&mut self, image: &n::Image, format: format::Format, _layers: image::SubresourceLayers)
         -> Result<n::RenderTargetView, TargetViewError>
     {
-        // TODO: subresource range
+        // TODO: subresource layers
 
         let (mtl_format, _) = map_format(format).ok_or_else(|| {
             error!("failed to find corresponding Metal format for {:?}", format);
@@ -535,13 +535,13 @@ impl core::Device<Backend> for Device {
             }
         }
     }
-    
+
     fn create_semaphore(&mut self) -> n::Semaphore {
         unsafe { n::Semaphore(n::dispatch_semaphore_create(1)) } // Returns retained
     }
 
     #[cfg(feature = "argument_buffer")]
-    fn create_descriptor_pool(&mut self, max_sets: usize, descriptor_ranges: &[pso::DescriptorRangeDesc]) 
+    fn create_descriptor_pool(&mut self, max_sets: usize, descriptor_ranges: &[pso::DescriptorRangeDesc])
         -> n::DescriptorPool
     {
         let mut num_samplers = 0;
@@ -573,7 +573,7 @@ impl core::Device<Backend> for Device {
     }
 
     #[cfg(not(feature = "argument_buffer"))]
-    fn create_descriptor_pool(&mut self, max_sets: usize, descriptor_ranges: &[pso::DescriptorRangeDesc]) 
+    fn create_descriptor_pool(&mut self, max_sets: usize, descriptor_ranges: &[pso::DescriptorRangeDesc])
         -> n::DescriptorPool
     {
         n::DescriptorPool {}
@@ -838,7 +838,7 @@ impl core::Device<Backend> for Device {
         }
     }
 
-    fn get_image_requirements(&mut self, image: &n::UnboundImage) -> memory::Requirements { 
+    fn get_image_requirements(&mut self, image: &n::UnboundImage) -> memory::Requirements {
         if self.private_caps.resource_heaps {
             // We don't know what memory type the user will try to allocate the image with, so we test them
             // all get the most stringent ones. Note we don't check Shared because heaps can't use it

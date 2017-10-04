@@ -113,7 +113,8 @@ pub trait Surface<B: Backend> {
 
     /// Create a new swapchain from a surface and a queue.
     ///
-    /// *Note*: The number of exposed backbuffers might differ from number of internally used buffers.
+    /// *Note*: The number of exposed images in the back buffer might differ
+    /// from number of internally used buffers.
     ///
     /// # Safety
     ///
@@ -141,7 +142,7 @@ pub trait Surface<B: Backend> {
     fn build_swapchain<C>(&mut self,
         config: SwapchainConfig,
         present_queue: &CommandQueue<B, C>,
-    ) -> (B::Swapchain, Vec<Backbuffer<B>>);
+    ) -> (B::Swapchain, Backbuffer<B>);
 }
 
 /// Handle to a backbuffer of the swapchain.
@@ -157,8 +158,8 @@ impl Frame {
 
     /// Retrieve frame id.
     ///
-    /// The can be used to fetch the currently used backbuffer from
-    /// [`get_backbuffers`](trait.Swapchain.html#tymethod.get_backbuffers)
+    /// The can be used to access the currently used backbuffer image
+    /// in `Backbuffer::Images`.
     ///
     /// # Examples
     ///
@@ -239,11 +240,11 @@ impl SwapchainConfig {
 }
 
 /// Swapchain backbuffer type
-pub struct Backbuffer<B: Backend> {
-    /// Back buffer color
-    pub color: B::Image,
-    /// Back buffer depth/stencil
-    pub depth_stencil: Option<B::Image>,
+pub enum Backbuffer<B: Backend> {
+    /// Color image chain
+    Images(Vec<B::Image>),
+    /// A single opaque framebuffer
+    FrameBuffer(B::FrameBuffer),
 }
 
 /// The `Swapchain` is the backend representation of the surface.
