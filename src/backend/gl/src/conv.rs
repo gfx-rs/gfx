@@ -1,5 +1,4 @@
-
-use core::image as i;
+use core::{buffer, image as i};
 use gl::{self, types as t};
 
 pub fn image_kind_to_gl(kind: i::Kind) -> t::GLenum {
@@ -32,5 +31,15 @@ pub fn wrap_to_gl(w: i::WrapMode) -> t::GLenum {
         i::WrapMode::Mirror => gl::MIRRORED_REPEAT,
         i::WrapMode::Clamp  => gl::CLAMP_TO_EDGE,
         i::WrapMode::Border => gl::CLAMP_TO_BORDER,
+    }
+}
+
+pub fn buffer_usage_to_gl_target(usage: buffer::Usage) -> Option<t::GLenum> {
+    match usage & (buffer::CONSTANT | buffer::INDEX | buffer::VERTEX | buffer::INDIRECT) {
+        buffer::CONSTANT => Some(gl::UNIFORM_BUFFER),
+        buffer::INDEX => Some(gl::ELEMENT_ARRAY_BUFFER),
+        buffer::VERTEX => Some(gl::ARRAY_BUFFER),
+        buffer::INDIRECT => unimplemented!(),
+        _ => None
     }
 }

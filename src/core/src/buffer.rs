@@ -2,10 +2,14 @@
 use memory;
 use {IndexType, Backend};
 
-// TODO
 /// Error creating a buffer.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct CreationError;
+pub enum CreationError {
+    /// Required `Usage` is not supported.
+    Usage(Usage),
+    /// Some other problem.
+    Other,
+}
 
 bitflags!(
     /// Buffer usage flags.
@@ -23,6 +27,8 @@ bitflags!(
         const INDIRECT = 0x10,
         ///
         const VERTEX = 0x20,
+        ///
+        const HOST = 0x40, //TODO: read/write?
     }
 );
 

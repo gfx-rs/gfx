@@ -148,14 +148,15 @@ impl PlatformName {
 /// Private capabilities that don't need to be exposed.
 #[derive(Debug)]
 pub struct PrivateCaps {
-    pub array_buffer_supported: bool,
-    pub frame_buffer_supported: bool,
-    pub immutable_storage_supported: bool,
-    pub program_interface_supported: bool,
-    pub buffer_storage_supported: bool,
-    pub clear_buffer_supported: bool,
-    pub frag_data_location_supported: bool,
-    pub sync_supported: bool,
+    pub array_buffer: bool,
+    pub frame_buffer: bool,
+    pub buffer_role_change: bool,
+    pub buffer_storage: bool,
+    pub image_storage: bool,
+    pub clear_buffer: bool,
+    pub program_interface: bool,
+    pub frag_data_location: bool,
+    pub sync: bool,
     /// Indicates if we only have support via the EXT.
     pub sampler_anisotropy_ext: bool,
 }
@@ -299,24 +300,23 @@ pub fn get(gl: &gl::Gl) -> (Info, Features, Limits, PrivateCaps) {
         sampler_border_color:               info.is_supported(&[Core(3,3)]), // TODO: extensions
     };
     let private = PrivateCaps {
-        array_buffer_supported:             info.is_supported(&[Core(3,0),
+        array_buffer:                       info.is_supported(&[Core(3,0),
                                                                 Es  (3,0),
                                                                 Ext ("GL_ARB_vertex_array_object")]),
-        frame_buffer_supported:             info.is_supported(&[Core(3,0),
+        frame_buffer:                       info.is_supported(&[Core(3,0),
                                                                 Es  (2,0),
                                                                 Ext ("GL_ARB_framebuffer_object")]),
-        immutable_storage_supported:        info.is_supported(&[Core(3,2),
+        buffer_role_change:                 !info.version.is_embedded,
+        image_storage:                      info.is_supported(&[Core(3,2),
                                                                 Ext ("GL_ARB_texture_storage")]),
-
-        program_interface_supported:        info.is_supported(&[Core(4,3),
-                                                                Ext ("GL_ARB_program_interface_query")]),
-        buffer_storage_supported:           info.is_supported(&[Core(4,4),
+        buffer_storage:                     info.is_supported(&[Core(4,4),
                                                                 Ext ("GL_ARB_buffer_storage")]),
-        clear_buffer_supported:             info.is_supported(&[Core(3,0),
+        clear_buffer:                       info.is_supported(&[Core(3,0),
                                                                 Es  (3,0)]),
-        frag_data_location_supported:       !info.version.is_embedded,
-
-        sync_supported:                     info.is_supported(&[Core(3,2),
+        program_interface:                  info.is_supported(&[Core(4,3),
+                                                                Ext ("GL_ARB_program_interface_query")]),
+        frag_data_location:                 !info.version.is_embedded,
+        sync:                               info.is_supported(&[Core(3,2),
                                                                 Es  (3,0),
                                                                 Ext ("GL_ARB_sync")]),
         sampler_anisotropy_ext:             !info.is_supported(&[Core(4,6),
