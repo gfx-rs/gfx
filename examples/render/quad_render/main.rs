@@ -7,14 +7,12 @@ extern crate gfx_backend_vulkan as back;
 extern crate winit;
 extern crate image;
 
-use std::mem;
 use std::io::Cursor;
 
 use core::{command, device as d, image as i, pso, state};
 use core::{Adapter, Device, Instance, Primitive};
 use gfx::format::{Srgba8 as ColorFormat};
 use core::target::Rect;
-use gfx::pso::{Descriptors, GraphicsPipelineMeta};
 use gfx::allocators::StackAllocator as Allocator;
 
 gfx_buffer_struct! {
@@ -34,8 +32,8 @@ const QUAD: [Vertex; 6] = [
     Vertex { a_Pos: [ -0.5,-0.33 ], a_Uv: [0.0, 0.0] },
 ];
 
-gfx_descriptor_struct! {
-    SampleDesc {
+gfx_descriptors! {
+    desc {
         sampled_image: gfx::pso::SampledImage,
         sampler: gfx::pso::Sampler,
     }
@@ -43,7 +41,7 @@ gfx_descriptor_struct! {
 
 gfx_graphics_pipeline! {
     pipe {
-        sample: gfx::pso::DescriptorSet<SampleDesc<B>>, // TODO remove <B>
+        desc: desc::Component,
         color: gfx::pso::RenderTarget<ColorFormat>,
         vertices: gfx::pso::VertexBuffer<Vertex>,
     }
@@ -73,17 +71,15 @@ fn main() {
     type Context<C> = gfx::Context<back::Backend, C>;
     let (mut context, backbuffers) =
         Context::init_graphics::<ColorFormat>(surface, adapter);
-
-    let mut render_device = (*context.ref_device()).clone();
-    let device: &mut back::Device = render_device.mut_raw();
+    let mut device = (*context.ref_device()).clone();
 
     // Setup renderpass and pipeline
-    let vs_module = device.create_shader_module(include_bytes!("data/vs_main.spv")).unwrap();
-    let fs_module = device.create_shader_module(include_bytes!("data/ps_main.spv")).unwrap();
+    let vs_module = device.mut_raw().create_shader_module(include_bytes!("data/vs_main.spv")).unwrap();
+    let fs_module = device.mut_raw().create_shader_module(include_bytes!("data/ps_main.spv")).unwrap();
 
-    let sample_desc = context.mut_device().create_descriptors(1).pop().unwrap();
+    let (desc, mut desc_data) = device.create_descriptors(1).pop().unwrap();
     let pipe_init = pipe::Init {
-        sample: &sample_desc,
+        desc: &desc,
         color: pso::ColorInfo {
             mask: state::MASK_ALL,
             color: Some(state::BlendChannel {
@@ -99,7 +95,7 @@ fn main() {
         },
         vertices: (),
     };
-    let pipeline = context.mut_device().create_graphics_pipeline(
+    let pipeline = device.create_graphics_pipeline(
         pso::GraphicsShaderSet {
             vertex: pso::EntryPoint { entry: "main", module: &vs_module },
             hull: None,
@@ -114,13 +110,13 @@ fn main() {
 
     // Framebuffer creation
     let frame_rtvs = backbuffers.iter().map(|backbuffer| {
-        context.mut_device()
-            .view_image_as_render_target(&backbuffer.color, (0..1, 0..1))
+        device.view_image_as_render_target(&backbuffer.color, (0, 0..1))
             .unwrap()
     }).collect::<Vec<_>>();
     let framebuffers = frame_rtvs.iter().map(|rtv| {
         let extent = d::Extent { width: pixel_width as _, height: pixel_height as _, depth: 1 };
-        device.create_framebuffer(&render_pass, &[frame_rtv], &[], extent).unwrap()
+        device.create_framebuffer(&pipeline, &[&rtv], &[], extent)
+            .unwrap()
     }).collect::<Vec<_>>();
 
     let mut upload = Allocator::new(
@@ -134,15 +130,14 @@ fn main() {
 
     let mut init_tokens = Vec::new();
     let vertex_count = QUAD.len() as u64;
-    let (vertex_buffer, token) = context.mut_device().create_buffer::<Vertex, _>(
+    let (vertex_buffer, token) = device.create_buffer::<Vertex, _>(
         &mut upload,
         gfx::buffer::VERTEX,
         vertex_count
     ).unwrap();
     init_tokens.push(token);
 
-    context.mut_device()
-        .write_mapping(&vertex_buffer, 0..vertex_count)
+    device.write_mapping(&vertex_buffer, 0..vertex_count)
         .unwrap()
         .copy_from_slice(&QUAD);
 
@@ -150,13 +145,13 @@ fn main() {
     let img = image::load(Cursor::new(&img_data[..]), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
     let kind = i::Kind::D2(width as i::Size, height as i::Size, i::AaMode::Single);
-    let row_alignment_mask = device.get_limits().min_buffer_copy_pitch_alignment as u32 - 1;
+    let row_alignment_mask = device.ref_raw().get_limits().min_buffer_copy_pitch_alignment as u32 - 1;
     let image_stride = 4usize;
     let row_pitch = (width * image_stride as u32 + row_alignment_mask) & !row_alignment_mask;
     let upload_size = (height * row_pitch) as u64;
     println!("upload row pitch {}, total size {}", row_pitch, upload_size);
 
-    let (image_upload_buffer, token) = context.mut_device().create_buffer_raw(
+    let (image_upload_buffer, token) = device.create_buffer_raw(
         &mut upload,
         gfx::buffer::TRANSFER_SRC,
         upload_size,
@@ -166,8 +161,7 @@ fn main() {
 
     println!("copy image data into staging buffer");
 
-    if let Ok(mut image_data) = context.mut_device()
-        .write_mapping(&image_upload_buffer, 0..upload_size)
+    if let Ok(mut image_data) = device.write_mapping(&image_upload_buffer, 0..upload_size)
     {
         for y in 0 .. height as usize {
             let row = &(*img)[y*(width as usize)*image_stride .. (y+1)*(width as usize)*image_stride];
@@ -176,7 +170,7 @@ fn main() {
         }
     }
 
-    let (image, token) = context.mut_device().create_image::<ColorFormat, _>(
+    let (image, token) = device.create_image::<ColorFormat, _>(
         &mut data,
         gfx::image::TRANSFER_DST | gfx::image::SAMPLED,
         kind,
@@ -184,20 +178,19 @@ fn main() {
     ).unwrap();
     init_tokens.push(token);
 
-    let image_srv = context.mut_device()
-        .view_image_as_shader_resource(&image)
+    let image_srv = device.view_image_as_shader_resource(&image)
         .unwrap();
 
-    let sampler = context.mut_device().create_sampler(
+    let sampler = device.create_sampler(
         i::SamplerInfo::new(
             i::FilterMethod::Bilinear,
             i::WrapMode::Clamp,
         )
     );
 
-    context.mut_device().update_descriptor_sets()
-        .write(sample_desc.sampled_image(), 0, vec![&image_srv])
-        .write(sample_desc.sampler(), 0, vec![&sampler])
+    device.update_descriptor_sets()
+        .write(desc_data.sampled_image(&desc), 0, &[&image_srv as _])
+        .write(desc_data.sampler(&desc), 0, &[&sampler as _])
         .finish();
 
     // Rendering setup
@@ -230,15 +223,6 @@ fn main() {
     let init_submit = init_encoder.finish();
     let mut submits = vec![init_submit];
 
-    /* TODO
-    let image_barrier = m::Barrier::Image {
-        states: (i::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal) ..
-                (i::SHADER_READ, i::ImageLayout::ShaderReadOnlyOptimal),
-        target: image.resource(),
-        range: (0..1, 0..1),
-    };
-    */
-
     let mut running = true;
     while running {
         events_loop.poll_events(|event| {
@@ -259,37 +243,23 @@ fn main() {
         let mut encoder_pool = context.acquire_encoder_pool();
         let mut encoder = encoder_pool.acquire_encoder();
 
-        // Rendering
         {
-            let cmd_buffer = encoder.mut_buffer();
-
-            cmd_buffer.set_viewports(&[viewport]);
-            cmd_buffer.set_scissors(&[scissor]);
-            cmd_buffer.bind_graphics_pipeline(pipeline.pipeline());
-            // TODO: data instead of upload ?
-            // TODO: vertex access ?
-            cmd_buffer.bind_vertex_buffers(pso::VertexBufferSet(vec![(vertex_buffer.resource(), 0)]));
-            cmd_buffer.bind_graphics_descriptor_sets(pipeline.layout(), 0, &[&sample_desc.set()]); // TODO
-
-            {
-                let mut encoder = cmd_buffer.begin_renderpass_inline(
-                    pipeline.render_pass(),
-                    &framebuffers[frame.id()],
-                    Rect { x: 0, y: 0, w: pixel_width, h: pixel_height },
-                    &[command::ClearValue::Color(command::ClearColor::Float([0.8, 0.8, 0.8, 1.0]))],
-                );
-                encoder.draw(0..6, 0..1);
-            }
+            let data = pipe::Data {
+                desc: (&desc, &desc_data),
+                color: &frame_rtvs[frame.id()],
+                vertices: &vertex_buffer,
+                viewports: &[viewport],
+                scissors: &[scissor],
+                framebuffer: &framebuffers[frame.id()],
+            };
+            encoder.draw(0..6, &pipeline, data);
         }
         
         submits.push(encoder.finish());
-        context.present(mem::replace(&mut submits, Vec::new()));
+        context.present(submits.drain(..).collect::<Vec<_>>());
     }
 
     println!("cleanup!");
-    device.destroy_shader_module(vs_module);
-    device.destroy_shader_module(fs_module);
-    for framebuffer in framebuffers {
-        device.destroy_framebuffer(framebuffer);
-    }
+    device.mut_raw().destroy_shader_module(vs_module);
+    device.mut_raw().destroy_shader_module(fs_module);
 }

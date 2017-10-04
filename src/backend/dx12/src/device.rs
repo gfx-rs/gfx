@@ -726,7 +726,7 @@ impl d::Device<B> for Device {
         color_attachments: &[&n::RenderTargetView],
         depth_stencil_attachments: &[&n::DepthStencilView],
         _extent: d::Extent,
-    ) -> Result<n::FrameBuffer, d::FramebufferError> {
+    ) -> Result<n::FrameBuffer, d::FrameBufferError> {
         Ok(n::FrameBuffer {
             color: color_attachments.iter().map(|rtv| **rtv).collect(),
             depth_stencil: depth_stencil_attachments.iter().map(|dsv| **dsv).collect(),

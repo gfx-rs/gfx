@@ -594,7 +594,7 @@ impl d::Device<B> for Device {
         color_attachments: &[&n::RenderTargetView],
         depth_stencil_attachments: &[&n::DepthStencilView],
         extent: d::Extent,
-    ) -> Result<n::FrameBuffer, d::FramebufferError> {
+    ) -> Result<n::FrameBuffer, d::FrameBufferError> {
         let attachments = color_attachments
             .iter()
             .map(|attachment| attachment.view)

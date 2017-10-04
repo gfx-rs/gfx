@@ -44,7 +44,7 @@ impl<B: Backend> Allocator<B> for BoxedAllocator<B> {
 
     fn allocate_image(&mut self,
         device: &mut Device<B>,
-        usage: image::Usage,
+        _: image::Usage,
         image: B::UnboundImage
     ) -> (B::Image, Memory) {
         let requirements = device.mut_raw().get_image_requirements(&image);

@@ -45,59 +45,111 @@ macro_rules! gfx_buffer_struct {
 }
 
 #[macro_export]
-macro_rules! gfx_descriptor_struct {
+macro_rules! gfx_descriptors {
     ($name:ident { $( $field:ident: $bind:ty, )* }) => {
         #[allow(missing_docs)]
-        #[derive(Debug)]
-        pub struct $name<B: $crate::Backend> {
-            $( $field: usize, )*
-            layout: $crate::handle::raw::DescriptorSetLayout<B>,
-            set: $crate::pso::RawDescriptorSet<B>,
-        }
+        pub mod $name {
+            #[allow(unused_imports)]
+            use super::*;
+            use $crate::{core, pso, handle, image};
+            use $crate::Backend;
 
-        impl<B: $crate::Backend> $crate::pso::Descriptors<B> for $name<B> {
-            fn from_raw(
-                layout: $crate::handle::raw::DescriptorSetLayout<B>,
-                set: $crate::pso::RawDescriptorSet<B>
-            ) -> Self {
-                let mut binding = 0;
-                let mut next_binding = || {let b = binding; binding += 1; b };
-                $name {
-                    $( $field: next_binding(), )*
-                    layout,
-                    set
+            pub struct Set<B: Backend> {
+                $( $field: usize, )*
+                layout: handle::raw::DescriptorSetLayout<B>,
+                raw: pso::RawDescriptorSet<B>,
+            }
+
+            pub struct Data<B: Backend> {
+                $( $field: [Option<<$bind as pso::Bind<B>>::Handle>; <$bind as pso::BindDesc>::COUNT], )*
+            }
+
+            pub struct Component;
+
+            impl<B: Backend> pso::Descriptors<B> for Set<B> {
+                type Data = Data<B>;
+
+                fn from_raw(
+                    layout: handle::raw::DescriptorSetLayout<B>,
+                    raw: pso::RawDescriptorSet<B>
+                ) -> (Self, Self::Data) {
+                    let mut binding = 0;
+                    let mut next_binding = || {let b = binding; binding += 1; b };
+                    (Set {
+                        $( $field: next_binding(), )*
+                        layout,
+                        raw
+                    }, Data {
+                        $( $field: [None; <$bind as pso::BindDesc>::COUNT], )*
+                    })
                 }
+
+                fn layout_bindings() -> Vec<core::pso::DescriptorSetLayoutBinding> {
+                    let mut bindings = Vec::new();
+                    $({
+                        let binding = bindings.len();
+                        bindings.push(core::pso::DescriptorSetLayoutBinding {
+                            binding,
+                            ty: <$bind as pso::BindDesc>::TYPE,
+                            count: <$bind as pso::BindDesc>::COUNT,
+                            // TODO: specify stage
+                            stage_flags: core::pso::ShaderStageFlags::all(),
+                        });
+                    })*
+                    bindings
+                }
+                
+                fn layout(&self) -> &B::DescriptorSetLayout { self.layout.resource() }
+                fn set(&self) -> &B::DescriptorSet { self.raw.resource() }
             }
 
-            fn layout_bindings() -> Vec<$crate::core::pso::DescriptorSetLayoutBinding> {
-                let mut bindings = Vec::new();
-                $({
-                    let binding = bindings.len();
-                    bindings.push($crate::core::pso::DescriptorSetLayoutBinding {
-                        binding,
-                        ty: <$bind as $crate::pso::Bind>::desc_type(),
-                        count: <$bind as $crate::pso::Bind>::desc_count(),
-                        // TODO: specify stage
-                        stage_flags: $crate::core::pso::ShaderStageFlags::all(),
-                    });
-                })*
-                bindings
-            }
-            
-            fn layout(&self) -> &B::DescriptorSetLayout { self.layout.resource() }
-            fn set(&self) -> &B::DescriptorSet { self.set.resource() }
-        }
-
-        impl<B: $crate::Backend> $name<B> {
-            $(
-                fn $field(&self) -> $crate::pso::DescriptorSetBindRef<B, $bind> {
-                    $crate::pso::DescriptorSetBindRef {
-                        set: self.set(),
-                        binding: self.$field,
-                        phantom: ::std::marker::PhantomData,
+            impl<B: $crate::Backend> Data<B> {
+                $(
+                    pub fn $field<'a, 'b>(&'a mut self, set: &'b Set<B>)
+                        -> pso::DescriptorSetBindRef<'b, 'a, B, $bind>
+                    {
+                        pso::DescriptorSetBindRef {
+                            set: set.raw.resource(),
+                            binding: set.$field,
+                            handles: &mut self.$field,
+                        }
                     }
+                )*
+            }
+
+            impl<'a, B: Backend> pso::Component<'a, B> for Component {
+                type Init = &'a Set<B>;
+                type Data = (&'a Set<B>, &'a Data<B>);
+
+                fn descriptor_layout<'b>(init: &'b Self::Init) -> Option<&'b B::DescriptorSetLayout>
+                    where 'a: 'b
+                {
+                    Some(init.layout.resource())
                 }
-            )*
+
+                fn descriptor_set<'b>(data: &'b Self::Data) -> Option<&'b B::DescriptorSet>
+                    where 'a: 'b
+                {
+                    Some(data.0.raw.resource())
+                }
+
+                fn require<'b>(
+                    data: &'b Self::Data,
+                    buffers: &mut Vec<(&'b handle::raw::Buffer<B>, core::buffer::State)>,
+                    images: &mut Vec<(&'b handle::raw::Image<B>, image::Subresource, core::image::State)>,
+                    others: &mut handle::Bag<B>,
+                )
+                    where 'a: 'b
+                {
+                    $(
+                        for handle_opt in &(data.1).$field {
+                            handle_opt.as_ref().map(|h| {
+                                <$bind as pso::Bind<B>>::require(h, buffers, images, others);
+                            });
+                        }
+                    )*
+                }
+            }
         }
     }
 }
@@ -111,9 +163,13 @@ macro_rules! gfx_graphics_pipeline {
         pub mod $name {
             #[allow(unused_imports)]
             use super::*;
-            use $crate::{pso, handle, Backend, Device, Encoder, Primitive};
-            use $crate::core::pass::{self as cpass, SubpassRef};
-            use $crate::core::{pso as cpso, image as cimg};
+            use $crate::{pso, handle};
+            use $crate::{
+                Backend, Supports, Transfer, Graphics, Encoder,
+                Device, Primitive
+            };
+            use $crate::core::{pass as cpass, pso as cpso};
+            use $crate::core::command::RenderPassInlineEncoder;
     
             pub struct Meta<B: Backend> {
                 layout: handle::raw::PipelineLayout<B>,
@@ -126,6 +182,10 @@ macro_rules! gfx_graphics_pipeline {
             }
 
             pub struct Data<'a, B: Backend> {
+                // TODO:
+                pub viewports: &'a [$crate::core::Viewport],
+                pub scissors: &'a [$crate::core::target::Rect],
+                pub framebuffer: &'a handle::raw::FrameBuffer<B>,
                 $( pub $cmp_name: <$cmp as pso::Component<'a, B>>::Data, )*
             }
 
@@ -159,16 +219,11 @@ macro_rules! gfx_graphics_pipeline {
                         )*
                         let subpass = cpass::SubpassDesc {
                             color_attachments: &color_attachments[..],
+                            input_attachments: &[],
+                            preserve_attachments: &[],
                         };
 
-                        // TODO:
-                        let dependency = cpass::SubpassDependency {
-                            passes: SubpassRef::External..SubpassRef::Pass(0),
-                            stages: cpso::COLOR_ATTACHMENT_OUTPUT..cpso::COLOR_ATTACHMENT_OUTPUT,
-                            accesses: cimg::Access::empty()..(cimg::COLOR_ATTACHMENT_READ | cimg::COLOR_ATTACHMENT_WRITE),
-                        };
-
-                        device.create_renderpass_raw(&attachments[..], &[subpass], &[dependency])
+                        device.create_renderpass_raw(&attachments[..], &[subpass], &[])
                     };
             
                     let mut pipeline_desc = cpso::GraphicsPipelineDesc::new(
@@ -194,19 +249,61 @@ macro_rules! gfx_graphics_pipeline {
             impl<B: Backend> pso::GraphicsPipelineMeta<B> for Meta<B> {
                 fn layout(&self) -> &B::PipelineLayout { self.layout.resource() }
                 fn render_pass(&self) -> &B::RenderPass { self.render_pass.resource() }
-                fn pipeline(&self) -> &B::GraphicsPipeline { self.pipeline.resource() }
             }
 
             impl<'a, B: Backend> pso::GraphicsPipelineData<B> for Data<'a, B> {
                 type Pipeline = Meta<B>;
 
-                fn bind(
+                fn begin_renderpass<'b, 'c, C>(
                     self,
-                    _viewport: $crate::core::Viewport,
-                    _scissor: $crate::core::target::Rect,
-                    _pipeline: &Self::Pipeline)
+                    encoder: &'b mut Encoder<'c, B, C>,
+                    meta: &'b Self::Pipeline
+                ) -> RenderPassInlineEncoder<'b, B>
+                    where Self: 'a, 'c: 'b, C: Supports<Transfer> + Supports<Graphics>
                 {
-
+                    let mut buffer_states = Vec::new();
+                    let mut image_states = Vec::new();
+                    $(
+                        <$cmp as pso::Component<'a, B>>::require(
+                            &self.$cmp_name,
+                            &mut buffer_states,
+                            &mut image_states,
+                            encoder.handles());
+                    )*
+                    encoder.require_state(
+                        cpso::VERTEX_INPUT,
+                        &buffer_states[..],
+                        &image_states[..]
+                    );
+                    
+                    let cmd_buffer = encoder.mut_buffer();
+                    cmd_buffer.set_viewports(self.viewports);
+                    cmd_buffer.set_scissors(self.scissors);
+                    cmd_buffer.bind_graphics_pipeline(meta.pipeline.resource());
+                    let mut vbs = Vec::new();
+                    $(
+                        vbs.extend(<$cmp as pso::Component<'a, B>>::vertex_buffer(&self.$cmp_name));
+                    )*
+                    cmd_buffer.bind_vertex_buffers(cpso::VertexBufferSet(vbs));
+                    let mut descs = Vec::new();
+                    $(
+                        descs.extend(<$cmp as pso::Component<'a, B>>::descriptor_set(&self.$cmp_name));
+                    )*
+                    cmd_buffer.bind_graphics_descriptor_sets(meta.layout.resource(), 0, &descs[..]);
+                    // TODO: difference with viewport ?
+                    let extent = self.framebuffer.info().extent;
+                    let render_rect = $crate::core::target::Rect {
+                        x: 0,
+                        y: 0,
+                        w: extent.width as u16,
+                        h: extent.height as u16
+                    };
+                    cmd_buffer.begin_renderpass_inline(
+                        meta.render_pass.resource(),
+                        self.framebuffer.resource(),
+                        render_rect, 
+                        &[], // TODO
+                    )
                 }
             }
         }
