@@ -7,13 +7,19 @@ use gl;
 use Backend;
 use std::cell::Cell;
 
-pub type Buffer      = gl::types::GLuint;
+
 pub type Shader      = gl::types::GLuint;
 pub type Program     = gl::types::GLuint;
 pub type FrameBuffer = gl::types::GLuint;
 pub type Surface     = gl::types::GLuint;
 pub type Texture     = gl::types::GLuint;
 pub type Sampler     = gl::types::GLuint;
+
+#[derive(Debug)]
+pub struct Buffer {
+    pub raw: gl::types::GLuint,
+    pub target: gl::types::GLenum,
+}
 
 #[derive(Debug)]
 pub struct Fence(pub Cell<gl::types::GLsync>);
