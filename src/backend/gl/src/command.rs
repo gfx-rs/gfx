@@ -383,7 +383,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
 
         self.cache.index_type = Some(ibv.index_type);
-        self.push_cmd(Command::BindIndexBuffer(*ibv.buffer));
+        self.push_cmd(Command::BindIndexBuffer(ibv.buffer.raw));
     }
 
     fn bind_vertex_buffers(&mut self, _vbs: c::pso::VertexBufferSet<Backend>) {
@@ -479,7 +479,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
     fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: u64) {
-        self.push_cmd(Command::DispatchIndirect(*buffer, offset));
+        self.push_cmd(Command::DispatchIndirect(buffer.raw, offset));
     }
 
     fn copy_buffer(&mut self, _src: &n::Buffer, _dst: &n::Buffer, _regions: &[BufferCopy]) {
