@@ -320,9 +320,15 @@ impl<B: Backend, C> Context<B, C>
 
         let swap_config = core::SwapchainConfig::new()
             .with_color::<Cf>();
-        let (swapchain, backbuffers) = surface.build_swapchain(swap_config, &queue.inner);
+        let (swapchain, backbuffer) = surface.build_swapchain(swap_config, &queue.inner);
 
-        let frame_bundles = backbuffers.iter()
+        let backbuffer_images = match backbuffer {
+            core::Backbuffer::Images(images) => images,
+            core::Backbuffer::FrameBuffer(_) => unimplemented!(), //TODO
+        };
+
+        let frame_bundles = backbuffer_images
+            .iter()
             .map(|_| FrameBundle {
                 handles: handle::Bag::new(),
                 access_info: encoder::AccessInfo::new(),
@@ -333,19 +339,20 @@ impl<B: Backend, C> Context<B, C>
                     device.mut_raw().create_fence(true)),
             }).collect();
 
-        let backbuffers = backbuffers.into_iter()
+        let backbuffers = backbuffer_images
+            .into_iter()
             .map(|raw| {
                 Backbuffer {
                     color: Typed::new(device
                         .view_backbuffer_as_render_target_raw(
-                            raw.color,
+                            raw,
                             surface.get_kind(),
                             Cf::get_format(),
-                            (0..1, 0..1)
+                            (0, 0..1)
                         ).expect("backbuffer RTV")
                     )
                 }
-            }).collect::<Vec<_>>();
+            }).collect();
 
         (Context {
             surface,

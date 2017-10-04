@@ -259,7 +259,7 @@ impl core::Surface<Backend> for Surface {
         &mut self,
         config: core::SwapchainConfig,
         present_queue: &core::CommandQueue<Backend, C>,
-    ) -> (Swapchain, Vec<core::Backbuffer<Backend>>) {
+    ) -> (Swapchain, core::Backbuffer<Backend>) {
         let functor = ext::Swapchain::new(&self.raw.instance.0, &present_queue.as_raw().device().0)
             .expect("Unable to query swapchain function");
 
@@ -293,35 +293,34 @@ impl core::Surface<Backend> for Surface {
             old_swapchain: vk::SwapchainKHR::null(),
         };
 
-        let swapchain = unsafe { functor.create_swapchain_khr(&info, None) }
+        let swapchain_raw = unsafe { functor.create_swapchain_khr(&info, None) }
             .expect("Unable to create a swapchain");
 
-        let backbuffer_images = functor.get_swapchain_images_khr(swapchain)
+        let backbuffer_images = functor.get_swapchain_images_khr(swapchain_raw)
             .expect("Unable to get swapchain images");
 
-        let backbuffers = backbuffer_images
+        let swapchain = Swapchain {
+            raw: swapchain_raw,
+            functor,
+            frame_queue: VecDeque::new(),
+        };
+
+        let images = backbuffer_images
             .into_iter()
             .map(|image| {
-                core::Backbuffer {
-                    color: native::Image {
-                        raw: image,
-                        bytes_per_texel: 4,
-                        extent: vk::Extent3D {
-                            width: self.width,
-                            height: self.height,
-                            depth: 1,
-                        },
+                native::Image {
+                    raw: image,
+                    bytes_per_texel: 4,
+                    extent: vk::Extent3D {
+                        width: self.width,
+                        height: self.height,
+                        depth: 1,
                     },
-                    depth_stencil: None,
                 }
             })
             .collect();
 
-        (Swapchain {
-            raw: swapchain,
-            functor,
-            frame_queue: VecDeque::new(),
-        }, backbuffers)
+        (swapchain, core::Backbuffer::Images(images))
     }
 }
 

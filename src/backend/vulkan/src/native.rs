@@ -1,7 +1,7 @@
 use ash::vk;
 use ash::version::DeviceV1_0;
 use core;
-use core::image::SubresourceRange;
+use core::image::SubresourceLayers;
 use std::ops::Range;
 use std::sync::Arc;
 use {Backend, RawDevice};

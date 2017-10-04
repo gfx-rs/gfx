@@ -375,9 +375,9 @@ impl<B: Backend> Device<B> {
         image: B::Image,
         kind: image::Kind,
         format: format::Format,
-        range: image::SubresourceRange
+        layers: image::SubresourceLayers
     ) -> Result<handle::raw::RenderTargetView<B>, TargetViewError> {
-        self.raw.view_image_as_render_target(&image, format, range)
+        self.raw.view_image_as_render_target(&image, format, layers)
             .map(|rtv| RenderTargetView::new(
                 rtv,
                 handle::ViewSource::Backbuffer(image, kind, format),
