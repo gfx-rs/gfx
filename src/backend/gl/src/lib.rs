@@ -116,7 +116,7 @@ struct Share {
 
 impl Share {
     /// Fails during a debug build if the implementation's error flag was set.
-    pub fn check(&self) -> Result<(), Error> {
+    fn check(&self) -> Result<(), Error> {
         if cfg!(debug_assertions) {
             let gl = &self.context;
             let err = Error::from_error_code(unsafe { gl.GetError() });
@@ -140,7 +140,7 @@ impl Adapter {
     {
         let gl = gl::Gl::load_with(fn_proc);
         // query information
-        let (info, features, limits, private_caps) = info::get(&gl);
+        let (info, features, limits, private_caps) = info::query_all(&gl);
         info!("Vendor: {:?}", info.platform_name.vendor);
         info!("Renderer: {:?}", info.platform_name.renderer);
         info!("Version: {:?}", info.version);
@@ -175,6 +175,9 @@ impl Adapter {
             limits,
             private_caps,
         };
+        if let Err(err) = share.check() {
+            panic!("Error querying info: {:?}", err);
+        }
 
         Adapter {
             share: Rc::new(share),
@@ -186,10 +189,6 @@ impl Adapter {
 
 impl c::Adapter<Backend> for Adapter {
     fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)]) -> c::Gpu<Backend> {
-        // Only support a single queue
-        assert_eq!(queue_descs.len(), 1);
-        assert!(queue_descs[0].2 <= 1);
-
         // initialize permanent states
         let gl = &self.share.context;
         if self.share.features.srgb_color {
@@ -214,40 +213,49 @@ impl c::Adapter<Backend> for Adapter {
             }
         }
 
+        if let Err(err) = self.share.check() {
+            panic!("Error opening adapter: {:?}", err);
+        }
+
+        //TODO: possibly, provide separate memory types for GPU/host data
+        let mem_type = c::MemoryType {
+            id: 0,
+            properties: c::memory::DEVICE_LOCAL | c::memory::CPU_VISIBLE | c::memory::COHERENT,
+            heap_index: 0,
+        };
+
         let mut gpu = c::Gpu {
             device: Device::new(self.share.clone()),
             general_queues: Vec::new(),
             graphics_queues: Vec::new(),
             compute_queues: Vec::new(),
             transfer_queues: Vec::new(),
-            memory_types: Vec::new(), // TODO
-            memory_heaps: Vec::new(), // TODO
+            memory_types: vec![mem_type],
+            memory_heaps: vec![!0],
         };
 
-        let raw_queue = || {
-            CommandQueue {
+        for &(_, queue_type, num_queues) in queue_descs {
+            if num_queues == 0 {
+                continue
+            }
+            assert_eq!(num_queues, 1);
+            let raw_queue = CommandQueue {
                 share: self.share.clone(),
                 vao,
                 state: State::new(),
-            }
-        };
-
-        let (_, queue_type, num_queues) = queue_descs[0];
-        for _ in 0..num_queues {
-            unsafe {
-                match queue_type {
-                    QueueType::General => {
-                        gpu.general_queues.push(c::CommandQueue::new(raw_queue()));
-                    }
-                    QueueType::Graphics => {
-                        gpu.graphics_queues.push(c::CommandQueue::new(raw_queue()));
-                    }
-                    QueueType::Compute => {
-                        gpu.compute_queues.push(c::CommandQueue::new(raw_queue()));
-                    }
-                    QueueType::Transfer => {
-                        gpu.transfer_queues.push(c::CommandQueue::new(raw_queue()));
-                    }
+            };
+            match queue_type {
+                QueueType::General => unsafe {
+                    gpu.general_queues.push(c::CommandQueue::new(raw_queue));
+                }
+                QueueType::Graphics => unsafe {
+                    gpu.graphics_queues.push(c::CommandQueue::new(raw_queue));
+                }
+                QueueType::Compute => unsafe {
+                    gpu.compute_queues.push(c::CommandQueue::new(raw_queue));
+                }
+                QueueType::Transfer => unsafe {
+                    gpu.transfer_queues.push(c::CommandQueue::new(raw_queue));
                 }
             }
         }
