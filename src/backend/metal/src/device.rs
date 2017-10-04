@@ -104,7 +104,7 @@ impl core::Adapter<Backend> for Adapter {
                 min_buffer_copy_offset_alignment: 4, // TODO: Lower on iOS
                 min_buffer_copy_pitch_alignment: 4, // TODO: made this up
 
-                max_compute_group_size: (1, 1, 1), // FIXME
+                max_compute_group_size: [0; 3], // TODO
             },
         };
 

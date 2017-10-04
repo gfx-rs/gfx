@@ -63,7 +63,7 @@ impl core::Surface<Backend> for Surface {
     fn build_swapchain<C>(&mut self,
         config: SwapchainConfig,
         present_queue: &CommandQueue<Backend, C>,
-    ) -> (Swapchain, Vec<Backbuffer<Backend>>) {
+    ) -> (Swapchain, Backbuffer<Backend>) {
         let (mtl_format, cv_format) = match config.color_format {
             format::Format(SurfaceType::R8_G8_B8_A8, ChannelType::Srgb) => (MTLPixelFormat::RGBA8Unorm_sRGB, native::kCVPixelFormatType_32RGBA),
             _ => panic!("unsupported backbuffer format"), // TODO: more formats
@@ -108,17 +108,16 @@ impl core::Surface<Backend> for Surface {
             backbuffer_descriptor.set_height(pixel_height as u64);
             backbuffer_descriptor.set_usage(MTLTextureUsageRenderTarget);
 
-            // FIXME: depth
             let images = io_surfaces.iter().map(|surface| {
                 let mapped_texture: MTLTexture = msg_send![device.0,
                     newTextureWithDescriptor: backbuffer_descriptor.0
                     iosurface: surface.obj
                     plane: 0
                 ]; // Returns retained
-                Backbuffer { color: native::Image(mapped_texture), depth_stencil: None }
+                native::Image(mapped_texture)
             }).collect();
 
-            (Swapchain {
+            let swapchain = Swapchain {
                 surface: self.0.clone(),
                 pixel_width,
                 pixel_height,
@@ -126,7 +125,9 @@ impl core::Surface<Backend> for Surface {
                 io_surfaces,
                 frame_index: 0,
                 present_index: 0,
-            }, images)
+            };
+
+            (swapchain, Backbuffer::Images(images))
         }
     }
 }
