@@ -159,7 +159,7 @@ impl core::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn view_image_as_render_target(&mut self, _: &(), _: format::Format, _: image::SubresourceRange) -> Result<(), device::TargetViewError> {
+    fn view_image_as_render_target(&mut self, _: &(), _: format::Format, _: image::SubresourceLayers) -> Result<(), device::TargetViewError> {
         unimplemented!()
     }
 

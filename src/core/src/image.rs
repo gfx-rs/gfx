@@ -61,19 +61,19 @@ impl Error for CreationError {
 }
 
 /// An error associated with selected texture layer.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum LayerError {
     /// The source texture kind doesn't support array slices.
     NotExpected(Kind),
     /// Selected layer is outside of the provided range.
-    OutOfBounds(target::Layer, target::Layer),
+    OutOfBounds(Range<target::Layer>),
 }
 
 impl fmt::Display for LayerError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             LayerError::NotExpected(kind) => write!(f, "{}: {:?}", self.description(), kind),
-            LayerError::OutOfBounds(layer, count) => write!(f, "{}: {}/{}", self.description(), layer, count),
+            LayerError::OutOfBounds(ref range) => write!(f, "{}: {:?}", self.description(), range),
         }
     }
 }
@@ -82,7 +82,7 @@ impl Error for LayerError {
     fn description(&self) -> &str {
         match *self {
             LayerError::NotExpected(_) => "The source texture kind doesn't support array slices",
-            LayerError::OutOfBounds(_, _) => "Selected layer is outside of the provided range",
+            LayerError::OutOfBounds(_) => "Selected layers are outside of the provided range",
         }
     }
 }
