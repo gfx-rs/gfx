@@ -1,4 +1,8 @@
 //! Memory buffers
+
+use std::error::Error;
+use std::fmt;
+
 use memory;
 use {IndexType, Backend};
 
@@ -9,6 +13,36 @@ pub enum CreationError {
     Usage(Usage),
     /// Some other problem.
     Other,
+}
+
+/// Error creating a `BufferView`.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ViewError {
+    /// The required usage flag is not present in the image.
+    Usage(Usage),
+    /// The backend refused for some reason.
+    Unsupported,
+}
+
+impl fmt::Display for ViewError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let description = self.description();
+        match *self {
+            ViewError::Usage(usage) => write!(f, "{}: {:?}", description, usage),
+            _ => write!(f, "{}", description)
+        }
+    }
+}
+
+impl Error for ViewError {
+    fn description(&self) -> &str {
+        match *self {
+            ViewError::Usage(_) =>
+                "The required usage flag is not present in the image",
+            ViewError::Unsupported =>
+                "The backend refused for some reason",
+        }
+    }
 }
 
 bitflags!(

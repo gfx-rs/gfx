@@ -108,25 +108,24 @@ impl<'a, B: Backend, C: Supports<Graphics>> CommandBuffer<'a, B, C> {
         RenderPassInlineEncoder::new(self, render_pass, frame_buffer, render_area, clear_values)
     }
 
-    ///
-    pub fn clear_color(
+    /// Clear color image
+    pub fn clear_color_image(
         &mut self,
-        rtv: &B::RenderTargetView,
+        image: &B::Image,
         layout: ImageLayout,
-        clear_value: ClearColor,
+        value: ClearColor,
     ) {
-        self.raw.clear_color(rtv, layout, clear_value)
+        self.raw.clear_color_image(image, layout, value)
     }
 
-    ///
-    pub fn clear_depth_stencil(
+    /// Clear depth-stencil image
+    pub fn clear_depth_stencil_image(
         &mut self,
-        dsv: &B::DepthStencilView,
+        image: &B::Image,
         layout: ImageLayout,
-        depth_value: Option<target::Depth>,
-        stencil_value: Option<target::Stencil>,
+        value: ClearDepthStencil,
     ) {
-        self.raw.clear_depth_stencil(dsv, layout, depth_value, stencil_value)
+        self.raw.clear_depth_stencil_image(image, layout, value)
     }
 
     /// Bind index buffer view.

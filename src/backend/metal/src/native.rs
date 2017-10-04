@@ -74,6 +74,7 @@ pub struct RenderTargetView(pub MTLTexture);
 unsafe impl Send for RenderTargetView {}
 unsafe impl Sync for RenderTargetView {}
 
+//TODO: merge with `RenderTargetView`?
 #[derive(Debug)]
 pub struct DepthStencilView(pub MTLTexture);
 
@@ -285,7 +286,7 @@ pub unsafe fn objc_err_description(object: *mut objc::runtime::Object) -> String
     let utf8_bytes: NSUInteger = msg_send![description, lengthOfBytesUsingEncoding: 4 as NSUInteger];
     let mut bytes = Vec::with_capacity(utf8_bytes as usize);
     bytes.set_len(utf8_bytes as usize);
-    let success: objc::runtime::BOOL = msg_send![description, 
+    let success: objc::runtime::BOOL = msg_send![description,
         getBytes: bytes.as_mut_ptr()
         maxLength: utf8_bytes
         usedLength: ptr::null_mut::<NSUInteger>()

@@ -6,7 +6,7 @@
 use std::{fmt, mem, slice};
 use std::error::Error;
 use std::ops::Range;
-use {buffer, format, image, mapping, pass, pso, target};
+use {buffer, format, image, mapping, pass, pso};
 use {Backend, Features, Limits, MemoryType};
 use memory::Requirements;
 
@@ -37,108 +37,6 @@ impl Error for BindError {
         match *self {
             BindError::WrongMemory => "Unsupported memory allocation for the requirements",
             BindError::OutOfBounds => "Not enough space in the memory allocation",
-        }
-    }
-}
-
-/// Error creating either a ShaderResourceView, or UnorderedAccessView.
-#[derive(Clone, Debug, PartialEq)]
-pub enum ResourceViewError {
-    /// The corresponding bind flag is not present in the texture.
-    NoBindFlag,
-    /// Selected channel type is not supported for this texture.
-    Channel(format::ChannelType),
-    /// Selected layer can not be viewed for this texture.
-    Layer(image::LayerError),
-    /// The backend was refused for some reason.
-    Unsupported,
-}
-
-impl fmt::Display for ResourceViewError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            ResourceViewError::Channel(ref channel_type) => write!(f, "{}: {:?}", self.description(), channel_type),
-            ResourceViewError::Layer(ref le) => write!(f, "{}: {}", self.description(), le),
-            _ => write!(f, "{}", self.description())
-        }
-    }
-}
-
-impl Error for ResourceViewError {
-    fn description(&self) -> &str {
-        match *self {
-            ResourceViewError::NoBindFlag => "The corresponding bind flag is not present in the texture",
-            ResourceViewError::Channel(_) => "Selected channel type is not supported for this texture",
-            ResourceViewError::Layer(_) => "Selected layer can not be viewed for this texture",
-            ResourceViewError::Unsupported => "The backend was refused for some reason",
-        }
-    }
-
-    fn cause(&self) -> Option<&Error> {
-        if let ResourceViewError::Layer(ref e) = *self {
-            Some(e)
-        } else {
-            None
-        }
-    }
-}
-
-/// Error creating either a RenderTargetView, or DepthStencilView.
-#[derive(Clone, Debug, PartialEq)]
-pub enum TargetViewError {
-    /// The `RENDER_TARGET`/`DEPTH_STENCIL` flag is not present in the texture.
-    NoBindFlag,
-    /// Selected mip levels doesn't exist.
-    Level(target::Level),
-    /// Selected array layer doesn't exist.
-    Layer(image::LayerError),
-    /// Selected channel type is not supported for this texture.
-    Channel(format::ChannelType),
-    /// The backend was refused for some reason.
-    Unsupported,
-    /// The RTV cannot be changed due to the references to it existing.
-    NotDetached,
-    ///
-    BadFormat,
-}
-
-impl fmt::Display for TargetViewError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let description = self.description();
-        match *self {
-            TargetViewError::Level(ref level) => write!(f, "{}: {}", description, level),
-            TargetViewError::Layer(ref layer) => write!(f, "{}: {}", description, layer),
-            TargetViewError::Channel(ref channel)  => write!(f, "{}: {:?}", description, channel),
-            _ => write!(f, "{}", description)
-        }
-    }
-}
-
-impl Error for TargetViewError {
-    fn description(&self) -> &str {
-        match *self {
-            TargetViewError::NoBindFlag =>
-                "The `RENDER_TARGET`/`DEPTH_STENCIL` flag is not present in the texture",
-            TargetViewError::Level(_) =>
-                "Selected mip level doesn't exist",
-            TargetViewError::Layer(_) =>
-                "Selected array layer doesn't exist",
-            TargetViewError::Channel(_) =>
-                "Selected channel type is not supported for this texture",
-            TargetViewError::Unsupported =>
-                "The backend was refused for some reason",
-            TargetViewError::NotDetached =>
-                "The RTV cannot be changed due to the references to it existing",
-            TargetViewError::BadFormat =>
-                "An incompatible format was requested for the target view"
-        }
-    }
-
-    fn cause(&self) -> Option<&Error> {
-        if let TargetViewError::Layer(ref e) = *self {
-            Some(e)
-        } else {
-            None
         }
     }
 }
@@ -223,13 +121,21 @@ pub trait Device<B: Backend>: Clone {
     /// Allocate a memory segment of a specified type.
     ///
     /// There is only a limited amount of allocations allowed depending on the implementation!
-    fn allocate_memory(&mut self, mem_type: &MemoryType, size: u64) -> Result<B::Memory, OutOfMemory>;
+    fn allocate_memory(&mut self, &MemoryType, size: u64) -> Result<B::Memory, OutOfMemory>;
 
     ///
-    fn create_renderpass(&mut self, attachments: &[pass::Attachment], subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> B::RenderPass;
+    fn create_renderpass(
+        &mut self,
+        &[pass::Attachment],
+        &[pass::SubpassDesc],
+        &[pass::SubpassDependency],
+    ) -> B::RenderPass;
 
     ///
-    fn create_pipeline_layout(&mut self, sets: &[&B::DescriptorSetLayout]) -> B::PipelineLayout;
+    fn create_pipeline_layout(
+        &mut self,
+        &[&B::DescriptorSetLayout],
+    ) -> B::PipelineLayout;
 
     /// Create graphics pipelines.
     fn create_graphics_pipelines<'a>(
@@ -246,73 +152,66 @@ pub trait Device<B: Backend>: Clone {
     ///
     fn create_framebuffer(
         &mut self,
-        renderpass: &B::RenderPass,
-        color_attachments: &[&B::RenderTargetView],
-        depth_stencil_attachments: &[&B::DepthStencilView],
-        extent: Extent,
+        &B::RenderPass,
+        &[&B::ImageView],
+        Extent,
     ) -> Result<B::Framebuffer, FramebufferError>;
 
     ///
     fn create_shader_module(&mut self, spirv_data: &[u8]) -> Result<B::ShaderModule, ShaderError>;
 
-    ///
-    fn create_sampler(&mut self, image::SamplerInfo) -> B::Sampler;
-
     /// Create a new buffer (unbound).
     ///
     /// The created buffer won't have associated memory until `bind_buffer_memory` is called.
-    fn create_buffer(&mut self, size: u64, stride: u64, usage: buffer::Usage) -> Result<B::UnboundBuffer, buffer::CreationError>;
+    fn create_buffer(&mut self, size: u64, stride: u64, buffer::Usage) -> Result<B::UnboundBuffer, buffer::CreationError>;
 
     ///
-    fn get_buffer_requirements(&mut self, buffer: &B::UnboundBuffer) -> Requirements;
+    fn get_buffer_requirements(&mut self, &B::UnboundBuffer) -> Requirements;
 
     /// Bind memory to a buffer.
     ///
     /// The unbound buffer will be consumed because the binding is *immutable*.
     /// Be sure to check that there is enough memory available for the buffer.
     /// Use `get_buffer_requirements` to acquire the memory requirements.
-    fn bind_buffer_memory(&mut self, memory: &B::Memory, offset: u64, buffer: B::UnboundBuffer) -> Result<B::Buffer, BindError>;
+    fn bind_buffer_memory(&mut self, &B::Memory, offset: u64, B::UnboundBuffer) -> Result<B::Buffer, BindError>;
 
     ///
-    fn create_image(&mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
-         -> Result<B::UnboundImage, image::CreationError>;
+    fn create_buffer_view(&mut self, &B::Buffer, Range<u64>) -> Result<B::BufferView, buffer::ViewError>;
 
     ///
-    fn get_image_requirements(&mut self, image: &B::UnboundImage) -> Requirements;
+    fn create_image(&mut self, image::Kind, image::Level, format::Format, image::Usage) -> Result<B::UnboundImage, image::CreationError>;
 
     ///
-    fn bind_image_memory(&mut self, memory: &B::Memory, offset: u64, image: B::UnboundImage) -> Result<B::Image, BindError>;
+    fn get_image_requirements(&mut self, &B::UnboundImage) -> Requirements;
 
     ///
-    fn view_buffer_as_constant(&mut self, buffer: &B::Buffer, range: Range<u64>) -> Result<B::ConstantBufferView, TargetViewError>;
+    fn bind_image_memory(&mut self, &B::Memory, offset: u64, B::UnboundImage) -> Result<B::Image, BindError>;
 
     ///
-    fn view_image_as_render_target(&mut self, &B::Image, format::Format, image::SubresourceLayers) -> Result<B::RenderTargetView, TargetViewError>;
+    fn create_image_view(&mut self, &B::Image, format::Format, image::SubresourceLayers) -> Result<B::ImageView, image::ViewError>;
 
     ///
-    #[allow(unused_variables)]
-    fn view_image_as_depth_stencil(&mut self, &B::Image, format::Format, image::SubresourceLayers) -> Result<B::DepthStencilView, TargetViewError> {
-        unimplemented!()
-    }
-
-    ///
-    fn view_image_as_shader_resource(&mut self, image: &B::Image, format: format::Format) -> Result<B::ShaderResourceView, TargetViewError>;
-
-    ///
-    fn view_image_as_unordered_access(&mut self, image: &B::Image, format: format::Format) -> Result<B::UnorderedAccessView, TargetViewError>;
+    fn create_sampler(&mut self, image::SamplerInfo) -> B::Sampler;
 
     /// Create a descriptor pool.
     ///
     /// Descriptor pools allow allocation of descriptor sets.
     /// The pool can't be modified directly, only trough updating descriptor sets.
-    fn create_descriptor_pool(&mut self, max_sets: usize, descriptor_ranges: &[pso::DescriptorRangeDesc]) -> B::DescriptorPool;
+    fn create_descriptor_pool(
+        &mut self,
+        max_sets: usize,
+        &[pso::DescriptorRangeDesc],
+    ) -> B::DescriptorPool;
 
     /// Create a descriptor set layout.
-    fn create_descriptor_set_layout(&mut self, bindings: &[pso::DescriptorSetLayoutBinding]) -> B::DescriptorSetLayout;
+    fn create_descriptor_set_layout(
+        &mut self,
+        &[pso::DescriptorSetLayoutBinding],
+    ) -> B::DescriptorSetLayout;
 
     ///
     // TODO: copies
-    fn update_descriptor_sets(&mut self, writes: &[pso::DescriptorSetWrite<B>]);
+    fn update_descriptor_sets(&mut self, &[pso::DescriptorSetWrite<B>]);
 
     // TODO: mapping requires further looking into.
     // vulkan requires non-coherent mapping to round the range delimiters
@@ -396,11 +295,11 @@ pub trait Device<B: Backend>: Clone {
     fn create_fence(&mut self, signaled: bool) -> B::Fence;
 
     ///
-    fn reset_fences(&mut self, fences: &[&B::Fence]);
+    fn reset_fences(&mut self, &[&B::Fence]);
 
     /// Blocks until all or one of the given fences are signaled.
     /// Returns true if fences were signaled before the timeout.
-    fn wait_for_fences(&mut self, fences: &[&B::Fence], wait: WaitFor, timeout_ms: u32) -> bool;
+    fn wait_for_fences(&mut self, &[&B::Fence], WaitFor, timeout_ms: u32) -> bool;
 
     ///
     fn free_memory(&mut self, B::Memory);
@@ -438,6 +337,10 @@ pub trait Device<B: Backend>: Clone {
     /// which references the images, has finished execution.
     fn destroy_buffer(&mut self, B::Buffer);
 
+    ///
+    fn destroy_buffer_view(&mut self, B::BufferView);
+
+
     /// Destroys an image.
     ///
     /// The image shouldn't be destroy before any submitted command buffer,
@@ -445,19 +348,7 @@ pub trait Device<B: Backend>: Clone {
     fn destroy_image(&mut self, B::Image);
 
     ///
-    fn destroy_render_target_view(&mut self, B::RenderTargetView);
-
-    ///
-    fn destroy_depth_stencil_view(&mut self, B::DepthStencilView);
-
-    ///
-    fn destroy_constant_buffer_view(&mut self, B::ConstantBufferView);
-
-    ///
-    fn destroy_shader_resource_view(&mut self, B::ShaderResourceView);
-
-    ///
-    fn destroy_unordered_access_view(&mut self, B::UnorderedAccessView);
+    fn destroy_image_view(&mut self, B::ImageView);
 
     ///
     fn destroy_sampler(&mut self, B::Sampler);

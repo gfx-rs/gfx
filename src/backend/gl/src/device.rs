@@ -501,7 +501,9 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn view_image_as_render_target(&mut self, image: &n::Image, _format: Format, (level, layers): i::SubresourceLayers) -> Result<n::TargetView, d::TargetViewError> {
+    fn view_image_as_render_target(&mut self,
+        image: &n::Image, _format: Format, (level, layers): i::SubresourceLayers,
+    ) -> Result<n::TargetView, d::TargetViewError> {
         //TODO: check if `layers.end` covers all the layers
         //TODO: check format
         match *image {
@@ -525,6 +527,12 @@ impl d::Device<B> for Device {
                 }
             },
         }
+    }
+
+    fn view_image_as_depth_stencil(&mut self,
+        image: &n::Image, format: Format, layers: i::SubresourceLayers,
+    ) -> Result<n::TargetView, d::TargetViewError> {
+        self.view_image_as_render_target(image, format, layers) //TODO
     }
 
     fn view_image_as_shader_resource(&mut self, _: &n::Image, _: Format) -> Result<n::ShaderResourceView, d::TargetViewError> {

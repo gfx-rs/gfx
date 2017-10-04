@@ -264,15 +264,11 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
 
     type UnboundBuffer:       Debug + Any + Send + Sync;
     type Buffer:              Debug + Any + Send + Sync;
+    type BufferView:          Debug + Any + Send + Sync;
     type UnboundImage:        Debug + Any + Send + Sync;
     type Image:               Debug + Any + Send + Sync;
+    type ImageView:           Debug + Any + Send + Sync;
     type Sampler:             Debug + Any + Send + Sync;
-
-    type ConstantBufferView:  Debug + Any + Send + Sync;
-    type ShaderResourceView:  Debug + Any + Send + Sync;
-    type UnorderedAccessView: Debug + Any + Send + Sync;
-    type RenderTargetView:    Debug + Any + Send + Sync;
-    type DepthStencilView:    Debug + Any + Send + Sync;
 
     type ComputePipeline:     Debug + Any + Send + Sync;
     type GraphicsPipeline:    Debug + Any + Send + Sync;
