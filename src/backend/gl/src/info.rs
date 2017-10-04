@@ -238,19 +238,28 @@ impl Info {
 
 /// Load the information pertaining to the driver and the corresponding device
 /// capabilities.
-pub fn get(gl: &gl::Gl) -> (Info, Features, Limits, PrivateCaps) {
+pub fn query_all(gl: &gl::Gl) -> (Info, Features, Limits, PrivateCaps) {
     use self::Requirement::*;
     let info = Info::get(gl);
     let tessellation_supported =           info.is_supported(&[Core(4,0),
                                                                Ext("GL_ARB_tessellation_shader")]);
     let multi_viewports_supported =        info.is_supported(&[Core(4,1)]); // TODO: extension
-    let max_work_group = get_usize(gl, gl::MAX_COMPUTE_WORK_GROUP_COUNT);
+    let compute_supported =                info.is_supported(&[Core(4,3),
+                                                               Ext("GL_ARB_compute_shader")]);
+    let mut max_compute_group_size = [0usize; 3];
+    if compute_supported {
+        let mut value = 0 as gl::types::GLint;
+        for (i, size) in max_compute_group_size.iter_mut().enumerate() {
+            unsafe { gl.GetIntegeri_v(gl::MAX_COMPUTE_WORK_GROUP_SIZE, i as _, &mut value) };
+            *size = value as _;
+        }
+    }
 
     let limits = Limits {
         max_texture_size: get_usize(gl, gl::MAX_TEXTURE_SIZE),
         max_patch_size: if tessellation_supported { get_usize(gl, gl::MAX_PATCH_VERTICES) as u8 } else {0},
         max_viewports: if multi_viewports_supported { get_usize(gl, gl::MAX_VIEWPORTS) } else {1},
-        max_compute_group_size: (max_work_group, max_work_group, max_work_group),
+        max_compute_group_size,
 
         min_buffer_copy_offset_alignment: 1,
         min_buffer_copy_pitch_alignment: 1,
@@ -267,10 +276,8 @@ pub fn get(gl: &gl::Gl) -> (Info, Features, Limits, PrivateCaps) {
         draw_indexed_base:                  info.is_supported(&[Core(3,2)]), // TODO: extension
         draw_indexed_instanced:             info.is_supported(&[Core(3,1),
                                                                 Es  (3,0)]), // TODO: extension
-
         draw_indexed_instanced_base_vertex: info.is_supported(&[Core(3,2)]), // TODO: extension
         draw_indexed_instanced_base:        info.is_supported(&[Core(4,2)]), // TODO: extension
-
         instance_rate:                      info.is_supported(&[Core(3,3),
                                                                 Es  (3,0),
                                                                 Ext ("GL_ARB_instanced_arrays")]),

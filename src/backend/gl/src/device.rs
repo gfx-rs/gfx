@@ -3,7 +3,7 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use gl;
-use gl::types::{GLint, GLfloat};
+use gl::types::{GLint, GLenum, GLfloat};
 use core::{self as c, device as d, image as i, memory, pass, pso, buffer, mapping};
 use core::format::Format;
 use std::iter::repeat;
@@ -12,13 +12,13 @@ use {Backend as B, Share};
 use {conv, device, native as n, state};
 
 
-fn get_shader_iv(gl: &gl::Gl, name: n::Shader, query: gl::types::GLenum) -> gl::types::GLint {
+fn get_shader_iv(gl: &gl::Gl, name: n::Shader, query: GLenum) -> gl::types::GLint {
     let mut iv = 0;
     unsafe { gl.GetShaderiv(name, query, &mut iv) };
     iv
 }
 
-fn get_program_iv(gl: &gl::Gl, name: n::Program, query: gl::types::GLenum) -> gl::types::GLint {
+fn get_program_iv(gl: &gl::Gl, name: n::Program, query: GLenum) -> gl::types::GLint {
     let mut iv = 0;
     unsafe { gl.GetProgramiv(name, query, &mut iv) };
     iv
@@ -57,7 +57,10 @@ pub fn get_program_log(gl: &gl::Gl, name: n::Program) -> String {
 }
 
 #[derive(Debug)]
-pub struct UnboundBuffer(n::Buffer);
+pub struct UnboundBuffer {
+    buffer: n::Buffer,
+    requirements: memory::Requirements,
+}
 #[derive(Debug)]
 pub struct UnboundImage;
 
@@ -106,6 +109,9 @@ impl Device {
             gl.CompileShader(name);
         }
         info!("\tCompiled shader {}", name);
+        if let Err(err) = self.share.check() {
+            panic!("Error compiling shader: {:?}", err);
+        }
 
         let status = get_shader_iv(gl, name, gl::COMPILE_STATUS);
         let log = get_shader_log(gl, name);
@@ -119,7 +125,7 @@ impl Device {
         }
     }
 
-    fn bind_target(gl: &gl::Gl, point: gl::types::GLenum, attachment: gl::types::GLenum, view: &n::TargetView) {
+    fn bind_target(gl: &gl::Gl, point: GLenum, attachment: GLenum, view: &n::TargetView) {
         match *view {
             n::TargetView::Surface(surface) => unsafe {
                 gl.FramebufferRenderbuffer(point, attachment, gl::RENDERBUFFER, surface);
@@ -186,6 +192,7 @@ impl d::Device<B> for Device {
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         let gl = &self.share.context;
         let priv_caps = &self.share.private_caps;
+        let share = &self.share;
         descs.iter()
              .map(|&(shaders, _layout, subpass, _desc)| {
                 let subpass = match subpass.main_pass.subpasses.get(subpass.index) {
@@ -221,6 +228,9 @@ impl d::Device<B> for Device {
 
                     unsafe { gl.LinkProgram(name) };
                     info!("\tLinked program {}", name);
+                    if let Err(err) = share.check() {
+                        panic!("Error linking program: {:?}", err);
+                    }
 
                     let status = get_program_iv(gl, name, gl::LINK_STATUS);
                     let log = get_program_log(gl, name);
@@ -266,7 +276,7 @@ impl d::Device<B> for Device {
 
         assert_eq!(rtvs.len() + dsvs.len(), pass.attachments.len());
         for (i, view) in rtvs.iter().enumerate() {
-            let attachment = gl::COLOR_ATTACHMENT0 + i as gl::types::GLenum;
+            let attachment = gl::COLOR_ATTACHMENT0 + i as GLenum;
             Self::bind_target(gl, target, attachment, view);
         }
 
@@ -287,6 +297,10 @@ impl d::Device<B> for Device {
             assert_eq!(status, gl::FRAMEBUFFER_COMPLETE);
             gl.BindFramebuffer(target, 0);
         }
+        if let Err(err) = self.share.check() {
+            panic!("Error creating FBO: {:?} for {:?}, rtvs {:?}, dsvs {:?}", err, pass, rtvs, dsvs);
+        }
+
         name
     }
 
@@ -358,7 +372,7 @@ impl d::Device<B> for Device {
         n::FatSampler::Sampler(name)
     }
 
-    fn create_buffer(&mut self, size: u64, _stride: u64, usage: buffer::Usage) -> Result<device::UnboundBuffer, buffer::CreationError> {
+    fn create_buffer(&mut self, size: u64, stride: u64, usage: buffer::Usage) -> Result<device::UnboundBuffer, buffer::CreationError> {
         if !self.share.features.constant_buffer && usage.contains(buffer::CONSTANT) {
             error!("Constant buffers are not supported by this GL version");
             return Err(buffer::CreationError::Other);
@@ -380,11 +394,14 @@ impl d::Device<B> for Device {
         }
 
         if self.share.private_caps.buffer_storage {
-            let flags = if usage.contains(buffer::HOST) {
-                gl::DYNAMIC_STORAGE_BIT | gl::MAP_PERSISTENT_BIT //TODO: read/write
-            } else {
-                0
-            };
+            //TODO: gl::DYNAMIC_STORAGE_BIT | gl::MAP_PERSISTENT_BIT
+            let mut flags = 0;
+            if usage.contains(buffer::MAP_READ) {
+                flags |= gl::MAP_READ_BIT;
+            }
+            if usage.contains(buffer::MAP_WRITE) {
+                flags |= gl::MAP_WRITE_BIT;
+            }
             unsafe {
                 gl.BufferStorage(target,
                     size as _,
@@ -394,12 +411,12 @@ impl d::Device<B> for Device {
             }
         }
         else {
-            let flags = if usage.contains(buffer::HOST | buffer::TRANSFER_SRC) {
+            let flags = if usage.contains(buffer::MAP_READ | buffer::MAP_WRITE) {
+                gl::DYNAMIC_DRAW
+            } else if usage.contains(buffer::MAP_WRITE) {
                 gl::STREAM_DRAW
-            } else if usage.contains(buffer::HOST | buffer::TRANSFER_DST) {
+            } else if usage.contains(buffer::MAP_READ) {
                 gl::STREAM_READ
-            } else if usage.contains(buffer::HOST) {
-                gl::DYNAMIC_DRAW //TODO
             } else {
                 gl::STATIC_DRAW
             };
@@ -415,21 +432,37 @@ impl d::Device<B> for Device {
         unsafe {
             gl.BindBuffer(target, 0);
         }
-        Ok(device::UnboundBuffer(name))
+        if let Err(err) = self.share.check() {
+            panic!("Error {:?} creating buffer: size={:?}, usage={:?}", err, size, usage);
+        }
+
+        Ok(device::UnboundBuffer {
+            buffer: n::Buffer {
+                raw: name,
+                target,
+            },
+            requirements: memory::Requirements {
+                size,
+                alignment: stride,
+                type_mask: 0x1,
+            },
+        })
     }
 
-    fn get_buffer_requirements(&mut self, _: &device::UnboundBuffer) -> memory::Requirements {
-        unimplemented!()
+    fn get_buffer_requirements(&mut self, unbound: &device::UnboundBuffer) -> memory::Requirements {
+        unbound.requirements
     }
 
-    fn bind_buffer_memory(&mut self, _: &n::Memory, _: u64, _: device::UnboundBuffer) -> Result<n::Buffer, d::BindError> {
-        unimplemented!()
+    fn bind_buffer_memory(&mut self, _: &n::Memory, _: u64, unbound: device::UnboundBuffer) -> Result<n::Buffer, d::BindError> {
+        //TODO: this is a better place to call memory allocations, not in `create_buffer`
+        Ok(unbound.buffer)
     }
 
     fn create_image(&mut self, _: i::Kind, _: i::Level, _: Format, _: i::Usage)
-         -> Result<device::UnboundImage, i::CreationError> {
-            unimplemented!()
-         }
+         -> Result<device::UnboundImage, i::CreationError>
+    {
+        unimplemented!()
+    }
 
     fn get_image_requirements(&mut self, _: &device::UnboundImage) -> memory::Requirements {
         unimplemented!()
@@ -489,14 +522,36 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn acquire_mapping_raw(&mut self, _buf: &n::Buffer, _read: Option<Range<u64>>)
+    fn acquire_mapping_raw(&mut self, buffer: &n::Buffer, read: Option<Range<u64>>)
         -> Result<*mut u8, mapping::Error>
     {
-        unimplemented!()
+        let gl = &self.share.context;
+        let access = match read {
+            Some(_) => gl::READ_ONLY,
+            None => gl::WRITE_ONLY,
+        };
+
+        let data = unsafe {
+            gl.BindBuffer(buffer.target, buffer.raw);
+            let ptr = gl.MapBuffer(buffer.target, access);
+            gl.BindBuffer(buffer.target, 0);
+            ptr
+        };
+
+        if let Err(err) = self.share.check() {
+            panic!("Error mapping buffer: {:?}, {:?}, access = {}", err, buffer, access);
+        }
+        debug_assert_ne!(data, ptr::null_mut());
+        Ok(data as _)
     }
 
-    fn release_mapping_raw(&mut self, _buf: &n::Buffer, _wrote: Option<Range<u64>>) {
-        unimplemented!()
+    fn release_mapping_raw(&mut self, buffer: &n::Buffer, _wrote: Option<Range<u64>>) {
+        let gl = &self.share.context;
+        unsafe {
+            gl.BindBuffer(buffer.target, buffer.raw);
+            gl.UnmapBuffer(buffer.target);
+            gl.BindBuffer(buffer.target, 0);
+        }
     }
 
     fn create_semaphore(&mut self) -> n::Semaphore {
@@ -650,7 +705,7 @@ impl d::Device<B> for Device {
     }
 }
 
-pub fn wait_fence(fence: &n::Fence, gl: &gl::Gl, timeout_ms: u32) -> gl::types::GLenum {
+pub fn wait_fence(fence: &n::Fence, gl: &gl::Gl, timeout_ms: u32) -> GLenum {
     let timeout = timeout_ms as u64 * 1_000_000;
     // TODO:
     // This can be called by multiple objects wanting to ensure they have exclusive

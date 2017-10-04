@@ -544,7 +544,7 @@ impl core::Surface<Backend> for Surface {
     fn build_swapchain<C>(&mut self,
         _: core::SwapchainConfig,
         _: &core::CommandQueue<Backend, C>
-    ) -> (Swapchain, Vec<core::Backbuffer<Backend>>) {
+    ) -> (Swapchain, core::Backbuffer<Backend>) {
         unimplemented!()
     }
 }

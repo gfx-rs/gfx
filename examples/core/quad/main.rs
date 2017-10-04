@@ -324,7 +324,7 @@ fn main() {
     let buffer_stride = std::mem::size_of::<Vertex>() as u64;
     let buffer_len = QUAD.len() as u64 * buffer_stride;
 
-    let buffer_unbound = device.create_buffer(buffer_len, buffer_stride, buffer::VERTEX).unwrap();
+    let buffer_unbound = device.create_buffer(buffer_len, buffer_stride, buffer::VERTEX | buffer::MAP_WRITE).unwrap();
     println!("{:?}", buffer_unbound);
     let buffer_req = device.get_buffer_requirements(&buffer_unbound);
 
@@ -361,7 +361,7 @@ fn main() {
 
     let image_upload_memory = device.allocate_memory(upload_type, upload_size).unwrap();
     let image_upload_buffer = {
-        let buffer = device.create_buffer(upload_size, image_stride as u64, buffer::TRANSFER_SRC).unwrap();
+        let buffer = device.create_buffer(upload_size, image_stride as u64, buffer::TRANSFER_SRC | buffer::MAP_WRITE).unwrap();
         device.bind_buffer_memory(&image_upload_memory, 0, buffer).unwrap()
     };
 
