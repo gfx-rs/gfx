@@ -31,15 +31,11 @@ impl core::Backend for Backend {
 
     type UnboundBuffer = ();
     type Buffer = ();
+    type BufferView = ();
     type UnboundImage = ();
     type Image = ();
+    type ImageView = ();
     type Sampler = ();
-
-    type ConstantBufferView = ();
-    type ShaderResourceView = ();
-    type UnorderedAccessView = ();
-    type RenderTargetView = ();
-    type DepthStencilView = ();
 
     type ComputePipeline = ();
     type GraphicsPipeline = ();
@@ -116,7 +112,7 @@ impl core::Device<Backend> for Device {
 
     fn create_framebuffer(
         &mut self, _: &(),
-        _: &[&()], _: &[&()],
+        _: &[&()],
         _: device::Extent,
     ) -> Result<(), device::FramebufferError> {
         unimplemented!()
@@ -141,6 +137,10 @@ impl core::Device<Backend> for Device {
         unimplemented!()
     }
 
+    fn create_buffer_view(&mut self, _: &(), _: Range<u64>) -> Result<(), buffer::ViewError> {
+        unimplemented!()
+    }
+
     fn create_image(&mut self, _: image::Kind, _: image::Level, _: format::Format, _: image::Usage)
          -> Result<(), image::CreationError>
     {
@@ -155,21 +155,10 @@ impl core::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn view_buffer_as_constant(&mut self, _: &(), _: Range<u64>) -> Result<(), device::TargetViewError> {
+    fn create_image_view(&mut self, _: &(), _: format::Format, _: image::SubresourceLayers) -> Result<(), image::ViewError> {
         unimplemented!()
     }
 
-    fn view_image_as_render_target(&mut self, _: &(), _: format::Format, _: image::SubresourceLayers) -> Result<(), device::TargetViewError> {
-        unimplemented!()
-    }
-
-    fn view_image_as_shader_resource(&mut self, _: &(), _: format::Format) -> Result<(), device::TargetViewError> {
-        unimplemented!()
-    }
-
-    fn view_image_as_unordered_access(&mut self, _: &(), _: format::Format) -> Result<(), device::TargetViewError> {
-        unimplemented!()
-    }
     fn create_descriptor_pool(&mut self, _: usize, _: &[pso::DescriptorRangeDesc]) -> DescriptorPool {
         unimplemented!()
     }
@@ -230,33 +219,19 @@ impl core::Device<Backend> for Device {
     fn destroy_framebuffer(&mut self, _: ()) {
         unimplemented!()
     }
+
     fn destroy_buffer(&mut self, _: ()) {
+        unimplemented!()
+    }
+    fn destroy_buffer_view(&mut self, _: ()) {
         unimplemented!()
     }
     fn destroy_image(&mut self, _: ()) {
         unimplemented!()
     }
-
-    fn destroy_render_target_view(&mut self, _: ()) {
+    fn destroy_image_view(&mut self, _: ()) {
         unimplemented!()
     }
-
-    fn destroy_depth_stencil_view(&mut self, _: ()) {
-        unimplemented!()
-    }
-
-    fn destroy_constant_buffer_view(&mut self, _: ()) {
-        unimplemented!()
-    }
-
-    fn destroy_shader_resource_view(&mut self, _: ()) {
-        unimplemented!()
-    }
-
-    fn destroy_unordered_access_view(&mut self, _: ()) {
-        unimplemented!()
-    }
-
     fn destroy_sampler(&mut self, _: ()) {
         unimplemented!()
     }
@@ -347,24 +322,17 @@ impl core::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn clear_color(&mut self, _: &(), _: image::ImageLayout, _: command::ClearColor) {
+    fn clear_color_image(&mut self, _: &(), _: image::ImageLayout, _: command::ClearColor) {
+        unimplemented!()
+    }
+
+    fn clear_depth_stencil_image(&mut self, _: &(), _: image::ImageLayout, _: command::ClearDepthStencil) {
         unimplemented!()
     }
 
     fn clear_attachments(&mut self, _: &[command::AttachmentClear], _: &[target::Rect]) {
         unimplemented!()
     }
-
-    fn clear_depth_stencil(
-        &mut self,
-        _: &(),
-        _: image::ImageLayout,
-        _: Option<target::Depth>,
-        _: Option<target::Stencil>,
-    ) {
-        unimplemented!()
-    }
-
 
     fn resolve_image(
         &mut self,

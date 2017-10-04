@@ -1021,13 +1021,63 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn view_image_as_render_target(&mut self,
+    fn view_image_as_render_target(
+        &mut self,
         image: &n::Image,
         format: format::Format,
-        _layers: image::SubresourceLayers,
+        (mip_level, layers): image::SubresourceLayers,
     ) -> Result<n::RenderTargetView, d::TargetViewError> {
         //TODO: use subresource range
         let handle = self.rtv_pool.lock().unwrap().alloc_handles(1).cpu;
+
+        if image.kind.get_dimensions().3 != image::AaMode::Single {
+            error!("No MSAA supported yet!");
+        }
+        if layers.start + 1 != layers.end { //TODO
+            return Err(d::TargetViewError::Layers(layers));
+        }
+
+        let mut desc = winapi::D3D12_RENDER_TARGET_VIEW_DESC {
+            Format: match conv::map_format(format, true) {
+                Some(format) => format,
+                None => return Err(d::TargetViewError::BadFormat)
+            },
+            .. unsafe { mem::zeroed() }
+        };
+
+        match image.kind {
+            image::Kind::D2(..) => {
+                desc.ViewDimension = winapi::D3D12_RTV_DIMENSION_TEXTURE2D;
+                *unsafe { desc.Texture2D_mut() } = winapi::D3D12_TEX2D_RTV {
+                    MipSlice: mip_level,
+                    PlaneSlice: layers.start,
+                };
+            },
+            _ => unimplemented!()
+        };
+
+        unsafe {
+            self.raw.CreateRenderTargetView(
+                image.resource,
+                &desc,
+                handle,
+            );
+        }
+
+        Ok(n::RenderTargetView {
+            resource: image.resource,
+            handle,
+        })
+    }
+
+    fn view_image_as_depth_stencil(
+        &mut self,
+        image: &n::Image,
+        format: format::Format,
+        (mip_level, layers): image::SubresourceLayers,
+    ) -> Result<n::DepthStencilView, d::TargetViewError> {
+        //TODO: use subresource range
+        let handle = self.dsv_pool.lock().unwrap().alloc_handles(1).cpu;
 
         if image.kind.get_dimensions().3 != image::AaMode::Single {
             error!("No MSAA supported yet!");
@@ -1045,22 +1095,22 @@ impl d::Device<B> for Device {
             image::Kind::D2(..) => {
                 desc.ViewDimension = winapi::D3D12_RTV_DIMENSION_TEXTURE2D;
                 *unsafe { desc.Texture2D_mut() } = winapi::D3D12_TEX2D_RTV {
-                    MipSlice: 0,
-                    PlaneSlice: 0,
+                    MipSlice: mip_level,
+                    PlaneSlice: layers.start,
                 };
             },
             _ => unimplemented!()
         };
 
         unsafe {
-            self.raw.CreateRenderTargetView(
+            self.raw.CreateDepthStencilView(
                 image.resource,
                 &desc,
                 handle,
             );
         }
 
-        Ok(n::RenderTargetView {
+        Ok(n::DepthStencilView {
             resource: image.resource,
             handle,
         })

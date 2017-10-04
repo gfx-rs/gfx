@@ -871,6 +871,21 @@ impl d::Device<B> for Device {
         Ok(rtv)
     }
 
+    fn view_image_as_depth_stencil(&mut self,
+        image: &n::Image,
+        format: format::Format,
+        layers: image::SubresourceLayers,
+    ) -> Result<n::DepthStencilView, d::TargetViewError>
+    {
+        let dsv = n::DepthStencilView {
+            image: image.raw,
+            view: self.create_image_view(image, format),
+            layers,
+        };
+
+        Ok(dsv)
+    }
+
     fn view_image_as_shader_resource(&mut self, image: &n::Image, format: format::Format) -> Result<n::ShaderResourceView, d::TargetViewError> {
         // TODO: check format compatibility? Allow different formats?
         let view = self.create_image_view(image, format);

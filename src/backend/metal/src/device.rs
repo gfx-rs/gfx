@@ -476,18 +476,39 @@ impl core::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn view_image_as_render_target(&mut self, image: &n::Image, format: format::Format, _layers: image::SubresourceLayers)
-        -> Result<n::RenderTargetView, TargetViewError>
-    {
+    fn view_image_as_render_target(&mut self,
+        image: &n::Image, format: format::Format, _layers: image::SubresourceLayers,
+    ) -> Result<n::RenderTargetView, TargetViewError> {
         // TODO: subresource layers
 
-        let (mtl_format, _) = map_format(format).ok_or_else(|| {
-            error!("failed to find corresponding Metal format for {:?}", format);
-            panic!(); // TODO: return TargetViewError once it is implemented
-        })?;
+        let (mtl_format, _) = match map_format(format) {
+            Some(f) => f,
+            None => {
+                error!("failed to find corresponding Metal format for {:?}", format);
+                return Err(TargetViewError::BadFormat);
+            },
+        };
 
         unsafe {
             Ok(n::RenderTargetView(image.0.new_texture_view(mtl_format))) // Returns retained
+        }
+    }
+
+    fn view_image_as_depth_stencil(&mut self,
+        image: &n::Image, format: format::Format, _layers: image::SubresourceLayers,
+    ) -> Result<n::DepthStencilView, TargetViewError> {
+        // TODO: subresource layers
+
+        let (mtl_format, _) = match map_format(format) {
+            Some(f) => f,
+            None => {
+                error!("failed to find corresponding Metal format for {:?}", format);
+                return Err(TargetViewError::BadFormat);
+            },
+        };
+
+        unsafe {
+            Ok(n::DepthStencilView(image.0.new_texture_view(mtl_format))) // Returns retained
         }
     }
 
