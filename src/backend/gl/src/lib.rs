@@ -64,8 +64,8 @@ impl c::Backend for Backend {
     type ConstantBufferView = native::ConstantBufferView;
     type ShaderResourceView = native::ShaderResourceView;
     type UnorderedAccessView = native::UnorderedAccessView;
-    type RenderTargetView = native::RenderTargetView;
-    type DepthStencilView = native::DepthStencilView;
+    type RenderTargetView = native::TargetView;
+    type DepthStencilView = native::TargetView;
 
     type ComputePipeline = native::ComputePipeline;
     type GraphicsPipeline = native::GraphicsPipeline;
@@ -410,7 +410,7 @@ impl CommandQueue {
         }
     }
 
-    fn unbind_target(&mut self, point: gl::types::GLenum, attachment: gl::types::GLenum) {
+    fn _unbind_target(&mut self, point: gl::types::GLenum, attachment: gl::types::GLenum) {
         let gl = &self.share.context;
         unsafe { gl.FramebufferTexture(point, attachment, 0, 0) };
     }

@@ -212,7 +212,7 @@ impl RawCommandBuffer {
                 .try_lock()
                 .expect("Trying to record a command buffers, while memory is in-use.");
 
-            let mut cmd_buffer = match *memory {
+            let cmd_buffer = match *memory {
                 BufferMemory::Linear(ref mut buffer) => &mut buffer.commands,
                 BufferMemory::Individual { ref mut storage, .. } => {
                     &mut storage.get_mut(&self.id).unwrap().commands
@@ -238,7 +238,7 @@ impl RawCommandBuffer {
                 .try_lock()
                 .expect("Trying to record a command buffers, while memory is in-use.");
 
-        let mut data_buffer = match *memory {
+        let data_buffer = match *memory {
             BufferMemory::Linear(ref mut buffer) => &mut buffer.data,
             BufferMemory::Individual { ref mut storage, .. } => {
                 &mut storage.get_mut(&self.id).unwrap().data
@@ -334,26 +334,26 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     fn clear_color(
         &mut self,
-        rtv: &n::RenderTargetView,
+        rtv: &n::TargetView,
         _: image::ImageLayout,
         value: command::ClearColor,
     ) {
-        if self.is_main_target(rtv.view) {
+        if self.is_main_target(*rtv) {
             let fbo = self.display_fb;
             self.push_cmd(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, fbo));
         } else {
             let fbo = self.fbo;
             self.push_cmd(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, fbo));
-            self.push_cmd(Command::BindTargetView(gl::DRAW_FRAMEBUFFER, gl::COLOR_ATTACHMENT0, rtv.view));
+            self.push_cmd(Command::BindTargetView(gl::DRAW_FRAMEBUFFER, gl::COLOR_ATTACHMENT0, *rtv));
             self.push_cmd(Command::SetDrawColorBuffers(1));
         }
 
-        self.push_cmd(Command::ClearColor(rtv.view, value));
+        self.push_cmd(Command::ClearColor(*rtv, value));
     }
 
     fn clear_depth_stencil(
         &mut self,
-        _dsv: &n::DepthStencilView,
+        _dsv: &n::TargetView,
         _: image::ImageLayout,
         _depth: Option<target::Depth>,
         _stencil: Option<target::Stencil>,
