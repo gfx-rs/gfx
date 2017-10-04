@@ -271,9 +271,9 @@ impl d::Device<B> for Device {
         rtvs: &[&n::TargetView],
         dsvs: &[&n::TargetView],
         _extent: d::Extent,
-    ) -> Result<n::FrameBuffer, d::FramebufferError> {
+    ) -> Result<n::FrameBuffer, d::FrameBufferError> {
         if !self.share.private_caps.framebuffer {
-            return Err(d::FramebufferError);
+            return Err(d::FrameBufferError);
         }
 
         let gl = &self.share.context;

@@ -174,7 +174,7 @@ pub enum ShaderError {
 
 /// An error from creating a framebuffer.
 #[derive(Clone, Debug, PartialEq)]
-pub struct FramebufferError;
+pub struct FrameBufferError;
 
 /// # Overview
 ///
@@ -250,7 +250,7 @@ pub trait Device<B: Backend>: Clone {
         color_attachments: &[&B::RenderTargetView],
         depth_stencil_attachments: &[&B::DepthStencilView],
         extent: Extent,
-    ) -> Result<B::FrameBuffer, FramebufferError>;
+    ) -> Result<B::FrameBuffer, FrameBufferError>;
 
     ///
     fn create_shader_module(&mut self, spirv_data: &[u8]) -> Result<B::ShaderModule, ShaderError>;

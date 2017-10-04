@@ -55,6 +55,7 @@ impl<B: Backend> InnerGarbageCollector<B> {
                 RenderPass(rp) => dev.destroy_renderpass(rp),
                 PipelineLayout(pl) => dev.destroy_pipeline_layout(pl),
                 GraphicsPipeline(pl) => dev.destroy_graphics_pipeline(pl),
+                FrameBuffer(fb) => dev.destroy_framebuffer(fb),
                 Buffer(b) => dev.destroy_buffer(b),
                 Image(i) => dev.destroy_image(i),
                 RenderTargetView(rtv) => dev.destroy_render_target_view(rtv),
@@ -230,7 +231,7 @@ define_resources! {
     PipelineLayout: (),
     GraphicsPipeline: (),
     // ComputePipeline
-    // FrameBuffer
+    FrameBuffer: ::handle::FrameBufferInfo<B>,
     Buffer: ::buffer::Info,
     Image: ::image::Info,
     RenderTargetView: ::handle::raw::Image<B>,
@@ -256,6 +257,13 @@ pub type UnorderedAccessView<B, T> = Typed<raw::UnorderedAccessView<B>, T>;
 pub use self::raw::Sampler;
 
 #[derive(Debug, Clone)]
+pub struct FrameBufferInfo<B: Backend> {
+    pub rtvs: Vec<raw::RenderTargetView<B>>,
+    pub dsvs: Vec<raw::DepthStencilView<B>>,
+    pub extent: ::Extent,
+}
+
+#[derive(Debug, Clone)]
 pub enum ViewSource<B: Backend> {
     Image(raw::Image<B>),
     Buffer(raw::Buffer<B>),
@@ -273,7 +281,7 @@ impl<'a, B: Backend> From<&'a raw::Buffer<B>> for ViewSource<B> {
     }
 }
 
-pub(crate) struct Bag<B: Backend>(Vec<Any<B>>);
+pub struct Bag<B: Backend>(Vec<Any<B>>);
 
 impl<B: Backend> Bag<B> {
     pub fn new() -> Self {

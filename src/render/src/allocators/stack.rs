@@ -1,6 +1,7 @@
 use std::sync::mpsc;
+use std::collections::HashMap;
 
-use core::{self, Device as CoreDevice};
+use core::{self, MemoryType, Device as CoreDevice};
 use core::memory::Requirements;
 use memory::{self, Allocator, Memory, ReleaseFn, Provider, Dependency};
 use {buffer, image};
@@ -11,10 +12,9 @@ pub struct StackAllocator<B: Backend>(Provider<InnerStackAllocator<B>>);
 pub struct InnerStackAllocator<B: Backend> {
     device: B::Device,
     usage: memory::Usage,
-    // TODO: Any support ?
-    buffers: ChunkStack<B>,
-    images: ChunkStack<B>,
-    targets: ChunkStack<B>,
+    // stacks by memory type
+    // TODO: VecMap ?
+    stacks: HashMap<usize, ChunkStack<B>>,
     chunk_size: u64,
 }
 
@@ -38,9 +38,7 @@ impl<B: Backend> StackAllocator<B> {
         StackAllocator(Provider::new(InnerStackAllocator {
             device: (*device.ref_raw()).clone(),
             usage,
-            buffers: ChunkStack::new(),
-            images: ChunkStack::new(),
-            targets: ChunkStack::new(),
+            stacks: HashMap::new(),
             chunk_size,
         }))
     }
@@ -52,9 +50,9 @@ impl<B: Backend> StackAllocator<B> {
 
 impl<B: Backend> InnerStackAllocator<B> {
     fn shrink(&mut self) {
-        self.buffers.shrink(&mut self.device);
-        self.images.shrink(&mut self.device);
-        self.targets.shrink(&mut self.device);
+        for (_, stack) in &mut self.stacks {
+            stack.shrink(&mut self.device);
+        }
     }
 }
 
@@ -68,9 +66,12 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
         let inner: &mut InnerStackAllocator<B> = &mut self.0;
         let requirements = core::buffer::complete_requirements::<B>(
             device.mut_raw(), &buffer, usage);
-        let (memory, offset, release) = inner.buffers.allocate(
+        let memory_type = device.find_usage_memory(inner.usage, requirements.type_mask)
+            .expect("could not find suitable memory");
+        let mut stack = inner.stacks.entry(memory_type.id)
+            .or_insert_with(|| ChunkStack::new(memory_type));
+        let (memory, offset, release) = stack.allocate(
             device,
-            inner.usage,
             inner.chunk_size,
             requirements,
             dependency,
@@ -82,20 +83,18 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
 
     fn allocate_image(&mut self,
         device: &mut Device<B>,
-        usage: image::Usage,
+        _: image::Usage,
         image: B::UnboundImage
     ) -> (B::Image, Memory) {
         let dependency = self.0.dependency();
         let inner: &mut InnerStackAllocator<B> = &mut self.0;
         let requirements = device.mut_raw().get_image_requirements(&image);
-        let stack = if usage.can_target() {
-            &mut inner.targets
-        } else {
-            &mut inner.images
-        };
+        let memory_type = device.find_usage_memory(inner.usage, requirements.type_mask)
+            .expect("could not find suitable memory");
+        let mut stack = inner.stacks.entry(memory_type.id)
+            .or_insert_with(|| ChunkStack::new(memory_type));
         let (memory, offset, release) = stack.allocate(
             device,
-            inner.usage,
             inner.chunk_size,
             requirements,
             dependency,
@@ -107,6 +106,7 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
 }
 
 struct ChunkStack<B: Backend> {
+    memory_type: MemoryType,
     chunks: Vec<B::Memory>,
     allocs: Vec<StackAlloc>,
     receiver: mpsc::Receiver<usize>,
@@ -120,10 +120,11 @@ struct StackAlloc {
 }
 
 impl<B: Backend> ChunkStack<B> {
-    fn new() -> Self {
+    fn new(memory_type: MemoryType) -> Self {
         let (sender, receiver) = mpsc::channel();
 
         ChunkStack {
+            memory_type,
             chunks: Vec::new(),
             allocs: Vec::new(),
             receiver,
@@ -133,7 +134,6 @@ impl<B: Backend> ChunkStack<B> {
 
     fn allocate(&mut self,
         device: &mut Device<B>,
-        usage: memory::Usage,
         chunk_size: u64,
         req: Requirements,
         dependency: Dependency<InnerStackAllocator<B>>,
@@ -161,7 +161,7 @@ impl<B: Backend> ChunkStack<B> {
             };
 
         if chunk_index == self.chunks.len() {
-            self.grow(device, usage, chunk_size);
+            self.grow(device, chunk_size);
         }
 
         let alloc_index = self.allocs.len();
@@ -182,13 +182,10 @@ impl<B: Backend> ChunkStack<B> {
 
     fn grow(&mut self,
         device: &mut Device<B>,
-        usage: memory::Usage,
         chunk_size: u64
     ) {
-        let type_mask = 0xFF; //TODO
-        let memory_type = device.find_usage_memory(usage, type_mask).unwrap();
         let memory = device.mut_raw()
-            .allocate_memory(&memory_type, chunk_size)
+            .allocate_memory(&self.memory_type, chunk_size)
             .unwrap();
         self.chunks.push(memory);
     }
