@@ -1024,7 +1024,7 @@ impl d::Device<B> for Device {
     fn view_image_as_render_target(&mut self,
         image: &n::Image,
         format: format::Format,
-        _range: image::SubresourceRange,
+        _layers: image::SubresourceLayers,
     ) -> Result<n::RenderTargetView, d::TargetViewError> {
         //TODO: use subresource range
         let handle = self.rtv_pool.lock().unwrap().alloc_handles(1).cpu;

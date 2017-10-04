@@ -88,7 +88,7 @@ impl Error for ResourceViewError {
 pub enum TargetViewError {
     /// The `RENDER_TARGET`/`DEPTH_STENCIL` flag is not present in the texture.
     NoBindFlag,
-    /// Selected mip level doesn't exist.
+    /// Selected mip levels doesn't exist.
     Level(target::Level),
     /// Selected array layer doesn't exist.
     Layer(image::LayerError),
@@ -291,7 +291,7 @@ pub trait Device<B: Backend>: Clone {
     fn view_buffer_as_constant(&mut self, buffer: &B::Buffer, range: Range<u64>) -> Result<B::ConstantBufferView, TargetViewError>;
 
     ///
-    fn view_image_as_render_target(&mut self, image: &B::Image, format: format::Format, range: image::SubresourceRange) -> Result<B::RenderTargetView, TargetViewError>;
+    fn view_image_as_render_target(&mut self, &B::Image, format::Format, image::SubresourceLayers) -> Result<B::RenderTargetView, TargetViewError>;
 
     // TODO: view_image_as_depth_stencil
 

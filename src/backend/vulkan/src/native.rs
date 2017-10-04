@@ -98,14 +98,14 @@ pub enum UnorderedAccessView {
 pub struct RenderTargetView {
     pub image: vk::Image,
     pub view: vk::ImageView,
-    pub range: SubresourceRange
+    pub layers: SubresourceLayers,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct DepthStencilView {
     pub image: vk::Image,
     pub view: vk::ImageView,
-    pub range: SubresourceRange
+    pub layers: SubresourceLayers,
 }
 
 #[derive(Debug)]
