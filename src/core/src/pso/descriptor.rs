@@ -28,7 +28,7 @@ pub enum DescriptorType {
     ConstantBuffer,
     /// Read-Write, structured buffer.
     StorageBuffer,
-    /// Allows unfiltered loads of pixel local data in the fragement shader.
+    /// Allows unfiltered loads of pixel local data in the fragment shader.
     InputAttachment,
 
     // TODO: Dynamic descriptors
@@ -91,11 +91,11 @@ pub struct DescriptorSetWrite<'a, 'b, B: Backend> {
 #[allow(missing_docs)] //TODO
 pub enum DescriptorWrite<'a, B: Backend> {
     Sampler(Vec<&'a B::Sampler>),
-    SampledImage(Vec<(&'a B::ShaderResourceView, ImageLayout)>),
-    StorageImage(Vec<(&'a B::ShaderResourceView, ImageLayout)>),
-    UniformTexelBuffer,
-    StorageTexelBuffer,
-    ConstantBuffer(Vec<&'a B::ConstantBufferView>),
-    StorageBuffer,
-    InputAttachment(Vec<(&'a B::ShaderResourceView, ImageLayout)>),
+    SampledImage(Vec<(&'a B::ImageView, ImageLayout)>),
+    StorageImage(Vec<(&'a B::ImageView, ImageLayout)>),
+    UniformTexelBuffer(Vec<&'a B::BufferView>),
+    StorageTexelBuffer(Vec<&'a B::BufferView>),
+    ConstantBuffer(Vec<&'a B::BufferView>),
+    StorageBuffer, //TODO
+    InputAttachment(Vec<(&'a B::ImageView, ImageLayout)>),
 }

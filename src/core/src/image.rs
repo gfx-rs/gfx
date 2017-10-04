@@ -10,8 +10,10 @@
 use std::error::Error;
 use std::fmt;
 use std::ops::Range;
+
 use {format, state, target};
 pub use target::{Layer, Level};
+
 
 /// Maximum accessible mipmap level of a image.
 pub const MAX_LEVEL: Level = 15;
@@ -59,6 +61,59 @@ impl Error for CreationError {
         }
     }
 }
+
+/// Error creating an `ImageView`.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ViewError {
+    /// The required usage flag is not present in the image.
+    Usage(Usage),
+    /// Selected mip levels doesn't exist.
+    Level(Level),
+    /// Selected array layer doesn't exist.
+    Layer(LayerError),
+    /// An incompatible format was requested for the view.
+    BadFormat,
+    /// The backend refused for some reason.
+    Unsupported,
+}
+
+impl fmt::Display for ViewError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let description = self.description();
+        match *self {
+            ViewError::Usage(usage) => write!(f, "{}: {:?}", description, usage),
+            ViewError::Level(level) => write!(f, "{}: {}", description, level),
+            ViewError::Layer(ref layer) => write!(f, "{}: {}", description, layer),
+            _ => write!(f, "{}", description)
+        }
+    }
+}
+
+impl Error for ViewError {
+    fn description(&self) -> &str {
+        match *self {
+            ViewError::Usage(_) =>
+                "The required usage flag is not present in the image",
+            ViewError::Level(_) =>
+                "Selected mip level doesn't exist",
+            ViewError::Layer(_) =>
+                "Selected array layer doesn't exist",
+            ViewError::BadFormat =>
+                "An incompatible format was requested for the view",
+            ViewError::Unsupported =>
+                "The backend refused for some reason",
+        }
+    }
+
+    fn cause(&self) -> Option<&Error> {
+        if let ViewError::Layer(ref e) = *self {
+            Some(e)
+        } else {
+            None
+        }
+    }
+}
+
 
 /// An error associated with selected texture layer.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
