@@ -1,27 +1,23 @@
-use {Surface, Backend};
-use ::native;
-use ::conversions::*;
+use {Backend};
+use native;
 
-use std::ops::{Deref, DerefMut, Range};
+use std::ops::{Deref, Range};
 use std::sync::{Arc};
 use std::cell::UnsafeCell;
 
-use core::{self, memory, target, pso};
+use core::{self, memory, target, pool, pso};
 use core::{VertexCount, VertexOffset, InstanceCount, IndexCount, Viewport};
 use core::{RawSubmission};
 use core::buffer::{IndexBufferView};
 use core::image::{ImageLayout};
 use core::command::{AttachmentClear, ClearColor, ClearValue, BufferImageCopy, BufferCopy};
-use core::command::{RenderPassInlineEncoder, ImageCopy, SubpassContents};
+use core::command::{ImageCopy, SubpassContents};
 use core::command::{ImageResolve};
-use core::pool::{CommandPoolCreateFlags};
 
 use metal::*;
 use cocoa::foundation::NSUInteger;
 use block::{ConcreteBlock};
 
-pub struct QueueFamily {
-}
 
 pub struct CommandQueue(Arc<QueueInner>);
 
@@ -42,7 +38,7 @@ impl Drop for QueueInner {
 
 pub struct CommandPool {
     queue: Arc<QueueInner>,
-    managed: Vec<CommandBuffer>,
+    managed: Option<Vec<CommandBuffer>>,
 }
 
 unsafe impl Send for CommandPool {
@@ -51,7 +47,10 @@ unsafe impl Sync for CommandPool {
 }
 
 #[derive(Clone)]
-pub struct CommandBuffer(Arc<UnsafeCell<CommandBufferInner>>);
+pub struct CommandBuffer {
+    inner: Arc<UnsafeCell<CommandBufferInner>>,
+    queue: Option<Arc<QueueInner>>,
+}
 
 struct CommandBufferInner {
     command_buffer: MTLCommandBuffer,
@@ -62,6 +61,15 @@ struct CommandBufferInner {
     primitive_type: MTLPrimitiveType,
     vertex_buffers: Vec<(MTLBuffer, pso::BufferOffset)>, // Unretained
     descriptor_sets: Vec<Option<native::DescriptorSet>>,
+}
+
+impl CommandBufferInner {
+    fn reset(&mut self, queue: &QueueInner) {
+        let old = self.command_buffer;
+        self.command_buffer = MTLCommandBuffer::nil();
+        unsafe { old.release(); }
+        self.command_buffer = queue.queue.new_command_buffer();
+    }
 }
 
 unsafe impl Send for CommandBuffer {
@@ -118,7 +126,7 @@ impl core::RawCommandQueue<Backend> for CommandQueue {
         };
 
         for buffer in submit.cmd_buffers {
-            let command_buffer = (&mut *(buffer.0).get()).command_buffer;
+            let command_buffer = (&mut *buffer.inner.get()).command_buffer;
             if let Some(ref signal_block) = signal_block {
                 msg_send![command_buffer.0, addCompletedHandler: signal_block.deref() as *const _];
             }
@@ -139,24 +147,27 @@ impl core::RawCommandQueue<Backend> for CommandQueue {
 
 impl core::RawCommandPool<Backend> for CommandPool {
     fn reset(&mut self) {
-        for cmd_buffer in &mut self.managed {
-            let old_buffer = cmd_buffer.inner().command_buffer;
-            cmd_buffer.inner().command_buffer = MTLCommandBuffer::nil();
-            unsafe { old_buffer.release(); }
-            cmd_buffer.inner().command_buffer = self.queue.queue.new_command_buffer();
+        if let Some(ref mut managed) = self.managed {
+            for cmd_buffer in managed {
+                cmd_buffer.inner().reset(&self.queue);
+            }
         }
     }
 
-    unsafe fn from_queue(queue: &CommandQueue, flags: CommandPoolCreateFlags) -> Self {
+    unsafe fn from_queue(queue: &CommandQueue, flags: pool::CommandPoolCreateFlags) -> Self {
         CommandPool {
             queue: (queue.0).clone(),
-            managed: Vec::new(),
+            managed: if flags.contains(pool::RESET_INDIVIDUAL) { 
+                None
+            } else {
+                Some(Vec::new())
+            },
         }
     }
 
     fn allocate(&mut self, num: usize) -> Vec<CommandBuffer> {
-        let buffers: Vec<_> = (0..num).map(|_| {
-            CommandBuffer(Arc::new(unsafe {
+        let buffers: Vec<_> = (0..num).map(|_| CommandBuffer {
+            inner: Arc::new(unsafe {
                 // TODO: maybe use unretained command buffer for efficiency?
                 let command_buffer = self.queue.queue.new_command_buffer(); // Returns retained
                 defer_on_unwind! { command_buffer.release() }
@@ -171,9 +182,17 @@ impl core::RawCommandPool<Backend> for CommandPool {
                     vertex_buffers: Vec::new(),
                     descriptor_sets: Vec::new(),
                 })
-            }))
+            }),
+            queue: if self.managed.is_some() {
+                None
+            } else {
+                Some(self.queue.clone())
+            },
         }).collect();
-        self.managed.extend(buffers.iter().cloned());
+
+        if let Some(ref mut managed) = self.managed {
+            managed.extend_from_slice(&buffers);
+        }
         buffers
     }
 
@@ -182,9 +201,13 @@ impl core::RawCommandPool<Backend> for CommandPool {
         for mut cmd_buf in buffers {
             //TODO: what else here?
             let target = cmd_buf.inner().command_buffer;
-            match self.managed.iter_mut().position(|b| b.inner().command_buffer == target) {
+            let managed = match self.managed {
+                Some(ref mut vec) => vec,
+                None => continue,
+            };
+            match managed.iter_mut().position(|b| b.inner().command_buffer == target) {
                 Some(index) => {
-                    self.managed.swap_remove(index);
+                    managed.swap_remove(index);
                 }
                 None => {
                     error!("Unable to free a command buffer!")
@@ -201,22 +224,20 @@ impl CommandBuffer {
     #[inline]
     fn inner(&mut self) -> &mut CommandBufferInner {
         unsafe {
-            &mut *self.0.get()
+            &mut *self.inner.get()
         }
     }
 
     fn encode_blit(&mut self) -> MTLBlitCommandEncoder {
-        unsafe {
-            match self.inner().encoder_state {
-                EncoderState::None => {},
-                EncoderState::Blit(blit_encoder) => return blit_encoder,
-                EncoderState::Render(render_encoder) => panic!("invalid inside renderpass"),
-            }
-
-            let blit_encoder = self.inner().command_buffer.new_blit_command_encoder(); // Returns retained
-            self.inner().encoder_state = EncoderState::Blit(blit_encoder);
-            blit_encoder
+        match self.inner().encoder_state {
+            EncoderState::None => {},
+            EncoderState::Blit(blit_encoder) => return blit_encoder,
+            EncoderState::Render(render_encoder) => panic!("invalid inside renderpass"),
         }
+
+        let blit_encoder = self.inner().command_buffer.new_blit_command_encoder(); // Returns retained
+        self.inner().encoder_state = EncoderState::Blit(blit_encoder);
+        blit_encoder
     }
 
     fn except_renderpass(&mut self) -> MTLRenderCommandEncoder {
@@ -230,6 +251,10 @@ impl CommandBuffer {
 
 impl core::RawCommandBuffer<Backend> for CommandBuffer {
     fn begin(&mut self) {
+        if let Some(ref queue) = self.queue {
+            unsafe { &mut *self.inner.get() }
+                .reset(queue);
+        }
     }
 
     fn finish(&mut self) {
@@ -247,8 +272,9 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
         self.inner().encoder_state = EncoderState::None;
     }
 
-    fn reset(&mut self, release_resources: bool) {
-        unimplemented!()
+    fn reset(&mut self, _release_resources: bool) {
+        unsafe { &mut *self.inner.get() }
+            .reset(self.queue.as_ref().unwrap());
     }
 
     fn pipeline_barrier(
@@ -369,7 +395,7 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
         first_subpass: SubpassContents,
     ) {
         unsafe {
-            let command_buffer = &mut *self.0.get();
+            let command_buffer = self.inner();
 
             match command_buffer.encoder_state {
                 EncoderState::Render(_) => panic!("already in a renderpass"),

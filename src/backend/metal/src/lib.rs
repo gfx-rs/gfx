@@ -33,7 +33,6 @@ use std::os::raw::c_void;
 use core::{QueueType};
 use objc::runtime::{Object, Class};
 use cocoa::base::YES;
-use cocoa::appkit::NSWindow;
 use core_graphics::geometry::CGRect;
 
 pub struct Instance {
