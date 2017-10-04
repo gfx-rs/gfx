@@ -56,7 +56,7 @@ impl core::Surface<Backend> for Surface {
         &mut self,
         config: core::SwapchainConfig,
         present_queue: &core::CommandQueue<Backend, C>,
-    ) -> (Swapchain, Vec<core::Backbuffer<Backend>>) {
+    ) -> (Swapchain, core::Backbuffer<Backend>) {
         let mut swap_chain: *mut winapi::IDXGISwapChain1 = ptr::null_mut();
         let buffer_count = 2; // TODO: user-defined value
         let mut format = config.color_format;
@@ -104,7 +104,7 @@ impl core::Surface<Backend> for Surface {
         let mut swap_chain = unsafe { ComPtr::<winapi::IDXGISwapChain3>::new(swap_chain as *mut winapi::IDXGISwapChain3) };
 
         // Get backbuffer images
-        let backbuffers = (0..buffer_count).map(|i| {
+        let images = (0..buffer_count).map(|i| {
             let mut resource: *mut winapi::ID3D12Resource = ptr::null_mut();
             unsafe {
                 swap_chain.GetBuffer(
@@ -114,20 +114,15 @@ impl core::Surface<Backend> for Surface {
             }
 
             let kind = image::Kind::D2(self.width as u16, self.height as u16, 1.into());
-            let color = n::Image {
+            n::Image {
                 resource,
                 kind,
                 dxgi_format: format,
                 bits_per_texel: config.color_format.0.get_total_bits(),
                 levels: 1,
                 layers: 1,
-            };
-
-            core::Backbuffer {
-                color,
-                depth_stencil: None, // TODO
             }
-        }).collect::<Vec<_>>();
+        }).collect();
 
         let swapchain = Swapchain {
             inner: swap_chain,
@@ -135,7 +130,7 @@ impl core::Surface<Backend> for Surface {
             frame_queue: VecDeque::new(),
         };
 
-        (swapchain, backbuffers)
+        (swapchain, core::Backbuffer::Images(images))
     }
 }
 
