@@ -101,15 +101,12 @@ impl core::Surface<B> for Surface {
         &mut self,
         _config: core::SwapchainConfig,
         _: &core::CommandQueue<B, C>,
-    ) -> (Swapchain, Vec<core::Backbuffer<B>>) {
-        let backbuffer = core::Backbuffer {
-            color: n::Image::Surface(0),
-            depth_stencil: Some(n::Image::Surface(0)),
-        };
-
-        (Swapchain {
+    ) -> (Swapchain, core::Backbuffer<B>) {
+        let swapchain = Swapchain {
             window: self.window.clone(),
-        }, vec![backbuffer])
+        };
+        let backbuffer = core::Backbuffer::FrameBuffer(0);
+        (swapchain, backbuffer)
     }
 }
 

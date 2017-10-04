@@ -119,7 +119,21 @@ impl Device {
         }
     }
 
+    fn bind_target(gl: &gl::Gl, point: gl::types::GLenum, attachment: gl::types::GLenum, view: &n::TargetView) {
+        match *view {
+            n::TargetView::Surface(surface) => unsafe {
+                gl.FramebufferRenderbuffer(point, attachment, gl::RENDERBUFFER, surface);
+            },
+            n::TargetView::Texture(texture, level) => unsafe {
+                gl.FramebufferTexture(point, attachment, texture, level as _);
+            },
+            n::TargetView::TextureLayer(texture, level, layer) => unsafe {
+                gl.FramebufferTextureLayer(point, attachment, texture, level as _, layer as _);
+            },
+        }
+    }
 }
+
 impl d::Device<B> for Device {
     fn get_features(&self) -> &c::Features {
         &self.share.features
@@ -173,7 +187,7 @@ impl d::Device<B> for Device {
         let gl = &self.share.context;
         let priv_caps = &self.share.private_caps;
         descs.iter()
-             .map(|&(shaders, layout, subpass, desc)| {
+             .map(|&(shaders, _layout, subpass, _desc)| {
                 let subpass = match subpass.main_pass.subpasses.get(subpass.index) {
                     Some(sp) => sp,
                     None => return Err(pso::CreationError::InvalidSubpass(subpass.index)),
@@ -237,12 +251,43 @@ impl d::Device<B> for Device {
 
     fn create_framebuffer(
         &mut self,
-        _: &n::RenderPass,
-        _: &[&n::RenderTargetView],
-        _: &[&n::DepthStencilView],
-        _: d::Extent,
+        pass: &n::RenderPass,
+        rtvs: &[&n::TargetView],
+        dsvs: &[&n::TargetView],
+        _extent: d::Extent,
     ) -> n::FrameBuffer {
-        unimplemented!()
+        let gl = &self.share.context;
+        let target = gl::DRAW_FRAMEBUFFER;
+        let mut name = 0;
+        unsafe {
+            gl.GenFramebuffers(1, &mut name);
+            gl.BindFramebuffer(target, name);
+        }
+
+        assert_eq!(rtvs.len() + dsvs.len(), pass.attachments.len());
+        for (i, view) in rtvs.iter().enumerate() {
+            let attachment = gl::COLOR_ATTACHMENT0 + i as gl::types::GLenum;
+            Self::bind_target(gl, target, attachment, view);
+        }
+
+        match dsvs.len() {
+            0 => (),
+            1 => {
+                Self::bind_target(gl, target, gl::DEPTH_STENCIL_ATTACHMENT, &dsvs[0]);
+            },
+            2 => {
+                Self::bind_target(gl, target, gl::DEPTH_ATTACHMENT, &dsvs[0]);
+                Self::bind_target(gl, target, gl::STENCIL_ATTACHMENT, &dsvs[1]);
+            },
+            _ => panic!("Unexpected depth/stencil attachments {:?}", dsvs),
+        }
+
+        unsafe {
+            let status = gl.CheckFramebufferStatus(target);
+            assert_eq!(status, gl::FRAMEBUFFER_COMPLETE);
+            gl.BindFramebuffer(target, 0);
+        }
+        name
     }
 
     fn create_shader_module(
@@ -342,8 +387,30 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn view_image_as_render_target(&mut self, _: &n::Image, _: Format, _: i::SubresourceRange) -> Result<n::RenderTargetView, d::TargetViewError> {
-        unimplemented!()
+    fn view_image_as_render_target(&mut self, image: &n::Image, _format: Format, (level, layers): i::SubresourceLayers) -> Result<n::TargetView, d::TargetViewError> {
+        //TODO: check if `layers.end` covers all the layers
+        //TODO: check format
+        match *image {
+            n::Image::Surface(surface) => {
+                if level == 0 && layers.start == 0 {
+                    Ok(n::TargetView::Surface(surface))
+                } else if level != 0 {
+                    Err(d::TargetViewError::Level(level)) //TODO
+                } else {
+                    Err(d::TargetViewError::Layer(i::LayerError::OutOfBounds(layers)))
+                }
+            },
+            n::Image::Texture(texture) => {
+                //TODO: check that `level` exists
+                if layers.start == 0 {
+                    Ok(n::TargetView::Texture(texture, level))
+                } else if layers.start + 1 == layers.end {
+                    Ok(n::TargetView::TextureLayer(texture, level, layers.start))
+                } else {
+                    Err(d::TargetViewError::Layer(i::LayerError::OutOfBounds(layers)))
+                }
+            },
+        }
     }
 
     fn view_image_as_shader_resource(&mut self, _: &n::Image, _: Format) -> Result<n::ShaderResourceView, d::TargetViewError> {
@@ -366,13 +433,13 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn acquire_mapping_raw(&mut self, buf: &n::Buffer, read: Option<Range<u64>>)
+    fn acquire_mapping_raw(&mut self, _buf: &n::Buffer, _read: Option<Range<u64>>)
         -> Result<*mut u8, mapping::Error>
     {
         unimplemented!()
     }
 
-    fn release_mapping_raw(&mut self, buf: &n::Buffer, wrote: Option<Range<u64>>) {
+    fn release_mapping_raw(&mut self, _buf: &n::Buffer, _wrote: Option<Range<u64>>) {
         unimplemented!()
     }
 
@@ -430,7 +497,7 @@ impl d::Device<B> for Device {
                 true
             },
             d::WaitFor::Any => {
-                let mut waiting = |_timeout_ms: u32| {
+                let waiting = |_timeout_ms: u32| {
                     for fence in fences {
                         match wait_fence(fence, &self.share.context, 0) {
                             gl::ALREADY_SIGNALED | gl::CONDITION_SATISFIED => return true,
@@ -486,11 +553,11 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn destroy_render_target_view(&mut self, _: n::RenderTargetView) {
+    fn destroy_render_target_view(&mut self, _: n::TargetView) {
         unimplemented!()
     }
 
-    fn destroy_depth_stencil_view(&mut self, _: n::DepthStencilView) {
+    fn destroy_depth_stencil_view(&mut self, _: n::TargetView) {
         unimplemented!()
     }
 

@@ -126,12 +126,6 @@ pub struct ShaderResourceView;
 #[derive(Debug)]
 pub struct UnorderedAccessView;
 #[derive(Debug)]
-pub struct RenderTargetView {
-    pub view: TargetView,
-}
-#[derive(Debug)]
-pub struct DepthStencilView;
-#[derive(Debug)]
 pub struct PipelineLayout;
 
 #[derive(Debug)]
