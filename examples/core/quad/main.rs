@@ -23,7 +23,7 @@ use core::{buffer, command, device as d, image as i, memory as m, pass, pso, poo
 use core::{Adapter, Device, Instance};
 use core::{
     DescriptorPool, Gpu, FrameSync, Primitive, QueueType,
-    Surface, Swapchain, SwapchainConfig,
+    Backbuffer, Surface, Swapchain, SwapchainConfig,
 };
 use core::format::{Formatted, Srgba8 as ColorFormat, Vec2};
 use core::pass::Subpass;
@@ -111,7 +111,7 @@ fn main() {
     let mut queue = graphics_queues.remove(0);
     let swap_config = SwapchainConfig::new()
         .with_color::<ColorFormat>();
-    let (mut swap_chain, backbuffers) = surface.build_swapchain(swap_config, &queue);
+    let (mut swap_chain, backbuffer) = surface.build_swapchain(swap_config, &queue);
 
     // Setup renderpass and pipeline
     #[cfg(any(feature = "vulkan", feature = "dx12"))]
@@ -274,14 +274,28 @@ fn main() {
     let desc_sets = desc_pool.allocate_sets(&[&set_layout]);
 
     // Framebuffer and render target creation
-    let frame_rtvs = backbuffers.iter().map(|bb| {
-        device.view_image_as_render_target(&bb.color, ColorFormat::get_format(), (0..1, 0..1)).unwrap()
-    }).collect::<Vec<_>>();
-
-    let framebuffers = frame_rtvs.iter().map(|frame_rtv| {
-        let extent = d::Extent { width: pixel_width as _, height: pixel_height as _, depth: 1 };
-        device.create_framebuffer(&render_pass, &[&frame_rtv], &[], extent)
-    }).collect::<Vec<_>>();
+    let (frame_images, framebuffers) = match backbuffer {
+        Backbuffer::Images(images) => {
+            let extent = d::Extent { width: pixel_width as _, height: pixel_height as _, depth: 1 };
+            let pairs = images
+                .into_iter()
+                .map(|image| {
+                    let rtv = device.view_image_as_render_target(&image, ColorFormat::get_format(), (0, 0..1)).unwrap();
+                    (image, rtv)
+                })
+                .collect::<Vec<_>>();
+            let fbos = pairs
+                .iter()
+                .map(|&(_, ref rtv)| {
+                    device.create_framebuffer(&render_pass, &[rtv], &[], extent)
+                })
+                .collect();
+            (pairs, fbos)
+        }
+        Backbuffer::FrameBuffer(fbo) => {
+            (Vec::new(), vec![fbo])
+        }
+    };
 
     // Buffer allocations
     println!("Memory types: {:?}", memory_types);
@@ -441,9 +455,6 @@ fn main() {
         device.wait_for_fences(&[&frame_fence], d::WaitFor::All, !0);
     }
 
-    // not really needed, the transitions are covered by the render pass
-    // Note: the actual stages are unlikely correct, need verifying
-    let do_barriers = false;
     //
     let mut running = true;
     while running {
@@ -469,17 +480,6 @@ fn main() {
         let submit = {
             let mut cmd_buffer = graphics_pool.acquire_command_buffer();
 
-            let rtv = &backbuffers[frame.id()].color;
-            if do_barriers {
-                let rtv_target_barrier = m::Barrier::Image {
-                    states: (i::Access::empty(), i::ImageLayout::Undefined) ..
-                            (i::COLOR_ATTACHMENT_WRITE, i::ImageLayout::ColorAttachmentOptimal),
-                    target: rtv,
-                    range: (0..1, 0..1),
-                };
-                cmd_buffer.pipeline_barrier(pso::TRANSFER .. pso::FRAGMENT_SHADER, &[rtv_target_barrier]);
-            }
-
             cmd_buffer.set_viewports(&[viewport]);
             cmd_buffer.set_scissors(&[scissor]);
             cmd_buffer.bind_graphics_pipeline(&pipelines[0].as_ref().unwrap());
@@ -494,16 +494,6 @@ fn main() {
                     &[command::ClearValue::Color(command::ClearColor::Float([0.8, 0.8, 0.8, 1.0]))],
                 );
                 encoder.draw(0..6, 0..1);
-            }
-
-            if do_barriers {
-                let rtv_present_barrier = m::Barrier::Image {
-                    states: (i::COLOR_ATTACHMENT_WRITE, i::ImageLayout::ColorAttachmentOptimal) ..
-                            (i::Access::empty(), i::ImageLayout::Present),
-                    target: rtv,
-                    range: (0..1, 0..1),
-                };
-                cmd_buffer.pipeline_barrier(pso::FRAGMENT_SHADER .. pso::TRANSFER, &[rtv_present_barrier]);
             }
 
             cmd_buffer.finish()
@@ -553,8 +543,9 @@ fn main() {
     for framebuffer in framebuffers {
         device.destroy_framebuffer(framebuffer);
     }
-    for rtv in frame_rtvs {
+    for (image, rtv) in frame_images {
         device.destroy_render_target_view(rtv);
+        device.destroy_image(image);
     }
 }
 
