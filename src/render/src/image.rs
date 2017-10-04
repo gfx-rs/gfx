@@ -3,7 +3,7 @@ use memory::Memory;
 
 pub use core::image::{
     CreationError, Kind, AaMode, Size, Level, Layer, Dimensions,
-    SamplerInfo, SubresourceRange
+    SamplerInfo, SubresourceLayers, SubresourceRange
 };
 pub use core::image::{Usage,
     TRANSFER_SRC, TRANSFER_DST,

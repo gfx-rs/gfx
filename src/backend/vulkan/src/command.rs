@@ -242,11 +242,11 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         let clear_value = conv::map_clear_color(color);
 
         let range = {
-            let (ref mip_levels, ref array_layers) = rtv.range;
+            let (mip_level, ref array_layers) = rtv.layers;
             vk::ImageSubresourceRange {
                 aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
-                base_mip_level: mip_levels.start as u32,
-                level_count: (mip_levels.end - mip_levels.start) as u32,
+                base_mip_level: mip_level as u32,
+                level_count: 1,
                 base_array_layer: array_layers.start as u32,
                 layer_count: (array_layers.end - array_layers.start) as u32,
             }
@@ -276,7 +276,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         };
 
         let range = {
-            let (ref mip_levels, ref array_layers) = dsv.range;
+            let (mip_level, ref array_layers) = dsv.layers;
             let mut aspect_mask = vk::ImageAspectFlags::empty();
             if depth.is_some() {
                 aspect_mask |= vk::IMAGE_ASPECT_DEPTH_BIT;
@@ -287,8 +287,8 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
 
             vk::ImageSubresourceRange {
                 aspect_mask,
-                base_mip_level: mip_levels.start as u32,
-                level_count: (mip_levels.end - mip_levels.start) as u32,
+                base_mip_level: mip_level as u32,
+                level_count: 1,
                 base_array_layer: array_layers.start as u32,
                 layer_count: (array_layers.end - array_layers.start) as u32,
             }
