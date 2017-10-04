@@ -859,13 +859,13 @@ impl d::Device<B> for Device {
     fn view_image_as_render_target(&mut self,
         image: &n::Image,
         format: format::Format,
-        range: image::SubresourceRange,
+        layers: image::SubresourceLayers,
     ) -> Result<n::RenderTargetView, d::TargetViewError>
     {
         let rtv = n::RenderTargetView {
             image: image.raw,
             view: self.create_image_view(image, format),
-            range,
+            layers,
         };
 
         Ok(rtv)
