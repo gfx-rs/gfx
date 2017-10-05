@@ -708,11 +708,11 @@ impl d::Device<B> for Device {
         color_attachments: &[&n::RenderTargetView],
         depth_stencil_attachments: &[&n::DepthStencilView],
         _extent: d::Extent,
-    ) -> n::FrameBuffer {
-        n::FrameBuffer {
+    ) -> Result<n::FrameBuffer, d::FramebufferError> {
+        Ok(n::FrameBuffer {
             color: color_attachments.iter().map(|rtv| **rtv).collect(),
             depth_stencil: depth_stencil_attachments.iter().map(|dsv| **dsv).collect(),
-        }
+        })
     }
 
     fn create_shader_module(&mut self, raw_data: &[u8]) -> Result<n::ShaderModule, d::ShaderError> {
