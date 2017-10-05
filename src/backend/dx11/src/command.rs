@@ -58,7 +58,7 @@ impl DataBuffer {
 }
 
 ///Serialized device command.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum Command {
     // states
     BindProgram(Program),
@@ -76,9 +76,10 @@ pub enum Command {
     SetDepthStencil(*const ID3D11DepthStencilState, UINT),
     SetBlend(*const ID3D11BlendState, [FLOAT; 4], UINT),
     CopyBuffer(Buffer, Buffer, UINT, UINT, UINT),
+    CopyTexture(tex::TextureCopyRegion<Texture>, tex::TextureCopyRegion<Texture>),
     // resource updates
     UpdateBuffer(Buffer, DataPointer, usize),
-    UpdateTexture(Texture, tex::Kind, Option<tex::CubeFace>, DataPointer, tex::RawImageInfo),
+    UpdateTexture(tex::TextureCopyRegion<Texture>, DataPointer),
     GenerateMips(native::Srv),
     // drawing
     ClearColor(native::Rtv, [f32; 4]),
@@ -123,7 +124,7 @@ pub trait Parser: Sized + Send {
     fn reset(&mut self);
     fn parse(&mut self, Command);
     fn update_buffer(&mut self, Buffer, &[u8], usize);
-    fn update_texture(&mut self, Texture, tex::Kind, Option<tex::CubeFace>, &[u8], tex::RawImageInfo);
+    fn update_texture(&mut self, tex::TextureCopyRegion<Texture>, &[u8]);
 }
 
 impl<P: Parser> From<P> for CommandBuffer<P> {
@@ -324,30 +325,29 @@ impl<P: 'static + Parser> command::Buffer<Resources> for CommandBuffer<P> {
 
     #[allow(unused_variables)]
     fn copy_buffer_to_texture(&mut self, src: Buffer, src_offset_bytes: usize,
-                              dst: Texture,
-                              kind: tex::Kind,
-                              face: Option<tex::CubeFace>,
-                              img: tex::RawImageInfo) {
+                              dst: tex::TextureCopyRegion<Texture>) {
         unimplemented!()
     }
 
     #[allow(unused_variables)]
     fn copy_texture_to_buffer(&mut self,
-                              src: Texture,
-                              kind: tex::Kind,
-                              face: Option<tex::CubeFace>,
-                              img: tex::RawImageInfo,
+                              src: tex::TextureCopyRegion<Texture>,
                               dst: Buffer, dst_offset_bytes: usize) {
         unimplemented!()
+    }
+
+    fn copy_texture_to_texture(&mut self,
+                               src: tex::TextureCopyRegion<Texture>,
+                               dst: tex::TextureCopyRegion<Texture>) {
+        self.parser.parse(Command::CopyTexture(src, dst));
     }
 
     fn update_buffer(&mut self, buf: Buffer, data: &[u8], offset: usize) {
         self.parser.update_buffer(buf, data, offset);
     }
 
-    fn update_texture(&mut self, tex: Texture, kind: tex::Kind, face: Option<tex::CubeFace>,
-                      data: &[u8], image: tex::RawImageInfo) {
-        self.parser.update_texture(tex, kind, face, data, image);
+    fn update_texture(&mut self, dst: tex::TextureCopyRegion<Texture>, data: &[u8]) {
+        self.parser.update_texture(dst, data);
     }
 
     fn generate_mipmap(&mut self, srv: native::Srv) {

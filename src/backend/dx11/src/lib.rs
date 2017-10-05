@@ -278,9 +278,9 @@ impl command::Parser for CommandList {
         let ptr = self.1.add(data);
         self.0.push(command::Command::UpdateBuffer(buf, ptr, offset));
     }
-    fn update_texture(&mut self, tex: Texture, kind: tex::Kind, face: Option<tex::CubeFace>, data: &[u8], image: tex::RawImageInfo) {
+    fn update_texture(&mut self, dst: tex::TextureCopyRegion<Texture>, data: &[u8]) {
         let ptr = self.1.add(data);
-        self.0.push(command::Command::UpdateTexture(tex, kind, face, ptr, image));
+        self.0.push(command::Command::UpdateTexture(dst, ptr));
     }
 }
 
@@ -313,8 +313,8 @@ impl command::Parser for DeferredContext {
     fn update_buffer(&mut self, buf: Buffer, data: &[u8], offset: usize) {
         execute::update_buffer(self.0, &buf, data, offset);
     }
-    fn update_texture(&mut self, tex: Texture, kind: tex::Kind, face: Option<tex::CubeFace>, data: &[u8], image: tex::RawImageInfo) {
-        execute::update_texture(self.0, &tex, kind, face, data, &image);
+    fn update_texture(&mut self, dst: tex::TextureCopyRegion<Texture>, data: &[u8]) {
+        execute::update_texture(self.0, &dst, data);
     }
 }
 

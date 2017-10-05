@@ -57,6 +57,9 @@ pub type CopyBufferTextureResult = Result<(), CopyError<usize, [texture::Size; 3
 /// Result type returned when copying texture data into a buffer.
 pub type CopyTextureBufferResult = Result<(), CopyError<[texture::Size; 3], usize>>;
 
+/// Result of copying texture to texture;
+pub type CopyTextureResult = Result<(), CopyError<[texture::Size; 3], [texture::Size; 3]>>;
+
 impl<S, D> fmt::Display for CopyError<S, D>
     where S: fmt::Debug + fmt::Display, D: fmt::Debug + fmt::Display
 {
@@ -350,6 +353,56 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
 
         self.command_buffer.copy_texture_to_buffer(src,
             self.handles.ref_buffer(dst).clone(), dst_offset_bytes);
+        Ok(())
+    }
+
+    /// Copy part of a texture to another texture
+    pub fn copy_texture_to_texture_raw(&mut self,
+        src: &handle::RawTexture<R>, src_face: Option<texture::CubeFace>, src_info: texture::RawImageInfo,
+        dst: &handle::RawTexture<R>, dst_face: Option<texture::CubeFace>, dst_info: texture::RawImageInfo)
+        -> CopyTextureResult
+    {
+        if !src.get_info().bind.contains(memory::TRANSFER_SRC) {
+            return Err(CopyError::NoSrcBindFlag);
+        }
+        let src_dim = src.get_info().kind.get_dimensions();
+        if !src_info.is_inside(src_dim) {
+            let (w, h, d, _) = src_dim;
+            return Err(CopyError::OutOfSrcBounds {
+                size: [w, h, d],
+                copy_end: [src_info.xoffset + src_info.width,
+                           src_info.yoffset + src_info.height,
+                           src_info.zoffset + src_info.depth]
+            });
+        }
+        let src = texture::TextureCopyRegion {
+            texture: self.handles.ref_texture(src).clone(),
+            kind: src.get_info().kind,
+            cube_face: src_face,
+            info: src_info,
+        };
+
+        if !dst.get_info().bind.contains(memory::TRANSFER_DST) {
+            return Err(CopyError::NoDstBindFlag);
+        }
+        let dst_dim = dst.get_info().kind.get_dimensions();
+        if !dst_info.is_inside(dst_dim) {
+            let (w, h, d, _) = dst_dim;
+            return Err(CopyError::OutOfDstBounds {
+                size: [w, h, d],
+                copy_end: [dst_info.xoffset + dst_info.width,
+                           dst_info.yoffset + dst_info.height,
+                           dst_info.zoffset + dst_info.depth]
+            });
+        }
+        let dst = texture::TextureCopyRegion {
+            texture: self.handles.ref_texture(dst).clone(),
+            kind: dst.get_info().kind,
+            cube_face: dst_face,
+            info: dst_info,
+        };
+
+        self.command_buffer.copy_texture_to_texture(src, dst);
         Ok(())
     }
 

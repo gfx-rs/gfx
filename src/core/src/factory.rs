@@ -425,7 +425,7 @@ pub trait Factory<R: Resources> {
     {
         self.view_texture_as_depth_stencil(tex, 0, None, texture::DepthStencilFlags::empty())
     }
-    
+
     fn create_texture_immutable_u8<T: format::TextureFormat>(&mut self, kind: texture::Kind, mipmap: texture::Mipmap, data: &[&[u8]])
                                    -> Result<(handle::Texture<R, T::Surface>,
                                               handle::ShaderResourceView<R, T::View>),
