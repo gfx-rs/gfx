@@ -114,35 +114,14 @@ fn main() {
     let (mut swap_chain, backbuffers) = surface.build_swapchain(swap_config, &queue);
 
     // Setup renderpass and pipeline
-    // dx12 runtime shader compilation
-    #[cfg(feature = "dx12")]
+    #[cfg(any(feature = "vulkan", feature = "dx12"))]
     let vs_module = device
-        .create_shader_module_from_source(
-            pso::Stage::Vertex,
-            "vs_main",
-            "main",
-            include_bytes!("shader/quad.hlsl"))
+        .create_shader_module(include_bytes!("data/vert.spv"))
         .unwrap();
-    #[cfg(feature = "dx12")]
+    #[cfg(any(feature = "vulkan", feature = "dx12"))]
     let fs_module = device
-        .create_shader_module_from_source(
-            pso::Stage::Fragment,
-            "ps_main",
-            "main",
-            include_bytes!("shader/quad.hlsl"))
+        .create_shader_module(include_bytes!("data/frag.spv"))
         .unwrap();
-    #[cfg(feature = "vulkan")]
-    let vs_module = device
-        .create_shader_module_from_glsl(
-            include_str!("shader/quad.vert"),
-            pso::Stage::Vertex,
-        ).unwrap();
-    #[cfg(feature = "vulkan")]
-    let fs_module = device
-        .create_shader_module_from_glsl(
-            include_str!("shader/quad.frag"),
-            pso::Stage::Fragment,
-        ).unwrap();
 
     #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
     let shader_lib = device.create_shader_library_from_source(

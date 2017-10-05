@@ -15,6 +15,24 @@ use {free_list, native as n, shade, Backend as B, Device};
 use winapi;
 use wio::com::ComPtr;
 
+/// Emit error during shader module creation. Used if we don't expect an error
+/// but might panic due to an exception in SPIRV-Cross.
+fn gen_unexpected_error(err: SpirvErrorCode) -> d::ShaderError {
+    let msg = match err {
+        SpirvErrorCode::CompilationError(msg) => msg,
+        SpirvErrorCode::Unhandled => "Unexpected error".into(),
+    };
+    d::ShaderError::CompilationFailed(msg)
+}
+
+/// Emit error during shader module creation. Used if we execute an query command.
+fn gen_query_error(err: SpirvErrorCode) -> d::ShaderError {
+    let msg = match err {
+        SpirvErrorCode::CompilationError(msg) => msg,
+        SpirvErrorCode::Unhandled => "Unknown query error".into(),
+    };
+    d::ShaderError::CompilationFailed(msg)
+}
 
 #[derive(Debug)]
 pub struct UnboundBuffer {
@@ -726,11 +744,8 @@ impl d::Device<B> for Device {
             )
         };
 
-        let module = spirv::Module::new(spirv_data);
-
-        let parse_options = spirv::ParserOptions::default();
-        let parsed = spirv::Parser::new()
-            .parse(&module, &parse_options)
+        let module = spirv::Module::from_words(spirv_data);
+        let mut ast = spirv::Ast::<hlsl::Target>::parse(&module)
             .map_err(|err| {
                 let msg =  match err {
                     SpirvErrorCode::CompilationError(msg) => msg,
@@ -739,10 +754,30 @@ impl d::Device<B> for Device {
                 d::ShaderError::CompilationFailed(msg)
             })?;
 
+        // Patch descriptor sets due to the splitting of descriptor heaps into
+        // SrvCbvUav and sampler heap. Each set will have a new location to match
+        // the layout of the root signatures.
+        let shader_resources = ast.get_shader_resources().map_err(gen_query_error)?;
+        for image in &shader_resources.separate_images {
+            let set = ast.get_decoration(image.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
+            ast.set_decoration(image.id, spirv::Decoration::DescriptorSet, 2*set)
+               .map_err(gen_unexpected_error)?;
+        }
+
+        for sampler in &shader_resources.separate_samplers {
+            let set = ast.get_decoration(sampler.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
+            ast.set_decoration(sampler.id, spirv::Decoration::DescriptorSet, 2*set+1)
+               .map_err(gen_unexpected_error)?;
+        }
+
+        let shader_model = hlsl::ShaderModel::V5_1;
         let mut compile_options = hlsl::CompilerOptions::default();
-        compile_options.shader_model = hlsl::ShaderModel::V5_1;
-        let shader_code = self.hlsl_compiler
-            .compile(&parsed, &compile_options)
+        compile_options.shader_model = shader_model;
+        compile_options.vertex.invert_y = true;
+
+        ast.set_compile_options(compile_options)
+           .map_err(gen_unexpected_error)?;
+        let shader_code = ast.compile()
             .map_err(|err| {
                 let msg =  match err {
                     SpirvErrorCode::CompilationError(msg) => msg,
@@ -751,8 +786,11 @@ impl d::Device<B> for Device {
                 d::ShaderError::CompilationFailed(msg)
             })?;
 
+        debug!("SPIRV-Cross generated shader: {}", shader_code);
+
         let mut shader_map = BTreeMap::new();
-        for entry_point in parsed.entry_points {
+        let entry_points = ast.get_entry_points().map_err(gen_query_error)?;
+        for entry_point in entry_points {
             let stage = match entry_point.execution_model {
                 spirv::ExecutionModel::Vertex => pso::Stage::Vertex,
                 spirv::ExecutionModel::Fragment => pso::Stage::Fragment,
@@ -761,10 +799,11 @@ impl d::Device<B> for Device {
 
             let shader_blob = Self::compile_shader(
                 stage,
-                compile_options.shader_model,
+                shader_model,
                 &entry_point.name,
                 shader_code.as_bytes(),
             )?;
+
             shader_map.insert(entry_point.name, shader_blob);
         }
         Ok(n::ShaderModule { shaders: shader_map })
