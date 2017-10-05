@@ -213,23 +213,34 @@ impl c::Adapter<Backend> for Adapter {
             panic!("Error opening adapter: {:?}", err);
         }
 
-        let memory_types = vec![
-            core::MemoryType {
-                id: 0,
-                properties: c::memory::DEVICE_LOCAL,
-                heap_index: 1,
-            },
-            core::MemoryType {
-                id: 1,
-                properties: c::memory::CPU_VISIBLE | c::memory::CPU_CACHED,
-                heap_index: 0,
-            },
-            core::MemoryType {
-                id: 2,
-                properties: c::memory::CPU_VISIBLE | c::memory::COHERENT,
-                heap_index: 0,
-            },
-        ];
+        let memory_types = if self.share.private_caps.map {
+            vec![
+                //TODO: expose `COHERENT` types as well
+                core::MemoryType {
+                    id: 0,
+                    properties: c::memory::DEVICE_LOCAL,
+                    heap_index: 1,
+                },
+                core::MemoryType { //download
+                    id: 1,
+                    properties: c::memory::CPU_VISIBLE | c::memory::CPU_CACHED,
+                    heap_index: 0,
+                },
+                core::MemoryType { // upload
+                    id: 2,
+                    properties: c::memory::CPU_VISIBLE | c::memory::WRITE_COMBINED,
+                    heap_index: 0,
+                },
+            ]
+        } else {
+            vec![
+                core::MemoryType {
+                    id: 0,
+                    properties: c::memory::DEVICE_LOCAL,
+                    heap_index: 0,
+                },
+            ]
+        };
 
         let mut gpu = c::Gpu {
             device: Device::new(self.share.clone()),
