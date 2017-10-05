@@ -191,7 +191,7 @@ impl CommandQueue {
 
         // Bind default VAO
         if !self.state.vao {
-            if priv_caps.array_buffer {
+            if priv_caps.vertex_array {
                 unsafe { gl.BindVertexArray(self.vao) };
             }
             self.state.vao = true
@@ -452,7 +452,7 @@ impl CommandQueue {
                 }
             }
             com::Command::BindFrameBuffer(point, frame_buffer) => {
-                if self.share.private_caps.frame_buffer {
+                if self.share.private_caps.framebuffer {
                     let gl = &self.share.context;
                     unsafe { gl.BindFramebuffer(point, frame_buffer) };
                 } else if frame_buffer != 0 {

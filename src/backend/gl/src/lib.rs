@@ -202,7 +202,7 @@ impl c::Adapter<Backend> for Adapter {
 
         // create main VAO and bind it
         let mut vao = 0;
-        if self.share.private_caps.array_buffer {
+        if self.share.private_caps.vertex_array {
             unsafe {
                 gl.GenVertexArrays(1, &mut vao);
                 gl.BindVertexArray(vao);
@@ -213,12 +213,23 @@ impl c::Adapter<Backend> for Adapter {
             panic!("Error opening adapter: {:?}", err);
         }
 
-        //TODO: possibly, provide separate memory types for GPU/host data
-        let mem_type = c::MemoryType {
-            id: 0,
-            properties: c::memory::DEVICE_LOCAL | c::memory::CPU_VISIBLE | c::memory::COHERENT,
-            heap_index: 0,
-        };
+        let memory_types = vec![
+            core::MemoryType {
+                id: 0,
+                properties: c::memory::DEVICE_LOCAL,
+                heap_index: 1,
+            },
+            core::MemoryType {
+                id: 1,
+                properties: c::memory::CPU_VISIBLE | c::memory::CPU_CACHED,
+                heap_index: 0,
+            },
+            core::MemoryType {
+                id: 2,
+                properties: c::memory::CPU_VISIBLE | c::memory::COHERENT,
+                heap_index: 0,
+            },
+        ];
 
         let mut gpu = c::Gpu {
             device: Device::new(self.share.clone()),
@@ -226,8 +237,8 @@ impl c::Adapter<Backend> for Adapter {
             graphics_queues: Vec::new(),
             compute_queues: Vec::new(),
             transfer_queues: Vec::new(),
-            memory_types: vec![mem_type],
-            memory_heaps: vec![!0],
+            memory_types,
+            memory_heaps: vec![!0, !0],
         };
 
         for &(_, queue_type, num_queues) in queue_descs {
