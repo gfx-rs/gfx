@@ -9,7 +9,7 @@ use core::format::Format;
 use std::iter::repeat;
 
 use {Backend as B, Share};
-use {conv, device, native as n, state};
+use {conv, native as n, state};
 
 
 fn get_shader_iv(gl: &gl::Gl, name: n::Shader, query: GLenum) -> gl::types::GLint {
@@ -58,9 +58,11 @@ pub fn get_program_log(gl: &gl::Gl, name: n::Program) -> String {
 
 #[derive(Debug)]
 pub struct UnboundBuffer {
-    buffer: n::Buffer,
+    name: n::RawBuffer,
+    target: GLenum,
     requirements: memory::Requirements,
 }
+
 #[derive(Debug)]
 pub struct UnboundImage;
 
@@ -149,8 +151,12 @@ impl d::Device<B> for Device {
         &self.share.limits
     }
 
-    fn allocate_memory(&mut self, _: &c::MemoryType, _: u64) -> Result<n::Memory, d::OutOfMemory> {
-        Ok(n::Memory)
+    fn allocate_memory(
+        &mut self, mem_type: &c::MemoryType, _size: u64,
+    ) -> Result<n::Memory, d::OutOfMemory> {
+        Ok(n::Memory {
+            properties: mem_type.properties,
+        })
     }
 
     fn create_renderpass(
@@ -265,7 +271,11 @@ impl d::Device<B> for Device {
         rtvs: &[&n::TargetView],
         dsvs: &[&n::TargetView],
         _extent: d::Extent,
-    ) -> n::FrameBuffer {
+    ) -> Result<n::FrameBuffer, d::FramebufferError> {
+        if !self.share.private_caps.framebuffer {
+            return Err(d::FramebufferError);
+        }
+
         let gl = &self.share.context;
         let target = gl::DRAW_FRAMEBUFFER;
         let mut name = 0;
@@ -301,7 +311,7 @@ impl d::Device<B> for Device {
             panic!("Error creating FBO: {:?} for {:?}, rtvs {:?}, dsvs {:?}", err, pass, rtvs, dsvs);
         }
 
-        name
+        Ok(name)
     }
 
     fn create_shader_module(
@@ -372,11 +382,14 @@ impl d::Device<B> for Device {
         n::FatSampler::Sampler(name)
     }
 
-    fn create_buffer(&mut self, size: u64, stride: u64, usage: buffer::Usage) -> Result<device::UnboundBuffer, buffer::CreationError> {
+    fn create_buffer(
+        &mut self, size: u64, stride: u64, usage: buffer::Usage,
+    ) -> Result<UnboundBuffer, buffer::CreationError> {
         if !self.share.features.constant_buffer && usage.contains(buffer::CONSTANT) {
             error!("Constant buffers are not supported by this GL version");
             return Err(buffer::CreationError::Other);
         }
+
         let target = if self.share.private_caps.buffer_role_change {
             gl::ARRAY_BUFFER
         } else {
@@ -390,85 +403,94 @@ impl d::Device<B> for Device {
         let mut name = 0;
         unsafe {
             gl.GenBuffers(1, &mut name);
-            gl.BindBuffer(target, name);
         }
+
+        Ok(UnboundBuffer {
+            name,
+            target,
+            requirements: memory::Requirements {
+                size,
+                alignment: stride,
+                type_mask: 0x7,
+            },
+        })
+    }
+
+    fn get_buffer_requirements(&mut self, unbound: &UnboundBuffer) -> memory::Requirements {
+        unbound.requirements
+    }
+
+    fn bind_buffer_memory(
+        &mut self, memory: &n::Memory, _offset: u64, unbound: UnboundBuffer,
+    ) -> Result<n::Buffer, d::BindError> {
+        let gl = &self.share.context;
+        let target = unbound.target;
+
+        let can_upload = memory.properties.contains(memory::CPU_VISIBLE | memory::WRITE_COMBINED);
+        let can_download = memory.properties.contains(memory::CPU_VISIBLE | memory::COHERENT);
 
         if self.share.private_caps.buffer_storage {
             //TODO: gl::DYNAMIC_STORAGE_BIT | gl::MAP_PERSISTENT_BIT
             let mut flags = 0;
-            if usage.contains(buffer::MAP_READ) {
+            if can_download {
                 flags |= gl::MAP_READ_BIT;
             }
-            if usage.contains(buffer::MAP_WRITE) {
+            if can_upload {
                 flags |= gl::MAP_WRITE_BIT;
             }
             unsafe {
+                gl.BindBuffer(target, unbound.name);
                 gl.BufferStorage(target,
-                    size as _,
+                    unbound.requirements.size as _,
                     ptr::null(),
                     flags,
                 );
+                gl.BindBuffer(target, 0);
             }
         }
         else {
-            let flags = if usage.contains(buffer::MAP_READ | buffer::MAP_WRITE) {
+            let flags = if can_upload && can_download {
                 gl::DYNAMIC_DRAW
-            } else if usage.contains(buffer::MAP_WRITE) {
+            } else if can_upload {
                 gl::STREAM_DRAW
-            } else if usage.contains(buffer::MAP_READ) {
+            } else if can_download {
                 gl::STREAM_READ
             } else {
                 gl::STATIC_DRAW
             };
             unsafe {
+                gl.BindBuffer(target, unbound.name);
                 gl.BufferData(target,
-                    size as _,
+                    unbound.requirements.size as _,
                     ptr::null(),
                     flags,
                 );
+                gl.BindBuffer(target, 0);
             }
         }
 
-        unsafe {
-            gl.BindBuffer(target, 0);
-        }
         if let Err(err) = self.share.check() {
-            panic!("Error {:?} creating buffer: size={:?}, usage={:?}", err, size, usage);
+            panic!("Error {:?} initializing buffer {:?}, memory {:?}",
+                err, unbound, memory.properties);
         }
 
-        Ok(device::UnboundBuffer {
-            buffer: n::Buffer {
-                raw: name,
-                target,
-            },
-            requirements: memory::Requirements {
-                size,
-                alignment: stride,
-                type_mask: 0x1,
-            },
+        Ok(n::Buffer {
+            raw: unbound.name,
+            target,
         })
     }
 
-    fn get_buffer_requirements(&mut self, unbound: &device::UnboundBuffer) -> memory::Requirements {
-        unbound.requirements
-    }
-
-    fn bind_buffer_memory(&mut self, _: &n::Memory, _: u64, unbound: device::UnboundBuffer) -> Result<n::Buffer, d::BindError> {
-        //TODO: this is a better place to call memory allocations, not in `create_buffer`
-        Ok(unbound.buffer)
-    }
-
     fn create_image(&mut self, _: i::Kind, _: i::Level, _: Format, _: i::Usage)
-         -> Result<device::UnboundImage, i::CreationError>
+         -> Result<UnboundImage, i::CreationError>
     {
         unimplemented!()
     }
 
-    fn get_image_requirements(&mut self, _: &device::UnboundImage) -> memory::Requirements {
+    fn get_image_requirements(&mut self, _: &UnboundImage) -> memory::Requirements {
         unimplemented!()
     }
 
-    fn bind_image_memory(&mut self, _: &n::Memory, _: u64, _: device::UnboundImage) -> Result<n::Image, d::BindError> {
+    fn bind_image_memory(&mut self, _: &n::Memory, _: u64, _: UnboundImage) -> Result<n::Image, d::BindError> {
         unimplemented!()
     }
 

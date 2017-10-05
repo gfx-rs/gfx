@@ -148,8 +148,12 @@ impl PlatformName {
 /// Private capabilities that don't need to be exposed.
 #[derive(Debug)]
 pub struct PrivateCaps {
-    pub array_buffer: bool,
-    pub frame_buffer: bool,
+    /// VAO support
+    pub vertex_array: bool,
+    /// FBO support
+    pub framebuffer: bool,
+    /// Can bind a buffer to a different target than was
+    /// used upon the buffer creation/initialization
     pub buffer_role_change: bool,
     pub buffer_storage: bool,
     pub image_storage: bool,
@@ -307,10 +311,10 @@ pub fn query_all(gl: &gl::Gl) -> (Info, Features, Limits, PrivateCaps) {
         sampler_border_color:               info.is_supported(&[Core(3,3)]), // TODO: extensions
     };
     let private = PrivateCaps {
-        array_buffer:                       info.is_supported(&[Core(3,0),
+        vertex_array:                       info.is_supported(&[Core(3,0),
                                                                 Es  (3,0),
                                                                 Ext ("GL_ARB_vertex_array_object")]),
-        frame_buffer:                       info.is_supported(&[Core(3,0),
+        framebuffer:                        info.is_supported(&[Core(3,0),
                                                                 Es  (2,0),
                                                                 Ext ("GL_ARB_framebuffer_object")]),
         buffer_role_change:                 !info.version.is_embedded,
