@@ -594,7 +594,7 @@ impl d::Device<B> for Device {
         color_attachments: &[&n::RenderTargetView],
         depth_stencil_attachments: &[&n::DepthStencilView],
         extent: d::Extent,
-    ) -> n::FrameBuffer {
+    ) -> Result<n::FrameBuffer, d::FramebufferError> {
         let attachments = color_attachments
             .iter()
             .map(|attachment| attachment.view)
@@ -620,7 +620,7 @@ impl d::Device<B> for Device {
             self.raw.0.create_framebuffer(&info, None)
         }.expect("error on framebuffer creation");
 
-        n::FrameBuffer { raw: framebuffer }
+        Ok(n::FrameBuffer { raw: framebuffer })
     }
 
     fn create_shader_module(&mut self, spirv_data: &[u8]) -> Result<n::ShaderModule, d::ShaderError> {

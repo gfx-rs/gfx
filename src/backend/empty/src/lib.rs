@@ -118,7 +118,7 @@ impl core::Device<Backend> for Device {
         &mut self, _: &(),
         _: &[&()], _: &[&()],
         _: device::Extent,
-    ) -> () {
+    ) -> Result<(), device::FramebufferError> {
         unimplemented!()
     }
 
