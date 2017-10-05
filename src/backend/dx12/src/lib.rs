@@ -24,7 +24,6 @@ mod shade;
 mod window;
 
 use core::{memory, Features, Limits, QueueType};
-use spirv_cross::hlsl;
 use wio::com::ComPtr;
 
 use std::{mem, ptr};
@@ -220,7 +219,6 @@ pub struct Device {
     heap_srv_cbv_uav: Arc<Mutex<native::DescriptorHeap>>,
     heap_sampler: Arc<Mutex<native::DescriptorHeap>>,
     events: Vec<winapi::HANDLE>,
-    hlsl_compiler: hlsl::Compiler,
 }
 unsafe impl Send for Device {} //blocked by ComPtr
 
@@ -332,7 +330,6 @@ impl Device {
             heap_srv_cbv_uav: Arc::new(Mutex::new(heap_srv_cbv_uav)),
             heap_sampler: Arc::new(Mutex::new(heap_sampler)),
             events: Vec::new(),
-            hlsl_compiler: hlsl::Compiler::new(),
         }
     }
 }
