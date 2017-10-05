@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use {gl, Surface, Texture, NewTexture, Buffer, Sampler};
+use {gl, FrameBuffer, Surface, Texture, NewTexture, Buffer, Sampler};
 use gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
 use state;
 use info::PrivateCaps;
@@ -638,11 +638,26 @@ fn tex_sub_image<F>(gl: &gl::Gl, kind: t::Kind, target: GLenum, pix: GLenum,
     })
 }
 
+fn bind_read_fbo(gl: &gl::Gl, texture: NewTexture, fbo: FrameBuffer) {
+    let target = gl::READ_FRAMEBUFFER;
+    unsafe {
+        gl.BindFramebuffer(target, fbo);
+        gl.FramebufferRenderbuffer(target, gl::COLOR_ATTACHMENT1, gl::RENDERBUFFER, 0);
+        gl.FramebufferRenderbuffer(target, gl::COLOR_ATTACHMENT2, gl::RENDERBUFFER, 0);
+        gl.FramebufferRenderbuffer(target, gl::COLOR_ATTACHMENT3, gl::RENDERBUFFER, 0);
+        gl.FramebufferRenderbuffer(target, gl::DEPTH_STENCIL_ATTACHMENT, gl::RENDERBUFFER, 0);
+        match texture {
+            NewTexture::Surface(s) =>
+                gl.FramebufferRenderbuffer(target, gl::COLOR_ATTACHMENT0, gl::RENDERBUFFER, s),
+            NewTexture::Texture(t) =>
+                gl.FramebufferTexture(target, gl::COLOR_ATTACHMENT0, gl::TEXTURE_2D, t as _),
+        };
+        gl.ReadBuffer(gl::COLOR_ATTACHMENT0);
+    }
+}
+
 pub fn copy_from_buffer(gl: &gl::Gl,
-                        dst: Texture,
-                        kind: t::Kind,
-                        face: Option<t::CubeFace>,
-                        img: &t::RawImageInfo,
+                        dst: &t::TextureCopyRegion<Texture>,
                         src: Buffer, src_offset: gl::types::GLintptr)
                         -> Result<(), t::CreationError>
 {
@@ -650,65 +665,66 @@ pub fn copy_from_buffer(gl: &gl::Gl,
     let data = src_offset as *const GLvoid;
     unsafe { gl.BindBuffer(gl::PIXEL_UNPACK_BUFFER, src); }
 
-    let pixel_format = format_to_glpixel(img.format);
-    let data_type = match format_to_gltype(img.format) {
+    let format = dst.info.format;
+    let pixel_format = format_to_glpixel(format);
+    let data_type = match format_to_gltype(format) {
         Ok(t) => t,
-        Err(_) => return Err(t::CreationError::Format(img.format.0, Some(img.format.1))),
+        Err(_) => return Err(t::CreationError::Format(format.0, Some(format.1))),
     };
 
-    let target = kind_to_gl(kind);
-    unsafe { gl.BindTexture(target, dst); }
+    let target = kind_to_gl(dst.kind);
+    unsafe { gl.BindTexture(target, dst.texture); }
 
-    let target = kind_face_to_gl(kind, face);
-    tex_sub_image(gl, kind, target, pixel_format, data_type, img, data)
+    let target = kind_face_to_gl(dst.kind, dst.cube_face);
+    tex_sub_image(gl, dst.kind, target, pixel_format, data_type, &dst.info, data)
 }
 
 pub fn copy_to_buffer(gl: &gl::Gl,
-                      src: NewTexture,
-                      kind: t::Kind,
-                      face: Option<t::CubeFace>,
-                      img: &t::RawImageInfo,
-                      dst: Buffer, dst_offset: gl::types::GLintptr)
+                      src: &t::TextureCopyRegion<NewTexture>,
+                      dst: Buffer, dst_offset: gl::types::GLintptr,
+                      fbo: FrameBuffer)
                       -> Result<(), t::CreationError>
 {
     let data = dst_offset as *mut GLvoid;
     unsafe { gl.BindBuffer(gl::PIXEL_PACK_BUFFER, dst); }
 
-    let pixel_format = format_to_glpixel(img.format);
-    let data_type = match format_to_gltype(img.format) {
+    let format = src.info.format;
+    let pixel_format = format_to_glpixel(format);
+    let data_type = match format_to_gltype(format) {
         Ok(t) => t,
-        Err(_) => return Err(t::CreationError::Format(img.format.0, Some(img.format.1))),
+        Err(_) => return Err(t::CreationError::Format(format.0, Some(format.1))),
     };
 
-    match src {
+    // FIXME: can't specify image offsets
+    let src_dim = src.kind.get_dimensions();
+    debug_assert!(src.info.xoffset == 0 &&
+                  src.info.yoffset == 0 &&
+                  src.info.zoffset == 0 &&
+                  src.info.width == src_dim.0 &&
+                  src.info.height == src_dim.1 &&
+                  src.info.depth == src_dim.2);
+
+    match src.texture {
         NewTexture::Texture(t) => {
-            let target = kind_to_gl(kind);
+            let target = kind_to_gl(src.kind);
             unsafe { gl.BindTexture(target, t); }
 
-            let target = kind_face_to_gl(kind, face);
-            // FIXME: can't specify image offsets
-            let (w, h, d, _) = kind.get_dimensions();
-            debug_assert!(img.xoffset == 0 &&
-                          img.yoffset == 0 &&
-                          img.zoffset == 0 &&
-                          img.width == w &&
-                          img.height == h &&
-                          img.depth == d);
+            let target = kind_face_to_gl(src.kind, src.cube_face);
             unsafe {
                 gl.GetTexImage(target,
-                               img.mipmap as GLint,
+                               src.info.mipmap as GLint,
                                pixel_format,
                                data_type,
                                data);
             }
         }
-        NewTexture::Surface(s) => {
+        NewTexture::Surface(_) => {
+            bind_read_fbo(gl, src.texture, fbo);
             unsafe {
-                gl.BindFramebuffer(gl::READ_FRAMEBUFFER, s);
-                gl.ReadPixels(img.xoffset as GLint,
-                              img.yoffset as GLint,
-                              img.width as GLint,
-                              img.height as GLint,
+                gl.ReadPixels(src.info.xoffset as GLint,
+                              src.info.yoffset as GLint,
+                              src.info.width as GLint,
+                              src.info.height as GLint,
                               pixel_format,
                               data_type,
                               data);
@@ -719,23 +735,52 @@ pub fn copy_to_buffer(gl: &gl::Gl,
     Ok(())
 }
 
-pub fn update_texture(gl: &gl::Gl, name: Texture,
-                      kind: t::Kind, face: Option<t::CubeFace>,
-                      img: &t::RawImageInfo, slice: &[u8])
-                          -> Result<(), t::CreationError> {
+pub fn copy_textures(gl: &gl::Gl, src: &t::TextureCopyRegion<NewTexture>,
+                     dst: &t::TextureCopyRegion<Texture>, fbo: FrameBuffer)
+                     -> Result<(), t::CreationError> {
+    bind_read_fbo(gl, src.texture, fbo);
+    let target = kind_to_gl(dst.kind);
+    let format = dst.info.format;
+
+    // FIXME: can't specify image offsets
+    let src_dim = src.kind.get_dimensions();
+    debug_assert!(src.info.xoffset == 0 &&
+                  src.info.yoffset == 0 &&
+                  src.info.zoffset == 0 &&
+                  src.info.width == src_dim.0 &&
+                  src.info.height == src_dim.1 &&
+                  src.info.depth == src_dim.2);
+
+    let int_format = match format_to_glfull(format) {
+        Ok(f) => f,
+        Err(_) => return Err(t::CreationError::Format(format.0, Some(format.1))),
+    };
+    unsafe {
+        gl.BindTexture(target, dst.texture);
+        gl.CopyTexImage2D(target, dst.info.mipmap as _, int_format,
+            dst.info.xoffset as _, dst.info.yoffset as _,
+            dst.info.width as _, dst.info.height as _, 0);
+    }
+
+    Ok(())
+}
+
+pub fn update_texture(gl: &gl::Gl, dst: &t::TextureCopyRegion<Texture>, slice: &[u8])
+                      -> Result<(), t::CreationError> {
     //TODO: check size
     let data = slice.as_ptr() as *const GLvoid;
-    let pixel_format = format_to_glpixel(img.format);
-    let data_type = match format_to_gltype(img.format) {
+    let format = dst.info.format;
+    let pixel_format = format_to_glpixel(format);
+    let data_type = match format_to_gltype(format) {
         Ok(t) => t,
-        Err(_) => return Err(t::CreationError::Format(img.format.0, Some(img.format.1))),
+        Err(_) => return Err(t::CreationError::Format(format.0, Some(format.1))),
     };
 
-    let target = kind_to_gl(kind);
-    unsafe { gl.BindTexture(target, name) };
+    let target = kind_to_gl(dst.kind);
+    unsafe { gl.BindTexture(target, dst.texture) };
 
-    let target = kind_face_to_gl(kind, face);
-    tex_sub_image(gl, kind, target, pixel_format, data_type, img, data)
+    let target = kind_face_to_gl(dst.kind, dst.cube_face);
+    tex_sub_image(gl, dst.kind, target, pixel_format, data_type, &dst.info, data)
 }
 
 pub fn init_texture_data(gl: &gl::Gl, name: Texture, desc: t::Info, channel: ChannelType,
@@ -762,15 +807,21 @@ pub fn init_texture_data(gl: &gl::Gl, name: Texture, desc: t::Info, channel: Cha
     }
 
     for i in 0 .. num_slices {
-        for (f, &face) in faces.iter().enumerate() {
+        for (f, &cube_face) in faces.iter().enumerate() {
             for m in 0 .. num_mips {
                 let sub = data.0[(i*faces.len() + f)*num_mips + m];
-                let mut image = desc.to_raw_image_info(channel, m as t::Level);
+                let mut info = desc.to_raw_image_info(channel, m as t::Level);
                 if opt_slices.is_some() {
-                    image.zoffset = i as t::Size;
-                    image.depth = 1;
+                    info.zoffset = i as t::Size;
+                    info.depth = 1;
                 }
-                try!(update_texture(gl, name, desc.kind, face, &image, sub));
+                let dst = t::TextureCopyRegion {
+                    texture: name,
+                    kind: desc.kind,
+                    cube_face,
+                    info,
+                };
+                try!(update_texture(gl, &dst, sub));
             }
         }
     }

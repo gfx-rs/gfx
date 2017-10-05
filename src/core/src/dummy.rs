@@ -100,17 +100,13 @@ impl command::Buffer<DummyResources> for DummyCommandBuffer {
     fn copy_buffer(&mut self, _: (), _: (),
                    _: usize, _: usize,
                    _: usize) {}
-    fn copy_buffer_to_texture(&mut self,
-                              _: (), _: usize,
-                              _: (), _: texture::Kind,
-                              _: Option<texture::CubeFace>, _: texture::RawImageInfo) {}
-    fn copy_texture_to_buffer(&mut self,
-                              _: (), _: texture::Kind,
-                              _: Option<texture::CubeFace>, _: texture::RawImageInfo,
-                              _: (), _: usize) {}
+    fn copy_buffer_to_texture(&mut self, _: (), _: usize, _: texture::TextureCopyRegion<()>) {}
+    fn copy_texture_to_buffer(&mut self, _: texture::TextureCopyRegion<()>, _: (), _: usize) {}
+    fn copy_texture_to_texture(&mut self,
+                               _: texture::TextureCopyRegion<()>,
+                               _: texture::TextureCopyRegion<()>) {}
     fn update_buffer(&mut self, _: (), _: &[u8], _: usize) {}
-    fn update_texture(&mut self, _: (), _: texture::Kind, _: Option<texture::CubeFace>,
-                      _: &[u8], _: texture::RawImageInfo) {}
+    fn update_texture(&mut self, _: texture::TextureCopyRegion<()>, _: &[u8]) {}
     fn generate_mipmap(&mut self, _: ()) {}
     fn clear_color(&mut self, _: (), _: command::ClearColor) {}
     fn clear_depth_stencil(&mut self, _: (), _: Option<target::Depth>,

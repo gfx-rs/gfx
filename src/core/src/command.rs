@@ -72,18 +72,19 @@ pub trait Buffer<R: Resources>: 'static + Send {
     /// Copy part of a buffer to a texture
     fn copy_buffer_to_texture(&mut self,
                               src: R::Buffer, src_offset_bytes: usize,
-                              dst: R::Texture, texture::Kind,
-                              Option<texture::CubeFace>, texture::RawImageInfo);
+                              dst: texture::TextureCopyRegion<R::Texture>);
     /// Copy part of a texture to a buffer
     fn copy_texture_to_buffer(&mut self,
-                              src: R::Texture, texture::Kind,
-                              Option<texture::CubeFace>, texture::RawImageInfo,
+                              src: texture::TextureCopyRegion<R::Texture>,
                               dst: R::Buffer, dst_offset_bytes: usize);
+    /// Copy part of one texture into another
+    fn copy_texture_to_texture(&mut self,
+                               src: texture::TextureCopyRegion<R::Texture>,
+                               dst: texture::TextureCopyRegion<R::Texture>);
     /// Update a vertex/index/uniform buffer
     fn update_buffer(&mut self, R::Buffer, data: &[u8], offset: usize);
     /// Update a texture
-    fn update_texture(&mut self, R::Texture, texture::Kind, Option<texture::CubeFace>,
-                      data: &[u8], texture::RawImageInfo);
+    fn update_texture(&mut self, texture::TextureCopyRegion<R::Texture>, data: &[u8]);
     fn generate_mipmap(&mut self, R::ShaderResourceView);
     /// Clear color target
     fn clear_color(&mut self, R::RenderTargetView, ClearColor);
