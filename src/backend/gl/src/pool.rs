@@ -1,7 +1,8 @@
 use core::{self, pool};
 use command::{self, Command, RawCommandBuffer, SubpassCommandBuffer};
 use native as n;
-use {Backend, CommandQueue};
+use queue::CommandQueue;
+use Backend;
 use gl;
 
 use std::collections::HashMap;
