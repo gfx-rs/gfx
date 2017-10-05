@@ -252,12 +252,21 @@ pub fn query_all(gl: &gl::Gl) -> (Info, Features, Limits, PrivateCaps) {
     let multi_viewports_supported =        info.is_supported(&[Core(4,1)]); // TODO: extension
     let compute_supported =                info.is_supported(&[Core(4,3),
                                                                Ext("GL_ARB_compute_shader")]);
+    let mut max_compute_group_count = [0usize; 3];
     let mut max_compute_group_size = [0usize; 3];
     if compute_supported {
-        let mut value = 0 as gl::types::GLint;
-        for (i, size) in max_compute_group_size.iter_mut().enumerate() {
-            unsafe { gl.GetIntegeri_v(gl::MAX_COMPUTE_WORK_GROUP_SIZE, i as _, &mut value) };
-            *size = value as _;
+        let mut values = [0 as gl::types::GLint; 2];
+        for (i, (count, size)) in max_compute_group_count
+            .iter_mut()
+            .zip(max_compute_group_size.iter_mut())
+            .enumerate()
+        {
+            unsafe {
+                gl.GetIntegeri_v(gl::MAX_COMPUTE_WORK_GROUP_COUNT, i as _, &mut values[0]);
+                gl.GetIntegeri_v(gl::MAX_COMPUTE_WORK_GROUP_SIZE, i as _, &mut values[1]);
+            }
+            *count = values[0] as _;
+            *size = values[1] as _;
         }
     }
 
@@ -265,6 +274,7 @@ pub fn query_all(gl: &gl::Gl) -> (Info, Features, Limits, PrivateCaps) {
         max_texture_size: get_usize(gl, gl::MAX_TEXTURE_SIZE),
         max_patch_size: if tessellation_supported { get_usize(gl, gl::MAX_PATCH_VERTICES) as u8 } else {0},
         max_viewports: if multi_viewports_supported { get_usize(gl, gl::MAX_VIEWPORTS) } else {1},
+        max_compute_group_count,
         max_compute_group_size,
 
         min_buffer_copy_offset_alignment: 1,

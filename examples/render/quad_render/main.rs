@@ -185,7 +185,7 @@ fn main() {
     let framebuffers = backbuffers.iter().map(|backbuffer| {
         let frame_rtv = backbuffer.color.resource();
         let extent = d::Extent { width: pixel_width as _, height: pixel_height as _, depth: 1 };
-        device.create_framebuffer(&render_pass, &[frame_rtv], &[], extent)
+        device.create_framebuffer(&render_pass, &[frame_rtv], &[], extent).unwrap()
     }).collect::<Vec<_>>();
 
     let mut upload = Allocator::new(

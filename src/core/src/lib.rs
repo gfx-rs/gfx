@@ -155,6 +155,8 @@ pub struct Limits {
     /// Maximum number of viewports.
     pub max_viewports: usize,
     ///
+    pub max_compute_group_count: [usize; 3],
+    ///
     pub max_compute_group_size: [usize; 3],
 
     /// The alignment of the start of the buffer used as a GPU copy source, in bytes, non-zero.
