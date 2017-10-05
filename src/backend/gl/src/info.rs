@@ -161,6 +161,8 @@ pub struct PrivateCaps {
     pub program_interface: bool,
     pub frag_data_location: bool,
     pub sync: bool,
+    /// Can map memory
+    pub map: bool,
     /// Indicates if we only have support via the EXT.
     pub sampler_anisotropy_ext: bool,
 }
@@ -170,9 +172,9 @@ pub struct PrivateCaps {
 pub struct Info {
     /// The platform identifier
     pub platform_name: PlatformName,
-    /// The OpenGL API vesion number
+    /// The OpenGL API version number
     pub version: Version,
-    /// The GLSL vesion number
+    /// The GLSL version number
     pub shading_language: Version,
     /// The extensions supported by the implementation
     pub extensions: HashSet<&'static str>,
@@ -330,6 +332,7 @@ pub fn query_all(gl: &gl::Gl) -> (Info, Features, Limits, PrivateCaps) {
         sync:                               info.is_supported(&[Core(3,2),
                                                                 Es  (3,0),
                                                                 Ext ("GL_ARB_sync")]),
+        map:                                !info.version.is_embedded, //TODO: OES extension
         sampler_anisotropy_ext:             !info.is_supported(&[Core(4,6),
                                                                 Ext ("GL_ARB_texture_filter_anisotropic")]) &&
                                             info.is_supported(&[Ext ("GL_EXT_texture_filter_anisotropic")]),

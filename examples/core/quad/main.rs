@@ -308,7 +308,7 @@ fn main() {
             let fbos = pairs
                 .iter()
                 .map(|&(_, ref rtv)| {
-                    device.create_framebuffer(&render_pass, &[rtv], &[], extent)
+                    device.create_framebuffer(&render_pass, &[rtv], &[], extent).unwrap()
                 })
                 .collect();
             (pairs, fbos)
@@ -324,14 +324,15 @@ fn main() {
     let buffer_stride = std::mem::size_of::<Vertex>() as u64;
     let buffer_len = QUAD.len() as u64 * buffer_stride;
 
-    let buffer_unbound = device.create_buffer(buffer_len, buffer_stride, buffer::VERTEX | buffer::MAP_WRITE).unwrap();
+    let buffer_unbound = device.create_buffer(buffer_len, buffer_stride, buffer::VERTEX).unwrap();
     println!("{:?}", buffer_unbound);
     let buffer_req = device.get_buffer_requirements(&buffer_unbound);
 
     let upload_type =
         memory_types.iter().find(|mem_type| {
             buffer_req.type_mask & (1 << mem_type.id) != 0 &&
-            mem_type.properties.contains(m::CPU_VISIBLE | m::COHERENT)
+            mem_type.properties.contains(m::CPU_VISIBLE) &&
+            !mem_type.properties.contains(m::CPU_CACHED)
         })
         .unwrap();
 
@@ -361,7 +362,7 @@ fn main() {
 
     let image_upload_memory = device.allocate_memory(upload_type, upload_size).unwrap();
     let image_upload_buffer = {
-        let buffer = device.create_buffer(upload_size, image_stride as u64, buffer::TRANSFER_SRC | buffer::MAP_WRITE).unwrap();
+        let buffer = device.create_buffer(upload_size, image_stride as u64, buffer::TRANSFER_SRC).unwrap();
         device.bind_buffer_memory(&image_upload_memory, 0, buffer).unwrap()
     };
 

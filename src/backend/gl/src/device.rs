@@ -426,18 +426,19 @@ impl d::Device<B> for Device {
         let gl = &self.share.context;
         let target = unbound.target;
 
-        let can_upload = memory.properties.contains(memory::CPU_VISIBLE | memory::WRITE_COMBINED);
-        let can_download = memory.properties.contains(memory::CPU_VISIBLE | memory::COHERENT);
+        let cpu_can_read = memory.can_download();
+        let cpu_can_write = memory.can_upload();
 
         if self.share.private_caps.buffer_storage {
             //TODO: gl::DYNAMIC_STORAGE_BIT | gl::MAP_PERSISTENT_BIT
             let mut flags = 0;
-            if can_download {
+            if cpu_can_read {
                 flags |= gl::MAP_READ_BIT;
             }
-            if can_upload {
+            if cpu_can_write {
                 flags |= gl::MAP_WRITE_BIT;
             }
+            //TODO: use *Named calls to avoid binding
             unsafe {
                 gl.BindBuffer(target, unbound.name);
                 gl.BufferStorage(target,
@@ -449,11 +450,11 @@ impl d::Device<B> for Device {
             }
         }
         else {
-            let flags = if can_upload && can_download {
+            let flags = if cpu_can_read && cpu_can_write {
                 gl::DYNAMIC_DRAW
-            } else if can_upload {
+            } else if cpu_can_write {
                 gl::STREAM_DRAW
-            } else if can_download {
+            } else if cpu_can_read {
                 gl::STREAM_READ
             } else {
                 gl::STATIC_DRAW
@@ -477,6 +478,8 @@ impl d::Device<B> for Device {
         Ok(n::Buffer {
             raw: unbound.name,
             target,
+            cpu_can_read,
+            cpu_can_write,
         })
     }
 
@@ -547,11 +550,13 @@ impl d::Device<B> for Device {
     fn acquire_mapping_raw(&mut self, buffer: &n::Buffer, read: Option<Range<u64>>)
         -> Result<*mut u8, mapping::Error>
     {
-        let gl = &self.share.context;
         let access = match read {
-            Some(_) => gl::READ_ONLY,
-            None => gl::WRITE_ONLY,
+            Some(_) if buffer.cpu_can_read && buffer.cpu_can_write => gl::READ_WRITE,
+            Some(_) if buffer.cpu_can_read => gl::READ_ONLY,
+            None if buffer.cpu_can_write => gl::WRITE_ONLY,
+            _ => return Err(mapping::Error::InvalidAccess)
         };
+        let gl = &self.share.context;
 
         let data = unsafe {
             gl.BindBuffer(buffer.target, buffer.raw);
@@ -567,7 +572,8 @@ impl d::Device<B> for Device {
         Ok(data as _)
     }
 
-    fn release_mapping_raw(&mut self, buffer: &n::Buffer, _wrote: Option<Range<u64>>) {
+    fn release_mapping_raw(&mut self, buffer: &n::Buffer, wrote: Option<Range<u64>>) {
+        assert!(wrote.is_none() || buffer.cpu_can_write);
         let gl = &self.share.context;
         unsafe {
             gl.BindBuffer(buffer.target, buffer.raw);

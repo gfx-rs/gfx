@@ -1,8 +1,7 @@
 
 use conv;
-use core::{self, pass};
+use core::{self, image as i, memory as mem, pass};
 use core::target::{Layer, Level};
-use core::image as i;
 use gl;
 use Backend;
 use std::cell::Cell;
@@ -20,6 +19,8 @@ pub type Sampler     = gl::types::GLuint;
 pub struct Buffer {
     pub(crate) raw: RawBuffer,
     pub(crate) target: gl::types::GLenum,
+    pub(crate) cpu_can_read: bool,
+    pub(crate) cpu_can_write: bool,
 }
 
 #[derive(Debug)]
@@ -114,7 +115,16 @@ pub struct ShaderModule {
 
 #[derive(Debug)]
 pub struct Memory {
-    pub(crate) properties: core::memory::Properties,
+    pub(crate) properties: mem::Properties,
+}
+
+impl Memory {
+    pub fn can_upload(&self) -> bool {
+        self.properties.contains(mem::CPU_VISIBLE | mem::WRITE_COMBINED)
+    }
+    pub fn can_download(&self) -> bool {
+        self.properties.contains(mem::CPU_VISIBLE | mem::CPU_CACHED)
+    }
 }
 
 #[derive(Debug)]
