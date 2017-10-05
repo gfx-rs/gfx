@@ -254,8 +254,8 @@ impl command::Buffer<Resources> for CommandBuffer {
                 }
 
                 // It may be the case that we have a stencil clear command for this buffer
-                // queued but a stencil attachment is not requested. In that case, the 
-                // stencil clear must be preserved for future attachments, but the depth 
+                // queued but a stencil attachment is not requested. In that case, the
+                // stencil clear must be preserved for future attachments, but the depth
                 // clear has been processed already and must be removed.
                 if let Some(stencil_value) = clear_entry.get().1 {
                     if let Some(stencil_attachment) = stencil_attachment {
@@ -326,20 +326,21 @@ impl command::Buffer<Resources> for CommandBuffer {
 
     #[allow(unused_variables)]
     fn copy_buffer_to_texture(&mut self, src: Buffer, src_offset_bytes: usize,
-                              dst: Texture,
-                              kind: texture::Kind,
-                              face: Option<texture::CubeFace>,
-                              img: texture::RawImageInfo) {
+                              dst: texture::TextureCopyRegion<Texture>) {
         unimplemented!()
     }
 
     #[allow(unused_variables)]
     fn copy_texture_to_buffer(&mut self,
-                              src: Texture,
-                              kind: texture::Kind,
-                              face: Option<texture::CubeFace>,
-                              img: texture::RawImageInfo,
+                              src: texture::TextureCopyRegion<Texture>,
                               dst: Buffer, dst_offset_bytes: usize) {
+        unimplemented!()
+    }
+
+    #[allow(unused_variables)]
+    fn copy_texture_to_texture(&mut self,
+                               src: texture::TextureCopyRegion<Texture>,
+                               dst: texture::TextureCopyRegion<Texture>) {
         unimplemented!()
     }
 
@@ -397,11 +398,8 @@ impl command::Buffer<Resources> for CommandBuffer {
     }
 
     fn update_texture(&mut self,
-                      tex: Texture,
-                      kind: texture::Kind,
-                      face: Option<texture::CubeFace>,
-                      data: &[u8],
-                      info: texture::RawImageInfo) {
+                      dst: texture::TextureCopyRegion<Texture>,
+                      data: &[u8]) {
         unimplemented!()
     }
 
@@ -422,10 +420,10 @@ impl command::Buffer<Resources> for CommandBuffer {
     fn clear_depth_stencil(&mut self, target: Dsv,
                            depth: Option<target::Depth>, stencil: Option<target::Stencil>) {
         match self.dsv_clear.entry(target) {
-            Entry::Occupied(mut entry) => { 
+            Entry::Occupied(mut entry) => {
                 let new_depth = depth.or(entry.get().0);
                 let new_stencil = stencil.or(entry.get().1);
-                entry.insert((new_depth, new_stencil)); 
+                entry.insert((new_depth, new_stencil));
             },
             Entry::Vacant(entry) => { entry.insert((depth, stencil)); },
         }

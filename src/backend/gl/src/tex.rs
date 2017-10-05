@@ -638,7 +638,7 @@ fn tex_sub_image<F>(gl: &gl::Gl, kind: t::Kind, target: GLenum, pix: GLenum,
     })
 }
 
-fn bind_read_fbo(gl: &gl::Gl, texture: NewTexture, fbo: FrameBuffer) {
+fn bind_read_fbo(gl: &gl::Gl, texture: NewTexture, level: t::Level, fbo: FrameBuffer) {
     let target = gl::READ_FRAMEBUFFER;
     unsafe {
         gl.BindFramebuffer(target, fbo);
@@ -647,10 +647,12 @@ fn bind_read_fbo(gl: &gl::Gl, texture: NewTexture, fbo: FrameBuffer) {
         gl.FramebufferRenderbuffer(target, gl::COLOR_ATTACHMENT3, gl::RENDERBUFFER, 0);
         gl.FramebufferRenderbuffer(target, gl::DEPTH_STENCIL_ATTACHMENT, gl::RENDERBUFFER, 0);
         match texture {
-            NewTexture::Surface(s) =>
-                gl.FramebufferRenderbuffer(target, gl::COLOR_ATTACHMENT0, gl::RENDERBUFFER, s),
-            NewTexture::Texture(t) =>
-                gl.FramebufferTexture(target, gl::COLOR_ATTACHMENT0, gl::TEXTURE_2D, t as _),
+            NewTexture::Surface(s) => {
+                gl.FramebufferRenderbuffer(target, gl::COLOR_ATTACHMENT0, gl::RENDERBUFFER, s);
+            }
+            NewTexture::Texture(t) => {
+                gl.FramebufferTexture(target, gl::COLOR_ATTACHMENT0, t as _, level as _);
+            }
         };
         gl.ReadBuffer(gl::COLOR_ATTACHMENT0);
     }
@@ -719,7 +721,7 @@ pub fn copy_to_buffer(gl: &gl::Gl,
             }
         }
         NewTexture::Surface(_) => {
-            bind_read_fbo(gl, src.texture, fbo);
+            bind_read_fbo(gl, src.texture, src.info.mipmap, fbo);
             unsafe {
                 gl.ReadPixels(src.info.xoffset as GLint,
                               src.info.yoffset as GLint,
@@ -738,28 +740,19 @@ pub fn copy_to_buffer(gl: &gl::Gl,
 pub fn copy_textures(gl: &gl::Gl, src: &t::TextureCopyRegion<NewTexture>,
                      dst: &t::TextureCopyRegion<Texture>, fbo: FrameBuffer)
                      -> Result<(), t::CreationError> {
-    bind_read_fbo(gl, src.texture, fbo);
+    bind_read_fbo(gl, src.texture, src.info.mipmap, fbo);
     let target = kind_to_gl(dst.kind);
-    let format = dst.info.format;
 
-    // FIXME: can't specify image offsets
-    let src_dim = src.kind.get_dimensions();
-    debug_assert!(src.info.xoffset == 0 &&
-                  src.info.yoffset == 0 &&
-                  src.info.zoffset == 0 &&
-                  src.info.width == src_dim.0 &&
-                  src.info.height == src_dim.1 &&
-                  src.info.depth == src_dim.2);
+    debug_assert!(src.info.zoffset == 0 && src.info.depth <= 1 &&
+                  src.info.width == dst.info.width &&
+                  src.info.height == dst.info.height);
 
-    let int_format = match format_to_glfull(format) {
-        Ok(f) => f,
-        Err(_) => return Err(t::CreationError::Format(format.0, Some(format.1))),
-    };
     unsafe {
         gl.BindTexture(target, dst.texture);
-        gl.CopyTexImage2D(target, dst.info.mipmap as _, int_format,
+        gl.CopyTexSubImage2D(target, dst.info.mipmap as _,
             dst.info.xoffset as _, dst.info.yoffset as _,
-            dst.info.width as _, dst.info.height as _, 0);
+            src.info.xoffset as _, src.info.yoffset as _,
+            src.info.width as _, src.info.height as _);
     }
 
     Ok(())

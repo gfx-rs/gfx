@@ -244,26 +244,26 @@ impl command::Buffer<Resources> for Buffer {
 
     #[allow(unused_variables)]
     fn copy_buffer_to_texture(&mut self, src: native::Buffer, src_offset_bytes: usize,
-                              dst: native::Texture,
-                              kind: tex::Kind,
-                              face: Option<tex::CubeFace>,
-                              img: tex::RawImageInfo) {
+                              dst: tex::TextureCopyRegion<native::Texture>) {
         unimplemented!()
     }
 
     #[allow(unused_variables)]
     fn copy_texture_to_buffer(&mut self,
-                              src: native::Texture,
-                              kind: tex::Kind,
-                              face: Option<tex::CubeFace>,
-                              img: tex::RawImageInfo,
+                              src: tex::TextureCopyRegion<native::Texture>,
                               dst: native::Buffer, dst_offset_bytes: usize) {
         unimplemented!()
     }
 
+    #[allow(unused_variables)]
+    fn copy_texture_to_texture(&mut self,
+                               src: tex::TextureCopyRegion<native::Texture>,
+                               dst: tex::TextureCopyRegion<native::Texture>) {
+        unimplemented!()
+    }
+
     fn update_buffer(&mut self, _: native::Buffer, _: &[u8], _: usize) {}
-    fn update_texture(&mut self, _: native::Texture, _: tex::Kind, _: Option<tex::CubeFace>,
-                      _: &[u8], _: tex::RawImageInfo) {}
+    fn update_texture(&mut self, _: tex::TextureCopyRegion<native::Texture>, _: &[u8]) {}
     fn generate_mipmap(&mut self, _: native::TextureView) {}
 
     fn clear_color(&mut self, tv: native::TextureView, color: command::ClearColor) {
