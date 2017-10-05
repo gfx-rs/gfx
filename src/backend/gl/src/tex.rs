@@ -640,6 +640,14 @@ fn tex_sub_image<F>(gl: &gl::Gl, kind: t::Kind, target: GLenum, pix: GLenum,
 
 fn bind_read_fbo(gl: &gl::Gl, texture: NewTexture, level: t::Level, fbo: FrameBuffer) {
     let target = gl::READ_FRAMEBUFFER;
+    if texture == NewTexture::Surface(0) {
+        //Warning: assuming the back buffer
+        unsafe {
+            gl.BindFramebuffer(target, 0);
+            gl.ReadBuffer(gl::BACK);
+        }
+        return
+    }
     unsafe {
         gl.BindFramebuffer(target, fbo);
         gl.FramebufferRenderbuffer(target, gl::COLOR_ATTACHMENT1, gl::RENDERBUFFER, 0);
