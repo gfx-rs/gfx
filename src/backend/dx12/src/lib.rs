@@ -285,8 +285,6 @@ impl Device {
             max_samplers,
         );
 
-        let max_thread_groups = winapi::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION as _;
-
         Device {
             raw: device,
             features: Features { // TODO
@@ -313,10 +311,15 @@ impl Device {
                 max_texture_size: 0,
                 max_patch_size: 0,
                 max_viewports: 0,
+                max_compute_group_count: [
+                    winapi::D3D12_CS_THREAD_GROUP_MAX_X  as _,
+                    winapi::D3D12_CS_THREAD_GROUP_MAX_Y  as _,
+                    winapi::D3D12_CS_THREAD_GROUP_MAX_Z  as _,
+                ],
                 max_compute_group_size: [
-                    max_thread_groups,
-                    max_thread_groups,
-                    max_thread_groups,
+                    winapi::D3D12_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP as _,
+                    1, //TODO
+                    1, //TODO
                 ],
                 min_buffer_copy_offset_alignment: winapi::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as _,
                 min_buffer_copy_pitch_alignment: winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as _,

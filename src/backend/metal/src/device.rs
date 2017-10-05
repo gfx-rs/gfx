@@ -10,7 +10,7 @@ use std::{mem, ptr, slice};
 
 use core::{self,
         image, pass, format, mapping, memory, buffer, pso};
-use core::device::{WaitFor, BindError, OutOfMemory, TargetViewError, ShaderError, Extent};
+use core::device::{WaitFor, BindError, OutOfMemory, TargetViewError, FramebufferError, ShaderError, Extent};
 use core::pso::{DescriptorSetWrite, DescriptorType, DescriptorSetLayoutBinding, AttributeDesc};
 use core::pass::{Subpass};
 
@@ -104,6 +104,7 @@ impl core::Adapter<Backend> for Adapter {
                 min_buffer_copy_offset_alignment: 4, // TODO: Lower on iOS
                 min_buffer_copy_pitch_alignment: 4, // TODO: made this up
 
+                max_compute_group_count: [0; 3], // TODO
                 max_compute_group_size: [0; 3], // TODO
             },
         };
@@ -409,15 +410,15 @@ impl core::Device<Backend> for Device {
     fn create_framebuffer(&mut self, renderpass: &n::RenderPass,
         color_attachments: &[&n::RenderTargetView], depth_stencil_attachments: &[&n::DepthStencilView],
         extent: Extent,
-    ) -> n::FrameBuffer {
-        unsafe {
-            let descriptor: MTLRenderPassDescriptor = msg_send![renderpass.desc.0, copy]; // Returns retained
-            defer_on_unwind! { descriptor.release() };
+    ) -> Result<n::FrameBuffer, FramebufferError> {
+        let descriptor = unsafe {
+            let desc: MTLRenderPassDescriptor = msg_send![renderpass.desc.0, copy]; // Returns retained
+            defer_on_unwind! { desc.release() };
 
-            msg_send![descriptor.0, setRenderTargetArrayLength: extent.depth as usize];
+            msg_send![desc.0, setRenderTargetArrayLength: extent.depth as usize];
 
             for (i, attachment) in color_attachments.iter().enumerate() {
-                let mtl_attachment = descriptor.color_attachments().object_at(i);
+                let mtl_attachment = desc.color_attachments().object_at(i);
                 mtl_attachment.set_texture(attachment.0);
             }
 
@@ -426,14 +427,15 @@ impl core::Device<Backend> for Device {
             }
 
             if let Some(attachment) = depth_stencil_attachments.get(0) {
-                let mtl_attachment = descriptor.depth_attachment();
+                let mtl_attachment = desc.depth_attachment();
                 mtl_attachment.set_texture(attachment.0);
-
                 // TODO: stencil
             }
 
-            n::FrameBuffer(descriptor)
-        }
+            desc
+        };
+
+        Ok(n::FrameBuffer(descriptor))
     }
 
     fn create_shader_module(&mut self, spirv_data: &[u8]) -> Result<n::ShaderModule, ShaderError> {
