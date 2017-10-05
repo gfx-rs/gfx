@@ -8,6 +8,7 @@ use Backend;
 use std::cell::Cell;
 
 
+pub type RawBuffer   = gl::types::GLuint;
 pub type Shader      = gl::types::GLuint;
 pub type Program     = gl::types::GLuint;
 pub type FrameBuffer = gl::types::GLuint;
@@ -17,8 +18,8 @@ pub type Sampler     = gl::types::GLuint;
 
 #[derive(Debug)]
 pub struct Buffer {
-    pub raw: gl::types::GLuint,
-    pub target: gl::types::GLenum,
+    pub(crate) raw: RawBuffer,
+    pub(crate) target: gl::types::GLenum,
 }
 
 #[derive(Debug)]
@@ -27,27 +28,27 @@ unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 
 impl Fence {
-    pub fn new(sync: gl::types::GLsync) -> Self {
+    pub(crate) fn new(sync: gl::types::GLsync) -> Self {
         Fence(Cell::new(sync))
     }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct ResourceView {
-    pub object: Texture,
+    pub(crate) object: Texture,
     pub(crate) bind: gl::types::GLenum,
     pub(crate) owned: bool,
 }
 
 impl ResourceView {
-    pub fn new_texture(t: Texture, kind: i::Kind) -> ResourceView {
+    pub(crate) fn new_texture(t: Texture, kind: i::Kind) -> ResourceView {
         ResourceView {
             object: t,
             bind: conv::image_kind_to_gl(kind),
             owned: false,
         }
     }
-    pub fn new_buffer(b: Texture) -> ResourceView {
+    pub(crate) fn new_buffer(b: Texture) -> ResourceView {
         ResourceView {
             object: b,
             bind: gl::TEXTURE_BUFFER,
@@ -59,12 +60,12 @@ impl ResourceView {
 
 #[derive(Clone, Debug, Copy)]
 pub struct GraphicsPipeline {
-    pub program: Program,
+    pub(crate) program: Program,
 }
 
 #[derive(Clone, Debug, Copy)]
 pub struct ComputePipeline {
-    pub program: Program,
+    pub(crate) program: Program,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -108,21 +109,23 @@ impl core::DescriptorPool<Backend> for DescriptorPool {
 
 #[derive(Clone, Copy, Debug, Hash)]
 pub struct ShaderModule {
-    pub raw: Shader,
+    pub(crate) raw: Shader,
 }
 
 #[derive(Debug)]
-pub struct Memory;
+pub struct Memory {
+    pub(crate) properties: core::memory::Properties,
+}
 
 #[derive(Debug)]
 pub struct RenderPass {
-    pub attachments: Vec<pass::Attachment>,
-    pub subpasses: Vec<SubpassDesc>,
+    pub(crate) attachments: Vec<pass::Attachment>,
+    pub(crate) subpasses: Vec<SubpassDesc>,
 }
 
 #[derive(Debug)]
 pub struct SubpassDesc {
-    pub color_attachments: Vec<usize>,
+    pub(crate) color_attachments: Vec<usize>,
 }
 
 #[derive(Debug)]

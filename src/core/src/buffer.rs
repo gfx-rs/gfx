@@ -27,18 +27,10 @@ bitflags!(
         const INDIRECT = 0x10,
         ///
         const VERTEX = 0x20,
-        ///
-        const MAP_READ = 0x100,
-        ///
-        const MAP_WRITE = 0x200,
     }
 );
 
 impl Usage {
-    /// can this buffer be used in host mapping?
-    pub fn can_map(&self) -> bool {
-        self.intersects(MAP_READ | MAP_WRITE)
-    }
     /// Can this buffer be used in transfer operations ?
     pub fn can_transfer(&self) -> bool {
         self.intersects(TRANSFER_SRC | TRANSFER_DST)
