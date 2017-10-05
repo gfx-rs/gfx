@@ -17,6 +17,7 @@
 use gl;
 use core::{self as c, command, state as s};
 use core::target::{ColorValue, Depth, Mirror, Rect, Stencil};
+use core::texture::TextureCopyRegion;
 use {Buffer, BufferElement, Program, FrameBuffer, Texture,
      NewTexture, Resources, PipelineState, ResourceView, TargetView};
 
@@ -73,7 +74,7 @@ impl DataBuffer {
 
 
 /// Serialized device command.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum Command {
     // states
     BindProgram(Program),
@@ -101,22 +102,16 @@ pub enum Command {
                gl::types::GLintptr, gl::types::GLintptr,
                gl::types::GLsizeiptr),
     CopyBufferToTexture(Buffer, gl::types::GLintptr,
-                        Texture,
-                        c::texture::Kind,
-                        Option<c::texture::CubeFace>,
-                        c::texture::RawImageInfo),
-    CopyTextureToBuffer(NewTexture,
-                        c::texture::Kind,
-                        Option<c::texture::CubeFace>,
-                        c::texture::RawImageInfo,
-                        Buffer, gl::types::GLintptr),
+                        TextureCopyRegion<Texture>),
+    CopyTextureToBuffer(TextureCopyRegion<NewTexture>,
+                        Buffer, gl::types::GLintptr,
+                        FrameBuffer),
+    CopyTextureToTexture(TextureCopyRegion<NewTexture>,
+                         TextureCopyRegion<Texture>,
+                         FrameBuffer),
     // resource updates
     UpdateBuffer(Buffer, DataPointer, usize),
-    UpdateTexture(Texture,
-                  c::texture::Kind,
-                  Option<c::texture::CubeFace>,
-                  DataPointer,
-                  c::texture::RawImageInfo),
+    UpdateTexture(TextureCopyRegion<Texture>, DataPointer),
     GenerateMipmap(ResourceView),
     // drawing
     Clear(Option<command::ClearColor>, Option<Depth>, Option<Stencil>),
@@ -526,31 +521,42 @@ impl command::Buffer<Resources> for CommandBuffer {
 
     fn copy_buffer_to_texture(&mut self,
                               src: Buffer, src_offset_bytes: usize,
-                              dst: NewTexture,
-                              kind: c::texture::Kind,
-                              face: Option<c::texture::CubeFace>,
-                              img: c::texture::RawImageInfo) {
-        match dst {
-            NewTexture::Texture(t) =>
+                              dst: TextureCopyRegion<NewTexture>) {
+        match dst.texture {
+            NewTexture::Texture(raw) => {
+                let dst = dst.with_texture(raw);
                 self.buf.push(Command::CopyBufferToTexture(
-                    src, src_offset_bytes as gl::types::GLintptr,
-                    t, kind, face, img
-                )),
-            NewTexture::Surface(s) =>
+                    src, src_offset_bytes as _, dst
+                ));
+            }
+            NewTexture::Surface(s) => {
                 error!("GL: Cannot copy to a Surface({})", s)
+            }
         }
     }
 
     fn copy_texture_to_buffer(&mut self,
-                              src: NewTexture,
-                              kind: c::texture::Kind,
-                              face: Option<c::texture::CubeFace>,
-                              img: c::texture::RawImageInfo,
+                              src: TextureCopyRegion<NewTexture>,
                               dst: Buffer, dst_offset_bytes: usize) {
         self.buf.push(Command::CopyTextureToBuffer(
-            src, kind, face, img,
-            dst, dst_offset_bytes as gl::types::GLintptr
+            src, dst, dst_offset_bytes as _, self.fbo
         ));
+        self.cache.framebuffer = None; // reset in the cache
+    }
+
+    fn copy_texture_to_texture(&mut self,
+                               src: TextureCopyRegion<NewTexture>,
+                               dst: TextureCopyRegion<NewTexture>) {
+        match dst.texture {
+            NewTexture::Texture(raw) => {
+                let dst = dst.with_texture(raw);
+                self.buf.push(Command::CopyTextureToTexture(src, dst, self.fbo));
+                self.cache.framebuffer = None; // reset in the cache
+            }
+            NewTexture::Surface(s) => {
+                error!("GL: Cannot copy to a Surface({})", s)
+            }
+        }
     }
 
     fn update_buffer(&mut self, buf: Buffer, data: &[u8], offset_bytes: usize) {
@@ -559,15 +565,13 @@ impl command::Buffer<Resources> for CommandBuffer {
     }
 
     fn update_texture(&mut self,
-                      ntex: NewTexture,
-                      kind: c::texture::Kind,
-                      face: Option<c::texture::CubeFace>,
-                      data: &[u8],
-                      img: c::texture::RawImageInfo) {
+                      dst: TextureCopyRegion<NewTexture>,
+                      data: &[u8]) {
         let ptr = self.data.add(data);
-        match ntex {
-            NewTexture::Texture(t) => {
-                self.buf.push(Command::UpdateTexture(t, kind, face, ptr, img))
+        match dst.texture {
+            NewTexture::Texture(raw) => {
+                let dst = dst.with_texture(raw);
+                self.buf.push(Command::UpdateTexture(dst, ptr))
             }
             NewTexture::Surface(s) => {
                 error!("GL: unable to update the contents of a Surface({})", s)

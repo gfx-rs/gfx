@@ -262,7 +262,7 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
     /// Copy part of a buffer to a texture
     pub fn copy_buffer_to_texture_raw(
         &mut self, src: &handle::RawBuffer<R>, src_offset_bytes: usize,
-        dst: &handle::RawTexture<R>, face: Option<texture::CubeFace>, info: texture::RawImageInfo)
+        dst: &handle::RawTexture<R>, cube_face: Option<texture::CubeFace>, info: texture::RawImageInfo)
         -> CopyBufferTextureResult
     {
         if !src.get_info().bind.contains(memory::TRANSFER_SRC) {
@@ -291,20 +291,25 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
                            info.zoffset + info.depth]
             });
         }
+        let dst = texture::TextureCopyRegion {
+            texture: self.handles.ref_texture(dst).clone(),
+            kind: dst.get_info().kind,
+            cube_face,
+            info,
+        };
 
         self.access_info.buffer_read(src);
 
         self.command_buffer.copy_buffer_to_texture(
             self.handles.ref_buffer(src).clone(), src_offset_bytes,
-            self.handles.ref_texture(dst).clone(), dst.get_info().kind,
-            face, info);
+            dst);
         Ok(())
     }
 
     /// Copy part of a texture to a buffer
     pub fn copy_texture_to_buffer_raw(
         &mut self, src: &handle::RawTexture<R>,
-        face: Option<texture::CubeFace>, info: texture::RawImageInfo,
+        cube_face: Option<texture::CubeFace>, info: texture::RawImageInfo,
         dst: &handle::RawBuffer<R>, dst_offset_bytes: usize)
         -> CopyTextureBufferResult
     {
@@ -334,12 +339,16 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
                            info.zoffset + info.depth]
             });
         }
+        let src = texture::TextureCopyRegion {
+            texture: self.handles.ref_texture(src).clone(),
+            kind: src.get_info().kind,
+            cube_face,
+            info,
+        };
 
         self.access_info.buffer_write(dst);
 
-        self.command_buffer.copy_texture_to_buffer(
-            self.handles.ref_texture(src).clone(), src.get_info().kind,
-            face, info,
+        self.command_buffer.copy_texture_to_buffer(src,
             self.handles.ref_buffer(dst).clone(), dst_offset_bytes);
         Ok(())
     }
@@ -383,7 +392,7 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
 
     /// Update the contents of a texture.
     pub fn update_texture<S, T>(&mut self, tex: &handle::Texture<R, T::Surface>,
-                          face: Option<texture::CubeFace>,
+                          cube_face: Option<texture::CubeFace>,
                           img: texture::NewImageInfo, data: &[S::DataType])
                           -> Result<(), UpdateError<[texture::Size; 3]>>
     where
@@ -414,11 +423,14 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
                 source: [w, h, d],
             })
         }
+        let dst = texture::TextureCopyRegion {
+            texture: self.handles.ref_texture(tex.raw()).clone(),
+            kind: tex.get_info().kind,
+            cube_face,
+            info: img.convert(T::get_format()),
+        };
 
-        self.command_buffer.update_texture(
-            self.handles.ref_texture(tex.raw()).clone(),
-            tex.get_info().kind, face, cast_slice(data),
-            img.convert(T::get_format()));
+        self.command_buffer.update_texture(dst, cast_slice(data));
         Ok(())
     }
 

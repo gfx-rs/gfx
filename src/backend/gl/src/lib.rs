@@ -596,14 +596,20 @@ impl Device {
                                          size);
                 }
             },
-            Command::CopyBufferToTexture(src, src_offset, dst, kind, face, img) => {
-                match tex::copy_from_buffer(&self.share.context, dst, kind, face, &img, src, src_offset) {
+            Command::CopyBufferToTexture(src, src_offset, ref dst) => {
+                match tex::copy_from_buffer(&self.share.context, dst, src, src_offset) {
                     Ok(_) => (),
                     Err(e) => error!("GL: {:?} failed: {:?}", cmd, e)
                 }
             },
-            Command::CopyTextureToBuffer(src, kind, face, img, dst, dst_offset) => {
-                match tex::copy_to_buffer(&self.share.context, src, kind, face, &img, dst, dst_offset) {
+            Command::CopyTextureToBuffer(ref src, dst, dst_offset, fbo) => {
+                match tex::copy_to_buffer(&self.share.context, src, dst, dst_offset, fbo) {
+                    Ok(_) => (),
+                    Err(e) => error!("GL: {:?} failed: {:?}", cmd, e)
+                }
+            },
+            Command::CopyTextureToTexture(ref src, ref dst, fbo) => {
+                match tex::copy_textures(&self.share.context, src, dst, fbo) {
                     Ok(_) => (),
                     Err(e) => error!("GL: {:?} failed: {:?}", cmd, e)
                 }
@@ -613,11 +619,11 @@ impl Device {
                 factory::update_sub_buffer(&self.share.context, buffer,
                     data.as_ptr(), data.len(), offset, buffer::Role::Vertex);
             },
-            Command::UpdateTexture(texture, kind, face, pointer, ref image) => {
+            Command::UpdateTexture(ref dst, pointer) => {
                 let data = data_buf.get(pointer);
-                match tex::update_texture(&self.share.context, texture, kind, face, image, data) {
+                match tex::update_texture(&self.share.context, dst, data) {
                     Ok(_) => (),
-                    Err(e) => error!("GL: Texture({}) update failed: {:?}", texture, e),
+                    Err(e) => error!("GL: Texture({}) update failed: {:?}", dst.texture, e),
                 }
             },
             Command::GenerateMipmap(view) => {

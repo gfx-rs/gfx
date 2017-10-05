@@ -396,6 +396,32 @@ impl RawImageInfo {
     }
 }
 
+/// A texture region defined for copy operations
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+pub struct TextureCopyRegion<T> {
+    /// Raw texture
+    pub texture: T,
+    /// Texture kind
+    pub kind: Kind,
+    /// Optional cube face
+    pub cube_face: Option<CubeFace>,
+    /// Dimensions, offsets, and format
+    pub info: RawImageInfo,
+}
+
+impl<T> TextureCopyRegion<T> {
+    /// Change the texture
+    pub fn with_texture<U>(self, texture: U) -> TextureCopyRegion<U> {
+        TextureCopyRegion {
+            texture,
+            kind: self.kind,
+            cube_face: self.cube_face,
+            info: self.info,
+        }
+    }
+}
+
 /// Specifies how texture coordinates outside the range `[0, 1]` are handled.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
