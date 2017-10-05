@@ -3,9 +3,6 @@
 use gl;
 use core::{self as c, command, image, memory, target, Viewport};
 use core::buffer::IndexBufferView;
-use core::command::{
-    BufferCopy, BufferImageCopy, ClearValue, ImageCopy, ImageResolve, SubpassContents,
-};
 use core::target::{ColorValue, Stencil};
 use {native as n, Backend};
 use pool::{self, BufferMemory};
@@ -318,13 +315,13 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         _render_pass: &n::RenderPass,
         _frame_buffer: &n::FrameBuffer,
         _render_area: target::Rect,
-        _clear_values: &[ClearValue],
-        _first_subpass: SubpassContents,
+        _clear_values: &[command::ClearValue],
+        _first_subpass: command::SubpassContents,
     ) {
         unimplemented!()
     }
 
-    fn next_subpass(&mut self, _contents: SubpassContents) {
+    fn next_subpass(&mut self, _contents: command::SubpassContents) {
         unimplemented!()
     }
 
@@ -371,7 +368,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         _src_layout: image::ImageLayout,
         _dst: &n::Image,
         _dst_layout: image::ImageLayout,
-        _regions: &[ImageResolve],
+        _regions: &[command::ImageResolve],
     ) {
         unimplemented!()
     }
@@ -482,7 +479,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         self.push_cmd(Command::DispatchIndirect(buffer.raw, offset));
     }
 
-    fn copy_buffer(&mut self, _src: &n::Buffer, _dst: &n::Buffer, _regions: &[BufferCopy]) {
+    fn copy_buffer(&mut self, _src: &n::Buffer, _dst: &n::Buffer, _regions: &[command::BufferCopy]) {
         unimplemented!()
     }
 
@@ -492,7 +489,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         _src_layout: image::ImageLayout,
         _dst: &n::Image,
         _dst_layout: image::ImageLayout,
-        _regions: &[ImageCopy],
+        _regions: &[command::ImageCopy],
     ) {
         unimplemented!()
     }
@@ -502,7 +499,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         _src: &n::Buffer,
         _dst: &n::Image,
         _dst_layout: image::ImageLayout,
-        _regions: &[BufferImageCopy],
+        _regions: &[command::BufferImageCopy],
     ) {
         unimplemented!()
     }
@@ -512,7 +509,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         _src: &n::Image,
         _src_layout: image::ImageLayout,
         _dst: &n::Buffer,
-        _regions: &[BufferImageCopy],
+        _regions: &[command::BufferImageCopy],
     ) {
         unimplemented!()
     }
