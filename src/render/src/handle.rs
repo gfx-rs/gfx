@@ -220,6 +220,10 @@ macro_rules! define_resources {
                         self.as_ptr().hash(state)
                     }
                 }
+
+                impl<B: Backend> AsRef<$name<B>> for $name<B> {
+                    fn as_ref(&self) -> &$name<B> { self }
+                }
             )*
         }
     }

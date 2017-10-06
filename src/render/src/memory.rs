@@ -2,6 +2,7 @@ pub use core::memory::{Pod, cast_slice};
 
 use std::marker::PhantomData;
 use std::{ops, cmp, fmt, hash};
+//use std::convert::AsRef;
 use std::sync::Arc;
 use std::cell::UnsafeCell;
 
@@ -127,17 +128,9 @@ impl<I, T> hash::Hash for Typed<I, T>
     }
 }
 
-impl<I, T> ops::Deref for Typed<I, T> {
-    type Target = I;
-
-    fn deref(&self) -> &I {
+impl<I, T> AsRef<I> for Typed<I, T> {
+    fn as_ref(&self) -> &I {
         &self.inner
-    }
-}
-
-impl<I, T> ops::DerefMut for Typed<I, T> {
-    fn deref_mut(&mut self) -> &mut I {
-        &mut self.inner
     }
 }
 

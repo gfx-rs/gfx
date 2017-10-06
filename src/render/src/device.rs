@@ -147,7 +147,7 @@ impl<B: Backend> Device<B> {
     ) -> Result<mapping::Reader<'a, B, MTB::Data>, mapping::Error>
         where MTB: buffer::MaybeTyped<B>
     {
-        let (resource, info) = buffer.as_raw().resource_info();
+        let (resource, info) = buffer.as_ref().resource_info();
         assert!(info.access.acquire_exclusive(), "access overlap on mapping");
         Ok(mapping::Reader {
             inner: self.raw.acquire_mapping_reader(
@@ -185,7 +185,7 @@ impl<B: Backend> Device<B> {
     ) -> Result<mapping::Writer<'a, B, MTB::Data>, mapping::Error>
         where MTB: buffer::MaybeTyped<B>
     {
-        let (resource, info) = buffer.as_raw().resource_info();
+        let (resource, info) = buffer.as_ref().resource_info();
         assert!(info.access.acquire_exclusive(), "access overlap on mapping");
         Ok(mapping::Writer {
             inner: self.raw.acquire_mapping_writer(
@@ -325,7 +325,7 @@ impl<B: Backend> Device<B> {
         range: Range<u64>,
     ) -> Result<handle::ConstantBufferView<B, T>, TargetViewError>
     {
-        self.view_buffer_as_constant_raw(buffer, range)
+        self.view_buffer_as_constant_raw(buffer.as_ref(), range)
             .map(Typed::new)
     }
 
@@ -350,7 +350,7 @@ impl<B: Backend> Device<B> {
     ) -> Result<handle::RenderTargetView<B, F>, TargetViewError>
         where F: format::RenderFormat
     {
-        self.view_image_as_render_target_raw(image, F::get_format(), range)
+        self.view_image_as_render_target_raw(image.as_ref(), F::get_format(), range)
             .map(Typed::new)
     }
 
@@ -376,7 +376,7 @@ impl<B: Backend> Device<B> {
     ) -> Result<handle::RenderTargetView<B, F>, TargetViewError>
         where F: format::RenderFormat
     {
-        self.view_image_as_render_target_raw(image, F::get_format(), layers)
+        self.view_image_as_render_target_raw(image.as_ref(), F::get_format(), layers)
             .map(Typed::new)
     }
 
@@ -399,7 +399,7 @@ impl<B: Backend> Device<B> {
         -> Result<handle::ShaderResourceView<B, F>, TargetViewError>
         where F: format::ImageFormat
     {
-        self.view_image_as_shader_resource_raw(image, F::get_format())
+        self.view_image_as_shader_resource_raw(image.as_ref(), F::get_format())
             .map(Typed::new)
     }
 
@@ -421,7 +421,7 @@ impl<B: Backend> Device<B> {
         -> Result<handle::UnorderedAccessView<B, F>, TargetViewError>
         where F: format::ImageFormat
     {
-        self.view_image_as_unordered_access_raw(image, F::get_format())
+        self.view_image_as_unordered_access_raw(image.as_ref(), F::get_format())
             .map(Typed::new)
     }
 

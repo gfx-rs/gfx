@@ -512,7 +512,7 @@ impl core::Device<Backend> for Device {
             let base_ptr = buf.0.contents() as *mut u8;
 
             if base_ptr.is_null() {
-                return Err(unimplemented!());
+                return Err(mapping::Error::InvalidAccess);
             }
 
             if let Some(range) = read {

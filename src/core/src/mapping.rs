@@ -10,6 +10,8 @@ use Backend;
 /// Error accessing a mapping.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Error {
+    /// The requested mapping access did not match the expected usage.
+    InvalidAccess,
     /// The requested mapping range is outside of the resource.
     OutOfBounds,
     ///
@@ -26,6 +28,7 @@ impl StdError for Error {
     fn description(&self) -> &str {
         use self::Error::*;
         match *self {
+            InvalidAccess => "The requested mapping access did not match the expected usage",
             OutOfBounds => "The requested mapping range is outside of the resource",
             OutOfMemory => "Not enough physical or virtual memory",
         }
