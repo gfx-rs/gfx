@@ -295,7 +295,7 @@ impl<'a, B, F> Component<'a, B> for RenderTarget<F>
         images: &mut Vec<(&'b handle::raw::Image<B>, image::Subresource, core::image::State)>,
         _: &mut handle::Bag<B>,
     ) where 'a: 'b {
-        let img = data.info();
+        let img = data.as_ref().info();
         let levels = img.info().mip_levels;
         let layers = img.info().kind.get_num_layers();
         // TODO: READ not always necessary
@@ -373,14 +373,14 @@ impl<'a, B, T, I> Component<'a, B> for VertexBuffer<T, I>
         _: &mut Vec<(&'b handle::raw::Image<B>, image::Subresource, core::image::State)>,
         _: &mut handle::Bag<B>,
     ) where 'a: 'b {
-        buffers.push((data, core::buffer::VERTEX_BUFFER_READ));
+        buffers.push((data.as_ref(), core::buffer::VERTEX_BUFFER_READ));
     }
 
     fn vertex_buffer<'b>(data: &'b Self::Data) -> Option<(&'b B::Buffer, core::pso::BufferOffset)>
         where 'a: 'b
     {
         // TODO: offset
-        Some((data.resource(), 0))
+        Some((data.as_ref().resource(), 0))
     }
 }
 

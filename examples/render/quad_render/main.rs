@@ -82,16 +82,8 @@ fn main() {
         desc: &desc,
         color: pso::ColorInfo {
             mask: state::MASK_ALL,
-            color: Some(state::BlendChannel {
-                equation: state::Equation::Add,
-                source: state::Factor::ZeroPlus(state::BlendValue::SourceAlpha),
-                destination: state::Factor::OneMinus(state::BlendValue::SourceAlpha),
-            }),
-            alpha: Some(state::BlendChannel {
-                equation: state::Equation::Add,
-                source: state::Factor::One,
-                destination: state::Factor::One,
-            }),
+            color: Some(gfx::preset::blend::ALPHA.color),
+            alpha: Some(gfx::preset::blend::ALPHA.alpha),
         },
         vertices: (),
     };
@@ -115,7 +107,7 @@ fn main() {
     }).collect::<Vec<_>>();
     let framebuffers = frame_rtvs.iter().map(|rtv| {
         let extent = d::Extent { width: pixel_width as _, height: pixel_height as _, depth: 1 };
-        device.create_framebuffer(&pipeline, &[&rtv], &[], extent)
+        device.create_framebuffer(&pipeline, &[rtv.as_ref()], &[], extent)
             .unwrap()
     }).collect::<Vec<_>>();
 
@@ -128,14 +120,12 @@ fn main() {
     println!("Memory types: {:?}", context.ref_device().memory_types());
     println!("Memory heaps: {:?}", context.ref_device().memory_heaps());
 
-    let mut init_tokens = Vec::new();
     let vertex_count = QUAD.len() as u64;
-    let (vertex_buffer, token) = device.create_buffer::<Vertex, _>(
+    let (vertex_buffer, vertex_token) = device.create_buffer::<Vertex, _>(
         &mut upload,
         gfx::buffer::VERTEX,
         vertex_count
     ).unwrap();
-    init_tokens.push(token);
 
     device.write_mapping(&vertex_buffer, 0..vertex_count)
         .unwrap()
@@ -151,18 +141,16 @@ fn main() {
     let upload_size = (height * row_pitch) as u64;
     println!("upload row pitch {}, total size {}", row_pitch, upload_size);
 
-    let (image_upload_buffer, token) = device.create_buffer_raw(
+    let (image_upload_buffer, image_upload_token) = device.create_buffer_raw(
         &mut upload,
         gfx::buffer::TRANSFER_SRC,
         upload_size,
         image_stride as u64
     ).unwrap();
-    init_tokens.push(token);
 
     println!("copy image data into staging buffer");
 
-    if let Ok(mut image_data) = device.write_mapping(&image_upload_buffer, 0..upload_size)
-    {
+    if let Ok(mut image_data) = device.write_mapping(&image_upload_buffer, 0..upload_size) {
         for y in 0 .. height as usize {
             let row = &(*img)[y*(width as usize)*image_stride .. (y+1)*(width as usize)*image_stride];
             let dest_base = y * row_pitch as usize;
@@ -170,13 +158,12 @@ fn main() {
         }
     }
 
-    let (image, token) = device.create_image::<ColorFormat, _>(
+    let (image, image_token) = device.create_image::<ColorFormat, _>(
         &mut data,
         gfx::image::TRANSFER_DST | gfx::image::SAMPLED,
         kind,
         1,
     ).unwrap();
-    init_tokens.push(token);
 
     let image_srv = device.view_image_as_shader_resource(&image)
         .unwrap();
@@ -189,8 +176,8 @@ fn main() {
     );
 
     device.update_descriptor_sets()
-        .write(desc_data.sampled_image(&desc), 0, &[&image_srv as _])
-        .write(desc_data.sampler(&desc), 0, &[&sampler as _])
+        .write(desc_data.sampled_image(&desc), 0, &[image_srv.as_ref()])
+        .write(desc_data.sampler(&desc), 0, &[sampler.as_ref()])
         .finish();
 
     // Rendering setup
@@ -206,7 +193,11 @@ fn main() {
 
     let mut encoder_pool = context.acquire_encoder_pool();
     let mut init_encoder = encoder_pool.acquire_encoder();
-    init_encoder.init_resources(init_tokens);
+    init_encoder.init_resources(vec![
+        vertex_token,
+        image_upload_token,
+        image_token,
+    ]);
     init_encoder.copy_buffer_to_image(
         &image_upload_buffer,
         &image,
