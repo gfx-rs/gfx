@@ -38,7 +38,7 @@ pub trait BindDesc {
 pub trait Bind<B: Backend>: BindDesc {
     type Handle: 'static + Clone;
 
-    fn write<'a>(&[&'a Self::Handle]) -> core::pso::DescriptorWrite<'a, B>;
+    fn write<'a, H: AsRef<Self::Handle>>(&[&'a H]) -> core::pso::DescriptorWrite<'a, B>;
     fn require<'a>(
         &'a Self::Handle,
         &mut Vec<(&'a handle::raw::Buffer<B>, core::buffer::State)>,
@@ -60,7 +60,7 @@ macro_rules! define_descriptors {
             {
                 type Handle = T::Handle;
 
-                fn write<'a>(handles: &[&'a Self::Handle]) -> core::pso::DescriptorWrite<'a, B> {
+                fn write<'a, H: AsRef<Self::Handle>>(handles: &[&'a H]) -> core::pso::DescriptorWrite<'a, B> {
                     T::write(handles)
                 }
 
@@ -95,12 +95,12 @@ define_descriptors! {
 impl<B: Backend> Bind<B> for SampledImage {
     type Handle = handle::raw::ShaderResourceView<B>;
 
-    fn write<'a>(srvs: &[&'a Self::Handle]) -> core::pso::DescriptorWrite<'a, B> {
+    fn write<'a, H: AsRef<Self::Handle>>(srvs: &[&'a H]) -> core::pso::DescriptorWrite<'a, B> {
         core::pso::DescriptorWrite::SampledImage(srvs.iter()
-            .map(|&srv| match srv.info() {
+            .map(|&srv| match srv.as_ref().info() {
                 &handle::ViewSource::Image(_) => {
                     let layout = ImageLayout::ShaderReadOnlyOptimal;
-                    (srv.resource(), layout)
+                    (srv.as_ref().resource(), layout)
                 }
                 &handle::ViewSource::Buffer(_) => unreachable!(),
             }).collect())
@@ -133,9 +133,9 @@ impl<B: Backend> Bind<B> for SampledImage {
 impl<B: Backend> Bind<B> for Sampler {
     type Handle = handle::raw::Sampler<B>;
 
-    fn write<'a>(samplers: &[&'a Self::Handle]) -> core::pso::DescriptorWrite<'a, B> {
+    fn write<'a, H: AsRef<Self::Handle>>(samplers: &[&'a H]) -> core::pso::DescriptorWrite<'a, B> {
         core::pso::DescriptorWrite::Sampler(samplers.iter()
-            .map(|&sampler| sampler.resource())
+            .map(|&sampler| sampler.as_ref().resource())
             .collect())
     }
 
@@ -165,14 +165,14 @@ impl<'a, B: Backend> DescriptorSetsUpdate<'a, B> {
         DescriptorSetsUpdate { device, writes: Vec::new() }
     }
 
-    pub fn write<'b, T: Bind<B>>(
+    pub fn write<'b, T: Bind<B>, H: 'a + AsRef<T::Handle>>(
         mut self,
         bind_ref: DescriptorSetBindRef<'a, 'b, B, T>,
         array_offset: usize,
-        handles: &[&'a T::Handle],
+        handles: &[&'a H],
     ) -> Self {
         for (slot, &handle) in bind_ref.handles[array_offset..].iter_mut().zip(handles.iter()) {
-            *slot = Some(handle.clone());
+            *slot = Some(handle.as_ref().clone());
         }
 
         self.writes.push(core::pso::DescriptorSetWrite {
