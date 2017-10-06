@@ -22,7 +22,7 @@ impl<'a, B: Backend> RenderPassInlineEncoder<'a, B> {
     pub fn new<C>(
         cmd_buffer: &'a mut CommandBuffer<B, C>,
         render_pass: &B::RenderPass,
-        frame_buffer: &B::FrameBuffer,
+        frame_buffer: &B::Framebuffer,
         render_area: target::Rect,
         clear_values: &[ClearValue],
     ) -> Self

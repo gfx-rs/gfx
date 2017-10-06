@@ -256,7 +256,7 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
 
     type ShaderModule:        Debug + Any + Send + Sync;
     type RenderPass:          Debug + Any + Send + Sync;
-    type FrameBuffer:         Debug + Any + Send + Sync;
+    type Framebuffer:         Debug + Any + Send + Sync;
 
     type Memory:              Debug + Any;
     type CommandPool:         RawCommandPool<Self>;

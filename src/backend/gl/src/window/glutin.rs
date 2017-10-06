@@ -105,7 +105,7 @@ impl core::Surface<B> for Surface {
         let swapchain = Swapchain {
             window: self.window.clone(),
         };
-        let backbuffer = core::Backbuffer::FrameBuffer(0);
+        let backbuffer = core::Backbuffer::Framebuffer(0);
         (swapchain, backbuffer)
     }
 }

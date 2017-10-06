@@ -126,7 +126,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     fn begin_renderpass(
         &mut self,
         render_pass: &B::RenderPass,
-        frame_buffer: &B::FrameBuffer,
+        frame_buffer: &B::Framebuffer,
         render_area: target::Rect,
         clear_values: &[ClearValue],
         first_subpass: SubpassContents,

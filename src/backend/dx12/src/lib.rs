@@ -464,7 +464,7 @@ impl core::Backend for Backend {
 
     type ShaderModule = native::ShaderModule;
     type RenderPass = native::RenderPass;
-    type FrameBuffer = native::FrameBuffer;
+    type Framebuffer = native::FrameBuffer;
 
     type UnboundBuffer = device::UnboundBuffer;
     type Buffer = native::Buffer;
