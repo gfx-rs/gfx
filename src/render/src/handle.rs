@@ -95,7 +95,7 @@ macro_rules! define_resources {
             use std::{cmp, hash};
 
             $(
-            
+
             #[derive(Debug)]
             pub struct $name<B: Backend> {
                 // option for owned drop
@@ -105,6 +105,7 @@ macro_rules! define_resources {
             }
 
             impl<B: Backend> $name<B> {
+                #[allow(unused)]
                 pub(crate) fn new(
                     resource: B::$name,
                     info: $info,

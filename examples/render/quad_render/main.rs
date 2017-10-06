@@ -176,8 +176,8 @@ fn main() {
     );
 
     device.update_descriptor_sets()
-        .write(desc_data.sampled_image(&desc), 0, &[image_srv.as_ref()])
-        .write(desc_data.sampler(&desc), 0, &[sampler.as_ref()])
+        .write(desc_data.sampled_image(&desc), 0, &[&image_srv])
+        .write(desc_data.sampler(&desc), 0, &[&sampler])
         .finish();
 
     // Rendering setup
@@ -245,7 +245,7 @@ fn main() {
             };
             encoder.draw(0..6, &pipeline, data);
         }
-        
+
         submits.push(encoder.finish());
         context.present(submits.drain(..).collect::<Vec<_>>());
     }
