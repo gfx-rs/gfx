@@ -308,7 +308,7 @@ impl<B: Backend, C> Context<B, C>
 
         let backbuffer_images = match backbuffer {
             core::Backbuffer::Images(images) => images,
-            core::Backbuffer::FrameBuffer(_) => unimplemented!(), //TODO
+            core::Backbuffer::Framebuffer(_) => unimplemented!(), //TODO
         };
 
         let frame_bundles = backbuffer_images
