@@ -98,7 +98,7 @@ macro_rules! gfx_descriptors {
                     })*
                     bindings
                 }
-                
+
                 fn layout(&self) -> &B::DescriptorSetLayout { self.layout.resource() }
                 fn set(&self) -> &B::DescriptorSet { self.raw.resource() }
             }
@@ -170,7 +170,7 @@ macro_rules! gfx_graphics_pipeline {
             };
             use $crate::core::{pass as cpass, pso as cpso};
             use $crate::core::command::RenderPassInlineEncoder;
-    
+
             pub struct Meta<B: Backend> {
                 layout: handle::raw::PipelineLayout<B>,
                 render_pass: handle::raw::RenderPass<B>,
@@ -185,7 +185,7 @@ macro_rules! gfx_graphics_pipeline {
                 // TODO:
                 pub viewports: &'a [$crate::core::Viewport],
                 pub scissors: &'a [$crate::core::target::Rect],
-                pub framebuffer: &'a handle::raw::FrameBuffer<B>,
+                pub framebuffer: &'a handle::raw::Framebuffer<B>,
                 $( pub $cmp_name: <$cmp as pso::Component<'a, B>>::Data, )*
             }
 
@@ -225,7 +225,7 @@ macro_rules! gfx_graphics_pipeline {
 
                         device.create_renderpass_raw(&attachments[..], &[subpass], &[])
                     };
-            
+
                     let mut pipeline_desc = cpso::GraphicsPipelineDesc::new(
                         primitive, rasterizer
                     );
@@ -275,7 +275,7 @@ macro_rules! gfx_graphics_pipeline {
                         &buffer_states[..],
                         &image_states[..]
                     );
-                    
+
                     let cmd_buffer = encoder.mut_buffer();
                     cmd_buffer.set_viewports(self.viewports);
                     cmd_buffer.set_scissors(self.scissors);
@@ -301,7 +301,7 @@ macro_rules! gfx_graphics_pipeline {
                     cmd_buffer.begin_renderpass_inline(
                         meta.render_pass.resource(),
                         self.framebuffer.resource(),
-                        render_rect, 
+                        render_rect,
                         &[], // TODO
                     )
                 }

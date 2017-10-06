@@ -100,7 +100,7 @@ impl<'a, B: Backend, C: Supports<Graphics>> CommandBuffer<'a, B, C> {
     pub fn begin_renderpass_inline(
         &mut self,
         render_pass: &B::RenderPass,
-        frame_buffer: &B::FrameBuffer,
+        frame_buffer: &B::Framebuffer,
         render_area: target::Rect,
         clear_values: &[ClearValue],
     ) -> RenderPassInlineEncoder<B>

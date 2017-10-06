@@ -292,7 +292,7 @@ fn main() {
                 .collect();
             (pairs, fbos)
         }
-        Backbuffer::FrameBuffer(fbo) => {
+        Backbuffer::Framebuffer(fbo) => {
             (Vec::new(), vec![fbo])
         }
     };
