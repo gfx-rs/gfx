@@ -244,7 +244,7 @@ pub enum Backbuffer<B: Backend> {
     /// Color image chain
     Images(Vec<B::Image>),
     /// A single opaque framebuffer
-    FrameBuffer(B::FrameBuffer),
+    Framebuffer(B::Framebuffer),
 }
 
 /// The `Swapchain` is the backend representation of the surface.

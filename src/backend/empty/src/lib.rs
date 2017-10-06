@@ -27,7 +27,7 @@ impl core::Backend for Backend {
 
     type ShaderModule = ();
     type RenderPass = ();
-    type FrameBuffer = ();
+    type Framebuffer = ();
 
     type UnboundBuffer = ();
     type Buffer = ();
@@ -118,7 +118,7 @@ impl core::Device<Backend> for Device {
         &mut self, _: &(),
         _: &[&()], _: &[&()],
         _: device::Extent,
-    ) -> Result<(), device::FrameBufferError> {
+    ) -> Result<(), device::FramebufferError> {
         unimplemented!()
     }
 

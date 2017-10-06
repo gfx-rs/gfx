@@ -11,7 +11,7 @@ use handle::inner::*;
 use {core, buffer, image, format, mapping, pso};
 use {Backend, Primitive, Extent};
 
-pub use core::device::{TargetViewError, FrameBufferError};
+pub use core::device::{TargetViewError, FramebufferError};
 
 #[derive(Clone)]
 pub struct Device<B: Backend> {
@@ -522,19 +522,19 @@ impl<B: Backend> Device<B> {
         rtvs: &[&handle::raw::RenderTargetView<B>],
         dsvs: &[&handle::raw::DepthStencilView<B>],
         extent: Extent,
-    ) -> Result<handle::raw::FrameBuffer<B>, FrameBufferError>
+    ) -> Result<handle::raw::Framebuffer<B>, FramebufferError>
         where P: pso::GraphicsPipelineMeta<B>
     {
         let rtv_res: Vec<_> = rtvs.iter().map(|&rtv| rtv.resource()).collect();
         let dsv_res: Vec<_> = dsvs.iter().map(|&dsv| dsv.resource()).collect();
         let buffer = self.raw.create_framebuffer(
             pipeline.render_pass(), &rtv_res[..], &dsv_res[..], extent)?;
-        let info = handle::FrameBufferInfo {
+        let info = handle::FramebufferInfo {
             rtvs: rtvs.iter().map(|&rtv| rtv.clone()).collect(),
             dsvs: dsvs.iter().map(|&dsv| dsv.clone()).collect(),
             extent,
         };
-        Ok(FrameBuffer::new(buffer, info, self.garbage.clone()).into())
+        Ok(Framebuffer::new(buffer, info, self.garbage.clone()).into())
     }
 /*
     /// Creates a `ShaderSet` from the supplied vertex and pixel shader source code.

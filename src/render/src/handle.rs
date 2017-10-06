@@ -55,7 +55,7 @@ impl<B: Backend> InnerGarbageCollector<B> {
                 RenderPass(rp) => dev.destroy_renderpass(rp),
                 PipelineLayout(pl) => dev.destroy_pipeline_layout(pl),
                 GraphicsPipeline(pl) => dev.destroy_graphics_pipeline(pl),
-                FrameBuffer(fb) => dev.destroy_framebuffer(fb),
+                Framebuffer(fb) => dev.destroy_framebuffer(fb),
                 Buffer(b) => dev.destroy_buffer(b),
                 Image(i) => dev.destroy_image(i),
                 RenderTargetView(rtv) => dev.destroy_render_target_view(rtv),
@@ -95,7 +95,7 @@ macro_rules! define_resources {
             use std::{cmp, hash};
 
             $(
-            
+
             #[derive(Debug)]
             pub struct $name<B: Backend> {
                 // option for owned drop
@@ -235,7 +235,7 @@ define_resources! {
     PipelineLayout: (),
     GraphicsPipeline: (),
     // ComputePipeline
-    FrameBuffer: ::handle::FrameBufferInfo<B>,
+    Framebuffer: ::handle::FramebufferInfo<B>,
     Buffer: ::buffer::Info,
     Image: ::image::Info,
     RenderTargetView: ::handle::raw::Image<B>,
@@ -261,7 +261,7 @@ pub type UnorderedAccessView<B, T> = Typed<raw::UnorderedAccessView<B>, T>;
 pub use self::raw::Sampler;
 
 #[derive(Debug, Clone)]
-pub struct FrameBufferInfo<B: Backend> {
+pub struct FramebufferInfo<B: Backend> {
     pub rtvs: Vec<raw::RenderTargetView<B>>,
     pub dsvs: Vec<raw::DepthStencilView<B>>,
     pub extent: ::Extent,

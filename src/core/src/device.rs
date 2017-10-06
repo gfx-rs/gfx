@@ -174,7 +174,7 @@ pub enum ShaderError {
 
 /// An error from creating a framebuffer.
 #[derive(Clone, Debug, PartialEq)]
-pub struct FrameBufferError;
+pub struct FramebufferError;
 
 /// # Overview
 ///
@@ -250,7 +250,7 @@ pub trait Device<B: Backend>: Clone {
         color_attachments: &[&B::RenderTargetView],
         depth_stencil_attachments: &[&B::DepthStencilView],
         extent: Extent,
-    ) -> Result<B::FrameBuffer, FrameBufferError>;
+    ) -> Result<B::Framebuffer, FramebufferError>;
 
     ///
     fn create_shader_module(&mut self, spirv_data: &[u8]) -> Result<B::ShaderModule, ShaderError>;
@@ -430,7 +430,7 @@ pub trait Device<B: Backend>: Clone {
     ///
     /// The framebuffer shouldn't be destroy before any submitted command buffer,
     /// which references the framebuffer, has finished execution.
-    fn destroy_framebuffer(&mut self, B::FrameBuffer);
+    fn destroy_framebuffer(&mut self, B::Framebuffer);
 
     /// Destroys a buffer.
     ///
