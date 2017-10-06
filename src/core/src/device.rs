@@ -291,7 +291,7 @@ pub trait Device<B: Backend>: Clone {
 
     ///
     #[allow(unused_variables)]
-    fn view_image_as_depth_stencil(&mut self, image: &B::Image, format: format::Format, range: image::SubresourceRange) -> Result<B::DepthStencilView, TargetViewError> {
+    fn view_image_as_depth_stencil(&mut self, &B::Image, format::Format, image::SubresourceLayers) -> Result<B::DepthStencilView, TargetViewError> {
         unimplemented!()
     }
 

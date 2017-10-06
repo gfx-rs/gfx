@@ -352,8 +352,8 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         where MTB: buffer::MaybeTyped<B>
     {
         if regions.is_empty() { return };
-        let src = src.as_raw();
-        let dst = dst.as_raw();
+        let src = src.as_ref();
+        let dst = dst.as_ref();
 
         debug_assert!(src.info().usage.contains(buffer::TRANSFER_SRC),
             "missing TRANSFER_SRC usage flag");
@@ -422,7 +422,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         where MTB: buffer::MaybeTyped<B>
     {
         if data.is_empty() { return; }
-        let buffer = buffer.as_raw();
+        let buffer = buffer.as_ref();
 
         debug_assert!(buffer.info().usage.contains(buffer::TRANSFER_DST),
             "missing TRANSFER_DST usage flag");
@@ -444,12 +444,17 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             cast_slice(data));
     }
 
-    pub fn copy_image(
+    pub fn copy_image<IA, IB>(
         &mut self,
-        src: &handle::raw::Image<B>,
-        dst: &handle::raw::Image<B>,
+        src: IA,
+        dst: IB,
         regions: &[ImageCopy],
-    ) {
+    )
+        where IA: AsRef<handle::raw::Image<B>>,
+              IB: AsRef<handle::raw::Image<B>>
+    {
+        let src = src.as_ref();
+        let dst = dst.as_ref();
         if regions.is_empty() { return };
 
         debug_assert!(src.info().usage.contains(image::TRANSFER_SRC),
@@ -477,12 +482,17 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
     }
     
     /// Copy part of a buffer to an image
-    pub fn copy_buffer_to_image(
+    pub fn copy_buffer_to_image<BA, IB>(
         &mut self,
-        src: &handle::raw::Buffer<B>,
-        dst: &handle::raw::Image<B>,
+        src: BA,
+        dst: IB,
         regions: &[BufferImageCopy],
-    ) {
+    )
+        where BA: AsRef<handle::raw::Buffer<B>>,
+              IB: AsRef<handle::raw::Image<B>>
+    {
+        let src = src.as_ref();
+        let dst = dst.as_ref();
         if regions.is_empty() { return };
 
         debug_assert!(src.info().usage.contains(buffer::TRANSFER_SRC),
@@ -511,12 +521,17 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
     }
 
     /// Copy part of an image to a buffer
-    pub fn copy_image_to_buffer(
+    pub fn copy_image_to_buffer<IA, BB>(
         &mut self,
-        src: &handle::raw::Image<B>,
-        dst: &handle::raw::Buffer<B>,
+        src: IA,
+        dst: BB,
         regions: &[BufferImageCopy],
-    ) {
+    )
+        where IA: AsRef<handle::raw::Image<B>>,
+              BB: AsRef<handle::raw::Buffer<B>>
+    {
+        let src = src.as_ref();
+        let dst = dst.as_ref();
         if regions.is_empty() { return };
 
         debug_assert!(src.info().usage.contains(image::TRANSFER_SRC),
@@ -585,7 +600,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
     )
         where F: format::RenderFormat, F::View: Into<ClearColor>
     {
-        self.clear_color_raw(rtv, value.into());
+        self.clear_color_raw(rtv.as_ref(), value.into());
     }
 
     /// Clears `dsv`'s depth to `depth_value` and stencil to `stencil_value`, if some.

@@ -85,17 +85,14 @@ impl Access {
     }
 }
 
-pub trait MaybeTyped<B: Backend> {
+pub trait MaybeTyped<B: Backend>: AsRef<handle::raw::Buffer<B>> {
     type Data: Pod;
-    fn as_raw(&self) -> &handle::raw::Buffer<B>;
 }
 
 impl<B: Backend> MaybeTyped<B> for handle::raw::Buffer<B> {
     type Data = u8;
-    fn as_raw(&self) -> &handle::raw::Buffer<B> { &self }
 }
 
 impl<B: Backend, T: Pod> MaybeTyped<B> for handle::Buffer<B, T> {
     type Data = T;
-    fn as_raw(&self) -> &handle::raw::Buffer<B> { &self }
 }
