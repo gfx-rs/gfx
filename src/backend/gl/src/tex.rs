@@ -749,21 +749,36 @@ pub fn copy_textures(gl: &gl::Gl, src: &t::TextureCopyRegion<NewTexture>,
                      dst: &t::TextureCopyRegion<Texture>, fbo: FrameBuffer)
                      -> Result<(), t::CreationError> {
     bind_read_fbo(gl, src.texture, src.info.mipmap, fbo);
-    let target = kind_to_gl(dst.kind);
+    let bind_target = kind_to_gl(dst.kind);
+    unsafe { gl.BindTexture(bind_target, dst.texture); }
+    let copy_target = match dst.cube_face {
+        Some(face) => cube_face_to_gl(face),
+        None => bind_target,
+    };
 
-    debug_assert!(src.info.zoffset == 0 && src.info.depth <= 1 &&
+    debug_assert!(src.info.zoffset == 0 &&
+                  src.info.depth <= 1 &&
+                  dst.info.depth <= 1 &&
                   src.info.width == dst.info.width &&
                   src.info.height == dst.info.height);
 
-    unsafe {
-        gl.BindTexture(target, dst.texture);
-        gl.CopyTexSubImage2D(target, dst.info.mipmap as _,
-            dst.info.xoffset as _, dst.info.yoffset as _,
-            src.info.xoffset as _, src.info.yoffset as _,
-            src.info.width as _, src.info.height as _);
-    }
-
-    Ok(())
+    Ok(match dst.kind {
+        t::Kind::D2(_, _, t::AaMode::Single) |
+        t::Kind::Cube(_) => unsafe {
+            gl.CopyTexSubImage2D(copy_target, dst.info.mipmap as _,
+                dst.info.xoffset as _, dst.info.yoffset as _,
+                src.info.xoffset as _, src.info.yoffset as _,
+                src.info.width as _, src.info.height as _);
+        },
+        t::Kind::D2Array(_, _, _, t::AaMode::Single) |
+        t::Kind::D3(_, _, _) => unsafe {
+            gl.CopyTexSubImage3D(copy_target, dst.info.mipmap as _,
+                dst.info.xoffset as _, dst.info.yoffset as _, dst.info.zoffset as _,
+                src.info.xoffset as _, src.info.yoffset as _,
+                src.info.width as _, src.info.height as _);
+        },
+        _ => return Err(t::CreationError::Kind)
+    })
 }
 
 pub fn update_texture(gl: &gl::Gl, dst: &t::TextureCopyRegion<Texture>, slice: &[u8])
