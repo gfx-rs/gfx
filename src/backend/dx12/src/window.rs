@@ -3,22 +3,39 @@ use core::{self, image};
 use dxguid;
 use std::collections::VecDeque;
 use std::ptr;
+#[cfg(feature = "winit")]
 use winit;
 use winapi;
 use wio::com::ComPtr;
 use {conv, native as n, Adapter, Backend, Instance, QueueFamily};
 
-use winit::os::windows::WindowExt;
+use std::os::raw::c_void;
 
 impl Instance {
-    pub fn create_surface(&self, window: &winit::Window) -> Surface {
-        let (width, height) = window.get_inner_size_pixels().unwrap();
+    pub fn create_surface_from_hwnd(&self, hwnd: *mut c_void) -> Surface {
+        let (width, height) = unsafe {
+            use winapi::RECT;
+            use user32::GetClientRect;
+            use std::mem::zeroed;
+            let mut rect: RECT = zeroed();
+            if GetClientRect(hwnd as *mut _, &mut rect as *mut RECT) == 0 {
+                panic!("GetClientRect failed");
+            }
+            ((rect.right - rect.left) as u32, (rect.bottom - rect.top) as u32)
+        };
+
         Surface {
             factory: self.factory.clone(),
-            wnd_handle: window.get_hwnd() as *mut _,
+            wnd_handle: hwnd as *mut _,
             width: width,
             height: height,
         }
+    }
+
+    #[cfg(feature = "winit")]
+    pub fn create_surface(&self, window: &winit::Window) -> Surface {
+        use winit::os::windows::WindowExt;
+        self.create_surface_from_hwnd(window.get_hwnd() as *mut _)
     }
 }
 
