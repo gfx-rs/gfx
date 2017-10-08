@@ -10,7 +10,9 @@ extern crate kernel32;
 extern crate log;
 extern crate smallvec;
 extern crate spirv_cross;
+extern crate user32;
 extern crate winapi;
+#[cfg(feature = "winit")]
 extern crate winit;
 extern crate wio;
 
