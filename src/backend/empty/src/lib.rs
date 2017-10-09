@@ -155,7 +155,7 @@ impl core::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_image_view(&mut self, _: &(), _: format::Format, _: image::SubresourceLayers) -> Result<(), image::ViewError> {
+    fn create_image_view(&mut self, _: &(), _: format::Format, _: image::SubresourceRange) -> Result<(), image::ViewError> {
         unimplemented!()
     }
 
@@ -322,11 +322,23 @@ impl core::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn clear_color_image(&mut self, _: &(), _: image::ImageLayout, _: command::ClearColor) {
+    fn clear_color_image(
+        &mut self,
+        _: &(),
+        _: image::ImageLayout,
+        _: image::SubresourceRange,
+        _: command::ClearColor,
+    ) {
         unimplemented!()
     }
 
-    fn clear_depth_stencil_image(&mut self, _: &(), _: image::ImageLayout, _: command::ClearDepthStencil) {
+    fn clear_depth_stencil_image(
+        &mut self,
+        _: &(),
+        _: image::ImageLayout,
+        _: image::SubresourceRange,
+        _: command::ClearDepthStencil,
+    ) {
         unimplemented!()
     }
 

@@ -106,10 +106,9 @@ impl Error for ViewError {
     }
 
     fn cause(&self) -> Option<&Error> {
-        if let ViewError::Layer(ref e) = *self {
-            Some(e)
-        } else {
-            None
+        match *self {
+            ViewError::Layer(ref e) => Some(e),
+            _ => None,
         }
     }
 }
@@ -585,11 +584,16 @@ bitflags!(
 /// Image state
 pub type State = (Access, ImageLayout);
 
-///
+/// Selector of a concrete subresource in an image.
 pub type Subresource = (Level, Layer);
 
-///
-pub type SubresourceLayers = (Level, Range<Layer>);
-
-///
-pub type SubresourceRange = (Range<Level>, Range<Layer>);
+/// A subset of resources contained within an image.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct SubresourceRange {
+    /// Included aspects: color/depth/stencil
+    pub aspect: AspectFlags,
+    /// Included array levels
+    pub levels: Range<Level>,
+    /// Included mipmap levels
+    pub layers: Range<Layer>,
+}
