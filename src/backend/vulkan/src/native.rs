@@ -20,28 +20,40 @@ pub struct ComputePipeline(pub vk::Pipeline);
 
 #[derive(Debug, Hash)]
 pub struct Memory {
-    pub inner: vk::DeviceMemory,
-    pub ptr: *mut u8,
+    pub(crate) inner: vk::DeviceMemory,
+    pub(crate) ptr: *mut u8,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Buffer {
-    pub raw: vk::Buffer,
-    pub memory: vk::DeviceMemory,
-    pub offset: u64,
-    pub ptr: *mut u8,
+    pub(crate) raw: vk::Buffer,
+    pub(crate) memory: vk::DeviceMemory,
+    pub(crate) offset: u64,
+    pub(crate) ptr: *mut u8,
 }
 
 unsafe impl Sync for Buffer {}
 unsafe impl Send for Buffer {}
 
-#[derive(Debug, Hash, PartialEq, Eq)]
-pub struct Image {
-    pub raw: vk::Image,
-    pub bytes_per_texel: u8,
-    pub extent: vk::Extent3D,
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct BufferView {
+    //TODO: `VkBufferView`
+    pub(crate) buffer: vk::Buffer,
+    pub(crate) range: Range<u64>,
 }
 
+#[derive(Debug, Hash, PartialEq, Eq)]
+pub struct Image {
+    pub(crate) raw: vk::Image,
+    pub(crate) bytes_per_texel: u8,
+    pub(crate) extent: vk::Extent3D,
+}
+
+pub struct ImageView {
+    pub(crate) image: vk::Image,
+    pub(crate) view: vk::ImageView,
+    pub(crate) range: SubresourceRange,
+}
 
 #[derive(Debug, Hash)]
 pub struct Sampler(pub vk::Sampler);
@@ -53,59 +65,27 @@ pub struct RenderPass {
 
 #[derive(Debug, Hash)]
 pub struct FrameBuffer {
-    pub raw: vk::Framebuffer,
+    pub(crate)  raw: vk::Framebuffer,
 }
 
 #[derive(Debug)]
 pub struct DescriptorSetLayout {
-    pub raw: vk::DescriptorSetLayout,
+    pub(crate)  raw: vk::DescriptorSetLayout,
 }
 
 #[derive(Debug)]
 pub struct DescriptorSet {
-    pub raw: vk::DescriptorSet,
+    pub(crate)  raw: vk::DescriptorSet,
 }
 
 #[derive(Debug, Hash)]
 pub struct PipelineLayout {
-    pub raw: vk::PipelineLayout,
+    pub(crate)  raw: vk::PipelineLayout,
 }
 
 #[derive(Debug, Eq, Hash, PartialEq)]
 pub struct ShaderModule {
-    pub raw: vk::ShaderModule,
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct ConstantBufferView {
-    pub buffer: vk::Buffer,
-    pub range: Range<u64>,
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum ShaderResourceView {
-    Buffer,
-    Image(vk::ImageView),
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum UnorderedAccessView {
-    Buffer,
-    Image(vk::ImageView),
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct RenderTargetView {
-    pub image: vk::Image,
-    pub view: vk::ImageView,
-    pub layers: SubresourceLayers,
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct DepthStencilView {
-    pub image: vk::Image,
-    pub view: vk::ImageView,
-    pub layers: SubresourceLayers,
+    pub(crate)  raw: vk::ShaderModule,
 }
 
 #[derive(Debug)]

@@ -3,7 +3,7 @@ use std::ops::Range;
 use {pso, target};
 use {Backend, IndexCount, InstanceCount, VertexCount, VertexOffset, Viewport};
 use buffer::IndexBufferView;
-use image::ImageLayout;
+use image::{ImageLayout, SubresourceRange};
 use memory::Barrier;
 use super::{
     AttachmentClear, BufferCopy, BufferImageCopy,
@@ -50,6 +50,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         &mut self,
         &B::Image,
         ImageLayout,
+        SubresourceRange,
         ClearColor,
     );
 
@@ -58,6 +59,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         &mut self,
         &B::Image,
         ImageLayout,
+        SubresourceRange,
         ClearDepthStencil,
     );
 
