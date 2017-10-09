@@ -158,12 +158,16 @@ pub trait Device<B: Backend>: Clone {
     ) -> Result<B::Framebuffer, FramebufferError>;
 
     ///
-    fn create_shader_module(&mut self, spirv_data: &[u8]) -> Result<B::ShaderModule, ShaderError>;
+    fn create_shader_module(
+        &mut self, spirv_data: &[u8]
+    ) -> Result<B::ShaderModule, ShaderError>;
 
     /// Create a new buffer (unbound).
     ///
     /// The created buffer won't have associated memory until `bind_buffer_memory` is called.
-    fn create_buffer(&mut self, size: u64, stride: u64, buffer::Usage) -> Result<B::UnboundBuffer, buffer::CreationError>;
+    fn create_buffer(
+        &mut self, size: u64, stride: u64, buffer::Usage,
+    ) -> Result<B::UnboundBuffer, buffer::CreationError>;
 
     ///
     fn get_buffer_requirements(&mut self, &B::UnboundBuffer) -> Requirements;
@@ -173,22 +177,32 @@ pub trait Device<B: Backend>: Clone {
     /// The unbound buffer will be consumed because the binding is *immutable*.
     /// Be sure to check that there is enough memory available for the buffer.
     /// Use `get_buffer_requirements` to acquire the memory requirements.
-    fn bind_buffer_memory(&mut self, &B::Memory, offset: u64, B::UnboundBuffer) -> Result<B::Buffer, BindError>;
+    fn bind_buffer_memory(
+        &mut self, &B::Memory, offset: u64, B::UnboundBuffer
+    ) -> Result<B::Buffer, BindError>;
 
     ///
-    fn create_buffer_view(&mut self, &B::Buffer, Range<u64>) -> Result<B::BufferView, buffer::ViewError>;
+    fn create_buffer_view(
+        &mut self, &B::Buffer, Range<u64>
+    ) -> Result<B::BufferView, buffer::ViewError>;
 
     ///
-    fn create_image(&mut self, image::Kind, image::Level, format::Format, image::Usage) -> Result<B::UnboundImage, image::CreationError>;
+    fn create_image(
+        &mut self, image::Kind, image::Level, format::Format, image::Usage,
+    ) -> Result<B::UnboundImage, image::CreationError>;
 
     ///
     fn get_image_requirements(&mut self, &B::UnboundImage) -> Requirements;
 
     ///
-    fn bind_image_memory(&mut self, &B::Memory, offset: u64, B::UnboundImage) -> Result<B::Image, BindError>;
+    fn bind_image_memory(
+        &mut self, &B::Memory, offset: u64, B::UnboundImage
+    ) -> Result<B::Image, BindError>;
 
     ///
-    fn create_image_view(&mut self, &B::Image, format::Format, image::SubresourceLayers) -> Result<B::ImageView, image::ViewError>;
+    fn create_image_view(
+        &mut self, &B::Image, format::Format, image::SubresourceRange,
+    ) -> Result<B::ImageView, image::ViewError>;
 
     ///
     fn create_sampler(&mut self, image::SamplerInfo) -> B::Sampler;

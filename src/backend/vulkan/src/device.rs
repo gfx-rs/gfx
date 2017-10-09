@@ -19,40 +19,6 @@ pub struct UnboundBuffer(n::Buffer);
 pub struct UnboundImage(n::Image);
 
 impl Device {
-    fn create_image_view(&mut self, image: &n::Image, format: format::Format) -> vk::ImageView {
-        // TODO
-        let components = vk::ComponentMapping {
-            r: vk::ComponentSwizzle::Identity,
-            g: vk::ComponentSwizzle::Identity,
-            b: vk::ComponentSwizzle::Identity,
-            a: vk::ComponentSwizzle::Identity,
-        };
-
-        // TODO
-        let subresource_range = vk::ImageSubresourceRange {
-            aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
-            base_mip_level: 0,
-            level_count: 1,
-            base_array_layer: 0,
-            layer_count: vk::VK_REMAINING_ARRAY_LAYERS,
-        };
-
-        let info = vk::ImageViewCreateInfo {
-            s_type: vk::StructureType::ImageViewCreateInfo,
-            p_next: ptr::null(),
-            flags: vk::ImageViewCreateFlags::empty(), // TODO
-            image: image.raw,
-            view_type: vk::ImageViewType::Type2d, // TODO
-            format: conv::map_format(format.0, format.1).unwrap(), // TODO
-            components: components,
-            subresource_range: subresource_range,
-        };
-
-        unsafe {
-            self.raw.0.create_image_view(&info, None)
-        }.expect("Error on image view creation") // TODO
-    }
-
     #[cfg(feature = "glsl-to-spirv")]
     pub fn create_shader_module_from_glsl(
         &mut self,
@@ -702,7 +668,7 @@ impl d::Device<B> for Device {
 
         let buffer = unsafe {
             self.raw.0.create_buffer(&info, None)
-                        .expect("Error on buffer creation") // TODO: error handling
+                .expect("Error on buffer creation") // TODO: error handling
         };
 
         Ok(UnboundBuffer(n::Buffer {
@@ -738,7 +704,15 @@ impl d::Device<B> for Device {
         Ok(buffer)
     }
 
-    ///
+    fn create_buffer_view(
+        &mut self, buffer: &n::Buffer, range: Range<u64>,
+    ) -> Result<n::BufferView, buffer::ViewError> {
+        Ok(n::BufferView {
+            buffer: buffer.raw,
+            range,
+        })
+    }
+
     fn create_image(&mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
          -> Result<UnboundImage, image::CreationError>
     {
@@ -821,13 +795,12 @@ impl d::Device<B> for Device {
 
         let raw = unsafe {
             self.raw.0.create_image(&info, None)
-                      .expect("Error on image creation") // TODO: error handling
+                .expect("Error on image creation") // TODO: error handling
         };
 
         Ok(UnboundImage(n::Image{ raw, bytes_per_texel, extent }))
     }
 
-    ///
     fn get_image_requirements(&mut self, image: &UnboundImage) -> Requirements {
         let req = self.raw.0.get_image_memory_requirements(image.0.raw);
 
@@ -838,7 +811,6 @@ impl d::Device<B> for Device {
         }
     }
 
-    ///
     fn bind_image_memory(&mut self, memory: &n::Memory, offset: u64, image: UnboundImage) -> Result<n::Image, d::BindError> {
         // TODO: error handling
         // TODO: check required type
@@ -849,55 +821,45 @@ impl d::Device<B> for Device {
         Ok(image.0)
     }
 
-    fn view_buffer_as_constant(&mut self, buffer: &n::Buffer, range: Range<u64>) -> Result<n::ConstantBufferView, d::TargetViewError> {
-        Ok(n::ConstantBufferView {
-            buffer: buffer.raw,
+    fn create_image_view(
+        &mut self, image: &n::Image, format: format::Format, range: image::SubresourceRange,
+    ) -> Result<n::ImageView, image::ViewError> {
+        // TODO
+        let components = vk::ComponentMapping {
+            r: vk::ComponentSwizzle::Identity,
+            g: vk::ComponentSwizzle::Identity,
+            b: vk::ComponentSwizzle::Identity,
+            a: vk::ComponentSwizzle::Identity,
+        };
+
+        let subresource_range = vk::ImageSubresourceRange {
+            aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT, //TODO
+            base_mip_level: range.0.start as _,
+            level_count: (range.0.end - range.0.start) as _,
+            base_array_layer: range.1.start as _,
+            layer_count: (range.1.end - range.1.start) as _,
+        };
+
+        let info = vk::ImageViewCreateInfo {
+            s_type: vk::StructureType::ImageViewCreateInfo,
+            p_next: ptr::null(),
+            flags: vk::ImageViewCreateFlags::empty(), // TODO
+            image: image.raw,
+            view_type: vk::ImageViewType::Type2d, // TODO
+            format: conv::map_format(format.0, format.1).unwrap(), // TODO
+            components,
+            subresource_range,
+        };
+
+        let view = unsafe {
+            self.raw.0.create_image_view(&info, None)
+        }.expect("Error on image view creation"); // TODO
+
+        Ok(n::ImageView {
+            image: image.raw,
+            view,
             range,
         })
-    }
-
-    fn view_image_as_render_target(&mut self,
-        image: &n::Image,
-        format: format::Format,
-        layers: image::SubresourceLayers,
-    ) -> Result<n::RenderTargetView, d::TargetViewError>
-    {
-        let rtv = n::RenderTargetView {
-            image: image.raw,
-            view: self.create_image_view(image, format),
-            layers,
-        };
-
-        Ok(rtv)
-    }
-
-    fn view_image_as_depth_stencil(&mut self,
-        image: &n::Image,
-        format: format::Format,
-        layers: image::SubresourceLayers,
-    ) -> Result<n::DepthStencilView, d::TargetViewError>
-    {
-        let dsv = n::DepthStencilView {
-            image: image.raw,
-            view: self.create_image_view(image, format),
-            layers,
-        };
-
-        Ok(dsv)
-    }
-
-    fn view_image_as_shader_resource(&mut self, image: &n::Image, format: format::Format) -> Result<n::ShaderResourceView, d::TargetViewError> {
-        // TODO: check format compatibility? Allow different formats?
-        let view = self.create_image_view(image, format);
-        let srv = n::ShaderResourceView::Image(view);
-        Ok(srv)
-    }
-
-    fn view_image_as_unordered_access(&mut self, image: &n::Image, format: format::Format) -> Result<n::UnorderedAccessView, d::TargetViewError> {
-        // TODO: check format compatibility? Allow different formats?
-        let view = self.create_image_view(image, format);
-        let uav = n::UnorderedAccessView::Image(view);
-        Ok(uav)
     }
 
     fn create_descriptor_pool(&mut self,

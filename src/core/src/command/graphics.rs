@@ -1,7 +1,7 @@
 use {pso, target};
 use {Backend, Viewport};
 use buffer::IndexBufferView;
-use image::ImageLayout;
+use image::{ImageLayout, SubresourceRange};
 use queue::capability::{Graphics, Supports};
 use super::{CommandBuffer, RawCommandBuffer, RenderPassInlineEncoder};
 
@@ -113,9 +113,10 @@ impl<'a, B: Backend, C: Supports<Graphics>> CommandBuffer<'a, B, C> {
         &mut self,
         image: &B::Image,
         layout: ImageLayout,
+        range: SubresourceRange,
         value: ClearColor,
     ) {
-        self.raw.clear_color_image(image, layout, value)
+        self.raw.clear_color_image(image, layout, range, value)
     }
 
     /// Clear depth-stencil image
@@ -123,9 +124,10 @@ impl<'a, B: Backend, C: Supports<Graphics>> CommandBuffer<'a, B, C> {
         &mut self,
         image: &B::Image,
         layout: ImageLayout,
+        range: SubresourceRange,
         value: ClearDepthStencil,
     ) {
-        self.raw.clear_depth_stencil_image(image, layout, value)
+        self.raw.clear_depth_stencil_image(image, layout, range, value)
     }
 
     /// Bind index buffer view.

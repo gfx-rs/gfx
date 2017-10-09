@@ -610,15 +610,11 @@ impl core::Backend for Backend {
 
     type UnboundBuffer = device::UnboundBuffer;
     type Buffer = native::Buffer;
+    type BufferView = native::BufferView;
     type UnboundImage = device::UnboundImage;
     type Image = native::Image;
+    type ImageView = native::ImageView;
     type Sampler = native::Sampler;
-
-    type ConstantBufferView = native::ConstantBufferView;
-    type ShaderResourceView = native::ShaderResourceView;
-    type UnorderedAccessView = native::UnorderedAccessView;
-    type RenderTargetView = native::RenderTargetView;
-    type DepthStencilView = native::DepthStencilView;
 
     type ComputePipeline = native::ComputePipeline;
     type GraphicsPipeline = native::GraphicsPipeline;

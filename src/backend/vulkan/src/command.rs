@@ -257,13 +257,13 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn clear_color(
+    fn clear_color_image(
         &mut self,
-        rtv: &n::RenderTargetView,
+        image: &n::Image,
         layout: ImageLayout,
-        color: ClearColor,
+        value: ClearColor,
     ) {
-        let clear_value = conv::map_clear_color(color);
+        let clear_value = conv::map_clear_color(value);
 
         let range = {
             let (mip_level, ref array_layers) = rtv.layers;
@@ -279,7 +279,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         unsafe {
             self.device.0.cmd_clear_color_image(
                 self.raw,
-                rtv.image,
+                image.raw,
                 conv::map_image_layout(layout),
                 &clear_value,
                 &[range],
@@ -287,16 +287,16 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         };
     }
 
-    fn clear_depth_stencil(
+    fn clear_depth_stencil_image(
         &mut self,
-        dsv: &n::DepthStencilView,
+        image: &n::Image,
         layout: ImageLayout,
-        depth: Option<target::Depth>,
-        stencil: Option<target::Stencil>,
+        range:
+        value: ClearDepthStencil,
     ) {
         let clear_value = vk::ClearDepthStencilValue {
-            depth: depth.unwrap_or(0.0),
-            stencil: stencil.unwrap_or(0) as u32,
+            depth: value.depth,
+            stencil: value.stencil,
         };
 
         let range = {
@@ -311,10 +311,10 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
 
             vk::ImageSubresourceRange {
                 aspect_mask,
-                base_mip_level: mip_level as u32,
+                base_mip_level: mip_level as _,
                 level_count: 1,
-                base_array_layer: array_layers.start as u32,
-                layer_count: (array_layers.end - array_layers.start) as u32,
+                base_array_layer: array_layers.start as _,
+                layer_count: (array_layers.end - array_layers.start) as _,
             }
         };
 
