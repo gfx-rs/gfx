@@ -4,6 +4,7 @@ use core::command::{ClearColor, ClearDepthStencil, ClearValue, Offset};
 use core::device::Extent;
 use core::format::{SurfaceType, ChannelType};
 use core::{IndexType, Primitive};
+use std::ops::Range;
 
 
 pub fn map_format(surface: SurfaceType, chan: ChannelType) -> Option<vk::Format> {
@@ -231,14 +232,14 @@ pub fn map_extent(offset: Extent) -> vk::Extent3D {
 
 pub fn map_subresource_layers(
     aspect_mask: vk::ImageAspectFlags,
-    &(level, ref layers): &image::SubresourceLayers,
-) -> vk::ImageSubresourceLayers
-{
+    level: image::Level,
+    layers: &Range<image::Layer>,
+) -> vk::ImageSubresourceLayers {
     vk::ImageSubresourceLayers {
         aspect_mask,
-        mip_level: level as u32,
-        base_array_layer: layers.start as u32,
-        layer_count: (layers.end - layers.start) as u32,
+        mip_level: level as _,
+        base_array_layer: layers.start as _,
+        layer_count: (layers.end - layers.start) as _,
     }
 }
 
@@ -246,22 +247,19 @@ pub fn map_subresource_with_layers(
     aspect_mask: vk::ImageAspectFlags,
     (mip_level, base_layer): image::Subresource,
     layers: image::Layer,
-) -> vk::ImageSubresourceLayers
-{
-    map_subresource_layers(aspect_mask, &(mip_level, base_layer..base_layer+layers))
+) -> vk::ImageSubresourceLayers {
+    map_subresource_layers(aspect_mask, mip_level, &(base_layer..base_layer+layers))
 }
 
 pub fn map_subresource_range(
-    aspect_mask: vk::ImageAspectFlags,
-    &(ref levels, ref layers): &image::SubresourceRange,
-) -> vk::ImageSubresourceRange
-{
+    range: &image::SubresourceRange,
+) -> vk::ImageSubresourceRange {
     vk::ImageSubresourceRange {
-        aspect_mask,
-        base_mip_level: levels.start as u32,
-        level_count: (levels.end - levels.start) as u32,
-        base_array_layer: layers.start as u32,
-        layer_count: (layers.end - layers.start) as u32,
+        aspect_mask: map_image_aspects(range.aspects),
+        base_mip_level: range.levels.start as _,
+        level_count: (range.levels.end - range.levels.start) as _,
+        base_array_layer: range.layers.start as _,
+        layer_count: (range.layers.end - range.layers.start) as _,
     }
 }
 
