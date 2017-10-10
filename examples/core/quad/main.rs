@@ -50,6 +50,12 @@ const QUAD: [Vertex; 6] = [
     Vertex { a_Pos: [ -0.5,-0.33 ], a_Uv: [0.0, 0.0] },
 ];
 
+const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
+    aspects: i::ASPECT_COLOR,
+    levels: 0 .. 1,
+    layers: 0 .. 1,
+};
+
 #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]
 fn main() {
     env_logger::init().unwrap();
@@ -280,14 +286,14 @@ fn main() {
             let pairs = images
                 .into_iter()
                 .map(|image| {
-                    let rtv = device.view_image_as_render_target(&image, ColorFormat::get_format(), (0, 0..1)).unwrap();
+                    let rtv = device.create_image_view(&image, ColorFormat::get_format(), COLOR_RANGE.clone()).unwrap();
                     (image, rtv)
                 })
                 .collect::<Vec<_>>();
             let fbos = pairs
                 .iter()
                 .map(|&(_, ref rtv)| {
-                    device.create_framebuffer(&render_pass, &[rtv], &[], extent).unwrap()
+                    device.create_framebuffer(&render_pass, &[rtv], extent).unwrap()
                 })
                 .collect();
             (pairs, fbos)
@@ -310,8 +316,8 @@ fn main() {
     let upload_type =
         memory_types.iter().find(|mem_type| {
             buffer_req.type_mask & (1 << mem_type.id) != 0 &&
-            mem_type.properties.contains(m::CPU_VISIBLE) &&
-            !mem_type.properties.contains(m::CPU_CACHED)
+            mem_type.properties.contains(m::CPU_VISIBLE)
+            //&& !mem_type.properties.contains(m::CPU_CACHED)
         })
         .unwrap();
 
@@ -372,7 +378,7 @@ fn main() {
     let image_memory = device.allocate_memory(device_type, image_req.size).unwrap();
 
     let image_logo = device.bind_image_memory(&image_memory, 0, image_unbound).unwrap();
-    let image_srv = device.view_image_as_shader_resource(&image_logo, ColorFormat::get_format()).unwrap();
+    let image_srv = device.create_image_view(&image_logo, ColorFormat::get_format(), COLOR_RANGE.clone()).unwrap();
 
     let sampler = device.create_sampler(
         i::SamplerInfo::new(
@@ -420,7 +426,7 @@ fn main() {
                 states: (i::Access::empty(), i::ImageLayout::Undefined) ..
                         (i::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal),
                 target: &image_logo,
-                range: (0..1, 0..1),
+                range: COLOR_RANGE.clone(),
             };
             cmd_buffer.pipeline_barrier(pso::TOP_OF_PIPE .. pso::TRANSFER, &[image_barrier]);
 
@@ -432,8 +438,7 @@ fn main() {
                     buffer_offset: 0,
                     buffer_row_pitch: row_pitch,
                     buffer_slice_pitch: row_pitch * (height as u32),
-                    image_aspect: i::ASPECT_COLOR,
-                    image_subresource: (0, 0..1),
+                    image_range: COLOR_RANGE.clone(),
                     image_offset: command::Offset { x: 0, y: 0, z: 0 },
                     image_extent: d::Extent { width, height, depth: 1 },
                 }]);
@@ -442,7 +447,7 @@ fn main() {
                 states: (i::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal) ..
                         (i::SHADER_READ, i::ImageLayout::ShaderReadOnlyOptimal),
                 target: &image_logo,
-                range: (0..1, 0..1),
+                range: COLOR_RANGE.clone(),
             };
             cmd_buffer.pipeline_barrier(pso::TRANSFER .. pso::BOTTOM_OF_PIPE, &[image_barrier]);
 
@@ -527,7 +532,7 @@ fn main() {
     device.destroy_buffer(vertex_buffer);
     device.destroy_buffer(image_upload_buffer);
     device.destroy_image(image_logo);
-    device.destroy_shader_resource_view(image_srv);
+    device.destroy_image_view(image_srv);
     device.destroy_sampler(sampler);
     device.destroy_fence(frame_fence);
     device.destroy_semaphore(frame_semaphore);
@@ -545,7 +550,7 @@ fn main() {
         device.destroy_framebuffer(framebuffer);
     }
     for (image, rtv) in frame_images {
-        device.destroy_render_target_view(rtv);
+        device.destroy_image_view(rtv);
         device.destroy_image(image);
     }
 }
