@@ -6,11 +6,11 @@ use std::ops::Range;
 use std::cmp;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::{mem, ptr, slice};
+use std::{mem, ptr};
 
 use core::{self,
         image, pass, format, mapping, memory, buffer, pso};
-use core::device::{WaitFor, BindError, OutOfMemory, TargetViewError, FramebufferError, ShaderError, Extent};
+use core::device::{WaitFor, BindError, OutOfMemory, FramebufferError, ShaderError, Extent};
 use core::pso::{DescriptorSetWrite, DescriptorType, DescriptorSetLayoutBinding, AttributeDesc};
 use core::pass::{Subpass};
 
@@ -60,6 +60,7 @@ impl core::Adapter<Backend> for Adapter {
         let mut transfer_queues = Vec::new();
 
         for &(_, queue_type, count) in queue_descs {
+            assert_eq!(count, 1);
             match queue_type {
                 core::QueueType::General => general_queues
                     .push(unsafe { core::CommandQueue::new(command::CommandQueue::new(self.device)) }),
@@ -73,7 +74,6 @@ impl core::Adapter<Backend> for Adapter {
         }
 
         assert!(queue_descs.len() == 1, "Metal only supports one queue family");
-        let (_, _, queue_count) = queue_descs[0];
 
         let resource_heaps = [
             MTLFeatureSet::iOS_GPUFamily1_v3,
@@ -162,6 +162,7 @@ impl core::Adapter<Backend> for Adapter {
 #[derive(Clone, Copy)]
 struct PrivateCapabilities {
     resource_heaps: bool,
+    #[allow(dead_code)] //TODO: run-time checks instead of compile time feature
     indirect_arguments: bool,
 }
 
@@ -178,16 +179,13 @@ impl LanguageVersion {
 
 impl Device {
     pub fn create_shader_library_from_file<P>(
-        &mut self,
-        path: P,
+        &mut self, _path: P,
     ) -> Result<n::ShaderModule, ShaderError> where P: AsRef<Path> {
         unimplemented!()
     }
 
     pub fn create_shader_library_from_source<S>(
-        &mut self,
-        source: S,
-        version: LanguageVersion,
+        &mut self, source: S, version: LanguageVersion,
     ) -> Result<n::ShaderModule, ShaderError> where S: AsRef<str> {
         let options = MTLCompileOptions::new();
         options.set_language_version(match version {
@@ -203,6 +201,7 @@ impl Device {
         }
     }
 
+    #[cfg(feature = "argument_buffer")]
     fn describe_argument(ty: DescriptorType, index: usize, count: usize) -> MTLArgumentDescriptor {
         let arg = MTLArgumentDescriptor::new();
         arg.set_array_length(count as NSUInteger);
@@ -234,15 +233,21 @@ impl core::Device<Backend> for Device {
         &self.limits
     }
 
-    fn create_renderpass(&mut self, attachments: &[pass::Attachment], subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> n::RenderPass {
+    fn create_renderpass(
+        &mut self,
+        attachments: &[pass::Attachment],
+        _subpasses: &[pass::SubpassDesc],
+        _dependencies: &[pass::SubpassDependency],
+    ) -> n::RenderPass {
+        //TODO: subpasses, dependencies
         unsafe {
             let pass = MTLRenderPassDescriptor::new(); // Returns retained
             defer_on_unwind! { pass.release() };
 
             let mut color_attachment_index = 0;
-            let mut depth_attachment_index = 0;
+            //let mut depth_attachment_index = 0;
             for attachment in attachments {
-                let (format, is_depth) = map_format(attachment.format).expect("unsupported attachment format");
+                let (_format, is_depth) = map_format(attachment.format).expect("unsupported attachment format");
 
                 let mtl_attachment: MTLRenderPassAttachmentDescriptor;
                 if !is_depth {
@@ -258,11 +263,15 @@ impl core::Device<Backend> for Device {
                 mtl_attachment.set_store_action(map_store_operation(attachment.ops.store));
             }
 
-            n::RenderPass { desc: pass, attachments: attachments.into() }
+            n::RenderPass {
+                desc: pass,
+                attachments: attachments.into(),
+                num_colors: color_attachment_index,
+            }
         }
     }
 
-    fn create_pipeline_layout(&mut self, sets: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
+    fn create_pipeline_layout(&mut self, _sets: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
         n::PipelineLayout {}
     }
 
@@ -271,7 +280,7 @@ impl core::Device<Backend> for Device {
         params: &[(pso::GraphicsShaderSet<'a, Backend>, &n::PipelineLayout, Subpass<'a, Backend>, &pso::GraphicsPipelineDesc)],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         unsafe {
-            params.iter().map(|&(ref shader_set, pipeline_layout, ref pass_descriptor, pipeline_desc)| {
+            params.iter().map(|&(ref shader_set, _pipeline_layout, ref pass_descriptor, pipeline_desc)| {
                 let pipeline =  MTLRenderPipelineDescriptor::alloc().init(); // Returns retained
                 defer! { pipeline.release() };
 
@@ -372,7 +381,7 @@ impl core::Device<Backend> for Device {
                         }
                     }
                 }
-                for (i, &AttributeDesc { location, binding, element, }) in pipeline_desc.attributes.iter().enumerate() {
+                for (i, &AttributeDesc { binding, element, ..}) in pipeline_desc.attributes.iter().enumerate() {
                     let mtl_vertex_format = map_vertex_format(element.format).expect("unsupported vertex format for Metal");
 
                     let mtl_attribute_desc = vertex_descriptor.attributes().object_at(i);
@@ -407,9 +416,8 @@ impl core::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_framebuffer(&mut self, renderpass: &n::RenderPass,
-        color_attachments: &[&n::RenderTargetView], depth_stencil_attachments: &[&n::DepthStencilView],
-        extent: Extent,
+    fn create_framebuffer(
+        &mut self, renderpass: &n::RenderPass, attachments: &[&n::ImageView], extent: Extent
     ) -> Result<n::FrameBuffer, FramebufferError> {
         let descriptor = unsafe {
             let desc: MTLRenderPassDescriptor = msg_send![renderpass.desc.0, copy]; // Returns retained
@@ -417,16 +425,15 @@ impl core::Device<Backend> for Device {
 
             msg_send![desc.0, setRenderTargetArrayLength: extent.depth as usize];
 
-            for (i, attachment) in color_attachments.iter().enumerate() {
+            for (i, attachment) in attachments[..renderpass.num_colors].iter().enumerate() {
                 let mtl_attachment = desc.color_attachments().object_at(i);
                 mtl_attachment.set_texture(attachment.0);
             }
 
-            if depth_stencil_attachments.len() > 1 {
-                panic!("Metal does not support multiple depth attachments");
-            }
+            assert!(renderpass.num_colors + 1 >= attachments.len(),
+                "Metal does not support multiple depth attachments");
 
-            if let Some(attachment) = depth_stencil_attachments.get(0) {
+            if let Some(attachment) = attachments.get(renderpass.num_colors) {
                 let mtl_attachment = desc.depth_attachment();
                 mtl_attachment.set_texture(attachment.0);
                 // TODO: stencil
@@ -438,7 +445,7 @@ impl core::Device<Backend> for Device {
         Ok(n::FrameBuffer(descriptor))
     }
 
-    fn create_shader_module(&mut self, spirv_data: &[u8]) -> Result<n::ShaderModule, ShaderError> {
+    fn create_shader_module(&mut self, _spirv_data: &[u8]) -> Result<n::ShaderModule, ShaderError> {
         unimplemented!()
     }
 
@@ -472,89 +479,35 @@ impl core::Device<Backend> for Device {
         }
     }
 
-    fn view_buffer_as_constant(&mut self, buffer: &n::Buffer, range: Range<u64>) -> Result<n::ConstantBufferView, TargetViewError> {
-        unimplemented!()
+    fn destroy_sampler(&mut self, sampler: n::Sampler) {
+        unsafe { sampler.0.release(); }
     }
 
-    fn view_image_as_render_target(&mut self,
-        image: &n::Image, format: format::Format, _layers: image::SubresourceLayers,
-    ) -> Result<n::RenderTargetView, TargetViewError> {
-        // TODO: subresource layers
+    fn acquire_mapping_raw(
+        &mut self, buf: &n::Buffer, read: Option<Range<u64>>
+    ) -> Result<*mut u8, mapping::Error> {
+        let base_ptr = buf.0.contents() as *mut u8;
 
-        let (mtl_format, _) = match map_format(format) {
-            Some(f) => f,
-            None => {
-                error!("failed to find corresponding Metal format for {:?}", format);
-                return Err(TargetViewError::BadFormat);
-            },
-        };
-
-        unsafe {
-            Ok(n::RenderTargetView(image.0.new_texture_view(mtl_format))) // Returns retained
+        if base_ptr.is_null() {
+            return Err(mapping::Error::InvalidAccess);
         }
-    }
 
-    fn view_image_as_depth_stencil(&mut self,
-        image: &n::Image, format: format::Format, _layers: image::SubresourceLayers,
-    ) -> Result<n::DepthStencilView, TargetViewError> {
-        // TODO: subresource layers
-
-        let (mtl_format, _) = match map_format(format) {
-            Some(f) => f,
-            None => {
-                error!("failed to find corresponding Metal format for {:?}", format);
-                return Err(TargetViewError::BadFormat);
-            },
-        };
-
-        unsafe {
-            Ok(n::DepthStencilView(image.0.new_texture_view(mtl_format))) // Returns retained
-        }
-    }
-
-    fn view_image_as_shader_resource(&mut self, image: &n::Image, format: format::Format) -> Result<n::ShaderResourceView, TargetViewError> {
-        let (mtl_format, _) = map_format(format).ok_or_else(|| {
-            error!("failed to find corresponding Metal format for {:?}", format);
-            panic!(); // TODO: return TargetViewError once it is implemented
-        })?;
-
-        unsafe {
-            Ok(n::ShaderResourceView(image.0.new_texture_view(mtl_format))) // Returns retained
-        }
-    }
-
-    fn view_image_as_unordered_access(&mut self, image: &n::Image, format: format::Format) -> Result<n::UnorderedAccessView, TargetViewError> {
-        unimplemented!()
-    }
-
-    fn acquire_mapping_raw(&mut self, buf: &n::Buffer, read: Option<Range<u64>>)
-        -> Result<*mut u8, mapping::Error> {
-        unsafe {
-            let base_ptr = buf.0.contents() as *mut u8;
-
-            if base_ptr.is_null() {
-                return Err(mapping::Error::InvalidAccess);
+        if let Some(range) = read {
+            if range.end > buf.0.length() {
+                return Err(mapping::Error::OutOfBounds);
             }
-
-            if let Some(range) = read {
-                if range.end > buf.0.length() {
-                    return Err(mapping::Error::OutOfBounds);
-                }
-            }
-
-            Ok(base_ptr)
         }
+
+        Ok(base_ptr)
     }
 
     fn release_mapping_raw(&mut self, buffer: &n::Buffer, wrote: Option<Range<u64>>) {
-        unsafe {
-            if let Some(range) = wrote {
-                if buffer.0.storage_mode() != MTLStorageMode::Shared {
-                    buffer.0.did_modify_range(NSRange {
-                        location: range.start as NSUInteger,
-                        length: (range.end - range.start) as NSUInteger,
-                    });
-                }
+        if let Some(range) = wrote {
+            if buffer.0.storage_mode() != MTLStorageMode::Shared {
+                buffer.0.did_modify_range(NSRange {
+                    location: range.start as NSUInteger,
+                    length: (range.end - range.start) as NSUInteger,
+                });
             }
         }
     }
@@ -729,38 +682,6 @@ impl core::Device<Backend> for Device {
         unsafe { buffer.0.release(); }
     }
 
-    fn destroy_buffer(&mut self, buffer: n::Buffer) {
-        unsafe { buffer.0.release(); }
-    }
-
-    fn destroy_image(&mut self, image: n::Image) {
-        unsafe { image.0.release(); }
-    }
-
-    fn destroy_render_target_view(&mut self, view: n::RenderTargetView) {
-        unsafe { view.0.release(); }
-    }
-
-    fn destroy_depth_stencil_view(&mut self, view: n::DepthStencilView) {
-        unsafe { view.0.release(); }
-    }
-
-    fn destroy_constant_buffer_view(&mut self, view: n::ConstantBufferView) {
-        unimplemented!()
-    }
-
-    fn destroy_shader_resource_view(&mut self, view: n::ShaderResourceView) {
-        unsafe { view.0.release(); }
-    }
-
-    fn destroy_unordered_access_view(&mut self, view: n::UnorderedAccessView) {
-        unimplemented!()
-    }
-
-    fn destroy_sampler(&mut self, sampler: n::Sampler) {
-        unsafe { sampler.0.release(); }
-    }
-
     fn destroy_semaphore(&mut self, semaphore: n::Semaphore) {
         unsafe { n::dispatch_release(semaphore.0) }
     }
@@ -788,7 +709,9 @@ impl core::Device<Backend> for Device {
         }
     }
 
-    fn create_buffer(&mut self, size: u64, _stride: u64, _usage: buffer::Usage) -> Result<n::UnboundBuffer, buffer::CreationError> {
+    fn create_buffer(
+        &mut self, size: u64, _stride: u64, _usage: buffer::Usage
+    ) -> Result<n::UnboundBuffer, buffer::CreationError> {
         Ok(n::UnboundBuffer {
             size
         })
@@ -815,7 +738,9 @@ impl core::Device<Backend> for Device {
         }
     }
 
-    fn bind_buffer_memory(&mut self, memory: &n::Memory, offset: u64, buffer: n::UnboundBuffer) -> Result<n::Buffer, BindError> {
+    fn bind_buffer_memory(
+        &mut self, memory: &n::Memory, offset: u64, buffer: n::UnboundBuffer
+    ) -> Result<n::Buffer, BindError> {
         let bound_buffer = match *memory {
             n::Memory::Native(ref heap) => {
                 let resource_options = resource_options_from_storage_and_cache(
@@ -836,7 +761,22 @@ impl core::Device<Backend> for Device {
         }
     }
 
-    fn create_image(&mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
+    fn destroy_buffer(&mut self, buffer: n::Buffer) {
+        unsafe { buffer.0.release(); }
+    }
+
+    fn create_buffer_view(
+        &mut self, _buffer: &n::Buffer, _range: Range<u64>
+    ) -> Result<n::BufferView, buffer::ViewError> {
+        unimplemented!()
+    }
+
+    fn destroy_buffer_view(&mut self, _view: n::BufferView) {
+        unimplemented!()
+    }
+
+    fn create_image(
+        &mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
          -> Result<n::UnboundImage, image::CreationError>
     {
         let (mtl_format, _) = map_format(format).ok_or(image::CreationError::Format(format.0, Some(format.1)))?;
@@ -891,7 +831,9 @@ impl core::Device<Backend> for Device {
         }
     }
 
-    fn bind_image_memory(&mut self, memory: &n::Memory, offset: u64, image: n::UnboundImage) -> Result<n::Image, BindError> {
+    fn bind_image_memory(
+        &mut self, memory: &n::Memory, offset: u64, image: n::UnboundImage
+    ) -> Result<n::Image, BindError> {
         let bound_image = match *memory {
             n::Memory::Native(ref heap) => {
                 let resource_options = resource_options_from_storage_and_cache(
@@ -913,6 +855,32 @@ impl core::Device<Backend> for Device {
         } else {
             Err(BindError::OutOfBounds)
         }
+    }
+
+    fn destroy_image(&mut self, image: n::Image) {
+        unsafe { image.0.release(); }
+    }
+
+    fn create_image_view(&mut self,
+        image: &n::Image, format: format::Format, _range: image::SubresourceRange,
+    ) -> Result<n::ImageView, image::ViewError> {
+        // TODO: subresource range
+
+        let (mtl_format, _) = match map_format(format) {
+            Some(f) => f,
+            None => {
+                error!("failed to find corresponding Metal format for {:?}", format);
+                return Err(image::ViewError::BadFormat);
+            },
+        };
+
+        unsafe {
+            Ok(n::ImageView(image.0.new_texture_view(mtl_format))) // Returns retained
+        }
+    }
+
+    fn destroy_image_view(&mut self, view: n::ImageView) {
+        unsafe { view.0.release(); }
     }
 
     // Emulated fence implementations

@@ -1,8 +1,6 @@
 use {Adapter, Backend};
 use {native, conversions};
 
-use std::mem;
-use std::marker::PhantomData;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -46,6 +44,7 @@ pub struct Swapchain {
 }
 
 const SWAP_CHAIN_IMAGE_COUNT: usize = 3;
+const kCVPixelFormatType_32RGBA: u32 = (b'R' as u32) << 24 | (b'G' as u32) << 16 | (b'B' as u32) << 8 | b'A' as u32;
 
 impl core::Surface<Backend> for Surface {
     fn get_kind(&self) -> image::Kind {
@@ -65,7 +64,7 @@ impl core::Surface<Backend> for Surface {
         present_queue: &CommandQueue<Backend, C>,
     ) -> (Swapchain, Backbuffer<Backend>) {
         let (mtl_format, cv_format) = match config.color_format {
-            format::Format(SurfaceType::R8_G8_B8_A8, ChannelType::Srgb) => (MTLPixelFormat::RGBA8Unorm_sRGB, native::kCVPixelFormatType_32RGBA),
+            format::Format(SurfaceType::R8_G8_B8_A8, ChannelType::Srgb) => (MTLPixelFormat::RGBA8Unorm_sRGB, kCVPixelFormatType_32RGBA),
             _ => panic!("unsupported backbuffer format"), // TODO: more formats
         };
 
