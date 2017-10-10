@@ -69,15 +69,11 @@ fn main() {
         .unwrap();
     #[cfg(feature = "gl")]
     let window = {
-        use core::format::ChannelType;
-
-        let color_format = ColorFormat::get_format();
-        let color_total_bits = color_format.0.get_total_bits();
-        let alpha_bits = color_format.0.get_alpha_stencil_bits();
-        let builder = glutin::ContextBuilder::new()
-            .with_vsync(true)
-            .with_pixel_format(color_total_bits - alpha_bits, alpha_bits)
-            .with_srgb(color_format.1 == ChannelType::Srgb);
+        let builder = back::config_context(
+            glutin::ContextBuilder::new(),
+            ColorFormat::get_format(),
+            None,
+        ).with_vsync(true);
         glutin::GlWindow::new(wb, builder, &events_loop).unwrap()
     };
 

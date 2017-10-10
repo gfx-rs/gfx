@@ -148,17 +148,17 @@ impl CommandQueue {
     }
     */
 
-    fn bind_target(&mut self, point: gl::types::GLenum, attachment: gl::types::GLenum, view: &native::TargetView) {
+    fn bind_target(&mut self, point: gl::types::GLenum, attachment: gl::types::GLenum, view: &native::ImageView) {
         let gl = &self.share.context;
         match view {
-            &native::TargetView::Surface(surface) => unsafe {
+            &native::ImageView::Surface(surface) => unsafe {
                 gl.FramebufferRenderbuffer(point, attachment, gl::RENDERBUFFER, surface);
             },
-            &native::TargetView::Texture(texture, level) => unsafe {
+            &native::ImageView::Texture(texture, level) => unsafe {
                 gl.FramebufferTexture(point, attachment, texture,
                                       level as gl::types::GLint);
             },
-            &native::TargetView::TextureLayer(texture, level, layer) => unsafe {
+            &native::ImageView::TextureLayer(texture, level, layer) => unsafe {
                 gl.FramebufferTextureLayer(point, attachment, texture,
                                            level as gl::types::GLint,
                                            layer as gl::types::GLint);
