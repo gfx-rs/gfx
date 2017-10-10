@@ -24,7 +24,8 @@ pub struct FormatBits {
     pub stencil: u8,
 }
 
-const BITS_ZERO: FormatBits = FormatBits {
+/// Format bits configuration with no bits assigned.
+pub const BITS_ZERO: FormatBits = FormatBits {
     total: 0,
     color: 0,
     alpha: 0,

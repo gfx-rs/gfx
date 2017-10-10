@@ -75,9 +75,9 @@ pub enum Command {
     },
     SetScissors(BufferSlice),
     SetBlendColor(ColorValue),
-    ClearColor(n::TargetView, command::ClearColor),
+    ClearColor(n::ImageView, command::ClearColor),
     BindFrameBuffer(FrameBufferTarget, n::FrameBuffer),
-    BindTargetView(FrameBufferTarget, AttachmentPoint, n::TargetView),
+    BindTargetView(FrameBufferTarget, AttachmentPoint, n::ImageView),
     SetDrawColorBuffers(usize),
 }
 
@@ -248,10 +248,6 @@ impl RawCommandBuffer {
         };
         slice
     }
-
-    fn is_main_target(&self, tv: n::TargetView) -> bool {
-        tv == n::TargetView::Surface(0)
-    }
 }
 
 impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
@@ -329,31 +325,30 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn clear_color(
+    fn clear_color_image(
         &mut self,
-        rtv: &n::TargetView,
+        image: &n::Image,
         _: image::ImageLayout,
+        _range: image::SubresourceRange,
         value: command::ClearColor,
     ) {
-        if self.is_main_target(*rtv) {
-            let fbo = self.display_fb;
-            self.push_cmd(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, fbo));
-        } else {
-            let fbo = self.fbo;
-            self.push_cmd(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, fbo));
-            self.push_cmd(Command::BindTargetView(gl::DRAW_FRAMEBUFFER, gl::COLOR_ATTACHMENT0, *rtv));
-            self.push_cmd(Command::SetDrawColorBuffers(1));
-        }
-
-        self.push_cmd(Command::ClearColor(*rtv, value));
+        let fbo = self.fbo;
+        let view = match *image {
+            n::Image::Surface(id) => n::ImageView::Surface(id),
+            n::Image::Texture(id) => n::ImageView::Texture(id, 0), //TODO
+        };
+        self.push_cmd(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, fbo));
+        self.push_cmd(Command::BindTargetView(gl::DRAW_FRAMEBUFFER, gl::COLOR_ATTACHMENT0, view));
+        self.push_cmd(Command::SetDrawColorBuffers(1));
+        self.push_cmd(Command::ClearColor(view, value));
     }
 
-    fn clear_depth_stencil(
+    fn clear_depth_stencil_image(
         &mut self,
-        _dsv: &n::TargetView,
+        _image: &n::Image,
         _: image::ImageLayout,
-        _depth: Option<target::Depth>,
-        _stencil: Option<target::Stencil>,
+        _range: image::SubresourceRange,
+        _value: command::ClearDepthStencil,
     ) {
         unimplemented!()
     }
