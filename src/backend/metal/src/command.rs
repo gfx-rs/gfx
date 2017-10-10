@@ -9,8 +9,8 @@ use core::{self, memory, target, pool, pso};
 use core::{VertexCount, VertexOffset, InstanceCount, IndexCount, Viewport};
 use core::{RawSubmission};
 use core::buffer::{IndexBufferView};
-use core::image::{ImageLayout};
-use core::command::{AttachmentClear, ClearColor, ClearValue, BufferImageCopy, BufferCopy};
+use core::image::{ImageLayout, SubresourceRange};
+use core::command::{AttachmentClear, ClearColor, ClearDepthStencil, ClearValue, BufferImageCopy, BufferCopy};
 use core::command::{ImageCopy, SubpassContents};
 use core::command::{ImageResolve};
 
@@ -303,11 +303,22 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn clear_color(
+    fn clear_color_image(
         &mut self,
-        rtv: &native::RenderTargetView,
+        image: &native::Image,
         layout: ImageLayout,
-        color: ClearColor,
+        range: SubresourceRange,
+        value: ClearColor,
+    ) {
+        unimplemented!()
+    }
+
+    fn clear_depth_stencil_image(
+        &mut self,
+        image: &native::Image,
+        layout: ImageLayout,
+        range: SubresourceRange,
+        value: ClearDepthStencil,
     ) {
         unimplemented!()
     }
@@ -316,16 +327,6 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
         &mut self,
         clears: &[AttachmentClear],
         rects: &[target::Rect],
-    ) {
-        unimplemented!()
-    }
-
-    fn clear_depth_stencil(
-        &mut self,
-        dsv: &native::DepthStencilView,
-        layout: ImageLayout,
-        depth_value: Option<target::Depth>,
-        stencil_value: Option<target::Stencil>,
     ) {
         unimplemented!()
     }
@@ -554,9 +555,11 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
 
         for region in regions {
             let image_offset = &region.image_offset;
+            let r = &region.image_range;
+            assert_eq!(r.levels.start + 1, r.levels.end);
 
-            for layer in region.image_subresource.1.clone() {
-                let offset = region.buffer_offset + region.buffer_slice_pitch as NSUInteger * (layer - region.image_subresource.1.start) as NSUInteger;
+            for layer in r.layers.clone() {
+                let offset = region.buffer_offset + region.buffer_slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
                 unsafe {
                     msg_send![encoder.0,
                         copyFromBuffer: (src.0).0
@@ -566,7 +569,7 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
                         sourceSize: extent
                         toTexture: (dst.0).0
                         destinationSlice: layer as NSUInteger
-                        destinationLevel: region.image_subresource.0 as NSUInteger
+                        destinationLevel: r.levels.start as NSUInteger
                         destinationOrigin: MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ }
                     ]
                 }
@@ -591,14 +594,16 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
 
         for region in regions {
             let image_offset = &region.image_offset;
+            let r = &region.image_range;
+            assert_eq!(r.levels.start + 1, r.levels.end);
 
-            for layer in region.image_subresource.1.clone() {
-                let offset = region.buffer_offset + region.buffer_slice_pitch as NSUInteger * (layer - region.image_subresource.1.start) as NSUInteger;
+            for layer in r.layers.clone() {
+                let offset = region.buffer_offset + region.buffer_slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
                 unsafe {
                     msg_send![encoder.0,
                         copyFromTexture: (src.0).0
                         sourceSlice: layer as NSUInteger
-                        sourceLevel: region.image_subresource.0 as NSUInteger
+                        sourceLevel: r.levels.start as NSUInteger
                         sourceOrigin: MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ }
                         sourceSize: extent
                         toBuffer: (dst.0).0
