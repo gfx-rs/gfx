@@ -157,7 +157,7 @@ impl core::RawCommandPool<Backend> for CommandPool {
     unsafe fn from_queue(queue: &CommandQueue, flags: pool::CommandPoolCreateFlags) -> Self {
         CommandPool {
             queue: (queue.0).clone(),
-            managed: if flags.contains(pool::RESET_INDIVIDUAL) { 
+            managed: if flags.contains(pool::RESET_INDIVIDUAL) {
                 None
             } else {
                 Some(Vec::new())
@@ -497,6 +497,15 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn bind_compute_pipeline(&mut self, pipeline: &native::ComputePipeline) {
+        unimplemented!()
+    }
+
+    fn bind_compute_descriptor_sets(
+        &mut self,
+        _layout: &native::PipelineLayout,
+        _first_set: usize,
+        _sets: &[&native::DescriptorSet],
+    ) {
         unimplemented!()
     }
 

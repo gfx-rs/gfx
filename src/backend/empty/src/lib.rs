@@ -440,6 +440,15 @@ impl core::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
+    fn bind_compute_descriptor_sets(
+        &mut self,
+        _: &(),
+        _: usize,
+        _: &[&()],
+    ) {
+        unimplemented!()
+    }
+
     fn dispatch(&mut self, _: u32, _: u32, _: u32) {
         unimplemented!()
     }

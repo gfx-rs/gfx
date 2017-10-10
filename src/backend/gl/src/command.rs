@@ -471,6 +471,15 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
+    fn bind_compute_descriptor_sets(
+        &mut self,
+        _layout: &n::PipelineLayout,
+        _first_set: usize,
+        _sets: &[&n::DescriptorSet],
+    ) {
+        unimplemented!()
+    }
+
     fn dispatch(&mut self, x: u32, y: u32, z: u32) {
         self.push_cmd(Command::Dispatch(x, y, z));
     }

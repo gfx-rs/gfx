@@ -173,6 +173,14 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     /// - Only queues with compute capability support this function.
     fn bind_compute_pipeline(&mut self, &B::ComputePipeline);
 
+    ///
+    fn bind_compute_descriptor_sets(
+        &mut self,
+        layout: &B::PipelineLayout,
+        first_set: usize,
+        sets: &[&B::DescriptorSet],
+    );
+
     /// Execute a workgroup in the compute pipeline.
     ///
     /// # Errors
