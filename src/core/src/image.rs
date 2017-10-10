@@ -591,7 +591,7 @@ pub type Subresource = (Level, Layer);
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct SubresourceRange {
     /// Included aspects: color/depth/stencil
-    pub aspect: AspectFlags,
+    pub aspects: AspectFlags,
     /// Included array levels
     pub levels: Range<Level>,
     /// Included mipmap levels
