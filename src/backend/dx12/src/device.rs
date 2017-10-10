@@ -44,12 +44,14 @@ pub struct UnboundBuffer {
 #[derive(Debug)]
 pub struct UnboundImage {
     desc: winapi::D3D12_RESOURCE_DESC,
+    dsv_format: winapi::DXGI_FORMAT,
     requirements: memory::Requirements,
     kind: image::Kind,
     usage: image::Usage,
+    aspects: image::AspectFlags,
     bits_per_texel: u8,
-    levels: image::Level,
-    layers: image::Layer,
+    num_levels: image::Level,
+    num_layers: image::Layer,
 }
 
 impl Device {
@@ -123,7 +125,7 @@ impl Device {
         Ok(n::ShaderModule { shaders: shader_map })
     }
 
-    pub fn create_descriptor_heap_impl(
+    pub(crate) fn create_descriptor_heap_impl(
         device: &mut ComPtr<winapi::ID3D12Device>,
         heap_type: winapi::D3D12_DESCRIPTOR_HEAP_TYPE,
         shader_visible: bool,
@@ -213,6 +215,137 @@ impl Device {
             }
         }
     }
+
+    fn view_image_as_render_target(
+        &mut self,
+        resource: *mut winapi::ID3D12Resource,
+        kind: image::Kind,
+        format: winapi::DXGI_FORMAT,
+        range: &image::SubresourceRange,
+    ) -> Result<winapi::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
+        //TODO: use subresource range
+        let handle = self.rtv_pool.lock().unwrap().alloc_handles(1).cpu;
+
+        if kind.get_dimensions().3 != image::AaMode::Single {
+            error!("No MSAA supported yet!");
+        }
+
+        let mut desc = winapi::D3D12_RENDER_TARGET_VIEW_DESC {
+            Format: format,
+            .. unsafe { mem::zeroed() }
+        };
+
+        match kind {
+            image::Kind::D2(..) => {
+                assert_eq!(range.levels.start + 1, range.levels.end);
+                desc.ViewDimension = winapi::D3D12_RTV_DIMENSION_TEXTURE2D;
+                *unsafe { desc.Texture2D_mut() } = winapi::D3D12_TEX2D_RTV {
+                    MipSlice: range.levels.start as _,
+                    PlaneSlice: 0, //TODO
+                };
+            },
+            _ => unimplemented!()
+        };
+
+        unsafe {
+            self.raw.CreateRenderTargetView(resource, &desc, handle);
+        }
+
+        Ok(handle)
+    }
+
+    fn view_image_as_depth_stencil(
+        &mut self,
+        resource: *mut winapi::ID3D12Resource,
+        kind: image::Kind,
+        format: winapi::DXGI_FORMAT,
+        range: &image::SubresourceRange,
+    ) -> Result<winapi::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
+        //TODO: use subresource range
+        let handle = self.dsv_pool.lock().unwrap().alloc_handles(1).cpu;
+
+        if kind.get_dimensions().3 != image::AaMode::Single {
+            error!("No MSAA supported yet!");
+        }
+
+        let mut desc = winapi::D3D12_DEPTH_STENCIL_VIEW_DESC {
+            Format: format,
+            .. unsafe { mem::zeroed() }
+        };
+
+        match kind {
+            image::Kind::D2(..) => {
+                assert_eq!(range.levels.start + 1, range.levels.end);
+                desc.ViewDimension = winapi::D3D12_DSV_DIMENSION_TEXTURE2D;
+                *unsafe { desc.Texture2D_mut() } = winapi::D3D12_TEX2D_DSV {
+                    MipSlice: range.levels.start as _,
+                };
+            },
+            _ => unimplemented!()
+        };
+
+        unsafe {
+            self.raw.CreateDepthStencilView(resource, &desc, handle);
+        }
+
+        Ok(handle)
+    }
+
+    fn view_image_as_shader_resource(
+        &mut self,
+        resource: *mut winapi::ID3D12Resource,
+        kind: image::Kind,
+        format: winapi::DXGI_FORMAT,
+        range: &image::SubresourceRange,
+    ) -> Result<winapi::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
+        let handle = self.srv_pool.lock().unwrap().alloc_handles(1).cpu;
+
+        let dimension = match kind {
+            image::Kind::D1(..) |
+            image::Kind::D1Array(..) => winapi::D3D12_SRV_DIMENSION_TEXTURE1D,
+            image::Kind::D2(..) |
+            image::Kind::D2Array(..) => winapi::D3D12_SRV_DIMENSION_TEXTURE2D,
+            image::Kind::D3(..) |
+            image::Kind::Cube(..) |
+            image::Kind::CubeArray(..) => winapi::D3D12_SRV_DIMENSION_TEXTURE3D,
+        };
+
+        let mut desc = winapi::D3D12_SHADER_RESOURCE_VIEW_DESC {
+            Format: format,
+            ViewDimension: dimension,
+            Shader4ComponentMapping: 0x1688, // TODO: map swizzle
+            u: unsafe { mem::zeroed() },
+        };
+
+        match kind {
+            image::Kind::D2(_, _, image::AaMode::Single) => {
+                assert_eq!(range.levels.start, 0);
+                *unsafe{ desc.Texture2D_mut() } = winapi::D3D12_TEX2D_SRV {
+                    MostDetailedMip: 0,
+                    MipLevels: range.levels.end as _,
+                    PlaneSlice: 0, //TODO
+                    ResourceMinLODClamp: 0.0,
+                }
+            }
+            _ => unimplemented!()
+        }
+
+        unsafe {
+            self.raw.CreateShaderResourceView(resource, &desc, handle);
+        }
+
+        Ok(handle)
+    }
+
+    fn view_image_as_storage(
+        &mut self,
+        _resource: *mut winapi::ID3D12Resource,
+        _kind: image::Kind,
+        _format: winapi::DXGI_FORMAT,
+        _range: &image::SubresourceRange,
+    ) -> Result<winapi::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
+        unimplemented!()
+    }
 }
 
 impl d::Device<B> for Device {
@@ -250,7 +383,7 @@ impl d::Device<B> for Device {
         //TODO: merge with `map_heap_properties`
         let default_state = if !mem_type.properties.contains(memory::CPU_VISIBLE) {
             winapi::D3D12_RESOURCE_STATE_COMMON
-        } else if mem_type.properties.contains(memory::COHERENT) {
+        } else if mem_type.properties.contains(memory::WRITE_COMBINED) {
             winapi::D3D12_RESOURCE_STATE_GENERIC_READ
         } else {
             winapi::D3D12_RESOURCE_STATE_COPY_DEST
@@ -299,17 +432,22 @@ impl d::Device<B> for Device {
 
         // Fill out subpass known layouts
         for (sid, sub) in subpasses.iter().enumerate() {
-            for &(id, _layout) in sub.color_attachments {
+            for &(id, _layout) in sub.colors {
                 let state = SubState::New(att_infos[id].target_state);
                 let old = mem::replace(&mut att_infos[id].sub_states[sid], state);
                 debug_assert_eq!(SubState::Undefined, old);
             }
-            for &(id, _layout) in sub.input_attachments {
+            for &(id, _layout) in sub.depth_stencil {
+                let state = SubState::New(att_infos[id].target_state);
+                let old = mem::replace(&mut att_infos[id].sub_states[sid], state);
+                debug_assert_eq!(SubState::Undefined, old);
+            }
+            for &(id, _layout) in sub.inputs {
                 let state = SubState::New(winapi::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
                 let old = mem::replace(&mut att_infos[id].sub_states[sid], state);
                 debug_assert_eq!(SubState::Undefined, old);
             }
-            for &id in sub.preserve_attachments {
+            for &id in sub.preserves {
                 let old = mem::replace(&mut att_infos[id].sub_states[sid], SubState::Preserve);
                 debug_assert_eq!(SubState::Undefined, old);
             }
@@ -365,8 +503,9 @@ impl d::Device<B> for Device {
             }
 
             rp.subpasses.push(n::SubpassDesc {
-                color_attachments: subpasses[sid].color_attachments.iter().cloned().collect(),
-                input_attachments: subpasses[sid].input_attachments.iter().cloned().collect(),
+                color_attachments: subpasses[sid].colors.iter().cloned().collect(),
+                depth_stencil_attachment: subpasses[sid].depth_stencil.cloned(),
+                input_attachments: subpasses[sid].inputs.iter().cloned().collect(),
                 pre_barriers,
             });
         }
@@ -564,7 +703,7 @@ impl d::Device<B> for Device {
                         Ok(winapi::D3D12_INPUT_ELEMENT_DESC {
                             SemanticName: input_elem.semantic_name,
                             SemanticIndex: input_elem.semantic_index,
-                            Format: match conv::map_format(format, false) {
+                            Format: match conv::map_format(format) {
                                 Some(fm) => fm,
                                 None => {
                                     error!("Unable to find DXGI format for {:?}", format);
@@ -595,7 +734,7 @@ impl d::Device<B> for Device {
                     .zip(pass.color_attachments.iter())
                 {
                     let format = subpass.main_pass.attachments[target.0].format;
-                    *rtv = conv::map_format(format, true).unwrap_or(winapi::DXGI_FORMAT_UNKNOWN);
+                    *rtv = conv::map_format(format).unwrap_or(winapi::DXGI_FORMAT_UNKNOWN);
                     num_rtvs += 1;
                 }
                 (rtvs, num_rtvs)
@@ -636,8 +775,9 @@ impl d::Device<B> for Device {
                 PrimitiveTopologyType: conv::map_topology_type(desc.input_assembler.primitive),
                 NumRenderTargets: num_rtvs,
                 RTVFormats: rtvs,
-                DSVFormat: desc.depth_stencil.and_then(|(format, _)| conv::map_format(format, true))
-                                             .unwrap_or(winapi::DXGI_FORMAT_UNKNOWN),
+                DSVFormat: desc.depth_stencil
+                    .and_then(|(format, _)| conv::map_format_dsv(format.0))
+                    .unwrap_or(winapi::DXGI_FORMAT_UNKNOWN),
                 SampleDesc: winapi::DXGI_SAMPLE_DESC {
                     Count: 1, // TODO
                     Quality: 0, // TODO
@@ -723,13 +863,11 @@ impl d::Device<B> for Device {
     fn create_framebuffer(
         &mut self,
         _renderpass: &n::RenderPass,
-        color_attachments: &[&n::RenderTargetView],
-        depth_stencil_attachments: &[&n::DepthStencilView],
+        attachments: &[&n::ImageView],
         _extent: d::Extent,
-    ) -> Result<n::FrameBuffer, d::FramebufferError> {
-        Ok(n::FrameBuffer {
-            color: color_attachments.iter().map(|rtv| **rtv).collect(),
-            depth_stencil: depth_stencil_attachments.iter().map(|dsv| **dsv).collect(),
+    ) -> Result<n::Framebuffer, d::FramebufferError> {
+        Ok(n::Framebuffer {
+            attachments: attachments.iter().cloned().cloned().collect(),
         })
     }
 
@@ -809,36 +947,6 @@ impl d::Device<B> for Device {
         Ok(n::ShaderModule { shaders: shader_map })
     }
 
-    fn create_sampler(&mut self, info: image::SamplerInfo) -> n::Sampler {
-        let handle = self.sampler_pool.lock().unwrap().alloc_handles(1).cpu;
-
-        let op = match info.comparison {
-            Some(_) => conv::FilterOp::Comparison,
-            None => conv::FilterOp::Product,
-        };
-        let desc = winapi::D3D12_SAMPLER_DESC {
-            Filter: conv::map_filter(info.filter, op),
-            AddressU: conv::map_wrap(info.wrap_mode.0),
-            AddressV: conv::map_wrap(info.wrap_mode.1),
-            AddressW: conv::map_wrap(info.wrap_mode.2),
-            MipLODBias: info.lod_bias.into(),
-            MaxAnisotropy: match info.filter {
-                image::FilterMethod::Anisotropic(max) => max as _, // TODO: check support here?
-                _ => 0,
-            },
-            ComparisonFunc: conv::map_function(info.comparison.unwrap_or(state::Comparison::Always)),
-            BorderColor: info.border.into(),
-            MinLOD: info.lod_range.start.into(),
-            MaxLOD: info.lod_range.end.into(),
-        };
-
-        unsafe {
-            self.raw.CreateSampler(&desc, handle);
-        }
-
-        n::Sampler { handle }
-    }
-
     fn create_buffer(
         &mut self,
         size: u64,
@@ -913,6 +1021,14 @@ impl d::Device<B> for Device {
         })
     }
 
+    fn create_buffer_view(
+        &mut self,
+        _buffer: &n::Buffer,
+        _range: Range<u64>,
+    ) -> Result<n::BufferView, buffer::ViewError> {
+        unimplemented!()
+    }
+
     fn create_image(
         &mut self,
         kind: image::Kind,
@@ -920,6 +1036,18 @@ impl d::Device<B> for Device {
         format: format::Format,
         usage: image::Usage,
     ) -> Result<UnboundImage, image::CreationError> {
+        let mut aspects = image::AspectFlags::empty();
+        let bits = format.0.describe_bits();
+        if bits.color != 0 {
+            aspects |= image::ASPECT_COLOR;
+        }
+        if bits.depth != 0 {
+            aspects |= image::ASPECT_DEPTH;
+        }
+        if bits.stencil != 0 {
+            aspects |= image::ASPECT_STENCIL;
+        }
+
         let (width, height, depth, aa) = kind.get_dimensions();
         let dimension = match kind {
             image::Kind::D1(..) |
@@ -937,7 +1065,7 @@ impl d::Device<B> for Device {
             Height: height as u32,
             DepthOrArraySize: cmp::max(1, depth),
             MipLevels: mip_levels as u16,
-            Format: match conv::map_format(format, false) {
+            Format: match conv::map_format(format) {
                 Some(format) => format,
                 None => return Err(image::CreationError::Format(format.0, Some(format.1))),
             },
@@ -955,6 +1083,7 @@ impl d::Device<B> for Device {
         }
 
         Ok(UnboundImage {
+            dsv_format: conv::map_format_dsv(format.0).unwrap_or(desc.Format),
             desc,
             requirements: memory::Requirements {
                 size: alloc_info.SizeInBytes,
@@ -964,9 +1093,10 @@ impl d::Device<B> for Device {
             },
             kind,
             usage,
-            bits_per_texel: format.0.get_total_bits(),
-            levels: mip_levels,
-            layers: kind.get_num_layers(),
+            aspects,
+            bits_per_texel: bits.total,
+            num_levels: mip_levels,
+            num_layers: kind.get_num_layers(),
         })
     }
 
@@ -1003,175 +1133,114 @@ impl d::Device<B> for Device {
                 &mut resource,
             )
         });
+
+        //TODO: the clear_Xv is incomplete. We should support clearing images created without XXX_ATTACHMENT usage.
+        // for this, we need to check the format and force the `RENDER_TARGET` flag behind the user's back
+        // if the format supports being rendered into, allowing us to create clear_Xv
+
         Ok(n::Image {
             resource: resource as *mut _,
             kind: image.kind,
+            usage: image.usage,
             dxgi_format: image.desc.Format,
             bits_per_texel: image.bits_per_texel,
-            levels: image.levels,
-            layers: image.layers,
-        })
-    }
-
-    fn view_buffer_as_constant(
-        &mut self,
-        _buffer: &n::Buffer,
-        _range: Range<u64>,
-    ) -> Result<n::ConstantBufferView, d::TargetViewError> {
-        unimplemented!()
-    }
-
-    fn view_image_as_render_target(
-        &mut self,
-        image: &n::Image,
-        format: format::Format,
-        (mip_level, layers): image::SubresourceLayers,
-    ) -> Result<n::RenderTargetView, d::TargetViewError> {
-        //TODO: use subresource range
-        let handle = self.rtv_pool.lock().unwrap().alloc_handles(1).cpu;
-
-        if image.kind.get_dimensions().3 != image::AaMode::Single {
-            error!("No MSAA supported yet!");
-        }
-        if layers.start + 1 != layers.end { //TODO
-            return Err(d::TargetViewError::Layers(layers));
-        }
-
-        let mut desc = winapi::D3D12_RENDER_TARGET_VIEW_DESC {
-            Format: match conv::map_format(format, true) {
-                Some(format) => format,
-                None => return Err(d::TargetViewError::BadFormat)
-            },
-            .. unsafe { mem::zeroed() }
-        };
-
-        match image.kind {
-            image::Kind::D2(..) => {
-                desc.ViewDimension = winapi::D3D12_RTV_DIMENSION_TEXTURE2D;
-                *unsafe { desc.Texture2D_mut() } = winapi::D3D12_TEX2D_RTV {
-                    MipSlice: mip_level,
-                    PlaneSlice: layers.start,
+            num_levels: image.num_levels,
+            num_layers: image.num_layers,
+            clear_cv: if image.aspects.contains(image::ASPECT_COLOR) && image.usage.contains(image::COLOR_ATTACHMENT) {
+                let range = image::SubresourceRange {
+                    aspects: image::ASPECT_COLOR,
+                    levels: 0 .. 1, //TODO?
+                    layers: 0 .. image.num_layers,
                 };
+                Some(self.view_image_as_render_target(resource as *mut _, image.kind, image.desc.Format, &range).unwrap())
+            } else {
+                None
             },
-            _ => unimplemented!()
-        };
-
-        unsafe {
-            self.raw.CreateRenderTargetView(
-                image.resource,
-                &desc,
-                handle,
-            );
-        }
-
-        Ok(n::RenderTargetView {
-            resource: image.resource,
-            handle,
-        })
-    }
-
-    fn view_image_as_depth_stencil(
-        &mut self,
-        image: &n::Image,
-        format: format::Format,
-        (mip_level, layers): image::SubresourceLayers,
-    ) -> Result<n::DepthStencilView, d::TargetViewError> {
-        //TODO: use subresource range
-        let handle = self.dsv_pool.lock().unwrap().alloc_handles(1).cpu;
-
-        if image.kind.get_dimensions().3 != image::AaMode::Single {
-            error!("No MSAA supported yet!");
-        }
-
-        let mut desc = winapi::D3D12_RENDER_TARGET_VIEW_DESC {
-            Format: match conv::map_format(format, true) {
-                Some(format) => format,
-                None => return Err(d::TargetViewError::BadFormat)
-            },
-            .. unsafe { mem::zeroed() }
-        };
-
-        match image.kind {
-            image::Kind::D2(..) => {
-                desc.ViewDimension = winapi::D3D12_RTV_DIMENSION_TEXTURE2D;
-                *unsafe { desc.Texture2D_mut() } = winapi::D3D12_TEX2D_RTV {
-                    MipSlice: mip_level,
-                    PlaneSlice: layers.start,
+            clear_dv: if image.aspects.contains(image::ASPECT_DEPTH) && image.usage.contains(image::DEPTH_STENCIL_ATTACHMENT) {
+                let range = image::SubresourceRange {
+                    aspects: image::ASPECT_DEPTH,
+                    levels: 0 .. 1, //TODO?
+                    layers: 0 .. image.num_layers,
                 };
+                Some(self.view_image_as_depth_stencil(resource as *mut _, image.kind, image.dsv_format, &range).unwrap())
+            } else {
+                None
             },
-            _ => unimplemented!()
-        };
-
-        unsafe {
-            self.raw.CreateDepthStencilView(
-                image.resource,
-                &desc,
-                handle,
-            );
-        }
-
-        Ok(n::DepthStencilView {
-            resource: image.resource,
-            handle,
+            clear_sv: if image.aspects.contains(image::ASPECT_STENCIL) && image.usage.contains(image::DEPTH_STENCIL_ATTACHMENT) {
+                let range = image::SubresourceRange {
+                    aspects: image::ASPECT_STENCIL,
+                    levels: 0 .. 1, //TODO?
+                    layers: 0 .. image.num_layers,
+                };
+                Some(self.view_image_as_depth_stencil(resource as *mut _, image.kind, image.dsv_format, &range).unwrap())
+            } else {
+                None
+            },
         })
     }
 
-    fn view_image_as_shader_resource(
+    fn create_image_view(
         &mut self,
         image: &n::Image,
         format: format::Format,
-    ) -> Result<n::ShaderResourceView, d::TargetViewError> {
-        let handle = self.srv_pool.lock().unwrap().alloc_handles(1).cpu;
+        range: image::SubresourceRange,
+    ) -> Result<n::ImageView, image::ViewError> {
+        let format_raw = conv::map_format(format).ok_or(image::ViewError::BadFormat);
 
-        let dimension = match image.kind {
-            image::Kind::D1(..) |
-            image::Kind::D1Array(..) => winapi::D3D12_SRV_DIMENSION_TEXTURE1D,
-            image::Kind::D2(..) |
-            image::Kind::D2Array(..) => winapi::D3D12_SRV_DIMENSION_TEXTURE2D,
-            image::Kind::D3(..) |
-            image::Kind::Cube(..) |
-            image::Kind::CubeArray(..) => winapi::D3D12_SRV_DIMENSION_TEXTURE3D,
-        };
-
-        let mut desc = winapi::D3D12_SHADER_RESOURCE_VIEW_DESC {
-            Format: match conv::map_format(format, false) {
-                Some(format) => format,
-                None => return Err(d::TargetViewError::BadFormat),
+        Ok(n::ImageView {
+            resource: image.resource,
+            handle_srv: if image.usage.contains(image::SAMPLED) {
+                Some(self.view_image_as_shader_resource(image.resource, image.kind, format_raw.clone()?, &range)?)
+            } else {
+                None
             },
-            ViewDimension: dimension,
-            Shader4ComponentMapping: 0x1688, // TODO: map swizzle
-            u: unsafe { mem::zeroed() },
-        };
-
-        match image.kind {
-            image::Kind::D2(_, _, image::AaMode::Single) => {
-                *unsafe{ desc.Texture2D_mut() } = winapi::D3D12_TEX2D_SRV {
-                    MostDetailedMip: 0,
-                    MipLevels: !0,
-                    PlaneSlice: 0,
-                    ResourceMinLODClamp: 0.0,
-                }
-            }
-            _ => unimplemented!()
-        }
-
-        unsafe {
-            self.raw.CreateShaderResourceView(
-                image.resource,
-                &desc,
-                handle,
-            );
-        }
-
-        Ok(n::ShaderResourceView { handle })
+            handle_rtv: if image.usage.contains(image::COLOR_ATTACHMENT) {
+                Some(self.view_image_as_render_target(image.resource, image.kind, format_raw.clone()?, &range)?)
+            } else {
+                None
+            },
+            handle_dsv: if image.usage.contains(image::DEPTH_STENCIL_ATTACHMENT) {
+                let fmt = conv::map_format_dsv(format.0).ok_or(image::ViewError::BadFormat);
+                Some(self.view_image_as_depth_stencil(image.resource, image.kind, fmt?, &range)?)
+            } else {
+                None
+            },
+            handle_uav: if image.usage.contains(image::STORAGE) {
+                Some(self.view_image_as_storage(image.resource, image.kind, format_raw?, &range)?)
+            } else {
+                None
+            },
+        })
     }
 
-    fn view_image_as_unordered_access(
-        &mut self,
-        _image: &n::Image,
-        _format: format::Format,
-    ) -> Result<n::UnorderedAccessView, d::TargetViewError> {
-        unimplemented!()
+    fn create_sampler(&mut self, info: image::SamplerInfo) -> n::Sampler {
+        let handle = self.sampler_pool.lock().unwrap().alloc_handles(1).cpu;
+
+        let op = match info.comparison {
+            Some(_) => conv::FilterOp::Comparison,
+            None => conv::FilterOp::Product,
+        };
+        let desc = winapi::D3D12_SAMPLER_DESC {
+            Filter: conv::map_filter(info.filter, op),
+            AddressU: conv::map_wrap(info.wrap_mode.0),
+            AddressV: conv::map_wrap(info.wrap_mode.1),
+            AddressW: conv::map_wrap(info.wrap_mode.2),
+            MipLODBias: info.lod_bias.into(),
+            MaxAnisotropy: match info.filter {
+                image::FilterMethod::Anisotropic(max) => max as _, // TODO: check support here?
+                _ => 0,
+            },
+            ComparisonFunc: conv::map_function(info.comparison.unwrap_or(state::Comparison::Always)),
+            BorderColor: info.border.into(),
+            MinLOD: info.lod_range.start.into(),
+            MaxLOD: info.lod_range.end.into(),
+        };
+
+        unsafe {
+            self.raw.CreateSampler(&desc, handle);
+        }
+
+        n::Sampler { handle }
     }
 
     fn create_descriptor_pool(
@@ -1251,7 +1320,7 @@ impl d::Device<B> for Device {
             winapi::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
             |dw, starts| match *dw {
                 pso::DescriptorWrite::SampledImage(ref images) => {
-                    starts.extend(images.iter().map(|&(ref srv, _layout)| srv.handle))
+                    starts.extend(images.iter().map(|&(ref srv, _layout)| srv.handle_srv.unwrap()))
                 }
                 pso::DescriptorWrite::Sampler(_) => (), // done separately
                 _ => unimplemented!()
@@ -1397,7 +1466,7 @@ impl d::Device<B> for Device {
         unsafe { (*pipeline.raw).Release(); }
     }
 
-    fn destroy_framebuffer(&mut self, _fb: n::FrameBuffer) {
+    fn destroy_framebuffer(&mut self, _fb: n::Framebuffer) {
         // Just drop
     }
 
@@ -1405,28 +1474,16 @@ impl d::Device<B> for Device {
         unsafe { (*buffer.resource).Release(); }
     }
 
+    fn destroy_buffer_view(&mut self, _view: n::BufferView) {
+        // empty
+    }
+
     fn destroy_image(&mut self, image: n::Image) {
         unsafe { (*image.resource).Release(); }
     }
 
-    fn destroy_render_target_view(&mut self, _rtv: n::RenderTargetView) {
+    fn destroy_image_view(&mut self, _view: n::ImageView) {
         // Just drop
-    }
-
-    fn destroy_depth_stencil_view(&mut self, _dsv: n::DepthStencilView) {
-        // Just drop
-    }
-
-    fn destroy_constant_buffer_view(&mut self, _: n::ConstantBufferView) {
-        unimplemented!()
-    }
-
-    fn destroy_shader_resource_view(&mut self, _srv: n::ShaderResourceView) {
-        // Just drop
-    }
-
-    fn destroy_unordered_access_view(&mut self, _uav: n::UnorderedAccessView) {
-        unimplemented!()
     }
 
     fn destroy_sampler(&mut self, _sampler: n::Sampler) {
@@ -1434,15 +1491,10 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_descriptor_pool(&mut self, pool: n::DescriptorPool) {
-        {
-            let mut heap = self.heap_srv_cbv_uav.lock().unwrap();
-            heap.allocator.deallocate(pool.heap_srv_cbv_uav.range);
-        }
-
-        {
-            let mut heap = self.heap_sampler.lock().unwrap();
-            heap.allocator.deallocate(pool.heap_sampler.range);
-        }
+        self.heap_srv_cbv_uav.lock().unwrap()
+            .allocator.deallocate(pool.heap_srv_cbv_uav.range);
+        self.heap_sampler.lock().unwrap()
+            .allocator.deallocate(pool.heap_sampler.range);
     }
 
     fn destroy_descriptor_set_layout(&mut self, _layout: n::DescriptorSetLayout) {
