@@ -8,6 +8,30 @@
 //  ETC2_EAC_RGBA8, // Use the EXT2 EAC algorithm on 4 components.
 use memory::Pod;
 
+
+/// Description of the bits distribution of a format.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct FormatBits {
+    /// Total number of bits
+    pub total: u8,
+    /// Number of color bits (summed for R/G/B)
+    pub color: u8,
+    /// Number of alpha bits
+    pub alpha: u8,
+    /// Number of depth bits
+    pub depth: u8,
+    /// Number of stencil bits
+    pub stencil: u8,
+}
+
+const BITS_ZERO: FormatBits = FormatBits {
+    total: 0,
+    color: 0,
+    alpha: 0,
+    depth: 0,
+    stencil: 0,
+};
+
 macro_rules! impl_channel_type {
     { $($name:ident = $shader_type:ident [ $($imp_trait:ident),* ] ,)* } => {
         /// Type of a surface channel. This is how we interpret the
@@ -47,7 +71,8 @@ impl_channel_type! {
 }
 
 macro_rules! impl_formats {
-    { $($name:ident : $container:ident < $($channel:ident),* > = $data_type:ty {$alpha_bits:expr} [ $($imp_trait:ident),* ] ,)* } => {
+    { $($name:ident : $container:ident < $($channel:ident),* > = $data_type:ty
+        {$total:expr $( ,$component:ident : $bits:expr )*} [ $($imp_trait:ident),* ] ,)* } => {
         /// Type of the allocated texture surface. It is supposed to only
         /// carry information about the number of bits per each channel.
         /// The actual types are up to the views to decide and interpret.
@@ -61,25 +86,28 @@ macro_rules! impl_formats {
         }
         impl SurfaceType {
             /// Return the total number of bits for this format.
-            pub fn get_total_bits(&self) -> u8 {
-                use std::mem::size_of;
+            pub fn describe_bits(&self) -> FormatBits {
                 match *self {
-                    $( SurfaceType::$name => (size_of::<$data_type>() * 8) as u8, )*
-                }
-            }
-            /// Return the number of bits allocated for alpha and stencil.
-            pub fn get_alpha_stencil_bits(&self) -> u8  {
-                match *self {
-                    $( SurfaceType::$name => $alpha_bits, )*
+                    $( SurfaceType::$name => FormatBits {
+                        total: $total,
+                        $( $component: $bits, )*
+                        .. BITS_ZERO
+                    }, )*
                 }
             }
         }
+
         $(
             #[allow(missing_docs, non_camel_case_types)]
             #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
             #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
             pub enum $name {}
             impl SurfaceTyped for $name {
+                const BITS: FormatBits = FormatBits {
+                    total: $total,
+                    $( $component: $bits, )*
+                    .. BITS_ZERO
+                };
                 type DataType = $data_type;
                 fn get_surface_type() -> SurfaceType {
                     SurfaceType::$name
@@ -96,48 +124,117 @@ macro_rules! impl_formats {
                 }
             )*
         )*
+
+        #[cfg(test)]
+        mod test {
+            use std::mem::size_of;
+            use super::F16;
+            // Verify that the total number of bits specified for each format
+            // matches the run-time representation. This can be nicer once every
+            // Rust type gets a `SIZEOF` kind of associated constant.
+            #[test]
+            fn test_formats() {
+                $(
+                    assert_eq!(size_of::<$data_type>() * 8, $total);
+                )*
+            }
+        }
     }
 }
 
 
 impl_formats! {
-    R4_G4           : Vec2<Unorm> = u8 {0}  [TextureSurface, RenderSurface],
-    R4_G4_B4_A4     : Vec4<Unorm> = u16 {4} [TextureSurface, RenderSurface],
-    R5_G5_B5_A1     : Vec4<Unorm> = u16 {1} [TextureSurface, RenderSurface],
-    R5_G6_B5        : Vec3<Unorm> = u16 {0} [TextureSurface, RenderSurface],
-    R8              : Vec1<Int, Uint, Inorm, Unorm> = u8 {0}
+    R4_G4:
+        Vec2<Unorm> = u8
+        { 8, color: 8 }
+        [TextureSurface, RenderSurface],
+    R4_G4_B4_A4:
+        Vec4<Unorm> = u16
+        { 16, color: 12, alpha: 4 }
+        [TextureSurface, RenderSurface],
+    R5_G5_B5_A1:
+        Vec4<Unorm> = u16
+        { 16, color: 15, alpha: 1 }
+        [TextureSurface, RenderSurface],
+    R5_G6_B5:
+        Vec3<Unorm> = u16
+        { 16, color: 16 }
+        [TextureSurface, RenderSurface],
+    R8:
+        Vec1<Int, Uint, Inorm, Unorm> = u8
+        { 8, color: 8 }
         [BufferSurface, TextureSurface, RenderSurface],
-    R8_G8           : Vec2<Int, Uint, Inorm, Unorm> = [u8; 2] {0}
+    R8_G8:
+        Vec2<Int, Uint, Inorm, Unorm> = [u8; 2]
+        { 16, color: 16 }
         [BufferSurface, TextureSurface, RenderSurface],
-    R8_G8_B8_A8     : Vec4<Int, Uint, Inorm, Unorm, Srgb> = [u8; 4] {8}
+    R8_G8_B8_A8:
+        Vec4<Int, Uint, Inorm, Unorm, Srgb> = [u8; 4]
+        { 32, color: 24, alpha: 8 }
         [BufferSurface, TextureSurface, RenderSurface],
-    R10_G10_B10_A2  : Vec4<Uint, Unorm> = u32 {2}
+    R10_G10_B10_A2:
+        Vec4<Uint, Unorm> = u32
+        { 32, color: 30, alpha: 2 }
         [BufferSurface, TextureSurface, RenderSurface],
-    R11_G11_B10     : Vec4<Unorm, Float> = u32 {0}
+    R11_G11_B10:
+        Vec4<Unorm, Float> = u32
+        { 32, color: 32 }
         [BufferSurface, TextureSurface, RenderSurface],
-    R16             : Vec1<Int, Uint, Inorm, Unorm, Float> = u16 {0}
+    R16:
+        Vec1<Int, Uint, Inorm, Unorm, Float> = u16
+        { 16, color: 16 }
         [BufferSurface, TextureSurface, RenderSurface],
-    R16_G16         : Vec2<Int, Uint, Inorm, Unorm, Float> = [u16; 2] {0}
+    R16_G16:
+        Vec2<Int, Uint, Inorm, Unorm, Float> = [u16; 2]
+        { 32, color: 32 }
         [BufferSurface, TextureSurface, RenderSurface],
-    R16_G16_B16     : Vec3<Int, Uint, Inorm, Unorm, Float> = [u16; 3] {0}
+    R16_G16_B16:
+        Vec3<Int, Uint, Inorm, Unorm, Float> = [u16; 3]
+        { 48, color: 48 }
         [BufferSurface, TextureSurface, RenderSurface],
-    R16_G16_B16_A16 : Vec4<Int, Uint, Inorm, Unorm, Float> = [u16; 4] {16}
+    R16_G16_B16_A16:
+        Vec4<Int, Uint, Inorm, Unorm, Float> = [u16; 4]
+        { 64, color: 48, alpha: 16 }
         [BufferSurface, TextureSurface, RenderSurface],
-    R32             : Vec1<Int, Uint, Float> = u32 {0}
+    R32:
+        Vec1<Int, Uint, Float> = u32
+        { 32, color: 32 }
         [BufferSurface, TextureSurface, RenderSurface],
-    R32_G32         : Vec2<Int, Uint, Float> = [u32; 2] {0}
+    R32_G32:
+        Vec2<Int, Uint, Float> = [u32; 2]
+        { 64, color: 64 }
         [BufferSurface, TextureSurface, RenderSurface],
-    R32_G32_B32     : Vec3<Int, Uint, Float> = [u32; 3] {0}
+    R32_G32_B32:
+        Vec3<Int, Uint, Float> = [u32; 3]
+        { 96, color: 96 }
         [BufferSurface, TextureSurface, RenderSurface],
-    R32_G32_B32_A32 : Vec4<Int, Uint, Float> = [u32; 4] {32}
+    R32_G32_B32_A32:
+        Vec4<Int, Uint, Float> = [u32; 4]
+        { 128, color: 96, alpha: 32 }
         [BufferSurface, TextureSurface, RenderSurface],
-    B8_G8_R8_A8     : Vec4<Unorm, Srgb> = [u8; 4] {32}
+    B8_G8_R8_A8:
+        Vec4<Unorm, Srgb> = [u8; 4]
+        { 32, color: 24, alpha: 8 }
         [BufferSurface, TextureSurface, RenderSurface],
-    D16             : Vec1<Unorm> = F16 {0} [TextureSurface, DepthSurface],
-    D24             : Vec1<Unorm> = f32 {8} [TextureSurface, DepthSurface], //hacky stencil bits
-    D24_S8          : Vec1<Unorm, Uint> = u32 {8} [TextureSurface, DepthSurface, StencilSurface],
-    D32             : Vec1<Float> = f32 {0} [TextureSurface, DepthSurface],
-    D32_S8          : Vec1<Unorm, Float, Uint> = (f32, u32) {32} [TextureSurface, DepthSurface, StencilSurface],
+    D16:
+        Vec1<Unorm> = F16
+        { 16, depth: 16 }
+        [TextureSurface, DepthSurface],
+    D24: Vec1<Unorm> = f32
+        { 32, depth: 24 }
+        [TextureSurface, DepthSurface],
+    D24_S8:
+        Vec1<Unorm, Uint> = u32
+        { 32, depth: 24, stencil: 8 }
+        [TextureSurface, DepthSurface, StencilSurface],
+    D32:
+        Vec1<Float> = f32
+        { 32, depth: 32 }
+        [TextureSurface, DepthSurface],
+    D32_S8:
+        Vec1<Unorm, Float, Uint> = (f32, u32)
+        { 64, depth: 32, stencil: 8 } //TODO: verify
+        [TextureSurface, DepthSurface, StencilSurface],
 }
 
 impl SurfaceType {
@@ -191,6 +288,8 @@ pub struct Format(pub SurfaceType, pub ChannelType);
 
 /// Compile-time surface type trait.
 pub trait SurfaceTyped {
+    /// Bits distribution.
+    const BITS: FormatBits;
     /// The corresponding data type to be passed from CPU.
     type DataType: Pod;
     /// Return the run-time value of the type.
