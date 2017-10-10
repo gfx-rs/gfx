@@ -127,15 +127,15 @@ impl Device {
         }
     }
 
-    fn bind_target(gl: &gl::Gl, point: GLenum, attachment: GLenum, view: &n::TargetView) {
+    fn bind_target(gl: &gl::Gl, point: GLenum, attachment: GLenum, view: &n::ImageView) {
         match *view {
-            n::TargetView::Surface(surface) => unsafe {
+            n::ImageView::Surface(surface) => unsafe {
                 gl.FramebufferRenderbuffer(point, attachment, gl::RENDERBUFFER, surface);
             },
-            n::TargetView::Texture(texture, level) => unsafe {
+            n::ImageView::Texture(texture, level) => unsafe {
                 gl.FramebufferTexture(point, attachment, texture, level as _);
             },
-            n::TargetView::TextureLayer(texture, level, layer) => unsafe {
+            n::ImageView::TextureLayer(texture, level, layer) => unsafe {
                 gl.FramebufferTextureLayer(point, attachment, texture, level as _, layer as _);
             },
         }
@@ -171,7 +171,7 @@ impl d::Device<B> for Device {
                 .map(|subpass| {
                     let color_attachments =
                         subpass
-                            .color_attachments
+                            .colors
                             .iter()
                             .map(|&(index, _)| index)
                             .collect();
@@ -268,8 +268,7 @@ impl d::Device<B> for Device {
     fn create_framebuffer(
         &mut self,
         pass: &n::RenderPass,
-        rtvs: &[&n::TargetView],
-        dsvs: &[&n::TargetView],
+        attachments: &[&n::ImageView],
         _extent: d::Extent,
     ) -> Result<n::FrameBuffer, d::FramebufferError> {
         if !self.share.private_caps.framebuffer {
@@ -284,22 +283,11 @@ impl d::Device<B> for Device {
             gl.BindFramebuffer(target, name);
         }
 
-        assert_eq!(rtvs.len() + dsvs.len(), pass.attachments.len());
-        for (i, view) in rtvs.iter().enumerate() {
+        assert_eq!(attachments.len(), pass.attachments.len());
+        //TODO: exclude depth/stencil attachments from here
+        for (i, view) in attachments.iter().enumerate() {
             let attachment = gl::COLOR_ATTACHMENT0 + i as GLenum;
             Self::bind_target(gl, target, attachment, view);
-        }
-
-        match dsvs.len() {
-            0 => (),
-            1 => {
-                Self::bind_target(gl, target, gl::DEPTH_STENCIL_ATTACHMENT, &dsvs[0]);
-            },
-            2 => {
-                Self::bind_target(gl, target, gl::DEPTH_ATTACHMENT, &dsvs[0]);
-                Self::bind_target(gl, target, gl::STENCIL_ATTACHMENT, &dsvs[1]);
-            },
-            _ => panic!("Unexpected depth/stencil attachments {:?}", dsvs),
         }
 
         unsafe {
@@ -308,7 +296,7 @@ impl d::Device<B> for Device {
             gl.BindFramebuffer(target, 0);
         }
         if let Err(err) = self.share.check() {
-            panic!("Error creating FBO: {:?} for {:?}, rtvs {:?}, dsvs {:?}", err, pass, rtvs, dsvs);
+            panic!("Error creating FBO: {:?} for {:?} with attachments {:?}", err, pass, attachments);
         }
 
         Ok(name)
@@ -483,6 +471,12 @@ impl d::Device<B> for Device {
         })
     }
 
+    fn create_buffer_view(
+        &mut self, _: &n::Buffer, _: Range<u64>
+    ) -> Result<n::BufferView, buffer::ViewError> {
+        unimplemented!()
+    }
+
     fn create_image(&mut self, _: i::Kind, _: i::Level, _: Format, _: i::Usage)
          -> Result<UnboundImage, i::CreationError>
     {
@@ -497,50 +491,34 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn view_buffer_as_constant(&mut self, _: &n::Buffer, _: Range<u64>) -> Result<n::ConstantBufferView, d::TargetViewError> {
-        unimplemented!()
-    }
-
-    fn view_image_as_render_target(&mut self,
-        image: &n::Image, _format: Format, (level, layers): i::SubresourceLayers,
-    ) -> Result<n::TargetView, d::TargetViewError> {
+    fn create_image_view(&mut self,
+        image: &n::Image, _format: Format, range: i::SubresourceRange,
+    ) -> Result<n::ImageView, i::ViewError> {
         //TODO: check if `layers.end` covers all the layers
+        let level = range.levels.start;
+        assert_eq!(level + 1, range.levels.end);
         //TODO: check format
         match *image {
             n::Image::Surface(surface) => {
-                if level == 0 && layers.start == 0 {
-                    Ok(n::TargetView::Surface(surface))
+                if range.levels.start == 0 && range.layers.start == 0 {
+                    Ok(n::ImageView::Surface(surface))
                 } else if level != 0 {
-                    Err(d::TargetViewError::Level(level)) //TODO
+                    Err(i::ViewError::Level(level)) //TODO
                 } else {
-                    Err(d::TargetViewError::Layer(i::LayerError::OutOfBounds(layers)))
+                    Err(i::ViewError::Layer(i::LayerError::OutOfBounds(range.layers)))
                 }
-            },
+            }
             n::Image::Texture(texture) => {
                 //TODO: check that `level` exists
-                if layers.start == 0 {
-                    Ok(n::TargetView::Texture(texture, level))
-                } else if layers.start + 1 == layers.end {
-                    Ok(n::TargetView::TextureLayer(texture, level, layers.start))
+                if range.layers.start == 0 {
+                    Ok(n::ImageView::Texture(texture, level))
+                } else if range.layers.start + 1 == range.layers.end {
+                    Ok(n::ImageView::TextureLayer(texture, level, range.layers.start))
                 } else {
-                    Err(d::TargetViewError::Layer(i::LayerError::OutOfBounds(layers)))
+                    Err(i::ViewError::Layer(i::LayerError::OutOfBounds(range.layers)))
                 }
-            },
+            }
         }
-    }
-
-    fn view_image_as_depth_stencil(&mut self,
-        image: &n::Image, format: Format, layers: i::SubresourceLayers,
-    ) -> Result<n::TargetView, d::TargetViewError> {
-        self.view_image_as_render_target(image, format, layers) //TODO
-    }
-
-    fn view_image_as_shader_resource(&mut self, _: &n::Image, _: Format) -> Result<n::ShaderResourceView, d::TargetViewError> {
-        unimplemented!()
-    }
-
-    fn view_image_as_unordered_access(&mut self, _: &n::Image, _: Format) -> Result<n::UnorderedAccessView, d::TargetViewError> {
-        unimplemented!()
     }
 
     fn create_descriptor_pool(&mut self, _: usize, _: &[pso::DescriptorRangeDesc]) -> n::DescriptorPool {
@@ -693,33 +671,19 @@ impl d::Device<B> for Device {
     fn destroy_framebuffer(&mut self, _: n::FrameBuffer) {
         unimplemented!()
     }
+
     fn destroy_buffer(&mut self, _: n::Buffer) {
+        unimplemented!()
+    }
+    fn destroy_buffer_view(&mut self, _: n::BufferView) {
         unimplemented!()
     }
     fn destroy_image(&mut self, _: n::Image) {
         unimplemented!()
     }
-
-    fn destroy_render_target_view(&mut self, _: n::TargetView) {
+    fn destroy_image_view(&mut self, _: n::ImageView) {
         unimplemented!()
     }
-
-    fn destroy_depth_stencil_view(&mut self, _: n::TargetView) {
-        unimplemented!()
-    }
-
-    fn destroy_constant_buffer_view(&mut self, _: n::ConstantBufferView) {
-        unimplemented!()
-    }
-
-    fn destroy_shader_resource_view(&mut self, _: n::ShaderResourceView) {
-        unimplemented!()
-    }
-
-    fn destroy_unordered_access_view(&mut self, _: n::UnorderedAccessView) {
-        unimplemented!()
-    }
-
     fn destroy_sampler(&mut self, _: n::FatSampler) {
         unimplemented!()
     }

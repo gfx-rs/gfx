@@ -1,5 +1,3 @@
-
-use conv;
 use core::{self, image as i, memory as mem, pass};
 use core::target::{Layer, Level};
 use gl;
@@ -24,6 +22,9 @@ pub struct Buffer {
 }
 
 #[derive(Debug)]
+pub struct BufferView;
+
+#[derive(Debug)]
 pub struct Fence(pub Cell<gl::types::GLsync>);
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
@@ -33,31 +34,6 @@ impl Fence {
         Fence(Cell::new(sync))
     }
 }
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct ResourceView {
-    pub(crate) object: Texture,
-    pub(crate) bind: gl::types::GLenum,
-    pub(crate) owned: bool,
-}
-
-impl ResourceView {
-    pub(crate) fn new_texture(t: Texture, kind: i::Kind) -> ResourceView {
-        ResourceView {
-            object: t,
-            bind: conv::image_kind_to_gl(kind),
-            owned: false,
-        }
-    }
-    pub(crate) fn new_buffer(b: Texture) -> ResourceView {
-        ResourceView {
-            object: b,
-            bind: gl::TEXTURE_BUFFER,
-            owned: true,
-        }
-    }
-}
-
 
 #[derive(Clone, Debug, Copy)]
 pub struct GraphicsPipeline {
@@ -84,7 +60,7 @@ pub enum FatSampler {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub enum TargetView {
+pub enum ImageView {
     Surface(Surface),
     Texture(Texture, Level),
     TextureLayer(Texture, Level, Layer),
@@ -139,12 +115,6 @@ pub struct SubpassDesc {
     pub(crate) color_attachments: Vec<usize>,
 }
 
-#[derive(Debug)]
-pub struct ConstantBufferView;
-#[derive(Debug)]
-pub struct ShaderResourceView;
-#[derive(Debug)]
-pub struct UnorderedAccessView;
 #[derive(Debug)]
 pub struct PipelineLayout;
 
