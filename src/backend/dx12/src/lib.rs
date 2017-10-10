@@ -129,7 +129,7 @@ impl core::Adapter<Backend> for Adapter {
             },
             core::MemoryType {
                 id: 2,
-                properties: memory::CPU_VISIBLE | memory::COHERENT,
+                properties: memory::CPU_VISIBLE | memory::WRITE_COMBINED,
                 heap_index: 0,
             },
         ];
@@ -215,6 +215,7 @@ pub struct Device {
     private_caps: Capabilities,
     // CPU only pools
     rtv_pool: Arc<Mutex<native::DescriptorCpuPool>>,
+    dsv_pool: Arc<Mutex<native::DescriptorCpuPool>>,
     srv_pool: Arc<Mutex<native::DescriptorCpuPool>>,
     sampler_pool: Arc<Mutex<native::DescriptorCpuPool>>,
     // CPU/GPU descriptor heaps
@@ -234,7 +235,7 @@ impl Device {
         });
 
         // Allocate descriptor heaps
-        let max_rtvs = 64; // TODO
+        let max_rtvs = 256; // TODO
         let rtv_pool = native::DescriptorCpuPool {
             heap: Self::create_descriptor_heap_impl(
                 &mut device,
@@ -245,6 +246,19 @@ impl Device {
             offset: 0,
             size: 0,
             max_size: max_rtvs as _,
+        };
+
+        let max_dsvs = 64; // TODO
+        let dsv_pool = native::DescriptorCpuPool {
+            heap: Self::create_descriptor_heap_impl(
+                &mut device,
+                winapi::D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
+                false,
+                max_dsvs,
+            ),
+            offset: 0,
+            size: 0,
+            max_size: max_dsvs as _,
         };
 
         let max_srvs = 0x1000; // TODO
@@ -330,6 +344,7 @@ impl Device {
                 heterogeneous_resource_heaps: features.ResourceHeapTier != winapi::D3D12_RESOURCE_HEAP_TIER_1,
             },
             rtv_pool: Arc::new(Mutex::new(rtv_pool)),
+            dsv_pool: Arc::new(Mutex::new(dsv_pool)),
             srv_pool: Arc::new(Mutex::new(srv_pool)),
             sampler_pool: Arc::new(Mutex::new(sampler_pool)),
             heap_srv_cbv_uav: Arc::new(Mutex::new(heap_srv_cbv_uav)),
@@ -466,19 +481,15 @@ impl core::Backend for Backend {
 
     type ShaderModule = native::ShaderModule;
     type RenderPass = native::RenderPass;
-    type Framebuffer = native::FrameBuffer;
+    type Framebuffer = native::Framebuffer;
 
     type UnboundBuffer = device::UnboundBuffer;
     type Buffer = native::Buffer;
+    type BufferView = native::BufferView;
     type UnboundImage = device::UnboundImage;
     type Image = native::Image;
+    type ImageView = native::ImageView;
     type Sampler = native::Sampler;
-
-    type ConstantBufferView = native::ConstantBufferView;
-    type ShaderResourceView = native::ShaderResourceView;
-    type UnorderedAccessView = native::UnorderedAccessView;
-    type RenderTargetView = native::RenderTargetView;
-    type DepthStencilView = native::DepthStencilView;
 
     type ComputePipeline = native::ComputePipeline;
     type GraphicsPipeline = native::GraphicsPipeline;

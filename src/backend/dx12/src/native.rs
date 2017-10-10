@@ -7,6 +7,7 @@ use Backend;
 use std::collections::BTreeMap;
 use std::ops::Range;
 
+
 #[derive(Debug, Hash)]
 pub struct ShaderModule {
     pub(crate) shaders: BTreeMap<String, *mut winapi::ID3DBlob>,
@@ -16,13 +17,13 @@ unsafe impl Sync for ShaderModule { }
 
 #[derive(Debug, Hash, Clone)]
 pub struct BarrierDesc {
-    pub attachment_id: pass::AttachmentId,
-    pub states: Range<winapi::D3D12_RESOURCE_STATES>,
-    pub flags: winapi::D3D12_RESOURCE_BARRIER_FLAGS,
+    pub(crate) attachment_id: pass::AttachmentId,
+    pub(crate) states: Range<winapi::D3D12_RESOURCE_STATES>,
+    pub(crate) flags: winapi::D3D12_RESOURCE_BARRIER_FLAGS,
 }
 
 impl BarrierDesc {
-    pub fn new(
+    pub(crate) fn new(
         attachment_id: pass::AttachmentId,
         states: Range<winapi::D3D12_RESOURCE_STATES>,
     ) -> Self {
@@ -33,7 +34,7 @@ impl BarrierDesc {
         }
     }
 
-    pub fn split(self) -> Range<Self> {
+    pub(crate) fn split(self) -> Range<Self> {
         BarrierDesc {
             flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_BEGIN_ONLY,
             .. self.clone()
@@ -48,29 +49,30 @@ impl BarrierDesc {
 
 #[derive(Debug, Hash, Clone)]
 pub struct SubpassDesc {
-    pub color_attachments: Vec<pass::AttachmentRef>,
-    pub input_attachments: Vec<pass::AttachmentRef>,
-    pub pre_barriers: Vec<BarrierDesc>,
+    pub(crate) color_attachments: Vec<pass::AttachmentRef>,
+    pub(crate) depth_stencil_attachment: Option<pass::AttachmentRef>,
+    pub(crate) input_attachments: Vec<pass::AttachmentRef>,
+    pub(crate) pre_barriers: Vec<BarrierDesc>,
 }
 
 #[derive(Debug, Hash, Clone)]
 pub struct RenderPass {
-    pub attachments: Vec<pass::Attachment>,
-    pub subpasses: Vec<SubpassDesc>,
-    pub post_barriers: Vec<BarrierDesc>,
+    pub(crate) attachments: Vec<pass::Attachment>,
+    pub(crate) subpasses: Vec<SubpassDesc>,
+    pub(crate) post_barriers: Vec<BarrierDesc>,
 }
 
 #[derive(Debug, Hash)]
 pub struct GraphicsPipeline {
-    pub raw: *mut winapi::ID3D12PipelineState,
-    pub topology: winapi::D3D12_PRIMITIVE_TOPOLOGY,
+    pub(crate) raw: *mut winapi::ID3D12PipelineState,
+    pub(crate) topology: winapi::D3D12_PRIMITIVE_TOPOLOGY,
 }
 unsafe impl Send for GraphicsPipeline { }
 unsafe impl Sync for GraphicsPipeline { }
 
 #[derive(Debug, Hash)]
 pub struct ComputePipeline {
-    pub raw: *mut winapi::ID3D12PipelineState,
+    pub(crate) raw: *mut winapi::ID3D12PipelineState,
 }
 
 unsafe impl Send for ComputePipeline { }
@@ -85,113 +87,115 @@ bitflags! {
 
 #[derive(Debug, Hash)]
 pub struct PipelineLayout {
-    pub raw: *mut winapi::ID3D12RootSignature,
+    pub(crate) raw: *mut winapi::ID3D12RootSignature,
     // Storing for each associated descriptor set layout, which tables we created
     // in the root signature. This is required for binding descriptor sets.
-    pub tables: Vec<SetTableTypes>,
+    pub(crate) tables: Vec<SetTableTypes>,
 }
 unsafe impl Send for PipelineLayout { }
 unsafe impl Sync for PipelineLayout { }
 
 #[derive(Debug, Hash, Clone)]
-pub struct FrameBuffer {
-    pub color: Vec<RenderTargetView>,
-    pub depth_stencil: Vec<DepthStencilView>,
+pub struct Framebuffer {
+    pub(crate) attachments: Vec<ImageView>,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
 pub struct Buffer {
-    pub resource: *mut winapi::ID3D12Resource,
-    pub size_in_bytes: u32,
-    pub stride: u32,
+    pub(crate) resource: *mut winapi::ID3D12Resource,
+    pub(crate) size_in_bytes: u32,
+    pub(crate) stride: u32,
 }
 unsafe impl Send for Buffer { }
 unsafe impl Sync for Buffer { }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Debug, Hash, PartialEq, Eq)]
+pub struct BufferView;
+
+#[derive(Clone, Debug, Hash)]
 pub struct Image {
-    pub resource: *mut winapi::ID3D12Resource,
-    pub kind: image::Kind,
-    pub dxgi_format: winapi::DXGI_FORMAT,
-    pub bits_per_texel: u8,
-    pub levels: image::Level,
-    pub layers: image::Layer,
+    pub(crate) resource: *mut winapi::ID3D12Resource,
+    pub(crate) kind: image::Kind,
+    pub(crate) usage: image::Usage,
+    pub(crate) dxgi_format: winapi::DXGI_FORMAT,
+    pub(crate) bits_per_texel: u8,
+    pub(crate) num_levels: image::Level,
+    pub(crate) num_layers: image::Layer,
+    pub(crate) clear_cv: Option<winapi::D3D12_CPU_DESCRIPTOR_HANDLE>,
+    pub(crate) clear_dv: Option<winapi::D3D12_CPU_DESCRIPTOR_HANDLE>,
+    pub(crate) clear_sv: Option<winapi::D3D12_CPU_DESCRIPTOR_HANDLE>,
 }
 unsafe impl Send for Image { }
 unsafe impl Sync for Image { }
 
 impl Image {
-    /// Get the SubresourceRange for the whole image.
-    pub fn as_subresource_range(&self) -> image::SubresourceRange {
-        (0..self.levels, 0..self.layers)
+    /// Get `SubresourceRange` of the whole image.
+    pub fn to_subresource_range(&self, aspects: image::AspectFlags) -> image::SubresourceRange {
+        image::SubresourceRange {
+            aspects,
+            levels: 0 .. self.num_levels,
+            layers: 0 .. self.num_layers,
+        }
     }
 
-    pub fn calc_subresource(&self, mip_level: UINT, layer: UINT) -> UINT {
-        mip_level + layer * self.levels as UINT
+    pub fn calc_subresource(&self, mip_level: UINT, layer: UINT, plane: UINT) -> UINT {
+        mip_level + (layer * self.num_levels as UINT) + (plane * self.num_levels as UINT * self.num_layers as UINT)
     }
 }
 
 #[derive(Copy, Debug, Hash, Clone)]
-pub struct RenderTargetView {
-    pub resource: *mut winapi::ID3D12Resource,
-    pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
+pub struct ImageView {
+    pub(crate) resource: *mut winapi::ID3D12Resource,
+    pub(crate) handle_srv: Option<winapi::D3D12_CPU_DESCRIPTOR_HANDLE>,
+    pub(crate) handle_rtv: Option<winapi::D3D12_CPU_DESCRIPTOR_HANDLE>,
+    pub(crate) handle_dsv: Option<winapi::D3D12_CPU_DESCRIPTOR_HANDLE>,
+    pub(crate) handle_uav: Option<winapi::D3D12_CPU_DESCRIPTOR_HANDLE>,
 }
-unsafe impl Send for RenderTargetView { }
-unsafe impl Sync for RenderTargetView { }
+unsafe impl Send for ImageView { }
+unsafe impl Sync for ImageView { }
 
-#[derive(Copy, Debug, Hash, Clone)]
-pub struct DepthStencilView {
-    pub resource: *mut winapi::ID3D12Resource,
-    pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
+#[derive(Debug)]
+pub struct Sampler {
+    pub(crate) handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
 }
-unsafe impl Send for DepthStencilView { }
-unsafe impl Sync for DepthStencilView { }
 
 #[derive(Debug)]
 pub struct DescriptorSetLayout {
-    pub bindings: Vec<pso::DescriptorSetLayoutBinding>,
+    pub(crate) bindings: Vec<pso::DescriptorSetLayoutBinding>,
 }
 
 #[derive(Debug)]
 pub struct Fence {
-    pub raw: ComPtr<winapi::ID3D12Fence>,
+    pub(crate) raw: ComPtr<winapi::ID3D12Fence>,
 }
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 
 #[derive(Debug)]
 pub struct Semaphore {
-    pub raw: ComPtr<winapi::ID3D12Fence>,
+    pub(crate) raw: ComPtr<winapi::ID3D12Fence>,
 }
 unsafe impl Send for Semaphore {}
 unsafe impl Sync for Semaphore {}
 
 #[derive(Debug)]
 pub struct Memory {
-    pub heap: ComPtr<winapi::ID3D12Heap>,
-    pub ty: MemoryType,
-    pub size: u64,
-    pub default_state: winapi::D3D12_RESOURCE_STATES,
+    pub(crate) heap: ComPtr<winapi::ID3D12Heap>,
+    pub(crate) ty: MemoryType,
+    pub(crate) size: u64,
+    pub(crate) default_state: winapi::D3D12_RESOURCE_STATES,
 }
-#[derive(Debug)]
-pub struct ConstantBufferView;
-#[derive(Debug)]
-pub struct ShaderResourceView {
-    pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
-}
-#[derive(Debug)]
-pub struct UnorderedAccessView;
 
 #[derive(Debug)]
 pub struct DescriptorRange {
-    pub handle: DualHandle,
-    pub ty: pso::DescriptorType,
-    pub handle_size: u64,
-    pub count: usize,
+    pub(crate) handle: DualHandle,
+    pub(crate) ty: pso::DescriptorType,
+    pub(crate) handle_size: u64,
+    pub(crate) count: usize,
 }
 
 impl DescriptorRange {
-    pub fn at(&self, index: usize) -> winapi::D3D12_CPU_DESCRIPTOR_HANDLE {
+    pub(crate) fn at(&self, index: usize) -> winapi::D3D12_CPU_DESCRIPTOR_HANDLE {
         assert!(index < self.count);
         let ptr = self.handle.cpu.ptr + self.handle_size * index as u64;
         winapi::D3D12_CPU_DESCRIPTOR_HANDLE { ptr }
@@ -208,13 +212,13 @@ pub enum DescriptorRangeBinding {
 #[derive(Debug)]
 pub struct DescriptorSet {
     // Required for binding at command buffer
-    pub heap_srv_cbv_uav: ComPtr<winapi::ID3D12DescriptorHeap>,
-    pub heap_samplers: ComPtr<winapi::ID3D12DescriptorHeap>,
+    pub(crate) heap_srv_cbv_uav: ComPtr<winapi::ID3D12DescriptorHeap>,
+    pub(crate) heap_samplers: ComPtr<winapi::ID3D12DescriptorHeap>,
 
-    pub ranges: Vec<DescriptorRangeBinding>,
+    pub(crate) ranges: Vec<DescriptorRangeBinding>,
 
-    pub first_gpu_sampler: Option<winapi::D3D12_GPU_DESCRIPTOR_HANDLE>,
-    pub first_gpu_view: Option<winapi::D3D12_GPU_DESCRIPTOR_HANDLE>,
+    pub(crate) first_gpu_sampler: Option<winapi::D3D12_GPU_DESCRIPTOR_HANDLE>,
+    pub(crate) first_gpu_view: Option<winapi::D3D12_GPU_DESCRIPTOR_HANDLE>,
 }
 
 // TODO: is this really safe?
@@ -223,21 +227,21 @@ unsafe impl Sync for DescriptorSet {}
 
 #[derive(Copy, Clone, Debug)]
 pub struct DualHandle {
-    pub cpu: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
-    pub gpu: winapi::D3D12_GPU_DESCRIPTOR_HANDLE,
+    pub(crate) cpu: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
+    pub(crate) gpu: winapi::D3D12_GPU_DESCRIPTOR_HANDLE,
 }
 
 #[derive(Debug)]
 pub struct DescriptorHeap {
-    pub raw: ComPtr<winapi::ID3D12DescriptorHeap>,
-    pub handle_size: u64,
-    pub total_handles: u64,
-    pub start: DualHandle,
-    pub allocator: free_list::Allocator,
+    pub(crate) raw: ComPtr<winapi::ID3D12DescriptorHeap>,
+    pub(crate) handle_size: u64,
+    pub(crate) total_handles: u64,
+    pub(crate) start: DualHandle,
+    pub(crate) allocator: free_list::Allocator,
 }
 
 impl DescriptorHeap {
-    pub fn at(&self, index: u64) -> DualHandle {
+    pub(crate) fn at(&self, index: u64) -> DualHandle {
         assert!(index < self.total_handles);
         DualHandle {
             cpu: winapi::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: self.start.cpu.ptr + self.handle_size * index },
@@ -248,14 +252,14 @@ impl DescriptorHeap {
 
 #[derive(Debug)]
 pub struct DescriptorCpuPool {
-    pub heap: DescriptorHeap,
-    pub offset: u64,
-    pub size: u64,
-    pub max_size: u64,
+    pub(crate) heap: DescriptorHeap,
+    pub(crate) offset: u64,
+    pub(crate) size: u64,
+    pub(crate) max_size: u64,
 }
 
 impl DescriptorCpuPool {
-    pub fn alloc_handles(&mut self, count: u64) -> DualHandle {
+    pub(crate) fn alloc_handles(&mut self, count: u64) -> DualHandle {
         assert!(self.size + count <= self.max_size);
         let index = self.offset + self.size;
         self.size += count;
@@ -267,15 +271,15 @@ impl DescriptorCpuPool {
 /// Pools will create descriptor sets inside this slice.
 #[derive(Debug)]
 pub struct DescriptorHeapSlice {
-    pub heap: ComPtr<winapi::ID3D12DescriptorHeap>,
-    pub range: Range<u64>,
-    pub start: DualHandle,
-    pub handle_size: u64,
-    pub next: u64,
+    pub(crate) heap: ComPtr<winapi::ID3D12DescriptorHeap>,
+    pub(crate) range: Range<u64>,
+    pub(crate) start: DualHandle,
+    pub(crate) handle_size: u64,
+    pub(crate) next: u64,
 }
 
 impl DescriptorHeapSlice {
-    pub fn alloc_handles(&mut self, count: u64) -> DualHandle {
+    pub(crate) fn alloc_handles(&mut self, count: u64) -> DualHandle {
         assert!(self.next + count <= self.range.end);
         let index = self.next;
         self.next += count;
@@ -288,10 +292,10 @@ impl DescriptorHeapSlice {
 
 #[derive(Debug)]
 pub struct DescriptorPool {
-    pub heap_srv_cbv_uav: DescriptorHeapSlice,
-    pub heap_sampler: DescriptorHeapSlice,
-    pub pools: Vec<pso::DescriptorRangeDesc>,
-    pub max_size: u64,
+    pub(crate) heap_srv_cbv_uav: DescriptorHeapSlice,
+    pub(crate) heap_sampler: DescriptorHeapSlice,
+    pub(crate) pools: Vec<pso::DescriptorRangeDesc>,
+    pub(crate) max_size: u64,
 }
 unsafe impl Send for DescriptorPool {}
 unsafe impl Sync for DescriptorPool {}
@@ -353,9 +357,4 @@ impl core::DescriptorPool<Backend> for DescriptorPool {
     fn reset(&mut self) {
         unimplemented!()
     }
-}
-
-#[derive(Debug)]
-pub struct Sampler {
-    pub handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
 }

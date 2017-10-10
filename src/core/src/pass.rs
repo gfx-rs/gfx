@@ -60,11 +60,11 @@ impl AttachmentOps {
 #[derive(Clone, Debug, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct Attachment {
-    ///
+    /// Attachment format
     pub format: Format,
-    /// load and store operations of the attachment
+    /// Load and store operations of the attachment
     pub ops: AttachmentOps,
-    /// load and store operations of the stencil aspect, if any
+    /// Load and store operations of the stencil aspect, if any
     pub stencil_ops: AttachmentOps,
     /// Initial and final image layouts of the renderpass.
     pub layouts: Range<AttachmentLayout>,
@@ -100,11 +100,13 @@ pub struct SubpassDependency {
 /// Description of a subpass for renderpass creation.
 pub struct SubpassDesc<'a> {
     ///
-    pub color_attachments: &'a [AttachmentRef],
+    pub colors: &'a [AttachmentRef],
     ///
-    pub input_attachments: &'a [AttachmentRef],
+    pub depth_stencil: Option<&'a AttachmentRef>,
     ///
-    pub preserve_attachments: &'a [AttachmentId],
+    pub inputs: &'a [AttachmentRef],
+    ///
+    pub preserves: &'a [AttachmentId],
 }
 
 /// Index of a subpass.

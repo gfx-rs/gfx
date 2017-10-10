@@ -1,4 +1,4 @@
-use core::format::Format;
+use core::format::{Format, SurfaceType};
 use core::{buffer, memory, state, pso, Primitive};
 use core::image::{self, FilterMethod, WrapMode};
 use core::pso::DescriptorSetLayoutBinding;
@@ -12,7 +12,7 @@ pub fn map_heap_properties(props: memory::Properties) -> D3D12_HEAP_PROPERTIES {
     D3D12_HEAP_PROPERTIES {
         Type: if !props.contains(memory::CPU_VISIBLE) {
             D3D12_HEAP_TYPE_DEFAULT
-        } else if props.contains(memory::COHERENT) {
+        } else if props.contains(memory::WRITE_COMBINED) {
             D3D12_HEAP_TYPE_UPLOAD
         } else {
             D3D12_HEAP_TYPE_READBACK
@@ -24,7 +24,7 @@ pub fn map_heap_properties(props: memory::Properties) -> D3D12_HEAP_PROPERTIES {
     }
 }
 
-pub fn map_format(format: Format, is_target: bool) -> Option<DXGI_FORMAT> {
+pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     use core::format::SurfaceType::*;
     use core::format::ChannelType::*;
     Some(match format.0 {
@@ -114,33 +114,39 @@ pub fn map_format(format: Format, is_target: bool) -> Option<DXGI_FORMAT> {
             Srgb => DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,
             _ => return None,
         },
-        D16 => match (is_target, format.1) {
-            (true, _)      => DXGI_FORMAT_D16_UNORM,
-            (false, Unorm) => DXGI_FORMAT_R16_UNORM,
+        D16 => match format.1 {
+            Unorm => DXGI_FORMAT_R16_UNORM,
             _ => return None,
         },
-        D24 => match (is_target, format.1) {
-            (true, _)      => DXGI_FORMAT_D24_UNORM_S8_UINT,
-            (false, Unorm) => DXGI_FORMAT_R24_UNORM_X8_TYPELESS,
+        D24 => match format.1 {
+            Unorm => DXGI_FORMAT_R24_UNORM_X8_TYPELESS,
             _ => return None,
         },
-        D24_S8 => match (is_target, format.1) {
-            (true, _)      => DXGI_FORMAT_D24_UNORM_S8_UINT,
-            (false, Unorm) => DXGI_FORMAT_R24_UNORM_X8_TYPELESS,
-            (false, Uint)  => DXGI_FORMAT_X24_TYPELESS_G8_UINT,
+        D24_S8 => match format.1 {
+            Unorm => DXGI_FORMAT_R24_UNORM_X8_TYPELESS,
+            Uint  => DXGI_FORMAT_X24_TYPELESS_G8_UINT,
             _ => return None,
         },
-        D32 => match (is_target, format.1) {
-            (true, _)      => DXGI_FORMAT_D32_FLOAT,
-            (false, Float) => DXGI_FORMAT_R32_FLOAT,
+        D32 => match format.1 {
+            Float => DXGI_FORMAT_R32_FLOAT,
             _ => return None,
         },
-        D32_S8 => match (is_target, format.1) {
-            (true, _)      => DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
-            (false, Float) => DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS,
-            (false, Uint)  => DXGI_FORMAT_X32_TYPELESS_G8X24_UINT,
+        D32_S8 => match format.1 {
+            Float => DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS,
+            Uint  => DXGI_FORMAT_X32_TYPELESS_G8X24_UINT,
             _ => return None,
         },
+    })
+}
+
+pub fn map_format_dsv(surface: SurfaceType) -> Option<DXGI_FORMAT> {
+    Some(match surface {
+        SurfaceType::D16    => DXGI_FORMAT_D16_UNORM,
+        SurfaceType::D24    => DXGI_FORMAT_D24_UNORM_S8_UINT,
+        SurfaceType::D24_S8 => DXGI_FORMAT_D24_UNORM_S8_UINT,
+        SurfaceType::D32    => DXGI_FORMAT_D32_FLOAT,
+        SurfaceType::D32_S8 => DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
+        _ => return None,
     })
 }
 

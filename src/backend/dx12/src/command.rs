@@ -1,9 +1,7 @@
 use wio::com::ComPtr;
-use core::{command, image, memory, pass, pso, target};
+use core::{command as com, image, memory, pass, pso, target};
 use core::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, Viewport};
 use core::buffer::IndexBufferView;
-use core::command::{AttachmentClear, BufferCopy, BufferImageCopy, ClearColor,
-                    ClearValue, ImageCopy, ImageResolve, SubpassContents};
 use winapi::{self, UINT64, UINT};
 use {conv, native as n, Backend};
 use smallvec::SmallVec;
@@ -22,18 +20,8 @@ fn get_rect(rect: &target::Rect) -> winapi::D3D12_RECT {
 #[derive(Debug, Clone)]
 pub struct RenderPassCache {
     render_pass: n::RenderPass,
-    frame_buffer: n::FrameBuffer,
-    render_area: winapi::D3D12_RECT,
-    clear_values: Vec<ClearValue>,
-}
-
-impl RenderPassCache {
-    fn get_resource(&self, att_id: pass::AttachmentId) -> *mut winapi::ID3D12Resource {
-        match self.frame_buffer.color.get(att_id) {
-            Some(view) => view.resource,
-            None => self.frame_buffer.depth_stencil[att_id - self.frame_buffer.color.len()].resource,
-        }
-    }
+    framebuffer: n::Framebuffer,
+    target_rect: winapi::D3D12_RECT,
 }
 
 #[derive(Clone)]
@@ -78,7 +66,7 @@ impl CommandBuffer {
                 Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
                 Flags: barrier.flags,
                 u: winapi::D3D12_RESOURCE_TRANSITION_BARRIER {
-                    pResource: state.get_resource(barrier.attachment_id),
+                    pResource: state.framebuffer.attachments[barrier.attachment_id].resource,
                     Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
                     StateBefore: barrier.states.start,
                     StateAfter: barrier.states.end,
@@ -96,10 +84,32 @@ impl CommandBuffer {
         }
     }
 
+    fn bind_targets(&mut self) {
+        let state = self.pass_cache.as_ref().unwrap();
+        let subpass = &state.render_pass.subpasses[self.cur_subpass];
+        let color_views = subpass.color_attachments
+            .iter()
+            .map(|&(id, _)| state.framebuffer.attachments[id].handle_rtv.unwrap())
+            .collect::<Vec<_>>();
+        let ds_view = match subpass.depth_stencil_attachment {
+            Some((id, _)) => state.framebuffer.attachments[id].handle_dsv.as_ref().unwrap() as *const _,
+            None => ptr::null(),
+        };
+
+        unsafe {
+            self.raw.OMSetRenderTargets(
+                color_views.len() as UINT,
+                color_views.as_ptr(),
+                winapi::FALSE,
+                ds_view,
+            );
+        }
+    }
+
     fn clear_render_target_view(
         &mut self,
         rtv: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
-        color: ClearColor,
+        color: com::ClearColor,
         rects: &[winapi::D3D12_RECT],
     ) {
         let num_rects = rects.len() as _;
@@ -110,7 +120,7 @@ impl CommandBuffer {
         };
 
         match color {
-            ClearColor::Float(ref c) => unsafe {
+            com::ClearColor::Float(ref c) => unsafe {
                 self.raw.ClearRenderTargetView(rtv, c, num_rects, rects);
             },
             _ => {
@@ -123,8 +133,8 @@ impl CommandBuffer {
     fn clear_depth_stencil_view(
         &mut self,
         dsv: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
-        depth: Option<target::Depth>,
-        stencil: Option<target::Stencil>,
+        depth: Option<f32>,
+        stencil: Option<u8>,
         rects: &[winapi::D3D12_RECT],
     ) {
         let mut flags = winapi::D3D12_CLEAR_FLAGS(0);
@@ -155,7 +165,7 @@ impl CommandBuffer {
     }
 }
 
-impl command::RawCommandBuffer<Backend> for CommandBuffer {
+impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn begin(&mut self) {
         unsafe { self.raw.Reset(self.allocator.as_mut(), ptr::null_mut()); }
     }
@@ -171,12 +181,12 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     fn begin_renderpass(
         &mut self,
         render_pass: &n::RenderPass,
-        framebuffer: &n::FrameBuffer,
-        render_area: target::Rect,
-        clear_values: &[ClearValue],
-        _first_subpass: SubpassContents,
+        framebuffer: &n::Framebuffer,
+        target_rect: target::Rect,
+        clear_values: &[com::ClearValue],
+        _first_subpass: com::SubpassContents,
     ) {
-        assert_eq!(framebuffer.color.len() + framebuffer.depth_stencil.len(), render_pass.attachments.len());
+        assert_eq!(framebuffer.attachments.len(), render_pass.attachments.len());
         // Make sure that no subpass works with Present as intermediate layout.
         // This wouldn't make much sense, and proceeding with this constraint
         // allows the state transitions generated from subpass dependencies
@@ -184,72 +194,52 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         assert!(!render_pass.subpasses.iter().any(|sp| {
             sp.color_attachments
                 .iter()
+                .chain(sp.depth_stencil_attachment.iter())
                 .chain(sp.input_attachments.iter()).
                 any(|aref| aref.1 == image::ImageLayout::Present)
         }));
 
-        let area = get_rect(&render_area);
+        let area = get_rect(&target_rect);
         self.pass_cache = Some(RenderPassCache {
             render_pass: render_pass.clone(),
-            frame_buffer: framebuffer.clone(),
-            render_area: area,
-            clear_values: clear_values.into(),
+            framebuffer: framebuffer.clone(),
+            target_rect: area,
         });
         self.cur_subpass = 0;
         self.insert_subpass_barriers();
 
         let mut clear_iter = clear_values.iter();
-        for (color, attachment) in framebuffer.color.iter().zip(render_pass.attachments.iter()) {
+        for (view, attachment) in framebuffer.attachments.iter().zip(render_pass.attachments.iter()) {
             if attachment.ops.load == pass::AttachmentLoadOp::Clear {
-                match clear_iter.next() {
-                    Some(&command::ClearValue::Color(value)) => {
-                        let data = match value {
-                            command::ClearColor::Float(v) => v,
-                            _ => {
-                                error!("Integer clear is not implemented yet");
-                                [0.0; 4]
-                            }
-                        };
-                        unsafe {
-                            self.raw.ClearRenderTargetView(color.handle, &data, 1, &area);
-                        }
+                match *clear_iter.next().unwrap() {
+                    com::ClearValue::Color(value) => {
+                        let handle = view.handle_rtv.unwrap();
+                        self.clear_render_target_view(handle, value, &[area]);
                     },
-                    other => error!("Invalid clear value for view {:?}: {:?}", color, other),
+                    com::ClearValue::DepthStencil(value) => {
+                        let handle = view.handle_dsv.unwrap();
+                        self.clear_depth_stencil_view(handle, Some(value.depth), None, &[area]);
+                    }
+                }
+            }
+            if attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
+                match *clear_iter.next().unwrap() {
+                    com::ClearValue::DepthStencil(value) => {
+                        let handle = view.handle_dsv.unwrap();
+                        self.clear_depth_stencil_view(handle, None, Some(value.stencil as _), &[area]);
+                    }
+                    com::ClearValue::Color(_) => panic!("Unexpected clear color value for stencil"),
                 }
             }
         }
-        if let (Some(depth), Some(&pass::Attachment{ ops: pass::AttachmentOps { load: pass::AttachmentLoadOp::Clear, .. }, ..})) = (framebuffer.depth_stencil.first(), render_pass.attachments.last()) {
-            match clear_iter.next() {
-                Some(&command::ClearValue::DepthStencil(value)) => {
-                    unsafe {
-                        self.raw.ClearDepthStencilView(depth.handle,
-                            winapi::D3D12_CLEAR_FLAG_DEPTH | winapi::D3D12_CLEAR_FLAG_STENCIL,
-                            value.depth, value.stencil as u8, 1, &area);
-                    }
-                },
-                other => error!("Invalid clear value for view {:?}: {:?}",
-                    framebuffer.depth_stencil[0], other),
-            }
-        }
 
-        let color_views = framebuffer.color.iter().map(|view| view.handle).collect::<Vec<_>>();
-        let ds_view = match framebuffer.depth_stencil.first() {
-            Some(ref view) => &view.handle as *const _,
-            None => ptr::null(),
-        };
-        unsafe {
-            self.raw.OMSetRenderTargets(
-                color_views.len() as UINT,
-                color_views.as_ptr(),
-                winapi::FALSE,
-                ds_view,
-            );
-        }
+        self.bind_targets();
     }
 
-    fn next_subpass(&mut self, _contents: SubpassContents) {
+    fn next_subpass(&mut self, _contents: com::SubpassContents) {
         self.cur_subpass += 1;
         self.insert_subpass_barriers();
+        self.bind_targets();
     }
 
     fn end_renderpass(&mut self) {
@@ -309,15 +299,14 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                         },
                     };
 
-                    if *range == target.as_subresource_range() {
+                    if *range == target.to_subresource_range(range.aspects) {
                         // Only one barrier if it affects the whole image.
                         raw_barriers.push(barrier);
                     } else {
                         // Generate barrier for each layer/level combination.
-                        let (levels, layers) = range.clone();
-                        for level in levels {
-                            for layer in layers.clone() {
-                                barrier.u.Subresource = target.calc_subresource(level as _, layer as _);
+                        for level in range.levels.clone() {
+                            for layer in range.layers.clone() {
+                                barrier.u.Subresource = target.calc_subresource(level as _, layer as _, 0);
                                 raw_barriers.push(barrier);
                             }
                         }
@@ -367,25 +356,50 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn clear_color(
+    fn clear_color_image(
         &mut self,
-        rtv: &n::RenderTargetView,
+        image: &n::Image,
         _: image::ImageLayout,
-        color: ClearColor,
+        range: image::SubresourceRange,
+        value: com::ClearColor,
     ) {
-        self.clear_render_target_view(rtv.handle, color, &[]);
+        assert!((image::ASPECT_COLOR).contains(range.aspects));
+        assert_eq!(range, image.to_subresource_range(range.aspects));
+        if range.aspects.contains(image::ASPECT_COLOR) {
+            let rtv = image.clear_cv.unwrap();
+            self.clear_render_target_view(rtv, value, &[]);
+        }
+    }
+
+    fn clear_depth_stencil_image(
+        &mut self,
+        image: &n::Image,
+        _layout: image::ImageLayout,
+        range: image::SubresourceRange,
+        value: com::ClearDepthStencil,
+    ) {
+        assert!((image::ASPECT_DEPTH | image::ASPECT_STENCIL).contains(range.aspects));
+        assert_eq!(range, image.to_subresource_range(range.aspects));
+        if range.aspects.contains(image::ASPECT_DEPTH) {
+            let dsv = image.clear_dv.unwrap();
+            self.clear_depth_stencil_view(dsv, Some(value.depth), None, &[]);
+        }
+        if range.aspects.contains(image::ASPECT_STENCIL) {
+            let dsv = image.clear_sv.unwrap();
+            self.clear_depth_stencil_view(dsv, None, Some(value.stencil as _), &[]);
+        }
     }
 
     fn clear_attachments(
         &mut self,
-        clears: &[AttachmentClear],
+        clears: &[com::AttachmentClear],
         rects: &[target::Rect],
     ) {
         assert!(self.pass_cache.is_some(), "`clear_attachments` can only be called inside a renderpass");
         let rects: SmallVec<[winapi::D3D12_RECT; 16]> = rects.iter().map(get_rect).collect();
         for clear in clears {
             match *clear {
-                AttachmentClear::Color(index, cv) => {
+                com::AttachmentClear::Color(index, cv) => {
                     let rtv = {
                         let pass_cache = self.pass_cache.as_ref().unwrap();
                         let rtv_id = pass_cache
@@ -395,9 +409,10 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                             .0;
 
                         pass_cache
-                            .frame_buffer
-                            .color[rtv_id]
-                            .handle
+                            .framebuffer
+                            .attachments[rtv_id]
+                            .handle_rtv
+                            .unwrap()
                     };
 
                     self.clear_render_target_view(
@@ -411,28 +426,13 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn clear_depth_stencil(
-        &mut self,
-        dsv: &n::DepthStencilView,
-        _layout: image::ImageLayout,
-        depth: Option<target::Depth>,
-        stencil: Option<target::Stencil>,
-    ) {
-        self.clear_depth_stencil_view(
-            dsv.handle,
-            depth,
-            stencil,
-            &[],
-        );
-    }
-
     fn resolve_image(
         &mut self,
         src: &n::Image,
         _: image::ImageLayout,
         dst: &n::Image,
         _: image::ImageLayout,
-        regions: &[ImageResolve],
+        regions: &[com::ImageResolve],
     ) {
         {
             // Insert barrier for `COPY_DEST` to `RESOLVE_DEST` as we only expose
@@ -456,9 +456,9 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                 unsafe {
                     self.raw.ResolveSubresource(
                         src.resource,
-                        src.calc_subresource(region.src_subresource.0 as UINT, l + region.src_subresource.1 as UINT),
+                        src.calc_subresource(region.src_subresource.0 as UINT, l + region.src_subresource.1 as UINT, 0),
                         dst.resource,
-                        dst.calc_subresource(region.dst_subresource.0 as UINT, l + region.dst_subresource.1 as UINT),
+                        dst.calc_subresource(region.dst_subresource.0 as UINT, l + region.dst_subresource.1 as UINT, 0),
                         src.dxgi_format,
                     );
                 }
@@ -691,7 +691,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn copy_buffer(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: &[BufferCopy]) {
+    fn copy_buffer(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: &[com::BufferCopy]) {
         // copy each region
         for region in regions {
             unsafe {
@@ -714,7 +714,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         _: image::ImageLayout,
         dst: &n::Image,
         _: image::ImageLayout,
-        regions: &[ImageCopy],
+        regions: &[com::ImageCopy],
     ) {
         let mut src_image = winapi::D3D12_TEXTURE_COPY_LOCATION {
             pResource: src.resource,
@@ -731,9 +731,9 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         for region in regions {
             for layer in 0..region.num_layers {
                 *unsafe { src_image.SubresourceIndex_mut() } =
-                    src.calc_subresource(region.src_subresource.0 as _, (region.src_subresource.1 + layer) as _);
+                    src.calc_subresource(region.src_subresource.0 as _, (region.src_subresource.1 + layer) as _, 0);
                 *unsafe { dst_image.SubresourceIndex_mut() } =
-                    dst.calc_subresource(region.dst_subresource.0 as _, (region.dst_subresource.1 + layer) as _);
+                    dst.calc_subresource(region.dst_subresource.0 as _, (region.dst_subresource.1 + layer) as _, 0);
 
                 let src_box = winapi::D3D12_BOX {
                     left: region.src_offset.x as _,
@@ -762,7 +762,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         buffer: &n::Buffer,
         image: &n::Image,
         _: image::ImageLayout,
-        regions: &[BufferImageCopy],
+        regions: &[com::BufferImageCopy],
     ) {
         let mut src = winapi::D3D12_TEXTURE_COPY_LOCATION {
             pResource: buffer.resource,
@@ -777,7 +777,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         let (width, height, depth, _) = image.kind.get_dimensions();
         for region in regions {
             // Copy each layer in the region
-            let layers = region.image_subresource.1.clone();
+            let layers = region.image_range.layers.clone();
             for layer in layers {
                 assert_eq!(region.buffer_offset % winapi::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64, 0);
                 assert_eq!(region.buffer_row_pitch % winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32, 0);
@@ -798,7 +798,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                     },
                 };
                 *unsafe { dst.SubresourceIndex_mut() } =
-                    image.calc_subresource(region.image_subresource.0 as _, layer as _);
+                    image.calc_subresource(region.image_range.levels.start as _, layer as _, 0);
                 let src_box = winapi::D3D12_BOX {
                     left: 0,
                     top: 0,
@@ -826,7 +826,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         image: &n::Image,
         _: image::ImageLayout,
         buffer: &n::Buffer,
-        regions: &[BufferImageCopy],
+        regions: &[com::BufferImageCopy],
     ) {
         let mut src = winapi::D3D12_TEXTURE_COPY_LOCATION {
             pResource: image.resource,
@@ -841,7 +841,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         let (width, height, depth, _) = image.kind.get_dimensions();
         for region in regions {
             // Copy each layer in the region
-            let layers = region.image_subresource.1.clone();
+            let layers = region.image_range.layers.clone();
             for layer in layers {
                 assert_eq!(region.buffer_offset % winapi::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64, 0);
                 assert_eq!(region.buffer_row_pitch % winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32, 0);
@@ -852,7 +852,7 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
 
                 // Advance buffer offset with each layer
                 *unsafe { src.SubresourceIndex_mut() } =
-                    image.calc_subresource(region.image_subresource.0 as _, layer as _);
+                    image.calc_subresource(region.image_range.levels.start as _, layer as _, 0);
                 *unsafe { dst.PlacedFootprint_mut() } = winapi::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
                     Offset: region.buffer_offset as UINT64 + (layer as u32 * region.buffer_row_pitch * height * depth) as UINT64,
                     Footprint: winapi::D3D12_SUBRESOURCE_FOOTPRINT {

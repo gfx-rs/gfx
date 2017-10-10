@@ -94,9 +94,9 @@ impl<B: Backend, C> CommandPool<B, C> {
         self.reserve(1);
 
         let buffer = &mut self.buffers[self.next_buffer];
+        buffer.begin();
         self.next_buffer += 1;
         unsafe {
-            buffer.begin();
             CommandBuffer::new(buffer)
         }
     }

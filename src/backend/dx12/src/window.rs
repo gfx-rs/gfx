@@ -2,12 +2,12 @@
 use core::{self, image};
 use dxguid;
 use std::collections::VecDeque;
-use std::ptr;
+use std::{mem, ptr};
 #[cfg(feature = "winit")]
 use winit;
 use winapi;
 use wio::com::ComPtr;
-use {conv, native as n, Adapter, Backend, Instance, QueueFamily};
+use {conv, native as n, Adapter, Backend, Device, Instance, QueueFamily};
 
 use std::os::raw::c_void;
 
@@ -16,8 +16,7 @@ impl Instance {
         let (width, height) = unsafe {
             use winapi::RECT;
             use user32::GetClientRect;
-            use std::mem::zeroed;
-            let mut rect: RECT = zeroed();
+            let mut rect: RECT = mem::zeroed();
             if GetClientRect(hwnd as *mut _, &mut rect as *mut RECT) == 0 {
                 panic!("GetClientRect failed");
             }
@@ -83,12 +82,25 @@ impl core::Surface<Backend> for Surface {
             // [15716] DXGI ERROR: IDXGIFactory::CreateSwapchain: Flip model swapchains (DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL and DXGI_SWAP_EFFECT_FLIP_DISCARD) only support the following Formats: (DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R10G10B10A2_UNORM), assuming the underlying Device does as well.
             format.1 = core::format::ChannelType::Unorm;
         }
-        let format = conv::map_format(format, true).unwrap(); // TODO: error handling
+        let format = conv::map_format(format).unwrap(); // TODO: error handling
+        let mut device = present_queue.as_raw().device.clone();
+
+        let rtv_desc = winapi::D3D12_RENDER_TARGET_VIEW_DESC {
+            Format: conv::map_format(config.color_format).unwrap(),
+            ViewDimension: winapi::D3D12_RTV_DIMENSION_TEXTURE2D,
+            .. unsafe { mem::zeroed() }
+        };
+        let rtv_heap = Device::create_descriptor_heap_impl(
+            &mut device,
+            winapi::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+            false,
+            buffer_count,
+        );
 
         // TODO: double-check values
         let desc = winapi::DXGI_SWAP_CHAIN_DESC1 {
             AlphaMode: winapi::DXGI_ALPHA_MODE_IGNORE,
-            BufferCount: buffer_count,
+            BufferCount: buffer_count as _,
             Width: self.width,
             Height: self.height,
             Format: format,
@@ -125,19 +137,28 @@ impl core::Surface<Backend> for Surface {
             let mut resource: *mut winapi::ID3D12Resource = ptr::null_mut();
             unsafe {
                 swap_chain.GetBuffer(
-                    i,
+                    i as _,
                     &dxguid::IID_ID3D12Resource,
                     &mut resource as *mut *mut _ as *mut *mut _);
+            }
+
+            let rtv_handle = rtv_heap.at(i as _).cpu;
+            unsafe {
+                device.CreateRenderTargetView(resource, &rtv_desc, rtv_handle);
             }
 
             let kind = image::Kind::D2(self.width as u16, self.height as u16, 1.into());
             n::Image {
                 resource,
                 kind,
+                usage: image::COLOR_ATTACHMENT,
                 dxgi_format: format,
-                bits_per_texel: config.color_format.0.get_total_bits(),
-                levels: 1,
-                layers: 1,
+                bits_per_texel: config.color_format.0.describe_bits().total,
+                num_levels: 1,
+                num_layers: 1,
+                clear_cv: Some(rtv_handle),
+                clear_dv: None,
+                clear_sv: None,
             }
         }).collect();
 
@@ -145,6 +166,7 @@ impl core::Surface<Backend> for Surface {
             inner: swap_chain,
             next_frame: 0,
             frame_queue: VecDeque::new(),
+            rtv_heap,
         };
 
         (swapchain, core::Backbuffer::Images(images))
@@ -155,6 +177,8 @@ pub struct Swapchain {
     inner: ComPtr<winapi::IDXGISwapChain3>,
     next_frame: usize,
     frame_queue: VecDeque<usize>,
+    #[allow(dead_code)]
+    rtv_heap: n::DescriptorHeap,
 }
 
 impl core::Swapchain<Backend> for Swapchain {
