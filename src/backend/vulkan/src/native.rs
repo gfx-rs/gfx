@@ -1,7 +1,7 @@
 use ash::vk;
 use ash::version::DeviceV1_0;
 use core;
-use core::image::SubresourceLayers;
+use core::image::SubresourceRange;
 use std::ops::Range;
 use std::sync::Arc;
 use {Backend, RawDevice};
@@ -49,6 +49,7 @@ pub struct Image {
     pub(crate) extent: vk::Extent3D,
 }
 
+#[derive(Debug, Hash, PartialEq, Eq)]
 pub struct ImageView {
     pub(crate) image: vk::Image,
     pub(crate) view: vk::ImageView,

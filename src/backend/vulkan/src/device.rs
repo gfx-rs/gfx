@@ -4,6 +4,7 @@ use core::{buffer, device as d, format, image, mapping, pass, pso};
 use core::{Features, Limits, MemoryType};
 use core::memory::Requirements;
 use native as n;
+use smallvec::SmallVec;
 use std::{mem, ptr};
 use std::ffi::CString;
 use std::ops::Range;
@@ -557,26 +558,21 @@ impl d::Device<B> for Device {
     fn create_framebuffer(
         &mut self,
         renderpass: &n::RenderPass,
-        color_attachments: &[&n::RenderTargetView],
-        depth_stencil_attachments: &[&n::DepthStencilView],
+        attachments: &[&n::ImageView],
         extent: d::Extent,
     ) -> Result<n::FrameBuffer, d::FramebufferError> {
-        let attachments = color_attachments
+        let attachments_raw = attachments
             .iter()
             .map(|attachment| attachment.view)
-            .chain(depth_stencil_attachments
-                .iter()
-                .map(|attachment| attachment.view)
-            )
-            .collect::<Vec<_>>();
+            .collect::<SmallVec<[_; 4]>>();
 
         let info = vk::FramebufferCreateInfo {
             s_type: vk::StructureType::FramebufferCreateInfo,
             p_next: ptr::null(),
             flags: vk::FramebufferCreateFlags::empty(),
             render_pass: renderpass.raw,
-            attachment_count: attachments.len() as u32,
-            p_attachments: attachments.as_ptr(),
+            attachment_count: attachments_raw.len() as u32,
+            p_attachments: attachments_raw.as_ptr(),
             width: extent.width,
             height: extent.height,
             layers: extent.depth,
@@ -834,10 +830,10 @@ impl d::Device<B> for Device {
 
         let subresource_range = vk::ImageSubresourceRange {
             aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT, //TODO
-            base_mip_level: range.0.start as _,
-            level_count: (range.0.end - range.0.start) as _,
-            base_array_layer: range.1.start as _,
-            layer_count: (range.1.end - range.1.start) as _,
+            base_mip_level: range.levels.start as _,
+            level_count: (range.levels.end - range.levels.start) as _,
+            base_array_layer: range.layers.start as _,
+            layer_count: (range.layers.end - range.layers.start) as _,
         };
 
         let info = vk::ImageViewCreateInfo {
@@ -943,13 +939,10 @@ impl d::Device<B> for Device {
                 pso::DescriptorWrite::SampledImage(ref images) |
                 pso::DescriptorWrite::StorageImage(ref images) |
                 pso::DescriptorWrite::InputAttachment(ref images) => {
-                    for &(srv, layout) in images {
-                        let view = if let n::ShaderResourceView::Image(view) = *srv { view }
-                                    else { panic!("Wrong shader resource view (expected image)") }; // TODO
-
+                    for &(view, layout) in images {
                         image_infos.push(vk::DescriptorImageInfo {
                             sampler: vk::Sampler::null(),
-                            image_view: view,
+                            image_view: view.view,
                             image_layout: conv::map_image_layout(layout),
                         });
                     }
@@ -1159,36 +1152,16 @@ impl d::Device<B> for Device {
         unsafe { self.raw.0.destroy_buffer(buffer.raw, None); }
     }
 
+    fn destroy_buffer_view(&mut self, _: n::BufferView) {
+        //TODO?
+    }
+
     fn destroy_image(&mut self, image: n::Image) {
         unsafe { self.raw.0.destroy_image(image.raw, None); }
     }
 
-    fn destroy_render_target_view(&mut self, rtv: n::RenderTargetView) {
-        unsafe { self.raw.0.destroy_image_view(rtv.view, None); }
-    }
-
-    fn destroy_depth_stencil_view(&mut self, dsv: n::DepthStencilView) {
-        unsafe { self.raw.0.destroy_image_view(dsv.view, None); }
-    }
-
-    fn destroy_constant_buffer_view(&mut self, _: n::ConstantBufferView) { }
-
-    fn destroy_shader_resource_view(&mut self, srv: n::ShaderResourceView) {
-        match srv {
-            n::ShaderResourceView::Buffer => (),
-            n::ShaderResourceView::Image(view) => unsafe {
-                self.raw.0.destroy_image_view(view, None);
-            }
-        }
-    }
-
-    fn destroy_unordered_access_view(&mut self, uav: n::UnorderedAccessView) {
-        match uav {
-            n::UnorderedAccessView::Buffer => (),
-            n::UnorderedAccessView::Image(view) => unsafe {
-                self.raw.0.destroy_image_view(view, None);
-            }
-        }
+    fn destroy_image_view(&mut self, view: n::ImageView) {
+        unsafe { self.raw.0.destroy_image_view(view.view, None); }
     }
 
     fn destroy_sampler(&mut self, sampler: n::Sampler) {
