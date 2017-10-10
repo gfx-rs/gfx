@@ -59,6 +59,30 @@ fn map_buffer_image_regions(
         .collect()
 }
 
+impl CommandBuffer {
+    fn bind_descriptor_sets(
+        &mut self,
+        bind_point: vk::PipelineBindPoint,
+        layout: &n::PipelineLayout,
+        first_set: usize,
+        sets: &[&n::DescriptorSet],
+    ) {
+        let sets: SmallVec<[vk::DescriptorSet; 16]> = sets.iter().map(|set| set.raw).collect();
+        let dynamic_offsets = &[]; // TODO
+
+        unsafe {
+            self.device.0.cmd_bind_descriptor_sets(
+                self.raw,
+                bind_point,
+                layout.raw,
+                first_set as u32,
+                &sets,
+                dynamic_offsets,
+            );
+        }
+    }
+}
+
 impl command::RawCommandBuffer<Backend> for CommandBuffer {
     fn begin(&mut self) {
         let info = vk::CommandBufferBeginInfo {
@@ -536,19 +560,12 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
         first_set: usize,
         sets: &[&n::DescriptorSet],
     ) {
-        let sets: SmallVec<[vk::DescriptorSet; 16]> = sets.iter().map(|set| set.raw).collect();
-        let dynamic_offsets = &[]; // TODO
-
-        unsafe {
-            self.device.0.cmd_bind_descriptor_sets(
-                self.raw,
-                vk::PipelineBindPoint::Graphics,
-                layout.raw,
-                first_set as u32,
-                &sets,
-                dynamic_offsets,
-            );
-        }
+        self.bind_descriptor_sets(
+            vk::PipelineBindPoint::Graphics,
+            layout,
+            first_set,
+            sets,
+        );
     }
 
     fn bind_compute_pipeline(&mut self, pipeline: &n::ComputePipeline) {
@@ -559,6 +576,20 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
                 pipeline.0,
             )
         }
+    }
+
+    fn bind_compute_descriptor_sets(
+        &mut self,
+        layout: &n::PipelineLayout,
+        first_set: usize,
+        sets: &[&n::DescriptorSet],
+    ) {
+        self.bind_descriptor_sets(
+            vk::PipelineBindPoint::Compute,
+            layout,
+            first_set,
+            sets,
+        );
     }
 
     fn dispatch(&mut self, x: u32, y: u32, z: u32) {

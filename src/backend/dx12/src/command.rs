@@ -153,7 +153,6 @@ impl CommandBuffer {
             );
         }
     }
-
 }
 
 impl command::RawCommandBuffer<Backend> for CommandBuffer {
@@ -619,6 +618,48 @@ impl command::RawCommandBuffer<Backend> for CommandBuffer {
     fn bind_compute_pipeline(&mut self, pipeline: &n::ComputePipeline) {
         unsafe {
             self.raw.SetPipelineState(pipeline.raw);
+        }
+    }
+
+    fn bind_compute_descriptor_sets(
+        &mut self,
+        layout: &n::PipelineLayout,
+        first_set: usize,
+        sets: &[&n::DescriptorSet],
+    ) {
+        unsafe {
+            self.raw.SetComputeRootSignature(layout.raw);
+
+            // Bind descriptor heaps
+            // TODO: Can we bind them always or only once?
+            //       Resize while recording?
+            let mut heaps = [
+                sets[0].heap_srv_cbv_uav.as_mut() as *mut _,
+                sets[0].heap_samplers.as_mut() as *mut _
+            ];
+            self.raw.SetDescriptorHeaps(2, heaps.as_mut_ptr())
+        }
+
+        let mut table_id = 0;
+        for table in &layout.tables[.. first_set] {
+            if table.contains(n::SRV_CBV_UAV) {
+                table_id += 1;
+            }
+            if table.contains(n::SAMPLERS) {
+                table_id += 1;
+            }
+        }
+        for (set, table) in sets.iter().zip(layout.tables[first_set..].iter()) {
+            set.first_gpu_view.map(|gpu| unsafe {
+                assert!(table.contains(n::SRV_CBV_UAV));
+                self.raw.SetComputeRootDescriptorTable(table_id, gpu);
+                table_id += 1;
+            });
+            set.first_gpu_sampler.map(|gpu| unsafe {
+                assert!(table.contains(n::SAMPLERS));
+                self.raw.SetComputeRootDescriptorTable(table_id, gpu);
+                table_id += 1;
+            });
         }
     }
 
