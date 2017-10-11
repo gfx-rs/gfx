@@ -593,7 +593,7 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
 
         for region in regions {
             let image_offset = &region.image_offset;
-            let r = &region.image_lauers;
+            let r = &region.image_layers;
 
             for layer in r.layers.clone() {
                 let offset = region.buffer_offset + region.buffer_slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;

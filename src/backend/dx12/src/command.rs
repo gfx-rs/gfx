@@ -18,10 +18,18 @@ fn get_rect(rect: &target::Rect) -> winapi::D3D12_RECT {
 }
 
 #[derive(Debug, Clone)]
+struct AttachmentClear {
+    subpass_id: Option<pass::SubpassId>,
+    value: Option<com::ClearValue>,
+    stencil_value: Option<u32>,
+}
+
+#[derive(Debug, Clone)]
 pub struct RenderPassCache {
     render_pass: n::RenderPass,
     framebuffer: n::Framebuffer,
     target_rect: winapi::D3D12_RECT,
+    attachment_clears: Vec<AttachmentClear>,
 }
 
 #[derive(Clone)]
@@ -87,6 +95,8 @@ impl CommandBuffer {
     fn bind_targets(&mut self) {
         let state = self.pass_cache.as_ref().unwrap();
         let subpass = &state.render_pass.subpasses[self.cur_subpass];
+
+        // collect render targets
         let color_views = subpass.color_attachments
             .iter()
             .map(|&(id, _)| state.framebuffer.attachments[id].handle_rtv.unwrap())
@@ -95,7 +105,7 @@ impl CommandBuffer {
             Some((id, _)) => state.framebuffer.attachments[id].handle_dsv.as_ref().unwrap() as *const _,
             None => ptr::null(),
         };
-
+        // set render targets
         unsafe {
             self.raw.OMSetRenderTargets(
                 color_views.len() as UINT,
@@ -104,10 +114,32 @@ impl CommandBuffer {
                 ds_view,
             );
         }
+
+        // performs clears for all the attachments first used in this subpass
+        for (view, clear) in state.framebuffer.attachments.iter().zip(state.attachment_clears.iter()) {
+            if clear.subpass_id != Some(self.cur_subpass) {
+                continue;
+            }
+            match clear.value {
+                Some(com::ClearValue::Color(value)) => {
+                    let handle = view.handle_rtv.unwrap();
+                    self.clear_render_target_view(handle, value, &[state.target_rect]);
+                }
+                Some(com::ClearValue::DepthStencil(value)) => {
+                    let handle = view.handle_dsv.unwrap();
+                    self.clear_depth_stencil_view(handle, Some(value.depth), None, &[state.target_rect]);
+                }
+                None => {}
+            }
+            if let Some(value) = clear.stencil_value {
+                let handle = view.handle_dsv.unwrap();
+                self.clear_depth_stencil_view(handle, None, Some(value), &[state.target_rect]);
+            }
+        }
     }
 
     fn clear_render_target_view(
-        &mut self,
+        &self,
         rtv: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
         color: com::ClearColor,
         rects: &[winapi::D3D12_RECT],
@@ -121,7 +153,7 @@ impl CommandBuffer {
 
         match color {
             com::ClearColor::Float(ref c) => unsafe {
-                self.raw.ClearRenderTargetView(rtv, c, num_rects, rects);
+                self.raw.clone().ClearRenderTargetView(rtv, c, num_rects, rects);
             },
             _ => {
                 // TODO: Can we support uint/int?
@@ -131,10 +163,10 @@ impl CommandBuffer {
     }
 
     fn clear_depth_stencil_view(
-        &mut self,
+        &self,
         dsv: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
         depth: Option<f32>,
-        stencil: Option<u8>,
+        stencil: Option<u32>,
         rects: &[winapi::D3D12_RECT],
     ) {
         let mut flags = winapi::D3D12_CLEAR_FLAGS(0);
@@ -153,10 +185,10 @@ impl CommandBuffer {
         };
 
         unsafe {
-            self.raw.ClearDepthStencilView(
+            self.raw.clone().ClearDepthStencilView(
                 dsv,
                 flags,
-                depth.unwrap_or_default() as _,
+                depth.unwrap_or_default(),
                 stencil.unwrap_or_default() as _,
                 num_rects,
                 rects,
@@ -199,40 +231,35 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 any(|aref| aref.1 == image::ImageLayout::Present)
         }));
 
-        let area = get_rect(&target_rect);
+        let mut clear_iter = clear_values.iter();
+        let attachment_clears = render_pass.attachments.iter().enumerate().map(|(i, attachment)| {
+            AttachmentClear {
+                subpass_id: render_pass.subpasses.iter().position(|sp| sp.is_using(i)),
+                value: if attachment.ops.load == pass::AttachmentLoadOp::Clear {
+                    Some(*clear_iter.next().unwrap())
+                } else {
+                    None
+                },
+                stencil_value: if attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
+                    match clear_iter.next() {
+                        Some(&com::ClearValue::DepthStencil(value)) => Some(value.stencil),
+                        other => panic!("Unexpected clear value: {:?}", other),
+                    }
+                } else {
+                    None
+                },
+            }
+        }).collect();
+        assert_eq!(clear_iter.next(), None);
+
         self.pass_cache = Some(RenderPassCache {
             render_pass: render_pass.clone(),
             framebuffer: framebuffer.clone(),
-            target_rect: area,
+            target_rect: get_rect(&target_rect),
+            attachment_clears,
         });
         self.cur_subpass = 0;
         self.insert_subpass_barriers();
-
-        let mut clear_iter = clear_values.iter();
-        for (view, attachment) in framebuffer.attachments.iter().zip(render_pass.attachments.iter()) {
-            if attachment.ops.load == pass::AttachmentLoadOp::Clear {
-                match *clear_iter.next().unwrap() {
-                    com::ClearValue::Color(value) => {
-                        let handle = view.handle_rtv.unwrap();
-                        self.clear_render_target_view(handle, value, &[area]);
-                    },
-                    com::ClearValue::DepthStencil(value) => {
-                        let handle = view.handle_dsv.unwrap();
-                        self.clear_depth_stencil_view(handle, Some(value.depth), None, &[area]);
-                    }
-                }
-            }
-            if attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
-                match *clear_iter.next().unwrap() {
-                    com::ClearValue::DepthStencil(value) => {
-                        let handle = view.handle_dsv.unwrap();
-                        self.clear_depth_stencil_view(handle, None, Some(value.stencil as _), &[area]);
-                    }
-                    com::ClearValue::Color(_) => panic!("Unexpected clear color value for stencil"),
-                }
-            }
-        }
-
         self.bind_targets();
     }
 
@@ -777,7 +804,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let (width, height, depth, _) = image.kind.get_dimensions();
         for region in regions {
             // Copy each layer in the region
-            let layers = region.image_range.layers.clone();
+            let layers = region.image_layers.layers.clone();
             for layer in layers {
                 assert_eq!(region.buffer_offset % winapi::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64, 0);
                 assert_eq!(region.buffer_row_pitch % winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32, 0);
@@ -798,7 +825,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     },
                 };
                 *unsafe { dst.SubresourceIndex_mut() } =
-                    image.calc_subresource(region.image_range.levels.start as _, layer as _, 0);
+                    image.calc_subresource(region.image_layers.level as _, layer as _, 0);
                 let src_box = winapi::D3D12_BOX {
                     left: 0,
                     top: 0,
@@ -841,7 +868,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let (width, height, depth, _) = image.kind.get_dimensions();
         for region in regions {
             // Copy each layer in the region
-            let layers = region.image_range.layers.clone();
+            let layers = region.image_layers.layers.clone();
             for layer in layers {
                 assert_eq!(region.buffer_offset % winapi::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64, 0);
                 assert_eq!(region.buffer_row_pitch % winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32, 0);
@@ -852,7 +879,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                 // Advance buffer offset with each layer
                 *unsafe { src.SubresourceIndex_mut() } =
-                    image.calc_subresource(region.image_range.levels.start as _, layer as _, 0);
+                    image.calc_subresource(region.image_layers.level as _, layer as _, 0);
                 *unsafe { dst.PlacedFootprint_mut() } = winapi::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
                     Offset: region.buffer_offset as UINT64 + (layer as u32 * region.buffer_row_pitch * height * depth) as UINT64,
                     Footprint: winapi::D3D12_SUBRESOURCE_FOOTPRINT {
