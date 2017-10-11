@@ -110,20 +110,29 @@ impl d::Device<B> for Device {
 
         let subpasses = subpasses.iter().map(|subpass| {
             {
-                let colors = subpass.color_attachments.iter()
-                    .map(|&(id, layout)| vk::AttachmentReference { attachment: id as u32, layout: conv::map_image_layout(layout) })
+                fn make_ref(&(id, layout): &pass::AttachmentRef) -> vk::AttachmentReference {
+                    vk::AttachmentReference {
+                        attachment: id as _,
+                        layout: conv::map_image_layout(layout),
+                    }
+                }
+                let colors = subpass.colors.iter()
+                    .map(make_ref)
                     .collect::<Vec<_>>();
-                let inputs = subpass.input_attachments.iter()
-                    .map(|&(id, layout)| vk::AttachmentReference { attachment: id as u32, layout: conv::map_image_layout(layout) })
+                let depth_stencil = subpass.depth_stencil
+                    .map(make_ref);
+                let inputs = subpass.inputs.iter()
+                    .map(make_ref)
                     .collect::<Vec<_>>();
-                let preserves = subpass.preserve_attachments.iter()
+                let preserves = subpass.preserves.iter()
                     .map(|&id| id as u32)
                     .collect::<Vec<_>>();
 
-                attachment_refs.push((colors, inputs, preserves));
+                attachment_refs.push((colors, depth_stencil, inputs, preserves));
             }
 
-            let &(ref color_attachments, ref input_attachments, ref preserve_attachments) = attachment_refs.last().unwrap();
+            let &(ref color_attachments, ref depth_stencil, ref input_attachments, ref preserve_attachments) =
+                attachment_refs.last().unwrap();
 
             vk::SubpassDescription {
                 flags: vk::SubpassDescriptionFlags::empty(),
@@ -133,7 +142,10 @@ impl d::Device<B> for Device {
                 color_attachment_count: color_attachments.len() as u32,
                 p_color_attachments: color_attachments.as_ptr(),
                 p_resolve_attachments: ptr::null(), // TODO
-                p_depth_stencil_attachment: ptr::null(), // TODO
+                p_depth_stencil_attachment: match *depth_stencil {
+                    Some(ref aref) => aref as *const _,
+                    None => ptr::null(),
+                },
                 preserve_attachment_count: preserve_attachments.len() as u32,
                 p_preserve_attachments: preserve_attachments.as_ptr(),
             }
@@ -765,7 +777,7 @@ impl d::Device<B> for Device {
             ),
         };
 
-        let bytes_per_texel = format.0.get_total_bits() / 8;
+        let bytes_per_texel = format.0.describe_bits().total / 8;
         let samples = match aa_mode {
             image::AaMode::Single => vk::SAMPLE_COUNT_1_BIT,
             _ => unimplemented!(),
@@ -939,7 +951,7 @@ impl d::Device<B> for Device {
                 pso::DescriptorWrite::SampledImage(ref images) |
                 pso::DescriptorWrite::StorageImage(ref images) |
                 pso::DescriptorWrite::InputAttachment(ref images) => {
-                    for &(view, layout) in images {
+                    for &(ref view, layout) in images {
                         image_infos.push(vk::DescriptorImageInfo {
                             sampler: vk::Sampler::null(),
                             image_view: view.view,
@@ -949,11 +961,11 @@ impl d::Device<B> for Device {
                 }
 
                 pso::DescriptorWrite::ConstantBuffer(ref cbvs) => {
-                    for cbv in cbvs {
+                    for &(ref buffer, ref range) in cbvs {
                         buffer_infos.push(vk::DescriptorBufferInfo {
-                            buffer: cbv.buffer,
-                            offset: cbv.range.start,
-                            range: cbv.range.end - cbv.range.start,
+                            buffer: buffer.raw,
+                            offset: range.start,
+                            range: range.end - range.start,
                         });
                     }
                 }

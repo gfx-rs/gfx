@@ -73,6 +73,9 @@ impl core::Swapchain<B> for Swapchain {
     }
 }
 
+//TODO: if we make `Surface` a `WindowBuilder` instead of `GlWindow`,
+// we could spawn window + GL context when a swapchain is requested
+// and actually respect the swapchain configuration provided by the user.
 pub struct Surface {
     window: Rc<glutin::GlWindow>,
 }

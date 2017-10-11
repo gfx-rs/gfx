@@ -39,11 +39,10 @@ fn map_buffer_image_regions(
     regions
         .iter()
         .map(|region| {
-            let r = &region.image_range;
+            let r = &region.image_layers;
             let aspect_mask = conv::map_image_aspects(r.aspects);
             let row_length = div(region.buffer_row_pitch, image.bytes_per_texel as u32);
-            assert_eq!(r.levels.start + 1, r.levels.end);
-            let image_subresource = conv::map_subresource_layers(aspect_mask, r.levels.start, &r.layers);
+            let image_subresource = conv::map_subresource_layers(aspect_mask, r.level, &r.layers);
             vk::BufferImageCopy {
                 buffer_offset: region.buffer_offset,
                 buffer_row_length: row_length,
