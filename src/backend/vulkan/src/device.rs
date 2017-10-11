@@ -185,7 +185,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_pipeline_layout(&mut self, sets: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
-        // TODO:
+        debug!("create_pipeline_layout {:?}", sets);
 
         let set_layouts = sets.iter().map(|set| {
             set.raw
@@ -215,6 +215,7 @@ impl d::Device<B> for Device {
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         use core::state as s;
 
+        debug!("create_graphics_pipelines {:?}", descs);
         // Store pipeline parameters to avoid stack usage
         let mut info_stages                = Vec::with_capacity(descs.len());
         let mut info_vertex_descs          = Vec::with_capacity(descs.len());
@@ -903,6 +904,8 @@ impl d::Device<B> for Device {
     }
 
     fn create_descriptor_set_layout(&mut self, bindings: &[pso::DescriptorSetLayoutBinding])-> n::DescriptorSetLayout {
+        debug!("create_descriptor_set_layout {:?}", bindings);
+
         let bindings = bindings.iter().map(|binding| {
             vk::DescriptorSetLayoutBinding {
                 binding: binding.binding as u32,
@@ -923,8 +926,7 @@ impl d::Device<B> for Device {
 
         let layout = unsafe {
             self.raw.0.create_descriptor_set_layout(&info, None)
-                        .expect("Error on descriptor set layout creation") // TODO
-        };
+        }.expect("Error on descriptor set layout creation"); // TODO
 
         n::DescriptorSetLayout {
             raw: layout,

@@ -74,8 +74,8 @@ fn main() {
     let mut device = (*context.ref_device()).clone();
 
     // Setup renderpass and pipeline
-    let vs_module = device.mut_raw().create_shader_module(include_bytes!("data/vs_main.spv")).unwrap();
-    let fs_module = device.mut_raw().create_shader_module(include_bytes!("data/ps_main.spv")).unwrap();
+    let vs_module = device.mut_raw().create_shader_module(include_bytes!("../../core/quad/data/vert.spv")).unwrap();
+    let fs_module = device.mut_raw().create_shader_module(include_bytes!("../../core/quad/data/frag.spv")).unwrap();
 
     let (desc, mut desc_data) = device.create_descriptors(1).pop().unwrap();
     let pipe_init = pipe::Init {
@@ -100,14 +100,20 @@ fn main() {
         pipe_init,
     ).unwrap();
 
+    let image_range = gfx::image::SubresourceRange {
+        aspects: i::ASPECT_COLOR,
+        levels: 0 .. 1,
+        layers: 0 .. 1,
+    };
+
     // Framebuffer creation
     let frame_rtvs = backbuffers.iter().map(|backbuffer| {
-        device.view_image_as_render_target(&backbuffer.color, (0, 0..1))
+        device.create_image_view(&backbuffer.color, image_range.clone())
             .unwrap()
     }).collect::<Vec<_>>();
     let framebuffers = frame_rtvs.iter().map(|rtv| {
         let extent = d::Extent { width: pixel_width as _, height: pixel_height as _, depth: 1 };
-        device.create_framebuffer(&pipeline, &[rtv.as_ref()], &[], extent)
+        device.create_framebuffer(&pipeline, &[rtv.as_ref()], extent)
             .unwrap()
     }).collect::<Vec<_>>();
 
@@ -165,7 +171,7 @@ fn main() {
         1,
     ).unwrap();
 
-    let image_srv = device.view_image_as_shader_resource(&image)
+    let image_srv = device.create_image_view(&image, image_range)
         .unwrap();
 
     let sampler = device.create_sampler(
@@ -205,8 +211,11 @@ fn main() {
             buffer_offset: 0,
             buffer_row_pitch: row_pitch,
             buffer_slice_pitch: row_pitch * (height as u32),
-            image_aspect: i::ASPECT_COLOR,
-            image_subresource: (0, 0..1),
+            image_layers: gfx::image::SubresourceLayers {
+                aspects: i::ASPECT_COLOR,
+                level: 0,
+                layers: 0 .. 1,
+            },
             image_offset: command::Offset { x: 0, y: 0, z: 0 },
             image_extent: d::Extent { width, height, depth: 1 },
         }]);
@@ -245,7 +254,7 @@ fn main() {
             };
             encoder.draw(0..6, &pipeline, data);
         }
-        
+
         submits.push(encoder.finish());
         context.present(submits.drain(..).collect::<Vec<_>>());
     }
