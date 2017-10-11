@@ -113,6 +113,7 @@ pub struct SubpassDesc<'a> {
 pub type SubpassId = usize;
 
 /// A sub-pass borrow of a pass.
+#[derive(Debug)]
 pub struct Subpass<'a, B: Backend> {
     /// Index of the subpass
     pub index: SubpassId,
