@@ -265,7 +265,7 @@ impl<'a, B, F> Component<'a, B> for RenderTarget<F>
 
     fn attachment(_: &Self::Init) -> Option<Attachment> {
         Some(Attachment {
-            format: F::get_format(),
+            format: F::SELF,
             // TODO: AttachmentLoadOp::Clear
             ops: AttachmentOps::new(AttachmentLoadOp::Load, AttachmentStoreOp::Store),
             stencil_ops: AttachmentOps::DONT_CARE,

@@ -831,16 +831,12 @@ impl d::Device<B> for Device {
     }
 
     fn create_image_view(
-        &mut self, image: &n::Image, format: format::Format, range: image::SubresourceRange,
+        &mut self,
+        image: &n::Image,
+        format: format::Format,
+        swizzle: format::Swizzle,
+        range: image::SubresourceRange,
     ) -> Result<n::ImageView, image::ViewError> {
-        // TODO
-        let components = vk::ComponentMapping {
-            r: vk::ComponentSwizzle::Identity,
-            g: vk::ComponentSwizzle::Identity,
-            b: vk::ComponentSwizzle::Identity,
-            a: vk::ComponentSwizzle::Identity,
-        };
-
         let subresource_range = vk::ImageSubresourceRange {
             aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT, //TODO
             base_mip_level: range.levels.start as _,
@@ -856,7 +852,7 @@ impl d::Device<B> for Device {
             image: image.raw,
             view_type: vk::ImageViewType::Type2d, // TODO
             format: conv::map_format(format.0, format.1).unwrap(), // TODO
-            components,
+            components: conv::map_swizzle(swizzle),
             subresource_range,
         };
 

@@ -335,7 +335,7 @@ impl<B: Backend, C> Context<B, C>
                         usage: image::TRANSFER_SRC | image::COLOR_ATTACHMENT,
                         kind: surface.get_kind(),
                         mip_levels: 1,
-                        format: Cf::get_format(),
+                        format: Cf::SELF,
                         origin: image::Origin::Backbuffer,
                         stable_state: (stable_access, stable_layout),
                     },

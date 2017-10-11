@@ -25,7 +25,7 @@ use core::{
     DescriptorPool, Gpu, FrameSync, Primitive, QueueType,
     Backbuffer, Surface, Swapchain, SwapchainConfig,
 };
-use core::format::{Formatted, Srgba8 as ColorFormat, Vec2};
+use core::format::{Formatted, Srgba8 as ColorFormat, Swizzle, Vec2};
 use core::pass::Subpass;
 use core::queue::Submission;
 use core::target::Rect;
@@ -71,7 +71,7 @@ fn main() {
     let window = {
         let builder = back::config_context(
             glutin::ContextBuilder::new(),
-            ColorFormat::get_format(),
+            ColorFormat::SELF,
             None,
         ).with_vsync(true);
         glutin::GlWindow::new(wb, builder, &events_loop).unwrap()
@@ -169,7 +169,7 @@ fn main() {
 
     let render_pass = {
         let attachment = pass::Attachment {
-            format: ColorFormat::get_format(),
+            format: ColorFormat::SELF,
             ops: pass::AttachmentOps::new(pass::AttachmentLoadOp::Clear, pass::AttachmentStoreOp::Store),
             stencil_ops: pass::AttachmentOps::DONT_CARE,
             layouts: i::ImageLayout::Undefined .. i::ImageLayout::Present,
@@ -218,7 +218,7 @@ fn main() {
         location: 0,
         binding: 0,
         element: pso::Element {
-            format: <Vec2<f32> as Formatted>::get_format(),
+            format: Vec2::<f32>::SELF,
             offset: 0,
         },
     });
@@ -226,7 +226,7 @@ fn main() {
         location: 1,
         binding: 0,
         element: pso::Element {
-            format: <Vec2<f32> as Formatted>::get_format(),
+            format: Vec2::<f32>::SELF,
             offset: 8
         },
     });
@@ -283,7 +283,7 @@ fn main() {
             let pairs = images
                 .into_iter()
                 .map(|image| {
-                    let rtv = device.create_image_view(&image, ColorFormat::get_format(), COLOR_RANGE.clone()).unwrap();
+                    let rtv = device.create_image_view(&image, ColorFormat::SELF, Swizzle::NO, COLOR_RANGE.clone()).unwrap();
                     (image, rtv)
                 })
                 .collect::<Vec<_>>();
@@ -367,7 +367,7 @@ fn main() {
         device.release_mapping_writer(data);
     }
 
-    let image_unbound = device.create_image(kind, 1, ColorFormat::get_format(), i::TRANSFER_DST | i::SAMPLED).unwrap(); // TODO: usage
+    let image_unbound = device.create_image(kind, 1, ColorFormat::SELF, i::TRANSFER_DST | i::SAMPLED).unwrap(); // TODO: usage
     println!("{:?}", image_unbound);
     let image_req = device.get_image_requirements(&image_unbound);
 
@@ -381,7 +381,7 @@ fn main() {
     let image_memory = device.allocate_memory(device_type, image_req.size).unwrap();
 
     let image_logo = device.bind_image_memory(&image_memory, 0, image_unbound).unwrap();
-    let image_srv = device.create_image_view(&image_logo, ColorFormat::get_format(), COLOR_RANGE.clone()).unwrap();
+    let image_srv = device.create_image_view(&image_logo, ColorFormat::SELF, Swizzle::NO, COLOR_RANGE.clone()).unwrap();
 
     let sampler = device.create_sampler(
         i::SamplerInfo::new(

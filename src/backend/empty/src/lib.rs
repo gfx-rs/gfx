@@ -155,7 +155,13 @@ impl core::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_image_view(&mut self, _: &(), _: format::Format, _: image::SubresourceRange) -> Result<(), image::ViewError> {
+    fn create_image_view(&
+        mut self,
+        _: &(),
+        _: format::Format,
+        _: format::Swizzle,
+        _: image::SubresourceRange,
+    ) -> Result<(), image::ViewError> {
         unimplemented!()
     }
 
