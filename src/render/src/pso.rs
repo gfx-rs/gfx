@@ -93,38 +93,29 @@ define_descriptors! {
 }
 
 impl<B: Backend> Bind<B> for SampledImage {
-    type Handle = handle::raw::ShaderResourceView<B>;
+    type Handle = handle::raw::ImageView<B>;
 
-    fn write<'a>(srvs: &[&'a Self::Handle]) -> core::pso::DescriptorWrite<'a, B> {
-        core::pso::DescriptorWrite::SampledImage(srvs.iter()
-            .map(|&srv| match srv.info() {
-                &handle::ViewSource::Image(_) => {
-                    let layout = ImageLayout::ShaderReadOnlyOptimal;
-                    (srv.resource(), layout)
-                }
-                &handle::ViewSource::Buffer(_) => unreachable!(),
+    fn write<'a>(views: &[&'a Self::Handle]) -> core::pso::DescriptorWrite<'a, B> {
+        core::pso::DescriptorWrite::SampledImage(views.iter()
+            .map(|&view| {
+                let layout = ImageLayout::ShaderReadOnlyOptimal;
+                (view.resource(), layout)
             }).collect())
     }
 
     fn require<'a>(
-        srv: &'a Self::Handle,
+        view: &'a Self::Handle,
         _: &mut Vec<(&'a handle::raw::Buffer<B>, core::buffer::State)>,
         images: &mut Vec<(&'a handle::raw::Image<B>, image::Subresource, core::image::State)>,
         _: &mut handle::Bag<B>,
     ) {
-        match srv.info() {
-            &handle::ViewSource::Image(ref img) => {
-                let levels = img.info().mip_levels;
-                let layers = img.info().kind.get_num_layers();
-                let state = (image::SHADER_READ, ImageLayout::ShaderReadOnlyOptimal);
-                for level in 0..levels {
-                    for layer in 0..layers {
-                        images.push((img, (level, layer), state));
-                    }
-                }
-            }
-            &handle::ViewSource::Buffer(_) => {
-                unimplemented!()
+        let img = view.info();
+        let levels = img.info().mip_levels;
+        let layers = img.info().kind.get_num_layers();
+        let state = (image::SHADER_READ, ImageLayout::ShaderReadOnlyOptimal);
+        for level in 0..levels {
+            for layer in 0..layers {
+                images.push((img, (level, layer), state));
             }
         }
     }
@@ -270,7 +261,7 @@ impl<'a, B, F> Component<'a, B> for RenderTarget<F>
     where B: Backend, F: 'a + format::RenderFormat
 {
     type Init = core::pso::ColorInfo;
-    type Data = &'a handle::RenderTargetView<B, F>;
+    type Data = &'a handle::ImageView<B, F>;
 
     fn attachment(_: &Self::Init) -> Option<Attachment> {
         Some(Attachment {

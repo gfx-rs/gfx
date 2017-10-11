@@ -326,23 +326,26 @@ impl<B: Backend, C> Context<B, C>
         let backbuffers = backbuffer_images
             .into_iter()
             .map(|raw| {
-                let usage = image::TRANSFER_SRC | image::COLOR_ATTACHMENT;
-                let kind = surface.get_kind();
-                let mip_levels = 1;
-                let format = Cf::get_format();
-                let origin = image::Origin::Backbuffer;
                 let stable_access = core::image::Access::empty();
                 let stable_layout = core::image::ImageLayout::Present;
-                let stable_state = (stable_access, stable_layout);
+                let handle = handle::inner::Image::without_garbage(
+                    raw,
+                    image::Info {
+                        aspects: core::image::ASPECT_COLOR,
+                        usage: image::TRANSFER_SRC | image::COLOR_ATTACHMENT,
+                        kind: surface.get_kind(),
+                        mip_levels: 1,
+                        format: Cf::get_format(),
+                        origin: image::Origin::Backbuffer,
+                        stable_state: (stable_access, stable_layout),
+                    },
+                );
                 Backbuffer {
-                    color: Typed::new(handle::inner::Image::without_garbage(
-                        raw,
-                        image::Info { usage, kind, mip_levels, format, origin, stable_state }
-                    ).into())
+                    color: Typed::new(handle.into()),
                 }
             }).collect();
 
-        (Context {
+        let context = Context {
             surface,
             device,
             queue,
@@ -350,7 +353,9 @@ impl<B: Backend, C> Context<B, C>
             frame_bundles,
             frame_acquired: None,
             garbage,
-        }, backbuffers)
+        };
+
+        (context, backbuffers)
     }
 
     pub fn acquire_frame(&mut self) -> Frame {
@@ -458,6 +463,7 @@ impl<B: Backend, C> Drop for Context<B, C>
     where C: Supports<Transfer>
 {
     fn drop(&mut self) {
+        let _ = &self.surface;
         self.wait_idle();
         self.garbage.collect();
 

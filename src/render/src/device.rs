@@ -11,7 +11,7 @@ use handle::inner::*;
 use {core, buffer, image, format, mapping, pso};
 use {Backend, Primitive, Extent};
 
-pub use core::device::{TargetViewError, FramebufferError};
+pub use core::device::{FramebufferError};
 
 #[derive(Clone)]
 pub struct Device<B: Backend> {
@@ -136,6 +136,28 @@ impl<B: Backend> Device<B> {
         ).map(|(h, t)| (Typed::new(h), t))
     }
 
+    pub fn create_buffer_view_raw(
+        &mut self,
+        buffer: &handle::raw::Buffer<B>,
+        range: Range<u64>,
+    ) -> Result<handle::raw::BufferView<B>, buffer::ViewError> {
+        self.raw.create_buffer_view(buffer.resource(), range)
+            .map(|cbv| BufferView::new(
+                cbv,
+                buffer.clone(),
+                self.garbage.clone()
+            ).into())
+    }
+
+    pub fn create_buffer_view<T>(
+        &mut self,
+        buffer: &handle::Buffer<B, T>,
+        range: Range<u64>,
+    ) -> Result<handle::BufferView<B, T>, buffer::ViewError> {
+        self.create_buffer_view_raw(buffer.as_ref(), range)
+            .map(Typed::new)
+    }
+
     /// Acquire a mapping Reader.
     ///
     /// The accessible slice will correspond to the specified range (in elements).
@@ -237,13 +259,13 @@ impl<B: Backend> Device<B> {
         })
     }
 
-    pub fn create_image_raw<A>(
+    pub fn create_image_raw<A: Allocator<B>>(
         &mut self,
         allocator: &mut A,
         usage: image::Usage,
         kind: image::Kind,
         mip_levels: image::Level,
-        format: format::Format
+        format: format::Format,
     ) -> Result<(handle::raw::Image<B>, InitToken<B>), image::CreationError>
         where A: Allocator<B>
     {
@@ -252,6 +274,18 @@ impl<B: Backend> Device<B> {
             SAMPLED, TRANSFER_SRC, TRANSFER_DST,
         };
         use core::image::ImageLayout;
+
+        let bits = format.0.describe_bits();
+        let mut aspects = core::image::AspectFlags::empty();
+        if bits.color + bits.alpha != 0 {
+            aspects |= core::image::ASPECT_COLOR;
+        }
+        if bits.depth != 0 {
+            aspects |= core::image::ASPECT_DEPTH;
+        }
+        if bits.stencil != 0 {
+            aspects |= core::image::ASPECT_STENCIL;
+        }
 
         let image = self.raw.create_image(kind, mip_levels, format, usage)?;
         let (image, memory) = allocator.allocate_image(self, usage, image);
@@ -271,7 +305,7 @@ impl<B: Backend> Device<B> {
             _ => ImageLayout::General,
         };
         let stable_state = (stable_access, stable_layout);
-        let info = image::Info { usage, kind, mip_levels, format, origin, stable_state };
+        let info = image::Info { aspects, usage, kind, mip_levels, format, origin, stable_state };
         let handle = handle::raw::Image::from(
             Image::new(image, info, self.garbage.clone()));
         let token = InitToken { handle: handle.clone().into() };
@@ -297,132 +331,35 @@ impl<B: Backend> Device<B> {
         ).map(|(h, t)| (Typed::new(h), t))
     }
 
-    pub fn create_sampler(&mut self, info: image::SamplerInfo)
-        -> handle::Sampler<B>
+    pub fn create_image_view_raw(
+        &mut self,
+        image: &handle::raw::Image<B>,
+        format: format::Format,
+        range: image::SubresourceRange,
+    ) -> Result<handle::raw::ImageView<B>, image::ViewError> {
+        self.raw.create_image_view(image.resource(), format, range)
+            .map(|view| ImageView::new(
+                view,
+                image.clone(),
+                self.garbage.clone()
+            ).into())
+    }
+
+    pub fn create_image_view<F>(
+        &mut self,
+        image: &handle::Image<B, F>,
+        range: image::SubresourceRange,
+    ) -> Result<handle::ImageView<B, F>, image::ViewError>
+        where F: format::RenderFormat
     {
+        self.create_image_view_raw(image.as_ref(), F::get_format(), range)
+            .map(Typed::new)
+    }
+
+    pub fn create_sampler(&mut self, info: image::SamplerInfo) -> handle::Sampler<B> {
         handle::inner::Sampler::new(
             self.raw.create_sampler(info.clone()), info, self.garbage.clone()
         ).into()
-    }
-
-    pub fn view_buffer_as_constant_raw(
-        &mut self,
-        buffer: &handle::raw::Buffer<B>,
-        range: Range<u64>,
-    ) -> Result<handle::raw::ConstantBufferView<B>, TargetViewError>
-    {
-        self.raw.view_buffer_as_constant(buffer.resource(), range)
-            .map(|cbv| ConstantBufferView::new(
-                cbv,
-                buffer.clone(),
-                self.garbage.clone()
-            ).into())
-    }
-
-    pub fn view_buffer_as_constant<T>(
-        &mut self,
-        buffer: &handle::Buffer<B, T>,
-        range: Range<u64>,
-    ) -> Result<handle::ConstantBufferView<B, T>, TargetViewError>
-    {
-        self.view_buffer_as_constant_raw(buffer.as_ref(), range)
-            .map(Typed::new)
-    }
-
-    pub fn view_image_as_render_target_raw(
-        &mut self,
-        image: &handle::raw::Image<B>,
-        format: format::Format,
-        layers: image::SubresourceLayers
-    ) -> Result<handle::raw::RenderTargetView<B>, TargetViewError> {
-        self.raw.view_image_as_render_target(image.resource(), format, layers)
-            .map(|rtv| RenderTargetView::new(
-                rtv,
-                image.clone(),
-                self.garbage.clone()
-            ).into())
-    }
-
-    pub fn view_image_as_render_target<F>(
-        &mut self,
-        image: &handle::Image<B, F>,
-        range: image::SubresourceLayers
-    ) -> Result<handle::RenderTargetView<B, F>, TargetViewError>
-        where F: format::RenderFormat
-    {
-        self.view_image_as_render_target_raw(image.as_ref(), F::get_format(), range)
-            .map(Typed::new)
-    }
-
-    pub fn view_image_as_depth_stencil_raw(
-        &mut self,
-        image: &handle::raw::Image<B>,
-        format: format::Format,
-        layers: image::SubresourceLayers,
-    ) -> Result<handle::raw::RenderTargetView<B>, TargetViewError>
-    {
-        self.raw.view_image_as_render_target(image.resource(), format, layers)
-            .map(|rtv| RenderTargetView::new(
-                rtv,
-                image.clone(),
-                self.garbage.clone()
-            ).into())
-    }
-
-    pub fn view_image_as_depth_stencil<F>(
-        &mut self,
-        image: &handle::Image<B, F>,
-        layers: image::SubresourceLayers,
-    ) -> Result<handle::RenderTargetView<B, F>, TargetViewError>
-        where F: format::RenderFormat
-    {
-        self.view_image_as_render_target_raw(image.as_ref(), F::get_format(), layers)
-            .map(Typed::new)
-    }
-
-    pub fn view_image_as_shader_resource_raw(
-        &mut self,
-        image: &handle::raw::Image<B>,
-        format: format::Format
-    ) -> Result<handle::raw::ShaderResourceView<B>, TargetViewError>
-    {
-        self.raw.view_image_as_shader_resource(image.resource(), format)
-            .map(|srv| ShaderResourceView::new(
-                srv,
-                image.into(),
-                self.garbage.clone()
-            ).into())
-    }
-
-    // TODO: rename to simply ViewError ?
-    pub fn view_image_as_shader_resource<F>(&mut self, image: &handle::Image<B, F>)
-        -> Result<handle::ShaderResourceView<B, F>, TargetViewError>
-        where F: format::ImageFormat
-    {
-        self.view_image_as_shader_resource_raw(image.as_ref(), F::get_format())
-            .map(Typed::new)
-    }
-
-    pub fn view_image_as_unordered_access_raw(
-        &mut self,
-        image: &handle::raw::Image<B>,
-        format: format::Format
-    ) -> Result<handle::raw::UnorderedAccessView<B>, TargetViewError>
-    {
-        self.raw.view_image_as_unordered_access(image.resource(), format)
-            .map(|uav| UnorderedAccessView::new(
-                uav,
-                image.into(),
-                self.garbage.clone()
-            ).into())
-    }
-
-    pub fn view_image_as_unordered_access<F>(&mut self, image: &handle::Image<B, F>)
-        -> Result<handle::UnorderedAccessView<B, F>, TargetViewError>
-        where F: format::ImageFormat
-    {
-        self.view_image_as_unordered_access_raw(image.as_ref(), F::get_format())
-            .map(Typed::new)
     }
 
     // TODO: smarter allocation
@@ -519,19 +456,16 @@ impl<B: Backend> Device<B> {
     pub fn create_framebuffer<P>(
         &mut self,
         pipeline: &P,
-        rtvs: &[&handle::raw::RenderTargetView<B>],
-        dsvs: &[&handle::raw::DepthStencilView<B>],
+        attachments: &[&handle::raw::ImageView<B>],
         extent: Extent,
     ) -> Result<handle::raw::Framebuffer<B>, FramebufferError>
         where P: pso::GraphicsPipelineMeta<B>
     {
-        let rtv_res: Vec<_> = rtvs.iter().map(|&rtv| rtv.resource()).collect();
-        let dsv_res: Vec<_> = dsvs.iter().map(|&dsv| dsv.resource()).collect();
+        let resources: Vec<_> = attachments.iter().map(|&view| view.resource()).collect();
         let buffer = self.raw.create_framebuffer(
-            pipeline.render_pass(), &rtv_res[..], &dsv_res[..], extent)?;
+            pipeline.render_pass(), &resources[..], extent)?;
         let info = handle::FramebufferInfo {
-            rtvs: rtvs.iter().map(|&rtv| rtv.clone()).collect(),
-            dsvs: dsvs.iter().map(|&dsv| dsv.clone()).collect(),
+            attachments: attachments.iter().cloned().cloned().collect(),
             extent,
         };
         Ok(Framebuffer::new(buffer, info, self.garbage.clone()).into())
