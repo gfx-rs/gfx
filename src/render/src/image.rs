@@ -3,13 +3,13 @@ use memory::Memory;
 
 pub use core::image::{
     CreationError, Kind, AaMode, Size, Level, Layer, Dimensions,
-    AspectFlags, SamplerInfo, ViewError,
+    AspectFlags, SamplerInfo, ViewError, Usage,
     Subresource, SubresourceLayers, SubresourceRange,
 };
-pub use core::image::{Usage,
+pub use core::image::{
     TRANSFER_SRC, TRANSFER_DST,
     COLOR_ATTACHMENT, DEPTH_STENCIL_ATTACHMENT,
-    SAMPLED
+    SAMPLED,
 };
 
 #[allow(missing_docs)]

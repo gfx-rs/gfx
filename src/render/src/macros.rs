@@ -212,15 +212,16 @@ macro_rules! gfx_graphics_pipeline {
                                     format: attach.format,
                                     ops: attach.ops,
                                     stencil_ops: attach.stencil_ops,
-                                    layouts: attach.required_layout..attach.required_layout,
+                                    layouts: attach.required_layout .. attach.required_layout,
                                 });
                                 color_attachments.push((attach_id, attach.required_layout));
                             }
                         )*
                         let subpass = cpass::SubpassDesc {
-                            color_attachments: &color_attachments[..],
-                            input_attachments: &[],
-                            preserve_attachments: &[],
+                            colors: &color_attachments[..],
+                            depth_stencil: None, //TODO
+                            inputs: &[],
+                            preserves: &[],
                         };
 
                         device.create_renderpass_raw(&attachments[..], &[subpass], &[])

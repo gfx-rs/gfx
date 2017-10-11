@@ -589,6 +589,7 @@ pub type Subresource = (Level, Layer);
 
 /// A subset of resource layers contained within an image's level.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct SubresourceLayers {
     /// Included aspects: color/depth/stencil
     pub aspects: AspectFlags,
@@ -600,6 +601,7 @@ pub struct SubresourceLayers {
 
 /// A subset of resources contained within an image.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct SubresourceRange {
     /// Included aspects: color/depth/stencil
     pub aspects: AspectFlags,

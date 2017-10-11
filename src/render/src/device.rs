@@ -445,7 +445,7 @@ impl<B: Backend> Device<B> {
         shader_entries: core::pso::GraphicsShaderSet<B>,
         primitive: Primitive,
         rasterizer: pso::Rasterizer,
-        init: I
+        init: I,
     ) -> Result<I::Pipeline, pso::CreationError>
         where I: pso::GraphicsPipelineInit<B>
     {
