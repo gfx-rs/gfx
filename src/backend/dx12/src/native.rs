@@ -55,6 +55,17 @@ pub struct SubpassDesc {
     pub(crate) pre_barriers: Vec<BarrierDesc>,
 }
 
+impl SubpassDesc {
+    /// Check if an attachment is used by this sub-pass.
+    //Note: preserved attachment are not considered used.
+    pub(crate) fn is_using(&self, at_id: pass::AttachmentId) -> bool {
+        self.color_attachments.iter()
+            .chain(self.depth_stencil_attachment.iter())
+            .chain(self.input_attachments.iter())
+            .any(|&(id, _)| id == at_id)
+    }
+}
+
 #[derive(Debug, Hash, Clone)]
 pub struct RenderPass {
     pub(crate) attachments: Vec<pass::Attachment>,
