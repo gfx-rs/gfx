@@ -327,7 +327,7 @@ impl<B: Backend> Device<B> {
             usage,
             kind,
             mip_levels,
-            F::get_format()
+            F::SELF,
         ).map(|(h, t)| (Typed::new(h), t))
     }
 
@@ -337,7 +337,7 @@ impl<B: Backend> Device<B> {
         format: format::Format,
         range: image::SubresourceRange,
     ) -> Result<handle::raw::ImageView<B>, image::ViewError> {
-        self.raw.create_image_view(image.resource(), format, range)
+        self.raw.create_image_view(image.resource(), format, format::Swizzle::NO, range)
             .map(|view| ImageView::new(
                 view,
                 image.clone(),
@@ -352,7 +352,7 @@ impl<B: Backend> Device<B> {
     ) -> Result<handle::ImageView<B, F>, image::ViewError>
         where F: format::RenderFormat
     {
-        self.create_image_view_raw(image.as_ref(), F::get_format(), range)
+        self.create_image_view_raw(image.as_ref(), F::SELF, range)
             .map(Typed::new)
     }
 

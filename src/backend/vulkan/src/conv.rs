@@ -1,13 +1,12 @@
 use ash::vk;
-use core::{buffer, image, pass, pso, state};
+use core::{buffer, format, image, pass, pso, state};
 use core::command::{ClearColor, ClearDepthStencil, ClearValue, Offset};
 use core::device::Extent;
-use core::format::{SurfaceType, ChannelType};
 use core::{IndexType, Primitive};
 use std::ops::Range;
 
 
-pub fn map_format(surface: SurfaceType, chan: ChannelType) -> Option<vk::Format> {
+pub fn map_format(surface: format::SurfaceType, chan: format::ChannelType) -> Option<vk::Format> {
     use core::format::SurfaceType::*;
     use core::format::ChannelType::*;
     Some(match surface {
@@ -147,6 +146,27 @@ pub fn map_format(surface: SurfaceType, chan: ChannelType) -> Option<vk::Format>
             _ => return None,
         },
     })
+}
+
+pub fn map_component(component: format::Component) -> vk::ComponentSwizzle {
+    use core::format::Component::*;
+    match component {
+        Zero => vk::ComponentSwizzle::Zero,
+        One  => vk::ComponentSwizzle::One,
+        R    => vk::ComponentSwizzle::R,
+        G    => vk::ComponentSwizzle::G,
+        B    => vk::ComponentSwizzle::B,
+        A    => vk::ComponentSwizzle::A,
+    }
+}
+
+pub fn map_swizzle(swizzle: format::Swizzle) -> vk::ComponentMapping {
+    vk::ComponentMapping {
+        r: map_component(swizzle.0),
+        g: map_component(swizzle.1),
+        b: map_component(swizzle.2),
+        a: map_component(swizzle.3),
+    }
 }
 
 pub fn map_index_type(index_type: IndexType) -> vk::IndexType {

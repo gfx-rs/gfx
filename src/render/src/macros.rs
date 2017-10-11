@@ -32,7 +32,7 @@ macro_rules! gfx_buffer_struct {
                 let mut offset = 0;
                 $(
                     elements.push($crate::core::pso::Element {
-                        format: <$ty as $crate::format::Formatted>::get_format(),
+                        format: <$ty as $crate::format::Formatted>::SELF,
                         offset: offset as u32,
                     });
                     offset += ::std::mem::size_of::<$ty>();
