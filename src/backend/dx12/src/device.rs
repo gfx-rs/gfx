@@ -1183,6 +1183,7 @@ impl d::Device<B> for Device {
         &mut self,
         image: &n::Image,
         format: format::Format,
+        _swizzle: format::Swizzle,
         range: image::SubresourceRange,
     ) -> Result<n::ImageView, image::ViewError> {
         let format_raw = conv::map_format(format).ok_or(image::ViewError::BadFormat);

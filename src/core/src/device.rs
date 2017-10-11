@@ -201,7 +201,11 @@ pub trait Device<B: Backend>: Clone {
 
     ///
     fn create_image_view(
-        &mut self, &B::Image, format::Format, image::SubresourceRange,
+        &mut self,
+        &B::Image,
+        format::Format,
+        format::Swizzle,
+        image::SubresourceRange,
     ) -> Result<B::ImageView, image::ViewError>;
 
     ///

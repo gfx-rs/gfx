@@ -390,12 +390,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         range: image::SubresourceRange,
         value: com::ClearColor,
     ) {
-        assert!((image::ASPECT_COLOR).contains(range.aspects));
-        assert_eq!(range, image.to_subresource_range(range.aspects));
-        if range.aspects.contains(image::ASPECT_COLOR) {
-            let rtv = image.clear_cv.unwrap();
-            self.clear_render_target_view(rtv, value, &[]);
-        }
+        assert_eq!(range, image.to_subresource_range(image::ASPECT_COLOR));
+        let rtv = image.clear_cv.unwrap();
+        self.clear_render_target_view(rtv, value, &[]);
     }
 
     fn clear_depth_stencil_image(

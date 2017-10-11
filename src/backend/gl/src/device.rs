@@ -5,7 +5,7 @@ use std::rc::Rc;
 use gl;
 use gl::types::{GLint, GLenum, GLfloat};
 use core::{self as c, device as d, image as i, memory, pass, pso, buffer, mapping};
-use core::format::Format;
+use core::format::{Format, Swizzle};
 use std::iter::repeat;
 
 use {Backend as B, Share};
@@ -492,11 +492,13 @@ impl d::Device<B> for Device {
     }
 
     fn create_image_view(&mut self,
-        image: &n::Image, _format: Format, range: i::SubresourceRange,
+        image: &n::Image, format: Format, swizzle: Swizzle, range: i::SubresourceRange,
     ) -> Result<n::ImageView, i::ViewError> {
         //TODO: check if `layers.end` covers all the layers
         let level = range.levels.start;
         assert_eq!(level + 1, range.levels.end);
+        //assert_eq!(format, image.format);
+        assert_eq!(swizzle, Swizzle::NO);
         //TODO: check format
         match *image {
             n::Image::Surface(surface) => {

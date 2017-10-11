@@ -205,7 +205,7 @@ impl SwapchainConfig {
     /// ```
     pub fn new() -> Self {
         SwapchainConfig {
-            color_format: format::Rgba8::get_format(), // TODO: try to find best default format
+            color_format: format::Rgba8::SELF, // TODO: try to find best default format
             depth_stencil_format: None,
         }
     }
@@ -218,7 +218,7 @@ impl SwapchainConfig {
     ///
     /// ```
     pub fn with_color<Cf: format::RenderFormat>(mut self) -> Self {
-        self.color_format = Cf::get_format();
+        self.color_format = Cf::SELF;
         self
     }
 
@@ -232,7 +232,7 @@ impl SwapchainConfig {
     ///
     /// ```
     pub fn with_depth_stencil<Dsf: format::DepthStencilFormat>(mut self) -> Self {
-        self.depth_stencil_format = Some(Dsf::get_format());
+        self.depth_stencil_format = Some(Dsf::SELF);
         self
     }
 

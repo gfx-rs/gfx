@@ -861,8 +861,12 @@ impl core::Device<Backend> for Device {
         unsafe { image.0.release(); }
     }
 
-    fn create_image_view(&mut self,
-        image: &n::Image, format: format::Format, _range: image::SubresourceRange,
+    fn create_image_view(
+        &mut self,
+        image: &n::Image,
+        format: format::Format,
+        _swizzle: format::Swizzle,
+        _range: image::SubresourceRange,
     ) -> Result<n::ImageView, image::ViewError> {
         // TODO: subresource range
 
