@@ -441,7 +441,11 @@ fn main() {
                     buffer_offset: 0,
                     buffer_row_pitch: row_pitch,
                     buffer_slice_pitch: row_pitch * (height as u32),
-                    image_range: COLOR_RANGE.clone(),
+                    image_layers: i::SubresourceLayers {
+                        aspects: i::ASPECT_COLOR,
+                        level: 0,
+                        layers: 0 .. 1,
+                    },
                     image_offset: command::Offset { x: 0, y: 0, z: 0 },
                     image_extent: d::Extent { width, height, depth: 1 },
                 }]);

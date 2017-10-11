@@ -555,8 +555,7 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
 
         for region in regions {
             let image_offset = &region.image_offset;
-            let r = &region.image_range;
-            assert_eq!(r.levels.start + 1, r.levels.end);
+            let r = &region.image_layers;
 
             for layer in r.layers.clone() {
                 let offset = region.buffer_offset + region.buffer_slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
@@ -569,7 +568,7 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
                         sourceSize: extent
                         toTexture: (dst.0).0
                         destinationSlice: layer as NSUInteger
-                        destinationLevel: r.levels.start as NSUInteger
+                        destinationLevel: r.level as NSUInteger
                         destinationOrigin: MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ }
                     ]
                 }
@@ -594,8 +593,7 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
 
         for region in regions {
             let image_offset = &region.image_offset;
-            let r = &region.image_range;
-            assert_eq!(r.levels.start + 1, r.levels.end);
+            let r = &region.image_lauers;
 
             for layer in r.layers.clone() {
                 let offset = region.buffer_offset + region.buffer_slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
@@ -603,7 +601,7 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
                     msg_send![encoder.0,
                         copyFromTexture: (src.0).0
                         sourceSlice: layer as NSUInteger
-                        sourceLevel: r.levels.start as NSUInteger
+                        sourceLevel: r.level as NSUInteger
                         sourceOrigin: MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ }
                         sourceSize: extent
                         toBuffer: (dst.0).0

@@ -1,6 +1,7 @@
 //! Descriptor sets and layouts.
 
 use std::fmt;
+use std::ops::Range;
 
 use {Backend};
 use image::ImageLayout;
@@ -95,7 +96,7 @@ pub enum DescriptorWrite<'a, B: Backend> {
     StorageImage(Vec<(&'a B::ImageView, ImageLayout)>),
     UniformTexelBuffer(Vec<&'a B::BufferView>),
     StorageTexelBuffer(Vec<&'a B::BufferView>),
-    ConstantBuffer(Vec<&'a B::BufferView>),
+    ConstantBuffer(Vec<(&'a B::Buffer, Range<u64>)>),
     StorageBuffer, //TODO
     InputAttachment(Vec<(&'a B::ImageView, ImageLayout)>),
 }

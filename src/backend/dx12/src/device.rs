@@ -1038,7 +1038,7 @@ impl d::Device<B> for Device {
     ) -> Result<UnboundImage, image::CreationError> {
         let mut aspects = image::AspectFlags::empty();
         let bits = format.0.describe_bits();
-        if bits.color != 0 {
+        if bits.color + bits.alpha != 0 {
             aspects |= image::ASPECT_COLOR;
         }
         if bits.depth != 0 {

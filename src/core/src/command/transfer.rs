@@ -75,7 +75,7 @@ pub struct BufferImageCopy {
     ///
     pub buffer_slice_pitch: u32,
     ///
-    pub image_range: image::SubresourceRange,
+    pub image_layers: image::SubresourceLayers,
     ///
     pub image_offset: Offset,
     ///
