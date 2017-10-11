@@ -5,9 +5,10 @@ use std::ops::Range;
 use std::sync::mpsc;
 use std::collections::{HashMap, HashSet};
 
-use core::{self, CommandPool};
+use core::{self, image as i, CommandPool};
 use core::command::CommandBuffer;
-use core::image::ImageLayout;
+use core::memory::Barrier;
+
 use memory::{Provider, Dependency, cast_slice};
 use device::InitToken;
 use {handle, buffer, image, format, pso};
@@ -16,7 +17,7 @@ use {VertexCount};
 
 pub use core::command::{
     BufferCopy, ImageCopy, BufferImageCopy,
-    ClearColor
+    ClearColor, ClearDepthStencil,
 };
 
 pub struct Pool<B: Backend, C>(Provider<PoolInner<B, C>>);
@@ -211,19 +212,23 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         self.buffer.pipeline_barrier(stage_transition, &barriers[..]);
     }
 
-    fn init_image<'b>(&mut self, image: &'b handle::raw::Image<B>)
-        -> core::memory::Barrier<'b, B>
-    {
-        let creation_state = (core::image::Access::empty(), ImageLayout::Undefined);
-        let levels = image.info().mip_levels;
-        let layers = image.info().kind.get_num_layers();
+    fn init_image<'b>(
+        &mut self, image: &'b handle::raw::Image<B>
+    ) -> Barrier<'b, B> {
+        let creation_state = (core::image::Access::empty(), i::ImageLayout::Undefined);
+        let num_levels = image.info().mip_levels;
+        let num_layers = image.info().kind.get_num_layers();
         let stable_state = image.info().stable_state;
-        let states = ImageStates::new(stable_state, levels, layers);
+        let states = ImageStates::new(stable_state, num_levels, num_layers);
         self.image_states.insert(image.clone(), states);
-        core::memory::Barrier::Image {
-            states: creation_state..stable_state,
+        Barrier::Image {
+            states: creation_state .. stable_state,
             target: image.resource(),
-            range: (0..levels, 0..layers)
+            range: i::SubresourceRange {
+                aspects: image.info().aspects,
+                levels: 0 .. num_levels,
+                layers: 0 .. num_layers,
+            },
         }
     }
 
@@ -231,7 +236,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         &mut self,
         buffer: &'b handle::raw::Buffer<B>,
         state: core::buffer::State
-    ) -> Option<core::memory::Barrier<'b, B>> {
+    ) -> Option<Barrier<'b, B>> {
         if !self.buffer_states.contains_key(buffer) {
             self.buffer_states.insert(buffer.clone(), buffer.info().stable_state);
         }
@@ -247,7 +252,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         level: image::Level,
         layer: image::Layer,
         state: core::image::State,
-    ) -> Option<core::memory::Barrier<'b, B>> {
+    ) -> Option<Barrier<'b, B>> {
         if !self.image_states.contains_key(image) {
             let levels = image.info().mip_levels;
             let layers = image.info().kind.get_num_layers();
@@ -266,10 +271,10 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         buffer: &'b handle::raw::Buffer<B>,
         current: &mut core::buffer::State,
         next: core::buffer::State
-    ) -> Option<core::memory::Barrier<'b, B>> {
+    ) -> Option<Barrier<'b, B>> {
         let state = mem::replace(current, next);
         if state != next {
-            Some(core::memory::Barrier::Buffer {
+            Some(Barrier::Buffer {
                 states: state..next,
                 target: buffer.resource(),
             })
@@ -284,13 +289,17 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         layer: image::Layer,
         current: &mut core::image::State,
         next: core::image::State,
-    ) -> Option<core::memory::Barrier<'b, B>> {
+    ) -> Option<Barrier<'b, B>> {
         let state = mem::replace(current, next);
         if state != next {
-            Some(core::memory::Barrier::Image {
-                states: state..next,
+            Some(Barrier::Image {
+                states: state .. next,
                 target: image.resource(),
-                range: (level..(level+1), layer..(layer+1)),
+                range: i::SubresourceRange {
+                    aspects: image.info().aspects,
+                    levels: level .. (level+1),
+                    layers: layer .. (layer+1),
+                },
             })
         } else {
             None
@@ -437,7 +446,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             core::pso::TRANSFER,
             &[(buffer, core::buffer::TRANSFER_WRITE)],
             &[]);
-            
+
         self.buffer.update_buffer(
             buffer.resource(),
             start_bytes,
@@ -463,8 +472,8 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             "missing TRANSFER_DST usage flag");
 
         // TODO: error handling
-        let src_state = (core::image::TRANSFER_READ, ImageLayout::TransferSrcOptimal);
-        let dst_state = (core::image::TRANSFER_WRITE, ImageLayout::TransferDstOptimal);
+        let src_state = (core::image::TRANSFER_READ, i::ImageLayout::TransferSrcOptimal);
+        let dst_state = (core::image::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal);
         let mut image_states = Vec::new();
         for region in regions {
             image_states.push((src, region.src_subresource, src_state));
@@ -480,7 +489,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             dst.resource(), dst_state.1,
             regions);
     }
-    
+
     /// Copy part of a buffer to an image
     pub fn copy_buffer_to_image<BA, IB>(
         &mut self,
@@ -501,12 +510,12 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             "missing TRANSFER_DST usage flag");
 
         // TODO: error handling
-        let dst_state = (core::image::TRANSFER_WRITE, ImageLayout::TransferDstOptimal);
+        let dst_state = (core::image::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal);
         let mut image_states = Vec::new();
         for region in regions {
-            let (level, ref layers) = region.image_subresource;
-            for layer in layers.clone() {
-                image_states.push((dst, (level, layer), dst_state));
+            let r = &region.image_layers;
+            for layer in r.layers.clone() {
+                image_states.push((dst, (r.level, layer), dst_state));
             }
         }
         self.require_state(
@@ -540,12 +549,12 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             "missing TRANSFER_DST usage flag");
 
         // TODO: error handling
-        let src_state = (core::image::TRANSFER_READ, ImageLayout::TransferSrcOptimal);
+        let src_state = (core::image::TRANSFER_READ, i::ImageLayout::TransferSrcOptimal);
         let mut image_states = Vec::new();
         for region in regions {
-            let (level, ref layers) = region.image_subresource;
-            for layer in layers.clone() {
-                image_states.push((src, (level, layer), src_state));
+            let r = &region.image_layers;
+            for layer in r.layers.clone() {
+                image_states.push((src, (r.level, layer), src_state));
             }
         }
         self.require_state(
@@ -563,10 +572,10 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
 impl<'a, B: Backend, C> Encoder<'a, B, C>
     where C: Supports<Transfer> + Supports<Graphics>
 {
-    fn require_clear_state(&mut self, image: &handle::raw::Image<B>) -> ImageLayout {
+    fn require_clear_state(&mut self, image: &handle::raw::Image<B>) -> i::ImageLayout {
         let levels = image.info().mip_levels;
         let layers = image.info().kind.get_num_layers();
-        let state = (core::image::TRANSFER_WRITE, ImageLayout::TransferDstOptimal);
+        let state = (core::image::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal);
         let mut image_states = Vec::new();
         for level in 0..levels {
             for layer in 0..layers {
@@ -581,38 +590,50 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         state.1
     }
 
-    /// Clears `rtv` to `value`.
+    /// Clears `image` to `value`.
     pub fn clear_color_raw(
         &mut self,
-        rtv: &handle::raw::RenderTargetView<B>,
+        image: &handle::raw::Image<B>,
         value: ClearColor,
     ) {
-        let layout = self.require_clear_state(rtv.info());
-        self.handles.add(rtv.clone());
-        self.buffer.clear_color(rtv.resource(), layout, value);
+        let layout = self.require_clear_state(image);
+        //TODO
+        let range = i::SubresourceRange {
+            aspects: i::ASPECT_COLOR,
+            levels: 0 .. 1,
+            layers: 0 .. 1,
+        };
+        self.handles.add(image.clone());
+        self.buffer.clear_color_image(image.resource(), layout, range, value);
     }
 
-    /// Clears `rtv` to `value`.
+    /// Clears `image` to `value`.
     pub fn clear_color<F>(
         &mut self,
-        rtv: &handle::RenderTargetView<B, F>,
-        value: F::View
-    )
-        where F: format::RenderFormat, F::View: Into<ClearColor>
+        image: &handle::Image<B, F>,
+        value: F::View,
+    ) where
+        F: format::RenderFormat,
+        F::View: Into<ClearColor>,
     {
-        self.clear_color_raw(rtv.as_ref(), value.into());
+        self.clear_color_raw(image.as_ref(), value.into());
     }
 
-    /// Clears `dsv`'s depth to `depth_value` and stencil to `stencil_value`, if some.
+    /// Clears `image`'s depth/stencil with `value`
     pub fn clear_depth_stencil_raw(
         &mut self,
-        dsv: &handle::raw::DepthStencilView<B>,
-        depth_value: Option<core::target::Depth>,
-        stencil_value: Option<core::target::Stencil>
+        image: &handle::raw::Image<B>,
+        value: ClearDepthStencil,
     ) {
-        let layout = self.require_clear_state(dsv.info());
-        self.handles.add(dsv.clone());
-        self.buffer.clear_depth_stencil(dsv.resource(), layout, depth_value, stencil_value);
+        let layout = self.require_clear_state(image);
+        //TODO
+        let range = i::SubresourceRange {
+            aspects: i::ASPECT_DEPTH | i::ASPECT_STENCIL,
+            levels: 0 .. 1,
+            layers: 0 .. 1,
+        };
+        self.handles.add(image.clone());
+        self.buffer.clear_depth_stencil_image(image.resource(), layout, range, value);
     }
 
     pub fn draw<D>(
