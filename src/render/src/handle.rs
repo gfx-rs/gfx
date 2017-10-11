@@ -57,12 +57,9 @@ impl<B: Backend> InnerGarbageCollector<B> {
                 GraphicsPipeline(pl) => dev.destroy_graphics_pipeline(pl),
                 Framebuffer(fb) => dev.destroy_framebuffer(fb),
                 Buffer(b) => dev.destroy_buffer(b),
+                BufferView(bv) => dev.destroy_buffer_view(bv),
                 Image(i) => dev.destroy_image(i),
-                RenderTargetView(rtv) => dev.destroy_render_target_view(rtv),
-                DepthStencilView(dsv) => dev.destroy_depth_stencil_view(dsv),
-                ConstantBufferView(cbv) => dev.destroy_constant_buffer_view(cbv),
-                ShaderResourceView(srv) => dev.destroy_shader_resource_view(srv),
-                UnorderedAccessView(uav) => dev.destroy_unordered_access_view(uav),
+                ImageView(iv) => dev.destroy_image_view(iv),
                 Sampler(s) => dev.destroy_sampler(s),
                 DescriptorPool(dp) => dev.destroy_descriptor_pool(dp),
                 DescriptorSetLayout(dsl) => dev.destroy_descriptor_set_layout(dsl),
@@ -237,12 +234,9 @@ define_resources! {
     // ComputePipeline
     Framebuffer: ::handle::FramebufferInfo<B>,
     Buffer: ::buffer::Info,
+    BufferView: ::handle::raw::Buffer<B>,
     Image: ::image::Info,
-    RenderTargetView: ::handle::raw::Image<B>,
-    DepthStencilView: ::handle::raw::Image<B>,
-    ConstantBufferView: ::handle::raw::Buffer<B>,
-    ShaderResourceView: ::handle::ViewSource<B>,
-    UnorderedAccessView: ::handle::ViewSource<B>,
+    ImageView: ::handle::raw::Image<B>,
     Sampler: ::image::SamplerInfo,
     DescriptorPool: (),
     DescriptorSetLayout: (),
@@ -251,39 +245,18 @@ define_resources! {
 }
 
 pub type Buffer<B, T> = Typed<raw::Buffer<B>, T>;
+pub type BufferView<B, T> = Typed<raw::BufferView<B>, T>;
 pub type Image<B, F> = Typed<raw::Image<B>, F>;
-pub type RenderTargetView<B, F> = Typed<raw::RenderTargetView<B>, F>;
-pub type DepthStencilView<B, F> = Typed<raw::DepthStencilView<B>, F>;
-pub type ConstantBufferView<B, T> = Typed<raw::ConstantBufferView<B>, T>;
-pub type ShaderResourceView<B, T> = Typed<raw::ShaderResourceView<B>, T>;
-pub type UnorderedAccessView<B, T> = Typed<raw::UnorderedAccessView<B>, T>;
+pub type ImageView<B, F> = Typed<raw::ImageView<B>, F>;
 
 pub use self::raw::Sampler;
 
 #[derive(Debug, Clone)]
 pub struct FramebufferInfo<B: Backend> {
-    pub rtvs: Vec<raw::RenderTargetView<B>>,
-    pub dsvs: Vec<raw::DepthStencilView<B>>,
+    pub attachments: Vec<raw::ImageView<B>>,
     pub extent: ::Extent,
 }
 
-#[derive(Debug, Clone)]
-pub enum ViewSource<B: Backend> {
-    Image(raw::Image<B>),
-    Buffer(raw::Buffer<B>),
-}
-
-impl<'a, B: Backend> From<&'a raw::Image<B>> for ViewSource<B> {
-    fn from(image: &'a raw::Image<B>) -> Self {
-        ViewSource::Image(image.clone())
-    }
-}
-
-impl<'a, B: Backend> From<&'a raw::Buffer<B>> for ViewSource<B> {
-    fn from(buffer: &'a raw::Buffer<B>) -> Self {
-        ViewSource::Buffer(buffer.clone())
-    }
-}
 
 pub struct Bag<B: Backend>(Vec<Any<B>>);
 

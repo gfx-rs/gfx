@@ -4,7 +4,7 @@ use {core, handle};
 use memory::{Memory, Pod};
 use Backend;
 
-pub use core::buffer::{CreationError};
+pub use core::buffer::{CreationError, ViewError};
 pub use core::buffer::{Usage,
     TRANSFER_SRC, TRANSFER_DST, CONSTANT, INDEX, INDIRECT, VERTEX
 };
