@@ -587,13 +587,24 @@ pub type State = (Access, ImageLayout);
 /// Selector of a concrete subresource in an image.
 pub type Subresource = (Level, Layer);
 
+/// A subset of resource layers contained within an image's level.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct SubresourceLayers {
+    /// Included aspects: color/depth/stencil
+    pub aspects: AspectFlags,
+    /// Selected mipmap level
+    pub level: Level,
+    /// Included array levels
+    pub layers: Range<Layer>,
+}
+
 /// A subset of resources contained within an image.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct SubresourceRange {
     /// Included aspects: color/depth/stencil
     pub aspects: AspectFlags,
-    /// Included array levels
-    pub levels: Range<Level>,
     /// Included mipmap levels
+    pub levels: Range<Level>,
+    /// Included array levels
     pub layers: Range<Layer>,
 }

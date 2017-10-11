@@ -53,8 +53,7 @@ impl<B: Backend, C> CommandPool<B, C> {
         queue: &CommandQueue<B, D>,
         capacity: usize,
         flags: CommandPoolCreateFlags,
-    ) -> Self
-    {
+    ) -> Self {
         let raw = unsafe {
             B::CommandPool::from_queue(queue.as_raw(), flags)
         };
