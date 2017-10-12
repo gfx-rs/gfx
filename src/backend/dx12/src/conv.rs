@@ -515,7 +515,7 @@ pub fn map_descriptor_range(bind: &DescriptorSetLayoutBinding, register_space: u
             pso::DescriptorType::SampledImage => D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
             pso::DescriptorType::StorageBuffer |
             pso::DescriptorType::StorageImage => D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
-            pso::DescriptorType::ConstantBuffer => D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
+            pso::DescriptorType::UniformBuffer => D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
             _ => panic!("unsupported binding type {:?}", bind.ty)
         },
         NumDescriptors: bind.count as _,
