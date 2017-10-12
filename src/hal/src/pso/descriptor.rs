@@ -26,7 +26,7 @@ pub enum DescriptorType {
     /// Read-Write, formatted buffer.
     StorageTexelBuffer,
     /// Read-only, structured buffer.
-    ConstantBuffer,
+    UniformBuffer,
     /// Read-Write, structured buffer.
     StorageBuffer,
     /// Allows unfiltered loads of pixel local data in the fragment shader.

@@ -508,7 +508,7 @@ pub fn map_descriptor_type(ty: pso::DescriptorType) -> vk::DescriptorType {
         Dt::StorageImage       => vk::DescriptorType::StorageImage,
         Dt::UniformTexelBuffer => vk::DescriptorType::UniformTexelBuffer,
         Dt::StorageTexelBuffer => vk::DescriptorType::StorageTexelBuffer,
-        Dt::ConstantBuffer     => vk::DescriptorType::UniformBuffer,
+        Dt::UniformBuffer      => vk::DescriptorType::UniformBuffer,
         Dt::StorageBuffer      => vk::DescriptorType::StorageBuffer,
         Dt::InputAttachment    => vk::DescriptorType::InputAttachment,
     }
