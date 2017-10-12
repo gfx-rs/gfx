@@ -2,7 +2,6 @@ use ash::vk;
 use ash::version::DeviceV1_0;
 use core;
 use core::image::SubresourceRange;
-use std::ops::Range;
 use std::sync::Arc;
 use {Backend, RawDevice};
 
@@ -37,9 +36,7 @@ unsafe impl Send for Buffer {}
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct BufferView {
-    //TODO: `VkBufferView`
-    pub(crate) buffer: vk::Buffer,
-    pub(crate) range: Range<u64>,
+    pub(crate) raw: vk::BufferView,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]

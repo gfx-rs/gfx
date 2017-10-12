@@ -1,7 +1,7 @@
 //! Dummy backend implementation to test the code for compile errors
 //! outside of the graphics development environment.
 
-extern crate gfx_core as core;
+extern crate gfx_hal as core;
 
 use std::ops::Range;
 use core::{buffer, command, device, format, image, target, mapping, memory, pass, pool, pso};
@@ -137,7 +137,7 @@ impl core::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_buffer_view(&mut self, _: &(), _: Range<u64>) -> Result<(), buffer::ViewError> {
+    fn create_buffer_view(&mut self, _: &(), _: format::Format, _: Range<u64>) -> Result<(), buffer::ViewError> {
         unimplemented!()
     }
 

@@ -23,10 +23,10 @@
 //!
 //! ```no_run
 //! # extern crate gfx_backend_empty as empty;
-//! # extern crate gfx_core;
+//! # extern crate gfx_hal;
 //! # fn main() {
-//! use gfx_core::{Device, FrameSync};
-//! # use gfx_core::{CommandQueue, Graphics, Swapchain};
+//! use gfx_hal::{Device, FrameSync};
+//! # use gfx_hal::{CommandQueue, Graphics, Swapchain};
 //!
 //! # let mut swapchain: empty::Swapchain = return;
 //! # let mut device: empty::Device = return;
@@ -126,11 +126,11 @@ pub trait Surface<B: Backend> {
     ///
     /// ```no_run
     /// # extern crate gfx_backend_empty as empty;
-    /// # extern crate gfx_core;
+    /// # extern crate gfx_hal;
     /// # fn main() {
-    /// use gfx_core::{Surface, SwapchainConfig};
-    /// use gfx_core::format::Srgba8;
-    /// # use gfx_core::{CommandQueue, Graphics};
+    /// use gfx_hal::{Surface, SwapchainConfig};
+    /// use gfx_hal::format::Srgba8;
+    /// # use gfx_hal::{CommandQueue, Graphics};
     ///
     /// # let mut surface: empty::Surface = return;
     /// # let queue: CommandQueue<empty::Backend, Graphics> = return;

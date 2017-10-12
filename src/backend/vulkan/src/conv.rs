@@ -450,8 +450,17 @@ pub fn map_buffer_usage(usage: buffer::Usage) -> vk::BufferUsageFlags {
     if usage.contains(buffer::TRANSFER_DST) {
         flags |= vk::BUFFER_USAGE_TRANSFER_DST_BIT;
     }
-    if usage.contains(buffer::CONSTANT) {
+    if usage.contains(buffer::UNIFORM) {
         flags |= vk::BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    }
+    if usage.contains(buffer::STORAGE) {
+        flags |= vk::BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    }
+    if usage.contains(buffer::UNIFORM_TEXEL) {
+        flags |= vk::BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
+    }
+    if usage.contains(buffer::STORAGE_TEXEL) {
+        flags |= vk::BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
     }
     if usage.contains(buffer::INDEX) {
         flags |= vk::BUFFER_USAGE_INDEX_BUFFER_BIT;

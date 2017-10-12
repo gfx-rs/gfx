@@ -1,5 +1,5 @@
-use core::{self, image as i, memory as mem, pass};
-use core::target::{Layer, Level};
+use hal::{self, image as i, memory as mem, pass};
+use hal::target::{Layer, Level};
 use gl;
 use Backend;
 use std::cell::Cell;
@@ -75,7 +75,7 @@ pub struct DescriptorSet;
 #[derive(Debug)]
 pub struct DescriptorPool {}
 
-impl core::DescriptorPool<Backend> for DescriptorPool {
+impl hal::DescriptorPool<Backend> for DescriptorPool {
     fn allocate_sets(&mut self, layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
         layouts.iter().map(|_| DescriptorSet).collect()
     }

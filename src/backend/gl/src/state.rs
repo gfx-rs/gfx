@@ -1,8 +1,10 @@
-use core::{ColorSlot};
-use core::state as s;
-use core::state::{BlendValue, Comparison, CullFace, Equation,
-                  Offset, RasterMethod, StencilOp, FrontFace};
-use core::target::{ColorValue, Stencil};
+use hal::{ColorSlot};
+use hal::state as s;
+use hal::state::{
+    BlendValue, Comparison, CullFace, Equation,
+    Offset, RasterMethod, StencilOp, FrontFace,
+};
+use hal::target::{ColorValue, Stencil};
 use gl;
 use smallvec::SmallVec;
 

@@ -766,7 +766,7 @@ impl core::Device<Backend> for Device {
     }
 
     fn create_buffer_view(
-        &mut self, _buffer: &n::Buffer, _range: Range<u64>
+        &mut self, _buffer: &n::Buffer, _format: format::Format, _range: Range<u64>
     ) -> Result<n::BufferView, buffer::ViewError> {
         unimplemented!()
     }

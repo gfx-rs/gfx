@@ -1,5 +1,5 @@
 [package]
-name = "gfx_backend_metal"
+name = "gfx-backend-metal"
 version = "0.1.0"
 description = "Metal API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
@@ -8,7 +8,7 @@ keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
 readme = "README.md"
-documentation = "https://docs.rs/gfx_backend_metal"
+documentation = "https://docs.rs/gfx-backend-metal"
 workspace = "../../.."
 
 [features]
@@ -19,7 +19,7 @@ argument_buffer = []
 name = "gfx_backend_metal"
 
 [dependencies]
-gfx_core = { path = "../../core", version = "0.10" }
+gfx-hal = { path = "../../hal", version = "0.1" }
 log = "0.3"
 winit = { version = "0.7", optional = true }
 scopeguard = "0.3"

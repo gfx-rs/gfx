@@ -1,4 +1,4 @@
-extern crate gfx_core as core;
+extern crate gfx_hal as core;
 extern crate cocoa;
 #[macro_use] extern crate objc;
 extern crate io_surface;

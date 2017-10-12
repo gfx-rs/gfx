@@ -13,27 +13,26 @@ SDL2_PPA=http://ppa.launchpad.net/zoogie/sdl2-snapshots/ubuntu/pool/main/libs/li
 
 
 ifeq ($(OS),Windows_NT)
-	EXCLUDES+= --exclude gfx_backend_metal
+	EXCLUDES+= --exclude gfx-backend-metal
 	FEATURES_QUAD=vulkan
 	ifeq ($(TARGET),x86_64-pc-windows-gnu)
 		# No d3d12 support on GNU windows ATM
 		# context: https://github.com/gfx-rs/gfx/pull/1417
-		EXCLUDES+= --exclude gfx_backend_dx12
+		EXCLUDES+= --exclude gfx-backend-dx12
 	else
 		FEATURES_QUAD2=dx12
 	endif
 else
 	UNAME_S:=$(shell uname -s)
-	EXCLUDES+= --exclude gfx_device_dx11
-	EXCLUDES+= --exclude gfx_backend_dx12
+	EXCLUDES+= --exclude gfx-backend-dx12
 	GLUTIN_HEADLESS_FEATURE="--features headless" #TODO?
 	ifeq ($(UNAME_S),Linux)
-		EXCLUDES+= --exclude gfx_backend_metal
+		EXCLUDES+= --exclude gfx-backend-metal
 		FEATURES_QUAD=vulkan
 	endif
 	ifeq ($(UNAME_S),Darwin)
-		EXCLUDES+= --exclude gfx_backend_vulkan
-		EXCLUDES+= --exclude quad_render
+		EXCLUDES+= --exclude gfx-backend-vulkan
+		EXCLUDES+= --exclude quad-render
 		FEATURES_QUAD=metal
 		FEATURES_QUAD_ADD=metal_argument_buffer
 		CMD_QUAD_RENDER=pwd
@@ -41,9 +40,9 @@ else
 endif
 
 
-.PHONY: all check ex-core-quad render ex-render-quad travis-sdl2
+.PHONY: all check ex-hal-quad render ex-render-quad travis-sdl2
 
-all: check ex-core-quad render ex-render-quad
+all: check ex-hal-quad render ex-render-quad
 
 check:
 	cargo check --all $(EXCLUDES)
@@ -53,11 +52,11 @@ render:
 	cd src/render && cargo test --features "$(FEATURES_RENDER)"
 	cd src/render && cargo test --features "$(FEATURES_RENDER) $(FEATURES_RENDER_ADD)"
 
-ex-core-quad:
-	cd examples/core/quad && cargo check --features "gl"
-	cd examples/core/quad && cargo check --features "$(FEATURES_QUAD2)"
-	cd examples/core/quad && cargo check --features "$(FEATURES_QUAD)"
-	cd examples/core/quad && cargo check --features "$(FEATURES_QUAD) $(FEATURES_QUAD_ADD)"
+ex-hal-quad:
+	cd examples/hal/quad && cargo check --features "gl"
+	cd examples/hal/quad && cargo check --features "$(FEATURES_QUAD2)"
+	cd examples/hal/quad && cargo check --features "$(FEATURES_QUAD)"
+	cd examples/hal/quad && cargo check --features "$(FEATURES_QUAD) $(FEATURES_QUAD_ADD)"
 
 ex-render-quad:
 	cd examples/render/quad_render && $(CMD_QUAD_RENDER)

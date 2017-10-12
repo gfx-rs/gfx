@@ -4,7 +4,7 @@ extern crate d3d12;
 extern crate d3dcompiler;
 extern crate dxguid;
 extern crate dxgi;
-extern crate gfx_core as core;
+extern crate gfx_hal as core;
 extern crate kernel32;
 #[macro_use]
 extern crate log;

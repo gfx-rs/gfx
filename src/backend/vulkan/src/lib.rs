@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate log;
 extern crate ash;
-extern crate gfx_core as core;
+extern crate gfx_hal as core;
 #[macro_use]
 extern crate lazy_static;
 extern crate smallvec;

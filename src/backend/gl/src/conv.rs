@@ -1,5 +1,5 @@
-use core::{buffer, image as i};
 use gl::{self, types as t};
+use hal::{buffer, image as i};
 
 pub fn image_kind_to_gl(kind: i::Kind) -> t::GLenum {
     match kind {
@@ -35,8 +35,8 @@ pub fn wrap_to_gl(w: i::WrapMode) -> t::GLenum {
 }
 
 pub fn buffer_usage_to_gl_target(usage: buffer::Usage) -> Option<t::GLenum> {
-    match usage & (buffer::CONSTANT | buffer::INDEX | buffer::VERTEX | buffer::INDIRECT) {
-        buffer::CONSTANT => Some(gl::UNIFORM_BUFFER),
+    match usage & (buffer::UNIFORM | buffer::INDEX | buffer::VERTEX | buffer::INDIRECT) {
+        buffer::UNIFORM => Some(gl::UNIFORM_BUFFER),
         buffer::INDEX => Some(gl::ELEMENT_ARRAY_BUFFER),
         buffer::VERTEX => Some(gl::ARRAY_BUFFER),
         buffer::INDIRECT => unimplemented!(),

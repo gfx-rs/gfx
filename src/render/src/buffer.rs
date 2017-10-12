@@ -6,7 +6,7 @@ use Backend;
 
 pub use core::buffer::{CreationError, ViewError};
 pub use core::buffer::{Usage,
-    TRANSFER_SRC, TRANSFER_DST, CONSTANT, INDEX, INDIRECT, VERTEX
+    TRANSFER_SRC, TRANSFER_DST, UNIFORM, INDEX, INDIRECT, VERTEX
 };
 
 /// An information block that is immutable and associated to each buffer.

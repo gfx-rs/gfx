@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::{ffi, fmt, mem, str};
 use gl;
-use core::{Features, Limits};
+use hal::{Features, Limits};
 
 /// A version number for a specific component of an OpenGL implementation
 #[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]

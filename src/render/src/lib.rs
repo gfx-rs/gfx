@@ -93,7 +93,7 @@ extern crate serde;
 #[macro_use]
 extern crate log;
 extern crate draw_state;
-pub extern crate gfx_core as core;
+pub extern crate gfx_hal as core;
 
 /// public re-exported traits
 pub mod traits {

@@ -1,8 +1,8 @@
 extern crate env_logger;
+extern crate gfx_hal as core;
+extern crate gfx_backend_vulkan as back;
 #[macro_use]
 extern crate gfx_render as gfx;
-extern crate gfx_core as core;
-extern crate gfx_backend_vulkan as back;
 
 extern crate winit;
 extern crate image;
@@ -74,8 +74,8 @@ fn main() {
     let mut device = (*context.ref_device()).clone();
 
     // Setup renderpass and pipeline
-    let vs_module = device.mut_raw().create_shader_module(include_bytes!("../../core/quad/data/vert.spv")).unwrap();
-    let fs_module = device.mut_raw().create_shader_module(include_bytes!("../../core/quad/data/frag.spv")).unwrap();
+    let vs_module = device.mut_raw().create_shader_module(include_bytes!("../../hal/quad/data/vert.spv")).unwrap();
+    let fs_module = device.mut_raw().create_shader_module(include_bytes!("../../hal/quad/data/frag.spv")).unwrap();
 
     let (desc, mut desc_data) = device.create_descriptors(1).pop().unwrap();
     let pipe_init = pipe::Init {
@@ -137,7 +137,7 @@ fn main() {
         .unwrap()
         .copy_from_slice(&QUAD);
 
-    let img_data = include_bytes!("../../core/quad/data/logo.png");
+    let img_data = include_bytes!("../../hal/quad/data/logo.png");
     let img = image::load(Cursor::new(&img_data[..]), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
     let kind = i::Kind::D2(width as i::Size, height as i::Size, i::AaMode::Single);

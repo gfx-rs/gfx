@@ -1,14 +1,14 @@
 [package]
-name = "gfx_render"
+name = "gfx-render"
 version = "0.1.0"
-description = "A high-performance, bindless graphics API"
+description = "gfx-rs higher rendering layer"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
 readme = "../../README.md"
-documentation = "https://docs.rs/gfx_render"
+documentation = "https://docs.rs/gfx-render"
 categories = ["rendering::graphics-api"]
 workspace = "../.."
 
@@ -17,13 +17,13 @@ name = "gfx_render"
 path = "src/lib.rs"
 
 [features]
-serialize = ["serde", "gfx_core/serialize", "draw_state/serialize"]
+serialize = ["serde", "gfx-hal/serialize", "draw_state/serialize"]
 unstable = []
 
 [dependencies]
 bitflags = "0.8"
 mint = { version = "0.4.1", optional = true }
 draw_state = "0.7"
-gfx_core = { path = "../core", version = "0.10" }
+gfx-hal = { path = "../hal", version = "0.1" }
 log = "0.3"
 serde = { version = "1.0", features = ["serde_derive"], optional = true }

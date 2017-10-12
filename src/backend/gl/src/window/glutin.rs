@@ -28,9 +28,9 @@
 //! ```no_run
 //! extern crate glutin;
 //! extern crate gfx_backend_gl;
-//! extern crate gfx_core as core;
+//! extern crate gfx_hal;
 //!
-//! use core::Instance;
+//! use gfx_hal::Instance;
 //! use gfx_backend_gl::Headless;
 //! use glutin::{HeadlessRendererBuilder};
 //!
@@ -43,7 +43,7 @@
 //! }
 //! ```
 
-use core::{self, format, image};
+use hal::{self as core, format, image};
 
 use {native as n, Adapter, Backend as B, QueueFamily};
 

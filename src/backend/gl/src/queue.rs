@@ -1,7 +1,7 @@
 use std::mem;
 use std::rc::Rc;
 
-use core as c;
+use hal as c;
 use gl;
 use smallvec::SmallVec;
 
