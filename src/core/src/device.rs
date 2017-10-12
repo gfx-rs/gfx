@@ -183,7 +183,7 @@ pub trait Device<B: Backend>: Clone {
 
     ///
     fn create_buffer_view(
-        &mut self, &B::Buffer, Range<u64>
+        &mut self, &B::Buffer, format::Format, Range<u64>
     ) -> Result<B::BufferView, buffer::ViewError>;
 
     ///

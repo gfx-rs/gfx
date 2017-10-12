@@ -139,11 +139,12 @@ impl<B: Backend> Device<B> {
     pub fn create_buffer_view_raw(
         &mut self,
         buffer: &handle::raw::Buffer<B>,
+        format: format::Format,
         range: Range<u64>,
     ) -> Result<handle::raw::BufferView<B>, buffer::ViewError> {
-        self.raw.create_buffer_view(buffer.resource(), range)
-            .map(|cbv| BufferView::new(
-                cbv,
+        self.raw.create_buffer_view(buffer.resource(), format, range)
+            .map(|view| BufferView::new(
+                view,
                 buffer.clone(),
                 self.garbage.clone()
             ).into())
@@ -152,9 +153,10 @@ impl<B: Backend> Device<B> {
     pub fn create_buffer_view<T>(
         &mut self,
         buffer: &handle::Buffer<B, T>,
+        format: format::Format,
         range: Range<u64>,
     ) -> Result<handle::BufferView<B, T>, buffer::ViewError> {
-        self.create_buffer_view_raw(buffer.as_ref(), range)
+        self.create_buffer_view_raw(buffer.as_ref(), format, range)
             .map(Typed::new)
     }
 
