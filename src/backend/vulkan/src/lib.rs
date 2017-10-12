@@ -202,8 +202,9 @@ impl Instance {
                 pp_enabled_extension_names: str_pointers[layers.len()..].as_ptr(),
             };
 
-            entry.create_instance(&create_info, None)
-                .expect("Unable to create Vulkan instance")
+            unsafe {
+                entry.create_instance(&create_info, None)
+            }.expect("Unable to create Vulkan instance")
         };
 
         #[cfg(debug_assertions)]

@@ -716,18 +716,21 @@ impl d::Device<B> for Device {
     fn create_buffer_view(
         &mut self, buffer: &n::Buffer, format: format::Format, range: Range<u64>
     ) -> Result<n::BufferView, buffer::ViewError> {
-        unimplemented!() // The implementation is below, but ash is currently missing create_buffer_view.
-        /* Ok(n::BufferView { raw:
-            self.raw.0.create_buffer_view(vk::BufferViewCreateInfo {
-                s_type: vk::StructureType::BufferViewCreateInfo,
-                p_next: ptr::null(),
-                flags: vk::BufferViewCreateFlags::empty(),
-                buffer: buffer.raw,
-                format: conv::map_format(format.0, format.1).unwrap(),
-                offset: range.start,
-                range: range.end - range.start,
-            }, None).expect("Error on buffer view creation") //TODO: Proper error handling
-        }) */
+        let info = vk::BufferViewCreateInfo {
+            s_type: vk::StructureType::BufferViewCreateInfo,
+            p_next: ptr::null(),
+            flags: vk::BufferViewCreateFlags::empty(),
+            buffer: buffer.raw,
+            format: conv::map_format(format.0, format.1).unwrap(),
+            offset: range.start,
+            range: range.end - range.start,
+        };
+
+        let view = unsafe {
+            self.raw.0.create_buffer_view(&info, None)
+        }.expect("Error on buffer view creation"); //TODO: Proper error handling
+
+        Ok(n::BufferView { raw: view })
     }
 
     fn create_image(&mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
