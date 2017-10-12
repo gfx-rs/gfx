@@ -24,7 +24,7 @@ extern crate gfx_device_dx11 as device_dx11;
 
 use std::ptr;
 use winit::os::windows::WindowExt;
-use core::{format, handle as h, factory as f, memory, texture as tex};
+use core::{format, handle as h, memory, texture as tex};
 use core::texture::Size;
 use device_dx11::{Device, Factory, Resources};
 
@@ -60,7 +60,7 @@ impl Window {
             kind: tex::Kind::D2(self.size.0, self.size.1, tex::AaMode::Single),
             levels: 1,
             format: self.color_format.0,
-            bind: memory::RENDER_TARGET,
+            bind: memory::RENDER_TARGET | memory::TRANSFER_SRC,
             usage: memory::Usage::Data,
         };
         let desc = tex::RenderDesc {
@@ -190,20 +190,27 @@ impl DeviceExt for Device {
     }
 }
 
+
 /// Update the internal dimensions of the main framebuffer targets. Generic version over the format.
-pub fn update_views<Cf, D>(window: &mut Window, factory: &mut Factory, device: &mut D, width: u16, height: u16)
-            -> Result<h::RenderTargetView<Resources, Cf>, f::TargetViewError>
-where Cf: format::RenderFormat, D: DeviceExt
+pub fn update_view<Cf, D>(
+    window: &mut Window, factory: &mut Factory, device: &mut D,
+    width: u16, height: u16,
+    main_color: &mut h::RenderTargetView<Resources, Cf>,
+) where
+    Cf: format::RenderFormat + format::TextureFormat,
+    D: DeviceExt,
 {
-    
+    use core::Factory;
+    // first, replace the main view pointer with a dummy
+    // the code assumes this is the last standing reference, beware!
+    *main_color = factory.create_render_target(1, 1).unwrap().2;
+    // clean up everything
     factory.cleanup();
     device.clear_state();
     device.cleanup();
-
-    window.resize_swap_chain::<Cf>(factory, width, height)
-        .map_err(|hr| {
-            error!("Resize failed with code {:X}", hr);
-            f::TargetViewError::NotDetached
-        }
-    )    
+    // now, create a new view
+    *main_color = match window.resize_swap_chain(factory, width, height) {
+        Ok(view) => view,
+        Err(hr) => panic!("Resize failed with code {:X}. Have you released all the main target handles?", hr),
+    };
 }

@@ -242,18 +242,20 @@ A: Sized + ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>
             }
         });
         if let Some((width, height)) = new_size {
-            use gfx_window_dxgi::update_views;
-            match update_views(&mut window, &mut factory, &mut device, width, height) {
-                Ok(new_color) => {
-                    let new_depth = factory.create_depth_stencil_view_only(width, height).unwrap();
-                    app.on_resize(&mut factory, WindowTargets {
-                        color: new_color,
-                        depth: new_depth,
-                        aspect_ratio: width as f32 / height as f32,
-                    });
-                },
-                Err(e) => error!("Resize failed: {}", e),
-            }
+            //TODO: clean up the old references first!
+
+            factory.cleanup();
+            device.clear_state();
+            device.cleanup();
+
+            let new_color = window.resize_swap_chain::<ColorFormat>(&mut factory, width, height).unwrap();
+            let new_depth = factory.create_depth_stencil_view_only(width, height).unwrap();
+            app.on_resize(&mut factory, WindowTargets {
+                color: new_color,
+                depth: new_depth,
+                aspect_ratio: width as f32 / height as f32,
+            });
+
             continue;
         }
         app.render(&mut device);

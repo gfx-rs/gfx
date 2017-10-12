@@ -20,8 +20,8 @@ use {Buffer, Texture};
 
 
 fn copy_buffer(context: *mut winapi::ID3D11DeviceContext,
-               src: &Buffer, dst: &Buffer,
-               src_offset: UINT, dst_offset: UINT,
+               src: &Buffer, src_offset: UINT,
+               dst: &Buffer, dst_offset: UINT,
                size: UINT) {
     let src_resource = src.as_resource();
     let dst_resource = dst.as_resource();
@@ -62,7 +62,6 @@ fn copy_texture(context: *mut winapi::ID3D11DeviceContext,
                                          dst.info.xoffset as _, dst.info.yoffset as _, dst.info.zoffset as _,
                                          src_resource, src.info.mipmap as _, &src_box)
     };
-
 }
 
 pub fn update_buffer(context: *mut winapi::ID3D11DeviceContext, buffer: &Buffer,
@@ -221,8 +220,14 @@ pub fn process(ctx: *mut winapi::ID3D11DeviceContext, command: &command::Command
         SetBlend(blend, ref value, mask) => unsafe {
             (*ctx).OMSetBlendState(blend as *mut _, value, mask);
         },
-        CopyBuffer(ref src, ref dst, src_offset, dst_offset, size) => {
-            copy_buffer(ctx, src, dst, src_offset, dst_offset, size);
+        CopyBuffer(ref src, src_offset, ref dst, dst_offset, size) => {
+            copy_buffer(ctx, src, src_offset, dst, dst_offset, size);
+        },
+        CopyBufferToTexture(ref _src, _src_offset, ref _dst) => {
+            unimplemented!()
+        },
+        CopyTextureToBuffer(ref _src, ref _dst, _dst_offset) => {
+            unimplemented!()
         },
         CopyTexture(ref src, ref dst) => {
             copy_texture(ctx, src, dst);
