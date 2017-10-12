@@ -20,6 +20,6 @@ default = ["glutin"]
 [dependencies]
 log = "0.3"
 gfx_gl = "0.3.1"
-gfx-hal = { path = "../../core", version = "0.1" }
+gfx-hal = { path = "../../hal", version = "0.1" }
 smallvec = "0.4"
 glutin = { version = "0.9", optional = true }

@@ -1,7 +1,7 @@
 [package]
 name = "gfx-render"
 version = "0.1.0"
-description = "A high-performance, bindless graphics API"
+description = "gfx-rs higher rendering layer"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
@@ -24,6 +24,6 @@ unstable = []
 bitflags = "0.8"
 mint = { version = "0.4.1", optional = true }
 draw_state = "0.7"
-gfx-hal = { path = "../core", version = "0.1" }
+gfx-hal = { path = "../hal", version = "0.1" }
 log = "0.3"
 serde = { version = "1.0", features = ["serde_derive"], optional = true }

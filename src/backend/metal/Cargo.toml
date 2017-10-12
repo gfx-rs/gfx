@@ -19,7 +19,7 @@ argument_buffer = []
 name = "gfx_backend_metal"
 
 [dependencies]
-gfx-hal = { path = "../../core", version = "0.1" }
+gfx-hal = { path = "../../hal", version = "0.1" }
 log = "0.3"
 winit = { version = "0.7", optional = true }
 scopeguard = "0.3"

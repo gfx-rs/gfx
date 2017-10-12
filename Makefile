@@ -40,9 +40,9 @@ else
 endif
 
 
-.PHONY: all check ex-core-quad render ex-render-quad travis-sdl2
+.PHONY: all check ex-hal-quad render ex-render-quad travis-sdl2
 
-all: check ex-core-quad render ex-render-quad
+all: check ex-hal-quad render ex-render-quad
 
 check:
 	cargo check --all $(EXCLUDES)
@@ -52,11 +52,11 @@ render:
 	cd src/render && cargo test --features "$(FEATURES_RENDER)"
 	cd src/render && cargo test --features "$(FEATURES_RENDER) $(FEATURES_RENDER_ADD)"
 
-ex-core-quad:
-	cd examples/core/quad && cargo check --features "gl"
-	cd examples/core/quad && cargo check --features "$(FEATURES_QUAD2)"
-	cd examples/core/quad && cargo check --features "$(FEATURES_QUAD)"
-	cd examples/core/quad && cargo check --features "$(FEATURES_QUAD) $(FEATURES_QUAD_ADD)"
+ex-hal-quad:
+	cd examples/hal/quad && cargo check --features "gl"
+	cd examples/hal/quad && cargo check --features "$(FEATURES_QUAD2)"
+	cd examples/hal/quad && cargo check --features "$(FEATURES_QUAD)"
+	cd examples/hal/quad && cargo check --features "$(FEATURES_QUAD) $(FEATURES_QUAD_ADD)"
 
 ex-render-quad:
 	cd examples/render/quad_render && $(CMD_QUAD_RENDER)

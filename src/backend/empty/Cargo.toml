@@ -9,4 +9,4 @@ workspace = "../../.."
 name = "gfx_backend_empty"
 
 [dependencies]
-gfx-hal = { path = "../../core", version = "0.1" }
+gfx-hal = { path = "../../hal", version = "0.1" }

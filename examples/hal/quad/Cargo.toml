@@ -24,7 +24,7 @@ glutin = { version = "0.9", optional = true }
 image = "0.15"
 log = "0.3"
 winit = "0.7"
-gfx-hal = { path = "../../../src/core", version = "0.1" }
+gfx-hal = { path = "../../../src/hal", version = "0.1" }
 
 [dependencies.gfx-backend-gl]
 path = "../../../src/backend/gl"

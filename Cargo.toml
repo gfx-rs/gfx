@@ -7,7 +7,7 @@ members = [
     "src/backend/gl",
     "src/backend/metal",
     "src/backend/vulkan",
-    "src/core",
+    "src/hal",
     #"src/macros",
     "src/render",
     #"src/support",
@@ -15,6 +15,6 @@ members = [
     #"src/window/glfw",
     #"src/window/sdl",
     #"examples",
-    "examples/core/quad",
+    "examples/hal/quad",
     "examples/render/quad_render",
 ]

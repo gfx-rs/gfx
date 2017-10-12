@@ -20,7 +20,7 @@ name = "gfx_backend_dx12"
 [dependencies]
 bitflags = "0.8"
 log = "0.3"
-gfx-hal = { path = "../../core", version = "0.1" }
+gfx-hal = { path = "../../hal", version = "0.1" }
 d3d12-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
 d3dcompiler-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
 dxgi-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
