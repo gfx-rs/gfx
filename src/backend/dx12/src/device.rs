@@ -1024,6 +1024,7 @@ impl d::Device<B> for Device {
     fn create_buffer_view(
         &mut self,
         _buffer: &n::Buffer,
+        _format: format::Format,
         _range: Range<u64>,
     ) -> Result<n::BufferView, buffer::ViewError> {
         unimplemented!()
