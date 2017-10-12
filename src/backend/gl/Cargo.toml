@@ -1,5 +1,5 @@
 [package]
-name = "gfx_backend_gl"
+name = "gfx-backend-gl"
 version = "0.1.0"
 description = "OpenGL backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
@@ -8,7 +8,7 @@ keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
 readme = "README.md"
-documentation = "https://docs.rs/gfx_device_gl"
+documentation = "https://docs.rs/gfx-backend-gl"
 workspace = "../../.."
 
 [lib]
@@ -20,6 +20,6 @@ default = ["glutin"]
 [dependencies]
 log = "0.3"
 gfx_gl = "0.3.1"
-gfx_core = { path = "../../core", version = "0.10" }
+gfx-hal = { path = "../../core", version = "0.1" }
 smallvec = "0.4"
 glutin = { version = "0.9", optional = true }

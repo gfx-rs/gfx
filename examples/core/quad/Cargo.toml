@@ -6,12 +6,12 @@ workspace = "../../.."
 
 [features]
 default = []
-metal = ["gfx_backend_metal"]
-metal_argument_buffer = ["gfx_backend_metal/argument_buffer"]
-gl = ["glutin", "gfx_backend_gl"]
+metal = ["gfx-backend-metal"]
+metal_argument_buffer = ["gfx-backend-metal/argument_buffer"]
+gl = ["glutin", "gfx-backend-gl"]
 #dx11 = ["gfx_device_dx11", "gfx_window_dxgi"]
-dx12 = ["gfx_backend_dx12"]
-vulkan = ["gfx_backend_vulkan"]
+dx12 = ["gfx-backend-dx12"]
+vulkan = ["gfx-backend-vulkan"]
 unstable = []
 
 [[bin]]
@@ -24,23 +24,25 @@ glutin = { version = "0.9", optional = true }
 image = "0.15"
 log = "0.3"
 winit = "0.7"
-gfx_core = { path = "../../../src/core", version = "0.10" }
+gfx-hal = { path = "../../../src/core", version = "0.1" }
 
-[dependencies.gfx_backend_gl]
+[dependencies.gfx-backend-gl]
 path = "../../../src/backend/gl"
 version = "0.1"
 optional = true
 
-[dependencies.gfx_backend_vulkan]
+[dependencies.gfx-backend-vulkan]
 path = "../../../src/backend/vulkan"
 version = "0.1"
 optional = true
 features = ["glsl-to-spirv"]
 
-[target.'cfg(target_os = "macos")'.dependencies]
-gfx_backend_metal = { path = "../../../src/backend/metal", version = "0.1", optional = true }
+[target.'cfg(target_os = "macos")'.dependencies.gfx-backend-metal]
+path = "../../../src/backend/metal"
+version = "0.1"
+optional = true
 
-[target.'cfg(windows)'.dependencies]
-#gfx_device_dx11 = { path = "../../../src/backend/dx11", version = "0.6", optional = true }
-gfx_backend_dx12 = { path = "../../../src/backend/dx12", version = "0.1", optional = true }
-
+[target.'cfg(windows)'.dependencies.gfx-backend-dx12]
+path = "../../../src/backend/dx12"
+version = "0.1"
+optional = true

@@ -1,5 +1,5 @@
 [package]
-name = "gfx_backend_vulkan"
+name = "gfx-backend-vulkan"
 version = "0.1.0"
 description = "Vulkan API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
@@ -8,7 +8,7 @@ keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
 readme = "README.md"
-documentation = "https://docs.rs/gfx_device_vulkan"
+documentation = "https://docs.rs/gfx-device-vulkan"
 workspace = "../../.."
 
 [features]
@@ -22,7 +22,7 @@ log = "0.3"
 lazy_static = "0.2"
 shared_library = "0.1"
 ash = "0.18.6"
-gfx_core = { path = "../../core", version = "0.10" }
+gfx-hal = { path = "../../core", version = "0.1" }
 smallvec = "0.4"
 winit = { version = "0.7", optional = true }
 glsl-to-spirv = { version = "0.1", optional = true }

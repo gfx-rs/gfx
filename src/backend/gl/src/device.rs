@@ -4,8 +4,8 @@ use std::rc::Rc;
 
 use gl;
 use gl::types::{GLint, GLenum, GLfloat};
-use core::{self as c, device as d, image as i, memory, pass, pso, buffer, mapping};
-use core::format::{Format, Swizzle};
+use hal::{self as c, device as d, image as i, memory, pass, pso, buffer, mapping};
+use hal::format::{Format, Swizzle};
 use std::iter::repeat;
 
 use {Backend as B, Share};

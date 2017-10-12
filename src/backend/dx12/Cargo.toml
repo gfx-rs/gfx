@@ -1,5 +1,5 @@
 [package]
-name = "gfx_backend_dx12"
+name = "gfx-backend-dx12"
 version = "0.1.0"
 description = "DirectX-12 API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
@@ -8,7 +8,7 @@ keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
 readme = "README.md"
-documentation = "https://docs.rs/gfx_backend_dx12"
+documentation = "https://docs.rs/gfx-backend-dx12"
 workspace = "../../.."
 
 [features]
@@ -20,7 +20,7 @@ name = "gfx_backend_dx12"
 [dependencies]
 bitflags = "0.8"
 log = "0.3"
-gfx_core = { path = "../../core", version = "0.10" }
+gfx-hal = { path = "../../core", version = "0.1" }
 d3d12-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
 d3dcompiler-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
 dxgi-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }

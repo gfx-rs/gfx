@@ -6,14 +6,13 @@
 #[macro_use]
 extern crate log;
 extern crate gfx_gl as gl;
-extern crate gfx_core as core;
+extern crate gfx_hal as hal;
 extern crate smallvec;
 #[cfg(feature = "glutin")]
 extern crate glutin;
 
 use std::rc::Rc;
-use core as c;
-use core::QueueType;
+use hal::{self as c, QueueType};
 
 pub use self::device::Device;
 pub use self::info::{Info, PlatformName, Version};
@@ -212,17 +211,17 @@ impl c::Adapter<Backend> for Adapter {
         let memory_types = if self.share.private_caps.map {
             vec![
                 //TODO: expose `COHERENT` types as well
-                core::MemoryType {
+                c::MemoryType {
                     id: 0,
                     properties: c::memory::DEVICE_LOCAL,
                     heap_index: 1,
                 },
-                core::MemoryType { //download
+                c::MemoryType { //download
                     id: 1,
                     properties: c::memory::CPU_VISIBLE | c::memory::CPU_CACHED,
                     heap_index: 0,
                 },
-                core::MemoryType { // upload
+                c::MemoryType { // upload
                     id: 2,
                     properties: c::memory::CPU_VISIBLE | c::memory::WRITE_COMBINED,
                     heap_index: 0,
@@ -230,7 +229,7 @@ impl c::Adapter<Backend> for Adapter {
             ]
         } else {
             vec![
-                core::MemoryType {
+                c::MemoryType {
                     id: 0,
                     properties: c::memory::DEVICE_LOCAL,
                     heap_index: 0,

@@ -1,5 +1,5 @@
-use core::{buffer, image as i};
 use gl::{self, types as t};
+use hal::{buffer, image as i};
 
 pub fn image_kind_to_gl(kind: i::Kind) -> t::GLenum {
     match kind {

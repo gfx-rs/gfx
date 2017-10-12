@@ -4,7 +4,7 @@
 )]
 
 extern crate env_logger;
-extern crate gfx_core as core;
+extern crate gfx_hal as core;
 #[cfg(feature = "dx12")]
 extern crate gfx_backend_dx12 as back;
 #[cfg(feature = "vulkan")]

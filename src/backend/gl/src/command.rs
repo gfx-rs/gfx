@@ -1,9 +1,9 @@
 #![allow(missing_docs)]
 
 use gl;
-use core::{self as c, command, image, memory, target, Viewport};
-use core::buffer::IndexBufferView;
-use core::target::{ColorValue, Stencil};
+use hal::{self as c, command, image, memory, target, Viewport};
+use hal::buffer::IndexBufferView;
+use hal::target::{ColorValue, Stencil};
 use {native as n, Backend};
 use pool::{self, BufferMemory};
 

@@ -1,4 +1,4 @@
-use core::{self, pool};
+use hal::{self, pool};
 use command::{self, Command, RawCommandBuffer, SubpassCommandBuffer};
 use native as n;
 use queue::CommandQueue;
@@ -69,7 +69,7 @@ pub struct RawCommandPool {
     memory: Arc<Mutex<BufferMemory>>,
 }
 
-impl core::RawCommandPool<Backend> for RawCommandPool {
+impl hal::RawCommandPool<Backend> for RawCommandPool {
     fn reset(&mut self) {
         let mut memory = self
             .memory

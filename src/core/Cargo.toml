@@ -1,13 +1,13 @@
 [package]
-name = "gfx_core"
-version = "0.10.0"
+name = "gfx-hal"
+version = "0.1.0"
 description = "Core library of Gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics"]
 license = "Apache-2.0"
 authors = ["The Gfx-rs Developers"]
-documentation = "https://docs.rs/gfx_core"
+documentation = "https://docs.rs/gfx-hal"
 workspace = "../.."
 
 [features]
@@ -16,7 +16,7 @@ serialize = ["serde", "draw_state/serialize"]
 unstable = []
 
 [lib]
-name = "gfx_core"
+name = "gfx_hal"
 path = "src/lib.rs"
 
 [dependencies]
@@ -28,4 +28,4 @@ serde = { version = "1.0", features = ["serde_derive"], optional = true }
 smallvec = "0.4"
 
 [dev-dependencies]
-gfx_backend_empty = { path = "../backend/empty", version = "0.1" }
+gfx-backend-empty = { path = "../backend/empty", version = "0.1" }

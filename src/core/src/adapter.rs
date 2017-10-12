@@ -15,16 +15,16 @@ pub trait Adapter<B: Backend>: Sized {
     ///
     /// ```no_run
     /// # extern crate gfx_backend_empty as empty;
-    /// # extern crate gfx_core;
+    /// # extern crate gfx_hal;
     /// # fn main() {
-    /// use gfx_core::{Adapter, QueueFamily};
+    /// use gfx_hal::{Adapter, QueueFamily};
     ///
     /// # let adapter: empty::Adapter = return;
-    /// let queue_desc = adapter.get_queue_families()
-    ///                         .iter()
-    ///                         .map(|&(ref family, ty)|
-    ///                             (family, ty, family.num_queues()))
-    ///                         .collect::<Vec<_>>();
+    /// let queue_desc = adapter
+    ///     .get_queue_families()
+    ///     .iter()
+    ///     .map(|&(ref family, ty)| (family, ty, family.num_queues()))
+    ///     .collect::<Vec<_>>();
     /// let gpu = adapter.open(&queue_desc);
     /// # }
     /// ```
@@ -39,14 +39,14 @@ pub trait Adapter<B: Backend>: Sized {
     ///
     /// ```no_run
     /// # extern crate gfx_backend_empty as empty;
-    /// # extern crate gfx_core;
+    /// # extern crate gfx_hal;
     /// # fn main() {
-    /// use gfx_core::{Adapter, QueueType, Surface};
+    /// use gfx_hal::{Adapter, QueueType, Surface};
     ///
     /// # let adapter: empty::Adapter = return;
     /// # let surface: empty::Surface = return;
     /// // Open a gpu with a graphics queue, which can be used for presentation.
-    /// // GeneralQueues will be downcasted to GraphicsQueues.
+    /// // GeneralQueues will be down-casted to GraphicsQueues.
     /// let gpu = adapter.open_with(|family, ty| {
     ///     ((ty.supports_graphics() && surface.supports_queue(&family)) as u32, QueueType::Graphics)
     /// });
@@ -76,9 +76,9 @@ pub trait Adapter<B: Backend>: Sized {
     ///
     /// ```no_run
     /// # extern crate gfx_backend_empty as empty;
-    /// # extern crate gfx_core;
+    /// # extern crate gfx_hal;
     /// # fn main() {
-    /// use gfx_core::Adapter;
+    /// use gfx_hal::Adapter;
     ///
     /// # let adapter: empty::Adapter = return;
     /// println!("Adapter info: {:?}", adapter.get_info());
@@ -95,9 +95,9 @@ pub trait Adapter<B: Backend>: Sized {
     ///
     /// ```no_run
     /// # extern crate gfx_backend_empty as empty;
-    /// # extern crate gfx_core;
+    /// # extern crate gfx_hal;
     /// # fn main() {
-    /// use gfx_core::Adapter;
+    /// use gfx_hal::Adapter;
     ///
     /// # let adapter: empty::Adapter = return;
     /// for (i, &(_, ty)) in adapter.get_queue_families().into_iter().enumerate() {

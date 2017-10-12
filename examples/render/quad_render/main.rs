@@ -1,8 +1,8 @@
 extern crate env_logger;
+extern crate gfx_hal as core;
+extern crate gfx_backend_vulkan as back;
 #[macro_use]
 extern crate gfx_render as gfx;
-extern crate gfx_core as core;
-extern crate gfx_backend_vulkan as back;
 
 extern crate winit;
 extern crate image;
