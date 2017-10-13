@@ -1,5 +1,5 @@
 use std::ops::Range;
-use {pso, target, Backend, IndexCount, InstanceCount, VertexCount, VertexOffset};
+use {pso, target, Backend, IndexCount, InstanceCount, VertexCount, VertexOffset, Viewport};
 use buffer::IndexBufferView;
 use queue::{Supports, Graphics};
 use super::{AttachmentClear, ClearValue, CommandBuffer, RawCommandBuffer};
@@ -83,6 +83,46 @@ impl<'a, B: Backend> RenderPassInlineEncoder<'a, B> {
     pub fn bind_graphics_pipeline(&mut self, pipeline: &B::GraphicsPipeline) {
         self.0.bind_graphics_pipeline(pipeline)
     }
+
+    ///
+    pub fn bind_graphics_descriptor_sets(
+        &mut self,
+        layout: &B::PipelineLayout,
+        first_set: usize,
+        sets: &[&B::DescriptorSet],
+    ) {
+        self.0.bind_graphics_descriptor_sets(layout, first_set, sets)
+    }
+
+    ///
+    pub fn set_viewports(&mut self, viewports: &[Viewport]) {
+        self.0.set_viewports(viewports)
+    }
+
+    ///
+    pub fn set_scissors(&mut self, scissors: &[target::Rect]) {
+        self.0.set_scissors(scissors)
+    }
+
+    ///
+    pub fn set_stencil_reference(&mut self, front: target::Stencil, back: target::Stencil) {
+        self.0.set_stencil_reference(front, back)
+    }
+
+    ///
+    pub fn set_blend_constants(&mut self, cv: target::ColorValue) {
+        self.0.set_blend_constants(cv)
+    }
+
+    // TODO: set_line_width
+    // TODO: set_depth_bounds
+    // TODO: set_depth_bias
+    // TODO: set_stencil_compare_mask
+    // TODO: set_stencil_write_mask
+    // TODO: push constants
+    // TODO: pipeline barrier (postponed)
+    // TODO: begin/end query
+    
 }
 
 impl<'a, B: Backend> Drop for RenderPassInlineEncoder<'a, B> {
