@@ -443,6 +443,7 @@ impl core::Adapter<Backend> for Adapter {
                 max_compute_group_size: [max_group_size[0] as _, max_group_size[1] as _, max_group_size[2] as _],
                 min_buffer_copy_offset_alignment: limits.optimal_buffer_copy_offset_alignment as _,
                 min_buffer_copy_pitch_alignment: limits.optimal_buffer_copy_row_pitch_alignment as _,
+                min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as _,
             },
         };
 

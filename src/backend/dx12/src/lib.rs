@@ -353,6 +353,7 @@ impl Device {
                 ],
                 min_buffer_copy_offset_alignment: winapi::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as _,
                 min_buffer_copy_pitch_alignment: winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as _,
+                min_uniform_buffer_offset_alignment: 256, // Required alignment for CBVs
             },
             private_caps: Capabilities {
                 heterogeneous_resource_heaps: features.ResourceHeapTier != winapi::D3D12_RESOURCE_HEAP_TIER_1,

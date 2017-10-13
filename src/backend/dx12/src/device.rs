@@ -987,7 +987,10 @@ impl d::Device<B> for Device {
         usage: buffer::Usage,
     ) -> Result<UnboundBuffer, buffer::CreationError> {
         if usage.contains(buffer::UNIFORM) {
-            size = (size + 255) & !255; // constant buffers need to be aligned
+            // Constant buffer view sizes need to be aligned.
+            // Coupled with the offset alignment we can enforce an aligned CBV size
+            // on descriptor updates.
+            size = (size + 255) & !255;
         }
 
         let requirements = memory::Requirements {
@@ -1383,7 +1386,12 @@ impl d::Device<B> for Device {
                 pso::DescriptorWrite::UniformBuffer(ref views) => {
                     Some(views.iter().map(|&(buffer, ref range)| {
                         let handle = buffer_heap.alloc_handles(1).cpu;
-                        let size = ((range.end - range.start) + 255) & !255; // TODO
+                        // Making the size field of buffer requirements for uniform
+                        // buffers a multiple of 256 and setting the required offset
+                        // alignment to 256 allows us to patch the size here.
+                        // We can always enforce the size to be aligned to 256 for
+                        // CBVs without going out-of-bounds.
+                        let size = ((range.end - range.start) + 255) & !255;
                         let mut desc = winapi::D3D12_CONSTANT_BUFFER_VIEW_DESC {
                             BufferLocation: unsafe { (*buffer.resource).GetGPUVirtualAddress() },
                             SizeInBytes: size as _,
