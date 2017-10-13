@@ -18,6 +18,22 @@ use metal::*;
 use objc::runtime::Object as ObjcObject;
 use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
 
+/// Emit error during shader module parsing.
+fn gen_parse_error(err: SpirvErrorCode) -> ShaderError {
+    let msg = match err {
+        SpirvErrorCode::CompilationError(msg) => msg,
+        SpirvErrorCode::Unhandled => "Unknown parse error".into(),
+    };
+    ShaderError::CompilationFailed(msg)
+}
+/// Emit error during shader module creation. Used if we execute an query command.
+fn gen_query_error(err: SpirvErrorCode) -> ShaderError {
+    let msg = match err {
+        SpirvErrorCode::CompilationError(msg) => msg,
+        SpirvErrorCode::Unhandled => "Unknown query error".into(),
+    };
+    ShaderError::CompilationFailed(msg)
+}
 
 pub struct Adapter {
     pub(crate) device: MTLDevice,
@@ -445,27 +461,63 @@ impl core::Device<Backend> for Device {
         // spec requires "codeSize must be a multiple of 4"
         assert_eq!(raw_data.len() & 3, 0);
 
-        let spirv_data = unsafe {
+        let module = spirv::Module::from_words(unsafe {
             slice::from_raw_parts(
                 raw_data.as_ptr() as *const u32,
                 raw_data.len() / mem::size_of::<u32>(),
             )
-        };
+        });
 
-        let module = spirv::Module::from_words(spirv_data);
-        let mut ast = spirv::Ast::<msl::Target>::parse(&module)
+        // parse to enumerate resources
+        let mut parser_options = msl::ParserOptions::default();
+
+        let query_ast = spirv::Ast::<msl::Target>::parse(&module, &parser_options)
+            .map_err(gen_parse_error)?;
+        let shader_resources = query_ast.get_shader_resources()
             .map_err(|err| {
-                let msg =  match err {
+                let msg = match err {
                     SpirvErrorCode::CompilationError(msg) => msg,
-                    SpirvErrorCode::Unhandled => "Unknown parsing error".into(),
+                    SpirvErrorCode::Unhandled => "Unexpected error".into(),
                 };
                 ShaderError::CompilationFailed(msg)
             })?;
 
+        // fill the parser overrides
+        let image_ids = shader_resources.separate_images
+            .iter()
+            .map(|image| image.id);
+        let sampler_ids = shader_resources.separate_samplers
+            .iter()
+            .map(|sampler| sampler.id);
+        let stages = [spirv::ExecutionModel::Vertex, spirv::ExecutionModel::Fragment]; //TODO
+        // force the binding IDs to be preserved, as opposed to SPIRV-cross usual re-numeration
+        for resource in image_ids.chain(sampler_ids) {
+            let binding = query_ast.get_decoration(resource, spirv::Decoration::Binding).map_err(gen_query_error)?;
+            let desc_set = query_ast.get_decoration(resource, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
+            for &stage in &stages {
+                parser_options.resource_binding_overrides.insert(
+                    msl::ResourceBindingLocation {
+                        stage,
+                        desc_set,
+                        binding,
+                    },
+                    msl::ResourceBinding {
+                        resource_id: binding,
+                        force_used: false,
+                    },
+                );
+            }
+        }
+
+        // now parse again using the new overrides
+        let mut ast = spirv::Ast::<msl::Target>::parse(&module, &parser_options)
+            .map_err(gen_parse_error)?;
+
+        // compile with options
         let mut compile_options = msl::CompilerOptions::default();
         compile_options.vertex.invert_y = true;
 
-        ast.set_compile_options(compile_options)
+        ast.set_compile_options(&compile_options)
             .map_err(|err| {
                 let msg = match err {
                     SpirvErrorCode::CompilationError(msg) => msg,
@@ -483,6 +535,7 @@ impl core::Device<Backend> for Device {
                 ShaderError::CompilationFailed(msg)
             })?;
 
+        // done
         debug!("SPIRV-Cross generated shader:\n{}", shader_code);
 
         let lang_ver = LanguageVersion { major: 1, minor: 1 };
