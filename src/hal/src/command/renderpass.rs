@@ -83,6 +83,31 @@ impl<'a, B: Backend> RenderPassInlineEncoder<'a, B> {
     pub fn bind_graphics_pipeline(&mut self, pipeline: &B::GraphicsPipeline) {
         self.0.bind_graphics_pipeline(pipeline)
     }
+
+    ///
+    pub fn bind_graphics_descriptor_sets(
+        &mut self,
+        layout: &B::PipelineLayout,
+        first_set: usize,
+        sets: &[&B::DescriptorSet],
+    ) {
+        self.0.bind_graphics_descriptor_sets(layout, first_set, sets)
+    }
+
+    // TODO: set_viewports
+    // TODO: set_scissors
+    // TODO: set_line_width
+    // TODO: set_depth_bounds
+    // TODO: set_depth_bias
+    // TODO: set_blend_constants
+    // TODO: set_stencil_compare_mask
+    // TODO: set_stencil_reference
+    // TODO: set_stencil_write_mask
+
+    // TODO: push constants
+    // TODO: pipeline barrier
+    // TODO: begin/end query
+    
 }
 
 impl<'a, B: Backend> Drop for RenderPassInlineEncoder<'a, B> {
