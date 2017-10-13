@@ -954,7 +954,7 @@ impl d::Device<B> for Device {
                 d::ShaderError::CompilationFailed(msg)
             })?;
 
-        debug!("SPIRV-Cross generated shader: {}", shader_code);
+        debug!("SPIRV-Cross generated shader:\n{}", shader_code);
 
         let mut shader_map = BTreeMap::new();
         let entry_points = ast.get_entry_points().map_err(gen_query_error)?;

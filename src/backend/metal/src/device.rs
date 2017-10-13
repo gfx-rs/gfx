@@ -3,10 +3,9 @@ use {native as n, command};
 use conversions::*;
 
 use std::ops::Range;
-use std::cmp;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::{mem, ptr};
+use std::{cmp, mem, ptr, slice};
 
 use core::{self,
         image, pass, format, mapping, memory, buffer, pso};
@@ -17,6 +16,8 @@ use core::pass::{Subpass};
 use cocoa::foundation::{NSRange, NSUInteger};
 use metal::*;
 use objc::runtime::Object as ObjcObject;
+use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
+
 
 pub struct Adapter {
     pub(crate) device: MTLDevice,
@@ -440,8 +441,52 @@ impl core::Device<Backend> for Device {
         Ok(n::FrameBuffer(descriptor))
     }
 
-    fn create_shader_module(&mut self, _spirv_data: &[u8]) -> Result<n::ShaderModule, ShaderError> {
-        unimplemented!()
+    fn create_shader_module(&mut self, raw_data: &[u8]) -> Result<n::ShaderModule, ShaderError> {
+        // spec requires "codeSize must be a multiple of 4"
+        assert_eq!(raw_data.len() & 3, 0);
+
+        let spirv_data = unsafe {
+            slice::from_raw_parts(
+                raw_data.as_ptr() as *const u32,
+                raw_data.len() / mem::size_of::<u32>(),
+            )
+        };
+
+        let module = spirv::Module::from_words(spirv_data);
+        let mut ast = spirv::Ast::<msl::Target>::parse(&module)
+            .map_err(|err| {
+                let msg =  match err {
+                    SpirvErrorCode::CompilationError(msg) => msg,
+                    SpirvErrorCode::Unhandled => "Unknown parsing error".into(),
+                };
+                ShaderError::CompilationFailed(msg)
+            })?;
+
+        let mut compile_options = msl::CompilerOptions::default();
+        compile_options.vertex.invert_y = true;
+
+        ast.set_compile_options(compile_options)
+            .map_err(|err| {
+                let msg = match err {
+                    SpirvErrorCode::CompilationError(msg) => msg,
+                    SpirvErrorCode::Unhandled => "Unexpected error".into(),
+                };
+                ShaderError::CompilationFailed(msg)
+            })?;
+
+        let shader_code = ast.compile()
+            .map_err(|err| {
+                let msg =  match err {
+                    SpirvErrorCode::CompilationError(msg) => msg,
+                    SpirvErrorCode::Unhandled => "Unknown compile error".into(),
+                };
+                ShaderError::CompilationFailed(msg)
+            })?;
+
+        debug!("SPIRV-Cross generated shader:\n{}", shader_code);
+
+        let lang_ver = LanguageVersion { major: 1, minor: 1 };
+        self.create_shader_library_from_source(&shader_code, lang_ver)
     }
 
     fn create_sampler(&mut self, info: image::SamplerInfo) -> n::Sampler {
