@@ -90,11 +90,14 @@ unsafe impl Send for ComputePipeline { }
 unsafe impl Sync for ComputePipeline { }
 
 bitflags! {
-    pub flags SetTableTypes: u8 {
-        const SRV_CBV_UAV = 0x1,
-        const SAMPLERS = 0x2,
+    pub struct SetTableTypes: u8 {
+        const SRV_CBV_UAV = 0x1;
+        const SAMPLERS = 0x2;
     }
 }
+
+pub const SRV_CBV_UAV: SetTableTypes = SetTableTypes::SRV_CBV_UAV;
+pub const SAMPLERS: SetTableTypes = SetTableTypes::SAMPLERS;
 
 #[derive(Debug, Hash)]
 pub struct PipelineLayout {

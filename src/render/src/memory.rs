@@ -38,15 +38,19 @@ bitflags!(
     /// This information is used to create resources
     /// (see [gfx::Factory](trait.Factory.html#overview)).
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-    pub flags Access: u8 {
+    pub struct Access: u8 {
         /// Read access
-        const READ  = 0x1,
+        const READ  = 0x1;
         /// Write access
-        const WRITE = 0x2,
+        const WRITE = 0x2;
         /// Full access
-        const RW    = 0x3,
+        const RW    = 0x3;
     }
 );
+
+pub const READ: Access = Access::READ;
+pub const WRITE: Access = Access::WRITE;
+pub const RW: Access = Access::RW;
 
 pub type ReleaseFn = Box<FnMut()>; // TODO?: FnOnce
 pub struct Memory {
@@ -79,7 +83,7 @@ pub trait Allocator<B: Backend> {
         usage: buffer::Usage,
         buffer: B::UnboundBuffer
     ) -> (B::Buffer, Memory);
-    
+
     fn allocate_image(&mut self,
         device: &mut Device<B>,
         usage: image::Usage,

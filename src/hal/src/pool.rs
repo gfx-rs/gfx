@@ -9,14 +9,21 @@ use std::marker::PhantomData;
 bitflags!(
     /// Command pool creation flags.
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-    pub flags CommandPoolCreateFlags: u8 {
+    pub struct CommandPoolCreateFlags: u8 {
         /// Indicates short-lived command buffers.
         /// Memory optimization hint for implementations.
-        const TRANSIENT = 0x1,
+        const TRANSIENT = 0x1;
         /// Allow command buffers to be reset individually.
-        const RESET_INDIVIDUAL = 0x2
+        const RESET_INDIVIDUAL = 0x2;
     }
 );
+
+/// Indicates short-lived command buffers.
+/// Memory optimization hint for implementations.
+pub const TRANSIENT: CommandPoolCreateFlags = CommandPoolCreateFlags::TRANSIENT;
+/// Allow command buffers to be reset individually.
+pub const RESET_INDIVIDUAL: CommandPoolCreateFlags = CommandPoolCreateFlags::RESET_INDIVIDUAL;
+
 /// The allocated command buffers are associated with the creating command queue.
 pub trait RawCommandPool<B: Backend>: Send {
     /// Reset the command pool and the corresponding command buffers.
