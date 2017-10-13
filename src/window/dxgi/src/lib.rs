@@ -111,11 +111,18 @@ where Cf: format::RenderFormat
 
 /// Initialize with a given size. Raw format version.
 pub fn init_raw(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop, color_format: format::Format)
-                -> Result<(Window, Device, Factory, h::RawRenderTargetView<Resources>), InitError> {
+                -> Result<(Window, Device, Factory, h::RawRenderTargetView<Resources>), InitError>
+{
     let inner = match wb.build(events_loop) {
         Ok(w) => w,
         Err(_) => return Err(InitError::Window),
     };
+    init_existing_raw(inner, color_format)
+}
+
+pub fn init_existing_raw(inner: winit::Window, color_format: format::Format)
+                         -> Result<(Window, Device, Factory, h::RawRenderTargetView<Resources>), InitError>
+{
     let (width, height) = inner.get_inner_size_pixels().unwrap();
 
     let driver_types = [
