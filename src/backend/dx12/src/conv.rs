@@ -9,18 +9,22 @@ use winapi::*;
 
 pub fn map_heap_properties(props: memory::Properties) -> D3D12_HEAP_PROPERTIES {
     //TODO: ensure the flags are valid
-    D3D12_HEAP_PROPERTIES {
-        Type: if !props.contains(memory::CPU_VISIBLE) {
-            D3D12_HEAP_TYPE_DEFAULT
-        } else if props.contains(memory::WRITE_COMBINED) {
-            D3D12_HEAP_TYPE_UPLOAD
-        } else {
-            D3D12_HEAP_TYPE_READBACK
-        },
-        CPUPageProperty: D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
-        MemoryPoolPreference: D3D12_MEMORY_POOL_UNKNOWN,
-        CreationNodeMask: 0,
-        VisibleNodeMask: 0,
+    if !props.contains(memory::CPU_VISIBLE) {
+        D3D12_HEAP_PROPERTIES {
+            Type: D3D12_HEAP_TYPE_DEFAULT,
+            CPUPageProperty: D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+            MemoryPoolPreference: D3D12_MEMORY_POOL_UNKNOWN,
+            CreationNodeMask: 0,
+            VisibleNodeMask: 0,
+        }
+    } else {
+        D3D12_HEAP_PROPERTIES {
+            Type:  D3D12_HEAP_TYPE_CUSTOM,
+            CPUPageProperty: D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
+            MemoryPoolPreference: D3D12_MEMORY_POOL_L0,
+            CreationNodeMask: 0,
+            VisibleNodeMask: 0,
+        }
     }
 }
 
@@ -525,8 +529,14 @@ pub fn map_descriptor_range(bind: &DescriptorSetLayoutBinding, register_space: u
     }
 }
 
-pub fn map_buffer_flags(_usage: buffer::Usage) -> D3D12_RESOURCE_FLAGS {
-    D3D12_RESOURCE_FLAG_NONE
+pub fn map_buffer_flags(usage: buffer::Usage) -> D3D12_RESOURCE_FLAGS {
+    let mut flags = D3D12_RESOURCE_FLAG_NONE;
+
+    if usage.contains(buffer::STORAGE) {
+        flags = flags | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    }
+
+    flags
 }
 
 pub fn map_image_flags(usage: image::Usage) -> D3D12_RESOURCE_FLAGS {

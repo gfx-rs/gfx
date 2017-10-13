@@ -217,6 +217,7 @@ pub struct Device {
     rtv_pool: Arc<Mutex<native::DescriptorCpuPool>>,
     dsv_pool: Arc<Mutex<native::DescriptorCpuPool>>,
     srv_pool: Arc<Mutex<native::DescriptorCpuPool>>,
+    uav_pool: Arc<Mutex<native::DescriptorCpuPool>>,
     sampler_pool: Arc<Mutex<native::DescriptorCpuPool>>,
     // CPU/GPU descriptor heaps
     heap_srv_cbv_uav: Arc<Mutex<native::DescriptorHeap>>,
@@ -272,6 +273,19 @@ impl Device {
             offset: 0,
             size: 0,
             max_size: max_srvs as _,
+        };
+
+        let max_uavs = 0x1000; // TODO
+        let uav_pool = native::DescriptorCpuPool {
+            heap: Self::create_descriptor_heap_impl(
+                &mut device,
+                winapi::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                false,
+                max_uavs,
+            ),
+            offset: 0,
+            size: 0,
+            max_size: max_uavs as _,
         };
 
         let max_samplers = 2048; // D3D12 doesn't allow more samplers for one heap.
@@ -346,6 +360,7 @@ impl Device {
             rtv_pool: Arc::new(Mutex::new(rtv_pool)),
             dsv_pool: Arc::new(Mutex::new(dsv_pool)),
             srv_pool: Arc::new(Mutex::new(srv_pool)),
+            uav_pool: Arc::new(Mutex::new(uav_pool)),
             sampler_pool: Arc::new(Mutex::new(sampler_pool)),
             heap_srv_cbv_uav: Arc::new(Mutex::new(heap_srv_cbv_uav)),
             heap_sampler: Arc::new(Mutex::new(heap_sampler)),
