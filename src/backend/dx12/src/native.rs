@@ -197,7 +197,6 @@ pub struct Memory {
     pub(crate) heap: ComPtr<winapi::ID3D12Heap>,
     pub(crate) ty: MemoryType,
     pub(crate) size: u64,
-    pub(crate) default_state: winapi::D3D12_RESOURCE_STATES,
 }
 
 #[derive(Debug)]

@@ -1,32 +1,10 @@
 use core::format::{Format, SurfaceType};
-use core::{buffer, memory, state, pso, Primitive};
+use core::{buffer, state, pso, Primitive};
 use core::image::{self, FilterMethod, WrapMode};
 use core::pso::DescriptorSetLayoutBinding;
 use core::state::Comparison;
 use std::fmt;
 use winapi::*;
-
-
-pub fn map_heap_properties(props: memory::Properties) -> D3D12_HEAP_PROPERTIES {
-    //TODO: ensure the flags are valid
-    if !props.contains(memory::CPU_VISIBLE) {
-        D3D12_HEAP_PROPERTIES {
-            Type: D3D12_HEAP_TYPE_DEFAULT,
-            CPUPageProperty: D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
-            MemoryPoolPreference: D3D12_MEMORY_POOL_UNKNOWN,
-            CreationNodeMask: 0,
-            VisibleNodeMask: 0,
-        }
-    } else {
-        D3D12_HEAP_PROPERTIES {
-            Type:  D3D12_HEAP_TYPE_CUSTOM,
-            CPUPageProperty: D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
-            MemoryPoolPreference: D3D12_MEMORY_POOL_L0,
-            CreationNodeMask: 0,
-            VisibleNodeMask: 0,
-        }
-    }
-}
 
 pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     use core::format::SurfaceType::*;

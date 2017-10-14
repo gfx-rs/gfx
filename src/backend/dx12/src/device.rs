@@ -392,9 +392,17 @@ impl d::Device<B> for Device {
     ) -> Result<n::Memory, d::OutOfMemory> {
         let mut heap = ptr::null_mut();
 
+        let properties = winapi::D3D12_HEAP_PROPERTIES {
+            Type: winapi::D3D12_HEAP_TYPE_CUSTOM,
+            CPUPageProperty: self.heap_properties[mem_type.id].page_property,
+            MemoryPoolPreference: self.heap_properties[mem_type.id].memory_pool,
+            CreationNodeMask: 0,
+            VisibleNodeMask: 0,
+        };
+
         let desc = winapi::D3D12_HEAP_DESC {
             SizeInBytes: size,
-            Properties: conv::map_heap_properties(mem_type.properties),
+            Properties: properties,
             Alignment: 0, //Warning: has to be 4K for MSAA targets
             Flags: match mem_type.id >> 2 {
                 0 => winapi::D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES,
@@ -413,20 +421,10 @@ impl d::Device<B> for Device {
         }
         assert_eq!(winapi::S_OK, hr);
 
-        //TODO: merge with `map_heap_properties`
-        let default_state = if !mem_type.properties.contains(memory::CPU_VISIBLE) {
-            winapi::D3D12_RESOURCE_STATE_COMMON
-        } else if !mem_type.properties.contains(memory::WRITE_COMBINED) {
-            winapi::D3D12_RESOURCE_STATE_COPY_DEST
-        } else {
-            winapi::D3D12_RESOURCE_STATE_GENERIC_READ
-        };
-
         Ok(n::Memory {
             heap: unsafe { ComPtr::new(heap as _) },
             ty: mem_type.clone(),
             size,
-            default_state,
         })
     }
 
@@ -1392,7 +1390,7 @@ impl d::Device<B> for Device {
                         // We can always enforce the size to be aligned to 256 for
                         // CBVs without going out-of-bounds.
                         let size = ((range.end - range.start) + 255) & !255;
-                        let mut desc = winapi::D3D12_CONSTANT_BUFFER_VIEW_DESC {
+                        let desc = winapi::D3D12_CONSTANT_BUFFER_VIEW_DESC {
                             BufferLocation: unsafe { (*buffer.resource).GetGPUVirtualAddress() },
                             SizeInBytes: size as _,
                         };

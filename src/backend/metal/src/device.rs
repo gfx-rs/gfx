@@ -118,7 +118,7 @@ impl core::Adapter<Backend> for Adapter {
             },
             core::MemoryType {
                 id: 1,
-                properties: memory::CPU_VISIBLE | memory::CPU_CACHED | memory::WRITE_COMBINED,
+                properties: memory::CPU_VISIBLE | memory::CPU_CACHED,
                 heap_index: 0,
             },
             core::MemoryType {
@@ -128,12 +128,6 @@ impl core::Adapter<Backend> for Adapter {
             },
             core::MemoryType {
                 id: 3,
-                properties: memory::CPU_VISIBLE | memory::COHERENT
-                    | memory::CPU_CACHED | memory::WRITE_COMBINED,
-                heap_index: 0,
-            },
-            core::MemoryType {
-                id: 4,
                 properties: memory::DEVICE_LOCAL,
                 heap_index: 1,
             },

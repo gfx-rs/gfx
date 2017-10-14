@@ -313,16 +313,8 @@ fn main() {
     let upload_type =
         memory_types.iter().find(|mem_type| {
             buffer_req.type_mask & (1 << mem_type.id) != 0 &&
-            mem_type.properties.contains(m::CPU_VISIBLE) &&
-            mem_type.properties.contains(m::WRITE_COMBINED)
-        })
-        .unwrap_or_else(||
-            memory_types.iter().find(|mem_type| {
-                buffer_req.type_mask & (1 << mem_type.id) != 0 &&
-                mem_type.properties.contains(m::CPU_VISIBLE)
-            })
-            .unwrap()
-        );
+            mem_type.properties.contains(m::CPU_VISIBLE)
+        }).unwrap();
 
     let buffer_memory = device.allocate_memory(upload_type, 1024).unwrap();
     let vertex_buffer = device.bind_buffer_memory(&buffer_memory, 0, buffer_unbound).unwrap();

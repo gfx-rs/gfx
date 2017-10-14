@@ -34,6 +34,67 @@ use std::os::windows::ffi::OsStringExt;
 use std::ffi::OsString;
 use std::sync::{Arc, Mutex};
 
+pub(crate) struct HeapProperties {
+    pub page_property: winapi::D3D12_CPU_PAGE_PROPERTY,
+    pub memory_pool: winapi::D3D12_MEMORY_POOL,
+}
+
+// https://msdn.microsoft.com/de-de/library/windows/desktop/dn788678(v=vs.85).aspx
+static HEAPS_NUMA: &'static [HeapProperties] = &[
+    // DEFAULT
+    HeapProperties {
+        page_property: winapi::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
+        memory_pool: winapi::D3D12_MEMORY_POOL_L1,
+    },
+    // UPLOAD
+    HeapProperties {
+        page_property: winapi::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE,
+        memory_pool: winapi::D3D12_MEMORY_POOL_L0,
+
+    },
+    // READBACK
+    HeapProperties {
+        page_property: winapi::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
+        memory_pool: winapi::D3D12_MEMORY_POOL_L0,
+    },
+];
+
+static HEAPS_UMA: &'static [HeapProperties] = &[
+    // DEFAULT
+    HeapProperties {
+        page_property: winapi::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
+        memory_pool: winapi::D3D12_MEMORY_POOL_L0,
+    },
+    // UPLOAD
+    HeapProperties {
+        page_property: winapi::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE,
+        memory_pool: winapi::D3D12_MEMORY_POOL_L0,
+    },
+    // READBACK
+    HeapProperties {
+        page_property: winapi::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
+        memory_pool: winapi::D3D12_MEMORY_POOL_L0,
+    },
+];
+
+static HEAPS_CCUMA: &'static [HeapProperties] = &[
+    // DEFAULT
+    HeapProperties {
+        page_property: winapi::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
+        memory_pool: winapi::D3D12_MEMORY_POOL_L0,
+    },
+    // UPLOAD
+    HeapProperties {
+        page_property: winapi::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
+        memory_pool: winapi::D3D12_MEMORY_POOL_L0,
+    },
+    //READBACK
+    HeapProperties {
+        page_property: winapi::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
+        memory_pool: winapi::D3D12_MEMORY_POOL_L0,
+    },
+];
+
 #[derive(Clone)]
 pub struct QueueFamily;
 
@@ -94,6 +155,7 @@ fn collect_queues<C>(
 #[derive(Clone)]
 pub struct Adapter {
     adapter: ComPtr<winapi::IDXGIAdapter2>,
+    factory: ComPtr<winapi::IDXGIFactory4>,
     info: core::AdapterInfo,
     queue_families: Vec<(QueueFamily, QueueType)>,
 }
@@ -113,26 +175,88 @@ impl core::Adapter<Backend> for Adapter {
         if !winapi::SUCCEEDED(hr) {
             error!("error on device creation: {:x}", hr);
         }
-        let device = Device::new(unsafe { ComPtr::new(device_raw) });
+        let mut device = Device::new(unsafe { ComPtr::new(device_raw) });
+
+        // Get the IDXGIAdapter3 from the created device to query video memory information.
+        let mut adapter_id = unsafe { mem::uninitialized() };
+        unsafe { device.raw.GetAdapterLuid(&mut adapter_id); }
+
+        let mut adapter = {
+            let mut adapter: *mut winapi::IDXGIAdapter3 = ptr::null_mut();
+            unsafe {
+                assert_eq!(winapi::S_OK, self.factory.as_mut().EnumAdapterByLuid(
+                    adapter_id,
+                    &dxguid::IID_IDXGIAdapter3,
+                    &mut adapter as *mut *mut _ as *mut *mut _,
+                ));
+                ComPtr::new(adapter)
+            }
+        };
 
         // https://msdn.microsoft.com/en-us/library/windows/desktop/dn788678(v=vs.85).aspx
-        let base_memory_types = [
-            core::MemoryType {
-                id: 0,
-                properties: memory::DEVICE_LOCAL,
-                heap_index: 1,
-            },
-            core::MemoryType {
-                id: 1,
-                properties: memory::CPU_VISIBLE | memory::CPU_CACHED,
-                heap_index: 0,
-            },
-            core::MemoryType {
-                id: 2,
-                properties: memory::CPU_VISIBLE | memory::WRITE_COMBINED,
-                heap_index: 0,
-            },
-        ];
+        let base_memory_types = match device.private_caps.memory_architecture {
+            MemoryArchitecture::NUMA => [
+                // DEFAULT
+                core::MemoryType {
+                    id: 0,
+                    properties: memory::DEVICE_LOCAL,
+                    heap_index: 0,
+                },
+                // UPLOAD
+                core::MemoryType {
+                    id: 1,
+                    properties: memory::CPU_VISIBLE | memory::COHERENT,
+                    heap_index: 1,
+                },
+                // READBACK
+                core::MemoryType {
+                    id: 2,
+                    properties: memory::CPU_VISIBLE | memory::COHERENT | memory::CPU_CACHED,
+                    heap_index: 1,
+                },
+            ],
+            MemoryArchitecture::UMA => [
+                // DEFAULT
+                core::MemoryType {
+                    id: 0,
+                    properties: memory::DEVICE_LOCAL,
+                    heap_index: 0,
+                },
+                // UPLOAD
+                core::MemoryType {
+                    id: 1,
+                    properties: memory::DEVICE_LOCAL | memory::CPU_VISIBLE | memory::COHERENT,
+                    heap_index: 0,
+                },
+                // READBACK
+                core::MemoryType {
+                    id: 2,
+                    properties: memory::DEVICE_LOCAL | memory::CPU_VISIBLE | memory::COHERENT | memory::CPU_CACHED,
+                    heap_index: 0,
+                },
+            ],
+            MemoryArchitecture::CacheCoherentUMA => [
+                // DEFAULT
+                core::MemoryType {
+                    id: 0,
+                    properties: memory::DEVICE_LOCAL,
+                    heap_index: 0,
+                },
+                // UPLOAD
+                core::MemoryType {
+                    id: 1,
+                    properties: memory::DEVICE_LOCAL | memory::CPU_VISIBLE | memory::COHERENT | memory::CPU_CACHED,
+                    heap_index: 0,
+                },
+                // READBACK
+                core::MemoryType {
+                    id: 2,
+                    properties: memory::DEVICE_LOCAL | memory::CPU_VISIBLE | memory::COHERENT | memory::CPU_CACHED,
+                    heap_index: 0,
+                },
+            ],
+        };
+
         let memory_types = if device.private_caps.heterogeneous_resource_heaps {
             base_memory_types.to_vec()
         } else {
@@ -153,13 +277,34 @@ impl core::Adapter<Backend> for Adapter {
             types
         };
 
+        let memory_heaps = {
+            let mut query_memory = |segment: winapi::DXGI_MEMORY_SEGMENT_GROUP| unsafe {
+                let mut mem_info: winapi::DXGI_QUERY_VIDEO_MEMORY_INFO = mem::uninitialized();
+                assert_eq!(winapi::S_OK, adapter.QueryVideoMemoryInfo(
+                    0,
+                    segment,
+                    &mut mem_info,
+                ));
+                mem_info.Budget
+            };
+
+            let local = query_memory(winapi::DXGI_MEMORY_SEGMENT_GROUP_LOCAL);
+            match device.private_caps.memory_architecture {
+                MemoryArchitecture::NUMA => {
+                    let non_local = query_memory(winapi::DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL);
+                    vec![local, non_local]
+                },
+                _ => vec![local],
+            }
+        };
+
         core::Gpu {
             general_queues: collect_queues(queue_descs, &device, QueueType::General),
             graphics_queues: collect_queues(queue_descs, &device, QueueType::Graphics),
             compute_queues: collect_queues(queue_descs, &device, QueueType::Compute),
             transfer_queues: collect_queues(queue_descs, &device, QueueType::Transfer),
             memory_types,
-            memory_heaps: vec![!0, !0], // TODO: VRAM sizes
+            memory_heaps,
             device,
         }
     }
@@ -202,9 +347,17 @@ impl core::RawCommandQueue<Backend> for CommandQueue {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+enum MemoryArchitecture {
+    NUMA,
+    UMA,
+    CacheCoherentUMA,
+}
+
 #[derive(Clone)]
 pub struct Capabilities {
     heterogeneous_resource_heaps: bool,
+    memory_architecture: MemoryArchitecture,
 }
 
 #[derive(Clone)]
@@ -213,6 +366,7 @@ pub struct Device {
     features: core::Features,
     limits: core::Limits,
     private_caps: Capabilities,
+    heap_properties: &'static [HeapProperties],
     // CPU only pools
     rtv_pool: Arc<Mutex<native::DescriptorCpuPool>>,
     dsv_pool: Arc<Mutex<native::DescriptorCpuPool>>,
@@ -233,6 +387,13 @@ impl Device {
             device.CheckFeatureSupport(winapi::D3D12_FEATURE_D3D12_OPTIONS,
                 &mut features as *mut _ as *mut _,
                 mem::size_of::<winapi::D3D12_FEATURE_DATA_D3D12_OPTIONS>() as _)
+        });
+
+        let mut features_architecture: winapi::D3D12_FEATURE_DATA_ARCHITECTURE = unsafe { mem::zeroed() };
+        assert_eq!(winapi::S_OK, unsafe {
+            device.CheckFeatureSupport(winapi::D3D12_FEATURE_ARCHITECTURE,
+                &mut features_architecture as *mut _ as *mut _,
+                mem::size_of::<winapi::D3D12_FEATURE_DATA_ARCHITECTURE>() as _)
         });
 
         // Allocate descriptor heaps
@@ -315,6 +476,15 @@ impl Device {
             max_samplers,
         );
 
+        let uma = features_architecture.UMA == winapi::TRUE;
+        let cc_uma = features_architecture.CacheCoherentUMA == winapi::TRUE;
+
+        let (memory_architecture, heap_properties) = match (uma, cc_uma) {
+            (true, true)  => (MemoryArchitecture::CacheCoherentUMA, HEAPS_CCUMA),
+            (true, false) => (MemoryArchitecture::UMA, HEAPS_UMA),
+            (false, _)            => (MemoryArchitecture::NUMA, HEAPS_NUMA),
+        };
+
         Device {
             raw: device,
             features: Features { // TODO
@@ -357,7 +527,9 @@ impl Device {
             },
             private_caps: Capabilities {
                 heterogeneous_resource_heaps: features.ResourceHeapTier != winapi::D3D12_RESOURCE_HEAP_TIER_1,
+                memory_architecture,
             },
+            heap_properties,
             rtv_pool: Arc::new(Mutex::new(rtv_pool)),
             dsv_pool: Arc::new(Mutex::new(dsv_pool)),
             srv_pool: Arc::new(Mutex::new(srv_pool)),
@@ -466,6 +638,7 @@ impl core::Instance<Backend> for Instance {
                 devices.push(
                     Adapter {
                         adapter: adapter,
+                        factory: self.factory.clone(),
                         info: info,
                         queue_families: vec![(QueueFamily, QueueType::General)], // TODO:
                     });
