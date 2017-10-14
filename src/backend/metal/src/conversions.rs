@@ -112,7 +112,7 @@ pub fn map_blend_factor(factor: core::state::Factor, scalar: bool) -> MTLBlendFa
 pub fn map_vertex_format(format: Format) -> Option<MTLVertexFormat> {
     use core::format::SurfaceType::*;
     use core::format::ChannelType::*;
-   
+
     // TODO: more formats
     Some(match format {
         Format(R32_G32_B32_A32, Float) => MTLVertexFormat::Float4,
@@ -135,8 +135,8 @@ pub fn map_memory_properties_to_options(properties: memory::Properties) -> MTLRe
     } else {
         panic!("invalid heap properties");
     }
-    if properties.contains(memory::WRITE_COMBINED) {
-        options |= MTLResourceOptionCPUCacheModeWriteCombined;
+    if !properties.contains(memory::CPU_CACHED) {
+        options |= MTLResourceCPUCacheModeWriteCombined;
     }
     options
 }
@@ -153,10 +153,10 @@ pub fn map_memory_properties_to_storage_and_cache(properties: memory::Properties
     } else {
         panic!("invalid heap properties");
     };
-    let cpu = if properties.contains(memory::WRITE_COMBINED) {
-        MTLCPUCacheMode::WriteCombined
-    } else {
+    let cpu = if properties.contains(memory::CPU_CACHED) {
         MTLCPUCacheMode::DefaultCache
+    } else {
+        MTLCPUCacheMode::WriteCombined
     };
     (storage, cpu)
 }
