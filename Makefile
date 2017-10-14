@@ -3,7 +3,6 @@ EXCLUDES:=
 FEATURES_RENDER:=
 FEATURES_RENDER_ADD:= mint serialize
 FEATURES_QUAD:=
-FEATURES_QUAD_ADD:=
 FEATURES_QUAD2:=
 CMD_QUAD_RENDER:=cargo check
 
@@ -34,7 +33,6 @@ else
 		EXCLUDES+= --exclude gfx-backend-vulkan
 		EXCLUDES+= --exclude quad-render
 		FEATURES_QUAD=metal
-		FEATURES_QUAD_ADD=metal_argument_buffer
 		CMD_QUAD_RENDER=pwd
 	endif
 endif
@@ -56,7 +54,6 @@ ex-hal-quad:
 	cd examples/hal/quad && cargo check --features "gl"
 	cd examples/hal/quad && cargo check --features "$(FEATURES_QUAD2)"
 	cd examples/hal/quad && cargo check --features "$(FEATURES_QUAD)"
-	cd examples/hal/quad && cargo check --features "$(FEATURES_QUAD) $(FEATURES_QUAD_ADD)"
 
 ex-render-quad:
 	cd examples/render/quad_render && $(CMD_QUAD_RENDER)

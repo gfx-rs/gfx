@@ -546,11 +546,11 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
         regions: &[BufferImageCopy],
     ) {
         let encoder = self.encode_blit();
-        let extent = unsafe { MTLSize {
+        let extent = MTLSize {
             width: dst.0.width(),
             height: dst.0.height(),
             depth: dst.0.depth(),
-        }};
+        };
         // FIXME: layout
 
         for region in regions {
@@ -584,11 +584,11 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
         regions: &[BufferImageCopy],
     ) {
         let encoder = self.encode_blit();
-        let extent = unsafe { MTLSize {
+        let extent = MTLSize {
             width: src.0.width(),
             height: src.0.height(),
             depth: src.0.depth(),
-        }};
+        };
         // FIXME: layout
 
         for region in regions {
@@ -663,47 +663,47 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
 }
 
 impl CommandBuffer {
-    #[cfg(feature = "argument_buffer")]
-    fn bind_descriptor_set(encoder: MTLRenderCommandEncoder, slot: u64, set: &native::DescriptorSet) {
-        if set.stage_flags.contains(pso::STAGE_VERTEX) {
-            encoder.set_vertex_buffer(slot, set.offset, set.buffer)
-        }
-        if set.stage_flags.contains(pso::STAGE_FRAGMENT) {
-            encoder.set_fragment_buffer(slot, set.offset, set.buffer)
-        }
-    }
+    fn bind_descriptor_set(encoder: MTLRenderCommandEncoder, slot: u64, desc_set: &native::DescriptorSet) {
+        match *desc_set {
+            native::DescriptorSet::Emulated(ref inner) => {
+                use native::DescriptorSetBinding::*;
+                let set = inner.lock().unwrap();
+                for (&binding, values) in set.bindings.iter() {
+                    let layout = set.layout.iter().find(|x| x.binding == binding).unwrap();
 
-    #[cfg(not(feature = "argument_buffer"))]
-    fn bind_descriptor_set(encoder: MTLRenderCommandEncoder, _slot: u64, set: &native::DescriptorSet) {
-        use native::DescriptorSetBinding::*;
-        let set = set.inner.lock().unwrap();
+                    if layout.stage_flags.contains(pso::STAGE_FRAGMENT) {
+                        match *values {
+                            Sampler(ref samplers) => {
+                                if samplers.len() > 1 {
+                                    unimplemented!()
+                                }
 
-        for (&binding, values) in set.bindings.iter() {
-            let layout = set.layout.iter().find(|x| x.binding == binding).unwrap();
+                                let sampler = samplers[0];
+                                encoder.set_fragment_sampler_state(binding as u64, sampler);
+                            },
+                            SampledImage(ref images) => {
+                                if images.len() > 1 {
+                                    unimplemented!()
+                                }
 
-            if layout.stage_flags.contains(pso::STAGE_FRAGMENT) {
-                match *values {
-                    Sampler(ref samplers) => {
-                        if samplers.len() > 1 {
-                            unimplemented!()
+                                let (image, _layout) = images[0]; // TODO: layout?
+                                encoder.set_fragment_texture(binding as u64, image);
+                            },
+                            _ => unimplemented!(),
                         }
-
-                        let sampler = samplers[0];
-                        encoder.set_fragment_sampler_state(binding as u64, sampler);
-                    },
-                    SampledImage(ref images) => {
-                        if images.len() > 1 {
-                            unimplemented!()
-                        }
-
-                        let (image, layout) = images[0]; // TODO: layout?
-                        encoder.set_fragment_texture(binding as u64, image);
-                    },
-                    _ => unimplemented!(),
+                    }
+                    if layout.stage_flags.contains(pso::STAGE_VERTEX) {
+                        unimplemented!()
+                    }
                 }
             }
-            if layout.stage_flags.contains(pso::STAGE_VERTEX) {
-                unimplemented!()
+            native::DescriptorSet::ArgumentBuffer { buffer, offset, stage_flags, .. } => {
+                if stage_flags.contains(pso::STAGE_VERTEX) {
+                    encoder.set_vertex_buffer(slot, offset, buffer)
+                }
+                if stage_flags.contains(pso::STAGE_FRAGMENT) {
+                    encoder.set_fragment_buffer(slot, offset, buffer)
+                }
             }
         }
     }

@@ -18,6 +18,20 @@ use metal::*;
 use objc::runtime::Object as ObjcObject;
 use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
 
+
+const RESOURCE_HEAP_SUPPORT: &[MTLFeatureSet] = &[
+    MTLFeatureSet::iOS_GPUFamily1_v3,
+    MTLFeatureSet::iOS_GPUFamily2_v3,
+    MTLFeatureSet::iOS_GPUFamily3_v2,
+    MTLFeatureSet::tvOS_GPUFamily1_v2,
+];
+
+const ARGUMENT_BUFFER_SUPPORT: &[MTLFeatureSet] = &[
+    MTLFeatureSet::iOS_GPUFamily1_v4,
+    MTLFeatureSet::tvOS_GPUFamily1_v3,
+    MTLFeatureSet::macOS_GPUFamily1_v3,
+];
+
 /// Emit error during shader module parsing.
 fn gen_parse_error(err: SpirvErrorCode) -> ShaderError {
     let msg = match err {
@@ -41,10 +55,22 @@ pub struct Adapter {
     pub(crate) queue_families: [(n::QueueFamily, core::QueueType); 1],
 }
 
+impl Adapter {
+    fn supports_any(&self, features_sets: &[MTLFeatureSet]) -> bool {
+        features_sets.iter().cloned().any(|x| self.device.supports_feature_set(x))
+    }
+}
+
 impl Drop for Adapter {
     fn drop(&mut self) {
         unsafe { self.device.release(); }
     }
+}
+
+#[derive(Clone, Copy)]
+struct PrivateCapabilities {
+    resource_heaps: bool,
+    argument_buffers: bool,
 }
 
 pub struct Device {
@@ -92,27 +118,15 @@ impl core::Adapter<Backend> for Adapter {
 
         assert!(queue_descs.len() == 1, "Metal only supports one queue family");
 
-        let resource_heaps = [
-            MTLFeatureSet::iOS_GPUFamily1_v3,
-            MTLFeatureSet::iOS_GPUFamily2_v3,
-            MTLFeatureSet::iOS_GPUFamily3_v2,
-            MTLFeatureSet::iOS_GPUFamily1_v4,
-            MTLFeatureSet::iOS_GPUFamily2_v4,
-            MTLFeatureSet::iOS_GPUFamily3_v3,
-
-            MTLFeatureSet::tvOS_GPUFamily1_v2,
-            MTLFeatureSet::tvOS_GPUFamily1_v3,
-
-            MTLFeatureSet::macOS_GPUFamily1_v3,
-        ].iter().cloned().any(|x| self.device.supports_feature_set(x));
+        let private_caps = PrivateCapabilities {
+            resource_heaps: self.supports_any(RESOURCE_HEAP_SUPPORT),
+            argument_buffers: self.supports_any(ARGUMENT_BUFFER_SUPPORT),
+        };
 
         unsafe { self.device.retain(); }
         let device = Device {
             device: self.device,
-            private_caps: PrivateCapabilities {
-                resource_heaps,
-                indirect_arguments: true, //TEMP
-            },
+            private_caps,
             limits: core::Limits {
                 max_texture_size: 4096, // TODO: feature set
                 max_patch_size: 0, // No tesselation
@@ -171,12 +185,6 @@ impl core::Adapter<Backend> for Adapter {
     }
 }
 
-#[derive(Clone, Copy)]
-struct PrivateCapabilities {
-    resource_heaps: bool,
-    #[allow(dead_code)] //TODO: run-time checks instead of compile time feature
-    indirect_arguments: bool,
-}
 
 pub struct LanguageVersion {
     pub major: u8,
@@ -213,7 +221,6 @@ impl Device {
         }
     }
 
-    #[cfg(feature = "argument_buffer")]
     fn describe_argument(ty: DescriptorType, index: usize, count: usize) -> MTLArgumentDescriptor {
         let arg = MTLArgumentDescriptor::new();
         arg.set_array_length(count as NSUInteger);
@@ -609,10 +616,13 @@ impl core::Device<Backend> for Device {
         unsafe { n::Semaphore(n::dispatch_semaphore_create(1)) } // Returns retained
     }
 
-    #[cfg(feature = "argument_buffer")]
-    fn create_descriptor_pool(&mut self, max_sets: usize, descriptor_ranges: &[pso::DescriptorRangeDesc])
-        -> n::DescriptorPool
-    {
+    fn create_descriptor_pool(
+        &mut self, max_sets: usize, descriptor_ranges: &[pso::DescriptorRangeDesc]
+    ) -> n::DescriptorPool {
+        if !self.private_caps.argument_buffers {
+            return n::DescriptorPool::Emulated;
+        }
+
         let mut num_samplers = 0;
         let mut num_textures = 0;
 
@@ -632,24 +642,22 @@ impl core::Device<Backend> for Device {
 
         let total_size = encoder.encoded_length();
         unsafe { encoder.release() };
-        let arg_buffer = self.device.new_buffer(total_size, MTLResourceOptions::empty());
+        let buffer = self.device.new_buffer(total_size, MTLResourceOptions::empty());
 
-        n::DescriptorPool {
-            arg_buffer,
+        n::DescriptorPool::ArgumentBuffer {
+            buffer,
             total_size,
             offset: 0,
         }
     }
 
-    #[cfg(not(feature = "argument_buffer"))]
-    fn create_descriptor_pool(&mut self, max_sets: usize, descriptor_ranges: &[pso::DescriptorRangeDesc])
-        -> n::DescriptorPool
-    {
-        n::DescriptorPool {}
-    }
+    fn create_descriptor_set_layout(
+        &mut self, bindings: &[DescriptorSetLayoutBinding]
+    ) -> n::DescriptorSetLayout {
+        if !self.private_caps.argument_buffers {
+            return n::DescriptorSetLayout::Emulated(bindings.to_vec())
+        }
 
-    #[cfg(feature = "argument_buffer")]
-    fn create_descriptor_set_layout(&mut self, bindings: &[DescriptorSetLayoutBinding]) -> n::DescriptorSetLayout {
         let mut stage_flags = pso::ShaderStageFlags::empty();
         let mut arguments = bindings.iter().map(|desc| {
             stage_flags |= desc.stage_flags;
@@ -658,19 +666,9 @@ impl core::Device<Backend> for Device {
         let arg_array = NSArray::array_with_objects(&arguments);
         let encoder = self.device.new_argument_encoder(arg_array);
 
-        n::DescriptorSetLayout {
-            encoder,
-            stage_flags,
-        }
+        n::DescriptorSetLayout::ArgumentBuffer(encoder, stage_flags)
     }
 
-    #[cfg(not(feature = "argument_buffer"))]
-    fn create_descriptor_set_layout(&mut self, bindings: &[DescriptorSetLayoutBinding]) -> n::DescriptorSetLayout {
-        n::DescriptorSetLayout {
-            bindings: bindings.to_vec(),
-        }
-    }
-    #[cfg(feature = "argument_buffer")]
     fn update_descriptor_sets(&mut self, writes: &[DescriptorSetWrite<Backend>]) {
         use core::pso::DescriptorWrite::*;
 
@@ -678,70 +676,72 @@ impl core::Device<Backend> for Device {
         let mut mtl_textures = Vec::new();
 
         for write in writes {
-            write.set.encoder.set_argument_buffer(write.set.buffer, write.set.offset);
-            //TODO: range checks, need to keep some layout metadata around
-            assert_eq!(write.array_offset, 0); //TODO
+            match *write.set {
+                n::DescriptorSet::Emulated(ref inner) => {
+                    let mut set = inner.lock().unwrap();
 
-            match write.write {
-                Sampler(ref samplers) => {
-                    mtl_samplers.clear();
-                    mtl_samplers.extend(samplers.iter().map(|sampler| sampler.0.clone()));
-                    write.set.encoder.set_sampler_states(&mtl_samplers, write.binding as _);
-                },
-                SampledImage(ref images) => {
-                    mtl_textures.clear();
-                    mtl_textures.extend(images.iter().map(|image| image.0.clone().0));
-                    write.set.encoder.set_textures(&mtl_textures, write.binding as _);
-                },
-                _ => unimplemented!(),
-            }
-        }
-    }
+                    // Find layout entry
+                    let layout = set.layout.iter()
+                        .find(|layout| layout.binding == write.binding)
+                        .expect("invalid descriptor set binding index")
+                        .clone();
 
-    #[cfg(not(feature = "argument_buffer"))]
-    fn update_descriptor_sets(&mut self, writes: &[DescriptorSetWrite<Backend>]) {
-        use core::pso::DescriptorWrite::*;
+                    match (&write.write, set.bindings.get_mut(&write.binding)) {
+                        (&Sampler(ref samplers), Some(&mut n::DescriptorSetBinding::Sampler(ref mut vec))) => {
+                            if write.array_offset + samplers.len() > layout.count {
+                                panic!("out of range descriptor write");
+                            }
 
-        for write in writes {
-            let n::DescriptorSetInner { ref mut bindings, layout: ref set_layout } = *write.set.inner.lock().unwrap();
+                            let target_iter = vec[write.array_offset..(write.array_offset + samplers.len())].iter_mut();
 
-            // Find layout entry
-            let layout = set_layout.iter().find(|layout| layout.binding == write.binding)
-                .expect("invalid descriptor set binding index");
+                            for (new, old) in samplers.iter().zip(target_iter) {
+                                unsafe {
+                                    new.0.retain();
+                                    old.release();
+                                }
+                                *old = new.0;
+                            }
+                        },
+                        (&SampledImage(ref images), Some(&mut n::DescriptorSetBinding::SampledImage(ref mut vec))) => {
+                            if write.array_offset + images.len() > layout.count {
+                                panic!("out of range descriptor write");
+                            }
 
-            match (&write.write, bindings.get_mut(&write.binding)) {
-                (&Sampler(ref samplers), Some(&mut n::DescriptorSetBinding::Sampler(ref mut vec))) => {
-                    if write.array_offset + samplers.len() > layout.count {
-                        panic!("out of range descriptor write");
+                            let target_iter = vec[write.array_offset..(write.array_offset + images.len())].iter_mut();
+
+                            for (new, old) in images.iter().zip(target_iter) {
+                                unsafe {
+                                    (new.0).0.retain();
+                                    old.0.release();
+                                }
+                                *old = ((new.0).0, new.1);
+                            }
+                        },
+                        (&Sampler(_), _) | (&SampledImage(_), _) => panic!("mismatched descriptor set type"),
+                        _ => unimplemented!(),
                     }
+                }
+                n::DescriptorSet::ArgumentBuffer { buffer, offset, ref encoder, stage_flags } => {
+                    debug_assert!(self.private_caps.argument_buffers);
 
-                    let target_iter = vec[write.array_offset..(write.array_offset + samplers.len())].iter_mut();
+                    encoder.set_argument_buffer(buffer, offset);
+                    //TODO: range checks, need to keep some layout metadata around
+                    assert_eq!(write.array_offset, 0); //TODO
 
-                    for (new, old) in samplers.iter().zip(target_iter) {
-                        unsafe {
-                            new.0.retain();
-                            old.release();
-                        }
-                        *old = new.0;
+                    match write.write {
+                        Sampler(ref samplers) => {
+                            mtl_samplers.clear();
+                            mtl_samplers.extend(samplers.iter().map(|sampler| sampler.0.clone()));
+                            encoder.set_sampler_states(&mtl_samplers, write.binding as _);
+                        },
+                        SampledImage(ref images) => {
+                            mtl_textures.clear();
+                            mtl_textures.extend(images.iter().map(|image| image.0.clone().0));
+                            encoder.set_textures(&mtl_textures, write.binding as _);
+                        },
+                        _ => unimplemented!(),
                     }
-                },
-                (&SampledImage(ref images), Some(&mut n::DescriptorSetBinding::SampledImage(ref mut vec))) => {
-                    if write.array_offset + images.len() > layout.count {
-                        panic!("out of range descriptor write");
-                    }
-
-                    let target_iter = vec[write.array_offset..(write.array_offset + images.len())].iter_mut();
-
-                    for (new, old) in images.iter().zip(target_iter) {
-                        unsafe {
-                            (new.0).0.retain();
-                            old.0.release();
-                        }
-                        *old = ((new.0).0, new.1);
-                    }
-                },
-                (&Sampler(_), _) | (&SampledImage(_), _) => panic!("mismatched descriptor set type"),
-                _ => unimplemented!(),
+                }
             }
         }
     }
