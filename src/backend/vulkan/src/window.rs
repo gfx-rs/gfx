@@ -38,7 +38,7 @@ impl Drop for RawSurface {
 }
 
 impl Instance {
-    #[cfg(unix)]
+    #[cfg(all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "android"))))]
     pub fn create_surface_from_xlib(&self, display: *mut c_void, window: usize) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
@@ -78,7 +78,7 @@ impl Instance {
         self.create_surface_from_vk_surface_khr(surface, width, height)
     }
 
-    #[cfg(unix)]
+    #[cfg(all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "android"))))]
     pub fn create_surface_from_wayland(&self, display: *mut c_void, surface: *mut c_void, width: u32, height: u32) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
@@ -151,9 +151,55 @@ impl Instance {
         self.create_surface_from_vk_surface_khr(surface, width, height)
     }
 
+    #[cfg(target_os = "ios")]
+    pub fn create_surface_from_uiview(&self, uiview: *mut c_void) -> Surface {
+        unimplemented!()
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn create_surface_from_nsview(&self, nsview: *mut c_void) -> Surface {
+        use std::mem;
+        use objc::runtime::Object;
+
+        let entry = VK_ENTRY
+            .as_ref()
+            .expect("Unable to load Vulkan entry points");
+
+        if !self.extensions.contains(&vk::VK_MVK_MACOS_SURFACE_EXTENSION_NAME) {
+            panic!("Vulkan driver does not support VK_MVK_MACOS_SURFACE");
+        }
+
+        let view: *mut Object = unsafe { mem::transmute(nsview) };
+
+        let surface = {
+            let macos_loader = ext::MacOSSurface::new(entry, &self.raw.0)
+                .expect("Unable to load macos surface functions");
+
+            unsafe {
+                let info = vk::MacOSSurfaceCreateInfoMVK {
+                    s_type: vk::StructureType::MacOSSurfaceCreateInfoMvk,
+                    p_next: ptr::null(),
+                    flags: vk::MacOSSurfaceCreateFlagsMVK::empty(),
+                    p_view: nsview as *mut _,
+                };
+
+                macos_loader.create_macos_surface_mvk(&info, None)
+                    .expect("Unable to create MacOS surface")
+            }
+        };
+
+        let (width, height) = unsafe {
+            use core_graphics::geometry::CGRect;
+            let view_size: CGRect = msg_send![view, bounds];
+            (view_size.size.width as _, view_size.size.height as _)
+        };
+
+        self.create_surface_from_vk_surface_khr(surface, width, height)
+    }
+
     #[cfg(feature = "winit")]
     pub fn create_surface(&self, window: &winit::Window) -> Surface {
-        #[cfg(unix)]
+        #[cfg(all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "android"))))]
         {
             use winit::os::unix::WindowExt;
 
@@ -173,6 +219,11 @@ impl Instance {
                 }
             }
             panic!("The Vulkan driver does not support surface creation!");
+        }
+        #[cfg(target_os = "macos")]
+        {
+            use winit::os::macos::WindowExt;
+            self.create_surface_from_nsview(window.get_nsview())
         }
         #[cfg(windows)]
         {

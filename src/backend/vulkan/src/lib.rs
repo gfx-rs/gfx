@@ -13,8 +13,13 @@ extern crate user32;
 extern crate winapi;
 #[cfg(feature = "winit")]
 extern crate winit;
-#[cfg(all(unix, not(target_os = "android")))]
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "android"))))]
 extern crate x11;
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+#[macro_use]
+extern crate objc;
+#[cfg(target_os = "macos")]
+extern crate core_graphics;
 #[cfg(feature = "glsl-to-spirv")]
 extern crate glsl_to_spirv;
 

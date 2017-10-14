@@ -21,7 +21,8 @@ name = "gfx_backend_vulkan"
 log = "0.3"
 lazy_static = "0.2"
 shared_library = "0.1"
-ash = "0.19.1"
+#ash = "0.19.1"
+ash = { git = "https://github.com/davll/ash.git", branch = "moltenvk" }
 gfx-hal = { path = "../../hal", version = "0.1" }
 smallvec = "0.4"
 winit = { version = "0.7", optional = true }
@@ -34,3 +35,8 @@ user32-sys = "0.2"
 
 [target.'cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))'.dependencies]
 x11 = { version = "2.15", features = ["xlib"]}
+
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+ash = { git = "https://github.com/davll/ash.git", branch = "moltenvk", features = ["moltenvk"] }
+objc = "0.2"
+core-graphics = "0.9"
