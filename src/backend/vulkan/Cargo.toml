@@ -37,6 +37,5 @@ user32-sys = "0.2"
 x11 = { version = "2.15", features = ["xlib"]}
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
-ash = { git = "https://github.com/davll/ash.git", branch = "moltenvk", features = ["moltenvk"] }
 objc = "0.2"
 core-graphics = "0.9"
