@@ -174,7 +174,7 @@ impl Instance {
 
         unsafe {
             msg_send![view, setWantsLayer: 1];
-            let render_layer: *mut Object = msg_send![Class::get("CAMetalLayer").unwrap(), new]; // Returns retained
+            let render_layer: *mut Object = msg_send![Class::get("CAMetalLayer").unwrap(), layer]; // Returns retained
             let view_size: CGRect = msg_send![view, bounds];
             msg_send![render_layer, setFrame: view_size];
             //let view_layer: *mut Object = msg_send![view, layer];

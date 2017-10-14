@@ -41,11 +41,11 @@ mod pool;
 mod window;
 
 const LAYERS: &'static [&'static str] = &[
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(any(target_os = "macos", target_os = "ios"))))]
     "VK_LAYER_LUNARG_standard_validation",
 ];
 const EXTENSIONS: &'static [&'static str] = &[
-    #[cfg(debug_assertions)]
+    #[cfg(all(debug_assertions, not(any(target_os = "macos", target_os = "ios"))))]
     "VK_EXT_debug_report",
 ];
 const DEVICE_EXTENSIONS: &'static [&'static str] = &[
@@ -214,8 +214,7 @@ impl Instance {
             }.expect("Unable to create Vulkan instance")
         };
 
-        /*
-        #[cfg(debug_assertions)]
+        #[cfg(all(debug_assertions, not(any(target_os = "macos", target_os = "ios"))))]
         let debug_report = {
             let ext = ext::DebugReport::new(entry, &instance).unwrap();
             let info = vk::DebugReportCallbackCreateInfoEXT {
@@ -232,8 +231,7 @@ impl Instance {
             }.unwrap();
             Some((ext, handle))
         };
-        #[cfg(not(debug_assertions))]
-        */
+        #[cfg(any(not(debug_assertions), any(target_os = "macos", target_os = "ios")))]
         let debug_report = None;
 
         Instance {
