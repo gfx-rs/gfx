@@ -159,7 +159,8 @@ impl Instance {
     #[cfg(target_os = "macos")]
     pub fn create_surface_from_nsview(&self, nsview: *mut c_void) -> Surface {
         use std::mem;
-        use objc::runtime::Object;
+        use objc::runtime::{Class, Object};
+        use core_graphics::geometry::CGRect;
 
         let entry = VK_ENTRY
             .as_ref()
@@ -170,6 +171,16 @@ impl Instance {
         }
 
         let view: *mut Object = unsafe { mem::transmute(nsview) };
+
+        unsafe {
+            msg_send![view, setWantsLayer: 1];
+            let render_layer: *mut Object = msg_send![Class::get("CAMetalLayer").unwrap(), new]; // Returns retained
+            let view_size: CGRect = msg_send![view, bounds];
+            msg_send![render_layer, setFrame: view_size];
+            //let view_layer: *mut Object = msg_send![view, layer];
+            //msg_send![view_layer, addSublayer: render_layer];
+            msg_send![view, setLayer: render_layer];
+        }
 
         let surface = {
             let macos_loader = ext::MacOSSurface::new(entry, &self.raw.0)
@@ -189,7 +200,6 @@ impl Instance {
         };
 
         let (width, height) = unsafe {
-            use core_graphics::geometry::CGRect;
             let view_size: CGRect = msg_send![view, bounds];
             (view_size.size.width as _, view_size.size.height as _)
         };

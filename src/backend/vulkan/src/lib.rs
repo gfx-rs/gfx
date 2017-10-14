@@ -61,6 +61,8 @@ const SURFACE_EXTENSIONS: &'static [&'static str] = &[
     vk::VK_KHR_MIR_SURFACE_EXTENSION_NAME,
     vk::VK_KHR_ANDROID_SURFACE_EXTENSION_NAME,
     vk::VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
+    vk::VK_MVK_MACOS_SURFACE_EXTENSION_NAME,
+    vk::VK_MVK_IOS_SURFACE_EXTENSION_NAME,
 ];
 
 lazy_static! {
@@ -212,6 +214,7 @@ impl Instance {
             }.expect("Unable to create Vulkan instance")
         };
 
+        /*
         #[cfg(debug_assertions)]
         let debug_report = {
             let ext = ext::DebugReport::new(entry, &instance).unwrap();
@@ -230,6 +233,7 @@ impl Instance {
             Some((ext, handle))
         };
         #[cfg(not(debug_assertions))]
+        */
         let debug_report = None;
 
         Instance {
