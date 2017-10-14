@@ -22,7 +22,7 @@ log = "0.3"
 lazy_static = "0.2"
 shared_library = "0.1"
 #ash = "0.19.1"
-ash = { git = "https://github.com/davll/ash.git", branch = "moltenvk" }
+ash = "0.20.0"
 gfx-hal = { path = "../../hal", version = "0.1" }
 smallvec = "0.4"
 winit = { version = "0.7", optional = true }
