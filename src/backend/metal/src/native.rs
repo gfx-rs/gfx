@@ -10,11 +10,17 @@ use core::{self, image, pass, pso};
 use cocoa::foundation::{NSRange, NSUInteger};
 use metal::*;
 use objc;
+use spirv_cross::msl;
 
 pub struct QueueFamily {}
 
+/// Shader module can be compiled in advance if it's resource bindings do not
+/// depend on pipeline layout, in which case the value would become `Compiled`.
 #[derive(Debug)]
-pub struct ShaderModule(pub MTLLibrary);
+pub enum ShaderModule {
+    Compiled(MTLLibrary),
+    Raw(Vec<u8>),
+}
 
 unsafe impl Send for ShaderModule {}
 unsafe impl Sync for ShaderModule {}
@@ -35,11 +41,18 @@ pub struct FrameBuffer(pub(crate) MTLRenderPassDescriptor);
 unsafe impl Send for FrameBuffer {}
 unsafe impl Sync for FrameBuffer {}
 
+
 #[derive(Debug)]
-pub struct PipelineLayout {}
+pub struct PipelineLayout {
+    pub(crate) res_overrides: Vec<(msl::ResourceBindingLocation, msl::ResourceBinding)>,
+}
 
 #[derive(Debug)]
 pub struct GraphicsPipeline {
+    // we hold the compiled libraries here for now
+    // TODO: move to some cache in `Device`
+    pub(crate) vs_lib: MTLLibrary,
+    pub(crate) fs_lib: Option<MTLLibrary>,
     pub(crate) raw: MTLRenderPipelineState,
     pub(crate) primitive_type: MTLPrimitiveType,
 }

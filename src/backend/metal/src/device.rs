@@ -216,9 +216,66 @@ impl Device {
             _ => return Err(ShaderError::CompilationFailed("shader model not supported".into()))
         });
         match self.device.new_library_with_source(source.as_ref(), options) { // Returns retained
-            Ok(lib) => Ok(n::ShaderModule(lib)),
+            Ok(lib) => Ok(n::ShaderModule::Compiled(lib)),
             Err(err) => Err(ShaderError::CompilationFailed(err.into())),
         }
+    }
+
+    fn compile_shader_library(
+        &mut self,
+        raw_data: &[u8],
+        overrides: &[(msl::ResourceBindingLocation, msl::ResourceBinding)],
+    ) -> Result<MTLLibrary, ShaderError> {
+        // spec requires "codeSize must be a multiple of 4"
+        assert_eq!(raw_data.len() & 3, 0);
+
+        let module = spirv::Module::from_words(unsafe {
+            slice::from_raw_parts(
+                raw_data.as_ptr() as *const u32,
+                raw_data.len() / mem::size_of::<u32>(),
+            )
+        });
+
+        // parse to enumerate resources
+        let mut parser_options = msl::ParserOptions::default();
+
+        // fill the parser overrides
+        parser_options.resource_binding_overrides.extend(overrides.iter().cloned());
+
+        // now parse again using the new overrides
+        let mut ast = spirv::Ast::<msl::Target>::parse(&module, &parser_options)
+            .map_err(gen_parse_error)?;
+
+        // compile with options
+        let mut compile_options = msl::CompilerOptions::default();
+        compile_options.vertex.invert_y = true;
+
+        ast.set_compile_options(&compile_options)
+            .map_err(|err| {
+                let msg = match err {
+                    SpirvErrorCode::CompilationError(msg) => msg,
+                    SpirvErrorCode::Unhandled => "Unexpected error".into(),
+                };
+                ShaderError::CompilationFailed(msg)
+            })?;
+
+        let shader_code = ast.compile()
+            .map_err(|err| {
+                let msg =  match err {
+                    SpirvErrorCode::CompilationError(msg) => msg,
+                    SpirvErrorCode::Unhandled => "Unknown compile error".into(),
+                };
+                ShaderError::CompilationFailed(msg)
+            })?;
+
+        // done
+        debug!("SPIRV-Cross generated shader:\n{}", shader_code);
+
+        let options = MTLCompileOptions::new();
+        options.set_language_version(MTLLanguageVersion::V1_1);
+        self.device
+            .new_library_with_source(shader_code.as_ref(), options) // Returns retained
+            .map_err(|err| ShaderError::CompilationFailed(err.into()))
     }
 
     fn describe_argument(ty: DescriptorType, index: usize, count: usize) -> MTLArgumentDescriptor {
@@ -240,6 +297,157 @@ impl Device {
         }
 
         arg
+    }
+
+    fn create_graphics_pipeline<'a>(
+        &mut self,
+        &(ref shader_set, pipeline_layout, ref pass_descriptor, pipeline_desc):
+        &(pso::GraphicsShaderSet<'a, Backend>, &n::PipelineLayout, Subpass<'a, Backend>, &pso::GraphicsPipelineDesc),
+    ) -> Result<n::GraphicsPipeline, pso::CreationError> {
+        let pipeline =  MTLRenderPipelineDescriptor::alloc().init(); // Returns retained
+        unsafe { defer! { pipeline.release() }};
+
+        // FIXME: lots missing
+
+        let (primitive_class, primitive_type) = match pipeline_desc.input_assembler.primitive {
+            core::Primitive::PointList => (MTLPrimitiveTopologyClass::Point, MTLPrimitiveType::Point),
+            core::Primitive::LineList => (MTLPrimitiveTopologyClass::Line, MTLPrimitiveType::Line),
+            core::Primitive::LineStrip => (MTLPrimitiveTopologyClass::Line, MTLPrimitiveType::LineStrip),
+            core::Primitive::TriangleList => (MTLPrimitiveTopologyClass::Triangle, MTLPrimitiveType::Triangle),
+            core::Primitive::TriangleStrip => (MTLPrimitiveTopologyClass::Triangle, MTLPrimitiveType::TriangleStrip),
+            _ => (MTLPrimitiveTopologyClass::Unspecified, MTLPrimitiveType::Point) //TODO: double-check
+        };
+        pipeline.set_input_primitive_topology(primitive_class);
+
+        // Shaders
+        let vs_lib = match shader_set.vertex.module {
+            &n::ShaderModule::Compiled(lib) => lib,
+            &n::ShaderModule::Raw(ref data) => {
+                //TODO: cache them all somewhere!
+                self.compile_shader_library(data, &pipeline_layout.res_overrides).unwrap()
+            }
+        };
+        let mtl_vertex_function = vs_lib
+            .get_function(shader_set.vertex.entry); // Returns retained
+        if mtl_vertex_function.is_null() {
+            error!("invalid vertex shader entry point");
+            return Err(pso::CreationError::Other);
+        }
+        unsafe { defer! { mtl_vertex_function.release() }};
+        pipeline.set_vertex_function(mtl_vertex_function);
+        let fs_lib = if let Some(fragment_entry) = shader_set.fragment {
+            let fs_lib = match fragment_entry.module {
+                &n::ShaderModule::Compiled(lib) => lib,
+                &n::ShaderModule::Raw(ref data) => {
+                    self.compile_shader_library(data, &pipeline_layout.res_overrides).unwrap()
+                }
+            };
+            let mtl_fragment_function = fs_lib
+                .get_function(fragment_entry.entry); // Returns retained
+            if mtl_fragment_function.is_null() {
+                error!("invalid pixel shader entry point");
+                return Err(pso::CreationError::Other);
+            }
+            unsafe { defer! { mtl_fragment_function.release() }};
+            pipeline.set_fragment_function(mtl_fragment_function);
+            Some(fs_lib)
+        } else {
+            None
+        };
+        if shader_set.hull.is_some() {
+            error!("Metal tesselation shaders are not supported");
+            return Err(pso::CreationError::Other);
+        }
+        if shader_set.domain.is_some() {
+            error!("Metal tesselation shaders are not supported");
+            return Err(pso::CreationError::Other);
+        }
+        if shader_set.geometry.is_some() {
+            error!("Metal geometry shaders are not supported");
+            return Err(pso::CreationError::Other);
+        }
+
+        // Copy color target info from Subpass
+        for (i, attachment) in pass_descriptor.main_pass.attachments.iter().enumerate() {
+            let descriptor = pipeline.color_attachments().object_at(i);
+
+            let (mtl_format, is_depth) = map_format(attachment.format).expect("unsupported color format for Metal");
+            if is_depth {
+                continue;
+            }
+
+            descriptor.set_pixel_format(mtl_format);
+        }
+
+        // Blending
+        for (i, color_desc) in pipeline_desc.blender.targets.iter().enumerate() {
+            let descriptor = pipeline.color_attachments().object_at(i);
+
+            descriptor.set_write_mask(map_write_mask(color_desc.mask));
+            descriptor.set_blending_enabled(color_desc.color.is_some() | color_desc.alpha.is_some());
+
+            if let Some(blend) = color_desc.color {
+                descriptor.set_source_rgb_blend_factor(map_blend_factor(blend.source, false));
+                descriptor.set_destination_rgb_blend_factor(map_blend_factor(blend.destination, false));
+                descriptor.set_rgb_blend_operation(map_blend_op(blend.equation));
+            }
+
+            if let Some(blend) = color_desc.alpha {
+                descriptor.set_source_alpha_blend_factor(map_blend_factor(blend.source, true));
+                descriptor.set_destination_alpha_blend_factor(map_blend_factor(blend.destination, true));
+                descriptor.set_alpha_blend_operation(map_blend_op(blend.equation));
+            }
+        }
+
+        // Vertex buffers
+        let vertex_descriptor = MTLVertexDescriptor::new();
+        unsafe { defer! { vertex_descriptor.release() }};
+        for (i, vertex_buffer) in pipeline_desc.vertex_buffers.iter().enumerate() {
+            let mtl_buffer_desc = vertex_descriptor.layouts().object_at(i);
+            mtl_buffer_desc.set_stride(vertex_buffer.stride as u64);
+            match vertex_buffer.rate {
+                0 => {
+                    // FIXME: should this use MTLVertexStepFunction::Constant?
+                    mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerVertex);
+                },
+                1 => {
+                    // FIXME: how to determine instancing in this case?
+                    mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerVertex);
+                },
+                c => {
+                    mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerInstance);
+                    mtl_buffer_desc.set_step_rate(c as u64);
+                }
+            }
+        }
+        for (i, &AttributeDesc { binding, element, ..}) in pipeline_desc.attributes.iter().enumerate() {
+            let mtl_vertex_format = map_vertex_format(element.format).expect("unsupported vertex format for Metal");
+
+            let mtl_attribute_desc = vertex_descriptor.attributes().object_at(i);
+            mtl_attribute_desc.set_buffer_index(binding as NSUInteger); // TODO: Might be binding, not location?
+            mtl_attribute_desc.set_offset(element.offset as NSUInteger);
+            mtl_attribute_desc.set_format(mtl_vertex_format);
+        }
+
+        pipeline.set_vertex_descriptor(vertex_descriptor);
+
+        let mut err_ptr: *mut ObjcObject = ptr::null_mut();
+        let pso: MTLRenderPipelineState = unsafe {
+            msg_send![self.device.0, newRenderPipelineStateWithDescriptor:pipeline.0 error: &mut err_ptr]
+        };
+        unsafe { defer! { msg_send![err_ptr, release] }};
+
+        if pso.is_null() {
+            error!("PSO creation failed: {}", unsafe { n::objc_err_description(err_ptr) });
+            Err(pso::CreationError::Other)
+        } else {
+            Ok(n::GraphicsPipeline {
+                vs_lib,
+                fs_lib,
+                raw: pso,
+                primitive_type,
+            })
+        }
     }
 }
 
@@ -290,142 +498,67 @@ impl core::Device<Backend> for Device {
         }
     }
 
-    fn create_pipeline_layout(&mut self, _sets: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
-        n::PipelineLayout {}
+    fn create_pipeline_layout(&mut self, set_layouts: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
+        use core::pso::{STAGE_VERTEX, STAGE_FRAGMENT};
+
+        struct Counters {
+            buffers: u32,
+            textures: u32,
+            samplers: u32,
+        }
+        let mut stage_infos = [
+            (STAGE_VERTEX,   spirv::ExecutionModel::Vertex,   Counters { buffers:0, textures:0, samplers:0 }),
+            (STAGE_FRAGMENT, spirv::ExecutionModel::Fragment, Counters { buffers:0, textures:0, samplers:0 }),
+        ];
+        let mut res_overrides = Vec::new();
+
+        for (set_index, set_layout) in set_layouts.iter().enumerate() {
+            let set_bindings = match set_layout {
+                &&n::DescriptorSetLayout::Emulated(ref bindings) => bindings,
+                _ => continue,
+            };
+            for set_binding in set_bindings {
+                for &mut(stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
+                    if !set_binding.stage_flags.contains(stage_bit) {
+                        continue
+                    }
+                    let count = match set_binding.ty {
+                        DescriptorType::UniformBuffer |
+                        DescriptorType::StorageBuffer => &mut counters.buffers,
+                        DescriptorType::SampledImage => &mut counters.textures,
+                        DescriptorType::Sampler => &mut counters.samplers,
+                        _ => unimplemented!()
+                    };
+                    let count_base = *count;
+                    for i in 0 .. set_binding.count {
+                        let location = msl::ResourceBindingLocation {
+                            stage,
+                            desc_set: set_index as _,
+                            binding: (set_binding.binding + i) as _,
+                        };
+                        let res_binding = msl::ResourceBinding {
+                            resource_id: *count,
+                            force_used: false,
+                        };
+                        *count += 1;
+                        res_overrides.push((location, res_binding));
+                    }
+                }
+            }
+        }
+
+        n::PipelineLayout { res_overrides }
     }
 
     fn create_graphics_pipelines<'a>(
         &mut self,
         params: &[(pso::GraphicsShaderSet<'a, Backend>, &n::PipelineLayout, Subpass<'a, Backend>, &pso::GraphicsPipelineDesc)],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
-        unsafe {
-            params.iter().map(|&(ref shader_set, _pipeline_layout, ref pass_descriptor, pipeline_desc)| {
-                let pipeline =  MTLRenderPipelineDescriptor::alloc().init(); // Returns retained
-                defer! { pipeline.release() };
-
-                // FIXME: lots missing
-
-                let (primitive_class, primitive_type) = match pipeline_desc.input_assembler.primitive {
-                    core::Primitive::PointList => (MTLPrimitiveTopologyClass::Point, MTLPrimitiveType::Point),
-                    core::Primitive::LineList => (MTLPrimitiveTopologyClass::Line, MTLPrimitiveType::Line),
-                    core::Primitive::LineStrip => (MTLPrimitiveTopologyClass::Line, MTLPrimitiveType::LineStrip),
-                    core::Primitive::TriangleList => (MTLPrimitiveTopologyClass::Triangle, MTLPrimitiveType::Triangle),
-                    core::Primitive::TriangleStrip => (MTLPrimitiveTopologyClass::Triangle, MTLPrimitiveType::TriangleStrip),
-                    _ => (MTLPrimitiveTopologyClass::Unspecified, MTLPrimitiveType::Point) //TODO: double-check
-                };
-                pipeline.set_input_primitive_topology(primitive_class);
-
-                // Shaders
-                let mtl_vertex_function = (shader_set.vertex.module.0)
-                    .get_function(shader_set.vertex.entry); // Returns retained
-                if mtl_vertex_function.is_null() {
-                    error!("invalid vertex shader entry point");
-                    return Err(pso::CreationError::Other);
-                }
-                defer! { mtl_vertex_function.release() };
-                pipeline.set_vertex_function(mtl_vertex_function);
-                if let Some(fragment_entry) = shader_set.fragment {
-                    let mtl_fragment_function = (fragment_entry.module.0)
-                        .get_function(fragment_entry.entry); // Returns retained
-                    if mtl_fragment_function.is_null() {
-                        error!("invalid pixel shader entry point");
-                        return Err(pso::CreationError::Other);
-                    }
-                    defer! { mtl_fragment_function.release() };
-                    pipeline.set_fragment_function(mtl_fragment_function);
-                }
-                if shader_set.hull.is_some() {
-                    error!("Metal tesselation shaders are not supported");
-                    return Err(pso::CreationError::Other);
-                }
-                if shader_set.domain.is_some() {
-                    error!("Metal tesselation shaders are not supported");
-                    return Err(pso::CreationError::Other);
-                }
-                if shader_set.geometry.is_some() {
-                    error!("Metal geometry shaders are not supported");
-                    return Err(pso::CreationError::Other);
-                }
-
-                // Copy color target info from Subpass
-                for (i, attachment) in pass_descriptor.main_pass.attachments.iter().enumerate() {
-                    let descriptor = pipeline.color_attachments().object_at(i);
-
-                    let (mtl_format, is_depth) = map_format(attachment.format).expect("unsupported color format for Metal");
-                    if is_depth {
-                        continue;
-                    }
-
-                    descriptor.set_pixel_format(mtl_format);
-                }
-
-                // Blending
-                for (i, color_desc) in pipeline_desc.blender.targets.iter().enumerate() {
-                    let descriptor = pipeline.color_attachments().object_at(i);
-
-                    descriptor.set_write_mask(map_write_mask(color_desc.mask));
-                    descriptor.set_blending_enabled(color_desc.color.is_some() | color_desc.alpha.is_some());
-
-                    if let Some(blend) = color_desc.color {
-                        descriptor.set_source_rgb_blend_factor(map_blend_factor(blend.source, false));
-                        descriptor.set_destination_rgb_blend_factor(map_blend_factor(blend.destination, false));
-                        descriptor.set_rgb_blend_operation(map_blend_op(blend.equation));
-                    }
-
-                    if let Some(blend) = color_desc.alpha {
-                        descriptor.set_source_alpha_blend_factor(map_blend_factor(blend.source, true));
-                        descriptor.set_destination_alpha_blend_factor(map_blend_factor(blend.destination, true));
-                        descriptor.set_alpha_blend_operation(map_blend_op(blend.equation));
-                    }
-                }
-
-                // Vertex buffers
-                let vertex_descriptor = MTLVertexDescriptor::new();
-                defer! { vertex_descriptor.release() };
-                for (i, vertex_buffer) in pipeline_desc.vertex_buffers.iter().enumerate() {
-                    let mtl_buffer_desc = vertex_descriptor.layouts().object_at(i);
-                    mtl_buffer_desc.set_stride(vertex_buffer.stride as u64);
-                    match vertex_buffer.rate {
-                        0 => {
-                            // FIXME: should this use MTLVertexStepFunction::Constant?
-                            mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerVertex);
-                        },
-                        1 => {
-                            // FIXME: how to determine instancing in this case?
-                            mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerVertex);
-                        },
-                        c => {
-                            mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerInstance);
-                            mtl_buffer_desc.set_step_rate(c as u64);
-                        }
-                    }
-                }
-                for (i, &AttributeDesc { binding, element, ..}) in pipeline_desc.attributes.iter().enumerate() {
-                    let mtl_vertex_format = map_vertex_format(element.format).expect("unsupported vertex format for Metal");
-
-                    let mtl_attribute_desc = vertex_descriptor.attributes().object_at(i);
-                    mtl_attribute_desc.set_buffer_index(binding as NSUInteger); // TODO: Might be binding, not location?
-                    mtl_attribute_desc.set_offset(element.offset as NSUInteger);
-                    mtl_attribute_desc.set_format(mtl_vertex_format);
-                }
-
-                pipeline.set_vertex_descriptor(vertex_descriptor);
-
-                let mut err_ptr: *mut ObjcObject = ptr::null_mut();
-                let pso: MTLRenderPipelineState = msg_send![self.device.0, newRenderPipelineStateWithDescriptor:pipeline.0 error: &mut err_ptr];
-                defer! { msg_send![err_ptr, release] };
-
-                if pso.is_null() {
-                    error!("PSO creation failed: {}", n::objc_err_description(err_ptr));
-                    return Err(pso::CreationError::Other);
-                } else {
-                    Ok(n::GraphicsPipeline {
-                        raw: pso,
-                        primitive_type,
-                    })
-                }
-            }).collect()
+        let mut output = Vec::with_capacity(params.len());
+        for param in params {
+            output.push(self.create_graphics_pipeline(param));
         }
+        output
     }
 
     fn create_compute_pipelines<'a>(
@@ -465,88 +598,13 @@ impl core::Device<Backend> for Device {
     }
 
     fn create_shader_module(&mut self, raw_data: &[u8]) -> Result<n::ShaderModule, ShaderError> {
-        // spec requires "codeSize must be a multiple of 4"
-        assert_eq!(raw_data.len() & 3, 0);
-
-        let module = spirv::Module::from_words(unsafe {
-            slice::from_raw_parts(
-                raw_data.as_ptr() as *const u32,
-                raw_data.len() / mem::size_of::<u32>(),
-            )
-        });
-
-        // parse to enumerate resources
-        let mut parser_options = msl::ParserOptions::default();
-
-        let query_ast = spirv::Ast::<msl::Target>::parse(&module, &parser_options)
-            .map_err(gen_parse_error)?;
-        let shader_resources = query_ast.get_shader_resources()
-            .map_err(|err| {
-                let msg = match err {
-                    SpirvErrorCode::CompilationError(msg) => msg,
-                    SpirvErrorCode::Unhandled => "Unexpected error".into(),
-                };
-                ShaderError::CompilationFailed(msg)
-            })?;
-
-        // fill the parser overrides
-        let image_ids = shader_resources.separate_images
-            .iter()
-            .map(|image| image.id);
-        let sampler_ids = shader_resources.separate_samplers
-            .iter()
-            .map(|sampler| sampler.id);
-        let stages = [spirv::ExecutionModel::Vertex, spirv::ExecutionModel::Fragment]; //TODO
-        // force the binding IDs to be preserved, as opposed to SPIRV-cross usual re-numeration
-        for resource in image_ids.chain(sampler_ids) {
-            let binding = query_ast.get_decoration(resource, spirv::Decoration::Binding).map_err(gen_query_error)?;
-            let desc_set = query_ast.get_decoration(resource, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
-            for &stage in &stages {
-                parser_options.resource_binding_overrides.insert(
-                    msl::ResourceBindingLocation {
-                        stage,
-                        desc_set,
-                        binding,
-                    },
-                    msl::ResourceBinding {
-                        resource_id: binding,
-                        force_used: false,
-                    },
-                );
-            }
+        let depends_on_pipeline_layout = true; //TODO: !self.private_caps.argument_buffers
+        if depends_on_pipeline_layout {
+            Ok(n::ShaderModule::Raw(raw_data.to_vec()))
+        } else {
+            self.compile_shader_library(raw_data, &[])
+                .map(n::ShaderModule::Compiled)
         }
-
-        // now parse again using the new overrides
-        let mut ast = spirv::Ast::<msl::Target>::parse(&module, &parser_options)
-            .map_err(gen_parse_error)?;
-
-        // compile with options
-        let mut compile_options = msl::CompilerOptions::default();
-        compile_options.vertex.invert_y = true;
-
-        ast.set_compile_options(&compile_options)
-            .map_err(|err| {
-                let msg = match err {
-                    SpirvErrorCode::CompilationError(msg) => msg,
-                    SpirvErrorCode::Unhandled => "Unexpected error".into(),
-                };
-                ShaderError::CompilationFailed(msg)
-            })?;
-
-        let shader_code = ast.compile()
-            .map_err(|err| {
-                let msg =  match err {
-                    SpirvErrorCode::CompilationError(msg) => msg,
-                    SpirvErrorCode::Unhandled => "Unknown compile error".into(),
-                };
-                ShaderError::CompilationFailed(msg)
-            })?;
-
-        // done
-        debug!("SPIRV-Cross generated shader:\n{}", shader_code);
-
-        let lang_ver = LanguageVersion { major: 1, minor: 1 };
-        self.create_shader_library_from_source(&shader_code, lang_ver)
     }
 
     fn create_sampler(&mut self, info: image::SamplerInfo) -> n::Sampler {
@@ -756,7 +814,12 @@ impl core::Device<Backend> for Device {
     }
 
     fn destroy_shader_module(&mut self, module: n::ShaderModule) {
-        unsafe { module.0.release(); }
+        match module {
+            n::ShaderModule::Compiled(lib) => unsafe {
+                lib.release();
+            },
+            n::ShaderModule::Raw(_) => ()
+        }
     }
 
     fn destroy_renderpass(&mut self, pass: n::RenderPass) {
@@ -764,6 +827,7 @@ impl core::Device<Backend> for Device {
     }
 
     fn destroy_graphics_pipeline(&mut self, pipeline: n::GraphicsPipeline) {
+        //TODO: release associated vs/fs libraries
         unsafe { pipeline.raw.release(); }
     }
 
