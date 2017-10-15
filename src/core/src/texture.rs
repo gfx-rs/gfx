@@ -265,13 +265,14 @@ pub enum Kind {
 }
 
 impl Kind {
-    /// Get texture dimensions, with 0 values where not applicable.
+    /// Get texture dimensions, with 0 height where not applicable.
+    /// Depth should default to 1 instead: https://github.com/gfx-rs/gfx/issues/1574
     pub fn get_dimensions(&self) -> Dimensions {
         let s0 = AaMode::Single;
         match *self {
-            Kind::D1(w) => (w, 0, 0, s0),
+            Kind::D1(w) => (w, 0, 1, s0),
             Kind::D1Array(w, a) => (w, 0, a as Size, s0),
-            Kind::D2(w, h, s) => (w, h, 0, s),
+            Kind::D2(w, h, s) => (w, h, 1, s),
             Kind::D2Array(w, h, a, s) => (w, h, a as Size, s),
             Kind::D3(w, h, d) => (w, h, d, s0),
             Kind::Cube(w) => (w, w, 6, s0),
