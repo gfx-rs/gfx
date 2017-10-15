@@ -262,13 +262,13 @@ pub enum Kind {
 }
 
 impl Kind {
-    /// Get texture dimensions, with 0 values where not applicable.
+    /// Get texture dimensions
     pub fn get_dimensions(&self) -> Dimensions {
         let s0 = AaMode::Single;
         match *self {
-            Kind::D1(w) => (w, 0, 0, s0),
-            Kind::D1Array(w, a) => (w, 0, a as Size, s0),
-            Kind::D2(w, h, s) => (w, h, 0, s),
+            Kind::D1(w) => (w, 1, 1, s0),
+            Kind::D1Array(w, a) => (w, 1, a as Size, s0),
+            Kind::D2(w, h, s) => (w, h, 1, s),
             Kind::D2Array(w, h, a, s) => (w, h, a as Size, s),
             Kind::D3(w, h, d) => (w, h, d, s0),
             Kind::Cube(w) => (w, w, 6, s0),
@@ -278,11 +278,11 @@ impl Kind {
     /// Get the dimensionality of a particular mipmap level.
     pub fn get_level_dimensions(&self, level: Level) -> Dimensions {
         use std::cmp::{max, min};
-        // unused dimensions must stay 0, all others must be at least 1
+        // must be at least 1
         let map = |val| max(min(val, 1), val >> min(level, MAX_LEVEL));
         let (w, h, da, _) = self.get_dimensions();
         let dm = if self.get_num_slices().is_some() {
-            0
+            1
         } else {
             map(da)
         };

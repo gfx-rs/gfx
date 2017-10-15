@@ -7,7 +7,6 @@ use d3dcompiler;
 use dxguid;
 use kernel32;
 use spirv_cross::{hlsl, spirv, ErrorCode as SpirvErrorCode};
-use std::cmp;
 use std::collections::BTreeMap;
 use std::ops::Range;
 use std::{ffi, mem, ptr, slice};
@@ -1064,7 +1063,7 @@ impl d::Device<B> for Device {
             Alignment: 0,
             Width: width as u64,
             Height: height as u32,
-            DepthOrArraySize: cmp::max(1, depth),
+            DepthOrArraySize: depth,
             MipLevels: mip_levels as u16,
             Format: match conv::map_format(format) {
                 Some(format) => format,

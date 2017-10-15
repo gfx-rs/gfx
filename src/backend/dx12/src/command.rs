@@ -5,7 +5,7 @@ use core::buffer::IndexBufferView;
 use winapi::{self, UINT64, UINT};
 use {conv, native as n, Backend};
 use smallvec::SmallVec;
-use std::{cmp, mem, ptr};
+use std::{mem, ptr};
 use std::ops::Range;
 
 fn get_rect(rect: &target::Rect) -> winapi::D3D12_RECT {
@@ -807,8 +807,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 assert_eq!(region.buffer_row_pitch % winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32, 0);
                 assert!(region.buffer_row_pitch >= width as u32 * image.bits_per_texel as u32 / 8);
 
-                let height = cmp::max(1, height as _);
-                let depth = cmp::max(1, depth as _);
+                let height = height as _;
+                let depth = depth as _;
 
                 // Advance buffer offset with each layer
                 *unsafe { src.PlacedFootprint_mut() } = winapi::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
@@ -871,8 +871,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 assert_eq!(region.buffer_row_pitch % winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32, 0);
                 assert!(region.buffer_row_pitch >= width as u32 * image.bits_per_texel as u32 / 8);
 
-                let height = cmp::max(1, height as _);
-                let depth = cmp::max(1, depth as _);
+                let height = height as _;
+                let depth = depth as _;
 
                 // Advance buffer offset with each layer
                 *unsafe { src.SubresourceIndex_mut() } =
