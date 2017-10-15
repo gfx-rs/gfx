@@ -53,64 +53,112 @@ bitflags!(
     /// The pipeline is structured as given the by the ordering of the flags.
     /// Some stages are queue type dependent.
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-    pub flags PipelineStage: u32 {
+    pub struct PipelineStage: u32 {
         /// Beginning of the command queue.
-        const TOP_OF_PIPE = 0x1,
+        const TOP_OF_PIPE = 0x1;
         /// Indirect data consumption.
-        const DRAW_INDIRECT = 0x2,
+        const DRAW_INDIRECT = 0x2;
         /// Vertex data consumption.
-        const VERTEX_INPUT = 0x4,
+        const VERTEX_INPUT = 0x4;
         /// Vertex shader execution.
-        const VERTEX_SHADER = 0x8,
+        const VERTEX_SHADER = 0x8;
         /// Hull shader execution.
-        const HULL_SHADER = 0x10,
+        const HULL_SHADER = 0x10;
         /// Domain shader execution.
-        const DOMAIN_SHADER = 0x20,
+        const DOMAIN_SHADER = 0x20;
         /// Geometry shader execution.
-        const GEOMETRY_SHADER = 0x40,
+        const GEOMETRY_SHADER = 0x40;
         /// Fragment shader execution.
-        const FRAGMENT_SHADER = 0x80,
+        const FRAGMENT_SHADER = 0x80;
         /// Stage of early depth and stencil test.
-        const EARLY_FRAGMENT_TESTS = 0x100,
+        const EARLY_FRAGMENT_TESTS = 0x100;
         /// Stage of late depth and stencil test.
-        const LATE_FRAGMENT_TESTS = 0x200,
+        const LATE_FRAGMENT_TESTS = 0x200;
         /// Stage of final color value calculation.
-        const COLOR_ATTACHMENT_OUTPUT = 0x400,
+        const COLOR_ATTACHMENT_OUTPUT = 0x400;
         /// Compute shader execution,
-        const COMPUTE_SHADER = 0x800,
+        const COMPUTE_SHADER = 0x800;
         /// Copy/Transfer command execution.
-        const TRANSFER = 0x1000,
+        const TRANSFER = 0x1000;
         /// End of the command queue.
-        const BOTTOM_OF_PIPE = 0x2000,
+        const BOTTOM_OF_PIPE = 0x2000;
         /// Read/Write access from host.
         /// (Not a real pipeline stage)
-        const HOST = 0x4000,
+        const HOST = 0x4000;
     }
 );
+
+///
+pub const TOP_OF_PIPE: PipelineStage = PipelineStage::TOP_OF_PIPE;
+///
+pub const DRAW_INDIRECT: PipelineStage = PipelineStage::DRAW_INDIRECT;
+///
+pub const VERTEX_INPUT: PipelineStage = PipelineStage::VERTEX_INPUT;
+///
+pub const VERTEX_SHADER: PipelineStage = PipelineStage::VERTEX_SHADER;
+///
+pub const HULL_SHADER: PipelineStage = PipelineStage::HULL_SHADER;
+///
+pub const DOMAIN_SHADER: PipelineStage = PipelineStage::DOMAIN_SHADER;
+///
+pub const GEOMETRY_SHADER: PipelineStage = PipelineStage::GEOMETRY_SHADER;
+///
+pub const FRAGMENT_SHADER: PipelineStage = PipelineStage::FRAGMENT_SHADER;
+///
+pub const EARLY_FRAGMENT_TESTS: PipelineStage = PipelineStage::EARLY_FRAGMENT_TESTS;
+///
+pub const LATE_FRAGMENT_TESTS: PipelineStage = PipelineStage::LATE_FRAGMENT_TESTS;
+///
+pub const COLOR_ATTACHMENT_OUTPUT: PipelineStage = PipelineStage::COLOR_ATTACHMENT_OUTPUT;
+///
+pub const COMPUTE_SHADER: PipelineStage = PipelineStage::COMPUTE_SHADER;
+///
+pub const TRANSFER: PipelineStage = PipelineStage::TRANSFER;
+///
+pub const BOTTOM_OF_PIPE: PipelineStage = PipelineStage::BOTTOM_OF_PIPE;
+///
+pub const HOST: PipelineStage = PipelineStage::HOST;
 
 bitflags!(
     /// Combination of different shader pipeline stages.
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-    pub flags ShaderStageFlags: u16 {
+    pub struct ShaderStageFlags: u16 {
         /// Vertex shader stage.
-        const STAGE_VERTEX   = 0x1,
+        const STAGE_VERTEX   = 0x1;
         /// Hull (tessellation) shader stage.
-        const STAGE_HULL     = 0x2,
+        const STAGE_HULL     = 0x2;
         /// Domain (tessellation) shader stage.
-        const STAGE_DOMAIN   = 0x4,
+        const STAGE_DOMAIN   = 0x4;
         /// Geometry shader stage.
-        const STAGE_GEOMETRY = 0x8,
+        const STAGE_GEOMETRY = 0x8;
         /// Fragment shader stage.
-        const STAGE_FRAGMENT = 0x10,
+        const STAGE_FRAGMENT = 0x10;
         /// Compute shader stage.
-        const STAGE_COMPUTE  = 0x20,
+        const STAGE_COMPUTE  = 0x20;
         /// All graphics pipeline shader stages.
-        const STAGE_GRAPHICS = STAGE_VERTEX.bits | STAGE_HULL.bits |
-            STAGE_DOMAIN.bits | STAGE_GEOMETRY.bits | STAGE_FRAGMENT.bits,
+        const STAGE_GRAPHICS = Self::STAGE_VERTEX.bits | Self::STAGE_HULL.bits |
+            Self::STAGE_DOMAIN.bits | Self::STAGE_GEOMETRY.bits | Self::STAGE_FRAGMENT.bits;
         /// All shader stages.
-        const STAGE_ALL      = STAGE_GRAPHICS.bits | STAGE_COMPUTE.bits,
+        const STAGE_ALL      = Self::STAGE_GRAPHICS.bits | Self::STAGE_COMPUTE.bits;
     }
 );
+
+///
+pub const STAGE_VERTEX: ShaderStageFlags = ShaderStageFlags::STAGE_VERTEX;
+///
+pub const STAGE_HULL: ShaderStageFlags = ShaderStageFlags::STAGE_HULL;
+///
+pub const STAGE_DOMAIN: ShaderStageFlags = ShaderStageFlags::STAGE_DOMAIN;
+///
+pub const STAGE_GEOMETRY: ShaderStageFlags = ShaderStageFlags::STAGE_GEOMETRY;
+///
+pub const STAGE_FRAGMENT: ShaderStageFlags = ShaderStageFlags::STAGE_FRAGMENT;
+///
+pub const STAGE_COMPUTE: ShaderStageFlags = ShaderStageFlags::STAGE_COMPUTE;
+///
+pub const STAGE_GRAPHICS: ShaderStageFlags = ShaderStageFlags::STAGE_GRAPHICS;
+///
+pub const STAGE_ALL: ShaderStageFlags = ShaderStageFlags::STAGE_ALL;
 
 //Note: this type is only needed for backends, not used anywhere within gfx_core.
 /// Which program stage this shader represents.

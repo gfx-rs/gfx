@@ -40,33 +40,46 @@ pub fn cast_slice<A: Pod, B: Pod>(slice: &[A]) -> &[B] {
 bitflags!(
     /// Memory property flags.
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-    pub flags Properties: u16 {
+    pub struct Properties: u16 {
         /// Device local memory on the GPU.
-        const DEVICE_LOCAL   = 0x1,
+        const DEVICE_LOCAL   = 0x1;
 
         /// CPU-GPU coherent.
         ///
         /// Non-coherent memory requires explicit flushing.
-        const COHERENT     = 0x2,
+        const COHERENT     = 0x2;
 
         /// Host visible memory can be accessed by the CPU.
         ///
         /// Backends must provide at least one cpu visible memory.
-        const CPU_VISIBLE   = 0x4,
+        const CPU_VISIBLE   = 0x4;
 
         /// Cached memory by the CPU
-        const CPU_CACHED = 0x8,
+        const CPU_CACHED = 0x8;
 
         /// Memory combined writes.
         ///
         /// Buffer writes will be combined for possible larger bus transactions.
         /// It's not advised to use these memory allocations for reading back data.
-        const WRITE_COMBINED = 0x10,
+        const WRITE_COMBINED = 0x10;
 
         ///
-        const LAZILY_ALLOCATED = 0x20,
+        const LAZILY_ALLOCATED = 0x20;
     }
 );
+
+///
+pub const DEVICE_LOCAL: Properties = Properties::DEVICE_LOCAL;
+///
+pub const COHERENT: Properties = Properties::COHERENT;
+///
+pub const CPU_VISIBLE: Properties = Properties::CPU_VISIBLE;
+///
+pub const CPU_CACHED: Properties = Properties::CPU_CACHED;
+///
+pub const WRITE_COMBINED: Properties = Properties::WRITE_COMBINED;
+///
+pub const LAZILY_ALLOCATED: Properties = Properties::LAZILY_ALLOCATED;
 
 #[allow(missing_docs)] //TODO
 #[derive(Clone, Debug)]
