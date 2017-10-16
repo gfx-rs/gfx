@@ -615,6 +615,7 @@ impl core::Device<Backend> for Device {
     }
 
     fn create_shader_module(&mut self, raw_data: &[u8]) -> Result<n::ShaderModule, ShaderError> {
+        //TODO: we can probably at least parse here and save the `Ast`
         let depends_on_pipeline_layout = true; //TODO: !self.private_caps.argument_buffers
         if depends_on_pipeline_layout {
             Ok(n::ShaderModule::Raw(raw_data.to_vec()))
@@ -628,7 +629,6 @@ impl core::Device<Backend> for Device {
         unsafe {
             let descriptor = MTLSamplerDescriptor::new(); // Returns retained
             defer! { descriptor.release() };
-
 
             use self::image::FilterMethod::*;
             let (min_mag, mipmap) = match info.filter {

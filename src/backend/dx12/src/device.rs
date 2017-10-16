@@ -905,17 +905,14 @@ impl d::Device<B> for Device {
         // spec requires "codeSize must be a multiple of 4"
         assert_eq!(raw_data.len() & 3, 0);
 
-        let spirv_data = unsafe {
+        let module = spirv::Module::from_words(unsafe {
             slice::from_raw_parts(
                 raw_data.as_ptr() as *const u32,
                 raw_data.len() / mem::size_of::<u32>(),
             )
-        };
+        });
 
-        let module = spirv::Module::from_words(spirv_data);
-        let parser_options = hlsl::ParserOptions::default();
-
-        let mut ast = spirv::Ast::<hlsl::Target>::parse(&module, &parser_options)
+        let mut ast = spirv::Ast::<hlsl::Target>::parse(&module)
             .map_err(|err| {
                 let msg =  match err {
                     SpirvErrorCode::CompilationError(msg) => msg,
@@ -945,7 +942,7 @@ impl d::Device<B> for Device {
         compile_options.shader_model = shader_model;
         compile_options.vertex.invert_y = true;
 
-        ast.set_compile_options(&compile_options)
+        ast.set_compiler_options(&compile_options)
            .map_err(gen_unexpected_error)?;
         let shader_code = ast.compile()
             .map_err(|err| {
