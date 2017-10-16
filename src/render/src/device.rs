@@ -2,7 +2,7 @@ use std::mem;
 use std::ops::Range;
 use core::{Device as CoreDevice, MemoryType};
 use core::memory::{Properties,
-    DEVICE_LOCAL, CPU_VISIBLE, CPU_CACHED, WRITE_COMBINED
+    DEVICE_LOCAL, CPU_VISIBLE, CPU_CACHED, COHERENT
 };
 
 use memory::{self, Allocator, Typed};
@@ -85,18 +85,23 @@ impl<B: Backend> Device<B> {
 
     pub fn find_upload_memory(&self, type_mask: u64) -> Option<MemoryType> {
         self.find_memory(type_mask, |props| {
-            props.contains(CPU_VISIBLE | WRITE_COMBINED)
+            props.contains(CPU_VISIBLE | COHERENT)
             && !props.contains(CPU_CACHED)
         }).or_else(|| self.find_memory(type_mask, |props| {
+            props.contains(CPU_VISIBLE | COHERENT)
+        })).or_else(|| self.find_memory(type_mask, |props| {
             props.contains(CPU_VISIBLE)
         }))
     }
 
     pub fn find_download_memory(&self, type_mask: u64) -> Option<MemoryType> {
         self.find_memory(type_mask, |props| {
-            props.contains(CPU_VISIBLE | CPU_CACHED)
-            && !props.contains(WRITE_COMBINED)
+            props.contains(CPU_VISIBLE | COHERENT | CPU_CACHED)
         }).or_else(|| self.find_memory(type_mask, |props| {
+            props.contains(CPU_VISIBLE | CPU_CACHED)
+        })).or_else(|| self.find_memory(type_mask, |props| {
+            props.contains(CPU_VISIBLE | COHERENT)
+        })).or_else(|| self.find_memory(type_mask, |props| {
             props.contains(CPU_VISIBLE)
         }))
     }

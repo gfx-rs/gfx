@@ -208,22 +208,23 @@ impl c::Adapter<Backend> for Adapter {
             panic!("Error opening adapter: {:?}", err);
         }
 
+        // COHERENT flags require that the backend does flushing and invaldation
+        // by itself. If we move towards persistent mapping we need to re-evaluate it.
         let memory_types = if self.share.private_caps.map {
             vec![
-                //TODO: expose `COHERENT` types as well
                 c::MemoryType {
                     id: 0,
                     properties: c::memory::DEVICE_LOCAL,
                     heap_index: 1,
                 },
-                c::MemoryType { //download
+                c::MemoryType { // upload
                     id: 1,
-                    properties: c::memory::CPU_VISIBLE | c::memory::CPU_CACHED,
+                    properties: c::memory::CPU_VISIBLE | c::memory::COHERENT,
                     heap_index: 0,
                 },
-                c::MemoryType { // upload
+                c::MemoryType { // download
                     id: 2,
-                    properties: c::memory::CPU_VISIBLE | c::memory::WRITE_COMBINED,
+                    properties: c::memory::CPU_VISIBLE | c::memory::COHERENT | c::memory::CPU_CACHED,
                     heap_index: 0,
                 },
             ]

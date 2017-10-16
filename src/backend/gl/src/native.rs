@@ -97,7 +97,7 @@ pub struct Memory {
 
 impl Memory {
     pub fn can_upload(&self) -> bool {
-        self.properties.contains(mem::CPU_VISIBLE | mem::WRITE_COMBINED)
+        self.properties.contains(mem::CPU_VISIBLE)
     }
     pub fn can_download(&self) -> bool {
         self.properties.contains(mem::CPU_VISIBLE | mem::CPU_CACHED)

@@ -66,6 +66,7 @@ impl Device {
             let stage = match stage {
                 pso::Stage::Vertex => "vs",
                 pso::Stage::Fragment => "ps",
+                pso::Stage::Compute => "cs",
                 _ => unimplemented!(),
             };
 
@@ -174,9 +175,9 @@ impl Device {
         &mut self,
         writes: &[pso::DescriptorSetWrite<B>],
         heap_type: winapi::D3D12_DESCRIPTOR_HEAP_TYPE,
-        fun: F,
+        mut fun: F,
     ) where
-        F: Fn(&pso::DescriptorWrite<B>, &mut Vec<winapi::D3D12_CPU_DESCRIPTOR_HANDLE>),
+        F: FnMut(&pso::DescriptorWrite<B>, &mut Vec<winapi::D3D12_CPU_DESCRIPTOR_HANDLE>),
     {
         let mut dst_starts = Vec::new();
         let mut dst_sizes = Vec::new();
@@ -339,12 +340,44 @@ impl Device {
 
     fn view_image_as_storage(
         &mut self,
-        _resource: *mut winapi::ID3D12Resource,
-        _kind: image::Kind,
-        _format: winapi::DXGI_FORMAT,
-        _range: &image::SubresourceRange,
+        resource: *mut winapi::ID3D12Resource,
+        kind: image::Kind,
+        format: winapi::DXGI_FORMAT,
+        range: &image::SubresourceRange,
     ) -> Result<winapi::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
-        unimplemented!()
+        let handle = self.uav_pool.lock().unwrap().alloc_handles(1).cpu;
+
+        let dimension = match kind {
+            image::Kind::D1(..) |
+            image::Kind::D1Array(..) => winapi::D3D12_UAV_DIMENSION_TEXTURE1D,
+            image::Kind::D2(..) |
+            image::Kind::D2Array(..) => winapi::D3D12_UAV_DIMENSION_TEXTURE2D,
+            image::Kind::D3(..) |
+            image::Kind::Cube(..) |
+            image::Kind::CubeArray(..) => winapi::D3D12_UAV_DIMENSION_TEXTURE3D,
+        };
+
+        let mut desc = winapi::D3D12_UNORDERED_ACCESS_VIEW_DESC {
+            Format: format,
+            ViewDimension: dimension,
+            u: unsafe { mem::zeroed() },
+        };
+
+        match kind {
+            image::Kind::D2(_, _, _) => {
+                *unsafe{ desc.Texture2D_mut() } = winapi::D3D12_TEX2D_UAV {
+                    MipSlice: range.levels.start as _,
+                    PlaneSlice: 0,
+                }
+            }
+            _ => unimplemented!()
+        }
+
+        unsafe {
+            self.raw.CreateUnorderedAccessView(resource, ptr::null_mut(), &desc, handle);
+        }
+
+        Ok(handle)
     }
 }
 
@@ -359,9 +392,17 @@ impl d::Device<B> for Device {
     ) -> Result<n::Memory, d::OutOfMemory> {
         let mut heap = ptr::null_mut();
 
+        let properties = winapi::D3D12_HEAP_PROPERTIES {
+            Type: winapi::D3D12_HEAP_TYPE_CUSTOM,
+            CPUPageProperty: self.heap_properties[mem_type.id].page_property,
+            MemoryPoolPreference: self.heap_properties[mem_type.id].memory_pool,
+            CreationNodeMask: 0,
+            VisibleNodeMask: 0,
+        };
+
         let desc = winapi::D3D12_HEAP_DESC {
             SizeInBytes: size,
-            Properties: conv::map_heap_properties(mem_type.properties),
+            Properties: properties,
             Alignment: 0, //Warning: has to be 4K for MSAA targets
             Flags: match mem_type.id >> 2 {
                 0 => winapi::D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES,
@@ -380,20 +421,10 @@ impl d::Device<B> for Device {
         }
         assert_eq!(winapi::S_OK, hr);
 
-        //TODO: merge with `map_heap_properties`
-        let default_state = if !mem_type.properties.contains(memory::CPU_VISIBLE) {
-            winapi::D3D12_RESOURCE_STATE_COMMON
-        } else if mem_type.properties.contains(memory::WRITE_COMBINED) {
-            winapi::D3D12_RESOURCE_STATE_GENERIC_READ
-        } else {
-            winapi::D3D12_RESOURCE_STATE_COPY_DEST
-        };
-
         Ok(n::Memory {
             heap: unsafe { ComPtr::new(heap as _) },
             ty: mem_type.clone(),
             size,
-            default_state,
         })
     }
 
@@ -949,10 +980,17 @@ impl d::Device<B> for Device {
 
     fn create_buffer(
         &mut self,
-        size: u64,
+        mut size: u64,
         stride: u64,
         usage: buffer::Usage,
     ) -> Result<UnboundBuffer, buffer::CreationError> {
+        if usage.contains(buffer::UNIFORM) {
+            // Constant buffer view sizes need to be aligned.
+            // Coupled with the offset alignment we can enforce an aligned CBV size
+            // on descriptor updates.
+            size = (size + 255) & !255;
+        }
+
         let requirements = memory::Requirements {
             size,
             alignment: winapi::D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT as u64,
@@ -986,7 +1024,6 @@ impl d::Device<B> for Device {
         }
 
         let mut resource = ptr::null_mut();
-        let init_state = memory.default_state; //TODO?
         let desc = winapi::D3D12_RESOURCE_DESC {
             Dimension: winapi::D3D12_RESOURCE_DIMENSION_BUFFER,
             Alignment: 0,
@@ -1008,7 +1045,7 @@ impl d::Device<B> for Device {
                 memory.heap.as_mut(),
                 offset,
                 &desc,
-                init_state,
+                winapi::D3D12_RESOURCE_STATE_COMMON,
                 ptr::null(),
                 &dxguid::IID_ID3D12Resource,
                 &mut resource,
@@ -1121,14 +1158,13 @@ impl d::Device<B> for Device {
         }
 
         let mut resource = ptr::null_mut();
-        let init_state = memory.default_state; //TODO?
 
         assert_eq!(winapi::S_OK, unsafe {
             self.raw.CreatePlacedResource(
                 memory.heap.as_mut(),
                 offset,
                 &image.desc,
-                init_state,
+                winapi::D3D12_RESOURCE_STATE_COMMON,
                 ptr::null(),
                 &dxguid::IID_ID3D12Resource,
                 &mut resource,
@@ -1318,11 +1354,91 @@ impl d::Device<B> for Device {
     }
 
     fn update_descriptor_sets(&mut self, writes: &[pso::DescriptorSetWrite<B>]) {
+        // Create temporary non-shader visible views for uniform and storage buffers.
+        let mut num_views = 0;
+        for sw in writes {
+            match sw.write {
+                pso::DescriptorWrite::UniformBuffer(ref views) |
+                pso::DescriptorWrite::StorageBuffer(ref views) => {
+                    num_views += views.len();
+                },
+                _ => (),
+            }
+        }
+
+        let mut buffer_heap = n::DescriptorCpuPool {
+            heap: Self::create_descriptor_heap_impl(
+                &mut self.raw,
+                winapi::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                false,
+                num_views,
+            ),
+            offset: 0,
+            size: 0,
+            max_size: num_views as _,
+        };
+
+        // Create views
+        let mut handles = writes.iter().filter_map(|sw| {
+            match sw.write {
+                pso::DescriptorWrite::UniformBuffer(ref views) => {
+                    Some(views.iter().map(|&(buffer, ref range)| {
+                        let handle = buffer_heap.alloc_handles(1).cpu;
+                        // Making the size field of buffer requirements for uniform
+                        // buffers a multiple of 256 and setting the required offset
+                        // alignment to 256 allows us to patch the size here.
+                        // We can always enforce the size to be aligned to 256 for
+                        // CBVs without going out-of-bounds.
+                        let size = ((range.end - range.start) + 255) & !255;
+                        let desc = winapi::D3D12_CONSTANT_BUFFER_VIEW_DESC {
+                            BufferLocation: unsafe { (*buffer.resource).GetGPUVirtualAddress() },
+                            SizeInBytes: size as _,
+                        };
+                        unsafe { self.raw.CreateConstantBufferView(&desc, handle); }
+                        handle
+                    }).collect::<Vec<_>>())
+                }
+                pso::DescriptorWrite::StorageBuffer(ref views) => {
+                    // StorageBuffer gets translated into a byte address buffer.
+                    // We don't have to stride information to make it structured.
+                    Some(views.iter().map(|&(buffer, ref range)| {
+                        let handle = buffer_heap.alloc_handles(1).cpu;
+                        let mut desc = winapi::D3D12_UNORDERED_ACCESS_VIEW_DESC {
+                            Format: winapi::DXGI_FORMAT_R32_TYPELESS,
+                            ViewDimension: winapi::D3D12_UAV_DIMENSION_BUFFER,
+                            u: unsafe { mem::zeroed() },
+                        };
+
+                       *unsafe { desc.Buffer_mut() } = winapi::D3D12_BUFFER_UAV {
+                            FirstElement: range.start as _,
+                            NumElements: ((range.end - range.start) / 4) as _,
+                            StructureByteStride: 0,
+                            CounterOffsetInBytes: 0,
+                            Flags: winapi::D3D12_BUFFER_UAV_FLAG_RAW,
+                        };
+
+                        unsafe {
+                            self.raw.CreateUnorderedAccessView(buffer.resource, ptr::null_mut(), &desc, handle);
+                        }
+                        handle
+                    }).collect::<Vec<_>>())
+                },
+                _ => None,
+            }
+        }).collect::<Vec<_>>();
+
         self.update_descriptor_sets_impl(writes,
             winapi::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
             |dw, starts| match *dw {
                 pso::DescriptorWrite::SampledImage(ref images) => {
                     starts.extend(images.iter().map(|&(ref srv, _layout)| srv.handle_srv.unwrap()))
+                }
+                pso::DescriptorWrite::UniformBuffer(_) |
+                pso::DescriptorWrite::StorageBuffer(_) => {
+                    starts.append(&mut handles.remove(0))
+                }
+                pso::DescriptorWrite::StorageImage(ref images) => {
+                    starts.extend(images.iter().map(|&(ref uav, _layout)| uav.handle_uav.unwrap()))
                 }
                 pso::DescriptorWrite::Sampler(_) => (), // done separately
                 _ => unimplemented!()

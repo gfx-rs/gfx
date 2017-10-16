@@ -279,6 +279,7 @@ pub fn query_all(gl: &gl::Gl) -> (Info, Features, Limits, PrivateCaps) {
 
         min_buffer_copy_offset_alignment: 1,
         min_buffer_copy_pitch_alignment: 1,
+        min_uniform_buffer_offset_alignment: 1, // TODO
 
     };
     let features = Features {
