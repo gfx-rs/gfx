@@ -24,3 +24,7 @@ install:
 build: false
 test_script:
   - C:\MinGW\bin\mingw32-make.exe all
+
+cache:
+  - target
+  - C:\Users\appveyor\.cargo\registry
