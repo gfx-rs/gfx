@@ -72,6 +72,9 @@ impl Drop for Adapter {
 struct PrivateCapabilities {
     resource_heaps: bool,
     argument_buffers: bool,
+    max_buffers_per_stage: usize,
+    max_textures_per_stage: usize,
+    max_samplers_per_stage: usize,
 }
 
 pub struct Device {
@@ -116,12 +119,16 @@ impl core::Adapter<Backend> for Adapter {
                     .push(unsafe { core::CommandQueue::new(command::CommandQueue::new(self.device)) }),
             }
         }
-
         assert!(queue_descs.len() == 1, "Metal only supports one queue family");
+
+        let is_mac = self.device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1);
 
         let private_caps = PrivateCapabilities {
             resource_heaps: self.supports_any(RESOURCE_HEAP_SUPPORT),
             argument_buffers: self.supports_any(ARGUMENT_BUFFER_SUPPORT) && false, //TODO
+            max_buffers_per_stage: 31,
+            max_textures_per_stage: if is_mac {128} else {31},
+            max_samplers_per_stage: 31,
         };
 
         unsafe { self.device.retain(); }
@@ -133,7 +140,7 @@ impl core::Adapter<Backend> for Adapter {
                 max_patch_size: 0, // No tesselation
                 max_viewports: 1,
 
-                min_buffer_copy_offset_alignment: 4, // TODO: Lower on iOS
+                min_buffer_copy_offset_alignment: if is_mac {256} else {64},
                 min_buffer_copy_pitch_alignment: 4, // TODO: made this up
                 min_uniform_buffer_offset_alignment: 1, // TODO
 
@@ -501,9 +508,9 @@ impl core::Device<Backend> for Device {
         use core::pso::{STAGE_VERTEX, STAGE_FRAGMENT};
 
         struct Counters {
-            buffers: u32,
-            textures: u32,
-            samplers: u32,
+            buffers: usize,
+            textures: usize,
+            samplers: usize,
         }
         let mut stage_infos = [
             (STAGE_VERTEX,   spirv::ExecutionModel::Vertex,   Counters { buffers:0, textures:0, samplers:0 }),
@@ -526,7 +533,6 @@ impl core::Device<Backend> for Device {
                                 DescriptorType::Sampler => &mut counters.samplers,
                                 _ => unimplemented!()
                             };
-                            let count_base = *count;
                             for i in 0 .. set_binding.count {
                                 let location = msl::ResourceBindingLocation {
                                     stage,
@@ -534,7 +540,7 @@ impl core::Device<Backend> for Device {
                                     binding: (set_binding.binding + i) as _,
                                 };
                                 let res_binding = msl::ResourceBinding {
-                                    resource_id: *count,
+                                    resource_id: *count as _,
                                     force_used: false,
                                 };
                                 *count += 1;
@@ -554,7 +560,7 @@ impl core::Device<Backend> for Device {
                             binding: 0,
                         };
                         let res_binding = msl::ResourceBinding {
-                            resource_id: counters.buffers,
+                            resource_id: counters.buffers as _,
                             force_used: false,
                         };
                         res_overrides.insert(location, res_binding);
@@ -562,6 +568,13 @@ impl core::Device<Backend> for Device {
                     }
                 }
             }
+        }
+
+        // TODO: return an `Err` when HAL signature of the function supports it
+        for &(_, _, ref counters) in &stage_infos {
+            assert!(counters.buffers <= self.private_caps.max_buffers_per_stage);
+            assert!(counters.textures <= self.private_caps.max_textures_per_stage);
+            assert!(counters.samplers <= self.private_caps.max_samplers_per_stage);
         }
 
         n::PipelineLayout { res_overrides }
@@ -892,19 +905,23 @@ impl core::Device<Backend> for Device {
     }
 
     fn get_buffer_requirements(&mut self, buffer: &n::UnboundBuffer) -> memory::Requirements {
-        // We don't know what memory type the user will try to allocate the buffer with, so we test them
-        // all get the most stringent ones. Note we don't check Shared because heaps can't use it
-        let mut max_size = 0;
-        let mut max_alignment = 0;
-        for &options in [
-            MTLResourceStorageModeManaged,
-            MTLResourceStorageModeManaged | MTLResourceCPUCacheModeWriteCombined,
-            MTLResourceStorageModePrivate,
-        ].iter() {
-            let requirements = self.device.heap_buffer_size_and_align(buffer.size, options);
-            max_size = cmp::max(max_size, requirements.size);
-            max_alignment = cmp::max(max_alignment, requirements.align);
+        let mut max_size = buffer.size;
+        let mut max_alignment = 1;
+
+        if self.private_caps.resource_heaps {
+            // We don't know what memory type the user will try to allocate the buffer with, so we test them
+            // all get the most stringent ones. Note we don't check Shared because heaps can't use it
+            for &options in [
+                MTLResourceStorageModeManaged,
+                MTLResourceStorageModeManaged | MTLResourceCPUCacheModeWriteCombined,
+                MTLResourceStorageModePrivate,
+            ].iter() {
+                let requirements = self.device.heap_buffer_size_and_align(buffer.size, options);
+                max_size = cmp::max(max_size, requirements.size);
+                max_alignment = cmp::max(max_alignment, requirements.align);
+            }
         }
+
         memory::Requirements {
             size: max_size,
             alignment: max_alignment,
