@@ -30,7 +30,7 @@ use device_dx11::{Device, Factory, Resources};
 
 
 pub struct Window {
-    inner: winit::Window,
+    pub inner: winit::Window,
     swap_chain: *mut winapi::IDXGISwapChain,
     driver_type: winapi::D3D_DRIVER_TYPE,
     color_format: format::Format,
