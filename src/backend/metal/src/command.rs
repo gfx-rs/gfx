@@ -52,15 +52,65 @@ pub struct CommandBuffer {
     queue: Option<Arc<QueueInner>>,
 }
 
+#[derive(Debug)]
+struct StageResources {
+    buffers: Vec<Option<(MTLBuffer, pso::BufferOffset)>>,
+    textures: Vec<Option<MTLTexture>>,
+    samplers: Vec<Option<MTLSamplerState>>,
+}
+
+impl StageResources {
+    fn new() -> Self {
+        StageResources {
+            buffers: Vec::new(),
+            textures: Vec::new(),
+            samplers: Vec::new(),
+        }
+    }
+
+    fn clear(&mut self) {
+        self.buffers.clear();
+        self.textures.clear();
+        self.samplers.clear();
+    }
+
+    fn add_buffer(&mut self, slot: usize, buffer: MTLBuffer, offset: usize) {
+        while self.buffers.len() <= slot {
+            self.buffers.push(None)
+        }
+        self.buffers[slot] = Some((buffer, offset));
+    }
+
+    fn add_textures(&mut self, start: usize, textures: &[(MTLTexture, ImageLayout)]) {
+        while self.textures.len() < start + textures.len() {
+            self.textures.push(None)
+        }
+        for (out, &(texture, _)) in self.textures[start..].iter_mut().zip(textures.iter()) {
+            *out = Some(texture);
+        }
+    }
+
+    fn add_samplers(&mut self, start: usize, samplers: &[MTLSamplerState]) {
+        while self.samplers.len() < start + samplers.len() {
+            self.samplers.push(None)
+        }
+        for (out, sampler) in self.samplers[start..].iter_mut().zip(samplers.iter()) {
+            *out = Some(*sampler);
+        }
+    }
+}
+
 struct CommandBufferInner {
     command_buffer: MTLCommandBuffer,
+    //TODO: would be cleaner to move the cache into `CommandBuffer` iself
+    // it doesn't have to be in `Inner`
     encoder_state: EncoderState,
     viewport: Option<MTLViewport>,
     scissors: Option<MTLScissorRect>,
     pipeline_state: Option<MTLRenderPipelineState>, // Unretained
     primitive_type: MTLPrimitiveType,
-    vertex_buffers: Vec<(MTLBuffer, pso::BufferOffset)>, // Unretained
-    descriptor_sets: Vec<Option<native::DescriptorSet>>,
+    resources_vs: StageResources,
+    resources_fs: StageResources,
 }
 
 impl CommandBufferInner {
@@ -69,6 +119,55 @@ impl CommandBufferInner {
         self.command_buffer = MTLCommandBuffer::nil();
         unsafe { old.release(); }
         self.command_buffer = queue.queue.new_command_buffer();
+
+        self.resources_vs.clear();
+        self.resources_fs.clear();
+    }
+
+    fn begin_renderpass(&mut self, encoder: MTLRenderCommandEncoder) {
+        self.encoder_state = EncoderState::Render(encoder);
+        // Apply previously bound values for this command buffer
+        if let Some(viewport) = self.viewport {
+            encoder.set_viewport(viewport);
+        }
+        if let Some(scissors) = self.scissors {
+            encoder.set_scissor_rect(scissors);
+        }
+        if let Some(pipeline_state) = self.pipeline_state {
+            encoder.set_render_pipeline_state(pipeline_state);
+        }
+        // inherit vertex resources
+        for (i, resource) in self.resources_vs.buffers.iter().enumerate() {
+            if let Some((buffer, offset)) = *resource {
+                encoder.set_vertex_buffer(i as _, offset as _, buffer);
+            }
+        }
+        for (i, resource) in self.resources_vs.textures.iter().enumerate() {
+            if let Some(texture) = *resource {
+                encoder.set_vertex_texture(i as _, texture);
+            }
+        }
+        for (i, resource) in self.resources_vs.samplers.iter().enumerate() {
+            if let Some(sampler) = *resource {
+                encoder.set_vertex_sampler_state(i as _, sampler);
+            }
+        }
+        // inherit fragment resources
+        for (i, resource) in self.resources_fs.buffers.iter().enumerate() {
+            if let Some((buffer, offset)) = *resource {
+                encoder.set_fragment_buffer(i as _, offset as _, buffer);
+            }
+        }
+        for (i, resource) in self.resources_fs.textures.iter().enumerate() {
+            if let Some(texture) = *resource {
+                encoder.set_fragment_texture(i as _, texture);
+            }
+        }
+        for (i, resource) in self.resources_fs.samplers.iter().enumerate() {
+            if let Some(sampler) = *resource {
+                encoder.set_fragment_sampler_state(i as _, sampler);
+            }
+        }
     }
 }
 
@@ -179,8 +278,8 @@ impl core::RawCommandPool<Backend> for CommandPool {
                     scissors: None,
                     pipeline_state: None,
                     primitive_type: MTLPrimitiveType::Point,
-                    vertex_buffers: Vec::new(),
-                    descriptor_sets: Vec::new(),
+                    resources_vs: StageResources::new(),
+                    resources_fs: StageResources::new(),
                 })
             }),
             queue: if self.managed.is_some() {
@@ -346,37 +445,58 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn bind_vertex_buffers(&mut self, buffer: pso::VertexBufferSet<Backend>) {
-        self.inner().vertex_buffers.clear();
-        self.inner().vertex_buffers.extend(buffer.0.iter().map(|&(buffer, offset)| (buffer.0, offset)));
+    fn bind_vertex_buffers(&mut self, buffer_set: pso::VertexBufferSet<Backend>) {
+        let inner = self.inner();
+        let buffers = &mut inner.resources_vs.buffers;
+        while buffers.len() < buffer_set.0.len()    {
+            buffers.push(None)
+        }
+        for (out, &(buffer, offset)) in buffers.iter_mut().zip(buffer_set.0.iter()) {
+            *out = Some((buffer.0, offset));
+        }
+        if let EncoderState::Render(ref encoder) = inner.encoder_state {
+            for (i, &(buffer, offset)) in buffer_set.0.iter().enumerate() {
+                encoder.set_vertex_buffer(i as _, offset as _, buffer.0);
+            }
+        }
     }
 
     fn set_viewports(&mut self, rects: &[Viewport]) {
+        let inner = self.inner();
         if rects.len() != 1 {
             panic!("Metal supports only one viewport");
         }
         let rect = &rects[0];
-        self.inner().viewport = Some(MTLViewport {
+        let vp = MTLViewport {
             originX: rect.x as f64,
             originY: rect.y as f64,
             width: rect.w as f64,
             height: rect.h as f64,
             znear: rect.near as f64,
             zfar: rect.far as f64,
-        });
+        };
+        inner.viewport = Some(vp);
+        if let EncoderState::Render(ref encoder) = inner.encoder_state {
+            encoder.set_viewport(vp);
+        }
     }
 
     fn set_scissors(&mut self, rects: &[target::Rect]) {
+        let inner = self.inner();
         if rects.len() != 1 {
             panic!("Metal supports only one scissor");
         }
         let rect = &rects[0];
-        self.inner().scissors = Some(MTLScissorRect {
+        let scissor = MTLScissorRect {
             x: rect.x as NSUInteger,
             y: rect.y as NSUInteger,
             width: rect.w as NSUInteger,
             height: rect.h as NSUInteger,
-        });
+        };
+        inner.scissors = Some(scissor);
+        if let EncoderState::Render(ref encoder) = inner.encoder_state {
+            encoder.set_scissor_rect(scissor);
+        }
     }
 
     fn set_stencil_reference(&mut self, front: target::Stencil, back: target::Stencil) {
@@ -430,29 +550,7 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
             let render_encoder = command_buffer.command_buffer.new_render_command_encoder(pass_descriptor); // Returns retained
             defer_on_unwind! { render_encoder.release() };
 
-            // Apply previously bound values for this command buffer
-            if let Some(viewport) = command_buffer.viewport {
-                render_encoder.set_viewport(viewport);
-            }
-            if let Some(scissors) = command_buffer.scissors {
-                render_encoder.set_scissor_rect(scissors);
-            }
-            if let Some(pipeline_state) = command_buffer.pipeline_state {
-                render_encoder.set_render_pipeline_state(pipeline_state);
-            } else {
-                panic!("missing bound pipeline state object");
-            }
-            for (i, &(buffer, offset)) in command_buffer.vertex_buffers.iter().enumerate() {
-                render_encoder.set_vertex_buffer(i as u64, offset as u64, buffer);
-            }
-            // Interpret descriptor sets
-            for (i, set_maybe) in command_buffer.descriptor_sets.iter().enumerate() {
-                if let &Some(ref set) = set_maybe {
-                    Self::bind_descriptor_set(render_encoder, i as u64, set);
-                }
-            }
-
-            command_buffer.encoder_state = EncoderState::Render(render_encoder);
+            command_buffer.begin_renderpass(render_encoder);
         }
     }
 
@@ -477,7 +575,9 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
         let inner = self.inner();
         inner.pipeline_state = Some(pipeline.raw);
         inner.primitive_type = pipeline.primitive_type;
-        //TODO: render_encoder.set_render_pipeline_state(pipeline_state); ?
+        if let EncoderState::Render(encoder) = inner.encoder_state {
+            encoder.set_render_pipeline_state(pipeline.raw);
+        }
     }
 
     fn bind_graphics_descriptor_sets(
@@ -486,14 +586,98 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
         first_set: usize,
         sets: &[&native::DescriptorSet],
     ) {
+        use spirv_cross::{msl, spirv};
         let inner = self.inner();
-        let descriptor_sets_len = inner.descriptor_sets.len();
-        inner.descriptor_sets.extend(
-            (descriptor_sets_len..(first_set + sets.len()))
-                .map(|_| None)
-        );
-        for (out, &set) in inner.descriptor_sets[first_set ..].iter_mut().zip(sets) {
-            *out = Some(set.clone());
+
+        for (set_index, &desc_set) in sets.iter().enumerate() {
+            let location_vs = msl::ResourceBindingLocation {
+                stage: spirv::ExecutionModel::Vertex,
+                desc_set: (first_set + set_index) as _,
+                binding: 0,
+            };
+            let location_fs = msl::ResourceBindingLocation {
+                stage: spirv::ExecutionModel::Fragment,
+                desc_set: (first_set + set_index) as _,
+                binding: 0,
+            };
+            match *desc_set {
+                native::DescriptorSet::Emulated(ref desc_inner) => {
+                    use native::DescriptorSetBinding::*;
+                    let set = desc_inner.lock().unwrap();
+                    for (&binding, values) in set.bindings.iter() {
+                        let desc_layout = set.layout.iter().find(|x| x.binding == binding).unwrap();
+
+                        if desc_layout.stage_flags.contains(pso::STAGE_VERTEX) {
+                            let location = msl::ResourceBindingLocation {
+                                binding: binding as _,
+                                .. location_vs
+                            };
+                            let start = layout.res_overrides[&location].resource_id as usize;
+                            match *values {
+                                Sampler(ref samplers) => {
+                                    inner.resources_vs.add_samplers(start, samplers.as_slice());
+                                    if let EncoderState::Render(ref encoder) = inner.encoder_state {
+                                        for (i, &sampler) in samplers.iter().enumerate() {
+                                            encoder.set_vertex_sampler_state((start + i) as _, sampler);
+                                        }
+                                    }
+                                },
+                                SampledImage(ref images) => {
+                                    inner.resources_vs.add_textures(start, images.as_slice());
+                                    if let EncoderState::Render(ref encoder) = inner.encoder_state {
+                                        for (i, &texture) in images.iter().enumerate() {
+                                            encoder.set_vertex_texture((start + i) as _, texture.0);
+                                        }
+                                    }
+                                },
+                                _ => unimplemented!(),
+                            }
+                        }
+                        if desc_layout.stage_flags.contains(pso::STAGE_FRAGMENT) {
+                            let location = msl::ResourceBindingLocation {
+                                binding: binding as _,
+                                .. location_fs
+                            };
+                            let start = layout.res_overrides[&location].resource_id as usize;
+                            match *values {
+                                Sampler(ref samplers) => {
+                                    inner.resources_fs.add_samplers(start, samplers.as_slice());
+                                    if let EncoderState::Render(ref encoder) = inner.encoder_state {
+                                        for (i, &sampler) in samplers.iter().enumerate() {
+                                            encoder.set_fragment_sampler_state((start + i) as _, sampler);
+                                        }
+                                    }
+                                },
+                                SampledImage(ref images) => {
+                                    inner.resources_fs.add_textures(start, images.as_slice());
+                                    if let EncoderState::Render(ref encoder) = inner.encoder_state {
+                                        for (i, &texture) in images.iter().enumerate() {
+                                            encoder.set_fragment_texture((start + i) as _, texture.0);
+                                        }
+                                    }
+                                },
+                                _ => unimplemented!(),
+                            }
+                        }
+                    }
+                }
+                native::DescriptorSet::ArgumentBuffer { buffer, offset, stage_flags, .. } => {
+                    if stage_flags.contains(pso::STAGE_VERTEX) {
+                        let slot = layout.res_overrides[&location_vs].resource_id;
+                        inner.resources_vs.add_buffer(slot as _, buffer, offset as _);
+                        if let EncoderState::Render(ref encoder) = inner.encoder_state {
+                            encoder.set_vertex_buffer(slot as _, offset as _, buffer)
+                        }
+                    }
+                    if stage_flags.contains(pso::STAGE_FRAGMENT) {
+                        let slot = layout.res_overrides[&location_fs].resource_id;
+                        inner.resources_fs.add_buffer(slot as _, buffer, offset as _);
+                        if let EncoderState::Render(ref encoder) = inner.encoder_state {
+                            encoder.set_fragment_buffer(slot as _, offset as _, buffer)
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -659,52 +843,5 @@ impl core::RawCommandBuffer<Backend> for CommandBuffer {
         stride: u32,
     ) {
         unimplemented!()
-    }
-}
-
-impl CommandBuffer {
-    fn bind_descriptor_set(encoder: MTLRenderCommandEncoder, slot: u64, desc_set: &native::DescriptorSet) {
-        match *desc_set {
-            native::DescriptorSet::Emulated(ref inner) => {
-                use native::DescriptorSetBinding::*;
-                let set = inner.lock().unwrap();
-                for (&binding, values) in set.bindings.iter() {
-                    let layout = set.layout.iter().find(|x| x.binding == binding).unwrap();
-
-                    if layout.stage_flags.contains(pso::STAGE_FRAGMENT) {
-                        match *values {
-                            Sampler(ref samplers) => {
-                                if samplers.len() > 1 {
-                                    unimplemented!()
-                                }
-
-                                let sampler = samplers[0];
-                                encoder.set_fragment_sampler_state(binding as u64, sampler);
-                            },
-                            SampledImage(ref images) => {
-                                if images.len() > 1 {
-                                    unimplemented!()
-                                }
-
-                                let (image, _layout) = images[0]; // TODO: layout?
-                                encoder.set_fragment_texture(binding as u64, image);
-                            },
-                            _ => unimplemented!(),
-                        }
-                    }
-                    if layout.stage_flags.contains(pso::STAGE_VERTEX) {
-                        unimplemented!()
-                    }
-                }
-            }
-            native::DescriptorSet::ArgumentBuffer { buffer, offset, stage_flags, .. } => {
-                if stage_flags.contains(pso::STAGE_VERTEX) {
-                    encoder.set_vertex_buffer(slot, offset, buffer)
-                }
-                if stage_flags.contains(pso::STAGE_FRAGMENT) {
-                    encoder.set_fragment_buffer(slot, offset, buffer)
-                }
-            }
-        }
     }
 }

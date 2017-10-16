@@ -2,6 +2,7 @@ use {Backend};
 use {native as n, command};
 use conversions::*;
 
+use std::collections::HashMap;
 use std::ops::Range;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -120,7 +121,7 @@ impl core::Adapter<Backend> for Adapter {
 
         let private_caps = PrivateCapabilities {
             resource_heaps: self.supports_any(RESOURCE_HEAP_SUPPORT),
-            argument_buffers: self.supports_any(ARGUMENT_BUFFER_SUPPORT),
+            argument_buffers: self.supports_any(ARGUMENT_BUFFER_SUPPORT) && false, //TODO
         };
 
         unsafe { self.device.retain(); }
@@ -224,7 +225,7 @@ impl Device {
     fn compile_shader_library(
         &mut self,
         raw_data: &[u8],
-        overrides: &[(msl::ResourceBindingLocation, msl::ResourceBinding)],
+        overrides: &HashMap<msl::ResourceBindingLocation, msl::ResourceBinding>,
     ) -> Result<MTLLibrary, ShaderError> {
         // spec requires "codeSize must be a multiple of 4"
         assert_eq!(raw_data.len() & 3, 0);
@@ -236,21 +237,17 @@ impl Device {
             )
         });
 
-        // parse to enumerate resources
-        let mut parser_options = msl::ParserOptions::default();
-
-        // fill the parser overrides
-        parser_options.resource_binding_overrides.extend(overrides.iter().cloned());
-
         // now parse again using the new overrides
-        let mut ast = spirv::Ast::<msl::Target>::parse(&module, &parser_options)
+        let mut ast = spirv::Ast::<msl::Target>::parse(&module)
             .map_err(gen_parse_error)?;
 
         // compile with options
-        let mut compile_options = msl::CompilerOptions::default();
-        compile_options.vertex.invert_y = true;
+        let mut compiler_options = msl::CompilerOptions::default();
+        compiler_options.vertex.invert_y = true;
+        // fill the resource overrides
+        compiler_options.resource_binding_overrides = overrides.clone();
 
-        ast.set_compile_options(&compile_options)
+        ast.set_compiler_options(&compiler_options)
             .map_err(|err| {
                 let msg = match err {
                     SpirvErrorCode::CompilationError(msg) => msg,
@@ -305,7 +302,6 @@ impl Device {
         &(pso::GraphicsShaderSet<'a, Backend>, &n::PipelineLayout, Subpass<'a, Backend>, &pso::GraphicsPipelineDesc),
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
         let pipeline =  MTLRenderPipelineDescriptor::alloc().init(); // Returns retained
-        unsafe { defer! { pipeline.release() }};
 
         // FIXME: lots missing
 
@@ -333,8 +329,8 @@ impl Device {
             error!("invalid vertex shader entry point");
             return Err(pso::CreationError::Other);
         }
-        unsafe { defer! { mtl_vertex_function.release() }};
         pipeline.set_vertex_function(mtl_vertex_function);
+        unsafe { mtl_vertex_function.release() };
         let fs_lib = if let Some(fragment_entry) = shader_set.fragment {
             let fs_lib = match fragment_entry.module {
                 &n::ShaderModule::Compiled(lib) => lib,
@@ -348,8 +344,8 @@ impl Device {
                 error!("invalid pixel shader entry point");
                 return Err(pso::CreationError::Other);
             }
-            unsafe { defer! { mtl_fragment_function.release() }};
             pipeline.set_fragment_function(mtl_fragment_function);
+            unsafe { mtl_fragment_function.release() };
             Some(fs_lib)
         } else {
             None
@@ -401,7 +397,6 @@ impl Device {
 
         // Vertex buffers
         let vertex_descriptor = MTLVertexDescriptor::new();
-        unsafe { defer! { vertex_descriptor.release() }};
         for (i, vertex_buffer) in pipeline_desc.vertex_buffers.iter().enumerate() {
             let mtl_buffer_desc = vertex_descriptor.layouts().object_at(i);
             mtl_buffer_desc.set_stride(vertex_buffer.stride as u64);
@@ -435,10 +430,14 @@ impl Device {
         let pso: MTLRenderPipelineState = unsafe {
             msg_send![self.device.0, newRenderPipelineStateWithDescriptor:pipeline.0 error: &mut err_ptr]
         };
-        unsafe { defer! { msg_send![err_ptr, release] }};
+        unsafe {
+            pipeline.release();
+            vertex_descriptor.release();
+        }
 
         if pso.is_null() {
             error!("PSO creation failed: {}", unsafe { n::objc_err_description(err_ptr) });
+            unsafe { msg_send![err_ptr, release] };
             Err(pso::CreationError::Other)
         } else {
             Ok(n::GraphicsPipeline {
@@ -510,38 +509,56 @@ impl core::Device<Backend> for Device {
             (STAGE_VERTEX,   spirv::ExecutionModel::Vertex,   Counters { buffers:0, textures:0, samplers:0 }),
             (STAGE_FRAGMENT, spirv::ExecutionModel::Fragment, Counters { buffers:0, textures:0, samplers:0 }),
         ];
-        let mut res_overrides = Vec::new();
+        let mut res_overrides = HashMap::new();
 
         for (set_index, set_layout) in set_layouts.iter().enumerate() {
-            let set_bindings = match set_layout {
-                &&n::DescriptorSetLayout::Emulated(ref bindings) => bindings,
-                _ => continue,
-            };
-            for set_binding in set_bindings {
-                for &mut(stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
-                    if !set_binding.stage_flags.contains(stage_bit) {
-                        continue
+            match set_layout {
+                &&n::DescriptorSetLayout::Emulated(ref set_bindings) => {
+                    for set_binding in set_bindings {
+                        for &mut(stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
+                            if !set_binding.stage_flags.contains(stage_bit) {
+                                continue
+                            }
+                            let count = match set_binding.ty {
+                                DescriptorType::UniformBuffer |
+                                DescriptorType::StorageBuffer => &mut counters.buffers,
+                                DescriptorType::SampledImage => &mut counters.textures,
+                                DescriptorType::Sampler => &mut counters.samplers,
+                                _ => unimplemented!()
+                            };
+                            let count_base = *count;
+                            for i in 0 .. set_binding.count {
+                                let location = msl::ResourceBindingLocation {
+                                    stage,
+                                    desc_set: set_index as _,
+                                    binding: (set_binding.binding + i) as _,
+                                };
+                                let res_binding = msl::ResourceBinding {
+                                    resource_id: *count,
+                                    force_used: false,
+                                };
+                                *count += 1;
+                                res_overrides.insert(location, res_binding);
+                            }
+                        }
                     }
-                    let count = match set_binding.ty {
-                        DescriptorType::UniformBuffer |
-                        DescriptorType::StorageBuffer => &mut counters.buffers,
-                        DescriptorType::SampledImage => &mut counters.textures,
-                        DescriptorType::Sampler => &mut counters.samplers,
-                        _ => unimplemented!()
-                    };
-                    let count_base = *count;
-                    for i in 0 .. set_binding.count {
+                }
+                &&n::DescriptorSetLayout::ArgumentBuffer(_, stage_flags) => {
+                    for &mut(stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
+                        if !stage_flags.contains(stage_bit) {
+                            continue
+                        }
                         let location = msl::ResourceBindingLocation {
                             stage,
                             desc_set: set_index as _,
-                            binding: (set_binding.binding + i) as _,
+                            binding: 0,
                         };
                         let res_binding = msl::ResourceBinding {
-                            resource_id: *count,
+                            resource_id: counters.buffers,
                             force_used: false,
                         };
-                        *count += 1;
-                        res_overrides.push((location, res_binding));
+                        res_overrides.insert(location, res_binding);
+                        counters.buffers += 1;
                     }
                 }
             }
@@ -602,7 +619,7 @@ impl core::Device<Backend> for Device {
         if depends_on_pipeline_layout {
             Ok(n::ShaderModule::Raw(raw_data.to_vec()))
         } else {
-            self.compile_shader_library(raw_data, &[])
+            self.compile_shader_library(raw_data, &HashMap::new())
                 .map(n::ShaderModule::Compiled)
         }
     }

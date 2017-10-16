@@ -44,7 +44,7 @@ unsafe impl Sync for FrameBuffer {}
 
 #[derive(Debug)]
 pub struct PipelineLayout {
-    pub(crate) res_overrides: Vec<(msl::ResourceBindingLocation, msl::ResourceBinding)>,
+    pub(crate) res_overrides: HashMap<msl::ResourceBindingLocation, msl::ResourceBinding>,
 }
 
 #[derive(Debug)]

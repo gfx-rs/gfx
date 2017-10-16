@@ -7,7 +7,6 @@ workspace = "../../.."
 [features]
 default = []
 metal = ["gfx-backend-metal"]
-metal_argument_buffer = ["gfx-backend-metal/argument_buffer"]
 gl = ["glutin", "gfx-backend-gl"]
 #dx11 = ["gfx_device_dx11", "gfx_window_dxgi"]
 dx12 = ["gfx-backend-dx12"]
