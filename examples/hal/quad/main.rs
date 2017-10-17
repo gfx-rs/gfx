@@ -32,6 +32,12 @@ use core::target::Rect;
 
 use std::io::Cursor;
 
+// MSL doesn't allow `main` entry point name.
+//TODO: just use a different name consistently in all backends
+#[cfg(feature = "metal")]
+const ENTRY_NAME: &str = "main0";
+#[cfg(not(feature = "metal"))]
+const ENTRY_NAME: &str = "main";
 
 #[derive(Debug, Clone, Copy)]
 #[allow(non_snake_case)]
@@ -60,6 +66,7 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
 fn main() {
     env_logger::init().unwrap();
     let mut events_loop = winit::EventsLoop::new();
+
     let wb = winit::WindowBuilder::new()
         .with_dimensions(1024, 768)
         .with_title("quad".to_string());
@@ -116,11 +123,11 @@ fn main() {
     let (mut swap_chain, backbuffer) = surface.build_swapchain(swap_config, &queue);
 
     // Setup renderpass and pipeline
-    #[cfg(any(feature = "vulkan", feature = "dx12"))]
+    #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
     let vs_module = device
         .create_shader_module(include_bytes!("data/vert.spv"))
         .unwrap();
-    #[cfg(any(feature = "vulkan", feature = "dx12"))]
+    #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
     let fs_module = device
         .create_shader_module(include_bytes!("data/frag.spv"))
         .unwrap();
@@ -130,22 +137,17 @@ fn main() {
             include_str!("shader/quad_indirect.metal"),
             back::LanguageVersion::new(2, 0),
         ).expect("Error on creating shader lib");
-    #[cfg(all(feature = "metal", not(feature = "metal_argument_buffer")))]
-    let shader_lib = device.create_shader_library_from_source(
-            include_str!("shader/quad.metal"),
-            back::LanguageVersion::new(1, 1),
-        ).expect("Error on creating shader lib");
 
     #[cfg(feature = "gl")]
     let vs_module = device
         .create_shader_module_from_source(
-            include_bytes!("shader/quad_450.glslv"),
+            include_bytes!("shader/quad_150.glslv"),
             pso::Stage::Vertex,
         ).unwrap();
     #[cfg(feature = "gl")]
     let fs_module = device
         .create_shader_module_from_source(
-            include_bytes!("shader/quad_450.glslf"),
+            include_bytes!("shader/quad_150.glslf"),
             pso::Stage::Fragment,
         ).unwrap();
 
@@ -233,13 +235,15 @@ fn main() {
 
     //
     let pipelines = {
-        #[cfg(any(feature = "vulkan", feature = "dx12", feature = "gl"))]
+        //TODO: remove the type annotations when we have support for
+        // inidirect argument buffers in SPIRV-Cross
+        #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]
         let (vs_entry, fs_entry) = (
-            pso::EntryPoint { entry: "main", module: &vs_module },
-            pso::EntryPoint { entry: "main", module: &fs_module },
+            pso::EntryPoint::<back::Backend> { entry: ENTRY_NAME, module: &vs_module },
+            pso::EntryPoint::<back::Backend> { entry: ENTRY_NAME, module: &fs_module },
         );
 
-        #[cfg(feature = "metal")]
+        #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
         let (vs_entry, fs_entry) = (
             pso::EntryPoint { entry: "vs_main", module: &shader_lib },
             pso::EntryPoint { entry: "ps_main", module: &shader_lib },
@@ -520,12 +524,12 @@ fn main() {
     device.destroy_descriptor_pool(desc_pool);
     device.destroy_descriptor_set_layout(set_layout);
 
-    #[cfg(any(feature = "vulkan", feature = "dx12", feature = "gl"))]
+    #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]
     {
         device.destroy_shader_module(vs_module);
         device.destroy_shader_module(fs_module);
     }
-    #[cfg(feature = "metal")]
+    #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
     device.destroy_shader_module(shader_lib);
 
     device.destroy_buffer(vertex_buffer);

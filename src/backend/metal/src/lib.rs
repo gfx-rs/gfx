@@ -7,6 +7,7 @@ extern crate core_graphics;
 #[macro_use] extern crate log;
 #[macro_use] extern crate scopeguard;
 extern crate block;
+extern crate spirv_cross;
 
 extern crate metal_rs as metal;
 
