@@ -17,6 +17,9 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
 pub struct Resources<B: hal::Backend> {
     pub buffers: HashMap<String, (B::Buffer, B::Memory)>,
     pub images: HashMap<String, (B::Image, B::Memory)>,
+    pub image_views: HashMap<String, B::ImageView>,
+    pub render_passes: HashMap<String, (B::RenderPass, Vec<String>)>,
+    pub framebuffers: HashMap<String, B::Framebuffer>,
 }
 
 pub struct Scene<B: hal::Backend> {
@@ -63,12 +66,19 @@ impl<B: hal::Backend> Scene<B> {
         let mut resources = Resources {
             buffers: HashMap::new(),
             images: HashMap::new(),
+            image_views: HashMap::new(),
+            render_passes: HashMap::new(),
+            framebuffers: HashMap::new(),
         };
         let mut upload_buffers = HashMap::new();
         let init_submission = {
             let mut init_cmd = command_pool.acquire_command_buffer();
+
+            // Pass[1]: images, buffers, and passes
             for (name, resource) in &raw.resources {
                 match *resource {
+                    raw::Resource::Buffer => {
+                    }
                     raw::Resource::Image { kind, num_levels, format, usage, ref data } => {
                         let unbound = device.create_image(kind, num_levels, format, usage)
                             .unwrap();
@@ -143,7 +153,6 @@ impl<B: hal::Backend> Scene<B> {
                                         depth: d as _,
                                     },
                                 }]);
-
                             let image_barrier = hal::memory::Barrier::Image {
                                 states: (i::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal) ..
                                         (i::SHADER_READ, i::ImageLayout::ShaderReadOnlyOptimal),
@@ -157,11 +166,111 @@ impl<B: hal::Backend> Scene<B> {
 
                         resources.images.insert(name.clone(), (image, memory));
                     }
-                    raw::Resource::Buffer => {
+                    raw::Resource::RenderPass { ref attachments, ref subpasses, ref dependencies } => {
+                        let att_ref = |aref: &raw::AttachmentRef| {
+                            let id = attachments.keys().position(|s| s == &aref.0).unwrap();
+                            (id, aref.1)
+                        };
+                        let subpass_ref = |name: &String| {
+                            if name.is_empty() {
+                                hal::pass::SubpassRef::External
+                            } else {
+                                let id = subpasses.keys().position(|s| s == name).unwrap();
+                                hal::pass::SubpassRef::Pass(id)
+                            }
+                        };
+
+                        let raw_atts = attachments
+                            .values()
+                            .cloned()
+                            .collect::<Vec<_>>();
+                        let temp = subpasses
+                            .values()
+                            .map(|sp| {
+                                let colors = sp.colors
+                                    .iter()
+                                    .map(&att_ref)
+                                    .collect::<Vec<_>>();
+                                let ds = sp.depth_stencil
+                                    .as_ref()
+                                    .map(&att_ref);
+                                let inputs = sp.inputs
+                                    .iter()
+                                    .map(&att_ref)
+                                    .collect::<Vec<_>>();
+                                let preserves = sp.preserves
+                                    .iter()
+                                    .map(|name| {
+                                        attachments.keys().position(|s| s == name).unwrap()
+                                    })
+                                    .collect::<Vec<_>>();
+                                (colors, ds, inputs, preserves)
+                            })
+                            .collect::<Vec<_>>();
+                        let raw_subs = temp
+                            .iter()
+                            .map(|t| hal::pass::SubpassDesc {
+                                colors: &t.0,
+                                depth_stencil: t.1.as_ref(),
+                                inputs: &t.2,
+                                preserves: &t.3,
+                            })
+                            .collect::<Vec<_>>();
+                        let raw_deps = dependencies
+                            .iter()
+                            .map(|dep| hal::pass::SubpassDependency {
+                                passes: subpass_ref(&dep.passes.start) .. subpass_ref(&dep.passes.end),
+                                stages: dep.stages.clone(),
+                                accesses: dep.accesses.clone(),
+                            })
+                            .collect::<Vec<_>>();
+
+                        let rp = device.create_render_pass(&raw_atts, &raw_subs, &raw_deps);
+                        let att_names = attachments.keys().cloned().collect();
+                        resources.render_passes.insert(name.clone(), (rp, att_names));
                     }
-                    _ => unimplemented!()
+                    _ => {}
                 }
             }
+
+            // Pass[2]: image & buffer views
+            for (name, resource) in &raw.resources {
+                match *resource {
+                    raw::Resource::ImageView { ref image, format, swizzle, ref range } => {
+                        let image = &resources.images[image].0;
+                        let view = device.create_image_view(image, format, swizzle, range.clone())
+                            .unwrap();
+                        resources.image_views.insert(name.clone(), view);
+                    }
+                    _ => {}
+                }
+            }
+
+            // Pass[3]: framebuffers
+            for (name, resource) in &raw.resources {
+                match *resource {
+                    raw::Resource::Framebuffer { ref pass, ref views, extent } => {
+                        let (ref render_pass, ref att_names) = resources.render_passes[pass];
+                        let framebuffer = {
+                            let image_views = att_names
+                                .iter()
+                                .map(|name| {
+                                    let entry = views
+                                        .iter()
+                                        .find(|entry| entry.0 == name)
+                                        .unwrap();
+                                    &resources.image_views[entry.1]
+                                })
+                                .collect::<Vec<_>>();
+                            device.create_framebuffer(render_pass, &image_views, extent)
+                                .unwrap()
+                        };
+                        resources.framebuffers.insert(name.clone(), framebuffer);
+                    }
+                    _ => {}
+                }
+            }
+
             init_cmd.finish()
         };
 

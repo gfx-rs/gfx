@@ -88,7 +88,7 @@ impl core::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_renderpass(&mut self, _: &[pass::Attachment], _: &[pass::SubpassDesc], _: &[pass::SubpassDependency]) -> () {
+    fn create_render_pass(&mut self, _: &[pass::Attachment], _: &[pass::SubpassDesc], _: &[pass::SubpassDependency]) -> () {
         unimplemented!()
     }
 

@@ -414,13 +414,13 @@ impl<B: Backend> Device<B> {
     }
 
     #[doc(hidden)]
-    pub fn create_renderpass_raw(
+    pub fn create_render_pass_raw(
         &mut self,
         attachments: &[core::pass::Attachment],
         subpasses: &[core::pass::SubpassDesc],
         dependencies: &[core::pass::SubpassDependency],
     ) -> handle::raw::RenderPass<B> {
-        let pass = self.raw.create_renderpass(attachments, subpasses, dependencies);
+        let pass = self.raw.create_render_pass(attachments, subpasses, dependencies);
         RenderPass::new(pass, (), self.garbage.clone()).into()
     }
 

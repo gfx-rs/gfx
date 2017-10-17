@@ -190,7 +190,7 @@ fn main() {
             accesses: i::Access::empty() .. (i::COLOR_ATTACHMENT_READ | i::COLOR_ATTACHMENT_WRITE),
         };
 
-        device.create_renderpass(&[attachment], &[subpass], &[dependency])
+        device.create_render_pass(&[attachment], &[subpass], &[dependency])
     };
 
     //
