@@ -10,11 +10,17 @@ use core::{self, image, pass, pso};
 use cocoa::foundation::{NSRange, NSUInteger};
 use metal::*;
 use objc;
+use spirv_cross::msl;
 
 pub struct QueueFamily {}
 
+/// Shader module can be compiled in advance if it's resource bindings do not
+/// depend on pipeline layout, in which case the value would become `Compiled`.
 #[derive(Debug)]
-pub struct ShaderModule(pub MTLLibrary);
+pub enum ShaderModule {
+    Compiled(MTLLibrary),
+    Raw(Vec<u8>),
+}
 
 unsafe impl Send for ShaderModule {}
 unsafe impl Sync for ShaderModule {}
@@ -35,11 +41,18 @@ pub struct FrameBuffer(pub(crate) MTLRenderPassDescriptor);
 unsafe impl Send for FrameBuffer {}
 unsafe impl Sync for FrameBuffer {}
 
+
 #[derive(Debug)]
-pub struct PipelineLayout {}
+pub struct PipelineLayout {
+    pub(crate) res_overrides: HashMap<msl::ResourceBindingLocation, msl::ResourceBinding>,
+}
 
 #[derive(Debug)]
 pub struct GraphicsPipeline {
+    // we hold the compiled libraries here for now
+    // TODO: move to some cache in `Device`
+    pub(crate) vs_lib: MTLLibrary,
+    pub(crate) fs_lib: Option<MTLLibrary>,
     pub(crate) raw: MTLRenderPipelineState,
     pub(crate) primitive_type: MTLPrimitiveType,
 }
@@ -84,62 +97,72 @@ unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
 
 
-#[cfg(feature = "argument_buffer")]
 #[derive(Debug)]
-pub struct DescriptorPool {
-    pub(crate) arg_buffer: MTLBuffer,
-    pub(crate) total_size: NSUInteger,
-    pub(crate) offset: NSUInteger,
+pub enum DescriptorPool {
+    Emulated,
+    ArgumentBuffer {
+        buffer: MTLBuffer,
+        total_size: NSUInteger,
+        offset: NSUInteger,
+    }
 }
-#[cfg(feature = "argument_buffer")]
+//TODO: re-evaluate Send/Sync here
 unsafe impl Send for DescriptorPool {}
-#[cfg(feature = "argument_buffer")]
-unsafe impl Sync for DescriptorPool {} //TEMP!
-
-#[cfg(not(feature = "argument_buffer"))]
-#[derive(Debug)]
-pub struct DescriptorPool {}
+unsafe impl Sync for DescriptorPool {}
 
 impl core::DescriptorPool<Backend> for DescriptorPool {
-    #[cfg(feature = "argument_buffer")]
     fn allocate_sets(&mut self, layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
-        layouts.iter().map(|layout| {
-            let offset = self.offset;
-            self.offset += layout.encoder.encoded_length();
+        match *self {
+            DescriptorPool::Emulated => {
+                layouts.iter().map(|layout| {
+                    let layout_bindings = match layout {
+                        &&DescriptorSetLayout::Emulated(ref bindings) => bindings,
+                        _ => panic!("Incompatible descriptor set layout type"),
+                    };
 
-            DescriptorSet {
-                buffer: self.arg_buffer.clone(),
-                offset,
-                encoder: layout.encoder.clone(),
-                stage_flags: layout.stage_flags,
+                    let bindings = layout_bindings.iter().map(|layout| {
+                        let binding = match layout.ty {
+                            pso::DescriptorType::Sampler => {
+                                let resources = (0 .. layout.count).map(|_| MTLSamplerState::nil());
+                                DescriptorSetBinding::Sampler(resources.collect())
+                            }
+                            pso::DescriptorType::SampledImage => {
+                                let resources = (0 .. layout.count)
+                                    .map(|_| (MTLTexture::nil(), image::ImageLayout::General));
+                                DescriptorSetBinding::SampledImage(resources.collect())
+                            }
+                            _ => unimplemented!()
+                        };
+                        (layout.binding, binding)
+                    }).collect();
+
+                    let inner = DescriptorSetInner {
+                        layout: layout_bindings.to_vec(),
+                        bindings,
+                    };
+                    DescriptorSet::Emulated(Arc::new(Mutex::new(inner)))
+                }).collect()
             }
-        }).collect()
-    }
+            DescriptorPool::ArgumentBuffer { buffer, total_size, ref mut offset } => {
+                layouts.iter().map(|layout| {
+                    let (encoder, stage_flags) = match layout {
+                        &&DescriptorSetLayout::ArgumentBuffer(ref encoder, stages) => (encoder, stages),
+                        _ => panic!("Incompatible descriptor set layout type"),
+                    };
 
-    #[cfg(not(feature = "argument_buffer"))]
-    fn allocate_sets(&mut self, layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
-        layouts.iter().map(|layout| {
-            let bindings = layout.bindings.iter().map(|layout| {
-                let binding = match layout.ty {
-                    pso::DescriptorType::Sampler => {
-                        DescriptorSetBinding::Sampler((0..layout.count).map(|_| MTLSamplerState::nil()).collect())
-                    },
-                    pso::DescriptorType::SampledImage => {
-                        DescriptorSetBinding::SampledImage((0..layout.count).map(|_| (MTLTexture::nil(), image::ImageLayout::General)).collect())
-                    },
-                    _ => unimplemented!(),
-                };
-                (layout.binding, binding)
-            }).collect();
+                    let cur_offset = *offset;
+                    *offset += encoder.encoded_length();
+                    assert!(*offset <= total_size);
 
-            let inner = DescriptorSetInner {
-                layout: layout.bindings.clone(),
-                bindings,
-            };
-            DescriptorSet {
-                inner: Arc::new(Mutex::new(inner)),
+                    DescriptorSet::ArgumentBuffer {
+                        buffer: buffer.clone(),
+                        offset: cur_offset,
+                        encoder: encoder.clone(),
+                        stage_flags,
+                    }
+                }).collect()
             }
-        }).collect()
+        }
     }
 
     fn reset(&mut self) {
@@ -147,49 +170,32 @@ impl core::DescriptorPool<Backend> for DescriptorPool {
     }
 }
 
-#[cfg(feature = "argument_buffer")]
 #[derive(Debug)]
-pub struct DescriptorSetLayout {
-    pub(crate) encoder: MTLArgumentEncoder,
-    pub(crate) stage_flags: pso::ShaderStageFlags,
+pub enum DescriptorSetLayout {
+    Emulated(Vec<pso::DescriptorSetLayoutBinding>),
+    ArgumentBuffer(MTLArgumentEncoder, pso::ShaderStageFlags),
 }
-#[cfg(feature = "argument_buffer")]
 unsafe impl Send for DescriptorSetLayout {}
-#[cfg(feature = "argument_buffer")]
 unsafe impl Sync for DescriptorSetLayout {}
 
-#[cfg(not(feature = "argument_buffer"))]
-#[derive(Debug)]
-pub struct DescriptorSetLayout {
-    pub(crate) bindings: Vec<pso::DescriptorSetLayoutBinding>,
-}
-
 #[derive(Clone, Debug)]
-#[cfg(feature = "argument_buffer")]
-pub struct DescriptorSet {
-    pub(crate) buffer: MTLBuffer,
-    pub(crate) offset: NSUInteger,
-    pub(crate) encoder: MTLArgumentEncoder,
-    pub(crate) stage_flags: pso::ShaderStageFlags,
+pub enum DescriptorSet {
+    Emulated(Arc<Mutex<DescriptorSetInner>>),
+    ArgumentBuffer {
+        buffer: MTLBuffer,
+        offset: NSUInteger,
+        encoder: MTLArgumentEncoder,
+        stage_flags: pso::ShaderStageFlags,
+    }
 }
-#[cfg(feature = "argument_buffer")]
 unsafe impl Send for DescriptorSet {}
-#[cfg(feature = "argument_buffer")]
 unsafe impl Sync for DescriptorSet {}
 
-#[derive(Clone, Debug)]
-#[cfg(not(feature = "argument_buffer"))]
-pub struct DescriptorSet {
-    pub(crate) inner: Arc<Mutex<DescriptorSetInner>>,
-}
-
-#[cfg(not(feature = "argument_buffer"))]
 #[derive(Debug)]
 pub struct DescriptorSetInner {
     pub(crate) layout: Vec<pso::DescriptorSetLayoutBinding>, // TODO: maybe don't clone?
     pub(crate) bindings: HashMap<usize, DescriptorSetBinding>,
 }
-#[cfg(not(feature = "argument_buffer"))]
 unsafe impl Send for DescriptorSetInner {}
 
 #[derive(Debug)]

@@ -13,7 +13,6 @@ workspace = "../../.."
 
 [features]
 default = ["winit"]
-argument_buffer = []
 
 [lib]
 name = "gfx_backend_metal"
@@ -30,3 +29,4 @@ cocoa = "0.9"
 core-foundation = "0.3"
 core-graphics = "0.9"
 io-surface = "0.7"
+spirv_cross = { git = "https://github.com/grovesNL/spirv_cross.git", branch = "build-set-stdlib" }
