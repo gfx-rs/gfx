@@ -5,14 +5,18 @@ cache:
   directories:
    - $HOME/deps
 
-rust:
-  - stable
-  - nightly
-
 matrix:
   include:
     - os: linux
+      rust: stable
+    - os: linux
+      rust: nightly
     - os: osx
+      rust: stable
+      osx_image: xcode9
+      compiler: clang
+    - os: osx
+      rust: nightly
       osx_image: xcode9
       compiler: clang
 
