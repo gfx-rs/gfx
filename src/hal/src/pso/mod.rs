@@ -124,41 +124,41 @@ bitflags!(
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
     pub struct ShaderStageFlags: u16 {
         /// Vertex shader stage.
-        const STAGE_VERTEX   = 0x1;
+        const VERTEX   = 0x1;
         /// Hull (tessellation) shader stage.
-        const STAGE_HULL     = 0x2;
+        const HULL     = 0x2;
         /// Domain (tessellation) shader stage.
-        const STAGE_DOMAIN   = 0x4;
+        const DOMAIN   = 0x4;
         /// Geometry shader stage.
-        const STAGE_GEOMETRY = 0x8;
+        const GEOMETRY = 0x8;
         /// Fragment shader stage.
-        const STAGE_FRAGMENT = 0x10;
+        const FRAGMENT = 0x10;
         /// Compute shader stage.
-        const STAGE_COMPUTE  = 0x20;
+        const COMPUTE  = 0x20;
         /// All graphics pipeline shader stages.
-        const STAGE_GRAPHICS = Self::STAGE_VERTEX.bits | Self::STAGE_HULL.bits |
-            Self::STAGE_DOMAIN.bits | Self::STAGE_GEOMETRY.bits | Self::STAGE_FRAGMENT.bits;
+        const GRAPHICS = Self::VERTEX.bits | Self::HULL.bits |
+            Self::DOMAIN.bits | Self::GEOMETRY.bits | Self::FRAGMENT.bits;
         /// All shader stages.
-        const STAGE_ALL      = Self::STAGE_GRAPHICS.bits | Self::STAGE_COMPUTE.bits;
+        const ALL      = Self::GRAPHICS.bits | Self::COMPUTE.bits;
     }
 );
 
 ///
-pub const STAGE_VERTEX: ShaderStageFlags = ShaderStageFlags::STAGE_VERTEX;
+pub const STAGE_VERTEX: ShaderStageFlags = ShaderStageFlags::VERTEX;
 ///
-pub const STAGE_HULL: ShaderStageFlags = ShaderStageFlags::STAGE_HULL;
+pub const STAGE_HULL: ShaderStageFlags = ShaderStageFlags::HULL;
 ///
-pub const STAGE_DOMAIN: ShaderStageFlags = ShaderStageFlags::STAGE_DOMAIN;
+pub const STAGE_DOMAIN: ShaderStageFlags = ShaderStageFlags::DOMAIN;
 ///
-pub const STAGE_GEOMETRY: ShaderStageFlags = ShaderStageFlags::STAGE_GEOMETRY;
+pub const STAGE_GEOMETRY: ShaderStageFlags = ShaderStageFlags::GEOMETRY;
 ///
-pub const STAGE_FRAGMENT: ShaderStageFlags = ShaderStageFlags::STAGE_FRAGMENT;
+pub const STAGE_FRAGMENT: ShaderStageFlags = ShaderStageFlags::FRAGMENT;
 ///
-pub const STAGE_COMPUTE: ShaderStageFlags = ShaderStageFlags::STAGE_COMPUTE;
+pub const STAGE_COMPUTE: ShaderStageFlags = ShaderStageFlags::COMPUTE;
 ///
-pub const STAGE_GRAPHICS: ShaderStageFlags = ShaderStageFlags::STAGE_GRAPHICS;
+pub const STAGE_GRAPHICS: ShaderStageFlags = ShaderStageFlags::GRAPHICS;
 ///
-pub const STAGE_ALL: ShaderStageFlags = ShaderStageFlags::STAGE_ALL;
+pub const STAGE_ALL: ShaderStageFlags = ShaderStageFlags::ALL;
 
 //Note: this type is only needed for backends, not used anywhere within gfx_core.
 /// Which program stage this shader represents.

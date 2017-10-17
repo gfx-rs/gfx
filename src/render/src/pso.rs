@@ -112,7 +112,7 @@ impl<B: Backend> Bind<B> for SampledImage {
         let img = view.info();
         let levels = img.info().mip_levels;
         let layers = img.info().kind.get_num_layers();
-        let state = (image::SHADER_READ, ImageLayout::ShaderReadOnlyOptimal);
+        let state = (image::Access::SHADER_READ, ImageLayout::ShaderReadOnlyOptimal);
         for level in 0..levels {
             for layer in 0..layers {
                 images.push((img, (level, layer), state));
@@ -290,7 +290,7 @@ impl<'a, B, F> Component<'a, B> for RenderTarget<F>
         let levels = img.info().mip_levels;
         let layers = img.info().kind.get_num_layers();
         // TODO: READ not always necessary
-        let state = (image::COLOR_ATTACHMENT_READ | image::COLOR_ATTACHMENT_WRITE,
+        let state = (image::Access::COLOR_ATTACHMENT_READ | image::Access::COLOR_ATTACHMENT_WRITE,
             ImageLayout::ColorAttachmentOptimal);
         for level in 0..levels {
             for layer in 0..layers {
@@ -364,7 +364,7 @@ impl<'a, B, T, I> Component<'a, B> for VertexBuffer<T, I>
         _: &mut Vec<(&'b handle::raw::Image<B>, image::Subresource, hal::image::State)>,
         _: &mut handle::Bag<B>,
     ) where 'a: 'b {
-        buffers.push((data.as_ref(), hal::buffer::VERTEX_BUFFER_READ));
+        buffers.push((data.as_ref(), hal::buffer::Access::VERTEX_BUFFER_READ));
     }
 
     fn vertex_buffer<'b>(data: &'b Self::Data) -> Option<(&'b B::Buffer, hal::pso::BufferOffset)>

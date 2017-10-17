@@ -390,7 +390,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         range: image::SubresourceRange,
         value: com::ClearColor,
     ) {
-        assert_eq!(range, image.to_subresource_range(image::ASPECT_COLOR));
+        assert_eq!(range, image.to_subresource_range(image::AspectFlags::COLOR));
         let rtv = image.clear_cv.unwrap();
         self.clear_render_target_view(rtv, value, &[]);
     }
@@ -402,13 +402,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         range: image::SubresourceRange,
         value: com::ClearDepthStencil,
     ) {
-        assert!((image::ASPECT_DEPTH | image::ASPECT_STENCIL).contains(range.aspects));
+        use self::image::AspectFlags;
+        assert!((AspectFlags::DEPTH | AspectFlags::STENCIL).contains(range.aspects));
         assert_eq!(range, image.to_subresource_range(range.aspects));
-        if range.aspects.contains(image::ASPECT_DEPTH) {
+        if range.aspects.contains(AspectFlags::DEPTH) {
             let dsv = image.clear_dv.unwrap();
             self.clear_depth_stencil_view(dsv, Some(value.depth), None, &[]);
         }
-        if range.aspects.contains(image::ASPECT_STENCIL) {
+        if range.aspects.contains(AspectFlags::STENCIL) {
             let dsv = image.clear_sv.unwrap();
             self.clear_depth_stencil_view(dsv, None, Some(value.stencil as _), &[]);
         }

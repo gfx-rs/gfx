@@ -101,7 +101,7 @@ fn main() {
     ).unwrap();
 
     let image_range = gfx::image::SubresourceRange {
-        aspects: i::ASPECT_COLOR,
+        aspects: i::AspectFlags::COLOR,
         levels: 0 .. 1,
         layers: 0 .. 1,
     };
@@ -129,7 +129,7 @@ fn main() {
     let vertex_count = QUAD.len() as u64;
     let (vertex_buffer, vertex_token) = device.create_buffer::<Vertex, _>(
         &mut upload,
-        gfx::buffer::VERTEX,
+        gfx::buffer::Usage::VERTEX,
         vertex_count
     ).unwrap();
 
@@ -149,7 +149,7 @@ fn main() {
 
     let (image_upload_buffer, image_upload_token) = device.create_buffer_raw(
         &mut upload,
-        gfx::buffer::TRANSFER_SRC,
+        gfx::buffer::Usage::TRANSFER_SRC,
         upload_size,
         image_stride as u64
     ).unwrap();
@@ -166,7 +166,7 @@ fn main() {
 
     let (image, image_token) = device.create_image::<ColorFormat, _>(
         &mut data,
-        gfx::image::TRANSFER_DST | gfx::image::SAMPLED,
+        gfx::image::Usage::TRANSFER_DST | gfx::image::Usage::SAMPLED,
         kind,
         1,
     ).unwrap();
@@ -212,7 +212,7 @@ fn main() {
             buffer_row_pitch: row_pitch,
             buffer_slice_pitch: row_pitch * (height as u32),
             image_layers: gfx::image::SubresourceLayers {
-                aspects: i::ASPECT_COLOR,
+                aspects: i::AspectFlags::COLOR,
                 level: 0,
                 layers: 0 .. 1,
             },

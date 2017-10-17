@@ -412,7 +412,7 @@ impl d::Device<B> for Device {
     fn create_buffer(
         &self, size: u64, stride: u64, usage: buffer::Usage,
     ) -> Result<UnboundBuffer, buffer::CreationError> {
-        if !self.share.features.constant_buffer && usage.contains(buffer::UNIFORM) {
+        if !self.share.features.constant_buffer && usage.contains(buffer::Usage::UNIFORM) {
             error!("Constant buffers are not supported by this GL version");
             return Err(buffer::CreationError::Other);
         }

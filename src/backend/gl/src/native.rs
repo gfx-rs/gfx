@@ -1,4 +1,5 @@
-use hal::{self, image as i, memory as mem, pass};
+use hal::{self, image as i, pass};
+use hal::memory::Properties;
 use hal::target::{Layer, Level};
 use gl;
 use Backend;
@@ -92,15 +93,15 @@ pub struct ShaderModule {
 
 #[derive(Debug)]
 pub struct Memory {
-    pub(crate) properties: mem::Properties,
+    pub(crate) properties: Properties,
 }
 
 impl Memory {
     pub fn can_upload(&self) -> bool {
-        self.properties.contains(mem::CPU_VISIBLE)
+        self.properties.contains(Properties::CPU_VISIBLE)
     }
     pub fn can_download(&self) -> bool {
-        self.properties.contains(mem::CPU_VISIBLE | mem::CPU_CACHED)
+        self.properties.contains(Properties::CPU_VISIBLE | Properties::CPU_CACHED)
     }
 }
 

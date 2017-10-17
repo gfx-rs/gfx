@@ -202,23 +202,25 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             panic!("Error opening adapter: {:?}", err);
         }
 
+        use hal::memory::Properties;
+
         // COHERENT flags require that the backend does flushing and invaldation
         // by itself. If we move towards persistent mapping we need to re-evaluate it.
         let memory_types = if self.0.private_caps.map {
             vec![
                 hal::MemoryType {
                     id: 0,
-                    properties: hal::memory::DEVICE_LOCAL,
+                    properties: Properties::DEVICE_LOCAL,
                     heap_index: 1,
                 },
                 hal::MemoryType { // upload
                     id: 1,
-                    properties: hal::memory::CPU_VISIBLE | hal::memory::COHERENT,
+                    properties: Properties::CPU_VISIBLE | Properties::COHERENT,
                     heap_index: 0,
                 },
                 hal::MemoryType { // download
                     id: 2,
-                    properties: hal::memory::CPU_VISIBLE | hal::memory::COHERENT | hal::memory::CPU_CACHED,
+                    properties: Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
                     heap_index: 0,
                 },
             ]
@@ -226,7 +228,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             vec![
                 hal::MemoryType {
                     id: 0,
-                    properties: hal::memory::DEVICE_LOCAL,
+                    properties: Properties::DEVICE_LOCAL,
                     heap_index: 0,
                 },
             ]

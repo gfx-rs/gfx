@@ -68,7 +68,7 @@ impl d::Device<B> for Device {
             self.raw.0.allocate_memory(&info, None)
         }.expect("Error on memory allocation"); // TODO: error handling
 
-        let ptr = if memory_type.properties.contains(memory::CPU_VISIBLE) {
+        let ptr = if memory_type.properties.contains(memory::Properties::CPU_VISIBLE) {
             unsafe {
                 self.raw.0.map_memory(
                     memory,

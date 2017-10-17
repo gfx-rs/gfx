@@ -412,11 +412,12 @@ pub fn map_function(fun: Comparison) -> D3D12_COMPARISON_FUNC {
 }
 
 pub fn map_buffer_resource_state(access: buffer::Access) -> D3D12_RESOURCE_STATES {
+    use self::buffer::Access;
     // Mutable states
-    if access.contains(buffer::SHADER_WRITE) {
+    if access.contains(Access::SHADER_WRITE) {
         return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     }
-    if access.contains(buffer::TRANSFER_WRITE) {
+    if access.contains(Access::TRANSFER_WRITE) {
         // Resolve not relevant for buffers.
         return D3D12_RESOURCE_STATE_COPY_DEST;
     }
@@ -424,19 +425,19 @@ pub fn map_buffer_resource_state(access: buffer::Access) -> D3D12_RESOURCE_STATE
     // Read-only states
     let mut state = D3D12_RESOURCE_STATE_COMMON;
 
-    if access.contains(buffer::TRANSFER_READ) {
+    if access.contains(Access::TRANSFER_READ) {
         state = state | D3D12_RESOURCE_STATE_COPY_SOURCE;
     }
-    if access.contains(buffer::INDEX_BUFFER_READ) {
+    if access.contains(Access::INDEX_BUFFER_READ) {
         state = state | D3D12_RESOURCE_STATE_INDEX_BUFFER;
     }
-    if access.contains(buffer::VERTEX_BUFFER_READ) || access.contains(buffer::CONSTANT_BUFFER_READ) {
+    if access.contains(Access::VERTEX_BUFFER_READ) || access.contains(Access::CONSTANT_BUFFER_READ) {
         state = state | D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
     }
-    if access.contains(buffer::INDIRECT_COMMAND_READ) {
+    if access.contains(Access::INDIRECT_COMMAND_READ) {
         state = state | D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
     }
-    if access.contains(buffer::SHADER_READ) {
+    if access.contains(Access::SHADER_READ) {
         // SHADER_READ only allows SRV access
         state = state | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     }
@@ -445,19 +446,20 @@ pub fn map_buffer_resource_state(access: buffer::Access) -> D3D12_RESOURCE_STATE
 }
 
 pub fn map_image_resource_state(access: image::Access, layout: image::ImageLayout) -> D3D12_RESOURCE_STATES {
+    use self::image::Access;
     // `D3D12_RESOURCE_STATE_PRESENT` is the same as COMMON (general state)
     if layout == image::ImageLayout::Present {
         return D3D12_RESOURCE_STATE_PRESENT;
     }
 
     // Mutable states
-    if access.contains(image::SHADER_WRITE) {
+    if access.contains(Access::SHADER_WRITE) {
         return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     }
-    if access.contains(image::DEPTH_STENCIL_ATTACHMENT_WRITE) {
+    if access.contains(Access::DEPTH_STENCIL_ATTACHMENT_WRITE) {
         return D3D12_RESOURCE_STATE_DEPTH_WRITE;
     }
-    if access.contains(image::COLOR_ATTACHMENT_READ) || access.contains(image::COLOR_ATTACHMENT_WRITE) {
+    if access.contains(Access::COLOR_ATTACHMENT_READ) || access.contains(Access::COLOR_ATTACHMENT_WRITE) {
         return D3D12_RESOURCE_STATE_RENDER_TARGET;
     }
 
@@ -466,26 +468,26 @@ pub fn map_image_resource_state(access: image::Access, layout: image::ImageLayou
     // We currently assume that `COPY_DEST` is more common state than out of renderpass resolves.
     // Resolve operations need to insert a barrier before and after the command to transition from and
     // into `COPY_DEST` to have a consistent state for srcAccess.
-    if access.contains(image::TRANSFER_WRITE) {
+    if access.contains(Access::TRANSFER_WRITE) {
         return D3D12_RESOURCE_STATE_COPY_DEST;
     }
 
     // Read-only states
     let mut state = D3D12_RESOURCE_STATE_COMMON;
 
-    if access.contains(image::TRANSFER_READ) {
+    if access.contains(Access::TRANSFER_READ) {
         state = state | D3D12_RESOURCE_STATE_COPY_SOURCE;
     }
-    if access.contains(image::INPUT_ATTACHMENT_READ) {
+    if access.contains(Access::INPUT_ATTACHMENT_READ) {
         state = state | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     }
-    if access.contains(image::DEPTH_STENCIL_ATTACHMENT_READ) {
+    if access.contains(Access::DEPTH_STENCIL_ATTACHMENT_READ) {
         state = state | D3D12_RESOURCE_STATE_DEPTH_READ;
     }
-    if access.contains(image::SHADER_READ) {
+    if access.contains(Access::SHADER_READ) {
         // SHADER_READ only allows SRV access
         // Already handled the `SHADER_WRITE` write case above.
-        assert!(!access.contains(image::SHADER_WRITE));
+        assert!(!access.contains(Access::SHADER_WRITE));
         state = state | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     }
 
@@ -512,7 +514,7 @@ pub fn map_descriptor_range(bind: &DescriptorSetLayoutBinding, register_space: u
 pub fn map_buffer_flags(usage: buffer::Usage) -> D3D12_RESOURCE_FLAGS {
     let mut flags = D3D12_RESOURCE_FLAG_NONE;
 
-    if usage.contains(buffer::STORAGE) {
+    if usage.contains(buffer::Usage::STORAGE) {
         flags = flags | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
 
@@ -520,18 +522,19 @@ pub fn map_buffer_flags(usage: buffer::Usage) -> D3D12_RESOURCE_FLAGS {
 }
 
 pub fn map_image_flags(usage: image::Usage) -> D3D12_RESOURCE_FLAGS {
+    use self::image::Usage;
     let mut flags = D3D12_RESOURCE_FLAG_NONE;
 
-    if usage.contains(image::COLOR_ATTACHMENT) {
+    if usage.contains(Usage::COLOR_ATTACHMENT) {
         flags = flags | D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
     }
-    if usage.contains(image::DEPTH_STENCIL_ATTACHMENT) {
+    if usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
         flags = flags | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
     }
-    if usage.contains(image::STORAGE) {
+    if usage.contains(Usage::STORAGE) {
         flags = flags | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
-    if usage.contains(image::DEPTH_STENCIL_ATTACHMENT) && !usage.contains(image::SAMPLED) {
+    if usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) && !usage.contains(Usage::SAMPLED) {
         flags = flags | D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
     }
 

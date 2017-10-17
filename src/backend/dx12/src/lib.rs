@@ -121,6 +121,7 @@ pub struct PhysicalDevice {
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(self, families: Vec<(QueueFamily, usize)>) -> hal::Gpu<Backend> {
+        use self::memory::Properties;
         // Create D3D12 device
         let mut device_raw = ptr::null_mut();
         let hr = unsafe {
@@ -193,19 +194,19 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 // DEFAULT
                 hal::MemoryType {
                     id: 0,
-                    properties: memory::DEVICE_LOCAL,
+                    properties: Properties::DEVICE_LOCAL,
                     heap_index: 0,
                 },
                 // UPLOAD
                 hal::MemoryType {
                     id: 1,
-                    properties: memory::CPU_VISIBLE | memory::COHERENT,
+                    properties: Properties::CPU_VISIBLE | Properties::COHERENT,
                     heap_index: 1,
                 },
                 // READBACK
                 hal::MemoryType {
                     id: 2,
-                    properties: memory::CPU_VISIBLE | memory::COHERENT | memory::CPU_CACHED,
+                    properties: Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
                     heap_index: 1,
                 },
             ],
@@ -213,19 +214,19 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 // DEFAULT
                 hal::MemoryType {
                     id: 0,
-                    properties: memory::DEVICE_LOCAL,
+                    properties: Properties::DEVICE_LOCAL,
                     heap_index: 0,
                 },
                 // UPLOAD
                 hal::MemoryType {
                     id: 1,
-                    properties: memory::DEVICE_LOCAL | memory::CPU_VISIBLE | memory::COHERENT,
+                    properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT,
                     heap_index: 0,
                 },
                 // READBACK
                 hal::MemoryType {
                     id: 2,
-                    properties: memory::DEVICE_LOCAL | memory::CPU_VISIBLE | memory::COHERENT | memory::CPU_CACHED,
+                    properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
                     heap_index: 0,
                 },
             ],
@@ -233,19 +234,19 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 // DEFAULT
                 hal::MemoryType {
                     id: 0,
-                    properties: memory::DEVICE_LOCAL,
+                    properties: Properties::DEVICE_LOCAL,
                     heap_index: 0,
                 },
                 // UPLOAD
                 hal::MemoryType {
                     id: 1,
-                    properties: memory::DEVICE_LOCAL | memory::CPU_VISIBLE | memory::COHERENT | memory::CPU_CACHED,
+                    properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
                     heap_index: 0,
                 },
                 // READBACK
                 hal::MemoryType {
                     id: 2,
-                    properties: memory::DEVICE_LOCAL | memory::CPU_VISIBLE | memory::COHERENT | memory::CPU_CACHED,
+                    properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
                     heap_index: 0,
                 },
             ],

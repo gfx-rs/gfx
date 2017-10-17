@@ -1018,7 +1018,7 @@ impl d::Device<B> for Device {
         stride: u64,
         usage: buffer::Usage,
     ) -> Result<UnboundBuffer, buffer::CreationError> {
-        if usage.contains(buffer::UNIFORM) {
+        if usage.contains(buffer::Usage::UNIFORM) {
             // Constant buffer view sizes need to be aligned.
             // Coupled with the offset alignment we can enforce an aligned CBV size
             // on descriptor updates.
@@ -1108,16 +1108,17 @@ impl d::Device<B> for Device {
         format: format::Format,
         usage: image::Usage,
     ) -> Result<UnboundImage, image::CreationError> {
-        let mut aspects = image::AspectFlags::empty();
+        use self::image::AspectFlags;
+        let mut aspects = AspectFlags::empty();
         let bits = format.0.describe_bits();
         if bits.color + bits.alpha != 0 {
-            aspects |= image::ASPECT_COLOR;
+            aspects |= AspectFlags::COLOR;
         }
         if bits.depth != 0 {
-            aspects |= image::ASPECT_DEPTH;
+            aspects |= AspectFlags::DEPTH;
         }
         if bits.stencil != 0 {
-            aspects |= image::ASPECT_STENCIL;
+            aspects |= AspectFlags::STENCIL;
         }
 
         let (width, height, depth, aa) = kind.get_dimensions();
@@ -1182,6 +1183,7 @@ impl d::Device<B> for Device {
         offset: u64,
         image: UnboundImage,
     ) -> Result<n::Image, d::BindError> {
+        use self::image::{AspectFlags, Usage};
         if image.requirements.type_mask & (1 << memory.ty.id) == 0 {
             error!("Bind memory failure: supported mask 0x{:x}, given id {}",
                 image.requirements.type_mask, memory.ty.id);
@@ -1217,9 +1219,9 @@ impl d::Device<B> for Device {
             bits_per_texel: image.bits_per_texel,
             num_levels: image.num_levels,
             num_layers: image.num_layers,
-            clear_cv: if image.aspects.contains(image::ASPECT_COLOR) && image.usage.contains(image::COLOR_ATTACHMENT) {
+            clear_cv: if image.aspects.contains(AspectFlags::COLOR) && image.usage.contains(Usage::COLOR_ATTACHMENT) {
                 let range = image::SubresourceRange {
-                    aspects: image::ASPECT_COLOR,
+                    aspects: AspectFlags::COLOR,
                     levels: 0 .. 1, //TODO?
                     layers: 0 .. image.num_layers,
                 };
@@ -1227,9 +1229,9 @@ impl d::Device<B> for Device {
             } else {
                 None
             },
-            clear_dv: if image.aspects.contains(image::ASPECT_DEPTH) && image.usage.contains(image::DEPTH_STENCIL_ATTACHMENT) {
+            clear_dv: if image.aspects.contains(AspectFlags::DEPTH) && image.usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
                 let range = image::SubresourceRange {
-                    aspects: image::ASPECT_DEPTH,
+                    aspects: AspectFlags::DEPTH,
                     levels: 0 .. 1, //TODO?
                     layers: 0 .. image.num_layers,
                 };
@@ -1237,9 +1239,9 @@ impl d::Device<B> for Device {
             } else {
                 None
             },
-            clear_sv: if image.aspects.contains(image::ASPECT_STENCIL) && image.usage.contains(image::DEPTH_STENCIL_ATTACHMENT) {
+            clear_sv: if image.aspects.contains(AspectFlags::STENCIL) && image.usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
                 let range = image::SubresourceRange {
-                    aspects: image::ASPECT_STENCIL,
+                    aspects: AspectFlags::STENCIL,
                     levels: 0 .. 1, //TODO?
                     layers: 0 .. image.num_layers,
                 };
@@ -1257,27 +1259,28 @@ impl d::Device<B> for Device {
         _swizzle: format::Swizzle,
         range: image::SubresourceRange,
     ) -> Result<n::ImageView, image::ViewError> {
+        use self::image::Usage;
         let format_raw = conv::map_format(format).ok_or(image::ViewError::BadFormat);
 
         Ok(n::ImageView {
             resource: image.resource,
-            handle_srv: if image.usage.contains(image::SAMPLED) {
+            handle_srv: if image.usage.contains(Usage::SAMPLED) {
                 Some(self.view_image_as_shader_resource(image.resource, image.kind, format_raw.clone()?, &range)?)
             } else {
                 None
             },
-            handle_rtv: if image.usage.contains(image::COLOR_ATTACHMENT) {
+            handle_rtv: if image.usage.contains(Usage::COLOR_ATTACHMENT) {
                 Some(self.view_image_as_render_target(image.resource, image.kind, format_raw.clone()?, &range)?)
             } else {
                 None
             },
-            handle_dsv: if image.usage.contains(image::DEPTH_STENCIL_ATTACHMENT) {
+            handle_dsv: if image.usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
                 let fmt = conv::map_format_dsv(format.0).ok_or(image::ViewError::BadFormat);
                 Some(self.view_image_as_depth_stencil(image.resource, image.kind, fmt?, &range)?)
             } else {
                 None
             },
-            handle_uav: if image.usage.contains(image::STORAGE) {
+            handle_uav: if image.usage.contains(Usage::STORAGE) {
                 Some(self.view_image_as_storage(image.resource, image.kind, format_raw?, &range)?)
             } else {
                 None

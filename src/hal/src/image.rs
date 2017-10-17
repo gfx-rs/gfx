@@ -559,20 +559,20 @@ bitflags!(
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
     pub struct AspectFlags: u8 {
         /// Color aspect.
-        const ASPECT_COLOR = 0x1;
+        const COLOR = 0x1;
         /// Depth aspect.
-        const ASPECT_DEPTH = 0x2;
+        const DEPTH = 0x2;
         /// Stencil aspect.
-        const ASPECT_STENCIL = 0x4;
+        const STENCIL = 0x4;
     }
 );
 
 /// Color aspect.
-pub const ASPECT_COLOR: AspectFlags = AspectFlags::ASPECT_COLOR;
+pub const ASPECT_COLOR: AspectFlags = AspectFlags::COLOR;
 /// Depth aspect.
-pub const ASPECT_DEPTH: AspectFlags = AspectFlags::ASPECT_DEPTH;
+pub const ASPECT_DEPTH: AspectFlags = AspectFlags::DEPTH;
 /// Stencil aspect.
-pub const ASPECT_STENCIL: AspectFlags = AspectFlags::ASPECT_STENCIL;
+pub const ASPECT_STENCIL: AspectFlags = AspectFlags::STENCIL;
 
 bitflags!(
     ///

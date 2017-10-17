@@ -8,10 +8,7 @@ use ash::version::DeviceV1_0;
 use hal::{command as com, memory, pso, target};
 use hal::{IndexCount, InstanceCount, VertexCount, VertexOffset, Viewport};
 use hal::buffer::IndexBufferView;
-use hal::image::{
-    ImageLayout, SubresourceRange,
-    ASPECT_COLOR, ASPECT_DEPTH, ASPECT_STENCIL,
-};
+use hal::image::{AspectFlags, ImageLayout, SubresourceRange};
 use {conv, native as n};
 use {Backend, RawDevice};
 
@@ -194,7 +191,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     });
                 }
                 memory::Barrier::Image { ref states, target, ref range } => {
-                    assert_eq!(range.aspects, ASPECT_COLOR);
+                    assert_eq!(range.aspects, AspectFlags::COLOR);
                     let subresource_range = conv::map_subresource_range(range);
                     image_bars.push(vk::ImageMemoryBarrier {
                         s_type: vk::StructureType::ImageMemoryBarrier,
@@ -265,7 +262,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         range: SubresourceRange,
         value: com::ClearColor,
     ) {
-        assert!(ASPECT_COLOR.contains(range.aspects));
+        assert!(AspectFlags::COLOR.contains(range.aspects));
         let range = conv::map_subresource_range(&range);
         let clear_value = conv::map_clear_color(value);
 
@@ -287,7 +284,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         range: SubresourceRange,
         value: com::ClearDepthStencil,
     ) {
-        assert!((ASPECT_DEPTH | ASPECT_STENCIL).contains(range.aspects));
+        assert!((AspectFlags::DEPTH | AspectFlags::STENCIL).contains(range.aspects));
         let range = conv::map_subresource_range(&range);
         let clear_value = vk::ClearDepthStencilValue {
             depth: value.depth,

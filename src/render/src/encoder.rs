@@ -5,9 +5,11 @@ use std::ops::Range;
 use std::sync::mpsc;
 use std::collections::{HashMap, HashSet};
 
-use hal::{self, image as i, CommandPool};
+use hal::{self, buffer as b, image as i, CommandPool};
 use hal::command::CommandBuffer;
+use hal::image::AspectFlags;
 use hal::memory::Barrier;
+use hal::pso::PipelineStage;
 
 use memory::{Provider, Dependency, cast_slice};
 use device::InitToken;
@@ -47,7 +49,7 @@ impl<B: Backend, C> Pool<B, C> {
             buffer: self.mut_inner().acquire_command_buffer(),
             // raw_data: pso::RawDataSet::new(),
             handles: handle::Bag::new(),
-            pipeline_stage: hal::pso::TOP_OF_PIPE,
+            pipeline_stage: PipelineStage::TOP_OF_PIPE,
             buffer_states: HashMap::new(),
             image_states: HashMap::new(),
         }
@@ -85,7 +87,7 @@ pub struct Encoder<'a, B: Backend, C> {
     handles: handle::Bag<B>,
     pool: PoolDependency<B, C>,
     // raw_data: pso::RawDataSet<B>,
-    pipeline_stage: hal::pso::PipelineStage,
+    pipeline_stage: PipelineStage,
     buffer_states: HashMap<handle::raw::Buffer<B>, hal::buffer::State>,
     image_states: HashMap<handle::raw::Image<B>, ImageStates>,
 }
@@ -345,7 +347,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
                 }
             }
         }
-        let stage_transition = self.pipeline_stage..hal::pso::BOTTOM_OF_PIPE;
+        let stage_transition = self.pipeline_stage..PipelineStage::BOTTOM_OF_PIPE;
         self.buffer.pipeline_barrier(stage_transition, &barriers[..]);
     }
 
@@ -364,9 +366,9 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         let src = src.as_ref();
         let dst = dst.as_ref();
 
-        debug_assert!(src.info().usage.contains(buffer::TRANSFER_SRC),
+        debug_assert!(src.info().usage.contains(b::Usage::TRANSFER_SRC),
             "missing TRANSFER_SRC usage flag");
-        debug_assert!(dst.info().usage.contains(buffer::TRANSFER_DST),
+        debug_assert!(dst.info().usage.contains(b::Usage::TRANSFER_DST),
             "missing TRANSFER_DST usage flag");
 
         let stride = mem::size_of::<MTB::Data>() as u64;
@@ -410,9 +412,9 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         }
 
         self.require_state(
-            hal::pso::TRANSFER,
-            &[(src, hal::buffer::TRANSFER_READ),
-               (dst, hal::buffer::TRANSFER_WRITE)],
+            PipelineStage::TRANSFER,
+            &[(src, b::Access::TRANSFER_READ),
+               (dst, b::Access::TRANSFER_WRITE)],
             &[]);
 
         self.buffer.copy_buffer(
@@ -433,7 +435,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         if data.is_empty() { return; }
         let buffer = buffer.as_ref();
 
-        debug_assert!(buffer.info().usage.contains(buffer::TRANSFER_DST),
+        debug_assert!(buffer.info().usage.contains(b::Usage::TRANSFER_DST),
             "missing TRANSFER_DST usage flag");
 
         let stride = mem::size_of::<MTB::Data>() as u64;
@@ -443,8 +445,8 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             "out of buffer bounds");
 
         self.require_state(
-            hal::pso::TRANSFER,
-            &[(buffer, hal::buffer::TRANSFER_WRITE)],
+            PipelineStage::TRANSFER,
+            &[(buffer, b::Access::TRANSFER_WRITE)],
             &[]);
 
         self.buffer.update_buffer(
@@ -466,21 +468,21 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         let dst = dst.as_ref();
         if regions.is_empty() { return };
 
-        debug_assert!(src.info().usage.contains(image::TRANSFER_SRC),
+        debug_assert!(src.info().usage.contains(i::Usage::TRANSFER_SRC),
             "missing TRANSFER_SRC usage flag");
-        debug_assert!(dst.info().usage.contains(image::TRANSFER_DST),
+        debug_assert!(dst.info().usage.contains(i::Usage::TRANSFER_DST),
             "missing TRANSFER_DST usage flag");
 
         // TODO: error handling
-        let src_state = (hal::image::TRANSFER_READ, i::ImageLayout::TransferSrcOptimal);
-        let dst_state = (hal::image::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal);
+        let src_state = (i::Access::TRANSFER_READ, i::ImageLayout::TransferSrcOptimal);
+        let dst_state = (i::Access::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal);
         let mut image_states = Vec::new();
         for region in regions {
             image_states.push((src, region.src_subresource, src_state));
             image_states.push((dst, region.dst_subresource, dst_state));
         }
         self.require_state(
-            hal::pso::TRANSFER,
+            PipelineStage::TRANSFER,
             &[],
             &image_states[..]);
 
@@ -504,13 +506,13 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         let dst = dst.as_ref();
         if regions.is_empty() { return };
 
-        debug_assert!(src.info().usage.contains(buffer::TRANSFER_SRC),
+        debug_assert!(src.info().usage.contains(b::Usage::TRANSFER_SRC),
             "missing TRANSFER_SRC usage flag");
-        debug_assert!(dst.info().usage.contains(image::TRANSFER_DST),
+        debug_assert!(dst.info().usage.contains(i::Usage::TRANSFER_DST),
             "missing TRANSFER_DST usage flag");
 
         // TODO: error handling
-        let dst_state = (hal::image::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal);
+        let dst_state = (i::Access::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal);
         let mut image_states = Vec::new();
         for region in regions {
             let r = &region.image_layers;
@@ -519,8 +521,8 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             }
         }
         self.require_state(
-            hal::pso::TRANSFER,
-            &[(src, hal::buffer::TRANSFER_READ)],
+            PipelineStage::TRANSFER,
+            &[(src, b::Access::TRANSFER_READ)],
             &image_states[..]);
 
         self.buffer.copy_buffer_to_image(
@@ -543,13 +545,13 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         let dst = dst.as_ref();
         if regions.is_empty() { return };
 
-        debug_assert!(src.info().usage.contains(image::TRANSFER_SRC),
+        debug_assert!(src.info().usage.contains(i::Usage::TRANSFER_SRC),
             "missing TRANSFER_SRC usage flag");
-        debug_assert!(dst.info().usage.contains(buffer::TRANSFER_DST),
+        debug_assert!(dst.info().usage.contains(b::Usage::TRANSFER_DST),
             "missing TRANSFER_DST usage flag");
 
         // TODO: error handling
-        let src_state = (hal::image::TRANSFER_READ, i::ImageLayout::TransferSrcOptimal);
+        let src_state = (i::Access::TRANSFER_READ, i::ImageLayout::TransferSrcOptimal);
         let mut image_states = Vec::new();
         for region in regions {
             let r = &region.image_layers;
@@ -558,8 +560,8 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             }
         }
         self.require_state(
-            hal::pso::TRANSFER,
-            &[(dst, hal::buffer::TRANSFER_WRITE)],
+            PipelineStage::TRANSFER,
+            &[(dst, b::Access::TRANSFER_WRITE)],
             &image_states[..]);
 
         self.buffer.copy_image_to_buffer(
@@ -575,7 +577,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
     fn require_clear_state(&mut self, image: &handle::raw::Image<B>) -> i::ImageLayout {
         let levels = image.info().mip_levels;
         let layers = image.info().kind.get_num_layers();
-        let state = (hal::image::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal);
+        let state = (i::Access::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal);
         let mut image_states = Vec::new();
         for level in 0..levels {
             for layer in 0..layers {
@@ -583,7 +585,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             }
         }
         self.require_state(
-            hal::pso::TRANSFER,
+            PipelineStage::TRANSFER,
             &[],
             &image_states[..]);
 
@@ -599,7 +601,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         let layout = self.require_clear_state(image);
         //TODO
         let range = i::SubresourceRange {
-            aspects: i::ASPECT_COLOR,
+            aspects: AspectFlags::COLOR,
             levels: 0 .. 1,
             layers: 0 .. 1,
         };
@@ -628,7 +630,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         let layout = self.require_clear_state(image);
         //TODO
         let range = i::SubresourceRange {
-            aspects: i::ASPECT_DEPTH | i::ASPECT_STENCIL,
+            aspects: AspectFlags::DEPTH | AspectFlags::STENCIL,
             levels: 0 .. 1,
             layers: 0 .. 1,
         };
