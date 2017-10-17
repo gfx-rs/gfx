@@ -1,0 +1,47 @@
+(
+	resources: {
+		"im-color": Image(
+			kind: D2(1, 1, Single),
+			num_levels: 1,
+			format: (R8_G8_B8_A8, Unorm),
+			usage: (bits: 4),
+			memory: Device,
+		),
+		"pass": RenderPass(
+			attachments: {
+				"color": (
+					format: (R8_G8_B8_A8, Unorm),
+					ops: (load: Clear, store: Store),
+					layouts: (start: General, end: General),
+				),
+			},
+			subpasses: {
+				"main": (
+					colors: [("color", General)],
+				)
+			},
+			dependencies: [],
+		),
+		"im-color-view": ImageView(
+			image: "im-color",
+			format: (R8_G8_B8_A8, Unorm),
+			range: (
+				aspects: (bits: 1),
+				levels: (start: 0, end: 1),
+				layers: (start: 0, end: 1),
+			),
+		),
+		"fbo": Framebuffer(
+			pass: "pass",
+			views: {
+				"color": "im-color-view"
+			},
+			extent: (
+				width: 1,
+				height: 1,
+				depth: 1,
+			),
+		),
+	},
+	jobs: {},
+)

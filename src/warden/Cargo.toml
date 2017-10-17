@@ -1,0 +1,29 @@
+[package]
+name = "gfx-warden"
+version = "0.1.0"
+description = "gfx-rs reftest framework"
+homepage = "https://github.com/gfx-rs/gfx"
+repository = "https://github.com/gfx-rs/gfx"
+keywords = ["graphics", "gamedev"]
+license = "Apache-2.0"
+authors = ["The Gfx-rs Developers"]
+readme = "../../README.md"
+documentation = "https://docs.rs/gfx-render"
+categories = ["rendering::graphics-api"]
+workspace = "../.."
+
+[lib]
+name = "gfx_warden"
+path = "src/lib.rs"
+
+[features]
+default = []
+
+#TODO: keep Warden backend-agnostic?
+
+[dependencies]
+gfx-backend-vulkan = { path = "../backend/vulkan", version = "0.1" }
+gfx-hal = { path = "../hal", version = "0.1", features = ["serialize"] }
+#log = "0.3"
+ron = "0.1"
+serde = { version = "1.0", features = ["serde_derive"] }
