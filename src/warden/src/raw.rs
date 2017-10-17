@@ -3,12 +3,6 @@ use std::ops::Range;
 
 use hal;
 
-#[derive(Debug, Deserialize)]
-pub enum Memory {
-    Device,
-    Upload,
-    Download,
-}
 
 #[derive(Debug, Deserialize)]
 pub struct AttachmentRef(pub String, pub hal::pass::AttachmentLayout);
@@ -16,7 +10,6 @@ pub struct AttachmentRef(pub String, pub hal::pass::AttachmentLayout);
 #[derive(Debug, Deserialize)]
 pub struct Subpass {
     pub colors: Vec<AttachmentRef>,
-    #[serde(default)]
     pub depth_stencil: Option<AttachmentRef>,
     #[serde(default)]
     pub inputs: Vec<AttachmentRef>,
@@ -40,7 +33,8 @@ pub enum Resource {
         num_levels: hal::image::Level,
         format: hal::format::Format,
         usage: hal::image::Usage,
-        memory: Memory,
+        #[serde(default)]
+        data: String,
     },
     ImageView {
         image: String,
@@ -108,7 +102,7 @@ pub enum Job {
     Graphics {
         descriptors: HashMap<String, DescriptorSetData>,
         framebuffer: String,
-        pass: (String, Vec<DrawPass>),
+        pass: (String, HashMap<String, DrawPass>),
     },
 }
 
