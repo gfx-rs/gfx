@@ -8,14 +8,17 @@ cache:
 rust:
   - stable
   - nightly
-os:
-  - linux
-  - osx
-osx_image: xcode8
+
+matrix:
+  include:
+    - os: linux
+    - os: osx
+      osx_image: xcode9
+      compiler: clang
+
 branches:
   except:
     - staging.tmp
-
 
 notifications:
   webhooks:
@@ -34,7 +37,7 @@ before_install:
   # (assuming it will have libsdl2-dev and Rust by then)
   # see https://docs.travis-ci.com/user/trusty-ci-environment/
   - if [[ $TRAVIS_OS_NAME == "linux" ]]; then export DISPLAY=:99.0 && sh -e /etc/init.d/xvfb start && make travis-sdl2; fi
-  - if [[ $TRAVIS_OS_NAME == osx ]]; then brew update && brew install sdl2 && brew install gcc5 && brew upgrade cmake && CC=gcc-5 && CXX=g++-5; fi
+  - if [[ $TRAVIS_OS_NAME == osx ]]; then brew update && brew install sdl2 && brew upgrade cmake && export CXX=clang++ && export CC=clang && export MACOSX_DEPLOYMENT_TARGET=10.7; fi
 
 addons:
   apt:
