@@ -38,13 +38,19 @@ else
 endif
 
 
-.PHONY: all check ex-hal-quad render ex-render-quad travis-sdl2
+.PHONY: all check ex-hal-quad warden reftest render ex-render-quad travis-sdl2
 
-all: check ex-hal-quad render ex-render-quad
+all: check ex-hal-quad warden render ex-render-quad
 
 check:
 	cargo check --all $(EXCLUDES)
 	cargo test --all $(EXCLUDES)
+
+warden:
+	cd src/warden && cargo test
+
+reftest: warden
+	cd src/warden && cargo run --bin reftest
 
 render:
 	cd src/render && cargo test --features "$(FEATURES_RENDER)"
