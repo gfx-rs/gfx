@@ -14,8 +14,12 @@ use serde::de::Deserialize;
 
 fn main() {
     let raw_scene = {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../reftests/scenes/basic.ron",
+        );
         let mut raw_data = Vec::new();
-        File::open("../../reftests/scenes/basic.ron")
+        File::open(path)
             .unwrap()
             .read_to_end(&mut raw_data)
             .unwrap();
@@ -24,8 +28,12 @@ fn main() {
             .unwrap()
     };
 
+    let data_path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../reftests/data",
+    );
     let instance = back::Instance::create("warden", 1);
     let adapters = instance.enumerate_adapters();
-    let mut scene = warden::gpu::Scene::<back::Backend>::new(&adapters[0], &raw_scene);
-    scene.run(&["test".to_string()]);
+    let mut scene = warden::gpu::Scene::<back::Backend>::new(&adapters[0], &raw_scene, data_path);
+    scene.run(Some("empty"));
 }

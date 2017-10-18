@@ -43,7 +43,7 @@ pub struct Scene<B: hal::Backend> {
 }
 
 impl<B: hal::Backend> Scene<B> {
-    pub fn new(adapter: &B::Adapter, raw: &raw::Scene) -> Self {
+    pub fn new(adapter: &B::Adapter, raw: &raw::Scene, data_path: &str) -> Self {
         fn align(x: usize, y: usize) -> usize {
             if x > 0 && y > 0 {
                 ((x - 1) | (y - 1)) + 1
@@ -128,7 +128,7 @@ impl<B: hal::Backend> Scene<B> {
                                 .unwrap();
                             // write the data
                             {
-                                let mut file = File::open(&format!("../../reftests/data/{}", data))
+                                let mut file = File::open(&format!("{}/{}", data_path, data))
                                     .unwrap();
                                 let mut mapping = device.acquire_mapping_writer::<u8>(&upload_buffer, 0..upload_size)
                                     .unwrap();
@@ -334,18 +334,20 @@ impl<B: hal::Backend> Scene<B> {
                         }
                     }
                 }
-                raw::Job::Graphics { ref descriptors, ref framebuffer, ref pass } => {
+                raw::Job::Graphics { ref descriptors, ref framebuffer, ref pass, ref clear_values } => {
                     let (ref fb, extent) = resources.framebuffers[framebuffer];
                     let rp = &resources.render_passes[&pass.0];
-                    let cv = &[]; //TODO
                     let rect = hal::target::Rect {
                         x: 0,
                         y: 0,
                         w: extent.width as _,
                         h: extent.height as _,
                     };
-                    let mut encoder = command_buf.begin_renderpass_inline(&rp.handle, fb, rect, cv);
+                    let mut encoder = command_buf.begin_renderpass_inline(&rp.handle, fb, rect, clear_values);
                     for subpass in &rp.subpasses {
+                        if Some(subpass) != rp.subpasses.first() {
+                            encoder = encoder.next_subpass_inline();
+                        }
                         for command in &pass.1[subpass].commands {
                             use raw::DrawCommand as Dc;
                             match *command {
@@ -401,10 +403,12 @@ impl<B: hal::Backend> Scene<B> {
 }
 
 impl<B: hal::Backend> Scene<B> {
-    pub fn run(&mut self, jobs: &[String]) {
+    pub fn run<'a, I>(&mut self, jobs: I)
+    where
+        I: IntoIterator<Item = &'a str>
+    {
         //TODO: re-use submits!
-        let values = jobs
-            .iter()
+        let values = jobs.into_iter()
             .map(|name| self.jobs.remove(name).unwrap())
             .collect::<Vec<_>>();
         let submission = hal::queue::Submission::new()

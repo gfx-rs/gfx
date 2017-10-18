@@ -119,6 +119,7 @@ pub enum Job {
     Graphics {
         descriptors: HashMap<String, DescriptorSetData>,
         framebuffer: String,
+        clear_values: Vec<hal::command::ClearValue>,
         pass: (String, HashMap<String, DrawPass>),
     },
 }

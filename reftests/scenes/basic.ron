@@ -44,15 +44,14 @@
 		),
 	},
 	jobs: {
-		"test": Graphics(
+		"empty": Graphics(
 			descriptors: {},
 			framebuffer: "fbo",
+			clear_values: [
+				Color(Float((0.8, 0.8, 0.8, 1.0))),
+			],
 			pass: ("pass", {
 				"main": (commands: [
-					//Draw(
-					//	vertices: (start: 0, end: 4),
-					//	instances: (start: 0, end: 1),
-					//),
 				]),
 			}),
 		),
