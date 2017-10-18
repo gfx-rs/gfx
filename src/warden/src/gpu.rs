@@ -3,7 +3,7 @@ use std::io::Read;
 use std::fs::File;
 
 use hal::{self, image as i};
-use hal::{Adapter, Device};
+use hal::{Adapter, Device, DescriptorPool};
 
 use raw;
 
@@ -14,18 +14,28 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
     layers: 0 .. 1,
 };
 
+pub struct RenderPass<B: hal::Backend> {
+    pub handle: B::RenderPass,
+    attachments: Vec<String>,
+    subpasses: Vec<String>,
+}
+
 pub struct Resources<B: hal::Backend> {
     pub buffers: HashMap<String, (B::Buffer, B::Memory)>,
     pub images: HashMap<String, (B::Image, B::Memory)>,
     pub image_views: HashMap<String, B::ImageView>,
-    pub render_passes: HashMap<String, (B::RenderPass, Vec<String>)>,
-    pub framebuffers: HashMap<String, B::Framebuffer>,
+    pub render_passes: HashMap<String, RenderPass<B>>,
+    pub framebuffers: HashMap<String, (B::Framebuffer, hal::device::Extent)>,
+    pub desc_set_layouts: HashMap<String, B::DescriptorSetLayout>,
+    pub desc_pools: HashMap<String, B::DescriptorPool>,
+    pub desc_sets: HashMap<String, B::DescriptorSet>,
+    pub pipeline_layouts: HashMap<String, B::PipelineLayout>,
 }
 
 pub struct Scene<B: hal::Backend> {
     pub resources: Resources<B>,
-    pub jobs: HashMap<String, B::CommandBuffer>,
-    init_submission: hal::command::Submit<B, hal::queue::Graphics>,
+    pub jobs: HashMap<String, hal::command::Submit<B, hal::queue::Graphics>>,
+    init_submit: Option<hal::command::Submit<B, hal::queue::Graphics>>,
     device: B::Device,
     queue: hal::CommandQueue<B, hal::queue::Graphics>,
     command_pool: hal::CommandPool<B, hal::queue::Graphics>,
@@ -69,12 +79,16 @@ impl<B: hal::Backend> Scene<B> {
             image_views: HashMap::new(),
             render_passes: HashMap::new(),
             framebuffers: HashMap::new(),
+            desc_set_layouts: HashMap::new(),
+            desc_pools: HashMap::new(),
+            desc_sets: HashMap::new(),
+            pipeline_layouts: HashMap::new(),
         };
         let mut upload_buffers = HashMap::new();
-        let init_submission = {
+        let init_submit = {
             let mut init_cmd = command_pool.acquire_command_buffer();
 
-            // Pass[1]: images, buffers, and passes
+            // Pass[1]: images, buffers, passes, descriptor set layouts/pools
             for (name, resource) in &raw.resources {
                 match *resource {
                     raw::Resource::Buffer => {
@@ -225,15 +239,26 @@ impl<B: hal::Backend> Scene<B> {
                             })
                             .collect::<Vec<_>>();
 
-                        let rp = device.create_render_pass(&raw_atts, &raw_subs, &raw_deps);
-                        let att_names = attachments.keys().cloned().collect();
-                        resources.render_passes.insert(name.clone(), (rp, att_names));
+                        let rp = RenderPass {
+                            handle: device.create_render_pass(&raw_atts, &raw_subs, &raw_deps),
+                            attachments: attachments.keys().cloned().collect(),
+                            subpasses: subpasses.keys().cloned().collect(),
+                        };
+                        resources.render_passes.insert(name.clone(), rp);
+                    }
+                    raw::Resource::DescriptorSetLayout { ref bindings } => {
+                        let layout = device.create_descriptor_set_layout(bindings);
+                        resources.desc_set_layouts.insert(name.clone(), layout);
+                    }
+                    raw::Resource::DescriptorPool { capacity, ref ranges } => {
+                        let pool = device.create_descriptor_pool(capacity, ranges);
+                        resources.desc_pools.insert(name.clone(), pool);
                     }
                     _ => {}
                 }
             }
 
-            // Pass[2]: image & buffer views
+            // Pass[2]: image & buffer views, descriptor sets, pipeline layouts
             for (name, resource) in &raw.resources {
                 match *resource {
                     raw::Resource::ImageView { ref image, format, swizzle, ref range } => {
@@ -241,6 +266,27 @@ impl<B: hal::Backend> Scene<B> {
                         let view = device.create_image_view(image, format, swizzle, range.clone())
                             .unwrap();
                         resources.image_views.insert(name.clone(), view);
+                    }
+                    raw::Resource::DescriptorSet { ref pool, ref layout } => {
+                        let set_layout = &resources.desc_set_layouts[layout];
+                        let dest_pool: &mut B::DescriptorPool = resources.desc_pools
+                            .get_mut(pool)
+                            .unwrap();
+                        let set = dest_pool
+                            .allocate_sets(&[set_layout])
+                            .pop()
+                            .unwrap();
+                        resources.desc_sets.insert(name.clone(), set);
+                    }
+                    raw::Resource::PipelineLayout { ref set_layouts } => {
+                        let layout = {
+                            let layouts = set_layouts
+                                .iter()
+                                .map(|sl| &resources.desc_set_layouts[sl])
+                                .collect::<Vec<_>>();
+                            device.create_pipeline_layout(&layouts)
+                        };
+                        resources.pipeline_layouts.insert(name.clone(), layout);
                     }
                     _ => {}
                 }
@@ -250,9 +296,9 @@ impl<B: hal::Backend> Scene<B> {
             for (name, resource) in &raw.resources {
                 match *resource {
                     raw::Resource::Framebuffer { ref pass, ref views, extent } => {
-                        let (ref render_pass, ref att_names) = resources.render_passes[pass];
+                        let rp = &resources.render_passes[pass];
                         let framebuffer = {
-                            let image_views = att_names
+                            let image_views = rp.attachments
                                 .iter()
                                 .map(|name| {
                                     let entry = views
@@ -262,29 +308,109 @@ impl<B: hal::Backend> Scene<B> {
                                     &resources.image_views[entry.1]
                                 })
                                 .collect::<Vec<_>>();
-                            device.create_framebuffer(render_pass, &image_views, extent)
+                            device.create_framebuffer(&rp.handle, &image_views, extent)
                                 .unwrap()
                         };
-                        resources.framebuffers.insert(name.clone(), framebuffer);
+                        resources.framebuffers.insert(name.clone(), (framebuffer, extent));
                     }
                     _ => {}
                 }
             }
 
-            init_cmd.finish()
+            Some(init_cmd.finish())
         };
 
         // fill up command buffers
         let mut jobs = HashMap::new();
+        for (name, job) in &raw.jobs {
+            let mut command_buf = command_pool.acquire_command_buffer();
+            match *job {
+                raw::Job::Transfer { ref commands } => {
+                    use raw::TransferCommand as Tc;
+                    for command in commands {
+                        match *command {
+                            //TODO
+                            Tc::CopyBufferToImage => {}
+                        }
+                    }
+                }
+                raw::Job::Graphics { ref descriptors, ref framebuffer, ref pass } => {
+                    let (ref fb, extent) = resources.framebuffers[framebuffer];
+                    let rp = &resources.render_passes[&pass.0];
+                    let cv = &[]; //TODO
+                    let rect = hal::target::Rect {
+                        x: 0,
+                        y: 0,
+                        w: extent.width as _,
+                        h: extent.height as _,
+                    };
+                    let mut encoder = command_buf.begin_renderpass_inline(&rp.handle, fb, rect, cv);
+                    for subpass in &rp.subpasses {
+                        for command in &pass.1[subpass].commands {
+                            use raw::DrawCommand as Dc;
+                            match *command {
+                                Dc::BindIndexBuffer { ref buffer, offset, index_type } => {
+                                    let view = hal::buffer::IndexBufferView {
+                                        buffer: &resources.buffers[buffer].0,
+                                        offset,
+                                        index_type,
+                                    };
+                                    encoder.bind_index_buffer(view);
+                                }
+                                Dc::BindVertexBuffers(ref buffers) => {
+                                    let buffers_raw = buffers
+                                        .iter()
+                                        .map(|&(ref name, offset)| {
+                                            (&resources.buffers[name].0, offset)
+                                        })
+                                        .collect::<Vec<_>>();
+                                    let set = hal::pso::VertexBufferSet(buffers_raw);
+                                    encoder.bind_vertex_buffers(set);
+                                }
+                                Dc::BindPipeline(ref name) => {
+                                    unimplemented!()
+                                }
+                                Dc::BindDescriptorSets { ref layout, first, ref sets } => {
+                                    unimplemented!()
+                                }
+                                Dc::Draw { ref vertices, ref instances } => {
+                                    encoder.draw(vertices.clone(), instances.clone());
+                                }
+                                Dc::DrawIndexed { ref indices, base_vertex, ref instances } => {
+                                    encoder.draw_indexed(indices.clone(), base_vertex, instances.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            jobs.insert(name.clone(), command_buf.finish());
+        }
+
+        // done
         Scene {
             resources,
             jobs,
-            init_submission,
+            init_submit,
             device,
             queue,
             command_pool,
             upload_buffers,
         }
+    }
+}
+
+impl<B: hal::Backend> Scene<B> {
+    pub fn run(&mut self, jobs: &[String]) {
+        //TODO: re-use submits!
+        let values = jobs
+            .iter()
+            .map(|name| self.jobs.remove(name).unwrap())
+            .collect::<Vec<_>>();
+        let submission = hal::queue::Submission::new()
+            .submit(&[self.init_submit.take().unwrap()])
+            .submit(&values);
+        self.queue.submit(submission, None);
     }
 }
 

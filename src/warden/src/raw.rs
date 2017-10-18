@@ -48,8 +48,20 @@ pub enum Resource {
         subpasses: HashMap<String, Subpass>,
         dependencies: Vec<SubpassDependency>,
     },
-    DescriptorSet,
-    PipelineLayout,
+    DescriptorSetLayout {
+        bindings: Vec<hal::pso::DescriptorSetLayoutBinding>,
+    },
+    DescriptorPool {
+        capacity: usize,
+        ranges: Vec<hal::pso::DescriptorRangeDesc>,
+    },
+    DescriptorSet {
+        pool: String,
+        layout: String,
+    },
+    PipelineLayout {
+        set_layouts: Vec<String>,
+    },
     GraphicsPipeline,
     Framebuffer {
         pass: String,
@@ -71,6 +83,11 @@ pub struct DescriptorSetData {
 
 #[derive(Debug, Deserialize)]
 pub enum DrawCommand {
+    BindIndexBuffer {
+        buffer: String,
+        offset: u64,
+        index_type: hal::IndexType,
+    },
     BindVertexBuffers(Vec<(String, hal::pso::BufferOffset)>),
     BindPipeline(String),
     BindDescriptorSets {
@@ -83,8 +100,8 @@ pub enum DrawCommand {
         instances: Range<hal::InstanceCount>,
     },
     DrawIndexed {
-        buffer: String,
         indices: Range<hal::IndexCount>,
+        base_vertex: hal::VertexOffset,
         instances: Range<hal::InstanceCount>,
     },
 }

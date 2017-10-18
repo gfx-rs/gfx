@@ -26,5 +26,6 @@ fn main() {
 
     let instance = back::Instance::create("warden", 1);
     let adapters = instance.enumerate_adapters();
-    let scene = warden::gpu::Scene::<back::Backend>::new(&adapters[0], &raw_scene);
+    let mut scene = warden::gpu::Scene::<back::Backend>::new(&adapters[0], &raw_scene);
+    scene.run(&["test".to_string()]);
 }
