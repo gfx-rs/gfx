@@ -113,7 +113,8 @@ impl core::Surface<B> for Surface {
     }
 }
 
-impl core::Instance<B> for Surface {
+impl core::Instance for Surface {
+    type Backend = B;
     fn enumerate_adapters(&self) -> Vec<Adapter> {
         unsafe { self.window.make_current().unwrap() };
         let adapter = Adapter::new(|s| self.window.get_proc_address(s) as *const _);

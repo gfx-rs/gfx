@@ -1,3 +1,4 @@
+#[cfg(feature = "vulkan")]
 extern crate gfx_backend_vulkan as back;
 extern crate gfx_hal as hal;
 extern crate gfx_warden as warden;
@@ -28,10 +29,13 @@ fn main() {
             .unwrap()
     };
 
-    let instance = back::Instance::create("warden", 1);
-    let adapters = instance.enumerate_adapters();
-    let mut scene = warden::gpu::Scene::<back::Backend>::new(&adapters[0], &raw_scene, "");
-    scene.run(Some("empty"));
-    let guard = scene.fetch_image("im-color");
-    println!("row: {:?}", guard.row(0));
+    #[cfg(feature = "vulkan")]
+    {
+        let instance = back::Instance::create("warden", 1);
+        let adapters = instance.enumerate_adapters();
+        let mut scene = warden::gpu::Scene::<back::Backend>::new(&adapters[0], &raw_scene, "");
+        scene.run(Some("empty"));
+        let guard = scene.fetch_image("im-color");
+        println!("row: {:?}", guard.row(0));
+    }
 }

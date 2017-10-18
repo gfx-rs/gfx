@@ -1,5 +1,6 @@
 RUST_BACKTRACE:=1
 EXCLUDES:=
+FEATURES_WARDEN:=
 FEATURES_RENDER:=
 FEATURES_RENDER_ADD:= mint serialize
 FEATURES_QUAD:=
@@ -14,12 +15,14 @@ SDL2_PPA=http://ppa.launchpad.net/zoogie/sdl2-snapshots/ubuntu/pool/main/libs/li
 ifeq ($(OS),Windows_NT)
 	EXCLUDES+= --exclude gfx-backend-metal
 	FEATURES_QUAD=vulkan
+	FEATURES_WARDEN+=vulkan
 	ifeq ($(TARGET),x86_64-pc-windows-gnu)
 		# No d3d12 support on GNU windows ATM
 		# context: https://github.com/gfx-rs/gfx/pull/1417
 		EXCLUDES+= --exclude gfx-backend-dx12
 	else
 		FEATURES_QUAD2=dx12
+		FEATURES_WARDEN+=dx12
 	endif
 else
 	UNAME_S:=$(shell uname -s)
@@ -28,11 +31,13 @@ else
 	ifeq ($(UNAME_S),Linux)
 		EXCLUDES+= --exclude gfx-backend-metal
 		FEATURES_QUAD=vulkan
+		FEATURES_WARDEN+=vulkan
 	endif
 	ifeq ($(UNAME_S),Darwin)
 		EXCLUDES+= --exclude gfx-backend-vulkan
 		EXCLUDES+= --exclude quad-render
 		FEATURES_QUAD=metal
+		FEATURES_WARDEN+=metal
 		CMD_QUAD_RENDER=pwd
 	endif
 endif
@@ -50,7 +55,7 @@ warden:
 	cd src/warden && cargo test
 
 reftests: warden
-	cd src/warden && cargo run --bin reftest
+	cd src/warden && cargo run --bin reftest --features "$(FEATURES_WARDEN)"
 
 render:
 	cd src/render && cargo test --features "$(FEATURES_RENDER)"

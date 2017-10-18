@@ -562,7 +562,8 @@ impl core::Swapchain<Backend> for Swapchain {
 }
 
 pub struct Instance;
-impl core::Instance<Backend> for Instance {
+impl core::Instance for Instance {
+    type Backend = Backend;
     fn enumerate_adapters(&self) -> Vec<Adapter> {
         Vec::new()
     }
