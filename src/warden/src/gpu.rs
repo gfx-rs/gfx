@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::io::Read;
 use std::fs::File;
+use std::slice;
 
 use hal::{self, image as i};
 use hal::{Adapter, Device, DescriptorPool};
@@ -14,6 +15,42 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
     layers: 0 .. 1,
 };
 
+pub struct FetchGuard<'a, B: hal::Backend> {
+    device: &'a mut B::Device,
+    buffer: Option<B::Buffer>,
+    memory: Option<B::Memory>,
+    mapping: *const u8,
+    row_pitch: usize,
+    width: usize,
+}
+
+impl<'a, B: hal::Backend> FetchGuard<'a, B> {
+    pub fn row(&self, i: usize) -> &[u8] {
+        let offset = (i * self.row_pitch) as isize;
+        unsafe {
+            slice::from_raw_parts(self.mapping.offset(offset), self.width)
+        }
+    }
+}
+
+impl<'a, B: hal::Backend> Drop for FetchGuard<'a, B> {
+    fn drop(&mut self) {
+        let buffer = self.buffer.take().unwrap();
+        let memory = self.memory.take().unwrap();
+        self.device.release_mapping_raw(&buffer, None);
+        self.device.destroy_buffer(buffer);
+        self.device.free_memory(memory);
+    }
+}
+
+pub struct Image<B: hal::Backend> {
+    pub handle: B::Image,
+    #[allow(dead_code)]
+    memory: B::Memory,
+    kind: hal::image::Kind,
+    format: hal::format::Format,
+}
+
 pub struct RenderPass<B: hal::Backend> {
     pub handle: B::RenderPass,
     attachments: Vec<String>,
@@ -22,7 +59,7 @@ pub struct RenderPass<B: hal::Backend> {
 
 pub struct Resources<B: hal::Backend> {
     pub buffers: HashMap<String, (B::Buffer, B::Memory)>,
-    pub images: HashMap<String, (B::Image, B::Memory)>,
+    pub images: HashMap<String, Image<B>>,
     pub image_views: HashMap<String, B::ImageView>,
     pub render_passes: HashMap<String, RenderPass<B>>,
     pub framebuffers: HashMap<String, (B::Framebuffer, hal::device::Extent)>,
@@ -40,18 +77,19 @@ pub struct Scene<B: hal::Backend> {
     queue: hal::CommandQueue<B, hal::queue::Graphics>,
     command_pool: hal::CommandPool<B, hal::queue::Graphics>,
     upload_buffers: HashMap<String, (B::Buffer, B::Memory)>,
+    download_type: hal::MemoryType,
+}
+
+fn align(x: usize, y: usize) -> usize {
+    if x > 0 && y > 0 {
+        ((x - 1) | (y - 1)) + 1
+    } else {
+        x
+    }
 }
 
 impl<B: hal::Backend> Scene<B> {
     pub fn new(adapter: &B::Adapter, raw: &raw::Scene, data_path: &str) -> Self {
-        fn align(x: usize, y: usize) -> usize {
-            if x > 0 && y > 0 {
-                ((x - 1) | (y - 1)) + 1
-            } else {
-                x
-            }
-        }
-
         // initialize graphics
         let hal::Gpu { mut device, mut graphics_queues, memory_types, .. } = {
             let (ref family, queue_type) = adapter.get_queue_families()[0];
@@ -65,6 +103,13 @@ impl<B: hal::Backend> Scene<B> {
                 //&&!mt.properties.contains(hal::memory::CPU_CACHED)
             })
             .unwrap();
+        let download_type = memory_types
+            .iter()
+            .find(|mt| {
+                mt.properties.contains(hal::memory::CPU_VISIBLE | hal::memory::CPU_CACHED)
+            })
+            .unwrap()
+            .clone();
         let limits = device.get_limits().clone();
         let queue = graphics_queues.remove(0);
         let mut command_pool = queue.create_graphics_pool(
@@ -178,7 +223,12 @@ impl<B: hal::Backend> Scene<B> {
                             upload_buffers.insert(name.clone(), (upload_buffer, upload_memory));
                         }
 
-                        resources.images.insert(name.clone(), (image, memory));
+                        resources.images.insert(name.clone(), Image {
+                            handle: image,
+                            memory,
+                            kind,
+                            format,
+                        });
                     }
                     raw::Resource::RenderPass { ref attachments, ref subpasses, ref dependencies } => {
                         let att_ref = |aref: &raw::AttachmentRef| {
@@ -262,7 +312,7 @@ impl<B: hal::Backend> Scene<B> {
             for (name, resource) in &raw.resources {
                 match *resource {
                     raw::Resource::ImageView { ref image, format, swizzle, ref range } => {
-                        let image = &resources.images[image].0;
+                        let image = &resources.images[image].handle;
                         let view = device.create_image_view(image, format, swizzle, range.clone())
                             .unwrap();
                         resources.image_views.insert(name.clone(), view);
@@ -398,6 +448,7 @@ impl<B: hal::Backend> Scene<B> {
             queue,
             command_pool,
             upload_buffers,
+            download_type,
         }
     }
 }
@@ -415,6 +466,89 @@ impl<B: hal::Backend> Scene<B> {
             .submit(&[self.init_submit.take().unwrap()])
             .submit(&values);
         self.queue.submit(submission, None);
+    }
+
+    pub fn fetch_image(&mut self, name: &str) -> FetchGuard<B> {
+        let image = &self.resources.images[name];
+        let limits = self.device.get_limits().clone();
+
+        let (width, height, depth, aa) = image.kind.get_dimensions();
+        assert_eq!(aa, i::AaMode::Single);
+        let bpp = image.format.0.describe_bits().total as usize;
+        let width_bytes = bpp * width as usize / 8;
+        let row_pitch = align(width_bytes, limits.min_buffer_copy_pitch_alignment);
+        let down_size = row_pitch as u64 * height as u64 * depth as u64;
+
+        let unbound_buffer = self.device.create_buffer(down_size, bpp as _, hal::buffer::TRANSFER_DST)
+            .unwrap();
+        let down_req = self.device.get_buffer_requirements(&unbound_buffer);
+        let down_memory = self.device.allocate_memory(&self.download_type, down_req.size)
+            .unwrap();
+        let down_buffer = self.device.bind_buffer_memory(&down_memory, 0, unbound_buffer)
+            .unwrap();
+
+        let mut command_pool = self.queue.create_graphics_pool(
+            1,
+            hal::pool::CommandPoolCreateFlags::empty(),
+        );
+        let copy_submit = {
+            let mut cmd_buffer = command_pool.acquire_command_buffer();
+            let image_barrier = hal::memory::Barrier::Image {
+                states: (i::SHADER_READ, i::ImageLayout::ShaderReadOnlyOptimal) ..
+                        (i::TRANSFER_READ, i::ImageLayout::TransferSrcOptimal),
+                target: &image.handle,
+                range: COLOR_RANGE.clone(),
+            };
+            cmd_buffer.pipeline_barrier(hal::pso::TOP_OF_PIPE .. hal::pso::TRANSFER, &[image_barrier]);
+            cmd_buffer.copy_image_to_buffer(
+                &image.handle,
+                i::ImageLayout::TransferSrcOptimal,
+                &down_buffer,
+                &[hal::command::BufferImageCopy {
+                    buffer_offset: 0,
+                    buffer_row_pitch: row_pitch as u32,
+                    buffer_slice_pitch: row_pitch as u32 * height as u32,
+                    image_layers: i::SubresourceLayers {
+                        aspects: i::ASPECT_COLOR,
+                        level: 0,
+                        layers: 0 .. 1,
+                    },
+                    image_offset: hal::command::Offset { x: 0, y: 0, z: 0 },
+                    image_extent: hal::device::Extent {
+                        width: width as _,
+                        height: height as _,
+                        depth: depth as _,
+                    },
+                }]);
+            let image_barrier = hal::memory::Barrier::Image {
+                states: (i::TRANSFER_READ, i::ImageLayout::TransferSrcOptimal) ..
+                        (i::SHADER_READ, i::ImageLayout::ShaderReadOnlyOptimal),
+                target: &image.handle,
+                range: COLOR_RANGE.clone(),
+            };
+            cmd_buffer.pipeline_barrier(hal::pso::TRANSFER .. hal::pso::BOTTOM_OF_PIPE, &[image_barrier]);
+            cmd_buffer.finish()
+        };
+
+        let copy_fence = self.device.create_fence(false);
+        let submission = hal::queue::Submission::new()
+            .submit(&[copy_submit]);
+        self.queue.submit(submission, Some(&copy_fence));
+        //queue.destroy_command_pool(command_pool);
+        self.device.wait_for_fences(&[&copy_fence], hal::device::WaitFor::Any, !0);
+        self.device.destroy_fence(copy_fence);
+
+        let mapping = self.device.acquire_mapping_raw(&down_buffer, Some(0 .. down_size))
+            .unwrap() as *const _;
+
+        FetchGuard {
+            device: &mut self.device,
+            buffer: Some(down_buffer),
+            memory: Some(down_memory),
+            mapping,
+            row_pitch,
+            width: width_bytes,
+        }
     }
 }
 

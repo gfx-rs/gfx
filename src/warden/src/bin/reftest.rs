@@ -36,4 +36,6 @@ fn main() {
     let adapters = instance.enumerate_adapters();
     let mut scene = warden::gpu::Scene::<back::Backend>::new(&adapters[0], &raw_scene, data_path);
     scene.run(Some("empty"));
+    let guard = scene.fetch_image("im-color");
+    println!("row: {:?}", guard.row(0));
 }
