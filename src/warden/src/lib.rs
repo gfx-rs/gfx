@@ -3,6 +3,8 @@
 
 extern crate gfx_hal as hal;
 #[macro_use]
+extern crate log;
+#[macro_use]
 extern crate serde;
 
 pub mod gpu;

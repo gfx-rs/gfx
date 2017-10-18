@@ -18,6 +18,7 @@ path = "src/lib.rs"
 
 [features]
 default = []
+logger = ["env_logger"]
 vulkan = ["gfx-backend-vulkan"]
 dx12 = ["gfx-backend-dx12"]
 metal = ["gfx-backend-metal"]
@@ -26,9 +27,10 @@ metal = ["gfx-backend-metal"]
 
 [dependencies]
 gfx-hal = { path = "../hal", version = "0.1", features = ["serialize"] }
-#log = "0.3"
+log = "0.3"
 ron = "0.1"
 serde = { version = "1.0", features = ["serde_derive"] }
+env_logger = { version = "0.4", optional = true }
 
 [dependencies.gfx-backend-vulkan]
 path = "../../src/backend/vulkan"

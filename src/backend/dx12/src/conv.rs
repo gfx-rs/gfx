@@ -423,7 +423,7 @@ pub fn map_buffer_resource_state(access: buffer::Access) -> D3D12_RESOURCE_STATE
     let mut state = D3D12_RESOURCE_STATE_COMMON;
 
     if access.contains(buffer::TRANSFER_READ) {
-        state = state | D3D12_RESOURCE_STATE_COPY_SOURCE | D3D12_RESOURCE_STATE_RESOLVE_DEST;
+        state = state | D3D12_RESOURCE_STATE_COPY_SOURCE;
     }
     if access.contains(buffer::INDEX_BUFFER_READ) {
         state = state | D3D12_RESOURCE_STATE_INDEX_BUFFER;
@@ -472,7 +472,7 @@ pub fn map_image_resource_state(access: image::Access, layout: image::ImageLayou
     let mut state = D3D12_RESOURCE_STATE_COMMON;
 
     if access.contains(image::TRANSFER_READ) {
-        state = state | D3D12_RESOURCE_STATE_COPY_SOURCE | D3D12_RESOURCE_STATE_RESOLVE_DEST;
+        state = state | D3D12_RESOURCE_STATE_COPY_SOURCE;
     }
     if access.contains(image::INPUT_ATTACHMENT_READ) {
         state = state | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;

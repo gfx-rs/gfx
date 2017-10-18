@@ -6,6 +6,8 @@ extern crate ron;
 #[macro_use]
 extern crate serde;
 
+#[cfg(feature = "logger")]
+extern crate env_logger;
 #[cfg(feature = "vulkan")]
 extern crate gfx_backend_vulkan;
 #[cfg(feature = "dx12")]
@@ -92,6 +94,9 @@ impl Harness {
 }
 
 fn main() {
+    #[cfg(feature = "logger")]
+    env_logger::init().unwrap();
+
     let harness = Harness::new("suite");
     #[cfg(feature = "vulkan")]
     {
@@ -101,7 +106,7 @@ fn main() {
     }
     #[cfg(feature = "dx12")]
     {
-        println!("Warding Dx12:");
+        println!("Warding DX12:");
         let instance = gfx_backend_dx12::Instance::create("warden", 1);
         harness.run(instance);
     }
