@@ -38,7 +38,7 @@ else
 endif
 
 
-.PHONY: all check ex-hal-quad warden reftest render ex-render-quad travis-sdl2
+.PHONY: all check ex-hal-quad warden reftests render ex-render-quad travis-sdl2
 
 all: check ex-hal-quad warden render ex-render-quad
 
@@ -49,7 +49,7 @@ check:
 warden:
 	cd src/warden && cargo test
 
-reftest: warden
+reftests: warden
 	cd src/warden && cargo run --bin reftest
 
 render:
