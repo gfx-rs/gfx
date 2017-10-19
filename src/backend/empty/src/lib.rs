@@ -88,7 +88,7 @@ impl core::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_renderpass(&mut self, _: &[pass::Attachment], _: &[pass::SubpassDesc], _: &[pass::SubpassDependency]) -> () {
+    fn create_render_pass(&mut self, _: &[pass::Attachment], _: &[pass::SubpassDesc], _: &[pass::SubpassDependency]) -> () {
         unimplemented!()
     }
 
@@ -562,7 +562,8 @@ impl core::Swapchain<Backend> for Swapchain {
 }
 
 pub struct Instance;
-impl core::Instance<Backend> for Instance {
+impl core::Instance for Instance {
+    type Backend = Backend;
     fn enumerate_adapters(&self) -> Vec<Adapter> {
         Vec::new()
     }

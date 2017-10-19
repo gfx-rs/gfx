@@ -68,7 +68,7 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
             device.mut_raw(), &buffer, usage);
         let memory_type = device.find_usage_memory(inner.usage, requirements.type_mask)
             .expect("could not find suitable memory");
-        let mut stack = inner.stacks.entry(memory_type.id)
+        let stack = inner.stacks.entry(memory_type.id)
             .or_insert_with(|| ChunkStack::new(memory_type));
         let (memory, offset, release) = stack.allocate(
             device,
@@ -91,7 +91,7 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
         let requirements = device.mut_raw().get_image_requirements(&image);
         let memory_type = device.find_usage_memory(inner.usage, requirements.type_mask)
             .expect("could not find suitable memory");
-        let mut stack = inner.stacks.entry(memory_type.id)
+        let stack = inner.stacks.entry(memory_type.id)
             .or_insert_with(|| ChunkStack::new(memory_type));
         let (memory, offset, release) = stack.allocate(
             device,

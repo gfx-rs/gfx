@@ -224,7 +224,7 @@ macro_rules! gfx_graphics_pipeline {
                             preserves: &[],
                         };
 
-                        device.create_renderpass_raw(&attachments[..], &[subpass], &[])
+                        device.create_render_pass_raw(&attachments[..], &[subpass], &[])
                     };
 
                     let mut pipeline_desc = cpso::GraphicsPipelineDesc::new(

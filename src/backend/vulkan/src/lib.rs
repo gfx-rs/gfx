@@ -235,7 +235,9 @@ impl Instance {
     }
 }
 
-impl core::Instance<Backend> for Instance {
+impl core::Instance for Instance {
+    type Backend = Backend;
+
     fn enumerate_adapters(&self) -> Vec<Adapter> {
         self.raw.0.enumerate_physical_devices()
             .expect("Unable to enumerate adapter")

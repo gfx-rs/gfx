@@ -159,7 +159,7 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn create_renderpass(
+    fn create_render_pass(
         &mut self,
         attachments: &[pass::Attachment],
         subpasses: &[pass::SubpassDesc],

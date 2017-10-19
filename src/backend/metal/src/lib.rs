@@ -39,7 +39,9 @@ use core_graphics::geometry::CGRect;
 pub struct Instance {
 }
 
-impl core::Instance<Backend> for Instance {
+impl core::Instance for Instance {
+    type Backend = Backend;
+
     fn enumerate_adapters(&self) -> Vec<Adapter> {
         // TODO: enumerate all devices
 

@@ -90,7 +90,7 @@ pub struct VertexBufferSet<'a, B: Backend>(
 
 impl<'a, B: Backend> VertexBufferSet<'a, B> {
     /// Create an empty set
-    pub fn new() -> VertexBufferSet<'a, B> {
+    pub fn new() -> Self {
         VertexBufferSet(Vec::new())
     }
 }

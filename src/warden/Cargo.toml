@@ -1,0 +1,48 @@
+[package]
+name = "gfx-warden"
+version = "0.1.0"
+description = "gfx-rs reftest framework"
+homepage = "https://github.com/gfx-rs/gfx"
+repository = "https://github.com/gfx-rs/gfx"
+keywords = ["graphics", "gamedev"]
+license = "Apache-2.0"
+authors = ["The Gfx-rs Developers"]
+readme = "../../README.md"
+documentation = "https://docs.rs/gfx-render"
+categories = ["rendering::graphics-api"]
+workspace = "../.."
+
+[lib]
+name = "gfx_warden"
+path = "src/lib.rs"
+
+[features]
+default = []
+logger = ["env_logger"]
+vulkan = ["gfx-backend-vulkan"]
+dx12 = ["gfx-backend-dx12"]
+metal = ["gfx-backend-metal"]
+
+#TODO: keep Warden backend-agnostic?
+
+[dependencies]
+gfx-hal = { path = "../hal", version = "0.1", features = ["serialize"] }
+log = "0.3"
+ron = "0.1"
+serde = { version = "1.0", features = ["serde_derive"] }
+env_logger = { version = "0.4", optional = true }
+
+[dependencies.gfx-backend-vulkan]
+path = "../../src/backend/vulkan"
+version = "0.1"
+optional = true
+
+[target.'cfg(windows)'.dependencies.gfx-backend-dx12]
+path = "../../src/backend/dx12"
+version = "0.1"
+optional = true
+
+[target.'cfg(target_os = "macos")'.dependencies.gfx-backend-metal]
+path = "../../src/backend/metal"
+version = "0.1"
+optional = true

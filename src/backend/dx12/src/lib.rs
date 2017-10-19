@@ -585,7 +585,9 @@ impl Instance {
     }
 }
 
-impl core::Instance<Backend> for Instance {
+impl core::Instance for Instance {
+    type Backend = Backend;
+
     fn enumerate_adapters(&self) -> Vec<Adapter> {
         // Enumerate adapters
         let mut cur_index = 0;

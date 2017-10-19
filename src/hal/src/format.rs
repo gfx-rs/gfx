@@ -276,6 +276,12 @@ impl Swizzle {
     pub const NO: Swizzle = Swizzle(Component::R, Component::G, Component::B, Component::A);
 }
 
+impl Default for Swizzle {
+    fn default() -> Self {
+        Self::NO
+    }
+}
+
 /// Complete run-time surface format.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]

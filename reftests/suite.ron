@@ -1,0 +1,8 @@
+{
+	"basic": {
+		"render-pass-clear": (
+			jobs: ["empty"],
+			expect: ImageRow("im-color", 0, [204,204,204,255])
+		),
+	},
+}

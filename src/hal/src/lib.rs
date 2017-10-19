@@ -236,9 +236,11 @@ pub struct MemoryType {
 }
 
 /// Basic backend instance trait.
-pub trait Instance<B: Backend> {
+pub trait Instance {
+    /// Associated backend type of this instance.
+    type Backend: Backend;
     /// Enumerate all available adapters.
-    fn enumerate_adapters(&self) -> Vec<B::Adapter>;
+    fn enumerate_adapters(&self) -> Vec<<Self::Backend as Backend>::Adapter>;
 }
 
 /// Different types of a specific API.

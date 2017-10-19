@@ -124,7 +124,7 @@ pub trait Device<B: Backend>: Clone {
     fn allocate_memory(&mut self, &MemoryType, size: u64) -> Result<B::Memory, OutOfMemory>;
 
     ///
-    fn create_renderpass(
+    fn create_render_pass(
         &mut self,
         &[pass::Attachment],
         &[pass::SubpassDesc],

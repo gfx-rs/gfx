@@ -466,7 +466,7 @@ impl core::Device<Backend> for Device {
         &self.limits
     }
 
-    fn create_renderpass(
+    fn create_render_pass(
         &mut self,
         attachments: &[pass::Attachment],
         _subpasses: &[pass::SubpassDesc],

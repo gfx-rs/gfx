@@ -96,7 +96,7 @@ impl<B: Backend, C> CommandPool<B, C> {
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
-    pub fn acquire_command_buffer<'a>(&'a mut self) -> CommandBuffer<'a, B, C> {
+    pub fn acquire_command_buffer(&mut self) -> CommandBuffer<B, C> {
         self.reserve(1);
 
         let buffer = &mut self.buffers[self.next_buffer];

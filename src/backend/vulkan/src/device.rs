@@ -82,7 +82,7 @@ impl d::Device<B> for Device {
         Ok(n::Memory { inner: memory, ptr })
     }
 
-    fn create_renderpass(&mut self, attachments: &[pass::Attachment],
+    fn create_render_pass(&mut self, attachments: &[pass::Attachment],
         subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> n::RenderPass
     {
         let map_subpass_ref = |pass: pass::SubpassRef| {
