@@ -1,4 +1,7 @@
-#![cfg_attr(not(any(feature = "vulkan", feature = "dx12", feature = "metal")), allow(dead_code))]
+#![cfg_attr(
+    not(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl")),
+    allow(dead_code)
+)]
 
 extern crate gfx_hal as hal;
 extern crate gfx_warden as warden;
@@ -14,6 +17,8 @@ extern crate gfx_backend_vulkan;
 extern crate gfx_backend_dx12;
 #[cfg(feature = "metal")]
 extern crate gfx_backend_metal;
+#[cfg(feature = "gl")]
+extern crate gfx_backend_gl;
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -114,6 +119,15 @@ fn main() {
     {
         println!("Warding Metal:");
         let instance = gfx_backend_metal::Instance::create("warden", 1);
+        harness.run(instance);
+    }
+    #[cfg(feature = "gl")]
+    {
+        println!("Warding GL:");
+        let context = gfx_backend_gl::glutin::HeadlessRendererBuilder::new(1,1)
+            .build()
+            .unwrap();
+        let instance = gfx_backend_gl::Headless(context);
         harness.run(instance);
     }
     let _ = harness;
