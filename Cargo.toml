@@ -1,20 +1,13 @@
 [workspace]
 
 members = [
-    #"src/backend/dx11",
     "src/backend/dx12",
     "src/backend/empty",
     "src/backend/gl",
     "src/backend/metal",
     "src/backend/vulkan",
     "src/hal",
-    #"src/macros",
     "src/render",
-    #"src/support",
-    #"src/window/dxgi",
-    #"src/window/glfw",
-    #"src/window/sdl",
-    #"examples",
     "examples/hal/quad",
     "examples/render/quad_render",
 ]
