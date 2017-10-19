@@ -393,8 +393,8 @@ impl d::Device<B> for Device {
 
         let properties = winapi::D3D12_HEAP_PROPERTIES {
             Type: winapi::D3D12_HEAP_TYPE_CUSTOM,
-            CPUPageProperty: self.heap_properties[mem_type.id].page_property,
-            MemoryPoolPreference: self.heap_properties[mem_type.id].memory_pool,
+            CPUPageProperty: self.heap_properties[mem_type.heap_index].page_property,
+            MemoryPoolPreference: self.heap_properties[mem_type.heap_index].memory_pool,
             CreationNodeMask: 0,
             VisibleNodeMask: 0,
         };
