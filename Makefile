@@ -52,6 +52,7 @@ check:
 	cargo test --all $(EXCLUDES)
 
 warden:
+	cd src/warden && cargo check --features gl #TODO: run
 	cd src/warden && cargo test
 
 reftests: warden

@@ -22,6 +22,7 @@ logger = ["env_logger"]
 vulkan = ["gfx-backend-vulkan"]
 dx12 = ["gfx-backend-dx12"]
 metal = ["gfx-backend-metal"]
+gl = ["gfx-backend-gl"]
 
 #TODO: keep Warden backend-agnostic?
 
@@ -45,4 +46,10 @@ optional = true
 [target.'cfg(target_os = "macos")'.dependencies.gfx-backend-metal]
 path = "../../src/backend/metal"
 version = "0.1"
+optional = true
+
+[dependencies.gfx-backend-gl]
+path = "../../src/backend/gl"
+version = "0.1"
+features = ["glutin"]
 optional = true

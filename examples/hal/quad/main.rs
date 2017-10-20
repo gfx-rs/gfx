@@ -13,8 +13,6 @@ extern crate gfx_backend_vulkan as back;
 extern crate gfx_backend_metal as back;
 #[cfg(feature = "gl")]
 extern crate gfx_backend_gl as back;
-#[cfg(feature = "gl")]
-extern crate glutin;
 
 extern crate winit;
 extern crate image;
@@ -77,11 +75,11 @@ fn main() {
     #[cfg(feature = "gl")]
     let window = {
         let builder = back::config_context(
-            glutin::ContextBuilder::new(),
+            back::glutin::ContextBuilder::new(),
             ColorFormat::SELF,
             None,
         ).with_vsync(true);
-        glutin::GlWindow::new(wb, builder, &events_loop).unwrap()
+        back::glutin::GlWindow::new(wb, builder, &events_loop).unwrap()
     };
 
     let window_size = window.get_inner_size_pixels().unwrap();

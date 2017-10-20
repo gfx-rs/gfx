@@ -9,7 +9,7 @@ extern crate gfx_gl as gl;
 extern crate gfx_hal as hal;
 extern crate smallvec;
 #[cfg(feature = "glutin")]
-extern crate glutin;
+pub extern crate glutin;
 
 use std::rc::Rc;
 use hal::{self as c, QueueType};
