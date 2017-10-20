@@ -33,6 +33,7 @@ use std::os::raw::c_void;
 
 use objc::runtime::{Object, Class};
 use cocoa::base::YES;
+use cocoa::foundation::NSAutoreleasePool;
 use core_graphics::geometry::CGRect;
 
 
@@ -144,3 +145,25 @@ impl hal::Backend for Backend {
     type Semaphore = native::Semaphore;
 }
 
+pub struct AutoreleasePool {
+    pool: cocoa::base::id,
+}
+
+impl Drop for AutoreleasePool {
+    fn drop(&mut self) {
+        unsafe { self.pool.drain() }
+    }
+}
+
+impl AutoreleasePool {
+    pub unsafe fn new() -> Self {
+        AutoreleasePool {
+            pool: NSAutoreleasePool::new(cocoa::base::nil),
+        }
+    }
+
+    pub unsafe fn reset(&mut self) {
+        self.pool.drain();
+        self.pool = NSAutoreleasePool::new(cocoa::base::nil);
+    }
+}

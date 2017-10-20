@@ -19,7 +19,6 @@ use hal::pass::{Subpass};
 use cocoa::foundation::{NSRange, NSUInteger};
 use metal::{self, MTLFeatureSet, MTLLanguageVersion, MTLArgumentAccess, MTLDataType, MTLPrimitiveType, MTLPrimitiveTopologyClass};
 use metal::{MTLVertexStepFunction, MTLSamplerMinMagFilter, MTLSamplerMipFilter, MTLStorageMode, MTLResourceOptions, MTLTextureType};
-use metal::{MTLResourceStorageModeManaged, MTLResourceStorageModePrivate, MTLResourceCPUCacheModeWriteCombined};
 use foreign_types::ForeignType;
 use objc::runtime::Object as ObjcObject;
 use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
@@ -74,7 +73,7 @@ pub struct Device {
 }
 unsafe impl Send for Device {}
 
-pub struct PhysicalDevice(pub(crate) MTLDevice);
+pub struct PhysicalDevice(pub(crate) metal::Device);
 
 impl PhysicalDevice {
     fn supports_any(&self, features_sets: &[MTLFeatureSet]) -> bool {
@@ -87,7 +86,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(self, mut families: Vec<(QueueFamily, usize)>) -> hal::Gpu<Backend> {
         assert_eq!(families.len(), 1);
         let mut queue_group = hal::queue::RawQueueGroup::new(families.remove(0).0);
-        let queue_raw = command::CommandQueue::new(self.0);
+        let queue_raw = command::CommandQueue::new(&self.0);
         let queue = queue_raw.0.clone();
         queue_group.add_queue(queue_raw);
 
@@ -102,7 +101,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         };
 
         let device = Device {
-            device: self.device.clone(),
+            device: self.0.clone(),
             private_caps,
             limits: hal::Limits {
                 max_texture_size: 4096, // TODO: feature set
@@ -443,33 +442,31 @@ impl hal::Device<Backend> for Device {
         _dependencies: &[pass::SubpassDependency],
     ) -> n::RenderPass {
         //TODO: subpasses, dependencies
-        unsafe {
-            let pass = metal::RenderPassDescriptor::new().to_owned();
+        let pass = metal::RenderPassDescriptor::new().to_owned();
 
-            let mut color_attachment_index = 0;
-            //let mut depth_attachment_index = 0;
-            for attachment in attachments {
-                let (_format, is_depth) = map_format(attachment.format).expect("unsupported attachment format");
+        let mut color_attachment_index = 0;
+        //let mut depth_attachment_index = 0;
+        for attachment in attachments {
+            let (_format, is_depth) = map_format(attachment.format).expect("unsupported attachment format");
 
-                let mtl_attachment: &metal::RenderPassAttachmentDescriptorRef;
-                if !is_depth {
-                    let color_attachment = pass.color_attachments().object_at(color_attachment_index).expect("too many color attachments");
-                    color_attachment_index += 1;
+            let mtl_attachment: &metal::RenderPassAttachmentDescriptorRef;
+            if !is_depth {
+                let color_attachment = pass.color_attachments().object_at(color_attachment_index).expect("too many color attachments");
+                color_attachment_index += 1;
 
-                    mtl_attachment = color_attachment;
-                } else {
-                    unimplemented!()
-                }
-
-                mtl_attachment.set_load_action(map_load_operation(attachment.ops.load));
-                mtl_attachment.set_store_action(map_store_operation(attachment.ops.store));
+                mtl_attachment = color_attachment;
+            } else {
+                unimplemented!()
             }
 
-            n::RenderPass {
-                desc: pass,
-                attachments: attachments.into(),
-                num_colors: color_attachment_index,
-            }
+            mtl_attachment.set_load_action(map_load_operation(attachment.ops.load));
+            mtl_attachment.set_store_action(map_store_operation(attachment.ops.store));
+        }
+
+        n::RenderPass {
+            desc: pass,
+            attachments: attachments.into(),
+            num_colors: color_attachment_index,
         }
     }
 
@@ -562,7 +559,7 @@ impl hal::Device<Backend> for Device {
 
     fn create_compute_pipelines<'a>(
         &mut self,
-        pipelines: &[(pso::EntryPoint<'a, Backend>, &n::PipelineLayout)],
+        _pipelines: &[(pso::EntryPoint<'a, Backend>, &n::PipelineLayout)],
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
         unimplemented!()
     }
@@ -607,34 +604,32 @@ impl hal::Device<Backend> for Device {
     }
 
     fn create_sampler(&mut self, info: image::SamplerInfo) -> n::Sampler {
-        unsafe {
-            let descriptor = metal::SamplerDescriptor::new();
+        let descriptor = metal::SamplerDescriptor::new();
 
-            use self::image::FilterMethod::*;
-            let (min_mag, mipmap) = match info.filter {
-                Scale => (MTLSamplerMinMagFilter::Nearest, MTLSamplerMipFilter::NotMipmapped),
-                Mipmap => (MTLSamplerMinMagFilter::Nearest, MTLSamplerMipFilter::Nearest),
-                Bilinear => {
-                    (MTLSamplerMinMagFilter::Linear, MTLSamplerMipFilter::NotMipmapped)
-                }
-                Trilinear => (MTLSamplerMinMagFilter::Linear, MTLSamplerMipFilter::Linear),
-                Anisotropic(max) => {
-                    descriptor.set_max_anisotropy(max as u64);
-                    (MTLSamplerMinMagFilter::Linear, MTLSamplerMipFilter::NotMipmapped)
-                }
-            };
+        use self::image::FilterMethod::*;
+        let (min_mag, mipmap) = match info.filter {
+            Scale => (MTLSamplerMinMagFilter::Nearest, MTLSamplerMipFilter::NotMipmapped),
+            Mipmap => (MTLSamplerMinMagFilter::Nearest, MTLSamplerMipFilter::Nearest),
+            Bilinear => {
+                (MTLSamplerMinMagFilter::Linear, MTLSamplerMipFilter::NotMipmapped)
+            }
+            Trilinear => (MTLSamplerMinMagFilter::Linear, MTLSamplerMipFilter::Linear),
+            Anisotropic(max) => {
+                descriptor.set_max_anisotropy(max as u64);
+                (MTLSamplerMinMagFilter::Linear, MTLSamplerMipFilter::NotMipmapped)
+            }
+        };
 
-            descriptor.set_min_filter(min_mag);
-            descriptor.set_mag_filter(min_mag);
-            descriptor.set_mip_filter(mipmap);
+        descriptor.set_min_filter(min_mag);
+        descriptor.set_mag_filter(min_mag);
+        descriptor.set_mip_filter(mipmap);
 
-            // FIXME: more state
+        // FIXME: more state
 
-            n::Sampler(self.device.new_sampler(&descriptor))
-        }
+        n::Sampler(self.device.new_sampler(&descriptor))
     }
 
-    fn destroy_sampler(&mut self, sampler: n::Sampler) {
+    fn destroy_sampler(&mut self, _sampler: n::Sampler) {
     }
 
     fn acquire_mapping_raw(
@@ -671,7 +666,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn create_descriptor_pool(
-        &mut self, max_sets: usize, descriptor_ranges: &[pso::DescriptorRangeDesc]
+        &mut self, _max_sets: usize, descriptor_ranges: &[pso::DescriptorRangeDesc]
     ) -> n::DescriptorPool {
         if !self.private_caps.argument_buffers {
             return n::DescriptorPool::Emulated;
@@ -680,15 +675,15 @@ impl hal::Device<Backend> for Device {
         let mut num_samplers = 0;
         let mut num_textures = 0;
 
-        let mut arguments = descriptor_ranges.iter().map(|desc| {
-            let mut offset_ref = match desc.ty {
+        let arguments = descriptor_ranges.iter().map(|desc| {
+            let offset_ref = match desc.ty {
                 DescriptorType::Sampler => &mut num_samplers,
                 DescriptorType::SampledImage => &mut num_textures,
                 _ => unimplemented!()
             };
             let index = *offset_ref;
             *offset_ref += desc.count;
-            Self::describe_argument(desc.ty, *offset_ref, desc.count)
+            Self::describe_argument(desc.ty, index, desc.count)
         }).collect::<Vec<_>>();
 
         let arg_array = metal::Array::from_owned_slice(&arguments);
@@ -712,7 +707,7 @@ impl hal::Device<Backend> for Device {
         }
 
         let mut stage_flags = pso::ShaderStageFlags::empty();
-        let mut arguments = bindings.iter().map(|desc| {
+        let arguments = bindings.iter().map(|desc| {
             stage_flags |= desc.stage_flags;
             Self::describe_argument(desc.ty, desc.binding, desc.count)
         }).collect::<Vec<_>>();
@@ -766,7 +761,7 @@ impl hal::Device<Backend> for Device {
                         _ => unimplemented!(),
                     }
                 }
-                n::DescriptorSet::ArgumentBuffer { ref buffer, offset, ref encoder, stage_flags } => {
+                n::DescriptorSet::ArgumentBuffer { ref buffer, offset, ref encoder, .. } => {
                     debug_assert!(self.private_caps.argument_buffers);
 
                     encoder.set_argument_buffer(buffer, offset);
@@ -791,30 +786,28 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn destroy_descriptor_pool(&mut self, pool: n::DescriptorPool) {
+    fn destroy_descriptor_pool(&mut self, _pool: n::DescriptorPool) {
     }
 
-    fn destroy_descriptor_set_layout(&mut self, layout: n::DescriptorSetLayout) {
+    fn destroy_descriptor_set_layout(&mut self, _layout: n::DescriptorSetLayout) {
     }
 
-    fn destroy_pipeline_layout(&mut self, pipeline_layout: n::PipelineLayout) {
+    fn destroy_pipeline_layout(&mut self, _pipeline_layout: n::PipelineLayout) {
     }
 
-    fn destroy_shader_module(&mut self, module: n::ShaderModule) {
+    fn destroy_shader_module(&mut self, _module: n::ShaderModule) {
     }
 
-    fn destroy_renderpass(&mut self, pass: n::RenderPass) {
+    fn destroy_renderpass(&mut self, _pass: n::RenderPass) {
     }
 
-    fn destroy_graphics_pipeline(&mut self, pipeline: n::GraphicsPipeline) {
-        //TODO: release associated vs/fs libraries
+    fn destroy_graphics_pipeline(&mut self, _pipeline: n::GraphicsPipeline) {
     }
 
-    fn destroy_compute_pipeline(&mut self, pipeline: n::ComputePipeline) {
-        unimplemented!()
+    fn destroy_compute_pipeline(&mut self, _pipeline: n::ComputePipeline) {
     }
 
-    fn destroy_framebuffer(&mut self, buffer: n::FrameBuffer) {
+    fn destroy_framebuffer(&mut self, _buffer: n::FrameBuffer) {
     }
 
     fn destroy_semaphore(&mut self, semaphore: n::Semaphore) {
@@ -837,7 +830,7 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn free_memory(&mut self, memory: n::Memory) {
+    fn free_memory(&mut self, _memory: n::Memory) {
     }
 
     fn create_buffer(
@@ -856,9 +849,9 @@ impl hal::Device<Backend> for Device {
             // We don't know what memory type the user will try to allocate the buffer with, so we test them
             // all get the most stringent ones. Note we don't check Shared because heaps can't use it
             for &options in [
-                MTLResourceStorageModeManaged,
-                MTLResourceStorageModeManaged | MTLResourceCPUCacheModeWriteCombined,
-                MTLResourceStorageModePrivate,
+                MTLResourceOptions::StorageModeManaged,
+                MTLResourceOptions::StorageModeManaged | MTLResourceOptions::CPUCacheModeWriteCombined,
+                MTLResourceOptions::StorageModePrivate,
             ].iter() {
                 let requirements = self.device.heap_buffer_size_and_align(buffer.size, options);
                 max_size = cmp::max(max_size, requirements.size);
@@ -874,7 +867,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn bind_buffer_memory(
-        &mut self, memory: &n::Memory, offset: u64, buffer: n::UnboundBuffer
+        &mut self, memory: &n::Memory, _offset: u64, buffer: n::UnboundBuffer
     ) -> Result<n::Buffer, BindError> {
         Ok(n::Buffer(match *memory {
             n::Memory::Native(ref heap) => {
@@ -895,7 +888,7 @@ impl hal::Device<Backend> for Device {
         }))
     }
 
-    fn destroy_buffer(&mut self, buffer: n::Buffer) {
+    fn destroy_buffer(&mut self, _buffer: n::Buffer) {
     }
 
     fn create_buffer_view(
@@ -914,24 +907,22 @@ impl hal::Device<Backend> for Device {
     {
         let (mtl_format, _) = map_format(format).ok_or(image::CreationError::Format(format.0, Some(format.1)))?;
 
-        unsafe {
-            let descriptor = metal::TextureDescriptor::new();
+        let descriptor = metal::TextureDescriptor::new();
 
-            match kind {
-                image::Kind::D2(width, height, aa) => {
-                    descriptor.set_texture_type(MTLTextureType::D2);
-                    descriptor.set_width(width as u64);
-                    descriptor.set_height(height as u64);
-                },
-                _ => unimplemented!(),
-            }
-
-            descriptor.set_mipmap_level_count(mip_levels as u64);
-            descriptor.set_pixel_format(mtl_format);
-            descriptor.set_usage(map_texture_usage(usage));
-
-            Ok(n::UnboundImage(descriptor))
+        match kind {
+            image::Kind::D2(width, height, _aa) => {
+                descriptor.set_texture_type(MTLTextureType::D2);
+                descriptor.set_width(width as u64);
+                descriptor.set_height(height as u64);
+            },
+            _ => unimplemented!(),
         }
+
+        descriptor.set_mipmap_level_count(mip_levels as u64);
+        descriptor.set_pixel_format(mtl_format);
+        descriptor.set_usage(map_texture_usage(usage));
+
+        Ok(n::UnboundImage(descriptor))
     }
 
     fn get_image_requirements(&mut self, image: &n::UnboundImage) -> memory::Requirements {
@@ -941,9 +932,9 @@ impl hal::Device<Backend> for Device {
             let mut max_size = 0;
             let mut max_alignment = 0;
             for &options in [
-                MTLResourceStorageModeManaged,
-                MTLResourceStorageModeManaged | MTLResourceCPUCacheModeWriteCombined,
-                MTLResourceStorageModePrivate,
+                MTLResourceOptions::StorageModeManaged,
+                MTLResourceOptions::StorageModeManaged | MTLResourceOptions::CPUCacheModeWriteCombined,
+                MTLResourceOptions::StorageModePrivate,
             ].iter() {
                 image.0.set_resource_options(options);
                 let requirements = self.device.heap_texture_size_and_align(&image.0);
@@ -965,7 +956,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn bind_image_memory(
-        &mut self, memory: &n::Memory, offset: u64, image: n::UnboundImage
+        &mut self, memory: &n::Memory, _offset: u64, image: n::UnboundImage
     ) -> Result<n::Image, BindError> {
         Ok(n::Image(match *memory {
             n::Memory::Native(ref heap) => {
@@ -988,7 +979,7 @@ impl hal::Device<Backend> for Device {
         }))
     }
 
-    fn destroy_image(&mut self, image: n::Image) {
+    fn destroy_image(&mut self, _image: n::Image) {
     }
 
     fn create_image_view(
@@ -1008,12 +999,10 @@ impl hal::Device<Backend> for Device {
             },
         };
 
-        unsafe {
-            Ok(n::ImageView(image.0.new_texture_view(mtl_format))) // Returns retained
-        }
+        Ok(n::ImageView(image.0.new_texture_view(mtl_format)))
     }
 
-    fn destroy_image_view(&mut self, view: n::ImageView) {
+    fn destroy_image_view(&mut self, _view: n::ImageView) {
     }
 
     // Emulated fence implementations

@@ -5,7 +5,7 @@ use std::ops::{Deref, Range};
 use std::sync::{Arc};
 use std::cell::UnsafeCell;
 
-use hal::{self, memory, target, pool, pso};
+use hal::{memory, target, pool, pso};
 use hal::{VertexCount, VertexOffset, InstanceCount, IndexCount, Viewport};
 use hal::buffer::{IndexBufferView};
 use hal::image::{ImageLayout, SubresourceRange};
@@ -20,13 +20,8 @@ use block::{ConcreteBlock};
 
 pub struct CommandQueue(pub(crate) Arc<QueueInner>);
 
-<<<<<<< HEAD
 pub(crate) struct QueueInner {
-    queue: MTLCommandQueue,
-=======
-struct QueueInner {
     queue: metal::CommandQueue,
->>>>>>> Updated metal-rs version
 }
 
 unsafe impl Send for QueueInner {}
@@ -199,7 +194,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
             let semaphores_copy: Vec<_> = submit.signal_semaphores.iter().map(|semaphore| {
                 semaphore.0
             }).collect();
-            Some(ConcreteBlock::new(move |cb: *mut ()| -> () {
+            Some(ConcreteBlock::new(move |_cb: *mut ()| -> () {
                 for semaphore in semaphores_copy.iter() {
                     native::dispatch_semaphore_signal(*semaphore);
                 }
@@ -217,7 +212,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
             if buffer as *const _ == submit.cmd_buffers.last().unwrap() as *const _ {
                 if let Some(ref fence) = fence {
                     let value_ptr = fence.0.clone();
-                    let fence_block = ConcreteBlock::new(move |cb: *mut ()| -> () {
+                    let fence_block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
                         *value_ptr.lock().unwrap() = true;
                     }).copy();
                     msg_send![command_buffer, addCompletedHandler: fence_block.deref() as *const _];
@@ -239,7 +234,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
 
     fn allocate(&mut self, num: usize) -> Vec<CommandBuffer> {
         let buffers: Vec<_> = (0..num).map(|_| CommandBuffer {
-            inner: Arc::new(unsafe {
+            inner: Arc::new({
                 // TODO: maybe use unretained command buffer for efficiency?
                 let command_buffer = self.queue.queue.new_command_buffer().to_owned();
 
@@ -353,70 +348,70 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
 
     fn pipeline_barrier(
         &mut self,
-        stages: Range<pso::PipelineStage>,
-        barriers: &[memory::Barrier<Backend>],
+        _stages: Range<pso::PipelineStage>,
+        _barriers: &[memory::Barrier<Backend>],
     ) {
         // TODO: MTLRenderCommandEncoder.textureBarrier on macOS?
     }
 
     fn fill_buffer(
         &mut self,
-        buffer: &native::Buffer,
-        range: Range<u64>,
-        data: u32,
+        _buffer: &native::Buffer,
+        _range: Range<u64>,
+        _data: u32,
     ) {
         unimplemented!()
     }
 
     fn update_buffer(
         &mut self,
-        buffer: &native::Buffer,
-        offset: u64,
-        data: &[u8],
+        _buffer: &native::Buffer,
+        _offset: u64,
+        _data: &[u8],
     ) {
         unimplemented!()
     }
 
     fn clear_color_image(
         &mut self,
-        image: &native::Image,
-        layout: ImageLayout,
-        range: SubresourceRange,
-        value: ClearColor,
+        _image: &native::Image,
+        _layout: ImageLayout,
+        _range: SubresourceRange,
+        _value: ClearColor,
     ) {
         unimplemented!()
     }
 
     fn clear_depth_stencil_image(
         &mut self,
-        image: &native::Image,
-        layout: ImageLayout,
-        range: SubresourceRange,
-        value: ClearDepthStencil,
+        _image: &native::Image,
+        _layout: ImageLayout,
+        _range: SubresourceRange,
+        _value: ClearDepthStencil,
     ) {
         unimplemented!()
     }
 
     fn clear_attachments(
         &mut self,
-        clears: &[AttachmentClear],
-        rects: &[target::Rect],
+        _clears: &[AttachmentClear],
+        _rects: &[target::Rect],
     ) {
         unimplemented!()
     }
 
     fn resolve_image(
         &mut self,
-        src: &native::Image,
-        src_layout: ImageLayout,
-        dst: &native::Image,
-        dst_layout: ImageLayout,
-        regions: &[ImageResolve],
+        _src: &native::Image,
+        _src_layout: ImageLayout,
+        _dst: &native::Image,
+        _dst_layout: ImageLayout,
+        _regions: &[ImageResolve],
     ) {
         unimplemented!()
     }
 
-    fn bind_index_buffer(&mut self, view: IndexBufferView<Backend>) {
+    fn bind_index_buffer(&mut self, _view: IndexBufferView<Backend>) {
         unimplemented!()
     }
 
@@ -474,21 +469,21 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_stencil_reference(&mut self, front: target::Stencil, back: target::Stencil) {
+    fn set_stencil_reference(&mut self, _front: target::Stencil, _back: target::Stencil) {
         unimplemented!()
     }
 
-    fn set_blend_constants(&mut self, color: target::ColorValue) {
+    fn set_blend_constants(&mut self, _color: target::ColorValue) {
         unimplemented!()
     }
 
     fn begin_renderpass(
         &mut self,
-        render_pass: &native::RenderPass,
+        _render_pass: &native::RenderPass,
         frame_buffer: &native::FrameBuffer,
-        render_area: target::Rect,
+        _render_area: target::Rect,
         clear_values: &[ClearValue],
-        first_subpass: SubpassContents,
+        _first_subpass: SubpassContents,
     ) {
         unsafe {
             let command_buffer = self.inner();
@@ -526,7 +521,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn next_subpass(&mut self, contents: SubpassContents) {
+    fn next_subpass(&mut self, _contents: SubpassContents) {
         unimplemented!()
     }
 
@@ -651,7 +646,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_compute_pipeline(&mut self, pipeline: &native::ComputePipeline) {
+    fn bind_compute_pipeline(&mut self, _pipeline: &native::ComputePipeline) {
         unimplemented!()
     }
 
@@ -664,30 +659,30 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn dispatch(&mut self, x: u32, y: u32, z: u32) {
+    fn dispatch(&mut self, _x: u32, _y: u32, _z: u32) {
         unimplemented!()
     }
 
-    fn dispatch_indirect(&mut self, buffer: &native::Buffer, offset: u64) {
+    fn dispatch_indirect(&mut self, _buffer: &native::Buffer, _offset: u64) {
         unimplemented!()
     }
 
     fn copy_buffer(
         &mut self,
-        src: &native::Buffer,
-        dst: &native::Buffer,
-        regions: &[BufferCopy],
+        _src: &native::Buffer,
+        _dst: &native::Buffer,
+        _regions: &[BufferCopy],
     ) {
         unimplemented!()
     }
 
     fn copy_image(
         &mut self,
-        src: &native::Image,
-        src_layout: ImageLayout,
-        dst: &native::Image,
-        dst_layout: ImageLayout,
-        regions: &[ImageCopy],
+        _src: &native::Image,
+        _src_layout: ImageLayout,
+        _dst: &native::Image,
+        _dst_layout: ImageLayout,
+        _regions: &[ImageCopy],
     ) {
         unimplemented!()
     }
@@ -789,29 +784,29 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
 
     fn draw_indexed(
         &mut self,
-        indeces: Range<IndexCount>,
-        base_vertex: VertexOffset,
-        instances: Range<InstanceCount>,
+        _indeces: Range<IndexCount>,
+        _base_vertex: VertexOffset,
+        _instances: Range<InstanceCount>,
     ) {
         unimplemented!()
     }
 
     fn draw_indirect(
         &mut self,
-        buffer: &native::Buffer,
-        offset: u64,
-        draw_count: u32,
-        stride: u32,
+        _buffer: &native::Buffer,
+        _offset: u64,
+        _draw_count: u32,
+        _stride: u32,
     ) {
         unimplemented!()
     }
 
     fn draw_indexed_indirect(
         &mut self,
-        buffer: &native::Buffer,
-        offset: u64,
-        draw_count: u32,
-        stride: u32,
+        _buffer: &native::Buffer,
+        _offset: u64,
+        _draw_count: u32,
+        _stride: u32,
     ) {
         unimplemented!()
     }

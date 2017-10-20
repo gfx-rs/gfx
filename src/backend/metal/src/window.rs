@@ -5,12 +5,12 @@ use device::PhysicalDevice;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use hal::{self, format, memory, image};
+use hal::{self, format, image};
 use hal::{Backbuffer, SwapchainConfig};
 use hal::format::{ChannelType, SurfaceType};
 use hal::CommandQueue;
 
-use metal::{self, MTLPixelFormat, MTLTextureUsageRenderTarget};
+use metal::{self, MTLPixelFormat, MTLTextureUsage};
 use objc::runtime::{Object};
 use core_foundation::base::TCFType;
 use core_foundation::string::{CFString, CFStringRef};
@@ -44,6 +44,7 @@ pub struct Swapchain {
 }
 
 const SWAP_CHAIN_IMAGE_COUNT: usize = 3;
+#[allow(bad_style)]
 const kCVPixelFormatType_32RGBA: u32 = (b'R' as u32) << 24 | (b'G' as u32) << 16 | (b'B' as u32) << 8 | b'A' as u32;
 
 impl hal::Surface<Backend> for Surface {
@@ -104,7 +105,7 @@ impl hal::Surface<Backend> for Surface {
             backbuffer_descriptor.set_pixel_format(mtl_format);
             backbuffer_descriptor.set_width(pixel_width as u64);
             backbuffer_descriptor.set_height(pixel_height as u64);
-            backbuffer_descriptor.set_usage(MTLTextureUsageRenderTarget);
+            backbuffer_descriptor.set_usage(MTLTextureUsage::MTLTextureUsageRenderTarget);
 
             let images = io_surfaces.iter().map(|surface| {
                 let mapped_texture: metal::Texture = msg_send![device,
@@ -149,9 +150,10 @@ impl hal::Swapchain<Backend> for Swapchain {
 
     fn present<C>(
         &mut self,
-        present_queue: &mut CommandQueue<Backend, C>,
-        wait_semaphores: &[&native::Semaphore],
+        _present_queue: &mut CommandQueue<Backend, C>,
+        _wait_semaphores: &[&native::Semaphore],
     ) {
+        // TODO: wait for semaphores
         let buffer_index = self.present_index % self.io_surfaces.len();
 
         unsafe {

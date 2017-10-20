@@ -41,10 +41,6 @@ path = "../../../src/backend/metal"
 version = "0.1"
 optional = true
 
-
-[target.'cfg(target_os = "macos")'.dependencies.cocoa]
-version = "0.9"
-
 [target.'cfg(windows)'.dependencies.gfx-backend-dx12]
 path = "../../../src/backend/dx12"
 version = "0.1"
