@@ -1,11 +1,11 @@
 extern crate gfx_hal as hal;
 extern crate cocoa;
+extern crate foreign_types;
 #[macro_use] extern crate objc;
 extern crate io_surface;
 extern crate core_foundation;
 extern crate core_graphics;
 #[macro_use] extern crate log;
-#[macro_use] extern crate scopeguard;
 extern crate block;
 extern crate spirv_cross;
 
@@ -52,7 +52,7 @@ impl hal::Instance for Instance {
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
         // TODO: enumerate all devices
 
-        let device = metal::create_system_default_device(); // Returns retained
+        let device = metal::Device::system_default();
 
         vec![
             hal::Adapter {

@@ -10,8 +10,8 @@ use hal::{Backbuffer, SwapchainConfig};
 use hal::format::{ChannelType, SurfaceType};
 use hal::CommandQueue;
 
-use metal::*;
-use objc::runtime::{Object, Class};
+use metal::{self, MTLPixelFormat, MTLTextureUsageRenderTarget};
+use objc::runtime::{Object};
 use core_foundation::base::TCFType;
 use core_foundation::string::{CFString, CFStringRef};
 use core_foundation::dictionary::CFDictionary;
@@ -100,19 +100,18 @@ impl hal::Surface<Backend> for Surface {
 
             let device = present_queue.as_raw().device();
 
-            let backbuffer_descriptor = MTLTextureDescriptor::new();
-            defer! { backbuffer_descriptor.release() };
+            let backbuffer_descriptor = metal::TextureDescriptor::new();
             backbuffer_descriptor.set_pixel_format(mtl_format);
             backbuffer_descriptor.set_width(pixel_width as u64);
             backbuffer_descriptor.set_height(pixel_height as u64);
             backbuffer_descriptor.set_usage(MTLTextureUsageRenderTarget);
 
             let images = io_surfaces.iter().map(|surface| {
-                let mapped_texture: MTLTexture = msg_send![device.0,
-                    newTextureWithDescriptor: backbuffer_descriptor.0
+                let mapped_texture: metal::Texture = msg_send![device,
+                    newTextureWithDescriptor: &*backbuffer_descriptor
                     iosurface: surface.obj
                     plane: 0
-                ]; // Returns retained
+                ]; 
                 native::Image(mapped_texture)
             }).collect();
 

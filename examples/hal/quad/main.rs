@@ -13,6 +13,13 @@ extern crate gfx_backend_vulkan as back;
 extern crate gfx_backend_metal as back;
 #[cfg(feature = "gl")]
 extern crate gfx_backend_gl as back;
+<<<<<<< HEAD
+=======
+#[cfg(feature = "gl")]
+extern crate glutin;
+#[cfg(target_os = "macos")]
+extern crate cocoa;
+>>>>>>> Updated metal-rs version
 
 extern crate winit;
 extern crate image;
@@ -29,6 +36,9 @@ use hal::queue::Submission;
 use hal::target::Rect;
 
 use std::io::Cursor;
+
+#[cfg(target_os = "macos")]
+use cocoa::foundation::NSAutoreleasePool;
 
 // MSL doesn't allow `main` entry point name.
 //TODO: just use a different name consistently in all backends
@@ -63,6 +73,10 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
 #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]
 fn main() {
     env_logger::init().unwrap();
+
+    #[cfg(target_os = "macos")]
+    let mut autorelease_pool = unsafe { NSAutoreleasePool::new(cocoa::base::nil) };
+    
     let mut events_loop = winit::EventsLoop::new();
 
     let wb = winit::WindowBuilder::new()
@@ -515,6 +529,12 @@ fn main() {
 
         // present frame
         swap_chain.present(&mut queue, &[]);
+
+        #[cfg(target_os = "macos")]
+        unsafe {
+            autorelease_pool.drain();
+            autorelease_pool = NSAutoreleasePool::new(cocoa::base::nil);
+        }
     }
 
     // cleanup!

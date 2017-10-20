@@ -8,7 +8,7 @@ use std::ptr;
 use hal::{self, image, pass, pso};
 
 use cocoa::foundation::{NSRange, NSUInteger};
-use metal::*;
+use metal::{self, MTLPrimitiveType};
 use objc;
 use spirv_cross::msl;
 
@@ -17,7 +17,7 @@ use spirv_cross::msl;
 /// depend on pipeline layout, in which case the value would become `Compiled`.
 #[derive(Debug)]
 pub enum ShaderModule {
-    Compiled(MTLLibrary),
+    Compiled(metal::Library),
     Raw(Vec<u8>),
 }
 
@@ -26,7 +26,7 @@ unsafe impl Sync for ShaderModule {}
 
 #[derive(Debug)]
 pub struct RenderPass {
-    pub(crate) desc: MTLRenderPassDescriptor,
+    pub(crate) desc: metal::RenderPassDescriptor,
     pub(crate) attachments: Vec<pass::Attachment>,
     pub(crate) num_colors: usize,
 }
@@ -35,7 +35,7 @@ unsafe impl Send for RenderPass {}
 unsafe impl Sync for RenderPass {}
 
 #[derive(Debug)]
-pub struct FrameBuffer(pub(crate) MTLRenderPassDescriptor);
+pub struct FrameBuffer(pub(crate) metal::RenderPassDescriptor);
 
 unsafe impl Send for FrameBuffer {}
 unsafe impl Sync for FrameBuffer {}
@@ -50,9 +50,9 @@ pub struct PipelineLayout {
 pub struct GraphicsPipeline {
     // we hold the compiled libraries here for now
     // TODO: move to some cache in `Device`
-    pub(crate) vs_lib: MTLLibrary,
-    pub(crate) fs_lib: Option<MTLLibrary>,
-    pub(crate) raw: MTLRenderPipelineState,
+    pub(crate) vs_lib: metal::Library,
+    pub(crate) fs_lib: Option<metal::Library>,
+    pub(crate) raw: metal::RenderPipelineState,
     pub(crate) primitive_type: MTLPrimitiveType,
 }
 
@@ -63,7 +63,7 @@ unsafe impl Sync for GraphicsPipeline {}
 pub struct ComputePipeline {}
 
 #[derive(Debug)]
-pub struct Image(pub(crate) MTLTexture);
+pub struct Image(pub(crate) metal::Texture);
 
 unsafe impl Send for Image {}
 unsafe impl Sync for Image {}
@@ -72,13 +72,13 @@ unsafe impl Sync for Image {}
 pub struct BufferView {}
 
 #[derive(Debug)]
-pub struct ImageView(pub(crate) MTLTexture);
+pub struct ImageView(pub(crate) metal::Texture);
 
 unsafe impl Send for ImageView {}
 unsafe impl Sync for ImageView {}
 
 #[derive(Debug)]
-pub struct Sampler(pub(crate) MTLSamplerState);
+pub struct Sampler(pub(crate) metal::SamplerState);
 
 unsafe impl Send for Sampler {}
 unsafe impl Sync for Sampler {}
@@ -90,7 +90,7 @@ unsafe impl Send for Semaphore {}
 unsafe impl Sync for Semaphore {}
 
 #[derive(Debug)]
-pub struct Buffer(pub(crate) MTLBuffer);
+pub struct Buffer(pub(crate) metal::Buffer);
 
 unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
@@ -100,7 +100,7 @@ unsafe impl Sync for Buffer {}
 pub enum DescriptorPool {
     Emulated,
     ArgumentBuffer {
-        buffer: MTLBuffer,
+        buffer: metal::Buffer,
         total_size: NSUInteger,
         offset: NSUInteger,
     }
@@ -122,12 +122,12 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                     let bindings = layout_bindings.iter().map(|layout| {
                         let binding = match layout.ty {
                             pso::DescriptorType::Sampler => {
-                                let resources = (0 .. layout.count).map(|_| MTLSamplerState::nil());
+                                let resources = (0 .. layout.count).map(|_| None);
                                 DescriptorSetBinding::Sampler(resources.collect())
                             }
                             pso::DescriptorType::SampledImage => {
                                 let resources = (0 .. layout.count)
-                                    .map(|_| (MTLTexture::nil(), image::ImageLayout::General));
+                                    .map(|_| None);
                                 DescriptorSetBinding::SampledImage(resources.collect())
                             }
                             _ => unimplemented!()
@@ -142,7 +142,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                     DescriptorSet::Emulated(Arc::new(Mutex::new(inner)))
                 }).collect()
             }
-            DescriptorPool::ArgumentBuffer { buffer, total_size, ref mut offset } => {
+            DescriptorPool::ArgumentBuffer { ref buffer, total_size, ref mut offset } => {
                 layouts.iter().map(|layout| {
                     let (encoder, stage_flags) = match layout {
                         &&DescriptorSetLayout::ArgumentBuffer(ref encoder, stages) => (encoder, stages),
@@ -172,7 +172,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
 #[derive(Debug)]
 pub enum DescriptorSetLayout {
     Emulated(Vec<pso::DescriptorSetLayoutBinding>),
-    ArgumentBuffer(MTLArgumentEncoder, pso::ShaderStageFlags),
+    ArgumentBuffer(metal::ArgumentEncoder, pso::ShaderStageFlags),
 }
 unsafe impl Send for DescriptorSetLayout {}
 unsafe impl Sync for DescriptorSetLayout {}
@@ -181,9 +181,9 @@ unsafe impl Sync for DescriptorSetLayout {}
 pub enum DescriptorSet {
     Emulated(Arc<Mutex<DescriptorSetInner>>),
     ArgumentBuffer {
-        buffer: MTLBuffer,
+        buffer: metal::Buffer,
         offset: NSUInteger,
-        encoder: MTLArgumentEncoder,
+        encoder: metal::ArgumentEncoder,
         stage_flags: pso::ShaderStageFlags,
     }
 }
@@ -199,47 +199,20 @@ unsafe impl Send for DescriptorSetInner {}
 
 #[derive(Debug)]
 pub enum DescriptorSetBinding {
-    Sampler(Vec<MTLSamplerState>),
-    SampledImage(Vec<(MTLTexture, image::ImageLayout)>),
-    StorageImage(Vec<(MTLTexture, image::ImageLayout)>),
+    Sampler(Vec<Option<metal::SamplerState>>),
+    SampledImage(Vec<Option<(metal::Texture, image::ImageLayout)>>),
+    StorageImage(Vec<(metal::Texture, image::ImageLayout)>),
     UniformTexelBuffer,
     StorageTexelBuffer,
-    ConstantBuffer(Vec<MTLBuffer>),
+    ConstantBuffer(Vec<metal::Buffer>),
     StorageBuffer,
-    InputAttachment(Vec<(MTLTexture, image::ImageLayout)>),
-}
-
-impl Drop for DescriptorSetBinding {
-    fn drop(&mut self) {
-        use self::DescriptorSetBinding::*;
-
-        unsafe {
-            match *self {
-                Sampler(ref mut states) => for state in states.drain(..) {
-                    state.release();
-                },
-                SampledImage(ref mut images) => for (image, _) in images.drain(..) {
-                    image.release();
-                },
-                StorageImage(ref mut images) => for (image, _) in images.drain(..) {
-                    image.release();
-                },
-                ConstantBuffer(ref mut buffers) => for buffer in buffers.drain(..) {
-                    buffer.release();
-                },
-                InputAttachment(ref mut attachments) => for (attachment, _) in attachments.drain(..) {
-                    attachment.release();
-                },
-                _ => {}
-            }
-        }
-    }
+    InputAttachment(Vec<(metal::Texture, image::ImageLayout)>),
 }
 
 #[derive(Debug)]
 pub enum Memory {
     Emulated { memory_type: hal::MemoryType, size: u64 },
-    Native(MTLHeap),
+    Native(metal::Heap),
 }
 
 #[derive(Debug)]
@@ -251,7 +224,7 @@ unsafe impl Send for UnboundBuffer {}
 unsafe impl Sync for UnboundBuffer {}
 
 #[derive(Debug)]
-pub struct UnboundImage(pub MTLTextureDescriptor);
+pub struct UnboundImage(pub metal::TextureDescriptor);
 
 unsafe impl Send for UnboundImage {}
 unsafe impl Sync for UnboundImage {}
