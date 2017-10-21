@@ -90,28 +90,42 @@ pub type InitOk<Cf, Df> =
 ///
 /// fn main() {
 ///     let sdl = sdl2::init().unwrap();
+///     let video = sdl.video().unwrap();
 ///
-///     let builder = sdl.video().unwrap().window("Example", 800, 600);
+///     let builder = video.window("Example", 800, 600);
 ///     let (window, glcontext, device, factory, color_view, depth_view) =
-///         gfx_window_sdl::init::<Rgba8, DepthStencil>(builder).expect("gfx_window_sdl::init failed!");
+///         gfx_window_sdl::init::<Rgba8, DepthStencil>(&video, builder)
+///         .expect("gfx_window_sdl::init failed!");
 ///
 ///     // some code...
 /// }
 /// ```
-pub fn init<Cf, Df>(builder: WindowBuilder) -> Result<InitOk<Cf, Df>, InitError>
+pub fn init<Cf, Df>(video_subsystem: &sdl2::VideoSubsystem, builder: WindowBuilder)
+                    -> Result<InitOk<Cf, Df>, InitError>
 where
     Cf: RenderFormat,
     Df: DepthFormat,
 {
     use core::memory::Typed;
-    init_raw(builder, Cf::get_format(), Df::get_format())
+    init_raw(video_subsystem, builder, Cf::get_format(), Df::get_format())
         .map(|(w, gl, d, f, color_view, ds_view)|
             (w, gl, d, f, Typed::new(color_view), Typed::new(ds_view)))
 }
 
-pub fn init_raw(mut builder: WindowBuilder, cf: Format, df: Format)
+pub fn init_raw(video_subsystem: &sdl2::VideoSubsystem, mut builder: WindowBuilder, cf: Format, df: Format)
                 -> Result<InitRawOk, InitError> {
     use core::texture::{AaMode, Size};
+
+    {
+        let depth_total_bits = df.0.get_total_bits();
+        let stencil_bits = df.0.get_alpha_stencil_bits();
+        let attr = video_subsystem.gl_attr();
+        attr.set_framebuffer_srgb_compatible(cf.1 == ChannelType::Srgb);
+        attr.set_alpha_size(cf.0.get_alpha_stencil_bits());
+        attr.set_depth_size(depth_total_bits - stencil_bits);
+        attr.set_stencil_size(stencil_bits);
+        attr.set_context_flags().set();
+    }
 
     let mut window = builder.opengl().build()?;
 
@@ -121,16 +135,6 @@ pub fn init_raw(mut builder: WindowBuilder, cf: Format, df: Format)
         ..window.display_mode()?
     };
     window.set_display_mode((Some(display_mode)))?;
-    {
-        let depth_total_bits = df.0.get_total_bits();
-        let stencil_bits = df.0.get_alpha_stencil_bits();
-        let attr = window.subsystem().gl_attr();
-        attr.set_framebuffer_srgb_compatible(cf.1 == ChannelType::Srgb);
-        attr.set_alpha_size(cf.0.get_alpha_stencil_bits());
-        attr.set_depth_size(depth_total_bits - stencil_bits);
-        attr.set_stencil_size(stencil_bits);
-        attr.set_context_flags().set();
-    }
 
     let context = window.gl_create_context()?;
 
