@@ -184,11 +184,11 @@ impl core::Adapter<Backend> for Adapter {
         }
     }
 
-    fn get_info(&self) -> &core::AdapterInfo {
+    fn info(&self) -> &core::AdapterInfo {
         &self.adapter_info
     }
 
-    fn get_queue_families(&self) -> &[(n::QueueFamily, core::QueueType)] {
+    fn queue_families(&self) -> &[(n::QueueFamily, core::QueueType)] {
         &self.queue_families
     }
 }

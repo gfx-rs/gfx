@@ -273,11 +273,11 @@ impl c::Adapter<Backend> for Adapter {
         gpu
     }
 
-    fn get_info(&self) -> &c::AdapterInfo {
+    fn info(&self) -> &c::AdapterInfo {
         &self.adapter_info
     }
 
-    fn get_queue_families(&self) -> &[(QueueFamily, QueueType)] {
+    fn queue_families(&self) -> &[(QueueFamily, QueueType)] {
         &self.queue_family
     }
 }

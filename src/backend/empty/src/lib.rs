@@ -55,11 +55,11 @@ impl core::Adapter<Backend> for Adapter {
         unimplemented!()
     }
 
-    fn get_info(&self) -> &core::AdapterInfo {
+    fn info(&self) -> &core::AdapterInfo {
         unimplemented!()
     }
 
-    fn get_queue_families(&self) -> &[(QueueFamily, core::QueueType)] {
+    fn queue_families(&self) -> &[(QueueFamily, core::QueueType)] {
         unimplemented!()
     }
 }
