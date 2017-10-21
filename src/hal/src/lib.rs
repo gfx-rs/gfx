@@ -169,7 +169,7 @@ pub struct Limits {
 }
 
 /// Describes what geometric primitives are created from vertex data.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[repr(u8)]
 pub enum Primitive {
