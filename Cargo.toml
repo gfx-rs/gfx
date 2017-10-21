@@ -10,5 +10,6 @@ members = [
     "src/warden",
     "src/render",
     "examples/hal/quad",
+    "examples/hal/compute",
     "examples/render/quad_render",
 ]
