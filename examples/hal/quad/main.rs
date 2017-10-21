@@ -102,7 +102,7 @@ fn main() {
     };
 
     for adapter in &adapters {
-        println!("{:?}", adapter.get_info());
+        println!("{:?}", adapter.info());
     }
     let adapter = &adapters[0];
 

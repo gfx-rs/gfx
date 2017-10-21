@@ -21,7 +21,7 @@ pub trait Adapter<B: Backend>: Sized {
     ///
     /// # let adapter: empty::Adapter = return;
     /// let queue_desc = adapter
-    ///     .get_queue_families()
+    ///     .queue_families()
     ///     .iter()
     ///     .map(|&(ref family, ty)| (family, ty, family.num_queues()))
     ///     .collect::<Vec<_>>();
@@ -56,7 +56,7 @@ pub trait Adapter<B: Backend>: Sized {
     where
         F: FnMut(&B::QueueFamily, QueueType) -> (u32, QueueType),
     {
-        let queue_desc = self.get_queue_families()
+        let queue_desc = self.queue_families()
             .iter()
             .filter_map(|&(ref family, ty)| {
                 let (num_queues, ty) = f(family, ty);
@@ -81,10 +81,10 @@ pub trait Adapter<B: Backend>: Sized {
     /// use gfx_hal::Adapter;
     ///
     /// # let adapter: empty::Adapter = return;
-    /// println!("Adapter info: {:?}", adapter.get_info());
+    /// println!("Adapter info: {:?}", adapter.info());
     /// # }
     /// ```
-    fn get_info(&self) -> &AdapterInfo;
+    fn info(&self) -> &AdapterInfo;
 
     /// Return the supported queue families for this adapter.
     ///
@@ -100,12 +100,12 @@ pub trait Adapter<B: Backend>: Sized {
     /// use gfx_hal::Adapter;
     ///
     /// # let adapter: empty::Adapter = return;
-    /// for (i, &(_, ty)) in adapter.get_queue_families().into_iter().enumerate() {
+    /// for (i, &(_, ty)) in adapter.queue_families().into_iter().enumerate() {
     ///     println!("Queue family ({:?}) type: {:?}", i, ty);
     /// }
     /// # }
     /// ```
-    fn get_queue_families(&self) -> &[(B::QueueFamily, QueueType)];
+    fn queue_families(&self) -> &[(B::QueueFamily, QueueType)];
 }
 
 /// Information about a backend adapter.

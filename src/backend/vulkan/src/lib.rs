@@ -491,11 +491,11 @@ impl core::Adapter<Backend> for Adapter {
         }
     }
 
-    fn get_info(&self) -> &core::AdapterInfo {
+    fn info(&self) -> &core::AdapterInfo {
         &self.info
     }
 
-    fn get_queue_families(&self) -> &[(QueueFamily, QueueType)] {
+    fn queue_families(&self) -> &[(QueueFamily, QueueType)] {
         &self.queue_families
     }
 }

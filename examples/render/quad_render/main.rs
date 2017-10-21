@@ -64,7 +64,7 @@ fn main() {
     let surface = instance.create_surface(&window);
     let adapters = instance.enumerate_adapters();
     for adapter in &adapters {
-        println!("{:?}", adapter.get_info());
+        println!("{:?}", adapter.info());
     }
     let adapter = &adapters[0];
 

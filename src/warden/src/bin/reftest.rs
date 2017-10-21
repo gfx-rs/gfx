@@ -66,7 +66,7 @@ impl Harness {
 
         let adapters = instance.enumerate_adapters();
         let adapter = &adapters[0];
-        println!("\t{:?}", adapter.get_info());
+        println!("\t{:?}", adapter.info());
 
         for (scene_name, tests) in &self.suite {
             println!("\tLoading scene '{}':", scene_name);

@@ -94,7 +94,7 @@ impl<B: hal::Backend> Scene<B> {
         info!("creating Scene from {}", data_path);
         // initialize graphics
         let hal::Gpu { mut device, mut graphics_queues, memory_types, .. } = {
-            let (ref family, queue_type) = adapter.get_queue_families()[0];
+            let (ref family, queue_type) = adapter.queue_families()[0];
             assert!(queue_type.supports_graphics());
             adapter.open(&[(family, hal::QueueType::Graphics, 1)])
         };
