@@ -179,7 +179,10 @@ impl Adapter {
 }
 
 impl c::Adapter<Backend> for Adapter {
-    fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)]) -> c::Gpu<Backend> {
+    fn open<'a, I>(&self, queues: I) -> c::Gpu<Backend>
+    where
+        I: Iterator<Item = c::QueueDescriptor<'a, Backend>>
+    {
         // initialize permanent states
         let gl = &self.share.context;
         if self.share.features.srgb_color {
@@ -248,13 +251,13 @@ impl c::Adapter<Backend> for Adapter {
             memory_heaps: vec![!0, !0],
         };
 
-        for &(_, queue_type, num_queues) in queue_descs {
-            if num_queues == 0 {
+        for desc in queues {
+            if desc.num_queues == 0 {
                 continue
             }
-            assert_eq!(num_queues, 1);
+            assert_eq!(desc.num_queues, 1);
             let raw_queue = queue::CommandQueue::new(&self.share, vao);
-            match queue_type {
+            match desc.ty {
                 QueueType::General => unsafe {
                     gpu.general_queues.push(c::CommandQueue::new(raw_queue));
                 },

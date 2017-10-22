@@ -28,7 +28,7 @@ use std::cell::RefCell;
 use std::ptr;
 use std::sync::Arc;
 use core::{handle as h, texture as tex};
-use core::{QueueType, SubmissionResult};
+use core::{QueueType, QueueDescriptor, SubmissionResult};
 use core::command::{AccessInfo, AccessGuard};
 use std::os::raw::c_void;
 
@@ -295,10 +295,15 @@ pub struct Adapter {
 }
 
 impl core::Adapter<Backend> for Adapter {
-    fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)]) -> core::Gpu<Backend> {
+    fn open<'a, I>(&self, queues: I) -> core::Gpu<Backend>
+    where
+        I: Iterator<Item = QueueDescriptor<Backend>>,
+    {
+        let desc = queues.next().expect("Exactly one queue is required");
+
         // Only support a single queue
-        assert_eq!(queue_descs.len(), 1);
-        assert!(queue_descs[0].2 <= 1);
+        assert_eq!(queues.count(), 0, "DirectX 11 supports only a single queue");
+        assert!(desc.num_queues <= 1);
 
         // Create D3D11 device
         let mut feature_level = winapi::D3D_FEATURE_LEVEL_10_0;
@@ -367,10 +372,9 @@ impl core::Adapter<Backend> for Adapter {
             }
         };
 
-        let (_, queue_type, num_queues) = queue_descs[0];
-        for _ in 0..num_queues {
+        for _ in 0..desc.num_queues {
             unsafe {
-                match queue_type {
+                match desc.ty {
                     QueueType::General => {
                         gpu.general_queues.push(core::GeneralQueue::new(raw_queue()));
                     }

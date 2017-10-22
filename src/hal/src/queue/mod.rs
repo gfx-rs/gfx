@@ -17,6 +17,39 @@ use std::marker::PhantomData;
 pub use self::capability::{Compute, Graphics, General, Transfer, Supports};
 pub use self::submission::{RawSubmission, Submission};
 
+/// Queue descriptors are needed for `Gpu` creation via the `Adapter`.
+pub struct QueueDescriptor<'a, B: Backend> {
+    /// The requested queue family.
+    pub family: &'a B::QueueFamily,
+    /// Specifies the type of the queue.
+    pub ty: QueueType,
+    /// Specifies how many queues should be created.
+    pub num_queues: u32,
+}
+
+impl<'a, B: Backend> Copy for QueueDescriptor<'a, B> {}
+
+impl<'a, B: Backend> Clone for QueueDescriptor<'a, B> {
+    fn clone(&self) -> Self {
+        QueueDescriptor {
+            family: self.family,
+            ty: self.ty,
+            num_queues: self.num_queues,
+        }
+    }
+}
+
+impl<'a, B: Backend> QueueDescriptor<'a, B> {
+    /// Creates a new queue descriptor.
+    pub fn new(family: &'a B::QueueFamily, ty: QueueType, num_queues: u32) -> Self {
+        QueueDescriptor {
+            family,
+            ty,
+            num_queues,
+        }
+    }
+}
+
 ///
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
