@@ -30,7 +30,7 @@ pub fn main() {
     video.gl_attr().set_context_version(3, 2);
     let builder = video.window("SDL Window", 1024, 768);
     let (window, _gl_context, mut device, mut factory, main_color, _main_depth) =
-        gfx_window_sdl::init::<Rgba8, DepthStencil>(builder).unwrap();
+        gfx_window_sdl::init::<Rgba8, DepthStencil>(&video, builder).unwrap();
 
     let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
 
