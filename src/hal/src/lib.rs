@@ -28,7 +28,8 @@ pub use self::device::Device;
 pub use self::pool::{CommandPool, RawCommandPool, SubpassCommandPool};
 pub use self::pso::{DescriptorPool};
 pub use self::queue::{
-    CommandQueue, QueueFamily, QueueType, RawCommandQueue, RawSubmission, Submission,
+    CommandQueue, QueueDescriptor, QueueFamily, QueueType, RawCommandQueue, RawSubmission,
+    Submission,
     General, Graphics, Compute, Transfer,
 };
 pub use self::window::{

@@ -51,7 +51,10 @@ impl core::Backend for Backend {
 /// Dummy adapter.
 pub struct Adapter;
 impl core::Adapter<Backend> for Adapter {
-    fn open(&self, _: &[(&QueueFamily, core::QueueType, u32)]) -> core::Gpu<Backend> {
+    fn open<'a, I>(&self, _: I) -> core::Gpu<Backend>
+    where
+        I: Iterator<Item = core::QueueDescriptor<'a, Backend>>
+    {
         unimplemented!()
     }
 

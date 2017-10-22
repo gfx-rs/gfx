@@ -2,7 +2,7 @@
 //!
 //! Adapters are the main entry point for opening a [Device](../struct.Device).
 
-use {Backend, Gpu, QueueType};
+use {Backend, Gpu, QueueDescriptor, QueueType};
 
 /// Represents a physical or virtual device, which is capable of running the backend.
 ///
@@ -28,7 +28,9 @@ pub trait Adapter<B: Backend>: Sized {
     /// let gpu = adapter.open(&queue_desc);
     /// # }
     /// ```
-    fn open(&self, queue_descs: &[(&B::QueueFamily, QueueType, u32)]) -> Gpu<B>;
+    fn open<'a, I>(&self, queues: I) -> Gpu<B>
+    where
+        I: Iterator<Item = QueueDescriptor<'a, B>>;
 
     /// Create a new gpu with the specified queues.
     ///
@@ -56,18 +58,17 @@ pub trait Adapter<B: Backend>: Sized {
     where
         F: FnMut(&B::QueueFamily, QueueType) -> (u32, QueueType),
     {
-        let queue_desc = self.queue_families()
+        let queues = self.queue_families()
             .iter()
             .filter_map(|&(ref family, ty)| {
                 let (num_queues, ty) = f(family, ty);
                 if num_queues > 0 {
-                    Some((family, ty, num_queues))
+                    Some(QueueDescriptor::new(family, ty, num_queues))
                 } else {
                     None
                 }
-            })
-            .collect::<Vec<_>>();
-        self.open(&queue_desc)
+            });
+        self.open(queues)
     }
 
     /// Get the `AdapterInfo` for this adapter.

@@ -25,7 +25,10 @@ mod pool;
 mod shade;
 mod window;
 
-use core::{memory, Features, Limits, QueueType};
+use core::{
+    memory, Features, Limits, QueueDescriptor, QueueType,
+    General, Graphics, Compute, Transfer,
+};
 use wio::com::ComPtr;
 
 use std::{mem, ptr};
@@ -103,18 +106,24 @@ impl core::QueueFamily for QueueFamily {
 }
 
 /// Create associated command queues for a specific queue type
-fn collect_queues<C>(
-     queue_descs: &[(&QueueFamily, QueueType, u32)],
+fn collect_queues<'a, I>(
+     queues: I,
      device: &Device,
-     collect_type: QueueType,
-) -> Vec<core::CommandQueue<Backend, C>> {
-    queue_descs.iter()
-        .filter(|&&(_, qtype, _)| qtype == collect_type)
-        .flat_map(|&(_, _, qcount)| {
-            (0..qcount).map(|_| {
+) -> (
+    Vec<core::CommandQueue<Backend, General>>,
+    Vec<core::CommandQueue<Backend, Graphics>>,
+    Vec<core::CommandQueue<Backend, Compute>>,
+    Vec<core::CommandQueue<Backend, Transfer>>,
+)
+where
+    I: Iterator<Item = QueueDescriptor<'a, Backend>>
+{
+    queues
+        .flat_map(|desc| {
+            (0..desc.num_queues).map(|_| {
                 let mut device_raw = device.raw.clone();
                 let mut queue = ptr::null_mut();
-                let qtype = match collect_type {
+                let qtype = match desc.ty {
                     QueueType::General | QueueType::Graphics => winapi::D3D12_COMMAND_LIST_TYPE_DIRECT,
                     QueueType::Compute => winapi::D3D12_COMMAND_LIST_TYPE_COMPUTE,
                     QueueType::Transfer => winapi::D3D12_COMMAND_LIST_TYPE_COPY,
@@ -140,16 +149,27 @@ fn collect_queues<C>(
                 }
 
                 unsafe {
-                    core::CommandQueue::new(
-                        CommandQueue {
-                            raw: ComPtr::new(queue),
-                            device: device_raw,
-                            list_type: qtype,
-                        }
-                    )
+                    let queue = CommandQueue {
+                        raw: ComPtr::new(queue),
+                        device: device_raw,
+                        list_type: qtype,
+                    };
+
+                    (desc.ty, queue)
                 }
             })
-        }).collect()
+        }).fold((Vec::new(), Vec::new(), Vec::new(), Vec::new()),
+                |(mut gen, mut graph, mut comp, mut tran), (ty, queue)|
+                    unsafe {
+                        match ty {
+                            QueueType::General => gen.push(core::CommandQueue::new(queue)),
+                            QueueType::Graphics => graph.push(core::CommandQueue::new(queue)),
+                            QueueType::Compute => comp.push(core::CommandQueue::new(queue)),
+                            QueueType::Transfer => tran.push(core::CommandQueue::new(queue)),
+                        }
+
+                        (gen, graph, comp, trans)
+                    })
 }
 
 #[derive(Clone)]
@@ -161,7 +181,10 @@ pub struct Adapter {
 }
 
 impl core::Adapter<Backend> for Adapter {
-    fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)]) -> core::Gpu<Backend> {
+    fn open<'a, I>(&self, queues: I) -> Gpu<B>
+    where
+        I: Iterator<Item = QueueDescriptor<'a, Backend>>
+    {
         // Create D3D12 device
         let mut device_raw = ptr::null_mut();
         let hr = unsafe {
@@ -298,11 +321,14 @@ impl core::Adapter<Backend> for Adapter {
             }
         };
 
+        let queues = collect_queues(queue_descs, &device);
+        let (general_queues, graphics_queues, compute_queues, transfer_queus) = queues;
+
         core::Gpu {
-            general_queues: collect_queues(queue_descs, &device, QueueType::General),
-            graphics_queues: collect_queues(queue_descs, &device, QueueType::Graphics),
-            compute_queues: collect_queues(queue_descs, &device, QueueType::Compute),
-            transfer_queues: collect_queues(queue_descs, &device, QueueType::Transfer),
+            general_queues,
+            graphics_queues,
+            compute_queues,
+            transfer_queues,
             memory_types,
             memory_heaps,
             device,

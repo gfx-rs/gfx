@@ -321,13 +321,19 @@ impl core::QueueFamily for QueueFamily {
 }
 
 /// Create associated command queues for a specific queue type
-fn collect_queues<C>(
-     queue_descs: &[(&QueueFamily, QueueType, u32)],
+fn collect_queues<'a, I>(
+     queues: I,
      device_raw: &Arc<RawDevice>,
-     collect_type: QueueType,
-) -> Vec<core::CommandQueue<Backend, C>> {
-    queue_descs.iter()
-        .filter(|&&(_, qtype, _)| qtype == collect_type)
+) -> (
+    Vec<core::CommandQueue<Backend, core::General>>,
+    Vec<core::CommandQueue<Backend, core::Graphics>>,
+    Vec<core::CommandQueue<Backend, core::Compute>>,
+    Vec<core::CommandQueue<Backend, core::Transfer>>,
+)
+where
+    I: Iterator<Item = QueueDescriptor<'a, Backend>>
+{
+    queues
         .flat_map(|&(qfamily, _, qcount)| {
             let family_index = qfamily.family_index;
             (0..qcount).map(move |id| {
@@ -339,11 +345,22 @@ fn collect_queues<C>(
                     device: device_raw.clone(),
                     family_index,
                 };
-                unsafe {
-                    core::CommandQueue::new(queue)
-                }
+
+                ()
             })
-        }).collect()
+        })
+        .fold((Vec::new(), Vec::new(), Vec::new(), Vec::new()),
+                |(mut gen, mut graph, mut comp, mut tran), (ty, queue)|
+                    unsafe {
+                        match ty {
+                            QueueType::General => gen.push(core::CommandQueue::new(queue)),
+                            QueueType::Graphics => graph.push(core::CommandQueue::new(queue)),
+                            QueueType::Compute => comp.push(core::CommandQueue::new(queue)),
+                            QueueType::Transfer => tran.push(core::CommandQueue::new(queue)),
+                        }
+
+                        (gen, graph, comp, trans)
+                    })
 }
 
 pub struct Adapter {
@@ -361,11 +378,12 @@ impl Adapter {
 }
 
 impl core::Adapter<Backend> for Adapter {
-    fn open(&self,
-        queue_descs: &[(&QueueFamily, QueueType, u32)],
-    ) -> core::Gpu<Backend>
+    fn open<'a, I>(&self, queues: I) -> core::Gpu<Backend>
+    where
+        I: Iterator<Item = core::QueueDescriptor<'a, Backend>>
     {
-        let mut queue_priorities = Vec::with_capacity(queue_descs.len());
+        let hint = queues.size_hint();
+        let mut queue_priorities = Vec::with_capacity(hint.1.unwrap_or(hint.0));
 
         let queue_infos = queue_descs.iter().map(|&(family, _, queue_count)| {
                 queue_priorities.push(vec![0.0f32; queue_count as usize]);
@@ -480,12 +498,15 @@ impl core::Adapter<Backend> for Adapter {
         }).collect();
 
         let device_arc = device.raw.clone();
+        let queues = collect_queues(queues, &device_arc);
+        let (general_queues, graphics_queues, compute_queues, transfer_queus) = queues;
+
         core::Gpu {
             device,
-            general_queues: collect_queues(queue_descs, &device_arc, QueueType::General),
-            graphics_queues: collect_queues(queue_descs, &device_arc, QueueType::Graphics),
-            compute_queues: collect_queues(queue_descs, &device_arc, QueueType::Compute),
-            transfer_queues: collect_queues(queue_descs, &device_arc, QueueType::Transfer),
+            general_queues,
+            graphics_queues,
+            compute_queues,
+            transfer_queues,
             memory_types,
             memory_heaps,
         }
