@@ -6,25 +6,8 @@ use {Backend, Gpu};
 
 /// Represents a physical or virtual device, which is capable of running the backend.
 ///
-/// The `Adapter` is typically obtained from objects implementing `gfx::WindowExt` or
-/// `gfx::Headless`. How these types are created is backend-specific.
+/// The list of `Adapter` instances is obtained by calling `Instance::enumerate_adapters()`.
 pub trait Adapter<B: Backend>: Sized {
-    /// Create a new logical GPU.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # extern crate gfx_backend_empty as empty;
-    /// # extern crate gfx_hal;
-    /// # fn main() {
-    /// use gfx_hal::{Adapter};
-    ///
-    /// # let adapter: empty::Adapter = return;
-    /// let gpu = adapter.open();
-    /// # }
-    /// ```
-    fn open(&self) -> Gpu<B>;
-
     /// Get the `AdapterInfo` for this adapter.
     ///
     /// # Examples
@@ -41,7 +24,7 @@ pub trait Adapter<B: Backend>: Sized {
     /// ```
     fn info(&self) -> &AdapterInfo;
 
-    /// Return the supported queue families for this adapter.
+    /// Create a new logical GPU.
     ///
     /// # Examples
     ///
@@ -49,16 +32,34 @@ pub trait Adapter<B: Backend>: Sized {
     /// # extern crate gfx_backend_empty as empty;
     /// # extern crate gfx_hal;
     /// # fn main() {
-    /// use gfx_hal::Adapter;
-    /// use gfx_hal::queue::RawQueueFamily;
+    /// use gfx_hal::{Adapter};
     ///
     /// # let adapter: empty::Adapter = return;
-    /// for (i, qf) in adapter.queue_families().into_iter().enumerate() {
-    ///     println!("Queue family ({:?}) type: {:?}", i, qf.queue_type());
+    /// let gpu = adapter.open(vec![]);
+    /// # }
+    /// ```
+    fn open(self, Vec<(B::ProtoQueueFamily, usize)>) -> Gpu<B>;
+
+    /// Return the supported queue families information for this adapter.
+    ///
+    /// *Note*: supposed to be called once. A subsequent call returns
+    /// an empty vector.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # extern crate gfx_backend_empty as empty;
+    /// # extern crate gfx_hal;
+    /// # fn main() {
+    /// use gfx_hal::{Adapter, ProtoQueueFamily};
+    ///
+    /// # let mut adapter: empty::Adapter = return;
+    /// for (i, qf) in adapter.list_queue_families().into_iter().enumerate() {
+    ///     println!("Queue families ({:?}) type: {:?}", i, qf.queue_type());
     /// }
     /// # }
     /// ```
-    fn queue_families(&self) -> &[&B::QueueFamily];
+    fn list_queue_families(&mut self) -> Vec<B::ProtoQueueFamily>;
 }
 
 /// Information about a backend adapter.

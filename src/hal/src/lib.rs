@@ -27,8 +27,8 @@ pub use self::device::Device;
 pub use self::pool::CommandPool;
 pub use self::pso::{DescriptorPool};
 pub use self::queue::{
-    CommandQueue, QueueFamily, QueueType, Submission,
-    General, Graphics, Compute, Transfer,
+    CommandQueue, QueueFamily, QueueType, ProtoQueueFamily, Submission,
+    Capability, General, Graphics, Compute, Transfer,
 };
 pub use self::window::{
     Backbuffer, Frame, FrameSync, Surface, SurfaceCapabilities, Swapchain, SwapchainConfig,
@@ -253,10 +253,10 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type Surface:             Surface<Self>;
     type Swapchain:           Swapchain<Self>;
 
+    type ProtoQueueFamily:    queue::ProtoQueueFamily;
     type CommandQueue:        queue::RawCommandQueue<Self>;
     type CommandBuffer:       command::RawCommandBuffer<Self>;
     type SubpassCommandBuffer;
-    type QueueFamily:         queue::RawQueueFamily<Self>;
 
     type ShaderModule:        Debug + Any + Send + Sync;
     type RenderPass:          Debug + Any + Send + Sync;
@@ -312,8 +312,9 @@ pub type SubmissionResult<T> = Result<T, SubmissionError>;
 pub struct Gpu<B: Backend> {
     /// Logical device.
     pub device: B::Device,
-    /// Raw queue families.
-    pub queue_families: Vec<B::QueueFamily>,
+    /// Raw queue families. Each element in this vector
+    /// matches the corresponding argument in `Adapter::open`.
+    pub queue_families: Vec<queue::RawQueueFamily<B>>,
     /// Types of memory.
     ///
     /// Each memory type is associated with one heap of `memory_heaps`.
@@ -321,31 +322,4 @@ pub struct Gpu<B: Backend> {
     pub memory_types: Vec<MemoryType>,
     /// Memory heaps with their size in bytes.
     pub memory_heaps: Vec<u64>,
-}
-
-impl<B: Backend> Gpu<B> {
-    /// Returns a strongly typed queue family matching the requirements:
-    ///   - supports the given `Capability`
-    ///   - allows presenting onto a given `Surface`
-    pub fn init_queue_family<C: queue::Capability>(
-        &mut self, surface: &B::Surface
-    ) -> Result<QueueFamily<B, C>, ()> {
-        use queue::RawQueueFamily;
-
-        let pos_maybe = self.queue_families
-            .iter()
-            .position(|family| {
-                C::supported_by(family.queue_type()) &&
-                surface.supports_queue(family) &&
-                family.max_queues() != 0
-            });
-
-        match pos_maybe {
-            Some(pos) => {
-                let raw = self.queue_families.remove(pos);
-                Ok(unsafe { QueueFamily::new(raw) })
-            }
-            None => Err(()),
-        }
-    }
 }

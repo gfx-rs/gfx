@@ -11,7 +11,7 @@ pub mod capability;
 pub mod submission;
 
 use Backend;
-use pool::{CommandPool, CommandPoolCreateFlags};
+use std::fmt::Debug;
 use std::marker::PhantomData;
 
 pub use self::capability::{
@@ -34,63 +34,65 @@ pub enum QueueType {
     Transfer,
 }
 
-/// `RawQueueFamily` denotes a group of command queues provided by the backend
-/// with the same properties/type.
+/// General information about a queue family, available upon adapter discovery.
+/// Not useful after an adapter opened and turned into `Gpu`.
 ///
 /// *Note*: A backend can expose multiple queue families with the same properties.
-pub trait RawQueueFamily<B: Backend> {
+pub trait ProtoQueueFamily: Debug {
     /// Returns the type of queues.
     fn queue_type(&self) -> QueueType;
     /// Returns maximum number of queues created from this family.
     fn max_queues(&self) -> usize;
-    /// Creates a new command queue.
-    fn create_queue(&mut self) -> B::CommandQueue;
-    /// Creates a new command pool.
-    fn create_pool(&mut self, CommandPoolCreateFlags) -> B::CommandPool;
 }
 
-/// Stronger-typed queue family type with a specific capacity.
-/// Wraps around `RawQueueFamily`.
-pub struct QueueFamily<B: Backend, C> {
-    raw: B::QueueFamily,
-    capacity: usize,
-    _capability: PhantomData<C>,
+/// `RawQueueFamily` denotes a group of command queues provided by the backend
+/// with the same properties/type.
+pub struct RawQueueFamily<B: Backend> {
+    prototype: B::ProtoQueueFamily,
+    queues: Vec<B::CommandQueue>,
 }
 
-impl<B: Backend, C> QueueFamily<B, C> {
+//TODO: this is not a very sound structure, unfortunately.
+impl<B: Backend> RawQueueFamily<B> {
     #[doc(hidden)]
-    pub unsafe fn new(raw: B::QueueFamily) -> Self {
-        let capacity = raw.max_queues();
-        QueueFamily {
-            raw,
-            capacity,
-            _capability: PhantomData,
+    pub fn new(prototype: B::ProtoQueueFamily) -> Self {
+        RawQueueFamily {
+            prototype,
+            queues: Vec::new(),
         }
     }
-
-    /// Gets a reference to the enclosed raw queue family.
-    pub fn raw(&self) -> &B::QueueFamily {
-        &self.raw
+    #[doc(hidden)]
+    pub fn add_queue(&mut self, queue: B::CommandQueue) {
+        assert!(self.queues.len() < self.prototype.max_queues());
+        self.queues.push(queue);
     }
-
-    /// Returns the number of queues still available in this family.
-    pub fn num_queues(&self) -> usize {
-        self.capacity
+    ///
+    pub fn prototype(&self) -> &B::ProtoQueueFamily {
+        &self.prototype
     }
+}
 
-    /// Creates a stronger-typed command queue.
-    pub fn create_queue(&mut self) -> CommandQueue<B, C> {
-        assert_ne!(self.capacity, 0);
-        self.capacity -= 1;
-        CommandQueue(self.raw.create_queue(), PhantomData)
-    }
+/// Stronger-typed queue family.
+pub struct QueueFamily<B: Backend, C> {
+    pub(crate) prototype: B::ProtoQueueFamily,
+    /// Command queues created in this family.
+    pub queues: Vec<CommandQueue<B, C>>,
+}
 
-    /// Creates a stronger-typed command pool.
-    pub fn create_pool(
-        &mut self, max_buffers: usize, flags: CommandPoolCreateFlags
-    ) -> CommandPool<B, C> {
-        let raw = self.raw.create_pool(flags);
-        unsafe { CommandPool::new(raw, max_buffers) }
+impl<B: Backend, C: Capability> QueueFamily<B, C> {
+    /// Create a new strongly typed queue family from a raw one.
+    ///
+    /// *Note*: panics if the family doesn't expose required
+    /// queue capabilities.
+    pub fn new(raw: RawQueueFamily<B>) -> Self {
+        assert!(C::supported_by(raw.prototype.queue_type()));
+        QueueFamily {
+            prototype: raw.prototype,
+            queues: raw.queues
+                .into_iter()
+                .map(|q| CommandQueue(q, PhantomData))
+                .collect(),
+        }
     }
 }
 

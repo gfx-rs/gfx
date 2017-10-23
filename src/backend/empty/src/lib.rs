@@ -1,25 +1,25 @@
 //! Dummy backend implementation to test the code for compile errors
 //! outside of the graphics development environment.
 
-extern crate gfx_hal as core;
+extern crate gfx_hal as hal;
 
 use std::ops::Range;
-use core::{buffer, command, device, format, image, target, mapping, memory, pass, pool, pso, queue};
+use hal::{buffer, command, device, format, image, target, mapping, memory, pass, pool, pso, queue};
 
 /// Dummy backend.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Backend { }
-impl core::Backend for Backend {
+impl hal::Backend for Backend {
     type Adapter = Adapter;
     type Device = Device;
 
     type Surface = Surface;
     type Swapchain = Swapchain;
 
+    type ProtoQueueFamily = ProtoQueueFamily;
     type CommandQueue = RawCommandQueue;
     type CommandBuffer = RawCommandBuffer;
     type SubpassCommandBuffer = SubpassCommandBuffer;
-    type QueueFamily = RawQueueFamily;
 
     type Memory = ();
     type CommandPool = RawCommandPool;
@@ -50,16 +50,16 @@ impl core::Backend for Backend {
 
 /// Dummy adapter.
 pub struct Adapter;
-impl core::Adapter<Backend> for Adapter {
-    fn open(&self) -> core::Gpu<Backend> {
+impl hal::Adapter<Backend> for Adapter {
+    fn open(self, _: Vec<(ProtoQueueFamily, usize)>) -> hal::Gpu<Backend> {
         unimplemented!()
     }
 
-    fn info(&self) -> &core::AdapterInfo {
+    fn info(&self) -> &hal::AdapterInfo {
         unimplemented!()
     }
 
-    fn queue_families(&self) -> &[&RawQueueFamily] {
+    fn list_queue_families(&mut self) -> Vec<ProtoQueueFamily> {
         unimplemented!()
     }
 }
@@ -75,16 +75,24 @@ impl queue::RawCommandQueue<Backend> for RawCommandQueue {
 /// Dummy device doing nothing.
 #[derive(Clone)]
 pub struct Device;
-impl core::Device<Backend> for Device {
-    fn get_features(&self) -> &core::Features {
+impl hal::Device<Backend> for Device {
+    fn get_features(&self) -> &hal::Features {
         unimplemented!()
     }
 
-    fn get_limits(&self) -> &core::Limits {
+    fn get_limits(&self) -> &hal::Limits {
         unimplemented!()
     }
 
-    fn allocate_memory(&mut self, _: &core::MemoryType, _: u64) -> Result<(), device::OutOfMemory> {
+    fn create_command_pool(&mut self, _: &ProtoQueueFamily, _: pool::CommandPoolCreateFlags) -> RawCommandPool {
+        unimplemented!()
+    }
+
+    fn destroy_command_pool(&mut self, _: RawCommandPool) {
+        unimplemented!()
+    }
+
+    fn allocate_memory(&mut self, _: &hal::MemoryType, _: u64) -> Result<(), device::OutOfMemory> {
         unimplemented!()
     }
 
@@ -259,19 +267,13 @@ impl core::Device<Backend> for Device {
     }
 }
 
-/// Dummy queue family;
-pub struct RawQueueFamily;
-impl queue::RawQueueFamily<Backend> for RawQueueFamily {
-    fn queue_type(&self) -> core::QueueType {
+#[derive(Debug)]
+pub struct ProtoQueueFamily;
+impl queue::ProtoQueueFamily for ProtoQueueFamily {
+    fn queue_type(&self) -> hal::QueueType {
         unimplemented!()
     }
     fn max_queues(&self) -> usize {
-        unimplemented!()
-    }
-    fn create_queue(&mut self) -> RawCommandQueue {
-        unimplemented!()
-    }
-    fn create_pool(&mut self, _: pool::CommandPoolCreateFlags) -> RawCommandPool {
         unimplemented!()
     }
 }
@@ -376,7 +378,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn set_viewports(&mut self, _: &[core::Viewport]) {
+    fn set_viewports(&mut self, _: &[hal::Viewport]) {
 
     }
 
@@ -484,17 +486,17 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
     fn draw(&mut self,
-        _: Range<core::VertexCount>,
-        _: Range<core::InstanceCount>,
+        _: Range<hal::VertexCount>,
+        _: Range<hal::InstanceCount>,
     ) {
         unimplemented!()
     }
 
     fn draw_indexed(
         &mut self,
-        _: Range<core::IndexCount>,
-        _: core::VertexOffset,
-        _: Range<core::InstanceCount>,
+        _: Range<hal::IndexCount>,
+        _: hal::VertexOffset,
+        _: Range<hal::InstanceCount>,
     ) {
         unimplemented!()
     }
@@ -517,7 +519,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 // Dummy descriptor pool.
 #[derive(Debug)]
 pub struct DescriptorPool;
-impl core::DescriptorPool<Backend> for DescriptorPool {
+impl hal::DescriptorPool<Backend> for DescriptorPool {
     fn allocate_sets(&mut self, _: &[&()]) -> Vec<()> {
         unimplemented!()
     }
@@ -529,37 +531,37 @@ impl core::DescriptorPool<Backend> for DescriptorPool {
 
 /// Dummy surface.
 pub struct Surface;
-impl core::Surface<Backend> for Surface {
-    fn get_kind(&self) -> core::image::Kind {
+impl hal::Surface<Backend> for Surface {
+    fn get_kind(&self) -> hal::image::Kind {
         unimplemented!()
     }
 
-    fn surface_capabilities(&self, _: &Adapter) -> core::SurfaceCapabilities {
+    fn surface_capabilities(&self, _: &Adapter) -> hal::SurfaceCapabilities {
         unimplemented!()
     }
 
-    fn supports_queue(&self, _: &RawQueueFamily) -> bool {
+    fn supports_queue_family(&self, _: &ProtoQueueFamily) -> bool {
         unimplemented!()
     }
 
     fn build_swapchain<C>(&mut self,
-        _: core::SwapchainConfig,
-        _: &core::CommandQueue<Backend, C>
-    ) -> (Swapchain, core::Backbuffer<Backend>) {
+        _: hal::SwapchainConfig,
+        _: &hal::CommandQueue<Backend, C>
+    ) -> (Swapchain, hal::Backbuffer<Backend>) {
         unimplemented!()
     }
 }
 
 /// Dummy swapchain.
 pub struct Swapchain;
-impl core::Swapchain<Backend> for Swapchain {
-    fn acquire_frame(&mut self, _: core::FrameSync<Backend>) -> core::Frame {
+impl hal::Swapchain<Backend> for Swapchain {
+    fn acquire_frame(&mut self, _: hal::FrameSync<Backend>) -> hal::Frame {
         unimplemented!()
     }
 
     fn present<C>(
         &mut self,
-        _: &mut core::CommandQueue<Backend, C>,
+        _: &mut hal::CommandQueue<Backend, C>,
         _: &[&()],
     ) {
         unimplemented!()
@@ -567,7 +569,7 @@ impl core::Swapchain<Backend> for Swapchain {
 }
 
 pub struct Instance;
-impl core::Instance for Instance {
+impl hal::Instance for Instance {
     type Backend = Backend;
     fn enumerate_adapters(&self) -> Vec<Adapter> {
         Vec::new()

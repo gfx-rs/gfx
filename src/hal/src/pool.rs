@@ -16,12 +16,6 @@ bitflags!(
     }
 );
 
-/// Indicates short-lived command buffers.
-/// Memory optimization hint for implementations.
-pub const TRANSIENT: CommandPoolCreateFlags = CommandPoolCreateFlags::TRANSIENT;
-/// Allow command buffers to be reset individually.
-pub const RESET_INDIVIDUAL: CommandPoolCreateFlags = CommandPoolCreateFlags::RESET_INDIVIDUAL;
-
 /// The allocated command buffers are associated with the creating command queue.
 pub trait RawCommandPool<B: Backend>: Send {
     /// Reset the command pool and the corresponding command buffers.
@@ -50,8 +44,7 @@ pub struct CommandPool<B: Backend, C> {
 }
 
 impl<B: Backend, C> CommandPool<B, C> {
-    #[doc(hidden)]
-    pub unsafe fn new(raw: B::CommandPool, capacity: usize) -> Self {
+    pub(crate) fn new(raw: B::CommandPool, capacity: usize) -> Self {
         let mut pool = CommandPool {
             buffers: Vec::new(),
             pool: raw,
@@ -94,12 +87,12 @@ impl<B: Backend, C> CommandPool<B, C> {
             CommandBuffer::new(buffer)
         }
     }
-}
 
-impl<B: Backend, C> Drop for CommandPool<B, C> {
-    fn drop(&mut self) {
+    /// Downgrade a typed command pool to untyped one, free up the allocated command buffers.
+    pub fn downgrade(mut self) -> B::CommandPool {
         let free_list = self.buffers.drain(..).collect::<Vec<_>>();
         unsafe { self.pool.free(free_list); }
+        self.pool
     }
 }
 
