@@ -4,7 +4,7 @@
 extern crate gfx_hal as core;
 
 use std::ops::Range;
-use core::{buffer, command, device, format, image, target, mapping, memory, pass, pool, pso};
+use core::{buffer, command, device, format, image, target, mapping, memory, pass, pool, pso, queue};
 
 /// Dummy backend.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -16,10 +16,10 @@ impl core::Backend for Backend {
     type Surface = Surface;
     type Swapchain = Swapchain;
 
-    type CommandQueue = CommandQueue;
+    type CommandQueue = RawCommandQueue;
     type CommandBuffer = RawCommandBuffer;
     type SubpassCommandBuffer = SubpassCommandBuffer;
-    type QueueFamily = QueueFamily;
+    type QueueFamily = RawQueueFamily;
 
     type Memory = ();
     type CommandPool = RawCommandPool;
@@ -51,7 +51,7 @@ impl core::Backend for Backend {
 /// Dummy adapter.
 pub struct Adapter;
 impl core::Adapter<Backend> for Adapter {
-    fn open(&self, _: &[(&QueueFamily, core::QueueType, u32)]) -> core::Gpu<Backend> {
+    fn open(&self) -> core::Gpu<Backend> {
         unimplemented!()
     }
 
@@ -59,15 +59,15 @@ impl core::Adapter<Backend> for Adapter {
         unimplemented!()
     }
 
-    fn queue_families(&self) -> &[(QueueFamily, core::QueueType)] {
+    fn queue_families(&self) -> &[&RawQueueFamily] {
         unimplemented!()
     }
 }
 
 /// Dummy command queue doing nothing.
-pub struct CommandQueue;
-impl core::RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw(&mut self, _: core::RawSubmission<Backend>, _: Option<&()>) {
+pub struct RawCommandQueue;
+impl queue::RawCommandQueue<Backend> for RawCommandQueue {
+    unsafe fn submit_raw(&mut self, _: queue::RawSubmission<Backend>, _: Option<&()>) {
         unimplemented!()
     }
 }
@@ -260,9 +260,18 @@ impl core::Device<Backend> for Device {
 }
 
 /// Dummy queue family;
-pub struct QueueFamily;
-impl core::QueueFamily for QueueFamily {
-    fn num_queues(&self) -> u32 {
+pub struct RawQueueFamily;
+impl queue::RawQueueFamily<Backend> for RawQueueFamily {
+    fn queue_type(&self) -> core::QueueType {
+        unimplemented!()
+    }
+    fn max_queues(&self) -> usize {
+        unimplemented!()
+    }
+    fn create_queue(&mut self) -> RawCommandQueue {
+        unimplemented!()
+    }
+    fn create_pool(&mut self, _: pool::CommandPoolCreateFlags) -> RawCommandPool {
         unimplemented!()
     }
 }
@@ -272,12 +281,8 @@ pub struct SubpassCommandBuffer;
 
 /// Dummy raw command pool.
 pub struct RawCommandPool;
-impl core::RawCommandPool<Backend> for RawCommandPool {
+impl pool::RawCommandPool<Backend> for RawCommandPool {
     fn reset(&mut self) {
-        unimplemented!()
-    }
-
-    unsafe fn from_queue(_: &CommandQueue, _: pool::CommandPoolCreateFlags) -> Self {
         unimplemented!()
     }
 
@@ -292,14 +297,14 @@ impl core::RawCommandPool<Backend> for RawCommandPool {
 
 /// Dummy subpass command pool.
 pub struct SubpassCommandPool;
-impl core::SubpassCommandPool<Backend> for SubpassCommandPool {
+impl pool::SubpassCommandPool<Backend> for SubpassCommandPool {
 
 }
 
 /// Dummy command buffer, which ignores all the calls.
 #[derive(Clone)]
 pub struct RawCommandBuffer;
-impl core::RawCommandBuffer<Backend> for RawCommandBuffer {
+impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn begin(&mut self) {
         unimplemented!()
     }
@@ -533,7 +538,7 @@ impl core::Surface<Backend> for Surface {
         unimplemented!()
     }
 
-    fn supports_queue(&self, _: &QueueFamily) -> bool {
+    fn supports_queue(&self, _: &RawQueueFamily) -> bool {
         unimplemented!()
     }
 
