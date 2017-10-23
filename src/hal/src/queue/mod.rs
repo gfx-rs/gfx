@@ -14,7 +14,10 @@ use Backend;
 use pool::{CommandPool, CommandPoolCreateFlags};
 use std::marker::PhantomData;
 
-pub use self::capability::{Compute, Graphics, General, Transfer, Supports};
+pub use self::capability::{
+    Capability, Supports,
+    Compute, Graphics, General, Transfer,
+};
 pub use self::submission::{RawSubmission, Submission};
 
 ///
@@ -31,32 +34,64 @@ pub enum QueueType {
     Transfer,
 }
 
-impl QueueType {
-    /// Checks for graphics functionality support.
-    /// Supported by general and graphics queues.
-    pub fn supports_graphics(&self) -> bool {
-        *self == QueueType::General || *self == QueueType::Graphics
-    }
-
-    /// Checks for graphics functionality support.
-    /// Supported by general and compute queues.
-    pub fn supports_compute(&self) -> bool {
-        *self == QueueType::General || *self == QueueType::Compute
-    }
-
-    /// Checks for graphics functionality support.
-    /// Supported by general, graphics and compute queues.
-    pub fn supports_transfer(&self) -> bool { true }
-}
-
-/// `QueueFamily` denotes a group of command queues provided by the backend
+/// `RawQueueFamily` denotes a group of command queues provided by the backend
 /// with the same properties/type.
 ///
 /// *Note*: A backend can expose multiple queue families with the same properties.
-pub trait QueueFamily: 'static {
-    /// Return the number of available queues of this family.
-    // TODO: some backends like d3d12 support infinite software queues (verify)
-    fn num_queues(&self) -> u32;
+pub trait RawQueueFamily<B: Backend> {
+    /// Returns the type of queues.
+    fn queue_type(&self) -> QueueType;
+    /// Returns maximum number of queues created from this family.
+    fn max_queues(&self) -> usize;
+    /// Creates a new command queue.
+    fn create_queue(&mut self) -> B::CommandQueue;
+    /// Creates a new command pool.
+    fn create_pool(&mut self, CommandPoolCreateFlags) -> B::CommandPool;
+}
+
+/// Stronger-typed queue family type with a specific capacity.
+/// Wraps around `RawQueueFamily`.
+pub struct QueueFamily<B: Backend, C> {
+    raw: B::QueueFamily,
+    capacity: usize,
+    _capability: PhantomData<C>,
+}
+
+impl<B: Backend, C> QueueFamily<B, C> {
+    #[doc(hidden)]
+    pub unsafe fn new(raw: B::QueueFamily) -> Self {
+        let capacity = raw.max_queues();
+        QueueFamily {
+            raw,
+            capacity,
+            _capability: PhantomData,
+        }
+    }
+
+    /// Gets a reference to the enclosed raw queue family.
+    pub fn raw(&self) -> &B::QueueFamily {
+        &self.raw
+    }
+
+    /// Returns the number of queues still available in this family.
+    pub fn num_queues(&self) -> usize {
+        self.capacity
+    }
+
+    /// Creates a stronger-typed command queue.
+    pub fn create_queue(&mut self) -> CommandQueue<B, C> {
+        assert_ne!(self.capacity, 0);
+        self.capacity -= 1;
+        CommandQueue(self.raw.create_queue(), PhantomData)
+    }
+
+    /// Creates a stronger-typed command pool.
+    pub fn create_pool(
+        &mut self, max_buffers: usize, flags: CommandPoolCreateFlags
+    ) -> CommandPool<B, C> {
+        let raw = self.raw.create_pool(flags);
+        unsafe { CommandPool::new(raw, max_buffers) }
+    }
 }
 
 /// `RawCommandQueue` are abstractions to the internal GPU execution engines.
@@ -75,11 +110,6 @@ pub trait RawCommandQueue<B: Backend> {
 pub struct CommandQueue<B: Backend, C>(B::CommandQueue, PhantomData<C>);
 
 impl<B: Backend, C> CommandQueue<B, C> {
-    #[doc(hidden)]
-    pub unsafe fn new(raw: B::CommandQueue) -> Self {
-        CommandQueue(raw, PhantomData)
-    }
-
     /// Get a reference to the raw command queue
     pub fn as_raw(&self) -> &B::CommandQueue {
         &self.0
@@ -100,53 +130,5 @@ impl<B: Backend, C> CommandQueue<B, C> {
         unsafe {
             self.0.submit_raw(submission.as_raw(), fence)
         }
-    }
-
-    ///
-    pub fn create_general_pool(
-        &self,
-        capacity: usize,
-        flags: CommandPoolCreateFlags,
-    ) -> CommandPool<B, General>
-    where
-        C: Supports<General>
-    {
-        CommandPool::from_queue(self, capacity, flags)
-    }
-
-    ///
-    pub fn create_graphics_pool(
-        &self,
-        capacity: usize,
-        flags: CommandPoolCreateFlags,
-    ) -> CommandPool<B, Graphics>
-    where
-        C: Supports<Graphics>
-    {
-        CommandPool::from_queue(self, capacity, flags)
-    }
-
-    ///
-    pub fn create_compute_pool(
-        &self,
-        capacity: usize,
-        flags: CommandPoolCreateFlags,
-    ) -> CommandPool<B, Compute>
-    where
-        C: Supports<Compute>
-    {
-        CommandPool::from_queue(self, capacity, flags)
-    }
-
-    ///
-    pub fn create_transfer_pool(
-        &self,
-        capacity: usize,
-        flags: CommandPoolCreateFlags,
-    ) -> CommandPool<B, Transfer>
-    where
-        C: Supports<Transfer>
-    {
-        CommandPool::from_queue(self, capacity, flags)
     }
 }

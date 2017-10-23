@@ -2,8 +2,6 @@
 
 use {Backend};
 use command::{CommandBuffer, RawCommandBuffer};
-use queue::CommandQueue;
-use queue::capability::Supports;
 use std::marker::PhantomData;
 
 bitflags!(
@@ -31,9 +29,6 @@ pub trait RawCommandPool<B: Backend>: Send {
     /// # Synchronization: You may _not_ free the pool if a command buffer is still in use (pool memory still in use)
     fn reset(&mut self);
 
-    #[doc(hidden)]
-    unsafe fn from_queue(queue: &B::CommandQueue, flags: CommandPoolCreateFlags) -> Self;
-
     /// Allocate new command buffers from the pool.
     fn allocate(&mut self, num: usize) -> Vec<B::CommandBuffer>;
 
@@ -55,15 +50,8 @@ pub struct CommandPool<B: Backend, C> {
 }
 
 impl<B: Backend, C> CommandPool<B, C> {
-    /// Create a pool for a specific command queue
-    pub fn from_queue<D: Supports<C>>(
-        queue: &CommandQueue<B, D>,
-        capacity: usize,
-        flags: CommandPoolCreateFlags,
-    ) -> Self {
-        let raw = unsafe {
-            B::CommandPool::from_queue(queue.as_raw(), flags)
-        };
+    #[doc(hidden)]
+    pub unsafe fn new(raw: B::CommandPool, capacity: usize) -> Self {
         let mut pool = CommandPool {
             buffers: Vec::new(),
             pool: raw,

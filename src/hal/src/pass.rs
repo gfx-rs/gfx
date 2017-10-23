@@ -55,6 +55,7 @@ impl AttachmentOps {
         }
     }
 
+    #[cfg(feature = "serialize")]
     fn whatever() -> Self {
         Self::DONT_CARE
     }

@@ -23,16 +23,16 @@ use std::fmt::{self, Debug};
 use std::hash::Hash;
 
 pub use self::adapter::{Adapter, AdapterInfo};
-pub use self::command::{RawCommandBuffer};
 pub use self::device::Device;
-pub use self::pool::{CommandPool, RawCommandPool, SubpassCommandPool};
+pub use self::pool::CommandPool;
 pub use self::pso::{DescriptorPool};
 pub use self::queue::{
-    CommandQueue, QueueFamily, QueueType, RawCommandQueue, RawSubmission, Submission,
+    CommandQueue, QueueFamily, QueueType, Submission,
     General, Graphics, Compute, Transfer,
 };
 pub use self::window::{
-    Backbuffer, Frame, FrameSync, Surface, SurfaceCapabilities, Swapchain, SwapchainConfig};
+    Backbuffer, Frame, FrameSync, Surface, SurfaceCapabilities, Swapchain, SwapchainConfig,
+};
 pub use draw_state::{state, target};
 
 pub mod adapter;
@@ -253,18 +253,18 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type Surface:             Surface<Self>;
     type Swapchain:           Swapchain<Self>;
 
-    type CommandQueue:        RawCommandQueue<Self>;
-    type CommandBuffer:       RawCommandBuffer<Self>;
+    type CommandQueue:        queue::RawCommandQueue<Self>;
+    type CommandBuffer:       command::RawCommandBuffer<Self>;
     type SubpassCommandBuffer;
-    type QueueFamily:         QueueFamily;
+    type QueueFamily:         queue::RawQueueFamily<Self>;
 
     type ShaderModule:        Debug + Any + Send + Sync;
     type RenderPass:          Debug + Any + Send + Sync;
     type Framebuffer:         Debug + Any + Send + Sync;
 
     type Memory:              Debug + Any;
-    type CommandPool:         RawCommandPool<Self>;
-    type SubpassCommandPool:  SubpassCommandPool<Self>;
+    type CommandPool:         pool::RawCommandPool<Self>;
+    type SubpassCommandPool:  pool::SubpassCommandPool<Self>;
 
     type UnboundBuffer:       Debug + Any + Send + Sync;
     type Buffer:              Debug + Any + Send + Sync;
@@ -305,20 +305,15 @@ impl Error for SubmissionError {
 #[allow(missing_docs)]
 pub type SubmissionResult<T> = Result<T, SubmissionError>;
 
+
 /// Represents a handle to a physical device.
 ///
 /// This structure is typically created using an `Adapter`.
 pub struct Gpu<B: Backend> {
     /// Logical device.
     pub device: B::Device,
-    /// General command queues.
-    pub general_queues: Vec<CommandQueue<B, General>>,
-    /// Graphics command queues.
-    pub graphics_queues: Vec<CommandQueue<B, Graphics>>,
-    /// Compute command queues.
-    pub compute_queues: Vec<CommandQueue<B, Compute>>,
-    /// Transfer command queues.
-    pub transfer_queues: Vec<CommandQueue<B, Transfer>>,
+    /// Raw queue families.
+    pub queue_families: Vec<B::QueueFamily>,
     /// Types of memory.
     ///
     /// Each memory type is associated with one heap of `memory_heaps`.
@@ -326,4 +321,31 @@ pub struct Gpu<B: Backend> {
     pub memory_types: Vec<MemoryType>,
     /// Memory heaps with their size in bytes.
     pub memory_heaps: Vec<u64>,
+}
+
+impl<B: Backend> Gpu<B> {
+    /// Returns a strongly typed queue family matching the requirements:
+    ///   - supports the given `Capability`
+    ///   - allows presenting onto a given `Surface`
+    pub fn init_queue_family<C: queue::Capability>(
+        &mut self, surface: &B::Surface
+    ) -> Result<QueueFamily<B, C>, ()> {
+        use queue::RawQueueFamily;
+
+        let pos_maybe = self.queue_families
+            .iter()
+            .position(|family| {
+                C::supported_by(family.queue_type()) &&
+                surface.supports_queue(family) &&
+                family.max_queues() != 0
+            });
+
+        match pos_maybe {
+            Some(pos) => {
+                let raw = self.queue_families.remove(pos);
+                Ok(unsafe { QueueFamily::new(raw) })
+            }
+            None => Err(()),
+        }
+    }
 }

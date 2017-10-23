@@ -1,4 +1,5 @@
 //! Type system encoded queue capabilities.
+use queue::QueueType;
 
 /// General capability, supporting graphics, compute and transfer operations.
 pub enum General {}
@@ -8,6 +9,46 @@ pub enum Graphics {}
 pub enum Compute {}
 /// Transfer capability, supporting only transfer operations.
 pub enum Transfer {}
+
+///
+pub trait Capability {
+    /// Return true if this type level capability is supported by
+    /// a run-time queue type.
+    fn supported_by(QueueType) -> bool;
+}
+impl Capability for General {
+    fn supported_by(qt: QueueType) -> bool {
+        match qt {
+            QueueType::General => true,
+            _ => false,
+        }
+    }
+}
+impl Capability for Graphics {
+    fn supported_by(qt: QueueType) -> bool {
+        match qt {
+            QueueType::General |
+            QueueType::Graphics => true,
+            _ => false,
+        }
+    }
+}
+impl Capability for Compute {
+    fn supported_by(qt: QueueType) -> bool {
+        match qt {
+            QueueType::General |
+            QueueType::Compute => true,
+            _ => false,
+        }
+    }
+}
+impl Capability for Transfer {
+    fn supported_by(qt: QueueType) -> bool {
+        match qt {
+            _ => true
+        }
+    }
+}
 
 ///
 pub trait Supports<T> { }
