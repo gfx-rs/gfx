@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate log;
 extern crate ash;
-extern crate gfx_hal as core;
+extern crate gfx_hal as hal;
 #[macro_use]
 extern crate lazy_static;
 extern crate smallvec;
@@ -22,8 +22,8 @@ use ash::{Entry, LoadingError};
 use ash::extensions as ext;
 use ash::version::{EntryV1_0, DeviceV1_0, InstanceV1_0, V1_0};
 use ash::vk;
-use core::memory;
-use core::{Features, Limits, PatchSize, QueueType};
+use hal::memory;
+use hal::{Features, Limits, PatchSize, QueueType};
 use std::{fmt, mem, ptr};
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
@@ -235,7 +235,7 @@ impl Instance {
     }
 }
 
-impl core::Instance for Instance {
+impl hal::Instance for Instance {
     type Backend = Backend;
 
     fn enumerate_adapters(&self) -> Vec<Adapter> {
@@ -251,7 +251,7 @@ impl core::Instance for Instance {
                         .to_owned()
                 };
 
-                let info = core::AdapterInfo {
+                let info = hal::AdapterInfo {
                     name,
                     vendor: properties.vendor_id as usize,
                     device: properties.device_id as usize,
@@ -261,17 +261,14 @@ impl core::Instance for Instance {
                 let queue_families =
                     self.raw.0
                         .get_physical_device_queue_family_properties(device)
-                        .iter()
+                        .into_iter()
                         .enumerate()
-                        .map(|(i, queue_family)| {
-                        (
-                            QueueFamily {
-                                device: device,
-                                family_index: i as u32,
-                                queue_count: queue_family.queue_count,
-                            },
-                            map_queue_type(queue_family.queue_flags),
-                        )
+                        .map(|(i, properties)| {
+                            ProtoQueueFamily {
+                                properties,
+                                device,
+                                index: i as u32,
+                            }
                         }).collect();
 
                 Adapter {
@@ -286,99 +283,46 @@ impl core::Instance for Instance {
     }
 }
 
-pub struct QueueFamily {
+#[derive(Debug)]
+pub struct ProtoQueueFamily {
+    properties: vk::QueueFamilyProperties,
     device: vk::PhysicalDevice,
-    family_index: u32,
-    queue_count: u32,
+    index: u32,
 }
 
-impl QueueFamily {
-    #[doc(hidden)]
-    pub fn from_raw(device: vk::PhysicalDevice, index: u32, properties: &vk::QueueFamilyProperties) -> Self {
-        QueueFamily {
-            device: device,
-            family_index: index,
-            queue_count: properties.queue_count,
-        }
+impl hal::queue::ProtoQueueFamily for ProtoQueueFamily {
+    fn queue_type(&self) -> QueueType {
+        map_queue_type(self.properties.queue_flags)
     }
-
-    #[doc(hidden)]
-    pub fn device(&self) -> vk::PhysicalDevice {
-        self.device
-    }
-
-    #[doc(hidden)]
-    pub fn family_index(&self) -> u32 {
-        self.family_index
-    }
-
-}
-
-impl core::QueueFamily for QueueFamily {
-    fn num_queues(&self) -> u32 {
-        self.queue_count
+    fn max_queues(&self) -> usize {
+        self.properties.queue_count as _
     }
 }
 
-/// Create associated command queues for a specific queue type
-fn collect_queues<C>(
-     queue_descs: &[(&QueueFamily, QueueType, u32)],
-     device_raw: &Arc<RawDevice>,
-     collect_type: QueueType,
-) -> Vec<core::CommandQueue<Backend, C>> {
-    queue_descs.iter()
-        .filter(|&&(_, qtype, _)| qtype == collect_type)
-        .flat_map(|&(qfamily, _, qcount)| {
-            let family_index = qfamily.family_index;
-            (0..qcount).map(move |id| {
-                let queue_raw = unsafe {
-                    device_raw.0.get_device_queue(family_index, id)
-                };
-                let queue = CommandQueue {
-                    raw: Arc::new(queue_raw),
-                    device: device_raw.clone(),
-                    family_index,
-                };
-                unsafe {
-                    core::CommandQueue::new(queue)
-                }
-            })
-        }).collect()
-}
 
 pub struct Adapter {
     instance: Arc<RawInstance>,
     handle: vk::PhysicalDevice,
     properties: vk::PhysicalDeviceProperties,
-    queue_families: Vec<(QueueFamily, QueueType)>,
-    info: core::AdapterInfo,
+    queue_families: Vec<ProtoQueueFamily>,
+    info: hal::AdapterInfo,
 }
 
-impl Adapter {
-    pub(crate) fn handle(&self) -> vk::PhysicalDevice {
-        self.handle
-    }
-}
-
-impl core::Adapter<Backend> for Adapter {
-    fn open(&self,
-        queue_descs: &[(&QueueFamily, QueueType, u32)],
-    ) -> core::Gpu<Backend>
-    {
-        let mut queue_priorities = Vec::with_capacity(queue_descs.len());
-
-        let queue_infos = queue_descs.iter().map(|&(family, _, queue_count)| {
-                queue_priorities.push(vec![0.0f32; queue_count as usize]);
-
-                vk::DeviceQueueCreateInfo {
-                    s_type: vk::StructureType::DeviceQueueCreateInfo,
-                    p_next: ptr::null(),
-                    flags: vk::DeviceQueueCreateFlags::empty(),
-                    queue_family_index: family.family_index,
-                    queue_count,
-                    p_queue_priorities: queue_priorities.last().unwrap().as_ptr(),
-                }
-            }).collect::<Vec<_>>();
+impl hal::Adapter<Backend> for Adapter {
+    fn open(self, families: Vec<(ProtoQueueFamily, usize)>) -> hal::Gpu<Backend> {
+        let max_queue_count = families.iter().map(|&(_, count)| count).max().unwrap_or(0);
+        let queue_priorities = vec![0.0f32; max_queue_count];
+        let family_infos = families
+            .iter()
+            .map(|&(ref family, count)| vk::DeviceQueueCreateInfo {
+                s_type: vk::StructureType::DeviceQueueCreateInfo,
+                p_next: ptr::null(),
+                flags: vk::DeviceQueueCreateFlags::empty(),
+                queue_family_index: family.index,
+                queue_count: count as _,
+                p_queue_priorities: queue_priorities.as_ptr(),
+            })
+            .collect::<Vec<_>>();
 
         // Create device
         let device_raw = {
@@ -397,8 +341,8 @@ impl core::Adapter<Backend> for Adapter {
                 s_type: vk::StructureType::DeviceCreateInfo,
                 p_next: ptr::null(),
                 flags: vk::DeviceCreateFlags::empty(),
-                queue_create_info_count: queue_infos.len() as u32,
-                p_queue_create_infos: queue_infos.as_ptr(),
+                queue_create_info_count: family_infos.len() as u32,
+                p_queue_create_infos: family_infos.as_ptr(),
                 enabled_layer_count: 0,
                 pp_enabled_layer_names: ptr::null(),
                 enabled_extension_count: str_pointers.len() as u32,
@@ -411,6 +355,7 @@ impl core::Adapter<Backend> for Adapter {
                     .expect("Error on device creation")
             }
         };
+
         let limits = &self.properties.limits;
         let max_group_count = limits.max_compute_work_group_count;
         let max_group_size = limits.max_compute_work_group_size;
@@ -449,6 +394,25 @@ impl core::Adapter<Backend> for Adapter {
             },
         };
 
+        let device_arc = device.raw.clone();
+        let queue_families = families
+            .into_iter()
+            .map(|(family, count)| {
+                let family_index = family.index;
+                let mut family_raw = hal::queue::RawQueueFamily::new(family);
+                for id in 0 .. count {
+                    let queue_raw = unsafe {
+                        device_arc.0.get_device_queue(family_index, id as _)
+                    };
+                    family_raw.add_queue(CommandQueue {
+                        raw: Arc::new(queue_raw),
+                        device: device_arc.clone(),
+                    });
+                }
+                family_raw
+            })
+            .collect();
+
         let mem_properties =  self.instance.0.get_physical_device_memory_properties(self.handle);
         let memory_heaps = mem_properties.memory_heaps[..mem_properties.memory_heap_count as usize]
             .iter()
@@ -472,31 +436,27 @@ impl core::Adapter<Backend> for Adapter {
                 type_flags |= memory::LAZILY_ALLOCATED;
             }
 
-            core::MemoryType {
+            hal::MemoryType {
                 id: i,
                 properties: type_flags,
                 heap_index: mem.heap_index as usize,
             }
         }).collect();
 
-        let device_arc = device.raw.clone();
-        core::Gpu {
+        hal::Gpu {
             device,
-            general_queues: collect_queues(queue_descs, &device_arc, QueueType::General),
-            graphics_queues: collect_queues(queue_descs, &device_arc, QueueType::Graphics),
-            compute_queues: collect_queues(queue_descs, &device_arc, QueueType::Compute),
-            transfer_queues: collect_queues(queue_descs, &device_arc, QueueType::Transfer),
+            queue_families,
             memory_types,
             memory_heaps,
         }
     }
 
-    fn info(&self) -> &core::AdapterInfo {
+    fn info(&self) -> &hal::AdapterInfo {
         &self.info
     }
 
-    fn queue_families(&self) -> &[(QueueFamily, QueueType)] {
-        &self.queue_families
+    fn list_queue_families(&mut self) -> Vec<ProtoQueueFamily> {
+        mem::replace(&mut self.queue_families, Vec::new())
     }
 }
 
@@ -519,29 +479,11 @@ pub type RawCommandQueue = Arc<vk::Queue>;
 pub struct CommandQueue {
     raw: RawCommandQueue,
     device: Arc<RawDevice>,
-    family_index: u32,
 }
 
-impl CommandQueue {
-    #[doc(hidden)]
-    pub fn raw(&self) -> RawCommandQueue {
-        self.raw.clone()
-    }
-
-    #[doc(hidden)]
-    pub fn device(&self) -> Arc<RawDevice> {
-        self.device.clone()
-    }
-
-    #[doc(hidden)]
-    pub fn device_handle(&self) -> vk::Device {
-        self.device.0.handle()
-    }
-}
-
-impl core::RawCommandQueue<Backend> for CommandQueue {
+impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     unsafe fn submit_raw(&mut self,
-        submission: core::RawSubmission<Backend>,
+        submission: hal::queue::RawSubmission<Backend>,
         fence: Option<&native::Fence>,
     ) {
         let buffers = submission.cmd_buffers
@@ -592,17 +534,17 @@ pub struct Device {
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Backend {}
-impl core::Backend for Backend {
+impl hal::Backend for Backend {
     type Adapter = Adapter;
     type Device = Device;
 
     type Surface = window::Surface;
     type Swapchain = window::Swapchain;
 
+    type ProtoQueueFamily = ProtoQueueFamily;
     type CommandQueue = CommandQueue;
     type CommandBuffer = command::CommandBuffer;
     type SubpassCommandBuffer = command::SubpassCommandBuffer;
-    type QueueFamily = QueueFamily;
 
     type Memory = native::Memory;
     type CommandPool = pool::RawCommandPool;
