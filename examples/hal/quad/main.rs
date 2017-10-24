@@ -95,7 +95,7 @@ fn main() {
         (instance, adapters, surface)
     };
     #[cfg(feature = "gl")]
-    let (adapters, mut surface) = {
+    let (mut adapters, mut surface) = {
         let surface = back::Surface::from_window(window);
         let adapters = surface.enumerate_adapters();
         (adapters, surface)

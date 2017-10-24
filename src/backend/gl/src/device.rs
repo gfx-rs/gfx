@@ -1,15 +1,19 @@
-use std::ptr;
+use std::collections::HashMap;
+use std::iter::repeat;
 use std::ops::Range;
+use std::ptr;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 use gl;
 use gl::types::{GLint, GLenum, GLfloat};
 use hal::{self as c, device as d, image as i, memory, pass, pso, buffer, mapping};
 use hal::format::{Format, Swizzle};
-use std::iter::repeat;
+use hal::pool::CommandPoolCreateFlags;
 
-use {Backend as B, Share};
+use {Backend as B, ProtoQueueFamily, Share};
 use {conv, native as n, state};
+use pool::{BufferMemory, OwnedBuffer, RawCommandPool};
 
 
 fn get_shader_iv(gl: &gl::Gl, name: n::Shader, query: GLenum) -> gl::types::GLint {
@@ -54,6 +58,15 @@ pub fn get_program_log(gl: &gl::Gl, name: n::Program) -> String {
     } else {
         String::new()
     }
+}
+
+fn create_fbo_internal(gl: &gl::Gl) -> gl::types::GLuint {
+    let mut name = 0 as n::FrameBuffer;
+    unsafe {
+        gl.GenFramebuffers(1, &mut name);
+    }
+    info!("\tCreated frame buffer {}", name);
+    name
 }
 
 #[derive(Debug)]
@@ -157,6 +170,38 @@ impl d::Device<B> for Device {
         Ok(n::Memory {
             properties: mem_type.properties,
         })
+    }
+
+    fn create_command_pool(
+        &mut self,
+        _family: &ProtoQueueFamily,
+        flags: CommandPoolCreateFlags,
+    ) -> RawCommandPool {
+        let fbo = create_fbo_internal(&self.share.context);
+        let limits = self.share.limits.into();
+        let memory = if flags.contains(CommandPoolCreateFlags::RESET_INDIVIDUAL) {
+            BufferMemory::Individual {
+                storage: HashMap::new(),
+                next_buffer_id: 0,
+            }
+        } else {
+            BufferMemory::Linear(OwnedBuffer::new())
+        };
+
+        // Ignoring `TRANSIENT` hint, unsure how to make use of this.
+
+        RawCommandPool {
+            fbo,
+            limits,
+            memory: Arc::new(Mutex::new(memory)),
+        }
+    }
+
+    fn destroy_command_pool(&mut self, pool: RawCommandPool) {
+        let gl = &self.share.context;
+        unsafe {
+            gl.DeleteFramebuffers(1, &pool.fbo);
+        }
     }
 
     fn create_render_pass(
@@ -492,7 +537,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_image_view(&mut self,
-        image: &n::Image, format: Format, swizzle: Swizzle, range: i::SubresourceRange,
+        image: &n::Image, _format: Format, swizzle: Swizzle, range: i::SubresourceRange,
     ) -> Result<n::ImageView, i::ViewError> {
         //TODO: check if `layers.end` covers all the layers
         let level = range.levels.start;

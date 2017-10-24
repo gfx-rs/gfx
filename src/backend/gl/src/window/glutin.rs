@@ -43,9 +43,9 @@
 //! }
 //! ```
 
-use hal::{self as core, format, image};
+use hal::{self, format, image};
 
-use {native as n, Adapter, Backend as B, QueueFamily};
+use {native as n, Adapter, Backend as B, ProtoQueueFamily};
 
 use glutin::{self, GlContext};
 use std::rc::Rc;
@@ -62,13 +62,13 @@ pub struct Swapchain {
     window: Rc<glutin::GlWindow>,
 }
 
-impl core::Swapchain<B> for Swapchain {
-    fn acquire_frame(&mut self, _sync: core::FrameSync<B>) -> core::Frame {
+impl hal::Swapchain<B> for Swapchain {
+    fn acquire_frame(&mut self, _sync: hal::FrameSync<B>) -> hal::Frame {
         // TODO: sync
-        core::Frame::new(0)
+        hal::Frame::new(0)
     }
 
-    fn present<C>(&mut self, _: &mut core::CommandQueue<B, C>, _: &[&n::Semaphore]) {
+    fn present<C>(&mut self, _: &mut hal::CommandQueue<B, C>, _: &[&n::Semaphore]) {
         self.window.swap_buffers().unwrap();
     }
 }
@@ -88,32 +88,32 @@ impl Surface {
     }
 }
 
-impl core::Surface<B> for Surface {
-    fn get_kind(&self) -> core::image::Kind {
+impl hal::Surface<B> for Surface {
+    fn get_kind(&self) -> hal::image::Kind {
         let (w, h, _, a) = get_window_dimensions(&self.window);
-        core::image::Kind::D2(w, h, a)
+        hal::image::Kind::D2(w, h, a)
     }
 
-    fn surface_capabilities(&self, _: &Adapter) -> core::SurfaceCapabilities {
+    fn surface_capabilities(&self, _: &Adapter) -> hal::SurfaceCapabilities {
         unimplemented!()
     }
 
-    fn supports_queue(&self, _: &QueueFamily) -> bool { true }
+    fn supports_queue_family(&self, _: &ProtoQueueFamily) -> bool { true }
 
     fn build_swapchain<C>(
         &mut self,
-        _config: core::SwapchainConfig,
-        _: &core::CommandQueue<B, C>,
-    ) -> (Swapchain, core::Backbuffer<B>) {
+        _config: hal::SwapchainConfig,
+        _: &hal::CommandQueue<B, C>,
+    ) -> (Swapchain, hal::Backbuffer<B>) {
         let swapchain = Swapchain {
             window: self.window.clone(),
         };
-        let backbuffer = core::Backbuffer::Framebuffer(0);
+        let backbuffer = hal::Backbuffer::Framebuffer(0);
         (swapchain, backbuffer)
     }
 }
 
-impl core::Instance for Surface {
+impl hal::Instance for Surface {
     type Backend = B;
     fn enumerate_adapters(&self) -> Vec<Adapter> {
         unsafe { self.window.make_current().unwrap() };
@@ -143,7 +143,7 @@ pub fn config_context(
 
 pub struct Headless(pub glutin::HeadlessContext);
 
-impl core::Instance for Headless {
+impl hal::Instance for Headless {
     type Backend = B;
     fn enumerate_adapters(&self) -> Vec<Adapter> {
         unsafe { self.0.make_current().unwrap() };

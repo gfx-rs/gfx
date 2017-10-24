@@ -1,21 +1,11 @@
-use hal::{self, pool};
+use hal::pool;
 use command::{self, Command, RawCommandBuffer, SubpassCommandBuffer};
 use native as n;
-use queue::CommandQueue;
 use Backend;
-use gl;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-fn create_fbo_internal(gl: &gl::Gl) -> gl::types::GLuint {
-    let mut name = 0 as n::FrameBuffer;
-    unsafe {
-        gl.GenFramebuffers(1, &mut name);
-    }
-    info!("\tCreated frame buffer {}", name);
-    name
-}
 
 pub struct OwnedBuffer {
     pub(crate) commands: Vec<Command>,
@@ -64,12 +54,12 @@ pub enum BufferMemory {
 
 
 pub struct RawCommandPool {
-    fbo: n::FrameBuffer,
-    limits: command::Limits,
-    memory: Arc<Mutex<BufferMemory>>,
+    pub(crate) fbo: n::FrameBuffer,
+    pub(crate) limits: command::Limits,
+    pub(crate) memory: Arc<Mutex<BufferMemory>>,
 }
 
-impl hal::RawCommandPool<Backend> for RawCommandPool {
+impl pool::RawCommandPool<Backend> for RawCommandPool {
     fn reset(&mut self) {
         let mut memory = self
             .memory
@@ -85,30 +75,6 @@ impl hal::RawCommandPool<Backend> for RawCommandPool {
                     buffer.clear();
                 }
             }
-        }
-    }
-
-    unsafe fn from_queue(
-        queue: &CommandQueue,
-        flags: pool::CommandPoolCreateFlags,
-    ) -> Self {
-        let fbo = create_fbo_internal(&queue.share.context);
-        let limits = queue.share.limits.into();
-        let memory = if flags.contains(pool::RESET_INDIVIDUAL) {
-            BufferMemory::Individual {
-                storage: HashMap::new(),
-                next_buffer_id: 0,
-            }
-        } else {
-            BufferMemory::Linear(OwnedBuffer::new())
-        };
-
-        // Ignoring `TRANSIENT` hint, unsure how to make use of this.
-
-        RawCommandPool {
-            fbo,
-            limits,
-            memory: Arc::new(Mutex::new(memory)),
         }
     }
 
@@ -139,7 +105,7 @@ impl hal::RawCommandPool<Backend> for RawCommandPool {
 }
 
 pub struct SubpassCommandPool {
-    command_buffers: Vec<SubpassCommandBuffer>,
+    _command_buffers: Vec<SubpassCommandBuffer>,
 }
 
 impl pool::SubpassCommandPool<Backend> for SubpassCommandPool { }

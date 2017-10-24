@@ -82,8 +82,9 @@ pub struct QueueFamily<B: Backend, C> {
 impl<B: Backend, C: Capability> QueueFamily<B, C> {
     /// Create a new strongly typed queue family from a raw one.
     ///
-    /// *Note*: panics if the family doesn't expose required
-    /// queue capabilities.
+    /// # Panics
+    ///
+    /// Panics if the family doesn't expose required queue capabilities.
     pub fn new(raw: RawQueueFamily<B>) -> Self {
         assert!(C::supported_by(raw.prototype.queue_type()));
         QueueFamily {

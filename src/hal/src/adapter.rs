@@ -34,8 +34,9 @@ pub trait Adapter<B: Backend>: Sized {
     /// # fn main() {
     /// use gfx_hal::{Adapter};
     ///
-    /// # let adapter: empty::Adapter = return;
-    /// let gpu = adapter.open(vec![]);
+    /// # let mut adapter: empty::Adapter = return;
+    /// let family: empty::ProtoQueueFamily = return;
+    /// let gpu = adapter.open(vec![(family, 1)]);
     /// # }
     /// ```
     fn open(self, Vec<(B::ProtoQueueFamily, usize)>) -> Gpu<B>;
