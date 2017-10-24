@@ -18,7 +18,7 @@ extern crate winit;
 extern crate image;
 
 use hal::{buffer, command, device as d, image as i, memory as m, pass, pso, pool, state};
-use hal::{Adapter, Capability, Device, Instance, ProtoQueueFamily, Surface, Swapchain};
+use hal::{Capability, Device, Instance, QueueFamily, Surface, Swapchain};
 use hal::{
     DescriptorPool, Gpu, FrameSync, Primitive,
     Backbuffer, SwapchainConfig,
@@ -102,28 +102,19 @@ fn main() {
     };
 
     for adapter in &adapters {
-        println!("{:?}", adapter.info());
+        println!("{:?}", adapter.info);
     }
-    let mut adapter = adapters.remove(0);
-    let proto_family = {
-        let mut all_families = adapter.list_queue_families();
-        let pos = all_families
-            .iter()
-            .position(|family| {
-                hal::Graphics::supported_by(family.queue_type()) &&
-                surface.supports_queue_family(family)
-            })
-            .unwrap();
-        all_families.remove(pos)
-    };
-
     // Build a new device and associated command queues
-    let Gpu { mut device, mut queue_families, memory_types, .. } =
-        adapter.open(vec![(proto_family, 1)]);
+    let Gpu { mut device, mut queue_groups, memory_types, .. } =
+        adapters.remove(0).open_with(|family| {
+            if hal::Graphics::supported_by(family.queue_type()) && surface.supports_queue_family(family) {
+                Some(1)
+            } else { None }
+        });
 
-    let mut queue_family = hal::QueueFamily::<_, hal::Graphics>::new(queue_families.remove(0));
-    let mut command_pool = device.create_command_pool_typed(&queue_family, pool::CommandPoolCreateFlags::empty(), 16);
-    let mut queue = &mut queue_family.queues[0];
+    let mut queue_group = hal::QueueGroup::<_, hal::Graphics>::new(queue_groups.remove(0));
+    let mut command_pool = device.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty(), 16);
+    let mut queue = &mut queue_group.queues[0];
 
     let swap_config = SwapchainConfig::new()
         .with_color::<ColorFormat>();

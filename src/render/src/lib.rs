@@ -106,7 +106,7 @@ pub use draw_state::target::*;
 
 // public re-exports
 pub use hal::format;
-pub use hal::{Adapter, Backend, Frame, Primitive};
+pub use hal::{Backend, Frame, Primitive};
 pub use hal::queue::{Capability, Supports, Transfer, Compute, Graphics, General};
 pub use hal::{VertexCount, InstanceCount};
 pub use hal::device::Extent;
@@ -132,23 +132,23 @@ pub mod shade;
 pub mod macros;
 
 use std::collections::VecDeque;
-use hal::{CommandQueue, ProtoQueueFamily, Surface, Swapchain, Device as Device_};
+use hal::{CommandQueue, QueueFamily, Surface, Swapchain, Device as Device_};
 use hal::pool::CommandPoolCreateFlags;
 use hal::format::RenderFormat;
 use memory::Typed;
 
 struct Queue<B: Backend, C> {
-    family: hal::QueueFamily<B, C>,
+    group: hal::QueueGroup<B, C>,
     pool_receiver: encoder::CommandPoolReceiver<B, C>,
     pool_sender: encoder::CommandPoolSender<B, C>,
 }
 
 impl<B: Backend, C: hal::Capability> Queue<B, C> {
-    fn new(family_raw: hal::queue::RawQueueFamily<B>) -> Self {
-        let family = hal::QueueFamily::new(family_raw);
+    fn new(group_raw: hal::queue::RawQueueGroup<B>) -> Self {
+        let group = hal::QueueGroup::new(group_raw);
         let (pool_sender, pool_receiver) =
             encoder::command_pool_channel();
-        Queue { family, pool_sender, pool_receiver }
+        Queue { group, pool_sender, pool_receiver }
     }
 
     fn acquire_encoder_pool(
@@ -162,7 +162,7 @@ impl<B: Backend, C: hal::Capability> Queue<B, C> {
             .unwrap_or_else(|_| {
                 let initial_capacity = 4;
                 let flags = CommandPoolCreateFlags::empty();
-                device.create_command_pool_typed(&self.family, flags, initial_capacity)
+                device.create_command_pool_typed(&self.group, flags, initial_capacity)
             });
         encoder::Pool::new(pool, self.pool_sender.clone())
     }
@@ -217,37 +217,29 @@ impl<B: Backend, C> Context<B, C>
     where C: Capability + Supports<Transfer>
 {
     pub fn init<Cf>(
-        mut surface: B::Surface, mut adapter: B::Adapter
+        mut surface: B::Surface, adapter: hal::Adapter<B>
     ) -> (Self, Vec<Backbuffer<B, Cf>>)
     where
         Cf: RenderFormat,
     {
-        let proto_family = {
-            let mut families = adapter.list_queue_families();
-            let pos = families
-                .iter()
-                .position(|family| {
-                    let ty = family.queue_type();
-                    Graphics::supported_by(ty) &&
-                    Compute::supported_by(ty) &&
-                    surface.supports_queue_family(family)
-                })
-                .unwrap();
-            families.remove(pos)
-        };
-
         let hal::Gpu {
             mut device,
-            mut queue_families,
+            mut queue_groups,
             memory_types,
             memory_heaps,
-        } = adapter.open(vec![(proto_family, 1)]);
+        } = adapter.open_with(|family| {
+            let ty = family.queue_type();
+            if Graphics::supported_by(ty) && Compute::supported_by(ty) &&
+                surface.supports_queue_family(family) {
+                Some(1)
+            } else { None }
+        });
 
-        let queue = Queue::new(queue_families.remove(0));
+        let queue = Queue::new(queue_groups.remove(0));
 
         let swap_config = hal::SwapchainConfig::new()
             .with_color::<Cf>();
-        let (swapchain, backbuffer) = surface.build_swapchain(swap_config, &queue.family.queues[0]);
+        let (swapchain, backbuffer) = surface.build_swapchain(swap_config, &queue.group.queues[0]);
 
         let backbuffer_images = match backbuffer {
             hal::Backbuffer::Images(images) => images,
@@ -359,12 +351,12 @@ impl<B: Backend, C> Context<B, C>
                 .promote::<C>()
                 .submit(&inner_submits);
             let fence = Some(&bundle.signal_fence.inner);
-            self.queue.family.queues[0].submit::<C>(submission, fence);
+            self.queue.group.queues[0].submit::<C>(submission, fence);
         }
         bundle.signal_fence.signal = Pending;
 
         self.swapchain.present(
-            &mut self.queue.family.queues[0],
+            &mut self.queue.group.queues[0],
             &[&bundle.signal_semaphore]);
 
         self.frame_bundles.push_back(bundle);
@@ -403,7 +395,7 @@ impl<B: Backend, C> Context<B, C> {
 
     // TODO: remove
     pub fn mut_queue(&mut self) -> &mut CommandQueue<B, C> {
-        &mut self.queue.family.queues[0]
+        &mut self.queue.group.queues[0]
     }
 }
 

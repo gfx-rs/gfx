@@ -10,7 +10,7 @@ extern crate image;
 use std::io::Cursor;
 
 use hal::{command, device as d, image as i, pso, state};
-use hal::{Adapter, Device, Instance, Primitive};
+use hal::{Device, Instance, Primitive};
 use gfx::format::{Srgba8 as ColorFormat};
 use gfx::allocators::StackAllocator as Allocator;
 use hal::target::Rect;
@@ -64,7 +64,7 @@ fn main() {
     let surface = instance.create_surface(&window);
     let mut adapters = instance.enumerate_adapters();
     for adapter in &adapters {
-        println!("{:?}", adapter.info());
+        println!("{:?}", adapter.info);
     }
     let adapter = adapters.remove(0);
 
