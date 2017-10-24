@@ -1,17 +1,17 @@
 use std::mem;
 use std::ops::Range;
-use core::{Device as CoreDevice, MemoryType};
-use core::memory::{Properties,
+use hal::{Device as CoreDevice, MemoryType};
+use hal::memory::{Properties,
     DEVICE_LOCAL, CPU_VISIBLE, CPU_CACHED, COHERENT
 };
 
 use memory::{self, Allocator, Typed};
 use handle::{self, GarbageSender};
 use handle::inner::*;
-use {core, buffer, image, format, mapping, pso};
+use {hal, buffer, image, format, mapping, pso};
 use {Backend, Primitive, Extent};
 
-pub use core::device::{FramebufferError};
+pub use hal::device::{FramebufferError};
 
 #[derive(Clone)]
 pub struct Device<B: Backend> {
@@ -280,24 +280,24 @@ impl<B: Backend> Device<B> {
             COLOR_ATTACHMENT, DEPTH_STENCIL_ATTACHMENT,
             SAMPLED, TRANSFER_SRC, TRANSFER_DST,
         };
-        use core::image::ImageLayout;
+        use hal::image::ImageLayout;
 
         let bits = format.0.describe_bits();
-        let mut aspects = core::image::AspectFlags::empty();
+        let mut aspects = hal::image::AspectFlags::empty();
         if bits.color + bits.alpha != 0 {
-            aspects |= core::image::ASPECT_COLOR;
+            aspects |= hal::image::ASPECT_COLOR;
         }
         if bits.depth != 0 {
-            aspects |= core::image::ASPECT_DEPTH;
+            aspects |= hal::image::ASPECT_DEPTH;
         }
         if bits.stencil != 0 {
-            aspects |= core::image::ASPECT_STENCIL;
+            aspects |= hal::image::ASPECT_STENCIL;
         }
 
         let image = self.raw.create_image(kind, mip_levels, format, usage)?;
         let (image, memory) = allocator.allocate_image(self, usage, image);
         let origin = image::Origin::User(memory);
-        let stable_access = core::image::Access::empty();
+        let stable_access = hal::image::Access::empty();
         let stable_layout = match usage {
             _ if usage.contains(COLOR_ATTACHMENT) =>
                 ImageLayout::ColorAttachmentOptimal,
@@ -373,12 +373,12 @@ impl<B: Backend> Device<B> {
     pub fn create_descriptors<D>(&mut self, count: usize) -> Vec<(D, D::Data)>
         where D: pso::Descriptors<B>
     {
-        use core::DescriptorPool as CDP;
+        use hal::DescriptorPool as CDP;
 
         let bindings = &D::layout_bindings()[..];
         let layout = self.create_descriptor_set_layout(bindings);
         let ranges = bindings.iter().map(|binding| {
-            core::pso::DescriptorRangeDesc {
+            hal::pso::DescriptorRangeDesc {
                 ty: binding.ty,
                 count: binding.count * count,
             }
@@ -403,7 +403,7 @@ impl<B: Backend> Device<B> {
 
     fn create_descriptor_set_layout(
         &mut self,
-        bindings: &[core::pso::DescriptorSetLayoutBinding]
+        bindings: &[hal::pso::DescriptorSetLayoutBinding]
     ) -> handle::raw::DescriptorSetLayout<B> {
         let layout = self.raw.create_descriptor_set_layout(bindings);
         DescriptorSetLayout::new(layout, (), self.garbage.clone()).into()
@@ -416,9 +416,9 @@ impl<B: Backend> Device<B> {
     #[doc(hidden)]
     pub fn create_render_pass_raw(
         &mut self,
-        attachments: &[core::pass::Attachment],
-        subpasses: &[core::pass::SubpassDesc],
-        dependencies: &[core::pass::SubpassDependency],
+        attachments: &[hal::pass::Attachment],
+        subpasses: &[hal::pass::SubpassDesc],
+        dependencies: &[hal::pass::SubpassDependency],
     ) -> handle::raw::RenderPass<B> {
         let pass = self.raw.create_render_pass(attachments, subpasses, dependencies);
         RenderPass::new(pass, (), self.garbage.clone()).into()
@@ -436,10 +436,10 @@ impl<B: Backend> Device<B> {
     #[doc(hidden)]
     pub fn create_graphics_pipeline_raw(
         &mut self,
-        shader_entries: core::pso::GraphicsShaderSet<B>,
+        shader_entries: hal::pso::GraphicsShaderSet<B>,
         layout: &B::PipelineLayout,
-        subpass: core::pass::Subpass<B>,
-        desc: &core::pso::GraphicsPipelineDesc,
+        subpass: hal::pass::Subpass<B>,
+        desc: &hal::pso::GraphicsPipelineDesc,
     ) -> Result<handle::raw::GraphicsPipeline<B>, pso::CreationError> {
         let pipeline = self.raw.create_graphics_pipelines(&[
             (shader_entries, layout, subpass, desc)
@@ -449,7 +449,7 @@ impl<B: Backend> Device<B> {
 
     pub fn create_graphics_pipeline<I>(
         &mut self,
-        shader_entries: core::pso::GraphicsShaderSet<B>,
+        shader_entries: hal::pso::GraphicsShaderSet<B>,
         primitive: Primitive,
         rasterizer: pso::Rasterizer,
         init: I,

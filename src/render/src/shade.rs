@@ -5,19 +5,19 @@ use mint;
 
 use std::error::Error;
 use std::fmt;
-pub use core::shade::{self as core, ConstFormat, Formatted, Usage};
+pub use hal::shade::{self as core, ConstFormat, Formatted, Usage};
 
 #[allow(missing_docs)]
 pub trait ToUniform: Copy {
-    fn convert(self) -> core::UniformValue;
+    fn convert(self) -> hal::UniformValue;
 }
 
 macro_rules! impl_uniforms {
     ( $( $ty_src:ty = $ty_dst:ident ,)* ) => {
         $(
             impl ToUniform for $ty_src {
-                fn convert(self) -> core::UniformValue {
-                    core::UniformValue::$ty_dst(self.into())
+                fn convert(self) -> hal::UniformValue {
+                    hal::UniformValue::$ty_dst(self.into())
                 }
             }
         )*
@@ -54,17 +54,17 @@ impl_uniforms! {
 #[derive(Clone, Debug, PartialEq)]
 pub enum ProgramError {
     /// Unable to compile the vertex shader
-    Vertex(core::CreateShaderError),
+    Vertex(hal::CreateShaderError),
     /// Unable to compile the hull shader
-    Hull(core::CreateShaderError),
+    Hull(hal::CreateShaderError),
     /// Unable to compile the domain shader
-    Domain(core::CreateShaderError),
+    Domain(hal::CreateShaderError),
     /// Unable to compile the geometry shader
-    Geometry(core::CreateShaderError),
+    Geometry(hal::CreateShaderError),
     /// Unable to compile the pixel shader
-    Pixel(core::CreateShaderError),
+    Pixel(hal::CreateShaderError),
     /// Unable to link
-    Link(core::CreateProgramError),
+    Link(hal::CreateProgramError),
 }
 
 impl fmt::Display for ProgramError {

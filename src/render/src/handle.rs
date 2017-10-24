@@ -45,7 +45,7 @@ impl<B: Backend> GarbageCollector<B> {
 
 impl<B: Backend> InnerGarbageCollector<B> {
     fn collect(&mut self) {
-        use core::Device;
+        use hal::Device;
 
         let dev = &mut self.device;
         for garbage in self.receiver.try_iter() {

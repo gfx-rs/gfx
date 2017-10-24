@@ -1,7 +1,7 @@
 use std::{fmt, ops};
 use std::error::Error as StdError;
 
-use {core, memory, buffer};
+use {hal, memory, buffer};
 use {Backend, Device};
 
 /// Error accessing a mapping.
@@ -9,12 +9,12 @@ use {Backend, Device};
 pub enum Error {
     /// The requested mapping access did not match the expected usage.
     InvalidAccess(memory::Access, memory::Usage),
-    /// Another error reported by GFX's core
-    Core(core::mapping::Error)
+    /// Another error reported by gfx-hal
+    Core(hal::mapping::Error)
 }
 
-impl From<core::mapping::Error> for Error {
-    fn from(c: core::mapping::Error) -> Self {
+impl From<hal::mapping::Error> for Error {
+    fn from(c: hal::mapping::Error) -> Self {
         Error::Core(c)
     }
 }
@@ -42,7 +42,7 @@ impl StdError for Error {
 }
 
 pub struct Reader<'a, B: Backend, T: 'a> {
-    pub(crate) inner: core::mapping::Reader<'a, B, T>,
+    pub(crate) inner: hal::mapping::Reader<'a, B, T>,
     pub(crate) info: &'a buffer::Info,
 }
 
@@ -53,7 +53,7 @@ impl<'a, B: Backend, T: 'a> ops::Deref for Reader<'a, B, T> {
 }
 
 pub struct Writer<'a, B: Backend, T: 'a> {
-    pub(crate) inner: core::mapping::Writer<'a, B, T>,
+    pub(crate) inner: hal::mapping::Writer<'a, B, T>,
     pub(crate) info: &'a buffer::Info,
 }
 

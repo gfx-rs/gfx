@@ -1,5 +1,5 @@
 extern crate env_logger;
-extern crate gfx_hal as core;
+extern crate gfx_hal as hal;
 extern crate gfx_backend_vulkan as back;
 #[macro_use]
 extern crate gfx_render as gfx;
@@ -9,11 +9,11 @@ extern crate image;
 
 use std::io::Cursor;
 
-use core::{command, device as d, image as i, pso, state};
-use core::{Adapter, Device, Instance, Primitive};
+use hal::{command, device as d, image as i, pso, state};
+use hal::{Adapter, Device, Instance, Primitive};
 use gfx::format::{Srgba8 as ColorFormat};
-use core::target::Rect;
 use gfx::allocators::StackAllocator as Allocator;
+use hal::target::Rect;
 
 gfx_buffer_struct! {
     Vertex {
@@ -62,15 +62,15 @@ fn main() {
     // instantiate backend
     let instance = back::Instance::create("gfx-rs quad", 1);
     let surface = instance.create_surface(&window);
-    let adapters = instance.enumerate_adapters();
+    let mut adapters = instance.enumerate_adapters();
     for adapter in &adapters {
         println!("{:?}", adapter.info());
     }
-    let adapter = &adapters[0];
+    let adapter = adapters.remove(0);
 
-    type Context<C> = gfx::Context<back::Backend, C>;
     let (mut context, backbuffers) =
-        Context::init_graphics::<ColorFormat>(surface, adapter);
+        gfx::Context::<back::Backend, hal::Graphics>
+        ::init::<ColorFormat>(surface, adapter);
     let mut device = (*context.ref_device()).clone();
 
     // Setup renderpass and pipeline
@@ -187,7 +187,7 @@ fn main() {
         .finish();
 
     // Rendering setup
-    let viewport = core::Viewport {
+    let viewport = hal::Viewport {
         x: 0, y: 0,
         w: pixel_width, h: pixel_height,
         near: 0.0, far: 1.0,

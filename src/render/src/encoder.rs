@@ -5,9 +5,9 @@ use std::ops::Range;
 use std::sync::mpsc;
 use std::collections::{HashMap, HashSet};
 
-use core::{self, image as i, CommandPool};
-use core::command::CommandBuffer;
-use core::memory::Barrier;
+use hal::{self, image as i, CommandPool};
+use hal::command::CommandBuffer;
+use hal::memory::Barrier;
 
 use memory::{Provider, Dependency, cast_slice};
 use device::InitToken;
@@ -15,7 +15,7 @@ use {handle, buffer, image, format, pso};
 use {Backend, Supports, Transfer, Graphics};
 use {VertexCount};
 
-pub use core::command::{
+pub use hal::command::{
     BufferCopy, ImageCopy, BufferImageCopy,
     ClearColor, ClearDepthStencil,
 };
@@ -47,7 +47,7 @@ impl<B: Backend, C> Pool<B, C> {
             buffer: self.mut_inner().acquire_command_buffer(),
             // raw_data: pso::RawDataSet::new(),
             handles: handle::Bag::new(),
-            pipeline_stage: core::pso::TOP_OF_PIPE,
+            pipeline_stage: hal::pso::TOP_OF_PIPE,
             buffer_states: HashMap::new(),
             image_states: HashMap::new(),
         }
@@ -85,13 +85,13 @@ pub struct Encoder<'a, B: Backend, C> {
     handles: handle::Bag<B>,
     pool: PoolDependency<B, C>,
     // raw_data: pso::RawDataSet<B>,
-    pipeline_stage: core::pso::PipelineStage,
-    buffer_states: HashMap<handle::raw::Buffer<B>, core::buffer::State>,
+    pipeline_stage: hal::pso::PipelineStage,
+    buffer_states: HashMap<handle::raw::Buffer<B>, hal::buffer::State>,
     image_states: HashMap<handle::raw::Image<B>, ImageStates>,
 }
 
 pub struct Submit<B: Backend, C> {
-    pub(crate) inner: core::command::Submit<B, C>,
+    pub(crate) inner: hal::command::Submit<B, C>,
     pub(crate) access_info: AccessInfo<B>,
     pub(crate) handles: handle::Bag<B>,
     pub(crate) pool: PoolDependency<B, C>
@@ -99,13 +99,13 @@ pub struct Submit<B: Backend, C> {
 
 // TODO: coalescing?
 struct ImageStates {
-    states: Vec<core::image::State>,
+    states: Vec<hal::image::State>,
     levels: usize,
 }
 
 impl ImageStates {
     fn new(
-        state: core::image::State,
+        state: hal::image::State,
         levels: image::Level,
         layers: image::Layer,
     ) -> Self {
@@ -120,7 +120,7 @@ impl ImageStates {
         &mut self,
         level: image::Level,
         layer: image::Layer,
-    ) -> &mut core::image::State {
+    ) -> &mut hal::image::State {
         let index = layer as usize * self.levels + level as usize;
         &mut self.states[index]
     }
@@ -215,7 +215,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
     fn init_image<'b>(
         &mut self, image: &'b handle::raw::Image<B>
     ) -> Barrier<'b, B> {
-        let creation_state = (core::image::Access::empty(), i::ImageLayout::Undefined);
+        let creation_state = (hal::image::Access::empty(), i::ImageLayout::Undefined);
         let num_levels = image.info().mip_levels;
         let num_layers = image.info().kind.get_num_layers();
         let stable_state = image.info().stable_state;
@@ -235,7 +235,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
     fn require_buffer_state<'b>(
         &mut self,
         buffer: &'b handle::raw::Buffer<B>,
-        state: core::buffer::State
+        state: hal::buffer::State
     ) -> Option<Barrier<'b, B>> {
         if !self.buffer_states.contains_key(buffer) {
             self.buffer_states.insert(buffer.clone(), buffer.info().stable_state);
@@ -251,7 +251,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         image: &'b handle::raw::Image<B>,
         level: image::Level,
         layer: image::Layer,
-        state: core::image::State,
+        state: hal::image::State,
     ) -> Option<Barrier<'b, B>> {
         if !self.image_states.contains_key(image) {
             let levels = image.info().mip_levels;
@@ -269,8 +269,8 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
 
     fn transition_buffer<'b>(
         buffer: &'b handle::raw::Buffer<B>,
-        current: &mut core::buffer::State,
-        next: core::buffer::State
+        current: &mut hal::buffer::State,
+        next: hal::buffer::State
     ) -> Option<Barrier<'b, B>> {
         let state = mem::replace(current, next);
         if state != next {
@@ -287,8 +287,8 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         image: &'b handle::raw::Image<B>,
         level: image::Level,
         layer: image::Layer,
-        current: &mut core::image::State,
-        next: core::image::State,
+        current: &mut hal::image::State,
+        next: hal::image::State,
     ) -> Option<Barrier<'b, B>> {
         let state = mem::replace(current, next);
         if state != next {
@@ -309,9 +309,9 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
     #[doc(hidden)]
     pub fn require_state(
         &mut self,
-        stage: core::pso::PipelineStage,
-        buffer_states: &[(&handle::raw::Buffer<B>, core::buffer::State)],
-        image_states: &[(&handle::raw::Image<B>, image::Subresource, core::image::State)],
+        stage: hal::pso::PipelineStage,
+        buffer_states: &[(&handle::raw::Buffer<B>, hal::buffer::State)],
+        image_states: &[(&handle::raw::Image<B>, image::Subresource, hal::image::State)],
     ) {
         let mut barriers = Vec::new();
         for &(buffer, state) in buffer_states {
@@ -345,7 +345,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
                 }
             }
         }
-        let stage_transition = self.pipeline_stage..core::pso::BOTTOM_OF_PIPE;
+        let stage_transition = self.pipeline_stage..hal::pso::BOTTOM_OF_PIPE;
         self.buffer.pipeline_barrier(stage_transition, &barriers[..]);
     }
 
@@ -410,9 +410,9 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         }
 
         self.require_state(
-            core::pso::TRANSFER,
-            &[(src, core::buffer::TRANSFER_READ),
-               (dst, core::buffer::TRANSFER_WRITE)],
+            hal::pso::TRANSFER,
+            &[(src, hal::buffer::TRANSFER_READ),
+               (dst, hal::buffer::TRANSFER_WRITE)],
             &[]);
 
         self.buffer.copy_buffer(
@@ -443,8 +443,8 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             "out of buffer bounds");
 
         self.require_state(
-            core::pso::TRANSFER,
-            &[(buffer, core::buffer::TRANSFER_WRITE)],
+            hal::pso::TRANSFER,
+            &[(buffer, hal::buffer::TRANSFER_WRITE)],
             &[]);
 
         self.buffer.update_buffer(
@@ -472,15 +472,15 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             "missing TRANSFER_DST usage flag");
 
         // TODO: error handling
-        let src_state = (core::image::TRANSFER_READ, i::ImageLayout::TransferSrcOptimal);
-        let dst_state = (core::image::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal);
+        let src_state = (hal::image::TRANSFER_READ, i::ImageLayout::TransferSrcOptimal);
+        let dst_state = (hal::image::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal);
         let mut image_states = Vec::new();
         for region in regions {
             image_states.push((src, region.src_subresource, src_state));
             image_states.push((dst, region.dst_subresource, dst_state));
         }
         self.require_state(
-            core::pso::TRANSFER,
+            hal::pso::TRANSFER,
             &[],
             &image_states[..]);
 
@@ -510,7 +510,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             "missing TRANSFER_DST usage flag");
 
         // TODO: error handling
-        let dst_state = (core::image::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal);
+        let dst_state = (hal::image::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal);
         let mut image_states = Vec::new();
         for region in regions {
             let r = &region.image_layers;
@@ -519,8 +519,8 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             }
         }
         self.require_state(
-            core::pso::TRANSFER,
-            &[(src, core::buffer::TRANSFER_READ)],
+            hal::pso::TRANSFER,
+            &[(src, hal::buffer::TRANSFER_READ)],
             &image_states[..]);
 
         self.buffer.copy_buffer_to_image(
@@ -549,7 +549,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             "missing TRANSFER_DST usage flag");
 
         // TODO: error handling
-        let src_state = (core::image::TRANSFER_READ, i::ImageLayout::TransferSrcOptimal);
+        let src_state = (hal::image::TRANSFER_READ, i::ImageLayout::TransferSrcOptimal);
         let mut image_states = Vec::new();
         for region in regions {
             let r = &region.image_layers;
@@ -558,8 +558,8 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             }
         }
         self.require_state(
-            core::pso::TRANSFER,
-            &[(dst, core::buffer::TRANSFER_WRITE)],
+            hal::pso::TRANSFER,
+            &[(dst, hal::buffer::TRANSFER_WRITE)],
             &image_states[..]);
 
         self.buffer.copy_image_to_buffer(
@@ -575,7 +575,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
     fn require_clear_state(&mut self, image: &handle::raw::Image<B>) -> i::ImageLayout {
         let levels = image.info().mip_levels;
         let layers = image.info().kind.get_num_layers();
-        let state = (core::image::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal);
+        let state = (hal::image::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal);
         let mut image_states = Vec::new();
         for level in 0..levels {
             for layer in 0..layers {
@@ -583,7 +583,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             }
         }
         self.require_state(
-            core::pso::TRANSFER,
+            hal::pso::TRANSFER,
             &[],
             &image_states[..]);
 

@@ -1,12 +1,12 @@
-use core;
+use hal;
 use memory::Memory;
 
-pub use core::image::{
+pub use hal::image::{
     CreationError, Kind, AaMode, Size, Level, Layer, Dimensions,
     AspectFlags, SamplerInfo, ViewError, Usage,
     Subresource, SubresourceLayers, SubresourceRange,
 };
-pub use core::image::{
+pub use hal::image::{
     TRANSFER_SRC, TRANSFER_DST,
     COLOR_ATTACHMENT, DEPTH_STENCIL_ATTACHMENT,
     SAMPLED,
@@ -19,9 +19,9 @@ pub struct Info {
     pub usage: Usage,
     pub kind: Kind,
     pub mip_levels: Level,
-    pub format: core::format::Format,
+    pub format: hal::format::Format,
     pub origin: Origin,
-    pub(crate) stable_state: core::image::State,
+    pub(crate) stable_state: hal::image::State,
 }
 
 #[derive(Debug)]

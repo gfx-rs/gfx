@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use core::{Device as CoreDevice};
+use hal::{Device as CoreDevice};
 use memory::{self, Allocator, Memory};
 use {buffer, image};
 use {Backend, Device};
