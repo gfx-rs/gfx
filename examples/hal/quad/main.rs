@@ -18,7 +18,7 @@ extern crate winit;
 extern crate image;
 
 use hal::{buffer, command, device as d, image as i, memory as m, pass, pso, pool, state};
-use hal::{Capability, Device, Instance, QueueFamily, Surface, Swapchain};
+use hal::{Device, Instance, QueueFamily, Surface, Swapchain};
 use hal::{
     DescriptorPool, Gpu, FrameSync, Primitive,
     Backbuffer, SwapchainConfig,
@@ -107,7 +107,7 @@ fn main() {
     // Build a new device and associated command queues
     let Gpu { mut device, mut queue_groups, memory_types, .. } =
         adapters.remove(0).open_with(|family| {
-            if hal::Graphics::supported_by(family.queue_type()) && surface.supports_queue_family(family) {
+            if family.supports_graphics() && surface.supports_queue_family(family) {
                 Some(1)
             } else { None }
         });

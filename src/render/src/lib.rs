@@ -107,7 +107,7 @@ pub use draw_state::target::*;
 // public re-exports
 pub use hal::format;
 pub use hal::{Backend, Frame, Primitive};
-pub use hal::queue::{Capability, Supports, Transfer, Compute, Graphics, General};
+pub use hal::queue::{Supports, Transfer, Compute, Graphics, General};
 pub use hal::{VertexCount, InstanceCount};
 pub use hal::device::Extent;
 // pub use hal::{ShaderSet, VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
@@ -132,9 +132,9 @@ pub mod shade;
 pub mod macros;
 
 use std::collections::VecDeque;
-use hal::{CommandQueue, QueueFamily, Surface, Swapchain, Device as Device_};
-use hal::pool::CommandPoolCreateFlags;
+use hal::{Capability, CommandQueue, QueueFamily, Surface, Swapchain, Device as Device_};
 use hal::format::RenderFormat;
+use hal::pool::CommandPoolCreateFlags;
 use memory::Typed;
 
 struct Queue<B: Backend, C> {

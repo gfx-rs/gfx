@@ -42,6 +42,14 @@ pub trait QueueFamily: Debug {
     fn queue_type(&self) -> QueueType;
     /// Returns maximum number of queues created from this family.
     fn max_queues(&self) -> usize;
+    /// Returns true if the queue supports graphics operations.
+    fn supports_graphics(&self) -> bool {
+        Graphics::supported_by(self.queue_type())
+    }
+    /// Returns true if the queue supports graphics operations.
+    fn supports_compute(&self) -> bool {
+        Compute::supported_by(self.queue_type())
+    }
 }
 
 /// `RawQueueGroup` denotes a group of command queues provided by the backend

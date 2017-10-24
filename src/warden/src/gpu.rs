@@ -4,7 +4,7 @@ use std::fs::File;
 use std::slice;
 
 use hal::{self, image as i};
-use hal::{Capability, Device, DescriptorPool, QueueFamily};
+use hal::{Device, DescriptorPool, QueueFamily};
 
 use raw;
 
@@ -95,7 +95,7 @@ impl<B: hal::Backend> Scene<B> {
         // initialize graphics
         let hal::Gpu { mut device, mut queue_groups, memory_types, .. } =
             adapter.open_with(|family| {
-                if hal::Graphics::supported_by(family.queue_type()) {
+                if family.supports_graphics() {
                     Some(1)
                 } else { None }
             });
