@@ -12,7 +12,7 @@ use hal;
 use winit;
 
 use {conv, native};
-use {VK_ENTRY, Adapter, Backend, Instance, ProtoQueueFamily, RawInstance};
+use {VK_ENTRY, Backend, Instance, PhysicalDevice, QueueFamily, RawInstance};
 
 
 pub struct Surface {
@@ -207,10 +207,10 @@ impl hal::Surface<Backend> for Surface {
         hal::image::Kind::D2(self.width as Size, self.height as Size, aa)
     }
 
-    fn surface_capabilities(&self, adapter: &Adapter) -> hal::SurfaceCapabilities {
+    fn surface_capabilities(&self, physical_device: &PhysicalDevice) -> hal::SurfaceCapabilities {
         let caps =
             self.raw.functor.get_physical_device_surface_capabilities_khr(
-                adapter.handle,
+                physical_device.handle,
                 self.raw.handle,
             )
             .expect("Unable to query surface capabilities");
@@ -247,7 +247,7 @@ impl hal::Surface<Backend> for Surface {
         }
     }
 
-    fn supports_queue_family(&self, queue_family: &ProtoQueueFamily) -> bool {
+    fn supports_queue_family(&self, queue_family: &QueueFamily) -> bool {
         self.raw.functor.get_physical_device_surface_support_khr(
             queue_family.device,
             queue_family.index,

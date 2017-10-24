@@ -45,7 +45,7 @@
 
 use hal::{self, format, image};
 
-use {native as n, Adapter, Backend as B, ProtoQueueFamily};
+use {native as n, Backend as B, PhysicalDevice, QueueFamily};
 
 use glutin::{self, GlContext};
 use std::rc::Rc;
@@ -94,11 +94,11 @@ impl hal::Surface<B> for Surface {
         hal::image::Kind::D2(w, h, a)
     }
 
-    fn surface_capabilities(&self, _: &Adapter) -> hal::SurfaceCapabilities {
+    fn surface_capabilities(&self, _: &PhysicalDevice) -> hal::SurfaceCapabilities {
         unimplemented!()
     }
 
-    fn supports_queue_family(&self, _: &ProtoQueueFamily) -> bool { true }
+    fn supports_queue_family(&self, _: &QueueFamily) -> bool { true }
 
     fn build_swapchain<C>(
         &mut self,
@@ -115,9 +115,9 @@ impl hal::Surface<B> for Surface {
 
 impl hal::Instance for Surface {
     type Backend = B;
-    fn enumerate_adapters(&self) -> Vec<Adapter> {
+    fn enumerate_adapters(&self) -> Vec<hal::Adapter<B>> {
         unsafe { self.window.make_current().unwrap() };
-        let adapter = Adapter::new(|s| self.window.get_proc_address(s) as *const _);
+        let adapter = PhysicalDevice::new_adapter(|s| self.window.get_proc_address(s) as *const _);
         vec![adapter]
     }
 }
@@ -145,9 +145,9 @@ pub struct Headless(pub glutin::HeadlessContext);
 
 impl hal::Instance for Headless {
     type Backend = B;
-    fn enumerate_adapters(&self) -> Vec<Adapter> {
+    fn enumerate_adapters(&self) -> Vec<hal::Adapter<B>> {
         unsafe { self.0.make_current().unwrap() };
-        let adapter = Adapter::new(|s| self.0.get_proc_address(s) as *const _);
+        let adapter = PhysicalDevice::new_adapter(|s| self.0.get_proc_address(s) as *const _);
         vec![adapter]
     }
 }

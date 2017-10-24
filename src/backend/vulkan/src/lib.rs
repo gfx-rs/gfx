@@ -238,45 +238,43 @@ impl Instance {
 impl hal::Instance for Instance {
     type Backend = Backend;
 
-    fn enumerate_adapters(&self) -> Vec<Adapter> {
+    fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
         self.raw.0.enumerate_physical_devices()
             .expect("Unable to enumerate adapter")
-            .iter()
-            .map(|&device| {
+            .into_iter()
+            .map(|device| {
                 let properties = self.raw.0.get_physical_device_properties(device);
-                let name = unsafe {
-                    CStr::from_ptr(properties.device_name.as_ptr())
-                        .to_str()
-                        .expect("Invalid UTF-8 string")
-                        .to_owned()
-                };
-
                 let info = hal::AdapterInfo {
-                    name,
+                    name: unsafe {
+                        CStr::from_ptr(properties.device_name.as_ptr())
+                            .to_str()
+                            .expect("Invalid UTF-8 string")
+                            .to_owned()
+                    },
                     vendor: properties.vendor_id as usize,
                     device: properties.device_id as usize,
                     software_rendering: properties.device_type == vk::PhysicalDeviceType::Cpu,
                 };
-
-                let queue_families =
-                    self.raw.0
-                        .get_physical_device_queue_family_properties(device)
-                        .into_iter()
-                        .enumerate()
-                        .map(|(i, properties)| {
-                            ProtoQueueFamily {
-                                properties,
-                                device,
-                                index: i as u32,
-                            }
-                        }).collect();
-
-                Adapter {
+                let physical_device = PhysicalDevice {
                     instance: self.raw.clone(),
                     handle: device,
                     properties,
-                    queue_families,
+                };
+                let queue_families = self.raw.0
+                    .get_physical_device_queue_family_properties(device)
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, properties)| {
+                        QueueFamily {
+                            properties,
+                            device,
+                            index: i as u32,
+                        }
+                    }).collect();
+                hal::Adapter {
                     info,
+                    physical_device,
+                    queue_families,
                 }
             })
             .collect()
@@ -284,13 +282,13 @@ impl hal::Instance for Instance {
 }
 
 #[derive(Debug)]
-pub struct ProtoQueueFamily {
+pub struct QueueFamily {
     properties: vk::QueueFamilyProperties,
     device: vk::PhysicalDevice,
     index: u32,
 }
 
-impl hal::queue::ProtoQueueFamily for ProtoQueueFamily {
+impl hal::queue::QueueFamily for QueueFamily {
     fn queue_type(&self) -> QueueType {
         map_queue_type(self.properties.queue_flags)
     }
@@ -300,18 +298,14 @@ impl hal::queue::ProtoQueueFamily for ProtoQueueFamily {
 }
 
 
-pub struct Adapter {
+pub struct PhysicalDevice {
     instance: Arc<RawInstance>,
     handle: vk::PhysicalDevice,
     properties: vk::PhysicalDeviceProperties,
-    queue_families: Vec<ProtoQueueFamily>,
-    info: hal::AdapterInfo,
 }
 
-impl hal::Adapter<Backend> for Adapter {
-    fn open<'a, I>(&self, family_iter: I) -> hal::Gpu<Backend>
-    where I: Iterator<Item = (&'a QueueFamily, usize)>
-    {
+impl hal::PhysicalDevice<Backend> for PhysicalDevice {
+    fn open(self, families: Vec<(QueueFamily, usize)>) -> hal::Gpu<Backend> {
         let max_queue_count = families.iter().map(|&(_, count)| count).max().unwrap_or(0);
         let queue_priorities = vec![0.0f32; max_queue_count];
         let family_infos = families
@@ -397,11 +391,11 @@ impl hal::Adapter<Backend> for Adapter {
         };
 
         let device_arc = device.raw.clone();
-        let queue_families = families
+        let queue_groups = families
             .into_iter()
             .map(|(family, count)| {
                 let family_index = family.index;
-                let mut family_raw = hal::queue::RawQueueFamily::new(family);
+                let mut family_raw = hal::queue::RawQueueGroup::new(family);
                 for id in 0 .. count {
                     let queue_raw = unsafe {
                         device_arc.0.get_device_queue(family_index, id as _)
@@ -447,18 +441,10 @@ impl hal::Adapter<Backend> for Adapter {
 
         hal::Gpu {
             device,
-            queue_families,
+            queue_groups,
             memory_types,
             memory_heaps,
         }
-    }
-
-    fn info(&self) -> &hal::AdapterInfo {
-        &self.info
-    }
-
-    fn queue_families(&self) -> &[QueueFamily] {
-        &self.queue_families
     }
 }
 
@@ -537,13 +523,13 @@ pub struct Device {
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Backend {}
 impl hal::Backend for Backend {
-    type Adapter = Adapter;
+    type PhysicalDevice = PhysicalDevice;
     type Device = Device;
 
     type Surface = window::Surface;
     type Swapchain = window::Swapchain;
 
-    type ProtoQueueFamily = ProtoQueueFamily;
+    type QueueFamily = QueueFamily;
     type CommandQueue = CommandQueue;
     type CommandBuffer = command::CommandBuffer;
     type SubpassCommandBuffer = command::SubpassCommandBuffer;

@@ -10,7 +10,7 @@ use std::{mem, ptr};
 use std::ffi::CString;
 use std::ops::Range;
 
-use {Backend as B, Device, ProtoQueueFamily};
+use {Backend as B, Device, QueueFamily};
 use {conv, memory};
 use pool::RawCommandPool;
 
@@ -85,7 +85,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_command_pool(
-        &mut self, family: &ProtoQueueFamily, create_flags: CommandPoolCreateFlags
+        &mut self, family: &QueueFamily, create_flags: CommandPoolCreateFlags
     ) -> RawCommandPool {
         let mut flags = vk::CommandPoolCreateFlags::empty();
         if create_flags.contains(CommandPoolCreateFlags::TRANSIENT) {

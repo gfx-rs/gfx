@@ -11,7 +11,7 @@ use hal::{self as c, device as d, image as i, memory, pass, pso, buffer, mapping
 use hal::format::{Format, Swizzle};
 use hal::pool::CommandPoolCreateFlags;
 
-use {Backend as B, ProtoQueueFamily, Share};
+use {Backend as B, QueueFamily, Share};
 use {conv, native as n, state};
 use pool::{BufferMemory, OwnedBuffer, RawCommandPool};
 
@@ -174,7 +174,7 @@ impl d::Device<B> for Device {
 
     fn create_command_pool(
         &mut self,
-        _family: &ProtoQueueFamily,
+        _family: &QueueFamily,
         flags: CommandPoolCreateFlags,
     ) -> RawCommandPool {
         let fbo = create_fbo_internal(&self.share.context);
