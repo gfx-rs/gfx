@@ -4,7 +4,7 @@ use std::fs::File;
 use std::slice;
 
 use hal::{self, image as i};
-use hal::{Adapter, Device, DescriptorPool};
+use hal::{Device, DescriptorPool, QueueFamily};
 
 use raw;
 
@@ -75,7 +75,7 @@ pub struct Scene<B: hal::Backend> {
     pub jobs: HashMap<String, hal::command::Submit<B, hal::queue::Graphics>>,
     init_submit: Option<hal::command::Submit<B, hal::queue::Graphics>>,
     device: B::Device,
-    queue: hal::CommandQueue<B, hal::queue::Graphics>,
+    queue_group: hal::QueueGroup<B, hal::queue::Graphics>,
     command_pool: hal::CommandPool<B, hal::queue::Graphics>,
     upload_buffers: HashMap<String, (B::Buffer, B::Memory)>,
     download_type: hal::MemoryType,
@@ -90,14 +90,16 @@ fn align(x: usize, y: usize) -> usize {
 }
 
 impl<B: hal::Backend> Scene<B> {
-    pub fn new(adapter: &B::Adapter, raw: &raw::Scene, data_path: &str) -> Self {
+    pub fn new(adapter: hal::Adapter<B>, raw: &raw::Scene, data_path: &str) -> Self {
         info!("creating Scene from {}", data_path);
         // initialize graphics
-        let hal::Gpu { mut device, mut graphics_queues, memory_types, .. } = {
-            let (ref family, queue_type) = adapter.queue_families()[0];
-            assert!(queue_type.supports_graphics());
-            adapter.open(&[(family, hal::QueueType::Graphics, 1)])
-        };
+        let hal::Gpu { mut device, mut queue_groups, memory_types, .. } =
+            adapter.open_with(|family| {
+                if family.supports_graphics() {
+                    Some(1)
+                } else { None }
+            });
+
         let upload_type = memory_types
             .iter()
             .find(|mt| {
@@ -116,10 +118,11 @@ impl<B: hal::Backend> Scene<B> {
         info!("download memory: {:?}", &download_type);
 
         let limits = device.get_limits().clone();
-        let queue = graphics_queues.remove(0);
-        let mut command_pool = queue.create_graphics_pool(
-            1 + raw.jobs.len(),
+        let queue_group = hal::QueueGroup::<_, hal::Graphics>::new(queue_groups.remove(0));
+        let mut command_pool = device.create_command_pool_typed(
+            &queue_group,
             hal::pool::CommandPoolCreateFlags::empty(),
+            1 + raw.jobs.len(),
         );
 
         // create resources
@@ -472,7 +475,7 @@ impl<B: hal::Backend> Scene<B> {
             jobs,
             init_submit,
             device,
-            queue,
+            queue_group,
             command_pool,
             upload_buffers,
             download_type,
@@ -492,7 +495,7 @@ impl<B: hal::Backend> Scene<B> {
         let submission = hal::queue::Submission::new()
             .submit(&[self.init_submit.take().unwrap()])
             .submit(&values);
-        self.queue.submit(submission, None);
+        self.queue_group.queues[0].submit(submission, None);
     }
 
     pub fn fetch_image(&mut self, name: &str) -> FetchGuard<B> {
@@ -515,9 +518,10 @@ impl<B: hal::Backend> Scene<B> {
         let down_buffer = self.device.bind_buffer_memory(&down_memory, 0, unbound_buffer)
             .unwrap();
 
-        let mut command_pool = self.queue.create_graphics_pool(
-            1,
+        let mut command_pool = self.device.create_command_pool_typed(
+            &self.queue_group,
             hal::pool::CommandPoolCreateFlags::empty(),
+            1,
         );
         let copy_submit = {
             let mut cmd_buffer = command_pool.acquire_command_buffer();
@@ -559,7 +563,7 @@ impl<B: hal::Backend> Scene<B> {
         let copy_fence = self.device.create_fence(false);
         let submission = hal::queue::Submission::new()
             .submit(&[copy_submit]);
-        self.queue.submit(submission, Some(&copy_fence));
+        self.queue_group.queues[0].submit(submission, Some(&copy_fence));
         //queue.destroy_command_pool(command_pool);
         self.device.wait_for_fences(&[&copy_fence], hal::device::WaitFor::Any, !0);
         self.device.destroy_fence(copy_fence);
@@ -585,8 +589,8 @@ impl<B: hal::Backend> Drop for Scene<B> {
             self.device.free_memory(memory);
         }
         //TODO: free those properly
-        let _ = &self.queue;
+        let _ = &self.queue_group;
         let _ = &self.command_pool;
-        //queue.destroy_command_pool(command_pool);
+        //self.device.destroy_command_pool(self.command_pool.downgrade())
     }
 }

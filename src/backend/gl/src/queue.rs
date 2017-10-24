@@ -1,7 +1,7 @@
 use std::mem;
 use std::rc::Rc;
 
-use hal as c;
+use hal;
 use gl;
 use smallvec::SmallVec;
 
@@ -84,7 +84,7 @@ impl CommandQueue {
     }
 
     /*
-    fn bind_attribute(&mut self, slot: c::AttributeSlot, buffer: n::Buffer, bel: BufferElement) {
+    fn bind_attribute(&mut self, slot: hal::AttributeSlot, buffer: n::Buffer, bel: BufferElement) {
         use core::format::SurfaceType as S;
         use core::format::ChannelType as C;
         let (fm8, fm16, fm32) = match bel.elem.format.1 {
@@ -249,9 +249,7 @@ impl CommandQueue {
                 self.state.index_buffer = Some(buffer);
                 unsafe { gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer) };
             }
-            com::Command::BindVertexBuffers(_data_ptr) => {
-                unimplemented!()
-            }
+//          com::Command::BindVertexBuffers(_data_ptr) =>
             com::Command::Draw { primitive, ref vertices, ref instances } => {
                 let gl = &self.share.context;
                 let features = &self.share.features;
@@ -426,19 +424,19 @@ impl CommandQueue {
                     // Render target view bound to the framebuffer at attachment slot 0.
                     unsafe {
                         match c {
-                            c::command::ClearColor::Float(v) => {
+                            hal::command::ClearColor::Float(v) => {
                                 gl.ClearBufferfv(gl::COLOR, 0, &v[0]);
                             }
-                            c::command::ClearColor::Int(v) => {
+                            hal::command::ClearColor::Int(v) => {
                                 gl.ClearBufferiv(gl::COLOR, 0, &v[0]);
                             }
-                            c::command::ClearColor::Uint(v) => {
+                            hal::command::ClearColor::Uint(v) => {
                                 gl.ClearBufferuiv(gl::COLOR, 0, &v[0]);
                             }
                         }
                     }
                 } else {
-                    let v = if let c::command::ClearColor::Float(v) = c {
+                    let v = if let hal::command::ClearColor::Float(v) = c {
                         v
                     } else {
                         warn!("Integer clears are not supported on GL2");
@@ -482,7 +480,7 @@ impl CommandQueue {
                 if self.share.private_caps.sampler_objects {
                     unsafe { gl.BindSampler(slot as gl::types::GLuint, sampler.object) };
                 } else {
-                    assert!(c::MAX_SAMPLERS <= c::MAX_RESOURCE_VIEWS);
+                    assert!(hal::MAX_SAMPLERS <= hal::MAX_RESOURCE_VIEWS);
                     debug_assert_eq!(sampler.object, 0);
                     if let Some(bind) = bind_opt {
                         tex::bind_sampler(gl, bind, &sampler.info, &self.share.private_caps);
@@ -493,7 +491,7 @@ impl CommandQueue {
             },
             com::Command::BindPixelTargets(pts) => {
                 let point = gl::DRAW_FRAMEBUFFER;
-                for i in 0 .. c::MAX_COLOR_TARGETS {
+                for i in 0 .. hal::MAX_COLOR_TARGETS {
                     let att = gl::COLOR_ATTACHMENT0 + i as gl::types::GLuint;
                     if let Some(ref target) = pts.colors[i] {
                         self.bind_target(point, att, target);
@@ -606,10 +604,10 @@ impl CommandQueue {
     }
 }
 
-impl c::RawCommandQueue<Backend> for CommandQueue {
+impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     unsafe fn submit_raw(
         &mut self,
-        submit_info: c::RawSubmission<Backend>,
+        submit_info: hal::queue::RawSubmission<Backend>,
         fence: Option<&native::Fence>,
     ) {
         use pool::BufferMemory;

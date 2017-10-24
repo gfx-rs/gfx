@@ -22,17 +22,17 @@ use std::error::Error;
 use std::fmt::{self, Debug};
 use std::hash::Hash;
 
-pub use self::adapter::{Adapter, AdapterInfo};
-pub use self::command::{RawCommandBuffer};
+pub use self::adapter::{Adapter, AdapterInfo, PhysicalDevice};
 pub use self::device::Device;
-pub use self::pool::{CommandPool, RawCommandPool, SubpassCommandPool};
+pub use self::pool::CommandPool;
 pub use self::pso::{DescriptorPool};
 pub use self::queue::{
-    CommandQueue, QueueFamily, QueueType, RawCommandQueue, RawSubmission, Submission,
-    General, Graphics, Compute, Transfer,
+    CommandQueue, QueueGroup, QueueFamily, QueueType, Submission,
+    Capability, General, Graphics, Compute, Transfer,
 };
 pub use self::window::{
-    Backbuffer, Frame, FrameSync, Surface, SurfaceCapabilities, Swapchain, SwapchainConfig};
+    Backbuffer, Frame, FrameSync, Surface, SurfaceCapabilities, Swapchain, SwapchainConfig,
+};
 pub use draw_state::{state, target};
 
 pub mod adapter;
@@ -240,31 +240,31 @@ pub trait Instance {
     /// Associated backend type of this instance.
     type Backend: Backend;
     /// Enumerate all available adapters.
-    fn enumerate_adapters(&self) -> Vec<<Self::Backend as Backend>::Adapter>;
+    fn enumerate_adapters(&self) -> Vec<Adapter<Self::Backend>>;
 }
 
 /// Different types of a specific API.
 #[allow(missing_docs)]
 pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     //type Instance:          Instance<Self>;
-    type Adapter:             Adapter<Self>;
+    type PhysicalDevice:      PhysicalDevice<Self>;
     type Device:              Device<Self>;
 
     type Surface:             Surface<Self>;
     type Swapchain:           Swapchain<Self>;
 
-    type CommandQueue:        RawCommandQueue<Self>;
-    type CommandBuffer:       RawCommandBuffer<Self>;
-    type SubpassCommandBuffer;
     type QueueFamily:         QueueFamily;
+    type CommandQueue:        queue::RawCommandQueue<Self>;
+    type CommandBuffer:       command::RawCommandBuffer<Self>;
+    type SubpassCommandBuffer;
 
     type ShaderModule:        Debug + Any + Send + Sync;
     type RenderPass:          Debug + Any + Send + Sync;
     type Framebuffer:         Debug + Any + Send + Sync;
 
     type Memory:              Debug + Any;
-    type CommandPool:         RawCommandPool<Self>;
-    type SubpassCommandPool:  SubpassCommandPool<Self>;
+    type CommandPool:         pool::RawCommandPool<Self>;
+    type SubpassCommandPool:  pool::SubpassCommandPool<Self>;
 
     type UnboundBuffer:       Debug + Any + Send + Sync;
     type Buffer:              Debug + Any + Send + Sync;
@@ -305,20 +305,16 @@ impl Error for SubmissionError {
 #[allow(missing_docs)]
 pub type SubmissionResult<T> = Result<T, SubmissionError>;
 
+
 /// Represents a handle to a physical device.
 ///
 /// This structure is typically created using an `Adapter`.
 pub struct Gpu<B: Backend> {
     /// Logical device.
     pub device: B::Device,
-    /// General command queues.
-    pub general_queues: Vec<CommandQueue<B, General>>,
-    /// Graphics command queues.
-    pub graphics_queues: Vec<CommandQueue<B, Graphics>>,
-    /// Compute command queues.
-    pub compute_queues: Vec<CommandQueue<B, Compute>>,
-    /// Transfer command queues.
-    pub transfer_queues: Vec<CommandQueue<B, Transfer>>,
+    /// Raw queue groups. Each element in this vector
+    /// matches the corresponding argument in `Adapter::open`.
+    pub queue_groups: Vec<queue::RawQueueGroup<B>>,
     /// Types of memory.
     ///
     /// Each memory type is associated with one heap of `memory_heaps`.

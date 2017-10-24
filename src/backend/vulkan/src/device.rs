@@ -1,16 +1,18 @@
 use ash::vk;
 use ash::version::DeviceV1_0;
-use core::{buffer, device as d, format, image, mapping, pass, pso};
-use core::{Features, Limits, MemoryType};
-use core::memory::Requirements;
+use hal::{buffer, device as d, format, image, mapping, pass, pso};
+use hal::{Features, Limits, MemoryType};
+use hal::memory::Requirements;
+use hal::pool::CommandPoolCreateFlags;
 use native as n;
 use smallvec::SmallVec;
 use std::{mem, ptr};
 use std::ffi::CString;
 use std::ops::Range;
 
-use {Backend as B, Device};
+use {Backend as B, Device, QueueFamily};
 use {conv, memory};
+use pool::RawCommandPool;
 
 
 #[derive(Debug)]
@@ -80,6 +82,42 @@ impl d::Device<B> for Device {
         } as *mut _;
 
         Ok(n::Memory { inner: memory, ptr })
+    }
+
+    fn create_command_pool(
+        &mut self, family: &QueueFamily, create_flags: CommandPoolCreateFlags
+    ) -> RawCommandPool {
+        let mut flags = vk::CommandPoolCreateFlags::empty();
+        if create_flags.contains(CommandPoolCreateFlags::TRANSIENT) {
+            flags |= vk::COMMAND_POOL_CREATE_TRANSIENT_BIT;
+        }
+        if create_flags.contains(CommandPoolCreateFlags::RESET_INDIVIDUAL) {
+            flags |= vk::COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        }
+
+        let info = vk::CommandPoolCreateInfo {
+            s_type: vk::StructureType::CommandPoolCreateInfo,
+            p_next: ptr::null(),
+            flags,
+            queue_family_index: family.index,
+        };
+
+        let command_pool_raw = unsafe {
+            self.raw.0
+                .create_command_pool(&info, None)
+        }.expect("Error on command pool creation"); // TODO: better error handling
+
+        RawCommandPool {
+            raw: command_pool_raw,
+            device: self.raw.clone(),
+        }
+    }
+
+    fn destroy_command_pool(&mut self, pool: RawCommandPool) {
+        unsafe {
+            self.raw.0
+                .destroy_command_pool(pool.raw, None)
+        };
     }
 
     fn create_render_pass(&mut self, attachments: &[pass::Attachment],
@@ -213,7 +251,7 @@ impl d::Device<B> for Device {
         &mut self,
         descs: &[(pso::GraphicsShaderSet<'a, B>, &n::PipelineLayout, pass::Subpass<'a, B>, &pso::GraphicsPipelineDesc)],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
-        use core::state as s;
+        use hal::state as s;
 
         debug!("create_graphics_pipelines {:?}", descs);
         // Store pipeline parameters to avoid stack usage
@@ -624,7 +662,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_sampler(&mut self, sampler_info: image::SamplerInfo) -> n::Sampler {
-        use core::state::Comparison;
+        use hal::state::Comparison;
 
         let (min_filter, mag_filter, mipmap_mode, aniso) = conv::map_filter(sampler_info.filter);
         let info = vk::SamplerCreateInfo {
@@ -736,7 +774,7 @@ impl d::Device<B> for Device {
     fn create_image(&mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
          -> Result<UnboundImage, image::CreationError>
     {
-        use core::image::Kind::*;
+        use hal::image::Kind::*;
 
         let flags = match kind {
             Cube(_) => vk::IMAGE_CREATE_CUBE_COMPATIBLE_BIT,

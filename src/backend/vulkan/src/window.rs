@@ -6,13 +6,13 @@ use std::os::raw::c_void;
 use ash::vk;
 use ash::extensions as ext;
 
-use core;
+use hal;
 
 #[cfg(feature = "winit")]
 use winit;
 
 use {conv, native};
-use {VK_ENTRY, Adapter, Backend, Instance, QueueFamily, RawInstance};
+use {VK_ENTRY, Backend, Instance, PhysicalDevice, QueueFamily, RawInstance};
 
 
 pub struct Surface {
@@ -199,18 +199,18 @@ impl Instance {
     }
 }
 
-impl core::Surface<Backend> for Surface {
-    fn get_kind(&self) -> core::image::Kind {
-        use core::image::Size;
+impl hal::Surface<Backend> for Surface {
+    fn get_kind(&self) -> hal::image::Kind {
+        use hal::image::Size;
 
-        let aa = core::image::AaMode::Single;
-        core::image::Kind::D2(self.width as Size, self.height as Size, aa)
+        let aa = hal::image::AaMode::Single;
+        hal::image::Kind::D2(self.width as Size, self.height as Size, aa)
     }
 
-    fn surface_capabilities(&self, adapter: &Adapter) -> core::SurfaceCapabilities {
+    fn surface_capabilities(&self, physical_device: &PhysicalDevice) -> hal::SurfaceCapabilities {
         let caps =
             self.raw.functor.get_physical_device_surface_capabilities_khr(
-                adapter.handle(),
+                physical_device.handle,
                 self.raw.handle,
             )
             .expect("Unable to query surface capabilities");
@@ -221,7 +221,7 @@ impl core::Surface<Backend> for Surface {
         // `0xFFFFFFFF` indicates that the extent depends on the created swapchain.
         let current_extent =
             if caps.current_extent.width != 0xFFFFFFFF && caps.current_extent.height != 0xFFFFFFFF {
-                Some(core::window::Extent2d {
+                Some(hal::window::Extent2d {
                     width: caps.current_extent.width,
                     height: caps.current_extent.height,
                 })
@@ -229,17 +229,17 @@ impl core::Surface<Backend> for Surface {
                 None
             };
 
-        let min_extent = core::window::Extent2d {
+        let min_extent = hal::window::Extent2d {
             width: caps.min_image_extent.width,
             height: caps.min_image_extent.height,
         };
 
-        let max_extent = core::window::Extent2d {
+        let max_extent = hal::window::Extent2d {
             width: caps.max_image_extent.width,
             height: caps.max_image_extent.height,
         };
 
-        core::SurfaceCapabilities {
+        hal::SurfaceCapabilities {
             image_count: caps.min_image_count..max_images,
             current_extent,
             extents: min_extent..max_extent,
@@ -247,20 +247,20 @@ impl core::Surface<Backend> for Surface {
         }
     }
 
-    fn supports_queue(&self, queue_family: &QueueFamily) -> bool {
+    fn supports_queue_family(&self, queue_family: &QueueFamily) -> bool {
         self.raw.functor.get_physical_device_surface_support_khr(
-            queue_family.device(),
-            queue_family.family_index(), //Note: should be queue index?
+            queue_family.device,
+            queue_family.index,
             self.raw.handle,
         )
     }
 
     fn build_swapchain<C>(
         &mut self,
-        config: core::SwapchainConfig,
-        present_queue: &core::CommandQueue<Backend, C>,
-    ) -> (Swapchain, core::Backbuffer<Backend>) {
-        let functor = ext::Swapchain::new(&self.raw.instance.0, &present_queue.as_raw().device().0)
+        config: hal::SwapchainConfig,
+        present_queue: &hal::CommandQueue<Backend, C>,
+    ) -> (Swapchain, hal::Backbuffer<Backend>) {
+        let functor = ext::Swapchain::new(&self.raw.instance.0, &present_queue.as_raw().device.0)
             .expect("Unable to query swapchain function");
 
         // TODO: check for better ones if available
@@ -320,7 +320,7 @@ impl core::Surface<Backend> for Surface {
             })
             .collect();
 
-        (swapchain, core::Backbuffer::Images(images))
+        (swapchain, hal::Backbuffer::Images(images))
     }
 }
 
@@ -332,11 +332,11 @@ pub struct Swapchain {
 }
 
 
-impl core::Swapchain<Backend> for Swapchain {
-    fn acquire_frame(&mut self, sync: core::FrameSync<Backend>) -> core::Frame {
+impl hal::Swapchain<Backend> for Swapchain {
+    fn acquire_frame(&mut self, sync: hal::FrameSync<Backend>) -> hal::Frame {
         let (semaphore, fence) = match sync {
-            core::FrameSync::Semaphore(semaphore) => (semaphore.0, vk::Fence::null()),
-            core::FrameSync::Fence(fence) => (vk::Semaphore::null(), fence.0),
+            hal::FrameSync::Semaphore(semaphore) => (semaphore.0, vk::Fence::null()),
+            hal::FrameSync::Fence(fence) => (vk::Semaphore::null(), fence.0),
         };
 
         let index = unsafe {
@@ -345,12 +345,12 @@ impl core::Swapchain<Backend> for Swapchain {
         }.expect("Unable to acquire a swapchain image");
 
         self.frame_queue.push_back(index as usize);
-        core::Frame::new(index as usize)
+        hal::Frame::new(index as usize)
     }
 
     fn present<C>(
         &mut self,
-        present_queue: &mut core::CommandQueue<Backend, C>,
+        present_queue: &mut hal::CommandQueue<Backend, C>,
         wait_semaphores: &[&native::Semaphore],
     ) {
         let frame = self.frame_queue.pop_front().expect(
@@ -373,7 +373,7 @@ impl core::Swapchain<Backend> for Swapchain {
 
         assert_eq!(Ok(()), unsafe {
             self.functor
-                .queue_present_khr(*present_queue.as_raw().raw(), &info)
+                .queue_present_khr(*present_queue.as_raw().raw, &info)
         });
         // TODO: handle result and return code
     }

@@ -12,7 +12,6 @@ extern crate smallvec;
 pub extern crate glutin;
 
 use std::rc::Rc;
-use hal::{self as c, QueueType};
 
 pub use self::device::Device;
 pub use self::info::{Info, PlatformName, Version};
@@ -32,17 +31,17 @@ pub use window::glutin::{config_context, Headless, Surface, Swapchain};
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Backend {}
-impl c::Backend for Backend {
-    type Adapter = Adapter;
+impl hal::Backend for Backend {
+    type PhysicalDevice = PhysicalDevice;
     type Device = Device;
 
     type Surface = Surface;
     type Swapchain = Swapchain;
 
+    type QueueFamily = QueueFamily;
     type CommandQueue = queue::CommandQueue;
     type CommandBuffer = command::RawCommandBuffer;
     type SubpassCommandBuffer = command::SubpassCommandBuffer;
-    type QueueFamily = QueueFamily;
 
     type Memory = native::Memory;
     type CommandPool = pool::RawCommandPool;
@@ -100,8 +99,8 @@ impl Error {
 struct Share {
     context: gl::Gl,
     info: Info,
-    features: c::Features,
-    limits: c::Limits,
+    features: hal::Features,
+    limits: hal::Limits,
     private_caps: info::PrivateCaps,
 }
 
@@ -119,15 +118,11 @@ impl Share {
     }
 }
 
-pub struct Adapter {
-    share: Rc<Share>,
-    adapter_info: c::AdapterInfo,
-    queue_family: [(QueueFamily, QueueType); 1],
-}
+pub struct PhysicalDevice(Rc<Share>);
 
-impl Adapter {
-    fn new<F>(fn_proc: F) -> Self where
-        F: FnMut(&str) -> *const std::os::raw::c_void
+impl PhysicalDevice {
+    fn new_adapter<F>(fn_proc: F) -> hal::Adapter<Backend>
+    where F: FnMut(&str) -> *const std::os::raw::c_void
     {
         let gl = gl::Gl::load_with(fn_proc);
         // query information
@@ -140,21 +135,15 @@ impl Adapter {
         for extension in info.extensions.iter() {
             debug!("- {}", *extension);
         }
-
-        let adapter_info = c::AdapterInfo {
-            name: info.platform_name.renderer.into(),
-            vendor: 0, // TODO
-            device: 0, // TODO
-            software_rendering: false, // not always true ..
-        };
+        let name = info.platform_name.renderer.into();
 
         let queue_type = {
             use info::Requirement::{Core, Es};
             let compute_supported = info.is_supported(&[Core(4,3), Es(3, 1)]); // TODO: extension
             if compute_supported {
-                QueueType::General
+                hal::QueueType::General
             } else {
-                QueueType::Graphics
+                hal::QueueType::Graphics
             }
         };
 
@@ -170,19 +159,24 @@ impl Adapter {
             panic!("Error querying info: {:?}", err);
         }
 
-        Adapter {
-            share: Rc::new(share),
-            adapter_info: adapter_info,
-            queue_family: [(QueueFamily, queue_type)],
+        hal::Adapter {
+            info: hal::AdapterInfo {
+                name,
+                vendor: 0, // TODO
+                device: 0, // TODO
+                software_rendering: false, // not always true ..
+            },
+            physical_device: PhysicalDevice(Rc::new(share)),
+            queue_families: vec![QueueFamily(queue_type)],
         }
     }
 }
 
-impl c::Adapter<Backend> for Adapter {
-    fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)]) -> c::Gpu<Backend> {
+impl hal::PhysicalDevice<Backend> for PhysicalDevice {
+    fn open(self, families: Vec<(QueueFamily, usize)>) -> hal::Gpu<Backend> {
         // initialize permanent states
-        let gl = &self.share.context;
-        if self.share.features.srgb_color {
+        let gl = &self.0.context;
+        if self.0.features.srgb_color {
             unsafe {
                 gl.Enable(gl::FRAMEBUFFER_SRGB);
             }
@@ -190,100 +184,76 @@ impl c::Adapter<Backend> for Adapter {
         unsafe {
             gl.PixelStorei(gl::UNPACK_ALIGNMENT, 1);
 
-            if !self.share.info.version.is_embedded {
+            if !self.0.info.version.is_embedded {
                 gl.Enable(gl::PROGRAM_POINT_SIZE);
             }
         }
 
         // create main VAO and bind it
         let mut vao = 0;
-        if self.share.private_caps.vertex_array {
+        if self.0.private_caps.vertex_array {
             unsafe {
                 gl.GenVertexArrays(1, &mut vao);
                 gl.BindVertexArray(vao);
             }
         }
 
-        if let Err(err) = self.share.check() {
+        if let Err(err) = self.0.check() {
             panic!("Error opening adapter: {:?}", err);
         }
 
         // COHERENT flags require that the backend does flushing and invaldation
         // by itself. If we move towards persistent mapping we need to re-evaluate it.
-        let memory_types = if self.share.private_caps.map {
+        let memory_types = if self.0.private_caps.map {
             vec![
-                c::MemoryType {
+                hal::MemoryType {
                     id: 0,
-                    properties: c::memory::DEVICE_LOCAL,
+                    properties: hal::memory::DEVICE_LOCAL,
                     heap_index: 1,
                 },
-                c::MemoryType { // upload
+                hal::MemoryType { // upload
                     id: 1,
-                    properties: c::memory::CPU_VISIBLE | c::memory::COHERENT,
+                    properties: hal::memory::CPU_VISIBLE | hal::memory::COHERENT,
                     heap_index: 0,
                 },
-                c::MemoryType { // download
+                hal::MemoryType { // download
                     id: 2,
-                    properties: c::memory::CPU_VISIBLE | c::memory::COHERENT | c::memory::CPU_CACHED,
+                    properties: hal::memory::CPU_VISIBLE | hal::memory::COHERENT | hal::memory::CPU_CACHED,
                     heap_index: 0,
                 },
             ]
         } else {
             vec![
-                c::MemoryType {
+                hal::MemoryType {
                     id: 0,
-                    properties: c::memory::DEVICE_LOCAL,
+                    properties: hal::memory::DEVICE_LOCAL,
                     heap_index: 0,
                 },
             ]
         };
 
-        let mut gpu = c::Gpu {
-            device: Device::new(self.share.clone()),
-            general_queues: Vec::new(),
-            graphics_queues: Vec::new(),
-            compute_queues: Vec::new(),
-            transfer_queues: Vec::new(),
+        hal::Gpu {
+            device: Device::new(self.0.clone()),
+            queue_groups: families
+                .into_iter()
+                .map(|(proto_family, count)| {
+                    assert_eq!(count, 1);
+                    let mut family = hal::queue::RawQueueGroup::new(proto_family);
+                    let queue = queue::CommandQueue::new(&self.0, vao);
+                    family.add_queue(queue);
+                    family
+                })
+                .collect(),
             memory_types,
             memory_heaps: vec![!0, !0],
-        };
-
-        for &(_, queue_type, num_queues) in queue_descs {
-            if num_queues == 0 {
-                continue
-            }
-            assert_eq!(num_queues, 1);
-            let raw_queue = queue::CommandQueue::new(&self.share, vao);
-            match queue_type {
-                QueueType::General => unsafe {
-                    gpu.general_queues.push(c::CommandQueue::new(raw_queue));
-                },
-                QueueType::Graphics => unsafe {
-                    gpu.graphics_queues.push(c::CommandQueue::new(raw_queue));
-                },
-                QueueType::Compute => unsafe {
-                    gpu.compute_queues.push(c::CommandQueue::new(raw_queue));
-                },
-                QueueType::Transfer => unsafe {
-                    gpu.transfer_queues.push(c::CommandQueue::new(raw_queue));
-                },
-            }
         }
-
-        gpu
-    }
-
-    fn info(&self) -> &c::AdapterInfo {
-        &self.adapter_info
-    }
-
-    fn queue_families(&self) -> &[(QueueFamily, QueueType)] {
-        &self.queue_family
     }
 }
 
-pub struct QueueFamily;
+#[derive(Debug)]
+pub struct QueueFamily(hal::QueueType);
 
-impl c::QueueFamily for QueueFamily {
-    fn num_queues(&self) -> u32 { 1 }
+impl hal::QueueFamily for QueueFamily {
+    fn queue_type(&self) -> hal::QueueType { self.0 }
+    fn max_queues(&self) -> usize { 1 }
 }

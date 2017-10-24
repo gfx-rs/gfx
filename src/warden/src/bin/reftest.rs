@@ -62,13 +62,10 @@ impl Harness {
     }
 
     fn run<I: hal::Instance>(&self, instance: I) {
-        use hal::Adapter;
-
-        let adapters = instance.enumerate_adapters();
-        let adapter = &adapters[0];
-        println!("\t{:?}", adapter.info());
-
         for (scene_name, tests) in &self.suite {
+            let mut adapters = instance.enumerate_adapters();
+            let adapter = adapters.remove(0);
+            //println!("\t{:?}", adapter.info);
             println!("\tLoading scene '{}':", scene_name);
             let raw_scene = File::open(format!("{}/scenes/{}.ron", self.base_path, scene_name))
                 .map_err(de::Error::from)

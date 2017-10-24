@@ -1,25 +1,25 @@
 //! Dummy backend implementation to test the code for compile errors
 //! outside of the graphics development environment.
 
-extern crate gfx_hal as core;
+extern crate gfx_hal as hal;
 
 use std::ops::Range;
-use core::{buffer, command, device, format, image, target, mapping, memory, pass, pool, pso};
+use hal::{buffer, command, device, format, image, target, mapping, memory, pass, pool, pso, queue};
 
 /// Dummy backend.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Backend { }
-impl core::Backend for Backend {
-    type Adapter = Adapter;
+impl hal::Backend for Backend {
+    type PhysicalDevice = PhysicalDevice;
     type Device = Device;
 
     type Surface = Surface;
     type Swapchain = Swapchain;
 
-    type CommandQueue = CommandQueue;
+    type QueueFamily = QueueFamily;
+    type CommandQueue = RawCommandQueue;
     type CommandBuffer = RawCommandBuffer;
     type SubpassCommandBuffer = SubpassCommandBuffer;
-    type QueueFamily = QueueFamily;
 
     type Memory = ();
     type CommandPool = RawCommandPool;
@@ -48,26 +48,18 @@ impl core::Backend for Backend {
     type Semaphore = ();
 }
 
-/// Dummy adapter.
-pub struct Adapter;
-impl core::Adapter<Backend> for Adapter {
-    fn open(&self, _: &[(&QueueFamily, core::QueueType, u32)]) -> core::Gpu<Backend> {
-        unimplemented!()
-    }
-
-    fn info(&self) -> &core::AdapterInfo {
-        unimplemented!()
-    }
-
-    fn queue_families(&self) -> &[(QueueFamily, core::QueueType)] {
+/// Dummy physical device.
+pub struct PhysicalDevice;
+impl hal::PhysicalDevice<Backend> for PhysicalDevice {
+    fn open(self, _: Vec<(QueueFamily, usize)>) -> hal::Gpu<Backend> {
         unimplemented!()
     }
 }
 
 /// Dummy command queue doing nothing.
-pub struct CommandQueue;
-impl core::RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw(&mut self, _: core::RawSubmission<Backend>, _: Option<&()>) {
+pub struct RawCommandQueue;
+impl queue::RawCommandQueue<Backend> for RawCommandQueue {
+    unsafe fn submit_raw(&mut self, _: queue::RawSubmission<Backend>, _: Option<&()>) {
         unimplemented!()
     }
 }
@@ -75,16 +67,24 @@ impl core::RawCommandQueue<Backend> for CommandQueue {
 /// Dummy device doing nothing.
 #[derive(Clone)]
 pub struct Device;
-impl core::Device<Backend> for Device {
-    fn get_features(&self) -> &core::Features {
+impl hal::Device<Backend> for Device {
+    fn get_features(&self) -> &hal::Features {
         unimplemented!()
     }
 
-    fn get_limits(&self) -> &core::Limits {
+    fn get_limits(&self) -> &hal::Limits {
         unimplemented!()
     }
 
-    fn allocate_memory(&mut self, _: &core::MemoryType, _: u64) -> Result<(), device::OutOfMemory> {
+    fn create_command_pool(&mut self, _: &QueueFamily, _: pool::CommandPoolCreateFlags) -> RawCommandPool {
+        unimplemented!()
+    }
+
+    fn destroy_command_pool(&mut self, _: RawCommandPool) {
+        unimplemented!()
+    }
+
+    fn allocate_memory(&mut self, _: &hal::MemoryType, _: u64) -> Result<(), device::OutOfMemory> {
         unimplemented!()
     }
 
@@ -259,10 +259,13 @@ impl core::Device<Backend> for Device {
     }
 }
 
-/// Dummy queue family;
+#[derive(Debug)]
 pub struct QueueFamily;
-impl core::QueueFamily for QueueFamily {
-    fn num_queues(&self) -> u32 {
+impl queue::QueueFamily for QueueFamily {
+    fn queue_type(&self) -> hal::QueueType {
+        unimplemented!()
+    }
+    fn max_queues(&self) -> usize {
         unimplemented!()
     }
 }
@@ -272,12 +275,8 @@ pub struct SubpassCommandBuffer;
 
 /// Dummy raw command pool.
 pub struct RawCommandPool;
-impl core::RawCommandPool<Backend> for RawCommandPool {
+impl pool::RawCommandPool<Backend> for RawCommandPool {
     fn reset(&mut self) {
-        unimplemented!()
-    }
-
-    unsafe fn from_queue(_: &CommandQueue, _: pool::CommandPoolCreateFlags) -> Self {
         unimplemented!()
     }
 
@@ -292,14 +291,14 @@ impl core::RawCommandPool<Backend> for RawCommandPool {
 
 /// Dummy subpass command pool.
 pub struct SubpassCommandPool;
-impl core::SubpassCommandPool<Backend> for SubpassCommandPool {
+impl pool::SubpassCommandPool<Backend> for SubpassCommandPool {
 
 }
 
 /// Dummy command buffer, which ignores all the calls.
 #[derive(Clone)]
 pub struct RawCommandBuffer;
-impl core::RawCommandBuffer<Backend> for RawCommandBuffer {
+impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn begin(&mut self) {
         unimplemented!()
     }
@@ -371,7 +370,7 @@ impl core::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn set_viewports(&mut self, _: &[core::Viewport]) {
+    fn set_viewports(&mut self, _: &[hal::Viewport]) {
 
     }
 
@@ -479,17 +478,17 @@ impl core::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
     fn draw(&mut self,
-        _: Range<core::VertexCount>,
-        _: Range<core::InstanceCount>,
+        _: Range<hal::VertexCount>,
+        _: Range<hal::InstanceCount>,
     ) {
         unimplemented!()
     }
 
     fn draw_indexed(
         &mut self,
-        _: Range<core::IndexCount>,
-        _: core::VertexOffset,
-        _: Range<core::InstanceCount>,
+        _: Range<hal::IndexCount>,
+        _: hal::VertexOffset,
+        _: Range<hal::InstanceCount>,
     ) {
         unimplemented!()
     }
@@ -512,7 +511,7 @@ impl core::RawCommandBuffer<Backend> for RawCommandBuffer {
 // Dummy descriptor pool.
 #[derive(Debug)]
 pub struct DescriptorPool;
-impl core::DescriptorPool<Backend> for DescriptorPool {
+impl hal::DescriptorPool<Backend> for DescriptorPool {
     fn allocate_sets(&mut self, _: &[&()]) -> Vec<()> {
         unimplemented!()
     }
@@ -524,37 +523,37 @@ impl core::DescriptorPool<Backend> for DescriptorPool {
 
 /// Dummy surface.
 pub struct Surface;
-impl core::Surface<Backend> for Surface {
-    fn get_kind(&self) -> core::image::Kind {
+impl hal::Surface<Backend> for Surface {
+    fn get_kind(&self) -> hal::image::Kind {
         unimplemented!()
     }
 
-    fn surface_capabilities(&self, _: &Adapter) -> core::SurfaceCapabilities {
+    fn surface_capabilities(&self, _: &PhysicalDevice) -> hal::SurfaceCapabilities {
         unimplemented!()
     }
 
-    fn supports_queue(&self, _: &QueueFamily) -> bool {
+    fn supports_queue_family(&self, _: &QueueFamily) -> bool {
         unimplemented!()
     }
 
     fn build_swapchain<C>(&mut self,
-        _: core::SwapchainConfig,
-        _: &core::CommandQueue<Backend, C>
-    ) -> (Swapchain, core::Backbuffer<Backend>) {
+        _: hal::SwapchainConfig,
+        _: &hal::CommandQueue<Backend, C>
+    ) -> (Swapchain, hal::Backbuffer<Backend>) {
         unimplemented!()
     }
 }
 
 /// Dummy swapchain.
 pub struct Swapchain;
-impl core::Swapchain<Backend> for Swapchain {
-    fn acquire_frame(&mut self, _: core::FrameSync<Backend>) -> core::Frame {
+impl hal::Swapchain<Backend> for Swapchain {
+    fn acquire_frame(&mut self, _: hal::FrameSync<Backend>) -> hal::Frame {
         unimplemented!()
     }
 
     fn present<C>(
         &mut self,
-        _: &mut core::CommandQueue<Backend, C>,
+        _: &mut hal::CommandQueue<Backend, C>,
         _: &[&()],
     ) {
         unimplemented!()
@@ -562,9 +561,9 @@ impl core::Swapchain<Backend> for Swapchain {
 }
 
 pub struct Instance;
-impl core::Instance for Instance {
+impl hal::Instance for Instance {
     type Backend = Backend;
-    fn enumerate_adapters(&self) -> Vec<Adapter> {
-        Vec::new()
+    fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
+        unimplemented!()
     }
 }

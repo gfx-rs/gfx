@@ -5,10 +5,10 @@ use smallvec::SmallVec;
 use ash::vk;
 use ash::version::DeviceV1_0;
 
-use core::{command as com, memory, pso, target};
-use core::{IndexCount, InstanceCount, VertexCount, VertexOffset, Viewport};
-use core::buffer::IndexBufferView;
-use core::image::{
+use hal::{command as com, memory, pso, target};
+use hal::{IndexCount, InstanceCount, VertexCount, VertexOffset, Viewport};
+use hal::buffer::IndexBufferView;
+use hal::image::{
     ImageLayout, SubresourceRange,
     ASPECT_COLOR, ASPECT_DEPTH, ASPECT_STENCIL,
 };

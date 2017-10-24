@@ -1,4 +1,4 @@
-pub use core::memory::{Pod, cast_slice};
+pub use hal::memory::{Pod, cast_slice};
 
 use std::marker::PhantomData;
 use std::{ops, cmp, fmt, hash};

@@ -1,5 +1,6 @@
 use {Backend};
 use {native as n, command};
+use {QueueFamily};
 use conversions::*;
 
 use std::collections::HashMap;
@@ -8,11 +9,12 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::{cmp, mem, ptr, slice};
 
-use core::{self,
+use hal::{self,
         image, pass, format, mapping, memory, buffer, pso};
-use core::device::{WaitFor, BindError, OutOfMemory, FramebufferError, ShaderError, Extent};
-use core::pso::{DescriptorSetWrite, DescriptorType, DescriptorSetLayoutBinding, AttributeDesc};
-use core::pass::{Subpass};
+use hal::device::{WaitFor, BindError, OutOfMemory, FramebufferError, ShaderError, Extent};
+use hal::pool::CommandPoolCreateFlags;
+use hal::pso::{DescriptorSetWrite, DescriptorType, DescriptorSetLayoutBinding, AttributeDesc};
+use hal::pass::{Subpass};
 
 use cocoa::foundation::{NSRange, NSUInteger};
 use metal::*;
@@ -50,23 +52,6 @@ fn gen_query_error(err: SpirvErrorCode) -> ShaderError {
     ShaderError::CompilationFailed(msg)
 }
 
-pub struct Adapter {
-    pub(crate) device: MTLDevice,
-    pub(crate) adapter_info: core::AdapterInfo,
-    pub(crate) queue_families: [(n::QueueFamily, core::QueueType); 1],
-}
-
-impl Adapter {
-    fn supports_any(&self, features_sets: &[MTLFeatureSet]) -> bool {
-        features_sets.iter().cloned().any(|x| self.device.supports_feature_set(x))
-    }
-}
-
-impl Drop for Adapter {
-    fn drop(&mut self) {
-        unsafe { self.device.release(); }
-    }
-}
 
 #[derive(Clone, Copy)]
 struct PrivateCapabilities {
@@ -80,7 +65,8 @@ struct PrivateCapabilities {
 pub struct Device {
     device: MTLDevice,
     private_caps: PrivateCapabilities,
-    limits: core::Limits,
+    limits: hal::Limits,
+    queue: Arc<command::QueueInner>,
 }
 unsafe impl Send for Device {}
 
@@ -92,36 +78,42 @@ impl Drop for Device {
     }
 }
 
+//TODO: remove when auto-retain is in place
 impl Clone for Device {
     fn clone(&self) -> Device {
         unsafe { self.device.retain(); }
-        Device { device: self.device, private_caps: self.private_caps, limits: self.limits }
+        Device {
+            device: self.device,
+            private_caps: self.private_caps,
+            limits: self.limits,
+            queue: self.queue.clone(),
+        }
     }
 }
 
-impl core::Adapter<Backend> for Adapter {
-    fn open(&self, queue_descs: &[(&n::QueueFamily, core::QueueType, u32)]) -> core::Gpu<Backend> {
-        let mut general_queues = Vec::new();
-        let mut graphics_queues = Vec::new();
-        let mut compute_queues = Vec::new();
-        let mut transfer_queues = Vec::new();
+pub struct PhysicalDevice(pub(crate) MTLDevice);
 
-        for &(_, queue_type, count) in queue_descs {
-            assert_eq!(count, 1);
-            match queue_type {
-                core::QueueType::General => general_queues
-                    .push(unsafe { core::CommandQueue::new(command::CommandQueue::new(self.device)) }),
-                core::QueueType::Graphics => graphics_queues
-                    .push(unsafe { core::CommandQueue::new(command::CommandQueue::new(self.device)) }),
-                core::QueueType::Compute => compute_queues
-                    .push(unsafe { core::CommandQueue::new(command::CommandQueue::new(self.device)) }),
-                core::QueueType::Transfer => transfer_queues
-                    .push(unsafe { core::CommandQueue::new(command::CommandQueue::new(self.device)) }),
-            }
-        }
-        assert!(queue_descs.len() == 1, "Metal only supports one queue family");
+impl PhysicalDevice {
+    fn supports_any(&self, features_sets: &[MTLFeatureSet]) -> bool {
+        features_sets.iter().cloned().any(|x| self.0.supports_feature_set(x))
+    }
+}
 
-        let is_mac = self.device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1);
+impl Drop for PhysicalDevice {
+    fn drop(&mut self) {
+        unsafe { self.0.release(); }
+    }
+}
+
+impl hal::PhysicalDevice<Backend> for PhysicalDevice {
+    fn open(self, mut families: Vec<(QueueFamily, usize)>) -> hal::Gpu<Backend> {
+        assert_eq!(families.len(), 1);
+        let mut queue_group = hal::queue::RawQueueGroup::new(families.remove(0).0);
+        let queue_raw = command::CommandQueue::new(self.0);
+        let queue = queue_raw.0.clone();
+        queue_group.add_queue(queue_raw);
+
+        let is_mac = self.0.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1);
 
         let private_caps = PrivateCapabilities {
             resource_heaps: self.supports_any(RESOURCE_HEAP_SUPPORT),
@@ -131,11 +123,11 @@ impl core::Adapter<Backend> for Adapter {
             max_samplers_per_stage: 31,
         };
 
-        unsafe { self.device.retain(); }
+        unsafe { self.0.retain(); }
         let device = Device {
-            device: self.device,
+            device: self.0,
             private_caps,
-            limits: core::Limits {
+            limits: hal::Limits {
                 max_texture_size: 4096, // TODO: feature set
                 max_patch_size: 0, // No tesselation
                 max_viewports: 1,
@@ -147,25 +139,26 @@ impl core::Adapter<Backend> for Adapter {
                 max_compute_group_count: [0; 3], // TODO
                 max_compute_group_size: [0; 3], // TODO
             },
+            queue,
         };
 
         let memory_types = vec![
-            core::MemoryType {
+            hal::MemoryType {
                 id: 0,
                 properties: memory::CPU_VISIBLE | memory::CPU_CACHED,
                 heap_index: 0,
             },
-            core::MemoryType {
+            hal::MemoryType {
                 id: 1,
                 properties: memory::CPU_VISIBLE | memory::CPU_CACHED,
                 heap_index: 0,
             },
-            core::MemoryType {
+            hal::MemoryType {
                 id: 2,
                 properties: memory::CPU_VISIBLE | memory::COHERENT | memory::CPU_CACHED,
                 heap_index: 0,
             },
-            core::MemoryType {
+            hal::MemoryType {
                 id: 3,
                 properties: memory::DEVICE_LOCAL,
                 heap_index: 1,
@@ -173,23 +166,12 @@ impl core::Adapter<Backend> for Adapter {
         ];
         let memory_heaps = vec![!0, !0]; //TODO
 
-        core::Gpu {
+        hal::Gpu {
             device,
-            general_queues,
-            graphics_queues,
-            compute_queues,
-            transfer_queues,
+            queue_groups: vec![queue_group],
             memory_types,
             memory_heaps,
         }
-    }
-
-    fn info(&self) -> &core::AdapterInfo {
-        &self.adapter_info
-    }
-
-    fn queue_families(&self) -> &[(n::QueueFamily, core::QueueType)] {
-        &self.queue_families
     }
 }
 
@@ -313,11 +295,11 @@ impl Device {
         // FIXME: lots missing
 
         let (primitive_class, primitive_type) = match pipeline_desc.input_assembler.primitive {
-            core::Primitive::PointList => (MTLPrimitiveTopologyClass::Point, MTLPrimitiveType::Point),
-            core::Primitive::LineList => (MTLPrimitiveTopologyClass::Line, MTLPrimitiveType::Line),
-            core::Primitive::LineStrip => (MTLPrimitiveTopologyClass::Line, MTLPrimitiveType::LineStrip),
-            core::Primitive::TriangleList => (MTLPrimitiveTopologyClass::Triangle, MTLPrimitiveType::Triangle),
-            core::Primitive::TriangleStrip => (MTLPrimitiveTopologyClass::Triangle, MTLPrimitiveType::TriangleStrip),
+            hal::Primitive::PointList => (MTLPrimitiveTopologyClass::Point, MTLPrimitiveType::Point),
+            hal::Primitive::LineList => (MTLPrimitiveTopologyClass::Line, MTLPrimitiveType::Line),
+            hal::Primitive::LineStrip => (MTLPrimitiveTopologyClass::Line, MTLPrimitiveType::LineStrip),
+            hal::Primitive::TriangleList => (MTLPrimitiveTopologyClass::Triangle, MTLPrimitiveType::Triangle),
+            hal::Primitive::TriangleStrip => (MTLPrimitiveTopologyClass::Triangle, MTLPrimitiveType::TriangleStrip),
             _ => (MTLPrimitiveTopologyClass::Unspecified, MTLPrimitiveType::Point) //TODO: double-check
         };
         pipeline.set_input_primitive_topology(primitive_class);
@@ -457,13 +439,30 @@ impl Device {
     }
 }
 
-impl core::Device<Backend> for Device {
-    fn get_features(&self) -> &core::Features {
+impl hal::Device<Backend> for Device {
+    fn get_features(&self) -> &hal::Features {
         unimplemented!()
     }
 
-    fn get_limits(&self) -> &core::Limits {
+    fn get_limits(&self) -> &hal::Limits {
         &self.limits
+    }
+
+    fn create_command_pool(
+        &mut self, _family: &QueueFamily, flags: CommandPoolCreateFlags
+    ) -> command::CommandPool {
+        command::CommandPool {
+            queue: self.queue.clone(),
+            managed: if flags.contains(CommandPoolCreateFlags::RESET_INDIVIDUAL) {
+                None
+            } else {
+                Some(Vec::new())
+            },
+        }
+    }
+
+    fn destroy_command_pool(&mut self, _pool: command::CommandPool) {
+        //TODO?
     }
 
     fn create_render_pass(
@@ -505,7 +504,7 @@ impl core::Device<Backend> for Device {
     }
 
     fn create_pipeline_layout(&mut self, set_layouts: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
-        use core::pso::{STAGE_VERTEX, STAGE_FRAGMENT};
+        use hal::pso::{STAGE_VERTEX, STAGE_FRAGMENT};
 
         struct Counters {
             buffers: usize,
@@ -758,7 +757,7 @@ impl core::Device<Backend> for Device {
     }
 
     fn update_descriptor_sets(&mut self, writes: &[DescriptorSetWrite<Backend>]) {
-        use core::pso::DescriptorWrite::*;
+        use hal::pso::DescriptorWrite::*;
 
         let mut mtl_samplers = Vec::new();
         let mut mtl_textures = Vec::new();
@@ -873,7 +872,7 @@ impl core::Device<Backend> for Device {
         unsafe { n::dispatch_release(semaphore.0) }
     }
 
-    fn allocate_memory(&mut self, memory_type: &core::MemoryType, size: u64) -> Result<n::Memory, OutOfMemory> {
+    fn allocate_memory(&mut self, memory_type: &hal::MemoryType, size: u64) -> Result<n::Memory, OutOfMemory> {
         let (storage, cache) = map_memory_properties_to_storage_and_cache(memory_type.properties);
 
         // Heaps cannot be used for CPU coherent resources

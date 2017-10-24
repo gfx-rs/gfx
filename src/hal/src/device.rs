@@ -7,6 +7,8 @@ use std::{fmt, mem, slice};
 use std::error::Error;
 use std::ops::Range;
 use {buffer, format, image, mapping, pass, pso};
+use pool::{CommandPool, CommandPoolCreateFlags};
+use queue::QueueGroup;
 use {Backend, Features, Limits, MemoryType};
 use memory::Requirements;
 
@@ -118,10 +120,32 @@ pub trait Device<B: Backend>: Clone {
     /// Returns the limits of this `Device`.
     fn get_limits(&self) -> &Limits;
 
-    /// Allocate a memory segment of a specified type.
+    /// Allocates a memory segment of a specified type.
     ///
     /// There is only a limited amount of allocations allowed depending on the implementation!
     fn allocate_memory(&mut self, &MemoryType, size: u64) -> Result<B::Memory, OutOfMemory>;
+
+    ///
+    fn free_memory(&mut self, B::Memory);
+
+    /// Creates a new command pool for a given queue family.
+    ///
+    /// *Note*: the family has to be associated by one as the `Gpu::queue_groups`.
+    fn create_command_pool(&mut self, &B::QueueFamily, CommandPoolCreateFlags) -> B::CommandPool;
+
+    /// Creates a strongly typed command pool wrapper.
+    fn create_command_pool_typed<C>(
+        &mut self,
+        group: &QueueGroup<B, C>,
+        flags: CommandPoolCreateFlags,
+        max_buffers: usize,
+    ) -> CommandPool<B, C> {
+        let raw = self.create_command_pool(&group.family, flags);
+        CommandPool::new(raw, max_buffers)
+    }
+
+    /// Destroys a command pool.
+    fn destroy_command_pool(&mut self, B::CommandPool);
 
     ///
     fn create_render_pass(
@@ -310,6 +334,9 @@ pub trait Device<B: Backend>: Clone {
     fn create_semaphore(&mut self) -> B::Semaphore;
 
     ///
+    fn destroy_semaphore(&mut self, B::Semaphore);
+
+    ///
     fn create_fence(&mut self, signaled: bool) -> B::Fence;
 
     ///
@@ -320,7 +347,7 @@ pub trait Device<B: Backend>: Clone {
     fn wait_for_fences(&mut self, &[&B::Fence], WaitFor, timeout_ms: u32) -> bool;
 
     ///
-    fn free_memory(&mut self, B::Memory);
+    fn destroy_fence(&mut self, B::Fence);
 
     ///
     fn destroy_shader_module(&mut self, B::ShaderModule);
@@ -376,10 +403,4 @@ pub trait Device<B: Backend>: Clone {
 
     ///
     fn destroy_descriptor_set_layout(&mut self, B::DescriptorSetLayout);
-
-    ///
-    fn destroy_fence(&mut self, B::Fence);
-
-    ///
-    fn destroy_semaphore(&mut self, B::Semaphore);
 }

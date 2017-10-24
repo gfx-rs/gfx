@@ -4,7 +4,7 @@
 )]
 
 extern crate env_logger;
-extern crate gfx_hal as core;
+extern crate gfx_hal as hal;
 #[cfg(feature = "dx12")]
 extern crate gfx_backend_dx12 as back;
 #[cfg(feature = "vulkan")]
@@ -17,16 +17,16 @@ extern crate gfx_backend_gl as back;
 extern crate winit;
 extern crate image;
 
-use core::{buffer, command, device as d, image as i, memory as m, pass, pso, pool, state};
-use core::{Adapter, Device, Instance};
-use core::{
-    DescriptorPool, Gpu, FrameSync, Primitive, QueueType,
-    Backbuffer, Surface, Swapchain, SwapchainConfig,
+use hal::{buffer, command, device as d, image as i, memory as m, pass, pso, pool, state};
+use hal::{Device, Instance, QueueFamily, Surface, Swapchain};
+use hal::{
+    DescriptorPool, Gpu, FrameSync, Primitive,
+    Backbuffer, SwapchainConfig,
 };
-use core::format::{Formatted, Srgba8 as ColorFormat, Swizzle, Vec2};
-use core::pass::Subpass;
-use core::queue::Submission;
-use core::target::Rect;
+use hal::format::{Formatted, Srgba8 as ColorFormat, Swizzle, Vec2};
+use hal::pass::Subpass;
+use hal::queue::Submission;
+use hal::target::Rect;
 
 use std::io::Cursor;
 
@@ -88,34 +88,34 @@ fn main() {
 
     // instantiate backend
     #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
-    let (_instance, adapters, mut surface) = {
+    let (_instance, mut adapters, mut surface) = {
         let instance = back::Instance::create("gfx-rs quad", 1);
         let surface = instance.create_surface(&window);
         let adapters = instance.enumerate_adapters();
         (instance, adapters, surface)
     };
     #[cfg(feature = "gl")]
-    let (adapters, mut surface) = {
+    let (mut adapters, mut surface) = {
         let surface = back::Surface::from_window(window);
         let adapters = surface.enumerate_adapters();
         (adapters, surface)
     };
 
     for adapter in &adapters {
-        println!("{:?}", adapter.info());
+        println!("{:?}", adapter.info);
     }
-    let adapter = &adapters[0];
-
     // Build a new device and associated command queues
-    let Gpu { mut device, mut graphics_queues, memory_types, .. } =
-        adapter.open_with(|ref family, qtype| {
-            if qtype.supports_graphics() && surface.supports_queue(family) {
-                (1, QueueType::Graphics)
-            } else {
-                (0, QueueType::Transfer)
-            }
+    let Gpu { mut device, mut queue_groups, memory_types, .. } =
+        adapters.remove(0).open_with(|family| {
+            if family.supports_graphics() && surface.supports_queue_family(family) {
+                Some(1)
+            } else { None }
         });
-    let mut queue = graphics_queues.remove(0);
+
+    let mut queue_group = hal::QueueGroup::<_, hal::Graphics>::new(queue_groups.remove(0));
+    let mut command_pool = device.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty(), 16);
+    let mut queue = &mut queue_group.queues[0];
+
     let swap_config = SwapchainConfig::new()
         .with_color::<ColorFormat>();
     let (mut swap_chain, backbuffer) = surface.build_swapchain(swap_config, &queue);
@@ -400,7 +400,7 @@ fn main() {
     ]);
 
     // Rendering setup
-    let viewport = core::Viewport {
+    let viewport = hal::Viewport {
         x: 0, y: 0,
         w: pixel_width, h: pixel_height,
         near: 0.0, far: 1.0,
@@ -412,12 +412,11 @@ fn main() {
 
     let mut frame_semaphore = device.create_semaphore();
     let mut frame_fence = device.create_fence(false); // TODO: remove
-    let mut graphics_pool = queue.create_graphics_pool(16, pool::CommandPoolCreateFlags::empty());
 
     // copy buffer to texture
     {
         let submit = {
-            let mut cmd_buffer = graphics_pool.acquire_command_buffer();
+            let mut cmd_buffer = command_pool.acquire_command_buffer();
 
             let image_barrier = m::Barrier::Image {
                 states: (i::Access::empty(), i::ImageLayout::Undefined) ..
@@ -480,12 +479,12 @@ fn main() {
         });
 
         device.reset_fences(&[&frame_fence]);
-        graphics_pool.reset();
+        command_pool.reset();
         let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&mut frame_semaphore));
 
         // Rendering
         let submit = {
-            let mut cmd_buffer = graphics_pool.acquire_command_buffer();
+            let mut cmd_buffer = command_pool.acquire_command_buffer();
 
             cmd_buffer.set_viewports(&[viewport]);
             cmd_buffer.set_scissors(&[scissor]);
@@ -519,6 +518,7 @@ fn main() {
     }
 
     // cleanup!
+    device.destroy_command_pool(command_pool.downgrade());
     device.destroy_descriptor_pool(desc_pool);
     device.destroy_descriptor_set_layout(set_layout);
 

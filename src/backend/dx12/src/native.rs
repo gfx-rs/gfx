@@ -1,8 +1,8 @@
-use core::{self, image, pass, pso, MemoryType};
-use free_list;
 use winapi::{self, UINT};
 use wio::com::ComPtr;
-use Backend;
+
+use hal::{image, pass, pso, MemoryType, DescriptorPool as HalDescriptorPool};
+use {free_list, Backend};
 
 use std::collections::BTreeMap;
 use std::ops::Range;
@@ -313,7 +313,7 @@ pub struct DescriptorPool {
 unsafe impl Send for DescriptorPool {}
 unsafe impl Sync for DescriptorPool {}
 
-impl core::DescriptorPool<Backend> for DescriptorPool {
+impl HalDescriptorPool<Backend> for DescriptorPool {
     fn allocate_sets(&mut self, layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
         layouts
             .iter()

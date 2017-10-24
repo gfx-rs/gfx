@@ -1,13 +1,14 @@
-
-use core::{self, image};
-use dxguid;
 use std::collections::VecDeque;
 use std::{mem, ptr};
+
+use dxguid;
 #[cfg(feature = "winit")]
 use winit;
 use winapi;
 use wio::com::ComPtr;
-use {conv, native as n, Adapter, Backend, Device, Instance, QueueFamily};
+
+use hal::{self, image as i};
+use {conv, native as n, Backend, Device, Instance, PhysicalDevice, QueueFamily};
 
 use std::os::raw::c_void;
 
@@ -45,22 +46,20 @@ pub struct Surface {
     height: u32,
 }
 
-impl core::Surface<Backend> for Surface {
-    fn supports_queue(&self, _queue_family: &QueueFamily) -> bool { true }
-    fn get_kind(&self) -> core::image::Kind {
-        use core::image::Size;
-
-        let aa = core::image::AaMode::Single;
-        core::image::Kind::D2(self.width as Size, self.height as Size, aa)
+impl hal::Surface<Backend> for Surface {
+    fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool { true }
+    fn get_kind(&self) -> i::Kind {
+        let aa = i::AaMode::Single;
+        i::Kind::D2(self.width as i::Size, self.height as i::Size, aa)
     }
 
-    fn surface_capabilities(&self, _: &Adapter) -> core::SurfaceCapabilities {
-        let extent = core::window::Extent2d {
+    fn surface_capabilities(&self, _: &PhysicalDevice) -> hal::SurfaceCapabilities {
+        let extent = hal::window::Extent2d {
             width: self.width,
             height: self.height,
         };
 
-        core::SurfaceCapabilities {
+        hal::SurfaceCapabilities {
             image_count: 2..16, // we currently use a flip effect which supports 2..16 buffers
             current_extent: Some(extent),
             extents: extent..extent,
@@ -70,17 +69,17 @@ impl core::Surface<Backend> for Surface {
 
     fn build_swapchain<C>(
         &mut self,
-        config: core::SwapchainConfig,
-        present_queue: &core::CommandQueue<Backend, C>,
-    ) -> (Swapchain, core::Backbuffer<Backend>) {
+        config: hal::SwapchainConfig,
+        present_queue: &hal::CommandQueue<Backend, C>,
+    ) -> (Swapchain, hal::Backbuffer<Backend>) {
         let mut swap_chain: *mut winapi::IDXGISwapChain1 = ptr::null_mut();
         let buffer_count = 2; // TODO: user-defined value
         let mut format = config.color_format;
-        if format.1 == core::format::ChannelType::Srgb {
+        if format.1 == hal::format::ChannelType::Srgb {
             // Apparently, swap chain doesn't like sRGB, but the RTV can still have some:
             // https://www.gamedev.net/forums/topic/670546-d3d12srgb-buffer-format-for-swap-chain/
             // [15716] DXGI ERROR: IDXGIFactory::CreateSwapchain: Flip model swapchains (DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL and DXGI_SWAP_EFFECT_FLIP_DISCARD) only support the following Formats: (DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R10G10B10A2_UNORM), assuming the underlying Device does as well.
-            format.1 = core::format::ChannelType::Unorm;
+            format.1 = hal::format::ChannelType::Unorm;
         }
         let format = conv::map_format(format).unwrap(); // TODO: error handling
         let mut device = present_queue.as_raw().device.clone();
@@ -147,11 +146,11 @@ impl core::Surface<Backend> for Surface {
                 device.CreateRenderTargetView(resource, &rtv_desc, rtv_handle);
             }
 
-            let kind = image::Kind::D2(self.width as u16, self.height as u16, 1.into());
+            let kind = i::Kind::D2(self.width as u16, self.height as u16, 1.into());
             n::Image {
                 resource,
                 kind,
-                usage: image::COLOR_ATTACHMENT,
+                usage: i::COLOR_ATTACHMENT,
                 dxgi_format: format,
                 bits_per_texel: config.color_format.0.describe_bits().total,
                 num_levels: 1,
@@ -169,7 +168,7 @@ impl core::Surface<Backend> for Surface {
             rtv_heap,
         };
 
-        (swapchain, core::Backbuffer::Images(images))
+        (swapchain, hal::Backbuffer::Images(images))
     }
 }
 
@@ -181,8 +180,8 @@ pub struct Swapchain {
     rtv_heap: n::DescriptorHeap,
 }
 
-impl core::Swapchain<Backend> for Swapchain {
-    fn acquire_frame(&mut self, _sync: core::FrameSync<Backend>) -> core::Frame {
+impl hal::Swapchain<Backend> for Swapchain {
+    fn acquire_frame(&mut self, _sync: hal::FrameSync<Backend>) -> hal::Frame {
         // TODO: sync
 
         if false {
@@ -196,12 +195,12 @@ impl core::Swapchain<Backend> for Swapchain {
 
         // TODO:
         let index = unsafe { self.inner.GetCurrentBackBufferIndex() };
-        core::Frame::new(index as usize)
+        hal::Frame::new(index as usize)
     }
 
     fn present<C>(
         &mut self,
-        _: &mut core::CommandQueue<Backend, C>,
+        _: &mut hal::CommandQueue<Backend, C>,
         _wait_semaphores: &[&n::Semaphore],
     ) {
         // TODO: wait semaphores

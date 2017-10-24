@@ -8,7 +8,6 @@ extern crate serde;
 use std::fs::File;
 use std::io::Read;
 
-use hal::Instance;
 use ron::de::Deserializer;
 use serde::de::Deserialize;
 
@@ -31,6 +30,7 @@ fn main() {
 
     #[cfg(feature = "vulkan")]
     {
+        use hal::Instance;
         let instance = back::Instance::create("warden", 1);
         let adapters = instance.enumerate_adapters();
         let mut scene = warden::gpu::Scene::<back::Backend>::new(&adapters[0], &raw_scene, "");
@@ -38,4 +38,6 @@ fn main() {
         let guard = scene.fetch_image("im-color");
         println!("row: {:?}", guard.row(0));
     }
+
+    let _ = raw_scene;
 }

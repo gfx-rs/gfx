@@ -3,13 +3,13 @@
 use std::mem;
 use std::marker::PhantomData;
 
-use {core, handle};
-use core::image::{self, ImageLayout};
-use core::pass::{AttachmentOps, AttachmentLoadOp, AttachmentStoreOp};
+use {hal, handle};
+use hal::image::{self, ImageLayout};
+use hal::pass::{AttachmentOps, AttachmentLoadOp, AttachmentStoreOp};
 use format::{self, Format};
 use {Backend, Device, Primitive, Supports, Transfer, Graphics, Encoder};
 
-pub use core::pso::{Rasterizer, CreationError, InstanceRate};
+pub use hal::pso::{Rasterizer, CreationError, InstanceRate};
 
 #[derive(Debug)]
 pub struct RawDescriptorSet<B: Backend> {
@@ -25,24 +25,24 @@ pub trait Descriptors<B: Backend>: Sized {
     type Data: Sized;
 
     fn from_raw(handle::raw::DescriptorSetLayout<B>, RawDescriptorSet<B>) -> (Self, Self::Data);
-    fn layout_bindings() -> Vec<core::pso::DescriptorSetLayoutBinding>;
+    fn layout_bindings() -> Vec<hal::pso::DescriptorSetLayoutBinding>;
     fn layout(&self) -> &B::DescriptorSetLayout;
     fn set(&self) -> &B::DescriptorSet;
 }
 
 pub trait BindDesc {
-    const TYPE: core::pso::DescriptorType;
+    const TYPE: hal::pso::DescriptorType;
     const COUNT: usize;
 }
 
 pub trait Bind<B: Backend>: BindDesc {
     type Handle: 'static + Clone;
 
-    fn write<'a>(&[&'a Self::Handle]) -> core::pso::DescriptorWrite<'a, B>;
+    fn write<'a>(&[&'a Self::Handle]) -> hal::pso::DescriptorWrite<'a, B>;
     fn require<'a>(
         &'a Self::Handle,
-        &mut Vec<(&'a handle::raw::Buffer<B>, core::buffer::State)>,
-        &mut Vec<(&'a handle::raw::Image<B>, image::Subresource, core::image::State)>,
+        &mut Vec<(&'a handle::raw::Buffer<B>, hal::buffer::State)>,
+        &mut Vec<(&'a handle::raw::Image<B>, image::Subresource, hal::image::State)>,
         &mut handle::Bag<B>,
     );
 }
@@ -51,7 +51,7 @@ macro_rules! define_descriptors {
     ([$( $array_len:expr ),*] $( $name:ident, )*) => {
         $(
             impl<T: BindDesc> BindDesc for [T; $array_len] {
-                const TYPE: core::pso::DescriptorType = T::TYPE;
+                const TYPE: hal::pso::DescriptorType = T::TYPE;
                 const COUNT: usize = $array_len * T::COUNT;
             }
 
@@ -60,14 +60,14 @@ macro_rules! define_descriptors {
             {
                 type Handle = T::Handle;
 
-                fn write<'a>(handles: &[&'a Self::Handle]) -> core::pso::DescriptorWrite<'a, B> {
+                fn write<'a>(handles: &[&'a Self::Handle]) -> hal::pso::DescriptorWrite<'a, B> {
                     T::write(handles)
                 }
 
                 fn require<'a>(
                     handle: &'a Self::Handle,
-                    buffers: &mut Vec<(&'a handle::raw::Buffer<B>, core::buffer::State)>,
-                    images: &mut Vec<(&'a handle::raw::Image<B>, image::Subresource, core::image::State)>,
+                    buffers: &mut Vec<(&'a handle::raw::Buffer<B>, hal::buffer::State)>,
+                    images: &mut Vec<(&'a handle::raw::Image<B>, image::Subresource, hal::image::State)>,
                     others: &mut handle::Bag<B>
                 ) {
                     T::require(handle, buffers, images, others)
@@ -78,7 +78,7 @@ macro_rules! define_descriptors {
             pub struct $name;
 
             impl BindDesc for $name {
-                const TYPE: core::pso::DescriptorType = core::pso::DescriptorType::$name;
+                const TYPE: hal::pso::DescriptorType = hal::pso::DescriptorType::$name;
                 const COUNT: usize = 1;
             }
         )*
@@ -95,8 +95,8 @@ define_descriptors! {
 impl<B: Backend> Bind<B> for SampledImage {
     type Handle = handle::raw::ImageView<B>;
 
-    fn write<'a>(views: &[&'a Self::Handle]) -> core::pso::DescriptorWrite<'a, B> {
-        core::pso::DescriptorWrite::SampledImage(views.iter()
+    fn write<'a>(views: &[&'a Self::Handle]) -> hal::pso::DescriptorWrite<'a, B> {
+        hal::pso::DescriptorWrite::SampledImage(views.iter()
             .map(|&view| {
                 let layout = ImageLayout::ShaderReadOnlyOptimal;
                 (view.resource(), layout)
@@ -105,8 +105,8 @@ impl<B: Backend> Bind<B> for SampledImage {
 
     fn require<'a>(
         view: &'a Self::Handle,
-        _: &mut Vec<(&'a handle::raw::Buffer<B>, core::buffer::State)>,
-        images: &mut Vec<(&'a handle::raw::Image<B>, image::Subresource, core::image::State)>,
+        _: &mut Vec<(&'a handle::raw::Buffer<B>, hal::buffer::State)>,
+        images: &mut Vec<(&'a handle::raw::Image<B>, image::Subresource, hal::image::State)>,
         _: &mut handle::Bag<B>,
     ) {
         let img = view.info();
@@ -124,16 +124,16 @@ impl<B: Backend> Bind<B> for SampledImage {
 impl<B: Backend> Bind<B> for Sampler {
     type Handle = handle::raw::Sampler<B>;
 
-    fn write<'a>(samplers: &[&'a Self::Handle]) -> core::pso::DescriptorWrite<'a, B> {
-        core::pso::DescriptorWrite::Sampler(samplers.iter()
+    fn write<'a>(samplers: &[&'a Self::Handle]) -> hal::pso::DescriptorWrite<'a, B> {
+        hal::pso::DescriptorWrite::Sampler(samplers.iter()
             .map(|&sampler| sampler.resource())
             .collect())
     }
 
     fn require<'a>(
         sampler: &'a Self::Handle,
-        _: &mut Vec<(&'a handle::raw::Buffer<B>, core::buffer::State)>,
-        _: &mut Vec<(&'a handle::raw::Image<B>, image::Subresource, core::image::State)>,
+        _: &mut Vec<(&'a handle::raw::Buffer<B>, hal::buffer::State)>,
+        _: &mut Vec<(&'a handle::raw::Image<B>, image::Subresource, hal::image::State)>,
         others: &mut handle::Bag<B>,
     ) {
         others.add(sampler.clone());
@@ -148,7 +148,7 @@ pub struct DescriptorSetBindRef<'a, 'b, B: Backend, T: Bind<B>> {
 
 pub struct DescriptorSetsUpdate<'a, B: Backend> {
     device: &'a mut Device<B>,
-    writes: Vec<core::pso::DescriptorSetWrite<'a, 'a, B>>,
+    writes: Vec<hal::pso::DescriptorSetWrite<'a, 'a, B>>,
 }
 
 impl<'a, B: Backend> DescriptorSetsUpdate<'a, B> {
@@ -166,7 +166,7 @@ impl<'a, B: Backend> DescriptorSetsUpdate<'a, B> {
             *slot = Some(handle.clone());
         }
 
-        self.writes.push(core::pso::DescriptorSetWrite {
+        self.writes.push(hal::pso::DescriptorSetWrite {
             set: bind_ref.set,
             binding: bind_ref.binding,
             array_offset,
@@ -176,7 +176,7 @@ impl<'a, B: Backend> DescriptorSetsUpdate<'a, B> {
     }
 
     pub fn finish(self) {
-        use core::Device;
+        use hal::Device;
         self.device.mut_raw().update_descriptor_sets(&self.writes[..]);
     }
 }
@@ -187,7 +187,7 @@ pub trait GraphicsPipelineInit<B: Backend> {
     fn create(
         self,
         &mut Device<B>,
-        core::pso::GraphicsShaderSet<B>,
+        hal::pso::GraphicsShaderSet<B>,
         Primitive,
         Rasterizer
     ) -> Result<Self::Pipeline, CreationError>;
@@ -205,7 +205,7 @@ pub trait GraphicsPipelineData<B: Backend> {
         self,
         encoder: &'a mut Encoder<'b, B, C>,
         pipeline: &'a Self::Pipeline
-    ) -> core::command::RenderPassInlineEncoder<'a, B>
+    ) -> hal::command::RenderPassInlineEncoder<'a, B>
         where Self: 'a, 'b: 'a, C: Supports<Transfer> + Supports<Graphics>;
 }
 
@@ -225,17 +225,17 @@ pub trait Component<'a, B: Backend> {
 
     fn append_desc(
         Self::Init,
-        &mut core::pso::GraphicsPipelineDesc,
+        &mut hal::pso::GraphicsPipelineDesc,
     ) {}
 
     fn require<'b>(
         &'b Self::Data,
-        &mut Vec<(&'b handle::raw::Buffer<B>, core::buffer::State)>,
-        &mut Vec<(&'b handle::raw::Image<B>, image::Subresource, core::image::State)>,
+        &mut Vec<(&'b handle::raw::Buffer<B>, hal::buffer::State)>,
+        &mut Vec<(&'b handle::raw::Image<B>, image::Subresource, hal::image::State)>,
         &mut handle::Bag<B>,
     ) where 'a: 'b {}
 
-    fn vertex_buffer<'b>(&'b Self::Data) -> Option<(&'b B::Buffer, core::pso::BufferOffset)>
+    fn vertex_buffer<'b>(&'b Self::Data) -> Option<(&'b B::Buffer, hal::pso::BufferOffset)>
         where 'a: 'b
     {
         None
@@ -260,7 +260,7 @@ pub struct RenderTarget<F: format::RenderFormat>(PhantomData<F>);
 impl<'a, B, F> Component<'a, B> for RenderTarget<F>
     where B: Backend, F: 'a + format::RenderFormat
 {
-    type Init = core::pso::ColorInfo;
+    type Init = hal::pso::ColorInfo;
     type Data = &'a handle::ImageView<B, F>;
 
     fn attachment(_: &Self::Init) -> Option<Attachment> {
@@ -275,15 +275,15 @@ impl<'a, B, F> Component<'a, B> for RenderTarget<F>
 
     fn append_desc(
         init: Self::Init,
-        pipeline_desc: &mut core::pso::GraphicsPipelineDesc
+        pipeline_desc: &mut hal::pso::GraphicsPipelineDesc
     ) {
         pipeline_desc.blender.targets.push(init);
     }
 
     fn require<'b>(
         data: &'b Self::Data,
-        _: &mut Vec<(&'b handle::raw::Buffer<B>, core::buffer::State)>,
-        images: &mut Vec<(&'b handle::raw::Image<B>, image::Subresource, core::image::State)>,
+        _: &mut Vec<(&'b handle::raw::Buffer<B>, hal::buffer::State)>,
+        images: &mut Vec<(&'b handle::raw::Image<B>, image::Subresource, hal::image::State)>,
         _: &mut handle::Bag<B>,
     ) where 'a: 'b {
         let img = data.as_ref().info();
@@ -301,7 +301,7 @@ impl<'a, B, F> Component<'a, B> for RenderTarget<F>
 }
 
 pub trait Structure: Sized {
-    fn elements() -> Vec<core::pso::Element<Format>>;
+    fn elements() -> Vec<hal::pso::Element<Format>>;
 }
 
 /// Helper trait to support variable instance rate.
@@ -340,16 +340,16 @@ impl<'a, B, T, I> Component<'a, B> for VertexBuffer<T, I>
 
     fn append_desc(
         init: Self::Init,
-        pipeline_desc: &mut core::pso::GraphicsPipelineDesc
+        pipeline_desc: &mut hal::pso::GraphicsPipelineDesc
     ) {
         let binding = pipeline_desc.vertex_buffers.len() as u32;
-        pipeline_desc.vertex_buffers.push(core::pso::VertexBufferDesc {
+        pipeline_desc.vertex_buffers.push(hal::pso::VertexBufferDesc {
             stride: mem::size_of::<T>() as u32,
             rate: I::get_rate(&init),
         });
         let mut location = 0;
         for element in T::elements() {
-            pipeline_desc.attributes.push(core::pso::AttributeDesc {
+            pipeline_desc.attributes.push(hal::pso::AttributeDesc {
                 location,
                 binding,
                 element,
@@ -360,14 +360,14 @@ impl<'a, B, T, I> Component<'a, B> for VertexBuffer<T, I>
 
     fn require<'b>(
         data: &'b Self::Data,
-        buffers: &mut Vec<(&'b handle::raw::Buffer<B>, core::buffer::State)>,
-        _: &mut Vec<(&'b handle::raw::Image<B>, image::Subresource, core::image::State)>,
+        buffers: &mut Vec<(&'b handle::raw::Buffer<B>, hal::buffer::State)>,
+        _: &mut Vec<(&'b handle::raw::Image<B>, image::Subresource, hal::image::State)>,
         _: &mut handle::Bag<B>,
     ) where 'a: 'b {
-        buffers.push((data.as_ref(), core::buffer::VERTEX_BUFFER_READ));
+        buffers.push((data.as_ref(), hal::buffer::VERTEX_BUFFER_READ));
     }
 
-    fn vertex_buffer<'b>(data: &'b Self::Data) -> Option<(&'b B::Buffer, core::pso::BufferOffset)>
+    fn vertex_buffer<'b>(data: &'b Self::Data) -> Option<(&'b B::Buffer, hal::pso::BufferOffset)>
         where 'a: 'b
     {
         // TODO: offset

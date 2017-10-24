@@ -2,11 +2,11 @@
 //!
 //! See `Slice`-structure documentation for more information on this module.
 
-use core::{handle, buffer};
-use core::{Primitive, Backend, VertexCount};
-use core::command::InstanceParams;
-use core::device::Device;
-use core::memory::Bind;
+use hal::{handle, buffer};
+use hal::{Primitive, Backend, VertexCount};
+use hal::command::InstanceParams;
+use hal::device::Device;
+use hal::memory::Bind;
 use format::Format;
 use pso;
 
@@ -76,7 +76,7 @@ impl<B: Backend> Slice<B> {
 
     /// Calculates the number of primitives of the specified type in this `Slice`.
     pub fn get_prim_count(&self, prim: Primitive) -> u32 {
-        use core::Primitive as p;
+        use hal::Primitive as p;
         let nv = (self.end - self.start) as u32;
         match prim {
             p::PointList => nv,

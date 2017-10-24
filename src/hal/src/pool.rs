@@ -2,8 +2,6 @@
 
 use {Backend};
 use command::{CommandBuffer, RawCommandBuffer};
-use queue::CommandQueue;
-use queue::capability::Supports;
 use std::marker::PhantomData;
 
 bitflags!(
@@ -18,21 +16,12 @@ bitflags!(
     }
 );
 
-/// Indicates short-lived command buffers.
-/// Memory optimization hint for implementations.
-pub const TRANSIENT: CommandPoolCreateFlags = CommandPoolCreateFlags::TRANSIENT;
-/// Allow command buffers to be reset individually.
-pub const RESET_INDIVIDUAL: CommandPoolCreateFlags = CommandPoolCreateFlags::RESET_INDIVIDUAL;
-
 /// The allocated command buffers are associated with the creating command queue.
 pub trait RawCommandPool<B: Backend>: Send {
     /// Reset the command pool and the corresponding command buffers.
     ///
     /// # Synchronization: You may _not_ free the pool if a command buffer is still in use (pool memory still in use)
     fn reset(&mut self);
-
-    #[doc(hidden)]
-    unsafe fn from_queue(queue: &B::CommandQueue, flags: CommandPoolCreateFlags) -> Self;
 
     /// Allocate new command buffers from the pool.
     fn allocate(&mut self, num: usize) -> Vec<B::CommandBuffer>;
@@ -55,15 +44,7 @@ pub struct CommandPool<B: Backend, C> {
 }
 
 impl<B: Backend, C> CommandPool<B, C> {
-    /// Create a pool for a specific command queue
-    pub fn from_queue<D: Supports<C>>(
-        queue: &CommandQueue<B, D>,
-        capacity: usize,
-        flags: CommandPoolCreateFlags,
-    ) -> Self {
-        let raw = unsafe {
-            B::CommandPool::from_queue(queue.as_raw(), flags)
-        };
+    pub(crate) fn new(raw: B::CommandPool, capacity: usize) -> Self {
         let mut pool = CommandPool {
             buffers: Vec::new(),
             pool: raw,
@@ -106,12 +87,12 @@ impl<B: Backend, C> CommandPool<B, C> {
             CommandBuffer::new(buffer)
         }
     }
-}
 
-impl<B: Backend, C> Drop for CommandPool<B, C> {
-    fn drop(&mut self) {
+    /// Downgrade a typed command pool to untyped one, free up the allocated command buffers.
+    pub fn downgrade(mut self) -> B::CommandPool {
         let free_list = self.buffers.drain(..).collect::<Vec<_>>();
         unsafe { self.pool.free(free_list); }
+        self.pool
     }
 }
 

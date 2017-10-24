@@ -1,3 +1,5 @@
+#![allow(dead_code)] //TODO: remove
+
 use hal::{ColorSlot};
 use hal::state as s;
 use hal::state::{

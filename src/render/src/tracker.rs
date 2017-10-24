@@ -1,6 +1,6 @@
 //! Automatic resource mapping and handling
 
-use core::handle;
+use hal::handle;
 use Resources;
 
 /// TODO

@@ -1,8 +1,8 @@
 use std::sync::mpsc;
 use std::collections::HashMap;
 
-use core::{self, MemoryType, Device as CoreDevice};
-use core::memory::Requirements;
+use hal::{self, MemoryType, Device as Device_};
+use hal::memory::Requirements;
 use memory::{self, Allocator, Memory, ReleaseFn, Provider, Dependency};
 use {buffer, image};
 use {Backend, Device};
@@ -64,7 +64,7 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
     ) -> (B::Buffer, Memory) {
         let dependency = self.0.dependency();
         let inner: &mut InnerStackAllocator<B> = &mut self.0;
-        let requirements = core::buffer::complete_requirements::<B>(
+        let requirements = hal::buffer::complete_requirements::<B>(
             device.mut_raw(), &buffer, usage);
         let memory_type = device.find_usage_memory(inner.usage, requirements.type_mask)
             .expect("could not find suitable memory");

@@ -104,12 +104,12 @@ pub trait Surface<B: Backend> {
     /// ```no_run
     ///
     /// ```
-    fn supports_queue(&self, queue_family: &B::QueueFamily) -> bool;
+    fn supports_queue_family(&self, &B::QueueFamily) -> bool;
 
-    /// Query surface capabilities for this adapter.
+    /// Query surface capabilities for this physical device.
     ///
     /// Use this function for configuring your swapchain creation.
-    fn surface_capabilities(&self, adapter: &B::Adapter) -> SurfaceCapabilities;
+    fn surface_capabilities(&self, &B::PhysicalDevice) -> SurfaceCapabilities;
 
     /// Create a new swapchain from a surface and a queue.
     ///
@@ -139,7 +139,8 @@ pub trait Surface<B: Backend> {
     /// surface.build_swapchain(swapchain_config, &queue);
     /// # }
     /// ```
-    fn build_swapchain<C>(&mut self,
+    fn build_swapchain<C>(
+        &mut self,
         config: SwapchainConfig,
         present_queue: &CommandQueue<B, C>,
     ) -> (B::Swapchain, Backbuffer<B>);

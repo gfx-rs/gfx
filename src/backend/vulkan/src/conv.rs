@@ -1,14 +1,14 @@
 use ash::vk;
-use core::{buffer, format, image, pass, pso, state};
-use core::command::{ClearColor, ClearDepthStencil, ClearValue, Offset};
-use core::device::Extent;
-use core::{IndexType, Primitive};
+use hal::{buffer, format, image, pass, pso, state};
+use hal::command::{ClearColor, ClearDepthStencil, ClearValue, Offset};
+use hal::device::Extent;
+use hal::{IndexType, Primitive};
 use std::ops::Range;
 
 
 pub fn map_format(surface: format::SurfaceType, chan: format::ChannelType) -> Option<vk::Format> {
-    use core::format::SurfaceType::*;
-    use core::format::ChannelType::*;
+    use hal::format::SurfaceType::*;
+    use hal::format::ChannelType::*;
     Some(match surface {
         R4_G4 => match chan {
             Unorm => vk::Format::R4g4UnormPack8,
@@ -149,7 +149,7 @@ pub fn map_format(surface: format::SurfaceType, chan: format::ChannelType) -> Op
 }
 
 pub fn map_component(component: format::Component) -> vk::ComponentSwizzle {
-    use core::format::Component::*;
+    use hal::format::Component::*;
     match component {
         Zero => vk::ComponentSwizzle::Zero,
         One  => vk::ComponentSwizzle::One,
@@ -177,7 +177,7 @@ pub fn map_index_type(index_type: IndexType) -> vk::IndexType {
 }
 
 pub fn map_image_layout(layout: image::ImageLayout) -> vk::ImageLayout {
-    use core::image::ImageLayout as Il;
+    use hal::image::ImageLayout as Il;
     match layout {
         Il::General => vk::ImageLayout::General,
         Il::ColorAttachmentOptimal => vk::ImageLayout::ColorAttachmentOptimal,
@@ -284,7 +284,7 @@ pub fn map_subresource_range(
 }
 
 pub fn map_attachment_load_op(op: pass::AttachmentLoadOp) -> vk::AttachmentLoadOp {
-    use core::pass::AttachmentLoadOp as Alo;
+    use hal::pass::AttachmentLoadOp as Alo;
     match op {
         Alo::Load => vk::AttachmentLoadOp::Load,
         Alo::Clear => vk::AttachmentLoadOp::Clear,
@@ -293,7 +293,7 @@ pub fn map_attachment_load_op(op: pass::AttachmentLoadOp) -> vk::AttachmentLoadO
 }
 
 pub fn map_attachment_store_op(op: pass::AttachmentStoreOp) -> vk::AttachmentStoreOp {
-    use core::pass::AttachmentStoreOp as Aso;
+    use hal::pass::AttachmentStoreOp as Aso;
     match op {
         Aso::Store => vk::AttachmentStoreOp::Store,
         Aso::DontCare => vk::AttachmentStoreOp::DontCare,
@@ -501,7 +501,7 @@ pub fn map_image_usage(usage: image::Usage) -> vk::ImageUsageFlags {
 }
 
 pub fn map_descriptor_type(ty: pso::DescriptorType) -> vk::DescriptorType {
-    use core::pso::DescriptorType as Dt;
+    use hal::pso::DescriptorType as Dt;
     match ty {
         Dt::Sampler            => vk::DescriptorType::Sampler,
         Dt::SampledImage       => vk::DescriptorType::SampledImage,
@@ -546,7 +546,7 @@ pub fn map_stage_flags(stages: pso::ShaderStageFlags) -> vk::ShaderStageFlags {
 
 
 pub fn map_filter(filter: image::FilterMethod) -> (vk::Filter, vk::Filter, vk::SamplerMipmapMode, f32) {
-    use core::image::FilterMethod as Fm;
+    use hal::image::FilterMethod as Fm;
     match filter {
         Fm::Scale          => (vk::Filter::Nearest, vk::Filter::Nearest, vk::SamplerMipmapMode::Nearest, 1.0),
         Fm::Mipmap         => (vk::Filter::Nearest, vk::Filter::Nearest, vk::SamplerMipmapMode::Linear,  1.0),
@@ -557,7 +557,7 @@ pub fn map_filter(filter: image::FilterMethod) -> (vk::Filter, vk::Filter, vk::S
 }
 
 pub fn map_wrap(wrap: image::WrapMode) -> vk::SamplerAddressMode {
-    use core::image::WrapMode as Wm;
+    use hal::image::WrapMode as Wm;
     match wrap {
         Wm::Tile   => vk::SamplerAddressMode::Repeat,
         Wm::Mirror => vk::SamplerAddressMode::MirroredRepeat,
@@ -614,7 +614,7 @@ pub fn map_front_face(ff: state::FrontFace) -> vk::FrontFace {
 }
 
 pub fn map_comparison(fun: state::Comparison) -> vk::CompareOp {
-    use core::state::Comparison::*;
+    use hal::state::Comparison::*;
     match fun {
         Never        => vk::CompareOp::Never,
         Less         => vk::CompareOp::Less,
@@ -628,7 +628,7 @@ pub fn map_comparison(fun: state::Comparison) -> vk::CompareOp {
 }
 
 pub fn map_stencil_op(op: state::StencilOp) -> vk::StencilOp {
-    use core::state::StencilOp::*;
+    use hal::state::StencilOp::*;
     match op {
         Keep           => vk::StencilOp::Keep,
         Zero           => vk::StencilOp::Zero,
@@ -654,8 +654,8 @@ pub fn map_stencil_side(side: &state::StencilSide) -> vk::StencilOpState {
 }
 
 pub fn map_blend_factor(factor: state::Factor, scalar: bool) -> vk::BlendFactor {
-    use core::state::BlendValue::*;
-    use core::state::Factor::*;
+    use hal::state::BlendValue::*;
+    use hal::state::Factor::*;
     match factor {
         Zero => vk::BlendFactor::Zero,
         One => vk::BlendFactor::One,
@@ -681,7 +681,7 @@ pub fn map_blend_factor(factor: state::Factor, scalar: bool) -> vk::BlendFactor 
 }
 
 pub fn map_blend_op(equation: state::Equation) -> vk::BlendOp {
-    use core::state::Equation::*;
+    use hal::state::Equation::*;
     match equation {
         Add => vk::BlendOp::Add,
         Sub => vk::BlendOp::Subtract,

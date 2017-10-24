@@ -27,11 +27,11 @@ macro_rules! gfx_buffer_struct {
         impl $crate::pso::Structure for $name
             where $( $ty: $crate::format::BufferFormat, )*
         {
-            fn elements() -> Vec<$crate::core::pso::Element<$crate::format::Format>> {
+            fn elements() -> Vec<$crate::hal::pso::Element<$crate::format::Format>> {
                 let mut elements = Vec::new();
                 let mut offset = 0;
                 $(
-                    elements.push($crate::core::pso::Element {
+                    elements.push($crate::hal::pso::Element {
                         format: <$ty as $crate::format::Formatted>::SELF,
                         offset: offset as u32,
                     });
@@ -51,7 +51,7 @@ macro_rules! gfx_descriptors {
         pub mod $name {
             #[allow(unused_imports)]
             use super::*;
-            use $crate::{core, pso, handle, image};
+            use $crate::{hal, pso, handle, image};
             use $crate::Backend;
 
             pub struct Set<B: Backend> {
@@ -84,16 +84,16 @@ macro_rules! gfx_descriptors {
                     })
                 }
 
-                fn layout_bindings() -> Vec<core::pso::DescriptorSetLayoutBinding> {
+                fn layout_bindings() -> Vec<hal::pso::DescriptorSetLayoutBinding> {
                     let mut bindings = Vec::new();
                     $({
                         let binding = bindings.len();
-                        bindings.push(core::pso::DescriptorSetLayoutBinding {
+                        bindings.push(hal::pso::DescriptorSetLayoutBinding {
                             binding,
                             ty: <$bind as pso::BindDesc>::TYPE,
                             count: <$bind as pso::BindDesc>::COUNT,
                             // TODO: specify stage
-                            stage_flags: core::pso::ShaderStageFlags::all(),
+                            stage_flags: hal::pso::ShaderStageFlags::all(),
                         });
                     })*
                     bindings
@@ -135,8 +135,8 @@ macro_rules! gfx_descriptors {
 
                 fn require<'b>(
                     data: &'b Self::Data,
-                    buffers: &mut Vec<(&'b handle::raw::Buffer<B>, core::buffer::State)>,
-                    images: &mut Vec<(&'b handle::raw::Image<B>, image::Subresource, core::image::State)>,
+                    buffers: &mut Vec<(&'b handle::raw::Buffer<B>, hal::buffer::State)>,
+                    images: &mut Vec<(&'b handle::raw::Image<B>, image::Subresource, hal::image::State)>,
                     others: &mut handle::Bag<B>,
                 )
                     where 'a: 'b
@@ -168,8 +168,8 @@ macro_rules! gfx_graphics_pipeline {
                 Backend, Supports, Transfer, Graphics, Encoder,
                 Device, Primitive
             };
-            use $crate::core::{pass as cpass, pso as cpso};
-            use $crate::core::command::RenderPassInlineEncoder;
+            use $crate::hal::{pass as cpass, pso as cpso};
+            use $crate::hal::command::RenderPassInlineEncoder;
 
             pub struct Meta<B: Backend> {
                 layout: handle::raw::PipelineLayout<B>,
@@ -183,8 +183,8 @@ macro_rules! gfx_graphics_pipeline {
 
             pub struct Data<'a, B: Backend> {
                 // TODO:
-                pub viewports: &'a [$crate::core::Viewport],
-                pub scissors: &'a [$crate::core::target::Rect],
+                pub viewports: &'a [$crate::hal::Viewport],
+                pub scissors: &'a [$crate::hal::target::Rect],
                 pub framebuffer: &'a handle::raw::Framebuffer<B>,
                 $( pub $cmp_name: <$cmp as pso::Component<'a, B>>::Data, )*
             }
@@ -195,7 +195,7 @@ macro_rules! gfx_graphics_pipeline {
                 fn create(
                     self,
                     device: &mut Device<B>,
-                    shader_entries: $crate::core::pso::GraphicsShaderSet<B>,
+                    shader_entries: $crate::hal::pso::GraphicsShaderSet<B>,
                     primitive: Primitive,
                     rasterizer: pso::Rasterizer
                 ) -> Result<Self::Pipeline, pso::CreationError> {
@@ -293,7 +293,7 @@ macro_rules! gfx_graphics_pipeline {
                     cmd_buffer.bind_graphics_descriptor_sets(meta.layout.resource(), 0, &descs[..]);
                     // TODO: difference with viewport ?
                     let extent = self.framebuffer.info().extent;
-                    let render_rect = $crate::core::target::Rect {
+                    let render_rect = $crate::hal::target::Rect {
                         x: 0,
                         y: 0,
                         w: extent.width as u16,

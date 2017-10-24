@@ -1,11 +1,11 @@
 use std::sync::atomic::{self, AtomicBool, AtomicUsize};
 
-use {core, handle};
+use {hal, handle};
 use memory::{Memory, Pod};
 use Backend;
 
-pub use core::buffer::{CreationError, ViewError};
-pub use core::buffer::{Usage,
+pub use hal::buffer::{CreationError, ViewError};
+pub use hal::buffer::{Usage,
     TRANSFER_SRC, TRANSFER_DST, UNIFORM, INDEX, INDIRECT, VERTEX
 };
 
@@ -21,7 +21,7 @@ pub struct Info {
     /// Stride of a single element, in bytes. Only used for structured buffers
     /// that you use via shader resource / unordered access views.
     pub stride: u64,
-    pub(crate) stable_state: core::buffer::State,
+    pub(crate) stable_state: hal::buffer::State,
     /// Exclusive access
     pub(crate) access: Access,
 }
@@ -30,7 +30,7 @@ impl Info {
     pub(crate) fn new(usage: Usage, memory: Memory, size: u64, stride: u64)
         -> Self
     {
-        let stable_state = core::buffer::Access::empty();
+        let stable_state = hal::buffer::Access::empty();
         let access = Access {
             cpu: AtomicBool::new(false),
             gpu: AtomicUsize::new(0),

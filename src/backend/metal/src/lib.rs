@@ -1,4 +1,4 @@
-extern crate gfx_hal as core;
+extern crate gfx_hal as hal;
 extern crate cocoa;
 #[macro_use] extern crate objc;
 extern crate io_surface;
@@ -21,7 +21,7 @@ mod native;
 mod conversions;
 
 pub use command::{CommandQueue, CommandPool};
-pub use device::{Adapter, LanguageVersion};
+pub use device::LanguageVersion;
 pub use window::{Surface, Swapchain};
 
 pub type GraphicsCommandPool = CommandPool;
@@ -31,32 +31,41 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::os::raw::c_void;
 
-use core::{QueueType};
 use objc::runtime::{Object, Class};
 use cocoa::base::YES;
 use core_graphics::geometry::CGRect;
 
-pub struct Instance {
+
+#[derive(Debug)]
+pub struct QueueFamily {}
+
+impl hal::QueueFamily for QueueFamily {
+    fn queue_type(&self) -> hal::QueueType { hal::QueueType::General }
+    fn max_queues(&self) -> usize { 1 }
 }
 
-impl core::Instance for Instance {
+pub struct Instance {}
+
+impl hal::Instance for Instance {
     type Backend = Backend;
 
-    fn enumerate_adapters(&self) -> Vec<Adapter> {
+    fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
         // TODO: enumerate all devices
 
         let device = metal::create_system_default_device(); // Returns retained
 
-        vec![Adapter {
-            device,
-            adapter_info: core::AdapterInfo {
-                name: device.name().into(),
-                vendor: 0,
-                device: 0,
-                software_rendering: false,
-            },
-            queue_families: [(native::QueueFamily{}, QueueType::General)],
-        }]
+        vec![
+            hal::Adapter {
+                info: hal::AdapterInfo {
+                    name: device.name().into(),
+                    vendor: 0,
+                    device: 0,
+                    software_rendering: false,
+                },
+                physical_device: device::PhysicalDevice(device),
+                queue_families: vec![QueueFamily{}],
+            }
+        ]
     }
 }
 
@@ -96,17 +105,17 @@ impl Instance {
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Backend {}
-impl core::Backend for Backend {
-    type Adapter = device::Adapter;
+impl hal::Backend for Backend {
+    type PhysicalDevice = device::PhysicalDevice;
     type Device = device::Device;
 
     type Surface = window::Surface;
     type Swapchain = window::Swapchain;
 
+    type QueueFamily = QueueFamily;
     type CommandQueue = CommandQueue;
     type CommandBuffer = command::CommandBuffer;
     type SubpassCommandBuffer = command::CommandBuffer;
-    type QueueFamily = native::QueueFamily;
 
     type Memory = native::Memory;
     type CommandPool = command::CommandPool;

@@ -93,11 +93,11 @@ extern crate serde;
 #[macro_use]
 extern crate log;
 extern crate draw_state;
-pub extern crate gfx_hal as core;
+pub extern crate gfx_hal as hal;
 
 /// public re-exported traits
 pub mod traits {
-    pub use core::memory::Pod;
+    pub use hal::memory::Pod;
 }
 
 // draw state re-exports
@@ -105,12 +105,12 @@ pub use draw_state::{preset, state};
 pub use draw_state::target::*;
 
 // public re-exports
-pub use core::format;
-pub use core::{Adapter, Backend, Frame, Primitive};
-pub use core::queue::{Supports, Transfer, Compute, Graphics, General};
-pub use core::{VertexCount, InstanceCount};
-pub use core::device::Extent;
-// pub use core::{ShaderSet, VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
+pub use hal::format;
+pub use hal::{Backend, Frame, Primitive};
+pub use hal::queue::{Supports, Transfer, Compute, Graphics, General};
+pub use hal::{VertexCount, InstanceCount};
+pub use hal::device::Extent;
+// pub use hal::{ShaderSet, VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
 pub use encoder::Encoder;
 pub use device::Device;
 
@@ -132,42 +132,43 @@ pub mod shade;
 pub mod macros;
 
 use std::collections::VecDeque;
-use core::{CommandQueue, QueueType, Surface, Swapchain, Device as CoreDevice};
-use core::pool::{CommandPool, CommandPoolCreateFlags};
-use core::format::RenderFormat;
+use hal::{Capability, CommandQueue, QueueFamily, Surface, Swapchain, Device as Device_};
+use hal::format::RenderFormat;
+use hal::pool::CommandPoolCreateFlags;
 use memory::Typed;
 
 struct Queue<B: Backend, C> {
-    inner: CommandQueue<B, C>,
-    command_pool_receiver: encoder::CommandPoolReceiver<B, C>,
-    command_pool_sender: encoder::CommandPoolSender<B, C>,
+    group: hal::QueueGroup<B, C>,
+    pool_receiver: encoder::CommandPoolReceiver<B, C>,
+    pool_sender: encoder::CommandPoolSender<B, C>,
 }
 
-impl<B: Backend, C> Queue<B, C> {
-    fn new(inner: CommandQueue<B, C>) -> Self {
-        let (command_pool_sender, command_pool_receiver) =
+impl<B: Backend, C: hal::Capability> Queue<B, C> {
+    fn new(group_raw: hal::queue::RawQueueGroup<B>) -> Self {
+        let group = hal::QueueGroup::new(group_raw);
+        let (pool_sender, pool_receiver) =
             encoder::command_pool_channel();
-        Queue { inner, command_pool_sender, command_pool_receiver }
+        Queue { group, pool_sender, pool_receiver }
     }
 
-    fn acquire_encoder_pool(&mut self) -> encoder::Pool<B, C> {
-        let initial_capacity = 4;
-        let flags = CommandPoolCreateFlags::empty();
-        let pool = self.command_pool_receiver.try_recv()
+    fn acquire_encoder_pool(
+        &mut self, device: &mut B::Device
+    ) -> encoder::Pool<B, C> {
+        let pool = self.pool_receiver.try_recv()
             .map(|mut recycled| {
                 recycled.reset();
                 recycled
             })
             .unwrap_or_else(|_| {
-                CommandPool::from_queue(&self.inner, initial_capacity, flags)
+                let initial_capacity = 4;
+                let flags = CommandPoolCreateFlags::empty();
+                device.create_command_pool_typed(&self.group, flags, initial_capacity)
             });
-        encoder::Pool::new(pool, self.command_pool_sender.clone())
+        encoder::Pool::new(pool, self.pool_sender.clone())
     }
 }
 
-pub struct Context<B: Backend, C>
-    where C: Supports<Transfer>
-{
+pub struct Context<B: Backend, C> {
     surface: B::Surface,
     device: Device<B>,
     queue: Queue<B, C>,
@@ -212,103 +213,37 @@ struct FrameBundle<B: Backend, C> {
     signal_fence: Sync<B::Fence>,
 }
 
-trait Capability: Sized {
-    fn open<B: Backend>(
-        surface: &B::Surface,
-        adapter: &B::Adapter,
-    ) -> (Device<B>, Queue<B, Self>, handle::GarbageCollector<B>);
-}
-
-impl Capability for core::General {
-    fn open<B: Backend>(
-        surface: &B::Surface,
-        adapter: &B::Adapter,
-    ) -> (Device<B>, Queue<B, Self>, handle::GarbageCollector<B>) {
-        let core::Gpu {
-            device,
-            mut general_queues,
-            memory_types,
-            memory_heaps,
-            ..
-        } = adapter.open_with(|ref family, qtype| {
-            if qtype.supports_graphics()
-               && qtype.supports_compute()
-               && surface.supports_queue(family) {
-                (1, QueueType::General)
-            } else {
-                (0, QueueType::Transfer)
-            }
-        });
-
-        let (device, garbage) = Device::new(device, memory_types, memory_heaps);
-        let queue = Queue::new(general_queues.remove(0));
-        (device, queue, garbage)
-    }
-}
-
-impl Capability for core::Graphics {
-    fn open<B: Backend>(
-        surface: &B::Surface,
-        adapter: &B::Adapter,
-    ) -> (Device<B>, Queue<B, Self>, handle::GarbageCollector<B>) {
-        let core::Gpu {
-            device,
-            mut graphics_queues,
-            memory_types,
-            memory_heaps,
-            ..
-        } = adapter.open_with(|ref family, qtype| {
-            if qtype.supports_graphics() && surface.supports_queue(family) {
-                (1, QueueType::Graphics)
-            } else {
-                (0, QueueType::Transfer)
-            }
-        });
-
-        let (device, garbage) = Device::new(device, memory_types, memory_heaps);
-        let queue = Queue::new(graphics_queues.remove(0));
-        (device, queue, garbage)
-    }
-}
-
-impl<B: Backend> Context<B, core::General> {
-    pub fn init_general<Cf>(
-        surface: B::Surface,
-        adapter: &B::Adapter
-    ) -> (Self, Vec<Backbuffer<B, Cf>>)
-        where Cf: RenderFormat
-    {
-        Context::init(surface, adapter)
-    }
-}
-
-impl<B: Backend> Context<B, core::Graphics> {
-    pub fn init_graphics<Cf>(
-        surface: B::Surface,
-        adapter: &B::Adapter
-    ) -> (Self, Vec<Backbuffer<B, Cf>>)
-        where Cf: RenderFormat
-    {
-        Context::init(surface, adapter)
-    }
-}
-
 impl<B: Backend, C> Context<B, C>
-    where C: Supports<Transfer>
+    where C: Capability + Supports<Transfer>
 {
-    fn init<Cf>(mut surface: B::Surface, adapter: &B::Adapter)
-        -> (Self, Vec<Backbuffer<B, Cf>>)
-        where Cf: RenderFormat, C: Capability
+    pub fn init<Cf>(
+        mut surface: B::Surface, adapter: hal::Adapter<B>
+    ) -> (Self, Vec<Backbuffer<B, Cf>>)
+    where
+        Cf: RenderFormat,
     {
-        let (mut device, queue, garbage) = Capability::open(&surface, adapter);
+        let hal::Gpu {
+            mut device,
+            mut queue_groups,
+            memory_types,
+            memory_heaps,
+        } = adapter.open_with(|family| {
+            let ty = family.queue_type();
+            if Graphics::supported_by(ty) && Compute::supported_by(ty) &&
+                surface.supports_queue_family(family) {
+                Some(1)
+            } else { None }
+        });
 
-        let swap_config = core::SwapchainConfig::new()
+        let queue = Queue::new(queue_groups.remove(0));
+
+        let swap_config = hal::SwapchainConfig::new()
             .with_color::<Cf>();
-        let (swapchain, backbuffer) = surface.build_swapchain(swap_config, &queue.inner);
+        let (swapchain, backbuffer) = surface.build_swapchain(swap_config, &queue.group.queues[0]);
 
         let backbuffer_images = match backbuffer {
-            core::Backbuffer::Images(images) => images,
-            core::Backbuffer::Framebuffer(_) => unimplemented!(), //TODO
+            hal::Backbuffer::Images(images) => images,
+            hal::Backbuffer::Framebuffer(_) => unimplemented!(), //TODO
         };
 
         let frame_bundles = backbuffer_images
@@ -317,21 +252,21 @@ impl<B: Backend, C> Context<B, C>
                 handles: handle::Bag::new(),
                 access_info: encoder::AccessInfo::new(),
                 encoder_pools: Vec::new(),
-                wait_semaphore: device.mut_raw().create_semaphore(),
-                signal_semaphore: device.mut_raw().create_semaphore(),
+                wait_semaphore: device.create_semaphore(),
+                signal_semaphore: device.create_semaphore(),
                 signal_fence: Sync::reached(
-                    device.mut_raw().create_fence(true)),
+                    device.create_fence(true)),
             }).collect();
 
         let backbuffers = backbuffer_images
             .into_iter()
             .map(|raw| {
-                let stable_access = core::image::Access::empty();
-                let stable_layout = core::image::ImageLayout::Present;
+                let stable_access = hal::image::Access::empty();
+                let stable_layout = hal::image::ImageLayout::Present;
                 let handle = handle::inner::Image::without_garbage(
                     raw,
                     image::Info {
-                        aspects: core::image::ASPECT_COLOR,
+                        aspects: hal::image::ASPECT_COLOR,
                         usage: image::TRANSFER_SRC | image::COLOR_ATTACHMENT,
                         kind: surface.get_kind(),
                         mip_levels: 1,
@@ -344,6 +279,8 @@ impl<B: Backend, C> Context<B, C>
                     color: Typed::new(handle.into()),
                 }
             }).collect();
+
+        let (device, garbage) = Device::new(device, memory_types, memory_heaps);
 
         let context = Context {
             surface,
@@ -368,7 +305,7 @@ impl<B: Backend, C> Context<B, C>
             self.device.mut_raw()
                 .wait_for_fences(
                     &[&bundle.signal_fence.inner],
-                    core::device::WaitFor::All,
+                    hal::device::WaitFor::All,
                     !0);
         }
         self.device.mut_raw().reset_fences(&[&bundle.signal_fence.inner]);
@@ -380,7 +317,7 @@ impl<B: Backend, C> Context<B, C>
         bundle.encoder_pools.clear();
 
         let frame = self.swapchain.acquire_frame(
-            core::FrameSync::Semaphore(&mut bundle.wait_semaphore)
+            hal::FrameSync::Semaphore(&mut bundle.wait_semaphore)
         );
         self.frame_acquired = Some(bundle);
 
@@ -389,7 +326,7 @@ impl<B: Backend, C> Context<B, C>
     }
 
     pub fn acquire_encoder_pool(&mut self) -> encoder::Pool<B, C> {
-        self.queue.acquire_encoder_pool()
+        self.queue.acquire_encoder_pool(self.device.mut_raw())
     }
 
     // TODO: allow submissions before present
@@ -408,22 +345,25 @@ impl<B: Backend, C> Context<B, C>
         bundle.access_info.start_gpu_access();
 
         {
-            let submission = core::Submission::new()
-                .wait_on(&[(&bundle.wait_semaphore, core::pso::BOTTOM_OF_PIPE)])
+            let submission = hal::Submission::new()
+                .wait_on(&[(&bundle.wait_semaphore, hal::pso::BOTTOM_OF_PIPE)])
                 .signal(&[&bundle.signal_semaphore])
                 .promote::<C>()
                 .submit(&inner_submits);
-            self.queue.inner.submit::<C>(submission, Some(&bundle.signal_fence.inner));
+            let fence = Some(&bundle.signal_fence.inner);
+            self.queue.group.queues[0].submit::<C>(submission, fence);
         }
         bundle.signal_fence.signal = Pending;
 
         self.swapchain.present(
-            &mut self.queue.inner,
+            &mut self.queue.group.queues[0],
             &[&bundle.signal_semaphore]);
 
         self.frame_bundles.push_back(bundle);
     }
+}
 
+impl<B: Backend, C> Context<B, C> {
     fn wait_idle(&mut self) {
         assert!(self.frame_acquired.is_none());
 
@@ -442,7 +382,7 @@ impl<B: Backend, C> Context<B, C>
             }).collect();
 
         self.device.mut_raw()
-            .wait_for_fences(&fences, core::device::WaitFor::All, !0);
+            .wait_for_fences(&fences, hal::device::WaitFor::All, !0);
     }
 
     pub fn ref_device(&self) -> &Device<B> {
@@ -455,13 +395,11 @@ impl<B: Backend, C> Context<B, C>
 
     // TODO: remove
     pub fn mut_queue(&mut self) -> &mut CommandQueue<B, C> {
-        &mut self.queue.inner
+        &mut self.queue.group.queues[0]
     }
 }
 
-impl<B: Backend, C> Drop for Context<B, C>
-    where C: Supports<Transfer>
-{
+impl<B: Backend, C> Drop for Context<B, C> {
     fn drop(&mut self) {
         let _ = &self.surface;
         self.wait_idle();

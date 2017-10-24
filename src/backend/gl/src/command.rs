@@ -68,7 +68,7 @@ pub enum Command {
         instances: Range<c::InstanceCount>,
     },
     BindIndexBuffer(gl::types::GLuint),
-    BindVertexBuffers(BufferSlice),
+    //BindVertexBuffers(BufferSlice),
     SetViewports {
         viewport_ptr: BufferSlice,
         depth_range_ptr: BufferSlice,

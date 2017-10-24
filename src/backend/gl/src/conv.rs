@@ -1,7 +1,7 @@
 use gl::{self, types as t};
 use hal::{buffer, image as i};
 
-pub fn image_kind_to_gl(kind: i::Kind) -> t::GLenum {
+pub fn _image_kind_to_gl(kind: i::Kind) -> t::GLenum {
     match kind {
         i::Kind::D1(_) => gl::TEXTURE_1D,
         i::Kind::D1Array(_, _) => gl::TEXTURE_1D_ARRAY,

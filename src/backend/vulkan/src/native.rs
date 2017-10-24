@@ -1,7 +1,7 @@
 use ash::vk;
 use ash::version::DeviceV1_0;
-use core;
-use core::image::SubresourceRange;
+use hal;
+use hal::image::SubresourceRange;
 use std::sync::Arc;
 use {Backend, RawDevice};
 
@@ -92,7 +92,7 @@ pub struct DescriptorPool {
     pub(crate) device: Arc<RawDevice>,
 }
 
-impl core::DescriptorPool<Backend> for DescriptorPool {
+impl hal::DescriptorPool<Backend> for DescriptorPool {
     fn allocate_sets(&mut self, layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
         use std::ptr;
 

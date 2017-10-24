@@ -5,14 +5,13 @@ use std::sync::{Arc, Mutex};
 use std::os::raw::{c_void, c_long, c_int};
 use std::ptr;
 
-use core::{self, image, pass, pso};
+use hal::{self, image, pass, pso};
 
 use cocoa::foundation::{NSRange, NSUInteger};
 use metal::*;
 use objc;
 use spirv_cross::msl;
 
-pub struct QueueFamily {}
 
 /// Shader module can be compiled in advance if it's resource bindings do not
 /// depend on pipeline layout, in which case the value would become `Compiled`.
@@ -110,7 +109,7 @@ pub enum DescriptorPool {
 unsafe impl Send for DescriptorPool {}
 unsafe impl Sync for DescriptorPool {}
 
-impl core::DescriptorPool<Backend> for DescriptorPool {
+impl hal::DescriptorPool<Backend> for DescriptorPool {
     fn allocate_sets(&mut self, layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
         match *self {
             DescriptorPool::Emulated => {
@@ -239,7 +238,7 @@ impl Drop for DescriptorSetBinding {
 
 #[derive(Debug)]
 pub enum Memory {
-    Emulated { memory_type: core::MemoryType, size: u64 },
+    Emulated { memory_type: hal::MemoryType, size: u64 },
     Native(MTLHeap),
 }
 
@@ -260,11 +259,6 @@ unsafe impl Sync for UnboundImage {}
 #[derive(Debug)]
 pub struct Fence(pub Arc<Mutex<bool>>);
 
-impl core::QueueFamily for QueueFamily {
-    fn num_queues(&self) -> u32 {
-        1 // TODO: don't think there is a queue limit
-    }
-}
 
 pub unsafe fn objc_err_description(object: *mut objc::runtime::Object) -> String {
     let description: *mut objc::runtime::Object = msg_send![object, localizedDescription];
