@@ -5,23 +5,22 @@ use std::ops::{Deref, Range};
 use std::sync::{Arc};
 use std::cell::UnsafeCell;
 
-use core::{self, memory, target, pool, pso};
-use core::{VertexCount, VertexOffset, InstanceCount, IndexCount, Viewport};
-use core::{RawSubmission};
-use core::buffer::{IndexBufferView};
-use core::image::{ImageLayout, SubresourceRange};
-use core::command::{AttachmentClear, ClearColor, ClearDepthStencil, ClearValue, BufferImageCopy, BufferCopy};
-use core::command::{ImageCopy, SubpassContents};
-use core::command::{ImageResolve};
+use hal::{self, memory, target, pool, pso};
+use hal::{VertexCount, VertexOffset, InstanceCount, IndexCount, Viewport};
+use hal::buffer::{IndexBufferView};
+use hal::image::{ImageLayout, SubresourceRange};
+use hal::command::{AttachmentClear, ClearColor, ClearDepthStencil, ClearValue, BufferImageCopy, BufferCopy};
+use hal::command::{ImageCopy, SubpassContents, ImageResolve, RawCommandBuffer};
+use hal::queue::{RawCommandQueue, RawSubmission};
 
 use metal::*;
 use cocoa::foundation::NSUInteger;
 use block::{ConcreteBlock};
 
 
-pub struct CommandQueue(Arc<QueueInner>);
+pub struct CommandQueue(pub(crate) Arc<QueueInner>);
 
-struct QueueInner {
+pub(crate) struct QueueInner {
     queue: MTLCommandQueue,
 }
 
@@ -37,8 +36,8 @@ impl Drop for QueueInner {
 }
 
 pub struct CommandPool {
-    queue: Arc<QueueInner>,
-    managed: Option<Vec<CommandBuffer>>,
+    pub(crate) queue: Arc<QueueInner>,
+    pub(crate) managed: Option<Vec<CommandBuffer>>,
 }
 
 unsafe impl Send for CommandPool {
@@ -206,7 +205,7 @@ impl CommandQueue {
     }
 }
 
-impl core::RawCommandQueue<Backend> for CommandQueue {
+impl RawCommandQueue<Backend> for CommandQueue {
     unsafe fn submit_raw(&mut self, submit: RawSubmission<Backend>, fence: Option<&native::Fence>) {
         // FIXME: wait for semaphores!
 
@@ -244,23 +243,12 @@ impl core::RawCommandQueue<Backend> for CommandQueue {
     }
 }
 
-impl core::RawCommandPool<Backend> for CommandPool {
+impl pool::RawCommandPool<Backend> for CommandPool {
     fn reset(&mut self) {
         if let Some(ref mut managed) = self.managed {
             for cmd_buffer in managed {
                 cmd_buffer.inner().reset(&self.queue);
             }
-        }
-    }
-
-    unsafe fn from_queue(queue: &CommandQueue, flags: pool::CommandPoolCreateFlags) -> Self {
-        CommandPool {
-            queue: (queue.0).clone(),
-            managed: if flags.contains(pool::RESET_INDIVIDUAL) {
-                None
-            } else {
-                Some(Vec::new())
-            },
         }
     }
 
@@ -316,7 +304,7 @@ impl core::RawCommandPool<Backend> for CommandPool {
     }
 }
 
-impl core::SubpassCommandPool<Backend> for CommandPool {
+impl pool::SubpassCommandPool<Backend> for CommandPool {
 }
 
 impl CommandBuffer {
@@ -348,7 +336,7 @@ impl CommandBuffer {
     }
 }
 
-impl core::RawCommandBuffer<Backend> for CommandBuffer {
+impl RawCommandBuffer<Backend> for CommandBuffer {
     fn begin(&mut self) {
         if let Some(ref queue) = self.queue {
             unsafe { &mut *self.inner.get() }

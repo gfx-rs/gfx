@@ -1,12 +1,11 @@
-use core;
-use core::{pass, image, memory};
-use core::format::Format;
+use hal::{pass, image, memory, state};
+use hal::format::Format;
 use metal::*;
 
 // The boolean indicates whether this is a depth format
 pub fn map_format(format: Format) -> Option<(MTLPixelFormat, bool)> {
-    use core::format::SurfaceType::*;
-    use core::format::ChannelType::*;
+    use hal::format::SurfaceType::*;
+    use hal::format::ChannelType::*;
 
     // TODO: more formats
     match format {
@@ -47,9 +46,7 @@ pub fn map_store_operation(operation: pass::AttachmentStoreOp) -> MTLStoreAction
     }
 }
 
-pub fn map_write_mask(mask: core::state::ColorMask) -> MTLColorWriteMask {
-    use core::state;
-
+pub fn map_write_mask(mask: state::ColorMask) -> MTLColorWriteMask {
     let mut mtl_mask = MTLColorWriteMaskNone;
 
     if mask.contains(state::RED) {
@@ -68,8 +65,8 @@ pub fn map_write_mask(mask: core::state::ColorMask) -> MTLColorWriteMask {
     mtl_mask
 }
 
-pub fn map_blend_op(equation: core::state::Equation) -> MTLBlendOperation {
-    use core::state::Equation::*;
+pub fn map_blend_op(equation: state::Equation) -> MTLBlendOperation {
+    use hal::state::Equation::*;
 
     match equation {
         Add => MTLBlendOperation::Add,
@@ -80,9 +77,9 @@ pub fn map_blend_op(equation: core::state::Equation) -> MTLBlendOperation {
     }
 }
 
-pub fn map_blend_factor(factor: core::state::Factor, scalar: bool) -> MTLBlendFactor {
-    use core::state::BlendValue::*;
-    use core::state::Factor::*;
+pub fn map_blend_factor(factor: state::Factor, scalar: bool) -> MTLBlendFactor {
+    use hal::state::BlendValue::*;
+    use hal::state::Factor::*;
 
     match factor {
         Zero => MTLBlendFactor::Zero,
@@ -110,8 +107,8 @@ pub fn map_blend_factor(factor: core::state::Factor, scalar: bool) -> MTLBlendFa
 
 
 pub fn map_vertex_format(format: Format) -> Option<MTLVertexFormat> {
-    use core::format::SurfaceType::*;
-    use core::format::ChannelType::*;
+    use hal::format::SurfaceType::*;
+    use hal::format::ChannelType::*;
 
     // TODO: more formats
     Some(match format {

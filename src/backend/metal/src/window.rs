@@ -1,14 +1,14 @@
-use {Adapter, Backend};
+use {Backend, QueueFamily};
 use {native, conversions};
+use device::PhysicalDevice;
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use core::{self, format, memory, image};
-use core::{Backbuffer, SwapchainConfig};
-use core::format::SurfaceType;
-use core::format::ChannelType;
-use core::CommandQueue;
+use hal::{self, format, memory, image};
+use hal::{Backbuffer, SwapchainConfig};
+use hal::format::{ChannelType, SurfaceType};
+use hal::CommandQueue;
 
 use metal::*;
 use objc::runtime::{Object, Class};
@@ -46,16 +46,16 @@ pub struct Swapchain {
 const SWAP_CHAIN_IMAGE_COUNT: usize = 3;
 const kCVPixelFormatType_32RGBA: u32 = (b'R' as u32) << 24 | (b'G' as u32) << 16 | (b'B' as u32) << 8 | b'A' as u32;
 
-impl core::Surface<Backend> for Surface {
+impl hal::Surface<Backend> for Surface {
     fn get_kind(&self) -> image::Kind {
         unimplemented!()
     }
 
-    fn surface_capabilities(&self, _: &Adapter) -> core::SurfaceCapabilities {
+    fn surface_capabilities(&self, _: &PhysicalDevice) -> hal::SurfaceCapabilities {
         unimplemented!()
     }
 
-    fn supports_queue(&self, queue_family: &native::QueueFamily) -> bool {
+    fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {
         true // TODO: Not sure this is the case, don't know associativity of IOSurface
     }
 
@@ -131,18 +131,18 @@ impl core::Surface<Backend> for Surface {
     }
 }
 
-impl core::Swapchain<Backend> for Swapchain {
-    fn acquire_frame(&mut self, sync: core::FrameSync<Backend>) -> core::Frame {
+impl hal::Swapchain<Backend> for Swapchain {
+    fn acquire_frame(&mut self, sync: hal::FrameSync<Backend>) -> hal::Frame {
         unsafe {
             match sync {
-                core::FrameSync::Semaphore(semaphore) => {
+                hal::FrameSync::Semaphore(semaphore) => {
                     // FIXME: this is definitely wrong
                     native::dispatch_semaphore_signal(semaphore.0);
                 },
-                core::FrameSync::Fence(_fence) => unimplemented!(),
+                hal::FrameSync::Fence(_fence) => unimplemented!(),
             }
 
-            let frame = core::Frame::new(self.frame_index % self.io_surfaces.len());
+            let frame = hal::Frame::new(self.frame_index % self.io_surfaces.len());
             self.frame_index += 1;
             frame
         }
