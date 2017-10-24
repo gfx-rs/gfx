@@ -7,6 +7,7 @@ use ash::vk;
 use ash::extensions as ext;
 
 use hal;
+use hal::format::Format;
 
 #[cfg(feature = "winit")]
 use winit;
@@ -207,7 +208,8 @@ impl hal::Surface<Backend> for Surface {
         hal::image::Kind::D2(self.width as Size, self.height as Size, aa)
     }
 
-    fn surface_capabilities(&self, physical_device: &PhysicalDevice) -> hal::SurfaceCapabilities {
+    fn capabilities_and_formats(&self, physical_device: &PhysicalDevice) -> (hal::SurfaceCapabilities, Vec<Format>) {
+        // Capabilities
         let caps =
             self.raw.functor.get_physical_device_surface_capabilities_khr(
                 physical_device.handle,
@@ -239,12 +241,29 @@ impl hal::Surface<Backend> for Surface {
             height: caps.max_image_extent.height,
         };
 
-        hal::SurfaceCapabilities {
+        let capabilities = hal::SurfaceCapabilities {
             image_count: caps.min_image_count..max_images,
             current_extent,
             extents: min_extent..max_extent,
             max_image_layers: caps.max_image_array_layers,
-        }
+        };
+
+        // Swapchain formats
+        let formats =
+            self.raw.functor.get_physical_device_surface_formats_khr(
+                physical_device.handle,
+                self.raw.handle,
+            ).expect("Unable to query surface formats");
+
+        let formats = formats
+            .iter()
+            .filter_map(|sf| {
+                conv::map_vk_format(sf.format)
+                    .map(|(surface, channel)| Format(surface, channel))
+            })
+            .collect();
+
+        (capabilities, formats)
     }
 
     fn supports_queue_family(&self, queue_family: &QueueFamily) -> bool {

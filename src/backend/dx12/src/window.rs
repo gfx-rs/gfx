@@ -7,7 +7,7 @@ use winit;
 use winapi;
 use wio::com::ComPtr;
 
-use hal::{self, image as i};
+use hal::{self, format as f, image as i};
 use {conv, native as n, Backend, Device, Instance, PhysicalDevice, QueueFamily};
 
 use std::os::raw::c_void;
@@ -53,18 +53,37 @@ impl hal::Surface<Backend> for Surface {
         i::Kind::D2(self.width as i::Size, self.height as i::Size, aa)
     }
 
-    fn surface_capabilities(&self, _: &PhysicalDevice) -> hal::SurfaceCapabilities {
+    fn capabilities_and_formats(
+        &self, _: &PhysicalDevice,
+    ) -> (hal::SurfaceCapabilities, Vec<f::Format>) {
+        use hal::format::ChannelType::*;
+        use hal::format::SurfaceType::*;
+
         let extent = hal::window::Extent2d {
             width: self.width,
             height: self.height,
         };
 
-        hal::SurfaceCapabilities {
+        let capabilities = hal::SurfaceCapabilities {
             image_count: 2..16, // we currently use a flip effect which supports 2..16 buffers
             current_extent: Some(extent),
             extents: extent..extent,
             max_image_layers: 1,
-        }
+        };
+
+        // Sticking to FLIP swap effects for the moment.
+        // We also expose sRGB buffers but they are handled internally as UNORM.
+        // Rougly ordered by popularity..
+        let formats = vec![
+            f::Format(B8_G8_R8_A8, Srgb),
+            f::Format(B8_G8_R8_A8, Unorm),
+            f::Format(R8_G8_B8_A8, Srgb),
+            f::Format(R8_G8_B8_A8, Unorm),
+            f::Format(R10_G10_B10_A2, Unorm),
+            f::Format(R16_G16_B16_A16, Float),
+        ];
+
+        (capabilities, formats)
     }
 
     fn build_swapchain<C>(
@@ -75,11 +94,11 @@ impl hal::Surface<Backend> for Surface {
         let mut swap_chain: *mut winapi::IDXGISwapChain1 = ptr::null_mut();
         let buffer_count = 2; // TODO: user-defined value
         let mut format = config.color_format;
-        if format.1 == hal::format::ChannelType::Srgb {
+        if format.1 == f::ChannelType::Srgb {
             // Apparently, swap chain doesn't like sRGB, but the RTV can still have some:
             // https://www.gamedev.net/forums/topic/670546-d3d12srgb-buffer-format-for-swap-chain/
             // [15716] DXGI ERROR: IDXGIFactory::CreateSwapchain: Flip model swapchains (DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL and DXGI_SWAP_EFFECT_FLIP_DISCARD) only support the following Formats: (DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R10G10B10A2_UNORM), assuming the underlying Device does as well.
-            format.1 = hal::format::ChannelType::Unorm;
+            format.1 = f::ChannelType::Unorm;
         }
         let format = conv::map_format(format).unwrap(); // TODO: error handling
         let mut device = present_queue.as_raw().device.clone();

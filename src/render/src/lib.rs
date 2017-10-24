@@ -238,7 +238,7 @@ impl<B: Backend, C> Context<B, C>
         let queue = Queue::new(queue_groups.remove(0));
 
         let swap_config = hal::SwapchainConfig::new()
-            .with_color::<Cf>();
+            .with_color_typed::<Cf>(); // TODO: check support
         let (swapchain, backbuffer) = surface.build_swapchain(swap_config, &queue.group.queues[0]);
 
         let backbuffer_images = match backbuffer {

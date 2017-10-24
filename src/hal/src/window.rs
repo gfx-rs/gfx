@@ -51,7 +51,7 @@
 
 use Backend;
 use image;
-use format::{self, Formatted};
+use format::{self, Format, Formatted};
 use queue::CommandQueue;
 use std::ops::Range;
 
@@ -106,10 +106,10 @@ pub trait Surface<B: Backend> {
     /// ```
     fn supports_queue_family(&self, &B::QueueFamily) -> bool;
 
-    /// Query surface capabilities for this physical device.
+    /// Query surface capabilities and formats for this physical device.
     ///
     /// Use this function for configuring your swapchain creation.
-    fn surface_capabilities(&self, &B::PhysicalDevice) -> SurfaceCapabilities;
+    fn capabilities_and_formats(&self, &B::PhysicalDevice) -> (SurfaceCapabilities, Vec<Format>);
 
     /// Create a new swapchain from a surface and a queue.
     ///
@@ -135,7 +135,7 @@ pub trait Surface<B: Backend> {
     /// # let mut surface: empty::Surface = return;
     /// # let queue: CommandQueue<empty::Backend, Graphics> = return;
     /// let swapchain_config = SwapchainConfig::new()
-    ///                             .with_color::<Srgba8>();
+    ///                             .with_color_typed::<Srgba8>();
     /// surface.build_swapchain(swapchain_config, &queue);
     /// # }
     /// ```
@@ -218,7 +218,20 @@ impl SwapchainConfig {
     /// ```no_run
     ///
     /// ```
-    pub fn with_color<Cf: format::RenderFormat>(mut self) -> Self {
+    pub fn with_color(mut self, cf: format::Format) -> Self {
+        self.color_format = cf;
+        self
+    }
+
+
+    /// Specify the color format for the backbuffer images.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    ///
+    /// ```
+    pub fn with_color_typed<Cf: format::RenderFormat>(mut self) -> Self {
         self.color_format = Cf::SELF;
         self
     }
@@ -232,7 +245,21 @@ impl SwapchainConfig {
     /// ```no_run
     ///
     /// ```
-    pub fn with_depth_stencil<Dsf: format::DepthStencilFormat>(mut self) -> Self {
+    pub fn with_depth_stencil(mut self, dsf: format::Format) -> Self {
+        self.depth_stencil_format = Some(dsf);
+        self
+    }
+
+    /// Specify the depth stencil format for the backbuffer images.
+    ///
+    /// The Swapchain will create additional depth-stencil images for each backbuffer.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    ///
+    /// ```
+    pub fn with_depth_stencil_typed<Dsf: format::DepthStencilFormat>(mut self) -> Self {
         self.depth_stencil_format = Some(Dsf::SELF);
         self
     }

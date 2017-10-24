@@ -51,7 +51,9 @@ impl hal::Surface<Backend> for Surface {
         unimplemented!()
     }
 
-    fn surface_capabilities(&self, _: &PhysicalDevice) -> hal::SurfaceCapabilities {
+    fn capabilities_and_formats(
+        &self, _: &PhysicalDevice,
+    ) -> (hal::SurfaceCapabilities, Vec<format::Format>) {
         unimplemented!()
     }
 
