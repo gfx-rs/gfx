@@ -1,7 +1,7 @@
 use wio::com::ComPtr;
-use core::{command as com, image, memory, pass, pso, target};
-use core::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, Viewport};
-use core::buffer::IndexBufferView;
+use hal::{command as com, image, memory, pass, pso, target};
+use hal::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, Viewport};
+use hal::buffer::IndexBufferView;
 use winapi::{self, UINT64, UINT};
 use {conv, native as n, Backend};
 use smallvec::SmallVec;

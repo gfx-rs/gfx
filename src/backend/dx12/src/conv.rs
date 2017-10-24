@@ -1,14 +1,16 @@
-use core::format::{Format, SurfaceType};
-use core::{buffer, state, pso, Primitive};
-use core::image::{self, FilterMethod, WrapMode};
-use core::pso::DescriptorSetLayoutBinding;
-use core::state::Comparison;
 use std::fmt;
 use winapi::*;
 
+use hal::format::{Format, SurfaceType};
+use hal::{buffer, state, pso, Primitive};
+use hal::image::{self, FilterMethod, WrapMode};
+use hal::pso::DescriptorSetLayoutBinding;
+use hal::state::Comparison;
+
+
 pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
-    use core::format::SurfaceType::*;
-    use core::format::ChannelType::*;
+    use hal::format::SurfaceType::*;
+    use hal::format::ChannelType::*;
     Some(match format.0 {
         R4_G4 | R4_G4_B4_A4 | R5_G5_B5_A1 | R5_G6_B5 => return None,
         R8 => match format.1 {
@@ -133,7 +135,7 @@ pub fn map_format_dsv(surface: SurfaceType) -> Option<DXGI_FORMAT> {
 }
 
 pub fn map_topology_type(primitive: Primitive) -> D3D12_PRIMITIVE_TOPOLOGY_TYPE {
-    use core::Primitive::*;
+    use hal::Primitive::*;
     match primitive {
         PointList  => D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT,
         LineList |
@@ -200,8 +202,8 @@ pub fn map_rasterizer(rasterizer: &pso::Rasterizer) -> D3D12_RASTERIZER_DESC {
 }
 
 fn map_blend_factor(factor: state::Factor, scalar: bool) -> D3D12_BLEND {
-    use core::state::BlendValue::*;
-    use core::state::Factor::*;
+    use hal::state::BlendValue::*;
+    use hal::state::Factor::*;
     match factor {
         Zero => D3D12_BLEND_ZERO,
         One => D3D12_BLEND_ONE,
@@ -227,7 +229,7 @@ fn map_blend_factor(factor: state::Factor, scalar: bool) -> D3D12_BLEND {
 }
 
 fn map_blend_op(equation: state::Equation) -> D3D12_BLEND_OP {
-    use core::state::Equation::*;
+    use hal::state::Equation::*;
     match equation {
         Add => D3D12_BLEND_OP_ADD,
         Sub => D3D12_BLEND_OP_SUBTRACT,
@@ -308,7 +310,7 @@ fn map_comparison(func: state::Comparison) -> D3D12_COMPARISON_FUNC {
 }
 
 fn map_stencil_op(op: state::StencilOp) -> D3D12_STENCIL_OP {
-    use core::state::StencilOp::*;
+    use hal::state::StencilOp::*;
     match op {
         Keep => D3D12_STENCIL_OP_KEEP,
         Zero => D3D12_STENCIL_OP_ZERO,
@@ -377,7 +379,7 @@ pub enum FilterOp {
 }
 
 pub fn map_filter(filter: FilterMethod, op: FilterOp) -> D3D12_FILTER {
-    use core::image::FilterMethod::*;
+    use hal::image::FilterMethod::*;
     match op {
         FilterOp::Product => match filter {
             Scale          => D3D12_FILTER_MIN_MAG_MIP_POINT,

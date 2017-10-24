@@ -4,7 +4,7 @@ extern crate d3d12;
 extern crate d3dcompiler;
 extern crate dxguid;
 extern crate dxgi;
-extern crate gfx_hal as core;
+extern crate gfx_hal as hal;
 extern crate kernel32;
 #[macro_use]
 extern crate log;
@@ -25,7 +25,7 @@ mod pool;
 mod shade;
 mod window;
 
-use core::{memory, Features, Limits, QueueType};
+use hal::{memory, Features, Limits, QueueType};
 use wio::com::ComPtr;
 
 use std::{mem, ptr};
@@ -95,73 +95,32 @@ static HEAPS_CCUMA: &'static [HeapProperties] = &[
     },
 ];
 
-#[derive(Clone)]
-pub struct QueueFamily;
+#[derive(Debug)]
+pub struct QueueFamily(QueueType);
+const MAX_QUEUES: usize = 16; // infinite, to be fair
 
-impl core::QueueFamily for QueueFamily {
-    fn num_queues(&self) -> u32 { 1 } // TODO: infinite software queues actually
+impl hal::QueueFamily for QueueFamily {
+    fn queue_type(&self) -> QueueType { self.0 }
+    fn max_queues(&self) -> usize { MAX_QUEUES }
 }
 
-/// Create associated command queues for a specific queue type
-fn collect_queues<C>(
-     queue_descs: &[(&QueueFamily, QueueType, u32)],
-     device: &Device,
-     collect_type: QueueType,
-) -> Vec<core::CommandQueue<Backend, C>> {
-    queue_descs.iter()
-        .filter(|&&(_, qtype, _)| qtype == collect_type)
-        .flat_map(|&(_, _, qcount)| {
-            (0..qcount).map(|_| {
-                let mut device_raw = device.raw.clone();
-                let mut queue = ptr::null_mut();
-                let qtype = match collect_type {
-                    QueueType::General | QueueType::Graphics => winapi::D3D12_COMMAND_LIST_TYPE_DIRECT,
-                    QueueType::Compute => winapi::D3D12_COMMAND_LIST_TYPE_COMPUTE,
-                    QueueType::Transfer => winapi::D3D12_COMMAND_LIST_TYPE_COPY,
-                };
-
-                let queue_desc = winapi::D3D12_COMMAND_QUEUE_DESC {
-                    Type: qtype,
-                    Priority: 0,
-                    Flags: winapi::D3D12_COMMAND_QUEUE_FLAG_NONE,
-                    NodeMask: 0,
-                };
-
-                let hr = unsafe {
-                    device_raw.CreateCommandQueue(
-                        &queue_desc,
-                        &dxguid::IID_ID3D12CommandQueue,
-                        &mut queue as *mut *mut _ as *mut *mut c_void,
-                    )
-                };
-
-                if !winapi::SUCCEEDED(hr) {
-                    error!("error on queue creation: {:x}", hr);
-                }
-
-                unsafe {
-                    core::CommandQueue::new(
-                        CommandQueue {
-                            raw: ComPtr::new(queue),
-                            device: device_raw,
-                            list_type: qtype,
-                        }
-                    )
-                }
-            })
-        }).collect()
+impl QueueFamily {
+    fn native_type(&self) -> winapi::D3D12_COMMAND_LIST_TYPE {
+        match self.0 {
+            QueueType::General | QueueType::Graphics => winapi::D3D12_COMMAND_LIST_TYPE_DIRECT,
+            QueueType::Compute => winapi::D3D12_COMMAND_LIST_TYPE_COMPUTE,
+            QueueType::Transfer => winapi::D3D12_COMMAND_LIST_TYPE_COPY,
+        }
+    }
 }
 
-#[derive(Clone)]
-pub struct Adapter {
+pub struct PhysicalDevice {
     adapter: ComPtr<winapi::IDXGIAdapter2>,
     factory: ComPtr<winapi::IDXGIFactory4>,
-    info: core::AdapterInfo,
-    queue_families: Vec<(QueueFamily, QueueType)>,
 }
 
-impl core::Adapter<Backend> for Adapter {
-    fn open(&self, queue_descs: &[(&QueueFamily, QueueType, u32)]) -> core::Gpu<Backend> {
+impl hal::PhysicalDevice<Backend> for PhysicalDevice {
+    fn open(self, families: Vec<(QueueFamily, usize)>) -> hal::Gpu<Backend> {
         // Create D3D12 device
         let mut device_raw = ptr::null_mut();
         let hr = unsafe {
@@ -193,23 +152,58 @@ impl core::Adapter<Backend> for Adapter {
             }
         };
 
+        let queue_groups = families
+            .into_iter()
+            .map(|(family, count)| {
+                let queue_desc = winapi::D3D12_COMMAND_QUEUE_DESC {
+                    Type: family.native_type(),
+                    Priority: 0,
+                    Flags: winapi::D3D12_COMMAND_QUEUE_FLAG_NONE,
+                    NodeMask: 0,
+                };
+                let mut group = hal::queue::RawQueueGroup::new(family);
+
+                for _ in 0 .. count {
+                    let mut queue = ptr::null_mut();
+                    let hr = unsafe {
+                        device.raw.CreateCommandQueue(
+                            &queue_desc,
+                            &dxguid::IID_ID3D12CommandQueue,
+                            &mut queue as *mut *mut _ as *mut *mut c_void,
+                        )
+                    };
+
+                    if winapi::SUCCEEDED(hr) {
+                        group.add_queue(CommandQueue {
+                            raw: unsafe { ComPtr::new(queue) },
+                            device: device.raw.clone(),
+                        });
+                    } else {
+                        error!("error on queue creation: {:x}", hr);
+                    }
+                }
+
+                group
+            })
+            .collect();
+
         // https://msdn.microsoft.com/en-us/library/windows/desktop/dn788678(v=vs.85).aspx
         let base_memory_types = match device.private_caps.memory_architecture {
             MemoryArchitecture::NUMA => [
                 // DEFAULT
-                core::MemoryType {
+                hal::MemoryType {
                     id: 0,
                     properties: memory::DEVICE_LOCAL,
                     heap_index: 0,
                 },
                 // UPLOAD
-                core::MemoryType {
+                hal::MemoryType {
                     id: 1,
                     properties: memory::CPU_VISIBLE | memory::COHERENT,
                     heap_index: 1,
                 },
                 // READBACK
-                core::MemoryType {
+                hal::MemoryType {
                     id: 2,
                     properties: memory::CPU_VISIBLE | memory::COHERENT | memory::CPU_CACHED,
                     heap_index: 1,
@@ -217,19 +211,19 @@ impl core::Adapter<Backend> for Adapter {
             ],
             MemoryArchitecture::UMA => [
                 // DEFAULT
-                core::MemoryType {
+                hal::MemoryType {
                     id: 0,
                     properties: memory::DEVICE_LOCAL,
                     heap_index: 0,
                 },
                 // UPLOAD
-                core::MemoryType {
+                hal::MemoryType {
                     id: 1,
                     properties: memory::DEVICE_LOCAL | memory::CPU_VISIBLE | memory::COHERENT,
                     heap_index: 0,
                 },
                 // READBACK
-                core::MemoryType {
+                hal::MemoryType {
                     id: 2,
                     properties: memory::DEVICE_LOCAL | memory::CPU_VISIBLE | memory::COHERENT | memory::CPU_CACHED,
                     heap_index: 0,
@@ -237,19 +231,19 @@ impl core::Adapter<Backend> for Adapter {
             ],
             MemoryArchitecture::CacheCoherentUMA => [
                 // DEFAULT
-                core::MemoryType {
+                hal::MemoryType {
                     id: 0,
                     properties: memory::DEVICE_LOCAL,
                     heap_index: 0,
                 },
                 // UPLOAD
-                core::MemoryType {
+                hal::MemoryType {
                     id: 1,
                     properties: memory::DEVICE_LOCAL | memory::CPU_VISIBLE | memory::COHERENT | memory::CPU_CACHED,
                     heap_index: 0,
                 },
                 // READBACK
-                core::MemoryType {
+                hal::MemoryType {
                     id: 2,
                     properties: memory::DEVICE_LOCAL | memory::CPU_VISIBLE | memory::COHERENT | memory::CPU_CACHED,
                     heap_index: 0,
@@ -268,7 +262,7 @@ impl core::Adapter<Backend> for Adapter {
             for &tt in &[1, 2, 3] {
                 types.extend(base_memory_types
                     .iter()
-                    .map(|&mt| core::MemoryType {
+                    .map(|&mt| hal::MemoryType {
                         id: mt.id + (tt << 2),
                         .. mt
                     })
@@ -298,37 +292,25 @@ impl core::Adapter<Backend> for Adapter {
             }
         };
 
-        core::Gpu {
-            general_queues: collect_queues(queue_descs, &device, QueueType::General),
-            graphics_queues: collect_queues(queue_descs, &device, QueueType::Graphics),
-            compute_queues: collect_queues(queue_descs, &device, QueueType::Compute),
-            transfer_queues: collect_queues(queue_descs, &device, QueueType::Transfer),
+        hal::Gpu {
+            device,
+            queue_groups,
             memory_types,
             memory_heaps,
-            device,
         }
-    }
-
-    fn info(&self) -> &core::AdapterInfo {
-        &self.info
-    }
-
-    fn queue_families(&self) -> &[(QueueFamily, QueueType)] {
-        &self.queue_families
     }
 }
 
 pub struct CommandQueue {
     pub(crate) raw: ComPtr<winapi::ID3D12CommandQueue>,
     device: ComPtr<winapi::ID3D12Device>,
-    list_type: winapi::D3D12_COMMAND_LIST_TYPE,
 }
 unsafe impl Send for CommandQueue {} //blocked by ComPtr
 
-impl core::RawCommandQueue<Backend> for CommandQueue {
+impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     unsafe fn submit_raw(
         &mut self,
-        submission: core::RawSubmission<Backend>,
+        submission: hal::queue::RawSubmission<Backend>,
         fence: Option<&native::Fence>,
     ) {
         // TODO: semaphores
@@ -363,8 +345,8 @@ pub struct Capabilities {
 #[derive(Clone)]
 pub struct Device {
     raw: ComPtr<winapi::ID3D12Device>,
-    features: core::Features,
-    limits: core::Limits,
+    features: hal::Features,
+    limits: hal::Limits,
     private_caps: Capabilities,
     heap_properties: &'static [HeapProperties],
     // CPU only pools
@@ -585,13 +567,13 @@ impl Instance {
     }
 }
 
-impl core::Instance for Instance {
+impl hal::Instance for Instance {
     type Backend = Backend;
 
-    fn enumerate_adapters(&self) -> Vec<Adapter> {
+    fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
         // Enumerate adapters
         let mut cur_index = 0;
-        let mut devices = Vec::new();
+        let mut adapters = Vec::new();
         loop {
             let mut adapter = {
                 let mut adapter: *mut winapi::IDXGIAdapter1 = ptr::null_mut();
@@ -630,41 +612,50 @@ impl core::Instance for Instance {
                     name.to_string_lossy().into_owned()
                 };
 
-                let info = core::AdapterInfo {
+                let info = hal::AdapterInfo {
                     name: device_name,
                     vendor: desc.VendorId as usize,
                     device: desc.DeviceId as usize,
                     software_rendering: false, // TODO: check for WARP adapter (software rasterizer)?
                 };
 
-                devices.push(
-                    Adapter {
-                        adapter: adapter,
-                        factory: self.factory.clone(),
-                        info: info,
-                        queue_families: vec![(QueueFamily, QueueType::General)], // TODO:
-                    });
+                let physical_device = PhysicalDevice {
+                    adapter,
+                    factory: self.factory.clone(),
+                };
+
+                let queue_families = vec![
+                    QueueFamily(QueueType::Transfer),
+                    QueueFamily(QueueType::Compute),
+                    QueueFamily(QueueType::General),
+                ];
+
+                adapters.push(hal::Adapter {
+                    info,
+                    physical_device,
+                    queue_families
+                });
             }
 
             cur_index += 1;
         }
-        devices
+        adapters
     }
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Backend {}
-impl core::Backend for Backend {
-    type Adapter = Adapter;
+impl hal::Backend for Backend {
+    type PhysicalDevice = PhysicalDevice;
     type Device = Device;
 
     type Surface = window::Surface;
     type Swapchain = window::Swapchain;
 
+    type QueueFamily = QueueFamily;
     type CommandQueue = CommandQueue;
     type CommandBuffer = command::CommandBuffer;
     type SubpassCommandBuffer = command::SubpassCommandBuffer;
-    type QueueFamily = QueueFamily;
 
     type Memory = native::Memory;
     type CommandPool = pool::RawCommandPool;

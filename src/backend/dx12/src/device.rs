@@ -1,18 +1,23 @@
-use conv;
-use core::{buffer, device as d, format, image, mapping, memory, pass, pso, state};
-use core::{Features, Limits, MemoryType};
-use core::memory::Requirements;
+use std::collections::BTreeMap;
+use std::ops::Range;
+use std::{ffi, mem, ptr, slice};
+
 use d3d12;
 use d3dcompiler;
 use dxguid;
 use kernel32;
 use spirv_cross::{hlsl, spirv, ErrorCode as SpirvErrorCode};
-use std::collections::BTreeMap;
-use std::ops::Range;
-use std::{ffi, mem, ptr, slice};
-use {free_list, native as n, shade, Backend as B, Device};
 use winapi;
 use wio::com::ComPtr;
+
+use hal::{buffer, device as d, format, image, mapping, memory, pass, pso, state};
+use hal::{Features, Limits, MemoryType};
+use hal::memory::Requirements;
+use hal::pool::CommandPoolCreateFlags;
+
+use {conv, free_list, native as n, shade, Backend as B, Device, QueueFamily};
+use pool::RawCommandPool;
+
 
 /// Emit error during shader module creation. Used if we don't expect an error
 /// but might panic due to an exception in SPIRV-Cross.
@@ -427,6 +432,35 @@ impl d::Device<B> for Device {
             ty: mem_type.clone(),
             size,
         })
+    }
+
+    fn create_command_pool(
+        &mut self, family: &QueueFamily, _create_flags: CommandPoolCreateFlags
+    ) -> RawCommandPool {
+        let list_type = family.native_type();
+        // create command allocator
+        let mut command_allocator: *mut winapi::ID3D12CommandAllocator = ptr::null_mut();
+        let hr = unsafe {
+            self.raw.CreateCommandAllocator(
+                list_type,
+                &dxguid::IID_ID3D12CommandAllocator,
+                &mut command_allocator as *mut *mut _ as *mut *mut _,
+            )
+        };
+        // TODO: error handling
+        if !winapi::SUCCEEDED(hr) {
+            error!("error on command allocator creation: {:x}", hr);
+        }
+
+        RawCommandPool {
+            inner: unsafe { ComPtr::new(command_allocator) },
+            device: self.raw.clone(),
+            list_type,
+        }
+    }
+
+    fn destroy_command_pool(&mut self, _pool: RawCommandPool) {
+        // automatic
     }
 
     fn create_render_pass(
