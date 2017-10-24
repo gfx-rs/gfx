@@ -35,60 +35,59 @@ pub enum QueueType {
 }
 
 /// General information about a queue family, available upon adapter discovery.
-/// Not useful after an adapter opened and turned into `Gpu`.
 ///
 /// *Note*: A backend can expose multiple queue families with the same properties.
-pub trait ProtoQueueFamily: Debug {
+pub trait QueueFamily: Debug {
     /// Returns the type of queues.
     fn queue_type(&self) -> QueueType;
     /// Returns maximum number of queues created from this family.
     fn max_queues(&self) -> usize;
 }
 
-/// `RawQueueFamily` denotes a group of command queues provided by the backend
+/// `RawQueueGroup` denotes a group of command queues provided by the backend
 /// with the same properties/type.
-pub struct RawQueueFamily<B: Backend> {
-    prototype: B::ProtoQueueFamily,
+pub struct RawQueueGroup<B: Backend> {
+    family: B::QueueFamily,
     queues: Vec<B::CommandQueue>,
 }
 
 //TODO: this is not a very sound structure, unfortunately.
-impl<B: Backend> RawQueueFamily<B> {
+impl<B: Backend> RawQueueGroup<B> {
     #[doc(hidden)]
-    pub fn new(prototype: B::ProtoQueueFamily) -> Self {
-        RawQueueFamily {
-            prototype,
+    pub fn new(family: B::QueueFamily) -> Self {
+        RawQueueGroup {
+            family,
             queues: Vec::new(),
         }
     }
     #[doc(hidden)]
     pub fn add_queue(&mut self, queue: B::CommandQueue) {
-        assert!(self.queues.len() < self.prototype.max_queues());
+        assert!(self.queues.len() < self.family.max_queues());
         self.queues.push(queue);
     }
     ///
-    pub fn prototype(&self) -> &B::ProtoQueueFamily {
-        &self.prototype
+    pub fn family(&self) -> &B::QueueFamily {
+        &self.family
     }
 }
 
 /// Stronger-typed queue family.
-pub struct QueueFamily<B: Backend, C> {
-    pub(crate) prototype: B::ProtoQueueFamily,
+pub struct QueueGroup<B: Backend, C> {
+    pub(crate) family: B::QueueFamily,
     /// Command queues created in this family.
     pub queues: Vec<CommandQueue<B, C>>,
 }
 
-impl<B: Backend, C: Capability> QueueFamily<B, C> {
-    /// Create a new strongly typed queue family from a raw one.
+impl<B: Backend, C: Capability> QueueGroup<B, C> {
+    /// Create a new strongly typed queue group from a raw one.
     ///
     /// # Panics
     ///
     /// Panics if the family doesn't expose required queue capabilities.
-    pub fn new(raw: RawQueueFamily<B>) -> Self {
-        assert!(C::supported_by(raw.prototype.queue_type()));
-        QueueFamily {
-            prototype: raw.prototype,
+    pub fn new(raw: RawQueueGroup<B>) -> Self {
+        assert!(C::supported_by(raw.family.queue_type()));
+        QueueGroup {
+            family: raw.family,
             queues: raw.queues
                 .into_iter()
                 .map(|q| CommandQueue(q, PhantomData))

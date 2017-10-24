@@ -22,12 +22,12 @@ use std::error::Error;
 use std::fmt::{self, Debug};
 use std::hash::Hash;
 
-pub use self::adapter::{Adapter, AdapterInfo};
+pub use self::adapter::{Adapter, AdapterInfo, PhysicalDevice};
 pub use self::device::Device;
 pub use self::pool::CommandPool;
 pub use self::pso::{DescriptorPool};
 pub use self::queue::{
-    CommandQueue, QueueFamily, QueueType, ProtoQueueFamily, Submission,
+    CommandQueue, QueueGroup, QueueFamily, QueueType, Submission,
     Capability, General, Graphics, Compute, Transfer,
 };
 pub use self::window::{
@@ -240,20 +240,20 @@ pub trait Instance {
     /// Associated backend type of this instance.
     type Backend: Backend;
     /// Enumerate all available adapters.
-    fn enumerate_adapters(&self) -> Vec<<Self::Backend as Backend>::Adapter>;
+    fn enumerate_adapters(&self) -> Vec<Adapter<Self::Backend>>;
 }
 
 /// Different types of a specific API.
 #[allow(missing_docs)]
 pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     //type Instance:          Instance<Self>;
-    type Adapter:             Adapter<Self>;
+    type PhysicalDevice:      PhysicalDevice<Self>;
     type Device:              Device<Self>;
 
     type Surface:             Surface<Self>;
     type Swapchain:           Swapchain<Self>;
 
-    type ProtoQueueFamily:    queue::ProtoQueueFamily;
+    type QueueFamily:         QueueFamily;
     type CommandQueue:        queue::RawCommandQueue<Self>;
     type CommandBuffer:       command::RawCommandBuffer<Self>;
     type SubpassCommandBuffer;
@@ -312,9 +312,9 @@ pub type SubmissionResult<T> = Result<T, SubmissionError>;
 pub struct Gpu<B: Backend> {
     /// Logical device.
     pub device: B::Device,
-    /// Raw queue families. Each element in this vector
+    /// Raw queue groups. Each element in this vector
     /// matches the corresponding argument in `Adapter::open`.
-    pub queue_families: Vec<queue::RawQueueFamily<B>>,
+    pub queue_groups: Vec<queue::RawQueueGroup<B>>,
     /// Types of memory.
     ///
     /// Each memory type is associated with one heap of `memory_heaps`.

@@ -10,13 +10,13 @@ use hal::{buffer, command, device, format, image, target, mapping, memory, pass,
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Backend { }
 impl hal::Backend for Backend {
-    type Adapter = Adapter;
+    type PhysicalDevice = PhysicalDevice;
     type Device = Device;
 
     type Surface = Surface;
     type Swapchain = Swapchain;
 
-    type ProtoQueueFamily = ProtoQueueFamily;
+    type QueueFamily = QueueFamily;
     type CommandQueue = RawCommandQueue;
     type CommandBuffer = RawCommandBuffer;
     type SubpassCommandBuffer = SubpassCommandBuffer;
@@ -48,18 +48,10 @@ impl hal::Backend for Backend {
     type Semaphore = ();
 }
 
-/// Dummy adapter.
-pub struct Adapter;
-impl hal::Adapter<Backend> for Adapter {
-    fn open(self, _: Vec<(ProtoQueueFamily, usize)>) -> hal::Gpu<Backend> {
-        unimplemented!()
-    }
-
-    fn info(&self) -> &hal::AdapterInfo {
-        unimplemented!()
-    }
-
-    fn list_queue_families(&mut self) -> Vec<ProtoQueueFamily> {
+/// Dummy physical device.
+pub struct PhysicalDevice;
+impl hal::PhysicalDevice<Backend> for PhysicalDevice {
+    fn open(self, _: Vec<(QueueFamily, usize)>) -> hal::Gpu<Backend> {
         unimplemented!()
     }
 }
@@ -84,7 +76,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_command_pool(&mut self, _: &ProtoQueueFamily, _: pool::CommandPoolCreateFlags) -> RawCommandPool {
+    fn create_command_pool(&mut self, _: &QueueFamily, _: pool::CommandPoolCreateFlags) -> RawCommandPool {
         unimplemented!()
     }
 
@@ -268,8 +260,8 @@ impl hal::Device<Backend> for Device {
 }
 
 #[derive(Debug)]
-pub struct ProtoQueueFamily;
-impl queue::ProtoQueueFamily for ProtoQueueFamily {
+pub struct QueueFamily;
+impl queue::QueueFamily for QueueFamily {
     fn queue_type(&self) -> hal::QueueType {
         unimplemented!()
     }
@@ -536,11 +528,11 @@ impl hal::Surface<Backend> for Surface {
         unimplemented!()
     }
 
-    fn surface_capabilities(&self, _: &Adapter) -> hal::SurfaceCapabilities {
+    fn surface_capabilities(&self, _: &PhysicalDevice) -> hal::SurfaceCapabilities {
         unimplemented!()
     }
 
-    fn supports_queue_family(&self, _: &ProtoQueueFamily) -> bool {
+    fn supports_queue_family(&self, _: &QueueFamily) -> bool {
         unimplemented!()
     }
 
@@ -571,7 +563,7 @@ impl hal::Swapchain<Backend> for Swapchain {
 pub struct Instance;
 impl hal::Instance for Instance {
     type Backend = Backend;
-    fn enumerate_adapters(&self) -> Vec<Adapter> {
-        Vec::new()
+    fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
+        unimplemented!()
     }
 }

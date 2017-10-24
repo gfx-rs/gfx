@@ -8,7 +8,7 @@ use std::error::Error;
 use std::ops::Range;
 use {buffer, format, image, mapping, pass, pso};
 use pool::{CommandPool, CommandPoolCreateFlags};
-use queue::QueueFamily;
+use queue::QueueGroup;
 use {Backend, Features, Limits, MemoryType};
 use memory::Requirements;
 
@@ -128,16 +128,19 @@ pub trait Device<B: Backend>: Clone {
     ///
     fn free_memory(&mut self, B::Memory);
 
-    /// Creates a new command pool for a given queue family prototype.
+    /// Creates a new command pool for a given queue family.
     ///
-    /// *Note*: the prototype has to be one of the `Gpu::queue_families`.
-    fn create_command_pool(&mut self, &B::ProtoQueueFamily, CommandPoolCreateFlags) -> B::CommandPool;
+    /// *Note*: the family has to be associated by one as the `Gpu::queue_groups`.
+    fn create_command_pool(&mut self, &B::QueueFamily, CommandPoolCreateFlags) -> B::CommandPool;
 
     /// Creates a strongly typed command pool wrapper.
     fn create_command_pool_typed<C>(
-        &mut self, family: &QueueFamily<B, C>, flags: CommandPoolCreateFlags, max_buffers: usize
+        &mut self,
+        group: &QueueGroup<B, C>,
+        flags: CommandPoolCreateFlags,
+        max_buffers: usize,
     ) -> CommandPool<B, C> {
-        let raw = self.create_command_pool(&family.prototype, flags);
+        let raw = self.create_command_pool(&group.family, flags);
         CommandPool::new(raw, max_buffers)
     }
 

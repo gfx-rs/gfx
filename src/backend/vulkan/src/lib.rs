@@ -309,7 +309,9 @@ pub struct Adapter {
 }
 
 impl hal::Adapter<Backend> for Adapter {
-    fn open(self, families: Vec<(ProtoQueueFamily, usize)>) -> hal::Gpu<Backend> {
+    fn open<'a, I>(&self, family_iter: I) -> hal::Gpu<Backend>
+    where I: Iterator<Item = (&'a QueueFamily, usize)>
+    {
         let max_queue_count = families.iter().map(|&(_, count)| count).max().unwrap_or(0);
         let queue_priorities = vec![0.0f32; max_queue_count];
         let family_infos = families
@@ -455,8 +457,8 @@ impl hal::Adapter<Backend> for Adapter {
         &self.info
     }
 
-    fn list_queue_families(&mut self) -> Vec<ProtoQueueFamily> {
-        mem::replace(&mut self.queue_families, Vec::new())
+    fn queue_families(&self) -> &[QueueFamily] {
+        &self.queue_families
     }
 }
 
