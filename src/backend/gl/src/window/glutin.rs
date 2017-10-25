@@ -43,7 +43,7 @@
 //! }
 //! ```
 
-use hal::{self, format, image};
+use hal::{self, format as f, image};
 
 use {native as n, Backend as B, PhysicalDevice, QueueFamily};
 
@@ -86,6 +86,29 @@ impl Surface {
             window: Rc::new(window)
         }
     }
+
+    fn swapchain_formats(&self) -> Vec<f::Format> {
+        use hal::format::ChannelType::*;
+        use hal::format::SurfaceType::*;
+
+        let pixel_format = self.window.get_pixel_format();
+        let color_bits = pixel_format.color_bits;
+        let alpha_bits = pixel_format.alpha_bits;
+        let srgb = pixel_format.srgb;
+
+        // TODO: expose more formats
+        match (color_bits, alpha_bits, srgb) {
+            (24, 8, true) => vec![
+                f::Format(R8_G8_B8_A8, Srgb),
+                f::Format(B8_G8_R8_A8, Srgb),
+            ],
+            (24, 8, false) => vec![
+                f::Format(R8_G8_B8_A8, Unorm),
+                f::Format(B8_G8_R8_A8, Unorm),
+            ],
+            _ => vec![],
+        }
+    }
 }
 
 impl hal::Surface<B> for Surface {
@@ -94,7 +117,8 @@ impl hal::Surface<B> for Surface {
         hal::image::Kind::D2(w, h, a)
     }
 
-    fn surface_capabilities(&self, _: &PhysicalDevice) -> hal::SurfaceCapabilities {
+    fn capabilities_and_formats(&self, _: &PhysicalDevice) -> (hal::SurfaceCapabilities, Vec<f::Format>) {
+        let _formats = self.swapchain_formats();
         unimplemented!()
     }
 
@@ -124,20 +148,20 @@ impl hal::Instance for Surface {
 
 pub fn config_context(
     builder: glutin::ContextBuilder,
-    color_format: format::Format,
-    ds_format: Option<format::Format>,
+    color_format: f::Format,
+    ds_format: Option<f::Format>,
 ) -> glutin::ContextBuilder
 {
     let color_bits = color_format.0.describe_bits();
     let depth_bits = match ds_format {
         Some(fm) => fm.0.describe_bits(),
-        None => format::BITS_ZERO,
+        None => f::BITS_ZERO,
     };
     builder
         .with_depth_buffer(depth_bits.depth)
         .with_stencil_buffer(depth_bits.stencil)
         .with_pixel_format(color_bits.color, color_bits.alpha)
-        .with_srgb(color_format.1 == format::ChannelType::Srgb)
+        .with_srgb(color_format.1 == f::ChannelType::Srgb)
 }
 
 

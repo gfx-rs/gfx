@@ -23,7 +23,7 @@ use hal::{
     DescriptorPool, Gpu, FrameSync, Primitive,
     Backbuffer, SwapchainConfig,
 };
-use hal::format::{Formatted, Srgba8 as ColorFormat, Swizzle, Vec2};
+use hal::format::{ChannelType, Formatted, Srgba8 as ColorFormat, Swizzle, Vec2};
 use hal::pass::Subpass;
 use hal::queue::Submission;
 use hal::target::Rect;
@@ -104,9 +104,18 @@ fn main() {
     for adapter in &adapters {
         println!("{:?}", adapter.info);
     }
+
+    let adapter = adapters.remove(0);
+    let surface_format = surface
+        .capabilities_and_formats(&adapter.physical_device)
+        .1
+        .into_iter()
+        .find(|format| format.1 == ChannelType::Srgb)
+        .unwrap();
+
     // Build a new device and associated command queues
     let Gpu { mut device, mut queue_groups, memory_types, .. } =
-        adapters.remove(0).open_with(|family| {
+        adapter.open_with(|family| {
             if family.supports_graphics() && surface.supports_queue_family(family) {
                 Some(1)
             } else { None }
@@ -116,8 +125,9 @@ fn main() {
     let mut command_pool = device.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty(), 16);
     let mut queue = &mut queue_group.queues[0];
 
+    println!("{:?}", surface_format);
     let swap_config = SwapchainConfig::new()
-        .with_color::<ColorFormat>();
+        .with_color(surface_format);
     let (mut swap_chain, backbuffer) = surface.build_swapchain(swap_config, &queue);
 
     // Setup renderpass and pipeline
@@ -169,7 +179,7 @@ fn main() {
 
     let render_pass = {
         let attachment = pass::Attachment {
-            format: ColorFormat::SELF,
+            format: surface_format,
             ops: pass::AttachmentOps::new(pass::AttachmentLoadOp::Clear, pass::AttachmentStoreOp::Store),
             stencil_ops: pass::AttachmentOps::DONT_CARE,
             layouts: i::ImageLayout::Undefined .. i::ImageLayout::Present,
@@ -285,7 +295,7 @@ fn main() {
             let pairs = images
                 .into_iter()
                 .map(|image| {
-                    let rtv = device.create_image_view(&image, ColorFormat::SELF, Swizzle::NO, COLOR_RANGE.clone()).unwrap();
+                    let rtv = device.create_image_view(&image, surface_format, Swizzle::NO, COLOR_RANGE.clone()).unwrap();
                     (image, rtv)
                 })
                 .collect::<Vec<_>>();
