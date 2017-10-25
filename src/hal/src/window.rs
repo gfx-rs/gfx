@@ -29,7 +29,7 @@
 //! # use gfx_hal::{CommandQueue, Graphics, Swapchain};
 //!
 //! # let mut swapchain: empty::Swapchain = return;
-//! # let mut device: empty::Device = return;
+//! # let device: empty::Device = return;
 //! # let mut present_queue: CommandQueue<empty::Backend, Graphics> = return;
 //! let acquisition_semaphore = device.create_semaphore();
 //! let render_semaphore = device.create_semaphore();

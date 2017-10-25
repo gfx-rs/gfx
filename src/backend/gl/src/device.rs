@@ -101,7 +101,7 @@ impl Device {
 
 impl Device {
     pub fn create_shader_module_from_source(
-        &mut self,
+        &self,
         data: &[u8],
         stage: pso::Stage,
     ) -> Result<n::ShaderModule, d::ShaderError> {
@@ -165,7 +165,7 @@ impl d::Device<B> for Device {
     }
 
     fn allocate_memory(
-        &mut self, mem_type: &c::MemoryType, _size: u64,
+        &self, mem_type: &c::MemoryType, _size: u64,
     ) -> Result<n::Memory, d::OutOfMemory> {
         Ok(n::Memory {
             properties: mem_type.properties,
@@ -173,7 +173,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_command_pool(
-        &mut self,
+        &self,
         _family: &QueueFamily,
         flags: CommandPoolCreateFlags,
     ) -> RawCommandPool {
@@ -197,7 +197,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn destroy_command_pool(&mut self, pool: RawCommandPool) {
+    fn destroy_command_pool(&self, pool: RawCommandPool) {
         let gl = &self.share.context;
         unsafe {
             gl.DeleteFramebuffers(1, &pool.fbo);
@@ -205,7 +205,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_render_pass(
-        &mut self,
+        &self,
         attachments: &[pass::Attachment],
         subpasses: &[pass::SubpassDesc],
         _dependencies: &[pass::SubpassDependency],
@@ -233,12 +233,12 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_pipeline_layout(&mut self, _: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
+    fn create_pipeline_layout(&self, _: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
         n::PipelineLayout
     }
 
     fn create_graphics_pipelines<'a>(
-        &mut self,
+        &self,
         descs: &[(pso::GraphicsShaderSet<'a, B>, &n::PipelineLayout, pass::Subpass<'a, B>, &pso::GraphicsPipelineDesc)],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         let gl = &self.share.context;
@@ -304,14 +304,14 @@ impl d::Device<B> for Device {
     }
 
     fn create_compute_pipelines<'a>(
-        &mut self,
+        &self,
         _descs: &[(pso::EntryPoint<'a, B>, &n::PipelineLayout)],
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
         unimplemented!()
     }
 
     fn create_framebuffer(
-        &mut self,
+        &self,
         pass: &n::RenderPass,
         attachments: &[&n::ImageView],
         _extent: d::Extent,
@@ -348,14 +348,14 @@ impl d::Device<B> for Device {
     }
 
     fn create_shader_module(
-        &mut self,
+        &self,
         _data: &[u8],
     ) -> Result<n::ShaderModule, d::ShaderError> {
         //TODO: SPIRV loading or conversion to GLSL
         unimplemented!()
     }
 
-    fn create_sampler(&mut self, info: i::SamplerInfo) -> n::FatSampler {
+    fn create_sampler(&self, info: i::SamplerInfo) -> n::FatSampler {
         if !self.share.features.sampler_objects {
             return n::FatSampler::Info(info);
         }
@@ -416,7 +416,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_buffer(
-        &mut self, size: u64, stride: u64, usage: buffer::Usage,
+        &self, size: u64, stride: u64, usage: buffer::Usage,
     ) -> Result<UnboundBuffer, buffer::CreationError> {
         if !self.share.features.constant_buffer && usage.contains(buffer::UNIFORM) {
             error!("Constant buffers are not supported by this GL version");
@@ -449,12 +449,12 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn get_buffer_requirements(&mut self, unbound: &UnboundBuffer) -> memory::Requirements {
+    fn get_buffer_requirements(&self, unbound: &UnboundBuffer) -> memory::Requirements {
         unbound.requirements
     }
 
     fn bind_buffer_memory(
-        &mut self, memory: &n::Memory, _offset: u64, unbound: UnboundBuffer,
+        &self, memory: &n::Memory, _offset: u64, unbound: UnboundBuffer,
     ) -> Result<n::Buffer, d::BindError> {
         let gl = &self.share.context;
         let target = unbound.target;
@@ -517,26 +517,26 @@ impl d::Device<B> for Device {
     }
 
     fn create_buffer_view(
-        &mut self, _: &n::Buffer, _: Format, _: Range<u64>
+        &self, _: &n::Buffer, _: Format, _: Range<u64>
     ) -> Result<n::BufferView, buffer::ViewError> {
         unimplemented!()
     }
 
-    fn create_image(&mut self, _: i::Kind, _: i::Level, _: Format, _: i::Usage)
+    fn create_image(&self, _: i::Kind, _: i::Level, _: Format, _: i::Usage)
          -> Result<UnboundImage, i::CreationError>
     {
         unimplemented!()
     }
 
-    fn get_image_requirements(&mut self, _: &UnboundImage) -> memory::Requirements {
+    fn get_image_requirements(&self, _: &UnboundImage) -> memory::Requirements {
         unimplemented!()
     }
 
-    fn bind_image_memory(&mut self, _: &n::Memory, _: u64, _: UnboundImage) -> Result<n::Image, d::BindError> {
+    fn bind_image_memory(&self, _: &n::Memory, _: u64, _: UnboundImage) -> Result<n::Image, d::BindError> {
         unimplemented!()
     }
 
-    fn create_image_view(&mut self,
+    fn create_image_view(&self,
         image: &n::Image, _format: Format, swizzle: Swizzle, range: i::SubresourceRange,
     ) -> Result<n::ImageView, i::ViewError> {
         //TODO: check if `layers.end` covers all the layers
@@ -568,19 +568,19 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_descriptor_pool(&mut self, _: usize, _: &[pso::DescriptorRangeDesc]) -> n::DescriptorPool {
+    fn create_descriptor_pool(&self, _: usize, _: &[pso::DescriptorRangeDesc]) -> n::DescriptorPool {
         n::DescriptorPool { }
     }
 
-    fn create_descriptor_set_layout(&mut self, _: &[pso::DescriptorSetLayoutBinding]) -> n::DescriptorSetLayout {
+    fn create_descriptor_set_layout(&self, _: &[pso::DescriptorSetLayoutBinding]) -> n::DescriptorSetLayout {
         n::DescriptorSetLayout
     }
 
-    fn update_descriptor_sets(&mut self, _: &[pso::DescriptorSetWrite<B>]) {
+    fn update_descriptor_sets(&self, _: &[pso::DescriptorSetWrite<B>]) {
         unimplemented!()
     }
 
-    fn acquire_mapping_raw(&mut self, buffer: &n::Buffer, read: Option<Range<u64>>)
+    fn acquire_mapping_raw(&self, buffer: &n::Buffer, read: Option<Range<u64>>)
         -> Result<*mut u8, mapping::Error>
     {
         let access = match read {
@@ -605,7 +605,7 @@ impl d::Device<B> for Device {
         Ok(data as _)
     }
 
-    fn release_mapping_raw(&mut self, buffer: &n::Buffer, wrote: Option<Range<u64>>) {
+    fn release_mapping_raw(&self, buffer: &n::Buffer, wrote: Option<Range<u64>>) {
         assert!(wrote.is_none() || buffer.cpu_can_write);
         let gl = &self.share.context;
         unsafe {
@@ -615,11 +615,11 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_semaphore(&mut self) -> n::Semaphore {
+    fn create_semaphore(&self) -> n::Semaphore {
         n::Semaphore
     }
 
-    fn create_fence(&mut self, signalled: bool) -> n::Fence {
+    fn create_fence(&self, signalled: bool) -> n::Fence {
         let sync = if signalled && self.share.private_caps.sync {
             let gl = &self.share.context;
             unsafe { gl.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0) }
@@ -629,7 +629,7 @@ impl d::Device<B> for Device {
         n::Fence::new(sync)
     }
 
-    fn reset_fences(&mut self, fences: &[&n::Fence]) {
+    fn reset_fences(&self, fences: &[&n::Fence]) {
         if !self.share.private_caps.sync {
             return
         }
@@ -646,7 +646,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn wait_for_fences(&mut self, fences: &[&n::Fence], wait: d::WaitFor, timeout_ms: u32) -> bool {
+    fn wait_for_fences(&self, fences: &[&n::Fence], wait: d::WaitFor, timeout_ms: u32) -> bool {
         if !self.share.private_caps.sync {
             return true;
         }
@@ -694,60 +694,60 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn free_memory(&mut self, _: n::Memory) {
+    fn free_memory(&self, _: n::Memory) {
         unimplemented!()
     }
 
-    fn destroy_shader_module(&mut self, _: n::ShaderModule) {
+    fn destroy_shader_module(&self, _: n::ShaderModule) {
         unimplemented!()
     }
 
-    fn destroy_renderpass(&mut self, _: n::RenderPass) {
+    fn destroy_renderpass(&self, _: n::RenderPass) {
         unimplemented!()
     }
 
-    fn destroy_pipeline_layout(&mut self, _: n::PipelineLayout) {
+    fn destroy_pipeline_layout(&self, _: n::PipelineLayout) {
         unimplemented!()
     }
-    fn destroy_graphics_pipeline(&mut self, _: n::GraphicsPipeline) {
+    fn destroy_graphics_pipeline(&self, _: n::GraphicsPipeline) {
         unimplemented!()
     }
-    fn destroy_compute_pipeline(&mut self, _: n::ComputePipeline) {
+    fn destroy_compute_pipeline(&self, _: n::ComputePipeline) {
         unimplemented!()
     }
-    fn destroy_framebuffer(&mut self, _: n::FrameBuffer) {
-        unimplemented!()
-    }
-
-    fn destroy_buffer(&mut self, _: n::Buffer) {
-        unimplemented!()
-    }
-    fn destroy_buffer_view(&mut self, _: n::BufferView) {
-        unimplemented!()
-    }
-    fn destroy_image(&mut self, _: n::Image) {
-        unimplemented!()
-    }
-    fn destroy_image_view(&mut self, _: n::ImageView) {
-        unimplemented!()
-    }
-    fn destroy_sampler(&mut self, _: n::FatSampler) {
+    fn destroy_framebuffer(&self, _: n::FrameBuffer) {
         unimplemented!()
     }
 
-    fn destroy_descriptor_pool(&mut self, _: n::DescriptorPool) {
+    fn destroy_buffer(&self, _: n::Buffer) {
+        unimplemented!()
+    }
+    fn destroy_buffer_view(&self, _: n::BufferView) {
+        unimplemented!()
+    }
+    fn destroy_image(&self, _: n::Image) {
+        unimplemented!()
+    }
+    fn destroy_image_view(&self, _: n::ImageView) {
+        unimplemented!()
+    }
+    fn destroy_sampler(&self, _: n::FatSampler) {
         unimplemented!()
     }
 
-    fn destroy_descriptor_set_layout(&mut self, _: n::DescriptorSetLayout) {
+    fn destroy_descriptor_pool(&self, _: n::DescriptorPool) {
         unimplemented!()
     }
 
-    fn destroy_fence(&mut self, _: n::Fence) {
+    fn destroy_descriptor_set_layout(&self, _: n::DescriptorSetLayout) {
         unimplemented!()
     }
 
-    fn destroy_semaphore(&mut self, _: n::Semaphore) {
+    fn destroy_fence(&self, _: n::Fence) {
+        unimplemented!()
+    }
+
+    fn destroy_semaphore(&self, _: n::Semaphore) {
         unimplemented!()
     }
 }

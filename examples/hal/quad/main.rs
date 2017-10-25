@@ -118,7 +118,7 @@ fn main() {
         .unwrap();
 
     // Build a new device and associated command queues
-    let Gpu { mut device, mut queue_groups, memory_types, .. } =
+    let Gpu { device, mut queue_groups, memory_types, .. } =
         adapter.open_with(|family| {
             if family.supports_graphics() && surface.supports_queue_family(family) {
                 Some(1)

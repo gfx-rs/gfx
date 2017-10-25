@@ -18,7 +18,7 @@ impl<B: Backend> BoxedAllocator<B> {
         }
     }
 
-    fn make_memory(&self, mut device: B::Device, memory: B::Memory) -> Memory {
+    fn make_memory(&self, device: B::Device, memory: B::Memory) -> Memory {
         let mut memory = Some(memory);
         let release = Box::new(move || device.free_memory(memory.take().unwrap()));
         Memory::new(release, self.usage)
@@ -27,13 +27,13 @@ impl<B: Backend> BoxedAllocator<B> {
 
 impl<B: Backend> Allocator<B> for BoxedAllocator<B> {
     fn allocate_buffer(&mut self,
-        device: &mut Device<B>,
+        device: &Device<B>,
         _: buffer::Usage,
         buffer: B::UnboundBuffer
     ) -> (B::Buffer, Memory) {
-        let requirements = device.mut_raw().get_buffer_requirements(&buffer);
+        let requirements = device.ref_raw().get_buffer_requirements(&buffer);
         let mem_type = device.find_usage_memory(self.usage, requirements.type_mask).unwrap();
-        let mut device = device.ref_raw().clone();
+        let device = device.ref_raw().clone();
         let memory = device.allocate_memory(&mem_type, requirements.size)
             .unwrap();
         let buffer = device.bind_buffer_memory(&memory, 0, buffer)
@@ -47,9 +47,9 @@ impl<B: Backend> Allocator<B> for BoxedAllocator<B> {
         _: image::Usage,
         image: B::UnboundImage
     ) -> (B::Image, Memory) {
-        let requirements = device.mut_raw().get_image_requirements(&image);
+        let requirements = device.ref_raw().get_image_requirements(&image);
         let mem_type = device.find_usage_memory(self.usage, requirements.type_mask).unwrap();
-        let mut device = device.ref_raw().clone();
+        let device = device.ref_raw().clone();
         let memory = device.allocate_memory(&mem_type, requirements.size)
             .unwrap();
         let image = device.bind_image_memory(&memory, 0, image)

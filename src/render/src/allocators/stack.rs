@@ -51,21 +51,21 @@ impl<B: Backend> StackAllocator<B> {
 impl<B: Backend> InnerStackAllocator<B> {
     fn shrink(&mut self) {
         for (_, stack) in &mut self.stacks {
-            stack.shrink(&mut self.device);
+            stack.shrink(&self.device);
         }
     }
 }
 
 impl<B: Backend> Allocator<B> for StackAllocator<B> {
     fn allocate_buffer(&mut self,
-        device: &mut Device<B>,
+        device: &Device<B>,
         usage: buffer::Usage,
         buffer: B::UnboundBuffer
     ) -> (B::Buffer, Memory) {
         let dependency = self.0.dependency();
         let inner: &mut InnerStackAllocator<B> = &mut self.0;
         let requirements = hal::buffer::complete_requirements::<B>(
-            device.mut_raw(), &buffer, usage);
+            device.ref_raw(), &buffer, usage);
         let memory_type = device.find_usage_memory(inner.usage, requirements.type_mask)
             .expect("could not find suitable memory");
         let stack = inner.stacks.entry(memory_type.id)
@@ -76,7 +76,8 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
             requirements,
             dependency,
         );
-        let buffer = device.mut_raw().bind_buffer_memory(memory, offset, buffer)
+        let buffer = device.ref_raw()
+            .bind_buffer_memory(memory, offset, buffer)
             .unwrap();
         (buffer, Memory::new(release, inner.usage))
     }
@@ -88,7 +89,7 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
     ) -> (B::Image, Memory) {
         let dependency = self.0.dependency();
         let inner: &mut InnerStackAllocator<B> = &mut self.0;
-        let requirements = device.mut_raw().get_image_requirements(&image);
+        let requirements = device.ref_raw().get_image_requirements(&image);
         let memory_type = device.find_usage_memory(inner.usage, requirements.type_mask)
             .expect("could not find suitable memory");
         let stack = inner.stacks.entry(memory_type.id)
@@ -99,7 +100,8 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
             requirements,
             dependency,
         );
-        let image = device.mut_raw().bind_image_memory(memory, offset, image)
+        let image = device.ref_raw()
+            .bind_image_memory(memory, offset, image)
             .unwrap();
         (image, Memory::new(release, inner.usage))
     }
@@ -133,7 +135,7 @@ impl<B: Backend> ChunkStack<B> {
     }
 
     fn allocate(&mut self,
-        device: &mut Device<B>,
+        device: &Device<B>,
         chunk_size: u64,
         req: Requirements,
         dependency: Dependency<InnerStackAllocator<B>>,
@@ -181,16 +183,16 @@ impl<B: Backend> ChunkStack<B> {
     }
 
     fn grow(&mut self,
-        device: &mut Device<B>,
-        chunk_size: u64
+        device: &Device<B>,
+        chunk_size: u64,
     ) {
-        let memory = device.mut_raw()
+        let memory = device.ref_raw()
             .allocate_memory(&self.memory_type, chunk_size)
             .unwrap();
         self.chunks.push(memory);
     }
 
-    fn shrink(&mut self, device: &mut B::Device) {
+    fn shrink(&mut self, device: &B::Device) {
         self.update_allocs();
 
         let drain_beg = self.allocs.last()

@@ -223,7 +223,7 @@ impl<B: Backend, C> Context<B, C>
         Cf: RenderFormat,
     {
         let hal::Gpu {
-            mut device,
+            device,
             mut queue_groups,
             memory_types,
             memory_heaps,
