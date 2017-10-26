@@ -11,7 +11,8 @@ use std::error::Error;
 use std::fmt;
 use std::ops::Range;
 
-use {format, state};
+use format;
+use pso::Comparison;
 
 
 /// Image layer.
@@ -437,7 +438,7 @@ pub struct SamplerInfo {
     /// This range is used to clamp LOD level used for sampling.
     pub lod_range: Range<Lod>,
     /// Comparison mode, used primary for a shadow map.
-    pub comparison: Option<state::Comparison>,
+    pub comparison: Option<Comparison>,
     /// Border color is used when one of the wrap modes is set to border.
     pub border: PackedColor,
 }

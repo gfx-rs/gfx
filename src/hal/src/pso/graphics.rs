@@ -1,6 +1,6 @@
 //! Graphics pipeline descriptor.
 
-use {state as s, Backend, Primitive};
+use {Backend, Primitive};
 use super::EntryPoint;
 use super::input_assembler::{AttributeDesc, InputAssemblerDesc, VertexBufferDesc};
 use super::output_merger::{ColorInfo, DepthStencilDesc};
@@ -63,6 +63,38 @@ impl GraphicsPipelineDesc {
     }
 }
 
+/// Way to rasterize polygons.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
+#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+pub enum PolygonMode {
+    /// Rasterize as a point.
+    Point,
+    /// Rasterize as a line with the given width.
+    Line(f32),
+    /// Rasterize as a face.
+    Fill,
+}
+
+/// Which face, if any, to cull.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+pub enum CullFace {
+    ///
+    Front,
+    ///
+    Back,
+}
+
+/// The front face winding order of a set of vertices.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+pub enum FrontFace {
+    /// Clockwise winding order.
+    Clockwise,
+    /// Counter-clockwise winding order.
+    CounterClockwise,
+}
+
 ///
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
@@ -80,11 +112,11 @@ pub struct DepthBias {
 #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
 pub struct Rasterizer {
     /// How to rasterize this primitive.
-    pub polgyon_mode: s::RasterMethod,
+    pub polygon_mode: PolygonMode,
     /// Which face should be culled.
-    pub cull_mode: s::CullFace,
+    pub cull_face: Option<CullFace>,
     /// Which vertex winding is considered to be the front face for culling.
-    pub front_face: s::FrontFace,
+    pub front_face: FrontFace,
     ///
     pub depth_clamping: bool,
     ///
@@ -94,17 +126,15 @@ pub struct Rasterizer {
 }
 
 impl Rasterizer {
-    /// Create a new polygon-filling rasterizer state
-    pub fn new_fill() -> Self {
-        Rasterizer {
-            polgyon_mode: s::RasterMethod::Fill,
-            cull_mode: s::CullFace::Nothing,
-            front_face: s::FrontFace::CounterClockwise,
-            depth_clamping: true,
-            depth_bias: None,
-            conservative: false,
-        }
-    }
+    /// Simple polygon-filling rasterizer state
+    pub const FILL: Self = Rasterizer {
+        polgyon_mode: PolygonMode::Fill,
+        cull_mode: None,
+        front_face: FrontFace::CounterClockwise,
+        depth_clamping: true,
+        depth_bias: None,
+        conservative: false,
+    };
 }
 
 ///
@@ -120,14 +150,12 @@ pub struct BlendDesc {
 }
 
 impl BlendDesc {
-    /// Create a new empty blend descriptor
-    pub fn new() -> Self {
-        BlendDesc {
-            alpha_coverage: false,
-            logic_op: None,
-            targets: Vec::new(),
-        }
-    }
+    /// Empty blend descriptor
+    pub const EMPTY: Self = BlendDesc {
+        alpha_coverage: false,
+        logic_op: None,
+        targets: Vec::new(),
+    };
 }
 
 ///

@@ -1,6 +1,28 @@
-//! Output Merger(OM) stage descripton.
+//! Output Merger(OM) stage description.
 
 use {format, state as s};
+
+/// A pixel-wise comparison function.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+pub enum Comparison {
+    /// `false`
+    Never,
+    /// `x < y`
+    Less,
+    /// `x <= y`
+    LessEqual,
+    /// `x == y`
+    Equal,
+    /// `x >= y`
+    GreaterEqual,
+    /// `x > y`
+    Greater,
+    /// `x != y`
+    NotEqual,
+    /// `true`
+    Always,
+}
 
 /// PSO color target descriptor
 pub type ColorTargetDesc = (format::Format, ColorInfo);

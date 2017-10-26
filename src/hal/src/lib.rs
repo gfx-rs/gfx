@@ -33,7 +33,6 @@ pub use self::queue::{
 pub use self::window::{
     Backbuffer, Frame, FrameSync, Surface, SurfaceCapabilities, Swapchain, SwapchainConfig,
 };
-pub use draw_state::state;
 
 pub mod adapter;
 pub mod buffer;
