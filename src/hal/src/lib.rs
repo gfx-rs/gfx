@@ -33,7 +33,7 @@ pub use self::queue::{
 pub use self::window::{
     Backbuffer, Frame, FrameSync, Surface, SurfaceCapabilities, Swapchain, SwapchainConfig,
 };
-pub use draw_state::{state, target};
+pub use draw_state::state;
 
 pub mod adapter;
 pub mod buffer;
@@ -73,33 +73,6 @@ pub type UnorderedViewSlot = u8;
 pub type ColorSlot = u8;
 /// Slot for a sampler.
 pub type SamplerSlot = u8;
-
-///
-#[allow(missing_docs)]
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
-pub struct Viewport {
-    pub x: u16,
-    pub y: u16,
-    pub w: u16,
-    pub h: u16,
-    pub near: f32,
-    pub far: f32,
-}
-
-impl Viewport {
-    /// Construct a viewport from rectangle.
-    pub fn from_rect(rect: target::Rect, near: f32, far: f32) -> Self {
-        Viewport {
-            x: rect.x,
-            y: rect.y,
-            w: rect.w,
-            h: rect.h,
-            near,
-            far,
-        }
-    }
-}
 
 /// Features that the device supports.
 /// These only include features of the core interface and not API extensions.

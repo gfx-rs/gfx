@@ -11,10 +11,13 @@ use std::error::Error;
 use std::fmt;
 use std::ops::Range;
 
-use {format, state, target};
-pub use target::{Layer, Level};
+use {format, state};
 
 
+/// Image layer.
+pub type Layer = u16;
+/// Image mipmap level.
+pub type Level = u8;
 /// Maximum accessible mipmap level of a image.
 pub const MAX_LEVEL: Level = 15;
 
@@ -120,7 +123,7 @@ pub enum LayerError {
     /// The source texture kind doesn't support array slices.
     NotExpected(Kind),
     /// Selected layer is outside of the provided range.
-    OutOfBounds(Range<target::Layer>),
+    OutOfBounds(Range<Layer>),
 }
 
 impl fmt::Display for LayerError {

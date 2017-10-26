@@ -1,11 +1,12 @@
 
 use std::ops::Range;
-use {pso, target};
-use {Backend, IndexCount, InstanceCount, VertexCount, VertexOffset, Viewport};
+use pso;
+use {Backend, IndexCount, InstanceCount, VertexCount, VertexOffset};
 use buffer::IndexBufferView;
 use image::{ImageLayout, SubresourceRange};
 use memory::Barrier;
 use super::{
+    ColorValue, StencilValue, Rect, Viewport,
     AttachmentClear, BufferCopy, BufferImageCopy,
     ClearColor, ClearDepthStencil, ClearValue,
     ImageCopy, ImageResolve, SubpassContents,
@@ -64,7 +65,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     );
 
     ///
-    fn clear_attachments(&mut self, &[AttachmentClear], &[target::Rect]);
+    fn clear_attachments(&mut self, &[AttachmentClear], &[Rect]);
 
     ///
     fn resolve_image(
@@ -118,20 +119,20 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     /// - Command buffer must be in recording state.
     /// - Number of scissors must be between 1 and `max_viewports`.
     /// - Only queues with graphics capability support this function.
-    fn set_scissors(&mut self, &[target::Rect]);
+    fn set_scissors(&mut self, &[Rect]);
 
     ///
-    fn set_stencil_reference(&mut self, front: target::Stencil, back: target::Stencil);
+    fn set_stencil_reference(&mut self, front: StencilValue, back: StencilValue);
 
     ///
-    fn set_blend_constants(&mut self, target::ColorValue);
+    fn set_blend_constants(&mut self, ColorValue);
 
     ///
     fn begin_renderpass(
         &mut self,
         render_pass: &B::RenderPass,
         frame_buffer: &B::Framebuffer,
-        render_area: target::Rect,
+        render_area: Rect,
         clear_values: &[ClearValue],
         first_subpass: SubpassContents,
     );

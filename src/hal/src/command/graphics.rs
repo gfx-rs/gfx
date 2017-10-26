@@ -1,21 +1,48 @@
-use {pso, target};
-use {Backend, Viewport};
+use std::ops::Range;
+
+use Backend;
+use pso;
 use buffer::IndexBufferView;
 use image::{ImageLayout, SubresourceRange};
 use queue::capability::{Graphics, Supports};
 use super::{CommandBuffer, RawCommandBuffer, RenderPassInlineEncoder};
 
 
-/// A universal clear color supporting integet formats
+#[allow(missing_docs)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, PartialOrd)]
+#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+pub struct Rect {
+    pub x: u16,
+    pub y: u16,
+    pub w: u16,
+    pub h: u16,
+}
+
+#[allow(missing_docs)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+pub struct Viewport {
+    pub rect: Rect,
+    pub depth: Range<f32>,
+}
+
+/// A single RGBA float color.
+pub type ColorValue = [f32; 4];
+/// A single depth value from a depth buffer.
+pub type DepthValue = f32;
+/// A single value from a stencil buffer.
+pub type StencilValue = u32;
+
+/// A universal clear color supporting integer formats
 /// as well as the standard floating-point.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub enum ClearColor {
-    /// Standard floating-point vec4 color
-    Float([f32; 4]),
-    /// Integer vector to clear ivec4 targets.
+    /// Standard floating-point `vec4` color
+    Float(ColorValue),
+    /// Integer vector to clear `ivec4` targets.
     Int([i32; 4]),
-    /// Unsigned int vector to clear uvec4 targets.
+    /// Unsigned int vector to clear `uvec4` targets.
     Uint([u32; 4]),
 }
 
@@ -62,12 +89,7 @@ impl From<u32> for ClearColor {
 /// Depth-stencil target clear values.
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-pub struct ClearDepthStencil {
-    ///
-    pub depth: f32,
-    ///
-    pub stencil: u32,
-}
+pub struct ClearDepthStencil(pub DepthValue, pub StencilValue);
 
 /// General clear values for attachments (color or depth-stencil).
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
@@ -88,9 +110,9 @@ pub enum AttachmentClear {
     /// First tuple element denotes the index of the color attachment.
     Color(usize, ClearColor),
     /// Clear depth component of the attachment.
-    Depth(ClearDepthStencil),
+    Depth(DepthValue),
     /// Clear stencil component of the attachment.
-    Stencil(ClearDepthStencil),
+    Stencil(StencilValue),
     /// Clear depth-stencil component of the attachment.
     DepthStencil(ClearDepthStencil),
 }
@@ -101,7 +123,7 @@ impl<'a, B: Backend, C: Supports<Graphics>> CommandBuffer<'a, B, C> {
         &mut self,
         render_pass: &B::RenderPass,
         frame_buffer: &B::Framebuffer,
-        render_area: target::Rect,
+        render_area: Rect,
         clear_values: &[ClearValue],
     ) -> RenderPassInlineEncoder<B>
     {
@@ -164,17 +186,17 @@ impl<'a, B: Backend, C: Supports<Graphics>> CommandBuffer<'a, B, C> {
     }
 
     ///
-    pub fn set_scissors(&mut self, scissors: &[target::Rect]) {
+    pub fn set_scissors(&mut self, scissors: &[Rect]) {
         self.raw.set_scissors(scissors)
     }
 
     ///
-    pub fn set_stencil_reference(&mut self, front: target::Stencil, back: target::Stencil) {
+    pub fn set_stencil_reference(&mut self, front: StencilValue, back: StencilValue) {
         self.raw.set_stencil_reference(front, back)
     }
 
     ///
-    pub fn set_blend_constants(&mut self, cv: target::ColorValue) {
+    pub fn set_blend_constants(&mut self, cv: ColorValue) {
         self.raw.set_blend_constants(cv)
     }
 }
