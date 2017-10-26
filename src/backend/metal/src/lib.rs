@@ -1,11 +1,11 @@
 extern crate gfx_hal as hal;
 extern crate cocoa;
+extern crate foreign_types;
 #[macro_use] extern crate objc;
 extern crate io_surface;
 extern crate core_foundation;
 extern crate core_graphics;
 #[macro_use] extern crate log;
-#[macro_use] extern crate scopeguard;
 extern crate block;
 extern crate spirv_cross;
 
@@ -33,6 +33,7 @@ use std::os::raw::c_void;
 
 use objc::runtime::{Object, Class};
 use cocoa::base::YES;
+use cocoa::foundation::NSAutoreleasePool;
 use core_graphics::geometry::CGRect;
 
 
@@ -52,7 +53,7 @@ impl hal::Instance for Instance {
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
         // TODO: enumerate all devices
 
-        let device = metal::create_system_default_device(); // Returns retained
+        let device = metal::Device::system_default();
 
         vec![
             hal::Adapter {
@@ -144,3 +145,25 @@ impl hal::Backend for Backend {
     type Semaphore = native::Semaphore;
 }
 
+pub struct AutoreleasePool {
+    pool: cocoa::base::id,
+}
+
+impl Drop for AutoreleasePool {
+    fn drop(&mut self) {
+        unsafe { self.pool.drain() }
+    }
+}
+
+impl AutoreleasePool {
+    pub unsafe fn new() -> Self {
+        AutoreleasePool {
+            pool: NSAutoreleasePool::new(cocoa::base::nil),
+        }
+    }
+
+    pub unsafe fn reset(&mut self) {
+        self.pool.drain();
+        self.pool = NSAutoreleasePool::new(cocoa::base::nil);
+    }
+}

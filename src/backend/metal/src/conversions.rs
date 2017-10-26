@@ -47,19 +47,19 @@ pub fn map_store_operation(operation: pass::AttachmentStoreOp) -> MTLStoreAction
 }
 
 pub fn map_write_mask(mask: state::ColorMask) -> MTLColorWriteMask {
-    let mut mtl_mask = MTLColorWriteMaskNone;
+    let mut mtl_mask = MTLColorWriteMask::MTLColorWriteMaskNone;
 
     if mask.contains(state::RED) {
-        mtl_mask |= MTLColorWriteMaskRed;
+        mtl_mask |= MTLColorWriteMask::MTLColorWriteMaskRed;
     }
     if mask.contains(state::GREEN) {
-        mtl_mask |= MTLColorWriteMaskGreen;
+        mtl_mask |= MTLColorWriteMask::MTLColorWriteMaskGreen;
     }
     if mask.contains(state::BLUE) {
-        mtl_mask |= MTLColorWriteMaskBlue;
+        mtl_mask |= MTLColorWriteMask::MTLColorWriteMaskBlue;
     }
     if mask.contains(state::ALPHA) {
-        mtl_mask |= MTLColorWriteMaskAlpha;
+        mtl_mask |= MTLColorWriteMask::MTLColorWriteMaskAlpha;
     }
 
     mtl_mask
@@ -123,17 +123,17 @@ pub fn map_memory_properties_to_options(properties: memory::Properties) -> MTLRe
     let mut options = MTLResourceOptions::empty();
     if properties.contains(memory::CPU_VISIBLE) {
         if properties.contains(memory::COHERENT) {
-            options |= MTLResourceStorageModeShared;
+            options |= MTLResourceOptions::StorageModeShared;
         } else {
-            options |= MTLResourceStorageModeManaged;
+            options |= MTLResourceOptions::StorageModeManaged;
         }
     } else if properties.contains(memory::DEVICE_LOCAL) {
-        options |= MTLResourceStorageModePrivate;
+        options |= MTLResourceOptions::StorageModePrivate;
     } else {
         panic!("invalid heap properties");
     }
     if !properties.contains(memory::CPU_CACHED) {
-        options |= MTLResourceCPUCacheModeWriteCombined;
+        options |= MTLResourceOptions::CPUCacheModeWriteCombined;
     }
     options
 }
@@ -165,12 +165,12 @@ pub fn resource_options_from_storage_and_cache(storage: MTLStorageMode, cache: M
 }
 
 pub fn map_texture_usage(usage: image::Usage) -> MTLTextureUsage {
-    let mut texture_usage = MTLTextureUsagePixelFormatView;
+    let mut texture_usage = MTLTextureUsage::MTLTextureUsagePixelFormatView;
     if usage.contains(image::COLOR_ATTACHMENT) || usage.contains(image::DEPTH_STENCIL_ATTACHMENT) {
-        texture_usage |= MTLTextureUsageRenderTarget;
+        texture_usage |= MTLTextureUsage::MTLTextureUsageRenderTarget;
     }
     if usage.contains(image::SAMPLED) {
-        texture_usage |= MTLTextureUsageShaderRead;
+        texture_usage |= MTLTextureUsage::MTLTextureUsageShaderRead;
     }
     // TODO shader write
     texture_usage
