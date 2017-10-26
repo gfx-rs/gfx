@@ -1,15 +1,15 @@
-use std::sync::mpsc;
 use std::iter::Extend;
+use std::sync::{mpsc, Arc};
 
 use memory::{Typed, Provider, Dependency};
 use Backend;
 
-pub(crate) fn garbage<B: Backend>(device: &B::Device)
+pub(crate) fn garbage<B: Backend>(device: &Arc<B::Device>)
     -> (GarbageSender<B>, GarbageCollector<B>)
 {
     let (sender, receiver) = mpsc::channel();
     let provider = Provider::new(InnerGarbageCollector {
-        device: (*device).clone(),
+        device: Arc::clone(device),
         receiver,
     });
     let dependency = provider.dependency();
@@ -25,7 +25,7 @@ pub(crate) struct GarbageSender<B: Backend> {
 pub(crate) struct GarbageCollector<B: Backend>(Provider<InnerGarbageCollector<B>>);
 
 struct InnerGarbageCollector<B: Backend> {
-    device: B::Device,
+    device: Arc<B::Device>,
     receiver: mpsc::Receiver<Garbage<B>>,
 }
 

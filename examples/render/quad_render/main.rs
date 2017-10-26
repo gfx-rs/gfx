@@ -74,8 +74,8 @@ fn main() {
     let mut device = (*context.ref_device()).clone();
 
     // Setup renderpass and pipeline
-    let vs_module = device.mut_raw().create_shader_module(include_bytes!("../../hal/quad/data/vert.spv")).unwrap();
-    let fs_module = device.mut_raw().create_shader_module(include_bytes!("../../hal/quad/data/frag.spv")).unwrap();
+    let vs_module = device.raw.create_shader_module(include_bytes!("../../hal/quad/data/vert.spv")).unwrap();
+    let fs_module = device.raw.create_shader_module(include_bytes!("../../hal/quad/data/frag.spv")).unwrap();
 
     let (desc, mut desc_data) = device.create_descriptors(1).pop().unwrap();
     let pipe_init = pipe::Init {
@@ -141,7 +141,7 @@ fn main() {
     let img = image::load(Cursor::new(&img_data[..]), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
     let kind = i::Kind::D2(width as i::Size, height as i::Size, i::AaMode::Single);
-    let row_alignment_mask = device.ref_raw().get_limits().min_buffer_copy_pitch_alignment as u32 - 1;
+    let row_alignment_mask = device.raw.get_limits().min_buffer_copy_pitch_alignment as u32 - 1;
     let image_stride = 4usize;
     let row_pitch = (width * image_stride as u32 + row_alignment_mask) & !row_alignment_mask;
     let upload_size = (height * row_pitch) as u64;
@@ -260,6 +260,6 @@ fn main() {
     }
 
     println!("cleanup!");
-    device.mut_raw().destroy_shader_module(vs_module);
-    device.mut_raw().destroy_shader_module(fs_module);
+    device.raw.destroy_shader_module(vs_module);
+    device.raw.destroy_shader_module(fs_module);
 }

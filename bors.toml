@@ -3,4 +3,4 @@ status = [
   "continuous-integration/appveyor/branch"
 ]
 
-timeout_sec = 14400 # 6 hours
+timeout_sec = 18000 # 5 hours

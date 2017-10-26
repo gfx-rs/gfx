@@ -177,7 +177,7 @@ impl<'a, B: Backend> DescriptorSetsUpdate<'a, B> {
 
     pub fn finish(self) {
         use hal::Device;
-        self.device.mut_raw().update_descriptor_sets(&self.writes[..]);
+        self.device.raw.update_descriptor_sets(&self.writes[..]);
     }
 }
 

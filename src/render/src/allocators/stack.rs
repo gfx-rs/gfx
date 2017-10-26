@@ -1,4 +1,4 @@
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
 use std::collections::HashMap;
 
 use hal::{self, MemoryType, Device as Device_};
@@ -10,7 +10,7 @@ use {Backend, Device};
 pub struct StackAllocator<B: Backend>(Provider<InnerStackAllocator<B>>);
 
 pub struct InnerStackAllocator<B: Backend> {
-    device: B::Device,
+    device: Arc<B::Device>,
     usage: memory::Usage,
     // stacks by memory type
     // TODO: VecMap ?
@@ -36,7 +36,7 @@ impl<B: Backend> StackAllocator<B> {
         chunk_size: u64
     ) -> Self {
         StackAllocator(Provider::new(InnerStackAllocator {
-            device: (*device.ref_raw()).clone(),
+            device: Arc::clone(&device.raw),
             usage,
             stacks: HashMap::new(),
             chunk_size,
@@ -65,7 +65,7 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
         let dependency = self.0.dependency();
         let inner: &mut InnerStackAllocator<B> = &mut self.0;
         let requirements = hal::buffer::complete_requirements::<B>(
-            device.ref_raw(), &buffer, usage);
+            &device.raw, &buffer, usage);
         let memory_type = device.find_usage_memory(inner.usage, requirements.type_mask)
             .expect("could not find suitable memory");
         let stack = inner.stacks.entry(memory_type.id)
@@ -76,7 +76,7 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
             requirements,
             dependency,
         );
-        let buffer = device.ref_raw()
+        let buffer = device.raw
             .bind_buffer_memory(memory, offset, buffer)
             .unwrap();
         (buffer, Memory::new(release, inner.usage))
@@ -89,7 +89,7 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
     ) -> (B::Image, Memory) {
         let dependency = self.0.dependency();
         let inner: &mut InnerStackAllocator<B> = &mut self.0;
-        let requirements = device.ref_raw().get_image_requirements(&image);
+        let requirements = device.raw.get_image_requirements(&image);
         let memory_type = device.find_usage_memory(inner.usage, requirements.type_mask)
             .expect("could not find suitable memory");
         let stack = inner.stacks.entry(memory_type.id)
@@ -100,7 +100,7 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
             requirements,
             dependency,
         );
-        let image = device.ref_raw()
+        let image = device.raw
             .bind_image_memory(memory, offset, image)
             .unwrap();
         (image, Memory::new(release, inner.usage))
@@ -186,7 +186,7 @@ impl<B: Backend> ChunkStack<B> {
         device: &Device<B>,
         chunk_size: u64,
     ) {
-        let memory = device.ref_raw()
+        let memory = device.raw
             .allocate_memory(&self.memory_type, chunk_size)
             .unwrap();
         self.chunks.push(memory);
