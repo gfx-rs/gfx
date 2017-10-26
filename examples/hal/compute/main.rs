@@ -55,7 +55,7 @@ fn main() {
                     binding: 0,
                     ty: pso::DescriptorType::StorageBuffer,
                     count: 1,
-                    stage_flags: pso::STAGE_COMPUTE,
+                    stage_flags: pso::ShaderStageFlags::COMPUTE,
                 }
             ],
         );
@@ -81,8 +81,8 @@ fn main() {
 
     let (staging_memory, staging_buffer) = create_buffer(
         &mut gpu,
-        memory::CPU_VISIBLE | memory::COHERENT,
-        buffer::TRANSFER_SRC,
+        memory::Properties::CPU_VISIBLE | memory::Properties::COHERENT,
+        buffer::Usage::TRANSFER_SRC,
         stride,
         numbers.len() as u64,
     );
@@ -95,8 +95,8 @@ fn main() {
 
     let (device_memory, device_buffer) = create_buffer(
         &mut gpu,
-        memory::DEVICE_LOCAL,
-        buffer::TRANSFER_DST,
+        memory::Properties::DEVICE_LOCAL,
+        buffer::Usage::TRANSFER_DST,
         stride,
         numbers.len() as u64,
     );
@@ -118,11 +118,11 @@ fn main() {
         let mut command_buffer = command_pool.acquire_command_buffer();
         command_buffer.copy_buffer(&staging_buffer, &device_buffer, &[command::BufferCopy { src: 0, dst: 0, size: stride * numbers.len() as u64}]);
         command_buffer.pipeline_barrier(
-            Range { start: pso::TRANSFER, end: pso::COMPUTE_SHADER },
+            Range { start: pso::PipelineStage::TRANSFER, end: pso::PipelineStage::COMPUTE_SHADER },
                 &[memory::Barrier::Buffer {
                     states: Range {
-                        start: buffer::TRANSFER_WRITE,
-                        end: buffer::SHADER_READ | buffer::SHADER_WRITE
+                        start: buffer::Access::TRANSFER_WRITE,
+                        end: buffer::Access::SHADER_READ | buffer::Access::SHADER_WRITE
                     },
                     target: &device_buffer
                 }]);
@@ -130,11 +130,11 @@ fn main() {
         command_buffer.bind_compute_descriptor_sets(&pipeline_layout, 0, &[&desc_set]);
         command_buffer.dispatch(numbers.len() as u32, 1, 1);
         command_buffer.pipeline_barrier(
-            Range { start: pso::COMPUTE_SHADER, end: pso::TRANSFER },
+            Range { start: pso::PipelineStage::COMPUTE_SHADER, end: pso::PipelineStage::TRANSFER },
                 &[memory::Barrier::Buffer {
                     states: Range {
-                        start: buffer::SHADER_READ | buffer::SHADER_WRITE,
-                        end: buffer::TRANSFER_READ
+                        start: buffer::Access::SHADER_READ | buffer::Access::SHADER_WRITE,
+                        end: buffer::Access::TRANSFER_READ
                     },
                     target: &device_buffer
                 }]);
