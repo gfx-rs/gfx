@@ -43,16 +43,16 @@ endif
 all: check test
 
 check:
-	cargo check --all $(EXCLUDES)
-	cd src/warden && cargo check --features "gl $(FEATURES_HAL) $(FEATURES_HAL2)" #TODO: run
+	#Note: excluding `warden` here, since it depends on serialization
+	cargo check --all $(EXCLUDES) --exclude gfx-warden
 	cd examples/hal && cargo check --features "gl"
 	cd examples/hal && cargo check --features "$(FEATURES_HAL)"
 	cd examples/hal && cargo check --features "$(FEATURES_HAL2)"
 	cd examples/render/quad_render && $(CMD_QUAD_RENDER)
+	cd src/warden && cargo check --features "gl $(FEATURES_HAL) $(FEATURES_HAL2)" #TODO: run
 
 test:
 	cargo test --all $(EXCLUDES)
-	cd src/render && cargo test --features "$(FEATURES_RENDER)"
 	cd src/render && cargo test --features "$(FEATURES_RENDER) $(FEATURES_EXTRA)"
 
 reftests:
