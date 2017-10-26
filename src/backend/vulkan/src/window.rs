@@ -293,7 +293,7 @@ impl hal::Surface<Backend> for Surface {
             p_next: ptr::null(),
             flags: vk::SwapchainCreateFlagsKHR::empty(),
             surface: self.raw.handle,
-            min_image_count: 2, // TODO: let the user specify the value
+            min_image_count: config.image_count,
             image_format: conv::map_format(format.0, format.1).unwrap(),
             image_color_space: vk::ColorSpaceKHR::SrgbNonlinear,
             image_extent: vk::Extent2D {

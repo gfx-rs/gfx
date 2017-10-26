@@ -6,9 +6,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use hal::{self, format, image};
-use hal::{Backbuffer, SwapchainConfig};
+use hal::{Backbuffer, CommandQueue, SurfaceCapabilities, SwapchainConfig};
 use hal::format::{ChannelType, SurfaceType};
-use hal::CommandQueue;
+use hal::window::Extent2d;
 
 use metal::{self, MTLPixelFormat, MTLTextureUsage};
 use objc::runtime::{Object};
@@ -43,7 +43,6 @@ pub struct Swapchain {
     present_index: usize,
 }
 
-const SWAP_CHAIN_IMAGE_COUNT: usize = 3;
 #[allow(bad_style)]
 const kCVPixelFormatType_32RGBA: u32 = (b'R' as u32) << 24 | (b'G' as u32) << 16 | (b'B' as u32) << 8 | b'A' as u32;
 
@@ -55,7 +54,15 @@ impl hal::Surface<Backend> for Surface {
     fn capabilities_and_formats(
         &self, _: &PhysicalDevice,
     ) -> (hal::SurfaceCapabilities, Vec<format::Format>) {
-        unimplemented!()
+        let caps = hal::SurfaceCapabilities {
+            image_count: 1..8,
+            current_extent: None,
+            extents: Extent2d { width: 4, height: 4} .. Extent2d { width: 4096, height: 4096 },
+            max_image_layers: 1,
+        };
+        (caps, vec![
+            format::Format(SurfaceType::R8_G8_B8_A8, ChannelType::Srgb),
+        ])
     }
 
     fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {
@@ -89,9 +96,9 @@ impl hal::Surface<Backend> for Surface {
             let pixel_height = (view_points_size.size.height * scale_factor) as u64;
             let pixel_size = conversions::get_format_bytes_per_pixel(mtl_format) as u64;
 
-            info!("allocating {} IOSurface backbuffers of size {}x{} with pixel format 0x{:x}", SWAP_CHAIN_IMAGE_COUNT, pixel_width, pixel_height, cv_format);
+            info!("allocating {} IOSurface backbuffers of size {}x{} with pixel format 0x{:x}", config.image_count, pixel_width, pixel_height, cv_format);
             // Create swap chain surfaces
-            let io_surfaces: Vec<_> = (0..SWAP_CHAIN_IMAGE_COUNT).map(|_| {
+            let io_surfaces: Vec<_> = (0..config.image_count).map(|_| {
                 io_surface::new(&CFDictionary::from_CFType_pairs::<CFStringRef, CFNumberRef, CFString, CFNumber>(&[
                     (TCFType::wrap_under_get_rule(io_surface::kIOSurfaceWidth), CFNumber::from_i32(pixel_width as i32)),
                     (TCFType::wrap_under_get_rule(io_surface::kIOSurfaceHeight), CFNumber::from_i32(pixel_height as i32)),

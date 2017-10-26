@@ -194,6 +194,8 @@ pub struct SwapchainConfig {
     pub color_format: format::Format,
     /// Depth stencil format of the backbuffer images (optional).
     pub depth_stencil_format: Option<format::Format>,
+    /// Number of images in the swapchain.
+    pub image_count: u32,
 }
 
 impl SwapchainConfig {
@@ -208,6 +210,7 @@ impl SwapchainConfig {
         SwapchainConfig {
             color_format: format::Rgba8::SELF, // TODO: try to find best default format
             depth_stencil_format: None,
+            image_count: 2,
         }
     }
 
@@ -261,6 +264,20 @@ impl SwapchainConfig {
     /// ```
     pub fn with_depth_stencil_typed<Dsf: format::DepthStencilFormat>(mut self) -> Self {
         self.depth_stencil_format = Some(Dsf::SELF);
+        self
+    }
+
+    /// Specify the requested number of backbuffer images.
+    ///
+    /// The implementation may choose to create more if necessary.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    ///
+    /// ```
+    pub fn with_image_count(mut self, count: u32) -> Self {
+        self.image_count = count;
         self
     }
 
