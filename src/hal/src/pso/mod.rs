@@ -88,37 +88,6 @@ bitflags!(
     }
 );
 
-///
-pub const TOP_OF_PIPE: PipelineStage = PipelineStage::TOP_OF_PIPE;
-///
-pub const DRAW_INDIRECT: PipelineStage = PipelineStage::DRAW_INDIRECT;
-///
-pub const VERTEX_INPUT: PipelineStage = PipelineStage::VERTEX_INPUT;
-///
-pub const VERTEX_SHADER: PipelineStage = PipelineStage::VERTEX_SHADER;
-///
-pub const HULL_SHADER: PipelineStage = PipelineStage::HULL_SHADER;
-///
-pub const DOMAIN_SHADER: PipelineStage = PipelineStage::DOMAIN_SHADER;
-///
-pub const GEOMETRY_SHADER: PipelineStage = PipelineStage::GEOMETRY_SHADER;
-///
-pub const FRAGMENT_SHADER: PipelineStage = PipelineStage::FRAGMENT_SHADER;
-///
-pub const EARLY_FRAGMENT_TESTS: PipelineStage = PipelineStage::EARLY_FRAGMENT_TESTS;
-///
-pub const LATE_FRAGMENT_TESTS: PipelineStage = PipelineStage::LATE_FRAGMENT_TESTS;
-///
-pub const COLOR_ATTACHMENT_OUTPUT: PipelineStage = PipelineStage::COLOR_ATTACHMENT_OUTPUT;
-///
-pub const COMPUTE_SHADER: PipelineStage = PipelineStage::COMPUTE_SHADER;
-///
-pub const TRANSFER: PipelineStage = PipelineStage::TRANSFER;
-///
-pub const BOTTOM_OF_PIPE: PipelineStage = PipelineStage::BOTTOM_OF_PIPE;
-///
-pub const HOST: PipelineStage = PipelineStage::HOST;
-
 bitflags!(
     /// Combination of different shader pipeline stages.
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
@@ -142,23 +111,6 @@ bitflags!(
         const ALL      = Self::GRAPHICS.bits | Self::COMPUTE.bits;
     }
 );
-
-///
-pub const STAGE_VERTEX: ShaderStageFlags = ShaderStageFlags::VERTEX;
-///
-pub const STAGE_HULL: ShaderStageFlags = ShaderStageFlags::HULL;
-///
-pub const STAGE_DOMAIN: ShaderStageFlags = ShaderStageFlags::DOMAIN;
-///
-pub const STAGE_GEOMETRY: ShaderStageFlags = ShaderStageFlags::GEOMETRY;
-///
-pub const STAGE_FRAGMENT: ShaderStageFlags = ShaderStageFlags::FRAGMENT;
-///
-pub const STAGE_COMPUTE: ShaderStageFlags = ShaderStageFlags::COMPUTE;
-///
-pub const STAGE_GRAPHICS: ShaderStageFlags = ShaderStageFlags::GRAPHICS;
-///
-pub const STAGE_ALL: ShaderStageFlags = ShaderStageFlags::ALL;
 
 //Note: this type is only needed for backends, not used anywhere within gfx_core.
 /// Which program stage this shader represents.

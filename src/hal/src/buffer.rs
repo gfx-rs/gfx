@@ -70,25 +70,6 @@ bitflags!(
     }
 );
 
-///
-pub const TRANSFER_SRC: Usage   = Usage::TRANSFER_SRC;
-///
-pub const TRANSFER_DST: Usage   = Usage::TRANSFER_DST;
-///
-pub const UNIFORM: Usage        = Usage::UNIFORM;
-///
-pub const STORAGE: Usage        = Usage::STORAGE;
-///
-pub const UNIFORM_TEXEL: Usage  = Usage::UNIFORM_TEXEL;
-///
-pub const STORAGE_TEXEL: Usage  = Usage::STORAGE_TEXEL;
-///
-pub const INDEX: Usage          = Usage::INDEX;
-///
-pub const INDIRECT: Usage       = Usage::INDIRECT;
-///
-pub const VERTEX: Usage         = Usage::VERTEX;
-
 impl Usage {
     /// Can this buffer be used in transfer operations ?
     pub fn can_transfer(&self) -> bool {
@@ -126,31 +107,6 @@ bitflags!(
         const MEMORY_WRITE = 0x2000;
     }
 );
-
-///
-pub const TRANSFER_READ: Access             = Access::TRANSFER_READ;
-///
-pub const TRANSFER_WRITE: Access            = Access::TRANSFER_WRITE;
-///
-pub const INDEX_BUFFER_READ: Access         = Access::INDEX_BUFFER_READ;
-///
-pub const VERTEX_BUFFER_READ: Access        = Access::VERTEX_BUFFER_READ;
-///
-pub const CONSTANT_BUFFER_READ: Access      = Access::CONSTANT_BUFFER_READ;
-///
-pub const INDIRECT_COMMAND_READ: Access     = Access::INDIRECT_COMMAND_READ;
-///
-pub const SHADER_READ: Access               = Access::SHADER_READ;
-///
-pub const SHADER_WRITE: Access              = Access::SHADER_WRITE;
-///
-pub const HOST_READ: Access                 = Access::HOST_READ;
-///
-pub const HOST_WRITE: Access                = Access::HOST_WRITE;
-///
-pub const MEMORY_READ: Access               = Access::MEMORY_READ;
-///
-pub const MEMORY_WRITE: Access              = Access::MEMORY_WRITE;
 
 /// Buffer state
 pub type State = Access;

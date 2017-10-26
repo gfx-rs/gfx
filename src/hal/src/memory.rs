@@ -62,17 +62,6 @@ bitflags!(
     }
 );
 
-///
-pub const DEVICE_LOCAL: Properties = Properties::DEVICE_LOCAL;
-///
-pub const COHERENT: Properties = Properties::COHERENT;
-///
-pub const CPU_VISIBLE: Properties = Properties::CPU_VISIBLE;
-///
-pub const CPU_CACHED: Properties = Properties::CPU_CACHED;
-///
-pub const LAZILY_ALLOCATED: Properties = Properties::LAZILY_ALLOCATED;
-
 #[allow(missing_docs)] //TODO
 #[derive(Clone, Debug)]
 pub enum Barrier<'a, B: Backend> {

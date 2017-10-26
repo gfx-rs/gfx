@@ -272,7 +272,7 @@ macro_rules! gfx_graphics_pipeline {
                             encoder.handles());
                     )*
                     encoder.require_state(
-                        cpso::VERTEX_INPUT,
+                        cpso::PipelineStage::VERTEX_INPUT,
                         &buffer_states[..],
                         &image_states[..]
                     );
