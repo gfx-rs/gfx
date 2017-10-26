@@ -72,6 +72,7 @@ pub struct Device {
     queue: Arc<command::QueueInner>,
 }
 unsafe impl Send for Device {}
+unsafe impl Sync for Device {}
 
 pub struct PhysicalDevice(pub(crate) metal::Device);
 
@@ -165,13 +166,13 @@ impl LanguageVersion {
 
 impl Device {
     pub fn create_shader_library_from_file<P>(
-        &mut self, _path: P,
+        &self, _path: P,
     ) -> Result<n::ShaderModule, ShaderError> where P: AsRef<Path> {
         unimplemented!()
     }
 
     pub fn create_shader_library_from_source<S>(
-        &mut self, source: S, version: LanguageVersion,
+        &self, source: S, version: LanguageVersion,
     ) -> Result<n::ShaderModule, ShaderError> where S: AsRef<str> {
         let options = metal::CompileOptions::new();
         options.set_language_version(match version {
@@ -188,7 +189,7 @@ impl Device {
     }
 
     fn compile_shader_library(
-        &mut self,
+        &self,
         raw_data: &[u8],
         overrides: &HashMap<msl::ResourceBindingLocation, msl::ResourceBinding>,
     ) -> Result<metal::Library, ShaderError> {
@@ -262,7 +263,7 @@ impl Device {
     }
 
     fn create_graphics_pipeline<'a>(
-        &mut self,
+        &self,
         &(ref shader_set, pipeline_layout, ref pass_descriptor, pipeline_desc):
         &(pso::GraphicsShaderSet<'a, Backend>, &n::PipelineLayout, Subpass<'a, Backend>, &pso::GraphicsPipelineDesc),
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
@@ -419,7 +420,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn create_command_pool(
-        &mut self, _family: &QueueFamily, flags: CommandPoolCreateFlags
+        &self, _family: &QueueFamily, flags: CommandPoolCreateFlags
     ) -> command::CommandPool {
         command::CommandPool {
             queue: self.queue.clone(),
@@ -431,12 +432,12 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn destroy_command_pool(&mut self, _pool: command::CommandPool) {
+    fn destroy_command_pool(&self, _pool: command::CommandPool) {
         //TODO?
     }
 
     fn create_render_pass(
-        &mut self,
+        &self,
         attachments: &[pass::Attachment],
         _subpasses: &[pass::SubpassDesc],
         _dependencies: &[pass::SubpassDependency],
@@ -470,7 +471,7 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn create_pipeline_layout(&mut self, set_layouts: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
+    fn create_pipeline_layout(&self, set_layouts: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
         use hal::pso::{STAGE_VERTEX, STAGE_FRAGMENT};
 
         struct Counters {
@@ -547,7 +548,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn create_graphics_pipelines<'a>(
-        &mut self,
+        &self,
         params: &[(pso::GraphicsShaderSet<'a, Backend>, &n::PipelineLayout, Subpass<'a, Backend>, &pso::GraphicsPipelineDesc)],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         let mut output = Vec::with_capacity(params.len());
@@ -558,14 +559,14 @@ impl hal::Device<Backend> for Device {
     }
 
     fn create_compute_pipelines<'a>(
-        &mut self,
+        &self,
         _pipelines: &[(pso::EntryPoint<'a, Backend>, &n::PipelineLayout)],
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
         unimplemented!()
     }
 
     fn create_framebuffer(
-        &mut self, renderpass: &n::RenderPass, attachments: &[&n::ImageView], extent: Extent
+        &self, renderpass: &n::RenderPass, attachments: &[&n::ImageView], extent: Extent
     ) -> Result<n::FrameBuffer, FramebufferError> {
         let descriptor = unsafe {
             let desc: metal::RenderPassDescriptor = msg_send![renderpass.desc, copy];
@@ -592,7 +593,7 @@ impl hal::Device<Backend> for Device {
         Ok(n::FrameBuffer(descriptor))
     }
 
-    fn create_shader_module(&mut self, raw_data: &[u8]) -> Result<n::ShaderModule, ShaderError> {
+    fn create_shader_module(&self, raw_data: &[u8]) -> Result<n::ShaderModule, ShaderError> {
         //TODO: we can probably at least parse here and save the `Ast`
         let depends_on_pipeline_layout = true; //TODO: !self.private_caps.argument_buffers
         if depends_on_pipeline_layout {
@@ -603,7 +604,7 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn create_sampler(&mut self, info: image::SamplerInfo) -> n::Sampler {
+    fn create_sampler(&self, info: image::SamplerInfo) -> n::Sampler {
         let descriptor = metal::SamplerDescriptor::new();
 
         use self::image::FilterMethod::*;
@@ -629,11 +630,11 @@ impl hal::Device<Backend> for Device {
         n::Sampler(self.device.new_sampler(&descriptor))
     }
 
-    fn destroy_sampler(&mut self, _sampler: n::Sampler) {
+    fn destroy_sampler(&self, _sampler: n::Sampler) {
     }
 
     fn acquire_mapping_raw(
-        &mut self, buf: &n::Buffer, read: Option<Range<u64>>
+        &self, buf: &n::Buffer, read: Option<Range<u64>>
     ) -> Result<*mut u8, mapping::Error> {
         let base_ptr = buf.0.contents() as *mut u8;
 
@@ -650,7 +651,7 @@ impl hal::Device<Backend> for Device {
         Ok(base_ptr)
     }
 
-    fn release_mapping_raw(&mut self, buffer: &n::Buffer, wrote: Option<Range<u64>>) {
+    fn release_mapping_raw(&self, buffer: &n::Buffer, wrote: Option<Range<u64>>) {
         if let Some(range) = wrote {
             if buffer.0.storage_mode() != MTLStorageMode::Shared {
                 buffer.0.did_modify_range(NSRange {
@@ -661,12 +662,12 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn create_semaphore(&mut self) -> n::Semaphore {
+    fn create_semaphore(&self) -> n::Semaphore {
         unsafe { n::Semaphore(n::dispatch_semaphore_create(1)) } // Returns retained
     }
 
     fn create_descriptor_pool(
-        &mut self, _max_sets: usize, descriptor_ranges: &[pso::DescriptorRangeDesc]
+        &self, _max_sets: usize, descriptor_ranges: &[pso::DescriptorRangeDesc]
     ) -> n::DescriptorPool {
         if !self.private_caps.argument_buffers {
             return n::DescriptorPool::Emulated;
@@ -700,7 +701,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn create_descriptor_set_layout(
-        &mut self, bindings: &[DescriptorSetLayoutBinding]
+        &self, bindings: &[DescriptorSetLayoutBinding]
     ) -> n::DescriptorSetLayout {
         if !self.private_caps.argument_buffers {
             return n::DescriptorSetLayout::Emulated(bindings.to_vec())
@@ -717,7 +718,7 @@ impl hal::Device<Backend> for Device {
         n::DescriptorSetLayout::ArgumentBuffer(encoder, stage_flags)
     }
 
-    fn update_descriptor_sets(&mut self, writes: &[DescriptorSetWrite<Backend>]) {
+    fn update_descriptor_sets(&self, writes: &[DescriptorSetWrite<Backend>]) {
         use hal::pso::DescriptorWrite::*;
 
         let mut mtl_samplers = Vec::new();
@@ -786,35 +787,36 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn destroy_descriptor_pool(&mut self, _pool: n::DescriptorPool) {
+    fn destroy_descriptor_pool(&self, _pool: n::DescriptorPool) {
     }
 
-    fn destroy_descriptor_set_layout(&mut self, _layout: n::DescriptorSetLayout) {
+    fn destroy_descriptor_set_layout(&self, _layout: n::DescriptorSetLayout) {
     }
 
-    fn destroy_pipeline_layout(&mut self, _pipeline_layout: n::PipelineLayout) {
+    fn destroy_pipeline_layout(&self, _pipeline_layout: n::PipelineLayout) {
     }
 
-    fn destroy_shader_module(&mut self, _module: n::ShaderModule) {
+    fn destroy_shader_module(&self, _module: n::ShaderModule) {
     }
 
-    fn destroy_renderpass(&mut self, _pass: n::RenderPass) {
+    fn destroy_renderpass(&self, _pass: n::RenderPass) {
     }
 
-    fn destroy_graphics_pipeline(&mut self, _pipeline: n::GraphicsPipeline) {
+    fn destroy_graphics_pipeline(&self, _pipeline: n::GraphicsPipeline) {
     }
 
-    fn destroy_compute_pipeline(&mut self, _pipeline: n::ComputePipeline) {
+    fn destroy_compute_pipeline(&self, _pipeline: n::ComputePipeline) {
+        unimplemented!()
     }
 
-    fn destroy_framebuffer(&mut self, _buffer: n::FrameBuffer) {
+    fn destroy_framebuffer(&self, _buffer: n::FrameBuffer) {
     }
 
-    fn destroy_semaphore(&mut self, semaphore: n::Semaphore) {
+    fn destroy_semaphore(&self, semaphore: n::Semaphore) {
         unsafe { n::dispatch_release(semaphore.0) }
     }
 
-    fn allocate_memory(&mut self, memory_type: &hal::MemoryType, size: u64) -> Result<n::Memory, OutOfMemory> {
+    fn allocate_memory(&self, memory_type: &hal::MemoryType, size: u64) -> Result<n::Memory, OutOfMemory> {
         let (storage, cache) = map_memory_properties_to_storage_and_cache(memory_type.properties);
 
         // Heaps cannot be used for CPU coherent resources
@@ -830,18 +832,18 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn free_memory(&mut self, _memory: n::Memory) {
+    fn free_memory(&self, _memory: n::Memory) {
     }
 
     fn create_buffer(
-        &mut self, size: u64, _stride: u64, _usage: buffer::Usage
+        &self, size: u64, _stride: u64, _usage: buffer::Usage
     ) -> Result<n::UnboundBuffer, buffer::CreationError> {
         Ok(n::UnboundBuffer {
             size
         })
     }
 
-    fn get_buffer_requirements(&mut self, buffer: &n::UnboundBuffer) -> memory::Requirements {
+    fn get_buffer_requirements(&self, buffer: &n::UnboundBuffer) -> memory::Requirements {
         let mut max_size = buffer.size;
         let mut max_alignment = 1;
 
@@ -867,7 +869,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn bind_buffer_memory(
-        &mut self, memory: &n::Memory, _offset: u64, buffer: n::UnboundBuffer
+        &self, memory: &n::Memory, _offset: u64, buffer: n::UnboundBuffer
     ) -> Result<n::Buffer, BindError> {
         Ok(n::Buffer(match *memory {
             n::Memory::Native(ref heap) => {
@@ -888,21 +890,21 @@ impl hal::Device<Backend> for Device {
         }))
     }
 
-    fn destroy_buffer(&mut self, _buffer: n::Buffer) {
+    fn destroy_buffer(&self, _buffer: n::Buffer) {
     }
 
     fn create_buffer_view(
-        &mut self, _buffer: &n::Buffer, _format: format::Format, _range: Range<u64>
+        &self, _buffer: &n::Buffer, _format: format::Format, _range: Range<u64>
     ) -> Result<n::BufferView, buffer::ViewError> {
         unimplemented!()
     }
 
-    fn destroy_buffer_view(&mut self, _view: n::BufferView) {
+    fn destroy_buffer_view(&self, _view: n::BufferView) {
         unimplemented!()
     }
 
     fn create_image(
-        &mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
+        &self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
          -> Result<n::UnboundImage, image::CreationError>
     {
         let (mtl_format, _) = map_format(format).ok_or(image::CreationError::Format(format.0, Some(format.1)))?;
@@ -925,7 +927,7 @@ impl hal::Device<Backend> for Device {
         Ok(n::UnboundImage(descriptor))
     }
 
-    fn get_image_requirements(&mut self, image: &n::UnboundImage) -> memory::Requirements {
+    fn get_image_requirements(&self, image: &n::UnboundImage) -> memory::Requirements {
         if self.private_caps.resource_heaps {
             // We don't know what memory type the user will try to allocate the image with, so we test them
             // all get the most stringent ones. Note we don't check Shared because heaps can't use it
@@ -956,7 +958,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn bind_image_memory(
-        &mut self, memory: &n::Memory, _offset: u64, image: n::UnboundImage
+        &self, memory: &n::Memory, _offset: u64, image: n::UnboundImage
     ) -> Result<n::Image, BindError> {
         Ok(n::Image(match *memory {
             n::Memory::Native(ref heap) => {
@@ -979,11 +981,11 @@ impl hal::Device<Backend> for Device {
         }))
     }
 
-    fn destroy_image(&mut self, _image: n::Image) {
+    fn destroy_image(&self, _image: n::Image) {
     }
 
     fn create_image_view(
-        &mut self,
+        &self,
         image: &n::Image,
         format: format::Format,
         _swizzle: format::Swizzle,
@@ -1002,20 +1004,20 @@ impl hal::Device<Backend> for Device {
         Ok(n::ImageView(image.0.new_texture_view(mtl_format)))
     }
 
-    fn destroy_image_view(&mut self, _view: n::ImageView) {
+    fn destroy_image_view(&self, _view: n::ImageView) {
     }
 
     // Emulated fence implementations
     #[cfg(not(feature = "native_fence"))]
-    fn create_fence(&mut self, signaled: bool) -> n::Fence {
+    fn create_fence(&self, signaled: bool) -> n::Fence {
         n::Fence(Arc::new(Mutex::new(signaled)))
     }
-    fn reset_fences(&mut self, fences: &[&n::Fence]) {
+    fn reset_fences(&self, fences: &[&n::Fence]) {
         for fence in fences {
             *fence.0.lock().unwrap() = false;
         }
     }
-    fn wait_for_fences(&mut self, fences: &[&n::Fence], wait: WaitFor, mut timeout_ms: u32) -> bool {
+    fn wait_for_fences(&self, fences: &[&n::Fence], wait: WaitFor, mut timeout_ms: u32) -> bool {
         use std::{thread, time};
         let tick = 1;
         loop {
@@ -1034,6 +1036,12 @@ impl hal::Device<Backend> for Device {
         }
     }
     #[cfg(not(feature = "native_fence"))]
-    fn destroy_fence(&mut self, _fence: n::Fence) {
+    fn destroy_fence(&self, _fence: n::Fence) {
     }
+}
+
+#[test]
+fn test_send_sync() {
+    fn foo<T: Send+Sync>() {}
+    foo::<Device>()
 }

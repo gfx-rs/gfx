@@ -24,7 +24,7 @@ pub struct UnboundImage(n::Image);
 impl Device {
     #[cfg(feature = "glsl-to-spirv")]
     pub fn create_shader_module_from_glsl(
-        &mut self,
+        &self,
         code: &str,
         stage: pso::Stage,
     ) -> Result<n::ShaderModule, d::ShaderError> {
@@ -56,7 +56,7 @@ impl d::Device<B> for Device {
     fn get_features(&self) -> &Features { &self.features }
     fn get_limits(&self) -> &Limits { &self.limits }
 
-    fn allocate_memory(&mut self, memory_type: &MemoryType, size: u64) -> Result<n::Memory, d::OutOfMemory> {
+    fn allocate_memory(&self, memory_type: &MemoryType, size: u64) -> Result<n::Memory, d::OutOfMemory> {
         let info = vk::MemoryAllocateInfo {
             s_type: vk::StructureType::MemoryAllocateInfo,
             p_next: ptr::null(),
@@ -85,7 +85,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_command_pool(
-        &mut self, family: &QueueFamily, create_flags: CommandPoolCreateFlags
+        &self, family: &QueueFamily, create_flags: CommandPoolCreateFlags
     ) -> RawCommandPool {
         let mut flags = vk::CommandPoolCreateFlags::empty();
         if create_flags.contains(CommandPoolCreateFlags::TRANSIENT) {
@@ -113,14 +113,14 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn destroy_command_pool(&mut self, pool: RawCommandPool) {
+    fn destroy_command_pool(&self, pool: RawCommandPool) {
         unsafe {
             self.raw.0
                 .destroy_command_pool(pool.raw, None)
         };
     }
 
-    fn create_render_pass(&mut self, attachments: &[pass::Attachment],
+    fn create_render_pass(&self, attachments: &[pass::Attachment],
         subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> n::RenderPass
     {
         let map_subpass_ref = |pass: pass::SubpassRef| {
@@ -222,7 +222,7 @@ impl d::Device<B> for Device {
         n::RenderPass { raw: renderpass }
     }
 
-    fn create_pipeline_layout(&mut self, sets: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
+    fn create_pipeline_layout(&self, sets: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
         debug!("create_pipeline_layout {:?}", sets);
 
         let set_layouts = sets.iter().map(|set| {
@@ -248,7 +248,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_graphics_pipelines<'a>(
-        &mut self,
+        &self,
         descs: &[(pso::GraphicsShaderSet<'a, B>, &n::PipelineLayout, pass::Subpass<'a, B>, &pso::GraphicsPipelineDesc)],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         use hal::state as s;
@@ -544,7 +544,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_compute_pipelines<'a>(
-        &mut self,
+        &self,
         descs: &[(pso::EntryPoint<'a, B>, &n::PipelineLayout)],
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
         let mut c_strings = Vec::new(); // hold the C strings temporarily
@@ -607,7 +607,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_framebuffer(
-        &mut self,
+        &self,
         renderpass: &n::RenderPass,
         attachments: &[&n::ImageView],
         extent: d::Extent,
@@ -636,7 +636,7 @@ impl d::Device<B> for Device {
         Ok(n::FrameBuffer { raw: framebuffer })
     }
 
-    fn create_shader_module(&mut self, spirv_data: &[u8]) -> Result<n::ShaderModule, d::ShaderError> {
+    fn create_shader_module(&self, spirv_data: &[u8]) -> Result<n::ShaderModule, d::ShaderError> {
         // spec requires "codeSize must be a multiple of 4"
         assert_eq!(spirv_data.len() & 3, 0);
 
@@ -661,7 +661,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_sampler(&mut self, sampler_info: image::SamplerInfo) -> n::Sampler {
+    fn create_sampler(&self, sampler_info: image::SamplerInfo) -> n::Sampler {
         use hal::state::Comparison;
 
         let (min_filter, mag_filter, mipmap_mode, aniso) = conv::map_filter(sampler_info.filter);
@@ -701,7 +701,7 @@ impl d::Device<B> for Device {
     }
 
     ///
-    fn create_buffer(&mut self, size: u64, _stride: u64, usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
+    fn create_buffer(&self, size: u64, _stride: u64, usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
         let info = vk::BufferCreateInfo {
             s_type: vk::StructureType::BufferCreateInfo,
             p_next: ptr::null(),
@@ -726,7 +726,7 @@ impl d::Device<B> for Device {
         }))
     }
 
-    fn get_buffer_requirements(&mut self, buffer: &UnboundBuffer) -> Requirements {
+    fn get_buffer_requirements(&self, buffer: &UnboundBuffer) -> Requirements {
         let req = self.raw.0.get_buffer_memory_requirements((buffer.0).raw);
 
         Requirements {
@@ -736,7 +736,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn bind_buffer_memory(&mut self, memory: &n::Memory, offset: u64, buffer: UnboundBuffer) -> Result<n::Buffer, d::BindError> {
+    fn bind_buffer_memory(&self, memory: &n::Memory, offset: u64, buffer: UnboundBuffer) -> Result<n::Buffer, d::BindError> {
         assert_eq!(Ok(()), unsafe {
             self.raw.0.bind_buffer_memory((buffer.0).raw, memory.inner, offset)
         });
@@ -752,7 +752,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_buffer_view(
-        &mut self, buffer: &n::Buffer, format: format::Format, range: Range<u64>
+        &self, buffer: &n::Buffer, format: format::Format, range: Range<u64>
     ) -> Result<n::BufferView, buffer::ViewError> {
         let info = vk::BufferViewCreateInfo {
             s_type: vk::StructureType::BufferViewCreateInfo,
@@ -771,7 +771,7 @@ impl d::Device<B> for Device {
         Ok(n::BufferView { raw: view })
     }
 
-    fn create_image(&mut self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
+    fn create_image(&self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
          -> Result<UnboundImage, image::CreationError>
     {
         use hal::image::Kind::*;
@@ -859,7 +859,7 @@ impl d::Device<B> for Device {
         Ok(UnboundImage(n::Image{ raw, bytes_per_texel, extent }))
     }
 
-    fn get_image_requirements(&mut self, image: &UnboundImage) -> Requirements {
+    fn get_image_requirements(&self, image: &UnboundImage) -> Requirements {
         let req = self.raw.0.get_image_memory_requirements(image.0.raw);
 
         Requirements {
@@ -869,7 +869,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn bind_image_memory(&mut self, memory: &n::Memory, offset: u64, image: UnboundImage) -> Result<n::Image, d::BindError> {
+    fn bind_image_memory(&self, memory: &n::Memory, offset: u64, image: UnboundImage) -> Result<n::Image, d::BindError> {
         // TODO: error handling
         // TODO: check required type
         assert_eq!(Ok(()), unsafe {
@@ -880,7 +880,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_image_view(
-        &mut self,
+        &self,
         image: &n::Image,
         format: format::Format,
         swizzle: format::Swizzle,
@@ -916,7 +916,7 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn create_descriptor_pool(&mut self,
+    fn create_descriptor_pool(&self,
         max_sets: usize,
         descriptor_pools: &[pso::DescriptorRangeDesc],
     ) -> n::DescriptorPool
@@ -948,7 +948,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_descriptor_set_layout(&mut self, bindings: &[pso::DescriptorSetLayoutBinding])-> n::DescriptorSetLayout {
+    fn create_descriptor_set_layout(&self, bindings: &[pso::DescriptorSetLayoutBinding])-> n::DescriptorSetLayout {
         debug!("create_descriptor_set_layout {:?}", bindings);
 
         let bindings = bindings.iter().map(|binding| {
@@ -978,7 +978,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn update_descriptor_sets(&mut self, writes: &[pso::DescriptorSetWrite<B>]) {
+    fn update_descriptor_sets(&self, writes: &[pso::DescriptorSetWrite<B>]) {
         let mut image_infos = Vec::new();
         let mut buffer_infos = Vec::new();
         let mut texel_buffer_views = Vec::new();
@@ -1087,7 +1087,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn acquire_mapping_raw(&mut self, buf: &n::Buffer, read: Option<Range<u64>>)
+    fn acquire_mapping_raw(&self, buf: &n::Buffer, read: Option<Range<u64>>)
         -> Result<*mut u8, mapping::Error>
     {
         if let Some(read) = read {
@@ -1106,7 +1106,7 @@ impl d::Device<B> for Device {
         Ok(buf.ptr)
     }
 
-    fn release_mapping_raw(&mut self, buf: &n::Buffer, wrote: Option<Range<u64>>) {
+    fn release_mapping_raw(&self, buf: &n::Buffer, wrote: Option<Range<u64>>) {
         if let Some(wrote) = wrote {
             let range = vk::MappedMemoryRange {
                 s_type: vk::StructureType::MappedMemoryRange,
@@ -1122,7 +1122,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_semaphore(&mut self) -> n::Semaphore {
+    fn create_semaphore(&self) -> n::Semaphore {
         let info = vk::SemaphoreCreateInfo {
             s_type: vk::StructureType::SemaphoreCreateInfo,
             p_next: ptr::null(),
@@ -1137,7 +1137,7 @@ impl d::Device<B> for Device {
         n::Semaphore(semaphore)
     }
 
-    fn create_fence(&mut self, signaled: bool) -> n::Fence {
+    fn create_fence(&self, signaled: bool) -> n::Fence {
         let info = vk::FenceCreateInfo {
             s_type: vk::StructureType::FenceCreateInfo,
             p_next: ptr::null(),
@@ -1156,14 +1156,14 @@ impl d::Device<B> for Device {
         n::Fence(fence)
     }
 
-    fn reset_fences(&mut self, fences: &[&n::Fence]) {
+    fn reset_fences(&self, fences: &[&n::Fence]) {
         let fences = fences.iter().map(|fence| fence.0).collect::<Vec<_>>();
         assert_eq!(Ok(()), unsafe {
             self.raw.0.reset_fences(&fences)
         });
     }
 
-    fn wait_for_fences(&mut self, fences: &[&n::Fence], wait: d::WaitFor, timeout_ms: u32) -> bool {
+    fn wait_for_fences(&self, fences: &[&n::Fence], wait: d::WaitFor, timeout_ms: u32) -> bool {
         let fences = fences.iter().map(|fence| fence.0).collect::<Vec<_>>();
         let all = match wait {
             d::WaitFor::Any => false,
@@ -1179,70 +1179,76 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn free_memory(&mut self, memory: n::Memory) {
+    fn free_memory(&self, memory: n::Memory) {
         if !memory.ptr.is_null() {
             unsafe { self.raw.0.unmap_memory(memory.inner) }
         }
         unsafe { self.raw.0.free_memory(memory.inner, None); }
     }
 
-    fn destroy_shader_module(&mut self, module: n::ShaderModule) {
+    fn destroy_shader_module(&self, module: n::ShaderModule) {
         unsafe { self.raw.0.destroy_shader_module(module.raw, None); }
     }
 
-    fn destroy_renderpass(&mut self, rp: n::RenderPass) {
+    fn destroy_renderpass(&self, rp: n::RenderPass) {
         unsafe { self.raw.0.destroy_render_pass(rp.raw, None); }
     }
 
-    fn destroy_pipeline_layout(&mut self, pl: n::PipelineLayout) {
+    fn destroy_pipeline_layout(&self, pl: n::PipelineLayout) {
         unsafe { self.raw.0.destroy_pipeline_layout(pl.raw, None); }
     }
 
-    fn destroy_graphics_pipeline(&mut self, pipeline: n::GraphicsPipeline) {
+    fn destroy_graphics_pipeline(&self, pipeline: n::GraphicsPipeline) {
         unsafe { self.raw.0.destroy_pipeline(pipeline.0, None); }
     }
 
-    fn destroy_compute_pipeline(&mut self, pipeline: n::ComputePipeline) {
+    fn destroy_compute_pipeline(&self, pipeline: n::ComputePipeline) {
         unsafe { self.raw.0.destroy_pipeline(pipeline.0, None); }
     }
 
-    fn destroy_framebuffer(&mut self, fb: n::FrameBuffer) {
+    fn destroy_framebuffer(&self, fb: n::FrameBuffer) {
         unsafe { self.raw.0.destroy_framebuffer(fb.raw, None); }
     }
 
-    fn destroy_buffer(&mut self, buffer: n::Buffer) {
+    fn destroy_buffer(&self, buffer: n::Buffer) {
         unsafe { self.raw.0.destroy_buffer(buffer.raw, None); }
     }
 
-    fn destroy_buffer_view(&mut self, _: n::BufferView) {
+    fn destroy_buffer_view(&self, _: n::BufferView) {
         //TODO?
     }
 
-    fn destroy_image(&mut self, image: n::Image) {
+    fn destroy_image(&self, image: n::Image) {
         unsafe { self.raw.0.destroy_image(image.raw, None); }
     }
 
-    fn destroy_image_view(&mut self, view: n::ImageView) {
+    fn destroy_image_view(&self, view: n::ImageView) {
         unsafe { self.raw.0.destroy_image_view(view.view, None); }
     }
 
-    fn destroy_sampler(&mut self, sampler: n::Sampler) {
+    fn destroy_sampler(&self, sampler: n::Sampler) {
         unsafe { self.raw.0.destroy_sampler(sampler.0, None); }
     }
 
-    fn destroy_descriptor_pool(&mut self, pool: n::DescriptorPool) {
+    fn destroy_descriptor_pool(&self, pool: n::DescriptorPool) {
         unsafe { self.raw.0.destroy_descriptor_pool(pool.raw, None); }
     }
 
-    fn destroy_descriptor_set_layout(&mut self, layout: n::DescriptorSetLayout) {
+    fn destroy_descriptor_set_layout(&self, layout: n::DescriptorSetLayout) {
         unsafe { self.raw.0.destroy_descriptor_set_layout(layout.raw, None); }
     }
 
-    fn destroy_fence(&mut self, fence: n::Fence) {
+    fn destroy_fence(&self, fence: n::Fence) {
         unsafe { self.raw.0.destroy_fence(fence.0, None); }
     }
 
-    fn destroy_semaphore(&mut self, semaphore: n::Semaphore) {
+    fn destroy_semaphore(&self, semaphore: n::Semaphore) {
         unsafe { self.raw.0.destroy_semaphore(semaphore.0, None); }
     }
+}
+
+#[test]
+fn test_send_sync() {
+    fn foo<T: Send+Sync>() {}
+    foo::<Device>()
 }

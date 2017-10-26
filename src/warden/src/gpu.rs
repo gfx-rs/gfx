@@ -93,7 +93,7 @@ impl<B: hal::Backend> Scene<B> {
     pub fn new(adapter: hal::Adapter<B>, raw: &raw::Scene, data_path: &str) -> Self {
         info!("creating Scene from {}", data_path);
         // initialize graphics
-        let hal::Gpu { mut device, mut queue_groups, memory_types, .. } =
+        let hal::Gpu { device, mut queue_groups, memory_types, .. } =
             adapter.open_with(|family| {
                 if family.supports_graphics() {
                     Some(1)

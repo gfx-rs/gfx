@@ -1,6 +1,8 @@
 use std::mem;
 use std::ops::Range;
-use hal::{Device as CoreDevice, MemoryType};
+use std::sync::Arc;
+
+use hal::{self, Device as CoreDevice, MemoryType};
 use hal::memory::{Properties,
     DEVICE_LOCAL, CPU_VISIBLE, CPU_CACHED, COHERENT
 };
@@ -8,18 +10,28 @@ use hal::memory::{Properties,
 use memory::{self, Allocator, Typed};
 use handle::{self, GarbageSender};
 use handle::inner::*;
-use {hal, buffer, image, format, mapping, pso};
+use {buffer, image, format, mapping, pso};
 use {Backend, Primitive, Extent};
 
 pub use hal::device::{FramebufferError};
 
-#[derive(Clone)]
 pub struct Device<B: Backend> {
-    raw: B::Device,
+    pub raw: Arc<B::Device>,
     // TODO: could be shared instead of cloned
     memory_types: Vec<MemoryType>,
     memory_heaps: Vec<u64>,
     garbage: GarbageSender<B>,
+}
+
+impl<B: Backend> Clone for Device<B> {
+    fn clone(&self) -> Self {
+        Device {
+            raw: self.raw.clone(),
+            memory_types: self.memory_types.clone(),
+            memory_heaps: self.memory_heaps.clone(),
+            garbage: self.garbage.clone(),
+        }
+    }
 }
 
 pub struct InitToken<B: Backend> {
@@ -33,8 +45,9 @@ impl<B: Backend> Device<B> {
         memory_heaps: Vec<u64>,
     ) -> (Self, handle::GarbageCollector<B>)
     {
-        let (garbage, collector) = handle::garbage(&raw);
-        (Device { raw, memory_types, memory_heaps, garbage }, collector)
+        let arc = Arc::new(raw);
+        let (garbage, collector) = handle::garbage(&arc);
+        (Device { raw: arc, memory_types, memory_heaps, garbage }, collector)
     }
 
     pub fn memory_types(&self) -> &[MemoryType] {
@@ -43,14 +56,6 @@ impl<B: Backend> Device<B> {
 
     pub fn memory_heaps(&self) -> &[u64] {
         &self.memory_heaps
-    }
-
-    pub fn ref_raw(&self) -> &B::Device {
-        &self.raw
-    }
-
-    pub fn mut_raw(&mut self) -> &mut B::Device {
-        &mut self.raw
     }
 
     pub fn find_memory<P>(&self, type_mask: u64, predicate: P) -> Option<MemoryType>

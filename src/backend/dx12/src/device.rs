@@ -118,7 +118,7 @@ impl Device {
 
     /// Create a shader module from HLSL with a single entry point
     pub fn create_shader_module_from_source(
-        &mut self,
+        &self,
         stage: pso::Stage,
         hlsl_entry: &str,
         entry_point: &str,
@@ -178,7 +178,7 @@ impl Device {
     }
 
     fn update_descriptor_sets_impl<F>(
-        &mut self,
+        &self,
         writes: &[pso::DescriptorSetWrite<B>],
         heap_type: winapi::D3D12_DESCRIPTOR_HEAP_TYPE,
         mut fun: F,
@@ -210,7 +210,7 @@ impl Device {
 
         if !dst_starts.is_empty() {
             unsafe {
-                self.raw.CopyDescriptors(
+                self.raw.clone().CopyDescriptors(
                     dst_starts.len() as u32,
                     dst_starts.as_ptr(),
                     dst_sizes.as_ptr(),
@@ -224,7 +224,7 @@ impl Device {
     }
 
     fn view_image_as_render_target(
-        &mut self,
+        &self,
         resource: *mut winapi::ID3D12Resource,
         kind: image::Kind,
         format: winapi::DXGI_FORMAT,
@@ -255,14 +255,14 @@ impl Device {
         };
 
         unsafe {
-            self.raw.CreateRenderTargetView(resource, &desc, handle);
+            self.raw.clone().CreateRenderTargetView(resource, &desc, handle);
         }
 
         Ok(handle)
     }
 
     fn view_image_as_depth_stencil(
-        &mut self,
+        &self,
         resource: *mut winapi::ID3D12Resource,
         kind: image::Kind,
         format: winapi::DXGI_FORMAT,
@@ -292,14 +292,14 @@ impl Device {
         };
 
         unsafe {
-            self.raw.CreateDepthStencilView(resource, &desc, handle);
+            self.raw.clone().CreateDepthStencilView(resource, &desc, handle);
         }
 
         Ok(handle)
     }
 
     fn view_image_as_shader_resource(
-        &mut self,
+        &self,
         resource: *mut winapi::ID3D12Resource,
         kind: image::Kind,
         format: winapi::DXGI_FORMAT,
@@ -338,14 +338,14 @@ impl Device {
         }
 
         unsafe {
-            self.raw.CreateShaderResourceView(resource, &desc, handle);
+            self.raw.clone().CreateShaderResourceView(resource, &desc, handle);
         }
 
         Ok(handle)
     }
 
     fn view_image_as_storage(
-        &mut self,
+        &self,
         resource: *mut winapi::ID3D12Resource,
         kind: image::Kind,
         format: winapi::DXGI_FORMAT,
@@ -380,7 +380,7 @@ impl Device {
         }
 
         unsafe {
-            self.raw.CreateUnorderedAccessView(resource, ptr::null_mut(), &desc, handle);
+            self.raw.clone().CreateUnorderedAccessView(resource, ptr::null_mut(), &desc, handle);
         }
 
         Ok(handle)
@@ -392,7 +392,7 @@ impl d::Device<B> for Device {
     fn get_limits(&self) -> &Limits { &self.limits }
 
     fn allocate_memory(
-        &mut self,
+        &self,
         mem_type: &MemoryType,
         size: u64,
     ) -> Result<n::Memory, d::OutOfMemory> {
@@ -420,7 +420,7 @@ impl d::Device<B> for Device {
         };
 
         let hr = unsafe {
-            self.raw.CreateHeap(&desc, &dxguid::IID_ID3D12Heap, &mut heap)
+            self.raw.clone().CreateHeap(&desc, &dxguid::IID_ID3D12Heap, &mut heap)
         };
         if hr == winapi::E_OUTOFMEMORY {
             return Err(d::OutOfMemory);
@@ -435,13 +435,13 @@ impl d::Device<B> for Device {
     }
 
     fn create_command_pool(
-        &mut self, family: &QueueFamily, _create_flags: CommandPoolCreateFlags
+        &self, family: &QueueFamily, _create_flags: CommandPoolCreateFlags
     ) -> RawCommandPool {
         let list_type = family.native_type();
         // create command allocator
         let mut command_allocator: *mut winapi::ID3D12CommandAllocator = ptr::null_mut();
         let hr = unsafe {
-            self.raw.CreateCommandAllocator(
+            self.raw.clone().CreateCommandAllocator(
                 list_type,
                 &dxguid::IID_ID3D12CommandAllocator,
                 &mut command_allocator as *mut *mut _ as *mut *mut _,
@@ -459,12 +459,12 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn destroy_command_pool(&mut self, _pool: RawCommandPool) {
+    fn destroy_command_pool(&self, _pool: RawCommandPool) {
         // automatic
     }
 
     fn create_render_pass(
-        &mut self,
+        &self,
         attachments: &[pass::Attachment],
         subpasses: &[pass::SubpassDesc],
         dependencies: &[pass::SubpassDependency],
@@ -599,7 +599,7 @@ impl d::Device<B> for Device {
         rp
     }
 
-    fn create_pipeline_layout(&mut self, sets: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
+    fn create_pipeline_layout(&self, sets: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
         // Pipeline layouts are implemented as RootSignature for D3D12.
         //
         // Each descriptor set layout will be one table entry of the root signature.
@@ -692,7 +692,7 @@ impl d::Device<B> for Device {
                 (*error).Release();
             }
 
-            self.raw.CreateRootSignature(
+            self.raw.clone().CreateRootSignature(
                 0,
                 (*signature_raw).GetBufferPointer(),
                 (*signature_raw).GetBufferSize(),
@@ -709,7 +709,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_graphics_pipelines<'a>(
-        &mut self,
+        &self,
         descs: &[(pso::GraphicsShaderSet<'a, B>, &n::PipelineLayout, pass::Subpass<'a, B>, &pso::GraphicsPipelineDesc)],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         descs.iter().map(|&(shaders, ref signature, ref subpass, ref desc)| {
@@ -861,7 +861,7 @@ impl d::Device<B> for Device {
             // Create PSO
             let mut pipeline = ptr::null_mut();
             let hr = unsafe {
-                self.raw.CreateGraphicsPipelineState(
+                self.raw.clone().CreateGraphicsPipelineState(
                     &pso_desc,
                     &dxguid::IID_ID3D12PipelineState,
                     &mut pipeline as *mut *mut _ as *mut *mut _)
@@ -876,7 +876,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_compute_pipelines<'a>(
-        &mut self,
+        &self,
         descs: &[(pso::EntryPoint<'a, B>, &n::PipelineLayout)],
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
         descs.iter().map(|&(shader, ref signature)| {
@@ -912,7 +912,7 @@ impl d::Device<B> for Device {
             // Create PSO
             let mut pipeline = ptr::null_mut();
             let hr = unsafe {
-                self.raw.CreateComputePipelineState(
+                self.raw.clone().CreateComputePipelineState(
                     &pso_desc,
                     &dxguid::IID_ID3D12PipelineState,
                     &mut pipeline as *mut *mut _ as *mut *mut _)
@@ -927,7 +927,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_framebuffer(
-        &mut self,
+        &self,
         _renderpass: &n::RenderPass,
         attachments: &[&n::ImageView],
         _extent: d::Extent,
@@ -937,7 +937,7 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn create_shader_module(&mut self, raw_data: &[u8]) -> Result<n::ShaderModule, d::ShaderError> {
+    fn create_shader_module(&self, raw_data: &[u8]) -> Result<n::ShaderModule, d::ShaderError> {
         // spec requires "codeSize must be a multiple of 4"
         assert_eq!(raw_data.len() & 3, 0);
 
@@ -1013,7 +1013,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_buffer(
-        &mut self,
+        &self,
         mut size: u64,
         stride: u64,
         usage: buffer::Usage,
@@ -1038,12 +1038,12 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn get_buffer_requirements(&mut self, buffer: &UnboundBuffer) -> Requirements {
+    fn get_buffer_requirements(&self, buffer: &UnboundBuffer) -> Requirements {
         buffer.requirements
     }
 
     fn bind_buffer_memory(
-        &mut self,
+        &self,
         memory: &n::Memory,
         offset: u64,
         buffer: UnboundBuffer,
@@ -1075,7 +1075,7 @@ impl d::Device<B> for Device {
         };
 
         assert_eq!(winapi::S_OK, unsafe {
-            self.raw.CreatePlacedResource(
+            self.raw.clone().CreatePlacedResource(
                 memory.heap.as_mut(),
                 offset,
                 &desc,
@@ -1093,7 +1093,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_buffer_view(
-        &mut self,
+        &self,
         _buffer: &n::Buffer,
         _format: format::Format,
         _range: Range<u64>,
@@ -1102,7 +1102,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_image(
-        &mut self,
+        &self,
         kind: image::Kind,
         mip_levels: image::Level,
         format: format::Format,
@@ -1151,7 +1151,7 @@ impl d::Device<B> for Device {
 
         let mut alloc_info = unsafe { mem::zeroed() };
         unsafe {
-            self.raw.GetResourceAllocationInfo(&mut alloc_info, 0, 1, &desc);
+            self.raw.clone().GetResourceAllocationInfo(&mut alloc_info, 0, 1, &desc);
         }
 
         Ok(UnboundImage {
@@ -1172,12 +1172,12 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn get_image_requirements(&mut self, image: &UnboundImage) -> Requirements {
+    fn get_image_requirements(&self, image: &UnboundImage) -> Requirements {
         image.requirements
     }
 
     fn bind_image_memory(
-        &mut self,
+        &self,
         memory: &n::Memory,
         offset: u64,
         image: UnboundImage,
@@ -1194,7 +1194,7 @@ impl d::Device<B> for Device {
         let mut resource = ptr::null_mut();
 
         assert_eq!(winapi::S_OK, unsafe {
-            self.raw.CreatePlacedResource(
+            self.raw.clone().CreatePlacedResource(
                 memory.heap.as_mut(),
                 offset,
                 &image.desc,
@@ -1251,7 +1251,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_image_view(
-        &mut self,
+        &self,
         image: &n::Image,
         format: format::Format,
         _swizzle: format::Swizzle,
@@ -1285,7 +1285,7 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn create_sampler(&mut self, info: image::SamplerInfo) -> n::Sampler {
+    fn create_sampler(&self, info: image::SamplerInfo) -> n::Sampler {
         let handle = self.sampler_pool.lock().unwrap().alloc_handles(1).cpu;
 
         let op = match info.comparison {
@@ -1309,14 +1309,14 @@ impl d::Device<B> for Device {
         };
 
         unsafe {
-            self.raw.CreateSampler(&desc, handle);
+            self.raw.clone().CreateSampler(&desc, handle);
         }
 
         n::Sampler { handle }
     }
 
     fn create_descriptor_pool(
-        &mut self,
+        &self,
         max_sets: usize,
         descriptor_pools: &[pso::DescriptorRangeDesc],
     ) -> n::DescriptorPool {
@@ -1381,13 +1381,13 @@ impl d::Device<B> for Device {
     }
 
     fn create_descriptor_set_layout(
-        &mut self,
+        &self,
         bindings: &[pso::DescriptorSetLayoutBinding],
     )-> n::DescriptorSetLayout {
         n::DescriptorSetLayout { bindings: bindings.to_vec() }
     }
 
-    fn update_descriptor_sets(&mut self, writes: &[pso::DescriptorSetWrite<B>]) {
+    fn update_descriptor_sets(&self, writes: &[pso::DescriptorSetWrite<B>]) {
         // Create temporary non-shader visible views for uniform and storage buffers.
         let mut num_views = 0;
         for sw in writes {
@@ -1400,11 +1400,12 @@ impl d::Device<B> for Device {
             }
         }
 
+        let mut raw = self.raw.clone();
         let mut handles = Vec::with_capacity(num_views);
         let _buffer_heap = if num_views != 0 {
             let mut heap = n::DescriptorCpuPool {
                 heap: Self::create_descriptor_heap_impl(
-                    &mut self.raw,
+                    &mut raw,
                     winapi::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
                     false,
                     num_views,
@@ -1430,7 +1431,7 @@ impl d::Device<B> for Device {
                                 SizeInBytes: size as _,
                             };
                             unsafe {
-                                self.raw.CreateConstantBufferView(&desc, handle);
+                                raw.CreateConstantBufferView(&desc, handle);
                             }
                             handle
                         }));
@@ -1455,7 +1456,7 @@ impl d::Device<B> for Device {
                             };
 
                             unsafe {
-                                self.raw.CreateUnorderedAccessView(buffer.resource, ptr::null_mut(), &desc, handle);
+                                raw.CreateUnorderedAccessView(buffer.resource, ptr::null_mut(), &desc, handle);
                             }
                             handle
                         }));
@@ -1498,7 +1499,7 @@ impl d::Device<B> for Device {
             });
     }
 
-    fn acquire_mapping_raw(&mut self, buf: &n::Buffer, read: Option<Range<u64>>)
+    fn acquire_mapping_raw(&self, buf: &n::Buffer, read: Option<Range<u64>>)
         -> Result<*mut u8, mapping::Error>
     {
         let read_range = match read {
@@ -1520,7 +1521,7 @@ impl d::Device<B> for Device {
         Ok(ptr as *mut _)
     }
 
-    fn release_mapping_raw(&mut self, buf: &n::Buffer, wrote: Option<Range<u64>>) {
+    fn release_mapping_raw(&self, buf: &n::Buffer, wrote: Option<Range<u64>>) {
         let written_range = match wrote {
             Some(w) => winapi::D3D12_RANGE {
                 Begin: w.start,
@@ -1535,17 +1536,17 @@ impl d::Device<B> for Device {
         unsafe { (*buf.resource).Unmap(0, &written_range) };
     }
 
-    fn create_semaphore(&mut self) -> n::Semaphore {
+    fn create_semaphore(&self) -> n::Semaphore {
         let fence = self.create_fence(false);
         n::Semaphore {
             raw: fence.raw,
         }
     }
 
-    fn create_fence(&mut self, _signaled: bool) -> n::Fence {
+    fn create_fence(&self, _signaled: bool) -> n::Fence {
         let mut handle = ptr::null_mut();
         assert_eq!(winapi::S_OK, unsafe {
-            self.raw.CreateFence(
+            self.raw.clone().CreateFence(
                 0,
                 winapi::D3D12_FENCE_FLAGS(0),
                 &dxguid::IID_ID3D12Fence,
@@ -1558,7 +1559,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn reset_fences(&mut self, fences: &[&n::Fence]) {
+    fn reset_fences(&self, fences: &[&n::Fence]) {
         for fence in fences {
             assert_eq!(winapi::S_OK, unsafe {
                 fence.raw.clone().Signal(0)
@@ -1566,9 +1567,10 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn wait_for_fences(&mut self, fences: &[&n::Fence], wait: d::WaitFor, timeout_ms: u32) -> bool {
-        for _ in self.events.len() .. fences.len() {
-            self.events.push(unsafe {
+    fn wait_for_fences(&self, fences: &[&n::Fence], wait: d::WaitFor, timeout_ms: u32) -> bool {
+        let mut events = self.events.lock().unwrap();
+        for _ in events.len() .. fences.len() {
+            events.push(unsafe {
                 kernel32::CreateEventA(
                     ptr::null_mut(),
                     winapi::FALSE, winapi::FALSE,
@@ -1577,7 +1579,7 @@ impl d::Device<B> for Device {
             });
         }
 
-        for (&event, fence) in self.events.iter().zip(fences.iter()) {
+        for (&event, fence) in events.iter().zip(fences.iter()) {
             assert_eq!(winapi::S_OK, unsafe {
                 kernel32::ResetEvent(event);
                 fence.raw.clone().SetEventOnCompletion(1, event)
@@ -1589,7 +1591,7 @@ impl d::Device<B> for Device {
             d::WaitFor::All => winapi::TRUE,
         };
         let hr = unsafe {
-            kernel32::WaitForMultipleObjects(fences.len() as u32, self.events.as_ptr(), all, timeout_ms)
+            kernel32::WaitForMultipleObjects(fences.len() as u32, events.as_ptr(), all, timeout_ms)
         };
 
         const WAIT_OBJECT_LAST: u32 = winapi::WAIT_OBJECT_0 + winapi::MAXIMUM_WAIT_OBJECTS;
@@ -1602,72 +1604,72 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn free_memory(&mut self, _memory: n::Memory) {
+    fn free_memory(&self, _memory: n::Memory) {
         // Just drop
     }
 
-    fn destroy_shader_module(&mut self, shader_lib: n::ShaderModule) {
+    fn destroy_shader_module(&self, shader_lib: n::ShaderModule) {
         for (_, _blob) in shader_lib.shaders {
             //unsafe { blob.Release(); } //TODO
         }
     }
 
-    fn destroy_renderpass(&mut self, _rp: n::RenderPass) {
+    fn destroy_renderpass(&self, _rp: n::RenderPass) {
         // Just drop
     }
 
-    fn destroy_pipeline_layout(&mut self, layout: n::PipelineLayout) {
+    fn destroy_pipeline_layout(&self, layout: n::PipelineLayout) {
         unsafe { (*layout.raw).Release(); }
     }
 
-    fn destroy_graphics_pipeline(&mut self, pipeline: n::GraphicsPipeline) {
+    fn destroy_graphics_pipeline(&self, pipeline: n::GraphicsPipeline) {
         unsafe { (*pipeline.raw).Release(); }
     }
 
-    fn destroy_compute_pipeline(&mut self, pipeline: n::ComputePipeline) {
+    fn destroy_compute_pipeline(&self, pipeline: n::ComputePipeline) {
         unsafe { (*pipeline.raw).Release(); }
     }
 
-    fn destroy_framebuffer(&mut self, _fb: n::Framebuffer) {
+    fn destroy_framebuffer(&self, _fb: n::Framebuffer) {
         // Just drop
     }
 
-    fn destroy_buffer(&mut self, buffer: n::Buffer) {
+    fn destroy_buffer(&self, buffer: n::Buffer) {
         unsafe { (*buffer.resource).Release(); }
     }
 
-    fn destroy_buffer_view(&mut self, _view: n::BufferView) {
+    fn destroy_buffer_view(&self, _view: n::BufferView) {
         // empty
     }
 
-    fn destroy_image(&mut self, image: n::Image) {
+    fn destroy_image(&self, image: n::Image) {
         unsafe { (*image.resource).Release(); }
     }
 
-    fn destroy_image_view(&mut self, _view: n::ImageView) {
+    fn destroy_image_view(&self, _view: n::ImageView) {
         // Just drop
     }
 
-    fn destroy_sampler(&mut self, _sampler: n::Sampler) {
+    fn destroy_sampler(&self, _sampler: n::Sampler) {
         // Just drop
     }
 
-    fn destroy_descriptor_pool(&mut self, pool: n::DescriptorPool) {
+    fn destroy_descriptor_pool(&self, pool: n::DescriptorPool) {
         self.heap_srv_cbv_uav.lock().unwrap()
             .allocator.deallocate(pool.heap_srv_cbv_uav.range);
         self.heap_sampler.lock().unwrap()
             .allocator.deallocate(pool.heap_sampler.range);
     }
 
-    fn destroy_descriptor_set_layout(&mut self, _layout: n::DescriptorSetLayout) {
+    fn destroy_descriptor_set_layout(&self, _layout: n::DescriptorSetLayout) {
         // Just drop
     }
 
-    fn destroy_fence(&mut self, _fence: n::Fence) {
+    fn destroy_fence(&self, _fence: n::Fence) {
         // Just drop, ComPtr backed
     }
 
-    fn destroy_semaphore(&mut self, _semaphore: n::Semaphore) {
+    fn destroy_semaphore(&self, _semaphore: n::Semaphore) {
         // Just drop, ComPtr backed
     }
 }

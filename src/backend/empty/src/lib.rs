@@ -65,7 +65,6 @@ impl queue::RawCommandQueue<Backend> for RawCommandQueue {
 }
 
 /// Dummy device doing nothing.
-#[derive(Clone)]
 pub struct Device;
 impl hal::Device<Backend> for Device {
     fn get_features(&self) -> &hal::Features {
@@ -76,87 +75,87 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_command_pool(&mut self, _: &QueueFamily, _: pool::CommandPoolCreateFlags) -> RawCommandPool {
+    fn create_command_pool(&self, _: &QueueFamily, _: pool::CommandPoolCreateFlags) -> RawCommandPool {
         unimplemented!()
     }
 
-    fn destroy_command_pool(&mut self, _: RawCommandPool) {
+    fn destroy_command_pool(&self, _: RawCommandPool) {
         unimplemented!()
     }
 
-    fn allocate_memory(&mut self, _: &hal::MemoryType, _: u64) -> Result<(), device::OutOfMemory> {
+    fn allocate_memory(&self, _: &hal::MemoryType, _: u64) -> Result<(), device::OutOfMemory> {
         unimplemented!()
     }
 
-    fn create_render_pass(&mut self, _: &[pass::Attachment], _: &[pass::SubpassDesc], _: &[pass::SubpassDependency]) -> () {
+    fn create_render_pass(&self, _: &[pass::Attachment], _: &[pass::SubpassDesc], _: &[pass::SubpassDependency]) -> () {
         unimplemented!()
     }
 
-    fn create_pipeline_layout(&mut self, _: &[&()]) -> () {
+    fn create_pipeline_layout(&self, _: &[&()]) -> () {
         unimplemented!()
     }
 
     fn create_graphics_pipelines<'a>(
-        &mut self,
+        &self,
         _: &[(pso::GraphicsShaderSet<'a, Backend>, &(), pass::Subpass<'a, Backend>, &pso::GraphicsPipelineDesc)],
     ) -> Vec<Result<(), pso::CreationError>> {
         unimplemented!()
     }
 
     fn create_compute_pipelines<'a>(
-        &mut self,
+        &self,
         _: &[(pso::EntryPoint<'a, Backend>, &())],
     ) -> Vec<Result<(), pso::CreationError>> {
         unimplemented!()
     }
 
     fn create_framebuffer(
-        &mut self, _: &(),
+        &self, _: &(),
         _: &[&()],
         _: device::Extent,
     ) -> Result<(), device::FramebufferError> {
         unimplemented!()
     }
 
-    fn create_shader_module(&mut self, _: &[u8]) -> Result<(), device::ShaderError> {
+    fn create_shader_module(&self, _: &[u8]) -> Result<(), device::ShaderError> {
         unimplemented!()
     }
 
-    fn create_sampler(&mut self, _: image::SamplerInfo) -> () {
+    fn create_sampler(&self, _: image::SamplerInfo) -> () {
         unimplemented!()
     }
-    fn create_buffer(&mut self, _: u64, _: u64, _: buffer::Usage) -> Result<(), buffer::CreationError> {
-        unimplemented!()
-    }
-
-    fn get_buffer_requirements(&mut self, _: &()) -> memory::Requirements {
+    fn create_buffer(&self, _: u64, _: u64, _: buffer::Usage) -> Result<(), buffer::CreationError> {
         unimplemented!()
     }
 
-    fn bind_buffer_memory(&mut self, _: &(), _: u64, _: ()) -> Result<(), device::BindError> {
+    fn get_buffer_requirements(&self, _: &()) -> memory::Requirements {
         unimplemented!()
     }
 
-    fn create_buffer_view(&mut self, _: &(), _: format::Format, _: Range<u64>) -> Result<(), buffer::ViewError> {
+    fn bind_buffer_memory(&self, _: &(), _: u64, _: ()) -> Result<(), device::BindError> {
         unimplemented!()
     }
 
-    fn create_image(&mut self, _: image::Kind, _: image::Level, _: format::Format, _: image::Usage)
+    fn create_buffer_view(&self, _: &(), _: format::Format, _: Range<u64>) -> Result<(), buffer::ViewError> {
+        unimplemented!()
+    }
+
+    fn create_image(&self, _: image::Kind, _: image::Level, _: format::Format, _: image::Usage)
          -> Result<(), image::CreationError>
     {
         unimplemented!()
     }
 
-    fn get_image_requirements(&mut self, _: &()) -> memory::Requirements {
+    fn get_image_requirements(&self, _: &()) -> memory::Requirements {
         unimplemented!()
     }
 
-    fn bind_image_memory(&mut self, _: &(), _: u64, _: ()) -> Result<(), device::BindError> {
+    fn bind_image_memory(&self, _: &(), _: u64, _: ()) -> Result<(), device::BindError> {
         unimplemented!()
     }
 
-    fn create_image_view(&
-        mut self,
+    fn create_image_view(
+        &self,
         _: &(),
         _: format::Format,
         _: format::Swizzle,
@@ -165,96 +164,96 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_descriptor_pool(&mut self, _: usize, _: &[pso::DescriptorRangeDesc]) -> DescriptorPool {
+    fn create_descriptor_pool(&self, _: usize, _: &[pso::DescriptorRangeDesc]) -> DescriptorPool {
         unimplemented!()
     }
-    fn create_descriptor_set_layout(&mut self, _: &[pso::DescriptorSetLayoutBinding]) -> () {
-        unimplemented!()
-    }
-
-    fn update_descriptor_sets(&mut self, _: &[pso::DescriptorSetWrite<Backend>]) {
+    fn create_descriptor_set_layout(&self, _: &[pso::DescriptorSetLayoutBinding]) -> () {
         unimplemented!()
     }
 
-    fn acquire_mapping_raw(&mut self, _: &(), _: Option<Range<u64>>)
+    fn update_descriptor_sets(&self, _: &[pso::DescriptorSetWrite<Backend>]) {
+        unimplemented!()
+    }
+
+    fn acquire_mapping_raw(&self, _: &(), _: Option<Range<u64>>)
         -> Result<*mut u8, mapping::Error>
     {
         unimplemented!()
     }
 
-    fn release_mapping_raw(&mut self, _: &(), _: Option<Range<u64>>) {
+    fn release_mapping_raw(&self, _: &(), _: Option<Range<u64>>) {
         unimplemented!()
     }
 
-    fn create_semaphore(&mut self) -> () {
+    fn create_semaphore(&self) -> () {
         unimplemented!()
     }
 
-    fn create_fence(&mut self, _: bool) -> () {
+    fn create_fence(&self, _: bool) -> () {
         unimplemented!()
     }
 
-    fn reset_fences(&mut self, _: &[&()]) {
+    fn reset_fences(&self, _: &[&()]) {
         unimplemented!()
     }
-    fn wait_for_fences(&mut self, _: &[&()], _: device::WaitFor, _: u32) -> bool {
-        unimplemented!()
-    }
-
-    fn free_memory(&mut self, _: ()) {
+    fn wait_for_fences(&self, _: &[&()], _: device::WaitFor, _: u32) -> bool {
         unimplemented!()
     }
 
-    fn destroy_shader_module(&mut self, _: ()) {
+    fn free_memory(&self, _: ()) {
         unimplemented!()
     }
 
-    fn destroy_renderpass(&mut self, _: ()) {
+    fn destroy_shader_module(&self, _: ()) {
         unimplemented!()
     }
 
-    fn destroy_pipeline_layout(&mut self, _: ()) {
-        unimplemented!()
-    }
-    fn destroy_graphics_pipeline(&mut self, _: ()) {
-        unimplemented!()
-    }
-    fn destroy_compute_pipeline(&mut self, _: ()) {
-        unimplemented!()
-    }
-    fn destroy_framebuffer(&mut self, _: ()) {
+    fn destroy_renderpass(&self, _: ()) {
         unimplemented!()
     }
 
-    fn destroy_buffer(&mut self, _: ()) {
+    fn destroy_pipeline_layout(&self, _: ()) {
         unimplemented!()
     }
-    fn destroy_buffer_view(&mut self, _: ()) {
+    fn destroy_graphics_pipeline(&self, _: ()) {
         unimplemented!()
     }
-    fn destroy_image(&mut self, _: ()) {
+    fn destroy_compute_pipeline(&self, _: ()) {
         unimplemented!()
     }
-    fn destroy_image_view(&mut self, _: ()) {
-        unimplemented!()
-    }
-    fn destroy_sampler(&mut self, _: ()) {
+    fn destroy_framebuffer(&self, _: ()) {
         unimplemented!()
     }
 
-    fn destroy_descriptor_pool(&mut self, _: DescriptorPool) {
+    fn destroy_buffer(&self, _: ()) {
+        unimplemented!()
+    }
+    fn destroy_buffer_view(&self, _: ()) {
+        unimplemented!()
+    }
+    fn destroy_image(&self, _: ()) {
+        unimplemented!()
+    }
+    fn destroy_image_view(&self, _: ()) {
+        unimplemented!()
+    }
+    fn destroy_sampler(&self, _: ()) {
         unimplemented!()
     }
 
-    fn destroy_descriptor_set_layout(&mut self, _: ()) {
+    fn destroy_descriptor_pool(&self, _: DescriptorPool) {
         unimplemented!()
     }
 
-    fn destroy_fence(&mut self, _: ()) {
+    fn destroy_descriptor_set_layout(&self, _: ()) {
         unimplemented!()
     }
 
-    fn destroy_semaphore(&mut self, _: ()) {
+    fn destroy_fence(&self, _: ()) {
+        unimplemented!()
+    }
+
+    fn destroy_semaphore(&self, _: ()) {
         unimplemented!()
     }
 }

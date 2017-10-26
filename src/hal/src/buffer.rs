@@ -168,7 +168,7 @@ pub struct IndexBufferView<'a, B: Backend> {
 /// Retrieve the complete memory requirements for this buffer,
 /// taking usage and device limits into account
 pub fn complete_requirements<B: Backend>(
-    device: &mut B::Device,
+    device: &B::Device,
     buffer: &B::UnboundBuffer,
     usage: Usage,
 ) -> memory::Requirements {

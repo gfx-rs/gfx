@@ -32,7 +32,7 @@ use std::{mem, ptr};
 use std::os::raw::c_void;
 use std::os::windows::ffi::OsStringExt;
 use std::ffi::OsString;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 pub(crate) struct HeapProperties {
     pub page_property: winapi::D3D12_CPU_PAGE_PROPERTY,
@@ -329,20 +329,19 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 enum MemoryArchitecture {
     NUMA,
     UMA,
     CacheCoherentUMA,
 }
 
-#[derive(Clone)]
+#[derive(Debug)]
 pub struct Capabilities {
     heterogeneous_resource_heaps: bool,
     memory_architecture: MemoryArchitecture,
 }
 
-#[derive(Clone)]
 pub struct Device {
     raw: ComPtr<winapi::ID3D12Device>,
     features: hal::Features,
@@ -350,20 +349,21 @@ pub struct Device {
     private_caps: Capabilities,
     heap_properties: &'static [HeapProperties],
     // CPU only pools
-    rtv_pool: Arc<Mutex<native::DescriptorCpuPool>>,
-    dsv_pool: Arc<Mutex<native::DescriptorCpuPool>>,
-    srv_pool: Arc<Mutex<native::DescriptorCpuPool>>,
-    uav_pool: Arc<Mutex<native::DescriptorCpuPool>>,
-    sampler_pool: Arc<Mutex<native::DescriptorCpuPool>>,
+    rtv_pool: Mutex<native::DescriptorCpuPool>,
+    dsv_pool: Mutex<native::DescriptorCpuPool>,
+    srv_pool: Mutex<native::DescriptorCpuPool>,
+    uav_pool: Mutex<native::DescriptorCpuPool>,
+    sampler_pool: Mutex<native::DescriptorCpuPool>,
     // CPU/GPU descriptor heaps
-    heap_srv_cbv_uav: Arc<Mutex<native::DescriptorHeap>>,
-    heap_sampler: Arc<Mutex<native::DescriptorHeap>>,
-    events: Vec<winapi::HANDLE>,
+    heap_srv_cbv_uav: Mutex<native::DescriptorHeap>,
+    heap_sampler: Mutex<native::DescriptorHeap>,
+    events: Mutex<Vec<winapi::HANDLE>>,
 }
 unsafe impl Send for Device {} //blocked by ComPtr
+unsafe impl Sync for Device {} //blocked by ComPtr
 
 impl Device {
-    fn new(mut device: ComPtr<winapi::ID3D12Device>) -> Device {
+    fn new(mut device: ComPtr<winapi::ID3D12Device>) -> Self {
         let mut features: winapi::D3D12_FEATURE_DATA_D3D12_OPTIONS = unsafe { mem::zeroed() };
         assert_eq!(winapi::S_OK, unsafe {
             device.CheckFeatureSupport(winapi::D3D12_FEATURE_D3D12_OPTIONS,
@@ -512,14 +512,14 @@ impl Device {
                 memory_architecture,
             },
             heap_properties,
-            rtv_pool: Arc::new(Mutex::new(rtv_pool)),
-            dsv_pool: Arc::new(Mutex::new(dsv_pool)),
-            srv_pool: Arc::new(Mutex::new(srv_pool)),
-            uav_pool: Arc::new(Mutex::new(uav_pool)),
-            sampler_pool: Arc::new(Mutex::new(sampler_pool)),
-            heap_srv_cbv_uav: Arc::new(Mutex::new(heap_srv_cbv_uav)),
-            heap_sampler: Arc::new(Mutex::new(heap_sampler)),
-            events: Vec::new(),
+            rtv_pool: Mutex::new(rtv_pool),
+            dsv_pool: Mutex::new(dsv_pool),
+            srv_pool: Mutex::new(srv_pool),
+            uav_pool: Mutex::new(uav_pool),
+            sampler_pool: Mutex::new(sampler_pool),
+            heap_srv_cbv_uav: Mutex::new(heap_srv_cbv_uav),
+            heap_sampler: Mutex::new(heap_sampler),
+            events: Mutex::new(Vec::new()),
         }
     }
 }

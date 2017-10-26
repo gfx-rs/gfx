@@ -152,7 +152,7 @@ impl<B: Backend, C: hal::Capability> Queue<B, C> {
     }
 
     fn acquire_encoder_pool(
-        &mut self, device: &mut B::Device
+        &mut self, device: &B::Device
     ) -> encoder::Pool<B, C> {
         let pool = self.pool_receiver.try_recv()
             .map(|mut recycled| {
@@ -223,7 +223,7 @@ impl<B: Backend, C> Context<B, C>
         Cf: RenderFormat,
     {
         let hal::Gpu {
-            mut device,
+            device,
             mut queue_groups,
             memory_types,
             memory_heaps,
@@ -302,13 +302,13 @@ impl<B: Backend, C> Context<B, C>
             .expect("no frame bundles");
 
         if bundle.signal_fence.signal == Pending {
-            self.device.mut_raw()
-                .wait_for_fences(
-                    &[&bundle.signal_fence.inner],
-                    hal::device::WaitFor::All,
-                    !0);
+            self.device.raw.wait_for_fences(
+                &[&bundle.signal_fence.inner],
+                hal::device::WaitFor::All,
+                !0,
+            );
         }
-        self.device.mut_raw().reset_fences(&[&bundle.signal_fence.inner]);
+        self.device.raw.reset_fences(&[&bundle.signal_fence.inner]);
         bundle.signal_fence.signal = Reached;
 
         bundle.handles.clear();
@@ -326,7 +326,7 @@ impl<B: Backend, C> Context<B, C>
     }
 
     pub fn acquire_encoder_pool(&mut self) -> encoder::Pool<B, C> {
-        self.queue.acquire_encoder_pool(self.device.mut_raw())
+        self.queue.acquire_encoder_pool(&self.device.raw)
     }
 
     // TODO: allow submissions before present
@@ -381,8 +381,7 @@ impl<B: Backend, C> Context<B, C> {
                 }
             }).collect();
 
-        self.device.mut_raw()
-            .wait_for_fences(&fences, hal::device::WaitFor::All, !0);
+        self.device.raw.wait_for_fences(&fences, hal::device::WaitFor::All, !0);
     }
 
     pub fn ref_device(&self) -> &Device<B> {
@@ -405,11 +404,10 @@ impl<B: Backend, C> Drop for Context<B, C> {
         self.wait_idle();
         self.garbage.collect();
 
-        let device = self.device.mut_raw();
         for bundle in self.frame_bundles.drain(..) {
-            device.destroy_semaphore(bundle.wait_semaphore);
-            device.destroy_semaphore(bundle.signal_semaphore);
-            device.destroy_fence(bundle.signal_fence.inner);
+            self.device.raw.destroy_semaphore(bundle.wait_semaphore);
+            self.device.raw.destroy_semaphore(bundle.signal_semaphore);
+            self.device.raw.destroy_fence(bundle.signal_fence.inner);
         }
     }
 }

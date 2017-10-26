@@ -513,7 +513,6 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     }
 }
 
-#[derive(Clone)]
 pub struct Device {
     raw: Arc<RawDevice>,
     features: Features,

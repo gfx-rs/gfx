@@ -79,7 +79,7 @@ impl fmt::Debug for Memory {
 // TODO: errors
 pub trait Allocator<B: Backend> {
     fn allocate_buffer(&mut self,
-        device: &mut Device<B>,
+        device: &Device<B>,
         usage: buffer::Usage,
         buffer: B::UnboundBuffer
     ) -> (B::Buffer, Memory);
