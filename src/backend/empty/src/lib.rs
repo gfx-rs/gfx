@@ -65,7 +65,6 @@ impl queue::RawCommandQueue<Backend> for RawCommandQueue {
 }
 
 /// Dummy device doing nothing.
-#[derive(Clone)]
 pub struct Device;
 impl hal::Device<Backend> for Device {
     fn get_features(&self) -> &hal::Features {

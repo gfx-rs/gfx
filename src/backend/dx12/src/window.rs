@@ -92,7 +92,6 @@ impl hal::Surface<Backend> for Surface {
         present_queue: &hal::CommandQueue<Backend, C>,
     ) -> (Swapchain, hal::Backbuffer<Backend>) {
         let mut swap_chain: *mut winapi::IDXGISwapChain1 = ptr::null_mut();
-        let buffer_count = 2; // TODO: user-defined value
         let mut format = config.color_format;
         if format.1 == f::ChannelType::Srgb {
             // Apparently, swap chain doesn't like sRGB, but the RTV can still have some:
@@ -112,13 +111,13 @@ impl hal::Surface<Backend> for Surface {
             &mut device,
             winapi::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
             false,
-            buffer_count,
+            config.image_count as _,
         );
 
         // TODO: double-check values
         let desc = winapi::DXGI_SWAP_CHAIN_DESC1 {
             AlphaMode: winapi::DXGI_ALPHA_MODE_IGNORE,
-            BufferCount: buffer_count as _,
+            BufferCount: config.image_count,
             Width: self.width,
             Height: self.height,
             Format: format,
@@ -151,7 +150,7 @@ impl hal::Surface<Backend> for Surface {
         let mut swap_chain = unsafe { ComPtr::<winapi::IDXGISwapChain3>::new(swap_chain as *mut winapi::IDXGISwapChain3) };
 
         // Get backbuffer images
-        let images = (0..buffer_count).map(|i| {
+        let images = (0 .. config.image_count).map(|i| {
             let mut resource: *mut winapi::ID3D12Resource = ptr::null_mut();
             unsafe {
                 swap_chain.GetBuffer(

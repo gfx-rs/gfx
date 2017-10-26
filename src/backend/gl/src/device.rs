@@ -84,12 +84,6 @@ pub struct Device {
     share: Rc<Share>,
 }
 
-impl Clone for Device {
-    fn clone(&self) -> Device {
-        Device::new(self.share.clone())
-    }
-}
-
 impl Device {
     /// Create a new `Device`.
     pub(crate) fn new(share: Rc<Share>) -> Device {

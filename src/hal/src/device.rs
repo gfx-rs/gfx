@@ -96,8 +96,7 @@ pub struct FramebufferError;
 /// are not enforced at the HAL level due to OpenGL constraint (to be revised). Users can still
 /// benefit from the backends that support synchronization of the `Device`.
 ///
-#[allow(missing_docs)]
-pub trait Device<B: Backend>: Clone {
+pub trait Device<B: Backend> {
     /// Returns the features of this `Device`. This usually depends on the graphics API being
     /// used.
     fn get_features(&self) -> &Features;
@@ -364,6 +363,9 @@ pub trait Device<B: Backend>: Clone {
             })
     }
 
+    /// Release a mapping Writer
+    ///
+    /// See `acquire_mapping_raw` for more information.
     fn release_mapping_writer<'a, T>(&self, mut writer: mapping::Writer<'a, B, T>) {
         writer.released = true;
         self.release_mapping_raw(writer.buffer, Some(writer.range.clone()));
