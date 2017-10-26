@@ -1,5 +1,5 @@
 #![cfg_attr(
-    not(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl")),
+    not(any(feature = "vulkan", feature = "dx12", feature = "metal")),
     allow(dead_code, unused_extern_crates, unused_imports)
 )]
 

@@ -1,8 +1,7 @@
 RUST_BACKTRACE:=1
 EXCLUDES:=
-FEATURES_WARDEN:=
 FEATURES_RENDER:=
-FEATURES_RENDER_ADD:= mint serialize
+FEATURES_EXTRA:=mint serialize
 FEATURES_HAL:=
 FEATURES_HAL2:=
 CMD_QUAD_RENDER:=cargo check
@@ -15,14 +14,12 @@ SDL2_PPA=http://ppa.launchpad.net/zoogie/sdl2-snapshots/ubuntu/pool/main/libs/li
 ifeq ($(OS),Windows_NT)
 	EXCLUDES+= --exclude gfx-backend-metal
 	FEATURES_HAL=vulkan
-	FEATURES_WARDEN+=vulkan
 	ifeq ($(TARGET),x86_64-pc-windows-gnu)
 		# No d3d12 support on GNU windows ATM
 		# context: https://github.com/gfx-rs/gfx/pull/1417
 		EXCLUDES+= --exclude gfx-backend-dx12
 	else
 		FEATURES_HAL2=dx12
-		FEATURES_WARDEN+=dx12
 	endif
 else
 	UNAME_S:=$(shell uname -s)
@@ -31,48 +28,35 @@ else
 	ifeq ($(UNAME_S),Linux)
 		EXCLUDES+= --exclude gfx-backend-metal
 		FEATURES_HAL=vulkan
-		FEATURES_WARDEN+=vulkan
 	endif
 	ifeq ($(UNAME_S),Darwin)
 		EXCLUDES+= --exclude gfx-backend-vulkan
 		EXCLUDES+= --exclude quad-render
 		FEATURES_HAL=metal
-		FEATURES_WARDEN+=metal
 		CMD_QUAD_RENDER=pwd
 	endif
 endif
 
 
-.PHONY: all check ex-hal-quad ex-hal-compute warden reftests render ex-render-quad travis-sdl2
+.PHONY: all check test reftests travis-sdl2
 
-all: check ex-hal-quad ex-hal-compute warden render ex-render-quad
+all: check test
 
 check:
 	cargo check --all $(EXCLUDES)
-	cargo test --all $(EXCLUDES)
-
-warden:
-	cd src/warden && cargo check --features gl #TODO: run
-	cd src/warden && cargo test
-
-reftests: warden
-	cd src/warden && cargo run --bin reftest --features "$(FEATURES_WARDEN)"
-
-render:
-	cd src/render && cargo test --features "$(FEATURES_RENDER)"
-	cd src/render && cargo test --features "$(FEATURES_RENDER) $(FEATURES_RENDER_ADD)"
-
-ex-hal-quad:
-	cd examples/hal/quad && cargo check --features "gl"
-	cd examples/hal/quad && cargo check --features "$(FEATURES_HAL2)"
-	cd examples/hal/quad && cargo check --features "$(FEATURES_HAL)"
-
-ex-hal-compute:
-	cd examples/hal/compute && cargo check --features "$(FEATURES_HAL2)"
-	cd examples/hal/compute && cargo check --features "$(FEATURES_HAL)"
-
-ex-render-quad:
+	cd src/warden && cargo check --features "gl $(FEATURES_HAL) $(FEATURES_HAL2)" #TODO: run
+	cd examples/hal && cargo check --features "gl"
+	cd examples/hal && cargo check --features "$(FEATURES_HAL)"
+	cd examples/hal && cargo check --features "$(FEATURES_HAL2)"
 	cd examples/render/quad_render && $(CMD_QUAD_RENDER)
+
+test:
+	cargo test --all $(EXCLUDES)
+	cd src/render && cargo test --features "$(FEATURES_RENDER)"
+	cd src/render && cargo test --features "$(FEATURES_RENDER) $(FEATURES_EXTRA)"
+
+reftests:
+	cd src/warden && cargo run --bin reftest --features "$(FEATURES_HAL) $(FEATURES_HAL2)"
 
 travis-sdl2:
 	#TODO
