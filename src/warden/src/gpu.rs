@@ -3,14 +3,14 @@ use std::io::Read;
 use std::fs::File;
 use std::slice;
 
-use hal::{self, image as i};
+use hal::{self, buffer, image as i, memory, pso};
 use hal::{Device, DescriptorPool, QueueFamily};
 
 use raw;
 
 
 const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
-    aspects: i::ASPECT_COLOR,
+    aspects: i::AspectFlags::COLOR,
     levels: 0 .. 1,
     layers: 0 .. 1,
 };
@@ -103,14 +103,14 @@ impl<B: hal::Backend> Scene<B> {
         let upload_type = memory_types
             .iter()
             .find(|mt| {
-                mt.properties.contains(hal::memory::CPU_VISIBLE)
-                //&&!mt.properties.contains(hal::memory::CPU_CACHED)
+                mt.properties.contains(memory::Properties::CPU_VISIBLE)
+                //&&!mt.properties.contains(memory::Properties::CPU_CACHED)
             })
             .unwrap();
         let download_type = memory_types
             .iter()
             .find(|mt| {
-                mt.properties.contains(hal::memory::CPU_VISIBLE | hal::memory::CPU_CACHED)
+                mt.properties.contains(memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED)
             })
             .unwrap()
             .clone();
@@ -154,7 +154,7 @@ impl<B: hal::Backend> Scene<B> {
                             .iter()
                             .find(|mt| {
                                 requirements.type_mask & (1 << mt.id) != 0 &&
-                                mt.properties.contains(hal::memory::DEVICE_LOCAL)
+                                mt.properties.contains(memory::Properties::DEVICE_LOCAL)
                             })
                             .unwrap();
                         let memory = device.allocate_memory(memory_type, requirements.size)
@@ -166,12 +166,12 @@ impl<B: hal::Backend> Scene<B> {
                         // process initial data for the image
                         let stable_state = if data.is_empty() {
                             let (aspects, access, layout) = if bits.color != 0 {
-                                (i::ASPECT_COLOR, i::COLOR_ATTACHMENT_WRITE, i::ImageLayout::ColorAttachmentOptimal)
+                                (i::AspectFlags::COLOR, i::Access::COLOR_ATTACHMENT_WRITE, i::ImageLayout::ColorAttachmentOptimal)
                             } else {
-                                (i::ASPECT_DEPTH | i::ASPECT_STENCIL, i::DEPTH_STENCIL_ATTACHMENT_WRITE, i::ImageLayout::DepthStencilAttachmentOptimal)
+                                (i::AspectFlags::DEPTH | i::AspectFlags::STENCIL, i::Access::DEPTH_STENCIL_ATTACHMENT_WRITE, i::ImageLayout::DepthStencilAttachmentOptimal)
                             };
                             if false { //TODO
-                                let image_barrier = hal::memory::Barrier::Image {
+                                let image_barrier = memory::Barrier::Image {
                                     states: (i::Access::empty(), i::ImageLayout::Undefined) .. (access, layout),
                                     target: &image,
                                     range: i::SubresourceRange {
@@ -179,7 +179,7 @@ impl<B: hal::Backend> Scene<B> {
                                         .. COLOR_RANGE.clone()
                                     },
                                 };
-                                init_cmd.pipeline_barrier(hal::pso::TOP_OF_PIPE .. hal::pso::BOTTOM_OF_PIPE, &[image_barrier]);
+                                init_cmd.pipeline_barrier(pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::BOTTOM_OF_PIPE, &[image_barrier]);
                             }
                             (access, layout)
                         } else {
@@ -190,7 +190,7 @@ impl<B: hal::Backend> Scene<B> {
                             let row_pitch = align(width_bytes, limits.min_buffer_copy_pitch_alignment);
                             let upload_size = row_pitch as u64 * h as u64 * d as u64;
                             // create upload buffer
-                            let unbound_buffer = device.create_buffer(upload_size, bits.total as _, hal::buffer::TRANSFER_SRC)
+                            let unbound_buffer = device.create_buffer(upload_size, bits.total as _, buffer::Usage::TRANSFER_SRC)
                                 .unwrap();
                             let upload_req = device.get_buffer_requirements(&unbound_buffer);
                             assert_ne!(upload_req.type_mask & (1<<upload_type.id), 0);
@@ -212,14 +212,14 @@ impl<B: hal::Backend> Scene<B> {
                                 device.release_mapping_writer(mapping);
                             }
                             // add init commands
-                            let final_state = (i::SHADER_READ, i::ImageLayout::ShaderReadOnlyOptimal);
-                            let image_barrier = hal::memory::Barrier::Image {
+                            let final_state = (i::Access::SHADER_READ, i::ImageLayout::ShaderReadOnlyOptimal);
+                            let image_barrier = memory::Barrier::Image {
                                 states: (i::Access::empty(), i::ImageLayout::Undefined) ..
-                                        (i::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal),
+                                        (i::Access::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal),
                                 target: &image,
                                 range: COLOR_RANGE.clone(), //TODO
                             };
-                            init_cmd.pipeline_barrier(hal::pso::TOP_OF_PIPE .. hal::pso::TRANSFER, &[image_barrier]);
+                            init_cmd.pipeline_barrier(pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER, &[image_barrier]);
                             init_cmd.copy_buffer_to_image(
                                 &upload_buffer,
                                 &image,
@@ -229,7 +229,7 @@ impl<B: hal::Backend> Scene<B> {
                                     buffer_row_pitch: row_pitch as u32,
                                     buffer_slice_pitch: row_pitch as u32 * h as u32,
                                     image_layers: i::SubresourceLayers {
-                                        aspects: i::ASPECT_COLOR,
+                                        aspects: i::AspectFlags::COLOR,
                                         level: 0,
                                         layers: 0 .. 1,
                                     },
@@ -240,12 +240,12 @@ impl<B: hal::Backend> Scene<B> {
                                         depth: d as _,
                                     },
                                 }]);
-                            let image_barrier = hal::memory::Barrier::Image {
-                                states: (i::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal) .. final_state,
+                            let image_barrier = memory::Barrier::Image {
+                                states: (i::Access::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal) .. final_state,
                                 target: &image,
                                 range: COLOR_RANGE.clone(), //TODO
                             };
-                            init_cmd.pipeline_barrier(hal::pso::TRANSFER .. hal::pso::BOTTOM_OF_PIPE, &[image_barrier]);
+                            init_cmd.pipeline_barrier(pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE, &[image_barrier]);
                             // done
                             upload_buffers.insert(name.clone(), (upload_buffer, upload_memory));
                             final_state
@@ -432,7 +432,7 @@ impl<B: hal::Backend> Scene<B> {
                             use raw::DrawCommand as Dc;
                             match *command {
                                 Dc::BindIndexBuffer { ref buffer, offset, index_type } => {
-                                    let view = hal::buffer::IndexBufferView {
+                                    let view = buffer::IndexBufferView {
                                         buffer: &resources.buffers[buffer].0,
                                         offset,
                                         index_type,
@@ -446,7 +446,7 @@ impl<B: hal::Backend> Scene<B> {
                                             (&resources.buffers[name].0, offset)
                                         })
                                         .collect::<Vec<_>>();
-                                    let set = hal::pso::VertexBufferSet(buffers_raw);
+                                    let set = pso::VertexBufferSet(buffers_raw);
                                     encoder.bind_vertex_buffers(set);
                                 }
                                 Dc::BindPipeline(_) => {
@@ -509,7 +509,7 @@ impl<B: hal::Backend> Scene<B> {
         let row_pitch = align(width_bytes, limits.min_buffer_copy_pitch_alignment);
         let down_size = row_pitch as u64 * height as u64 * depth as u64;
 
-        let unbound_buffer = self.device.create_buffer(down_size, bpp as _, hal::buffer::TRANSFER_DST)
+        let unbound_buffer = self.device.create_buffer(down_size, bpp as _, buffer::Usage::TRANSFER_DST)
             .unwrap();
         let down_req = self.device.get_buffer_requirements(&unbound_buffer);
         assert_ne!(down_req.type_mask & (1<<self.download_type.id), 0);
@@ -525,12 +525,12 @@ impl<B: hal::Backend> Scene<B> {
         );
         let copy_submit = {
             let mut cmd_buffer = command_pool.acquire_command_buffer();
-            let image_barrier = hal::memory::Barrier::Image {
-                states: image.stable_state .. (i::TRANSFER_READ, i::ImageLayout::TransferSrcOptimal),
+            let image_barrier = memory::Barrier::Image {
+                states: image.stable_state .. (i::Access::TRANSFER_READ, i::ImageLayout::TransferSrcOptimal),
                 target: &image.handle,
                 range: COLOR_RANGE.clone(), //TODO
             };
-            cmd_buffer.pipeline_barrier(hal::pso::TOP_OF_PIPE .. hal::pso::TRANSFER, &[image_barrier]);
+            cmd_buffer.pipeline_barrier(pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER, &[image_barrier]);
             cmd_buffer.copy_image_to_buffer(
                 &image.handle,
                 i::ImageLayout::TransferSrcOptimal,
@@ -540,7 +540,7 @@ impl<B: hal::Backend> Scene<B> {
                     buffer_row_pitch: row_pitch as u32,
                     buffer_slice_pitch: row_pitch as u32 * height as u32,
                     image_layers: i::SubresourceLayers {
-                        aspects: i::ASPECT_COLOR,
+                        aspects: i::AspectFlags::COLOR,
                         level: 0,
                         layers: 0 .. 1,
                     },
@@ -551,12 +551,12 @@ impl<B: hal::Backend> Scene<B> {
                         depth: depth as _,
                     },
                 }]);
-            let image_barrier = hal::memory::Barrier::Image {
-                states: (i::TRANSFER_READ, i::ImageLayout::TransferSrcOptimal) .. image.stable_state,
+            let image_barrier = memory::Barrier::Image {
+                states: (i::Access::TRANSFER_READ, i::ImageLayout::TransferSrcOptimal) .. image.stable_state,
                 target: &image.handle,
                 range: COLOR_RANGE.clone(), //TODO
             };
-            cmd_buffer.pipeline_barrier(hal::pso::TRANSFER .. hal::pso::BOTTOM_OF_PIPE, &[image_barrier]);
+            cmd_buffer.pipeline_barrier(pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE, &[image_barrier]);
             cmd_buffer.finish()
         };
 
