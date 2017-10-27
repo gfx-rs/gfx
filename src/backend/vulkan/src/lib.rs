@@ -414,22 +414,23 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             .iter()
             .map(|mem| mem.size).collect();
         let memory_types = mem_properties.memory_types[..mem_properties.memory_type_count as usize].iter().enumerate().map(|(i, mem)| {
-            let mut type_flags = memory::Properties::empty();
+            use memory::Properties;
+            let mut type_flags = Properties::empty();
 
             if mem.property_flags.intersects(vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
-                type_flags |= memory::DEVICE_LOCAL;
+                type_flags |= Properties::DEVICE_LOCAL;
             }
             if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_COHERENT_BIT) {
-                type_flags |= memory::COHERENT;
+                type_flags |= Properties::COHERENT;
             }
             if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_CACHED_BIT) {
-                type_flags |= memory::CPU_CACHED;
+                type_flags |= Properties::CPU_CACHED;
             }
             if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
-                type_flags |= memory::CPU_VISIBLE;
+                type_flags |= Properties::CPU_VISIBLE;
             }
             if mem.property_flags.intersects(vk::MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) {
-                type_flags |= memory::LAZILY_ALLOCATED;
+                type_flags |= Properties::LAZILY_ALLOCATED;
             }
 
             hal::MemoryType {

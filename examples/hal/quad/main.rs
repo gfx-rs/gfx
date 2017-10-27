@@ -25,6 +25,7 @@ use hal::{
 };
 use hal::format::{ChannelType, Formatted, Srgba8 as ColorFormat, Swizzle, Vec2};
 use hal::pass::Subpass;
+use hal::pso::{PipelineStage, ShaderStageFlags};
 use hal::queue::Submission;
 use hal::target::Rect;
 
@@ -55,7 +56,7 @@ const QUAD: [Vertex; 6] = [
 ];
 
 const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
-    aspects: i::ASPECT_COLOR,
+    aspects: i::AspectFlags::COLOR,
     levels: 0 .. 1,
     layers: 0 .. 1,
 };
@@ -66,7 +67,7 @@ fn main() {
 
     #[cfg(feature = "metal")]
     let mut autorelease_pool = unsafe { back::AutoreleasePool::new() };
-    
+
     let mut events_loop = winit::EventsLoop::new();
 
     let wb = winit::WindowBuilder::new()
@@ -168,13 +169,13 @@ fn main() {
                 binding: 0,
                 ty: pso::DescriptorType::SampledImage,
                 count: 1,
-                stage_flags: pso::STAGE_FRAGMENT,
+                stage_flags: ShaderStageFlags::FRAGMENT,
             },
             pso::DescriptorSetLayoutBinding {
                 binding: 1,
                 ty: pso::DescriptorType::Sampler,
                 count: 1,
-                stage_flags: pso::STAGE_FRAGMENT,
+                stage_flags: ShaderStageFlags::FRAGMENT,
             },
         ],
     );
@@ -198,8 +199,8 @@ fn main() {
 
         let dependency = pass::SubpassDependency {
             passes: pass::SubpassRef::External .. pass::SubpassRef::Pass(0),
-            stages: pso::COLOR_ATTACHMENT_OUTPUT .. pso::COLOR_ATTACHMENT_OUTPUT,
-            accesses: i::Access::empty() .. (i::COLOR_ATTACHMENT_READ | i::COLOR_ATTACHMENT_WRITE),
+            stages: PipelineStage::COLOR_ATTACHMENT_OUTPUT .. PipelineStage::COLOR_ATTACHMENT_OUTPUT,
+            accesses: i::Access::empty() .. (i::Access::COLOR_ATTACHMENT_READ | i::Access::COLOR_ATTACHMENT_WRITE),
         };
 
         device.create_render_pass(&[attachment], &[subpass], &[dependency])
@@ -322,14 +323,14 @@ fn main() {
     let buffer_stride = std::mem::size_of::<Vertex>() as u64;
     let buffer_len = QUAD.len() as u64 * buffer_stride;
 
-    let buffer_unbound = device.create_buffer(buffer_len, buffer_stride, buffer::VERTEX).unwrap();
+    let buffer_unbound = device.create_buffer(buffer_len, buffer_stride, buffer::Usage::VERTEX).unwrap();
     println!("{:?}", buffer_unbound);
     let buffer_req = device.get_buffer_requirements(&buffer_unbound);
 
     let upload_type =
         memory_types.iter().find(|mem_type| {
             buffer_req.type_mask & (1 << mem_type.id) != 0 &&
-            mem_type.properties.contains(m::CPU_VISIBLE)
+            mem_type.properties.contains(m::Properties::CPU_VISIBLE)
         }).unwrap();
 
     let buffer_memory = device.allocate_memory(upload_type, 1024).unwrap();
@@ -358,7 +359,7 @@ fn main() {
 
     let image_upload_memory = device.allocate_memory(upload_type, upload_size).unwrap();
     let image_upload_buffer = {
-        let buffer = device.create_buffer(upload_size, image_stride as u64, buffer::TRANSFER_SRC).unwrap();
+        let buffer = device.create_buffer(upload_size, image_stride as u64, buffer::Usage::TRANSFER_SRC).unwrap();
         device.bind_buffer_memory(&image_upload_memory, 0, buffer).unwrap()
     };
 
@@ -375,7 +376,7 @@ fn main() {
         device.release_mapping_writer(data);
     }
 
-    let image_unbound = device.create_image(kind, 1, ColorFormat::SELF, i::TRANSFER_DST | i::SAMPLED).unwrap(); // TODO: usage
+    let image_unbound = device.create_image(kind, 1, ColorFormat::SELF, i::Usage::TRANSFER_DST | i::Usage::SAMPLED).unwrap(); // TODO: usage
     println!("{:?}", image_unbound);
     let image_req = device.get_image_requirements(&image_unbound);
 
@@ -383,7 +384,7 @@ fn main() {
         .iter()
         .find(|memory_type| {
             image_req.type_mask & (1 << memory_type.id) != 0 &&
-            memory_type.properties.contains(m::DEVICE_LOCAL)
+            memory_type.properties.contains(m::Properties::DEVICE_LOCAL)
         })
         .unwrap();
     let image_memory = device.allocate_memory(device_type, image_req.size).unwrap();
@@ -434,11 +435,11 @@ fn main() {
 
             let image_barrier = m::Barrier::Image {
                 states: (i::Access::empty(), i::ImageLayout::Undefined) ..
-                        (i::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal),
+                        (i::Access::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal),
                 target: &image_logo,
                 range: COLOR_RANGE.clone(),
             };
-            cmd_buffer.pipeline_barrier(pso::TOP_OF_PIPE .. pso::TRANSFER, &[image_barrier]);
+            cmd_buffer.pipeline_barrier(PipelineStage::TOP_OF_PIPE .. PipelineStage::TRANSFER, &[image_barrier]);
 
             cmd_buffer.copy_buffer_to_image(
                 &image_upload_buffer,
@@ -449,7 +450,7 @@ fn main() {
                     buffer_row_pitch: row_pitch,
                     buffer_slice_pitch: row_pitch * (height as u32),
                     image_layers: i::SubresourceLayers {
-                        aspects: i::ASPECT_COLOR,
+                        aspects: i::AspectFlags::COLOR,
                         level: 0,
                         layers: 0 .. 1,
                     },
@@ -458,12 +459,12 @@ fn main() {
                 }]);
 
             let image_barrier = m::Barrier::Image {
-                states: (i::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal) ..
-                        (i::SHADER_READ, i::ImageLayout::ShaderReadOnlyOptimal),
+                states: (i::Access::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal) ..
+                        (i::Access::SHADER_READ, i::ImageLayout::ShaderReadOnlyOptimal),
                 target: &image_logo,
                 range: COLOR_RANGE.clone(),
             };
-            cmd_buffer.pipeline_barrier(pso::TRANSFER .. pso::BOTTOM_OF_PIPE, &[image_barrier]);
+            cmd_buffer.pipeline_barrier(PipelineStage::TRANSFER .. PipelineStage::BOTTOM_OF_PIPE, &[image_barrier]);
 
             cmd_buffer.finish()
         };
@@ -520,7 +521,7 @@ fn main() {
         };
 
         let submission = Submission::new()
-            .wait_on(&[(&mut frame_semaphore, pso::BOTTOM_OF_PIPE)])
+            .wait_on(&[(&mut frame_semaphore, PipelineStage::BOTTOM_OF_PIPE)])
             .submit(&[submit]);
         queue.submit(submission, Some(&mut frame_fence));
 

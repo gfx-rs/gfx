@@ -572,7 +572,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
                     for (&binding, values) in set.bindings.iter() {
                         let desc_layout = set.layout.iter().find(|x| x.binding == binding).unwrap();
 
-                        if desc_layout.stage_flags.contains(pso::STAGE_VERTEX) {
+                        if desc_layout.stage_flags.contains(pso::ShaderStageFlags::VERTEX) {
                             let location = msl::ResourceBindingLocation {
                                 binding: binding as _,
                                 .. location_vs
@@ -598,7 +598,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
                                 _ => unimplemented!(),
                             }
                         }
-                        if desc_layout.stage_flags.contains(pso::STAGE_FRAGMENT) {
+                        if desc_layout.stage_flags.contains(pso::ShaderStageFlags::FRAGMENT) {
                             let location = msl::ResourceBindingLocation {
                                 binding: binding as _,
                                 .. location_fs
@@ -627,14 +627,14 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
                     }
                 }
                 native::DescriptorSet::ArgumentBuffer { ref buffer, offset, stage_flags, .. } => {
-                    if stage_flags.contains(pso::STAGE_VERTEX) {
+                    if stage_flags.contains(pso::ShaderStageFlags::VERTEX) {
                         let slot = layout.res_overrides[&location_vs].resource_id;
                         inner.resources_vs.add_buffer(slot as _, buffer, offset as _);
                         if let EncoderState::Render(ref encoder) = inner.encoder_state {
                             encoder.set_vertex_buffer(slot as _, offset as _, Some(buffer))
                         }
                     }
-                    if stage_flags.contains(pso::STAGE_FRAGMENT) {
+                    if stage_flags.contains(pso::ShaderStageFlags::FRAGMENT) {
                         let slot = layout.res_overrides[&location_fs].resource_id;
                         inner.resources_fs.add_buffer(slot as _, &buffer, offset as _);
                         if let EncoderState::Render(ref encoder) = inner.encoder_state {

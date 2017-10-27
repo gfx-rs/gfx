@@ -4,10 +4,7 @@ use {hal, handle};
 use memory::{Memory, Pod};
 use Backend;
 
-pub use hal::buffer::{CreationError, ViewError};
-pub use hal::buffer::{Usage,
-    TRANSFER_SRC, TRANSFER_DST, UNIFORM, INDEX, INDIRECT, VERTEX
-};
+pub use hal::buffer::{CreationError, Usage, ViewError};
 
 /// An information block that is immutable and associated to each buffer.
 #[derive(Debug)]

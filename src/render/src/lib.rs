@@ -35,7 +35,7 @@
 //! - The [`CommandBuffer` trait](trait.CommandBuffer.html).
 //! - The [`CommandQueue` struct](struct.CommandQueue.html).
 //!
-//! ## Devoce
+//! ## Device
 //!
 //! The device is what lets you allocate GPU resources such as buffers and textures.
 //!
@@ -266,8 +266,8 @@ impl<B: Backend, C> Context<B, C>
                 let handle = handle::inner::Image::without_garbage(
                     raw,
                     image::Info {
-                        aspects: hal::image::ASPECT_COLOR,
-                        usage: image::TRANSFER_SRC | image::COLOR_ATTACHMENT,
+                        aspects: hal::image::AspectFlags::COLOR,
+                        usage: image::Usage::TRANSFER_SRC | image::Usage::COLOR_ATTACHMENT,
                         kind: surface.get_kind(),
                         mip_levels: 1,
                         format: Cf::SELF,
@@ -346,7 +346,7 @@ impl<B: Backend, C> Context<B, C>
 
         {
             let submission = hal::Submission::new()
-                .wait_on(&[(&bundle.wait_semaphore, hal::pso::BOTTOM_OF_PIPE)])
+                .wait_on(&[(&bundle.wait_semaphore, hal::pso::PipelineStage::BOTTOM_OF_PIPE)])
                 .signal(&[&bundle.signal_semaphore])
                 .promote::<C>()
                 .submit(&inner_submits);

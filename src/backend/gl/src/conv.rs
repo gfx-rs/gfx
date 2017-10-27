@@ -35,11 +35,12 @@ pub fn wrap_to_gl(w: i::WrapMode) -> t::GLenum {
 }
 
 pub fn buffer_usage_to_gl_target(usage: buffer::Usage) -> Option<t::GLenum> {
-    match usage & (buffer::UNIFORM | buffer::INDEX | buffer::VERTEX | buffer::INDIRECT) {
-        buffer::UNIFORM => Some(gl::UNIFORM_BUFFER),
-        buffer::INDEX => Some(gl::ELEMENT_ARRAY_BUFFER),
-        buffer::VERTEX => Some(gl::ARRAY_BUFFER),
-        buffer::INDIRECT => unimplemented!(),
+    use self::buffer::Usage;
+    match usage & (Usage::UNIFORM | Usage::INDEX | Usage::VERTEX | Usage::INDIRECT) {
+        Usage::UNIFORM => Some(gl::UNIFORM_BUFFER),
+        Usage::INDEX => Some(gl::ELEMENT_ARRAY_BUFFER),
+        Usage::VERTEX => Some(gl::ARRAY_BUFFER),
+        Usage::INDIRECT => unimplemented!(),
         _ => None
     }
 }

@@ -390,14 +390,15 @@ pub fn map_image_layout(layout: image::ImageLayout) -> vk::ImageLayout {
 }
 
 pub fn map_image_aspects(aspects: image::AspectFlags) -> vk::ImageAspectFlags {
+    use self::image::AspectFlags;
     let mut flags = vk::ImageAspectFlags::empty();
-    if aspects.contains(image::ASPECT_COLOR) {
+    if aspects.contains(AspectFlags::COLOR) {
         flags |= vk::IMAGE_ASPECT_COLOR_BIT;
     }
-    if aspects.contains(image::ASPECT_DEPTH) {
+    if aspects.contains(AspectFlags::DEPTH) {
         flags |= vk::IMAGE_ASPECT_DEPTH_BIT;
     }
-    if aspects.contains(image::ASPECT_STENCIL) {
+    if aspects.contains(AspectFlags::STENCIL) {
         flags |= vk::IMAGE_ASPECT_STENCIL_BIT;
     }
     flags
@@ -498,42 +499,43 @@ pub fn map_attachment_store_op(op: pass::AttachmentStoreOp) -> vk::AttachmentSto
 }
 
 pub fn map_buffer_access(access: buffer::Access) -> vk::AccessFlags {
+    use self::buffer::Access;
     let mut flags = vk::AccessFlags::empty();
 
-    if access.contains(buffer::TRANSFER_READ) {
+    if access.contains(Access::TRANSFER_READ) {
         flags |= vk::ACCESS_TRANSFER_READ_BIT;
     }
-    if access.contains(buffer::TRANSFER_WRITE) {
+    if access.contains(Access::TRANSFER_WRITE) {
         flags |= vk::ACCESS_TRANSFER_WRITE_BIT;
     }
-    if access.contains(buffer::INDEX_BUFFER_READ) {
+    if access.contains(Access::INDEX_BUFFER_READ) {
         flags |= vk::ACCESS_INDEX_READ_BIT;
     }
-    if access.contains(buffer::VERTEX_BUFFER_READ) {
+    if access.contains(Access::VERTEX_BUFFER_READ) {
         flags |= vk::ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
     }
-    if access.contains(buffer::CONSTANT_BUFFER_READ) {
+    if access.contains(Access::CONSTANT_BUFFER_READ) {
         flags |= vk::ACCESS_UNIFORM_READ_BIT;
     }
-    if access.contains(buffer::INDIRECT_COMMAND_READ) {
+    if access.contains(Access::INDIRECT_COMMAND_READ) {
         flags |= vk::ACCESS_INDIRECT_COMMAND_READ_BIT;
     }
-    if access.contains(buffer::SHADER_READ) {
+    if access.contains(Access::SHADER_READ) {
         flags |= vk::ACCESS_SHADER_READ_BIT;
     }
-    if access.contains(buffer::SHADER_WRITE) {
+    if access.contains(Access::SHADER_WRITE) {
         flags |= vk::ACCESS_SHADER_WRITE_BIT;
     }
-    if access.contains(buffer::HOST_READ) {
+    if access.contains(Access::HOST_READ) {
         flags |= vk::ACCESS_HOST_READ_BIT;
     }
-    if access.contains(buffer::HOST_WRITE) {
+    if access.contains(Access::HOST_WRITE) {
         flags |= vk::ACCESS_HOST_WRITE_BIT;
     }
-    if access.contains(buffer::MEMORY_READ) {
+    if access.contains(Access::MEMORY_READ) {
         flags |= vk::ACCESS_MEMORY_READ_BIT;
     }
-    if access.contains(buffer::MEMORY_WRITE) {
+    if access.contains(Access::MEMORY_WRITE) {
         flags |= vk::ACCESS_MEMORY_WRITE_BIT;
     }
 
@@ -541,45 +543,46 @@ pub fn map_buffer_access(access: buffer::Access) -> vk::AccessFlags {
 }
 
 pub fn map_image_access(access: image::Access) -> vk::AccessFlags {
+    use self::image::Access;
     let mut flags = vk::AccessFlags::empty();
 
-    if access.contains(image::COLOR_ATTACHMENT_READ) {
+    if access.contains(Access::COLOR_ATTACHMENT_READ) {
         flags |= vk::ACCESS_COLOR_ATTACHMENT_READ_BIT;
     }
-    if access.contains(image::COLOR_ATTACHMENT_WRITE) {
+    if access.contains(Access::COLOR_ATTACHMENT_WRITE) {
         flags |= vk::ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
     }
-    if access.contains(image::TRANSFER_READ) {
+    if access.contains(Access::TRANSFER_READ) {
         flags |= vk::ACCESS_TRANSFER_READ_BIT;
     }
-    if access.contains(image::TRANSFER_WRITE) {
+    if access.contains(Access::TRANSFER_WRITE) {
         flags |= vk::ACCESS_TRANSFER_WRITE_BIT;
     }
-    if access.contains(image::SHADER_READ) {
+    if access.contains(Access::SHADER_READ) {
         flags |= vk::ACCESS_SHADER_READ_BIT;
     }
-    if access.contains(image::SHADER_WRITE) {
+    if access.contains(Access::SHADER_WRITE) {
         flags |= vk::ACCESS_SHADER_WRITE_BIT;
     }
-    if access.contains(image::DEPTH_STENCIL_ATTACHMENT_READ) {
+    if access.contains(Access::DEPTH_STENCIL_ATTACHMENT_READ) {
         flags |= vk::ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
     }
-    if access.contains(image::DEPTH_STENCIL_ATTACHMENT_WRITE) {
+    if access.contains(Access::DEPTH_STENCIL_ATTACHMENT_WRITE) {
         flags |= vk::ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     }
-    if access.contains(image::HOST_READ) {
+    if access.contains(Access::HOST_READ) {
         flags |= vk::ACCESS_HOST_READ_BIT;
     }
-    if access.contains(image::HOST_WRITE) {
+    if access.contains(Access::HOST_WRITE) {
         flags |= vk::ACCESS_HOST_WRITE_BIT;
     }
-    if access.contains(image::MEMORY_READ) {
+    if access.contains(Access::MEMORY_READ) {
         flags |= vk::ACCESS_MEMORY_READ_BIT;
     }
-    if access.contains(image::MEMORY_WRITE) {
+    if access.contains(Access::MEMORY_WRITE) {
         flags |= vk::ACCESS_MEMORY_WRITE_BIT;
     }
-    if access.contains(image::INPUT_ATTACHMENT_READ) {
+    if access.contains(Access::INPUT_ATTACHMENT_READ) {
         flags |= vk::ACCESS_INPUT_ATTACHMENT_READ_BIT;
     }
 
@@ -587,51 +590,52 @@ pub fn map_image_access(access: image::Access) -> vk::AccessFlags {
 }
 
 pub fn map_pipeline_stage(stage: pso::PipelineStage) -> vk::PipelineStageFlags {
+    use self::pso::PipelineStage;
     let mut flags = vk::PipelineStageFlags::empty();
 
-    if stage.contains(pso::TOP_OF_PIPE) {
+    if stage.contains(PipelineStage::TOP_OF_PIPE) {
         flags |= vk::PIPELINE_STAGE_TOP_OF_PIPE_BIT;
     }
-    if stage.contains(pso::DRAW_INDIRECT) {
+    if stage.contains(PipelineStage::DRAW_INDIRECT) {
         flags |= vk::PIPELINE_STAGE_DRAW_INDIRECT_BIT;
     }
-    if stage.contains(pso::VERTEX_INPUT) {
+    if stage.contains(PipelineStage::VERTEX_INPUT) {
         flags |= vk::PIPELINE_STAGE_VERTEX_INPUT_BIT;
     }
-    if stage.contains(pso::VERTEX_SHADER) {
+    if stage.contains(PipelineStage::VERTEX_SHADER) {
         flags |= vk::PIPELINE_STAGE_VERTEX_SHADER_BIT;
     }
-    if stage.contains(pso::HULL_SHADER) {
+    if stage.contains(PipelineStage::HULL_SHADER) {
         flags |= vk::PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT;
     }
-    if stage.contains(pso::DOMAIN_SHADER) {
+    if stage.contains(PipelineStage::DOMAIN_SHADER) {
         flags |= vk::PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT;
     }
-    if stage.contains(pso::GEOMETRY_SHADER) {
+    if stage.contains(PipelineStage::GEOMETRY_SHADER) {
         flags |= vk::PIPELINE_STAGE_GEOMETRY_SHADER_BIT;
     }
-    if stage.contains(pso::FRAGMENT_SHADER) {
+    if stage.contains(PipelineStage::FRAGMENT_SHADER) {
         flags |= vk::PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
     }
-    if stage.contains(pso::EARLY_FRAGMENT_TESTS) {
+    if stage.contains(PipelineStage::EARLY_FRAGMENT_TESTS) {
         flags |= vk::PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     }
-    if stage.contains(pso::LATE_FRAGMENT_TESTS) {
+    if stage.contains(PipelineStage::LATE_FRAGMENT_TESTS) {
         flags |= vk::PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
     }
-    if stage.contains(pso::COLOR_ATTACHMENT_OUTPUT) {
+    if stage.contains(PipelineStage::COLOR_ATTACHMENT_OUTPUT) {
         flags |= vk::PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     }
-    if stage.contains(pso::COMPUTE_SHADER) {
+    if stage.contains(PipelineStage::COMPUTE_SHADER) {
         flags |= vk::PIPELINE_STAGE_COMPUTE_SHADER_BIT;
     }
-    if stage.contains(pso::TRANSFER) {
+    if stage.contains(PipelineStage::TRANSFER) {
         flags |= vk::PIPELINE_STAGE_TRANSFER_BIT;
     }
-    if stage.contains(pso::BOTTOM_OF_PIPE) {
+    if stage.contains(PipelineStage::BOTTOM_OF_PIPE) {
         flags |= vk::PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
     }
-    if stage.contains(pso::HOST) {
+    if stage.contains(PipelineStage::HOST) {
         flags |= vk::PIPELINE_STAGE_HOST_BIT;
     }
 
@@ -639,33 +643,34 @@ pub fn map_pipeline_stage(stage: pso::PipelineStage) -> vk::PipelineStageFlags {
 }
 
 pub fn map_buffer_usage(usage: buffer::Usage) -> vk::BufferUsageFlags {
+    use self::buffer::Usage;
     let mut flags = vk::BufferUsageFlags::empty();
 
-    if usage.contains(buffer::TRANSFER_SRC) {
+    if usage.contains(Usage::TRANSFER_SRC) {
         flags |= vk::BUFFER_USAGE_TRANSFER_SRC_BIT;
     }
-    if usage.contains(buffer::TRANSFER_DST) {
+    if usage.contains(Usage::TRANSFER_DST) {
         flags |= vk::BUFFER_USAGE_TRANSFER_DST_BIT;
     }
-    if usage.contains(buffer::UNIFORM) {
+    if usage.contains(Usage::UNIFORM) {
         flags |= vk::BUFFER_USAGE_UNIFORM_BUFFER_BIT;
     }
-    if usage.contains(buffer::STORAGE) {
+    if usage.contains(Usage::STORAGE) {
         flags |= vk::BUFFER_USAGE_STORAGE_BUFFER_BIT;
     }
-    if usage.contains(buffer::UNIFORM_TEXEL) {
+    if usage.contains(Usage::UNIFORM_TEXEL) {
         flags |= vk::BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
     }
-    if usage.contains(buffer::STORAGE_TEXEL) {
+    if usage.contains(Usage::STORAGE_TEXEL) {
         flags |= vk::BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
     }
-    if usage.contains(buffer::INDEX) {
+    if usage.contains(Usage::INDEX) {
         flags |= vk::BUFFER_USAGE_INDEX_BUFFER_BIT;
     }
-    if usage.contains(buffer::INDIRECT) {
+    if usage.contains(Usage::INDIRECT) {
         flags |= vk::BUFFER_USAGE_INDIRECT_BUFFER_BIT;
     }
-    if usage.contains(buffer::VERTEX) {
+    if usage.contains(Usage::VERTEX) {
         flags |= vk::BUFFER_USAGE_VERTEX_BUFFER_BIT;
     }
 
@@ -673,24 +678,25 @@ pub fn map_buffer_usage(usage: buffer::Usage) -> vk::BufferUsageFlags {
 }
 
 pub fn map_image_usage(usage: image::Usage) -> vk::ImageUsageFlags {
+    use self::image::Usage;
     let mut flags = vk::ImageUsageFlags::empty();
 
-    if usage.contains(image::TRANSFER_SRC) {
+    if usage.contains(Usage::TRANSFER_SRC) {
         flags |= vk::IMAGE_USAGE_TRANSFER_SRC_BIT;
     }
-    if usage.contains(image::TRANSFER_DST) {
+    if usage.contains(Usage::TRANSFER_DST) {
         flags |= vk::IMAGE_USAGE_TRANSFER_DST_BIT;
     }
-    if usage.contains(image::COLOR_ATTACHMENT) {
+    if usage.contains(Usage::COLOR_ATTACHMENT) {
         flags |= vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     }
-    if usage.contains(image::DEPTH_STENCIL_ATTACHMENT) {
+    if usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
         flags |= vk::IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     }
-    if usage.contains(image::STORAGE) {
+    if usage.contains(Usage::STORAGE) {
         flags |= vk::IMAGE_USAGE_STORAGE_BIT;
     }
-    if usage.contains(image::SAMPLED) {
+    if usage.contains(Usage::SAMPLED) {
         flags |= vk::IMAGE_USAGE_SAMPLED_BIT;
     }
 
@@ -712,29 +718,30 @@ pub fn map_descriptor_type(ty: pso::DescriptorType) -> vk::DescriptorType {
 }
 
 pub fn map_stage_flags(stages: pso::ShaderStageFlags) -> vk::ShaderStageFlags {
+    use self::pso::ShaderStageFlags;
     let mut flags = vk::ShaderStageFlags::empty();
 
-    if stages.contains(pso::STAGE_VERTEX) {
+    if stages.contains(ShaderStageFlags::VERTEX) {
         flags |= vk::SHADER_STAGE_VERTEX_BIT;
     }
 
-    if stages.contains(pso::STAGE_HULL) {
+    if stages.contains(ShaderStageFlags::HULL) {
         flags |= vk::SHADER_STAGE_TESSELLATION_CONTROL_BIT;
     }
 
-    if stages.contains(pso::STAGE_DOMAIN) {
+    if stages.contains(ShaderStageFlags::DOMAIN) {
         flags |= vk::SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
     }
 
-    if stages.contains(pso::STAGE_GEOMETRY) {
+    if stages.contains(ShaderStageFlags::GEOMETRY) {
         flags |= vk::SHADER_STAGE_GEOMETRY_BIT;
     }
 
-    if stages.contains(pso::STAGE_FRAGMENT) {
+    if stages.contains(ShaderStageFlags::FRAGMENT) {
         flags |= vk::SHADER_STAGE_FRAGMENT_BIT;
     }
 
-    if stages.contains(pso::STAGE_COMPUTE) {
+    if stages.contains(ShaderStageFlags::COMPUTE) {
         flags |= vk::SHADER_STAGE_COMPUTE_BIT;
     }
 

@@ -168,7 +168,7 @@ impl hal::Surface<Backend> for Surface {
             n::Image {
                 resource,
                 kind,
-                usage: i::COLOR_ATTACHMENT,
+                usage: i::Usage::COLOR_ATTACHMENT,
                 dxgi_format: format,
                 bits_per_texel: config.color_format.0.describe_bits().total,
                 num_levels: 1,

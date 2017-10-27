@@ -121,36 +121,36 @@ pub fn map_vertex_format(format: Format) -> Option<MTLVertexFormat> {
 
 pub fn map_memory_properties_to_options(properties: memory::Properties) -> MTLResourceOptions {
     let mut options = MTLResourceOptions::empty();
-    if properties.contains(memory::CPU_VISIBLE) {
-        if properties.contains(memory::COHERENT) {
+    if properties.contains(memory::Properties::CPU_VISIBLE) {
+        if properties.contains(memory::Properties::COHERENT) {
             options |= MTLResourceOptions::StorageModeShared;
         } else {
             options |= MTLResourceOptions::StorageModeManaged;
         }
-    } else if properties.contains(memory::DEVICE_LOCAL) {
+    } else if properties.contains(memory::Properties::DEVICE_LOCAL) {
         options |= MTLResourceOptions::StorageModePrivate;
     } else {
         panic!("invalid heap properties");
     }
-    if !properties.contains(memory::CPU_CACHED) {
+    if !properties.contains(memory::Properties::CPU_CACHED) {
         options |= MTLResourceOptions::CPUCacheModeWriteCombined;
     }
     options
 }
 
 pub fn map_memory_properties_to_storage_and_cache(properties: memory::Properties) -> (MTLStorageMode, MTLCPUCacheMode) {
-    let storage = if properties.contains(memory::CPU_VISIBLE) {
-        if properties.contains(memory::COHERENT) {
+    let storage = if properties.contains(memory::Properties::CPU_VISIBLE) {
+        if properties.contains(memory::Properties::COHERENT) {
             MTLStorageMode::Shared
         } else {
             MTLStorageMode::Managed
         }
-    } else if properties.contains(memory::DEVICE_LOCAL) {
+    } else if properties.contains(memory::Properties::DEVICE_LOCAL) {
         MTLStorageMode::Private
     } else {
         panic!("invalid heap properties");
     };
-    let cpu = if properties.contains(memory::CPU_CACHED) {
+    let cpu = if properties.contains(memory::Properties::CPU_CACHED) {
         MTLCPUCacheMode::DefaultCache
     } else {
         MTLCPUCacheMode::WriteCombined
@@ -166,10 +166,10 @@ pub fn resource_options_from_storage_and_cache(storage: MTLStorageMode, cache: M
 
 pub fn map_texture_usage(usage: image::Usage) -> MTLTextureUsage {
     let mut texture_usage = MTLTextureUsage::MTLTextureUsagePixelFormatView;
-    if usage.contains(image::COLOR_ATTACHMENT) || usage.contains(image::DEPTH_STENCIL_ATTACHMENT) {
+    if usage.contains(image::Usage::COLOR_ATTACHMENT) || usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
         texture_usage |= MTLTextureUsage::MTLTextureUsageRenderTarget;
     }
-    if usage.contains(image::SAMPLED) {
+    if usage.contains(image::Usage::SAMPLED) {
         texture_usage |= MTLTextureUsage::MTLTextureUsageShaderRead;
     }
     // TODO shader write

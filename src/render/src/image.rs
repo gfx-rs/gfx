@@ -6,11 +6,6 @@ pub use hal::image::{
     AspectFlags, SamplerInfo, ViewError, Usage,
     Subresource, SubresourceLayers, SubresourceRange,
 };
-pub use hal::image::{
-    TRANSFER_SRC, TRANSFER_DST,
-    COLOR_ATTACHMENT, DEPTH_STENCIL_ATTACHMENT,
-    SAMPLED,
-};
 
 #[allow(missing_docs)]
 #[derive(Debug)]

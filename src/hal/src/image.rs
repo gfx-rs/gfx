@@ -349,19 +349,6 @@ bitflags!(
     }
 );
 
-///
-pub const TRANSFER_SRC: Usage = Usage::TRANSFER_SRC;
-///
-pub const TRANSFER_DST: Usage = Usage::TRANSFER_DST;
-///
-pub const COLOR_ATTACHMENT: Usage = Usage::COLOR_ATTACHMENT;
-///
-pub const DEPTH_STENCIL_ATTACHMENT: Usage = Usage::DEPTH_STENCIL_ATTACHMENT;
-///
-pub const STORAGE: Usage = Usage::STORAGE;
-///
-pub const SAMPLED: Usage = Usage::SAMPLED;
-
 impl Usage {
     /// Can this image be used in transfer operations ?
     pub fn can_transfer(&self) -> bool {
@@ -501,13 +488,6 @@ bitflags!(
     }
 );
 
-///
-pub const RO_DEPTH: DepthStencilFlags = DepthStencilFlags::RO_DEPTH;
-///
-pub const RO_STENCIL: DepthStencilFlags = DepthStencilFlags::RO_STENCIL;
-///
-pub const RO_DEPTH_STENCIL: DepthStencilFlags = DepthStencilFlags::RO_DEPTH_STENCIL;
-
 /// Texture depth-stencil view descriptor.
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -559,20 +539,13 @@ bitflags!(
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
     pub struct AspectFlags: u8 {
         /// Color aspect.
-        const ASPECT_COLOR = 0x1;
+        const COLOR = 0x1;
         /// Depth aspect.
-        const ASPECT_DEPTH = 0x2;
+        const DEPTH = 0x2;
         /// Stencil aspect.
-        const ASPECT_STENCIL = 0x4;
+        const STENCIL = 0x4;
     }
 );
-
-/// Color aspect.
-pub const ASPECT_COLOR: AspectFlags = AspectFlags::ASPECT_COLOR;
-/// Depth aspect.
-pub const ASPECT_DEPTH: AspectFlags = AspectFlags::ASPECT_DEPTH;
-/// Stencil aspect.
-pub const ASPECT_STENCIL: AspectFlags = AspectFlags::ASPECT_STENCIL;
 
 bitflags!(
     ///
@@ -607,34 +580,6 @@ bitflags!(
         const INPUT_ATTACHMENT_READ = 0x1000;
     }
 );
-
-/// Read state but can only be combined with `COLOR_ATTACHMENT_WRITE`.
-pub const COLOR_ATTACHMENT_READ: Access = Access::COLOR_ATTACHMENT_READ;
-/// Write-only state but can be combined with `COLOR_ATTACHMENT_READ`.
-pub const COLOR_ATTACHMENT_WRITE: Access = Access::COLOR_ATTACHMENT_WRITE;
-///
-pub const TRANSFER_READ: Access = Access::TRANSFER_READ;
-/// Write-only state of copy commands.
-pub const TRANSFER_WRITE: Access = Access::TRANSFER_WRITE;
-/// Read-only state for SRV access, or combine with `SHADER_WRITE` to have r/w access to UAV.
-pub const SHADER_READ: Access = Access::SHADER_READ;
-/// Write state for UAV access.
-/// Combine with `SHADER_READ` to have r/w access to UAV.
-pub const SHADER_WRITE: Access = Access::SHADER_WRITE;
-///
-pub const DEPTH_STENCIL_ATTACHMENT_READ: Access = Access::DEPTH_STENCIL_ATTACHMENT_READ;
-/// Write-only state for depth stencil writes.
-pub const DEPTH_STENCIL_ATTACHMENT_WRITE: Access = Access::DEPTH_STENCIL_ATTACHMENT_WRITE;
-///
-pub const HOST_READ: Access = Access::HOST_READ;
-///
-pub const HOST_WRITE: Access = Access::HOST_WRITE;
-///
-pub const MEMORY_READ: Access = Access::MEMORY_READ;
-///
-pub const MEMORY_WRITE: Access = Access::MEMORY_WRITE;
-///
-pub const INPUT_ATTACHMENT_READ: Access = Access::INPUT_ATTACHMENT_READ;
 
 /// Image state
 pub type State = (Access, ImageLayout);

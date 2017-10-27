@@ -85,6 +85,8 @@ impl PhysicalDevice {
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(self, mut families: Vec<(QueueFamily, usize)>) -> hal::Gpu<Backend> {
+        use self::memory::Properties;
+
         assert_eq!(families.len(), 1);
         let mut queue_group = hal::queue::RawQueueGroup::new(families.remove(0).0);
         let queue_raw = command::CommandQueue::new(&self.0);
@@ -122,22 +124,22 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let memory_types = vec![
             hal::MemoryType {
                 id: 0,
-                properties: memory::CPU_VISIBLE | memory::CPU_CACHED,
+                properties: Properties::CPU_VISIBLE | Properties::CPU_CACHED,
                 heap_index: 0,
             },
             hal::MemoryType {
                 id: 1,
-                properties: memory::CPU_VISIBLE | memory::CPU_CACHED,
+                properties: Properties::CPU_VISIBLE | Properties::CPU_CACHED,
                 heap_index: 0,
             },
             hal::MemoryType {
                 id: 2,
-                properties: memory::CPU_VISIBLE | memory::COHERENT | memory::CPU_CACHED,
+                properties: Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
                 heap_index: 0,
             },
             hal::MemoryType {
                 id: 3,
-                properties: memory::DEVICE_LOCAL,
+                properties: Properties::DEVICE_LOCAL,
                 heap_index: 1,
             },
         ];
@@ -472,7 +474,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn create_pipeline_layout(&self, set_layouts: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
-        use hal::pso::{STAGE_VERTEX, STAGE_FRAGMENT};
+        use hal::pso::ShaderStageFlags;
 
         struct Counters {
             buffers: usize,
@@ -480,8 +482,8 @@ impl hal::Device<Backend> for Device {
             samplers: usize,
         }
         let mut stage_infos = [
-            (STAGE_VERTEX,   spirv::ExecutionModel::Vertex,   Counters { buffers:0, textures:0, samplers:0 }),
-            (STAGE_FRAGMENT, spirv::ExecutionModel::Fragment, Counters { buffers:0, textures:0, samplers:0 }),
+            (ShaderStageFlags::VERTEX,   spirv::ExecutionModel::Vertex,   Counters { buffers:0, textures:0, samplers:0 }),
+            (ShaderStageFlags::FRAGMENT, spirv::ExecutionModel::Fragment, Counters { buffers:0, textures:0, samplers:0 }),
         ];
         let mut res_overrides = HashMap::new();
 

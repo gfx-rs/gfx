@@ -3,9 +3,7 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use hal::{self, Device as CoreDevice, MemoryType};
-use hal::memory::{Properties,
-    DEVICE_LOCAL, CPU_VISIBLE, CPU_CACHED, COHERENT
-};
+use hal::memory::{Properties};
 
 use memory::{self, Allocator, Typed};
 use handle::{self, GarbageSender};
@@ -82,32 +80,32 @@ impl<B: Backend> Device<B> {
 
     pub fn find_data_memory(&self, type_mask: u64) -> Option<MemoryType> {
         self.find_memory(type_mask, |props| {
-            props.contains(DEVICE_LOCAL) && !props.contains(CPU_VISIBLE)
+            props.contains(Properties::DEVICE_LOCAL) && !props.contains(Properties::CPU_VISIBLE)
         }).or_else(|| self.find_memory(type_mask, |props| {
-            props.contains(DEVICE_LOCAL)
+            props.contains(Properties::DEVICE_LOCAL)
         }))
     }
 
     pub fn find_upload_memory(&self, type_mask: u64) -> Option<MemoryType> {
         self.find_memory(type_mask, |props| {
-            props.contains(CPU_VISIBLE | COHERENT)
-            && !props.contains(CPU_CACHED)
+            props.contains(Properties::CPU_VISIBLE | Properties::COHERENT)
+            && !props.contains(Properties::CPU_CACHED)
         }).or_else(|| self.find_memory(type_mask, |props| {
-            props.contains(CPU_VISIBLE | COHERENT)
+            props.contains(Properties::CPU_VISIBLE | Properties::COHERENT)
         })).or_else(|| self.find_memory(type_mask, |props| {
-            props.contains(CPU_VISIBLE)
+            props.contains(Properties::CPU_VISIBLE)
         }))
     }
 
     pub fn find_download_memory(&self, type_mask: u64) -> Option<MemoryType> {
         self.find_memory(type_mask, |props| {
-            props.contains(CPU_VISIBLE | COHERENT | CPU_CACHED)
+            props.contains(Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED)
         }).or_else(|| self.find_memory(type_mask, |props| {
-            props.contains(CPU_VISIBLE | CPU_CACHED)
+            props.contains(Properties::CPU_VISIBLE | Properties::CPU_CACHED)
         })).or_else(|| self.find_memory(type_mask, |props| {
-            props.contains(CPU_VISIBLE | COHERENT)
+            props.contains(Properties::CPU_VISIBLE | Properties::COHERENT)
         })).or_else(|| self.find_memory(type_mask, |props| {
-            props.contains(CPU_VISIBLE)
+            props.contains(Properties::CPU_VISIBLE)
         }))
     }
 
@@ -281,22 +279,19 @@ impl<B: Backend> Device<B> {
     ) -> Result<(handle::raw::Image<B>, InitToken<B>), image::CreationError>
         where A: Allocator<B>
     {
-        use image::{
-            COLOR_ATTACHMENT, DEPTH_STENCIL_ATTACHMENT,
-            SAMPLED, TRANSFER_SRC, TRANSFER_DST,
-        };
-        use hal::image::ImageLayout;
+        use image::Usage;
+        use hal::image::{AspectFlags, ImageLayout};
 
         let bits = format.0.describe_bits();
-        let mut aspects = hal::image::AspectFlags::empty();
+        let mut aspects = AspectFlags::empty();
         if bits.color + bits.alpha != 0 {
-            aspects |= hal::image::ASPECT_COLOR;
+            aspects |= AspectFlags::COLOR;
         }
         if bits.depth != 0 {
-            aspects |= hal::image::ASPECT_DEPTH;
+            aspects |= AspectFlags::DEPTH;
         }
         if bits.stencil != 0 {
-            aspects |= hal::image::ASPECT_STENCIL;
+            aspects |= AspectFlags::STENCIL;
         }
 
         let image = self.raw.create_image(kind, mip_levels, format, usage)?;
@@ -304,15 +299,15 @@ impl<B: Backend> Device<B> {
         let origin = image::Origin::User(memory);
         let stable_access = hal::image::Access::empty();
         let stable_layout = match usage {
-            _ if usage.contains(COLOR_ATTACHMENT) =>
+            _ if usage.contains(Usage::COLOR_ATTACHMENT) =>
                 ImageLayout::ColorAttachmentOptimal,
-            _ if usage.contains(DEPTH_STENCIL_ATTACHMENT) =>
+            _ if usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) =>
                 ImageLayout::DepthStencilAttachmentOptimal,
-            _ if usage.contains(SAMPLED) =>
+            _ if usage.contains(Usage::SAMPLED) =>
                 ImageLayout::ShaderReadOnlyOptimal,
-            _ if usage.contains(TRANSFER_SRC) =>
+            _ if usage.contains(Usage::TRANSFER_SRC) =>
                 ImageLayout::TransferSrcOptimal,
-            _ if usage.contains(TRANSFER_DST) =>
+            _ if usage.contains(Usage::TRANSFER_DST) =>
                 ImageLayout::TransferDstOptimal,
             _ => ImageLayout::General,
         };
