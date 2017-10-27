@@ -1,9 +1,8 @@
 #![allow(missing_docs)]
 
 use gl;
-use hal::{self as c, command, image, memory, target, Viewport};
+use hal::{self, command, image, memory};
 use hal::buffer::IndexBufferView;
-use hal::target::{ColorValue, Stencil};
 use {native as n, Backend};
 use pool::{self, BufferMemory};
 
@@ -56,16 +55,16 @@ pub enum Command {
     DispatchIndirect(gl::types::GLuint, u64),
     Draw {
         primitive: gl::types::GLenum,
-        vertices: Range<c::VertexCount>,
-        instances: Range<c::InstanceCount>,
+        vertices: Range<hal::VertexCount>,
+        instances: Range<hal::InstanceCount>,
     },
     DrawIndexed {
         primitive: gl::types::GLenum,
         index_type: gl::types::GLenum,
-        index_count: c::IndexCount,
+        index_count: hal::IndexCount,
         index_buffer_offset: u64,
-        base_vertex: c::VertexOffset,
-        instances: Range<c::InstanceCount>,
+        base_vertex: hal::VertexOffset,
+        instances: Range<hal::InstanceCount>,
     },
     BindIndexBuffer(gl::types::GLuint),
     //BindVertexBuffers(BufferSlice),
@@ -74,7 +73,7 @@ pub enum Command {
         depth_range_ptr: BufferSlice,
     },
     SetScissors(BufferSlice),
-    SetBlendColor(ColorValue),
+    SetBlendColor(command::ColorValue),
     ClearColor(n::ImageView, command::ClearColor),
     BindFrameBuffer(FrameBufferTarget, n::FrameBuffer),
     BindTargetView(FrameBufferTarget, AttachmentPoint, n::ImageView),
@@ -90,11 +89,11 @@ struct Cache {
     // Active primitive topology, set by the current pipeline.
     primitive: Option<gl::types::GLenum>,
     // Active index type, set by the current index buffer.
-    index_type: Option<c::IndexType>,
+    index_type: Option<hal::IndexType>,
     // Stencil reference values (front, back).
-    stencil_ref: Option<(Stencil, Stencil)>,
+    stencil_ref: Option<(command::StencilValue, command::StencilValue)>,
     // Blend color.
-    blend_color: Option<ColorValue>,
+    blend_color: Option<command::ColorValue>,
     ///
     framebuffer: Option<(FrameBufferTarget, n::FrameBuffer)>,
     ///
@@ -122,8 +121,8 @@ pub struct Limits {
     max_viewports: usize,
 }
 
-impl From<c::Limits> for Limits {
-    fn from(l: c::Limits) -> Self {
+impl From<hal::Limits> for Limits {
+    fn from(l: hal::Limits) -> Self {
         Limits {
             max_viewports: l.max_viewports,
         }
@@ -292,7 +291,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     fn pipeline_barrier(
         &mut self,
-        _stages: Range<c::pso::PipelineStage>,
+        _stages: Range<hal::pso::PipelineStage>,
         _barries: &[memory::Barrier<Backend>],
     ) {
         unimplemented!()
@@ -310,7 +309,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         &mut self,
         _render_pass: &n::RenderPass,
         _frame_buffer: &n::FrameBuffer,
-        _render_area: target::Rect,
+        _render_area: command::Rect,
         _clear_values: &[command::ClearValue],
         _first_subpass: command::SubpassContents,
     ) {
@@ -353,7 +352,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn clear_attachments(&mut self, _: &[command::AttachmentClear], _: &[target::Rect]) {
+    fn clear_attachments(&mut self, _: &[command::AttachmentClear], _: &[command::Rect]) {
         unimplemented!()
     }
 
@@ -378,11 +377,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         self.push_cmd(Command::BindIndexBuffer(ibv.buffer.raw));
     }
 
-    fn bind_vertex_buffers(&mut self, _vbs: c::pso::VertexBufferSet<Backend>) {
+    fn bind_vertex_buffers(&mut self, _vbs: hal::pso::VertexBufferSet<Backend>) {
         unimplemented!()
     }
 
-    fn set_viewports(&mut self, viewports: &[Viewport]) {
+    fn set_viewports(&mut self, viewports: &[command::Viewport]) {
         match viewports.len() {
             0 => {
                 error!("Number of viewports can not be zero.");
@@ -398,11 +397,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                 let mut depth_range_ptr = BufferSlice { offset: 0, size: 0 };
 
                 for viewport in viewports {
-                    let viewport = &[viewport.x as f32, viewport.y as f32, viewport.w as f32, viewport.h as f32];
+                    let viewport = &[viewport.rect.x as f32, viewport.rect.y as f32, viewport.rect.w as f32, viewport.rect.h as f32];
                     viewport_ptr.append(self.add::<f32>(viewport));
                 }
                 for viewport in viewports {
-                    let depth_range = &[viewport.near as f64, viewport.far as f64];
+                    let depth_range = &[viewport.depth.start as f64, viewport.depth.end as f64];
                     depth_range_ptr.append(self.add::<f64>(depth_range));
                 }
                 self.push_cmd(Command::SetViewports { viewport_ptr, depth_range_ptr });
@@ -414,7 +413,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn set_scissors(&mut self, scissors: &[target::Rect]) {
+    fn set_scissors(&mut self, scissors: &[command::Rect]) {
         match scissors.len() {
             0 => {
                 error!("Number of scissors can not be zero.");
@@ -435,14 +434,14 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn set_stencil_reference(&mut self, front: target::Stencil, back: target::Stencil) {
+    fn set_stencil_reference(&mut self, front: command::StencilValue, back: command::StencilValue) {
         // Only cache the stencil references values until
         // we assembled all the pieces to set the stencil state
         // from the pipeline.
         self.cache.stencil_ref = Some((front, back));
     }
 
-    fn set_blend_constants(&mut self, cv: target::ColorValue) {
+    fn set_blend_constants(&mut self, cv: command::ColorValue) {
         if self.cache.blend_color != Some(cv) {
             self.cache.blend_color = Some(cv);
             self.push_cmd(Command::SetBlendColor(cv));
@@ -520,8 +519,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     fn draw(
         &mut self,
-        vertices: Range<c::VertexCount>,
-        instances: Range<c::InstanceCount>,
+        vertices: Range<hal::VertexCount>,
+        instances: Range<hal::InstanceCount>,
     ) {
         match self.cache.primitive {
             Some(primitive) => {
@@ -542,13 +541,13 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     fn draw_indexed(
         &mut self,
-        indices: Range<c::IndexCount>,
-        base_vertex: c::VertexOffset,
-        instances: Range<c::InstanceCount>,
+        indices: Range<hal::IndexCount>,
+        base_vertex: hal::VertexOffset,
+        instances: Range<hal::InstanceCount>,
     ) {
         let (start, index_type) = match self.cache.index_type {
-            Some(c::IndexType::U16) => (indices.start * 2, gl::UNSIGNED_SHORT),
-            Some(c::IndexType::U32) => (indices.start * 4, gl::UNSIGNED_INT),
+            Some(hal::IndexType::U16) => (indices.start * 2, gl::UNSIGNED_SHORT),
+            Some(hal::IndexType::U32) => (indices.start * 4, gl::UNSIGNED_INT),
             None => {
                 warn!("No index type bound. An index buffer needs to be bound before calling `draw_indexed`.");
                 self.cache.error_state = true;

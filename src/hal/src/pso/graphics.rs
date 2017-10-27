@@ -123,6 +123,7 @@ pub struct Rasterizer {
     pub depth_bias: Option<DepthBias>,
     ///
     pub conservative: bool,
+    //TODO: multisampling
 }
 
 impl Rasterizer {
