@@ -21,7 +21,7 @@ name = "gfx_backend_metal"
 gfx-hal = { path = "../../hal", version = "0.1" }
 log = "0.3"
 winit = { version = "0.7", optional = true }
-metal-rs = "0.5"
+metal-rs = "0.5.2"
 foreign-types = "0.3"
 objc = "0.2"
 block = "0.1"

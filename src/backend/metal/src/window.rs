@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use hal::{self, format, image};
-use hal::{Backbuffer, CommandQueue, SurfaceCapabilities, SwapchainConfig};
+use hal::{Backbuffer, CommandQueue, SwapchainConfig};
 use hal::format::{ChannelType, SurfaceType};
 use hal::window::Extent2d;
 
@@ -35,9 +35,7 @@ impl Drop for SurfaceInner {
 
 pub struct Swapchain {
     surface: Rc<SurfaceInner>,
-    pixel_width: u64,
-    pixel_height: u64,
-
+    _size_pixels: (u64, u64),
     io_surfaces: Vec<IOSurface>,
     frame_index: usize,
     present_index: usize,
@@ -127,9 +125,7 @@ impl hal::Surface<Backend> for Surface {
 
             let swapchain = Swapchain {
                 surface: self.0.clone(),
-                pixel_width,
-                pixel_height,
-
+                _size_pixels: (pixel_width, pixel_height),
                 io_surfaces,
                 frame_index: 0,
                 present_index: 0,

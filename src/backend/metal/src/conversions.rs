@@ -1,4 +1,4 @@
-use hal::{pass, image, memory, state};
+use hal::{pass, image, memory, pso};
 use hal::format::Format;
 use metal::*;
 
@@ -46,62 +46,60 @@ pub fn map_store_operation(operation: pass::AttachmentStoreOp) -> MTLStoreAction
     }
 }
 
-pub fn map_write_mask(mask: state::ColorMask) -> MTLColorWriteMask {
+pub fn map_write_mask(mask: pso::ColorMask) -> MTLColorWriteMask {
     let mut mtl_mask = MTLColorWriteMask::MTLColorWriteMaskNone;
 
-    if mask.contains(state::RED) {
+    if mask.contains(pso::ColorMask::RED) {
         mtl_mask |= MTLColorWriteMask::MTLColorWriteMaskRed;
     }
-    if mask.contains(state::GREEN) {
+    if mask.contains(pso::ColorMask::GREEN) {
         mtl_mask |= MTLColorWriteMask::MTLColorWriteMaskGreen;
     }
-    if mask.contains(state::BLUE) {
+    if mask.contains(pso::ColorMask::BLUE) {
         mtl_mask |= MTLColorWriteMask::MTLColorWriteMaskBlue;
     }
-    if mask.contains(state::ALPHA) {
+    if mask.contains(pso::ColorMask::ALPHA) {
         mtl_mask |= MTLColorWriteMask::MTLColorWriteMaskAlpha;
     }
 
     mtl_mask
 }
 
-pub fn map_blend_op(equation: state::Equation) -> MTLBlendOperation {
-    use hal::state::Equation::*;
-
-    match equation {
-        Add => MTLBlendOperation::Add,
-        Sub => MTLBlendOperation::Subtract,
-        RevSub => MTLBlendOperation::ReverseSubtract,
-        Min => MTLBlendOperation::Min,
-        Max => MTLBlendOperation::Max,
-    }
-}
-
-pub fn map_blend_factor(factor: state::Factor, scalar: bool) -> MTLBlendFactor {
-    use hal::state::BlendValue::*;
-    use hal::state::Factor::*;
+fn map_factor(factor: pso::Factor) -> MTLBlendFactor {
+    use hal::pso::Factor::*;
 
     match factor {
         Zero => MTLBlendFactor::Zero,
         One => MTLBlendFactor::One,
-        SourceAlphaSaturated => MTLBlendFactor::SourceAlphaSaturated,
-        ZeroPlus(SourceColor) if !scalar => MTLBlendFactor::SourceColor,
-        ZeroPlus(SourceAlpha) => MTLBlendFactor::SourceAlpha,
-        ZeroPlus(DestColor) if !scalar => MTLBlendFactor::DestinationColor,
-        ZeroPlus(DestAlpha) => MTLBlendFactor::DestinationAlpha,
-        ZeroPlus(ConstColor) if !scalar => MTLBlendFactor::BlendColor,
-        ZeroPlus(ConstAlpha) => MTLBlendFactor::BlendAlpha,
-        OneMinus(SourceColor) if !scalar => MTLBlendFactor::OneMinusSourceColor,
-        OneMinus(SourceAlpha) => MTLBlendFactor::OneMinusSourceAlpha,
-        OneMinus(DestColor) if !scalar => MTLBlendFactor::OneMinusDestinationColor,
-        OneMinus(DestAlpha) => MTLBlendFactor::OneMinusDestinationAlpha,
-        OneMinus(ConstColor) if !scalar => MTLBlendFactor::OneMinusBlendColor,
-        OneMinus(ConstAlpha) => MTLBlendFactor::OneMinusBlendAlpha,
-        _ => {
-            error!("Invalid blend factor requested for {}: {:?}",
-                if scalar {"alpha"} else {"color"}, factor);
-            MTLBlendFactor::Zero
-        }
+        SrcColor => MTLBlendFactor::SourceColor,
+        OneMinusSrcColor => MTLBlendFactor::OneMinusSourceColor,
+        DstColor => MTLBlendFactor::DestinationColor,
+        OneMinusDstColor => MTLBlendFactor::OneMinusDestinationColor,
+        SrcAlpha => MTLBlendFactor::SourceAlpha,
+        OneMinusSrcAlpha => MTLBlendFactor::OneMinusSourceAlpha,
+        DstAlpha => MTLBlendFactor::DestinationAlpha,
+        OneMinusDstAlpha => MTLBlendFactor::OneMinusDestinationAlpha,
+        ConstColor => MTLBlendFactor::BlendColor,
+        OneMinusConstColor => MTLBlendFactor::OneMinusBlendColor,
+        ConstAlpha => MTLBlendFactor::BlendAlpha,
+        OneMinusConstAlpha => MTLBlendFactor::OneMinusBlendAlpha,
+        SrcAlphaSaturate => MTLBlendFactor::SourceAlphaSaturated,
+        Src1Color => MTLBlendFactor::Source1Color,
+        OneMinusSrc1Color => MTLBlendFactor::OneMinusSource1Color,
+        Src1Alpha => MTLBlendFactor::Source1Alpha,
+        OneMinusSrc1Alpha => MTLBlendFactor::OneMinusSource1Alpha,
+    }
+}
+
+pub fn map_blend_op(operation: &pso::BlendOp) -> (MTLBlendOperation, MTLBlendFactor, MTLBlendFactor) {
+    use hal::pso::BlendOp::*;
+
+    match *operation {
+        Add    { src, dst } => (MTLBlendOperation::Add,             map_factor(src), map_factor(dst)),
+        Sub    { src, dst } => (MTLBlendOperation::Subtract,        map_factor(src), map_factor(dst)),
+        RevSub { src, dst } => (MTLBlendOperation::ReverseSubtract, map_factor(src), map_factor(dst)),
+        Min => (MTLBlendOperation::Min, MTLBlendFactor::Zero, MTLBlendFactor::Zero),
+        Max => (MTLBlendOperation::Max, MTLBlendFactor::Zero, MTLBlendFactor::Zero),
     }
 }
 
