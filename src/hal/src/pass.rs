@@ -55,7 +55,7 @@ impl AttachmentOps {
         }
     }
 
-    #[cfg(feature = "serialize")]
+    #[cfg(feature = "serde")]
     fn whatever() -> Self {
         Self::DONT_CARE
     }
@@ -70,7 +70,7 @@ pub struct Attachment {
     /// Load and store operations of the attachment
     pub ops: AttachmentOps,
     /// Load and store operations of the stencil aspect, if any
-    #[cfg_attr(feature = "serialize", serde(default = "AttachmentOps::whatever"))]
+    #[cfg_attr(feature = "serde", serde(default = "AttachmentOps::whatever"))]
     pub stencil_ops: AttachmentOps,
     /// Initial and final image layouts of the renderpass.
     pub layouts: Range<AttachmentLayout>,
