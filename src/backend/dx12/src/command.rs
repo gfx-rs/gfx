@@ -3,7 +3,7 @@ use hal::{command as com, image, memory, pass, pso};
 use hal::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset};
 use hal::buffer::IndexBufferView;
 use winapi::{self, UINT64, UINT};
-use {conv, native as n, Backend};
+use {conv, native as n, Backend, CmdSignatures};
 use smallvec::SmallVec;
 use std::{mem, ptr};
 use std::ops::Range;
@@ -36,6 +36,7 @@ pub struct RenderPassCache {
 pub struct CommandBuffer {
     raw: ComPtr<winapi::ID3D12GraphicsCommandList>,
     allocator: ComPtr<winapi::ID3D12CommandAllocator>,
+    signatures: CmdSignatures,
 
     // Cache renderpasses for graphics operations
     pass_cache: Option<RenderPassCache>,
@@ -48,10 +49,12 @@ impl CommandBuffer {
     pub(crate) fn new(
         raw: ComPtr<winapi::ID3D12GraphicsCommandList>,
         allocator: ComPtr<winapi::ID3D12CommandAllocator>,
+        signatures: CmdSignatures,
     ) -> Self {
         CommandBuffer {
             raw,
             allocator,
+            signatures,
             pass_cache: None,
             cur_subpass: !0,
         }
@@ -694,8 +697,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn dispatch_indirect(&mut self, _buffer: &n::Buffer, _offset: u64) {
-        unimplemented!()
+    fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: u64) {
+        unsafe {
+            self.raw.ExecuteIndirect(
+                self.signatures.dispatch.as_mut() as *mut _,
+                1,
+                buffer.resource,
+                offset,
+                ptr::null_mut(),
+                0,
+            );
+        }
     }
 
     fn fill_buffer(
@@ -940,22 +952,42 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn draw_indirect(
         &mut self,
-        _buffer: &n::Buffer,
-        _offset: u64,
-        _draw_count: u32,
-        _stride: u32,
+        buffer: &n::Buffer,
+        offset: u64,
+        draw_count: u32,
+        stride: u32,
     ) {
-        unimplemented!()
+        assert_eq!(stride, 16);
+        unsafe {
+            self.raw.ExecuteIndirect(
+                self.signatures.draw.as_mut() as *mut _,
+                draw_count,
+                buffer.resource,
+                offset,
+                ptr::null_mut(),
+                0,
+            );
+        }
     }
 
     fn draw_indexed_indirect(
         &mut self,
-        _buffer: &n::Buffer,
-        _offset: u64,
-        _draw_count: u32,
-        _stride: u32,
+        buffer: &n::Buffer,
+        offset: u64,
+        draw_count: u32,
+        stride: u32,
     ) {
-        unimplemented!()
+        assert_eq!(stride, 20);
+        unsafe {
+            self.raw.ExecuteIndirect(
+                self.signatures.draw_indexed.as_mut() as *mut _,
+                draw_count,
+                buffer.resource,
+                offset,
+                ptr::null_mut(),
+                0,
+            );
+        }
     }
 }
 

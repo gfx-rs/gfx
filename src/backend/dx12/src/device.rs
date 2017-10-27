@@ -38,6 +38,12 @@ fn gen_query_error(err: SpirvErrorCode) -> d::ShaderError {
     d::ShaderError::CompilationFailed(msg)
 }
 
+pub(crate) enum CommandSignature {
+    Draw,
+    DrawIndexed,
+    Dispatch,
+}
+
 #[derive(Debug)]
 pub struct UnboundBuffer {
     requirements: memory::Requirements,
@@ -128,6 +134,54 @@ impl Device {
         let blob = Self::compile_shader(stage, hlsl::ShaderModel::V5_1, hlsl_entry, code)?;
         shader_map.insert(entry_point.into(), blob);
         Ok(n::ShaderModule { shaders: shader_map })
+    }
+
+    pub(crate) fn create_command_signature(
+        device: &mut ComPtr<winapi::ID3D12Device>,
+        ty: CommandSignature,
+    ) -> ComPtr<winapi::ID3D12CommandSignature> {
+        let mut signature = ptr::null_mut();
+
+        let (arg_ty, stride) = match ty {
+            CommandSignature::Draw => (
+                winapi::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW,
+                16,
+            ),
+            CommandSignature::DrawIndexed => (
+                winapi::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED,
+                20,
+            ),
+            CommandSignature::Dispatch => (
+                winapi::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH,
+                12,
+            ),
+        };
+
+        let arg = winapi::D3D12_INDIRECT_ARGUMENT_DESC {
+            Type: arg_ty,
+            .. unsafe { mem::zeroed() }
+        };
+
+        let desc = winapi::D3D12_COMMAND_SIGNATURE_DESC {
+            ByteStride: stride,
+            NumArgumentDescs: 1,
+            pArgumentDescs: &arg,
+            NodeMask: 0,
+        };
+
+        let hr = unsafe {
+            device.CreateCommandSignature(
+                &desc,
+                ptr::null_mut(),
+                &dxguid::IID_ID3D12CommandSignature,
+                &mut signature as *mut *mut _ as *mut *mut _,
+            )
+        };
+
+        if !winapi::SUCCEEDED(hr) {
+            error!("error on command signature creation: {:x}", hr);
+        }
+        unsafe { ComPtr::new(signature) }
     }
 
     pub(crate) fn create_descriptor_heap_impl(
@@ -456,6 +510,7 @@ impl d::Device<B> for Device {
             inner: unsafe { ComPtr::new(command_allocator) },
             device: self.raw.clone(),
             list_type,
+            signatures: self.signatures.clone(),
         }
     }
 

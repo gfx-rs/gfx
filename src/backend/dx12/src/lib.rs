@@ -343,6 +343,13 @@ pub struct Capabilities {
     memory_architecture: MemoryArchitecture,
 }
 
+#[derive(Debug, Clone)]
+struct CmdSignatures {
+    draw: ComPtr<winapi::ID3D12CommandSignature>,
+    draw_indexed: ComPtr<winapi::ID3D12CommandSignature>,
+    dispatch: ComPtr<winapi::ID3D12CommandSignature>,
+}
+
 pub struct Device {
     raw: ComPtr<winapi::ID3D12Device>,
     features: hal::Features,
@@ -359,6 +366,7 @@ pub struct Device {
     heap_srv_cbv_uav: Mutex<native::DescriptorHeap>,
     heap_sampler: Mutex<native::DescriptorHeap>,
     events: Mutex<Vec<winapi::HANDLE>>,
+    signatures: CmdSignatures,
 }
 unsafe impl Send for Device {} //blocked by ComPtr
 unsafe impl Sync for Device {} //blocked by ComPtr
@@ -468,6 +476,21 @@ impl Device {
             (false, _)            => (MemoryArchitecture::NUMA, HEAPS_NUMA),
         };
 
+        let draw_signature = Self::create_command_signature(
+            &mut device,
+            device::CommandSignature::Draw,
+        );
+
+        let draw_indexed_signature = Self::create_command_signature(
+            &mut device,
+            device::CommandSignature::DrawIndexed,
+        );
+
+        let dispatch_signature = Self::create_command_signature(
+            &mut device,
+            device::CommandSignature::Dispatch,
+        );
+
         Device {
             raw: device,
             features: Features { // TODO
@@ -521,6 +544,11 @@ impl Device {
             heap_srv_cbv_uav: Mutex::new(heap_srv_cbv_uav),
             heap_sampler: Mutex::new(heap_sampler),
             events: Mutex::new(Vec::new()),
+            signatures: CmdSignatures {
+                draw: draw_signature,
+                draw_indexed: draw_indexed_signature,
+                dispatch: dispatch_signature,
+            },
         }
     }
 }
