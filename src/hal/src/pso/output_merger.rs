@@ -180,26 +180,37 @@ impl ColorBlendDesc {
 /// Depth test state.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct DepthTest {
-    /// Comparison function to use.
-    pub fun: Comparison,
-    /// Specify whether to write to the depth buffer or not.
-    pub write: bool,
+pub enum DepthTest {
+    /// Enabled depth testing.
+    On {
+        /// Comparison function to use.
+        fun: Comparison,
+        /// Specify whether to write to the depth buffer or not.
+        write: bool,
+    },
+    /// Disabled depth testing.
+    Off,
+}
+
+impl Default for DepthTest {
+    fn default() -> Self {
+        DepthTest::Off
+    }
 }
 
 impl DepthTest {
     ///
-    pub const FAIL: Self = DepthTest {
+    pub const FAIL: Self = DepthTest::On {
         fun: Comparison::Never,
         write: false,
     };
     ///
-    pub const PASS_TEST: Self = DepthTest {
+    pub const PASS_TEST: Self = DepthTest::On {
         fun: Comparison::Always,
         write: false,
     };
     ///
-    pub const PASS_WRITE: Self = DepthTest {
+    pub const PASS_WRITE: Self = DepthTest::On {
         fun: Comparison::Always,
         write: true,
     };
@@ -269,7 +280,7 @@ impl Default for StencilTest {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DepthStencilDesc {
     /// Optional depth testing/writing.
-    pub depth: Option<DepthTest>,
+    pub depth: DepthTest,
     /// Enable depth bounds testing.
     pub depth_bounds: bool,
     /// Stencil test/write.
