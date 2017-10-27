@@ -45,7 +45,7 @@ impl Error for BindError {
 
 /// Specifies the waiting targets.
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum WaitFor {
     /// Wait for any target.
     Any,
@@ -55,7 +55,7 @@ pub enum WaitFor {
 
 ///
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Extent {
     ///
     pub width: u32,

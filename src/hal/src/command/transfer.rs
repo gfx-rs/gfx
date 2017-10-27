@@ -10,7 +10,7 @@ use super::{CommandBuffer, RawCommandBuffer};
 
 ///
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Offset {
     ///
     pub x: i32,
@@ -22,7 +22,7 @@ pub struct Offset {
 
 /// Region of two buffers for copying.
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BufferCopy {
     /// Buffer region source offset.
     pub src: u64,
@@ -34,7 +34,7 @@ pub struct BufferCopy {
 
 ///
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ImageResolve {
     ///
     pub src_subresource: image::Subresource,
@@ -46,7 +46,7 @@ pub struct ImageResolve {
 
 ///
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ImageCopy {
     ///
     pub aspect_mask: image::AspectFlags,
@@ -66,7 +66,7 @@ pub struct ImageCopy {
 
 ///
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BufferImageCopy {
     ///
     pub buffer_offset: u64,

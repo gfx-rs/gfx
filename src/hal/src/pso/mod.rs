@@ -52,7 +52,7 @@ bitflags!(
     ///
     /// The pipeline is structured as given the by the ordering of the flags.
     /// Some stages are queue type dependent.
-    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct PipelineStage: u32 {
         /// Beginning of the command queue.
         const TOP_OF_PIPE = 0x1;
@@ -90,7 +90,7 @@ bitflags!(
 
 bitflags!(
     /// Combination of different shader pipeline stages.
-    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct ShaderStageFlags: u16 {
         /// Vertex shader stage.
         const VERTEX   = 0x1;
@@ -116,7 +116,7 @@ bitflags!(
 /// Which program stage this shader represents.
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[repr(u8)]
 pub enum Stage {
     Vertex,

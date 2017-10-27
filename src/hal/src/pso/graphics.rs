@@ -31,7 +31,7 @@ pub struct GraphicsShaderSet<'a, B: Backend> {
 
 ///
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct GraphicsPipelineDesc {
     /// Rasterizer setup
     pub rasterizer: Rasterizer,
@@ -65,7 +65,7 @@ impl GraphicsPipelineDesc {
 
 /// Way to rasterize polygons.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum PolygonMode {
     /// Rasterize as a point.
     Point,
@@ -77,7 +77,7 @@ pub enum PolygonMode {
 
 /// Which face, if any, to cull.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CullFace {
     ///
     Front,
@@ -87,7 +87,7 @@ pub enum CullFace {
 
 /// The front face winding order of a set of vertices.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum FrontFace {
     /// Clockwise winding order.
     Clockwise,
@@ -97,7 +97,7 @@ pub enum FrontFace {
 
 ///
 #[derive(Copy, Clone, Debug, PartialEq)]
-#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DepthBias {
     ///
     pub const_factor: f32,
@@ -109,7 +109,7 @@ pub struct DepthBias {
 
 /// Rasterization state.
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Rasterizer {
     /// How to rasterize this primitive.
     pub polygon_mode: PolygonMode,
@@ -139,7 +139,7 @@ impl Rasterizer {
 
 ///
 #[derive(Clone, Debug, Default, PartialEq)]
-#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BlendDesc {
     ///
     pub alpha_coverage: bool,
@@ -151,7 +151,7 @@ pub struct BlendDesc {
 
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum LogicOp {
     ///
     Clear,

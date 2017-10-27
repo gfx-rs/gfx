@@ -27,7 +27,7 @@ gl = ["gfx-backend-gl"]
 #TODO: keep Warden backend-agnostic?
 
 [dependencies]
-gfx-hal = { path = "../hal", version = "0.1", features = ["serialize"] }
+gfx-hal = { path = "../hal", version = "0.1", features = ["serde"] }
 log = "0.3"
 ron = "0.1"
 serde = { version = "1.0", features = ["serde_derive"] }

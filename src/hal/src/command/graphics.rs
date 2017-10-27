@@ -10,7 +10,7 @@ use super::{CommandBuffer, RawCommandBuffer, RenderPassInlineEncoder};
 
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Hash, PartialEq, PartialOrd)]
-#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Rect {
     pub x: u16,
     pub y: u16,
@@ -20,7 +20,7 @@ pub struct Rect {
 
 #[allow(missing_docs)]
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Viewport {
     pub rect: Rect,
     pub depth: Range<f32>,
@@ -36,7 +36,7 @@ pub type StencilValue = u32;
 /// A universal clear color supporting integer formats
 /// as well as the standard floating-point.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ClearColor {
     /// Standard floating-point `vec4` color
     Float(ColorValue),
@@ -88,12 +88,12 @@ impl From<u32> for ClearColor {
 
 /// Depth-stencil target clear values.
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ClearDepthStencil(pub DepthValue, pub StencilValue);
 
 /// General clear values for attachments (color or depth-stencil).
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ClearValue {
     ///
     Color(ClearColor),
@@ -103,7 +103,7 @@ pub enum ClearValue {
 
 /// Attachment clear description for the current subpass.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum AttachmentClear {
     /// Clear color attachment.
     ///

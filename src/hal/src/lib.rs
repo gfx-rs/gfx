@@ -12,7 +12,7 @@ extern crate smallvec;
 #[cfg(feature = "mint")]
 extern crate mint;
 
-#[cfg(feature = "serialize")]
+#[cfg(feature = "serde")]
 #[macro_use]
 extern crate serde;
 
@@ -75,7 +75,7 @@ pub type SamplerSlot = u8;
 /// Features that the device supports.
 /// These only include features of the core interface and not API extensions.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Features {
     /// Support indirect drawing and dispatching.
     pub indirect_execution: bool,
@@ -117,7 +117,7 @@ pub struct Features {
 
 /// Limits of the device.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Limits {
     /// Maximum supported texture size.
     pub max_texture_size: usize,
@@ -141,7 +141,7 @@ pub struct Limits {
 
 /// Describes what geometric primitives are created from vertex data.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[repr(u8)]
 pub enum Primitive {
     /// Each vertex represents a single point.
@@ -187,7 +187,7 @@ pub enum Primitive {
 /// A type of each index value in the slice's index buffer
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[repr(u8)]
 pub enum IndexType {
     U16,
@@ -196,7 +196,7 @@ pub enum IndexType {
 
 ///
 #[derive(Copy, Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct MemoryType {
     /// Id of the memory type.
     pub id: usize,
@@ -258,7 +258,7 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
 
 #[allow(missing_docs)]
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SubmissionError {}
 
 impl fmt::Display for SubmissionError {

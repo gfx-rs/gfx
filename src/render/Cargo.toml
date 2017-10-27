@@ -17,7 +17,7 @@ name = "gfx_render"
 path = "src/lib.rs"
 
 [features]
-serialize = ["serde", "gfx-hal/serialize", "draw_state/serialize"]
+serialize = ["serde", "gfx-hal/serde", "draw_state/serialize"]
 unstable = []
 
 [dependencies]

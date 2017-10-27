@@ -4,7 +4,7 @@ use command::StencilValue;
 
 /// A pixel-wise comparison function.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Comparison {
     /// `false`
     Never,
@@ -27,7 +27,7 @@ pub enum Comparison {
 
 bitflags!(
     /// Target output color mask.
-    #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct ColorMask: u8 {
         ///
         const RED     = 0x1;
@@ -54,7 +54,7 @@ impl Default for ColorMask {
 
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Factor {
     Zero,
     One,
@@ -80,7 +80,7 @@ pub enum Factor {
 /// Blending operation.
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BlendOp {
     /// Adds source and destination.
     /// Source and destination are multiplied by factors before addition.
@@ -122,7 +122,7 @@ impl BlendOp {
 
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BlendState {
     On {
         color: BlendOp,
@@ -168,7 +168,7 @@ impl Default for BlendState {
 
 /// PSO color target descriptor.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ColorBlendDesc(pub ColorMask, pub BlendState);
 
 impl ColorBlendDesc {
@@ -179,7 +179,7 @@ impl ColorBlendDesc {
 
 /// Depth test state.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DepthTest {
     /// Comparison function to use.
     pub fun: Comparison,
@@ -208,7 +208,7 @@ impl DepthTest {
 /// Stencil mask operation.
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum StencilOp {
     /// Keep the current value in the stencil buffer (no change).
     Keep,
@@ -230,7 +230,7 @@ pub enum StencilOp {
 
 /// Complete stencil state for a given side of a face.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct StencilFace {
     /// Comparison function to use to determine if the stencil test passes.
     pub fun: Comparison,
@@ -249,7 +249,7 @@ pub struct StencilFace {
 
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum StencilTest {
     On {
         front: StencilFace,
@@ -266,7 +266,7 @@ impl Default for StencilTest {
 
 /// PSO depth-stencil target descriptor.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DepthStencilDesc {
     /// Optional depth testing/writing.
     pub depth: Option<DepthTest>,

@@ -26,7 +26,7 @@ pub trait PhysicalDevice<B: Backend>: Sized {
 
 /// Information about a backend adapter.
 #[derive(Clone, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AdapterInfo {
     /// Adapter name
     pub name: String,

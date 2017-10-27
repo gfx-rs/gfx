@@ -12,7 +12,7 @@ use super::ShaderStageFlags;
 //       types is a tough task. We might be able to come up with better names?
 //       Or even use tuples to describe functionality instead of coming up with fancy names.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DescriptorType {
     /// Controls filtering parameters for sampling from images.
     Sampler,
@@ -43,7 +43,7 @@ pub enum DescriptorType {
 ///
 /// The binding _must_ match with the corresponding shader interface.
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DescriptorSetLayoutBinding {
     /// Integer identifier of the binding.
     pub binding: usize,
@@ -59,7 +59,7 @@ pub struct DescriptorSetLayoutBinding {
 
 /// Set of descriptors of a specific type.
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DescriptorRangeDesc {
     /// Type of the stored descriptors.
     pub ty: DescriptorType,

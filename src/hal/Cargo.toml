@@ -11,8 +11,6 @@ documentation = "https://docs.rs/gfx-hal"
 workspace = "../.."
 
 [features]
-#TODO: switch to pure `serde` feature once `draw_state` is no longer used
-serialize = ["serde"]
 unstable = []
 
 [lib]
