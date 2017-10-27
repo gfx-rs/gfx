@@ -5,8 +5,8 @@ use smallvec::SmallVec;
 use ash::vk;
 use ash::version::DeviceV1_0;
 
-use hal::{command as com, memory, pso, target};
-use hal::{IndexCount, InstanceCount, VertexCount, VertexOffset, Viewport};
+use hal::{command as com, memory, pso};
+use hal::{IndexCount, InstanceCount, VertexCount, VertexOffset};
 use hal::buffer::IndexBufferView;
 use hal::image::{AspectFlags, ImageLayout, SubresourceRange};
 use {conv, native as n};
@@ -116,7 +116,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         &mut self,
         render_pass: &n::RenderPass,
         frame_buffer: &n::FrameBuffer,
-        render_area: target::Rect,
+        render_area: com::Rect,
         clear_values: &[com::ClearValue],
         first_subpass: com::SubpassContents,
     ) {
@@ -287,8 +287,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         assert!((AspectFlags::DEPTH | AspectFlags::STENCIL).contains(range.aspects));
         let range = conv::map_subresource_range(&range);
         let clear_value = vk::ClearDepthStencilValue {
-            depth: value.depth,
-            stencil: value.stencil,
+            depth: value.0,
+            stencil: value.1,
         };
 
         unsafe {
@@ -305,7 +305,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn clear_attachments(
         &mut self,
         clears: &[com::AttachmentClear],
-        rects: &[target::Rect],
+        rects: &[com::Rect],
     ) {
         let clears: SmallVec<[vk::ClearAttachment; 16]> = clears
             .iter()
@@ -318,25 +318,25 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             clear_value: vk::ClearValue::new_color(conv::map_clear_color(cv)),
                         }
                     }
-                    com::AttachmentClear::Depth(cv) => {
+                    com::AttachmentClear::Depth(v) => {
                         vk::ClearAttachment {
                             aspect_mask: vk::IMAGE_ASPECT_DEPTH_BIT,
                             color_attachment: 0,
-                            clear_value: vk::ClearValue::new_depth_stencil(conv::map_clear_ds(cv)),
+                            clear_value: vk::ClearValue::new_depth_stencil(conv::map_clear_depth(v)),
                         }
                     }
-                    com::AttachmentClear::Stencil(cv) => {
+                    com::AttachmentClear::Stencil(v) => {
                         vk::ClearAttachment {
                             aspect_mask: vk::IMAGE_ASPECT_STENCIL_BIT,
                             color_attachment: 0,
-                            clear_value: vk::ClearValue::new_depth_stencil(conv::map_clear_ds(cv)),
+                            clear_value: vk::ClearValue::new_depth_stencil(conv::map_clear_stencil(v)),
                         }
                     }
                     com::AttachmentClear::DepthStencil(cv) => {
                         vk::ClearAttachment {
                             aspect_mask: vk::IMAGE_ASPECT_DEPTH_BIT | vk::IMAGE_ASPECT_STENCIL_BIT,
                             color_attachment: 0,
-                            clear_value: vk::ClearValue::new_depth_stencil(conv::map_clear_ds(cv)),
+                            clear_value: vk::ClearValue::new_depth_stencil(conv::map_clear_depth_stencil(cv)),
                         }
                     }
                 }
@@ -444,17 +444,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_viewports(&mut self, viewports: &[Viewport]) {
+    fn set_viewports(&mut self, viewports: &[com::Viewport]) {
         let viewports: SmallVec<[vk::Viewport; 16]> = viewports
             .iter()
             .map(|viewport| {
                 vk::Viewport {
-                    x: viewport.x as f32,
-                    y: viewport.y as f32,
-                    width: viewport.w as f32,
-                    height: viewport.h as f32,
-                    min_depth: viewport.near,
-                    max_depth: viewport.far,
+                    x: viewport.rect.x as f32,
+                    y: viewport.rect.y as f32,
+                    width: viewport.rect.w as f32,
+                    height: viewport.rect.h as f32,
+                    min_depth: viewport.depth.start,
+                    max_depth: viewport.depth.end,
                 }
             })
             .collect();
@@ -464,7 +464,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_scissors(&mut self, scissors: &[target::Rect]) {
+    fn set_scissors(&mut self, scissors: &[com::Rect]) {
         let scissors: SmallVec<[vk::Rect2D; 16]> = scissors
             .iter()
             .map(|scissor| {
@@ -486,7 +486,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_stencil_reference(&mut self, front: target::Stencil, back: target::Stencil) {
+    fn set_stencil_reference(
+        &mut self, front: com::StencilValue, back: com::StencilValue
+    ) {
         unsafe {
             if front == back {
                 // set front _and_ back
@@ -511,7 +513,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_blend_constants(&mut self, color: target::ColorValue) {
+    fn set_blend_constants(&mut self, color: com::ColorValue) {
         unsafe {
             self.device.0.cmd_set_blend_constants(self.raw, color);
         }

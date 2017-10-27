@@ -18,7 +18,7 @@ pub type BufferOffset = usize;
 
 /// A struct element descriptor.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Element<F> {
     /// Element format
     pub format: F,
@@ -28,7 +28,7 @@ pub struct Element<F> {
 
 /// Vertex buffer descriptor
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct VertexBufferDesc {
     /// Total container size, in bytes.
     /// Specifies the byte distance between two consecutive elements.
@@ -39,7 +39,7 @@ pub struct VertexBufferDesc {
 
 /// PSO vertex attribute descriptor
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AttributeDesc {
     /// Attribute binding location in the shader.
     pub location: Location,
@@ -51,7 +51,7 @@ pub struct AttributeDesc {
 
 ///
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum PrimitiveRestart {
     ///
     Disabled,
@@ -63,7 +63,7 @@ pub enum PrimitiveRestart {
 
 ///
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct InputAssemblerDesc {
     /// Type of the primitive
     pub primitive: Primitive,

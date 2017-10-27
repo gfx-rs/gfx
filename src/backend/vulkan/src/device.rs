@@ -251,8 +251,6 @@ impl d::Device<B> for Device {
         &self,
         descs: &[(pso::GraphicsShaderSet<'a, B>, &n::PipelineLayout, pass::Subpass<'a, B>, &pso::GraphicsPipelineDesc)],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
-        use hal::state as s;
-
         debug!("create_graphics_pipelines {:?}", descs);
         // Store pipeline parameters to avoid stack usage
         let mut info_stages                = Vec::with_capacity(descs.len());
@@ -308,7 +306,7 @@ impl d::Device<B> for Device {
                 stages.push(make_stage(vk::SHADER_STAGE_TESSELLATION_CONTROL_BIT, entry));
             }
 
-            let (polygon_mode, line_width) = conv::map_polygon_mode(desc.rasterizer.polgyon_mode);
+            let (polygon_mode, line_width) = conv::map_polygon_mode(desc.rasterizer.polygon_mode);
             info_stages.push(stages);
 
             {
@@ -367,7 +365,7 @@ impl d::Device<B> for Device {
                 depth_clamp_enable: if desc.rasterizer.depth_clamping { vk::VK_TRUE } else { vk::VK_FALSE },
                 rasterizer_discard_enable: if shaders.fragment.is_none() { vk::VK_TRUE } else { vk::VK_FALSE },
                 polygon_mode: polygon_mode,
-                cull_mode: conv::map_cull_mode(desc.rasterizer.cull_mode),
+                cull_mode: desc.rasterizer.cull_face.map(conv::map_cull_face).unwrap_or(vk::CULL_MODE_NONE),
                 front_face: conv::map_front_face(desc.rasterizer.front_face),
                 depth_bias_enable: if desc.rasterizer.depth_bias.is_some() { vk::VK_TRUE } else { vk::VK_FALSE },
                 depth_bias_constant_factor: desc.rasterizer.depth_bias.map_or(0.0, |off| off.const_factor),
@@ -408,66 +406,63 @@ impl d::Device<B> for Device {
                 alpha_to_one_enable: vk::VK_FALSE, // TODO
             });
 
+            let depth_stencil = desc.depth_stencil.unwrap_or_default();
+            let (depth_test_enable, depth_write_enable, depth_compare_op) = match depth_stencil.depth {
+                pso::DepthTest::On { fun, write } => (vk::VK_TRUE, write as _, conv::map_comparison(fun)),
+                pso::DepthTest::Off => (vk::VK_FALSE, vk::VK_FALSE, vk::CompareOp::Never),
+            };
+            let (stencil_test_enable, front, back) = match depth_stencil.stencil {
+                pso::StencilTest::On { ref front, ref back } => (
+                    vk::VK_TRUE,
+                    conv::map_stencil_side(front),
+                    conv::map_stencil_side(back),
+                ),
+                pso::StencilTest::Off => unsafe { mem::zeroed() },
+            };
+
             info_depth_stencil_states.push(vk::PipelineDepthStencilStateCreateInfo {
                 s_type: vk::StructureType::PipelineDepthStencilStateCreateInfo,
                 p_next: ptr::null(),
                 flags: vk::PipelineDepthStencilStateCreateFlags::empty(),
-                depth_test_enable: if let Some((_, pso::DepthStencilInfo { depth: Some(_), .. })) =
-                    desc.depth_stencil { vk::VK_TRUE } else { vk::VK_FALSE },
-                depth_write_enable: if let Some((_, pso::DepthStencilInfo { depth: Some(s::Depth { write: true, .. }), .. })) =
-                    desc.depth_stencil { vk::VK_TRUE } else { vk::VK_FALSE },
-                depth_compare_op: if let Some((_, pso::DepthStencilInfo { depth: Some(s::Depth { fun, .. }), ..})) =
-                    desc.depth_stencil { conv::map_comparison(fun) } else { vk::CompareOp::Never },
-                depth_bounds_test_enable: vk::VK_FALSE, // TODO
-                stencil_test_enable: match desc.depth_stencil {
-                    Some((_, pso::DepthStencilInfo { front: Some(_), .. })) |
-                    Some((_, pso::DepthStencilInfo { back: Some(_), .. })) => vk::VK_TRUE,
-                    _ => vk::VK_FALSE,
-                },
-                front: match desc.depth_stencil {
-                    Some((_, pso::DepthStencilInfo { front: Some(ref s), .. })) => conv::map_stencil_side(s),
-                    _ => unsafe { mem::zeroed() }, // TODO
-                },
-                back: match desc.depth_stencil {
-                    Some((_, pso::DepthStencilInfo { back: Some(ref s), .. })) => conv::map_stencil_side(s),
-                    _ => unsafe { mem::zeroed() }, // TODO
-                },
+                depth_test_enable,
+                depth_write_enable,
+                depth_compare_op,
+                depth_bounds_test_enable: depth_stencil.depth_bounds as _,
+                stencil_test_enable,
+                front,
+                back,
                 min_depth_bounds: 0.0,
                 max_depth_bounds: 1.0,
             });
 
             // Build blend states for color attachments
-            {
-                let mut blend_states = Vec::with_capacity(desc.blender.targets.len());
-                for info in &desc.blender.targets {
-                    let mut blend = vk::PipelineColorBlendAttachmentState {
-                        blend_enable: vk::VK_FALSE,
-                        src_color_blend_factor: vk::BlendFactor::Zero,
-                        dst_color_blend_factor: vk::BlendFactor::Zero,
-                        color_blend_op: vk::BlendOp::Add,
-                        src_alpha_blend_factor: vk::BlendFactor::Zero,
-                        dst_alpha_blend_factor: vk::BlendFactor::Zero,
-                        alpha_blend_op: vk::BlendOp::Add,
-                        color_write_mask: vk::ColorComponentFlags::from_flags(info.mask.bits() as u32).unwrap(),
-                    };
-
-                    if let Some(ref b) = info.color {
-                        blend.blend_enable = vk::VK_TRUE;
-                        blend.src_color_blend_factor = conv::map_blend_factor(b.source, false);
-                        blend.dst_color_blend_factor = conv::map_blend_factor(b.destination, false);
-                        blend.color_blend_op = conv::map_blend_op(b.equation);
+            let blend_states = desc.blender.targets
+                .iter()
+                .map(|&pso::ColorBlendDesc(mask, ref blend)| {
+                    let color_write_mask = vk::ColorComponentFlags::from_flags(mask.bits() as _).unwrap();
+                    match *blend {
+                        pso::BlendState::On { color, alpha } => {
+                            let (color_blend_op, src_color_blend_factor, dst_color_blend_factor) = conv::map_blend_op(color);
+                            let (alpha_blend_op, src_alpha_blend_factor, dst_alpha_blend_factor) = conv::map_blend_op(alpha);
+                            vk::PipelineColorBlendAttachmentState {
+                                color_write_mask,
+                                blend_enable: vk::VK_TRUE,
+                                src_color_blend_factor,
+                                dst_color_blend_factor,
+                                color_blend_op,
+                                src_alpha_blend_factor,
+                                dst_alpha_blend_factor,
+                                alpha_blend_op,
+                            }
+                        },
+                        pso::BlendState::Off => vk::PipelineColorBlendAttachmentState {
+                            color_write_mask,
+                            .. unsafe { mem::zeroed() }
+                        },
                     }
-                    if let Some(ref b) = info.alpha {
-                        blend.blend_enable = vk::VK_TRUE;
-                        blend.src_alpha_blend_factor = conv::map_blend_factor(b.source, true);
-                        blend.dst_alpha_blend_factor = conv::map_blend_factor(b.destination, true);
-                        blend.alpha_blend_op = conv::map_blend_op(b.equation);
-                    }
-
-                    blend_states.push(blend);
-                }
-                color_attachments.push(blend_states);
-            }
+                })
+                .collect::<Vec<_>>();
+            color_attachments.push(blend_states);
 
             info_color_blend_states.push(vk::PipelineColorBlendStateCreateInfo {
                 s_type: vk::StructureType::PipelineColorBlendStateCreateInfo,
@@ -662,7 +657,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_sampler(&self, sampler_info: image::SamplerInfo) -> n::Sampler {
-        use hal::state::Comparison;
+        use hal::pso::Comparison;
 
         let (min_filter, mag_filter, mipmap_mode, aniso) = conv::map_filter(sampler_info.filter);
         let info = vk::SamplerCreateInfo {

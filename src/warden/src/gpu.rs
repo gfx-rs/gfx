@@ -417,7 +417,7 @@ impl<B: hal::Backend> Scene<B> {
                     let _ = descriptors; //TODO
                     let (ref fb, extent) = resources.framebuffers[framebuffer];
                     let rp = &resources.render_passes[&pass.0];
-                    let rect = hal::target::Rect {
+                    let rect = hal::command::Rect {
                         x: 0,
                         y: 0,
                         w: extent.width as _,

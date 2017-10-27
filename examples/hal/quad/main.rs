@@ -17,7 +17,7 @@ extern crate gfx_backend_gl as back;
 extern crate winit;
 extern crate image;
 
-use hal::{buffer, command, device as d, image as i, memory as m, pass, pso, pool, state};
+use hal::{buffer, command, device as d, image as i, memory as m, pass, pso, pool};
 use hal::{Device, Instance, QueueFamily, Surface, Swapchain};
 use hal::{
     DescriptorPool, Gpu, FrameSync, Primitive,
@@ -27,7 +27,6 @@ use hal::format::{ChannelType, Formatted, Srgba8 as ColorFormat, Swizzle, Vec2};
 use hal::pass::Subpass;
 use hal::pso::{PipelineStage, ShaderStageFlags};
 use hal::queue::Submission;
-use hal::target::Rect;
 
 use std::io::Cursor;
 
@@ -209,21 +208,12 @@ fn main() {
     //
     let mut pipeline_desc = pso::GraphicsPipelineDesc::new(
         Primitive::TriangleList,
-        pso::Rasterizer::new_fill(),
+        pso::Rasterizer::FILL,
     );
-    pipeline_desc.blender.targets.push(pso::ColorInfo {
-        mask: state::MASK_ALL,
-        color: Some(state::BlendChannel {
-            equation: state::Equation::Add,
-            source: state::Factor::ZeroPlus(state::BlendValue::SourceAlpha),
-            destination: state::Factor::OneMinus(state::BlendValue::SourceAlpha),
-        }),
-        alpha: Some(state::BlendChannel {
-            equation: state::Equation::Add,
-            source: state::Factor::One,
-            destination: state::Factor::One,
-        }),
-    });
+    pipeline_desc.blender.targets.push(pso::ColorBlendDesc(
+        pso::ColorMask::ALL,
+        pso::BlendState::ALPHA,
+    ));
     pipeline_desc.vertex_buffers.push(pso::VertexBufferDesc {
         stride: std::mem::size_of::<Vertex>() as u32,
         rate: 0,
@@ -415,14 +405,12 @@ fn main() {
     ]);
 
     // Rendering setup
-    let viewport = hal::Viewport {
-        x: 0, y: 0,
-        w: pixel_width, h: pixel_height,
-        near: 0.0, far: 1.0,
-    };
-    let scissor = Rect {
-        x: 0, y: 0,
-        w: pixel_width, h: pixel_height,
+    let viewport = command::Viewport {
+        rect: command::Rect {
+            x: 0, y: 0,
+            w: pixel_width, h: pixel_height,
+        },
+        depth: 0.0 .. 1.0,
     };
 
     let mut frame_semaphore = device.create_semaphore();
@@ -501,8 +489,8 @@ fn main() {
         let submit = {
             let mut cmd_buffer = command_pool.acquire_command_buffer();
 
-            cmd_buffer.set_viewports(&[viewport]);
-            cmd_buffer.set_scissors(&[scissor]);
+            cmd_buffer.set_viewports(&[viewport.clone()]);
+            cmd_buffer.set_scissors(&[viewport.rect]);
             cmd_buffer.bind_graphics_pipeline(&pipelines[0].as_ref().unwrap());
             cmd_buffer.bind_vertex_buffers(pso::VertexBufferSet(vec![(&vertex_buffer, 0)]));
             cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, &[&desc_sets[0]]); //TODO
@@ -511,7 +499,7 @@ fn main() {
                 let mut encoder = cmd_buffer.begin_renderpass_inline(
                     &render_pass,
                     &framebuffers[frame.id()],
-                    Rect { x: 0, y: 0, w: pixel_width, h: pixel_height },
+                    viewport.rect,
                     &[command::ClearValue::Color(command::ClearColor::Float([0.8, 0.8, 0.8, 1.0]))],
                 );
                 encoder.draw(0..6, 0..1);

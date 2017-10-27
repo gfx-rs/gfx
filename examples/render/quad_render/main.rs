@@ -9,11 +9,10 @@ extern crate image;
 
 use std::io::Cursor;
 
-use hal::{command, device as d, image as i, pso, state};
+use hal::{command, device as d, image as i, pso};
 use hal::{Device, Instance, Primitive};
 use gfx::format::{Srgba8 as ColorFormat};
 use gfx::allocators::StackAllocator as Allocator;
-use hal::target::Rect;
 
 gfx_buffer_struct! {
     Vertex {
@@ -80,11 +79,7 @@ fn main() {
     let (desc, mut desc_data) = device.create_descriptors(1).pop().unwrap();
     let pipe_init = pipe::Init {
         desc: &desc,
-        color: pso::ColorInfo {
-            mask: state::MASK_ALL,
-            color: Some(gfx::preset::blend::ALPHA.color),
-            alpha: Some(gfx::preset::blend::ALPHA.alpha),
-        },
+        color: pso::ColorBlendDesc(pso::ColorMask::ALL, pso::BlendState::ALPHA),
         vertices: (),
     };
     let pipeline = device.create_graphics_pipeline(
@@ -96,7 +91,7 @@ fn main() {
             fragment: Some(pso::EntryPoint { entry: "main", module: &fs_module },),
         },
         Primitive::TriangleList,
-        pso::Rasterizer::new_fill(),
+        pso::Rasterizer::FILL,
         pipe_init,
     ).unwrap();
 
@@ -187,14 +182,13 @@ fn main() {
         .finish();
 
     // Rendering setup
-    let viewport = hal::Viewport {
+    let scissor = command::Rect {
         x: 0, y: 0,
         w: pixel_width, h: pixel_height,
-        near: 0.0, far: 1.0,
     };
-    let scissor = Rect {
-        x: 0, y: 0,
-        w: pixel_width, h: pixel_height,
+    let viewport = command::Viewport {
+        rect: scissor,
+        depth: 0.0 .. 1.0,
     };
 
     let mut encoder_pool = context.acquire_encoder_pool();
@@ -248,7 +242,7 @@ fn main() {
                 desc: (&desc, &desc_data),
                 color: &frame_rtvs[frame.id()],
                 vertices: &vertex_buffer,
-                viewports: &[viewport],
+                viewports: &[viewport.clone()],
                 scissors: &[scissor],
                 framebuffer: &framebuffers[frame.id()],
             };

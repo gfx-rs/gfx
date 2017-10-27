@@ -1,8 +1,11 @@
 use std::ops::Range;
-use {pso, target, Backend, IndexCount, InstanceCount, VertexCount, VertexOffset, Viewport};
+use {pso, Backend, IndexCount, InstanceCount, VertexCount, VertexOffset};
 use buffer::IndexBufferView;
 use queue::{Supports, Graphics};
-use super::{AttachmentClear, ClearValue, CommandBuffer, RawCommandBuffer};
+use super::{
+    ColorValue, StencilValue, Rect, Viewport,
+    AttachmentClear, ClearValue, CommandBuffer, RawCommandBuffer,
+};
 
 
 /// Specifies how commands for the following renderpasses will be recorded.
@@ -23,7 +26,7 @@ impl<'a, B: Backend> RenderPassInlineEncoder<'a, B> {
         cmd_buffer: &'a mut CommandBuffer<B, C>,
         render_pass: &B::RenderPass,
         frame_buffer: &B::Framebuffer,
-        render_area: target::Rect,
+        render_area: Rect,
         clear_values: &[ClearValue],
     ) -> Self
     where
@@ -45,7 +48,7 @@ impl<'a, B: Backend> RenderPassInlineEncoder<'a, B> {
     }
 
     ///
-    pub fn clear_attachments(&mut self, clears: &[AttachmentClear], rects: &[target::Rect]) {
+    pub fn clear_attachments(&mut self, clears: &[AttachmentClear], rects: &[Rect]) {
         self.0.clear_attachments(clears, rects)
     }
 
@@ -100,17 +103,17 @@ impl<'a, B: Backend> RenderPassInlineEncoder<'a, B> {
     }
 
     ///
-    pub fn set_scissors(&mut self, scissors: &[target::Rect]) {
+    pub fn set_scissors(&mut self, scissors: &[Rect]) {
         self.0.set_scissors(scissors)
     }
 
     ///
-    pub fn set_stencil_reference(&mut self, front: target::Stencil, back: target::Stencil) {
+    pub fn set_stencil_reference(&mut self, front: StencilValue, back: StencilValue) {
         self.0.set_stencil_reference(front, back)
     }
 
     ///
-    pub fn set_blend_constants(&mut self, cv: target::ColorValue) {
+    pub fn set_blend_constants(&mut self, cv: ColorValue) {
         self.0.set_blend_constants(cv)
     }
 
@@ -122,7 +125,7 @@ impl<'a, B: Backend> RenderPassInlineEncoder<'a, B> {
     // TODO: push constants
     // TODO: pipeline barrier (postponed)
     // TODO: begin/end query
-    
+
 }
 
 impl<'a, B: Backend> Drop for RenderPassInlineEncoder<'a, B> {

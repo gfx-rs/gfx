@@ -92,17 +92,12 @@ extern crate serde;
 
 #[macro_use]
 extern crate log;
-extern crate draw_state;
 pub extern crate gfx_hal as hal;
 
 /// public re-exported traits
 pub mod traits {
     pub use hal::memory::Pod;
 }
-
-// draw state re-exports
-pub use draw_state::{preset, state};
-pub use draw_state::target::*;
 
 // public re-exports
 pub use hal::format;

@@ -11,10 +11,14 @@ use std::error::Error;
 use std::fmt;
 use std::ops::Range;
 
-use {format, state, target};
-pub use target::{Layer, Level};
+use format;
+use pso::Comparison;
 
 
+/// Image layer.
+pub type Layer = u16;
+/// Image mipmap level.
+pub type Level = u8;
 /// Maximum accessible mipmap level of a image.
 pub const MAX_LEVEL: Level = 15;
 
@@ -120,7 +124,7 @@ pub enum LayerError {
     /// The source texture kind doesn't support array slices.
     NotExpected(Kind),
     /// Selected layer is outside of the provided range.
-    OutOfBounds(Range<target::Layer>),
+    OutOfBounds(Range<Layer>),
 }
 
 impl fmt::Display for LayerError {
@@ -155,7 +159,7 @@ pub type Dimensions = (Size, Size, Size, AaMode);
 
 /// Describes the configuration of samples inside each texel.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum AaMode {
     /// No additional sample information
     Single,
@@ -202,7 +206,7 @@ impl AaMode {
 /// textures. Alas, these names are simple, and match certain intuitions
 /// ingrained by many years of public use of inaccurate terminology.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum FilterMethod {
     /// The dumbest filtering possible, nearest-neighbor interpolation.
     Scale,
@@ -221,7 +225,7 @@ pub enum FilterMethod {
 /// The face of a cube texture to do an operation on.
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[repr(u8)]
 pub enum CubeFace {
     PosX,
@@ -241,7 +245,7 @@ pub const CUBE_FACES: [CubeFace; 6] = [
 
 /// Specifies the kind of a texture storage to be allocated.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Kind {
     /// A single row of texels.
     D1(Size),
@@ -331,7 +335,7 @@ impl Kind {
 
 bitflags!(
     /// Image usage flags
-    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct Usage: u8 {
         ///
         const TRANSFER_SRC = 0x1;
@@ -363,7 +367,7 @@ impl Usage {
 
 /// Specifies how texture coordinates outside the range `[0, 1]` are handled.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum WrapMode {
     /// Tile the texture. That is, sample the coordinate modulo `1.0`. This is
     /// the default.
@@ -378,7 +382,7 @@ pub enum WrapMode {
 
 /// A wrapper for the LOD level of a texture.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Lod(i16);
 
 impl From<f32> for Lod {
@@ -395,7 +399,7 @@ impl Into<f32> for Lod {
 
 /// A wrapper for the 8bpp RGBA color, encoded as u32.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PackedColor(pub u32);
 
 impl From<[f32; 4]> for PackedColor {
@@ -420,7 +424,7 @@ impl Into<[f32; 4]> for PackedColor {
 /// Specifies how to sample from a texture.
 // TODO: document the details of sampling.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SamplerInfo {
     /// Filter method to use.
     pub filter: FilterMethod,
@@ -434,7 +438,7 @@ pub struct SamplerInfo {
     /// This range is used to clamp LOD level used for sampling.
     pub lod_range: Range<Lod>,
     /// Comparison mode, used primary for a shadow map.
-    pub comparison: Option<state::Comparison>,
+    pub comparison: Option<Comparison>,
     /// Border color is used when one of the wrap modes is set to border.
     pub border: PackedColor,
 }
@@ -457,7 +461,7 @@ impl SamplerInfo {
 /// Texture resource view descriptor.
 #[allow(missing_docs)]
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ResourceDesc {
     pub channel: format::ChannelType,
     pub layer: Option<Layer>,
@@ -468,7 +472,7 @@ pub struct ResourceDesc {
 /// Texture render view descriptor.
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RenderDesc {
     pub channel: format::ChannelType,
     pub level: Level,
@@ -477,7 +481,7 @@ pub struct RenderDesc {
 
 bitflags!(
     /// Depth-stencil read-only flags
-    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct DepthStencilFlags: u8 {
         /// Depth is read-only in the view.
         const RO_DEPTH    = 0x1;
@@ -491,7 +495,7 @@ bitflags!(
 /// Texture depth-stencil view descriptor.
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DepthStencilDesc {
     pub level: Level,
     pub layer: Option<Layer>,
@@ -510,7 +514,7 @@ impl From<RenderDesc> for DepthStencilDesc {
 
 ///
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ImageLayout {
     ///
     General,
@@ -536,7 +540,7 @@ pub enum ImageLayout {
 
 bitflags!(
     ///
-    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct AspectFlags: u8 {
         /// Color aspect.
         const COLOR = 0x1;
@@ -549,7 +553,7 @@ bitflags!(
 
 bitflags!(
     ///
-    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct Access: u16 {
         /// Read state but can only be combined with `COLOR_ATTACHMENT_WRITE`.
         const COLOR_ATTACHMENT_READ = 0x1;
@@ -589,7 +593,7 @@ pub type Subresource = (Level, Layer);
 
 /// A subset of resource layers contained within an image's level.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SubresourceLayers {
     /// Included aspects: color/depth/stencil
     pub aspects: AspectFlags,
@@ -601,7 +605,7 @@ pub struct SubresourceLayers {
 
 /// A subset of resources contained within an image.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SubresourceRange {
     /// Included aspects: color/depth/stencil
     pub aspects: AspectFlags,

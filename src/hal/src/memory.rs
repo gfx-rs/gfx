@@ -39,7 +39,7 @@ pub fn cast_slice<A: Pod, B: Pod>(slice: &[A]) -> &[B] {
 
 bitflags!(
     /// Memory property flags.
-    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct Properties: u16 {
         /// Device local memory on the GPU.
         const DEVICE_LOCAL   = 0x1;

@@ -6,7 +6,7 @@ use std::marker::PhantomData;
 
 bitflags!(
     /// Command pool creation flags.
-    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct CommandPoolCreateFlags: u8 {
         /// Indicates short-lived command buffers.
         /// Memory optimization hint for implementations.

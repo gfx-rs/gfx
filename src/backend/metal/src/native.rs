@@ -201,12 +201,12 @@ unsafe impl Send for DescriptorSetInner {}
 pub enum DescriptorSetBinding {
     Sampler(Vec<Option<metal::SamplerState>>),
     SampledImage(Vec<Option<(metal::Texture, image::ImageLayout)>>),
-    StorageImage(Vec<(metal::Texture, image::ImageLayout)>),
-    UniformTexelBuffer,
-    StorageTexelBuffer,
-    ConstantBuffer(Vec<metal::Buffer>),
-    StorageBuffer,
-    InputAttachment(Vec<(metal::Texture, image::ImageLayout)>),
+    //StorageImage(Vec<(metal::Texture, image::ImageLayout)>),
+    //UniformTexelBuffer,
+    //StorageTexelBuffer,
+    //ConstantBuffer(Vec<metal::Buffer>),
+    //StorageBuffer,
+    //InputAttachment(Vec<(metal::Texture, image::ImageLayout)>),
 }
 
 #[derive(Debug)]
@@ -256,6 +256,7 @@ pub unsafe fn objc_err_description(object: *mut objc::runtime::Object) -> String
 }
 
 extern "C" {
+    #[allow(dead_code)]
     pub fn dispatch_semaphore_wait(
         semaphore: *mut c_void,
         timeout: u64,

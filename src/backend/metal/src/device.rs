@@ -45,15 +45,6 @@ fn gen_parse_error(err: SpirvErrorCode) -> ShaderError {
     };
     ShaderError::CompilationFailed(msg)
 }
-/// Emit error during shader module creation. Used if we execute an query command.
-fn gen_query_error(err: SpirvErrorCode) -> ShaderError {
-    let msg = match err {
-        SpirvErrorCode::CompilationError(msg) => msg,
-        SpirvErrorCode::Unhandled => "Unknown query error".into(),
-    };
-    ShaderError::CompilationFailed(msg)
-}
-
 
 #[derive(Clone, Copy)]
 struct PrivateCapabilities {
@@ -344,20 +335,20 @@ impl Device {
         // Blending
         for (i, color_desc) in pipeline_desc.blender.targets.iter().enumerate() {
             let descriptor = pipeline.color_attachments().object_at(i).expect("too many color attachments");
+            descriptor.set_write_mask(map_write_mask(color_desc.0));
 
-            descriptor.set_write_mask(map_write_mask(color_desc.mask));
-            descriptor.set_blending_enabled(color_desc.color.is_some() | color_desc.alpha.is_some());
+            if let pso::BlendState::On { ref color, ref alpha } = color_desc.1 {
+                descriptor.set_blending_enabled(true);
+                let (color_op, color_src, color_dst) = map_blend_op(color);
+                let (alpha_op, alpha_src, alpha_dst) = map_blend_op(alpha);
 
-            if let Some(blend) = color_desc.color {
-                descriptor.set_source_rgb_blend_factor(map_blend_factor(blend.source, false));
-                descriptor.set_destination_rgb_blend_factor(map_blend_factor(blend.destination, false));
-                descriptor.set_rgb_blend_operation(map_blend_op(blend.equation));
-            }
+                descriptor.set_rgb_blend_operation(color_op);
+                descriptor.set_source_rgb_blend_factor(color_src);
+                descriptor.set_destination_rgb_blend_factor(color_dst);
 
-            if let Some(blend) = color_desc.alpha {
-                descriptor.set_source_alpha_blend_factor(map_blend_factor(blend.source, true));
-                descriptor.set_destination_alpha_blend_factor(map_blend_factor(blend.destination, true));
-                descriptor.set_alpha_blend_operation(map_blend_op(blend.equation));
+                descriptor.set_alpha_blend_operation(alpha_op);
+                descriptor.set_source_alpha_blend_factor(alpha_src);
+                descriptor.set_destination_alpha_blend_factor(alpha_dst);
             }
         }
 

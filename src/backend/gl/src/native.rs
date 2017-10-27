@@ -1,6 +1,5 @@
 use hal::{self, image as i, pass};
 use hal::memory::Properties;
-use hal::target::{Layer, Level};
 use gl;
 use Backend;
 use std::cell::Cell;
@@ -63,8 +62,8 @@ pub enum FatSampler {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum ImageView {
     Surface(Surface),
-    Texture(Texture, Level),
-    TextureLayer(Texture, Level, Layer),
+    Texture(Texture, i::Level),
+    TextureLayer(Texture, i::Level, i::Layer),
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]

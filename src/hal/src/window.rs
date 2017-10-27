@@ -57,7 +57,7 @@ use std::ops::Range;
 
 ///
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Extent2d {
     ///
     pub width: u32,
@@ -67,7 +67,7 @@ pub struct Extent2d {
 
 ///
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SurfaceCapabilities {
     /// Number of presentable images supported by the adapter for a swapchain
     /// created from this surface.
@@ -148,7 +148,7 @@ pub trait Surface<B: Backend> {
 
 /// Handle to a backbuffer of the swapchain.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Frame(usize);
 
 impl Frame {

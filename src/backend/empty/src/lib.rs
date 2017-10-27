@@ -4,7 +4,7 @@
 extern crate gfx_hal as hal;
 
 use std::ops::Range;
-use hal::{buffer, command, device, format, image, target, mapping, memory, pass, pool, pso, queue};
+use hal::{buffer, command, device, format, image, mapping, memory, pass, pool, pso, queue};
 
 /// Dummy backend.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -346,7 +346,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn clear_attachments(&mut self, _: &[command::AttachmentClear], _: &[target::Rect]) {
+    fn clear_attachments(&mut self, _: &[command::AttachmentClear], _: &[command::Rect]) {
         unimplemented!()
     }
 
@@ -369,21 +369,21 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn set_viewports(&mut self, _: &[hal::Viewport]) {
+    fn set_viewports(&mut self, _: &[command::Viewport]) {
 
     }
 
-    fn set_scissors(&mut self, _: &[target::Rect]) {
+    fn set_scissors(&mut self, _: &[command::Rect]) {
         unimplemented!()
     }
 
 
-    fn set_stencil_reference(&mut self, _: target::Stencil, _: target::Stencil) {
+    fn set_stencil_reference(&mut self, _: command::StencilValue, _: command::StencilValue) {
         unimplemented!()
     }
 
 
-    fn set_blend_constants(&mut self, _: target::ColorValue) {
+    fn set_blend_constants(&mut self, _: command::ColorValue) {
         unimplemented!()
     }
 
@@ -392,7 +392,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         &mut self,
         _: &(),
         _: &(),
-        _: target::Rect,
+        _: command::Rect,
         _: &[command::ClearValue],
         _: command::SubpassContents,
     ) {

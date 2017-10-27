@@ -1,6 +1,6 @@
 use wio::com::ComPtr;
-use hal::{command as com, image, memory, pass, pso, target};
-use hal::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, Viewport};
+use hal::{command as com, image, memory, pass, pso};
+use hal::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset};
 use hal::buffer::IndexBufferView;
 use winapi::{self, UINT64, UINT};
 use {conv, native as n, Backend};
@@ -8,7 +8,7 @@ use smallvec::SmallVec;
 use std::{mem, ptr};
 use std::ops::Range;
 
-fn get_rect(rect: &target::Rect) -> winapi::D3D12_RECT {
+fn get_rect(rect: &com::Rect) -> winapi::D3D12_RECT {
     winapi::D3D12_RECT {
         left: rect.x as i32,
         top: rect.y as i32,
@@ -127,7 +127,7 @@ impl CommandBuffer {
                 }
                 Some(com::ClearValue::DepthStencil(value)) => {
                     let handle = view.handle_dsv.unwrap();
-                    self.clear_depth_stencil_view(handle, Some(value.depth), None, &[state.target_rect]);
+                    self.clear_depth_stencil_view(handle, Some(value.0), None, &[state.target_rect]);
                 }
                 None => {}
             }
@@ -214,7 +214,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         &mut self,
         render_pass: &n::RenderPass,
         framebuffer: &n::Framebuffer,
-        target_rect: target::Rect,
+        target_rect: com::Rect,
         clear_values: &[com::ClearValue],
         _first_subpass: com::SubpassContents,
     ) {
@@ -242,7 +242,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 },
                 stencil_value: if attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
                     match clear_iter.next() {
-                        Some(&com::ClearValue::DepthStencil(value)) => Some(value.stencil),
+                        Some(&com::ClearValue::DepthStencil(value)) => Some(value.1),
                         other => panic!("Unexpected clear value: {:?}", other),
                     }
                 } else {
@@ -407,18 +407,18 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         assert_eq!(range, image.to_subresource_range(range.aspects));
         if range.aspects.contains(AspectFlags::DEPTH) {
             let dsv = image.clear_dv.unwrap();
-            self.clear_depth_stencil_view(dsv, Some(value.depth), None, &[]);
+            self.clear_depth_stencil_view(dsv, Some(value.0), None, &[]);
         }
         if range.aspects.contains(AspectFlags::STENCIL) {
             let dsv = image.clear_sv.unwrap();
-            self.clear_depth_stencil_view(dsv, None, Some(value.stencil as _), &[]);
+            self.clear_depth_stencil_view(dsv, None, Some(value.1 as _), &[]);
         }
     }
 
     fn clear_attachments(
         &mut self,
         clears: &[com::AttachmentClear],
-        rects: &[target::Rect],
+        rects: &[com::Rect],
     ) {
         assert!(self.pass_cache.is_some(), "`clear_attachments` can only be called inside a renderpass");
         let rects: SmallVec<[winapi::D3D12_RECT; 16]> = rects.iter().map(get_rect).collect();
@@ -544,17 +544,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_viewports(&mut self, viewports: &[Viewport]) {
+    fn set_viewports(&mut self, viewports: &[com::Viewport]) {
         let viewports: SmallVec<[winapi::D3D12_VIEWPORT; 16]> = viewports
             .iter()
             .map(|viewport| {
                 winapi::D3D12_VIEWPORT {
-                    TopLeftX: viewport.x as _,
-                    TopLeftY: viewport.y as _,
-                    Width: viewport.w as _,
-                    Height: viewport.h as _,
-                    MinDepth: viewport.near,
-                    MaxDepth: viewport.far,
+                    TopLeftX: viewport.rect.x as _,
+                    TopLeftY: viewport.rect.y as _,
+                    Width: viewport.rect.w as _,
+                    Height: viewport.rect.h as _,
+                    MinDepth: viewport.depth.start,
+                    MaxDepth: viewport.depth.end,
                 }
             })
             .collect();
@@ -567,7 +567,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_scissors(&mut self, scissors: &[target::Rect]) {
+    fn set_scissors(&mut self, scissors: &[com::Rect]) {
         let rects: SmallVec<[winapi::D3D12_RECT; 16]> = scissors.iter().map(get_rect).collect();
         unsafe {
             self.raw
@@ -575,11 +575,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         };
     }
 
-    fn set_blend_constants(&mut self, color: target::ColorValue) {
+    fn set_blend_constants(&mut self, color: com::ColorValue) {
         unsafe { self.raw.OMSetBlendFactor(&color); }
     }
 
-    fn set_stencil_reference(&mut self, front: target::Stencil, back: target::Stencil) {
+    fn set_stencil_reference(&mut self, front: com::StencilValue, back: com::StencilValue) {
         if front != back {
             error!(
                 "Unable to set different stencil ref values for front ({}) and back ({})",

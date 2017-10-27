@@ -47,7 +47,7 @@ impl Error for ViewError {
 
 bitflags!(
     /// Buffer usage flags.
-    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct Usage: u16 {
         ///
         const TRANSFER_SRC  = 0x1;
@@ -79,7 +79,7 @@ impl Usage {
 
 bitflags!(
     /// Buffer state flags.
-    #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct Access: u16 {
         ///
         const TRANSFER_READ          = 0x01;

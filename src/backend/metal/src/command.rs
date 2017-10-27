@@ -5,12 +5,16 @@ use std::ops::{Deref, Range};
 use std::sync::{Arc};
 use std::cell::UnsafeCell;
 
-use hal::{memory, target, pool, pso};
-use hal::{VertexCount, VertexOffset, InstanceCount, IndexCount, Viewport};
+use hal::{memory, pool, pso};
+use hal::{VertexCount, VertexOffset, InstanceCount, IndexCount};
 use hal::buffer::{IndexBufferView};
 use hal::image::{ImageLayout, SubresourceRange};
-use hal::command::{AttachmentClear, ClearColor, ClearDepthStencil, ClearValue, BufferImageCopy, BufferCopy};
-use hal::command::{ImageCopy, SubpassContents, ImageResolve, RawCommandBuffer};
+use hal::command::{
+    AttachmentClear, ClearColor, ClearDepthStencil, ClearValue,
+    BufferImageCopy, BufferCopy, ImageCopy, ImageResolve,
+    SubpassContents, RawCommandBuffer,
+    ColorValue, StencilValue, Rect, Viewport,
+};
 use hal::queue::{RawCommandQueue, RawSubmission};
 
 use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLClearColor, MTLSize, MTLOrigin};
@@ -395,7 +399,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
     fn clear_attachments(
         &mut self,
         _clears: &[AttachmentClear],
-        _rects: &[target::Rect],
+        _rects: &[Rect],
     ) {
         unimplemented!()
     }
@@ -431,37 +435,37 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_viewports(&mut self, rects: &[Viewport]) {
+    fn set_viewports(&mut self, vps: &[Viewport]) {
         let inner = self.inner();
-        if rects.len() != 1 {
+        if vps.len() != 1 {
             panic!("Metal supports only one viewport");
         }
-        let rect = &rects[0];
-        let vp = MTLViewport {
-            originX: rect.x as f64,
-            originY: rect.y as f64,
-            width: rect.w as f64,
-            height: rect.h as f64,
-            znear: rect.near as f64,
-            zfar: rect.far as f64,
+        let vp = &vps[0];
+        let viewport = MTLViewport {
+            originX: vp.rect.x as f64,
+            originY: vp.rect.y as f64,
+            width: vp.rect.w as f64,
+            height: vp.rect.h as f64,
+            znear: vp.depth.start as f64,
+            zfar: vp.depth.end as f64,
         };
-        inner.viewport = Some(vp);
+        inner.viewport = Some(viewport);
         if let EncoderState::Render(ref encoder) = inner.encoder_state {
-            encoder.set_viewport(vp);
+            encoder.set_viewport(viewport);
         }
     }
 
-    fn set_scissors(&mut self, rects: &[target::Rect]) {
+    fn set_scissors(&mut self, rects: &[Rect]) {
         let inner = self.inner();
         if rects.len() != 1 {
             panic!("Metal supports only one scissor");
         }
         let rect = &rects[0];
         let scissor = MTLScissorRect {
-            x: rect.x as NSUInteger,
-            y: rect.y as NSUInteger,
-            width: rect.w as NSUInteger,
-            height: rect.h as NSUInteger,
+            x: rect.x as _,
+            y: rect.y as _,
+            width: rect.w as _,
+            height: rect.h as _,
         };
         inner.scissors = Some(scissor);
         if let EncoderState::Render(ref encoder) = inner.encoder_state {
@@ -469,11 +473,11 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_stencil_reference(&mut self, _front: target::Stencil, _back: target::Stencil) {
+    fn set_stencil_reference(&mut self, _front: StencilValue, _back: StencilValue) {
         unimplemented!()
     }
 
-    fn set_blend_constants(&mut self, _color: target::ColorValue) {
+    fn set_blend_constants(&mut self, _color: ColorValue) {
         unimplemented!()
     }
 
@@ -481,7 +485,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         &mut self,
         _render_pass: &native::RenderPass,
         frame_buffer: &native::FrameBuffer,
-        _render_area: target::Rect,
+        _render_area: Rect,
         clear_values: &[ClearValue],
         _first_subpass: SubpassContents,
     ) {
@@ -586,7 +590,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
                                             encoder.set_vertex_sampler_state((start + i) as _, sampler.as_ref().map(|x| &**x));
                                         }
                                     }
-                                },
+                                }
                                 SampledImage(ref images) => {
                                     inner.resources_vs.add_textures(start, images.as_slice());
                                     if let EncoderState::Render(ref encoder) = inner.encoder_state {
@@ -594,8 +598,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
                                             encoder.set_vertex_texture((start + i) as _, texture.as_ref().map(|&(ref texture, _)| &**texture));
                                         }
                                     }
-                                },
-                                _ => unimplemented!(),
+                                }
                             }
                         }
                         if desc_layout.stage_flags.contains(pso::ShaderStageFlags::FRAGMENT) {
@@ -612,7 +615,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
                                             encoder.set_fragment_sampler_state((start + i) as _, sampler.as_ref().map(|x| &**x));
                                         }
                                     }
-                                },
+                                }
                                 SampledImage(ref images) => {
                                     inner.resources_fs.add_textures(start, images.as_slice());
                                     if let EncoderState::Render(ref encoder) = inner.encoder_state {
@@ -620,8 +623,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
                                             encoder.set_fragment_texture((start + i) as _, texture.as_ref().map(|&(ref texture, _)| &**texture));
                                         }
                                     }
-                                },
-                                _ => unimplemented!(),
+                                }
                             }
                         }
                     }

@@ -1,6 +1,5 @@
 use ash::vk;
-use hal::{buffer, format, image, pass, pso, state};
-use hal::command::{ClearColor, ClearDepthStencil, ClearValue, Offset};
+use hal::{buffer, command, format, image, pass, pso};
 use hal::device::Extent;
 use hal::{IndexType, Primitive};
 use std::ops::Range;
@@ -404,35 +403,49 @@ pub fn map_image_aspects(aspects: image::AspectFlags) -> vk::ImageAspectFlags {
     flags
 }
 
-pub fn map_clear_color(value: ClearColor) -> vk::ClearColorValue {
+pub fn map_clear_color(value: command::ClearColor) -> vk::ClearColorValue {
     match value {
-        ClearColor::Float(v) => vk::ClearColorValue::new_float32(v),
-        ClearColor::Int(v)   => vk::ClearColorValue::new_int32(v),
-        ClearColor::Uint(v)  => vk::ClearColorValue::new_uint32(v),
+        command::ClearColor::Float(v) => vk::ClearColorValue::new_float32(v),
+        command::ClearColor::Int(v)   => vk::ClearColorValue::new_int32(v),
+        command::ClearColor::Uint(v)  => vk::ClearColorValue::new_uint32(v),
     }
 }
 
-pub fn map_clear_ds(value: ClearDepthStencil) -> vk::ClearDepthStencilValue {
+pub fn map_clear_depth_stencil(value: command::ClearDepthStencil) -> vk::ClearDepthStencilValue {
     vk::ClearDepthStencilValue {
-        depth: value.depth,
-        stencil: value.stencil,
+        depth: value.0,
+        stencil: value.1,
     }
 }
 
-pub fn map_clear_value(value: &ClearValue) -> vk::ClearValue {
+pub fn map_clear_depth(depth: command::DepthValue) -> vk::ClearDepthStencilValue {
+    vk::ClearDepthStencilValue {
+        depth,
+        stencil: 0,
+    }
+}
+
+pub fn map_clear_stencil(stencil: command::StencilValue) -> vk::ClearDepthStencilValue {
+    vk::ClearDepthStencilValue {
+        depth: 0.0,
+        stencil,
+    }
+}
+
+pub fn map_clear_value(value: &command::ClearValue) -> vk::ClearValue {
     match *value {
-        ClearValue::Color(cv) => {
+        command::ClearValue::Color(cv) => {
             let cv = map_clear_color(cv);
             vk::ClearValue::new_color(cv)
         },
-        ClearValue::DepthStencil(dsv) => {
-            let dsv = map_clear_ds(dsv);
+        command::ClearValue::DepthStencil(dsv) => {
+            let dsv = map_clear_depth_stencil(dsv);
             vk::ClearValue::new_depth_stencil(dsv)
         },
     }
 }
 
-pub fn map_offset(offset: Offset) -> vk::Offset3D {
+pub fn map_offset(offset: command::Offset) -> vk::Offset3D {
     vk::Offset3D {
         x: offset.x,
         y: offset.y,
@@ -781,44 +794,43 @@ pub fn map_border_color(col: image::PackedColor) -> Option<vk::BorderColor> {
 
 pub fn map_topology(prim: Primitive) -> vk::PrimitiveTopology {
     match prim {
-        Primitive::PointList     => vk::PrimitiveTopology::PointList,
-        Primitive::LineList      => vk::PrimitiveTopology::LineList,
-        Primitive::LineListAdjacency => vk::PrimitiveTopology::LineListWithAdjacency,
-        Primitive::LineStrip     => vk::PrimitiveTopology::LineStrip,
-        Primitive::LineStripAdjacency => vk::PrimitiveTopology::LineStripWithAdjacency,
-        Primitive::TriangleList  => vk::PrimitiveTopology::TriangleList,
-        Primitive::TriangleListAdjacency => vk::PrimitiveTopology::TriangleListWithAdjacency,
-        Primitive::TriangleStrip => vk::PrimitiveTopology::TriangleStrip,
+        Primitive::PointList              => vk::PrimitiveTopology::PointList,
+        Primitive::LineList               => vk::PrimitiveTopology::LineList,
+        Primitive::LineListAdjacency      => vk::PrimitiveTopology::LineListWithAdjacency,
+        Primitive::LineStrip              => vk::PrimitiveTopology::LineStrip,
+        Primitive::LineStripAdjacency     => vk::PrimitiveTopology::LineStripWithAdjacency,
+        Primitive::TriangleList           => vk::PrimitiveTopology::TriangleList,
+        Primitive::TriangleListAdjacency  => vk::PrimitiveTopology::TriangleListWithAdjacency,
+        Primitive::TriangleStrip          => vk::PrimitiveTopology::TriangleStrip,
         Primitive::TriangleStripAdjacency => vk::PrimitiveTopology::TriangleStripWithAdjacency,
-        Primitive::PatchList(_)  => vk::PrimitiveTopology::PatchList,
+        Primitive::PatchList(_)           => vk::PrimitiveTopology::PatchList,
     }
 }
 
-pub fn map_polygon_mode(rm: state::RasterMethod) -> (vk::PolygonMode, f32) {
+pub fn map_polygon_mode(rm: pso::PolygonMode) -> (vk::PolygonMode, f32) {
     match rm {
-        state::RasterMethod::Point   => (vk::PolygonMode::Point, 1.0),
-        state::RasterMethod::Line(w) => (vk::PolygonMode::Line, w as f32),
-        state::RasterMethod::Fill    => (vk::PolygonMode::Fill, 1.0),
+        pso::PolygonMode::Point   => (vk::PolygonMode::Point, 1.0),
+        pso::PolygonMode::Line(w) => (vk::PolygonMode::Line, w),
+        pso::PolygonMode::Fill    => (vk::PolygonMode::Fill, 1.0),
     }
 }
 
-pub fn map_cull_mode(cf: state::CullFace) -> vk::CullModeFlags {
+pub fn map_cull_face(cf: pso::CullFace) -> vk::CullModeFlags {
     match cf {
-        state::CullFace::Nothing => vk::CULL_MODE_NONE,
-        state::CullFace::Front   => vk::CULL_MODE_FRONT_BIT,
-        state::CullFace::Back    => vk::CULL_MODE_BACK_BIT,
+        pso::CullFace::Front   => vk::CULL_MODE_FRONT_BIT,
+        pso::CullFace::Back    => vk::CULL_MODE_BACK_BIT,
     }
 }
 
-pub fn map_front_face(ff: state::FrontFace) -> vk::FrontFace {
+pub fn map_front_face(ff: pso::FrontFace) -> vk::FrontFace {
     match ff {
-        state::FrontFace::Clockwise        => vk::FrontFace::Clockwise,
-        state::FrontFace::CounterClockwise => vk::FrontFace::CounterClockwise,
+        pso::FrontFace::Clockwise        => vk::FrontFace::Clockwise,
+        pso::FrontFace::CounterClockwise => vk::FrontFace::CounterClockwise,
     }
 }
 
-pub fn map_comparison(fun: state::Comparison) -> vk::CompareOp {
-    use hal::state::Comparison::*;
+pub fn map_comparison(fun: pso::Comparison) -> vk::CompareOp {
+    use hal::pso::Comparison::*;
     match fun {
         Never        => vk::CompareOp::Never,
         Less         => vk::CompareOp::Less,
@@ -831,8 +843,8 @@ pub fn map_comparison(fun: state::Comparison) -> vk::CompareOp {
     }
 }
 
-pub fn map_stencil_op(op: state::StencilOp) -> vk::StencilOp {
-    use hal::state::StencilOp::*;
+pub fn map_stencil_op(op: pso::StencilOp) -> vk::StencilOp {
+    use hal::pso::StencilOp::*;
     match op {
         Keep           => vk::StencilOp::Keep,
         Zero           => vk::StencilOp::Zero,
@@ -845,7 +857,7 @@ pub fn map_stencil_op(op: state::StencilOp) -> vk::StencilOp {
     }
 }
 
-pub fn map_stencil_side(side: &state::StencilSide) -> vk::StencilOpState {
+pub fn map_stencil_side(side: &pso::StencilFace) -> vk::StencilOpState {
     vk::StencilOpState {
         fail_op: map_stencil_op(side.op_fail),
         pass_op: map_stencil_op(side.op_pass),
@@ -857,40 +869,52 @@ pub fn map_stencil_side(side: &state::StencilSide) -> vk::StencilOpState {
     }
 }
 
-pub fn map_blend_factor(factor: state::Factor, scalar: bool) -> vk::BlendFactor {
-    use hal::state::BlendValue::*;
-    use hal::state::Factor::*;
+pub fn map_blend_factor(factor: pso::Factor) -> vk::BlendFactor {
+    use hal::pso::Factor::*;
     match factor {
         Zero => vk::BlendFactor::Zero,
         One => vk::BlendFactor::One,
-        SourceAlphaSaturated => vk::BlendFactor::SrcAlphaSaturate,
-        ZeroPlus(SourceColor) if !scalar => vk::BlendFactor::SrcColor,
-        ZeroPlus(SourceAlpha) => vk::BlendFactor::SrcAlpha,
-        ZeroPlus(DestColor) if !scalar => vk::BlendFactor::DstColor,
-        ZeroPlus(DestAlpha) => vk::BlendFactor::DstAlpha,
-        ZeroPlus(ConstColor) if !scalar => vk::BlendFactor::ConstantColor,
-        ZeroPlus(ConstAlpha) => vk::BlendFactor::ConstantAlpha,
-        OneMinus(SourceColor) if !scalar => vk::BlendFactor::OneMinusSrcColor,
-        OneMinus(SourceAlpha) => vk::BlendFactor::OneMinusSrcAlpha,
-        OneMinus(DestColor) if !scalar => vk::BlendFactor::OneMinusDstColor,
-        OneMinus(DestAlpha) => vk::BlendFactor::OneMinusDstAlpha,
-        OneMinus(ConstColor) if !scalar => vk::BlendFactor::OneMinusConstantColor,
-        OneMinus(ConstAlpha) => vk::BlendFactor::OneMinusConstantAlpha,
-        _ => {
-            error!("Invalid blend factor requested for {}: {:?}",
-                if scalar {"alpha"} else {"color"}, factor);
-            vk::BlendFactor::Zero
-        }
+        SrcColor => vk::BlendFactor::SrcColor,
+        OneMinusSrcColor => vk::BlendFactor::OneMinusSrcColor,
+        DstColor => vk::BlendFactor::DstColor,
+        OneMinusDstColor => vk::BlendFactor::OneMinusDstColor,
+        SrcAlpha => vk::BlendFactor::SrcAlpha,
+        OneMinusSrcAlpha => vk::BlendFactor::OneMinusSrcAlpha,
+        DstAlpha => vk::BlendFactor::DstAlpha,
+        OneMinusDstAlpha => vk::BlendFactor::OneMinusDstAlpha,
+        ConstColor => vk::BlendFactor::ConstantColor,
+        OneMinusConstColor => vk::BlendFactor::OneMinusConstantColor,
+        ConstAlpha => vk::BlendFactor::ConstantAlpha,
+        OneMinusConstAlpha => vk::BlendFactor::OneMinusConstantAlpha,
+        SrcAlphaSaturate => vk::BlendFactor::SrcAlphaSaturate,
+        Src1Color => vk::BlendFactor::Src1Color,
+        OneMinusSrc1Color => vk::BlendFactor::OneMinusSrc1Color,
+        Src1Alpha => vk::BlendFactor::Src1Alpha,
+        OneMinusSrc1Alpha => vk::BlendFactor::OneMinusSrc1Alpha,
     }
 }
 
-pub fn map_blend_op(equation: state::Equation) -> vk::BlendOp {
-    use hal::state::Equation::*;
-    match equation {
-        Add => vk::BlendOp::Add,
-        Sub => vk::BlendOp::Subtract,
-        RevSub => vk::BlendOp::ReverseSubtract,
-        Min => vk::BlendOp::Min,
-        Max => vk::BlendOp::Max,
+pub fn map_blend_op(
+    operation: pso::BlendOp
+) -> (vk::BlendOp, vk::BlendFactor, vk::BlendFactor) {
+    use hal::pso::BlendOp::*;
+    match operation {
+        Add { src, dst } => (
+            vk::BlendOp::Add,
+            map_blend_factor(src),
+            map_blend_factor(dst),
+        ),
+        Sub { src, dst } => (
+            vk::BlendOp::Subtract,
+            map_blend_factor(src),
+            map_blend_factor(dst),
+        ),
+        RevSub { src, dst } => (
+            vk::BlendOp::ReverseSubtract,
+            map_blend_factor(src),
+            map_blend_factor(dst),
+        ),
+        Min => (vk::BlendOp::Min, vk::BlendFactor::Zero, vk::BlendFactor::Zero),
+        Max => (vk::BlendOp::Max, vk::BlendFactor::Zero, vk::BlendFactor::Zero),
     }
 }

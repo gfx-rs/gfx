@@ -8,7 +8,7 @@ use std::ops::Range;
 
 /// Specifies the operation which will be applied at the beginning of a subpass.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum AttachmentLoadOp {
     /// Preserve existing content in the attachment.
     Load,
@@ -20,7 +20,7 @@ pub enum AttachmentLoadOp {
 
 ///
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum AttachmentStoreOp {
     /// Content written to the attachment will be preserved.
     Store,
@@ -33,7 +33,7 @@ pub type AttachmentLayout = image::ImageLayout;
 
 /// Attachment operations.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AttachmentOps {
     ///
     pub load: AttachmentLoadOp,
@@ -55,7 +55,7 @@ impl AttachmentOps {
         }
     }
 
-    #[cfg(feature = "serialize")]
+    #[cfg(feature = "serde")]
     fn whatever() -> Self {
         Self::DONT_CARE
     }
@@ -63,14 +63,14 @@ impl AttachmentOps {
 
 ///
 #[derive(Clone, Debug, Hash)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Attachment {
     /// Attachment format
     pub format: Format,
     /// Load and store operations of the attachment
     pub ops: AttachmentOps,
     /// Load and store operations of the stencil aspect, if any
-    #[cfg_attr(feature = "serialize", serde(default = "AttachmentOps::whatever"))]
+    #[cfg_attr(feature = "serde", serde(default = "AttachmentOps::whatever"))]
     pub stencil_ops: AttachmentOps,
     /// Initial and final image layouts of the renderpass.
     pub layouts: Range<AttachmentLayout>,
@@ -83,7 +83,7 @@ pub type AttachmentRef = (AttachmentId, AttachmentLayout);
 
 ///
 #[derive(Copy, Clone, Debug, Hash, PartialEq)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SubpassRef {
     ///
     External,
@@ -93,7 +93,7 @@ pub enum SubpassRef {
 
 /// Specifies dependencies between subpasses.
 #[derive(Clone, Debug, Hash)]
-#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SubpassDependency {
     ///
     pub passes: Range<SubpassRef>,

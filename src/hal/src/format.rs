@@ -40,14 +40,14 @@ macro_rules! impl_channel_type {
         #[allow(missing_docs)]
         #[repr(u8)]
         #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-        #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+        #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
         pub enum ChannelType {
             $( $name, )*
         }
         $(
             #[allow(missing_docs)]
             #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-            #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+            #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
             pub enum $name {}
             impl ChannelTyped for $name {
                 const SELF: ChannelType = ChannelType::$name;
@@ -79,7 +79,7 @@ macro_rules! impl_formats {
         #[repr(u8)]
         #[allow(missing_docs, non_camel_case_types)]
         #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-        #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+        #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
         pub enum SurfaceType {
             $( $name, )*
         }
@@ -99,7 +99,7 @@ macro_rules! impl_formats {
         $(
             #[allow(missing_docs, non_camel_case_types)]
             #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-            #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+            #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
             pub enum $name {}
             impl SurfaceTyped for $name {
                 const SELF: SurfaceType = SurfaceType::$name;
@@ -254,7 +254,7 @@ impl SurfaceType {
 #[allow(missing_docs)]
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Component {
     Zero,
     One,
@@ -268,7 +268,7 @@ pub enum Component {
 /// Note: It's not currently mirrored at compile-time,
 /// thus providing less safety and convenience.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Swizzle(pub Component, pub Component, pub Component, pub Component);
 
 impl Swizzle {
@@ -284,7 +284,7 @@ impl Default for Swizzle {
 
 /// Complete run-time surface format.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Format(pub SurfaceType, pub ChannelType);
 
 /// Compile-time surface type trait.
@@ -387,7 +387,7 @@ macro_rules! alias {
         $(
             #[allow(missing_docs)]
             #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-            #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+            #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
             pub struct $name(pub $ty);
             impl From<$ty> for $name {
                 fn from(v: $ty) -> $name {

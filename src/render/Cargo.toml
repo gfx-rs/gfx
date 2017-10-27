@@ -17,13 +17,12 @@ name = "gfx_render"
 path = "src/lib.rs"
 
 [features]
-serialize = ["serde", "gfx-hal/serialize", "draw_state/serialize"]
+serialize = ["serde", "gfx-hal/serde"]
 unstable = []
 
 [dependencies]
 bitflags = "1.0"
 mint = { version = "0.4.1", optional = true }
-draw_state = "0.7"
 gfx-hal = { path = "../hal", version = "0.1" }
 log = "0.3"
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
