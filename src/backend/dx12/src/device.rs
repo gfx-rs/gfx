@@ -10,7 +10,7 @@ use spirv_cross::{hlsl, spirv, ErrorCode as SpirvErrorCode};
 use winapi;
 use wio::com::ComPtr;
 
-use hal::{buffer, device as d, format, image, mapping, memory, pass, pso, state};
+use hal::{buffer, device as d, format, image, mapping, memory, pass, pso};
 use hal::{Features, Limits, MemoryType};
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
@@ -824,15 +824,7 @@ impl d::Device<B> for Device {
                 },
                 SampleMask: winapi::UINT::max_value(),
                 RasterizerState: conv::map_rasterizer(&desc.rasterizer),
-                DepthStencilState: conv::map_depth_stencil(
-                    &match desc.depth_stencil {
-                        Some((_, info)) => info,
-                        None => pso::DepthStencilInfo {
-                            depth: None,
-                            front: None,
-                            back: None,
-                        }
-                    }),
+                DepthStencilState: desc.depth_stencil.as_ref().map_or(unsafe { mem::zeroed() }, conv::map_depth_stencil),
                 InputLayout: winapi::D3D12_INPUT_LAYOUT_DESC {
                     pInputElementDescs: input_element_descs.as_ptr(),
                     NumElements: input_element_descs.len() as u32,
@@ -841,8 +833,8 @@ impl d::Device<B> for Device {
                 PrimitiveTopologyType: conv::map_topology_type(desc.input_assembler.primitive),
                 NumRenderTargets: num_rtvs,
                 RTVFormats: rtvs,
-                DSVFormat: desc.depth_stencil
-                    .and_then(|(format, _)| conv::map_format_dsv(format.0))
+                DSVFormat: pass.depth_stencil_attachment
+                    .and_then(|att_ref| conv::map_format_dsv(subpass.main_pass.attachments[att_ref.0].format.0))
                     .unwrap_or(winapi::DXGI_FORMAT_UNKNOWN),
                 SampleDesc: winapi::DXGI_SAMPLE_DESC {
                     Count: 1, // TODO
@@ -1305,7 +1297,7 @@ impl d::Device<B> for Device {
                 image::FilterMethod::Anisotropic(max) => max as _, // TODO: check support here?
                 _ => 0,
             },
-            ComparisonFunc: conv::map_function(info.comparison.unwrap_or(state::Comparison::Always)),
+            ComparisonFunc: conv::map_comparison(info.comparison.unwrap_or(pso::Comparison::Always)),
             BorderColor: info.border.into(),
             MinLOD: info.lod_range.start.into(),
             MaxLOD: info.lod_range.end.into(),

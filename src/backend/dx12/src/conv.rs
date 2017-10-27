@@ -1,11 +1,9 @@
-use std::fmt;
+use std::mem;
 use winapi::*;
 
 use hal::format::{Format, SurfaceType};
-use hal::{buffer, state, pso, Primitive};
-use hal::image::{self, FilterMethod, WrapMode};
+use hal::{buffer, image, pso, Primitive};
 use hal::pso::DescriptorSetLayoutBinding;
-use hal::state::Comparison;
 
 
 pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
@@ -145,51 +143,56 @@ pub fn map_topology_type(primitive: Primitive) -> D3D12_PRIMITIVE_TOPOLOGY_TYPE 
         TriangleList |
         TriangleStrip |
         TriangleListAdjacency |
-        TriangleStripAdjacency  => D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
-        PatchList(_)   => D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH,
+        TriangleStripAdjacency => D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+        PatchList(_) => D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH,
     }
 }
 
 pub fn map_topology(primitive: Primitive) -> D3D12_PRIMITIVE_TOPOLOGY {
+    use hal::Primitive::*;
     match primitive {
-        Primitive::PointList              => D3D_PRIMITIVE_TOPOLOGY_POINTLIST,
-        Primitive::LineList               => D3D_PRIMITIVE_TOPOLOGY_LINELIST,
-        Primitive::LineListAdjacency      => D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ,
-        Primitive::LineStrip              => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP,
-        Primitive::LineStripAdjacency     => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ,
-        Primitive::TriangleList           => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-        Primitive::TriangleListAdjacency  => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-        Primitive::TriangleStrip          => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
-        Primitive::TriangleStripAdjacency => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
-        Primitive::PatchList(num) => { assert!(num != 0);
+        PointList              => D3D_PRIMITIVE_TOPOLOGY_POINTLIST,
+        LineList               => D3D_PRIMITIVE_TOPOLOGY_LINELIST,
+        LineListAdjacency      => D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ,
+        LineStrip              => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP,
+        LineStripAdjacency     => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ,
+        TriangleList           => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+        TriangleListAdjacency  => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+        TriangleStrip          => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+        TriangleStripAdjacency => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+        PatchList(num) => { assert!(num != 0);
             D3D_PRIMITIVE_TOPOLOGY(D3D_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST.0 + (num as u32) - 1)
         },
     }
 }
 
 pub fn map_rasterizer(rasterizer: &pso::Rasterizer) -> D3D12_RASTERIZER_DESC {
+    use hal::pso::PolygonMode::*;
+    use hal::pso::CullFace::*;
+    use hal::pso::FrontFace::*;
+
     D3D12_RASTERIZER_DESC {
-        FillMode: match rasterizer.polgyon_mode {
-            state::RasterMethod::Point => {
+        FillMode: match rasterizer.polygon_mode {
+            Point => {
                 error!("Point rasterization is not supported");
                 D3D12_FILL_MODE_WIREFRAME
             },
-            state::RasterMethod::Line(_) => D3D12_FILL_MODE_WIREFRAME,
-            state::RasterMethod::Fill => D3D12_FILL_MODE_SOLID,
+            Line(_) => D3D12_FILL_MODE_WIREFRAME,
+            Fill => D3D12_FILL_MODE_SOLID,
         },
-        CullMode: match rasterizer.cull_mode {
-            state::CullFace::Nothing => D3D12_CULL_MODE_NONE,
-            state::CullFace::Front => D3D12_CULL_MODE_FRONT,
-            state::CullFace::Back => D3D12_CULL_MODE_BACK,
+        CullMode: match rasterizer.cull_face {
+            None => D3D12_CULL_MODE_NONE,
+            Some(Front) => D3D12_CULL_MODE_FRONT,
+            Some(Back) => D3D12_CULL_MODE_BACK,
         },
         FrontCounterClockwise: match rasterizer.front_face {
-            state::FrontFace::Clockwise => FALSE,
-            state::FrontFace::CounterClockwise => TRUE,
+            Clockwise => FALSE,
+            CounterClockwise => TRUE,
         },
         DepthBias: rasterizer.depth_bias.map_or(0, |bias| bias.const_factor as INT),
         DepthBiasClamp: rasterizer.depth_bias.map_or(0.0, |bias| bias.clamp),
         SlopeScaledDepthBias: rasterizer.depth_bias.map_or(0.0, |bias| bias.slope_factor),
-        DepthClipEnable: if rasterizer.depth_clamping { TRUE } else { FALSE },
+        DepthClipEnable: rasterizer.depth_clamping as _,
         MultisampleEnable: FALSE, // TODO: currently not supported
         ForcedSampleCount: 0, // TODO: currently not supported
         AntialiasedLineEnable: FALSE, // TODO: currently not supported
@@ -201,47 +204,43 @@ pub fn map_rasterizer(rasterizer: &pso::Rasterizer) -> D3D12_RASTERIZER_DESC {
     }
 }
 
-fn map_blend_factor(factor: state::Factor, scalar: bool) -> D3D12_BLEND {
-    use hal::state::BlendValue::*;
-    use hal::state::Factor::*;
+fn map_factor(factor: pso::Factor) -> D3D12_BLEND {
+    use hal::pso::Factor::*;
     match factor {
         Zero => D3D12_BLEND_ZERO,
         One => D3D12_BLEND_ONE,
-        SourceAlphaSaturated => D3D12_BLEND_SRC_ALPHA_SAT,
-        ZeroPlus(SourceColor) if !scalar => D3D12_BLEND_SRC_COLOR,
-        ZeroPlus(SourceAlpha) => D3D12_BLEND_SRC_ALPHA,
-        ZeroPlus(DestColor) if !scalar => D3D12_BLEND_DEST_COLOR,
-        ZeroPlus(DestAlpha) => D3D12_BLEND_DEST_ALPHA,
-        ZeroPlus(ConstColor) if !scalar => D3D12_BLEND_BLEND_FACTOR,
-        ZeroPlus(ConstAlpha) => D3D12_BLEND_BLEND_FACTOR,
-        OneMinus(SourceColor) if !scalar => D3D12_BLEND_INV_SRC_COLOR,
-        OneMinus(SourceAlpha) => D3D12_BLEND_INV_SRC_ALPHA,
-        OneMinus(DestColor) if !scalar => D3D12_BLEND_INV_DEST_COLOR,
-        OneMinus(DestAlpha) => D3D12_BLEND_INV_DEST_ALPHA,
-        OneMinus(ConstColor) if !scalar => D3D12_BLEND_INV_BLEND_FACTOR,
-        OneMinus(ConstAlpha) => D3D12_BLEND_INV_BLEND_FACTOR,
-        _ => {
-            error!("Invalid blend factor requested for {}: {:?}",
-                if scalar {"alpha"} else {"color"}, factor);
-            D3D12_BLEND_ZERO
-        }
+        SrcColor => D3D12_BLEND_SRC_COLOR,
+        OneMinusSrcColor => D3D12_BLEND_INV_SRC_COLOR,
+        DstColor => D3D12_BLEND_DEST_COLOR,
+        OneMinusDstColor => D3D12_BLEND_INV_DEST_COLOR,
+        SrcAlpha => D3D12_BLEND_SRC_ALPHA,
+        OneMinusSrcAlpha => D3D12_BLEND_INV_SRC_ALPHA,
+        DstAlpha => D3D12_BLEND_DEST_ALPHA,
+        OneMinusDstAlpha => D3D12_BLEND_INV_DEST_ALPHA,
+        ConstColor | ConstAlpha => D3D12_BLEND_BLEND_FACTOR,
+        OneMinusConstColor | OneMinusConstAlpha => D3D12_BLEND_INV_BLEND_FACTOR,
+        SrcAlphaSaturate => D3D12_BLEND_SRC_ALPHA_SAT,
+        Src1Color => D3D12_BLEND_SRC1_COLOR,
+        OneMinusSrc1Color => D3D12_BLEND_INV_SRC1_COLOR,
+        Src1Alpha => D3D12_BLEND_SRC1_ALPHA,
+        OneMinusSrc1Alpha => D3D12_BLEND_INV_SRC1_ALPHA,
     }
 }
 
-fn map_blend_op(equation: state::Equation) -> D3D12_BLEND_OP {
-    use hal::state::Equation::*;
-    match equation {
-        Add => D3D12_BLEND_OP_ADD,
-        Sub => D3D12_BLEND_OP_SUBTRACT,
-        RevSub => D3D12_BLEND_OP_REV_SUBTRACT,
-        Min => D3D12_BLEND_OP_MIN,
-        Max => D3D12_BLEND_OP_MAX,
+fn map_blend_op(operation: pso::BlendOp) -> (D3D12_BLEND_OP, D3D12_BLEND, D3D12_BLEND) {
+    use hal::pso::BlendOp::*;
+    match operation {
+        Add    { src, dst } => (D3D12_BLEND_OP_ADD,          map_factor(src), map_factor(dst)),
+        Sub    { src, dst } => (D3D12_BLEND_OP_SUBTRACT,     map_factor(src), map_factor(dst)),
+        RevSub { src, dst } => (D3D12_BLEND_OP_REV_SUBTRACT, map_factor(src), map_factor(dst)),
+        Min => (D3D12_BLEND_OP_MIN, D3D12_BLEND_ZERO, D3D12_BLEND_ZERO),
+        Max => (D3D12_BLEND_OP_MAX, D3D12_BLEND_ZERO, D3D12_BLEND_ZERO),
     }
 }
 
 
 pub fn map_render_targets(
-    color_targets: &[pso::ColorInfo],
+    color_targets: &[pso::ColorBlendDesc],
 ) -> [D3D12_RENDER_TARGET_BLEND_DESC; 8] {
     let dummy_target = D3D12_RENDER_TARGET_BLEND_DESC {
         BlendEnable: FALSE,
@@ -257,60 +256,68 @@ pub fn map_render_targets(
     };
     let mut targets = [dummy_target; 8];
 
-    for (target, desc) in targets.iter_mut().zip(color_targets.iter()) {
-        target.RenderTargetWriteMask = desc.mask.bits() as UINT8;
-
-        if let Some(ref b) = desc.color {
+    for (target, &pso::ColorBlendDesc(mask, blend)) in targets.iter_mut().zip(color_targets.iter()) {
+        target.RenderTargetWriteMask = mask.bits() as UINT8;
+        if let pso::BlendState::On { color, alpha } = blend {
+            let (color_op, color_src, color_dst) = map_blend_op(color);
+            let (alpha_op, alpha_src, alpha_dst) = map_blend_op(alpha);
             target.BlendEnable = TRUE;
-            target.SrcBlend = map_blend_factor(b.source, false);
-            target.DestBlend = map_blend_factor(b.destination, false);
-            target.BlendOp = map_blend_op(b.equation);
-        }
-        if let Some(ref b) = desc.alpha {
-            target.BlendEnable = TRUE;
-            target.SrcBlendAlpha = map_blend_factor(b.source, true);
-            target.DestBlendAlpha = map_blend_factor(b.destination, true);
-            target.BlendOpAlpha = map_blend_op(b.equation);
+            target.BlendOp = color_op;
+            target.SrcBlend = color_src;
+            target.DestBlend = color_dst;
+            target.BlendOpAlpha = alpha_op;
+            target.SrcBlendAlpha = alpha_src;
+            target.DestBlendAlpha = alpha_dst;
         }
     }
 
     targets
 }
 
-pub fn map_depth_stencil(dsi: &pso::DepthStencilInfo) -> D3D12_DEPTH_STENCIL_DESC {
-    D3D12_DEPTH_STENCIL_DESC {
-        DepthEnable: if dsi.depth.is_some() { TRUE } else { FALSE },
-        DepthWriteMask: D3D12_DEPTH_WRITE_MASK(match dsi.depth {
-            Some(ref d) if d.write => 1,
-            _ => 0,
-        }),
-        DepthFunc: match dsi.depth {
-            Some(ref d) => map_comparison(d.fun),
-            None => D3D12_COMPARISON_FUNC_NEVER,
+pub fn map_depth_stencil(dsi: &pso::DepthStencilDesc) -> D3D12_DEPTH_STENCIL_DESC {
+    let (depth_on, depth_write, depth_func) = match dsi.depth {
+        pso::DepthTest::On { fun, write } => (TRUE, write, map_comparison(fun)),
+        pso::DepthTest::Off => unsafe { mem::zeroed() },
+    };
+
+    let (stencil_on, front, back, read_mask, write_mask) = match dsi.stencil {
+        pso::StencilTest::On { ref front, ref back } => {
+            if front.mask_read != back.mask_read || front.mask_write != back.mask_write {
+                error!("Different masks on stencil front ({:?}) and back ({:?}) are not supported", front, back);
+            }
+            (TRUE, map_stencil_side(front), map_stencil_side(back), front.mask_read, front.mask_write)
         },
-        StencilEnable: if dsi.front.is_some() || dsi.back.is_some() { TRUE } else { FALSE },
-        StencilReadMask: map_stencil_mask(dsi, StencilAccess::Read, |s| (s.mask_read as UINT8)),
-        StencilWriteMask: map_stencil_mask(dsi, StencilAccess::Write, |s| (s.mask_write as UINT8)),
-        FrontFace: map_stencil_side(&dsi.front),
-        BackFace: map_stencil_side(&dsi.back),
+        pso::StencilTest::Off => unsafe { mem::zeroed() },
+    };
+
+    D3D12_DEPTH_STENCIL_DESC {
+        DepthEnable: depth_on,
+        DepthWriteMask: if depth_write {D3D12_DEPTH_WRITE_MASK_ALL} else {D3D12_DEPTH_WRITE_MASK_ZERO},
+        DepthFunc: depth_func,
+        StencilEnable: stencil_on,
+        StencilReadMask: read_mask as _,
+        StencilWriteMask: write_mask as _,
+        FrontFace: front,
+        BackFace: back,
     }
 }
 
-fn map_comparison(func: state::Comparison) -> D3D12_COMPARISON_FUNC {
+pub fn map_comparison(func: pso::Comparison) -> D3D12_COMPARISON_FUNC {
+    use hal::pso::Comparison::*;
     match func {
-        state::Comparison::Never => D3D12_COMPARISON_FUNC_NEVER,
-        state::Comparison::Less => D3D12_COMPARISON_FUNC_LESS,
-        state::Comparison::LessEqual => D3D12_COMPARISON_FUNC_LESS_EQUAL,
-        state::Comparison::Equal => D3D12_COMPARISON_FUNC_EQUAL,
-        state::Comparison::GreaterEqual => D3D12_COMPARISON_FUNC_GREATER_EQUAL,
-        state::Comparison::Greater => D3D12_COMPARISON_FUNC_GREATER,
-        state::Comparison::NotEqual => D3D12_COMPARISON_FUNC_NOT_EQUAL,
-        state::Comparison::Always => D3D12_COMPARISON_FUNC_ALWAYS,
+        Never => D3D12_COMPARISON_FUNC_NEVER,
+        Less => D3D12_COMPARISON_FUNC_LESS,
+        LessEqual => D3D12_COMPARISON_FUNC_LESS_EQUAL,
+        Equal => D3D12_COMPARISON_FUNC_EQUAL,
+        GreaterEqual => D3D12_COMPARISON_FUNC_GREATER_EQUAL,
+        Greater => D3D12_COMPARISON_FUNC_GREATER,
+        NotEqual => D3D12_COMPARISON_FUNC_NOT_EQUAL,
+        Always => D3D12_COMPARISON_FUNC_ALWAYS,
     }
 }
 
-fn map_stencil_op(op: state::StencilOp) -> D3D12_STENCIL_OP {
-    use hal::state::StencilOp::*;
+fn map_stencil_op(op: pso::StencilOp) -> D3D12_STENCIL_OP {
+    use hal::pso::StencilOp::*;
     match op {
         Keep => D3D12_STENCIL_OP_KEEP,
         Zero => D3D12_STENCIL_OP_ZERO,
@@ -323,8 +330,7 @@ fn map_stencil_op(op: state::StencilOp) -> D3D12_STENCIL_OP {
     }
 }
 
-fn map_stencil_side(side: &Option<state::StencilSide>) -> D3D12_DEPTH_STENCILOP_DESC {
-    let side = side.unwrap_or_default();
+fn map_stencil_side(side: &pso::StencilFace) -> D3D12_DEPTH_STENCILOP_DESC {
     D3D12_DEPTH_STENCILOP_DESC {
         StencilFailOp: map_stencil_op(side.op_fail),
         StencilDepthFailOp: map_stencil_op(side.op_depth_fail),
@@ -333,41 +339,13 @@ fn map_stencil_side(side: &Option<state::StencilSide>) -> D3D12_DEPTH_STENCILOP_
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-enum StencilAccess {
-    Read,
-    Write,
-}
-
-impl fmt::Display for StencilAccess {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", match *self {
-            StencilAccess::Read => "read",
-            StencilAccess::Write  => "write",
-        })
-    }
-}
-
-fn map_stencil_mask<F>(dsi: &pso::DepthStencilInfo, access: StencilAccess, accessor: F) -> UINT8
-    where F: Fn(&state::StencilSide) -> UINT8 {
-    match (dsi.front, dsi.back) {
-        (Some(ref front), Some(ref back)) if accessor(front) != accessor(back) => {
-            error!("Different {} masks on stencil front ({}) and back ({}) are not supported",
-                access, accessor(front), accessor(back));
-            accessor(front)
-        },
-        (Some(ref front), _) => accessor(front),
-        (_, Some(ref back)) => accessor(back),
-        (None, None) => 0,
-    }
-}
-
-pub fn map_wrap(wrap: WrapMode) -> D3D12_TEXTURE_ADDRESS_MODE {
+pub fn map_wrap(wrap: image::WrapMode) -> D3D12_TEXTURE_ADDRESS_MODE {
+    use hal::image::WrapMode::*;
     match wrap {
-        WrapMode::Tile   => D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-        WrapMode::Mirror => D3D12_TEXTURE_ADDRESS_MODE_MIRROR,
-        WrapMode::Clamp  => D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
-        WrapMode::Border => D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+        Tile   => D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        Mirror => D3D12_TEXTURE_ADDRESS_MODE_MIRROR,
+        Clamp  => D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+        Border => D3D12_TEXTURE_ADDRESS_MODE_BORDER,
     }
 }
 
@@ -378,7 +356,7 @@ pub enum FilterOp {
     //Minimum, TODO
 }
 
-pub fn map_filter(filter: FilterMethod, op: FilterOp) -> D3D12_FILTER {
+pub fn map_filter(filter: image::FilterMethod, op: FilterOp) -> D3D12_FILTER {
     use hal::image::FilterMethod::*;
     match op {
         FilterOp::Product => match filter {
@@ -395,19 +373,6 @@ pub fn map_filter(filter: FilterMethod, op: FilterOp) -> D3D12_FILTER {
             Trilinear      => D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR,
             Anisotropic(_) => D3D12_FILTER_COMPARISON_ANISOTROPIC,
         },
-    }
-}
-
-pub fn map_function(fun: Comparison) -> D3D12_COMPARISON_FUNC {
-    match fun {
-        Comparison::Never => D3D12_COMPARISON_FUNC_NEVER,
-        Comparison::Less => D3D12_COMPARISON_FUNC_LESS,
-        Comparison::LessEqual => D3D12_COMPARISON_FUNC_LESS_EQUAL,
-        Comparison::Equal => D3D12_COMPARISON_FUNC_EQUAL,
-        Comparison::GreaterEqual => D3D12_COMPARISON_FUNC_GREATER_EQUAL,
-        Comparison::Greater => D3D12_COMPARISON_FUNC_GREATER,
-        Comparison::NotEqual => D3D12_COMPARISON_FUNC_NOT_EQUAL,
-        Comparison::Always => D3D12_COMPARISON_FUNC_ALWAYS,
     }
 }
 
