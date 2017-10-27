@@ -260,7 +260,7 @@ pub struct RenderTarget<F: format::RenderFormat>(PhantomData<F>);
 impl<'a, B, F> Component<'a, B> for RenderTarget<F>
     where B: Backend, F: 'a + format::RenderFormat
 {
-    type Init = hal::pso::ColorInfo;
+    type Init = hal::pso::ColorBlendDesc;
     type Data = &'a handle::ImageView<B, F>;
 
     fn attachment(_: &Self::Init) -> Option<Attachment> {

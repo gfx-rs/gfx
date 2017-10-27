@@ -1,159 +1,3 @@
-//! Various helper macros.
-
-#[macro_export]
-macro_rules! gfx_format {
-    ($name:ident : $surface:ident = $container:ident<$channel:ident>) => {
-        impl $crate::format::Formatted for $name {
-            type Surface = $crate::format::$surface;
-            type Channel = $crate::format::$channel;
-            type View = $crate::format::$container<
-                <$crate::format::$channel as $crate::format::ChannelTyped>::ShaderType
-                >;
-        }
-    }
-}
-
-#[macro_export]
-macro_rules! gfx_buffer_struct {
-    ($name:ident { $( $field:ident: $ty:ty, )* }) => {
-        #[derive(Clone, Copy, Debug, PartialEq)]
-        #[allow(non_snake_case)]
-        pub struct $name {
-            $( $field: $ty, )*
-        }
-
-        unsafe impl $crate::memory::Pod for $name {}
-
-        impl $crate::pso::Structure for $name
-            where $( $ty: $crate::format::BufferFormat, )*
-        {
-            fn elements() -> Vec<$crate::hal::pso::Element<$crate::format::Format>> {
-                let mut elements = Vec::new();
-                let mut offset = 0;
-                $(
-                    elements.push($crate::hal::pso::Element {
-                        format: <$ty as $crate::format::Formatted>::SELF,
-                        offset: offset as u32,
-                    });
-                    offset += ::std::mem::size_of::<$ty>();
-                )*
-                let _ = offset;
-                elements
-            }
-        }
-    }
-}
-
-#[macro_export]
-macro_rules! gfx_descriptors {
-    ($name:ident { $( $field:ident: $bind:ty, )* }) => {
-        #[allow(missing_docs)]
-        pub mod $name {
-            #[allow(unused_imports)]
-            use super::*;
-            use $crate::{hal, pso, handle, image};
-            use $crate::Backend;
-
-            pub struct Set<B: Backend> {
-                $( $field: usize, )*
-                layout: handle::raw::DescriptorSetLayout<B>,
-                raw: pso::RawDescriptorSet<B>,
-            }
-
-            pub struct Data<B: Backend> {
-                $( $field: [Option<<$bind as pso::Bind<B>>::Handle>; <$bind as pso::BindDesc>::COUNT], )*
-            }
-
-            pub struct Component;
-
-            impl<B: Backend> pso::Descriptors<B> for Set<B> {
-                type Data = Data<B>;
-
-                fn from_raw(
-                    layout: handle::raw::DescriptorSetLayout<B>,
-                    raw: pso::RawDescriptorSet<B>
-                ) -> (Self, Self::Data) {
-                    let mut binding = 0;
-                    let mut next_binding = || {let b = binding; binding += 1; b };
-                    (Set {
-                        $( $field: next_binding(), )*
-                        layout,
-                        raw
-                    }, Data {
-                        $( $field: [None; <$bind as pso::BindDesc>::COUNT], )*
-                    })
-                }
-
-                fn layout_bindings() -> Vec<hal::pso::DescriptorSetLayoutBinding> {
-                    let mut bindings = Vec::new();
-                    $({
-                        let binding = bindings.len();
-                        bindings.push(hal::pso::DescriptorSetLayoutBinding {
-                            binding,
-                            ty: <$bind as pso::BindDesc>::TYPE,
-                            count: <$bind as pso::BindDesc>::COUNT,
-                            // TODO: specify stage
-                            stage_flags: hal::pso::ShaderStageFlags::all(),
-                        });
-                    })*
-                    bindings
-                }
-
-                fn layout(&self) -> &B::DescriptorSetLayout { self.layout.resource() }
-                fn set(&self) -> &B::DescriptorSet { self.raw.resource() }
-            }
-
-            impl<B: $crate::Backend> Data<B> {
-                $(
-                    pub fn $field<'a, 'b>(&'a mut self, set: &'b Set<B>)
-                        -> pso::DescriptorSetBindRef<'b, 'a, B, $bind>
-                    {
-                        pso::DescriptorSetBindRef {
-                            set: set.raw.resource(),
-                            binding: set.$field,
-                            handles: &mut self.$field,
-                        }
-                    }
-                )*
-            }
-
-            impl<'a, B: Backend> pso::Component<'a, B> for Component {
-                type Init = &'a Set<B>;
-                type Data = (&'a Set<B>, &'a Data<B>);
-
-                fn descriptor_layout<'b>(init: &'b Self::Init) -> Option<&'b B::DescriptorSetLayout>
-                    where 'a: 'b
-                {
-                    Some(init.layout.resource())
-                }
-
-                fn descriptor_set<'b>(data: &'b Self::Data) -> Option<&'b B::DescriptorSet>
-                    where 'a: 'b
-                {
-                    Some(data.0.raw.resource())
-                }
-
-                fn require<'b>(
-                    data: &'b Self::Data,
-                    buffers: &mut Vec<(&'b handle::raw::Buffer<B>, hal::buffer::State)>,
-                    images: &mut Vec<(&'b handle::raw::Image<B>, image::Subresource, hal::image::State)>,
-                    others: &mut handle::Bag<B>,
-                )
-                    where 'a: 'b
-                {
-                    $(
-                        for handle_opt in &(data.1).$field {
-                            handle_opt.as_ref().map(|h| {
-                                <$bind as pso::Bind<B>>::require(h, buffers, images, others);
-                            });
-                        }
-                    )*
-                }
-            }
-        }
-    }
-}
-
 #[macro_export]
 macro_rules! gfx_graphics_pipeline {
     ($name:ident {
@@ -169,7 +13,7 @@ macro_rules! gfx_graphics_pipeline {
                 Device, Primitive
             };
             use $crate::hal::{pass as cpass, pso as cpso};
-            use $crate::hal::command::RenderPassInlineEncoder;
+            use $crate::hal::command::{RenderPassInlineEncoder, Rect, Viewport};
 
             pub struct Meta<B: Backend> {
                 layout: handle::raw::PipelineLayout<B>,
@@ -183,8 +27,8 @@ macro_rules! gfx_graphics_pipeline {
 
             pub struct Data<'a, B: Backend> {
                 // TODO:
-                pub viewports: &'a [$crate::hal::Viewport],
-                pub scissors: &'a [$crate::hal::target::Rect],
+                pub viewports: &'a [Viewport],
+                pub scissors: &'a [Rect],
                 pub framebuffer: &'a handle::raw::Framebuffer<B>,
                 $( pub $cmp_name: <$cmp as pso::Component<'a, B>>::Data, )*
             }
@@ -293,7 +137,7 @@ macro_rules! gfx_graphics_pipeline {
                     cmd_buffer.bind_graphics_descriptor_sets(meta.layout.resource(), 0, &descs[..]);
                     // TODO: difference with viewport ?
                     let extent = self.framebuffer.info().extent;
-                    let render_rect = $crate::hal::target::Rect {
+                    let render_rect = Rect {
                         x: 0,
                         y: 0,
                         w: extent.width as u16,
