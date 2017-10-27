@@ -12,7 +12,7 @@ workspace = "../.."
 
 [features]
 #TODO: switch to pure `serde` feature once `draw_state` is no longer used
-serialize = ["serde", "draw_state/serialize"]
+serialize = ["serde"]
 unstable = []
 
 [lib]
@@ -22,7 +22,6 @@ path = "src/lib.rs"
 [dependencies]
 bitflags = "1.0"
 mint = { version = "0.4.1", optional = true }
-draw_state = "0.7"
 log = "0.3"
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
 smallvec = "0.4"

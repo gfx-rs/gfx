@@ -3,7 +3,7 @@
 use {Backend, Primitive};
 use super::EntryPoint;
 use super::input_assembler::{AttributeDesc, InputAssemblerDesc, VertexBufferDesc};
-use super::output_merger::{ColorInfo, DepthStencilDesc};
+use super::output_merger::{ColorBlendDesc, DepthStencilDesc};
 
 // Vulkan:
 //  - SpecializationInfo not provided per shader
@@ -57,14 +57,14 @@ impl GraphicsPipelineDesc {
             vertex_buffers: Vec::new(),
             attributes: Vec::new(),
             input_assembler: InputAssemblerDesc::new(primitive),
-            blender: BlendDesc::new(),
+            blender: BlendDesc::default(),
             depth_stencil: None,
         }
     }
 }
 
 /// Way to rasterize polygons.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
 pub enum PolygonMode {
     /// Rasterize as a point.
@@ -128,8 +128,8 @@ pub struct Rasterizer {
 impl Rasterizer {
     /// Simple polygon-filling rasterizer state
     pub const FILL: Self = Rasterizer {
-        polgyon_mode: PolygonMode::Fill,
-        cull_mode: None,
+        polygon_mode: PolygonMode::Fill,
+        cull_face: None,
         front_face: FrontFace::CounterClockwise,
         depth_clamping: true,
         depth_bias: None,
@@ -138,7 +138,7 @@ impl Rasterizer {
 }
 
 ///
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
 pub struct BlendDesc {
     ///
@@ -146,16 +146,7 @@ pub struct BlendDesc {
     ///
     pub logic_op: Option<LogicOp>,
     ///
-    pub targets: Vec<ColorInfo>,
-}
-
-impl BlendDesc {
-    /// Empty blend descriptor
-    pub const EMPTY: Self = BlendDesc {
-        alpha_coverage: false,
-        logic_op: None,
-        targets: Vec::new(),
-    };
+    pub targets: Vec<ColorBlendDesc>,
 }
 
 ///
