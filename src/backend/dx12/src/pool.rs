@@ -6,12 +6,13 @@ use winapi;
 
 use hal::pool;
 use command::CommandBuffer;
-use Backend;
+use {Backend, CmdSignatures};
 
 pub struct RawCommandPool {
     pub(crate) inner: ComPtr<winapi::ID3D12CommandAllocator>,
     pub(crate) device: ComPtr<winapi::ID3D12Device>,
     pub(crate) list_type: winapi::D3D12_COMMAND_LIST_TYPE,
+    pub(crate) signatures: CmdSignatures,
 }
 
 impl RawCommandPool {
@@ -55,7 +56,11 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
 
     fn allocate(&mut self, num: usize) -> Vec<CommandBuffer> {
         (0..num)
-            .map(|_| CommandBuffer::new(self.create_command_list(), self.inner.clone()))
+            .map(|_| CommandBuffer::new(
+                self.create_command_list(),
+                self.inner.clone(),
+                self.signatures.clone(),
+            ))
             .collect()
     }
 
