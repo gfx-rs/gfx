@@ -4,6 +4,10 @@
 
 use {Backend, Gpu};
 
+/// Scheduling hint for devices about the priority of a queue.
+/// Values ranging from `0.0` (low) to `1.0` (high).
+pub type QueuePriority = f32;
+
 /// Represents a physical or virtual device, which is capable of running the backend.
 pub trait PhysicalDevice<B: Backend>: Sized {
     /// Create a new logical GPU.
@@ -18,10 +22,10 @@ pub trait PhysicalDevice<B: Backend>: Sized {
     ///
     /// # let physical_device: empty::PhysicalDevice = return;
     /// # let family: empty::QueueFamily = return;
-    /// let gpu = physical_device.open(vec![(family, 1)]);
+    /// let gpu = physical_device.open(vec![(family, vec![1.0; 1])]);
     /// # }
     /// ```
-    fn open(self, Vec<(B::QueueFamily, usize)>) -> Gpu<B>;
+    fn open(self, Vec<(B::QueueFamily, Vec<QueuePriority>)>) -> Gpu<B>;
 }
 
 /// Information about a backend adapter.
@@ -38,7 +42,6 @@ pub struct AdapterInfo {
     pub software_rendering: bool,
 }
 
-///
 /// The list of `Adapter` instances is obtained by calling `Instance::enumerate_adapters()`.
 pub struct Adapter<B: Backend> {
     /// General information about this adapter.
@@ -78,7 +81,7 @@ impl<B: Backend> Adapter<B> {
                 selector(&family)
                     .map(|count| {
                         assert!(count != 0 && count <= family.max_queues());
-                        (family, count)
+                        (family, vec![1.0; count])
                     })
             })
             .collect();
