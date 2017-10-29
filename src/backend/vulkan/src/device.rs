@@ -249,7 +249,7 @@ impl d::Device<B> for Device {
 
     fn create_graphics_pipelines<'a>(
         &self,
-        descs: &[(pso::GraphicsShaderSet<'a, B>, &n::PipelineLayout, pass::Subpass<'a, B>, &pso::GraphicsPipelineDesc)],
+        descs: &[(pso::GraphicsShaderSet<'a, B>, pso::GraphicsPipelineDesc<'a, B>)],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         debug!("create_graphics_pipelines {:?}", descs);
         // Store pipeline parameters to avoid stack usage
@@ -283,7 +283,7 @@ impl d::Device<B> for Device {
             }
         };
 
-        let infos = descs.iter().map(|&(shaders, layout, subpass, desc)| {
+        let infos = descs.iter().map(|&(shaders, ref desc)| {
             let mut stages = Vec::new();
             // Vertex stage
             if true { //vertex shader is required
@@ -470,7 +470,7 @@ impl d::Device<B> for Device {
                 flags: vk::PipelineColorBlendStateCreateFlags::empty(),
                 logic_op_enable: vk::VK_FALSE, // TODO
                 logic_op: vk::LogicOp::Clear,
-                attachment_count: color_attachments.last().unwrap().len() as u32,
+                attachment_count: color_attachments.last().unwrap().len() as _,
                 p_attachments: color_attachments.last().unwrap().as_ptr(), // TODO:
                 blend_constants: [0.0; 4], // TODO:
             });
@@ -479,15 +479,32 @@ impl d::Device<B> for Device {
                 s_type: vk::StructureType::PipelineDynamicStateCreateInfo,
                 p_next: ptr::null(),
                 flags: vk::PipelineDynamicStateCreateFlags::empty(),
-                dynamic_state_count: dynamic_states.len() as u32,
+                dynamic_state_count: dynamic_states.len() as _,
                 p_dynamic_states: dynamic_states.as_ptr(),
             });
+
+            let (base_handle, base_index) = match desc.parent {
+                pso::BaseGraphics::Pipeline(pipeline) => (pipeline.0, -1),
+                pso::BaseGraphics::Index(index) => (vk::Pipeline::null(), index as _),
+                pso::BaseGraphics::None => (vk::Pipeline::null(), -1),
+            };
+
+            let mut flags = vk::PipelineCreateFlags::empty();
+            if let pso::BaseCompute::None = desc.parent {
+                flags |= vk::PIPELINE_CREATE_DERIVATIVE_BIT;
+            }
+            if desc.flags.contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION) {
+                flags |= vk::PIPELINE_CREATE_DISABLE_OPTIMIZATION_BIT;
+            }
+            if desc.flags.contains(pso::PipelineCreationFlags::ALLOW_DERIVATIVES) {
+                flags |= vk::PIPELINE_CREATE_ALLOW_DERIVATIVES_BIT;
+            }
 
             Ok(vk::GraphicsPipelineCreateInfo {
                 s_type: vk::StructureType::GraphicsPipelineCreateInfo,
                 p_next: ptr::null(),
-                flags: vk::PipelineCreateFlags::empty(),
-                stage_count: info_stages.last().unwrap().len() as u32,
+                flags,
+                stage_count: info_stages.last().unwrap().len() as _,
                 p_stages: info_stages.last().unwrap().as_ptr(),
                 p_vertex_input_state: info_vertex_input_states.last().unwrap(),
                 p_input_assembly_state: info_input_assembly_states.last().unwrap(),
@@ -498,11 +515,11 @@ impl d::Device<B> for Device {
                 p_depth_stencil_state: info_depth_stencil_states.last().unwrap(),
                 p_color_blend_state: info_color_blend_states.last().unwrap(),
                 p_dynamic_state: info_dynamic_states.last().unwrap(),
-                layout: layout.raw,
-                render_pass: subpass.main_pass.raw,
-                subpass: subpass.index as u32,
-                base_pipeline_handle: vk::Pipeline::null(),
-                base_pipeline_index: -1,
+                layout: desc.layout.raw,
+                render_pass: desc.subpass.main_pass.raw,
+                subpass: desc.subpass.index as _,
+                base_pipeline_handle: base_handle,
+                base_pipeline_index: base_index,
             })
         }).collect::<Vec<_>>();
 
@@ -540,10 +557,10 @@ impl d::Device<B> for Device {
 
     fn create_compute_pipelines<'a>(
         &self,
-        descs: &[(pso::EntryPoint<'a, B>, &n::PipelineLayout)],
+        descs: &[(pso::EntryPoint<'a, B>, pso::ComputePipelineDesc<'a, B>)],
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
         let mut c_strings = Vec::new(); // hold the C strings temporarily
-        let infos = descs.iter().map(|&(entry_point, layout)| {
+        let infos = descs.iter().map(|&(entry_point, ref desc)| {
             let string = CString::new(entry_point.entry).unwrap();
             let p_name = string.as_ptr();
             c_strings.push(string);
@@ -558,14 +575,31 @@ impl d::Device<B> for Device {
                 p_specialization_info: ptr::null(),
             };
 
+            let (base_handle, base_index) = match desc.parent {
+                pso::BaseCompute::Pipeline(pipeline) => (pipeline.0, -1),
+                pso::BaseCompute::Index(index) => (vk::Pipeline::null(), index as _),
+                pso::BaseCompute::None => (vk::Pipeline::null(), -1),
+            };
+
+            let mut flags = vk::PipelineCreateFlags::empty();
+            if let pso::BaseCompute::None = desc.parent {
+                flags |= vk::PIPELINE_CREATE_DERIVATIVE_BIT;
+            }
+            if desc.flags.contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION) {
+                flags |= vk::PIPELINE_CREATE_DISABLE_OPTIMIZATION_BIT;
+            }
+            if desc.flags.contains(pso::PipelineCreationFlags::ALLOW_DERIVATIVES) {
+                flags |= vk::PIPELINE_CREATE_ALLOW_DERIVATIVES_BIT;
+            }
+
             Ok(vk::ComputePipelineCreateInfo {
                 s_type: vk::StructureType::ComputePipelineCreateInfo,
                 p_next: ptr::null(),
-                flags: vk::PipelineCreateFlags::empty(),
+                flags,
                 stage,
-                layout: layout.raw,
-                base_pipeline_handle: vk::Pipeline::null(),
-                base_pipeline_index: -1,
+                layout: desc.layout.raw,
+                base_pipeline_handle: base_handle,
+                base_pipeline_index: base_index,
             })
         }).collect::<Vec<_>>();
 

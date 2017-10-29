@@ -8,11 +8,13 @@ use pass;
 use std::error::Error;
 use std::fmt;
 
+mod compute;
 mod descriptor;
 mod graphics;
 mod input_assembler;
 mod output_merger;
 
+pub use self::compute::*;
 pub use self::descriptor::*;
 pub use self::graphics::*;
 pub use self::input_assembler::*;
@@ -154,3 +156,45 @@ impl<'a, B: Backend> PartialEq for EntryPoint<'a, B> {
 
 impl<'a, B: Backend> Copy for EntryPoint<'a, B> {}
 impl<'a, B: Backend> Eq for EntryPoint<'a, B> {}
+
+
+bitflags!(
+    /// Pipeline creation flags.
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    pub struct PipelineCreationFlags: u32 {
+        /// Disable pipeline optimizations.
+        ///
+        /// May speedup pipeline creation.
+        const DISABLE_OPTIMIZATION = 0x1;
+        /// Allow derivatives of the pipeline.
+        ///
+        /// Must be set when pipelines set the pipeline as base.
+        const ALLOW_DERIVATIVES = 0x2;
+    }
+);
+
+///
+#[derive(Debug)]
+pub enum BaseGraphics<'a, B: Backend> {
+    /// Referencing an existing pipeline as parent.
+    Pipeline(&'a B::GraphicsPipeline),
+    /// A pipeline in the same `Device::create_graphics_pipelines` call.
+    ///
+    /// The index of the parent must be lower than the index of the child.
+    Index(usize),
+    ///
+    None,
+}
+
+///
+#[derive(Debug)]
+pub enum BaseCompute<'a, B: Backend> {
+    /// Referencing an existing pipeline as parent.
+    Pipeline(&'a B::ComputePipeline),
+    /// A pipeline in the same `Device::create_graphics_pipelines` call.
+    ///
+    /// The index of the parent must be lower than the index of the child.
+    Index(usize),
+    ///
+    None,
+}

@@ -1,18 +1,9 @@
 //! Graphics pipeline descriptor.
 
-use {Backend, Primitive};
-use super::EntryPoint;
+use {pass, Backend, Primitive};
+use super::{BaseGraphics, EntryPoint, PipelineCreationFlags};
 use super::input_assembler::{AttributeDesc, InputAssemblerDesc, VertexBufferDesc};
 use super::output_merger::{ColorBlendDesc, DepthStencilDesc};
-
-// Vulkan:
-//  - SpecializationInfo not provided per shader
-//
-// D3D12:
-//  - rootSignature specified outside
-//  - logicOp can be set for each RTV
-//  - streamOutput not included
-//  - IA: semantic name and index extracted from shader reflection
 
 /// A complete set of shaders to build a graphics pipeline.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -30,28 +21,38 @@ pub struct GraphicsShaderSet<'a, B: Backend> {
 }
 
 ///
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct GraphicsPipelineDesc {
+#[derive(Debug)]
+pub struct GraphicsPipelineDesc<'a, B: Backend> {
     /// Rasterizer setup
     pub rasterizer: Rasterizer,
-
     /// Vertex buffers (IA)
     pub vertex_buffers: Vec<VertexBufferDesc>,
     /// Vertex attributes (IA)
     pub attributes: Vec<AttributeDesc>,
     ///
     pub input_assembler: InputAssemblerDesc,
-
     ///
     pub blender: BlendDesc,
     /// Depth stencil (DSV)
     pub depth_stencil: Option<DepthStencilDesc>,
+    /// Pipeline layout.
+    pub layout: &'a B::PipelineLayout,
+    /// Subpass in which the pipeline can be executed.
+    pub subpass: pass::Subpass<'a, B>,
+    ///
+    pub flags: PipelineCreationFlags,
+    ///
+    pub parent: BaseGraphics<'a, B>,
 }
 
-impl GraphicsPipelineDesc {
+impl<'a, B: Backend> GraphicsPipelineDesc<'a, B> {
     /// Create a new empty PSO descriptor.
-    pub fn new(primitive: Primitive, rasterizer: Rasterizer) -> Self {
+    pub fn new(
+        primitive: Primitive,
+        rasterizer: Rasterizer,
+        layout: &'a B::PipelineLayout,
+        subpass: pass::Subpass<'a, B>,
+    ) -> Self {
         GraphicsPipelineDesc {
             rasterizer,
             vertex_buffers: Vec::new(),
@@ -59,6 +60,10 @@ impl GraphicsPipelineDesc {
             input_assembler: InputAssemblerDesc::new(primitive),
             blender: BlendDesc::default(),
             depth_stencil: None,
+            layout,
+            subpass,
+            flags: PipelineCreationFlags::empty(),
+            parent: BaseGraphics::None,
         }
     }
 }
