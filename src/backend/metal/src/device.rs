@@ -75,7 +75,7 @@ impl PhysicalDevice {
 
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
-    fn open(self, mut families: Vec<(QueueFamily, usize)>) -> hal::Gpu<Backend> {
+    fn open(self, mut families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>) -> hal::Gpu<Backend> {
         use self::memory::Properties;
 
         assert_eq!(families.len(), 1);

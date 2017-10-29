@@ -51,7 +51,7 @@ impl hal::Backend for Backend {
 /// Dummy physical device.
 pub struct PhysicalDevice;
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
-    fn open(self, _: Vec<(QueueFamily, usize)>) -> hal::Gpu<Backend> {
+    fn open(self, _: Vec<(QueueFamily, Vec<hal::QueuePriority>)>) -> hal::Gpu<Backend> {
         unimplemented!()
     }
 }

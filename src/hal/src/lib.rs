@@ -21,7 +21,7 @@ use std::error::Error;
 use std::fmt::{self, Debug};
 use std::hash::Hash;
 
-pub use self::adapter::{Adapter, AdapterInfo, PhysicalDevice};
+pub use self::adapter::{Adapter, AdapterInfo, PhysicalDevice, QueuePriority};
 pub use self::device::Device;
 pub use self::pool::CommandPool;
 pub use self::pso::{DescriptorPool};

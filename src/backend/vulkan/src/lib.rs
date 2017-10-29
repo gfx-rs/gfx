@@ -305,18 +305,16 @@ pub struct PhysicalDevice {
 }
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
-    fn open(self, families: Vec<(QueueFamily, usize)>) -> hal::Gpu<Backend> {
-        let max_queue_count = families.iter().map(|&(_, count)| count).max().unwrap_or(0);
-        let queue_priorities = vec![0.0f32; max_queue_count];
+    fn open(self, families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>) -> hal::Gpu<Backend> {
         let family_infos = families
             .iter()
-            .map(|&(ref family, count)| vk::DeviceQueueCreateInfo {
+            .map(|&(ref family, ref priorities)| vk::DeviceQueueCreateInfo {
                 s_type: vk::StructureType::DeviceQueueCreateInfo,
                 p_next: ptr::null(),
                 flags: vk::DeviceQueueCreateFlags::empty(),
                 queue_family_index: family.index,
-                queue_count: count as _,
-                p_queue_priorities: queue_priorities.as_ptr(),
+                queue_count: priorities.len() as _,
+                p_queue_priorities: priorities.as_ptr(),
             })
             .collect::<Vec<_>>();
 
@@ -393,10 +391,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let device_arc = device.raw.clone();
         let queue_groups = families
             .into_iter()
-            .map(|(family, count)| {
+            .map(|(family, priorities)| {
                 let family_index = family.index;
                 let mut family_raw = hal::queue::RawQueueGroup::new(family);
-                for id in 0 .. count {
+                for id in 0 .. priorities.len() {
                     let queue_raw = unsafe {
                         device_arc.0.get_device_queue(family_index, id as _)
                     };

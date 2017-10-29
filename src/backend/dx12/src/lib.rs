@@ -120,7 +120,7 @@ pub struct PhysicalDevice {
 }
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
-    fn open(self, families: Vec<(QueueFamily, usize)>) -> hal::Gpu<Backend> {
+    fn open(self, families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>) -> hal::Gpu<Backend> {
         use self::memory::Properties;
         // Create D3D12 device
         let mut device_raw = ptr::null_mut();
@@ -155,7 +155,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
         let queue_groups = families
             .into_iter()
-            .map(|(family, count)| {
+            .map(|(family, priorities)| {
                 let queue_desc = winapi::D3D12_COMMAND_QUEUE_DESC {
                     Type: family.native_type(),
                     Priority: 0,
@@ -164,7 +164,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 };
                 let mut group = hal::queue::RawQueueGroup::new(family);
 
-                for _ in 0 .. count {
+                for _ in 0 .. priorities.len() {
                     let mut queue = ptr::null_mut();
                     let hr = unsafe {
                         device.raw.CreateCommandQueue(

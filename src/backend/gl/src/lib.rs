@@ -173,7 +173,7 @@ impl PhysicalDevice {
 }
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
-    fn open(self, families: Vec<(QueueFamily, usize)>) -> hal::Gpu<Backend> {
+    fn open(self, families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>) -> hal::Gpu<Backend> {
         // initialize permanent states
         let gl = &self.0.context;
         if self.0.features.srgb_color {
@@ -238,8 +238,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             device: Device::new(self.0.clone()),
             queue_groups: families
                 .into_iter()
-                .map(|(proto_family, count)| {
-                    assert_eq!(count, 1);
+                .map(|(proto_family, priorities)| {
+                    assert_eq!(priorities.len(), 1);
                     let mut family = hal::queue::RawQueueGroup::new(proto_family);
                     let queue = queue::CommandQueue::new(&self.0, vao);
                     family.add_queue(queue);
