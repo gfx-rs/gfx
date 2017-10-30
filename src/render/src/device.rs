@@ -437,12 +437,10 @@ impl<B: Backend> Device<B> {
     pub fn create_graphics_pipeline_raw(
         &mut self,
         shader_entries: hal::pso::GraphicsShaderSet<B>,
-        layout: &B::PipelineLayout,
-        subpass: hal::pass::Subpass<B>,
-        desc: &hal::pso::GraphicsPipelineDesc,
+        desc: hal::pso::GraphicsPipelineDesc<B>,
     ) -> Result<handle::raw::GraphicsPipeline<B>, pso::CreationError> {
         let pipeline = self.raw.create_graphics_pipelines(&[
-            (shader_entries, layout, subpass, desc)
+            (shader_entries, desc)
         ]).pop().unwrap()?;
         Ok(GraphicsPipeline::new(pipeline, (), self.garbage.clone()).into())
     }

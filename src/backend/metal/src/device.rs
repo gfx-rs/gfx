@@ -257,10 +257,12 @@ impl Device {
 
     fn create_graphics_pipeline<'a>(
         &self,
-        &(ref shader_set, pipeline_layout, ref pass_descriptor, pipeline_desc):
-        &(pso::GraphicsShaderSet<'a, Backend>, &n::PipelineLayout, Subpass<'a, Backend>, &pso::GraphicsPipelineDesc),
+        &(ref shader_set, ref pipeline_desc):
+        &(pso::GraphicsShaderSet<'a, Backend>, pso::GraphicsPipelineDesc<'a, Backend>),
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
-        let pipeline =  metal::RenderPipelineDescriptor::new();
+        let pipeline = metal::RenderPipelineDescriptor::new();
+        let pipeline_layout = &pipeline_desc.layout;
+        let pass_descriptor = &pipeline_desc.subpass;
 
         // FIXME: lots missing
 
@@ -542,7 +544,7 @@ impl hal::Device<Backend> for Device {
 
     fn create_graphics_pipelines<'a>(
         &self,
-        params: &[(pso::GraphicsShaderSet<'a, Backend>, &n::PipelineLayout, Subpass<'a, Backend>, &pso::GraphicsPipelineDesc)],
+        params: &[(pso::GraphicsShaderSet<'a, Backend>, pso::GraphicsPipelineDesc<'a, Backend>)],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         let mut output = Vec::with_capacity(params.len());
         for param in params {
@@ -553,7 +555,7 @@ impl hal::Device<Backend> for Device {
 
     fn create_compute_pipelines<'a>(
         &self,
-        _pipelines: &[(pso::EntryPoint<'a, Backend>, &n::PipelineLayout)],
+        _pipelines: &[(pso::EntryPoint<'a, Backend>, pso::ComputePipelineDesc<'a, Backend>)],
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
         unimplemented!()
     }

@@ -233,16 +233,19 @@ impl d::Device<B> for Device {
 
     fn create_graphics_pipelines<'a>(
         &self,
-        descs: &[(pso::GraphicsShaderSet<'a, B>, &n::PipelineLayout, pass::Subpass<'a, B>, &pso::GraphicsPipelineDesc)],
+        descs: &[(pso::GraphicsShaderSet<'a, B>, pso::GraphicsPipelineDesc<'a, B>)],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         let gl = &self.share.context;
         let priv_caps = &self.share.private_caps;
         let share = &self.share;
         descs.iter()
-             .map(|&(shaders, _layout, subpass, _desc)| {
-                let subpass = match subpass.main_pass.subpasses.get(subpass.index) {
-                    Some(sp) => sp,
-                    None => return Err(pso::CreationError::InvalidSubpass(subpass.index)),
+             .map(|&(shaders, ref desc)| {
+                let subpass = {
+                    let subpass = desc.subpass;
+                    match subpass.main_pass.subpasses.get(subpass.index) {
+                        Some(sp) => sp,
+                        None => return Err(pso::CreationError::InvalidSubpass(subpass.index)),
+                    }
                 };
 
                 let program = {
@@ -299,7 +302,7 @@ impl d::Device<B> for Device {
 
     fn create_compute_pipelines<'a>(
         &self,
-        _descs: &[(pso::EntryPoint<'a, B>, &n::PipelineLayout)],
+        _descs: &[(pso::EntryPoint<'a, B>, pso::ComputePipelineDesc<'a, B>)],
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
         unimplemented!()
     }

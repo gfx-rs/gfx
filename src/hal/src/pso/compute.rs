@@ -13,3 +13,16 @@ pub struct ComputePipelineDesc<'a, B: Backend> {
     ///
     pub parent: BaseCompute<'a, B>,
 }
+
+impl<'a, B: Backend> ComputePipelineDesc<'a, B> {
+    /// Create a new empty PSO descriptor.
+    pub fn new(
+        layout: &'a B::PipelineLayout,
+    ) -> Self {
+        ComputePipelineDesc {
+            layout,
+            flags: PipelineCreationFlags::empty(),
+            parent: BaseCompute::None,
+        }
+    }
+}

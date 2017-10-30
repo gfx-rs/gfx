@@ -490,7 +490,7 @@ impl d::Device<B> for Device {
             };
 
             let mut flags = vk::PipelineCreateFlags::empty();
-            if let pso::BaseCompute::None = desc.parent {
+            if let pso::BaseGraphics::None = desc.parent {
                 flags |= vk::PIPELINE_CREATE_DERIVATIVE_BIT;
             }
             if desc.flags.contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION) {
