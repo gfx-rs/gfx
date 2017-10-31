@@ -249,7 +249,7 @@ impl d::Device<B> for Device {
 
     fn create_graphics_pipelines<'a>(
         &self,
-        descs: &[(pso::GraphicsShaderSet<'a, B>, pso::GraphicsPipelineDesc<'a, B>)],
+        descs: &[pso::GraphicsPipelineDesc<'a, B>],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         debug!("create_graphics_pipelines {:?}", descs);
         // Store pipeline parameters to avoid stack usage
@@ -283,26 +283,26 @@ impl d::Device<B> for Device {
             }
         };
 
-        let infos = descs.iter().map(|&(shaders, ref desc)| {
+        let infos = descs.iter().map(|desc| {
             let mut stages = Vec::new();
             // Vertex stage
             if true { //vertex shader is required
-                stages.push(make_stage(vk::SHADER_STAGE_VERTEX_BIT, shaders.vertex));
+                stages.push(make_stage(vk::SHADER_STAGE_VERTEX_BIT, desc.shaders.vertex));
             }
             // Pixel stage
-            if let Some(entry) = shaders.fragment {
+            if let Some(entry) = desc.shaders.fragment {
                 stages.push(make_stage(vk::SHADER_STAGE_FRAGMENT_BIT, entry));
             }
             // Geometry stage
-            if let Some(entry) = shaders.geometry {
+            if let Some(entry) = desc.shaders.geometry {
                 stages.push(make_stage(vk::SHADER_STAGE_GEOMETRY_BIT, entry));
             }
             // Domain stage
-            if let Some(entry) = shaders.domain {
+            if let Some(entry) = desc.shaders.domain {
                 stages.push(make_stage(vk::SHADER_STAGE_TESSELLATION_EVALUATION_BIT, entry));
             }
             // Hull stage
-            if let Some(entry) = shaders.hull {
+            if let Some(entry) = desc.shaders.hull {
                 stages.push(make_stage(vk::SHADER_STAGE_TESSELLATION_CONTROL_BIT, entry));
             }
 
@@ -363,7 +363,7 @@ impl d::Device<B> for Device {
                 p_next: ptr::null(),
                 flags: vk::PipelineRasterizationStateCreateFlags::empty(),
                 depth_clamp_enable: if desc.rasterizer.depth_clamping { vk::VK_TRUE } else { vk::VK_FALSE },
-                rasterizer_discard_enable: if shaders.fragment.is_none() { vk::VK_TRUE } else { vk::VK_FALSE },
+                rasterizer_discard_enable: if desc.shaders.fragment.is_none() { vk::VK_TRUE } else { vk::VK_FALSE },
                 polygon_mode: polygon_mode,
                 cull_mode: desc.rasterizer.cull_face.map(conv::map_cull_face).unwrap_or(vk::CULL_MODE_NONE),
                 front_face: conv::map_front_face(desc.rasterizer.front_face),
@@ -374,7 +374,7 @@ impl d::Device<B> for Device {
                 line_width: line_width,
             });
 
-            let is_tessellated = shaders.hull.is_some() && shaders.domain.is_some();
+            let is_tessellated = desc.shaders.hull.is_some() && desc.shaders.domain.is_some();
             if is_tessellated {
                 info_tessellation_states.push(vk::PipelineTessellationStateCreateInfo {
                     s_type: vk::StructureType::PipelineTessellationStateCreateInfo,
@@ -484,13 +484,13 @@ impl d::Device<B> for Device {
             });
 
             let (base_handle, base_index) = match desc.parent {
-                pso::BaseGraphics::Pipeline(pipeline) => (pipeline.0, -1),
-                pso::BaseGraphics::Index(index) => (vk::Pipeline::null(), index as _),
-                pso::BaseGraphics::None => (vk::Pipeline::null(), -1),
+                pso::BasePipeline::Pipeline(pipeline) => (pipeline.0, -1),
+                pso::BasePipeline::Index(index) => (vk::Pipeline::null(), index as _),
+                pso::BasePipeline::None => (vk::Pipeline::null(), -1),
             };
 
             let mut flags = vk::PipelineCreateFlags::empty();
-            if let pso::BaseGraphics::None = desc.parent {
+            if let pso::BasePipeline::None = desc.parent {
                 flags |= vk::PIPELINE_CREATE_DERIVATIVE_BIT;
             }
             if desc.flags.contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION) {
@@ -557,11 +557,11 @@ impl d::Device<B> for Device {
 
     fn create_compute_pipelines<'a>(
         &self,
-        descs: &[(pso::EntryPoint<'a, B>, pso::ComputePipelineDesc<'a, B>)],
+        descs: &[pso::ComputePipelineDesc<'a, B>],
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
         let mut c_strings = Vec::new(); // hold the C strings temporarily
-        let infos = descs.iter().map(|&(entry_point, ref desc)| {
-            let string = CString::new(entry_point.entry).unwrap();
+        let infos = descs.iter().map(|desc| {
+            let string = CString::new(desc.shader.entry).unwrap();
             let p_name = string.as_ptr();
             c_strings.push(string);
 
@@ -570,19 +570,19 @@ impl d::Device<B> for Device {
                 p_next: ptr::null(),
                 flags: vk::PipelineShaderStageCreateFlags::empty(),
                 stage: vk::SHADER_STAGE_COMPUTE_BIT,
-                module: entry_point.module.raw,
+                module: desc.shader.module.raw,
                 p_name,
                 p_specialization_info: ptr::null(),
             };
 
             let (base_handle, base_index) = match desc.parent {
-                pso::BaseCompute::Pipeline(pipeline) => (pipeline.0, -1),
-                pso::BaseCompute::Index(index) => (vk::Pipeline::null(), index as _),
-                pso::BaseCompute::None => (vk::Pipeline::null(), -1),
+                pso::BasePipeline::Pipeline(pipeline) => (pipeline.0, -1),
+                pso::BasePipeline::Index(index) => (vk::Pipeline::null(), index as _),
+                pso::BasePipeline::None => (vk::Pipeline::null(), -1),
             };
 
             let mut flags = vk::PipelineCreateFlags::empty();
-            if let pso::BaseCompute::None = desc.parent {
+            if let pso::BasePipeline::None = desc.parent {
                 flags |= vk::PIPELINE_CREATE_DERIVATIVE_BIT;
             }
             if desc.flags.contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION) {

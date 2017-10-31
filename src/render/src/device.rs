@@ -436,12 +436,9 @@ impl<B: Backend> Device<B> {
     #[doc(hidden)]
     pub fn create_graphics_pipeline_raw(
         &mut self,
-        shader_entries: hal::pso::GraphicsShaderSet<B>,
         desc: hal::pso::GraphicsPipelineDesc<B>,
     ) -> Result<handle::raw::GraphicsPipeline<B>, pso::CreationError> {
-        let pipeline = self.raw.create_graphics_pipelines(&[
-            (shader_entries, desc)
-        ]).pop().unwrap()?;
+        let pipeline = self.raw.create_graphics_pipelines(&[desc]).pop().unwrap()?;
         Ok(GraphicsPipeline::new(pipeline, (), self.garbage.clone()).into())
     }
 

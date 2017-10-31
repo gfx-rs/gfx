@@ -1,11 +1,13 @@
 //! Compute pipeline descriptor.
 
 use Backend;
-use super::{BaseCompute, PipelineCreationFlags};
+use super::{BaseCompute, BasePipeline, EntryPoint, PipelineCreationFlags};
 
 ///
 #[derive(Debug)]
 pub struct ComputePipelineDesc<'a, B: Backend> {
+    ///
+    pub shader: EntryPoint<'a, B>,
     /// Pipeline layout.
     pub layout: &'a B::PipelineLayout,
     ///
@@ -17,12 +19,14 @@ pub struct ComputePipelineDesc<'a, B: Backend> {
 impl<'a, B: Backend> ComputePipelineDesc<'a, B> {
     /// Create a new empty PSO descriptor.
     pub fn new(
+        shader: EntryPoint<'a, B>,
         layout: &'a B::PipelineLayout,
     ) -> Self {
         ComputePipelineDesc {
+            shader,
             layout,
             flags: PipelineCreationFlags::empty(),
-            parent: BaseCompute::None,
+            parent: BasePipeline::None,
         }
     }
 }

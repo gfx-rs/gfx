@@ -765,9 +765,9 @@ impl d::Device<B> for Device {
 
     fn create_graphics_pipelines<'a>(
         &self,
-        descs: &[(pso::GraphicsShaderSet<'a, B>, pso::GraphicsPipelineDesc<'a, B>)],
+        descs: &[pso::GraphicsPipelineDesc<'a, B>],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
-        descs.iter().map(|&(shaders, ref desc)| {
+        descs.iter().map(|desc| {
             let build_shader = |source: Option<pso::EntryPoint<'a, B>>| {
                 // TODO: better handle case where looking up shader fails
                 let shader = source.and_then(|src| src.module.shaders.get(src.entry));
@@ -787,11 +787,11 @@ impl d::Device<B> for Device {
                 }
             };
 
-            let vs = build_shader(Some(shaders.vertex));
-            let fs = build_shader(shaders.fragment);
-            let gs = build_shader(shaders.geometry);
-            let ds = build_shader(shaders.domain);
-            let hs = build_shader(shaders.hull);
+            let vs = build_shader(Some(desc.shaders.vertex));
+            let fs = build_shader(desc.shaders.fragment);
+            let gs = build_shader(desc.shaders.geometry);
+            let ds = build_shader(desc.shaders.domain);
+            let hs = build_shader(desc.shaders.hull);
 
             // Define input element descriptions
             let mut vs_reflect = shade::reflect_shader(&vs);
@@ -936,12 +936,12 @@ impl d::Device<B> for Device {
 
     fn create_compute_pipelines<'a>(
         &self,
-        descs: &[(pso::EntryPoint<'a, B>, pso::ComputePipelineDesc<'a, B>)],
+        descs: &[pso::ComputePipelineDesc<'a, B>],
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
-        descs.iter().map(|&(shader, ref desc)| {
+        descs.iter().map(|desc| {
             let cs = {
                 // TODO: better handle case where looking up shader fails
-                match shader.module.shaders.get(shader.entry) {
+                match desc.shader.module.shaders.get(desc.shader.entry) {
                     Some(shader) => {
                         winapi::D3D12_SHADER_BYTECODE {
                             pShaderBytecode: unsafe { (**shader).GetBufferPointer() as *const _ },

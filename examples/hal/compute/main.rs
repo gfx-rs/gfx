@@ -64,7 +64,7 @@ fn main() {
         let entry_point = pso::EntryPoint { entry: "main", module: &shader };
         let pipeline = gpu.device
             .create_compute_pipelines(&[
-                (entry_point, pso::ComputePipelineDesc::new(&pipeline_layout))
+                pso::ComputePipelineDesc::new(entry_point, &pipeline_layout)
             ])
             .remove(0)
             .expect("Error creating compute pipeline!");

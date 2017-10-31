@@ -175,10 +175,10 @@ bitflags!(
 
 ///
 #[derive(Debug)]
-pub enum BaseGraphics<'a, B: Backend> {
+pub enum BasePipeline<'a, P: 'a> {
     /// Referencing an existing pipeline as parent.
-    Pipeline(&'a B::GraphicsPipeline),
-    /// A pipeline in the same `Device::create_graphics_pipelines` call.
+    Pipeline(&'a P),
+    /// A pipeline in the same create pipelines call.
     ///
     /// The index of the parent must be lower than the index of the child.
     Index(usize),
@@ -187,14 +187,6 @@ pub enum BaseGraphics<'a, B: Backend> {
 }
 
 ///
-#[derive(Debug)]
-pub enum BaseCompute<'a, B: Backend> {
-    /// Referencing an existing pipeline as parent.
-    Pipeline(&'a B::ComputePipeline),
-    /// A pipeline in the same `Device::create_graphics_pipelines` call.
-    ///
-    /// The index of the parent must be lower than the index of the child.
-    Index(usize),
-    ///
-    None,
-}
+pub type BaseGraphics<'a, B: Backend> = BasePipeline<'a, B::GraphicsPipeline>;
+///
+pub type BaseCompute<'a, B: Backend> = BasePipeline<'a, B::ComputePipeline>;

@@ -1,7 +1,7 @@
 //! Graphics pipeline descriptor.
 
 use {pass, Backend, Primitive};
-use super::{BaseGraphics, EntryPoint, PipelineCreationFlags};
+use super::{BaseGraphics, BasePipeline, EntryPoint, PipelineCreationFlags};
 use super::input_assembler::{AttributeDesc, InputAssemblerDesc, VertexBufferDesc};
 use super::output_merger::{ColorBlendDesc, DepthStencilDesc};
 
@@ -23,6 +23,8 @@ pub struct GraphicsShaderSet<'a, B: Backend> {
 ///
 #[derive(Debug)]
 pub struct GraphicsPipelineDesc<'a, B: Backend> {
+    ///
+    pub shaders: GraphicsShaderSet<'a, B>,
     /// Rasterizer setup
     pub rasterizer: Rasterizer,
     /// Vertex buffers (IA)
@@ -48,12 +50,14 @@ pub struct GraphicsPipelineDesc<'a, B: Backend> {
 impl<'a, B: Backend> GraphicsPipelineDesc<'a, B> {
     /// Create a new empty PSO descriptor.
     pub fn new(
+        shaders: GraphicsShaderSet<'a, B>,
         primitive: Primitive,
         rasterizer: Rasterizer,
         layout: &'a B::PipelineLayout,
         subpass: pass::Subpass<'a, B>,
     ) -> Self {
         GraphicsPipelineDesc {
+            shaders,
             rasterizer,
             vertex_buffers: Vec::new(),
             attributes: Vec::new(),
@@ -63,7 +67,7 @@ impl<'a, B: Backend> GraphicsPipelineDesc<'a, B> {
             layout,
             subpass,
             flags: PipelineCreationFlags::empty(),
-            parent: BaseGraphics::None,
+            parent: BasePipeline::None,
         }
     }
 }

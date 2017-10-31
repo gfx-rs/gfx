@@ -79,16 +79,18 @@ macro_rules! gfx_graphics_pipeline {
                         };
 
                         let mut pipeline_desc = cpso::GraphicsPipelineDesc::new(
-                            primitive, rasterizer, layout.resource(), subpass
+                            shader_entries,
+                            primitive,
+                            rasterizer,
+                            layout.resource(),
+                            subpass,
                         );
                         $(
                             <$cmp as pso::Component<'a, B>>::append_desc(self.$cmp_name, &mut pipeline_desc);
                         )*
 
 
-                        device.create_graphics_pipeline_raw(
-                            shader_entries, pipeline_desc
-                        )?
+                        device.create_graphics_pipeline_raw(pipeline_desc)?
                     };
                     Ok(Meta { layout, render_pass, pipeline })
                 }

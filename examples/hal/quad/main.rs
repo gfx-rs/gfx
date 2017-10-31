@@ -232,6 +232,7 @@ fn main() {
         let subpass = Subpass { index: 0, main_pass: &render_pass };
 
         let mut pipeline_desc = pso::GraphicsPipelineDesc::new(
+            shader_entries,
             Primitive::TriangleList,
             pso::Rasterizer::FILL,
             &pipeline_layout,
@@ -264,9 +265,7 @@ fn main() {
         });
 
 
-        device.create_graphics_pipelines(&[
-            (shader_entries, pipeline_desc)
-        ])
+        device.create_graphics_pipelines(&[pipeline_desc])
     };
 
     println!("pipelines: {:?}", pipelines);

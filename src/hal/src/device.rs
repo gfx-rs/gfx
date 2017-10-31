@@ -154,7 +154,7 @@ pub trait Device<B: Backend> {
     /// Create graphics pipelines.
     fn create_graphics_pipelines<'a>(
         &self,
-        &[(pso::GraphicsShaderSet<'a, B>, pso::GraphicsPipelineDesc<'a, B>)],
+        &[pso::GraphicsPipelineDesc<'a, B>],
     ) -> Vec<Result<B::GraphicsPipeline, pso::CreationError>>;
 
     /// Destroys a graphics pipeline.
@@ -166,7 +166,7 @@ pub trait Device<B: Backend> {
     /// Create compute pipelines.
     fn create_compute_pipelines<'a>(
         &self,
-        &[(pso::EntryPoint<'a, B>, pso::ComputePipelineDesc<'a, B>)],
+        &[pso::ComputePipelineDesc<'a, B>],
     ) -> Vec<Result<B::ComputePipeline, pso::CreationError>>;
 
     /// Destroys a compute pipeline.

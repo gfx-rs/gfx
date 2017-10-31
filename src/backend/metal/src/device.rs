@@ -257,8 +257,7 @@ impl Device {
 
     fn create_graphics_pipeline<'a>(
         &self,
-        &(ref shader_set, ref pipeline_desc):
-        &(pso::GraphicsShaderSet<'a, Backend>, pso::GraphicsPipelineDesc<'a, Backend>),
+        pipeline_desc: &pso::GraphicsPipelineDesc<'a, Backend>,
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
         let pipeline = metal::RenderPipelineDescriptor::new();
         let pipeline_layout = &pipeline_desc.layout;
@@ -277,7 +276,7 @@ impl Device {
         pipeline.set_input_primitive_topology(primitive_class);
 
         // Shaders
-        let vs_lib = match shader_set.vertex.module {
+        let vs_lib = match pipeline_desc.shaders.vertex.module {
             &n::ShaderModule::Compiled(ref lib) => lib.to_owned(),
             &n::ShaderModule::Raw(ref data) => {
                 //TODO: cache them all somewhere!
@@ -285,13 +284,13 @@ impl Device {
             },
         };
         let mtl_vertex_function = vs_lib
-            .get_function(shader_set.vertex.entry)
+            .get_function(pipeline_desc.shaders.vertex.entry)
             .ok_or_else(|| {
                 error!("invalid vertex shader entry point");
                 pso::CreationError::Other
             })?;
         pipeline.set_vertex_function(Some(&mtl_vertex_function));
-        let fs_lib = if let Some(fragment_entry) = shader_set.fragment {
+        let fs_lib = if let Some(fragment_entry) = pipeline_desc.shaders.fragment {
             let fs_lib = match fragment_entry.module {
                 &n::ShaderModule::Compiled(ref lib) => lib.to_owned(),
                 &n::ShaderModule::Raw(ref data) => {
@@ -309,15 +308,15 @@ impl Device {
         } else {
             None
         };
-        if shader_set.hull.is_some() {
+        if pipeline_desc.shaders.hull.is_some() {
             error!("Metal tesselation shaders are not supported");
             return Err(pso::CreationError::Other);
         }
-        if shader_set.domain.is_some() {
+        if pipeline_desc.shaders.domain.is_some() {
             error!("Metal tesselation shaders are not supported");
             return Err(pso::CreationError::Other);
         }
-        if shader_set.geometry.is_some() {
+        if pipeline_desc.shaders.geometry.is_some() {
             error!("Metal geometry shaders are not supported");
             return Err(pso::CreationError::Other);
         }
@@ -544,7 +543,7 @@ impl hal::Device<Backend> for Device {
 
     fn create_graphics_pipelines<'a>(
         &self,
-        params: &[(pso::GraphicsShaderSet<'a, Backend>, pso::GraphicsPipelineDesc<'a, Backend>)],
+        params: &[pso::GraphicsPipelineDesc<'a, Backend>],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         let mut output = Vec::with_capacity(params.len());
         for param in params {
@@ -555,7 +554,7 @@ impl hal::Device<Backend> for Device {
 
     fn create_compute_pipelines<'a>(
         &self,
-        _pipelines: &[(pso::EntryPoint<'a, Backend>, pso::ComputePipelineDesc<'a, Backend>)],
+        _pipelines: &[pso::ComputePipelineDesc<'a, Backend>],
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
         unimplemented!()
     }
