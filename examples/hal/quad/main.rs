@@ -206,37 +206,6 @@ fn main() {
     };
 
     //
-    let mut pipeline_desc = pso::GraphicsPipelineDesc::new(
-        Primitive::TriangleList,
-        pso::Rasterizer::FILL,
-    );
-    pipeline_desc.blender.targets.push(pso::ColorBlendDesc(
-        pso::ColorMask::ALL,
-        pso::BlendState::ALPHA,
-    ));
-    pipeline_desc.vertex_buffers.push(pso::VertexBufferDesc {
-        stride: std::mem::size_of::<Vertex>() as u32,
-        rate: 0,
-    });
-
-    pipeline_desc.attributes.push(pso::AttributeDesc {
-        location: 0,
-        binding: 0,
-        element: pso::Element {
-            format: Vec2::<f32>::SELF,
-            offset: 0,
-        },
-    });
-    pipeline_desc.attributes.push(pso::AttributeDesc {
-        location: 1,
-        binding: 0,
-        element: pso::Element {
-            format: Vec2::<f32>::SELF,
-            offset: 8
-        },
-    });
-
-    //
     let pipelines = {
         //TODO: remove the type annotations when we have support for
         // inidirect argument buffers in SPIRV-Cross
@@ -259,10 +228,44 @@ fn main() {
             geometry: None,
             fragment: Some(fs_entry),
         };
+
         let subpass = Subpass { index: 0, main_pass: &render_pass };
-        device.create_graphics_pipelines(&[
-            (shader_entries, &pipeline_layout, subpass, &pipeline_desc)
-        ])
+
+        let mut pipeline_desc = pso::GraphicsPipelineDesc::new(
+            shader_entries,
+            Primitive::TriangleList,
+            pso::Rasterizer::FILL,
+            &pipeline_layout,
+            subpass,
+        );
+        pipeline_desc.blender.targets.push(pso::ColorBlendDesc(
+            pso::ColorMask::ALL,
+            pso::BlendState::ALPHA,
+        ));
+        pipeline_desc.vertex_buffers.push(pso::VertexBufferDesc {
+            stride: std::mem::size_of::<Vertex>() as u32,
+            rate: 0,
+        });
+
+        pipeline_desc.attributes.push(pso::AttributeDesc {
+            location: 0,
+            binding: 0,
+            element: pso::Element {
+                format: Vec2::<f32>::SELF,
+                offset: 0,
+            },
+        });
+        pipeline_desc.attributes.push(pso::AttributeDesc {
+            location: 1,
+            binding: 0,
+            element: pso::Element {
+                format: Vec2::<f32>::SELF,
+                offset: 8
+            },
+        });
+
+
+        device.create_graphics_pipelines(&[pipeline_desc])
     };
 
     println!("pipelines: {:?}", pipelines);

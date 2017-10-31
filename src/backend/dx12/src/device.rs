@@ -765,9 +765,9 @@ impl d::Device<B> for Device {
 
     fn create_graphics_pipelines<'a>(
         &self,
-        descs: &[(pso::GraphicsShaderSet<'a, B>, &n::PipelineLayout, pass::Subpass<'a, B>, &pso::GraphicsPipelineDesc)],
+        descs: &[pso::GraphicsPipelineDesc<'a, B>],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
-        descs.iter().map(|&(shaders, ref signature, ref subpass, ref desc)| {
+        descs.iter().map(|desc| {
             let build_shader = |source: Option<pso::EntryPoint<'a, B>>| {
                 // TODO: better handle case where looking up shader fails
                 let shader = source.and_then(|src| src.module.shaders.get(src.entry));
@@ -787,11 +787,11 @@ impl d::Device<B> for Device {
                 }
             };
 
-            let vs = build_shader(Some(shaders.vertex));
-            let fs = build_shader(shaders.fragment);
-            let gs = build_shader(shaders.geometry);
-            let ds = build_shader(shaders.domain);
-            let hs = build_shader(shaders.hull);
+            let vs = build_shader(Some(desc.shaders.vertex));
+            let fs = build_shader(desc.shaders.fragment);
+            let gs = build_shader(desc.shaders.geometry);
+            let ds = build_shader(desc.shaders.domain);
+            let hs = build_shader(desc.shaders.hull);
 
             // Define input element descriptions
             let mut vs_reflect = shade::reflect_shader(&vs);
@@ -842,9 +842,12 @@ impl d::Device<B> for Device {
 
             // TODO: check maximum number of rtvs
             // Get associated subpass information
-            let pass = match subpass.main_pass.subpasses.get(subpass.index) {
-                Some(subpass) => subpass,
-                None => return Err(pso::CreationError::InvalidSubpass(subpass.index)),
+            let pass = {
+                let subpass = &desc.subpass;
+                match subpass.main_pass.subpasses.get(subpass.index) {
+                    Some(subpass) => subpass,
+                    None => return Err(pso::CreationError::InvalidSubpass(subpass.index)),
+                }
             };
 
             // Get color attachment formats from subpass
@@ -854,7 +857,7 @@ impl d::Device<B> for Device {
                 for (rtv, target) in rtvs.iter_mut()
                     .zip(pass.color_attachments.iter())
                 {
-                    let format = subpass.main_pass.attachments[target.0].format;
+                    let format = desc.subpass.main_pass.attachments[target.0].format;
                     *rtv = conv::map_format(format).unwrap_or(winapi::DXGI_FORMAT_UNKNOWN);
                     num_rtvs += 1;
                 }
@@ -863,7 +866,7 @@ impl d::Device<B> for Device {
 
             // Setup pipeline description
             let pso_desc = winapi::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
-                pRootSignature: signature.raw,
+                pRootSignature: desc.layout.raw,
                 VS: vs, PS: fs, GS: gs, DS: ds, HS: hs,
                 StreamOutput: winapi::D3D12_STREAM_OUTPUT_DESC {
                     pSODeclaration: ptr::null(),
@@ -889,7 +892,16 @@ impl d::Device<B> for Device {
                 NumRenderTargets: num_rtvs,
                 RTVFormats: rtvs,
                 DSVFormat: pass.depth_stencil_attachment
-                    .and_then(|att_ref| conv::map_format_dsv(subpass.main_pass.attachments[att_ref.0].format.0))
+                    .and_then(|att_ref|
+                        conv::map_format_dsv(
+                            desc
+                            .subpass
+                            .main_pass
+                            .attachments[att_ref.0]
+                            .format
+                            .0
+                        )
+                    )
                     .unwrap_or(winapi::DXGI_FORMAT_UNKNOWN),
                 SampleDesc: winapi::DXGI_SAMPLE_DESC {
                     Count: 1, // TODO
@@ -924,12 +936,12 @@ impl d::Device<B> for Device {
 
     fn create_compute_pipelines<'a>(
         &self,
-        descs: &[(pso::EntryPoint<'a, B>, &n::PipelineLayout)],
+        descs: &[pso::ComputePipelineDesc<'a, B>],
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
-        descs.iter().map(|&(shader, ref signature)| {
+        descs.iter().map(|desc| {
             let cs = {
                 // TODO: better handle case where looking up shader fails
-                match shader.module.shaders.get(shader.entry) {
+                match desc.shader.module.shaders.get(desc.shader.entry) {
                     Some(shader) => {
                         winapi::D3D12_SHADER_BYTECODE {
                             pShaderBytecode: unsafe { (**shader).GetBufferPointer() as *const _ },
@@ -946,7 +958,7 @@ impl d::Device<B> for Device {
             };
 
             let pso_desc = winapi::D3D12_COMPUTE_PIPELINE_STATE_DESC {
-                pRootSignature: signature.raw,
+                pRootSignature: desc.layout.raw,
                 CS: cs,
                 NodeMask: 0,
                 CachedPSO: winapi::D3D12_CACHED_PIPELINE_STATE {

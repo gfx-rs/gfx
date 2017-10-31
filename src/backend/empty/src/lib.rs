@@ -97,14 +97,14 @@ impl hal::Device<Backend> for Device {
 
     fn create_graphics_pipelines<'a>(
         &self,
-        _: &[(pso::GraphicsShaderSet<'a, Backend>, &(), pass::Subpass<'a, Backend>, &pso::GraphicsPipelineDesc)],
+        _: &[pso::GraphicsPipelineDesc<'a, Backend>],
     ) -> Vec<Result<(), pso::CreationError>> {
         unimplemented!()
     }
 
     fn create_compute_pipelines<'a>(
         &self,
-        _: &[(pso::EntryPoint<'a, Backend>, &())],
+        _: &[pso::ComputePipelineDesc<'a, Backend>],
     ) -> Vec<Result<(), pso::CreationError>> {
         unimplemented!()
     }

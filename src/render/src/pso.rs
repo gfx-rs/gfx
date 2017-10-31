@@ -184,10 +184,10 @@ impl<'a, B: Backend> DescriptorSetsUpdate<'a, B> {
 pub trait GraphicsPipelineInit<B: Backend> {
     type Pipeline;
 
-    fn create(
+    fn create<'a>(
         self,
         &mut Device<B>,
-        hal::pso::GraphicsShaderSet<B>,
+        hal::pso::GraphicsShaderSet<'a, B>,
         Primitive,
         Rasterizer
     ) -> Result<Self::Pipeline, CreationError>;
@@ -225,7 +225,7 @@ pub trait Component<'a, B: Backend> {
 
     fn append_desc(
         Self::Init,
-        &mut hal::pso::GraphicsPipelineDesc,
+        &mut hal::pso::GraphicsPipelineDesc<B>,
     ) {}
 
     fn require<'b>(
@@ -275,7 +275,7 @@ impl<'a, B, F> Component<'a, B> for RenderTarget<F>
 
     fn append_desc(
         init: Self::Init,
-        pipeline_desc: &mut hal::pso::GraphicsPipelineDesc
+        pipeline_desc: &mut hal::pso::GraphicsPipelineDesc<B>,
     ) {
         pipeline_desc.blender.targets.push(init);
     }
@@ -340,7 +340,7 @@ impl<'a, B, T, I> Component<'a, B> for VertexBuffer<T, I>
 
     fn append_desc(
         init: Self::Init,
-        pipeline_desc: &mut hal::pso::GraphicsPipelineDesc
+        pipeline_desc: &mut hal::pso::GraphicsPipelineDesc<B>,
     ) {
         let binding = pipeline_desc.vertex_buffers.len() as u32;
         pipeline_desc.vertex_buffers.push(hal::pso::VertexBufferDesc {

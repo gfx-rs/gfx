@@ -36,10 +36,10 @@ macro_rules! gfx_graphics_pipeline {
             impl<'a, B: Backend> pso::GraphicsPipelineInit<B> for Init<'a, B> {
                 type Pipeline = Meta<B>;
 
-                fn create(
+                fn create<'b>(
                     self,
                     device: &mut Device<B>,
-                    shader_entries: $crate::hal::pso::GraphicsShaderSet<B>,
+                    shader_entries: $crate::hal::pso::GraphicsShaderSet<'b, B>,
                     primitive: Primitive,
                     rasterizer: pso::Rasterizer
                 ) -> Result<Self::Pipeline, pso::CreationError> {
@@ -71,21 +71,26 @@ macro_rules! gfx_graphics_pipeline {
                         device.create_render_pass_raw(&attachments[..], &[subpass], &[])
                     };
 
-                    let mut pipeline_desc = cpso::GraphicsPipelineDesc::new(
-                        primitive, rasterizer
-                    );
-                    $(
-                        <$cmp as pso::Component<'a, B>>::append_desc(self.$cmp_name, &mut pipeline_desc);
-                    )*
 
                     let pipeline = {
                         let subpass = cpass::Subpass {
                             index: 0,
-                            main_pass: render_pass.resource()
+                            main_pass: render_pass.resource(),
                         };
-                        device.create_graphics_pipeline_raw(
-                            shader_entries, layout.resource(), subpass, &pipeline_desc
-                        )?
+
+                        let mut pipeline_desc = cpso::GraphicsPipelineDesc::new(
+                            shader_entries,
+                            primitive,
+                            rasterizer,
+                            layout.resource(),
+                            subpass,
+                        );
+                        $(
+                            <$cmp as pso::Component<'a, B>>::append_desc(self.$cmp_name, &mut pipeline_desc);
+                        )*
+
+
+                        device.create_graphics_pipeline_raw(pipeline_desc)?
                     };
                     Ok(Meta { layout, render_pass, pipeline })
                 }

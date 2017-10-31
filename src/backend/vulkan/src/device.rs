@@ -249,7 +249,7 @@ impl d::Device<B> for Device {
 
     fn create_graphics_pipelines<'a>(
         &self,
-        descs: &[(pso::GraphicsShaderSet<'a, B>, &n::PipelineLayout, pass::Subpass<'a, B>, &pso::GraphicsPipelineDesc)],
+        descs: &[pso::GraphicsPipelineDesc<'a, B>],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         debug!("create_graphics_pipelines {:?}", descs);
         // Store pipeline parameters to avoid stack usage
@@ -283,26 +283,26 @@ impl d::Device<B> for Device {
             }
         };
 
-        let infos = descs.iter().map(|&(shaders, layout, subpass, desc)| {
+        let infos = descs.iter().map(|desc| {
             let mut stages = Vec::new();
             // Vertex stage
             if true { //vertex shader is required
-                stages.push(make_stage(vk::SHADER_STAGE_VERTEX_BIT, shaders.vertex));
+                stages.push(make_stage(vk::SHADER_STAGE_VERTEX_BIT, desc.shaders.vertex));
             }
             // Pixel stage
-            if let Some(entry) = shaders.fragment {
+            if let Some(entry) = desc.shaders.fragment {
                 stages.push(make_stage(vk::SHADER_STAGE_FRAGMENT_BIT, entry));
             }
             // Geometry stage
-            if let Some(entry) = shaders.geometry {
+            if let Some(entry) = desc.shaders.geometry {
                 stages.push(make_stage(vk::SHADER_STAGE_GEOMETRY_BIT, entry));
             }
             // Domain stage
-            if let Some(entry) = shaders.domain {
+            if let Some(entry) = desc.shaders.domain {
                 stages.push(make_stage(vk::SHADER_STAGE_TESSELLATION_EVALUATION_BIT, entry));
             }
             // Hull stage
-            if let Some(entry) = shaders.hull {
+            if let Some(entry) = desc.shaders.hull {
                 stages.push(make_stage(vk::SHADER_STAGE_TESSELLATION_CONTROL_BIT, entry));
             }
 
@@ -363,7 +363,7 @@ impl d::Device<B> for Device {
                 p_next: ptr::null(),
                 flags: vk::PipelineRasterizationStateCreateFlags::empty(),
                 depth_clamp_enable: if desc.rasterizer.depth_clamping { vk::VK_TRUE } else { vk::VK_FALSE },
-                rasterizer_discard_enable: if shaders.fragment.is_none() { vk::VK_TRUE } else { vk::VK_FALSE },
+                rasterizer_discard_enable: if desc.shaders.fragment.is_none() { vk::VK_TRUE } else { vk::VK_FALSE },
                 polygon_mode: polygon_mode,
                 cull_mode: desc.rasterizer.cull_face.map(conv::map_cull_face).unwrap_or(vk::CULL_MODE_NONE),
                 front_face: conv::map_front_face(desc.rasterizer.front_face),
@@ -374,7 +374,7 @@ impl d::Device<B> for Device {
                 line_width: line_width,
             });
 
-            let is_tessellated = shaders.hull.is_some() && shaders.domain.is_some();
+            let is_tessellated = desc.shaders.hull.is_some() && desc.shaders.domain.is_some();
             if is_tessellated {
                 info_tessellation_states.push(vk::PipelineTessellationStateCreateInfo {
                     s_type: vk::StructureType::PipelineTessellationStateCreateInfo,
@@ -470,7 +470,7 @@ impl d::Device<B> for Device {
                 flags: vk::PipelineColorBlendStateCreateFlags::empty(),
                 logic_op_enable: vk::VK_FALSE, // TODO
                 logic_op: vk::LogicOp::Clear,
-                attachment_count: color_attachments.last().unwrap().len() as u32,
+                attachment_count: color_attachments.last().unwrap().len() as _,
                 p_attachments: color_attachments.last().unwrap().as_ptr(), // TODO:
                 blend_constants: [0.0; 4], // TODO:
             });
@@ -479,15 +479,32 @@ impl d::Device<B> for Device {
                 s_type: vk::StructureType::PipelineDynamicStateCreateInfo,
                 p_next: ptr::null(),
                 flags: vk::PipelineDynamicStateCreateFlags::empty(),
-                dynamic_state_count: dynamic_states.len() as u32,
+                dynamic_state_count: dynamic_states.len() as _,
                 p_dynamic_states: dynamic_states.as_ptr(),
             });
+
+            let (base_handle, base_index) = match desc.parent {
+                pso::BasePipeline::Pipeline(pipeline) => (pipeline.0, -1),
+                pso::BasePipeline::Index(index) => (vk::Pipeline::null(), index as _),
+                pso::BasePipeline::None => (vk::Pipeline::null(), -1),
+            };
+
+            let mut flags = vk::PipelineCreateFlags::empty();
+            if let pso::BasePipeline::None = desc.parent {
+                flags |= vk::PIPELINE_CREATE_DERIVATIVE_BIT;
+            }
+            if desc.flags.contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION) {
+                flags |= vk::PIPELINE_CREATE_DISABLE_OPTIMIZATION_BIT;
+            }
+            if desc.flags.contains(pso::PipelineCreationFlags::ALLOW_DERIVATIVES) {
+                flags |= vk::PIPELINE_CREATE_ALLOW_DERIVATIVES_BIT;
+            }
 
             Ok(vk::GraphicsPipelineCreateInfo {
                 s_type: vk::StructureType::GraphicsPipelineCreateInfo,
                 p_next: ptr::null(),
-                flags: vk::PipelineCreateFlags::empty(),
-                stage_count: info_stages.last().unwrap().len() as u32,
+                flags,
+                stage_count: info_stages.last().unwrap().len() as _,
                 p_stages: info_stages.last().unwrap().as_ptr(),
                 p_vertex_input_state: info_vertex_input_states.last().unwrap(),
                 p_input_assembly_state: info_input_assembly_states.last().unwrap(),
@@ -498,11 +515,11 @@ impl d::Device<B> for Device {
                 p_depth_stencil_state: info_depth_stencil_states.last().unwrap(),
                 p_color_blend_state: info_color_blend_states.last().unwrap(),
                 p_dynamic_state: info_dynamic_states.last().unwrap(),
-                layout: layout.raw,
-                render_pass: subpass.main_pass.raw,
-                subpass: subpass.index as u32,
-                base_pipeline_handle: vk::Pipeline::null(),
-                base_pipeline_index: -1,
+                layout: desc.layout.raw,
+                render_pass: desc.subpass.main_pass.raw,
+                subpass: desc.subpass.index as _,
+                base_pipeline_handle: base_handle,
+                base_pipeline_index: base_index,
             })
         }).collect::<Vec<_>>();
 
@@ -540,11 +557,11 @@ impl d::Device<B> for Device {
 
     fn create_compute_pipelines<'a>(
         &self,
-        descs: &[(pso::EntryPoint<'a, B>, &n::PipelineLayout)],
+        descs: &[pso::ComputePipelineDesc<'a, B>],
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
         let mut c_strings = Vec::new(); // hold the C strings temporarily
-        let infos = descs.iter().map(|&(entry_point, layout)| {
-            let string = CString::new(entry_point.entry).unwrap();
+        let infos = descs.iter().map(|desc| {
+            let string = CString::new(desc.shader.entry).unwrap();
             let p_name = string.as_ptr();
             c_strings.push(string);
 
@@ -553,19 +570,36 @@ impl d::Device<B> for Device {
                 p_next: ptr::null(),
                 flags: vk::PipelineShaderStageCreateFlags::empty(),
                 stage: vk::SHADER_STAGE_COMPUTE_BIT,
-                module: entry_point.module.raw,
+                module: desc.shader.module.raw,
                 p_name,
                 p_specialization_info: ptr::null(),
             };
 
+            let (base_handle, base_index) = match desc.parent {
+                pso::BasePipeline::Pipeline(pipeline) => (pipeline.0, -1),
+                pso::BasePipeline::Index(index) => (vk::Pipeline::null(), index as _),
+                pso::BasePipeline::None => (vk::Pipeline::null(), -1),
+            };
+
+            let mut flags = vk::PipelineCreateFlags::empty();
+            if let pso::BasePipeline::None = desc.parent {
+                flags |= vk::PIPELINE_CREATE_DERIVATIVE_BIT;
+            }
+            if desc.flags.contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION) {
+                flags |= vk::PIPELINE_CREATE_DISABLE_OPTIMIZATION_BIT;
+            }
+            if desc.flags.contains(pso::PipelineCreationFlags::ALLOW_DERIVATIVES) {
+                flags |= vk::PIPELINE_CREATE_ALLOW_DERIVATIVES_BIT;
+            }
+
             Ok(vk::ComputePipelineCreateInfo {
                 s_type: vk::StructureType::ComputePipelineCreateInfo,
                 p_next: ptr::null(),
-                flags: vk::PipelineCreateFlags::empty(),
+                flags,
                 stage,
-                layout: layout.raw,
-                base_pipeline_handle: vk::Pipeline::null(),
-                base_pipeline_index: -1,
+                layout: desc.layout.raw,
+                base_pipeline_handle: base_handle,
+                base_pipeline_index: base_index,
             })
         }).collect::<Vec<_>>();
 
