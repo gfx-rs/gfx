@@ -114,11 +114,12 @@ pub struct Framebuffer {
     pub(crate) attachments: Vec<ImageView>,
 }
 
-#[derive(Debug, Hash, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Buffer {
     pub(crate) resource: *mut winapi::ID3D12Resource,
     pub(crate) size_in_bytes: u32,
     pub(crate) stride: u32,
+    pub(crate) clear_uav: Option<DualHandle>,
 }
 unsafe impl Send for Buffer { }
 unsafe impl Sync for Buffer { }
