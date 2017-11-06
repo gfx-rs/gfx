@@ -1144,10 +1144,41 @@ impl d::Device<B> for Device {
                 &mut resource,
             )
         });
+
+        let clear_uav = if buffer.usage.contains(buffer::Usage::TRANSFER_DST) {
+            let handles = self.uav_pool.lock().unwrap().alloc_handles(1);
+            let mut desc = winapi::D3D12_UNORDERED_ACCESS_VIEW_DESC {
+                Format: winapi::DXGI_FORMAT_R32_TYPELESS,
+                ViewDimension: winapi::D3D12_UAV_DIMENSION_BUFFER,
+                u: unsafe { mem::zeroed() },
+            };
+
+           *unsafe { desc.Buffer_mut() } = winapi::D3D12_BUFFER_UAV {
+                FirstElement: 0,
+                NumElements: (buffer.requirements.size / 4) as _,
+                StructureByteStride: 0,
+                CounterOffsetInBytes: 0,
+                Flags: winapi::D3D12_BUFFER_UAV_FLAG_RAW,
+            };
+
+            unsafe {
+                self.raw.clone().CreateUnorderedAccessView(
+                    resource as *mut _,
+                    ptr::null_mut(),
+                    &desc,
+                    handles.cpu,
+                );
+            }
+            Some(handles)
+        } else {
+            None
+        };
+
         Ok(n::Buffer {
             resource: resource as *mut _,
             size_in_bytes: buffer.requirements.size as _,
             stride: buffer.stride as _,
+            clear_uav,
         })
     }
 

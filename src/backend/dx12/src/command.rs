@@ -712,11 +712,53 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn fill_buffer(
         &mut self,
-        _buffer: &n::Buffer,
-        _range: Range<u64>,
-        _data: u32,
+        buffer: &n::Buffer,
+        range: Range<u64>,
+        data: u32,
     ) {
-        unimplemented!()
+        assert!(buffer.clear_uav.is_some(), "Buffer needs to be created with usage `TRANSFER_DST`");
+        assert_eq!(range, 0..buffer.size_in_bytes as u64); // TODO: Need to dynamically create UAVs
+
+        // Insert barrier for `COPY_DEST` to `UNORDERED_ACCESS` as we use
+        // `TRANSFER_WRITE` for all clear commands.
+        let transition_barrier = winapi::D3D12_RESOURCE_BARRIER {
+            Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+            Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+            u: winapi::D3D12_RESOURCE_TRANSITION_BARRIER {
+                pResource: buffer.resource,
+                Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                StateBefore: winapi::D3D12_RESOURCE_STATE_COPY_DEST,
+                StateAfter: winapi::D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            },
+        };
+
+        unsafe { self.raw.ResourceBarrier(1, &transition_barrier) };
+
+        let handles = buffer.clear_uav.unwrap();
+        unsafe {
+            self.raw.ClearUnorderedAccessViewUint(
+                handles.gpu,
+                handles.cpu,
+                buffer.resource,
+                &[data as UINT; 4],
+                0,
+                ptr::null_mut(), // TODO: lift with the forementioned restriction
+            );
+        }
+
+        // Transition back to original state
+        let transition_barrier = winapi::D3D12_RESOURCE_BARRIER {
+            Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+            Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+            u: winapi::D3D12_RESOURCE_TRANSITION_BARRIER {
+                pResource: buffer.resource,
+                Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                StateBefore: winapi::D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                StateAfter: winapi::D3D12_RESOURCE_STATE_COPY_DEST,
+            },
+        };
+
+        unsafe { self.raw.ResourceBarrier(1, &transition_barrier) };
     }
 
     fn update_buffer(
