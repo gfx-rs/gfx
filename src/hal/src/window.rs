@@ -285,6 +285,7 @@ impl SwapchainConfig {
 }
 
 /// Swapchain backbuffer type
+#[derive(Debug)]
 pub enum Backbuffer<B: Backend> {
     /// Color image chain
     Images(Vec<B::Image>),
