@@ -13,6 +13,7 @@ workspace = "../../.."
 
 [features]
 default = ["winit"]
+portable = []
 
 [lib]
 name = "gfx_backend_vulkan"
