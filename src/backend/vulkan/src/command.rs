@@ -1,6 +1,5 @@
 use std::{cmp, ptr};
 use std::ops::Range;
-use std::sync::Arc;
 use smallvec::SmallVec;
 use ash::vk;
 use ash::version::DeviceV1_0;
@@ -10,12 +9,14 @@ use hal::{IndexCount, InstanceCount, VertexCount, VertexOffset};
 use hal::buffer::IndexBufferView;
 use hal::image::{AspectFlags, ImageLayout, SubresourceRange};
 use {conv, native as n};
-use {Backend, RawDevice};
+use {Backend, DeviceRef};
 
+#[repr(C)]
 #[derive(Clone)]
+#[cfg_attr(feature = "portable", derive(Copy, Debug))]
 pub struct CommandBuffer {
     pub raw: vk::CommandBuffer,
-    pub device: Arc<RawDevice>,
+    pub device: DeviceRef,
 }
 
 fn map_subpass_contents(contents: com::SubpassContents) -> vk::SubpassContents {
