@@ -17,7 +17,7 @@ use spirv_cross::msl;
 /// depend on pipeline layout, in which case the value would become `Compiled`.
 #[derive(Debug)]
 pub enum ShaderModule {
-    Compiled(metal::Library),
+    Compiled { library: metal::Library, remapped_entry_point_names: HashMap<String, String> },
     Raw(Vec<u8>),
 }
 
