@@ -285,9 +285,9 @@ impl d::Device<B> for Device {
                     if status != 0 {
                         if !log.is_empty() {
                             warn!("\tLog: {}", log);
+                        } else {
+                            return Err(pso::CreationError::Other);
                         }
-                    } else {
-                        return Err(pso::CreationError::Other);
                     }
 
                     name
