@@ -30,11 +30,6 @@ use hal::queue::Submission;
 
 use std::io::Cursor;
 
-// MSL doesn't allow `main` entry point name.
-//TODO: just use a different name consistently in all backends
-#[cfg(feature = "metal")]
-const ENTRY_NAME: &str = "main0";
-#[cfg(not(feature = "metal"))]
 const ENTRY_NAME: &str = "main";
 
 #[derive(Debug, Clone, Copy)]

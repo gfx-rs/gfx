@@ -176,7 +176,10 @@ impl Device {
             _ => return Err(ShaderError::CompilationFailed("shader model not supported".into()))
         });
         match self.device.new_library_with_source(source.as_ref(), &options) {
-            Ok(lib) => Ok(n::ShaderModule::Compiled(lib)),
+            Ok(library) => Ok(n::ShaderModule::Compiled {
+                library,
+                remapped_entry_point_names: HashMap::new()
+            }),
             Err(err) => Err(ShaderError::CompilationFailed(err.into())),
         }
     }
@@ -185,7 +188,7 @@ impl Device {
         &self,
         raw_data: &[u8],
         overrides: &HashMap<msl::ResourceBindingLocation, msl::ResourceBinding>,
-    ) -> Result<metal::Library, ShaderError> {
+    ) -> Result<(metal::Library, HashMap<String, String>), ShaderError> {
         // spec requires "codeSize must be a multiple of 4"
         assert_eq!(raw_data.len() & 3, 0);
 
@@ -215,23 +218,50 @@ impl Device {
                 ShaderError::CompilationFailed(msg)
             })?;
 
+        let entry_points = ast.get_entry_points()
+            .map_err(|err| {
+                let msg = match err {
+                    SpirvErrorCode::CompilationError(msg) => msg,
+                    SpirvErrorCode::Unhandled => "Unexpected error".into(),
+                };
+                ShaderError::CompilationFailed(msg)
+            })?;
+
         let shader_code = ast.compile()
             .map_err(|err| {
-                let msg =  match err {
+                let msg = match err {
                     SpirvErrorCode::CompilationError(msg) => msg,
                     SpirvErrorCode::Unhandled => "Unknown compile error".into(),
                 };
                 ShaderError::CompilationFailed(msg)
             })?;
 
+        let mut remapped_entry_point_names = HashMap::new();
+
+        for entry_point in entry_points {
+            println!("Entry point {:?}", entry_point);
+            let cleansed = ast.get_cleansed_entry_point_name(&entry_point.name)
+                .map_err(|err| {
+                    let msg = match err {
+                        SpirvErrorCode::CompilationError(msg) => msg,
+                        SpirvErrorCode::Unhandled => "Unknown compile error".into(),
+                    };
+                    ShaderError::CompilationFailed(msg)
+                })?;
+            remapped_entry_point_names.insert(entry_point.name, cleansed);
+        }
+
         // done
         debug!("SPIRV-Cross generated shader:\n{}", shader_code);
 
         let options = metal::CompileOptions::new();
         options.set_language_version(MTLLanguageVersion::V1_1);
-        self.device
+        
+        let library = self.device
             .new_library_with_source(shader_code.as_ref(), &options)
-            .map_err(|err| ShaderError::CompilationFailed(err.into()))
+            .map_err(|err| ShaderError::CompilationFailed(err.into()))?;
+
+        Ok((library, remapped_entry_point_names))
     }
 
     fn describe_argument(ty: DescriptorType, index: usize, count: usize) -> metal::ArgumentDescriptor {
@@ -276,29 +306,46 @@ impl Device {
         pipeline.set_input_primitive_topology(primitive_class);
 
         // Shaders
-        let vs_lib = match pipeline_desc.shaders.vertex.module {
-            &n::ShaderModule::Compiled(ref lib) => lib.to_owned(),
+        let vs_entries_owned;
+        let (vs_lib, vs_remapped_entries) = match pipeline_desc.shaders.vertex.module {
+            &n::ShaderModule::Compiled {ref library, ref remapped_entry_point_names} => (library.to_owned(), remapped_entry_point_names),
             &n::ShaderModule::Raw(ref data) => {
                 //TODO: cache them all somewhere!
-                self.compile_shader_library(data, &pipeline_layout.res_overrides).unwrap()
-            },
+                let raw = self.compile_shader_library(data, &pipeline_layout.res_overrides).unwrap();
+                vs_entries_owned = raw.1;
+                (raw.0, &vs_entries_owned)
+            }
+        };
+        let vs_entry = if vs_remapped_entries.contains_key(pipeline_desc.shaders.vertex.entry) {
+            vs_remapped_entries.get(pipeline_desc.shaders.vertex.entry).unwrap()
+        } else {
+            pipeline_desc.shaders.vertex.entry
         };
         let mtl_vertex_function = vs_lib
-            .get_function(pipeline_desc.shaders.vertex.entry)
+            .get_function(vs_entry)
             .ok_or_else(|| {
                 error!("invalid vertex shader entry point");
                 pso::CreationError::Other
             })?;
         pipeline.set_vertex_function(Some(&mtl_vertex_function));
+
         let fs_lib = if let Some(fragment_entry) = pipeline_desc.shaders.fragment {
-            let fs_lib = match fragment_entry.module {
-                &n::ShaderModule::Compiled(ref lib) => lib.to_owned(),
+            let fs_entries_owned;
+            let (fs_lib, fs_remapped_entries) = match fragment_entry.module {
+                &n::ShaderModule::Compiled {ref library, ref remapped_entry_point_names} => (library.to_owned(), remapped_entry_point_names),
                 &n::ShaderModule::Raw(ref data) => {
-                    self.compile_shader_library(data, &pipeline_layout.res_overrides).unwrap()
+                    let raw = self.compile_shader_library(data, &pipeline_layout.res_overrides).unwrap();
+                    fs_entries_owned = raw.1;
+                    (raw.0, &fs_entries_owned)
                 }
             };
+            let fs_entry = if fs_remapped_entries.contains_key(fragment_entry.entry) {
+                fs_remapped_entries.get(fragment_entry.entry).unwrap()
+            } else {
+                fragment_entry.entry
+            };
             let mtl_fragment_function = fs_lib
-                .get_function(fragment_entry.entry)
+                .get_function(fs_entry)
                 .ok_or_else(|| {
                     error!("invalid pixel shader entry point");
                     pso::CreationError::Other
@@ -593,8 +640,11 @@ impl hal::Device<Backend> for Device {
         if depends_on_pipeline_layout {
             Ok(n::ShaderModule::Raw(raw_data.to_vec()))
         } else {
-            self.compile_shader_library(raw_data, &HashMap::new())
-                .map(n::ShaderModule::Compiled)
+            let (library, remapped_entry_point_names) = self.compile_shader_library(raw_data, &HashMap::new())?;
+            Ok(n::ShaderModule::Compiled {
+                library,
+                remapped_entry_point_names
+            })
         }
     }
 
