@@ -176,7 +176,10 @@ impl Device {
             _ => return Err(ShaderError::CompilationFailed("shader model not supported".into()))
         });
         match self.device.new_library_with_source(source.as_ref(), &options) {
-            Ok(library) => Ok(n::ShaderModule::Compiled { library, remapped_entry_point_names: HashMap::new() }),
+            Ok(library) => Ok(n::ShaderModule::Compiled {
+                library,
+                remapped_entry_point_names: HashMap::new()
+            }),
             Err(err) => Err(ShaderError::CompilationFailed(err.into())),
         }
     }
@@ -303,11 +306,14 @@ impl Device {
         pipeline.set_input_primitive_topology(primitive_class);
 
         // Shaders
+        let vs_entries_owned;
         let (vs_lib, vs_remapped_entries) = match pipeline_desc.shaders.vertex.module {
-            &n::ShaderModule::Compiled {ref library, ref remapped_entry_point_names} => (library.to_owned(), remapped_entry_point_names.to_owned()),
+            &n::ShaderModule::Compiled {ref library, ref remapped_entry_point_names} => (library.to_owned(), remapped_entry_point_names),
             &n::ShaderModule::Raw(ref data) => {
                 //TODO: cache them all somewhere!
-                self.compile_shader_library(data, &pipeline_layout.res_overrides).unwrap()
+                let raw = self.compile_shader_library(data, &pipeline_layout.res_overrides).unwrap();
+                vs_entries_owned = raw.1;
+                (raw.0, &vs_entries_owned)
             }
         };
         let vs_entry = if vs_remapped_entries.contains_key(pipeline_desc.shaders.vertex.entry) {
@@ -324,10 +330,13 @@ impl Device {
         pipeline.set_vertex_function(Some(&mtl_vertex_function));
 
         let fs_lib = if let Some(fragment_entry) = pipeline_desc.shaders.fragment {
+            let fs_entries_owned;
             let (fs_lib, fs_remapped_entries) = match fragment_entry.module {
-                &n::ShaderModule::Compiled {ref library, ref remapped_entry_point_names} => (library.to_owned(), remapped_entry_point_names.to_owned()),
+                &n::ShaderModule::Compiled {ref library, ref remapped_entry_point_names} => (library.to_owned(), remapped_entry_point_names),
                 &n::ShaderModule::Raw(ref data) => {
-                    self.compile_shader_library(data, &pipeline_layout.res_overrides).unwrap()
+                    let raw = self.compile_shader_library(data, &pipeline_layout.res_overrides).unwrap();
+                    fs_entries_owned = raw.1;
+                    (raw.0, &fs_entries_owned)
                 }
             };
             let fs_entry = if fs_remapped_entries.contains_key(fragment_entry.entry) {
