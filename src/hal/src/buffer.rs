@@ -15,6 +15,27 @@ pub enum CreationError {
     Other,
 }
 
+impl fmt::Display for CreationError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let description = self.description();
+        match *self {
+            CreationError::Usage(usage) => write!(f, "{}: {:?}", description, usage),
+            _ => write!(f, "{}", description)
+        }
+    }
+}
+
+impl Error for CreationError {
+    fn description(&self) -> &str {
+        match *self {
+            CreationError::Usage(_) =>
+                "Required `Usage` is not supported",
+            CreationError::Other =>
+                "Some other problem",
+        }
+    }
+}
+
 /// Error creating a `BufferView`.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ViewError {
