@@ -18,6 +18,7 @@ use std::os::raw::c_void;
 use std::sync::Arc;
 use winapi;
 use core::{self, factory as f, buffer, texture, mapping};
+use core::format::SurfaceTyped;
 use core::memory::{self, Bind, Typed};
 use core::handle::{self as h, Producer};
 use {Resources as R, Share, Buffer, Texture, Pipeline, Program, Shader};
@@ -329,6 +330,55 @@ impl Factory {
 
     pub fn cleanup(&mut self) {
         self.frame_handles.clear();
+    }
+
+    /// Read a download-usage texture contents. Useful for screenshot readbacks.
+    pub fn map_texture_read<'a, 'b, S: Copy + SurfaceTyped>(
+        &'a mut self, texture: &'b h::Texture<R, S>
+    ) -> &'b [S::DataType] {
+        let info = texture.get_info();
+        let (width, height, _, aa) = info.kind.get_dimensions();
+        assert_eq!(info.usage, memory::Usage::Download);
+        assert_eq!(aa, texture::AaMode::Single);
+        let mip0_texels = width as usize * height as usize;
+        let texel_size = S::get_surface_type().get_total_bits() / 8;
+
+        let mut ctx = ptr::null_mut();
+        unsafe {
+            (*self.device).GetImmediateContext(&mut ctx);
+        }
+
+        let mut sres = winapi::d3d11::D3D11_MAPPED_SUBRESOURCE {
+            pData: ptr::null_mut(),
+            RowPitch: width as u32 * texel_size as u32,
+            DepthPitch: 0,
+        };
+
+        let resource = self.frame_handles
+            .ref_texture(texture.raw())
+            .as_resource();
+        let hr = unsafe {
+            (*ctx).Map(resource as *mut _, 0, winapi::d3d11::D3D11_MAP_READ, 0, &mut sres)
+        };
+
+        if winapi::SUCCEEDED(hr) {
+            unsafe { slice::from_raw_parts(sres.pData as *const _, mip0_texels) }
+        } else {
+            panic!("Unable to map a texture {:?}, error {:x}", texture, hr);
+        }
+    }
+
+    pub fn unmap_texture<S>(&mut self, texture: &h::Texture<R, S>) {
+        let resource = self.frame_handles
+            .ref_texture(texture.raw())
+            .as_resource()
+            as *mut winapi::d3d11::ID3D11Resource;
+
+        let mut ctx = ptr::null_mut();
+        unsafe {
+            (*self.device).GetImmediateContext(&mut ctx);
+            (*ctx).Unmap(resource as *mut _, 0);
+        }
     }
 }
 
