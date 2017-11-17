@@ -760,6 +760,7 @@ impl d::Device<B> for Device {
         n::PipelineLayout {
             raw: signature,
             tables: set_tables,
+            num_parameter_slots: parameters.len(),
         }
     }
 
@@ -927,7 +928,12 @@ impl d::Device<B> for Device {
             };
 
             if winapi::SUCCEEDED(hr) {
-                Ok(n::GraphicsPipeline { raw: pipeline, topology })
+                Ok(n::GraphicsPipeline {
+                    raw: pipeline,
+                    signature: desc.layout.raw,
+                    num_parameter_slots: desc.layout.num_parameter_slots,
+                    topology,
+                })
             } else {
                 Err(pso::CreationError::Other)
             }
@@ -978,7 +984,11 @@ impl d::Device<B> for Device {
             };
 
             if winapi::SUCCEEDED(hr) {
-                Ok(n::ComputePipeline { raw: pipeline })
+                Ok(n::ComputePipeline {
+                    raw: pipeline,
+                    signature: desc.layout.raw,
+                    num_parameter_slots: desc.layout.num_parameter_slots,
+                })
             } else {
                 Err(pso::CreationError::Other)
             }

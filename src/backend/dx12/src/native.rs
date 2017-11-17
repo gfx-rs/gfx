@@ -76,6 +76,8 @@ pub struct RenderPass {
 #[derive(Debug, Hash)]
 pub struct GraphicsPipeline {
     pub(crate) raw: *mut winapi::ID3D12PipelineState,
+    pub(crate) signature: *mut winapi::ID3D12RootSignature, // weak-ptr, owned by `PipelineLayout`
+    pub(crate) num_parameter_slots: usize, // signature parameter slots, see `PipelineLayout`
     pub(crate) topology: winapi::D3D12_PRIMITIVE_TOPOLOGY,
 }
 unsafe impl Send for GraphicsPipeline { }
@@ -84,6 +86,8 @@ unsafe impl Sync for GraphicsPipeline { }
 #[derive(Debug, Hash)]
 pub struct ComputePipeline {
     pub(crate) raw: *mut winapi::ID3D12PipelineState,
+    pub(crate) signature: *mut winapi::ID3D12RootSignature, // weak-ptr, owned by `PipelineLayout`
+    pub(crate) num_parameter_slots: usize, // signature parameter slots, see `PipelineLayout`
 }
 
 unsafe impl Send for ComputePipeline { }
@@ -105,6 +109,9 @@ pub struct PipelineLayout {
     // Storing for each associated descriptor set layout, which tables we created
     // in the root signature. This is required for binding descriptor sets.
     pub(crate) tables: Vec<SetTableTypes>,
+    // Number of parameter slots in this layout, can be larger than number of tables.
+    // Required for updating the root signature when flusing user data.
+    pub(crate) num_parameter_slots: usize,
 }
 unsafe impl Send for PipelineLayout { }
 unsafe impl Sync for PipelineLayout { }
@@ -238,6 +245,30 @@ pub struct DescriptorSet {
 // TODO: is this really safe?
 unsafe impl Send for DescriptorSet {}
 unsafe impl Sync for DescriptorSet {}
+
+impl DescriptorSet {
+    pub fn srv_cbv_uav_gpu_start(&self) -> winapi::D3D12_GPU_DESCRIPTOR_HANDLE {
+        let mut handle = winapi::D3D12_GPU_DESCRIPTOR_HANDLE { ptr: 0 };
+        unsafe {
+            self
+                .heap_srv_cbv_uav
+                .as_mut()
+                .GetGPUDescriptorHandleForHeapStart(&mut handle);
+        }
+        handle
+    }
+
+    pub fn sampler_gpu_start(&self) -> winapi::D3D12_GPU_DESCRIPTOR_HANDLE {
+        let mut handle = winapi::D3D12_GPU_DESCRIPTOR_HANDLE { ptr: 0 };
+        unsafe {
+            self
+                .heap_samplers
+                .as_mut()
+                .GetGPUDescriptorHandleForHeapStart(&mut handle);
+        }
+        handle
+    }
+}
 
 #[derive(Copy, Clone, Debug)]
 pub struct DualHandle {

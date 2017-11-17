@@ -32,6 +32,98 @@ pub struct RenderPassCache {
     attachment_clears: Vec<AttachmentClear>,
 }
 
+/// Strongly-typed root signature element
+///
+/// Could be removed for an unsafer variant to occupy less memory
+#[derive(Debug, Copy, Clone)]
+enum RootElement {
+    /// Root constant in the signature
+    Constant(u32),
+    /// Descriptor table, storing table offset for the current descriptor heap
+    TableSrvCbvUav(u32),
+    /// Descriptor table, storing table offset for the current descriptor heap
+    TableSampler(u32),
+    /// Undefined value, implementation specific
+    Undefined,
+}
+
+/// Virtual data storage for the current root signature memory.
+#[derive(Clone)]
+struct UserData {
+    data: [RootElement; 64],
+    dirty_mask: u64,
+}
+
+impl UserData {
+    fn new() -> Self {
+        UserData {
+            data: [RootElement::Undefined; 64],
+            dirty_mask: 0,
+        }
+    }
+
+    /// Update root constant values. Changes are marked as dirty.
+    fn set_constants(&mut self, offset: usize, data: &[u32]) {
+        // Each root constant occupies one DWORD
+        for (i, val) in data.iter().enumerate() {
+            self.data[offset+i] = RootElement::Constant(*val);
+            self.dirty_mask |= 1u64 << (offset + i);
+        }
+    }
+
+    /// Update descriptor table. Changes are marked as dirty.
+    fn set_srv_cbv_uav_table(&mut self, offset: usize, table_start: u32) {
+        // A descriptor table occupies one DWORD
+        self.data[offset] = RootElement::TableSrvCbvUav(table_start);
+        self.dirty_mask |= 1u64 << offset;
+    }
+
+    /// Update descriptor table. Changes are marked as dirty.
+    fn set_sampler_table(&mut self, offset: usize, table_start: u32) {
+        // A descriptor table occupies one DWORD
+        self.data[offset] = RootElement::TableSampler(table_start);
+        self.dirty_mask |= 1u64 << offset;
+    }
+
+    /// Clear dirty flag.
+    fn clear(&mut self, i: usize) {
+        self.dirty_mask &= !(1 << i);
+    }
+}
+
+#[derive(Clone)]
+struct PipelineCache {
+    // Bound pipeline and root signature.
+    // Changed on bind pipeline calls.
+    pipeline: Option<(*mut winapi::ID3D12PipelineState, *mut winapi::ID3D12RootSignature)>,
+    // Paramter slots of the current root signature.
+    num_parameter_slots: usize,
+    // Virtualized root signature user data of the shaders
+    user_data: UserData,
+
+    // Descriptor heap gpu handle offsets
+    srv_cbv_uav_start: u64,
+    sampler_start: u64,
+}
+
+impl PipelineCache {
+    fn new() -> Self {
+        PipelineCache {
+            pipeline: None,
+            num_parameter_slots: 0,
+            user_data: UserData::new(),
+            srv_cbv_uav_start: 0,
+            sampler_start: 0,
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum BindPoint {
+    Compute,
+    Graphics,
+}
+
 #[derive(Clone)]
 pub struct CommandBuffer {
     raw: ComPtr<winapi::ID3D12GraphicsCommandList>,
@@ -41,6 +133,15 @@ pub struct CommandBuffer {
     // Cache renderpasses for graphics operations
     pass_cache: Option<RenderPassCache>,
     cur_subpass: usize,
+
+    // Cache current graphics root signature and pipeline to minimize rebinding and support two
+    // bindpoints.
+    gr_pipeline: PipelineCache,
+    // Cache current compute root signature and pipeline.
+    comp_pipeline: PipelineCache,
+    // D3D12 only has one slot for both bindpoints. Need to rebind everything if we want to switch
+    // between different bind points (ie. calling draw or dispatch).
+    active_bindpoint: BindPoint,
 }
 
 unsafe impl Send for CommandBuffer { }
@@ -57,11 +158,23 @@ impl CommandBuffer {
             signatures,
             pass_cache: None,
             cur_subpass: !0,
+            gr_pipeline: PipelineCache::new(),
+            comp_pipeline: PipelineCache::new(),
+            active_bindpoint: BindPoint::Graphics,
         }
     }
 
     pub(crate) unsafe fn as_raw_list(&self) -> *mut winapi::ID3D12CommandList {
         self.raw.as_mut() as *mut _ as *mut _
+    }
+
+    fn reset(&mut self) {
+        unsafe { self.raw.Reset(self.allocator.as_mut(), ptr::null_mut()); }
+        self.pass_cache = None;
+        self.cur_subpass = !0;
+        self.gr_pipeline = PipelineCache::new();
+        self.comp_pipeline = PipelineCache::new();
+        self.active_bindpoint = BindPoint::Graphics;
     }
 
     fn insert_subpass_barriers(&self) {
@@ -198,11 +311,111 @@ impl CommandBuffer {
             );
         }
     }
+
+    fn set_gr_bind_point(&mut self) {
+        if self.active_bindpoint != BindPoint::Graphics {
+            // Switch to graphics bind point
+            assert!(self.gr_pipeline.pipeline.is_some(), "No graphics pipeline bound");
+            let (pipeline, _) = self.gr_pipeline.pipeline.unwrap();
+            unsafe { self.raw.SetPipelineState(pipeline); }
+            self.active_bindpoint = BindPoint::Graphics;
+        }
+
+        self.flush_gr_user_data();
+    }
+
+    fn flush_gr_user_data(&mut self) {
+        let user_data = &mut self.gr_pipeline.user_data;
+        if user_data.dirty_mask == 0 {
+            return
+        }
+
+        // TODO: root constant support
+
+        // Flush descriptor tables
+        // Index in the user data array where tables are starting
+        let table_start = 0;
+        let table_slot_start = 0;
+        for i in 0..self.gr_pipeline.num_parameter_slots {
+            let table_index = i + table_start;
+            if ((user_data.dirty_mask >> table_index) & 1) == 1 {
+                let slot = (i + table_slot_start) as _;
+                match user_data.data[i] {
+                    RootElement::TableSrvCbvUav(offset) => {
+                        let gpu = winapi::D3D12_GPU_DESCRIPTOR_HANDLE {
+                            ptr: self.gr_pipeline.srv_cbv_uav_start + offset as u64,
+                        };
+                        unsafe { self.raw.SetGraphicsRootDescriptorTable(slot, gpu); }
+                    },
+                    RootElement::TableSampler(offset) => {
+                        let gpu = winapi::D3D12_GPU_DESCRIPTOR_HANDLE {
+                            ptr: self.gr_pipeline.sampler_start + offset as u64,
+                        };
+                        unsafe { self.raw.SetGraphicsRootDescriptorTable(slot, gpu); }
+                    },
+                    _ => {
+                        error!("Unexpected user data element in the root signature ({:?})", user_data.data[i]);
+                    },
+                }
+                user_data.clear(table_index);
+            }
+        }
+    }
+
+    fn set_compute_bind_point(&mut self) {
+        if self.active_bindpoint != BindPoint::Compute {
+            // Switch to compute bind point
+            assert!(self.comp_pipeline.pipeline.is_some(), "No compute pipeline bound");
+            let (pipeline, _) = self.comp_pipeline.pipeline.unwrap();
+            unsafe { self.raw.SetPipelineState(pipeline); }
+            self.active_bindpoint = BindPoint::Compute;
+        }
+
+        self.flush_compute_user_data();
+    }
+
+    fn flush_compute_user_data(&mut self) {
+        let user_data = &mut self.comp_pipeline.user_data;
+        if user_data.dirty_mask == 0 {
+            return
+        }
+
+        // TODO: root constant support
+
+        // Flush descriptor tables
+        // Index in the user data array where tables are starting
+        let table_start = 0;
+        let table_slot_start = 0;
+        for i in 0..self.comp_pipeline.num_parameter_slots {
+            let table_index = i + table_start;
+            if ((user_data.dirty_mask >> table_index) & 1) == 1 {
+                let slot = (i + table_slot_start) as _;
+                match user_data.data[i] {
+                    RootElement::TableSrvCbvUav(offset) => {
+                        let gpu = winapi::D3D12_GPU_DESCRIPTOR_HANDLE {
+                            ptr: self.comp_pipeline.srv_cbv_uav_start + offset as u64,
+                        };
+                        unsafe { self.raw.SetComputeRootDescriptorTable(slot, gpu); }
+                    },
+                    RootElement::TableSampler(offset) => {
+                        let gpu = winapi::D3D12_GPU_DESCRIPTOR_HANDLE {
+                            ptr: self.comp_pipeline.sampler_start + offset as u64,
+                        };
+                        unsafe { self.raw.SetComputeRootDescriptorTable(slot, gpu); }
+                    },
+                    _ => {
+                        error!("Unexpected user data element in the root signature ({:?})", user_data.data[i]);
+                    },
+                }
+                user_data.clear(table_index);
+            }
+        }
+    }
 }
 
 impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn begin(&mut self) {
-        unsafe { self.raw.Reset(self.allocator.as_mut(), ptr::null_mut()); }
+        self.reset();
     }
 
     fn finish(&mut self) {
@@ -210,7 +423,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn reset(&mut self, _release_resources: bool) {
-        unsafe { self.raw.Reset(self.allocator.as_mut(), ptr::null_mut()); }
+        self.reset();
     }
 
     fn begin_renderpass(
@@ -596,9 +809,23 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
         unsafe {
+            match self.gr_pipeline.pipeline {
+                Some((_, signature)) if signature == pipeline.signature => {
+                    // Same root signature, nothing to do
+                },
+                _ => {
+                    self.raw.SetGraphicsRootSignature(pipeline.signature);
+                    self.gr_pipeline.num_parameter_slots = pipeline.num_parameter_slots;
+                    // All slots need to be rebound internally on signature change.
+                    self.gr_pipeline.user_data.dirty_mask = !0;
+                }
+            }
             self.raw.SetPipelineState(pipeline.raw);
             self.raw.IASetPrimitiveTopology(pipeline.topology);
         };
+
+        self.active_bindpoint = BindPoint::Graphics;
+        self.gr_pipeline.pipeline = Some((pipeline.raw, pipeline.signature));
     }
 
     fn bind_graphics_descriptor_sets(
@@ -607,10 +834,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         first_set: usize,
         sets: &[&n::DescriptorSet],
     ) {
+        // Bind descriptor heaps
         unsafe {
-            self.raw.SetGraphicsRootSignature(layout.raw);
-
-            // Bind descriptor heaps
             // TODO: Can we bind them always or only once?
             //       Resize while recording?
             let mut heaps = [
@@ -619,6 +844,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             ];
             self.raw.SetDescriptorHeaps(2, heaps.as_mut_ptr())
         }
+
+        let srv_cbv_uav_base = sets[0].srv_cbv_uav_gpu_start();
+        let sampler_base = sets[0].sampler_gpu_start();
+
+        self.gr_pipeline.srv_cbv_uav_start = srv_cbv_uav_base.ptr;
+        self.gr_pipeline.sampler_start = sampler_base.ptr;
 
         let mut table_id = 0;
         for table in &layout.tables[.. first_set] {
@@ -630,14 +861,32 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
         }
         for (set, table) in sets.iter().zip(layout.tables[first_set..].iter()) {
-            set.first_gpu_view.map(|gpu| unsafe {
+            set.first_gpu_view.map(|gpu| {
                 assert!(table.contains(n::SRV_CBV_UAV));
-                self.raw.SetGraphicsRootDescriptorTable(table_id, gpu);
+
+                let root_offset = table_id; // TODO: take push constants into account
+                // Cast is safe as offset **must** be in u32 range. Unable to
+                // create heaps with more descriptors.
+                let table_offset = (gpu.ptr - srv_cbv_uav_base.ptr) as u32;
+                self
+                    .gr_pipeline
+                    .user_data
+                    .set_srv_cbv_uav_table(root_offset, table_offset);
+
                 table_id += 1;
             });
-            set.first_gpu_sampler.map(|gpu| unsafe {
+            set.first_gpu_sampler.map(|gpu| {
                 assert!(table.contains(n::SAMPLERS));
-                self.raw.SetGraphicsRootDescriptorTable(table_id, gpu);
+
+                let root_offset = table_id; // TODO: take push constants into account
+                // Cast is safe as offset **must** be in u32 range. Unable to
+                // create heaps with more descriptors.
+                let table_offset = (gpu.ptr - sampler_base.ptr) as u32;
+                self
+                    .gr_pipeline
+                    .user_data
+                    .set_sampler_table(root_offset, table_offset);
+
                 table_id += 1;
             });
         }
@@ -645,8 +894,22 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn bind_compute_pipeline(&mut self, pipeline: &n::ComputePipeline) {
         unsafe {
+            match self.comp_pipeline.pipeline {
+                Some((_, signature)) if signature == pipeline.signature => {
+                    // Same root signature, nothing to do
+                },
+                _ => {
+                    self.raw.SetComputeRootSignature(pipeline.signature);
+                    self.comp_pipeline.num_parameter_slots = pipeline.num_parameter_slots;
+                    // All slots need to be rebound internally on signature change.
+                    self.comp_pipeline.user_data.dirty_mask = !0;
+                }
+            }
             self.raw.SetPipelineState(pipeline.raw);
         }
+
+        self.active_bindpoint = BindPoint::Compute;
+        self.comp_pipeline.pipeline = Some((pipeline.raw, pipeline.signature));
     }
 
     fn bind_compute_descriptor_sets(
@@ -656,8 +919,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         sets: &[&n::DescriptorSet],
     ) {
         unsafe {
-            self.raw.SetComputeRootSignature(layout.raw);
-
             // Bind descriptor heaps
             // TODO: Can we bind them always or only once?
             //       Resize while recording?
@@ -667,6 +928,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             ];
             self.raw.SetDescriptorHeaps(2, heaps.as_mut_ptr())
         }
+
+        let srv_cbv_uav_base = sets[0].srv_cbv_uav_gpu_start();
+        let sampler_base = sets[0].sampler_gpu_start();
+
+        self.comp_pipeline.srv_cbv_uav_start = srv_cbv_uav_base.ptr;
+        self.comp_pipeline.sampler_start = sampler_base.ptr;
 
         let mut table_id = 0;
         for table in &layout.tables[.. first_set] {
@@ -678,26 +945,46 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
         }
         for (set, table) in sets.iter().zip(layout.tables[first_set..].iter()) {
-            set.first_gpu_view.map(|gpu| unsafe {
+            set.first_gpu_view.map(|gpu| {
                 assert!(table.contains(n::SRV_CBV_UAV));
-                self.raw.SetComputeRootDescriptorTable(table_id, gpu);
+
+                let root_offset = table_id; // TODO: take push constants into account
+                // Cast is safe as offset **must** be in u32 range. Unable to
+                // create heaps with more descriptors.
+                let table_offset = (gpu.ptr - srv_cbv_uav_base.ptr) as u32;
+                self
+                    .comp_pipeline
+                    .user_data
+                    .set_srv_cbv_uav_table(root_offset, table_offset);
+
                 table_id += 1;
             });
-            set.first_gpu_sampler.map(|gpu| unsafe {
+            set.first_gpu_sampler.map(|gpu| {
                 assert!(table.contains(n::SAMPLERS));
-                self.raw.SetComputeRootDescriptorTable(table_id, gpu);
+
+                let root_offset = table_id; // TODO: take push constants into account
+                // Cast is safe as offset **must** be in u32 range. Unable to
+                // create heaps with more descriptors.
+                let table_offset = (gpu.ptr - sampler_base.ptr) as u32;
+                self
+                    .comp_pipeline
+                    .user_data
+                    .set_sampler_table(root_offset, table_offset);
+
                 table_id += 1;
             });
         }
     }
 
     fn dispatch(&mut self, x: u32, y: u32, z: u32) {
+        self.set_compute_bind_point();
         unsafe {
             self.raw.Dispatch(x, y, z);
         }
     }
 
     fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: u64) {
+        self.set_compute_bind_point();
         unsafe {
             self.raw.ExecuteIndirect(
                 self.signatures.dispatch.as_mut() as *mut _,
@@ -965,6 +1252,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {
+        self.set_gr_bind_point();
         unsafe {
             self.raw.DrawInstanced(
                 vertices.end - vertices.start,
@@ -981,6 +1269,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         base_vertex: VertexOffset,
         instances: Range<InstanceCount>,
     ) {
+        self.set_gr_bind_point();
         unsafe {
             self.raw.DrawIndexedInstanced(
                 indices.end - indices.start,
@@ -1000,6 +1289,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         stride: u32,
     ) {
         assert_eq!(stride, 16);
+        self.set_gr_bind_point();
         unsafe {
             self.raw.ExecuteIndirect(
                 self.signatures.draw.as_mut() as *mut _,
@@ -1020,6 +1310,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         stride: u32,
     ) {
         assert_eq!(stride, 20);
+        self.set_gr_bind_point();
         unsafe {
             self.raw.ExecuteIndirect(
                 self.signatures.draw_indexed.as_mut() as *mut _,
