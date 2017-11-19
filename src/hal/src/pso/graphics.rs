@@ -6,7 +6,7 @@ use super::input_assembler::{AttributeDesc, InputAssemblerDesc, VertexBufferDesc
 use super::output_merger::{ColorBlendDesc, DepthStencilDesc};
 
 /// A complete set of shaders to build a graphics pipeline.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GraphicsShaderSet<'a, B: Backend> {
     ///
     pub vertex: EntryPoint<'a, B>,

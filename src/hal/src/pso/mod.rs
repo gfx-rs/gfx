@@ -7,6 +7,7 @@
 use pass;
 use std::error::Error;
 use std::fmt;
+use std::ops::Range;
 
 mod compute;
 mod descriptor;
@@ -136,6 +137,8 @@ pub struct EntryPoint<'a, B: Backend> {
     pub entry: &'a str,
     /// Shader module reference.
     pub module: &'a B::ShaderModule,
+    /// Specialization info.
+    pub specialization: Specialization<'a>,
 }
 
 impl<'a, B: Backend> Clone for EntryPoint<'a, B> {
@@ -143,6 +146,7 @@ impl<'a, B: Backend> Clone for EntryPoint<'a, B> {
         EntryPoint {
             entry: self.entry,
             module: self.module,
+            specialization: self.specialization.clone(),
         }
     }
 }
@@ -150,11 +154,11 @@ impl<'a, B: Backend> Clone for EntryPoint<'a, B> {
 impl<'a, B: Backend> PartialEq for EntryPoint<'a, B> {
     fn eq(&self, other: &Self) -> bool {
         self.entry.as_ptr() == other.entry.as_ptr() &&
-        self.module as *const _ == other.module as *const _
+        self.module as *const _ == other.module as *const _ &&
+        self.specialization == other.specialization
     }
 }
 
-impl<'a, B: Backend> Copy for EntryPoint<'a, B> {}
 impl<'a, B: Backend> Eq for EntryPoint<'a, B> {}
 
 
@@ -190,3 +194,29 @@ pub enum BasePipeline<'a, P: 'a> {
 pub type BaseGraphics<'a, B: Backend> = BasePipeline<'a, B::GraphicsPipeline>;
 ///
 pub type BaseCompute<'a, B: Backend> = BasePipeline<'a, B::ComputePipeline>;
+
+/// Specialization information for pipelines.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Specialization<'a> {
+    /// Constants to overwrite.
+    pub constants: &'a [SpecEntry],
+    /// Overwrite data, indexed by entries of `constants`.
+    pub data: &'a [u8],
+}
+
+impl<'a> Specialization<'a> {
+    /// Simple polygon-filling rasterizer state
+    pub const NO: Self = Specialization {
+        constants: &[],
+        data: &[],
+    };
+}
+
+///
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SpecEntry {
+    /// Constant identifier in shader source.
+    pub id: u32,
+    /// Slice of `data`.
+    pub slice: Range<usize>,
+}

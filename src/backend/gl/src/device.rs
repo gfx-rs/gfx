@@ -251,7 +251,7 @@ impl d::Device<B> for Device {
                 let program = {
                     let name = unsafe { gl.CreateProgram() };
 
-                    let attach_shader = |point_maybe: Option<pso::EntryPoint<B>>| {
+                    let attach_shader = |point_maybe: Option<&pso::EntryPoint<B>>| {
                         if let Some(point) = point_maybe {
                             assert_eq!(point.entry, "main");
                             unsafe { gl.AttachShader(name, point.module.raw); }
@@ -259,11 +259,11 @@ impl d::Device<B> for Device {
                     };
 
                     // Attach shaders to program
-                    attach_shader(Some(desc.shaders.vertex));
-                    attach_shader(desc.shaders.hull);
-                    attach_shader(desc.shaders.domain);
-                    attach_shader(desc.shaders.geometry);
-                    attach_shader(desc.shaders.fragment);
+                    attach_shader(Some(&desc.shaders.vertex));
+                    attach_shader(desc.shaders.hull.as_ref());
+                    attach_shader(desc.shaders.domain.as_ref());
+                    attach_shader(desc.shaders.geometry.as_ref());
+                    attach_shader(desc.shaders.fragment.as_ref());
 
                     if !priv_caps.program_interface && priv_caps.frag_data_location {
                         for i in 0..subpass.color_attachments.len() {

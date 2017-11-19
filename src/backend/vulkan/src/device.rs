@@ -268,10 +268,31 @@ impl d::Device<B> for Device {
 
         let dynamic_states = [vk::DynamicState::Viewport, vk::DynamicState::Scissor];
         let mut c_strings = Vec::new(); // hold the C strings temporarily
-        let mut make_stage = |stage, source: pso::EntryPoint<'a, B>| {
+        let mut make_stage = |stage, source: &pso::EntryPoint<'a, B>| {
             let string = CString::new(source.entry).unwrap();
             let p_name = string.as_ptr();
             c_strings.push(string);
+
+            let map_entries = source
+                .specialization
+                .constants
+                .iter()
+                .map(|constant| {
+                    vk::SpecializationMapEntry {
+                        constant_id: constant.id,
+                        offset: constant.slice.start as _,
+                        size: (constant.slice.end - constant.slice.start) as _,
+                    }
+                })
+                .collect::<SmallVec<[_; 16]>>();
+
+            let specialization_info = vk::SpecializationInfo {
+                map_entry_count: map_entries.len() as _,
+                p_map_entries: map_entries.as_ptr(),
+                data_size: source.specialization.data.len() as _,
+                p_data: source.specialization.data.as_ptr() as _,
+            };
+
             vk::PipelineShaderStageCreateInfo {
                 s_type: vk::StructureType::PipelineShaderStageCreateInfo,
                 p_next: ptr::null(),
@@ -279,7 +300,7 @@ impl d::Device<B> for Device {
                 stage,
                 module: source.module.raw,
                 p_name,
-                p_specialization_info: ptr::null(),
+                p_specialization_info: &specialization_info,
             }
         };
 
@@ -287,22 +308,22 @@ impl d::Device<B> for Device {
             let mut stages = Vec::new();
             // Vertex stage
             if true { //vertex shader is required
-                stages.push(make_stage(vk::SHADER_STAGE_VERTEX_BIT, desc.shaders.vertex));
+                stages.push(make_stage(vk::SHADER_STAGE_VERTEX_BIT, &desc.shaders.vertex));
             }
             // Pixel stage
-            if let Some(entry) = desc.shaders.fragment {
+            if let Some(ref entry) = desc.shaders.fragment {
                 stages.push(make_stage(vk::SHADER_STAGE_FRAGMENT_BIT, entry));
             }
             // Geometry stage
-            if let Some(entry) = desc.shaders.geometry {
+            if let Some(ref entry) = desc.shaders.geometry {
                 stages.push(make_stage(vk::SHADER_STAGE_GEOMETRY_BIT, entry));
             }
             // Domain stage
-            if let Some(entry) = desc.shaders.domain {
+            if let Some(ref entry) = desc.shaders.domain {
                 stages.push(make_stage(vk::SHADER_STAGE_TESSELLATION_EVALUATION_BIT, entry));
             }
             // Hull stage
-            if let Some(entry) = desc.shaders.hull {
+            if let Some(ref entry) = desc.shaders.hull {
                 stages.push(make_stage(vk::SHADER_STAGE_TESSELLATION_CONTROL_BIT, entry));
             }
 
