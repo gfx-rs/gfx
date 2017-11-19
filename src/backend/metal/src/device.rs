@@ -99,7 +99,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             private_caps,
             limits: hal::Limits {
                 max_texture_size: 4096, // TODO: feature set
-                max_patch_size: 0, // No tesselation
+                max_patch_size: 0, // No tessellation
                 max_viewports: 1,
 
                 min_buffer_copy_offset_alignment: if is_mac {256} else {64},
@@ -356,11 +356,11 @@ impl Device {
             None
         };
         if pipeline_desc.shaders.hull.is_some() {
-            error!("Metal tesselation shaders are not supported");
+            error!("Metal tessellation shaders are not supported");
             return Err(pso::CreationError::Other);
         }
         if pipeline_desc.shaders.domain.is_some() {
-            error!("Metal tesselation shaders are not supported");
+            error!("Metal tessellation shaders are not supported");
             return Err(pso::CreationError::Other);
         }
         if pipeline_desc.shaders.geometry.is_some() {

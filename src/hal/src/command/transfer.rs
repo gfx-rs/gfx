@@ -26,7 +26,7 @@ pub struct Offset {
 pub struct BufferCopy {
     /// Buffer region source offset.
     pub src: u64,
-    /// Buffer region destionation offset.
+    /// Buffer region destination offset.
     pub dst: u64,
     /// Region size.
     pub size: u64,

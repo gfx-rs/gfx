@@ -252,7 +252,7 @@ pub struct StencilFace {
     pub mask_write: StencilValue,
     /// What operation to do if the stencil test fails.
     pub op_fail: StencilOp,
-    /// What operation to do if the stenil test passes but the depth test fails.
+    /// What operation to do if the stencil test passes but the depth test fails.
     pub op_depth_fail: StencilOp,
     /// What operation to do if both the depth and stencil test pass.
     pub op_pass: StencilOp,

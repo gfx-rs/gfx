@@ -64,7 +64,7 @@ fn map_texture_type(tt: winapi::D3D_SRV_DIMENSION) -> s::TextureType {
         D3D_SRV_DIMENSION_TEXTURECUBE       => s::TextureType::Cube(NoArray),
         D3D_SRV_DIMENSION_TEXTURECUBEARRAY  => s::TextureType::Cube(Array),
         D3D_SRV_DIMENSION(t) => {
-            error!("Unknow texture dimension {}", t);
+            error!("Unknown texture dimension {}", t);
             s::TextureType::Buffer
         }
     }

@@ -41,7 +41,7 @@ pub enum BufferMemory {
     // and saves us additional bookkeeping overhead for keeping track of all
     // allocated buffers.
     //
-    // Reseting the pool will free all data and commands recorded. Therefore it's
+    // Resetting the pool will free all data and commands recorded. Therefore it's
     // crucial that all submits have been finished **before** calling `reset`.
     Linear(OwnedBuffer),
     // Storing the memory for each command buffer separately to allow individual

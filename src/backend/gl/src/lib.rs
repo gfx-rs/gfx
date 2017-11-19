@@ -204,7 +204,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
         use hal::memory::Properties;
 
-        // COHERENT flags require that the backend does flushing and invaldation
+        // COHERENT flags require that the backend does flushing and invalidation
         // by itself. If we move towards persistent mapping we need to re-evaluate it.
         let memory_types = if self.0.private_caps.map {
             vec![

@@ -42,7 +42,7 @@ fn calculate_color(height: f32) -> [f32; 3] {
     if height > 8.0 {
         [0.9, 0.9, 0.9] // white
     } else if height > 0.0 {
-        [0.7, 0.7, 0.7] // greay
+        [0.7, 0.7, 0.7] // gray
     } else if height > -5.0 {
         [0.2, 0.7, 0.2] // green
     } else {

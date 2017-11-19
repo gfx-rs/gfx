@@ -251,7 +251,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     ///
     fn draw_indexed(
         &mut self,
-        indeces: Range<IndexCount>,
+        indices: Range<IndexCount>,
         base_vertex: VertexOffset,
         instances: Range<InstanceCount>,
     );

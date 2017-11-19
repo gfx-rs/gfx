@@ -131,7 +131,7 @@ impl<B: gfx::Backend> gfx_support::Application<B> for App<B> {
         let delta = delta.as_secs() as f32 + delta.subsec_nanos() as f32 / 1000_000_000.0;
 
         // since we sample our diffuse texture twice we need to lerp between
-        // them to get a smooth transition (shouldn't even be noticable).
+        // them to get a smooth transition (shouldn't even be noticeable).
         // They start half a cycle apart (0.5) and is later used to calculate
         // the interpolation amount via `2.0 * abs(cycle0 - .5f)`
         self.cycles[0] += 0.25 * delta;

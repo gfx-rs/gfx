@@ -292,7 +292,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn pipeline_barrier(
         &mut self,
         _stages: Range<hal::pso::PipelineStage>,
-        _barries: &[memory::Barrier<Backend>],
+        _barriers: &[memory::Barrier<Backend>],
     ) {
         unimplemented!()
     }
@@ -368,7 +368,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
     fn bind_index_buffer(&mut self, ibv: IndexBufferView<Backend>) {
-        // TODO: how can we incoporate the buffer offset?
+        // TODO: how can we incorporate the buffer offset?
         if ibv.offset > 0 {
             warn!("Non-zero index buffer offset currently not handled.");
         }
