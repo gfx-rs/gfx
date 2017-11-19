@@ -122,6 +122,64 @@ impl Device {
         }
     }
 
+    fn parse_spirv(raw_data: &[u8]) -> Result<spirv::Ast<hlsl::Target>, d::ShaderError> {
+        // spec requires "codeSize must be a multiple of 4"
+        assert_eq!(raw_data.len() & 3, 0);
+
+        let module = spirv::Module::from_words(unsafe {
+            slice::from_raw_parts(
+                raw_data.as_ptr() as *const u32,
+                raw_data.len() / mem::size_of::<u32>(),
+            )
+        });
+
+        spirv::Ast::parse(&module)
+            .map_err(|err| {
+                let msg =  match err {
+                    SpirvErrorCode::CompilationError(msg) => msg,
+                    SpirvErrorCode::Unhandled => "Unknown parsing error".into(),
+                };
+                d::ShaderError::CompilationFailed(msg)
+            })
+    }
+
+    fn patch_spirv_resources(ast: &mut spirv::Ast<hlsl::Target>) -> Result<(), d::ShaderError> {
+        // Patch descriptor sets due to the splitting of descriptor heaps into
+        // SrvCbvUav and sampler heap. Each set will have a new location to match
+        // the layout of the root signatures.
+        let shader_resources = ast.get_shader_resources().map_err(gen_query_error)?;
+        for image in &shader_resources.separate_images {
+            let set = ast.get_decoration(image.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
+            ast.set_decoration(image.id, spirv::Decoration::DescriptorSet, 2*set)
+               .map_err(gen_unexpected_error)?;
+        }
+
+        for sampler in &shader_resources.separate_samplers {
+            let set = ast.get_decoration(sampler.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
+            ast.set_decoration(sampler.id, spirv::Decoration::DescriptorSet, 2*set+1)
+               .map_err(gen_unexpected_error)?;
+        }
+
+        Ok(())
+    }
+
+    fn translate_spirv(ast: &mut spirv::Ast<hlsl::Target>, shader_model: hlsl::ShaderModel) -> Result<String, d::ShaderError> {
+        let mut compile_options = hlsl::CompilerOptions::default();
+        compile_options.shader_model = shader_model;
+        compile_options.vertex.invert_y = true;
+
+        ast.set_compiler_options(&compile_options)
+           .map_err(gen_unexpected_error)?;
+        ast.compile()
+            .map_err(|err| {
+                let msg =  match err {
+                    SpirvErrorCode::CompilationError(msg) => msg,
+                    SpirvErrorCode::Unhandled => "Unknown compile error".into(),
+                };
+                d::ShaderError::CompilationFailed(msg)
+            })
+    }
+
     /// Create a shader module from HLSL with a single entry point
     pub fn create_shader_module_from_source(
         &self,
@@ -133,7 +191,7 @@ impl Device {
         let mut shader_map = BTreeMap::new();
         let blob = Self::compile_shader(stage, hlsl::ShaderModel::V5_1, hlsl_entry, code)?;
         shader_map.insert(entry_point.into(), blob);
-        Ok(n::ShaderModule { shaders: shader_map })
+        Ok(n::ShaderModule::Compiled(shader_map))
     }
 
     pub(crate) fn create_command_signature(
@@ -769,9 +827,21 @@ impl d::Device<B> for Device {
         descs: &[pso::GraphicsPipelineDesc<'a, B>],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         descs.iter().map(|desc| {
-            let build_shader = |source: Option<pso::EntryPoint<'a, B>>| {
+            let build_shader = |source: Option<&pso::EntryPoint<'a, B>>| {
                 // TODO: better handle case where looking up shader fails
-                let shader = source.and_then(|src| src.module.shaders.get(src.entry));
+                let shader = source.and_then(|src| {
+                    match *src.module {
+                        n::ShaderModule::Compiled(ref shaders) => {
+                            // TODO: Check that we no root constants in the signature
+                            //       for this entry point
+                            // Use precompiled shader, ignore specialization or layout.
+                            shaders.get(src.entry)
+                        }
+                        n::ShaderModule::Spirv(ref spirv) => {
+                            unimplemented!()
+                        }
+                    }
+                });
                 match shader {
                     Some(shader) => {
                         winapi::D3D12_SHADER_BYTECODE {
@@ -788,11 +858,11 @@ impl d::Device<B> for Device {
                 }
             };
 
-            let vs = build_shader(Some(desc.shaders.vertex));
-            let fs = build_shader(desc.shaders.fragment);
-            let gs = build_shader(desc.shaders.geometry);
-            let ds = build_shader(desc.shaders.domain);
-            let hs = build_shader(desc.shaders.hull);
+            let vs = build_shader(Some(&desc.shaders.vertex));
+            let fs = build_shader(desc.shaders.fragment.as_ref());
+            let gs = build_shader(desc.shaders.geometry.as_ref());
+            let ds = build_shader(desc.shaders.domain.as_ref());
+            let hs = build_shader(desc.shaders.hull.as_ref());
 
             // Define input element descriptions
             let mut vs_reflect = shade::reflect_shader(&vs);
@@ -947,7 +1017,19 @@ impl d::Device<B> for Device {
         descs.iter().map(|desc| {
             let cs = {
                 // TODO: better handle case where looking up shader fails
-                match desc.shader.module.shaders.get(desc.shader.entry) {
+                let shader = match *desc.shader.module {
+                    n::ShaderModule::Compiled(ref shaders) => {
+                        // TODO: Check that we no root constants in the signature
+                        //       for this entry point
+                        // Use precompiled shader, ignore specialization or layout.
+                        shaders.get(desc.shader.entry)
+                    }
+                    n::ShaderModule::Spirv(ref spirv) => {
+                        unimplemented!()
+                    }
+                };
+
+                match shader {
                     Some(shader) => {
                         winapi::D3D12_SHADER_BYTECODE {
                             pShaderBytecode: unsafe { (**shader).GetBufferPointer() as *const _ },
@@ -1007,57 +1089,11 @@ impl d::Device<B> for Device {
     }
 
     fn create_shader_module(&self, raw_data: &[u8]) -> Result<n::ShaderModule, d::ShaderError> {
-        // spec requires "codeSize must be a multiple of 4"
-        assert_eq!(raw_data.len() & 3, 0);
-
-        let module = spirv::Module::from_words(unsafe {
-            slice::from_raw_parts(
-                raw_data.as_ptr() as *const u32,
-                raw_data.len() / mem::size_of::<u32>(),
-            )
-        });
-
-        let mut ast = spirv::Ast::<hlsl::Target>::parse(&module)
-            .map_err(|err| {
-                let msg =  match err {
-                    SpirvErrorCode::CompilationError(msg) => msg,
-                    SpirvErrorCode::Unhandled => "Unknown parsing error".into(),
-                };
-                d::ShaderError::CompilationFailed(msg)
-            })?;
-
-        // Patch descriptor sets due to the splitting of descriptor heaps into
-        // SrvCbvUav and sampler heap. Each set will have a new location to match
-        // the layout of the root signatures.
-        let shader_resources = ast.get_shader_resources().map_err(gen_query_error)?;
-        for image in &shader_resources.separate_images {
-            let set = ast.get_decoration(image.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
-            ast.set_decoration(image.id, spirv::Decoration::DescriptorSet, 2*set)
-               .map_err(gen_unexpected_error)?;
-        }
-
-        for sampler in &shader_resources.separate_samplers {
-            let set = ast.get_decoration(sampler.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
-            ast.set_decoration(sampler.id, spirv::Decoration::DescriptorSet, 2*set+1)
-               .map_err(gen_unexpected_error)?;
-        }
+        let mut ast = Self::parse_spirv(raw_data)?;
+        Self::patch_spirv_resources(&mut ast)?;
 
         let shader_model = hlsl::ShaderModel::V5_1;
-        let mut compile_options = hlsl::CompilerOptions::default();
-        compile_options.shader_model = shader_model;
-        compile_options.vertex.invert_y = true;
-
-        ast.set_compiler_options(&compile_options)
-           .map_err(gen_unexpected_error)?;
-        let shader_code = ast.compile()
-            .map_err(|err| {
-                let msg =  match err {
-                    SpirvErrorCode::CompilationError(msg) => msg,
-                    SpirvErrorCode::Unhandled => "Unknown compile error".into(),
-                };
-                d::ShaderError::CompilationFailed(msg)
-            })?;
-
+        let shader_code = Self::translate_spirv(&mut ast, shader_model)?;
         debug!("SPIRV-Cross generated shader:\n{}", shader_code);
 
         let mut shader_map = BTreeMap::new();
@@ -1078,7 +1114,7 @@ impl d::Device<B> for Device {
 
             shader_map.insert(entry_point.name, shader_blob);
         }
-        Ok(n::ShaderModule { shaders: shader_map })
+        Ok(n::ShaderModule::Compiled(shader_map))
     }
 
     fn create_buffer(
@@ -1716,8 +1752,10 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_shader_module(&self, shader_lib: n::ShaderModule) {
-        for (_, _blob) in shader_lib.shaders {
-            //unsafe { blob.Release(); } //TODO
+        if let n::ShaderModule::Compiled(shaders) = shader_lib {
+            for (_, _blob) in shaders {
+                //unsafe { blob.Release(); } //TODO
+            }
         }
     }
 
