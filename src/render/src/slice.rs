@@ -37,7 +37,7 @@ use pso;
 /// in the `VertexBuffer`. This essentially moves the the start of the `VertexBuffer`, to the
 /// vertex with this index.
 ///
-/// # Constuction & Handling
+/// # Construction & Handling
 /// The `Slice` structure can be constructed automatically when using a `Device` to create a
 /// vertex buffer. If needed, it can also be created manually.
 ///

@@ -786,7 +786,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
 
     fn draw_indexed(
         &mut self,
-        _indeces: Range<IndexCount>,
+        _indices: Range<IndexCount>,
         _base_vertex: VertexOffset,
         _instances: Range<InstanceCount>,
     ) {

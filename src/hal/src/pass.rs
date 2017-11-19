@@ -76,7 +76,7 @@ pub struct Attachment {
     pub layouts: Range<AttachmentLayout>,
 }
 
-/// Index of an attachment within a framebuffer/rebderpass,
+/// Index of an attachment within a framebuffer/renderpass,
 pub type AttachmentId = usize;
 /// Reference to an attachment by index and expected image layout.
 pub type AttachmentRef = (AttachmentId, AttachmentLayout);

@@ -167,8 +167,8 @@ pub enum Primitive {
     /// For example, with `[a, b, c, d, e]`, `[a, b, c, d]` form a line segment with adjacency, and
     /// `[b, c, d, e]` form a line segment with adjacency.
     LineStripAdjacency,
-    /// Each sextuplet of vertices represent a single traingle with adjacency information. For
-    /// example, with `[a, b, c, d, e, f]`, `a`, `c`, and `e` form a traingle, and `b`, `d`, and
+    /// Each sextuplet of vertices represent a single triangle with adjacency information. For
+    /// example, with `[a, b, c, d, e, f]`, `a`, `c`, and `e` form a triangle, and `b`, `d`, and
     /// `f` are the adjacent vertices, where `b` is adjacent to the edge formed by `a` and `c`, `d`
     /// is adjacent to the edge `c` and `e`, and `f` is adjacent to the edge `e` and `a`.
     TriangleListAdjacency,

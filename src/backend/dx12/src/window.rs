@@ -73,7 +73,7 @@ impl hal::Surface<Backend> for Surface {
 
         // Sticking to FLIP swap effects for the moment.
         // We also expose sRGB buffers but they are handled internally as UNORM.
-        // Rougly ordered by popularity..
+        // Roughly ordered by popularity..
         let formats = vec![
             f::Format(B8_G8_R8_A8, Srgb),
             f::Format(B8_G8_R8_A8, Unorm),

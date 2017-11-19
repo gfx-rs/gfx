@@ -32,7 +32,7 @@ struct State {
 }
 
 impl State {
-    // Create a new state, respresenting the initial context state
+    // Create a new state, representing the initial context state
     // as exposed by OpenGL.
     fn new() -> Self {
         State {

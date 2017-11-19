@@ -203,7 +203,7 @@ fn main() {
     //
     let pipelines = {
         //TODO: remove the type annotations when we have support for
-        // inidirect argument buffers in SPIRV-Cross
+        // indirect argument buffers in SPIRV-Cross
         #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]
         let (vs_entry, fs_entry) = (
             pso::EntryPoint::<back::Backend> { entry: ENTRY_NAME, module: &vs_module },
