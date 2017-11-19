@@ -80,9 +80,6 @@ impl<'a, B: Backend> RenderPassInlineEncoder<'a, B> {
     }
 
     /// Bind a graphics pipeline.
-    ///
-    /// There is only *one* pipeline slot for compute and graphics.
-    /// Calling the corresponding `bind_pipeline` functions will override the slot.
     pub fn bind_graphics_pipeline(&mut self, pipeline: &B::GraphicsPipeline) {
         self.0.bind_graphics_pipeline(pipeline)
     }

@@ -163,9 +163,6 @@ impl<'a, B: Backend, C: Supports<Graphics>> CommandBuffer<'a, B, C> {
     }
 
     /// Bind a graphics pipeline.
-    ///
-    /// There is only *one* pipeline slot for compute and graphics.
-    /// Calling the corresponding `bind_pipeline` functions will override the slot.
     pub fn bind_graphics_pipeline(&mut self, pipeline: &B::GraphicsPipeline) {
         self.raw.bind_graphics_pipeline(pipeline)
     }

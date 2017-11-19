@@ -144,9 +144,6 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
 
     /// Bind a graphics pipeline.
     ///
-    /// There is only *one* pipeline slot for compute and graphics.
-    /// Calling `bind_compute_pipeline` functions will override the slot.
-    ///
     /// # Errors
     ///
     /// This function does not return an error. Invalid usage of this function
@@ -165,9 +162,6 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     );
 
     /// Bind a compute pipeline.
-    ///
-    /// There is only *one* pipeline slot for compute and graphics.
-    /// Calling `bind_graphics_pipeline` functions will override the slot.
     ///
     /// # Errors
     ///
