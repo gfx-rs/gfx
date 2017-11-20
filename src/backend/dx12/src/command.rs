@@ -86,7 +86,7 @@ impl UserData {
     }
 
     /// Clear dirty flag.
-    fn clear(&mut self, i: usize) {
+    fn clear_dirty(&mut self, i: usize) {
         self.dirty_mask &= !(1 << i);
     }
 }
@@ -312,54 +312,19 @@ impl CommandBuffer {
         }
     }
 
-    fn set_gr_bind_point(&mut self) {
+    fn set_graphics_bind_point(&mut self) {
         if self.active_bindpoint != BindPoint::Graphics {
             // Switch to graphics bind point
-            assert!(self.gr_pipeline.pipeline.is_some(), "No graphics pipeline bound");
-            let (pipeline, _) = self.gr_pipeline.pipeline.unwrap();
+            let (pipeline, _) = self.gr_pipeline.pipeline.expect("No graphics pipeline bound");
             unsafe { self.raw.SetPipelineState(pipeline); }
             self.active_bindpoint = BindPoint::Graphics;
         }
 
-        self.flush_gr_user_data();
-    }
-
-    fn flush_gr_user_data(&mut self) {
-        let user_data = &mut self.gr_pipeline.user_data;
-        if user_data.dirty_mask == 0 {
-            return
-        }
-
-        // TODO: root constant support
-
-        // Flush descriptor tables
-        // Index in the user data array where tables are starting
-        let table_start = 0;
-        let table_slot_start = 0;
-        for i in 0..self.gr_pipeline.num_parameter_slots {
-            let table_index = i + table_start;
-            if ((user_data.dirty_mask >> table_index) & 1) == 1 {
-                let slot = (i + table_slot_start) as _;
-                match user_data.data[i] {
-                    RootElement::TableSrvCbvUav(offset) => {
-                        let gpu = winapi::D3D12_GPU_DESCRIPTOR_HANDLE {
-                            ptr: self.gr_pipeline.srv_cbv_uav_start + offset as u64,
-                        };
-                        unsafe { self.raw.SetGraphicsRootDescriptorTable(slot, gpu); }
-                    },
-                    RootElement::TableSampler(offset) => {
-                        let gpu = winapi::D3D12_GPU_DESCRIPTOR_HANDLE {
-                            ptr: self.gr_pipeline.sampler_start + offset as u64,
-                        };
-                        unsafe { self.raw.SetGraphicsRootDescriptorTable(slot, gpu); }
-                    },
-                    _ => {
-                        error!("Unexpected user data element in the root signature ({:?})", user_data.data[i]);
-                    },
-                }
-                user_data.clear(table_index);
-            }
-        }
+        let cmd_buffer = &mut self.raw;
+        Self::flush_user_data(
+            &mut self.gr_pipeline,
+            |slot, gpu| unsafe { cmd_buffer.SetGraphicsRootDescriptorTable(slot, gpu); },
+        );
     }
 
     fn set_compute_bind_point(&mut self) {
@@ -371,11 +336,20 @@ impl CommandBuffer {
             self.active_bindpoint = BindPoint::Compute;
         }
 
-        self.flush_compute_user_data();
+        let cmd_buffer = &mut self.raw;
+        Self::flush_user_data(
+            &mut self.comp_pipeline,
+            |slot, gpu| unsafe { cmd_buffer.SetGraphicsRootDescriptorTable(slot, gpu); },
+        );
     }
 
-    fn flush_compute_user_data(&mut self) {
-        let user_data = &mut self.comp_pipeline.user_data;
+    fn flush_user_data<F>(
+        pipeline: &mut PipelineCache,
+        mut table_update: F,
+    ) where
+        F: FnMut(u32, winapi::D3D12_GPU_DESCRIPTOR_HANDLE),
+    {
+        let user_data = &mut pipeline.user_data;
         if user_data.dirty_mask == 0 {
             return
         }
@@ -386,28 +360,23 @@ impl CommandBuffer {
         // Index in the user data array where tables are starting
         let table_start = 0;
         let table_slot_start = 0;
-        for i in 0..self.comp_pipeline.num_parameter_slots {
+        for i in 0..pipeline.num_parameter_slots {
             let table_index = i + table_start;
             if ((user_data.dirty_mask >> table_index) & 1) == 1 {
                 let slot = (i + table_slot_start) as _;
-                match user_data.data[i] {
-                    RootElement::TableSrvCbvUav(offset) => {
-                        let gpu = winapi::D3D12_GPU_DESCRIPTOR_HANDLE {
-                            ptr: self.comp_pipeline.srv_cbv_uav_start + offset as u64,
-                        };
-                        unsafe { self.raw.SetComputeRootDescriptorTable(slot, gpu); }
-                    },
-                    RootElement::TableSampler(offset) => {
-                        let gpu = winapi::D3D12_GPU_DESCRIPTOR_HANDLE {
-                            ptr: self.comp_pipeline.sampler_start + offset as u64,
-                        };
-                        unsafe { self.raw.SetComputeRootDescriptorTable(slot, gpu); }
-                    },
+                let ptr = match user_data.data[i] {
+                    RootElement::TableSrvCbvUav(offset) =>
+                        pipeline.srv_cbv_uav_start + offset as u64,
+                    RootElement::TableSampler(offset) =>
+                        pipeline.sampler_start + offset as u64,
                     _ => {
                         error!("Unexpected user data element in the root signature ({:?})", user_data.data[i]);
-                    },
-                }
-                user_data.clear(table_index);
+                        continue
+                    }
+                };
+                let gpu = winapi::D3D12_GPU_DESCRIPTOR_HANDLE { ptr };
+                table_update(slot, gpu);
+                user_data.clear_dirty(table_index);
             }
         }
     }
@@ -1252,7 +1221,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {
-        self.set_gr_bind_point();
+        self.set_graphics_bind_point();
         unsafe {
             self.raw.DrawInstanced(
                 vertices.end - vertices.start,
@@ -1269,7 +1238,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         base_vertex: VertexOffset,
         instances: Range<InstanceCount>,
     ) {
-        self.set_gr_bind_point();
+        self.set_graphics_bind_point();
         unsafe {
             self.raw.DrawIndexedInstanced(
                 indices.end - indices.start,
@@ -1289,7 +1258,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         stride: u32,
     ) {
         assert_eq!(stride, 16);
-        self.set_gr_bind_point();
+        self.set_graphics_bind_point();
         unsafe {
             self.raw.ExecuteIndirect(
                 self.signatures.draw.as_mut() as *mut _,
@@ -1310,7 +1279,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         stride: u32,
     ) {
         assert_eq!(stride, 20);
-        self.set_gr_bind_point();
+        self.set_graphics_bind_point();
         unsafe {
             self.raw.ExecuteIndirect(
                 self.signatures.draw_indexed.as_mut() as *mut _,
