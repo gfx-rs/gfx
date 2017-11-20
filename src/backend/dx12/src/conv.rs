@@ -1,4 +1,5 @@
 use std::mem;
+use spirv_cross::spirv;
 use winapi::*;
 
 use hal::format::{Format, SurfaceType};
@@ -504,4 +505,12 @@ pub fn map_image_flags(usage: image::Usage) -> D3D12_RESOURCE_FLAGS {
     }
 
     flags
+}
+
+pub fn map_execution_model(model: spirv::ExecutionModel) -> pso::Stage {
+    match model {
+        spirv::ExecutionModel::Vertex => pso::Stage::Vertex,
+        spirv::ExecutionModel::Fragment => pso::Stage::Fragment,
+        _ => unimplemented!(), // TODO: geometry, tessellation and compute seem to unsupported for now
+    }
 }

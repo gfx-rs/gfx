@@ -70,6 +70,8 @@ pub struct Extent {
 pub enum ShaderError {
     /// The shader failed to compile.
     CompilationFailed(String),
+    /// Missing entry point.
+    MissingEntryPoint(String),
 }
 
 /// An error from creating a framebuffer.

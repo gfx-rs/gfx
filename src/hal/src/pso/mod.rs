@@ -4,7 +4,7 @@
 //! will want to use the typed and safe `PipelineState`. See the `pso` module inside the `gfx`
 //! crate.
 
-use pass;
+use {device, pass};
 use std::error::Error;
 use std::fmt;
 use std::ops::Range;
@@ -30,12 +30,15 @@ pub enum CreationError {
     Other,
     /// Invalid subpass (not part of renderpass).
     InvalidSubpass(pass::SubpassId),
+    /// Shader compilation error.
+    Shader(device::ShaderError),
 }
 
 impl fmt::Display for CreationError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             CreationError::InvalidSubpass(id) => write!(f, "{}: {:?}", self.description(), id),
+            CreationError::Shader(ref err) => write!(f, "{}: {:?}", self.description(), err),
             _ => write!(f, "{}", self.description()),
         }
     }
@@ -46,6 +49,7 @@ impl Error for CreationError {
         match *self {
             CreationError::Other => "Unknown other error.",
             CreationError::InvalidSubpass(_) => "Invalid subpass index.",
+            CreationError::Shader(_) => "Shader compilation error.",
         }
     }
 }

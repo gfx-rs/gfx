@@ -25,7 +25,7 @@ use hal::{
 };
 use hal::format::{ChannelType, Formatted, Srgba8 as ColorFormat, Swizzle, Vec2};
 use hal::pass::Subpass;
-use hal::pso::{PipelineStage, ShaderStageFlags};
+use hal::pso::{PipelineStage, ShaderStageFlags, Specialization};
 use hal::queue::Submission;
 
 use std::io::Cursor;
@@ -132,7 +132,7 @@ fn main() {
     // Setup renderpass and pipeline
     #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
     let vs_module = device
-        .create_shader_module(include_bytes!("data/vert.spv"))
+        .create_shader_module(include_bytes!("data/vert_spec.spv"))
         .unwrap();
     #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
     let fs_module = device
@@ -206,14 +206,30 @@ fn main() {
         // indirect argument buffers in SPIRV-Cross
         #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]
         let (vs_entry, fs_entry) = (
-            pso::EntryPoint::<back::Backend> { entry: ENTRY_NAME, module: &vs_module },
-            pso::EntryPoint::<back::Backend> { entry: ENTRY_NAME, module: &fs_module },
+            pso::EntryPoint::<back::Backend> {
+                entry: ENTRY_NAME,
+                module: &vs_module,
+                specialization: Specialization::NO,
+            },
+            pso::EntryPoint::<back::Backend> {
+                entry: ENTRY_NAME,
+                module: &fs_module,
+                specialization: Specialization::NO,
+            },
         );
 
         #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
         let (vs_entry, fs_entry) = (
-            pso::EntryPoint { entry: "vs_main", module: &shader_lib },
-            pso::EntryPoint { entry: "ps_main", module: &shader_lib },
+            pso::EntryPoint {
+                entry: "vs_main",
+                module: &shader_lib,
+                specialization: Specialization::NO,
+            },
+            pso::EntryPoint {
+                entry: "ps_main",
+                module: &shader_lib,
+                specialization: Specialization::NO,
+            },
         );
 
         let shader_entries = pso::GraphicsShaderSet {
