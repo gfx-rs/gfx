@@ -1,7 +1,10 @@
 use ash::vk;
+use byteorder::{NativeEndian, WriteBytesExt};
 use hal::{buffer, command, format, image, pass, pso};
 use hal::device::Extent;
 use hal::{IndexType, Primitive};
+use smallvec::SmallVec;
+use std::io;
 use std::ops::Range;
 
 
@@ -917,4 +920,31 @@ pub fn map_blend_op(
         Min => (vk::BlendOp::Min, vk::BlendFactor::Zero, vk::BlendFactor::Zero),
         Max => (vk::BlendOp::Max, vk::BlendFactor::Zero, vk::BlendFactor::Zero),
     }
+}
+
+pub fn map_specialization_constants(
+    specialization: &[pso::Specialization],
+    data: &mut SmallVec<[u8; 64]>,
+) -> Result<SmallVec<[vk::SpecializationMapEntry; 16]>, io::Error> {
+    specialization
+        .iter()
+        .map(|constant| {
+            let offset = data.len();
+            match constant.value {
+                pso::Constant::Bool(v) => { data.write_u32::<NativeEndian>(v as u32)?; }
+                pso::Constant::U32(v)  => { data.write_u32::<NativeEndian>(v)?; }
+                pso::Constant::U64(v)  => { data.write_u64::<NativeEndian>(v)?; }
+                pso::Constant::I32(v)  => { data.write_i32::<NativeEndian>(v)?; }
+                pso::Constant::I64(v)  => { data.write_i64::<NativeEndian>(v)?; }
+                pso::Constant::F32(v)  => { data.write_f32::<NativeEndian>(v)?; }
+                pso::Constant::F64(v)  => { data.write_f64::<NativeEndian>(v)?; }
+            }
+
+            Ok(vk::SpecializationMapEntry {
+                constant_id: constant.id,
+                offset: offset as _,
+                size: (data.len() - offset) as _,
+            })
+        })
+        .collect::<Result<_, _>>()
 }

@@ -84,11 +84,11 @@ fn main() {
     };
     let pipeline = device.create_graphics_pipeline(
         pso::GraphicsShaderSet {
-            vertex: pso::EntryPoint { entry: "main", module: &vs_module },
+            vertex: pso::EntryPoint { entry: "main", module: &vs_module, specialization: &[] },
             hull: None,
             domain: None,
             geometry: None,
-            fragment: Some(pso::EntryPoint { entry: "main", module: &fs_module },),
+            fragment: Some(pso::EntryPoint { entry: "main", module: &fs_module, specialization: &[] },),
         },
         Primitive::TriangleList,
         pso::Rasterizer::FILL,

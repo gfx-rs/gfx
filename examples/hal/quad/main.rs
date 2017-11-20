@@ -132,7 +132,7 @@ fn main() {
     // Setup renderpass and pipeline
     #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
     let vs_module = device
-        .create_shader_module(include_bytes!("data/vert_spec.spv"))
+        .create_shader_module(include_bytes!("data/vert.spv"))
         .unwrap();
     #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
     let fs_module = device
@@ -209,15 +209,17 @@ fn main() {
             pso::EntryPoint::<back::Backend> {
                 entry: ENTRY_NAME,
                 module: &vs_module,
-                specialization: Specialization {
-                    constants: &[pso::SpecEntry { id: 0, slice: 0..1 }],
-                    data: &[unsafe {*(&0.2f32 as *const _ as *const u32)}],
-                },
+                specialization: &[
+                    Specialization {
+                        id: 0,
+                        value: pso::Constant::F32(0.8),
+                    }
+                ],
             },
             pso::EntryPoint::<back::Backend> {
                 entry: ENTRY_NAME,
                 module: &fs_module,
-                specialization: Specialization::EMPTY,
+                specialization: &[],
             },
         );
 
@@ -226,15 +228,17 @@ fn main() {
             pso::EntryPoint {
                 entry: "vs_main",
                 module: &shader_lib,
-                specialization: Specialization {
-                    constants: &[pso::SpecEntry { id: 0, slice: 0..1 }],
-                    data: &[*(&1.5f32 as *const _ as *const u32)],
-                },
+                specialization: &[
+                    Specialization {
+                        id: 0,
+                        value: pso::Constant::F32(0.8),
+                    }
+                ],
             },
             pso::EntryPoint {
                 entry: "ps_main",
                 module: &shader_lib,
-                specialization: Specialization::EMPTY,
+                specialization: &[],
             },
         );
 

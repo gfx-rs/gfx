@@ -198,11 +198,9 @@ impl Device {
                     .get_specialization_constants()
                     .map_err(gen_query_error)?;
 
-                println!("{:?}", (&source.specialization, &spec_constants));
                 for spec_constant in spec_constants {
                     if let Some(constant) = source
                         .specialization
-                        .constants
                         .iter()
                         .find(|c| c.id == spec_constant.constant_id)
                     {
@@ -211,8 +209,23 @@ impl Device {
                             let value = ast
                                 .get_scalar_constant(spec_constant.id)
                                 .map_err(gen_query_error)?;
-                            slice::from_raw_parts_mut(value.data as *mut _ as *mut u32, constant.slice.end - constant.slice.start)
-                                .copy_from_slice(&source.specialization.data[constant.slice.clone()]);
+                            match constant.value {
+                                pso::Constant::Bool(v) => { *value.data = v as u64; }
+                                pso::Constant::U32(v) => { *value.data = v as u64; }
+                                pso::Constant::U64(v) => { *value.data = v; }
+                                pso::Constant::I32(v) => {
+                                    *value.data = *(&v as *const _ as *const u64);
+                                }
+                                pso::Constant::I64(v) => {
+                                    *value.data = *(&v as *const _ as *const u64);
+                                }
+                                pso::Constant::F32(v) => {
+                                    *value.data = *(&v as *const _ as *const u64);
+                                }
+                                pso::Constant::F64(v) => {
+                                    *value.data = *(&v as *const _ as *const u64);
+                                }
+                            }
                         }
                     }
                 }

@@ -135,14 +135,14 @@ pub enum Stage {
 }
 
 /// Shader entry point.
-#[derive(Debug)]
+#[derive(Debug, Copy)]
 pub struct EntryPoint<'a, B: Backend> {
     /// Entry point name.
     pub entry: &'a str,
     /// Shader module reference.
     pub module: &'a B::ShaderModule,
     /// Specialization info.
-    pub specialization: Specialization<'a>,
+    pub specialization: &'a [Specialization],
 }
 
 impl<'a, B: Backend> Clone for EntryPoint<'a, B> {
@@ -150,21 +150,10 @@ impl<'a, B: Backend> Clone for EntryPoint<'a, B> {
         EntryPoint {
             entry: self.entry,
             module: self.module,
-            specialization: self.specialization.clone(),
+            specialization: self.specialization,
         }
     }
 }
-
-impl<'a, B: Backend> PartialEq for EntryPoint<'a, B> {
-    fn eq(&self, other: &Self) -> bool {
-        self.entry.as_ptr() == other.entry.as_ptr() &&
-        self.module as *const _ == other.module as *const _ &&
-        self.specialization == other.specialization
-    }
-}
-
-impl<'a, B: Backend> Eq for EntryPoint<'a, B> {}
-
 
 bitflags!(
     /// Pipeline creation flags.
@@ -200,27 +189,29 @@ pub type BaseGraphics<'a, B: Backend> = BasePipeline<'a, B::GraphicsPipeline>;
 pub type BaseCompute<'a, B: Backend> = BasePipeline<'a, B::ComputePipeline>;
 
 /// Specialization information for pipelines.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Specialization<'a> {
-    /// Constants to overwrite.
-    pub constants: &'a [SpecEntry],
-    /// Overwrite data, indexed by entries of `constants`.
-    pub data: &'a [u32],
-}
-
-impl<'a> Specialization<'a> {
-    /// Not specialization value set, using default values.
-    pub const EMPTY: Self = Specialization {
-        constants: &[],
-        data: &[],
-    };
-}
-
-///
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct SpecEntry {
+#[derive(Debug, Clone)]
+pub struct Specialization {
     /// Constant identifier in shader source.
     pub id: u32,
-    /// Slice of `data`.
-    pub slice: Range<usize>,
+    /// Value to override specialization constant.
+    pub value: Constant,
+}
+
+/// Scalar specialization constant with value for overriding.
+#[derive(Debug, Clone)]
+pub enum Constant {
+    ///
+    Bool(bool),
+    ///
+    U32(u32),
+    ///
+    U64(u64),
+    ///
+    I32(i32),
+    ///
+    I64(i64),
+    ///
+    F32(f32),
+    ///
+    F64(f64),
 }

@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate log;
 extern crate ash;
+extern crate byteorder;
 extern crate gfx_hal as hal;
 #[macro_use]
 extern crate lazy_static;
