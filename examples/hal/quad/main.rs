@@ -209,12 +209,15 @@ fn main() {
             pso::EntryPoint::<back::Backend> {
                 entry: ENTRY_NAME,
                 module: &vs_module,
-                specialization: Specialization::NO,
+                specialization: Specialization {
+                    constants: &[pso::SpecEntry { id: 0, slice: 0..1 }],
+                    data: &[unsafe {*(&0.2f32 as *const _ as *const u32)}],
+                },
             },
             pso::EntryPoint::<back::Backend> {
                 entry: ENTRY_NAME,
                 module: &fs_module,
-                specialization: Specialization::NO,
+                specialization: Specialization::EMPTY,
             },
         );
 
@@ -223,12 +226,15 @@ fn main() {
             pso::EntryPoint {
                 entry: "vs_main",
                 module: &shader_lib,
-                specialization: Specialization::NO,
+                specialization: Specialization {
+                    constants: &[pso::SpecEntry { id: 0, slice: 0..1 }],
+                    data: &[*(&1.5f32 as *const _ as *const u32)],
+                },
             },
             pso::EntryPoint {
                 entry: "ps_main",
                 module: &shader_lib,
-                specialization: Specialization::NO,
+                specialization: Specialization::EMPTY,
             },
         );
 

@@ -205,12 +205,12 @@ pub struct Specialization<'a> {
     /// Constants to overwrite.
     pub constants: &'a [SpecEntry],
     /// Overwrite data, indexed by entries of `constants`.
-    pub data: &'a [u8],
+    pub data: &'a [u32],
 }
 
 impl<'a> Specialization<'a> {
-    /// Simple polygon-filling rasterizer state
-    pub const NO: Self = Specialization {
+    /// Not specialization value set, using default values.
+    pub const EMPTY: Self = Specialization {
         constants: &[],
         data: &[],
     };

@@ -198,7 +198,25 @@ impl Device {
                     .get_specialization_constants()
                     .map_err(gen_query_error)?;
 
-                println!("{:?}", (&source.specialization, spec_constants));
+                println!("{:?}", (&source.specialization, &spec_constants));
+                for spec_constant in spec_constants {
+                    if let Some(constant) = source
+                        .specialization
+                        .constants
+                        .iter()
+                        .find(|c| c.id == spec_constant.constant_id)
+                    {
+                        // Override specialization constant values
+                        unsafe {
+                            let value = ast
+                                .get_scalar_constant(spec_constant.id)
+                                .map_err(gen_query_error)?;
+                            slice::from_raw_parts_mut(value.data as *mut _ as *mut u32, constant.slice.end - constant.slice.start)
+                                .copy_from_slice(&source.specialization.data[constant.slice.clone()]);
+                        }
+                    }
+                }
+
                 Self::patch_spirv_resources(&mut ast)?;
                 let shader_model = hlsl::ShaderModel::V5_1;
                 let shader_code = Self::translate_spirv(&mut ast, shader_model)?;
