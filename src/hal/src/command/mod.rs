@@ -59,6 +59,7 @@ impl<'a, B: Backend, C> Drop for CommandBuffer<'a, B, C> {
 pub type QueryId = u32;
 
 ///
+#[derive(Debug)]
 pub struct Query<'a, B: Backend> {
     ///
     pub pool: &'a B::QueryPool,

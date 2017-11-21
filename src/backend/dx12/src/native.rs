@@ -406,3 +406,12 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
         unimplemented!()
     }
 }
+
+#[derive(Debug)]
+pub struct QueryPool {
+    pub(crate) raw: ComPtr<winapi::ID3D12QueryHeap>,
+    pub(crate) ty: winapi::D3D12_QUERY_HEAP_TYPE,
+}
+
+unsafe impl Send for QueryPool {}
+unsafe impl Sync for QueryPool {}
