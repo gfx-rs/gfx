@@ -691,6 +691,10 @@ impl d::Device<B> for Device {
         }
     }
 
+    fn get_fence_status(&self, _: &n::Fence) -> bool {
+        unimplemented!()
+    }
+
     fn free_memory(&self, _: n::Memory) {
         unimplemented!()
     }
