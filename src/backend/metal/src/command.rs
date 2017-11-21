@@ -14,8 +14,8 @@ use hal::command::{
     BufferImageCopy, BufferCopy, ImageCopy, ImageResolve,
     SubpassContents, RawCommandBuffer,
     ColorValue, StencilValue, Rect, Viewport,
-    Query, QueryControl, QueryId,
 };
+use hal::query::{Query, QueryControl, QueryId};
 use hal::queue::{RawCommandQueue, RawSubmission};
 
 use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLClearColor, MTLSize, MTLOrigin};

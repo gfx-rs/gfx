@@ -4,7 +4,7 @@
 extern crate gfx_hal as hal;
 
 use std::ops::Range;
-use hal::{buffer, command, device, format, image, mapping, memory, pass, pool, pso, queue};
+use hal::{buffer, command, device, format, image, mapping, memory, pass, pool, pso, query, queue};
 
 /// Dummy backend.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -197,10 +197,19 @@ impl hal::Device<Backend> for Device {
     fn reset_fences(&self, _: &[&()]) {
         unimplemented!()
     }
+
     fn wait_for_fences(&self, _: &[&()], _: device::WaitFor, _: u32) -> bool {
         unimplemented!()
     }
     fn get_fence_status(&self, _: &()) -> bool {
+        unimplemented!()
+    }
+
+    fn create_query_pool(&self, _: query::QueryType, _: u32) -> () {
+        unimplemented!()
+    }
+
+    fn destroy_query_pool(&self, _: ()) {
         unimplemented!()
     }
 
@@ -512,15 +521,15 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     fn begin_query(
         &mut self,
-        _: command::Query<Backend>,
-        _: command::QueryControl,
+        _: query::Query<Backend>,
+        _: query::QueryControl,
     ) {
         unimplemented!()
     }
 
     fn end_query(
         &mut self,
-        _: command::Query<Backend>,
+        _: query::Query<Backend>,
     ) {
         unimplemented!()
     }
@@ -528,7 +537,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn reset_query_pool(
         &mut self,
         _: &(),
-        _: Range<command::QueryId>,
+        _: Range<query::QueryId>,
     ) {
         unimplemented!()
     }

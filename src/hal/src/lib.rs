@@ -44,6 +44,7 @@ pub mod memory;
 pub mod pass;
 pub mod pool;
 pub mod pso;
+pub mod query;
 pub mod queue;
 pub mod window;
 

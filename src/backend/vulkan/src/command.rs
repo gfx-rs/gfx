@@ -5,7 +5,7 @@ use smallvec::SmallVec;
 use ash::vk;
 use ash::version::DeviceV1_0;
 
-use hal::{command as com, memory, pso};
+use hal::{command as com, memory, pso, query};
 use hal::{IndexCount, InstanceCount, VertexCount, VertexOffset};
 use hal::buffer::IndexBufferView;
 use hal::image::{AspectFlags, ImageLayout, SubresourceRange};
@@ -752,11 +752,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn begin_query(
         &mut self,
-        query: com::Query<Backend>,
-        control: com::QueryControl,
+        query: query::Query<Backend>,
+        control: query::QueryControl,
     ) {
         let mut flags = vk::QueryControlFlags::empty();
-        if control.contains(com::QueryControl::PRECISE) {
+        if control.contains(query::QueryControl::PRECISE) {
             flags |= vk::QUERY_CONTROL_PRECISE_BIT;
         }
 
@@ -772,7 +772,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn end_query(
         &mut self,
-        query: com::Query<Backend>,
+        query: query::Query<Backend>,
     ) {
         unsafe {
             self.device.0.cmd_end_query(
@@ -786,7 +786,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn reset_query_pool(
         &mut self,
         pool: &n::QueryPool,
-        queries: Range<com::QueryId>,
+        queries: Range<query::QueryId>,
     ) {
         unsafe {
             self.device.0.cmd_reset_query_pool(

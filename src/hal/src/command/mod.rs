@@ -54,26 +54,3 @@ impl<'a, B: Backend, C> Drop for CommandBuffer<'a, B, C> {
         self.raw.finish();
     }
 }
-
-///
-pub type QueryId = u32;
-
-///
-#[derive(Debug)]
-pub struct Query<'a, B: Backend> {
-    ///
-    pub pool: &'a B::QueryPool,
-    ///
-    pub id: QueryId,
-}
-
-bitflags!(
-    /// Query control flags.
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct QueryControl: u8 {
-        /// Occlusion queries **must** return the exact sampler number.
-        ///
-        /// Requires `precise_occlusion_query` device feature.
-        const PRECISE = 0x1;
-    }
-);

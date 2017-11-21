@@ -10,7 +10,7 @@ use spirv_cross::{hlsl, spirv, ErrorCode as SpirvErrorCode};
 use winapi;
 use wio::com::ComPtr;
 
-use hal::{buffer, device as d, format, image, mapping, memory, pass, pso};
+use hal::{buffer, device as d, format, image, mapping, memory, pass, pso, query};
 use hal::{Features, Limits, MemoryType};
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
@@ -1801,6 +1801,14 @@ impl d::Device<B> for Device {
     }
 
     fn free_memory(&self, _memory: n::Memory) {
+        // Just drop
+    }
+
+    fn create_query_pool(&self, ty: query::QueryType, count: u32) -> n::QueryPool {
+        unimplemented!()
+    }
+
+    fn destroy_query_pool(&self, pool: n::QueryPool) {
         // Just drop
     }
 

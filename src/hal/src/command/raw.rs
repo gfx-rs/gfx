@@ -5,12 +5,12 @@ use {Backend, IndexCount, InstanceCount, VertexCount, VertexOffset};
 use buffer::IndexBufferView;
 use image::{ImageLayout, SubresourceRange};
 use memory::Barrier;
+use query::{Query, QueryControl, QueryId};
 use super::{
     ColorValue, StencilValue, Rect, Viewport,
     AttachmentClear, BufferCopy, BufferImageCopy,
     ClearColor, ClearDepthStencil, ClearValue,
     ImageCopy, ImageResolve, SubpassContents,
-    Query, QueryControl, QueryId,
 };
 
 ///

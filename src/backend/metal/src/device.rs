@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::{cmp, mem, ptr, slice};
 
 use hal::{self,
-        image, pass, format, mapping, memory, buffer, pso};
+        image, pass, format, mapping, memory, buffer, pso, query};
 use hal::device::{WaitFor, BindError, OutOfMemory, FramebufferError, ShaderError, Extent};
 use hal::pool::CommandPoolCreateFlags;
 use hal::pso::{DescriptorSetWrite, DescriptorType, DescriptorSetLayoutBinding, AttributeDesc};
@@ -1084,6 +1084,14 @@ impl hal::Device<Backend> for Device {
     }
     #[cfg(not(feature = "native_fence"))]
     fn destroy_fence(&self, _fence: n::Fence) {
+    }
+
+    fn create_query_pool(&self, _ty: query::QueryType, _count: u32) -> () {
+        unimplemented!()
+    }
+
+    fn destroy_query_pool(&self, _: ()) {
+        unimplemented!()
     }
 }
 

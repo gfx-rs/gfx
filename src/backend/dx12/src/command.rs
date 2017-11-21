@@ -1,5 +1,5 @@
 use wio::com::ComPtr;
-use hal::{command as com, image, memory, pass, pso};
+use hal::{command as com, image, memory, pass, pso, query};
 use hal::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset};
 use hal::buffer::IndexBufferView;
 use winapi::{self, UINT64, UINT};
@@ -1312,12 +1312,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn begin_query(
         &mut self,
-        query: com::Query<Backend>,
-        flags: com::QueryControl,
+        query: query::Query<Backend>,
+        flags: query::QueryControl,
     ) {
         let query_ty = match query.pool.ty {
             winapi::D3D12_QUERY_HEAP_TYPE_OCCLUSION => {
-                if flags.contains(com::QueryControl::PRECISE) {
+                if flags.contains(query::QueryControl::PRECISE) {
                     self.occlusion_query = Some(OcclusionQuery::Precise(query.id));
                     winapi::D3D12_QUERY_TYPE_OCCLUSION
                 } else {
@@ -1348,7 +1348,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn end_query(
         &mut self,
-        query: com::Query<Backend>,
+        query: query::Query<Backend>,
     ) {
         let id = query.id;
         let query_ty = match query.pool.ty {
@@ -1385,7 +1385,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn reset_query_pool(
         &mut self,
         _pool: &n::QueryPool,
-        _queries: Range<com::QueryId>,
+        _queries: Range<query::QueryId>,
     ) {
         // Nothing todo here
         // vkCmdResetQueryPool sets the queries to `unavailable` but the specification

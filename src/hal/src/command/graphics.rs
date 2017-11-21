@@ -4,11 +4,9 @@ use Backend;
 use pso;
 use buffer::IndexBufferView;
 use image::{ImageLayout, SubresourceRange};
+use query::{Query, QueryControl, QueryId};
 use queue::capability::{Graphics, GraphicsOrCompute, Supports};
-use super::{
-    CommandBuffer, RawCommandBuffer, RenderPassInlineEncoder,
-    Query, QueryControl, QueryId,
-};
+use super::{CommandBuffer, RawCommandBuffer, RenderPassInlineEncoder};
 
 
 #[allow(missing_docs)]
