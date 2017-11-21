@@ -1079,6 +1079,9 @@ impl hal::Device<Backend> for Device {
             thread::sleep(time::Duration::from_millis(tick as u64));
         }
     }
+    fn get_fence_status(&self, fence: &n::Fence) -> bool {
+        *fence.0.lock().unwrap()
+    }
     #[cfg(not(feature = "native_fence"))]
     fn destroy_fence(&self, _fence: n::Fence) {
     }

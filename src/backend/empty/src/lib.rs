@@ -199,6 +199,9 @@ impl hal::Device<Backend> for Device {
     fn wait_for_fences(&self, _: &[&()], _: device::WaitFor, _: u32) -> bool {
         unimplemented!()
     }
+    fn get_fence_status(&self, _: &()) -> bool {
+        unimplemented!()
+    }
 
     fn free_memory(&self, _: ()) {
         unimplemented!()

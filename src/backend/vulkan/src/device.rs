@@ -1208,6 +1208,17 @@ impl d::Device<B> for Device {
         }
     }
 
+    fn get_fence_status(&self, fence: &n::Fence) -> bool {
+        let result = unsafe {
+            self.raw.0.get_fence_status(fence.0)
+        };
+        match result {
+            Ok(()) | Err(vk::Result::Success) => true,
+            Err(vk::Result::NotReady) => false,
+            _ => panic!("Unexpected get_fence_status result {:?}", result),
+        }
+    }
+
     fn free_memory(&self, memory: n::Memory) {
         if !memory.ptr.is_null() {
             unsafe { self.raw.0.unmap_memory(memory.inner) }

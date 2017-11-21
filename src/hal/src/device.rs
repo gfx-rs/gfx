@@ -387,6 +387,9 @@ pub trait Device<B: Backend> {
     /// Returns true if fences were signaled before the timeout.
     fn wait_for_fences(&self, &[&B::Fence], WaitFor, timeout_ms: u32) -> bool;
 
+    /// true for signaled, false for not ready
+    fn get_fence_status(&self, &B::Fence) -> bool;
+
     ///
     fn destroy_fence(&self, B::Fence);
 }
