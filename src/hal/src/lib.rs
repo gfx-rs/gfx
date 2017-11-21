@@ -113,6 +113,11 @@ pub struct Features {
     pub sampler_anisotropy: bool,
     /// Support setting border texel colors.
     pub sampler_border_color: bool,
+    /// Support precise occlusion queries, returning the actual number of samples.
+    /// If not supported, queries return a non-zero value when at least **one** sample passes.
+    pub precise_occlusion_query: bool,
+    /// Support query of pipeline statistics.
+    pub pipeline_statistics_query: bool,
 }
 
 /// Limits of the device.

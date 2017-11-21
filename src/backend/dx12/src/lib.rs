@@ -512,6 +512,8 @@ impl Device {
                 sampler_border_color: false,
                 sampler_lod_bias: false,
                 sampler_objects: false,
+                precise_occlusion_query: true,
+                pipeline_statistics_query: true,
             },
             limits: Limits { // TODO
                 max_texture_size: 0,

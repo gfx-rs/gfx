@@ -376,6 +376,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 sampler_border_color: false,
                 sampler_lod_bias: false,
                 sampler_objects: false,
+                precise_occlusion_query: false,
+                pipeline_statistics_query: false,
             },
             limits: Limits {
                 max_texture_size: limits.max_image_dimension3d as _,
