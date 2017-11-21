@@ -7,7 +7,6 @@
 use {device, pass};
 use std::error::Error;
 use std::fmt;
-use std::ops::Range;
 
 mod compute;
 mod descriptor;

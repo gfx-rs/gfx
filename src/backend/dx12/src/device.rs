@@ -206,26 +206,16 @@ impl Device {
                     {
                         // Override specialization constant values
                         unsafe {
-                            let value = ast
-                                .get_scalar_constant(spec_constant.id)
-                                .map_err(gen_query_error)?;
-                            match constant.value {
-                                pso::Constant::Bool(v) => { *value.data = v as u64; }
-                                pso::Constant::U32(v) => { *value.data = v as u64; }
-                                pso::Constant::U64(v) => { *value.data = v; }
-                                pso::Constant::I32(v) => {
-                                    *value.data = *(&v as *const _ as *const u64);
-                                }
-                                pso::Constant::I64(v) => {
-                                    *value.data = *(&v as *const _ as *const u64);
-                                }
-                                pso::Constant::F32(v) => {
-                                    *value.data = *(&v as *const _ as *const u64);
-                                }
-                                pso::Constant::F64(v) => {
-                                    *value.data = *(&v as *const _ as *const u64);
-                                }
-                            }
+                            let value = match constant.value {
+                                pso::Constant::Bool(v) => v as u64,
+                                pso::Constant::U32(v) => v as u64,
+                                pso::Constant::U64(v) => v,
+                                pso::Constant::I32(v) => *(&v as *const _ as *const u64),
+                                pso::Constant::I64(v) => *(&v as *const _ as *const u64),
+                                pso::Constant::F32(v) => *(&v as *const _ as *const u64),
+                                pso::Constant::F64(v) => *(&v as *const _ as *const u64),
+                            };
+                            ast.set_scalar_constant(spec_constant.id, value).map_err(gen_query_error)?;
                         }
                     }
                 }
