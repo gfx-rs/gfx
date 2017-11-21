@@ -14,6 +14,7 @@ use hal::command::{
     BufferImageCopy, BufferCopy, ImageCopy, ImageResolve,
     SubpassContents, RawCommandBuffer,
     ColorValue, StencilValue, Rect, Viewport,
+    Query, QueryControl, QueryId,
 };
 use hal::queue::{RawCommandQueue, RawSubmission};
 
@@ -831,6 +832,29 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         _offset: u64,
         _draw_count: u32,
         _stride: u32,
+    ) {
+        unimplemented!()
+    }
+
+    fn begin_query(
+        &mut self,
+        _query: Query<Backend>,
+        _flags: QueryControl,
+    ) {
+        unimplemented!()
+    }
+
+    fn end_query(
+        &mut self,
+        _query: Query<Backend>,
+    ) {
+        unimplemented!()
+    }
+
+    fn reset_query_pool(
+        &mut self,
+        _pool: &(),
+        _queries: Range<QueryId>,
     ) {
         unimplemented!()
     }

@@ -46,6 +46,7 @@ impl hal::Backend for Backend {
 
     type Fence = ();
     type Semaphore = ();
+    type QueryPool = ();
 }
 
 /// Dummy physical device.
@@ -505,6 +506,29 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         _: u64,
         _: u32,
         _: u32,
+    ) {
+        unimplemented!()
+    }
+
+    fn begin_query(
+        &mut self,
+        _: command::Query<Backend>,
+        _: command::QueryControl,
+    ) {
+        unimplemented!()
+    }
+
+    fn end_query(
+        &mut self,
+        _: command::Query<Backend>,
+    ) {
+        unimplemented!()
+    }
+
+    fn reset_query_pool(
+        &mut self,
+        _: &(),
+        _: Range<command::QueryId>,
     ) {
         unimplemented!()
     }

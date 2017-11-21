@@ -259,6 +259,7 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
 
     type Fence:               Debug + Any + Send + Sync;
     type Semaphore:           Debug + Any + Send + Sync;
+    type QueryPool:           Debug + Any + Send + Sync;
 }
 
 #[allow(missing_docs)]

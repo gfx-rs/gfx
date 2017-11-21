@@ -1,8 +1,9 @@
 #![allow(missing_docs)]
 
 use gl;
-use hal::{self, command, image, memory};
+use hal::{self, image, memory};
 use hal::buffer::IndexBufferView;
+use hal::command::{self, Query, QueryControl, QueryId};
 use {native as n, Backend};
 use pool::{self, BufferMemory};
 
@@ -590,6 +591,29 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         _offset: u64,
         _draw_count: u32,
         _stride: u32,
+    ) {
+        unimplemented!()
+    }
+
+    fn begin_query(
+        &mut self,
+        _query: Query<Backend>,
+        _flags: QueryControl,
+    ) {
+        unimplemented!()
+    }
+
+    fn end_query(
+        &mut self,
+        _query: Query<Backend>,
+    ) {
+        unimplemented!()
+    }
+
+    fn reset_query_pool(
+        &mut self,
+        _pool: &(),
+        _queries: Range<QueryId>,
     ) {
         unimplemented!()
     }

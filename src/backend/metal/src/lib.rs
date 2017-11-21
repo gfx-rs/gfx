@@ -143,6 +143,7 @@ impl hal::Backend for Backend {
 
     type Fence = native::Fence;
     type Semaphore = native::Semaphore;
+    type QueryPool = ();
 }
 
 pub struct AutoreleasePool {

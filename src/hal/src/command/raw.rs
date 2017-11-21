@@ -10,6 +10,7 @@ use super::{
     AttachmentClear, BufferCopy, BufferImageCopy,
     ClearColor, ClearDepthStencil, ClearValue,
     ImageCopy, ImageResolve, SubpassContents,
+    Query, QueryControl, QueryId,
 };
 
 ///
@@ -267,4 +268,13 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         draw_count: u32,
         stride: u32,
     );
+
+    ///
+    fn begin_query(&mut self, query: Query<B>, flags: QueryControl);
+
+    ///
+    fn end_query(&mut self, query: Query<B>);
+
+    ///
+    fn reset_query_pool(&mut self, pool: &B::QueryPool, queries: Range<QueryId>);
 }

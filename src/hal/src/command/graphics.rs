@@ -4,8 +4,11 @@ use Backend;
 use pso;
 use buffer::IndexBufferView;
 use image::{ImageLayout, SubresourceRange};
-use queue::capability::{Graphics, Supports};
-use super::{CommandBuffer, RawCommandBuffer, RenderPassInlineEncoder};
+use queue::capability::{Graphics, GraphicsOrCompute, Supports};
+use super::{
+    CommandBuffer, RawCommandBuffer, RenderPassInlineEncoder,
+    Query, QueryControl, QueryId,
+};
 
 
 #[allow(missing_docs)]
@@ -195,5 +198,22 @@ impl<'a, B: Backend, C: Supports<Graphics>> CommandBuffer<'a, B, C> {
     ///
     pub fn set_blend_constants(&mut self, cv: ColorValue) {
         self.raw.set_blend_constants(cv)
+    }
+}
+
+impl<'a, B: Backend, C: Supports<GraphicsOrCompute>> CommandBuffer<'a, B, C> {
+    ///
+    fn begin_query(&mut self, query: Query<B>, flags: QueryControl) {
+        self.raw.begin_query(query, flags)
+    }
+
+    ///
+    fn end_query(&mut self, query: Query<B>) {
+        self.raw.end_query(query)
+    }
+
+    ///
+    fn reset_query_pool(&mut self, pool: &B::QueryPool, queries: Range<QueryId>) {
+        self.raw.reset_query_pool(pool, queries)
     }
 }

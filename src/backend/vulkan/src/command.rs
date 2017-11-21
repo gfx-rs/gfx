@@ -749,6 +749,29 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             )
         }
     }
+
+    fn begin_query(
+        &mut self,
+        _query: com::Query<Backend>,
+        _flags: com::QueryControl,
+    ) {
+        unimplemented!()
+    }
+
+    fn end_query(
+        &mut self,
+        _query: com::Query<Backend>,
+    ) {
+        unimplemented!()
+    }
+
+    fn reset_query_pool(
+        &mut self,
+        _pool: &(),
+        _queries: Range<com::QueryId>,
+    ) {
+        unimplemented!()
+    }
 }
 
 pub struct SubpassCommandBuffer(pub CommandBuffer);

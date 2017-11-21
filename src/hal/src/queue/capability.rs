@@ -10,6 +10,9 @@ pub enum Compute {}
 /// Transfer capability, supporting only transfer operations.
 pub enum Transfer {}
 
+/// Graphics or compute capability.
+pub enum GraphicsOrCompute {}
+
 ///
 pub trait Capability {
     /// Return true if this type level capability is supported by
@@ -58,6 +61,10 @@ impl Supports<Compute> for General { }
 impl Supports<Transfer> for General { }
 impl Supports<Transfer> for Graphics { }
 impl Supports<Transfer> for Compute { }
+
+impl Supports<GraphicsOrCompute> for General { }
+impl Supports<GraphicsOrCompute> for Graphics { }
+impl Supports<GraphicsOrCompute> for Compute { }
 
 /// Encoding the minimal capability to support a combination of other capabilities.
 pub trait Upper {
