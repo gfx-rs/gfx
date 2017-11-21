@@ -752,25 +752,50 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn begin_query(
         &mut self,
-        _query: com::Query<Backend>,
-        _flags: com::QueryControl,
+        query: com::Query<Backend>,
+        control: com::QueryControl,
     ) {
-        unimplemented!()
+        let mut flags = vk::QueryControlFlags::empty();
+        if control.contains(com::QueryControl::PRECISE) {
+            flags |= vk::QUERY_CONTROL_PRECISE_BIT;
+        }
+
+        unsafe {
+            self.device.0.cmd_begin_query(
+                self.raw,
+                query.pool.0,
+                query.id,
+                flags
+            )
+        }
     }
 
     fn end_query(
         &mut self,
-        _query: com::Query<Backend>,
+        query: com::Query<Backend>,
     ) {
-        unimplemented!()
+        unsafe {
+            self.device.0.cmd_end_query(
+                self.raw,
+                query.pool.0,
+                query.id,
+            )
+        }
     }
 
     fn reset_query_pool(
         &mut self,
-        _pool: &(),
-        _queries: Range<com::QueryId>,
+        pool: &n::QueryPool,
+        queries: Range<com::QueryId>,
     ) {
-        unimplemented!()
+        unsafe {
+            self.device.0.cmd_reset_query_pool(
+                self.raw,
+                pool.0,
+                queries.start,
+                queries.end - queries.start,
+            )
+        }
     }
 }
 

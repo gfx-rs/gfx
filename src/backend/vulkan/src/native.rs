@@ -127,3 +127,6 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
         });
     }
 }
+
+#[derive(Debug, Hash)]
+pub struct QueryPool(pub vk::QueryPool);
