@@ -1711,6 +1711,10 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
+    fn wait_idle(&self) {
+        unimplemented!()
+    }
+
     fn free_memory(&self, _memory: n::Memory) {
         // Just drop
     }
