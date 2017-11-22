@@ -133,6 +133,10 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                                     .map(|_| None);
                                 DescriptorSetBinding::SampledImage(resources.collect())
                             }
+                            pso::DescriptorType::UniformBuffer => {
+                                let resources = (0 .. layout.count).map(|_| None);
+                                DescriptorSetBinding::ConstantBuffer(resources.collect())
+                            }
                             _ => unimplemented!()
                         };
                         (layout.binding, binding)
@@ -207,7 +211,7 @@ pub enum DescriptorSetBinding {
     //StorageImage(Vec<(metal::Texture, image::ImageLayout)>),
     //UniformTexelBuffer,
     //StorageTexelBuffer,
-    //ConstantBuffer(Vec<metal::Buffer>),
+    ConstantBuffer(Vec<Option<(metal::Buffer, u64)>>),
     //StorageBuffer,
     //InputAttachment(Vec<(metal::Texture, image::ImageLayout)>),
 }
