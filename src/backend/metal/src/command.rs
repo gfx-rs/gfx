@@ -599,6 +599,17 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
                                         }
                                     }
                                 }
+                                ConstantBuffer(ref buffers) => {
+                                    for (i, ref bref) in buffers.iter().enumerate() {
+                                        if let Some(ref buffer) = **bref {
+                                            let offset = buffer.1;
+                                            inner.resources_vs.add_buffer(start + i, buffer.0.as_ref(), offset as _);
+                                            if let EncoderState::Render(ref encoder) = inner.encoder_state {
+                                                encoder.set_vertex_buffer((start + i) as _,offset as _, Some(buffer.0.as_ref()));
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                         if desc_layout.stage_flags.contains(pso::ShaderStageFlags::FRAGMENT) {
@@ -621,6 +632,17 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
                                     if let EncoderState::Render(ref encoder) = inner.encoder_state {
                                         for (i, texture) in images.iter().enumerate() {
                                             encoder.set_fragment_texture((start + i) as _, texture.as_ref().map(|&(ref texture, _)| &**texture));
+                                        }
+                                    }
+                                }
+                                ConstantBuffer(ref buffers) => {
+                                    for (i, ref bref) in buffers.iter().enumerate() {
+                                        if let Some(ref buffer) = **bref {
+                                            let offset = buffer.1;
+                                            inner.resources_fs.add_buffer(start + i, buffer.0.as_ref(), offset as _);
+                                            if let EncoderState::Render(ref encoder) = inner.encoder_state {
+                                                encoder.set_fragment_buffer((start + i) as _,offset as _, Some(buffer.0.as_ref()));
+                                            }
                                         }
                                     }
                                 }
