@@ -265,6 +265,15 @@ fn main() {
 
     println!("pipelines: {:?}", pipelines);
 
+    // Cleanup unused shader modules
+    #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]
+    {
+        device.destroy_shader_module(vs_module);
+        device.destroy_shader_module(fs_module);
+    }
+    #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
+    device.destroy_shader_module(shader_lib);
+
     // Descriptors
     let mut desc_pool = device.create_descriptor_pool(
         1, // sets
@@ -527,14 +536,6 @@ fn main() {
     device.destroy_command_pool(command_pool.downgrade());
     device.destroy_descriptor_pool(desc_pool);
     device.destroy_descriptor_set_layout(set_layout);
-
-    #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]
-    {
-        device.destroy_shader_module(vs_module);
-        device.destroy_shader_module(fs_module);
-    }
-    #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
-    device.destroy_shader_module(shader_lib);
 
     device.destroy_buffer(vertex_buffer);
     device.destroy_buffer(image_upload_buffer);
