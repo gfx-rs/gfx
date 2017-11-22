@@ -412,7 +412,7 @@ fn main() {
     };
 
     let frame_semaphore = device.create_semaphore();
-    let frame_fence = device.create_fence(true);
+    //let frame_fence = device.create_fence(true);
     let render_semaphore = device.create_semaphore();
     let mut upload_semaphore = Some(device.create_semaphore());
     let mut used_semaphores = Vec::new();
@@ -485,8 +485,8 @@ fn main() {
 
         device.wait_idle();
 
-        device.wait_for_fences(&[&frame_fence], d::WaitFor::All, !0);
-        device.reset_fences(&[&frame_fence]);
+        //device.wait_for_fences(&[&frame_fence], d::WaitFor::All, !0);
+        //device.reset_fences(&[&frame_fence]);
 
         command_pool.reset();
         let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&frame_semaphore));
@@ -528,7 +528,7 @@ fn main() {
                     .signal(&[&render_semaphore])
                     .submit(&[submit])
             };
-            queue.submit(submission, Some(&frame_fence));
+            queue.submit(submission, None/*Some(&frame_fence)*/);
         }
 
         // present frame
@@ -545,7 +545,8 @@ fn main() {
     }
 
     // wait for command buffer
-    device.wait_for_fences(&[&frame_fence], d::WaitFor::All, !0);
+    device.wait_idle();
+    //device.wait_for_fences(&[&frame_fence], d::WaitFor::All, !0);
 
     // cleanup!
     device.destroy_command_pool(command_pool.downgrade());
@@ -565,7 +566,7 @@ fn main() {
     device.destroy_image(image_logo);
     device.destroy_image_view(image_srv);
     device.destroy_sampler(sampler);
-    device.destroy_fence(frame_fence);
+    //device.destroy_fence(frame_fence);
     device.destroy_semaphore(render_semaphore);
     device.destroy_semaphore(frame_semaphore);
     for x in used_semaphores.drain(..) { device.destroy_semaphore(x); }
