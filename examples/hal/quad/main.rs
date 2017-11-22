@@ -411,8 +411,11 @@ fn main() {
         depth: 0.0 .. 1.0,
     };
 
-    let mut frame_semaphore = device.create_semaphore();
-    let mut frame_fence = device.create_fence(false); // TODO: remove
+    let frame_semaphore = device.create_semaphore();
+    let frame_fence = device.create_fence(true);
+    let render_semaphore = device.create_semaphore();
+    let mut upload_semaphore = Some(device.create_semaphore());
+    let mut used_semaphores = Vec::new();
 
     // copy buffer to texture
     {
@@ -456,10 +459,11 @@ fn main() {
         };
 
         let submission = Submission::new()
+            .signal(&[upload_semaphore.as_ref().unwrap()])
             .submit(&[submit]);
-        queue.submit(submission, Some(&mut frame_fence));
+        queue.submit(submission, None);
 
-        device.wait_for_fences(&[&frame_fence], d::WaitFor::All, !0);
+        //device.wait_for_fences(&[&frame_fence], d::WaitFor::All, !0);
     }
 
     //
@@ -479,9 +483,13 @@ fn main() {
             }
         });
 
+        device.wait_idle();
+
+        device.wait_for_fences(&[&frame_fence], d::WaitFor::All, !0);
         device.reset_fences(&[&frame_fence]);
+
         command_pool.reset();
-        let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&mut frame_semaphore));
+        let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&frame_semaphore));
 
         // Rendering
         let submit = {
@@ -506,22 +514,38 @@ fn main() {
             cmd_buffer.finish()
         };
 
-        let submission = Submission::new()
-            .wait_on(&[(&mut frame_semaphore, PipelineStage::BOTTOM_OF_PIPE)])
-            .submit(&[submit]);
-        queue.submit(submission, Some(&mut frame_fence));
-
-        // TODO: replace with semaphore
-        device.wait_for_fences(&[&frame_fence], d::WaitFor::All, !0);
+        {
+            let submission = {
+                let wait_list = match &upload_semaphore {
+                    &Some(ref s) => vec![
+                        (&frame_semaphore, PipelineStage::BOTTOM_OF_PIPE),
+                        (s, PipelineStage::TOP_OF_PIPE),
+                    ],
+                    &None => vec![(&frame_semaphore, PipelineStage::BOTTOM_OF_PIPE)],
+                };
+                Submission::new()
+                    .wait_on(&wait_list)
+                    .signal(&[&render_semaphore])
+                    .submit(&[submit])
+            };
+            queue.submit(submission, Some(&frame_fence));
+        }
 
         // present frame
-        swap_chain.present(&mut queue, &[]);
+        swap_chain.present(&mut queue, &[&render_semaphore]);
 
         #[cfg(feature = "metal")]
         unsafe {
             autorelease_pool.reset();
         }
+
+        if let Some(s) = upload_semaphore.take() {
+            used_semaphores.push(s);
+        }
     }
+
+    // wait for command buffer
+    device.wait_for_fences(&[&frame_fence], d::WaitFor::All, !0);
 
     // cleanup!
     device.destroy_command_pool(command_pool.downgrade());
@@ -542,7 +566,9 @@ fn main() {
     device.destroy_image_view(image_srv);
     device.destroy_sampler(sampler);
     device.destroy_fence(frame_fence);
+    device.destroy_semaphore(render_semaphore);
     device.destroy_semaphore(frame_semaphore);
+    for x in used_semaphores.drain(..) { device.destroy_semaphore(x); }
     device.destroy_pipeline_layout(pipeline_layout);
     device.destroy_renderpass(render_pass);
     device.free_memory(buffer_memory);
@@ -558,8 +584,10 @@ fn main() {
     }
     for (image, rtv) in frame_images {
         device.destroy_image_view(rtv);
-        device.destroy_image(image);
+        // NOTE: swapchain images should be destroyed by swapchain
+        // device.destroy_image(image);
     }
+    // TODO: destroy swapchain
 }
 
 #[cfg(not(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl")))]
