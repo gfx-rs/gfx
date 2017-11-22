@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 
 use gl;
-use hal::{self, command, image, memory, query};
+use hal::{self, command, image, memory, pso, query};
 use hal::buffer::IndexBufferView;
 use {native as n, Backend};
 use pool::{self, BufferMemory};
@@ -613,6 +613,14 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         &mut self,
         _pool: &(),
         _queries: Range<query::QueryId>,
+    ) {
+        unimplemented!()
+    }
+
+    fn write_timestamp(
+        &mut self,
+        _: pso::PipelineStage,
+        _: query::Query<Backend>,
     ) {
         unimplemented!()
     }

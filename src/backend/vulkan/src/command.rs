@@ -797,6 +797,21 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             )
         }
     }
+
+    fn write_timestamp(
+        &mut self,
+        stage: pso::PipelineStage,
+        query: query::Query<Backend>,
+    ) {
+        unsafe {
+            self.device.0.cmd_write_timestamp(
+                self.raw,
+                conv::map_pipeline_stage(stage),
+                query.pool.0,
+                query.id,
+            )
+        }
+    }
 }
 
 pub struct SubpassCommandBuffer(pub CommandBuffer);

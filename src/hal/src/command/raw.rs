@@ -277,4 +277,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
 
     ///
     fn reset_query_pool(&mut self, pool: &B::QueryPool, queries: Range<QueryId>);
+
+    ///
+    fn write_timestamp(&mut self, pso::PipelineStage, Query<B>);
 }

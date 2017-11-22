@@ -541,6 +541,14 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     ) {
         unimplemented!()
     }
+
+    fn write_timestamp(
+        &mut self,
+        _: pso::PipelineStage,
+        _: query::Query<Backend>,
+    ) {
+        unimplemented!()
+    }
 }
 
 // Dummy descriptor pool.

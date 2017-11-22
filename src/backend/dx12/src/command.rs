@@ -1387,12 +1387,26 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         _pool: &n::QueryPool,
         _queries: Range<query::QueryId>,
     ) {
-        // Nothing todo here
+        // Nothing to do here
         // vkCmdResetQueryPool sets the queries to `unavailable` but the specification
         // doesn't state an affect on the `active` state. Every queries at the end of the command
         // buffer must be made inactive, which can only be done with EndQuery.
         // Therefore, every `begin_query` must follow a `end_query` state, the resulting values
         // after calling are undefined.
+    }
+
+    fn write_timestamp(
+        &mut self,
+        _: pso::PipelineStage,
+        query: query::Query<Backend>,
+    ) {
+        unsafe {
+            self.raw.EndQuery(
+                query.pool.raw.as_mut() as *mut _,
+                winapi::D3D12_QUERY_TYPE_TIMESTAMP,
+                query.id,
+            );
+        }
     }
 }
 
