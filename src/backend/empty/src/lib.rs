@@ -203,6 +203,10 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
+    fn wait_idle(&self) {
+        unimplemented!()
+    }
+
     fn free_memory(&self, _: ()) {
         unimplemented!()
     }

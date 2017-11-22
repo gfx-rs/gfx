@@ -1263,6 +1263,14 @@ impl d::Device<B> for Device {
         }
     }
 
+    fn wait_idle(&self) {
+        let result = self.raw.0.device_wait_idle();
+        match result {
+            Ok(()) => (),
+            Err(_) => panic!("Unexpected wait_idle result {:?}", result),
+        }
+    }
+
     fn free_memory(&self, memory: n::Memory) {
         if !memory.ptr.is_null() {
             unsafe { self.raw.0.unmap_memory(memory.inner) }

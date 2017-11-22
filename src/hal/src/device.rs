@@ -394,4 +394,7 @@ pub trait Device<B: Backend> {
 
     ///
     fn destroy_fence(&self, B::Fence);
+
+    ///
+    fn wait_idle(&self);
 }

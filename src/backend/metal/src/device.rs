@@ -1085,6 +1085,9 @@ impl hal::Device<Backend> for Device {
     #[cfg(not(feature = "native_fence"))]
     fn destroy_fence(&self, _fence: n::Fence) {
     }
+    fn wait_idle(&self) {
+        unimplemented!()
+    }
 }
 
 #[test]
