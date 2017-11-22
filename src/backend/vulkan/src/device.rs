@@ -252,6 +252,8 @@ impl d::Device<B> for Device {
         descs: &[pso::GraphicsPipelineDesc<'a, B>],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         debug!("create_graphics_pipelines {:?}", descs);
+        const NUM_STAGES: usize = 5;
+
         // Store pipeline parameters to avoid stack usage
         let mut info_stages                = Vec::with_capacity(descs.len());
         let mut info_vertex_descs          = Vec::with_capacity(descs.len());
@@ -265,8 +267,8 @@ impl d::Device<B> for Device {
         let mut info_color_blend_states    = Vec::with_capacity(descs.len());
         let mut info_dynamic_states        = Vec::with_capacity(descs.len());
         let mut color_attachments          = Vec::with_capacity(descs.len());
-        let mut info_specializations       = Vec::with_capacity(descs.len() * 5);
-        let mut specialization_data        = Vec::with_capacity(descs.len() * 5);
+        let mut info_specializations       = Vec::with_capacity(descs.len() * NUM_STAGES);
+        let mut specialization_data        = Vec::with_capacity(descs.len() * NUM_STAGES);
 
         let dynamic_states = [vk::DynamicState::Viewport, vk::DynamicState::Scissor];
         let mut c_strings = Vec::new(); // hold the C strings temporarily

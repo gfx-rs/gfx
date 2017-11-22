@@ -914,10 +914,9 @@ impl d::Device<B> for Device {
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         descs.iter().map(|desc| {
             let build_shader = |source: Option<&pso::EntryPoint<'a, B>>| {
-                let source = if let Some(src) = source {
-                    src
-                } else {
-                    return Ok((ptr::null_mut(), false));
+                let source = match source {
+                    Some(src) => src,
+                    None => return Ok((ptr::null_mut(), false)),
                 };
 
                 Self::extract_entry_point(source)

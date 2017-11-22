@@ -130,20 +130,20 @@ fn main() {
     let (mut swap_chain, backbuffer) = surface.build_swapchain(swap_config, &queue);
 
     // Setup renderpass and pipeline
-    #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
     let vs_module = device
         .create_shader_module(include_bytes!("data/vert.spv"))
         .unwrap();
-    #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
     let fs_module = device
         .create_shader_module(include_bytes!("data/frag.spv"))
         .unwrap();
 
+    /*
     #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
     let shader_lib = device.create_shader_library_from_source(
             include_str!("shader/quad_indirect.metal"),
             back::LanguageVersion::new(2, 0),
         ).expect("Error on creating shader lib");
+    */
 
     #[cfg(feature = "gl")]
     let vs_module = device
@@ -202,9 +202,6 @@ fn main() {
 
     //
     let pipelines = {
-        //TODO: remove the type annotations when we have support for
-        // indirect argument buffers in SPIRV-Cross
-        #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]
         let (vs_entry, fs_entry) = (
             pso::EntryPoint::<back::Backend> {
                 entry: ENTRY_NAME,
@@ -223,6 +220,7 @@ fn main() {
             },
         );
 
+        /*
         #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
         let (vs_entry, fs_entry) = (
             pso::EntryPoint {
@@ -241,6 +239,7 @@ fn main() {
                 specialization: &[],
             },
         );
+        */
 
         let shader_entries = pso::GraphicsShaderSet {
             vertex: vs_entry,
@@ -554,13 +553,14 @@ fn main() {
     device.destroy_descriptor_pool(desc_pool);
     device.destroy_descriptor_set_layout(set_layout);
 
-    #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]
     {
         device.destroy_shader_module(vs_module);
         device.destroy_shader_module(fs_module);
     }
+    /*
     #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
     device.destroy_shader_module(shader_lib);
+    */
 
     device.destroy_buffer(vertex_buffer);
     device.destroy_buffer(image_upload_buffer);
