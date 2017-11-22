@@ -252,6 +252,8 @@ impl d::Device<B> for Device {
         descs: &[pso::GraphicsPipelineDesc<'a, B>],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         debug!("create_graphics_pipelines {:?}", descs);
+        const NUM_STAGES: usize = 5;
+
         // Store pipeline parameters to avoid stack usage
         let mut info_stages                = Vec::with_capacity(descs.len());
         let mut info_vertex_descs          = Vec::with_capacity(descs.len());
@@ -265,13 +267,33 @@ impl d::Device<B> for Device {
         let mut info_color_blend_states    = Vec::with_capacity(descs.len());
         let mut info_dynamic_states        = Vec::with_capacity(descs.len());
         let mut color_attachments          = Vec::with_capacity(descs.len());
+        let mut info_specializations       = Vec::with_capacity(descs.len() * NUM_STAGES);
+        let mut specialization_data        = Vec::with_capacity(descs.len() * NUM_STAGES);
 
         let dynamic_states = [vk::DynamicState::Viewport, vk::DynamicState::Scissor];
         let mut c_strings = Vec::new(); // hold the C strings temporarily
-        let mut make_stage = |stage, source: pso::EntryPoint<'a, B>| {
+        let mut make_stage = |stage, source: &pso::EntryPoint<'a, B>| {
             let string = CString::new(source.entry).unwrap();
             let p_name = string.as_ptr();
             c_strings.push(string);
+
+            let mut data = SmallVec::<[u8; 64]>::new();
+            let map_entries = conv::map_specialization_constants(
+                &source.specialization,
+                &mut data,
+            ).unwrap();
+
+            specialization_data.push((data, map_entries));
+            let &(ref data, ref map_entries) = specialization_data.last().unwrap();
+
+            info_specializations.push(vk::SpecializationInfo {
+                map_entry_count: map_entries.len() as _,
+                p_map_entries: map_entries.as_ptr(),
+                data_size: data.len() as _,
+                p_data: data.as_ptr() as _,
+            });
+            let info = info_specializations.last().unwrap();
+
             vk::PipelineShaderStageCreateInfo {
                 s_type: vk::StructureType::PipelineShaderStageCreateInfo,
                 p_next: ptr::null(),
@@ -279,7 +301,7 @@ impl d::Device<B> for Device {
                 stage,
                 module: source.module.raw,
                 p_name,
-                p_specialization_info: ptr::null(),
+                p_specialization_info: info,
             }
         };
 
@@ -287,22 +309,22 @@ impl d::Device<B> for Device {
             let mut stages = Vec::new();
             // Vertex stage
             if true { //vertex shader is required
-                stages.push(make_stage(vk::SHADER_STAGE_VERTEX_BIT, desc.shaders.vertex));
+                stages.push(make_stage(vk::SHADER_STAGE_VERTEX_BIT, &desc.shaders.vertex));
             }
             // Pixel stage
-            if let Some(entry) = desc.shaders.fragment {
+            if let Some(ref entry) = desc.shaders.fragment {
                 stages.push(make_stage(vk::SHADER_STAGE_FRAGMENT_BIT, entry));
             }
             // Geometry stage
-            if let Some(entry) = desc.shaders.geometry {
+            if let Some(ref entry) = desc.shaders.geometry {
                 stages.push(make_stage(vk::SHADER_STAGE_GEOMETRY_BIT, entry));
             }
             // Domain stage
-            if let Some(entry) = desc.shaders.domain {
+            if let Some(ref entry) = desc.shaders.domain {
                 stages.push(make_stage(vk::SHADER_STAGE_TESSELLATION_EVALUATION_BIT, entry));
             }
             // Hull stage
-            if let Some(entry) = desc.shaders.hull {
+            if let Some(ref entry) = desc.shaders.hull {
                 stages.push(make_stage(vk::SHADER_STAGE_TESSELLATION_CONTROL_BIT, entry));
             }
 
@@ -490,8 +512,9 @@ impl d::Device<B> for Device {
             };
 
             let mut flags = vk::PipelineCreateFlags::empty();
-            if let pso::BasePipeline::None = desc.parent {
-                flags |= vk::PIPELINE_CREATE_DERIVATIVE_BIT;
+            match desc.parent {
+                pso::BasePipeline::None => (),
+                _ => { flags |= vk::PIPELINE_CREATE_DERIVATIVE_BIT; }
             }
             if desc.flags.contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION) {
                 flags |= vk::PIPELINE_CREATE_DISABLE_OPTIMIZATION_BIT;
@@ -560,10 +583,30 @@ impl d::Device<B> for Device {
         descs: &[pso::ComputePipelineDesc<'a, B>],
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
         let mut c_strings = Vec::new(); // hold the C strings temporarily
+        let mut info_specializations = Vec::with_capacity(descs.len());
+        let mut specialization_data = Vec::with_capacity(descs.len());
+
         let infos = descs.iter().map(|desc| {
             let string = CString::new(desc.shader.entry).unwrap();
             let p_name = string.as_ptr();
             c_strings.push(string);
+
+            let mut data = SmallVec::<[u8; 64]>::new();
+            let map_entries = conv::map_specialization_constants(
+                &desc.shader.specialization,
+                &mut data,
+            ).unwrap();
+
+            specialization_data.push((data, map_entries));
+            let &(ref data, ref map_entries) = specialization_data.last().unwrap();
+
+            info_specializations.push(vk::SpecializationInfo {
+                map_entry_count: map_entries.len() as _,
+                p_map_entries: map_entries.as_ptr(),
+                data_size: data.len() as _,
+                p_data: data.as_ptr() as _,
+            });
+            let info = info_specializations.last().unwrap();
 
             let stage = vk::PipelineShaderStageCreateInfo {
                 s_type: vk::StructureType::PipelineShaderStageCreateInfo,
@@ -572,7 +615,7 @@ impl d::Device<B> for Device {
                 stage: vk::SHADER_STAGE_COMPUTE_BIT,
                 module: desc.shader.module.raw,
                 p_name,
-                p_specialization_info: ptr::null(),
+                p_specialization_info: info,
             };
 
             let (base_handle, base_index) = match desc.parent {
@@ -582,8 +625,9 @@ impl d::Device<B> for Device {
             };
 
             let mut flags = vk::PipelineCreateFlags::empty();
-            if let pso::BasePipeline::None = desc.parent {
-                flags |= vk::PIPELINE_CREATE_DERIVATIVE_BIT;
+            match desc.parent {
+                pso::BasePipeline::None => (),
+                _ => { flags |= vk::PIPELINE_CREATE_DERIVATIVE_BIT; }
             }
             if desc.flags.contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION) {
                 flags |= vk::PIPELINE_CREATE_DISABLE_OPTIMIZATION_BIT;

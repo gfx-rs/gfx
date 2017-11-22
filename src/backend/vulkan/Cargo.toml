@@ -18,6 +18,7 @@ default = ["winit"]
 name = "gfx_backend_vulkan"
 
 [dependencies]
+byteorder = "1"
 log = "0.3"
 lazy_static = "0.2"
 shared_library = "0.1"

@@ -61,7 +61,7 @@ fn main() {
         );
 
         let pipeline_layout = gpu.device.create_pipeline_layout(&[&set_layout]);
-        let entry_point = pso::EntryPoint { entry: "main", module: &shader };
+        let entry_point = pso::EntryPoint { entry: "main", module: &shader, specialization: &[] };
         let pipeline = gpu.device
             .create_compute_pipelines(&[
                 pso::ComputePipelineDesc::new(entry_point, &pipeline_layout)

@@ -25,7 +25,7 @@ use hal::{
 };
 use hal::format::{ChannelType, Formatted, Srgba8 as ColorFormat, Swizzle, Vec2};
 use hal::pass::Subpass;
-use hal::pso::{PipelineStage, ShaderStageFlags};
+use hal::pso::{PipelineStage, ShaderStageFlags, Specialization};
 use hal::queue::Submission;
 
 use std::io::Cursor;
@@ -130,20 +130,20 @@ fn main() {
     let (mut swap_chain, backbuffer) = surface.build_swapchain(swap_config, &queue);
 
     // Setup renderpass and pipeline
-    #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
     let vs_module = device
         .create_shader_module(include_bytes!("data/vert.spv"))
         .unwrap();
-    #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
     let fs_module = device
         .create_shader_module(include_bytes!("data/frag.spv"))
         .unwrap();
 
+    /*
     #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
     let shader_lib = device.create_shader_library_from_source(
             include_str!("shader/quad_indirect.metal"),
             back::LanguageVersion::new(2, 0),
         ).expect("Error on creating shader lib");
+    */
 
     #[cfg(feature = "gl")]
     let vs_module = device
@@ -202,19 +202,44 @@ fn main() {
 
     //
     let pipelines = {
-        //TODO: remove the type annotations when we have support for
-        // indirect argument buffers in SPIRV-Cross
-        #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]
         let (vs_entry, fs_entry) = (
-            pso::EntryPoint::<back::Backend> { entry: ENTRY_NAME, module: &vs_module },
-            pso::EntryPoint::<back::Backend> { entry: ENTRY_NAME, module: &fs_module },
+            pso::EntryPoint::<back::Backend> {
+                entry: ENTRY_NAME,
+                module: &vs_module,
+                specialization: &[
+                    Specialization {
+                        id: 0,
+                        value: pso::Constant::F32(0.8),
+                    }
+                ],
+            },
+            pso::EntryPoint::<back::Backend> {
+                entry: ENTRY_NAME,
+                module: &fs_module,
+                specialization: &[],
+            },
         );
 
+        /*
         #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
         let (vs_entry, fs_entry) = (
-            pso::EntryPoint { entry: "vs_main", module: &shader_lib },
-            pso::EntryPoint { entry: "ps_main", module: &shader_lib },
+            pso::EntryPoint {
+                entry: "vs_main",
+                module: &shader_lib,
+                specialization: &[
+                    Specialization {
+                        id: 0,
+                        value: pso::Constant::F32(0.8),
+                    }
+                ],
+            },
+            pso::EntryPoint {
+                entry: "ps_main",
+                module: &shader_lib,
+                specialization: &[],
+            },
         );
+        */
 
         let shader_entries = pso::GraphicsShaderSet {
             vertex: vs_entry,
@@ -528,13 +553,14 @@ fn main() {
     device.destroy_descriptor_pool(desc_pool);
     device.destroy_descriptor_set_layout(set_layout);
 
-    #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]
     {
         device.destroy_shader_module(vs_module);
         device.destroy_shader_module(fs_module);
     }
+    /*
     #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
     device.destroy_shader_module(shader_lib);
+    */
 
     device.destroy_buffer(vertex_buffer);
     device.destroy_buffer(image_upload_buffer);

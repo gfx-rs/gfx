@@ -256,7 +256,7 @@ impl Device {
 
         let options = metal::CompileOptions::new();
         options.set_language_version(MTLLanguageVersion::V1_1);
-        
+
         let library = self.device
             .new_library_with_source(shader_code.as_ref(), &options)
             .map_err(|err| ShaderError::CompilationFailed(err.into()))?;
@@ -329,7 +329,7 @@ impl Device {
             })?;
         pipeline.set_vertex_function(Some(&mtl_vertex_function));
 
-        let fs_lib = if let Some(fragment_entry) = pipeline_desc.shaders.fragment {
+        let fs_lib = if let Some(ref fragment_entry) = pipeline_desc.shaders.fragment {
             let fs_entries_owned;
             let (fs_lib, fs_remapped_entries) = match fragment_entry.module {
                 &n::ShaderModule::Compiled {ref library, ref remapped_entry_point_names} => (library.to_owned(), remapped_entry_point_names),

@@ -7,10 +7,13 @@ use {free_list, Backend};
 use std::collections::BTreeMap;
 use std::ops::Range;
 
-
+// ShaderModule is either a precompiled if the source comes from HLSL or
+// the SPIR-V module doesn't contain specialization constants or push constants
+// because they need to be adjusted on pipeline creation.
 #[derive(Debug, Hash)]
-pub struct ShaderModule {
-    pub(crate) shaders: BTreeMap<String, *mut winapi::ID3DBlob>,
+pub enum ShaderModule {
+    Compiled(BTreeMap<String, *mut winapi::ID3DBlob>),
+    Spirv(Vec<u8>),
 }
 unsafe impl Send for ShaderModule { }
 unsafe impl Sync for ShaderModule { }

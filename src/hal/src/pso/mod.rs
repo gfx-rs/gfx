@@ -4,7 +4,7 @@
 //! will want to use the typed and safe `PipelineState`. See the `pso` module inside the `gfx`
 //! crate.
 
-use pass;
+use {device, pass};
 use std::error::Error;
 use std::fmt;
 
@@ -29,12 +29,15 @@ pub enum CreationError {
     Other,
     /// Invalid subpass (not part of renderpass).
     InvalidSubpass(pass::SubpassId),
+    /// Shader compilation error.
+    Shader(device::ShaderError),
 }
 
 impl fmt::Display for CreationError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             CreationError::InvalidSubpass(id) => write!(f, "{}: {:?}", self.description(), id),
+            CreationError::Shader(ref err) => write!(f, "{}: {:?}", self.description(), err),
             _ => write!(f, "{}", self.description()),
         }
     }
@@ -45,6 +48,7 @@ impl Error for CreationError {
         match *self {
             CreationError::Other => "Unknown other error.",
             CreationError::InvalidSubpass(_) => "Invalid subpass index.",
+            CreationError::Shader(_) => "Shader compilation error.",
         }
     }
 }
@@ -130,12 +134,14 @@ pub enum Stage {
 }
 
 /// Shader entry point.
-#[derive(Debug)]
+#[derive(Debug, Copy)]
 pub struct EntryPoint<'a, B: Backend> {
     /// Entry point name.
     pub entry: &'a str,
     /// Shader module reference.
     pub module: &'a B::ShaderModule,
+    /// Specialization info.
+    pub specialization: &'a [Specialization],
 }
 
 impl<'a, B: Backend> Clone for EntryPoint<'a, B> {
@@ -143,20 +149,10 @@ impl<'a, B: Backend> Clone for EntryPoint<'a, B> {
         EntryPoint {
             entry: self.entry,
             module: self.module,
+            specialization: self.specialization,
         }
     }
 }
-
-impl<'a, B: Backend> PartialEq for EntryPoint<'a, B> {
-    fn eq(&self, other: &Self) -> bool {
-        self.entry.as_ptr() == other.entry.as_ptr() &&
-        self.module as *const _ == other.module as *const _
-    }
-}
-
-impl<'a, B: Backend> Copy for EntryPoint<'a, B> {}
-impl<'a, B: Backend> Eq for EntryPoint<'a, B> {}
-
 
 bitflags!(
     /// Pipeline creation flags.
@@ -190,3 +186,31 @@ pub enum BasePipeline<'a, P: 'a> {
 pub type BaseGraphics<'a, B: Backend> = BasePipeline<'a, B::GraphicsPipeline>;
 ///
 pub type BaseCompute<'a, B: Backend> = BasePipeline<'a, B::ComputePipeline>;
+
+/// Specialization information for pipelines.
+#[derive(Debug, Clone)]
+pub struct Specialization {
+    /// Constant identifier in shader source.
+    pub id: u32,
+    /// Value to override specialization constant.
+    pub value: Constant,
+}
+
+/// Scalar specialization constant with value for overriding.
+#[derive(Debug, Clone)]
+pub enum Constant {
+    ///
+    Bool(bool),
+    ///
+    U32(u32),
+    ///
+    U64(u64),
+    ///
+    I32(i32),
+    ///
+    I64(i64),
+    ///
+    F32(f32),
+    ///
+    F64(f64),
+}
