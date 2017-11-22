@@ -201,17 +201,22 @@ impl<'a, B: Backend, C: Supports<Graphics>> CommandBuffer<'a, B, C> {
 
 impl<'a, B: Backend, C: Supports<GraphicsOrCompute>> CommandBuffer<'a, B, C> {
     ///
-    fn begin_query(&mut self, query: Query<B>, flags: QueryControl) {
+    pub fn begin_query(&mut self, query: Query<B>, flags: QueryControl) {
         self.raw.begin_query(query, flags)
     }
 
     ///
-    fn end_query(&mut self, query: Query<B>) {
+    pub fn end_query(&mut self, query: Query<B>) {
         self.raw.end_query(query)
     }
 
     ///
-    fn reset_query_pool(&mut self, pool: &B::QueryPool, queries: Range<QueryId>) {
+    pub fn reset_query_pool(&mut self, pool: &B::QueryPool, queries: Range<QueryId>) {
         self.raw.reset_query_pool(pool, queries)
+    }
+
+    ///
+    pub fn write_timestamp(&mut self, stage: pso::PipelineStage, query: Query<B>) {
+        self.raw.write_timestamp(stage, query)
     }
 }
