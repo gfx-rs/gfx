@@ -38,6 +38,23 @@ fn gen_query_error(err: SpirvErrorCode) -> d::ShaderError {
     d::ShaderError::CompilationFailed(msg)
 }
 
+fn shader_bytecode(shader: *mut winapi::ID3DBlob) -> winapi::D3D12_SHADER_BYTECODE {
+    unsafe {
+        winapi::D3D12_SHADER_BYTECODE {
+            pShaderBytecode: if !shader.is_null() {
+                (*shader).GetBufferPointer() as *const _
+            } else {
+                ptr::null_mut()
+            },
+            BytecodeLength: if !shader.is_null() {
+                (*shader).GetBufferSize() as u64
+            } else {
+                0
+            },
+        }
+    }
+}
+
 pub(crate) enum CommandSignature {
     Draw,
     DrawIndexed,
@@ -181,7 +198,9 @@ impl Device {
     }
 
     // Extract entry point from shader module on pipeline creation.
-    fn extract_entry_point(source: &pso::EntryPoint<B>) -> Result<*mut winapi::ID3DBlob, d::ShaderError> {
+    // Returns compiled shader blob and bool to indicate if the shader should be
+    // destroyed after pipeline creation
+    fn extract_entry_point(source: &pso::EntryPoint<B>) -> Result<(*mut winapi::ID3DBlob, bool), d::ShaderError> {
         match *source.module {
             n::ShaderModule::Compiled(ref shaders) => {
                 // TODO: Check that we no root constants in the signature
@@ -189,7 +208,7 @@ impl Device {
                 // Use precompiled shader, ignore specialization or layout.
                 shaders
                     .get(source.entry)
-                    .map(|x| *x)
+                    .map(|x| (*x, false))
                     .ok_or(d::ShaderError::MissingEntryPoint(source.entry.into()))
             }
             n::ShaderModule::Spirv(ref raw_data) => {
@@ -235,12 +254,13 @@ impl Device {
                     .ok_or(d::ShaderError::MissingEntryPoint(source.entry.into()))
                     .and_then(|entry_point| {
                         let stage = conv::map_execution_model(entry_point.execution_model);
-                        Self::compile_shader(
+                        let shader = Self::compile_shader(
                             stage,
                             shader_model,
                             &entry_point.name,
                             shader_code.as_bytes(),
-                        )
+                        )?;
+                        Ok((shader, true))
                     })
             }
         }
@@ -897,31 +917,21 @@ impl d::Device<B> for Device {
                 let source = if let Some(src) = source {
                     src
                 } else {
-                    return Ok(winapi::D3D12_SHADER_BYTECODE {
-                        pShaderBytecode: ptr::null(),
-                        BytecodeLength: 0,
-                    });
+                    return Ok((ptr::null_mut(), false));
                 };
 
-                match Self::extract_entry_point(source) {
-                    Ok(shader) => {
-                        Ok(winapi::D3D12_SHADER_BYTECODE {
-                            pShaderBytecode: unsafe { (*shader).GetBufferPointer() as *const _ },
-                            BytecodeLength: unsafe { (*shader).GetBufferSize() as u64 },
-                        })
-                    },
-                    Err(err) => Err(pso::CreationError::Shader(err)),
-                }
+                Self::extract_entry_point(source)
+                    .map_err(|err| pso::CreationError::Shader(err))
             };
 
-            let vs = build_shader(Some(&desc.shaders.vertex))?;
-            let fs = build_shader(desc.shaders.fragment.as_ref())?;
-            let gs = build_shader(desc.shaders.geometry.as_ref())?;
-            let ds = build_shader(desc.shaders.domain.as_ref())?;
-            let hs = build_shader(desc.shaders.hull.as_ref())?;
+            let (vs, vs_destroy) = build_shader(Some(&desc.shaders.vertex))?;
+            let (fs, fs_destroy) = build_shader(desc.shaders.fragment.as_ref())?;
+            let (gs, gs_destroy) = build_shader(desc.shaders.geometry.as_ref())?;
+            let (ds, ds_destroy) = build_shader(desc.shaders.domain.as_ref())?;
+            let (hs, hs_destroy) = build_shader(desc.shaders.hull.as_ref())?;
 
             // Define input element descriptions
-            let mut vs_reflect = shade::reflect_shader(&vs);
+            let mut vs_reflect = shade::reflect_shader(&shader_bytecode(vs));
             let input_element_descs = {
                 let input_descs = shade::reflect_input_elements(&mut vs_reflect);
                 desc.attributes
@@ -994,7 +1004,11 @@ impl d::Device<B> for Device {
             // Setup pipeline description
             let pso_desc = winapi::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
                 pRootSignature: desc.layout.raw,
-                VS: vs, PS: fs, GS: gs, DS: ds, HS: hs,
+                VS: shader_bytecode(vs),
+                PS: shader_bytecode(fs),
+                GS: shader_bytecode(gs),
+                DS: shader_bytecode(ds),
+                HS: shader_bytecode(hs),
                 StreamOutput: winapi::D3D12_STREAM_OUTPUT_DESC {
                     pSODeclaration: ptr::null(),
                     NumEntries: 0,
@@ -1053,6 +1067,14 @@ impl d::Device<B> for Device {
                     &mut pipeline as *mut *mut _ as *mut *mut _)
             };
 
+            let destroy_shader = |shader: *mut winapi::ID3DBlob| unsafe { (*shader).Release() };
+
+            if vs_destroy { destroy_shader(vs); }
+            if fs_destroy { destroy_shader(fs); }
+            if gs_destroy { destroy_shader(gs); }
+            if hs_destroy { destroy_shader(hs); }
+            if ds_destroy { destroy_shader(ds); }
+
             if winapi::SUCCEEDED(hr) {
                 Ok(n::GraphicsPipeline {
                     raw: pipeline,
@@ -1071,19 +1093,12 @@ impl d::Device<B> for Device {
         descs: &[pso::ComputePipelineDesc<'a, B>],
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
         descs.iter().map(|desc| {
-            let cs = match Self::extract_entry_point(&desc.shader) {
-                Ok(shader) => {
-                    winapi::D3D12_SHADER_BYTECODE {
-                        pShaderBytecode: unsafe { (*shader).GetBufferPointer() as *const _ },
-                        BytecodeLength: unsafe { (*shader).GetBufferSize() as u64 },
-                    }
-                },
-                Err(err) => return Err(pso::CreationError::Shader(err)),
-            };
+            let (cs, cs_destroy) = Self::extract_entry_point(&desc.shader)
+                .map_err(|err| pso::CreationError::Shader(err))?;
 
             let pso_desc = winapi::D3D12_COMPUTE_PIPELINE_STATE_DESC {
                 pRootSignature: desc.layout.raw,
-                CS: cs,
+                CS: shader_bytecode(cs),
                 NodeMask: 0,
                 CachedPSO: winapi::D3D12_CACHED_PIPELINE_STATE {
                     pCachedBlob: ptr::null(),
@@ -1100,6 +1115,10 @@ impl d::Device<B> for Device {
                     &dxguid::IID_ID3D12PipelineState,
                     &mut pipeline as *mut *mut _ as *mut *mut _)
             };
+
+            if cs_destroy {
+                unsafe { (*cs).Release(); }
+            }
 
             if winapi::SUCCEEDED(hr) {
                 Ok(n::ComputePipeline {
