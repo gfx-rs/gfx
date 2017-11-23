@@ -862,7 +862,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
     fn write_timestamp(
         &mut self,
         _: pso::PipelineStage,
-        _: query::Query<Backend>,
+        _: Query<Backend>,
     ) {
         // nothing to do, timestamps are unsupported on Metal
     }
