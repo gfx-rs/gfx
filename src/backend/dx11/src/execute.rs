@@ -44,23 +44,35 @@ fn copy_texture(context: *mut winapi::ID3D11DeviceContext,
                 dst: &tex::TextureCopyRegion<Texture>) {
     assert_eq!((src.info.width, src.info.height, src.info.depth),
                (dst.info.width, dst.info.height, dst.info.depth));
-    assert_eq!(src.kind.get_num_slices(), None);
-    assert_eq!(dst.kind.get_num_slices(), None);
 
-    let src_resource = src.texture.as_resource();
-    let dst_resource = dst.texture.as_resource();
+    let (src_slice, src_front) = match src.kind.get_num_slices() {
+        Some(_) => { assert!(src.info.depth <= 1); (src.info.zoffset, 0) },
+        None => (0, src.info.zoffset),
+    };
+    let (dst_slice, dst_front) = match dst.kind.get_num_slices() {
+        Some(_) => { assert!(dst.info.depth <= 1); (dst.info.zoffset, 0) },
+        None => (0, dst.info.zoffset),
+    };
+
     let src_box = winapi::D3D11_BOX {
         left: src.info.xoffset as _,
         right: (src.info.xoffset + src.info.width) as _,
         top: src.info.yoffset as _,
         bottom: (src.info.yoffset + src.info.height) as _,
-        front: src.info.zoffset as _,
-        back: (src.info.zoffset + cmp::max(1, src.info.depth)) as _,
+        front: src_front as _,
+        back: (src_front + cmp::max(1, src.info.depth)) as _,
     };
+
     unsafe {
-        (*context).CopySubresourceRegion(dst_resource, dst.info.mipmap as _,
-                                         dst.info.xoffset as _, dst.info.yoffset as _, dst.info.zoffset as _,
-                                         src_resource, src.info.mipmap as _, &src_box)
+        let src_sub = winapi::D3D11CalcSubresource(src.info.mipmap as _,
+                                                   src.kind.get_num_levels() as _,
+                                                   src_slice as _);
+        let dst_sub = winapi::D3D11CalcSubresource(dst.info.mipmap as _,
+                                                   dst.kind.get_num_levels() as _,
+                                                   dst_slice as _);
+        (*context).CopySubresourceRegion(dst.texture.as_resource(), dst_sub,
+                                         dst.info.xoffset as _, dst.info.yoffset as _, dst_front as _,
+                                         src.texture.as_resource(), src_sub, &src_box)
     };
 
 }
