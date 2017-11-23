@@ -1,5 +1,5 @@
 use wio::com::ComPtr;
-use hal::{command as com, image, memory, pass, pso};
+use hal::{command as com, image, memory, pass, pso, query};
 use hal::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset};
 use hal::buffer::IndexBufferView;
 use winapi::{self, UINT64, UINT};
@@ -30,6 +30,12 @@ pub struct RenderPassCache {
     framebuffer: n::Framebuffer,
     target_rect: winapi::D3D12_RECT,
     attachment_clears: Vec<AttachmentClear>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum OcclusionQuery {
+    Binary(UINT),
+    Precise(UINT),
 }
 
 /// Strongly-typed root signature element
@@ -142,6 +148,14 @@ pub struct CommandBuffer {
     // D3D12 only has one slot for both bindpoints. Need to rebind everything if we want to switch
     // between different bind points (ie. calling draw or dispatch).
     active_bindpoint: BindPoint,
+
+    // Active queries in the command buffer.
+    // Queries must begin and end in the same command buffer, which allows us to track them.
+    // The query pool type on `begin_query` must differ from all currently active queries.
+    // Therefore, only one query per query type can be active at the same time. Binary and precise
+    // occlusion queries share one queue type in Vulkan.
+    occlusion_query: Option<OcclusionQuery>,
+    pipeline_stats_query: Option<UINT>,
 }
 
 unsafe impl Send for CommandBuffer { }
@@ -161,6 +175,8 @@ impl CommandBuffer {
             gr_pipeline: PipelineCache::new(),
             comp_pipeline: PipelineCache::new(),
             active_bindpoint: BindPoint::Graphics,
+            occlusion_query: None,
+            pipeline_stats_query: None,
         }
     }
 
@@ -175,6 +191,8 @@ impl CommandBuffer {
         self.gr_pipeline = PipelineCache::new();
         self.comp_pipeline = PipelineCache::new();
         self.active_bindpoint = BindPoint::Graphics;
+        self.occlusion_query = None;
+        self.pipeline_stats_query = None;
     }
 
     fn insert_subpass_barriers(&self) {
@@ -1288,6 +1306,105 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 offset,
                 ptr::null_mut(),
                 0,
+            );
+        }
+    }
+
+    fn begin_query(
+        &mut self,
+        query: query::Query<Backend>,
+        flags: query::QueryControl,
+    ) {
+        let query_ty = match query.pool.ty {
+            winapi::D3D12_QUERY_HEAP_TYPE_OCCLUSION => {
+                if flags.contains(query::QueryControl::PRECISE) {
+                    self.occlusion_query = Some(OcclusionQuery::Precise(query.id));
+                    winapi::D3D12_QUERY_TYPE_OCCLUSION
+                } else {
+                    // Default to binary occlusion as it might be faster due to early depth/stencil
+                    // tests.
+                    self.occlusion_query = Some(OcclusionQuery::Binary(query.id));
+                    winapi::D3D12_QUERY_TYPE_BINARY_OCCLUSION
+                }
+            }
+            winapi::D3D12_QUERY_HEAP_TYPE_TIMESTAMP => {
+                panic!("Timestap queries are issued via ")
+            }
+            winapi::D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS => {
+                self.pipeline_stats_query = Some(query.id);
+                winapi::D3D12_QUERY_TYPE_PIPELINE_STATISTICS
+            }
+            _ => unreachable!(),
+        };
+
+        unsafe {
+            self.raw.BeginQuery(
+                query.pool.raw.as_mut() as *mut _,
+                query_ty,
+                query.id,
+            );
+        }
+    }
+
+    fn end_query(
+        &mut self,
+        query: query::Query<Backend>,
+    ) {
+        let id = query.id;
+        let query_ty = match query.pool.ty {
+            winapi::D3D12_QUERY_HEAP_TYPE_OCCLUSION
+                if self.occlusion_query == Some(OcclusionQuery::Precise(id)) =>
+            {
+                self.occlusion_query = None;
+                winapi::D3D12_QUERY_TYPE_OCCLUSION
+            }
+            winapi::D3D12_QUERY_HEAP_TYPE_OCCLUSION
+                if self.occlusion_query == Some(OcclusionQuery::Binary(id)) =>
+            {
+                self.occlusion_query = None;
+                winapi::D3D12_QUERY_TYPE_BINARY_OCCLUSION
+            }
+            winapi::D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS
+                if self.pipeline_stats_query == Some(id) =>
+            {
+                self.pipeline_stats_query = None;
+                winapi::D3D12_QUERY_TYPE_PIPELINE_STATISTICS
+            }
+            _ => panic!("Missing `begin_query` call for query: {:?}", query),
+        };
+
+        unsafe {
+            self.raw.EndQuery(
+                query.pool.raw.as_mut() as *mut _,
+                query_ty,
+                id,
+            );
+        }
+    }
+
+    fn reset_query_pool(
+        &mut self,
+        _pool: &n::QueryPool,
+        _queries: Range<query::QueryId>,
+    ) {
+        // Nothing to do here
+        // vkCmdResetQueryPool sets the queries to `unavailable` but the specification
+        // doesn't state an affect on the `active` state. Every queries at the end of the command
+        // buffer must be made inactive, which can only be done with EndQuery.
+        // Therefore, every `begin_query` must follow a `end_query` state, the resulting values
+        // after calling are undefined.
+    }
+
+    fn write_timestamp(
+        &mut self,
+        _: pso::PipelineStage,
+        query: query::Query<Backend>,
+    ) {
+        unsafe {
+            self.raw.EndQuery(
+                query.pool.raw.as_mut() as *mut _,
+                winapi::D3D12_QUERY_TYPE_TIMESTAMP,
+                query.id,
             );
         }
     }

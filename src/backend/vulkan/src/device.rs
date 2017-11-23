@@ -1,6 +1,6 @@
 use ash::vk;
 use ash::version::DeviceV1_0;
-use hal::{buffer, device as d, format, image, mapping, pass, pso};
+use hal::{buffer, device as d, format, image, mapping, pass, pso, query};
 use hal::{Features, Limits, MemoryType};
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
@@ -1268,6 +1268,37 @@ impl d::Device<B> for Device {
             unsafe { self.raw.0.unmap_memory(memory.inner) }
         }
         unsafe { self.raw.0.free_memory(memory.inner, None); }
+    }
+
+    fn create_query_pool(&self, ty: query::QueryType, query_count: u32) -> n::QueryPool {
+        let (query_type, pipeline_statistics) = match ty {
+            query::QueryType::Occlusion =>
+                (vk::QueryType::Occlusion, vk::QueryPipelineStatisticFlags::empty()),
+            query::QueryType::PipelineStatistics(statistics) =>
+                (vk::QueryType::PipelineStatistics, conv::map_pipeline_statistics(statistics)),
+            query::QueryType::Timestamp =>
+                (vk::QueryType::Timestamp, vk::QueryPipelineStatisticFlags::empty()),
+        };
+
+        let info = vk::QueryPoolCreateInfo {
+            s_type: vk::StructureType::QueryPoolCreateInfo,
+            p_next: ptr::null(),
+            flags: vk::QueryPoolCreateFlags::empty(),
+            query_type,
+            query_count,
+            pipeline_statistics
+        };
+
+        let pool = unsafe {
+            self.raw.0.create_query_pool(&info, None)
+                        .expect("Error on query pool creation") // TODO: error handling
+        };
+
+        n::QueryPool(pool)
+    }
+
+    fn destroy_query_pool(&self, pool: n::QueryPool) {
+        unsafe { self.raw.0.destroy_query_pool(pool.0, None); }
     }
 
     fn destroy_shader_module(&self, module: n::ShaderModule) {

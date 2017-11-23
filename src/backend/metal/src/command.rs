@@ -15,6 +15,7 @@ use hal::command::{
     SubpassContents, RawCommandBuffer,
     ColorValue, StencilValue, Rect, Viewport,
 };
+use hal::query::{Query, QueryControl, QueryId};
 use hal::queue::{RawCommandQueue, RawSubmission};
 
 use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLClearColor, MTLSize, MTLOrigin};
@@ -833,5 +834,36 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         _stride: u32,
     ) {
         unimplemented!()
+    }
+
+    fn begin_query(
+        &mut self,
+        _query: Query<Backend>,
+        _flags: QueryControl,
+    ) {
+        unimplemented!()
+    }
+
+    fn end_query(
+        &mut self,
+        _query: Query<Backend>,
+    ) {
+        unimplemented!()
+    }
+
+    fn reset_query_pool(
+        &mut self,
+        _pool: &(),
+        _queries: Range<QueryId>,
+    ) {
+        unimplemented!()
+    }
+
+    fn write_timestamp(
+        &mut self,
+        _: pso::PipelineStage,
+        _: Query<Backend>,
+    ) {
+        // nothing to do, timestamps are unsupported on Metal
     }
 }

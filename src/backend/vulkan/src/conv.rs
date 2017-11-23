@@ -1,6 +1,6 @@
 use ash::vk;
 use byteorder::{NativeEndian, WriteBytesExt};
-use hal::{buffer, command, format, image, pass, pso};
+use hal::{buffer, command, format, image, pass, pso, query};
 use hal::device::Extent;
 use hal::{IndexType, Primitive};
 use smallvec::SmallVec;
@@ -947,4 +947,48 @@ pub fn map_specialization_constants(
             })
         })
         .collect::<Result<_, _>>()
+}
+
+pub fn map_pipeline_statistics(
+    statistics: query::PipelineStatistic,
+) -> vk::QueryPipelineStatisticFlags {
+    use hal::query::PipelineStatistic as stat;
+
+    let mut flags = vk::QueryPipelineStatisticFlags::empty();
+
+    if statistics.contains(stat::INPUT_ASSEMBLY_VERTICES) {
+        flags |= vk::QUERY_PIPELINE_STATISTIC_INPUT_ASSEMBLY_VERTICES_BIT;
+    }
+    if statistics.contains(stat::INPUT_ASSEMBLY_PRIMITIVES) {
+        flags |= vk::QUERY_PIPELINE_STATISTIC_INPUT_ASSEMBLY_PRIMITIVES_BIT;
+    }
+    if statistics.contains(stat::VERTEX_SHADER_INVOCATIONS) {
+        flags |= vk::QUERY_PIPELINE_STATISTIC_VERTEX_SHADER_INVOCATIONS_BIT;
+    }
+    if statistics.contains(stat::GEOMETRY_SHADER_INVOCATIONS) {
+        flags |= vk::QUERY_PIPELINE_STATISTIC_GEOMETRY_SHADER_INVOCATIONS_BIT;
+    }
+    if statistics.contains(stat::GEOMETRY_SHADER_PRIMITIVES) {
+        flags |= vk::QUERY_PIPELINE_STATISTIC_GEOMETRY_SHADER_PRIMITIVES_BIT;
+    }
+    if statistics.contains(stat::CLIPPING_INVOCATIONS) {
+        flags |= vk::QUERY_PIPELINE_STATISTIC_CLIPPING_INVOCATIONS_BIT;
+    }
+    if statistics.contains(stat::CLIPPING_PRIMITIVES) {
+        flags |= vk::QUERY_PIPELINE_STATISTIC_CLIPPING_PRIMITIVES_BIT;
+    }
+    if statistics.contains(stat::FRAGMENT_SHADER_INVOCATIONS) {
+        flags |= vk::QUERY_PIPELINE_STATISTIC_FRAGMENT_SHADER_INVOCATIONS_BIT;
+    }
+    if statistics.contains(stat::HULL_SHADER_PATCHES) {
+        flags |= vk::QUERY_PIPELINE_STATISTIC_TESSELLATION_CONTROL_SHADER_PATCHES_BIT;
+    }
+    if statistics.contains(stat::DOMAIN_SHADER_INVOCATIONS) {
+        flags |= vk::QUERY_PIPELINE_STATISTIC_TESSELLATION_EVALUATION_SHADER_INVOCATIONS_BIT;
+    }
+    if statistics.contains(stat::COMPUTE_SHADER_INVOCATIONS) {
+        flags |= vk::QUERY_PIPELINE_STATISTIC_COMPUTE_SHADER_INVOCATIONS_BIT;
+    }
+
+    flags
 }

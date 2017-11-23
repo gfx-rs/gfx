@@ -5,7 +5,7 @@ use smallvec::SmallVec;
 use ash::vk;
 use ash::version::DeviceV1_0;
 
-use hal::{command as com, memory, pso};
+use hal::{command as com, memory, pso, query};
 use hal::{IndexCount, InstanceCount, VertexCount, VertexOffset};
 use hal::buffer::IndexBufferView;
 use hal::image::{AspectFlags, ImageLayout, SubresourceRange};
@@ -746,6 +746,69 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 offset,
                 draw_count,
                 stride,
+            )
+        }
+    }
+
+    fn begin_query(
+        &mut self,
+        query: query::Query<Backend>,
+        control: query::QueryControl,
+    ) {
+        let mut flags = vk::QueryControlFlags::empty();
+        if control.contains(query::QueryControl::PRECISE) {
+            flags |= vk::QUERY_CONTROL_PRECISE_BIT;
+        }
+
+        unsafe {
+            self.device.0.cmd_begin_query(
+                self.raw,
+                query.pool.0,
+                query.id,
+                flags
+            )
+        }
+    }
+
+    fn end_query(
+        &mut self,
+        query: query::Query<Backend>,
+    ) {
+        unsafe {
+            self.device.0.cmd_end_query(
+                self.raw,
+                query.pool.0,
+                query.id,
+            )
+        }
+    }
+
+    fn reset_query_pool(
+        &mut self,
+        pool: &n::QueryPool,
+        queries: Range<query::QueryId>,
+    ) {
+        unsafe {
+            self.device.0.cmd_reset_query_pool(
+                self.raw,
+                pool.0,
+                queries.start,
+                queries.end - queries.start,
+            )
+        }
+    }
+
+    fn write_timestamp(
+        &mut self,
+        stage: pso::PipelineStage,
+        query: query::Query<Backend>,
+    ) {
+        unsafe {
+            self.device.0.cmd_write_timestamp(
+                self.raw,
+                conv::map_pipeline_stage(stage),
+                query.pool.0,
+                query.id,
             )
         }
     }

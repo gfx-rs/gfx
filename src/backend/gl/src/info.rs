@@ -322,6 +322,8 @@ pub fn query_all(gl: &gl::Gl) -> (Info, Features, Limits, PrivateCaps) {
                                                                 Ext ("GL_ARB_texture_filter_anisotropic"),
                                                                 Ext ("GL_EXT_texture_filter_anisotropic")]),
         sampler_border_color:               info.is_supported(&[Core(3,3)]), // TODO: extensions
+        precise_occlusion_query: false, // TODO
+        pipeline_statistics_query: false, // TODO
     };
     let private = PrivateCaps {
         vertex_array:                       info.is_supported(&[Core(3,0),

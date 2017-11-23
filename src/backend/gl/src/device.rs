@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use gl;
 use gl::types::{GLint, GLenum, GLfloat};
-use hal::{self as c, device as d, image as i, memory, pass, pso, buffer, mapping};
+use hal::{self as c, device as d, image as i, memory, pass, pso, buffer, mapping, query};
 use hal::format::{Format, Swizzle};
 use hal::pool::CommandPoolCreateFlags;
 
@@ -696,6 +696,14 @@ impl d::Device<B> for Device {
     }
 
     fn free_memory(&self, _: n::Memory) {
+        unimplemented!()
+    }
+
+    fn create_query_pool(&self, _ty: query::QueryType, _count: u32) -> () {
+        unimplemented!()
+    }
+
+    fn destroy_query_pool(&self, _: ()) {
         unimplemented!()
     }
 

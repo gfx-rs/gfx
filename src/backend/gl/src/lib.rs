@@ -68,6 +68,7 @@ impl hal::Backend for Backend {
 
     type Fence = native::Fence;
     type Semaphore = native::Semaphore;
+    type QueryPool = ();
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]

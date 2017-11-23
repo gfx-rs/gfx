@@ -5,6 +5,7 @@ use {Backend, IndexCount, InstanceCount, VertexCount, VertexOffset};
 use buffer::IndexBufferView;
 use image::{ImageLayout, SubresourceRange};
 use memory::Barrier;
+use query::{Query, QueryControl, QueryId};
 use super::{
     ColorValue, StencilValue, Rect, Viewport,
     AttachmentClear, BufferCopy, BufferImageCopy,
@@ -267,4 +268,16 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         draw_count: u32,
         stride: u32,
     );
+
+    ///
+    fn begin_query(&mut self, query: Query<B>, flags: QueryControl);
+
+    ///
+    fn end_query(&mut self, query: Query<B>);
+
+    ///
+    fn reset_query_pool(&mut self, pool: &B::QueryPool, queries: Range<QueryId>);
+
+    ///
+    fn write_timestamp(&mut self, pso::PipelineStage, Query<B>);
 }

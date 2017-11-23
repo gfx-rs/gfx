@@ -6,7 +6,7 @@
 use std::{fmt, mem, slice};
 use std::error::Error;
 use std::ops::Range;
-use {buffer, format, image, mapping, pass, pso};
+use {buffer, format, image, mapping, pass, pso, query};
 use pool::{CommandPool, CommandPoolCreateFlags};
 use queue::QueueGroup;
 use {Backend, Features, Limits, MemoryType};
@@ -394,4 +394,10 @@ pub trait Device<B: Backend> {
 
     ///
     fn destroy_fence(&self, B::Fence);
+
+    ///
+    fn create_query_pool(&self, ty: query::QueryType, count: u32) -> B::QueryPool;
+
+    ///
+    fn destroy_query_pool(&self, B::QueryPool);
 }

@@ -44,6 +44,7 @@ pub mod memory;
 pub mod pass;
 pub mod pool;
 pub mod pso;
+pub mod query;
 pub mod queue;
 pub mod window;
 
@@ -113,6 +114,11 @@ pub struct Features {
     pub sampler_anisotropy: bool,
     /// Support setting border texel colors.
     pub sampler_border_color: bool,
+    /// Support precise occlusion queries, returning the actual number of samples.
+    /// If not supported, queries return a non-zero value when at least **one** sample passes.
+    pub precise_occlusion_query: bool,
+    /// Support query of pipeline statistics.
+    pub pipeline_statistics_query: bool,
 }
 
 /// Limits of the device.
@@ -254,6 +260,7 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
 
     type Fence:               Debug + Any + Send + Sync;
     type Semaphore:           Debug + Any + Send + Sync;
+    type QueryPool:           Debug + Any + Send + Sync;
 }
 
 #[allow(missing_docs)]

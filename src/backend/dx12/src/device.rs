@@ -10,7 +10,7 @@ use spirv_cross::{hlsl, spirv, ErrorCode as SpirvErrorCode};
 use winapi;
 use wio::com::ComPtr;
 
-use hal::{buffer, device as d, format, image, mapping, memory, pass, pso};
+use hal::{buffer, device as d, format, image, mapping, memory, pass, pso, query};
 use hal::{Features, Limits, MemoryType};
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
@@ -1801,6 +1801,41 @@ impl d::Device<B> for Device {
     }
 
     fn free_memory(&self, _memory: n::Memory) {
+        // Just drop
+    }
+
+    fn create_query_pool(&self, query_ty: query::QueryType, count: u32) -> n::QueryPool {
+        let heap_ty = match query_ty {
+            query::QueryType::Occlusion =>
+                winapi::D3D12_QUERY_HEAP_TYPE_OCCLUSION,
+            query::QueryType::PipelineStatistics(_) =>
+                winapi::D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS,
+            query::QueryType::Timestamp =>
+                winapi::D3D12_QUERY_HEAP_TYPE_TIMESTAMP,
+        };
+
+        let desc = winapi::D3D12_QUERY_HEAP_DESC {
+            Type: heap_ty,
+            Count: count,
+            NodeMask: 0,
+        };
+
+        let mut handle = ptr::null_mut();
+        assert_eq!(winapi::S_OK, unsafe {
+            self.raw.clone().CreateQueryHeap(
+                &desc,
+                &dxguid::IID_ID3D12QueryHeap,
+                &mut handle,
+            )
+        });
+
+        n::QueryPool {
+            raw: unsafe { ComPtr::new(handle as *mut _) },
+            ty: heap_ty,
+        }
+    }
+
+    fn destroy_query_pool(&self, _pool: n::QueryPool) {
         // Just drop
     }
 
