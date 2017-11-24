@@ -45,7 +45,7 @@
 
 use hal::{self, format as f, image};
 
-use {native as n, Backend as B, PhysicalDevice, QueueFamily};
+use {native as n, Backend as B, Device, PhysicalDevice, QueueFamily};
 
 use glutin::{self, GlContext};
 use std::rc::Rc;
@@ -123,14 +123,16 @@ impl hal::Surface<B> for Surface {
     }
 
     fn supports_queue_family(&self, _: &QueueFamily) -> bool { true }
+}
 
-    fn build_swapchain<C>(
-        &mut self,
+impl Device {
+    pub(crate) fn create_swapchain_impl(
+        &self,
+        surface: &mut Surface,
         _config: hal::SwapchainConfig,
-        _: &hal::CommandQueue<B, C>,
     ) -> (Swapchain, hal::Backbuffer<B>) {
         let swapchain = Swapchain {
-            window: self.window.clone(),
+            window: surface.window.clone(),
         };
         let backbuffer = hal::Backbuffer::Framebuffer(0);
         (swapchain, backbuffer)

@@ -19,15 +19,15 @@ use {VK_ENTRY, Backend, Instance, PhysicalDevice, QueueFamily, RawInstance};
 pub struct Surface {
     // Vk (EXT) specs [29.2.7 Platform-Independent Information]
     // For vkDestroySurfaceKHR: Host access to surface must be externally synchronized
-    raw: Arc<RawSurface>,
-    width: u32,
-    height: u32,
+    pub(crate) raw: Arc<RawSurface>,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
 }
 
 pub struct RawSurface {
-    handle: vk::SurfaceKHR,
+    pub(crate) handle: vk::SurfaceKHR,
     functor: ext::Surface,
-    instance: Arc<RawInstance>,
+    pub(crate) instance: Arc<RawInstance>,
 }
 
 impl Drop for RawSurface {
@@ -273,81 +273,13 @@ impl hal::Surface<Backend> for Surface {
             self.raw.handle,
         )
     }
-
-    fn build_swapchain<C>(
-        &mut self,
-        config: hal::SwapchainConfig,
-        present_queue: &hal::CommandQueue<Backend, C>,
-    ) -> (Swapchain, hal::Backbuffer<Backend>) {
-        let functor = ext::Swapchain::new(&self.raw.instance.0, &present_queue.as_raw().device.0)
-            .expect("Unable to query swapchain function");
-
-        // TODO: check for better ones if available
-        let present_mode = vk::PresentModeKHR::Fifo; // required to be supported
-
-        // TODO: handle depth stencil
-        let format = config.color_format;
-
-        let info = vk::SwapchainCreateInfoKHR {
-            s_type: vk::StructureType::SwapchainCreateInfoKhr,
-            p_next: ptr::null(),
-            flags: vk::SwapchainCreateFlagsKHR::empty(),
-            surface: self.raw.handle,
-            min_image_count: config.image_count,
-            image_format: conv::map_format(format.0, format.1).unwrap(),
-            image_color_space: vk::ColorSpaceKHR::SrgbNonlinear,
-            image_extent: vk::Extent2D {
-                width: self.width,
-                height: self.height,
-            },
-            image_array_layers: 1,
-            image_usage: vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-            image_sharing_mode: vk::SharingMode::Exclusive,
-            queue_family_index_count: 0,
-            p_queue_family_indices: ptr::null(),
-            pre_transform: vk::SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
-            composite_alpha: vk::COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-            present_mode: present_mode,
-            clipped: 1,
-            old_swapchain: vk::SwapchainKHR::null(),
-        };
-
-        let swapchain_raw = unsafe { functor.create_swapchain_khr(&info, None) }
-            .expect("Unable to create a swapchain");
-
-        let backbuffer_images = functor.get_swapchain_images_khr(swapchain_raw)
-            .expect("Unable to get swapchain images");
-
-        let swapchain = Swapchain {
-            raw: swapchain_raw,
-            functor,
-            frame_queue: VecDeque::new(),
-        };
-
-        let images = backbuffer_images
-            .into_iter()
-            .map(|image| {
-                native::Image {
-                    raw: image,
-                    bytes_per_texel: 4,
-                    extent: vk::Extent3D {
-                        width: self.width,
-                        height: self.height,
-                        depth: 1,
-                    },
-                }
-            })
-            .collect();
-
-        (swapchain, hal::Backbuffer::Images(images))
-    }
 }
 
 pub struct Swapchain {
-    raw: vk::SwapchainKHR,
-    functor: ext::Swapchain,
+    pub(crate) raw: vk::SwapchainKHR,
+    pub(crate) functor: ext::Swapchain,
     // Queued up frames for presentation
-    frame_queue: VecDeque<usize>,
+    pub(crate) frame_queue: VecDeque<usize>,
 }
 
 

@@ -11,6 +11,7 @@ use pool::{CommandPool, CommandPoolCreateFlags};
 use queue::QueueGroup;
 use {Backend, Features, Limits, MemoryType};
 use memory::Requirements;
+use window::{Backbuffer, SwapchainConfig};
 
 
 /// Error allocating memory.
@@ -400,4 +401,38 @@ pub trait Device<B: Backend> {
 
     ///
     fn destroy_query_pool(&self, B::QueryPool);
+
+    /// Create a new swapchain from a surface and a queue family.
+    ///
+    /// *Note*: The number of exposed images in the back buffer might differ
+    /// from number of internally used buffers.
+    ///
+    /// # Safety
+    ///
+    /// The queue family _must_ support surface presentation.
+    /// This can be checked by calling [`supports_queue_family`](trait.Surface.html#tymethod.supports_queue_family)
+    /// on this surface.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # extern crate gfx_backend_empty as empty;
+    /// # extern crate gfx_hal;
+    /// # fn main() {
+    /// use gfx_hal::{Device, SwapchainConfig};
+    /// use gfx_hal::format::Srgba8;
+    /// # use gfx_hal::{CommandQueue, Graphics};
+    ///
+    /// # let mut surface: empty::Surface = return;
+    /// # let device: empty::Device = return;
+    /// let swapchain_config = SwapchainConfig::new()
+    ///                             .with_color_typed::<Srgba8>();
+    /// device.create_swapchain(&mut surface, swapchain_config);
+    /// # }
+    /// ```
+    fn create_swapchain(
+        &self,
+        surface: &mut B::Surface,
+        config: SwapchainConfig,
+    ) -> (B::Swapchain, Backbuffer<B>);
 }

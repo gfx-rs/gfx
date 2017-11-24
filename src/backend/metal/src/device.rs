@@ -1,6 +1,5 @@
-use {Backend};
+use {Backend, QueueFamily, Surface, Swapchain};
 use {native as n, command};
-use {QueueFamily};
 use conversions::*;
 
 use std::collections::HashMap;
@@ -57,7 +56,7 @@ struct PrivateCapabilities {
 
 #[derive(Clone)]
 pub struct Device {
-    device: metal::Device,
+    pub(crate) device: metal::Device,
     private_caps: PrivateCapabilities,
     limits: hal::Limits,
     queue: Arc<command::QueueInner>,
@@ -1092,6 +1091,14 @@ impl hal::Device<Backend> for Device {
 
     fn destroy_query_pool(&self, _: ()) {
         unimplemented!()
+    }
+
+    fn create_swapchain(
+        &self,
+        surface: &mut Surface,
+        config: hal::SwapchainConfig,
+    ) -> (Swapchain, hal::Backbuffer<Backend>) {
+        self.build_swapchain(surface, config)
     }
 }
 

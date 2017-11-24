@@ -269,6 +269,14 @@ impl hal::Device<Backend> for Device {
     fn destroy_semaphore(&self, _: ()) {
         unimplemented!()
     }
+
+    fn create_swapchain(
+        &self,
+        _: &mut Surface,
+        _: hal::SwapchainConfig,
+    ) -> (Swapchain, hal::Backbuffer<Backend>) {
+        unimplemented!()
+    }
 }
 
 #[derive(Debug)]
@@ -578,13 +586,6 @@ impl hal::Surface<Backend> for Surface {
     }
 
     fn supports_queue_family(&self, _: &QueueFamily) -> bool {
-        unimplemented!()
-    }
-
-    fn build_swapchain<C>(&mut self,
-        _: hal::SwapchainConfig,
-        _: &hal::CommandQueue<Backend, C>
-    ) -> (Swapchain, hal::Backbuffer<Backend>) {
         unimplemented!()
     }
 }
