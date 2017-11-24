@@ -95,18 +95,37 @@ static HEAPS_CCUMA: &'static [HeapProperties] = &[
     },
 ];
 
-#[derive(Debug)]
-pub struct QueueFamily(QueueType);
+#[derive(Debug, Copy, Clone)]
+pub enum QueueFamily {
+    // Specially marked present queue.
+    // It's basically a normal 3D queue but D3D12 swapchain creation requires an
+    // associated queue, which we don't know on `create_swapchain`.
+    Present,
+    Normal(QueueType),
+}
+
 const MAX_QUEUES: usize = 16; // infinite, to be fair
 
 impl hal::QueueFamily for QueueFamily {
-    fn queue_type(&self) -> QueueType { self.0 }
-    fn max_queues(&self) -> usize { MAX_QUEUES }
+    fn queue_type(&self) -> QueueType {
+        match *self {
+            QueueFamily::Present => QueueType::General,
+            QueueFamily::Normal(ty) => ty,
+        }
+    }
+    fn max_queues(&self) -> usize {
+        match *self {
+            QueueFamily::Present => 1,
+            QueueFamily::Normal(_) => MAX_QUEUES,
+        }
+    }
 }
 
 impl QueueFamily {
     fn native_type(&self) -> winapi::D3D12_COMMAND_LIST_TYPE {
-        match self.0 {
+        use hal::QueueFamily;
+        let queue_type = self.queue_type();
+        match queue_type {
             QueueType::General | QueueType::Graphics => winapi::D3D12_COMMAND_LIST_TYPE_DIRECT,
             QueueType::Compute => winapi::D3D12_COMMAND_LIST_TYPE_COMPUTE,
             QueueType::Transfer => winapi::D3D12_COMMAND_LIST_TYPE_COPY,
@@ -153,40 +172,83 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             }
         };
 
+        // Always create the presentation queue in case we want to build a swapchain.
+        let mut present_queue = {
+            let queue_desc = winapi::D3D12_COMMAND_QUEUE_DESC {
+                Type: QueueFamily::Present.native_type(),
+                Priority: 0,
+                Flags: winapi::D3D12_COMMAND_QUEUE_FLAG_NONE,
+                NodeMask: 0,
+            };
+
+            let mut queue = ptr::null_mut();
+            let hr = unsafe {
+                device.raw.CreateCommandQueue(
+                    &queue_desc,
+                    &dxguid::IID_ID3D12CommandQueue,
+                    &mut queue as *mut *mut _ as *mut *mut c_void,
+                )
+            };
+
+            if !winapi::SUCCEEDED(hr) {
+                error!("error on queue creation: {:x}", hr);
+            }
+
+            unsafe { ComPtr::<winapi::ID3D12CommandQueue>::new(queue) }
+        };
+
         let queue_groups = families
             .into_iter()
             .map(|(family, priorities)| {
-                let queue_desc = winapi::D3D12_COMMAND_QUEUE_DESC {
-                    Type: family.native_type(),
-                    Priority: 0,
-                    Flags: winapi::D3D12_COMMAND_QUEUE_FLAG_NONE,
-                    NodeMask: 0,
-                };
                 let mut group = hal::queue::RawQueueGroup::new(family);
 
-                for _ in 0 .. priorities.len() {
-                    let mut queue = ptr::null_mut();
-                    let hr = unsafe {
-                        device.raw.CreateCommandQueue(
-                            &queue_desc,
-                            &dxguid::IID_ID3D12CommandQueue,
-                            &mut queue as *mut *mut _ as *mut *mut c_void,
-                        )
-                    };
-
-                    if winapi::SUCCEEDED(hr) {
+                match family {
+                    QueueFamily::Present => {
+                        // Exactly **one** present queue!
+                        // Number of queues need to be larger than 0 else it
+                        // violates the specification.
                         group.add_queue(CommandQueue {
-                            raw: unsafe { ComPtr::new(queue) },
-                            device: device.raw.clone(),
+                            raw: present_queue.clone(),
                         });
-                    } else {
-                        error!("error on queue creation: {:x}", hr);
+                    }
+                    QueueFamily::Normal(_) => {
+                        let queue_desc = winapi::D3D12_COMMAND_QUEUE_DESC {
+                            Type: family.native_type(),
+                            Priority: 0,
+                            Flags: winapi::D3D12_COMMAND_QUEUE_FLAG_NONE,
+                            NodeMask: 0,
+                        };
+
+                        for _ in 0 .. priorities.len() {
+                            let mut queue = ptr::null_mut();
+                            let hr = unsafe {
+                                device.raw.CreateCommandQueue(
+                                    &queue_desc,
+                                    &dxguid::IID_ID3D12CommandQueue,
+                                    &mut queue as *mut *mut _ as *mut *mut c_void,
+                                )
+                            };
+
+                            if winapi::SUCCEEDED(hr) {
+                                group.add_queue(CommandQueue {
+                                    raw: unsafe { ComPtr::new(queue) },
+                                });
+                            } else {
+                                error!("error on queue creation: {:x}", hr);
+                            }
+                        }
                     }
                 }
 
                 group
             })
             .collect();
+
+        // Avoid calling drop on empty ComPtr
+        {
+            mem::swap(&mut device.present_queue, &mut present_queue);
+            mem::forget(present_queue);
+        }
 
         // https://msdn.microsoft.com/en-us/library/windows/desktop/dn788678(v=vs.85).aspx
         let base_memory_types = match device.private_caps.memory_architecture {
@@ -304,7 +366,6 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
 pub struct CommandQueue {
     pub(crate) raw: ComPtr<winapi::ID3D12CommandQueue>,
-    device: ComPtr<winapi::ID3D12Device>,
 }
 unsafe impl Send for CommandQueue {} //blocked by ComPtr
 
@@ -367,6 +428,9 @@ pub struct Device {
     heap_sampler: Mutex<native::DescriptorHeap>,
     events: Mutex<Vec<winapi::HANDLE>>,
     signatures: CmdSignatures,
+    // Present queue exposed by the `Present` queue family.
+    // Required for swapchain creation. Only a single queue supports presentation.
+    present_queue: ComPtr<winapi::ID3D12CommandQueue>,
 }
 unsafe impl Send for Device {} //blocked by ComPtr
 unsafe impl Sync for Device {} //blocked by ComPtr
@@ -551,6 +615,7 @@ impl Device {
                 draw_indexed: draw_indexed_signature,
                 dispatch: dispatch_signature,
             },
+            present_queue: unsafe { ComPtr::new(ptr::null_mut()) }, // filled out on adapter opening
         }
     }
 }
@@ -656,9 +721,10 @@ impl hal::Instance for Instance {
                 };
 
                 let queue_families = vec![
-                    QueueFamily(QueueType::Transfer),
-                    QueueFamily(QueueType::Compute),
-                    QueueFamily(QueueType::General),
+                    QueueFamily::Present,
+                    QueueFamily::Normal(QueueType::General),
+                    QueueFamily::Normal(QueueType::Compute),
+                    QueueFamily::Normal(QueueType::Transfer),
                 ];
 
                 adapters.push(hal::Adapter {

@@ -1,6 +1,6 @@
 use {Backend, QueueFamily};
 use {native, conversions};
-use device::PhysicalDevice;
+use device::{Device, PhysicalDevice};
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -66,19 +66,22 @@ impl hal::Surface<Backend> for Surface {
     fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {
         true // TODO: Not sure this is the case, don't know associativity of IOSurface
     }
+}
 
-    fn build_swapchain<C>(&mut self,
+impl Device {
+    pub fn build_swapchain(
+        &self,
+        surface: &mut Surface,
         config: SwapchainConfig,
-        present_queue: &CommandQueue<Backend, C>,
     ) -> (Swapchain, Backbuffer<Backend>) {
         let (mtl_format, cv_format) = match config.color_format {
             format::Format(SurfaceType::R8_G8_B8_A8, ChannelType::Srgb) => (MTLPixelFormat::RGBA8Unorm_sRGB, kCVPixelFormatType_32RGBA),
             _ => panic!("unsupported backbuffer format"), // TODO: more formats
         };
 
-        let render_layer_borrow = self.0.render_layer.borrow_mut();
+        let render_layer_borrow = surface.0.render_layer.borrow_mut();
         let render_layer = *render_layer_borrow;
-        let nsview = self.0.nsview;
+        let nsview = surface.0.nsview;
 
         unsafe {
             // Update render layer size
@@ -106,8 +109,6 @@ impl hal::Surface<Backend> for Surface {
                 ]))
             }).collect();
 
-            let device = present_queue.as_raw().device();
-
             let backbuffer_descriptor = metal::TextureDescriptor::new();
             backbuffer_descriptor.set_pixel_format(mtl_format);
             backbuffer_descriptor.set_width(pixel_width as u64);
@@ -115,16 +116,16 @@ impl hal::Surface<Backend> for Surface {
             backbuffer_descriptor.set_usage(MTLTextureUsage::MTLTextureUsageRenderTarget);
 
             let images = io_surfaces.iter().map(|surface| {
-                let mapped_texture: metal::Texture = msg_send![device,
+                let mapped_texture: metal::Texture = msg_send![self.device.as_ref(),
                     newTextureWithDescriptor: &*backbuffer_descriptor
                     iosurface: surface.obj
                     plane: 0
-                ]; 
+                ];
                 native::Image(mapped_texture)
             }).collect();
 
             let swapchain = Swapchain {
-                surface: self.0.clone(),
+                surface: surface.0.clone(),
                 _size_pixels: (pixel_width, pixel_height),
                 io_surfaces,
                 frame_index: 0,

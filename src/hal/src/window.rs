@@ -110,40 +110,6 @@ pub trait Surface<B: Backend> {
     ///
     /// Use this function for configuring your swapchain creation.
     fn capabilities_and_formats(&self, &B::PhysicalDevice) -> (SurfaceCapabilities, Vec<Format>);
-
-    /// Create a new swapchain from a surface and a queue.
-    ///
-    /// *Note*: The number of exposed images in the back buffer might differ
-    /// from number of internally used buffers.
-    ///
-    /// # Safety
-    ///
-    /// The queue family of the passed `present_queue` _must_ support surface presentation.
-    /// This can be checked by calling [`supports_queue`](trait.Surface.html#tymethod.supports_queue)
-    /// on this surface.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # extern crate gfx_backend_empty as empty;
-    /// # extern crate gfx_hal;
-    /// # fn main() {
-    /// use gfx_hal::{Surface, SwapchainConfig};
-    /// use gfx_hal::format::Srgba8;
-    /// # use gfx_hal::{CommandQueue, Graphics};
-    ///
-    /// # let mut surface: empty::Surface = return;
-    /// # let queue: CommandQueue<empty::Backend, Graphics> = return;
-    /// let swapchain_config = SwapchainConfig::new()
-    ///                             .with_color_typed::<Srgba8>();
-    /// surface.build_swapchain(swapchain_config, &queue);
-    /// # }
-    /// ```
-    fn build_swapchain<C>(
-        &mut self,
-        config: SwapchainConfig,
-        present_queue: &CommandQueue<B, C>,
-    ) -> (B::Swapchain, Backbuffer<B>);
 }
 
 /// Handle to a backbuffer of the swapchain.
@@ -316,7 +282,8 @@ pub trait Swapchain<B: Backend> {
     ///
     /// # Safety
     ///
-    /// The passed queue _must_ be the **same** queue as used for creation.
+    /// The passed queue _must_ support presentation on the surface, which is
+    /// used for creating this swapchain.
     ///
     /// # Examples
     ///

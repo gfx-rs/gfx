@@ -127,7 +127,7 @@ fn main() {
     println!("{:?}", surface_format);
     let swap_config = SwapchainConfig::new()
         .with_color(surface_format);
-    let (mut swap_chain, backbuffer) = surface.build_swapchain(swap_config, &queue);
+    let (mut swap_chain, backbuffer) = device.create_swapchain(&mut surface, swap_config);
 
     // Setup renderpass and pipeline
     let vs_module = device

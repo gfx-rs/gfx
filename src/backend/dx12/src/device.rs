@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::ops::Range;
 use std::{ffi, mem, ptr, slice};
 
@@ -10,12 +10,12 @@ use spirv_cross::{hlsl, spirv, ErrorCode as SpirvErrorCode};
 use winapi;
 use wio::com::ComPtr;
 
-use hal::{buffer, device as d, format, image, mapping, memory, pass, pso, query};
+use hal::{self, buffer, device as d, format, image, mapping, memory, pass, pso, query};
 use hal::{Features, Limits, MemoryType};
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
 
-use {conv, free_list, native as n, shade, Backend as B, Device, QueueFamily};
+use {conv, free_list, native as n, shade, window as w, Backend as B, Device, QueueFamily};
 use pool::RawCommandPool;
 
 
@@ -1904,5 +1904,108 @@ impl d::Device<B> for Device {
 
     fn destroy_semaphore(&self, _semaphore: n::Semaphore) {
         // Just drop, ComPtr backed
+    }
+
+    fn create_swapchain(
+        &self,
+        surface: &mut w::Surface,
+        config: hal::SwapchainConfig,
+    ) -> (w::Swapchain, hal::Backbuffer<B>) {
+        let mut swap_chain: *mut winapi::IDXGISwapChain1 = ptr::null_mut();
+        let mut format = config.color_format;
+        if format.1 == format::ChannelType::Srgb {
+            // Apparently, swap chain doesn't like sRGB, but the RTV can still have some:
+            // https://www.gamedev.net/forums/topic/670546-d3d12srgb-buffer-format-for-swap-chain/
+            // [15716] DXGI ERROR: IDXGIFactory::CreateSwapchain: Flip model swapchains (DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL and DXGI_SWAP_EFFECT_FLIP_DISCARD) only support the following Formats: (DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R10G10B10A2_UNORM), assuming the underlying Device does as well.
+            format.1 = format::ChannelType::Unorm;
+        }
+        let format = conv::map_format(format).unwrap(); // TODO: error handling
+
+        let rtv_desc = winapi::D3D12_RENDER_TARGET_VIEW_DESC {
+            Format: conv::map_format(config.color_format).unwrap(),
+            ViewDimension: winapi::D3D12_RTV_DIMENSION_TEXTURE2D,
+            .. unsafe { mem::zeroed() }
+        };
+        let rtv_heap = Device::create_descriptor_heap_impl(
+            &mut self.raw.clone(),
+            winapi::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+            false,
+            config.image_count as _,
+        );
+
+        // TODO: double-check values
+        let desc = winapi::DXGI_SWAP_CHAIN_DESC1 {
+            AlphaMode: winapi::DXGI_ALPHA_MODE_IGNORE,
+            BufferCount: config.image_count,
+            Width: surface.width,
+            Height: surface.height,
+            Format: format,
+            Flags: 0,
+            BufferUsage: winapi::DXGI_USAGE_RENDER_TARGET_OUTPUT,
+            SampleDesc: winapi::DXGI_SAMPLE_DESC {
+                Count: 1,
+                Quality: 0,
+            },
+            Scaling: winapi::DXGI_SCALING_STRETCH,
+            Stereo: false as winapi::BOOL,
+            SwapEffect: winapi::DXGI_SWAP_EFFECT(4), // TODO: DXGI_SWAP_EFFECT_FLIP_DISCARD missing in winapi
+        };
+
+        let hr = unsafe {
+            // TODO
+            surface.factory.CreateSwapChainForHwnd(
+                self.present_queue.as_mut() as *mut _ as *mut winapi::IUnknown,
+                surface.wnd_handle,
+                &desc,
+                ptr::null(),
+                ptr::null_mut(),
+                &mut swap_chain as *mut *mut _,
+            )
+        };
+
+        if !winapi::SUCCEEDED(hr) {
+            error!("error on swapchain creation 0x{:x}", hr);
+        }
+
+        let mut swap_chain = unsafe { ComPtr::<winapi::IDXGISwapChain3>::new(swap_chain as *mut winapi::IDXGISwapChain3) };
+
+        // Get backbuffer images
+        let images = (0 .. config.image_count).map(|i| {
+            let mut resource: *mut winapi::ID3D12Resource = ptr::null_mut();
+            unsafe {
+                swap_chain.GetBuffer(
+                    i as _,
+                    &dxguid::IID_ID3D12Resource,
+                    &mut resource as *mut *mut _ as *mut *mut _);
+            }
+
+            let rtv_handle = rtv_heap.at(i as _).cpu;
+            unsafe {
+                self.raw.clone().CreateRenderTargetView(resource, &rtv_desc, rtv_handle);
+            }
+
+            let kind = image::Kind::D2(surface.width as u16, surface.height as u16, 1.into());
+            n::Image {
+                resource,
+                kind,
+                usage: image::Usage::COLOR_ATTACHMENT,
+                dxgi_format: format,
+                bits_per_texel: config.color_format.0.describe_bits().total,
+                num_levels: 1,
+                num_layers: 1,
+                clear_cv: Some(rtv_handle),
+                clear_dv: None,
+                clear_sv: None,
+            }
+        }).collect();
+
+        let swapchain = w::Swapchain {
+            inner: swap_chain,
+            next_frame: 0,
+            frame_queue: VecDeque::new(),
+            rtv_heap,
+        };
+
+        (swapchain, hal::Backbuffer::Images(images))
     }
 }

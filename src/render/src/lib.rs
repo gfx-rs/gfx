@@ -234,7 +234,7 @@ impl<B: Backend, C> Context<B, C>
 
         let swap_config = hal::SwapchainConfig::new()
             .with_color_typed::<Cf>(); // TODO: check support
-        let (swapchain, backbuffer) = surface.build_swapchain(swap_config, &queue.group.queues[0]);
+        let (swapchain, backbuffer) = device.create_swapchain(&mut surface, swap_config);
 
         let backbuffer_images = match backbuffer {
             hal::Backbuffer::Images(images) => images,

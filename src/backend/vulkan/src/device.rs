@@ -1,17 +1,19 @@
 use ash::vk;
+use ash::extensions as ext;
 use ash::version::DeviceV1_0;
 use hal::{buffer, device as d, format, image, mapping, pass, pso, query};
-use hal::{Features, Limits, MemoryType};
+use hal::{Features, Limits, MemoryType, Backbuffer, SwapchainConfig};
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
 use native as n;
 use smallvec::SmallVec;
 use std::{mem, ptr};
+use std::collections::VecDeque;
 use std::ffi::CString;
 use std::ops::Range;
 
 use {Backend as B, Device, QueueFamily};
-use {conv, memory};
+use {conv, memory, window as w};
 use pool::RawCommandPool;
 
 
@@ -1295,6 +1297,74 @@ impl d::Device<B> for Device {
         };
 
         n::QueryPool(pool)
+    }
+
+    fn create_swapchain(
+        &self,
+        surface: &mut w::Surface,
+        config: SwapchainConfig,
+    ) -> (w::Swapchain, Backbuffer<B>) {
+        let functor = ext::Swapchain::new(&surface.raw.instance.0, &self.raw.0)
+            .expect("Unable to query swapchain function");
+
+        // TODO: check for better ones if available
+        let present_mode = vk::PresentModeKHR::Fifo; // required to be supported
+
+        // TODO: handle depth stencil
+        let format = config.color_format;
+
+        let info = vk::SwapchainCreateInfoKHR {
+            s_type: vk::StructureType::SwapchainCreateInfoKhr,
+            p_next: ptr::null(),
+            flags: vk::SwapchainCreateFlagsKHR::empty(),
+            surface: surface.raw.handle,
+            min_image_count: config.image_count,
+            image_format: conv::map_format(format.0, format.1).unwrap(),
+            image_color_space: vk::ColorSpaceKHR::SrgbNonlinear,
+            image_extent: vk::Extent2D {
+                width: surface.width,
+                height: surface.height,
+            },
+            image_array_layers: 1,
+            image_usage: vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            image_sharing_mode: vk::SharingMode::Exclusive,
+            queue_family_index_count: 0,
+            p_queue_family_indices: ptr::null(),
+            pre_transform: vk::SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
+            composite_alpha: vk::COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+            present_mode: present_mode,
+            clipped: 1,
+            old_swapchain: vk::SwapchainKHR::null(),
+        };
+
+        let swapchain_raw = unsafe { functor.create_swapchain_khr(&info, None) }
+            .expect("Unable to create a swapchain");
+
+        let backbuffer_images = functor.get_swapchain_images_khr(swapchain_raw)
+            .expect("Unable to get swapchain images");
+
+        let swapchain = w::Swapchain {
+            raw: swapchain_raw,
+            functor,
+            frame_queue: VecDeque::new(),
+        };
+
+        let images = backbuffer_images
+            .into_iter()
+            .map(|image| {
+                n::Image {
+                    raw: image,
+                    bytes_per_texel: 4,
+                    extent: vk::Extent3D {
+                        width: surface.width,
+                        height: surface.height,
+                        depth: 1,
+                    },
+                }
+            })
+            .collect();
+
+        (swapchain, Backbuffer::Images(images))
     }
 
     fn destroy_query_pool(&self, pool: n::QueryPool) {

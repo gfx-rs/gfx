@@ -11,7 +11,7 @@ use hal::{self as c, device as d, image as i, memory, pass, pso, buffer, mapping
 use hal::format::{Format, Swizzle};
 use hal::pool::CommandPoolCreateFlags;
 
-use {Backend as B, QueueFamily, Share};
+use {Backend as B, QueueFamily, Share, Surface, Swapchain};
 use {conv, native as n, state};
 use pool::{BufferMemory, OwnedBuffer, RawCommandPool};
 
@@ -758,6 +758,14 @@ impl d::Device<B> for Device {
 
     fn destroy_semaphore(&self, _: n::Semaphore) {
         unimplemented!()
+    }
+
+    fn create_swapchain(
+        &self,
+        surface: &mut Surface,
+        config: c::SwapchainConfig,
+    ) -> (Swapchain, c::Backbuffer<B>) {
+        self.create_swapchain_impl(surface, config)
     }
 }
 
