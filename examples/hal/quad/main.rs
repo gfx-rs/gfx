@@ -174,7 +174,7 @@ fn main() {
         ],
     );
 
-    let pipeline_layout = device.create_pipeline_layout(&[&set_layout]);
+    let pipeline_layout = device.create_pipeline_layout(&[&set_layout], &[]);
 
     let render_pass = {
         let attachment = pass::Attachment {

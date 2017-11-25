@@ -357,13 +357,13 @@ impl<B: hal::Backend> Scene<B> {
                             .unwrap();
                         resources.desc_sets.insert(name.clone(), set);
                     }
-                    raw::Resource::PipelineLayout { ref set_layouts } => {
+                    raw::Resource::PipelineLayout { ref set_layouts, ref push_constant_ranges } => {
                         let layout = {
                             let layouts = set_layouts
                                 .iter()
                                 .map(|sl| &resources.desc_set_layouts[sl])
                                 .collect::<Vec<_>>();
-                            device.create_pipeline_layout(&layouts)
+                            device.create_pipeline_layout(&layouts, &push_constant_ranges)
                         };
                         resources.pipeline_layouts.insert(name.clone(), layout);
                     }

@@ -149,6 +149,7 @@ pub trait Device<B: Backend> {
     fn create_pipeline_layout(
         &self,
         &[&B::DescriptorSetLayout],
+        &[(pso::ShaderStageFlags, Range<u32>)]
     ) -> B::PipelineLayout;
 
     ///

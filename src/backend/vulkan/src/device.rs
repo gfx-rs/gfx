@@ -224,12 +224,20 @@ impl d::Device<B> for Device {
         n::RenderPass { raw: renderpass }
     }
 
-    fn create_pipeline_layout(&self, sets: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
+    fn create_pipeline_layout(&self, sets: &[&n::DescriptorSetLayout], push_constant_ranges: &[(pso::ShaderStageFlags, Range<u32>)]) -> n::PipelineLayout {
         debug!("create_pipeline_layout {:?}", sets);
 
         let set_layouts = sets.iter().map(|set| {
             set.raw
         }).collect::<Vec<_>>();
+
+        let push_constant_ranges = push_constant_ranges.iter().map(|&(s, ref r)| {
+                vk::PushConstantRange {
+                    stage_flags: conv::map_stage_flags(s),
+                    offset: r.start,
+                    size: r.end - r.start,
+                }
+            }).collect::<Vec<_>>();
 
         let info = vk::PipelineLayoutCreateInfo {
             s_type: vk::StructureType::PipelineLayoutCreateInfo,
@@ -237,8 +245,8 @@ impl d::Device<B> for Device {
             flags: vk::PipelineLayoutCreateFlags::empty(),
             set_layout_count: set_layouts.len() as u32,
             p_set_layouts: set_layouts.as_ptr(),
-            push_constant_range_count: 0, // TODO
-            p_push_constant_ranges: ptr::null(), // TODO
+            push_constant_range_count: push_constant_ranges.len() as u32,
+            p_push_constant_ranges: push_constant_ranges.as_ptr(),
         };
 
         let raw = unsafe {

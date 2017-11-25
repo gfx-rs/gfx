@@ -45,7 +45,7 @@ macro_rules! gfx_graphics_pipeline {
                 ) -> Result<Self::Pipeline, pso::CreationError> {
                     let mut desc_layouts = Vec::new();
                     $( desc_layouts.extend(<$cmp as pso::Component<'a, B>>::descriptor_layout(&self.$cmp_name)); )*
-                    let layout = device.create_pipeline_layout_raw(&desc_layouts[..]);
+                    let layout = device.create_pipeline_layout_raw(&desc_layouts[..], &[]);
                     let render_pass = {
                         let mut attachments = Vec::new();
                         let mut color_attachments = Vec::new();

@@ -843,7 +843,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
     ) {
         unimplemented!()
     }
-
+    
     fn end_query(
         &mut self,
         _query: Query<Backend>,
@@ -866,4 +866,24 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
     ) {
         // nothing to do, timestamps are unsupported on Metal
     }
+
+    fn push_graphics_constants(
+        &mut self,
+        layout: &native::PipelineLayout,
+        stages: pso::ShaderStageFlags,
+        offset: u32,
+        constants: &[u32],
+    ) {
+        unimplemented!()
+    }
+
+    fn push_compute_constants(
+        &mut self,
+        layout: &native::PipelineLayout,
+        offset: u32,
+        constants: &[u32],
+    ) {
+        unimplemented!()
+    }
+
 }

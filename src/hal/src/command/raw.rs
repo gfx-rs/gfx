@@ -280,4 +280,21 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
 
     ///
     fn write_timestamp(&mut self, pso::PipelineStage, Query<B>);
+
+    ///
+    fn push_graphics_constants(
+        &mut self,
+        layout: &B::PipelineLayout,
+        stages: pso::ShaderStageFlags,
+        offset: u32,
+        constants: &[u32],
+    );
+
+    ///
+    fn push_compute_constants(
+        &mut self,
+        layout: &B::PipelineLayout,
+        offset: u32,
+        constants: &[u32],
+    );
 }
