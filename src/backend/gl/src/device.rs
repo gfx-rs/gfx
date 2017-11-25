@@ -227,7 +227,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_pipeline_layout(&self, _: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
+    fn create_pipeline_layout(&self, _: &[&n::DescriptorSetLayout], _: &[(pso::ShaderStageFlags, Range<u32>)]) -> n::PipelineLayout {
         n::PipelineLayout
     }
 

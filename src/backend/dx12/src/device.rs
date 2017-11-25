@@ -798,7 +798,7 @@ impl d::Device<B> for Device {
         rp
     }
 
-    fn create_pipeline_layout(&self, sets: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
+    fn create_pipeline_layout(&self, sets: &[&n::DescriptorSetLayout], push_constant_ranges: &[(pso::ShaderStageFlags, Range<u32>)]) -> n::PipelineLayout {
         // Pipeline layouts are implemented as RootSignature for D3D12.
         //
         // Each descriptor set layout will be one table entry of the root signature.

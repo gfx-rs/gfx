@@ -812,6 +812,41 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             )
         }
     }
+    
+    fn push_compute_constants(
+        &mut self,
+        layout: &n::PipelineLayout,
+        offset: u32,
+        constants: &[u32],
+    ) {
+        unsafe {
+            self.device.0.cmd_push_constants(
+                self.raw,
+                layout.raw,
+                vk::SHADER_STAGE_COMPUTE_BIT,
+                offset,
+                constants,
+            );
+        }
+    }
+
+    fn push_graphics_constants(
+        &mut self,
+        layout: &n::PipelineLayout,
+        stages: pso::ShaderStageFlags,
+        offset: u32,
+        constants: &[u32],
+    ) {
+        unsafe {
+            self.device.0.cmd_push_constants(
+                self.raw,
+                layout.raw,
+                conv::map_stage_flags(stages),
+                offset,
+                constants,
+            );
+        }
+    }
 }
 
 pub struct SubpassCommandBuffer(pub CommandBuffer);

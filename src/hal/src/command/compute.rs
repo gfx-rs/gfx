@@ -2,7 +2,6 @@ use Backend;
 use queue::capability::{Compute, Supports};
 use super::{CommandBuffer, RawCommandBuffer};
 
-
 impl<'a, B: Backend, C: Supports<Compute>> CommandBuffer<'a, B, C> {
     ///
     pub fn bind_compute_pipeline(&mut self, pipeline: &B::ComputePipeline) {
@@ -27,5 +26,10 @@ impl<'a, B: Backend, C: Supports<Compute>> CommandBuffer<'a, B, C> {
     ///
     pub fn dispatch_indirect(&mut self, buffer: &B::Buffer, offset: u64) {
         self.raw.dispatch_indirect(buffer, offset)
+    }
+
+    ///
+    pub fn push_compute_constants(&mut self, layout: &B::PipelineLayout, offset: u32, constants: &[u32]) {
+        self.raw.push_compute_constants(layout, offset, constants);
     }
 }

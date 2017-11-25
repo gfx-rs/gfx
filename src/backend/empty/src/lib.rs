@@ -92,7 +92,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_pipeline_layout(&self, _: &[&()]) -> () {
+    fn create_pipeline_layout(&self, _: &[&()], _: &[(pso::ShaderStageFlags, Range<u32>)]) -> () {
         unimplemented!()
     }
 
@@ -554,6 +554,25 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         &mut self,
         _: pso::PipelineStage,
         _: query::Query<Backend>,
+    ) {
+        unimplemented!()
+    }
+    
+    fn push_graphics_constants(
+        &mut self,
+        _: &(),
+        _: pso::ShaderStageFlags,
+        _: u32,
+        _: &[u32],
+    ) {
+        unimplemented!()
+    }
+
+    fn push_compute_constants(
+        &mut self,
+        _: &(),
+        _: u32,
+        _: &[u32],
     ) {
         unimplemented!()
     }

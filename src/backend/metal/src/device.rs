@@ -511,7 +511,7 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn create_pipeline_layout(&self, set_layouts: &[&n::DescriptorSetLayout]) -> n::PipelineLayout {
+    fn create_pipeline_layout(&self, set_layouts: &[&n::DescriptorSetLayout], push_constant_ranges: &[(pso::ShaderStageFlags, Range<u32>)]) -> n::PipelineLayout {
         use hal::pso::ShaderStageFlags;
 
         struct Counters {

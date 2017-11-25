@@ -427,9 +427,10 @@ impl<B: Backend> Device<B> {
     #[doc(hidden)]
     pub fn create_pipeline_layout_raw(
         &mut self,
-        layouts: &[&B::DescriptorSetLayout]
+        layouts: &[&B::DescriptorSetLayout],
+        push_constant_ranges: &[(hal::pso::ShaderStageFlags, Range<u32>)],
     ) -> handle::raw::PipelineLayout<B> {
-        let layout = self.raw.create_pipeline_layout(layouts);
+        let layout = self.raw.create_pipeline_layout(layouts, push_constant_ranges);
         PipelineLayout::new(layout, (), self.garbage.clone()).into()
     }
 

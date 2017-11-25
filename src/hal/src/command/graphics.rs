@@ -197,6 +197,11 @@ impl<'a, B: Backend, C: Supports<Graphics>> CommandBuffer<'a, B, C> {
     pub fn set_blend_constants(&mut self, cv: ColorValue) {
         self.raw.set_blend_constants(cv)
     }
+
+    ///
+    pub fn push_graphics_constants(&mut self, layout: &B::PipelineLayout, stages: pso::ShaderStageFlags, offset: u32, constants: &[u32]) {
+        self.raw.push_graphics_constants(layout, stages, offset, constants);
+    }
 }
 
 impl<'a, B: Backend, C: Supports<GraphicsOrCompute>> CommandBuffer<'a, B, C> {

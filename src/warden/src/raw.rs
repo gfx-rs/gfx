@@ -61,6 +61,7 @@ pub enum Resource {
     },
     PipelineLayout {
         set_layouts: Vec<String>,
+        push_constant_ranges: Vec<(hal::pso::ShaderStageFlags, Range<u32>)>
     },
     GraphicsPipeline,
     Framebuffer {

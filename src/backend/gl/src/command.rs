@@ -601,6 +601,16 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     ) {
         unimplemented!()
     }
+    
+    fn push_graphics_constants(
+        &mut self,
+        layout: &n::PipelineLayout,
+        stages: pso::ShaderStageFlags,
+        offset: u32,
+        constants: &[u32],
+    ) {
+        unimplemented!()
+    }
 
     fn end_query(
         &mut self,
@@ -621,6 +631,15 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         &mut self,
         _: pso::PipelineStage,
         _: query::Query<Backend>,
+    ) {
+        unimplemented!()
+    }
+    
+    fn push_compute_constants(
+        &mut self,
+        layout: &n::PipelineLayout,
+        offset: u32,
+        constants: &[u32],
     ) {
         unimplemented!()
     }
