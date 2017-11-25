@@ -15,7 +15,10 @@ use hal::{Features, Limits, MemoryType};
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
 
-use {conv, free_list, native as n, shade, window as w, Backend as B, Device, QueueFamily};
+use {
+    conv, free_list, native as n, root_constants, shade, window as w,
+    Backend as B, Device, QueueFamily
+};
 use pool::RawCommandPool;
 
 
@@ -798,18 +801,37 @@ impl d::Device<B> for Device {
         rp
     }
 
-    fn create_pipeline_layout(&self, sets: &[&n::DescriptorSetLayout], push_constant_ranges: &[(pso::ShaderStageFlags, Range<u32>)]) -> n::PipelineLayout {
+    fn create_pipeline_layout(
+        &self,
+        sets: &[&n::DescriptorSetLayout],
+        push_constant_ranges: &[(pso::ShaderStageFlags, Range<u32>)],
+    ) -> n::PipelineLayout {
         // Pipeline layouts are implemented as RootSignature for D3D12.
         //
         // Each descriptor set layout will be one table entry of the root signature.
         // We have the additional restriction that SRV/CBV/UAV and samplers need to be
         // separated, so each set layout will actually occupy up to 2 entries!
 
+        let root_constants = root_constants::split(push_constant_ranges);
+        // Offest of `spaceN` for descriptor tables. Root constants will be in
+        // `space0`.
+        let table_space_offset = 0; // if !root_constants.is_empty() { 1 } else { 0 };
+
         let total = sets.iter().map(|desc_sec| desc_sec.bindings.len()).sum();
         // guarantees that no re-allocation is done, and our pointers are valid
         let mut ranges = Vec::with_capacity(total);
-        let mut parameters = Vec::with_capacity(sets.len() * 2);
+        let mut parameters = Vec::with_capacity(root_constants.len() + sets.len() * 2);
         let mut set_tables = Vec::with_capacity(sets.len());
+
+        for root_constant in root_constants.iter() {
+            let mut param = winapi::D3D12_ROOT_PARAMETER {
+                ParameterType: winapi::D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
+                ShaderVisibility: winapi::D3D12_SHADER_VISIBILITY_ALL, //TODO
+                .. unsafe { mem::zeroed() }
+            };
+
+            // TODO
+        }
 
         for (i, set) in sets.iter().enumerate() {
             let mut table_type = n::SetTableTypes::empty();
@@ -825,7 +847,7 @@ impl d::Device<B> for Device {
                 .bindings
                 .iter()
                 .filter(|bind| bind.ty != pso::DescriptorType::Sampler)
-                .map(|bind| conv::map_descriptor_range(bind, 2*i as u32)));
+                .map(|bind| conv::map_descriptor_range(bind, (table_space_offset + 2*i) as u32)));
 
             if ranges.len() > range_base {
                 *unsafe{ param.DescriptorTable_mut() } = winapi::D3D12_ROOT_DESCRIPTOR_TABLE {
@@ -842,7 +864,12 @@ impl d::Device<B> for Device {
                 .bindings
                 .iter()
                 .filter(|bind| bind.ty == pso::DescriptorType::Sampler)
-                .map(|bind| conv::map_descriptor_range(bind, (2*i +1) as u32)));
+                .map(|bind| {
+                    conv::map_descriptor_range(
+                        bind,
+                        (table_space_offset + 2*i+1) as u32,
+                    )
+                }));
 
             if ranges.len() > range_base {
                 *unsafe{ param.DescriptorTable_mut() } = winapi::D3D12_ROOT_DESCRIPTOR_TABLE {
@@ -904,6 +931,7 @@ impl d::Device<B> for Device {
         n::PipelineLayout {
             raw: signature,
             tables: set_tables,
+            root_constants,
             num_parameter_slots: parameters.len(),
         }
     }

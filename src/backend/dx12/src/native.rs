@@ -3,6 +3,7 @@ use wio::com::ComPtr;
 
 use hal::{image, pass, pso, MemoryType, DescriptorPool as HalDescriptorPool};
 use {free_list, Backend};
+use root_constants::RootConstant;
 
 use std::collections::BTreeMap;
 use std::ops::Range;
@@ -112,6 +113,8 @@ pub struct PipelineLayout {
     // Storing for each associated descriptor set layout, which tables we created
     // in the root signature. This is required for binding descriptor sets.
     pub(crate) tables: Vec<SetTableTypes>,
+    // Disjunct, sorted vector of root constant ranges.
+    pub(crate) root_constants: Vec<RootConstant>,
     // Number of parameter slots in this layout, can be larger than number of tables.
     // Required for updating the root signature when flusing user data.
     pub(crate) num_parameter_slots: usize,
