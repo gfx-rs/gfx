@@ -1,3 +1,7 @@
+skip_branch_with_pr: true
+branches:
+  except:
+    - staging.tmp
 environment:
   RUST_BACKTRACE: full
   matrix:
