@@ -97,6 +97,7 @@ pub enum Command {
     SetBlendState(c::ColorSlot, s::Color),
     SetBlendColor(ColorValue),
     SetPatches(c::PatchSize),
+    SetOutputMasks { color: bool, depth: bool, stencil: bool },
     CopyBuffer(Buffer, Buffer,
                gl::types::GLintptr, gl::types::GLintptr,
                gl::types::GLsizeiptr),
@@ -315,7 +316,13 @@ impl Cache {
         self.blend_color = Some(color_value);
         Some(Command::SetBlendColor(color_value))
     }
+}
 
+#[derive(Clone, Debug, Default)]
+pub struct Workarounds {
+    // On some systems (OSX), the driver may still output something even if the shader does not,
+    // so we need to explicitly mask out the outputs according to the views being bound.
+    pub main_fbo_mask: bool,
 }
 
 /// A command buffer abstraction for OpenGL.
@@ -341,17 +348,19 @@ pub struct CommandBuffer {
     pub display_fb: FrameBuffer,
     cache: Cache,
     active_attribs: usize,
+    workarounds: Workarounds,
 }
 
 impl CommandBuffer {
-    pub fn new(fbo: FrameBuffer) -> CommandBuffer {
+    pub fn new(fbo: FrameBuffer, workarounds: Workarounds) -> CommandBuffer {
         CommandBuffer {
             buf: Vec::new(),
             data: DataBuffer::new(),
-            fbo: fbo,
+            fbo,
             display_fb: 0 as FrameBuffer,
             cache: Cache::new(),
             active_attribs: 0,
+            workarounds,
         }
     }
     fn is_main_target(&self, tv: Option<TargetView>) -> bool {
@@ -461,6 +470,24 @@ impl command::Buffer<Resources> for CommandBuffer {
                       self.is_main_target(pts.stencil);
         if is_main {
             self.buf.extend(self.cache.bind_framebuffer(gl::DRAW_FRAMEBUFFER, self.display_fb));
+            if self.workarounds.main_fbo_mask {
+                // Note: this will only allow less stuff to reach the framebuffer, not more
+                self.buf.push(Command::SetOutputMasks {
+                    color: pts.colors[0].is_some(),
+                    depth: pts.depth.is_some(),
+                    stencil: pts.stencil.is_some(),
+                });
+                // Now that we bound a different mask, invalidate the cached states.
+                if pts.colors[0].is_none() {
+                    self.cache.blend_state = None;
+                }
+                if pts.depth.is_none() {
+                    self.cache.depth_state = None;
+                }
+                if pts.stencil.is_none() {
+                    //self.cache.stencil_state = None;
+                }
+            }
         } else {
             let num = pts.colors
                 .iter()
