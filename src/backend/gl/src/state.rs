@@ -136,7 +136,7 @@ pub fn bind_depth(gl: &gl::Gl, depth: &Option<s::Depth>) {
         &Some(ref d) => { unsafe {
             gl.Enable(gl::DEPTH_TEST);
             gl.DepthFunc(map_comparison(d.fun));
-            gl.DepthMask(if d.write {gl::TRUE} else {gl::FALSE});
+            gl.DepthMask(d.write as _);
         }},
         &None => unsafe { gl.Disable(gl::DEPTH_TEST) },
     }
@@ -208,6 +208,18 @@ fn map_factor(factor: s::Factor) -> gl::types::GLenum {
     }
 }
 
+pub fn set_output_masks(gl: &gl::Gl, color: bool, depth: bool, stencil: bool) {
+    if !color {
+        unsafe { gl.ColorMask(gl::FALSE, gl::FALSE, gl::FALSE, gl::FALSE) };
+    }
+    if !depth {
+        unsafe { gl.Disable(gl::DEPTH_TEST) };
+    }
+    if !stencil {
+        unsafe { gl.Disable(gl::STENCIL_TEST) };
+    }
+}
+
 pub fn bind_blend(gl: &gl::Gl, color: s::Color) {
     match color.blend {
         Some(b) => unsafe {
@@ -226,7 +238,7 @@ pub fn bind_blend(gl: &gl::Gl, color: s::Color) {
         None => unsafe {
             gl.Disable(gl::BLEND);
         },
-    };
+    }
     unsafe { gl.ColorMask(
         if (color.mask & s::RED  ).is_empty() {gl::FALSE} else {gl::TRUE},
         if (color.mask & s::GREEN).is_empty() {gl::FALSE} else {gl::TRUE},

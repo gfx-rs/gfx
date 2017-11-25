@@ -15,8 +15,7 @@
 //! OpenGL implementation of a device, striving to support OpenGL 2.0 with at
 //! least VAOs, but using newer extensions when available.
 
-#![allow(missing_docs)]
-#![deny(missing_copy_implementations)]
+#![allow(missing_docs, missing_copy_implementations)]
 
 #[macro_use]
 extern crate log;
@@ -213,6 +212,7 @@ pub struct Share {
     context: gl::Gl,
     capabilities: c::Capabilities,
     private_caps: info::PrivateCaps,
+    workarounds: command::Workarounds,
     handles: RefCell<handle::Manager<Resources>>,
 }
 
@@ -284,6 +284,9 @@ impl Device {
             context: gl,
             capabilities: caps,
             private_caps: private,
+            workarounds: command::Workarounds {
+                main_fbo_mask: cfg!(target_os = "macos"),
+            },
             handles: RefCell::new(handles),
         };
         if let Err(err) = share.check() {
@@ -583,6 +586,9 @@ impl Device {
                 unsafe {
                     gl.PatchParameteri(gl::PATCH_VERTICES, num as gl::types::GLint);
                 }
+            },
+            Command::SetOutputMasks { color, depth, stencil } => {
+                state::set_output_masks(&self.share.context, color, depth, stencil);
             },
             Command::CopyBuffer(src, dst, src_offset, dst_offset, size) => {
                 let gl = &self.share.context;
