@@ -10,6 +10,10 @@ rust:
 os:
   - linux
   - osx
+branches:
+  except:
+    - staging.tmp
+
 notifications:
   webhooks:
     urls:
