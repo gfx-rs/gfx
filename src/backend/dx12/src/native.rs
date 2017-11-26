@@ -83,6 +83,7 @@ pub struct GraphicsPipeline {
     pub(crate) signature: *mut winapi::ID3D12RootSignature, // weak-ptr, owned by `PipelineLayout`
     pub(crate) num_parameter_slots: usize, // signature parameter slots, see `PipelineLayout`
     pub(crate) topology: winapi::D3D12_PRIMITIVE_TOPOLOGY,
+    pub(crate) constants: Vec<RootConstant>,
 }
 unsafe impl Send for GraphicsPipeline { }
 unsafe impl Sync for GraphicsPipeline { }
@@ -92,6 +93,7 @@ pub struct ComputePipeline {
     pub(crate) raw: *mut winapi::ID3D12PipelineState,
     pub(crate) signature: *mut winapi::ID3D12RootSignature, // weak-ptr, owned by `PipelineLayout`
     pub(crate) num_parameter_slots: usize, // signature parameter slots, see `PipelineLayout`
+    pub(crate) constants: Vec<RootConstant>,
 }
 
 unsafe impl Send for ComputePipeline { }

@@ -73,6 +73,8 @@ pub enum ShaderError {
     CompilationFailed(String),
     /// Missing entry point.
     MissingEntryPoint(String),
+    /// Mismatch of interface (e.g missing push constants).
+    InterfaceMismatch(String),
 }
 
 /// An error from creating a framebuffer.
