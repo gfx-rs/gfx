@@ -18,6 +18,18 @@ use window::{Backbuffer, SwapchainConfig};
 #[derive(Clone, PartialEq, Debug)]
 pub struct OutOfMemory;
 
+impl fmt::Display for OutOfMemory {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Out of memory")
+    }
+}
+
+impl Error for OutOfMemory {
+    fn description(&self) -> &str {
+        "Out of memory"
+    }
+}
+
 /// Error binding a resource to memory allocation.
 #[derive(Clone, PartialEq, Debug)]
 pub enum BindError {
