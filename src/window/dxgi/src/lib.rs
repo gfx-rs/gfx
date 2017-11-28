@@ -60,7 +60,7 @@ impl Window {
             kind: tex::Kind::D2(self.size.0, self.size.1, tex::AaMode::Single),
             levels: 1,
             format: self.color_format.0,
-            bind: memory::RENDER_TARGET,
+            bind: memory::RENDER_TARGET | memory::TRANSFER_SRC,
             usage: memory::Usage::Data,
         };
         let desc = tex::RenderDesc {
