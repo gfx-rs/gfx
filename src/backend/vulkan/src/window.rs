@@ -109,7 +109,7 @@ impl Instance {
     }
 
     #[cfg(windows)]
-    pub fn create_surface_from_hwnd(&self, hwnd: *mut c_void) -> Surface {
+    pub fn create_surface_from_hwnd(&self, hinstance: *mut c_void, hwnd: *mut c_void) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
             .expect("Unable to load Vulkan entry points");
@@ -119,8 +119,6 @@ impl Instance {
         }
 
         let surface = {
-            use kernel32;
-
             let win32_loader = ext::Win32Surface::new(entry, &self.raw.0)
                 .expect("Unable to load win32 surface functions");
 
@@ -129,7 +127,7 @@ impl Instance {
                     s_type: vk::StructureType::Win32SurfaceCreateInfoKhr,
                     p_next: ptr::null(),
                     flags: vk::Win32SurfaceCreateFlagsKHR::empty(),
-                    hinstance: kernel32::GetModuleHandleW(ptr::null()) as *mut _,
+                    hinstance: hinstance as *mut _,
                     hwnd: hwnd as *mut _,
                 };
 
@@ -177,8 +175,11 @@ impl Instance {
         }
         #[cfg(windows)]
         {
+            use kernel32;
             use winit::os::windows::WindowExt;
-            self.create_surface_from_hwnd(window.get_hwnd() as *mut _)
+            let hinstance = unsafe { kernel32::GetModuleHandleW(ptr::null()) };
+            let hwnd = window.get_hwnd();
+            self.create_surface_from_hwnd(hinstance as *mut _, hwnd as *mut _)
         }
     }
 
