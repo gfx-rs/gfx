@@ -4,6 +4,7 @@ use hal::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset};
 use hal::buffer::IndexBufferView;
 use winapi::{self, UINT64, UINT};
 use {conv, native as n, Backend, CmdSignatures};
+use root_constants::RootConstant;
 use smallvec::SmallVec;
 use std::{mem, ptr};
 use std::ops::Range;
@@ -104,6 +105,8 @@ struct PipelineCache {
     pipeline: Option<(*mut winapi::ID3D12PipelineState, *mut winapi::ID3D12RootSignature)>,
     // Paramter slots of the current root signature.
     num_parameter_slots: usize,
+    //
+    root_constants: Vec<RootConstant>,
     // Virtualized root signature user data of the shaders
     user_data: UserData,
 
@@ -117,6 +120,7 @@ impl PipelineCache {
         PipelineCache {
             pipeline: None,
             num_parameter_slots: 0,
+            root_constants: Vec::new(),
             user_data: UserData::new(),
             srv_cbv_uav_start: 0,
             sampler_start: 0,
@@ -341,7 +345,15 @@ impl CommandBuffer {
         let cmd_buffer = &mut self.raw;
         Self::flush_user_data(
             &mut self.gr_pipeline,
-            |slot, gpu| unsafe { cmd_buffer.SetGraphicsRootDescriptorTable(slot, gpu); },
+            |slot, data| unsafe {
+                cmd_buffer.clone().SetGraphicsRoot32BitConstants(
+                    slot,
+                    data.len() as _,
+                    data.as_ptr() as *const _,
+                    0,
+                )
+            },
+            |slot, gpu| unsafe { cmd_buffer.clone().SetGraphicsRootDescriptorTable(slot, gpu); },
         );
     }
 
@@ -357,44 +369,75 @@ impl CommandBuffer {
         let cmd_buffer = &mut self.raw;
         Self::flush_user_data(
             &mut self.comp_pipeline,
-            |slot, gpu| unsafe { cmd_buffer.SetGraphicsRootDescriptorTable(slot, gpu); },
+            |slot, data| unsafe {
+                cmd_buffer.clone().SetComputeRoot32BitConstants(
+                    slot,
+                    data.len() as _,
+                    data.as_ptr() as *const _,
+                    0,
+                )
+            },
+            |slot, gpu| unsafe { cmd_buffer.clone().SetGraphicsRootDescriptorTable(slot, gpu); },
         );
     }
 
-    fn flush_user_data<F>(
+    fn flush_user_data<F, G>(
         pipeline: &mut PipelineCache,
-        mut table_update: F,
+        mut constants_update: F,
+        mut table_update: G,
     ) where
-        F: FnMut(u32, winapi::D3D12_GPU_DESCRIPTOR_HANDLE),
+        F: FnMut(u32, &[u32]),
+        G: FnMut(u32, winapi::D3D12_GPU_DESCRIPTOR_HANDLE),
     {
         let user_data = &mut pipeline.user_data;
         if user_data.dirty_mask == 0 {
             return
         }
 
-        // TODO: root constant support
+        let num_root_constant = pipeline.root_constants.len();
+        let mut cur_index = 0;
+        // TODO: opt: Only set dirty root constants?
+        for i in 0..num_root_constant {
+            let root_constant = &pipeline.root_constants[i];
+            let num_constants = (root_constant.range.end-root_constant.range.start) as usize;
+            let mut data = Vec::new();
+            for c in cur_index..cur_index+num_constants {
+                data.push(match user_data.data[c] {
+                    RootElement::Constant(v) => v,
+                    _ => {
+                        warn!("Unset or mismatching root constant at index {:?} ({:?})", c, user_data.data[c]);
+                        0
+                    }
+                });
+                user_data.clear_dirty(c);
+            }
+            constants_update(i as _, &data);
+            cur_index += num_constants;
+        }
 
         // Flush descriptor tables
         // Index in the user data array where tables are starting
-        let table_start = 0;
-        let table_slot_start = 0;
-        for i in 0..pipeline.num_parameter_slots {
-            let table_index = i + table_start;
+        let table_start = pipeline
+            .root_constants
+            .iter()
+            .fold(0, |sum, c| sum + c.range.end - c.range.start) as usize;
+
+        for i in num_root_constant..pipeline.num_parameter_slots {
+            let table_index = i - num_root_constant + table_start;
             if ((user_data.dirty_mask >> table_index) & 1) == 1 {
-                let slot = (i + table_slot_start) as _;
-                let ptr = match user_data.data[i] {
+                let ptr = match user_data.data[table_index] {
                     RootElement::TableSrvCbvUav(offset) =>
                         pipeline.srv_cbv_uav_start + offset as u64,
                     RootElement::TableSampler(offset) =>
                         pipeline.sampler_start + offset as u64,
                     _ => {
-                        error!("Unexpected user data element in the root signature ({:?})", user_data.data[i]);
+                        error!("Unexpected user data element in the root signature ({:?})", user_data.data[table_index]);
                         continue
                     }
                 };
                 let gpu = winapi::D3D12_GPU_DESCRIPTOR_HANDLE { ptr };
-                table_update(slot, gpu);
-                user_data.clear_dirty(table_index);
+                table_update(i as _, gpu);
+                user_data.clear_dirty(i);
             }
         }
     }
@@ -803,6 +846,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 _ => {
                     self.raw.SetGraphicsRootSignature(pipeline.signature);
                     self.gr_pipeline.num_parameter_slots = pipeline.num_parameter_slots;
+                    self.gr_pipeline.root_constants = pipeline.constants.clone();
                     // All slots need to be rebound internally on signature change.
                     self.gr_pipeline.user_data.dirty_mask = !0;
                 }
@@ -847,32 +891,38 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 table_id += 1;
             }
         }
+
+        let table_base_offset = layout
+            .root_constants
+            .iter()
+            .fold(0, |sum, c| sum + c.range.end - c.range.start);
+
         for (set, table) in sets.iter().zip(layout.tables[first_set..].iter()) {
             set.first_gpu_view.map(|gpu| {
                 assert!(table.contains(n::SRV_CBV_UAV));
 
-                let root_offset = table_id; // TODO: take push constants into account
+                let root_offset = table_id + table_base_offset;
                 // Cast is safe as offset **must** be in u32 range. Unable to
                 // create heaps with more descriptors.
                 let table_offset = (gpu.ptr - srv_cbv_uav_base.ptr) as u32;
                 self
                     .gr_pipeline
                     .user_data
-                    .set_srv_cbv_uav_table(root_offset, table_offset);
+                    .set_srv_cbv_uav_table(root_offset as _, table_offset);
 
                 table_id += 1;
             });
             set.first_gpu_sampler.map(|gpu| {
                 assert!(table.contains(n::SAMPLERS));
 
-                let root_offset = table_id; // TODO: take push constants into account
+                let root_offset = table_id + table_base_offset;
                 // Cast is safe as offset **must** be in u32 range. Unable to
                 // create heaps with more descriptors.
                 let table_offset = (gpu.ptr - sampler_base.ptr) as u32;
                 self
                     .gr_pipeline
                     .user_data
-                    .set_sampler_table(root_offset, table_offset);
+                    .set_sampler_table(root_offset as _, table_offset);
 
                 table_id += 1;
             });
@@ -888,6 +938,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 _ => {
                     self.raw.SetComputeRootSignature(pipeline.signature);
                     self.comp_pipeline.num_parameter_slots = pipeline.num_parameter_slots;
+                    self.comp_pipeline.root_constants = pipeline.constants.clone();
                     // All slots need to be rebound internally on signature change.
                     self.comp_pipeline.user_data.dirty_mask = !0;
                 }
@@ -931,32 +982,36 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 table_id += 1;
             }
         }
+        let table_base_offset = layout
+            .root_constants
+            .iter()
+            .fold(0, |sum, c| sum + c.range.end - c.range.start);
         for (set, table) in sets.iter().zip(layout.tables[first_set..].iter()) {
             set.first_gpu_view.map(|gpu| {
                 assert!(table.contains(n::SRV_CBV_UAV));
 
-                let root_offset = table_id; // TODO: take push constants into account
+                let root_offset = table_id + table_base_offset;
                 // Cast is safe as offset **must** be in u32 range. Unable to
                 // create heaps with more descriptors.
                 let table_offset = (gpu.ptr - srv_cbv_uav_base.ptr) as u32;
                 self
                     .comp_pipeline
                     .user_data
-                    .set_srv_cbv_uav_table(root_offset, table_offset);
+                    .set_srv_cbv_uav_table(root_offset as _, table_offset);
 
                 table_id += 1;
             });
             set.first_gpu_sampler.map(|gpu| {
                 assert!(table.contains(n::SAMPLERS));
 
-                let root_offset = table_id; // TODO: take push constants into account
+                let root_offset = table_id + table_base_offset;
                 // Cast is safe as offset **must** be in u32 range. Unable to
                 // create heaps with more descriptors.
                 let table_offset = (gpu.ptr - sampler_base.ptr) as u32;
                 self
                     .comp_pipeline
                     .user_data
-                    .set_sampler_table(root_offset, table_offset);
+                    .set_sampler_table(root_offset as _, table_offset);
 
                 table_id += 1;
             });
@@ -1412,11 +1467,22 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn push_graphics_constants(
         &mut self,
         layout: &n::PipelineLayout,
-        stages: pso::ShaderStageFlags,
+        _stages: pso::ShaderStageFlags,
         offset: u32,
         constants: &[u32],
     ) {
-        unimplemented!()
+        let num = constants.len() as u32;
+        for root_constant in &layout.root_constants {
+            if root_constant.range.start >= offset &&
+               root_constant.range.start < offset+num
+            {
+                let start = (root_constant.range.start-offset) as _;
+                let end = num.min(root_constant.range.end-offset) as _;
+                self.gr_pipeline
+                    .user_data
+                    .set_constants(offset as _, &constants[start..end]);
+            }
+        }
     }
 
     fn push_compute_constants(
@@ -1425,7 +1491,18 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         offset: u32,
         constants: &[u32],
     ) {
-        unimplemented!()
+        let num = constants.len() as u32;
+        for root_constant in &layout.root_constants {
+            if root_constant.range.start >= offset &&
+               root_constant.range.start < offset+num
+            {
+                let start = (root_constant.range.start-offset) as _;
+                let end = num.min(root_constant.range.end-offset) as _;
+                self.comp_pipeline
+                    .user_data
+                    .set_constants(offset as _, &constants[start..end]);
+            }
+        }
     }
 }
 
