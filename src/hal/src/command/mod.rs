@@ -1,6 +1,7 @@
 //!
 
 use Backend;
+use queue::capability::Supports;
 use std::marker::PhantomData;
 
 mod compute;
@@ -46,6 +47,17 @@ impl<'a, B: Backend, C> CommandBuffer<'a, B, C> {
     /// The command pool must be reset to able to re-record commands.
     pub fn finish(self) -> Submit<B, C> {
         unsafe { Submit::new(self) }
+    }
+
+    /// Downgrade a command buffer to a lesser capability type.
+    /// 
+    /// This is safe as you can't `submit` downgraded version since `submit`
+    /// requires `self` by move.
+    pub fn downgrade<D>(&mut self) -> &mut CommandBuffer<'a, B, D>
+    where
+        C: Supports<D>
+    {
+        unsafe { ::std::mem::transmute(self) }
     }
 }
 
