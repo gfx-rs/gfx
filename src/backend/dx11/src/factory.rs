@@ -335,7 +335,7 @@ impl Factory {
     /// Read a download-usage texture contents. Useful for screenshot readbacks.
     pub fn map_texture_read<'a, 'b, S: Copy + SurfaceTyped>(
         &'a mut self, texture: &'b h::Texture<R, S>
-    ) -> &'b [S::DataType] {
+    ) -> (&'b [S::DataType], usize) {
         let info = texture.get_info();
         let (width, height, _, aa) = info.kind.get_dimensions();
         assert_eq!(info.usage, memory::Usage::Download);
@@ -350,7 +350,7 @@ impl Factory {
 
         let mut sres = winapi::d3d11::D3D11_MAPPED_SUBRESOURCE {
             pData: ptr::null_mut(),
-            RowPitch: width as u32 * texel_size as u32,
+            RowPitch: 0,
             DepthPitch: 0,
         };
 
@@ -362,7 +362,9 @@ impl Factory {
         };
 
         if winapi::SUCCEEDED(hr) {
-            unsafe { slice::from_raw_parts(sres.pData as *const _, mip0_texels) }
+            unsafe {
+                (slice::from_raw_parts(sres.pData as *const _, sres.DepthPitch as usize / texel_size as usize), sres.RowPitch as usize / texel_size as usize)
+            }
         } else {
             panic!("Unable to map a texture {:?}, error {:x}", texture, hr);
         }
