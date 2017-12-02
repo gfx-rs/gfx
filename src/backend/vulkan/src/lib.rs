@@ -152,7 +152,7 @@ impl Instance {
                     .iter()
                     .find(|inst_ext| unsafe {
                         CStr::from_ptr(inst_ext.extension_name.as_ptr()) ==
-                            CStr::from_ptr(ext.as_ptr() as *const i8)
+                            CStr::from_ptr(ext.as_ptr() as *const _)
                     })
                     .map(|_| ext)
                     .or_else(|| {
@@ -170,7 +170,7 @@ impl Instance {
                     .iter()
                     .find(|inst_layer| unsafe {
                         CStr::from_ptr(inst_layer.layer_name.as_ptr()) ==
-                            CStr::from_ptr(layer.as_ptr() as *const i8)
+                            CStr::from_ptr(layer.as_ptr() as *const _)
                     })
                     .map(|_| layer)
                     .or_else(|| {
