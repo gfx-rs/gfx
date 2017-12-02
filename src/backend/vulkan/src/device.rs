@@ -234,8 +234,8 @@ impl d::Device<B> for Device {
         let push_constant_ranges = push_constant_ranges.iter().map(|&(s, ref r)| {
                 vk::PushConstantRange {
                     stage_flags: conv::map_stage_flags(s),
-                    offset: r.start,
-                    size: r.end - r.start,
+                    offset: r.start * 4,
+                    size: (r.end - r.start) * 4,
                 }
             }).collect::<Vec<_>>();
 

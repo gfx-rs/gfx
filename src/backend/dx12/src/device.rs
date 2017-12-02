@@ -22,6 +22,9 @@ use {
 use pool::RawCommandPool;
 use root_constants::RootConstant;
 
+// Register space used for root constants.
+const ROOT_CONSTANT_SPACE: u32 = 0;
+
 /// Emit error during shader module creation. Used if we don't expect an error
 /// but might panic due to an exception in SPIRV-Cross.
 fn gen_unexpected_error(err: SpirvErrorCode) -> d::ShaderError {
@@ -201,15 +204,7 @@ impl Device {
         compile_options.shader_model = shader_model;
         compile_options.vertex.invert_y = true;
 
-        let stage_flag = match stage {
-            pso::Stage::Vertex => pso::ShaderStageFlags::VERTEX,
-            pso::Stage::Hull => pso::ShaderStageFlags::HULL,
-            pso::Stage::Domain => pso::ShaderStageFlags::DOMAIN,
-            pso::Stage::Geometry => pso::ShaderStageFlags::GEOMETRY,
-            pso::Stage::Fragment => pso::ShaderStageFlags::FRAGMENT,
-            pso::Stage::Compute => pso::ShaderStageFlags::COMPUTE,
-        };
-
+        let stage_flag = stage.into();
         compile_options.root_constants_layout = layout
             .root_constants
             .iter()
@@ -862,9 +857,10 @@ impl d::Device<B> for Device {
         let root_constants = root_constants::split(push_constant_ranges)
             .iter()
             .map(|constant| {
+                assert!(constant.range.start <= constant.range.end);
                 RootConstant {
                     stages: constant.stages,
-                    range: (constant.range.start/4)..(constant.range.end/4),
+                    range: constant.range.start..constant.range.end,
                 }
             })
             .collect::<Vec<_>>();
@@ -881,7 +877,7 @@ impl d::Device<B> for Device {
 
             *unsafe{ param.Constants_mut() } = winapi::D3D12_ROOT_CONSTANTS {
                 ShaderRegister: root_constant.range.start as _,
-                RegisterSpace: 0, // root constants will always be in space0.
+                RegisterSpace: ROOT_CONSTANT_SPACE,
                 Num32BitValues: (root_constant.range.end - root_constant.range.start) as _,
             };
 

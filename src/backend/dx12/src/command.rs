@@ -9,6 +9,10 @@ use smallvec::SmallVec;
 use std::{mem, ptr};
 use std::ops::Range;
 
+// Fixed size of the root signature.
+// Limited by D3D12.
+const ROOT_SIGNATURE_SIZE: usize = 64;
+
 fn get_rect(rect: &com::Rect) -> winapi::D3D12_RECT {
     winapi::D3D12_RECT {
         left: rect.x as i32,
@@ -57,20 +61,21 @@ enum RootElement {
 /// Virtual data storage for the current root signature memory.
 #[derive(Clone)]
 struct UserData {
-    data: [RootElement; 64],
+    data: [RootElement; ROOT_SIGNATURE_SIZE],
     dirty_mask: u64,
 }
 
 impl UserData {
     fn new() -> Self {
         UserData {
-            data: [RootElement::Undefined; 64],
+            data: [RootElement::Undefined; ROOT_SIGNATURE_SIZE],
             dirty_mask: 0,
         }
     }
 
     /// Update root constant values. Changes are marked as dirty.
     fn set_constants(&mut self, offset: usize, data: &[u32]) {
+        assert!(offset + data.len() <= ROOT_SIGNATURE_SIZE);
         // Each root constant occupies one DWORD
         for (i, val) in data.iter().enumerate() {
             self.data[offset+i] = RootElement::Constant(*val);
@@ -80,6 +85,7 @@ impl UserData {
 
     /// Update descriptor table. Changes are marked as dirty.
     fn set_srv_cbv_uav_table(&mut self, offset: usize, table_start: u32) {
+        assert!(offset < ROOT_SIGNATURE_SIZE);
         // A descriptor table occupies one DWORD
         self.data[offset] = RootElement::TableSrvCbvUav(table_start);
         self.dirty_mask |= 1u64 << offset;
@@ -87,6 +93,7 @@ impl UserData {
 
     /// Update descriptor table. Changes are marked as dirty.
     fn set_sampler_table(&mut self, offset: usize, table_start: u32) {
+        assert!(offset < ROOT_SIGNATURE_SIZE);
         // A descriptor table occupies one DWORD
         self.data[offset] = RootElement::TableSampler(table_start);
         self.dirty_mask |= 1u64 << offset;
@@ -353,7 +360,9 @@ impl CommandBuffer {
                     0,
                 )
             },
-            |slot, gpu| unsafe { cmd_buffer.clone().SetGraphicsRootDescriptorTable(slot, gpu); },
+            |slot, gpu| unsafe {
+                cmd_buffer.clone().SetGraphicsRootDescriptorTable(slot, gpu);
+            },
         );
     }
 
@@ -377,8 +386,29 @@ impl CommandBuffer {
                     0,
                 )
             },
-            |slot, gpu| unsafe { cmd_buffer.clone().SetGraphicsRootDescriptorTable(slot, gpu); },
+            |slot, gpu| unsafe {
+                cmd_buffer.clone().SetGraphicsRootDescriptorTable(slot, gpu);
+            },
         );
+    }
+
+    fn push_constants(
+        user_data: &mut UserData,
+        layout: &n::PipelineLayout,
+        offset: u32,
+        constants: &[u32],
+    ) {
+        let num = constants.len() as u32;
+        for root_constant in &layout.root_constants {
+            assert!(root_constant.range.start <= root_constant.range.end);
+            if root_constant.range.start >= offset &&
+               root_constant.range.start < offset+num
+            {
+                let start = (root_constant.range.start-offset) as _;
+                let end = num.min(root_constant.range.end-offset) as _;
+                user_data.set_constants(offset as _, &constants[start..end]);
+            }
+        }
     }
 
     fn flush_user_data<F, G>(
@@ -397,8 +427,7 @@ impl CommandBuffer {
         let num_root_constant = pipeline.root_constants.len();
         let mut cur_index = 0;
         // TODO: opt: Only set dirty root constants?
-        for i in 0..num_root_constant {
-            let root_constant = &pipeline.root_constants[i];
+        for (i, root_constant) in pipeline.root_constants.iter().enumerate() {
             let num_constants = (root_constant.range.end-root_constant.range.start) as usize;
             let mut data = Vec::new();
             for c in cur_index..cur_index+num_constants {
@@ -430,14 +459,14 @@ impl CommandBuffer {
                         pipeline.srv_cbv_uav_start + offset as u64,
                     RootElement::TableSampler(offset) =>
                         pipeline.sampler_start + offset as u64,
-                    _ => {
-                        error!("Unexpected user data element in the root signature ({:?})", user_data.data[table_index]);
+                    other => {
+                        error!("Unexpected user data element in the root signature ({:?})", other);
                         continue
                     }
                 };
                 let gpu = winapi::D3D12_GPU_DESCRIPTOR_HANDLE { ptr };
                 table_update(i as _, gpu);
-                user_data.clear_dirty(i);
+                user_data.clear_dirty(table_index);
             }
         }
     }
@@ -1471,18 +1500,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         offset: u32,
         constants: &[u32],
     ) {
-        let num = constants.len() as u32;
-        for root_constant in &layout.root_constants {
-            if root_constant.range.start >= offset &&
-               root_constant.range.start < offset+num
-            {
-                let start = (root_constant.range.start-offset) as _;
-                let end = num.min(root_constant.range.end-offset) as _;
-                self.gr_pipeline
-                    .user_data
-                    .set_constants(offset as _, &constants[start..end]);
-            }
-        }
+        Self::push_constants(&mut self.gr_pipeline.user_data, layout, offset, constants);
     }
 
     fn push_compute_constants(
@@ -1491,18 +1509,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         offset: u32,
         constants: &[u32],
     ) {
-        let num = constants.len() as u32;
-        for root_constant in &layout.root_constants {
-            if root_constant.range.start >= offset &&
-               root_constant.range.start < offset+num
-            {
-                let start = (root_constant.range.start-offset) as _;
-                let end = num.min(root_constant.range.end-offset) as _;
-                self.comp_pipeline
-                    .user_data
-                    .set_constants(offset as _, &constants[start..end]);
-            }
-        }
+        Self::push_constants(&mut self.comp_pipeline.user_data, layout, offset, constants);
     }
 }
 

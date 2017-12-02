@@ -23,6 +23,7 @@ impl RootConstant {
     // Divide a root constant into two separate ranges depending on the overlap
     // with another root constant.
     fn divide(self, other: &RootConstant) -> (RootConstant, RootConstant) {
+        assert!(self.range.start <= other.range.start);
         let left = RootConstant {
             stages: self.stages,
             range: self.range.start..other.range.start,
@@ -51,24 +52,18 @@ impl Ord for RootConstant {
     }
 }
 
-impl<'a> From<&'a (pso::ShaderStageFlags, Range<u32>)> for RootConstant {
-    fn from(&(stages, ref range): &'a (pso::ShaderStageFlags, Range<u32>)) -> Self {
-        RootConstant { stages, range: range.clone() }
-    }
-}
-
 pub fn split(
     ranges: &[(pso::ShaderStageFlags, Range<u32>)],
 ) -> Vec<RootConstant> {
     // Frontier of unexplored root constant ranges, sorted descending
     // (less element shifting for Vec) regarding to the start of ranges.
     let mut ranges = into_vec(ranges);
-    ranges.sort_by(|a, b| a.cmp(b).reverse());
+    ranges.sort_by(|a, b| b.cmp(a));
 
     // Storing resulting disjunct root constant ranges.
     let mut disjunct = Vec::with_capacity(ranges.len());
 
-    while !ranges.is_empty() {
+    while let Some(cur) = ranges.pop() {
         // Run trough all unexplored ranges. After each run the frontier will be
         // resorted!
         //
@@ -79,7 +74,6 @@ pub fn split(
         //      on the overlap of the two ranges:
         //      Range 1: |---- left ---||--- right ---|
         //      Range 2:                |--------...
-        let cur = ranges.pop().unwrap();
         if let Some(mut next) = ranges.pop() {
             let (left, mut right) = cur.divide(&next);
             if !left.is_empty() {
@@ -113,14 +107,16 @@ pub fn split(
         } else {
             disjunct.push(cur);
         }
-        ranges.sort_by(|a, b| a.cmp(b).reverse());
+        ranges.sort_by(|a, b| b.cmp(a));
     }
 
     disjunct
 }
 
 fn into_vec(ranges: &[(pso::ShaderStageFlags, Range<u32>)]) -> Vec<RootConstant> {
-    ranges.iter().map(|x| x.into()).collect()
+    ranges.iter().map(|&(stages, ref range)| {
+        RootConstant { stages, range: range.clone() }
+    }).collect()
 }
 
 #[cfg(test)]

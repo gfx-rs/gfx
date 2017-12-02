@@ -118,7 +118,7 @@ bitflags!(
     }
 );
 
-//Note: this type is only needed for backends, not used anywhere within gfx_core.
+// Note: this type is only needed for backends, not used anywhere within gfx_hal.
 /// Which program stage this shader represents.
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -132,6 +132,20 @@ pub enum Stage {
     Fragment,
     Compute
 }
+
+impl From<Stage> for ShaderStageFlags {
+    fn from(stage: Stage) -> Self {
+        match stage {
+            Stage::Vertex => ShaderStageFlags::VERTEX,
+            Stage::Hull => ShaderStageFlags::HULL,
+            Stage::Domain => ShaderStageFlags::DOMAIN,
+            Stage::Geometry => ShaderStageFlags::GEOMETRY,
+            Stage::Fragment => ShaderStageFlags::FRAGMENT,
+            Stage::Compute => ShaderStageFlags::COMPUTE,
+        }
+    }
+}
+
 
 /// Shader entry point.
 #[derive(Debug, Copy)]

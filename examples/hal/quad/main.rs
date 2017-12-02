@@ -177,8 +177,8 @@ fn main() {
     let pipeline_layout = device.create_pipeline_layout(
         &[&set_layout],
         &[
-            (pso::ShaderStageFlags::VERTEX, 0..16),
-            (pso::ShaderStageFlags::VERTEX, 16..32),
+            (pso::ShaderStageFlags::VERTEX, 0..4),
+            (pso::ShaderStageFlags::VERTEX, 4..8),
         ],
     );
 
