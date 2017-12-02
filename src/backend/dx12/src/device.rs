@@ -15,9 +15,15 @@ use hal::{Features, Limits, MemoryType};
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
 
-use {conv, free_list, native as n, shade, window as w, Backend as B, Device, QueueFamily};
+use {
+    conv, free_list, native as n, root_constants, shade, window as w,
+    Backend as B, Device, QueueFamily
+};
 use pool::RawCommandPool;
+use root_constants::RootConstant;
 
+// Register space used for root constants.
+const ROOT_CONSTANT_SPACE: u32 = 0;
 
 /// Emit error during shader module creation. Used if we don't expect an error
 /// but might panic due to an exception in SPIRV-Cross.
@@ -160,30 +166,57 @@ impl Device {
             })
     }
 
-    fn patch_spirv_resources(ast: &mut spirv::Ast<hlsl::Target>) -> Result<(), d::ShaderError> {
+    fn patch_spirv_resources(
+        ast: &mut spirv::Ast<hlsl::Target>,
+        layout: Option<&n::PipelineLayout>,
+    ) -> Result<(), d::ShaderError> {
         // Patch descriptor sets due to the splitting of descriptor heaps into
         // SrvCbvUav and sampler heap. Each set will have a new location to match
         // the layout of the root signatures.
+        let space_offset = match layout {
+            Some(layout) if !layout.root_constants.is_empty() => 1,
+            _ => 0,
+        };
+
         let shader_resources = ast.get_shader_resources().map_err(gen_query_error)?;
         for image in &shader_resources.separate_images {
             let set = ast.get_decoration(image.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
-            ast.set_decoration(image.id, spirv::Decoration::DescriptorSet, 2*set)
+            ast.set_decoration(image.id, spirv::Decoration::DescriptorSet, space_offset + 2*set)
                .map_err(gen_unexpected_error)?;
         }
 
         for sampler in &shader_resources.separate_samplers {
             let set = ast.get_decoration(sampler.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
-            ast.set_decoration(sampler.id, spirv::Decoration::DescriptorSet, 2*set+1)
+            ast.set_decoration(sampler.id, spirv::Decoration::DescriptorSet, space_offset + 2*set+1)
                .map_err(gen_unexpected_error)?;
         }
 
         Ok(())
     }
 
-    fn translate_spirv(ast: &mut spirv::Ast<hlsl::Target>, shader_model: hlsl::ShaderModel) -> Result<String, d::ShaderError> {
+    fn translate_spirv(
+        ast: &mut spirv::Ast<hlsl::Target>,
+        shader_model: hlsl::ShaderModel,
+        layout: &n::PipelineLayout,
+        stage: pso::Stage,
+    ) -> Result<String, d::ShaderError> {
         let mut compile_options = hlsl::CompilerOptions::default();
         compile_options.shader_model = shader_model;
         compile_options.vertex.invert_y = true;
+
+        let stage_flag = stage.into();
+        compile_options.root_constants_layout = layout
+            .root_constants
+            .iter()
+            .filter_map(|constant| if constant.stages.contains(stage_flag) {
+                Some(hlsl::RootConstant {
+                    start: constant.range.start,
+                    end: constant.range.end,
+                })
+            } else {
+                None
+            })
+            .collect();
 
         ast.set_compiler_options(&compile_options)
            .map_err(gen_unexpected_error)?;
@@ -200,11 +233,14 @@ impl Device {
     // Extract entry point from shader module on pipeline creation.
     // Returns compiled shader blob and bool to indicate if the shader should be
     // destroyed after pipeline creation
-    fn extract_entry_point(source: &pso::EntryPoint<B>) -> Result<(*mut winapi::ID3DBlob, bool), d::ShaderError> {
+    fn extract_entry_point(
+        stage: pso::Stage,
+        source: &pso::EntryPoint<B>,
+        layout: &n::PipelineLayout,
+    ) -> Result<(*mut winapi::ID3DBlob, bool), d::ShaderError> {
         match *source.module {
             n::ShaderModule::Compiled(ref shaders) => {
-                // TODO: Check that we no root constants in the signature
-                //       for this entry point
+                // TODO: do we need to check for specialization constants?
                 // Use precompiled shader, ignore specialization or layout.
                 shaders
                     .get(source.entry)
@@ -239,9 +275,10 @@ impl Device {
                     }
                 }
 
-                Self::patch_spirv_resources(&mut ast)?;
+                Self::patch_spirv_resources(&mut ast, Some(layout))?;
                 let shader_model = hlsl::ShaderModel::V5_1;
-                let shader_code = Self::translate_spirv(&mut ast, shader_model)?;
+                let shader_code = Self::translate_spirv(&mut ast, shader_model, layout, stage)?;
+                debug!("SPIRV-Cross generated shader:\n{}", shader_code);
 
                 let real_name = ast
                     .get_cleansed_entry_point_name(source.entry)
@@ -798,17 +835,61 @@ impl d::Device<B> for Device {
         rp
     }
 
-    fn create_pipeline_layout(&self, sets: &[&n::DescriptorSetLayout], push_constant_ranges: &[(pso::ShaderStageFlags, Range<u32>)]) -> n::PipelineLayout {
+    fn create_pipeline_layout(
+        &self,
+        sets: &[&n::DescriptorSetLayout],
+        push_constant_ranges: &[(pso::ShaderStageFlags, Range<u32>)],
+    ) -> n::PipelineLayout {
         // Pipeline layouts are implemented as RootSignature for D3D12.
         //
         // Each descriptor set layout will be one table entry of the root signature.
         // We have the additional restriction that SRV/CBV/UAV and samplers need to be
         // separated, so each set layout will actually occupy up to 2 entries!
+        //
+        // Root signature layout:
+        //     Root Constants: Register: Offest/4, Space: 0
+        //       ...
+        //     DescriptorTable0: Space: 2 (+1) (SrvCbvUav)
+        //     DescriptorTable0: Space: 3 (+1) (Sampler)
+        //     DescriptorTable1: Space: 4 (+1) (SrvCbvUav)
+        //     ...
+
+        let root_constants = root_constants::split(push_constant_ranges)
+            .iter()
+            .map(|constant| {
+                assert!(constant.range.start <= constant.range.end);
+                RootConstant {
+                    stages: constant.stages,
+                    range: constant.range.start..constant.range.end,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // guarantees that no re-allocation is done, and our pointers are valid
+        let mut parameters = Vec::with_capacity(root_constants.len() + sets.len() * 2);
+
+        for root_constant in root_constants.iter() {
+            let mut param = winapi::D3D12_ROOT_PARAMETER {
+                ParameterType: winapi::D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
+                ShaderVisibility: winapi::D3D12_SHADER_VISIBILITY_ALL, //TODO
+                .. unsafe { mem::zeroed() }
+            };
+
+            *unsafe{ param.Constants_mut() } = winapi::D3D12_ROOT_CONSTANTS {
+                ShaderRegister: root_constant.range.start as _,
+                RegisterSpace: ROOT_CONSTANT_SPACE,
+                Num32BitValues: (root_constant.range.end - root_constant.range.start) as _,
+            };
+
+            parameters.push(param);
+        }
+
+        // Offest of `spaceN` for descriptor tables. Root constants will be in
+        // `space0`.
+        let table_space_offset = if !root_constants.is_empty() { 1 } else { 0 };
 
         let total = sets.iter().map(|desc_sec| desc_sec.bindings.len()).sum();
-        // guarantees that no re-allocation is done, and our pointers are valid
         let mut ranges = Vec::with_capacity(total);
-        let mut parameters = Vec::with_capacity(sets.len() * 2);
         let mut set_tables = Vec::with_capacity(sets.len());
 
         for (i, set) in sets.iter().enumerate() {
@@ -825,7 +906,7 @@ impl d::Device<B> for Device {
                 .bindings
                 .iter()
                 .filter(|bind| bind.ty != pso::DescriptorType::Sampler)
-                .map(|bind| conv::map_descriptor_range(bind, 2*i as u32)));
+                .map(|bind| conv::map_descriptor_range(bind, (table_space_offset + 2*i) as u32)));
 
             if ranges.len() > range_base {
                 *unsafe{ param.DescriptorTable_mut() } = winapi::D3D12_ROOT_DESCRIPTOR_TABLE {
@@ -842,7 +923,12 @@ impl d::Device<B> for Device {
                 .bindings
                 .iter()
                 .filter(|bind| bind.ty == pso::DescriptorType::Sampler)
-                .map(|bind| conv::map_descriptor_range(bind, (2*i +1) as u32)));
+                .map(|bind| {
+                    conv::map_descriptor_range(
+                        bind,
+                        (table_space_offset + 2*i+1) as u32,
+                    )
+                }));
 
             if ranges.len() > range_base {
                 *unsafe{ param.DescriptorTable_mut() } = winapi::D3D12_ROOT_DESCRIPTOR_TABLE {
@@ -904,6 +990,7 @@ impl d::Device<B> for Device {
         n::PipelineLayout {
             raw: signature,
             tables: set_tables,
+            root_constants,
             num_parameter_slots: parameters.len(),
         }
     }
@@ -913,21 +1000,22 @@ impl d::Device<B> for Device {
         descs: &[pso::GraphicsPipelineDesc<'a, B>],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
         descs.iter().map(|desc| {
-            let build_shader = |source: Option<&pso::EntryPoint<'a, B>>| {
-                let source = match source {
-                    Some(src) => src,
-                    None => return Ok((ptr::null_mut(), false)),
+            let build_shader =
+                |stage: pso::Stage, source: Option<&pso::EntryPoint<'a, B>>| {
+                    let source = match source {
+                        Some(src) => src,
+                        None => return Ok((ptr::null_mut(), false)),
+                    };
+
+                    Self::extract_entry_point(stage, source, desc.layout)
+                        .map_err(|err| pso::CreationError::Shader(err))
                 };
 
-                Self::extract_entry_point(source)
-                    .map_err(|err| pso::CreationError::Shader(err))
-            };
-
-            let (vs, vs_destroy) = build_shader(Some(&desc.shaders.vertex))?;
-            let (fs, fs_destroy) = build_shader(desc.shaders.fragment.as_ref())?;
-            let (gs, gs_destroy) = build_shader(desc.shaders.geometry.as_ref())?;
-            let (ds, ds_destroy) = build_shader(desc.shaders.domain.as_ref())?;
-            let (hs, hs_destroy) = build_shader(desc.shaders.hull.as_ref())?;
+            let (vs, vs_destroy) = build_shader(pso::Stage::Vertex, Some(&desc.shaders.vertex))?;
+            let (fs, fs_destroy) = build_shader(pso::Stage::Fragment, desc.shaders.fragment.as_ref())?;
+            let (gs, gs_destroy) = build_shader(pso::Stage::Geometry, desc.shaders.geometry.as_ref())?;
+            let (ds, ds_destroy) = build_shader(pso::Stage::Domain, desc.shaders.domain.as_ref())?;
+            let (hs, hs_destroy) = build_shader(pso::Stage::Hull, desc.shaders.hull.as_ref())?;
 
             // Define input element descriptions
             let mut vs_reflect = shade::reflect_shader(&shader_bytecode(vs));
@@ -1080,6 +1168,7 @@ impl d::Device<B> for Device {
                     signature: desc.layout.raw,
                     num_parameter_slots: desc.layout.num_parameter_slots,
                     topology,
+                    constants: desc.layout.root_constants.clone(),
                 })
             } else {
                 Err(pso::CreationError::Other)
@@ -1092,7 +1181,12 @@ impl d::Device<B> for Device {
         descs: &[pso::ComputePipelineDesc<'a, B>],
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
         descs.iter().map(|desc| {
-            let (cs, cs_destroy) = Self::extract_entry_point(&desc.shader)
+            let (cs, cs_destroy) =
+                Self::extract_entry_point(
+                    pso::Stage::Compute,
+                    &desc.shader,
+                    desc.layout,
+                )
                 .map_err(|err| pso::CreationError::Shader(err))?;
 
             let pso_desc = winapi::D3D12_COMPUTE_PIPELINE_STATE_DESC {
@@ -1124,6 +1218,7 @@ impl d::Device<B> for Device {
                     raw: pipeline,
                     signature: desc.layout.raw,
                     num_parameter_slots: desc.layout.num_parameter_slots,
+                    constants: desc.layout.root_constants.clone(),
                 })
             } else {
                 Err(pso::CreationError::Other)
@@ -1143,31 +1238,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_shader_module(&self, raw_data: &[u8]) -> Result<n::ShaderModule, d::ShaderError> {
-        let mut ast = Self::parse_spirv(raw_data)?;
-        if ast.get_specialization_constants().map_err(gen_query_error)?.len() > 0 {
-            return Ok(n::ShaderModule::Spirv(raw_data.into()))
-        }
-
-        Self::patch_spirv_resources(&mut ast)?;
-
-        let shader_model = hlsl::ShaderModel::V5_1;
-        let shader_code = Self::translate_spirv(&mut ast, shader_model)?;
-        debug!("SPIRV-Cross generated shader:\n{}", shader_code);
-
-        let mut shader_map = BTreeMap::new();
-        let entry_points = ast.get_entry_points().map_err(gen_query_error)?;
-        for entry_point in entry_points {
-            let stage = conv::map_execution_model(entry_point.execution_model);
-            let shader_blob = Self::compile_shader(
-                stage,
-                shader_model,
-                &entry_point.name,
-                shader_code.as_bytes(),
-            )?;
-
-            shader_map.insert(entry_point.name, shader_blob);
-        }
-        Ok(n::ShaderModule::Compiled(shader_map))
+        Ok(n::ShaderModule::Spirv(raw_data.into()))
     }
 
     fn create_buffer(

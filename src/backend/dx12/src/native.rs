@@ -3,6 +3,7 @@ use wio::com::ComPtr;
 
 use hal::{image, pass, pso, MemoryType, DescriptorPool as HalDescriptorPool};
 use {free_list, Backend};
+use root_constants::RootConstant;
 
 use std::collections::BTreeMap;
 use std::ops::Range;
@@ -82,6 +83,7 @@ pub struct GraphicsPipeline {
     pub(crate) signature: *mut winapi::ID3D12RootSignature, // weak-ptr, owned by `PipelineLayout`
     pub(crate) num_parameter_slots: usize, // signature parameter slots, see `PipelineLayout`
     pub(crate) topology: winapi::D3D12_PRIMITIVE_TOPOLOGY,
+    pub(crate) constants: Vec<RootConstant>,
 }
 unsafe impl Send for GraphicsPipeline { }
 unsafe impl Sync for GraphicsPipeline { }
@@ -91,6 +93,7 @@ pub struct ComputePipeline {
     pub(crate) raw: *mut winapi::ID3D12PipelineState,
     pub(crate) signature: *mut winapi::ID3D12RootSignature, // weak-ptr, owned by `PipelineLayout`
     pub(crate) num_parameter_slots: usize, // signature parameter slots, see `PipelineLayout`
+    pub(crate) constants: Vec<RootConstant>,
 }
 
 unsafe impl Send for ComputePipeline { }
@@ -112,6 +115,8 @@ pub struct PipelineLayout {
     // Storing for each associated descriptor set layout, which tables we created
     // in the root signature. This is required for binding descriptor sets.
     pub(crate) tables: Vec<SetTableTypes>,
+    // Disjunct, sorted vector of root constant ranges.
+    pub(crate) root_constants: Vec<RootConstant>,
     // Number of parameter slots in this layout, can be larger than number of tables.
     // Required for updating the root signature when flusing user data.
     pub(crate) num_parameter_slots: usize,

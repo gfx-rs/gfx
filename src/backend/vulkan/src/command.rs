@@ -812,7 +812,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             )
         }
     }
-    
+
     fn push_compute_constants(
         &mut self,
         layout: &n::PipelineLayout,
@@ -824,7 +824,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 self.raw,
                 layout.raw,
                 vk::SHADER_STAGE_COMPUTE_BIT,
-                offset,
+                offset * 4,
                 constants,
             );
         }
@@ -842,7 +842,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 self.raw,
                 layout.raw,
                 conv::map_stage_flags(stages),
-                offset,
+                offset * 4,
                 constants,
             );
         }

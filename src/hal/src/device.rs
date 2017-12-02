@@ -85,6 +85,8 @@ pub enum ShaderError {
     CompilationFailed(String),
     /// Missing entry point.
     MissingEntryPoint(String),
+    /// Mismatch of interface (e.g missing push constants).
+    InterfaceMismatch(String),
 }
 
 /// An error from creating a framebuffer.
@@ -157,11 +159,18 @@ pub trait Device<B: Backend> {
     ///
     fn destroy_renderpass(&self, B::RenderPass);
 
+    /// Create a new pipeline layout.
     ///
+    /// # Arguments
+    ///
+    /// * `set_layouts` - Descriptor set layouts
+    /// * `push_constants` - Ranges of push constants. A shader stage may only contain one push
+    ///     constant block. The length of the range indicates the number of u32 constants occupied
+    ///     by the push constant block.
     fn create_pipeline_layout(
         &self,
-        &[&B::DescriptorSetLayout],
-        &[(pso::ShaderStageFlags, Range<u32>)]
+        set_layouts: &[&B::DescriptorSetLayout],
+        push_constants: &[(pso::ShaderStageFlags, Range<u32>)]
     ) -> B::PipelineLayout;
 
     ///
