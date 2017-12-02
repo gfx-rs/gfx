@@ -39,7 +39,7 @@ impl Drop for RawSurface {
 }
 
 impl Instance {
-    #[cfg(unix)]
+    #[cfg(all(unix, not(target_os = "android")))]
     pub fn create_surface_from_xlib(&self, display: *mut c_void, window: usize) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
@@ -79,7 +79,7 @@ impl Instance {
         self.create_surface_from_vk_surface_khr(surface, width, height)
     }
 
-    #[cfg(unix)]
+    #[cfg(all(unix, not(target_os = "android")))]
     pub fn create_surface_from_wayland(&self, display: *mut c_void, surface: *mut c_void, width: u32, height: u32) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
@@ -103,6 +103,30 @@ impl Instance {
 
             unsafe { w_loader.create_wayland_surface_khr(&info, None) }
                 .expect("WaylandSurface failed")
+        };
+
+        self.create_surface_from_vk_surface_khr(surface, width, height)
+    }
+
+    #[cfg(target_os = "android")]
+    pub fn create_surface_android(&self, window: *const c_void, width: u32, height: u32) -> Surface {
+        let entry = VK_ENTRY
+            .as_ref()
+            .expect("Unable to load Vulkan entry points");
+
+        let surface = {
+            let loader = ext::AndroidSurface::new(entry, &self.raw.0)
+                                .expect("AndroidSurface failed");
+
+            let info = vk::AndroidSurfaceCreateInfoKHR {
+                s_type: vk::StructureType::AndroidSurfaceCreateInfoKhr,
+                p_next: ptr::null(),
+                flags: vk::AndroidSurfaceCreateFlagsKHR::empty(),
+                window: window as *const _ as *mut _,
+            };
+
+            unsafe { loader.create_android_surface_khr(&info, None) }
+                .expect("AndroidSurface failed")
         };
 
         self.create_surface_from_vk_surface_khr(surface, width, height)
@@ -152,7 +176,7 @@ impl Instance {
 
     #[cfg(feature = "winit")]
     pub fn create_surface(&self, window: &winit::Window) -> Surface {
-        #[cfg(unix)]
+        #[cfg(all(unix, not(target_os = "android")))]
         {
             use winit::os::unix::WindowExt;
 
@@ -172,6 +196,13 @@ impl Instance {
                 }
             }
             panic!("The Vulkan driver does not support surface creation!");
+        }
+        #[cfg(target_os = "android")]
+        {
+            use winit::os::android::WindowExt;
+            let (width, height) = window.get_inner_size().unwrap();
+            self.create_surface_android(window.get_native_window(), width, height)
+
         }
         #[cfg(windows)]
         {
