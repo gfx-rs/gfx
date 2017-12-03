@@ -1,36 +1,32 @@
- # GFX Examples
+# Examples
 
-A collection of GFX examples for using the different different GFX API's.
+A collection of gfx examples which use the various gfx APIs.
 
 ## Getting Started
-The gfx-rs git repository contains a number of examples.
-Those examples are automatically downloaded if you clone the gfx directory:
 
-	$ cd <my_dir>
-	$ git clone https://github.com/gfx-rs/gfx
+The gfx git repository contains a number of examples. Those examples are automatically downloaded if you clone the gfx directory by running
+
+    cd <my_dir>
+    git clone https://github.com/gfx-rs/gfx
 
 where `<my_dir>` is a directory name of your choice. Once gfx is downloaded you can build any of the gfx examples.
 
-### Why three different example directories?
+### Why Three Example Directories?
 
-The examples are split across three directories, each pertaining to the GFX library they are using.
+The examples are split across three directories, each pertaining to the gfx API they are using.
 
-1. examples/corell contains low level examples.
-2. examples/render shows how to use the render crate directly.
-3. examples/support shows how to utilize the support module, showing you how you can build an
-application using minimal setup.
+1. `examples/hal` contains low level examples which target the gfx Hardware Abstraction Layer (HAL).
+1. `examples/render` shows how to use the render crate directly.
+1. `examples/support` shows how to use the support crate, to demonstrate how you can build an application using minimal setup.
 
-To the run the examples, set your working directory to the examples/ directory and execute
-`cargo run --bin *` where * is the example you wan to run.
+*Please note that `support` is still being updated, so `support` examples will not run at the moment.*
 
-For example, try:
+To run the examples, set your working directory to the examples directory and execute
+`cargo run --bin <example> --features=<backend>`, where `<example>` is the example you want to run and `<backend>` is the backend you would like to use (`vulkan`, `dx12`, `metal`, or `gl`).
 
-	$ cd <my_dir>/examples
-	$ cargo run --bin triangle
+For example, to run the `quad` example on the `vulkan` backend, try:
 
-or
+    cd examples/hal
+    cargo run --bin quad --features=vulkan
 
-	$ cd <my_dir>/examples
-	$ cargo run --bin trianglell
-
-If you compile the example for the first time, it may take some while since all dependencies must be compiled too.
+If you run the examples for the first time, it may take some time because all dependencies must be compiled too.
