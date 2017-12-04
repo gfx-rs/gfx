@@ -25,8 +25,8 @@ name = "gfx_app"
 [dependencies]
 log = "0.3"
 env_logger = "0.4"
-glutin = "0.10"
-winit = "0.8"
+glutin = "0.11"
+winit = "0.9"
 gfx_core = { path = "src/core", version = "0.7.1" }
 gfx_corell = { path = "src/corell", version = "0.1" }
 gfx = { path = "src/render", version = "0.16" }
@@ -140,17 +140,13 @@ name = "particle"
 path = "examples/particle/main.rs"
 
 [[example]]
-name = "trianglell"
-path = "examples/trianglell/main.rs"
-
-[[example]]
 name = "render_target"
 path = "examples/render_target/main.rs"
 
 [dev-dependencies]
-cgmath = "0.14"
+cgmath = "0.15"
 gfx_gl = "0.3"
 rand = "0.3"
 genmesh = "0.4"
 noise = "0.1"
-image = "0.13"
+image = "0.18"
