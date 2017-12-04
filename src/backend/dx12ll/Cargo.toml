@@ -35,4 +35,4 @@ dxgi-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx"
 dxguid-sys = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
 comptr = { git = "https://github.com/msiglreith/comptr-rs.git" }
 winapi = { git = "https://github.com/msiglreith/winapi-rs.git", branch = "gfx" }
-winit = "0.8"
+winit = "0.9"
