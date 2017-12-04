@@ -127,7 +127,7 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
     let mut events_loop = glutin::EventsLoop::new();
     let (window, mut device, mut factory, main_color, main_depth) =
         gfx_window_glutin::init::<ColorFormat, DepthFormat>(window, context, &events_loop);
-    let (mut cur_width, mut cur_height) = window.get_inner_size_points().unwrap();
+    let (mut cur_width, mut cur_height) = window.get_inner_size().unwrap();
     let shade_lang = device.get_info().shading_language;
 
     let backend = if shade_lang.is_embedded {
