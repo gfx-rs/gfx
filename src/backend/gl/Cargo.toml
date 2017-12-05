@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx_device_gl"
-version = "0.14.5"
+version = "0.14.6"
 description = "OpenGL backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -29,5 +29,5 @@ name = "gfx_device_gl"
 
 [dependencies]
 log = "0.3"
-gfx_gl = "0.3.1"
+gfx_gl = "0.4"
 gfx_core = { path = "../../core", version = "0.7.2" }
