@@ -18,9 +18,10 @@ use hal::command::{
 use hal::query::{Query, QueryControl, QueryId};
 use hal::queue::{RawCommandQueue, RawSubmission};
 
-use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLClearColor, MTLSize, MTLOrigin};
+use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLClearColor, MTLIndexType, MTLSize, MTLOrigin};
 use cocoa::foundation::NSUInteger;
 use block::{ConcreteBlock};
+use conversions::map_index_type;
 
 
 pub struct CommandQueue(pub(crate) Arc<QueueInner>);
@@ -107,6 +108,7 @@ struct CommandBufferInner {
     primitive_type: MTLPrimitiveType,
     resources_vs: StageResources,
     resources_fs: StageResources,
+    index_buffer: Option<(metal::Buffer, u64, MTLIndexType)>,
 }
 
 impl CommandBufferInner {
@@ -252,6 +254,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                     primitive_type: MTLPrimitiveType::Point,
                     resources_vs: StageResources::new(),
                     resources_fs: StageResources::new(),
+                    index_buffer: None,
                 })
             }),
             queue: if self.managed.is_some() {
@@ -416,8 +419,15 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn bind_index_buffer(&mut self, _view: IndexBufferView<Backend>) {
-        unimplemented!()
+    fn bind_index_buffer(&mut self, view: IndexBufferView<Backend>) {
+        let buffer = view.buffer.0.clone();
+        let offset = view.offset;
+        let index_type = map_index_type(view.index_type);
+        self.inner().index_buffer = Some((
+            buffer,
+            offset,
+            index_type,
+        ));
     }
 
     fn bind_vertex_buffers(&mut self, buffer_set: pso::VertexBufferSet<Backend>) {
@@ -809,11 +819,30 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
 
     fn draw_indexed(
         &mut self,
-        _indices: Range<IndexCount>,
-        _base_vertex: VertexOffset,
-        _instances: Range<InstanceCount>,
+        indices: Range<IndexCount>,
+        base_vertex: VertexOffset,
+        instances: Range<InstanceCount>,
     ) {
-        unimplemented!()
+        let (buffer, offset, index_type) = self.inner().index_buffer.take().expect("must bind index buffer");
+        let primitive_type = self.inner().primitive_type;
+        let encoder = self.except_renderpass();
+        let index_offset = match index_type {
+            MTLIndexType::UInt16 => indices.start as u64 * 2,
+            MTLIndexType::UInt32 => indices.start as u64 * 4,
+        };
+
+        unsafe {
+            msg_send![encoder,
+                drawIndexedPrimitives: primitive_type
+                indexCount: (indices.end - indices.start) as NSUInteger
+                indexType: index_type
+                indexBuffer: buffer
+                indexBufferOffset: (index_offset + offset) as NSUInteger
+                instanceCount: (instances.end - instances.start) as NSUInteger
+                baseVertex: base_vertex as NSUInteger
+                baseInstance: instances.start as NSUInteger
+            ];
+        }
     }
 
     fn draw_indirect(
