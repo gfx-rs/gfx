@@ -8,12 +8,10 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::{cmp, mem, ptr, slice};
 
-use hal::{self,
-        image, pass, format, mapping, memory, buffer, pso, query};
+use hal::{self, image, pass, format, mapping, memory, buffer, pso, query};
 use hal::device::{WaitFor, BindError, OutOfMemory, FramebufferError, ShaderError, Extent};
 use hal::pool::CommandPoolCreateFlags;
 use hal::pso::{DescriptorSetWrite, DescriptorType, DescriptorSetLayoutBinding, AttributeDesc};
-use hal::pass::{Subpass};
 
 use cocoa::foundation::{NSRange, NSUInteger};
 use metal::{self, MTLFeatureSet, MTLLanguageVersion, MTLArgumentAccess, MTLDataType, MTLPrimitiveType, MTLPrimitiveTopologyClass};
@@ -21,7 +19,6 @@ use metal::{MTLVertexStepFunction, MTLSamplerMinMagFilter, MTLSamplerMipFilter, 
 use foreign_types::ForeignType;
 use objc::runtime::Object as ObjcObject;
 use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
-
 
 const RESOURCE_HEAP_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily1_v3,
@@ -43,6 +40,23 @@ fn gen_parse_error(err: SpirvErrorCode) -> ShaderError {
         SpirvErrorCode::Unhandled => "Unknown parse error".into(),
     };
     ShaderError::CompilationFailed(msg)
+}
+
+fn create_function_constants(specialization: &[pso::Specialization]) -> metal::FunctionConstantValues {
+    let constants_raw = metal::FunctionConstantValues::new();
+    for constant in specialization {
+        unsafe {
+            let (ty, value) = match constant.value {
+                pso::Constant::Bool(ref v) => (MTLDataType::Bool, v as *const _ as *const _),
+                pso::Constant::U32(ref v) => (MTLDataType::UInt, v as *const _ as *const _),
+                pso::Constant::I32(ref v) => (MTLDataType::Int, v as *const _ as *const _),
+                pso::Constant::F32(ref v) => (MTLDataType::Float, v as *const _ as *const _),
+                _ => panic!("Unsupported specialization constant type"),
+            };
+            constants_raw.set_constant_value_at_index(constant.id as u64, ty, value);
+        }
+    }
+    constants_raw
 }
 
 #[derive(Clone, Copy)]
@@ -71,7 +85,6 @@ impl PhysicalDevice {
         features_sets.iter().cloned().any(|x| self.0.supports_feature_set(x))
     }
 }
-
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(self, mut families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>) -> hal::Gpu<Backend> {
@@ -143,7 +156,6 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 }
-
 
 pub struct LanguageVersion {
     pub major: u8,
@@ -254,7 +266,7 @@ impl Device {
         debug!("SPIRV-Cross generated shader:\n{}", shader_code);
 
         let options = metal::CompileOptions::new();
-        options.set_language_version(MTLLanguageVersion::V1_1);
+        options.set_language_version(MTLLanguageVersion::V1_2);
 
         let library = self.device
             .new_library_with_source(shader_code.as_ref(), &options)
@@ -304,7 +316,7 @@ impl Device {
         };
         pipeline.set_input_primitive_topology(primitive_class);
 
-        // Shaders
+        // Vertex shader
         let vs_entries_owned;
         let (vs_lib, vs_remapped_entries) = match pipeline_desc.shaders.vertex.module {
             &n::ShaderModule::Compiled {ref library, ref remapped_entry_point_names} => (library.to_owned(), remapped_entry_point_names),
@@ -320,14 +332,22 @@ impl Device {
         } else {
             pipeline_desc.shaders.vertex.entry
         };
+
+        let vs_constants = if pipeline_desc.shaders.vertex.specialization.is_empty() {
+            None
+        } else {
+            Some(create_function_constants(pipeline_desc.shaders.vertex.specialization))
+        };
+        
         let mtl_vertex_function = vs_lib
-            .get_function(vs_entry)
-            .ok_or_else(|| {
+            .get_function(vs_entry, vs_constants)
+            .map_err(|_| {
                 error!("invalid vertex shader entry point");
                 pso::CreationError::Other
             })?;
         pipeline.set_vertex_function(Some(&mtl_vertex_function));
 
+        // Fragment shader
         let fs_lib = if let Some(ref fragment_entry) = pipeline_desc.shaders.fragment {
             let fs_entries_owned;
             let (fs_lib, fs_remapped_entries) = match fragment_entry.module {
@@ -338,14 +358,22 @@ impl Device {
                     (raw.0, &fs_entries_owned)
                 }
             };
+
             let fs_entry = if fs_remapped_entries.contains_key(fragment_entry.entry) {
                 fs_remapped_entries.get(fragment_entry.entry).unwrap()
             } else {
                 fragment_entry.entry
             };
+
+            let fs_constants = if fragment_entry.specialization.is_empty() {
+                None
+            } else {
+                Some(create_function_constants(fragment_entry.specialization))
+            };
+
             let mtl_fragment_function = fs_lib
-                .get_function(fs_entry)
-                .ok_or_else(|| {
+                .get_function(fs_entry, fs_constants)
+                .map_err(|_| {
                     error!("invalid pixel shader entry point");
                     pso::CreationError::Other
                 })?;
@@ -354,6 +382,8 @@ impl Device {
         } else {
             None
         };
+
+        // Other shaders
         if pipeline_desc.shaders.hull.is_some() {
             error!("Metal tessellation shaders are not supported");
             return Err(pso::CreationError::Other);
