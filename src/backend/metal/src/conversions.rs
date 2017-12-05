@@ -1,4 +1,4 @@
-use hal::{pass, image, memory, pso};
+use hal::{pass, image, memory, pso, IndexType};
 use hal::format::Format;
 use metal::*;
 
@@ -172,4 +172,11 @@ pub fn map_texture_usage(usage: image::Usage) -> MTLTextureUsage {
     }
     // TODO shader write
     texture_usage
+}
+
+pub fn map_index_type(index_type: IndexType) -> MTLIndexType {
+    match index_type {
+        IndexType::U16 => MTLIndexType::UInt16,
+        IndexType::U32 => MTLIndexType::UInt32,
+    }
 }
