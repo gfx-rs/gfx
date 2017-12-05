@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx_window_metal"
-version = "0.2.0"
+version = "0.3.0"
 description = "Metal window for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
