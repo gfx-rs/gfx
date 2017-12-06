@@ -27,11 +27,34 @@ use core::{format, texture};
 use core::memory::Typed;
 use gfx_device_gl::Resources as R;
 
+use std::error::Error;
+use std::fmt;
+
 #[derive(Debug)]
 pub enum InitError {
     PixelFormatUnsupportedError,
     WindowBuildError(WindowBuildError),
     SdlError(String),
+}
+
+impl fmt::Display for InitError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            InitError::WindowBuildError(ref e) => write!(f, "{}: {:?}", self.description(), e),
+            InitError::SdlError(ref e) => write!(f, "{}: {}", self.description(), e),
+            _ => f.write_str(self.description()),
+        }
+    }
+}
+
+impl Error for InitError {
+    fn description(&self) -> &str {
+        match *self {
+            InitError::PixelFormatUnsupportedError => "pixel format unsupported",
+            InitError::WindowBuildError(_) => "unable to build a window",
+            InitError::SdlError(_) => "SDL error",
+        }
+    }
 }
 
 impl From<String> for InitError {

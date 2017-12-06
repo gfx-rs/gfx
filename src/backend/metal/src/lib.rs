@@ -33,6 +33,8 @@ use core::memory::{Usage, Bind};
 use core::command::{AccessInfo, AccessGuard};
 
 use std::cell::RefCell;
+use std::error::Error;
+use std::fmt;
 use std::sync::Arc;
 // use std::{mem, ptr};
 
@@ -291,6 +293,20 @@ impl core::Device for Device {
 #[derive(Clone, Debug)]
 pub enum InitError {
     FeatureSet,
+}
+
+impl fmt::Display for InitError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(self.description())
+    }
+}
+
+impl Error for InitError {
+    fn description(&self) -> &str {
+        match *self {
+            InitError::FeatureSet => "no feature set available",
+        }
+    }
 }
 
 pub fn create(format: core::format::Format,

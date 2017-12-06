@@ -21,6 +21,7 @@ extern crate spirv_utils;
 
 use std::{fmt, iter, mem, ptr};
 use std::sync::{Arc, Mutex};
+use std::error::Error as StdError;
 use std::ffi::CStr;
 use shared_library::dynamic_library::DynamicLibrary;
 
@@ -285,9 +286,15 @@ pub fn create(app_name: &str, app_version: u32, layers: &[&str], extensions: &[&
 #[derive(Clone, PartialEq, Eq)]
 pub struct Error(pub vk::Result);
 
-impl fmt::Debug for Error {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(match self.0 {
+        f.write_str(self.description())
+    }
+}
+
+impl StdError for Error {
+    fn description(&self) -> &str {
+        match self.0 {
             vk::SUCCESS => "success",
             vk::NOT_READY => "not ready",
             vk::TIMEOUT => "timeout",
@@ -312,7 +319,13 @@ impl fmt::Debug for Error {
             vk::ERROR_INCOMPATIBLE_DISPLAY_KHR => "incompatible display (KHR)",
             vk::ERROR_VALIDATION_FAILED_EXT => "validation failed (EXT)",
             _ => "unknown",
-        })
+        }
+    }
+}
+
+impl fmt::Debug for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(self.description())
     }
 }
 

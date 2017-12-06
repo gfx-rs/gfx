@@ -23,6 +23,8 @@ extern crate gfx_gl as gl;
 extern crate gfx_core as core;
 
 use std::cell::RefCell;
+use std::error::Error as StdError;
+use std::fmt;
 use std::rc::Rc;
 use core::{self as c, handle, state as s, format, pso, texture, command as com, buffer};
 use core::target::{Layer, Level};
@@ -149,6 +151,26 @@ pub enum Error {
     InvalidFramebufferOperation,
     OutOfMemory,
     UnknownError,
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(self.description())
+    }
+}
+
+impl StdError for Error {
+    fn description(&self) -> &str {
+        match *self {
+            Error::NoError => "no error",
+            Error::InvalidEnum => "invalid enum",
+            Error::InvalidValue => "invalid value",
+            Error::InvalidOperation => "invalid operation",
+            Error::InvalidFramebufferOperation => "invalid frame buffer operation",
+            Error::OutOfMemory => "out of memory",
+            Error::UnknownError => "unknown error",
+        }
+    }
 }
 
 impl Error {
