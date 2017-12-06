@@ -523,7 +523,6 @@ fn main() {
             cmd_buffer.bind_graphics_pipeline(&pipelines[0].as_ref().unwrap());
             cmd_buffer.bind_vertex_buffers(pso::VertexBufferSet(vec![(&vertex_buffer, 0)]));
             cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, &[&desc_sets[0]]); //TODO
-            cmd_buffer.push_graphics_constants(&pipeline_layout, pso::ShaderStageFlags::VERTEX, 0, &[0, 4]);
 
             {
                 let mut encoder = cmd_buffer.begin_renderpass_inline(
