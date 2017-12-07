@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx_window_glutin"
-version = "0.18.0"
+version = "0.19.0"
 description = "Glutin window for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
