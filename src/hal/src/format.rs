@@ -287,6 +287,60 @@ impl Default for Swizzle {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Format(pub SurfaceType, pub ChannelType);
 
+/// Format properties of the physical device.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Properties {
+    ///
+    pub linear_tiling: ImageFeature,
+    ///
+    pub optimal_tiling: ImageFeature,
+    ///
+    pub buffer_features: BufferFeature,
+}
+
+bitflags!(
+    /// Image feature flags.
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    pub struct ImageFeature: u16 {
+        /// Image view can be sampled.
+        const SAMPLED = 0x1;
+        /// Image view can be used as storage image.
+        const STORAGE = 0x2;
+        /// Image view can be used as storage image (with atomics).
+        const STORAGE_ATOMIC = 0x4;
+        /// Image view can be used as color and input attachment.
+        const COLOR_ATTACHMENT = 0x8;
+        /// Image view can be used as color (with blending) and input attachment.
+        const COLOR_ATTACHMENT_BLEND = 0x10;
+        /// Image view can be used as depth-stencil and input attachment.
+        const DEPTH_STENCIL_ATTACHMENT = 0x20;
+        /// Image can be used as source for blit commands.
+        const BLIT_SRC = 0x40;
+        /// Image can be used as destination for blit commands.
+        const BLIT_DST = 0x80;
+        /// Image can be sampled with a (mipmap) linear sampler or as blit source
+        /// with linear sampling.
+        /// Requires `SAMPLED` or `BLIT_SRC` flag.
+        const SAMPLED_LINEAR = 0x100;
+    }
+);
+
+bitflags!(
+    /// Buffer feature flags.
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    pub struct BufferFeature: u16 {
+        /// Buffer view can be used as uniform texel buffer.
+        const UNIFORM_TEXEL = 0x1;
+        /// Buffer view can be used as storage texel buffer.
+        const STORAGE_TEXEL = 0x2;
+        /// Buffer view can be used as storage texel buffer (with atomics).
+        const STORAGE_TEXEL_ATOMIC = 0x4;
+        /// Image view can be used as vertex buffer.
+        const VERTEX = 0x8;
+    }
+);
+
 /// Compile-time surface type trait.
 pub trait SurfaceTyped {
     /// Associated run-time value of the type.

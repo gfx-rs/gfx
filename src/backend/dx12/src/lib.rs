@@ -26,7 +26,7 @@ mod root_constants;
 mod shade;
 mod window;
 
-use hal::{memory, Features, Limits, QueueType};
+use hal::{format, memory, Features, Limits, QueueType};
 use wio::com::ComPtr;
 
 use std::{mem, ptr};
@@ -362,6 +362,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             memory_types,
             memory_heaps,
         }
+    }
+
+    fn format_properties(&self, _: format::Format) -> format::Properties {
+        unimplemented!()
     }
 }
 

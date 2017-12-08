@@ -23,7 +23,7 @@ use ash::{Entry, LoadingError};
 use ash::extensions as ext;
 use ash::version::{EntryV1_0, DeviceV1_0, InstanceV1_0, V1_0};
 use ash::vk;
-use hal::memory;
+use hal::{format, memory};
 use hal::{Features, Limits, PatchSize, QueueType};
 use std::{fmt, mem, ptr};
 use std::ffi::{CStr, CString};
@@ -446,6 +446,19 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             queue_groups,
             memory_types,
             memory_heaps,
+        }
+    }
+
+    fn format_properties(&self, format: format::Format) -> format::Properties {
+        let properties = self.instance.0.get_physical_device_format_properties(
+            self.handle,
+            conv::map_format(format.0, format.1).unwrap(),
+        );
+
+        format::Properties {
+            linear_tiling: conv::map_image_features(properties.linear_tiling_features),
+            optimal_tiling: conv::map_image_features(properties.optimal_tiling_features),
+            buffer_features: conv::map_buffer_features(properties.buffer_features),
         }
     }
 }
