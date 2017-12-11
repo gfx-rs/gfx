@@ -251,6 +251,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             memory_heaps: vec![!0, !0],
         }
     }
+
+    fn format_properties(&self, _: hal::format::Format) -> hal::format::Properties {
+        unimplemented!()
+    }
 }
 
 #[derive(Debug)]

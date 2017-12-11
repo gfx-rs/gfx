@@ -2,7 +2,7 @@
 //!
 //! Physical devices are the main entry point for opening a [Device](../struct.Device).
 
-use {Backend, Gpu};
+use {format, Backend, Gpu};
 
 /// Scheduling hint for devices about the priority of a queue.
 /// Values ranging from `0.0` (low) to `1.0` (high).
@@ -26,6 +26,9 @@ pub trait PhysicalDevice<B: Backend>: Sized {
     /// # }
     /// ```
     fn open(self, Vec<(B::QueueFamily, Vec<QueuePriority>)>) -> Gpu<B>;
+
+    ///
+    fn format_properties(&self, format::Format) -> format::Properties;
 }
 
 /// Information about a backend adapter.

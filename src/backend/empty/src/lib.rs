@@ -55,6 +55,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(self, _: Vec<(QueueFamily, Vec<hal::QueuePriority>)>) -> hal::Gpu<Backend> {
         unimplemented!()
     }
+
+    fn format_properties(&self, _: format::Format) -> format::Properties {
+        unimplemented!()
+    }
 }
 
 /// Dummy command queue doing nothing.
@@ -557,7 +561,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     ) {
         unimplemented!()
     }
-    
+
     fn push_graphics_constants(
         &mut self,
         _: &(),

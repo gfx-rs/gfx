@@ -155,6 +155,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             memory_heaps,
         }
     }
+
+    fn format_properties(&self, _: format::Format) -> format::Properties {
+        unimplemented!()
+    }
 }
 
 pub struct LanguageVersion {
@@ -338,7 +342,7 @@ impl Device {
         } else {
             Some(create_function_constants(pipeline_desc.shaders.vertex.specialization))
         };
-        
+
         let mtl_vertex_function = vs_lib
             .get_function(vs_entry, vs_constants)
             .map_err(|_| {
