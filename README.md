@@ -2,9 +2,9 @@
   <img src="info/logo.png">
 </p>
 <p align="center">
-  <a href="https://docs.rs/gfx">
-      <img src="https://docs.rs/gfx/badge.svg" alt="Documentation on docs.rs">
-  </a>
+  <!--a href="https://docs.rs/gfx-hal">
+      <img src="https://docs.rs/gfx-hal/badge.svg" alt="Documentation on docs.rs">
+  </a-->
   <a href="https://travis-ci.org/gfx-rs/gfx">
       <img src="https://img.shields.io/travis/gfx-rs/gfx/master.svg?style=flat-square" alt="Travis Build Status">
   </a>
