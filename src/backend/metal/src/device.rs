@@ -221,7 +221,7 @@ impl Device {
         // compile with options
         let mut compiler_options = msl::CompilerOptions::default();
         compiler_options.vertex.invert_y = true;
-        // fill the resource overrides
+        // fill the overrides
         compiler_options.resource_binding_overrides = overrides.clone();
 
         ast.set_compiler_options(&compiler_options)
@@ -308,6 +308,11 @@ impl Device {
         let pipeline_layout = &pipeline_desc.layout;
         let pass_descriptor = &pipeline_desc.subpass;
 
+        if pipeline_layout.attribute_buffer_index as usize + pipeline_desc.vertex_buffers.len() > self.private_caps.max_buffers_per_stage {
+            error!("Too many buffers inputs of the vertex stage: {} attributes + {} resources",
+                pipeline_desc.vertex_buffers.len(), pipeline_layout.attribute_buffer_index);
+            return Err(pso::CreationError::Other);
+        }
         // FIXME: lots missing
 
         let (primitive_class, primitive_type) = match pipeline_desc.input_assembler.primitive {
@@ -346,7 +351,7 @@ impl Device {
         let mtl_vertex_function = vs_lib
             .get_function(vs_entry, vs_constants)
             .map_err(|_| {
-                error!("invalid vertex shader entry point");
+                error!("Invalid vertex shader entry point");
                 pso::CreationError::Other
             })?;
         pipeline.set_vertex_function(Some(&mtl_vertex_function));
@@ -436,7 +441,11 @@ impl Device {
         // Vertex buffers
         let vertex_descriptor = metal::VertexDescriptor::new();
         for (i, vertex_buffer) in pipeline_desc.vertex_buffers.iter().enumerate() {
-            let mtl_buffer_desc = vertex_descriptor.layouts().object_at(i).expect("too many vertex descriptor layouts");
+            let mtl_buffer_index = pipeline_layout.attribute_buffer_index as usize + i;
+            let mtl_buffer_desc = vertex_descriptor
+                .layouts()
+                .object_at(mtl_buffer_index)
+                .expect("too many vertex descriptor layouts");
             mtl_buffer_desc.set_stride(vertex_buffer.stride as u64);
             match vertex_buffer.rate {
                 0 => {
@@ -455,9 +464,13 @@ impl Device {
         }
         for (i, &AttributeDesc { binding, element, ..}) in pipeline_desc.attributes.iter().enumerate() {
             let mtl_vertex_format = map_vertex_format(element.format).expect("unsupported vertex format for Metal");
+            let mtl_attribute_desc = vertex_descriptor
+                .attributes()
+                .object_at(i)
+                .expect("too many vertex attributes");
+            let mtl_buffer_index = pipeline_layout.attribute_buffer_index + binding;
 
-            let mtl_attribute_desc = vertex_descriptor.attributes().object_at(i).expect("too many vertex attributes");
-            mtl_attribute_desc.set_buffer_index(binding as NSUInteger); // TODO: Might be binding, not location?
+            mtl_attribute_desc.set_buffer_index(mtl_buffer_index as _);
             mtl_attribute_desc.set_offset(element.offset as NSUInteger);
             mtl_attribute_desc.set_format(mtl_vertex_format);
         }
@@ -479,6 +492,7 @@ impl Device {
                 fs_lib,
                 raw: unsafe { metal::RenderPipelineState::from_ptr(pso) },
                 primitive_type,
+                attribute_buffer_index: pipeline_layout.attribute_buffer_index,
             })
         }
     }
@@ -545,7 +559,11 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn create_pipeline_layout(&self, set_layouts: &[&n::DescriptorSetLayout], push_constant_ranges: &[(pso::ShaderStageFlags, Range<u32>)]) -> n::PipelineLayout {
+    fn create_pipeline_layout(
+        &self,
+        set_layouts: &[&n::DescriptorSetLayout],
+        _push_constant_ranges: &[(pso::ShaderStageFlags, Range<u32>)],
+    ) -> n::PipelineLayout {
         use hal::pso::ShaderStageFlags;
 
         struct Counters {
@@ -618,7 +636,10 @@ impl hal::Device<Backend> for Device {
             assert!(counters.samplers <= self.private_caps.max_samplers_per_stage);
         }
 
-        n::PipelineLayout { res_overrides }
+        n::PipelineLayout {
+            attribute_buffer_index: stage_infos[0].2.buffers as _,
+            res_overrides,
+        }
     }
 
     fn create_graphics_pipelines<'a>(

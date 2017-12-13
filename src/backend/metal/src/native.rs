@@ -46,6 +46,8 @@ unsafe impl Sync for FrameBuffer {}
 
 #[derive(Debug)]
 pub struct PipelineLayout {
+    // First vertex buffer index to be used by attributes
+    pub(crate) attribute_buffer_index: u32,
     pub(crate) res_overrides: HashMap<msl::ResourceBindingLocation, msl::ResourceBinding>,
 }
 
@@ -57,6 +59,7 @@ pub struct GraphicsPipeline {
     pub(crate) fs_lib: Option<metal::Library>,
     pub(crate) raw: metal::RenderPipelineState,
     pub(crate) primitive_type: MTLPrimitiveType,
+    pub(crate) attribute_buffer_index: u32,
 }
 
 unsafe impl Send for GraphicsPipeline {}

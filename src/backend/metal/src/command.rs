@@ -109,6 +109,7 @@ struct CommandBufferInner {
     resources_vs: StageResources,
     resources_fs: StageResources,
     index_buffer: Option<(metal::Buffer, u64, MTLIndexType)>,
+    attribute_buffer_index: usize,
 }
 
 impl CommandBufferInner {
@@ -255,6 +256,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                     resources_vs: StageResources::new(),
                     resources_fs: StageResources::new(),
                     index_buffer: None,
+                    attribute_buffer_index: 0,
                 })
             }),
             queue: if self.managed.is_some() {
@@ -433,15 +435,17 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
     fn bind_vertex_buffers(&mut self, buffer_set: pso::VertexBufferSet<Backend>) {
         let inner = self.inner();
         let buffers = &mut inner.resources_vs.buffers;
-        while buffers.len() < buffer_set.0.len()    {
+        while buffers.len() < inner.attribute_buffer_index + buffer_set.0.len()    {
             buffers.push(None)
         }
-        for (ref mut out, &(ref buffer, offset)) in buffers.iter_mut().zip(buffer_set.0.iter()) {
+        for (ref mut out, &(ref buffer, offset)) in buffers[inner.attribute_buffer_index..].iter_mut().zip(buffer_set.0.iter()) {
             **out = Some((buffer.0.clone(), offset));
         }
+        //TODO: reuse the binding code from the cache to state between this and `begin_renderpass`
         if let EncoderState::Render(ref encoder) = inner.encoder_state {
             for (i, &(buffer, offset)) in buffer_set.0.iter().enumerate() {
-                encoder.set_vertex_buffer(i as _, offset as _, Some(&buffer.0));
+                let msl_buffer_index = inner.attribute_buffer_index + i;
+                encoder.set_vertex_buffer(msl_buffer_index as _, offset as _, Some(&buffer.0));
             }
         }
     }
@@ -558,6 +562,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         }
         inner.pipeline_state = Some(pipeline_state);
         inner.primitive_type = pipeline.primitive_type;
+        inner.attribute_buffer_index = pipeline.attribute_buffer_index as usize;
     }
 
     fn bind_graphics_descriptor_sets(
@@ -898,19 +903,19 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
 
     fn push_graphics_constants(
         &mut self,
-        layout: &native::PipelineLayout,
-        stages: pso::ShaderStageFlags,
-        offset: u32,
-        constants: &[u32],
+        _layout: &native::PipelineLayout,
+        _stages: pso::ShaderStageFlags,
+        _offset: u32,
+        _constants: &[u32],
     ) {
         unimplemented!()
     }
 
     fn push_compute_constants(
         &mut self,
-        layout: &native::PipelineLayout,
-        offset: u32,
-        constants: &[u32],
+        _layout: &native::PipelineLayout,
+        _offset: u32,
+        _constants: &[u32],
     ) {
         unimplemented!()
     }
