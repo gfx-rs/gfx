@@ -294,6 +294,16 @@ impl Device {
                 arg.set_data_type(MTLDataType::Texture);
                 arg.set_index(index as NSUInteger);
             }
+            DescriptorType::UniformBuffer => {
+                arg.set_access(MTLArgumentAccess::ReadOnly);
+                arg.set_data_type(MTLDataType::Struct);
+                arg.set_index(index as NSUInteger);
+            }
+            DescriptorType::StorageBuffer => {
+                arg.set_access(MTLArgumentAccess::ReadWrite);
+                arg.set_data_type(MTLDataType::Struct);
+                arg.set_index(index as NSUInteger);
+            }
             _ => unimplemented!()
         }
 
@@ -773,11 +783,13 @@ impl hal::Device<Backend> for Device {
 
         let mut num_samplers = 0;
         let mut num_textures = 0;
+        let mut num_uniforms = 0;
 
         let arguments = descriptor_ranges.iter().map(|desc| {
             let offset_ref = match desc.ty {
                 DescriptorType::Sampler => &mut num_samplers,
                 DescriptorType::SampledImage => &mut num_textures,
+                DescriptorType::UniformBuffer | DescriptorType::StorageBuffer => &mut num_uniforms,
                 _ => unimplemented!()
             };
             let index = *offset_ref;
@@ -821,6 +833,8 @@ impl hal::Device<Backend> for Device {
 
         let mut mtl_samplers = Vec::new();
         let mut mtl_textures = Vec::new();
+        let mut mtl_buffers = Vec::new();
+        let mut mtl_offsets = Vec::new();
 
         for write in writes {
             match *write.set {
@@ -856,7 +870,20 @@ impl hal::Device<Backend> for Device {
                                 *old = Some(((new.0).0.clone(), new.1));
                             }
                         },
-                        (&Sampler(_), _) | (&SampledImage(_), _) => panic!("mismatched descriptor set type"),
+                        (&UniformBuffer(ref buffers), Some(&mut n::DescriptorSetBinding::ConstantBuffer(ref mut vec))) => {
+                            if write.array_offset + buffers.len() > layout.count {
+                                panic!("out of range descriptor write");
+                            }
+
+                            let target_iter = vec[write.array_offset..(write.array_offset + buffers.len())].iter_mut();
+
+                            for (new, old) in buffers.iter().zip(target_iter) {
+                                assert!(new.1.end <= ((new.0).0).length());
+                                *old = Some(((new.0).0.clone(), new.1.start));
+                            }
+                        }
+
+                        (&Sampler(_), _) | (&SampledImage(_), _) | (&UniformBuffer(_), _) => panic!("mismatched descriptor set type"),
                         _ => unimplemented!(),
                     }
                 }
@@ -878,6 +905,26 @@ impl hal::Device<Backend> for Device {
                             mtl_textures.extend(images.iter().map(|image| &*((image.0).0)));
                             encoder.set_textures(&mtl_textures, write.binding as _);
                         },
+                        UniformBuffer(ref buffers) | StorageBuffer(ref buffers) => {
+                            mtl_buffers.clear();
+                            mtl_buffers.extend(buffers.iter().map(|buffer| &*((buffer.0).0)));
+                            mtl_offsets.clear();
+                            mtl_offsets.extend(buffers.iter().map(|buffer| buffer.1.clone()));
+
+                            let encoder: &metal::ArgumentEncoderRef = &encoder;
+
+                            let range = NSRange {
+                                location: offset,
+                                length: mtl_buffers.len() as NSUInteger,
+                            };
+                            unsafe {
+                                msg_send![encoder,
+                                          setBuffers: mtl_buffers.as_ptr()
+                                          offsets: mtl_offsets.as_ptr()
+                                          withRange:range
+                                ]
+                            }
+                        }
                         _ => unimplemented!(),
                     }
                 }
