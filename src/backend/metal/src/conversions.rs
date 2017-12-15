@@ -1,5 +1,6 @@
 use hal::{pass, image, memory, pso, IndexType};
 use hal::format::Format;
+use hal::pso::Comparison;
 use metal::*;
 
 // The boolean indicates whether this is a depth format
@@ -13,6 +14,8 @@ pub fn map_format(format: Format) -> Option<(MTLPixelFormat, bool)> {
         Format(R8_G8_B8_A8, Srgb) => Some((MTLPixelFormat::RGBA8Unorm_sRGB, false)),
         Format(B8_G8_R8_A8, Unorm) => Some((MTLPixelFormat::BGRA8Unorm, false)),
         Format(B8_G8_R8_A8, Srgb) => Some((MTLPixelFormat::BGRA8Unorm_sRGB, false)),
+        Format(D32, Float) => Some((MTLPixelFormat::Depth32Float, true)),
+        Format(D24_S8, Unorm) => Some((MTLPixelFormat::Depth24Unorm_Stencil8, true)),
         _ => None,
     }
 }
@@ -178,5 +181,18 @@ pub fn map_index_type(index_type: IndexType) -> MTLIndexType {
     match index_type {
         IndexType::U16 => MTLIndexType::UInt16,
         IndexType::U32 => MTLIndexType::UInt32,
+    }
+}
+
+pub fn map_compare_function(fun: Comparison) -> MTLCompareFunction {
+    match fun {
+        Comparison::Never => MTLCompareFunction::Never,
+        Comparison::Less => MTLCompareFunction::Less,
+        Comparison::LessEqual => MTLCompareFunction::LessEqual,
+        Comparison::Equal => MTLCompareFunction::Equal,
+        Comparison::GreaterEqual => MTLCompareFunction::GreaterEqual,
+        Comparison::Greater => MTLCompareFunction::Greater,
+        Comparison::NotEqual => MTLCompareFunction::NotEqual,
+        Comparison::Always => MTLCompareFunction::Always,
     }
 }
