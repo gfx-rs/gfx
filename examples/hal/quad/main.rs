@@ -479,7 +479,7 @@ fn main() {
                 target: &image_logo,
                 range: COLOR_RANGE.clone(),
             };
-            cmd_buffer.pipeline_barrier(PipelineStage::TRANSFER .. PipelineStage::BOTTOM_OF_PIPE, &[image_barrier]);
+            cmd_buffer.pipeline_barrier(PipelineStage::TRANSFER .. PipelineStage::FRAGMENT_SHADER, &[image_barrier]);
 
             cmd_buffer.finish()
         };
