@@ -351,7 +351,7 @@ fn main() {
             mem_type.properties.contains(m::Properties::CPU_VISIBLE)
         }).unwrap();
 
-    let buffer_memory = device.allocate_memory(upload_type, 1024).unwrap();
+    let buffer_memory = device.allocate_memory(upload_type, buffer_req.size).unwrap();
     let vertex_buffer = device.bind_buffer_memory(&buffer_memory, 0, buffer_unbound).unwrap();
 
     // TODO: check transitions: read/write mapping and vertex buffer read
@@ -375,11 +375,10 @@ fn main() {
     let upload_size = (height * row_pitch) as u64;
     println!("upload row pitch {}, total size {}", row_pitch, upload_size);
 
-    let image_upload_memory = device.allocate_memory(upload_type, upload_size).unwrap();
-    let image_upload_buffer = {
-        let buffer = device.create_buffer(upload_size, image_stride as u64, buffer::Usage::TRANSFER_SRC).unwrap();
-        device.bind_buffer_memory(&image_upload_memory, 0, buffer).unwrap()
-    };
+    let image_buffer_unbound = device.create_buffer(upload_size, image_stride as u64, buffer::Usage::TRANSFER_SRC).unwrap();
+    let image_mem_reqs = device.get_buffer_requirements(&image_buffer_unbound);
+    let image_upload_memory = device.allocate_memory(upload_type, image_mem_reqs.size).unwrap();
+    let image_upload_buffer = device.bind_buffer_memory(&image_upload_memory, 0, image_buffer_unbound).unwrap();
 
     // copy image data into staging buffer
     {
