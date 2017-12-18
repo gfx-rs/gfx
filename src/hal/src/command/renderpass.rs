@@ -114,15 +114,18 @@ impl<'a, B: Backend> RenderPassInlineEncoder<'a, B> {
         self.0.set_blend_constants(cv)
     }
 
+    ///
+    pub fn push_graphics_constants(&mut self, layout: &B::PipelineLayout, stages: pso::ShaderStageFlags, offset: u32, constants: &[u32]) {
+        self.0.push_graphics_constants(layout, stages, offset, constants);
+    }
+
     // TODO: set_line_width
     // TODO: set_depth_bounds
     // TODO: set_depth_bias
     // TODO: set_stencil_compare_mask
     // TODO: set_stencil_write_mask
-    // TODO: push constants
     // TODO: pipeline barrier (postponed)
     // TODO: begin/end query
-
 }
 
 impl<'a, B: Backend> Drop for RenderPassInlineEncoder<'a, B> {

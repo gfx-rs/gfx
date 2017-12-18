@@ -790,11 +790,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let location = unsafe { (*ibv.buffer.resource).GetGPUVirtualAddress() };
 
         let mut ibv_raw = winapi::D3D12_INDEX_BUFFER_VIEW {
-            BufferLocation: location,
-            SizeInBytes: ibv.buffer.size_in_bytes,
+            BufferLocation: location + ibv.offset,
+            SizeInBytes: ibv.buffer.size_in_bytes - ibv.offset as u32,
             Format: format,
         };
-
         unsafe {
             self.raw.IASetIndexBuffer(&mut ibv_raw);
         }
@@ -807,7 +806,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 let base = unsafe { (*buffer.resource).GetGPUVirtualAddress() };
                 winapi::D3D12_VERTEX_BUFFER_VIEW {
                     BufferLocation: base + offset as u64,
-                    SizeInBytes: buffer.size_in_bytes,
+                    SizeInBytes: buffer.size_in_bytes - offset as u32,
                     StrideInBytes: buffer.stride,
                 }
             })
