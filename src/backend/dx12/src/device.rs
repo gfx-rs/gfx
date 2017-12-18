@@ -185,11 +185,19 @@ impl Device {
                .map_err(gen_unexpected_error)?;
         }
 
+        for uniform_buffer in &shader_resources.uniform_buffers {
+            let set = ast.get_decoration(uniform_buffer.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
+            ast.set_decoration(uniform_buffer.id, spirv::Decoration::DescriptorSet, space_offset + 2*set)
+               .map_err(gen_unexpected_error)?;
+        }
+
         for sampler in &shader_resources.separate_samplers {
             let set = ast.get_decoration(sampler.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
             ast.set_decoration(sampler.id, spirv::Decoration::DescriptorSet, space_offset + 2*set+1)
                .map_err(gen_unexpected_error)?;
         }
+
+        // TODO: other resources
 
         Ok(())
     }
