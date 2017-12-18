@@ -1003,7 +1003,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn create_buffer(
-        &self, size: u64, _stride: u64, _usage: buffer::Usage
+        &self, size: u64, _usage: buffer::Usage
     ) -> Result<n::UnboundBuffer, buffer::CreationError> {
         Ok(n::UnboundBuffer {
             size

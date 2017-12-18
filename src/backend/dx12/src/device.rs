@@ -16,7 +16,7 @@ use hal::pool::CommandPoolCreateFlags;
 
 use {
     conv, free_list, native as n, root_constants, shade, window as w,
-    Backend as B, Device, QueueFamily
+    Backend as B, Device, QueueFamily, MAX_VERTEX_BUFFERS,
 };
 use pool::RawCommandPool;
 use root_constants::RootConstant;
@@ -69,7 +69,6 @@ pub(crate) enum CommandSignature {
 #[derive(Debug)]
 pub struct UnboundBuffer {
     requirements: memory::Requirements,
-    stride: u64,
     usage: buffer::Usage,
 }
 
@@ -1073,6 +1072,12 @@ impl d::Device<B> for Device {
                     .collect::<Result<Vec<_>, _>>()?
             };
 
+            // Input slots
+            let mut vertex_strides = [0; MAX_VERTEX_BUFFERS];
+            for (stride, buffer) in vertex_strides.iter_mut().zip(desc.vertex_buffers.iter()) {
+                *stride = buffer.stride;
+            }
+
             // TODO: check maximum number of rtvs
             // Get associated subpass information
             let pass = {
@@ -1178,6 +1183,7 @@ impl d::Device<B> for Device {
                     num_parameter_slots: desc.layout.num_parameter_slots,
                     topology,
                     constants: desc.layout.root_constants.clone(),
+                    vertex_strides,
                 })
             } else {
                 Err(pso::CreationError::Other)
@@ -1253,7 +1259,6 @@ impl d::Device<B> for Device {
     fn create_buffer(
         &self,
         mut size: u64,
-        stride: u64,
         usage: buffer::Usage,
     ) -> Result<UnboundBuffer, buffer::CreationError> {
         if usage.contains(buffer::Usage::UNIFORM) {
@@ -1271,7 +1276,6 @@ impl d::Device<B> for Device {
 
         Ok(UnboundBuffer {
             requirements,
-            stride,
             usage,
         })
     }
@@ -1356,7 +1360,6 @@ impl d::Device<B> for Device {
         Ok(n::Buffer {
             resource: resource as *mut _,
             size_in_bytes: buffer.requirements.size as _,
-            stride: buffer.stride as _,
             clear_uav,
         })
     }

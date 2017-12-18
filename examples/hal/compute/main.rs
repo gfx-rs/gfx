@@ -165,7 +165,7 @@ fn main() {
 }
 
 fn create_buffer<B: Backend>(gpu: &mut Gpu<B>, properties: memory::Properties, usage: buffer::Usage, stride: u64, len: u64) -> (B::Memory, B::Buffer) {
-    let buffer = gpu.device.create_buffer(stride * len, stride, usage).unwrap();
+    let buffer = gpu.device.create_buffer(stride * len, usage).unwrap();
     let requirements = gpu.device.get_buffer_requirements(&buffer);
 
     let ty = (&gpu.memory_types).into_iter().find(|memory_type| {

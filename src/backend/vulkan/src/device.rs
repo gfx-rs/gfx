@@ -784,7 +784,7 @@ impl d::Device<B> for Device {
     }
 
     ///
-    fn create_buffer(&self, size: u64, _stride: u64, usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
+    fn create_buffer(&self, size: u64, usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
         let info = vk::BufferCreateInfo {
             s_type: vk::StructureType::BufferCreateInfo,
             p_next: ptr::null(),

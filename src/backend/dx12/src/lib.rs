@@ -39,6 +39,10 @@ pub(crate) struct HeapProperties {
     pub memory_pool: d3d12::D3D12_MEMORY_POOL,
 }
 
+// https://msdn.microsoft.com/de-de/library/windows/desktop/dn770377(v=vs.85).aspx
+// Only 16 input slots allowed.
+const MAX_VERTEX_BUFFERS: usize = 16;
+
 // https://msdn.microsoft.com/de-de/library/windows/desktop/dn788678(v=vs.85).aspx
 static HEAPS_NUMA: &'static [HeapProperties] = &[
     // DEFAULT
