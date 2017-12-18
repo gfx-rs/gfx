@@ -3,7 +3,10 @@ use std::mem;
 
 #[cfg(feature = "winit")]
 use winit;
-use winapi;
+
+use winapi::shared::dxgi1_4;
+use winapi::shared::windef::{HWND, RECT};
+use winapi::um::winuser::GetClientRect;
 use wio::com::ComPtr;
 
 use hal::{self, format as f, image as i};
@@ -14,8 +17,6 @@ use std::os::raw::c_void;
 impl Instance {
     pub fn create_surface_from_hwnd(&self, hwnd: *mut c_void) -> Surface {
         let (width, height) = unsafe {
-            use winapi::RECT;
-            use user32::GetClientRect;
             let mut rect: RECT = mem::zeroed();
             if GetClientRect(hwnd as *mut _, &mut rect as *mut RECT) == 0 {
                 panic!("GetClientRect failed");
@@ -39,8 +40,8 @@ impl Instance {
 }
 
 pub struct Surface {
-    pub(crate) factory: ComPtr<winapi::IDXGIFactory4>,
-    pub(crate) wnd_handle: winapi::HWND,
+    pub(crate) factory: ComPtr<dxgi1_4::IDXGIFactory4>,
+    pub(crate) wnd_handle: HWND,
     pub(crate) width: u32,
     pub(crate) height: u32,
 }
@@ -87,7 +88,7 @@ impl hal::Surface<Backend> for Surface {
 }
 
 pub struct Swapchain {
-    pub(crate) inner: ComPtr<winapi::IDXGISwapChain3>,
+    pub(crate) inner: ComPtr<dxgi1_4::IDXGISwapChain3>,
     pub(crate) next_frame: usize,
     pub(crate) frame_queue: VecDeque<usize>,
     #[allow(dead_code)]

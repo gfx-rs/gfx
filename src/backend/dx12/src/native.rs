@@ -1,4 +1,6 @@
-use winapi::{self, UINT};
+use winapi::shared::minwindef::{UINT};
+use winapi::shared::dxgiformat::DXGI_FORMAT;
+use winapi::um::{d3d12, d3dcommon};
 use wio::com::ComPtr;
 
 use hal::{image, pass, pso, MemoryType, DescriptorPool as HalDescriptorPool};
@@ -13,7 +15,7 @@ use std::ops::Range;
 // because they need to be adjusted on pipeline creation.
 #[derive(Debug, Hash)]
 pub enum ShaderModule {
-    Compiled(BTreeMap<String, *mut winapi::ID3DBlob>),
+    Compiled(BTreeMap<String, *mut d3dcommon::ID3DBlob>),
     Spirv(Vec<u8>),
 }
 unsafe impl Send for ShaderModule { }
@@ -22,30 +24,30 @@ unsafe impl Sync for ShaderModule { }
 #[derive(Debug, Hash, Clone)]
 pub struct BarrierDesc {
     pub(crate) attachment_id: pass::AttachmentId,
-    pub(crate) states: Range<winapi::D3D12_RESOURCE_STATES>,
-    pub(crate) flags: winapi::D3D12_RESOURCE_BARRIER_FLAGS,
+    pub(crate) states: Range<d3d12::D3D12_RESOURCE_STATES>,
+    pub(crate) flags: d3d12::D3D12_RESOURCE_BARRIER_FLAGS,
 }
 
 impl BarrierDesc {
     pub(crate) fn new(
         attachment_id: pass::AttachmentId,
-        states: Range<winapi::D3D12_RESOURCE_STATES>,
+        states: Range<d3d12::D3D12_RESOURCE_STATES>,
     ) -> Self {
         BarrierDesc {
             attachment_id,
             states,
-            flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+            flags: d3d12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
         }
     }
 
     pub(crate) fn split(self) -> Range<Self> {
         BarrierDesc {
-            flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_BEGIN_ONLY,
+            flags: d3d12::D3D12_RESOURCE_BARRIER_FLAG_BEGIN_ONLY,
             .. self.clone()
         }
         ..
         BarrierDesc {
-            flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_END_ONLY,
+            flags: d3d12::D3D12_RESOURCE_BARRIER_FLAG_END_ONLY,
             .. self
         }
     }
@@ -79,10 +81,10 @@ pub struct RenderPass {
 
 #[derive(Debug, Hash)]
 pub struct GraphicsPipeline {
-    pub(crate) raw: *mut winapi::ID3D12PipelineState,
-    pub(crate) signature: *mut winapi::ID3D12RootSignature, // weak-ptr, owned by `PipelineLayout`
+    pub(crate) raw: *mut d3d12::ID3D12PipelineState,
+    pub(crate) signature: *mut d3d12::ID3D12RootSignature, // weak-ptr, owned by `PipelineLayout`
     pub(crate) num_parameter_slots: usize, // signature parameter slots, see `PipelineLayout`
-    pub(crate) topology: winapi::D3D12_PRIMITIVE_TOPOLOGY,
+    pub(crate) topology: d3d12::D3D12_PRIMITIVE_TOPOLOGY,
     pub(crate) constants: Vec<RootConstant>,
 }
 unsafe impl Send for GraphicsPipeline { }
@@ -90,8 +92,8 @@ unsafe impl Sync for GraphicsPipeline { }
 
 #[derive(Debug, Hash)]
 pub struct ComputePipeline {
-    pub(crate) raw: *mut winapi::ID3D12PipelineState,
-    pub(crate) signature: *mut winapi::ID3D12RootSignature, // weak-ptr, owned by `PipelineLayout`
+    pub(crate) raw: *mut d3d12::ID3D12PipelineState,
+    pub(crate) signature: *mut d3d12::ID3D12RootSignature, // weak-ptr, owned by `PipelineLayout`
     pub(crate) num_parameter_slots: usize, // signature parameter slots, see `PipelineLayout`
     pub(crate) constants: Vec<RootConstant>,
 }
@@ -111,7 +113,7 @@ pub const SAMPLERS: SetTableTypes = SetTableTypes::SAMPLERS;
 
 #[derive(Debug, Hash)]
 pub struct PipelineLayout {
-    pub(crate) raw: *mut winapi::ID3D12RootSignature,
+    pub(crate) raw: *mut d3d12::ID3D12RootSignature,
     // Storing for each associated descriptor set layout, which tables we created
     // in the root signature. This is required for binding descriptor sets.
     pub(crate) tables: Vec<SetTableTypes>,
@@ -124,14 +126,14 @@ pub struct PipelineLayout {
 unsafe impl Send for PipelineLayout { }
 unsafe impl Sync for PipelineLayout { }
 
-#[derive(Debug, Hash, Clone)]
+#[derive(Debug, Clone)]
 pub struct Framebuffer {
     pub(crate) attachments: Vec<ImageView>,
 }
 
 #[derive(Debug)]
 pub struct Buffer {
-    pub(crate) resource: *mut winapi::ID3D12Resource,
+    pub(crate) resource: *mut d3d12::ID3D12Resource,
     pub(crate) size_in_bytes: u32,
     pub(crate) stride: u32,
     pub(crate) clear_uav: Option<DualHandle>,
@@ -142,18 +144,23 @@ unsafe impl Sync for Buffer { }
 #[derive(Debug, Hash, PartialEq, Eq)]
 pub struct BufferView;
 
-#[derive(Clone, Debug, Hash)]
+
+#[derive(Clone, Derivative)]
+#[derivative(Debug)]
 pub struct Image {
-    pub(crate) resource: *mut winapi::ID3D12Resource,
+    pub(crate) resource: *mut d3d12::ID3D12Resource,
     pub(crate) kind: image::Kind,
     pub(crate) usage: image::Usage,
-    pub(crate) dxgi_format: winapi::DXGI_FORMAT,
+    pub(crate) dxgi_format: DXGI_FORMAT,
     pub(crate) bits_per_texel: u8,
     pub(crate) num_levels: image::Level,
     pub(crate) num_layers: image::Layer,
-    pub(crate) clear_cv: Option<winapi::D3D12_CPU_DESCRIPTOR_HANDLE>,
-    pub(crate) clear_dv: Option<winapi::D3D12_CPU_DESCRIPTOR_HANDLE>,
-    pub(crate) clear_sv: Option<winapi::D3D12_CPU_DESCRIPTOR_HANDLE>,
+    #[derivative(Debug="ignore")]
+    pub(crate) clear_cv: Option<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>,
+    #[derivative(Debug="ignore")]
+    pub(crate) clear_dv: Option<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>,
+    #[derivative(Debug="ignore")]
+    pub(crate) clear_sv: Option<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>,
 }
 unsafe impl Send for Image { }
 unsafe impl Sync for Image { }
@@ -173,20 +180,28 @@ impl Image {
     }
 }
 
-#[derive(Copy, Debug, Hash, Clone)]
+#[derive(Copy, Derivative, Clone)]
+#[derivative(Debug)]
 pub struct ImageView {
-    pub(crate) resource: *mut winapi::ID3D12Resource,
-    pub(crate) handle_srv: Option<winapi::D3D12_CPU_DESCRIPTOR_HANDLE>,
-    pub(crate) handle_rtv: Option<winapi::D3D12_CPU_DESCRIPTOR_HANDLE>,
-    pub(crate) handle_dsv: Option<winapi::D3D12_CPU_DESCRIPTOR_HANDLE>,
-    pub(crate) handle_uav: Option<winapi::D3D12_CPU_DESCRIPTOR_HANDLE>,
+    #[derivative(Debug="ignore")]
+    pub(crate) resource: *mut d3d12::ID3D12Resource,
+    #[derivative(Debug="ignore")]
+    pub(crate) handle_srv: Option<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>,
+    #[derivative(Debug="ignore")]
+    pub(crate) handle_rtv: Option<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>,
+    #[derivative(Debug="ignore")]
+    pub(crate) handle_dsv: Option<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>,
+    #[derivative(Debug="ignore")]
+    pub(crate) handle_uav: Option<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>,
 }
 unsafe impl Send for ImageView { }
 unsafe impl Sync for ImageView { }
 
-#[derive(Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Sampler {
-    pub(crate) handle: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
+    #[derivative(Debug="ignore")]
+    pub(crate) handle: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
 }
 
 #[derive(Debug)]
@@ -194,23 +209,29 @@ pub struct DescriptorSetLayout {
     pub(crate) bindings: Vec<pso::DescriptorSetLayoutBinding>,
 }
 
-#[derive(Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Fence {
-    pub(crate) raw: ComPtr<winapi::ID3D12Fence>,
+    #[derivative(Debug="ignore")]
+    pub(crate) raw: ComPtr<d3d12::ID3D12Fence>,
 }
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 
-#[derive(Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Semaphore {
-    pub(crate) raw: ComPtr<winapi::ID3D12Fence>,
+    #[derivative(Debug="ignore")]
+    pub(crate) raw: ComPtr<d3d12::ID3D12Fence>,
 }
 unsafe impl Send for Semaphore {}
 unsafe impl Sync for Semaphore {}
 
-#[derive(Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Memory {
-    pub(crate) heap: ComPtr<winapi::ID3D12Heap>,
+    #[derivative(Debug="ignore")]
+    pub(crate) heap: ComPtr<d3d12::ID3D12Heap>,
     pub(crate) ty: MemoryType,
     pub(crate) size: u64,
 }
@@ -220,14 +241,14 @@ pub struct DescriptorRange {
     pub(crate) handle: DualHandle,
     pub(crate) ty: pso::DescriptorType,
     pub(crate) handle_size: u64,
-    pub(crate) count: usize,
+    pub(crate) count: u64,
 }
 
 impl DescriptorRange {
-    pub(crate) fn at(&self, index: usize) -> winapi::D3D12_CPU_DESCRIPTOR_HANDLE {
+    pub(crate) fn at(&self, index: u64) -> d3d12::D3D12_CPU_DESCRIPTOR_HANDLE {
         assert!(index < self.count);
-        let ptr = self.handle.cpu.ptr + self.handle_size * index as u64;
-        winapi::D3D12_CPU_DESCRIPTOR_HANDLE { ptr }
+        let ptr = self.handle.cpu.ptr + (self.handle_size * index) as usize;
+        d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr }
     }
 }
 
@@ -238,16 +259,21 @@ pub enum DescriptorRangeBinding {
     Empty,
 }
 
-#[derive(Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct DescriptorSet {
     // Required for binding at command buffer
-    pub(crate) heap_srv_cbv_uav: ComPtr<winapi::ID3D12DescriptorHeap>,
-    pub(crate) heap_samplers: ComPtr<winapi::ID3D12DescriptorHeap>,
+    #[derivative(Debug="ignore")]
+    pub(crate) heap_srv_cbv_uav: ComPtr<d3d12::ID3D12DescriptorHeap>,
+    #[derivative(Debug="ignore")]
+    pub(crate) heap_samplers: ComPtr<d3d12::ID3D12DescriptorHeap>,
 
     pub(crate) ranges: Vec<DescriptorRangeBinding>,
 
-    pub(crate) first_gpu_sampler: Option<winapi::D3D12_GPU_DESCRIPTOR_HANDLE>,
-    pub(crate) first_gpu_view: Option<winapi::D3D12_GPU_DESCRIPTOR_HANDLE>,
+    #[derivative(Debug="ignore")]
+    pub(crate) first_gpu_sampler: Option<d3d12::D3D12_GPU_DESCRIPTOR_HANDLE>,
+    #[derivative(Debug="ignore")]
+    pub(crate) first_gpu_view: Option<d3d12::D3D12_GPU_DESCRIPTOR_HANDLE>,
 }
 
 // TODO: is this really safe?
@@ -255,38 +281,39 @@ unsafe impl Send for DescriptorSet {}
 unsafe impl Sync for DescriptorSet {}
 
 impl DescriptorSet {
-    pub fn srv_cbv_uav_gpu_start(&self) -> winapi::D3D12_GPU_DESCRIPTOR_HANDLE {
-        let mut handle = winapi::D3D12_GPU_DESCRIPTOR_HANDLE { ptr: 0 };
+    pub fn srv_cbv_uav_gpu_start(&self) -> d3d12::D3D12_GPU_DESCRIPTOR_HANDLE {
         unsafe {
             self
                 .heap_srv_cbv_uav
                 .as_mut()
-                .GetGPUDescriptorHandleForHeapStart(&mut handle);
+                .GetGPUDescriptorHandleForHeapStart()
         }
-        handle
     }
 
-    pub fn sampler_gpu_start(&self) -> winapi::D3D12_GPU_DESCRIPTOR_HANDLE {
-        let mut handle = winapi::D3D12_GPU_DESCRIPTOR_HANDLE { ptr: 0 };
+    pub fn sampler_gpu_start(&self) -> d3d12::D3D12_GPU_DESCRIPTOR_HANDLE {
         unsafe {
             self
                 .heap_samplers
                 .as_mut()
-                .GetGPUDescriptorHandleForHeapStart(&mut handle);
+                .GetGPUDescriptorHandleForHeapStart()
         }
-        handle
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Derivative)]
+#[derivative(Debug)]
 pub struct DualHandle {
-    pub(crate) cpu: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
-    pub(crate) gpu: winapi::D3D12_GPU_DESCRIPTOR_HANDLE,
+    #[derivative(Debug="ignore")]
+    pub(crate) cpu: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
+    #[derivative(Debug="ignore")]
+    pub(crate) gpu: d3d12::D3D12_GPU_DESCRIPTOR_HANDLE,
 }
 
-#[derive(Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct DescriptorHeap {
-    pub(crate) raw: ComPtr<winapi::ID3D12DescriptorHeap>,
+    #[derivative(Debug="ignore")]
+    pub(crate) raw: ComPtr<d3d12::ID3D12DescriptorHeap>,
     pub(crate) handle_size: u64,
     pub(crate) total_handles: u64,
     pub(crate) start: DualHandle,
@@ -297,8 +324,8 @@ impl DescriptorHeap {
     pub(crate) fn at(&self, index: u64) -> DualHandle {
         assert!(index < self.total_handles);
         DualHandle {
-            cpu: winapi::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: self.start.cpu.ptr + self.handle_size * index },
-            gpu: winapi::D3D12_GPU_DESCRIPTOR_HANDLE { ptr: self.start.gpu.ptr + self.handle_size * index },
+            cpu: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: self.start.cpu.ptr + (self.handle_size * index) as usize },
+            gpu: d3d12::D3D12_GPU_DESCRIPTOR_HANDLE { ptr: self.start.gpu.ptr + self.handle_size * index },
         }
     }
 }
@@ -322,9 +349,11 @@ impl DescriptorCpuPool {
 
 /// Slice of an descriptor heap, which is allocated for a pool.
 /// Pools will create descriptor sets inside this slice.
-#[derive(Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct DescriptorHeapSlice {
-    pub(crate) heap: ComPtr<winapi::ID3D12DescriptorHeap>,
+    #[derivative(Debug="ignore")]
+    pub(crate) heap: ComPtr<d3d12::ID3D12DescriptorHeap>,
     pub(crate) range: Range<u64>,
     pub(crate) start: DualHandle,
     pub(crate) handle_size: u64,
@@ -337,8 +366,8 @@ impl DescriptorHeapSlice {
         let index = self.next;
         self.next += count;
         DualHandle {
-            cpu: winapi::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: self.start.cpu.ptr + self.handle_size * index },
-            gpu: winapi::D3D12_GPU_DESCRIPTOR_HANDLE { ptr: self.start.gpu.ptr + self.handle_size * index },
+            cpu: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: self.start.cpu.ptr + (self.handle_size * index) as usize },
+            gpu: d3d12::D3D12_GPU_DESCRIPTOR_HANDLE { ptr: self.start.gpu.ptr + (self.handle_size * index) as u64 },
         }
     }
 }
@@ -372,7 +401,7 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                             DescriptorRangeBinding::Sampler(DescriptorRange {
                                 handle,
                                 ty: binding.ty,
-                                count: binding.count,
+                                count: binding.count as _,
                                 handle_size: self.heap_sampler.handle_size,
                             })
                         },
@@ -384,7 +413,7 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                             DescriptorRangeBinding::View(DescriptorRange {
                                 handle,
                                 ty: binding.ty,
-                                count: binding.count,
+                                count: binding.count as _,
                                 handle_size: self.heap_sampler.handle_size,
                             })
                         }
@@ -412,10 +441,12 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
     }
 }
 
-#[derive(Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct QueryPool {
-    pub(crate) raw: ComPtr<winapi::ID3D12QueryHeap>,
-    pub(crate) ty: winapi::D3D12_QUERY_HEAP_TYPE,
+    #[derivative(Debug="ignore")]
+    pub(crate) raw: ComPtr<d3d12::ID3D12QueryHeap>,
+    pub(crate) ty: d3d12::D3D12_QUERY_HEAP_TYPE,
 }
 
 unsafe impl Send for QueryPool {}

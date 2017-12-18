@@ -1,11 +1,15 @@
 use std::mem;
 use spirv_cross::spirv;
-use winapi::*;
+
+use winapi::shared::basetsd::UINT8;
+use winapi::shared::dxgiformat::*;
+use winapi::shared::minwindef::{FALSE, INT, TRUE};
+use winapi::um::d3d12::*;
+use winapi::um::d3dcommon::*;
 
 use hal::format::{Format, SurfaceType};
 use hal::{buffer, image, pso, Primitive};
 use hal::pso::DescriptorSetLayoutBinding;
-
 
 pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     use hal::format::SurfaceType::*;
@@ -162,7 +166,7 @@ pub fn map_topology(primitive: Primitive) -> D3D12_PRIMITIVE_TOPOLOGY {
         TriangleStrip          => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
         TriangleStripAdjacency => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
         PatchList(num) => { assert!(num != 0);
-            D3D_PRIMITIVE_TOPOLOGY(D3D_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST.0 + (num as u32) - 1)
+            D3D_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST + (num as u32) - 1
         },
     }
 }
