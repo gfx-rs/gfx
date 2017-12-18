@@ -480,7 +480,8 @@ pub fn map_descriptor_range(bind: &DescriptorSetLayoutBinding, register_space: u
 pub fn map_buffer_flags(usage: buffer::Usage) -> D3D12_RESOURCE_FLAGS {
     let mut flags = D3D12_RESOURCE_FLAG_NONE;
 
-    if usage.contains(buffer::Usage::STORAGE) {
+    // TRANSFER_DST also used for clearing buffers, which is implemented via UAV clears.
+    if usage.contains(buffer::Usage::STORAGE) || usage.contains(buffer::Usage::TRANSFER_DST) {
         flags = flags | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
 
