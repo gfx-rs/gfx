@@ -1,16 +1,12 @@
 #[macro_use]
 extern crate bitflags;
-extern crate d3d12;
-extern crate d3dcompiler;
-extern crate dxguid;
-extern crate dxgi;
+#[macro_use]
+extern crate derivative;
 extern crate gfx_hal as hal;
-extern crate kernel32;
 #[macro_use]
 extern crate log;
 extern crate smallvec;
 extern crate spirv_cross;
-extern crate user32;
 extern crate winapi;
 #[cfg(feature = "winit")]
 extern crate winit;
@@ -27,72 +23,75 @@ mod shade;
 mod window;
 
 use hal::{format, memory, Features, Limits, QueueType};
+
+use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, winerror};
+use winapi::shared::minwindef::TRUE;
+use winapi::um::{d3d12, d3d12sdklayers, d3dcommon, winnt};
 use wio::com::ComPtr;
 
 use std::{mem, ptr};
-use std::os::raw::c_void;
 use std::os::windows::ffi::OsStringExt;
 use std::ffi::OsString;
 use std::sync::Mutex;
 
 pub(crate) struct HeapProperties {
-    pub page_property: winapi::D3D12_CPU_PAGE_PROPERTY,
-    pub memory_pool: winapi::D3D12_MEMORY_POOL,
+    pub page_property: d3d12::D3D12_CPU_PAGE_PROPERTY,
+    pub memory_pool: d3d12::D3D12_MEMORY_POOL,
 }
 
 // https://msdn.microsoft.com/de-de/library/windows/desktop/dn788678(v=vs.85).aspx
 static HEAPS_NUMA: &'static [HeapProperties] = &[
     // DEFAULT
     HeapProperties {
-        page_property: winapi::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
-        memory_pool: winapi::D3D12_MEMORY_POOL_L1,
+        page_property: d3d12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
+        memory_pool: d3d12::D3D12_MEMORY_POOL_L1,
     },
     // UPLOAD
     HeapProperties {
-        page_property: winapi::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE,
-        memory_pool: winapi::D3D12_MEMORY_POOL_L0,
+        page_property: d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE,
+        memory_pool: d3d12::D3D12_MEMORY_POOL_L0,
 
     },
     // READBACK
     HeapProperties {
-        page_property: winapi::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
-        memory_pool: winapi::D3D12_MEMORY_POOL_L0,
+        page_property: d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
+        memory_pool: d3d12::D3D12_MEMORY_POOL_L0,
     },
 ];
 
 static HEAPS_UMA: &'static [HeapProperties] = &[
     // DEFAULT
     HeapProperties {
-        page_property: winapi::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
-        memory_pool: winapi::D3D12_MEMORY_POOL_L0,
+        page_property: d3d12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
+        memory_pool: d3d12::D3D12_MEMORY_POOL_L0,
     },
     // UPLOAD
     HeapProperties {
-        page_property: winapi::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE,
-        memory_pool: winapi::D3D12_MEMORY_POOL_L0,
+        page_property: d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE,
+        memory_pool: d3d12::D3D12_MEMORY_POOL_L0,
     },
     // READBACK
     HeapProperties {
-        page_property: winapi::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
-        memory_pool: winapi::D3D12_MEMORY_POOL_L0,
+        page_property: d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
+        memory_pool: d3d12::D3D12_MEMORY_POOL_L0,
     },
 ];
 
 static HEAPS_CCUMA: &'static [HeapProperties] = &[
     // DEFAULT
     HeapProperties {
-        page_property: winapi::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
-        memory_pool: winapi::D3D12_MEMORY_POOL_L0,
+        page_property: d3d12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
+        memory_pool: d3d12::D3D12_MEMORY_POOL_L0,
     },
     // UPLOAD
     HeapProperties {
-        page_property: winapi::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
-        memory_pool: winapi::D3D12_MEMORY_POOL_L0,
+        page_property: d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
+        memory_pool: d3d12::D3D12_MEMORY_POOL_L0,
     },
     //READBACK
     HeapProperties {
-        page_property: winapi::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
-        memory_pool: winapi::D3D12_MEMORY_POOL_L0,
+        page_property: d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
+        memory_pool: d3d12::D3D12_MEMORY_POOL_L0,
     },
 ];
 
@@ -123,20 +122,20 @@ impl hal::QueueFamily for QueueFamily {
 }
 
 impl QueueFamily {
-    fn native_type(&self) -> winapi::D3D12_COMMAND_LIST_TYPE {
+    fn native_type(&self) -> d3d12::D3D12_COMMAND_LIST_TYPE {
         use hal::QueueFamily;
         let queue_type = self.queue_type();
         match queue_type {
-            QueueType::General | QueueType::Graphics => winapi::D3D12_COMMAND_LIST_TYPE_DIRECT,
-            QueueType::Compute => winapi::D3D12_COMMAND_LIST_TYPE_COMPUTE,
-            QueueType::Transfer => winapi::D3D12_COMMAND_LIST_TYPE_COPY,
+            QueueType::General | QueueType::Graphics => d3d12::D3D12_COMMAND_LIST_TYPE_DIRECT,
+            QueueType::Compute => d3d12::D3D12_COMMAND_LIST_TYPE_COMPUTE,
+            QueueType::Transfer => d3d12::D3D12_COMMAND_LIST_TYPE_COPY,
         }
     }
 }
 
 pub struct PhysicalDevice {
-    adapter: ComPtr<winapi::IDXGIAdapter2>,
-    factory: ComPtr<winapi::IDXGIFactory4>,
+    adapter: ComPtr<dxgi1_2::IDXGIAdapter2>,
+    factory: ComPtr<dxgi1_4::IDXGIFactory4>,
 }
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
@@ -146,27 +145,25 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let mut device_raw = ptr::null_mut();
         let hr = unsafe {
             d3d12::D3D12CreateDevice(
-                self.adapter.as_mut() as *mut _ as *mut winapi::IUnknown,
-                winapi::D3D_FEATURE_LEVEL_12_0, // TODO: correct feature level?
-                &dxguid::IID_ID3D12Device,
-                &mut device_raw as *mut *mut _ as *mut *mut c_void,
+                self.adapter.as_mut() as *mut _ as *mut _,
+                d3dcommon::D3D_FEATURE_LEVEL_12_0, // TODO: correct feature level?
+                &d3d12::IID_ID3D12Device,
+                &mut device_raw as *mut *mut _ as *mut *mut _,
             )
         };
-        if !winapi::SUCCEEDED(hr) {
+        if !winerror::SUCCEEDED(hr) {
             error!("error on device creation: {:x}", hr);
         }
         let mut device = Device::new(unsafe { ComPtr::new(device_raw) });
 
         // Get the IDXGIAdapter3 from the created device to query video memory information.
-        let mut adapter_id = unsafe { mem::uninitialized() };
-        unsafe { device.raw.GetAdapterLuid(&mut adapter_id); }
-
-        let mut adapter = {
-            let mut adapter: *mut winapi::IDXGIAdapter3 = ptr::null_mut();
+        let adapter_id = unsafe { device.raw.GetAdapterLuid() };
+        let adapter = {
+            let mut adapter: *mut dxgi1_4::IDXGIAdapter3 = ptr::null_mut();
             unsafe {
-                assert_eq!(winapi::S_OK, self.factory.as_mut().EnumAdapterByLuid(
+                assert_eq!(winerror::S_OK, self.factory.as_mut().EnumAdapterByLuid(
                     adapter_id,
-                    &dxguid::IID_IDXGIAdapter3,
+                    &dxgi1_4::IID_IDXGIAdapter3,
                     &mut adapter as *mut *mut _ as *mut *mut _,
                 ));
                 ComPtr::new(adapter)
@@ -175,10 +172,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
         // Always create the presentation queue in case we want to build a swapchain.
         let mut present_queue = {
-            let queue_desc = winapi::D3D12_COMMAND_QUEUE_DESC {
+            let queue_desc = d3d12::D3D12_COMMAND_QUEUE_DESC {
                 Type: QueueFamily::Present.native_type(),
                 Priority: 0,
-                Flags: winapi::D3D12_COMMAND_QUEUE_FLAG_NONE,
+                Flags: d3d12::D3D12_COMMAND_QUEUE_FLAG_NONE,
                 NodeMask: 0,
             };
 
@@ -186,16 +183,16 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             let hr = unsafe {
                 device.raw.CreateCommandQueue(
                     &queue_desc,
-                    &dxguid::IID_ID3D12CommandQueue,
-                    &mut queue as *mut *mut _ as *mut *mut c_void,
+                    &d3d12::IID_ID3D12CommandQueue,
+                    &mut queue as *mut *mut _ as *mut *mut _,
                 )
             };
 
-            if !winapi::SUCCEEDED(hr) {
+            if !winerror::SUCCEEDED(hr) {
                 error!("error on queue creation: {:x}", hr);
             }
 
-            unsafe { ComPtr::<winapi::ID3D12CommandQueue>::new(queue) }
+            unsafe { ComPtr::<d3d12::ID3D12CommandQueue>::new(queue) }
         };
 
         let queue_groups = families
@@ -213,10 +210,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                         });
                     }
                     QueueFamily::Normal(_) => {
-                        let queue_desc = winapi::D3D12_COMMAND_QUEUE_DESC {
+                        let queue_desc = d3d12::D3D12_COMMAND_QUEUE_DESC {
                             Type: family.native_type(),
                             Priority: 0,
-                            Flags: winapi::D3D12_COMMAND_QUEUE_FLAG_NONE,
+                            Flags: d3d12::D3D12_COMMAND_QUEUE_FLAG_NONE,
                             NodeMask: 0,
                         };
 
@@ -225,12 +222,12 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                             let hr = unsafe {
                                 device.raw.CreateCommandQueue(
                                     &queue_desc,
-                                    &dxguid::IID_ID3D12CommandQueue,
-                                    &mut queue as *mut *mut _ as *mut *mut c_void,
+                                    &d3d12::IID_ID3D12CommandQueue,
+                                    &mut queue as *mut *mut _ as *mut *mut _,
                                 )
                             };
 
-                            if winapi::SUCCEEDED(hr) {
+                            if winerror::SUCCEEDED(hr) {
                                 group.add_queue(CommandQueue {
                                     raw: unsafe { ComPtr::new(queue) },
                                 });
@@ -336,9 +333,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         };
 
         let memory_heaps = {
-            let mut query_memory = |segment: winapi::DXGI_MEMORY_SEGMENT_GROUP| unsafe {
-                let mut mem_info: winapi::DXGI_QUERY_VIDEO_MEMORY_INFO = mem::uninitialized();
-                assert_eq!(winapi::S_OK, adapter.QueryVideoMemoryInfo(
+            let query_memory = |segment: dxgi1_4::DXGI_MEMORY_SEGMENT_GROUP| unsafe {
+                let mut mem_info: dxgi1_4::DXGI_QUERY_VIDEO_MEMORY_INFO = mem::uninitialized();
+                assert_eq!(winerror::S_OK, adapter.QueryVideoMemoryInfo(
                     0,
                     segment,
                     &mut mem_info,
@@ -346,10 +343,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 mem_info.Budget
             };
 
-            let local = query_memory(winapi::DXGI_MEMORY_SEGMENT_GROUP_LOCAL);
+            let local = query_memory(dxgi1_4::DXGI_MEMORY_SEGMENT_GROUP_LOCAL);
             match device.private_caps.memory_architecture {
                 MemoryArchitecture::NUMA => {
-                    let non_local = query_memory(winapi::DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL);
+                    let non_local = query_memory(dxgi1_4::DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL);
                     vec![local, non_local]
                 },
                 _ => vec![local],
@@ -370,7 +367,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 }
 
 pub struct CommandQueue {
-    pub(crate) raw: ComPtr<winapi::ID3D12CommandQueue>,
+    pub(crate) raw: ComPtr<d3d12::ID3D12CommandQueue>,
 }
 unsafe impl Send for CommandQueue {} //blocked by ComPtr
 
@@ -389,7 +386,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         self.raw.ExecuteCommandLists(lists.len() as _, lists.as_mut_ptr());
 
         if let Some(fence) = fence {
-            assert_eq!(winapi::S_OK,
+            assert_eq!(winerror::S_OK,
                 self.raw.Signal(fence.raw.as_mut(), 1)
             );
         }
@@ -409,15 +406,15 @@ pub struct Capabilities {
     memory_architecture: MemoryArchitecture,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct CmdSignatures {
-    draw: ComPtr<winapi::ID3D12CommandSignature>,
-    draw_indexed: ComPtr<winapi::ID3D12CommandSignature>,
-    dispatch: ComPtr<winapi::ID3D12CommandSignature>,
+    draw: ComPtr<d3d12::ID3D12CommandSignature>,
+    draw_indexed: ComPtr<d3d12::ID3D12CommandSignature>,
+    dispatch: ComPtr<d3d12::ID3D12CommandSignature>,
 }
 
 pub struct Device {
-    raw: ComPtr<winapi::ID3D12Device>,
+    raw: ComPtr<d3d12::ID3D12Device>,
     features: hal::Features,
     limits: hal::Limits,
     private_caps: Capabilities,
@@ -431,29 +428,29 @@ pub struct Device {
     // CPU/GPU descriptor heaps
     heap_srv_cbv_uav: Mutex<native::DescriptorHeap>,
     heap_sampler: Mutex<native::DescriptorHeap>,
-    events: Mutex<Vec<winapi::HANDLE>>,
+    events: Mutex<Vec<winnt::HANDLE>>,
     signatures: CmdSignatures,
     // Present queue exposed by the `Present` queue family.
     // Required for swapchain creation. Only a single queue supports presentation.
-    present_queue: ComPtr<winapi::ID3D12CommandQueue>,
+    present_queue: ComPtr<d3d12::ID3D12CommandQueue>,
 }
 unsafe impl Send for Device {} //blocked by ComPtr
 unsafe impl Sync for Device {} //blocked by ComPtr
 
 impl Device {
-    fn new(mut device: ComPtr<winapi::ID3D12Device>) -> Self {
-        let mut features: winapi::D3D12_FEATURE_DATA_D3D12_OPTIONS = unsafe { mem::zeroed() };
-        assert_eq!(winapi::S_OK, unsafe {
-            device.CheckFeatureSupport(winapi::D3D12_FEATURE_D3D12_OPTIONS,
+    fn new(mut device: ComPtr<d3d12::ID3D12Device>) -> Self {
+        let mut features: d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS = unsafe { mem::zeroed() };
+        assert_eq!(winerror::S_OK, unsafe {
+            device.CheckFeatureSupport(d3d12::D3D12_FEATURE_D3D12_OPTIONS,
                 &mut features as *mut _ as *mut _,
-                mem::size_of::<winapi::D3D12_FEATURE_DATA_D3D12_OPTIONS>() as _)
+                mem::size_of::<d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS>() as _)
         });
 
-        let mut features_architecture: winapi::D3D12_FEATURE_DATA_ARCHITECTURE = unsafe { mem::zeroed() };
-        assert_eq!(winapi::S_OK, unsafe {
-            device.CheckFeatureSupport(winapi::D3D12_FEATURE_ARCHITECTURE,
+        let mut features_architecture: d3d12::D3D12_FEATURE_DATA_ARCHITECTURE = unsafe { mem::zeroed() };
+        assert_eq!(winerror::S_OK, unsafe {
+            device.CheckFeatureSupport(d3d12::D3D12_FEATURE_ARCHITECTURE,
                 &mut features_architecture as *mut _ as *mut _,
-                mem::size_of::<winapi::D3D12_FEATURE_DATA_ARCHITECTURE>() as _)
+                mem::size_of::<d3d12::D3D12_FEATURE_DATA_ARCHITECTURE>() as _)
         });
 
         // Allocate descriptor heaps
@@ -461,7 +458,7 @@ impl Device {
         let rtv_pool = native::DescriptorCpuPool {
             heap: Self::create_descriptor_heap_impl(
                 &mut device,
-                winapi::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
                 false,
                 max_rtvs,
             ),
@@ -474,7 +471,7 @@ impl Device {
         let dsv_pool = native::DescriptorCpuPool {
             heap: Self::create_descriptor_heap_impl(
                 &mut device,
-                winapi::D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
+                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
                 false,
                 max_dsvs,
             ),
@@ -487,7 +484,7 @@ impl Device {
         let srv_pool = native::DescriptorCpuPool {
             heap: Self::create_descriptor_heap_impl(
                 &mut device,
-                winapi::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
                 false,
                 max_srvs,
             ),
@@ -500,7 +497,7 @@ impl Device {
         let uav_pool = native::DescriptorCpuPool {
             heap: Self::create_descriptor_heap_impl(
                 &mut device,
-                winapi::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
                 false,
                 max_uavs,
             ),
@@ -513,7 +510,7 @@ impl Device {
         let sampler_pool = native::DescriptorCpuPool {
             heap: Self::create_descriptor_heap_impl(
                 &mut device,
-                winapi::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
+                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
                 false,
                 max_samplers,
             ),
@@ -524,20 +521,20 @@ impl Device {
 
         let heap_srv_cbv_uav = Self::create_descriptor_heap_impl(
             &mut device,
-            winapi::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+            d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
             true,
             1_000_000, // maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
         );
 
         let heap_sampler = Self::create_descriptor_heap_impl(
             &mut device,
-            winapi::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
+            d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
             true,
             max_samplers,
         );
 
-        let uma = features_architecture.UMA == winapi::TRUE;
-        let cc_uma = features_architecture.CacheCoherentUMA == winapi::TRUE;
+        let uma = features_architecture.UMA == TRUE;
+        let cc_uma = features_architecture.CacheCoherentUMA == TRUE;
 
         let (memory_architecture, heap_properties) = match (uma, cc_uma) {
             (true, true)  => (MemoryArchitecture::CacheCoherentUMA, HEAPS_CCUMA),
@@ -589,21 +586,21 @@ impl Device {
                 max_patch_size: 0,
                 max_viewports: 0,
                 max_compute_group_count: [
-                    winapi::D3D12_CS_THREAD_GROUP_MAX_X  as _,
-                    winapi::D3D12_CS_THREAD_GROUP_MAX_Y  as _,
-                    winapi::D3D12_CS_THREAD_GROUP_MAX_Z  as _,
+                    d3d12::D3D12_CS_THREAD_GROUP_MAX_X  as _,
+                    d3d12::D3D12_CS_THREAD_GROUP_MAX_Y  as _,
+                    d3d12::D3D12_CS_THREAD_GROUP_MAX_Z  as _,
                 ],
                 max_compute_group_size: [
-                    winapi::D3D12_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP as _,
+                    d3d12::D3D12_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP as _,
                     1, //TODO
                     1, //TODO
                 ],
-                min_buffer_copy_offset_alignment: winapi::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as _,
-                min_buffer_copy_pitch_alignment: winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as _,
+                min_buffer_copy_offset_alignment: d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as _,
+                min_buffer_copy_pitch_alignment: d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as _,
                 min_uniform_buffer_offset_alignment: 256, // Required alignment for CBVs
             },
             private_caps: Capabilities {
-                heterogeneous_resource_heaps: features.ResourceHeapTier != winapi::D3D12_RESOURCE_HEAP_TIER_1,
+                heterogeneous_resource_heaps: features.ResourceHeapTier != d3d12::D3D12_RESOURCE_HEAP_TIER_1,
                 memory_architecture,
             },
             heap_properties,
@@ -626,7 +623,7 @@ impl Device {
 }
 
 pub struct Instance {
-    pub(crate) factory: ComPtr<winapi::IDXGIFactory4>,
+    pub(crate) factory: ComPtr<dxgi1_4::IDXGIFactory4>,
 }
 
 impl Instance {
@@ -634,14 +631,14 @@ impl Instance {
         #[cfg(debug_assertions)]
         {
             // Enable debug layer
-            let mut debug_controller: *mut winapi::ID3D12Debug = ptr::null_mut();
+            let mut debug_controller: *mut d3d12sdklayers::ID3D12Debug = ptr::null_mut();
             let hr = unsafe {
                 d3d12::D3D12GetDebugInterface(
-                    &dxguid::IID_ID3D12Debug,
-                    &mut debug_controller as *mut *mut _ as *mut *mut c_void)
+                    &d3d12sdklayers::IID_ID3D12Debug,
+                    &mut debug_controller as *mut *mut _ as *mut *mut _)
             };
 
-            if winapi::SUCCEEDED(hr) {
+            if winerror::SUCCEEDED(hr) {
                 unsafe { (*debug_controller).EnableDebugLayer() };
             }
 
@@ -649,16 +646,16 @@ impl Instance {
         }
 
         // Create DXGI factory
-        let mut dxgi_factory: *mut winapi::IDXGIFactory4 = ptr::null_mut();
+        let mut dxgi_factory: *mut dxgi1_4::IDXGIFactory4 = ptr::null_mut();
 
         let hr = unsafe {
-            dxgi::CreateDXGIFactory2(
-                winapi::DXGI_CREATE_FACTORY_DEBUG,
-                &dxguid::IID_IDXGIFactory4,
-                &mut dxgi_factory as *mut *mut _ as *mut *mut c_void)
+            dxgi1_3::CreateDXGIFactory2(
+                dxgi1_3::DXGI_CREATE_FACTORY_DEBUG,
+                &dxgi1_4::IID_IDXGIFactory4,
+                &mut dxgi_factory as *mut *mut _ as *mut *mut _)
         };
 
-        if !winapi::SUCCEEDED(hr) {
+        if !winerror::SUCCEEDED(hr) {
             error!("Failed on dxgi factory creation: {:?}", hr);
         }
 
@@ -676,35 +673,35 @@ impl hal::Instance for Instance {
         let mut cur_index = 0;
         let mut adapters = Vec::new();
         loop {
-            let mut adapter = {
-                let mut adapter: *mut winapi::IDXGIAdapter1 = ptr::null_mut();
+            let adapter = {
+                let mut adapter: *mut dxgi::IDXGIAdapter1 = ptr::null_mut();
                 let hr = unsafe {
                     self.factory.as_mut().EnumAdapters1(
                         cur_index,
                         &mut adapter as *mut *mut _)
                 };
 
-                if hr == winapi::DXGI_ERROR_NOT_FOUND {
+                if hr == winerror::DXGI_ERROR_NOT_FOUND {
                     break;
                 }
 
-                unsafe { ComPtr::new(adapter as *mut winapi::IDXGIAdapter2) }
+                unsafe { ComPtr::new(adapter as *mut dxgi1_2::IDXGIAdapter2) }
             };
 
             // Check for D3D12 support
             let hr = unsafe {
                 d3d12::D3D12CreateDevice(
-                    adapter.as_mut() as *mut _ as *mut winapi::IUnknown,
-                    winapi::D3D_FEATURE_LEVEL_11_0, // TODO: correct feature level?
-                    &dxguid::IID_ID3D12Device,
+                    adapter.as_mut() as *mut _ as *mut _,
+                    d3dcommon::D3D_FEATURE_LEVEL_11_0, // TODO: correct feature level?
+                    &d3d12::IID_ID3D12Device,
                     ptr::null_mut(),
                 )
             };
 
-            if winapi::SUCCEEDED(hr) {
+            if winerror::SUCCEEDED(hr) {
                 // We have found a possible adapter
                 // acquire the device information
-                let mut desc: winapi::DXGI_ADAPTER_DESC2 = unsafe { std::mem::uninitialized() };
+                let mut desc: dxgi1_2::DXGI_ADAPTER_DESC2 = unsafe { std::mem::uninitialized() };
                 unsafe { adapter.GetDesc2(&mut desc); }
 
                 let device_name = {

@@ -1,20 +1,20 @@
+use winapi::um::{d3d12, d3dcompiler, d3d12shader, winnt};
+use winapi::shared::winerror::SUCCEEDED;
+use winapi::shared::minwindef::UINT;
 use wio::com::ComPtr;
-use d3dcompiler;
-use dxguid;
-use winapi;
 
 use std::{mem, ptr};
 
-pub fn reflect_shader(code: &winapi::D3D12_SHADER_BYTECODE) -> ComPtr<winapi::ID3D12ShaderReflection> {
+pub fn reflect_shader(code: &d3d12::D3D12_SHADER_BYTECODE) -> ComPtr<d3d12shader::ID3D12ShaderReflection> {
     let mut reflection = ptr::null_mut();
     let hr = unsafe {
         d3dcompiler::D3DReflect(
             code.pShaderBytecode,
             code.BytecodeLength,
-            &dxguid::IID_ID3D12ShaderReflection,
-            &mut reflection as *mut *mut _ as *mut *mut winapi::c_void)
+            &d3d12shader::IID_ID3D12ShaderReflection,
+            &mut reflection as *mut *mut _ as *mut *mut _)
     };
-    if !winapi::SUCCEEDED(hr) {
+    if !SUCCEEDED(hr) {
         panic!("Shader reflection failed with code {:x}", hr);
     }
 
@@ -23,13 +23,13 @@ pub fn reflect_shader(code: &winapi::D3D12_SHADER_BYTECODE) -> ComPtr<winapi::ID
 
 #[derive(Debug)]
 pub struct InputElemDesc {
-    pub semantic_name: winapi::LPCSTR,
-    pub semantic_index: winapi::UINT,
-    pub input_slot: winapi::UINT,
+    pub semantic_name: winnt::LPCSTR,
+    pub semantic_index: UINT,
+    pub input_slot: UINT,
 }
 
 pub fn reflect_input_elements(
-    vertex_reflection: &mut ComPtr<winapi::ID3D12ShaderReflection>
+    vertex_reflection: &mut ComPtr<d3d12shader::ID3D12ShaderReflection>
 ) -> Vec<InputElemDesc> {
     let shader_desc = unsafe {
         let mut desc = mem::zeroed();

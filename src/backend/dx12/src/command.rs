@@ -2,19 +2,23 @@ use wio::com::ComPtr;
 use hal::{command as com, image, memory, pass, pso, query};
 use hal::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset};
 use hal::buffer::IndexBufferView;
-use winapi::{self, UINT64, UINT};
 use {conv, native as n, Backend, CmdSignatures};
 use root_constants::RootConstant;
 use smallvec::SmallVec;
 use std::{mem, ptr};
 use std::ops::Range;
 
+use winapi::um::d3d12;
+use winapi::shared::minwindef::{FALSE, UINT};
+use winapi::shared::basetsd::UINT64;
+use winapi::shared::dxgiformat;
+
 // Fixed size of the root signature.
 // Limited by D3D12.
 const ROOT_SIGNATURE_SIZE: usize = 64;
 
-fn get_rect(rect: &com::Rect) -> winapi::D3D12_RECT {
-    winapi::D3D12_RECT {
+fn get_rect(rect: &com::Rect) -> d3d12::D3D12_RECT {
+    d3d12::D3D12_RECT {
         left: rect.x as i32,
         top: rect.y as i32,
         right: (rect.x + rect.w) as i32,
@@ -29,11 +33,11 @@ struct AttachmentClear {
     stencil_value: Option<u32>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RenderPassCache {
     render_pass: n::RenderPass,
     framebuffer: n::Framebuffer,
-    target_rect: winapi::D3D12_RECT,
+    target_rect: d3d12::D3D12_RECT,
     attachment_clears: Vec<AttachmentClear>,
 }
 
@@ -109,7 +113,7 @@ impl UserData {
 struct PipelineCache {
     // Bound pipeline and root signature.
     // Changed on bind pipeline calls.
-    pipeline: Option<(*mut winapi::ID3D12PipelineState, *mut winapi::ID3D12RootSignature)>,
+    pipeline: Option<(*mut d3d12::ID3D12PipelineState, *mut d3d12::ID3D12RootSignature)>,
     // Paramter slots of the current root signature.
     num_parameter_slots: usize,
     //
@@ -143,8 +147,8 @@ enum BindPoint {
 
 #[derive(Clone)]
 pub struct CommandBuffer {
-    raw: ComPtr<winapi::ID3D12GraphicsCommandList>,
-    allocator: ComPtr<winapi::ID3D12CommandAllocator>,
+    raw: ComPtr<d3d12::ID3D12GraphicsCommandList>,
+    allocator: ComPtr<d3d12::ID3D12CommandAllocator>,
     signatures: CmdSignatures,
 
     // Cache renderpasses for graphics operations
@@ -173,8 +177,8 @@ unsafe impl Send for CommandBuffer { }
 
 impl CommandBuffer {
     pub(crate) fn new(
-        raw: ComPtr<winapi::ID3D12GraphicsCommandList>,
-        allocator: ComPtr<winapi::ID3D12CommandAllocator>,
+        raw: ComPtr<d3d12::ID3D12GraphicsCommandList>,
+        allocator: ComPtr<d3d12::ID3D12CommandAllocator>,
         signatures: CmdSignatures,
     ) -> Self {
         CommandBuffer {
@@ -191,7 +195,7 @@ impl CommandBuffer {
         }
     }
 
-    pub(crate) unsafe fn as_raw_list(&self) -> *mut winapi::ID3D12CommandList {
+    pub(crate) unsafe fn as_raw_list(&self) -> *mut d3d12::ID3D12CommandList {
         self.raw.as_mut() as *mut _ as *mut _
     }
 
@@ -215,15 +219,21 @@ impl CommandBuffer {
 
         let transition_barriers = proto_barriers
             .iter()
-            .map(|barrier| winapi::D3D12_RESOURCE_BARRIER {
-                Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-                Flags: barrier.flags,
-                u: winapi::D3D12_RESOURCE_TRANSITION_BARRIER {
+            .map(|barrier| {
+                let mut resource_barrier = d3d12::D3D12_RESOURCE_BARRIER {
+                    Type: d3d12::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+                    Flags: barrier.flags,
+                    u: unsafe { mem::zeroed() },
+                };
+
+                *unsafe { resource_barrier.u.Transition_mut() } = d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
                     pResource: state.framebuffer.attachments[barrier.attachment_id].resource,
-                    Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                    Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
                     StateBefore: barrier.states.start,
                     StateAfter: barrier.states.end,
-                },
+                };
+
+                resource_barrier
             })
             .collect::<Vec<_>>();
 
@@ -255,7 +265,7 @@ impl CommandBuffer {
             self.raw.OMSetRenderTargets(
                 color_views.len() as UINT,
                 color_views.as_ptr(),
-                winapi::FALSE,
+                FALSE,
                 ds_view,
             );
         }
@@ -285,9 +295,9 @@ impl CommandBuffer {
 
     fn clear_render_target_view(
         &self,
-        rtv: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
+        rtv: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
         color: com::ClearColor,
-        rects: &[winapi::D3D12_RECT],
+        rects: &[d3d12::D3D12_RECT],
     ) {
         let num_rects = rects.len() as _;
         let rects = if num_rects > 0 {
@@ -309,17 +319,17 @@ impl CommandBuffer {
 
     fn clear_depth_stencil_view(
         &self,
-        dsv: winapi::D3D12_CPU_DESCRIPTOR_HANDLE,
+        dsv: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
         depth: Option<f32>,
         stencil: Option<u32>,
-        rects: &[winapi::D3D12_RECT],
+        rects: &[d3d12::D3D12_RECT],
     ) {
-        let mut flags = winapi::D3D12_CLEAR_FLAGS(0);
+        let mut flags = 0;
         if depth.is_some() {
-            flags = flags | winapi::D3D12_CLEAR_FLAG_DEPTH;
+            flags = flags | d3d12::D3D12_CLEAR_FLAG_DEPTH;
         }
         if stencil.is_some() {
-            flags = flags | winapi::D3D12_CLEAR_FLAG_STENCIL;
+            flags = flags | d3d12::D3D12_CLEAR_FLAG_STENCIL;
         }
 
         let num_rects = rects.len() as _;
@@ -417,7 +427,7 @@ impl CommandBuffer {
         mut table_update: G,
     ) where
         F: FnMut(u32, &[u32]),
-        G: FnMut(u32, winapi::D3D12_GPU_DESCRIPTOR_HANDLE),
+        G: FnMut(u32, d3d12::D3D12_GPU_DESCRIPTOR_HANDLE),
     {
         let user_data = &mut pipeline.user_data;
         if user_data.dirty_mask == 0 {
@@ -464,11 +474,22 @@ impl CommandBuffer {
                         continue
                     }
                 };
-                let gpu = winapi::D3D12_GPU_DESCRIPTOR_HANDLE { ptr };
+                let gpu = d3d12::D3D12_GPU_DESCRIPTOR_HANDLE { ptr };
                 table_update(i as _, gpu);
                 user_data.clear_dirty(table_index);
             }
         }
+    }
+
+    fn transition_barrier(transition: d3d12::D3D12_RESOURCE_TRANSITION_BARRIER) ->  d3d12::D3D12_RESOURCE_BARRIER {
+        let mut barrier = d3d12::D3D12_RESOURCE_BARRIER {
+            Type: d3d12::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+            Flags: d3d12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+            u: unsafe { mem::zeroed() },
+        };
+
+        *unsafe { barrier.u.Transition_mut() } = transition;
+        barrier
     }
 }
 
@@ -568,18 +589,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         continue;
                     }
 
-                    raw_barriers.push(
-                        winapi::D3D12_RESOURCE_BARRIER {
-                            Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-                            Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
-                            u: winapi::D3D12_RESOURCE_TRANSITION_BARRIER {
-                                pResource: target.resource,
-                                Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-                                StateBefore: state_src,
-                                StateAfter: state_dst,
-                            },
+                    let barrier = Self::transition_barrier(
+                        d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
+                            pResource: target.resource,
+                            Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                            StateBefore: state_src,
+                            StateAfter: state_dst,
                         }
                     );
+
+                    raw_barriers.push(barrier);
                 }
                 memory::Barrier::Image { ref states, target, ref range } => {
                     let _ = range; //TODO: use subresource range
@@ -590,16 +609,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         continue;
                     }
 
-                    let mut barrier = winapi::D3D12_RESOURCE_BARRIER {
-                        Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-                        Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
-                        u: winapi::D3D12_RESOURCE_TRANSITION_BARRIER {
+                    let mut barrier = Self::transition_barrier(
+                        d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
                             pResource: target.resource,
-                            Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                            Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
                             StateBefore: state_src,
                             StateAfter: state_dst,
-                        },
-                    };
+                        }
+                    );
 
                     if *range == target.to_subresource_range(range.aspects) {
                         // Only one barrier if it affects the whole image.
@@ -608,7 +625,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         // Generate barrier for each layer/level combination.
                         for level in range.levels.clone() {
                             for layer in range.layers.clone() {
-                                barrier.u.Subresource = target.calc_subresource(level as _, layer as _, 0);
+                                {
+                                    let transition_barrier = &mut *unsafe { barrier.u.Transition_mut() };
+                                    transition_barrier.Subresource = target.calc_subresource(level as _, layer as _, 0);
+                                }
                                 raw_barriers.push(barrier);
                             }
                         }
@@ -623,12 +643,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         //       WAR only requires an execution barrier but D3D12 seems to need
         //       a UAV barrier for this according to docs. Can we make this better?
         {
-            let mut barrier = winapi::D3D12_RESOURCE_BARRIER {
-                Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_UAV,
-                Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+            let mut barrier = d3d12::D3D12_RESOURCE_BARRIER {
+                Type: d3d12::D3D12_RESOURCE_BARRIER_TYPE_UAV,
+                Flags: d3d12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
                 u: unsafe { mem::zeroed() },
             };
-            *unsafe { barrier.UAV_mut() } = winapi::D3D12_RESOURCE_UAV_BARRIER {
+            *unsafe { barrier.u.UAV_mut() } = d3d12::D3D12_RESOURCE_UAV_BARRIER {
                 pResource: ptr::null_mut(),
             };
             raw_barriers.push(barrier);
@@ -638,14 +658,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         //
         // TODO: Optimize, don't always add an alias barrier
         {
-            let mut barrier = winapi::D3D12_RESOURCE_BARRIER {
-                Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_ALIASING,
-                Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+            let mut barrier = d3d12::D3D12_RESOURCE_BARRIER {
+                Type: d3d12::D3D12_RESOURCE_BARRIER_TYPE_ALIASING,
+                Flags: d3d12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
                 u: unsafe { mem::zeroed() },
             };
-            *unsafe { barrier.Aliasing_mut() } = winapi::D3D12_RESOURCE_ALIASING_BARRIER {
+            *unsafe { barrier.u.Aliasing_mut() } = d3d12::D3D12_RESOURCE_ALIASING_BARRIER {
                 pResourceBefore: ptr::null_mut(),
-                        pResourceAfter: ptr::null_mut(),
+                pResourceAfter: ptr::null_mut(),
             };
             raw_barriers.push(barrier);
         }
@@ -696,7 +716,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         rects: &[com::Rect],
     ) {
         assert!(self.pass_cache.is_some(), "`clear_attachments` can only be called inside a renderpass");
-        let rects: SmallVec<[winapi::D3D12_RECT; 16]> = rects.iter().map(get_rect).collect();
+        let rects: SmallVec<[d3d12::D3D12_RECT; 16]> = rects.iter().map(get_rect).collect();
         for clear in clears {
             match *clear {
                 com::AttachmentClear::Color(index, cv) => {
@@ -737,17 +757,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         {
             // Insert barrier for `COPY_DEST` to `RESOLVE_DEST` as we only expose
             // `TRANSFER_WRITE` which is used for all copy commands.
-            let transition_barrier = winapi::D3D12_RESOURCE_BARRIER {
-                Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-                Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
-                u: winapi::D3D12_RESOURCE_TRANSITION_BARRIER {
+            let transition_barrier = Self::transition_barrier(
+                d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
                     pResource: dst.resource,
-                    Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, // TODO: only affected ranges
-                    StateBefore: winapi::D3D12_RESOURCE_STATE_COPY_DEST,
-                    StateAfter: winapi::D3D12_RESOURCE_STATE_RESOLVE_DEST,
-                },
-            };
-
+                    Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, // TODO: only affected ranges
+                    StateBefore: d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
+                    StateAfter: d3d12::D3D12_RESOURCE_STATE_RESOLVE_DEST,
+                }
+            );
             unsafe { self.raw.ResourceBarrier(1, &transition_barrier) };
         }
 
@@ -767,29 +784,26 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         {
             // Insert barrier for back transition from `RESOLVE_DEST` to `COPY_DEST`.
-            let transition_barrier = winapi::D3D12_RESOURCE_BARRIER {
-                Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-                Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
-                u: winapi::D3D12_RESOURCE_TRANSITION_BARRIER {
+            let transition_barrier = Self::transition_barrier(
+                d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
                     pResource: dst.resource,
-                    Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, // TODO: only affected ranges
-                    StateBefore: winapi::D3D12_RESOURCE_STATE_RESOLVE_DEST,
-                    StateAfter: winapi::D3D12_RESOURCE_STATE_COPY_DEST,
-                },
-            };
-
+                    Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, // TODO: only affected ranges
+                    StateBefore: d3d12::D3D12_RESOURCE_STATE_RESOLVE_DEST,
+                    StateAfter: d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
+                }
+            );
             unsafe { self.raw.ResourceBarrier(1, &transition_barrier) };
         }
     }
 
     fn bind_index_buffer(&mut self, ibv: IndexBufferView<Backend>) {
         let format = match ibv.index_type {
-            IndexType::U16 => winapi::DXGI_FORMAT_R16_UINT,
-            IndexType::U32 => winapi::DXGI_FORMAT_R32_UINT,
+            IndexType::U16 => dxgiformat::DXGI_FORMAT_R16_UINT,
+            IndexType::U32 => dxgiformat::DXGI_FORMAT_R32_UINT,
         };
         let location = unsafe { (*ibv.buffer.resource).GetGPUVirtualAddress() };
 
-        let mut ibv_raw = winapi::D3D12_INDEX_BUFFER_VIEW {
+        let mut ibv_raw = d3d12::D3D12_INDEX_BUFFER_VIEW {
             BufferLocation: location + ibv.offset,
             SizeInBytes: ibv.buffer.size_in_bytes - ibv.offset as u32,
             Format: format,
@@ -800,11 +814,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<Backend>) {
-        let buffers: SmallVec<[winapi::D3D12_VERTEX_BUFFER_VIEW; 16]> = vbs.0
+        let buffers: SmallVec<[d3d12::D3D12_VERTEX_BUFFER_VIEW; 16]> = vbs.0
             .iter()
             .map(|&(ref buffer, offset)| {
                 let base = unsafe { (*buffer.resource).GetGPUVirtualAddress() };
-                winapi::D3D12_VERTEX_BUFFER_VIEW {
+                d3d12::D3D12_VERTEX_BUFFER_VIEW {
                     BufferLocation: base + offset as u64,
                     SizeInBytes: buffer.size_in_bytes - offset as u32,
                     StrideInBytes: buffer.stride,
@@ -819,10 +833,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn set_viewports(&mut self, viewports: &[com::Viewport]) {
-        let viewports: SmallVec<[winapi::D3D12_VIEWPORT; 16]> = viewports
+        let viewports: SmallVec<[d3d12::D3D12_VIEWPORT; 16]> = viewports
             .iter()
             .map(|viewport| {
-                winapi::D3D12_VIEWPORT {
+                d3d12::D3D12_VIEWPORT {
                     TopLeftX: viewport.rect.x as _,
                     TopLeftY: viewport.rect.y as _,
                     Width: viewport.rect.w as _,
@@ -842,7 +856,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn set_scissors(&mut self, scissors: &[com::Rect]) {
-        let rects: SmallVec<[winapi::D3D12_RECT; 16]> = scissors.iter().map(get_rect).collect();
+        let rects: SmallVec<[d3d12::D3D12_RECT; 16]> = scissors.iter().map(get_rect).collect();
         unsafe {
             self.raw
                 .RSSetScissorRects(rects.len() as _, rects.as_ptr())
@@ -1078,17 +1092,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         // Insert barrier for `COPY_DEST` to `UNORDERED_ACCESS` as we use
         // `TRANSFER_WRITE` for all clear commands.
-        let transition_barrier = winapi::D3D12_RESOURCE_BARRIER {
-            Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-            Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
-            u: winapi::D3D12_RESOURCE_TRANSITION_BARRIER {
+        let transition_barrier = Self::transition_barrier(
+            d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
                 pResource: buffer.resource,
-                Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-                StateBefore: winapi::D3D12_RESOURCE_STATE_COPY_DEST,
-                StateAfter: winapi::D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            },
-        };
-
+                Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                StateBefore: d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
+                StateAfter: d3d12::D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            }
+        );
         unsafe { self.raw.ResourceBarrier(1, &transition_barrier) };
 
         let handles = buffer.clear_uav.unwrap();
@@ -1103,18 +1114,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             );
         }
 
-        // Transition back to original state
-        let transition_barrier = winapi::D3D12_RESOURCE_BARRIER {
-            Type: winapi::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-            Flags: winapi::D3D12_RESOURCE_BARRIER_FLAG_NONE,
-            u: winapi::D3D12_RESOURCE_TRANSITION_BARRIER {
+        let transition_barrier = Self::transition_barrier(
+            d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
                 pResource: buffer.resource,
-                Subresource: winapi::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-                StateBefore: winapi::D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-                StateAfter: winapi::D3D12_RESOURCE_STATE_COPY_DEST,
-            },
-        };
-
+                Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                StateBefore: d3d12::D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                StateAfter: d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
+            }
+        );
         unsafe { self.raw.ResourceBarrier(1, &transition_barrier) };
     }
 
@@ -1152,26 +1159,26 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         _: image::ImageLayout,
         regions: &[com::ImageCopy],
     ) {
-        let mut src_image = winapi::D3D12_TEXTURE_COPY_LOCATION {
+        let mut src_image = d3d12::D3D12_TEXTURE_COPY_LOCATION {
             pResource: src.resource,
-            Type: winapi::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+            Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
             u: unsafe { mem::zeroed() },
         };
 
-        let mut dst_image = winapi::D3D12_TEXTURE_COPY_LOCATION {
+        let mut dst_image = d3d12::D3D12_TEXTURE_COPY_LOCATION {
             pResource: dst.resource,
-            Type: winapi::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+            Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
             u: unsafe { mem::zeroed() },
         };
 
         for region in regions {
             for layer in 0..region.num_layers {
-                *unsafe { src_image.SubresourceIndex_mut() } =
+                *unsafe { src_image.u.SubresourceIndex_mut() } =
                     src.calc_subresource(region.src_subresource.0 as _, (region.src_subresource.1 + layer) as _, 0);
-                *unsafe { dst_image.SubresourceIndex_mut() } =
+                *unsafe { dst_image.u.SubresourceIndex_mut() } =
                     dst.calc_subresource(region.dst_subresource.0 as _, (region.dst_subresource.1 + layer) as _, 0);
 
-                let src_box = winapi::D3D12_BOX {
+                let src_box = d3d12::D3D12_BOX {
                     left: region.src_offset.x as _,
                     top: region.src_offset.y as _,
                     right: (region.src_offset.x + region.extent.width as i32) as _,
@@ -1200,14 +1207,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         _: image::ImageLayout,
         regions: &[com::BufferImageCopy],
     ) {
-        let mut src = winapi::D3D12_TEXTURE_COPY_LOCATION {
+        let mut src = d3d12::D3D12_TEXTURE_COPY_LOCATION {
             pResource: buffer.resource,
-            Type: winapi::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+            Type: d3d12::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
             u: unsafe { mem::zeroed() },
         };
-        let mut dst = winapi::D3D12_TEXTURE_COPY_LOCATION {
+        let mut dst = d3d12::D3D12_TEXTURE_COPY_LOCATION {
             pResource: image.resource,
-            Type: winapi::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+            Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
             u: unsafe { mem::zeroed() },
         };
         let (width, height, depth, _) = image.kind.get_dimensions();
@@ -1215,17 +1222,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             // Copy each layer in the region
             let layers = region.image_layers.layers.clone();
             for layer in layers {
-                assert_eq!(region.buffer_offset % winapi::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64, 0);
-                assert_eq!(region.buffer_row_pitch % winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32, 0);
+                assert_eq!(region.buffer_offset % d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64, 0);
+                assert_eq!(region.buffer_row_pitch % d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32, 0);
                 assert!(region.buffer_row_pitch >= width as u32 * image.bits_per_texel as u32 / 8);
 
                 let height = height as _;
                 let depth = depth as _;
 
                 // Advance buffer offset with each layer
-                *unsafe { src.PlacedFootprint_mut() } = winapi::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
+                *unsafe { src.u.PlacedFootprint_mut() } = d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
                     Offset: region.buffer_offset as UINT64 + (layer as u32 * region.buffer_row_pitch * height * depth) as UINT64,
-                    Footprint: winapi::D3D12_SUBRESOURCE_FOOTPRINT {
+                    Footprint: d3d12::D3D12_SUBRESOURCE_FOOTPRINT {
                         Format: image.dxgi_format,
                         Width: width as _,
                         Height: height,
@@ -1233,9 +1240,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         RowPitch: region.buffer_row_pitch,
                     },
                 };
-                *unsafe { dst.SubresourceIndex_mut() } =
+                *unsafe { dst.u.SubresourceIndex_mut() } =
                     image.calc_subresource(region.image_layers.level as _, layer as _, 0);
-                let src_box = winapi::D3D12_BOX {
+                let src_box = d3d12::D3D12_BOX {
                     left: 0,
                     top: 0,
                     right: region.image_extent.width as _,
@@ -1264,14 +1271,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         buffer: &n::Buffer,
         regions: &[com::BufferImageCopy],
     ) {
-        let mut src = winapi::D3D12_TEXTURE_COPY_LOCATION {
+        let mut src = d3d12::D3D12_TEXTURE_COPY_LOCATION {
             pResource: image.resource,
-            Type: winapi::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+            Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
             u: unsafe { mem::zeroed() },
         };
-        let mut dst = winapi::D3D12_TEXTURE_COPY_LOCATION {
+        let mut dst = d3d12::D3D12_TEXTURE_COPY_LOCATION {
             pResource: buffer.resource,
-            Type: winapi::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+            Type: d3d12::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
             u: unsafe { mem::zeroed() },
         };
         let (width, height, depth, _) = image.kind.get_dimensions();
@@ -1279,19 +1286,19 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             // Copy each layer in the region
             let layers = region.image_layers.layers.clone();
             for layer in layers {
-                assert_eq!(region.buffer_offset % winapi::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64, 0);
-                assert_eq!(region.buffer_row_pitch % winapi::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32, 0);
+                assert_eq!(region.buffer_offset % d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64, 0);
+                assert_eq!(region.buffer_row_pitch % d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32, 0);
                 assert!(region.buffer_row_pitch >= width as u32 * image.bits_per_texel as u32 / 8);
 
                 let height = height as _;
                 let depth = depth as _;
 
                 // Advance buffer offset with each layer
-                *unsafe { src.SubresourceIndex_mut() } =
+                *unsafe { src.u.SubresourceIndex_mut() } =
                     image.calc_subresource(region.image_layers.level as _, layer as _, 0);
-                *unsafe { dst.PlacedFootprint_mut() } = winapi::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
+                *unsafe { dst.u.PlacedFootprint_mut() } = d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
                     Offset: region.buffer_offset as UINT64 + (layer as u32 * region.buffer_row_pitch * height * depth) as UINT64,
-                    Footprint: winapi::D3D12_SUBRESOURCE_FOOTPRINT {
+                    Footprint: d3d12::D3D12_SUBRESOURCE_FOOTPRINT {
                         Format: image.dxgi_format,
                         Width: width as _,
                         Height: height,
@@ -1299,7 +1306,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         RowPitch: region.buffer_row_pitch,
                     },
                 };
-                let src_box = winapi::D3D12_BOX {
+                let src_box = d3d12::D3D12_BOX {
                     left: 0,
                     top: 0,
                     right: region.image_extent.width as _,
@@ -1399,23 +1406,23 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         flags: query::QueryControl,
     ) {
         let query_ty = match query.pool.ty {
-            winapi::D3D12_QUERY_HEAP_TYPE_OCCLUSION => {
+            d3d12::D3D12_QUERY_HEAP_TYPE_OCCLUSION => {
                 if flags.contains(query::QueryControl::PRECISE) {
                     self.occlusion_query = Some(OcclusionQuery::Precise(query.id));
-                    winapi::D3D12_QUERY_TYPE_OCCLUSION
+                    d3d12::D3D12_QUERY_TYPE_OCCLUSION
                 } else {
                     // Default to binary occlusion as it might be faster due to early depth/stencil
                     // tests.
                     self.occlusion_query = Some(OcclusionQuery::Binary(query.id));
-                    winapi::D3D12_QUERY_TYPE_BINARY_OCCLUSION
+                    d3d12::D3D12_QUERY_TYPE_BINARY_OCCLUSION
                 }
             }
-            winapi::D3D12_QUERY_HEAP_TYPE_TIMESTAMP => {
+            d3d12::D3D12_QUERY_HEAP_TYPE_TIMESTAMP => {
                 panic!("Timestap queries are issued via ")
             }
-            winapi::D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS => {
+            d3d12::D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS => {
                 self.pipeline_stats_query = Some(query.id);
-                winapi::D3D12_QUERY_TYPE_PIPELINE_STATISTICS
+                d3d12::D3D12_QUERY_TYPE_PIPELINE_STATISTICS
             }
             _ => unreachable!(),
         };
@@ -1435,23 +1442,23 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     ) {
         let id = query.id;
         let query_ty = match query.pool.ty {
-            winapi::D3D12_QUERY_HEAP_TYPE_OCCLUSION
+            d3d12::D3D12_QUERY_HEAP_TYPE_OCCLUSION
                 if self.occlusion_query == Some(OcclusionQuery::Precise(id)) =>
             {
                 self.occlusion_query = None;
-                winapi::D3D12_QUERY_TYPE_OCCLUSION
+                d3d12::D3D12_QUERY_TYPE_OCCLUSION
             }
-            winapi::D3D12_QUERY_HEAP_TYPE_OCCLUSION
+            d3d12::D3D12_QUERY_HEAP_TYPE_OCCLUSION
                 if self.occlusion_query == Some(OcclusionQuery::Binary(id)) =>
             {
                 self.occlusion_query = None;
-                winapi::D3D12_QUERY_TYPE_BINARY_OCCLUSION
+                d3d12::D3D12_QUERY_TYPE_BINARY_OCCLUSION
             }
-            winapi::D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS
+            d3d12::D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS
                 if self.pipeline_stats_query == Some(id) =>
             {
                 self.pipeline_stats_query = None;
-                winapi::D3D12_QUERY_TYPE_PIPELINE_STATISTICS
+                d3d12::D3D12_QUERY_TYPE_PIPELINE_STATISTICS
             }
             _ => panic!("Missing `begin_query` call for query: {:?}", query),
         };
@@ -1486,7 +1493,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         unsafe {
             self.raw.EndQuery(
                 query.pool.raw.as_mut() as *mut _,
-                winapi::D3D12_QUERY_TYPE_TIMESTAMP,
+                d3d12::D3D12_QUERY_TYPE_TIMESTAMP,
                 query.id,
             );
         }

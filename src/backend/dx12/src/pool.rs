@@ -1,38 +1,38 @@
 use wio::com::ComPtr;
-use dxguid;
 use std::ptr;
-use std::os::raw::c_void;
-use winapi;
+
+use winapi::um::d3d12;
+use winapi::shared::winerror::SUCCEEDED;
 
 use hal::pool;
 use command::CommandBuffer;
 use {Backend, CmdSignatures};
 
 pub struct RawCommandPool {
-    pub(crate) inner: ComPtr<winapi::ID3D12CommandAllocator>,
-    pub(crate) device: ComPtr<winapi::ID3D12Device>,
-    pub(crate) list_type: winapi::D3D12_COMMAND_LIST_TYPE,
+    pub(crate) inner: ComPtr<d3d12::ID3D12CommandAllocator>,
+    pub(crate) device: ComPtr<d3d12::ID3D12Device>,
+    pub(crate) list_type: d3d12::D3D12_COMMAND_LIST_TYPE,
     pub(crate) signatures: CmdSignatures,
 }
 
 impl RawCommandPool {
-    fn create_command_list(&mut self) -> ComPtr<winapi::ID3D12GraphicsCommandList> {
+    fn create_command_list(&mut self) -> ComPtr<d3d12::ID3D12GraphicsCommandList> {
         // allocate command lists
-        let mut command_list = {
-            let mut command_list: *mut winapi::ID3D12GraphicsCommandList = ptr::null_mut();
+        let command_list = {
+            let mut command_list: *mut d3d12::ID3D12GraphicsCommandList = ptr::null_mut();
             let hr = unsafe {
                 self.device.CreateCommandList(
                     0, // single gpu only atm
                     self.list_type,
                     self.inner.as_mut() as *mut _,
                     ptr::null_mut(),
-                    &dxguid::IID_ID3D12GraphicsCommandList,
-                    &mut command_list as *mut *mut _ as *mut *mut c_void,
+                    &d3d12::IID_ID3D12GraphicsCommandList,
+                    &mut command_list as *mut *mut _ as *mut *mut _,
                 )
             };
 
             // TODO: error handling
-            if !winapi::SUCCEEDED(hr) {
+            if !SUCCEEDED(hr) {
                 error!("error on command list creation: {:x}", hr);
             }
 
