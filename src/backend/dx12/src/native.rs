@@ -1,10 +1,10 @@
-use winapi::shared::minwindef::{UINT};
+use winapi::shared::minwindef::UINT;
 use winapi::shared::dxgiformat::DXGI_FORMAT;
 use winapi::um::{d3d12, d3dcommon};
 use wio::com::ComPtr;
 
 use hal::{image, pass, pso, MemoryType, DescriptorPool as HalDescriptorPool};
-use {free_list, Backend};
+use {free_list, Backend, MAX_VERTEX_BUFFERS};
 use root_constants::RootConstant;
 
 use std::collections::BTreeMap;
@@ -86,6 +86,7 @@ pub struct GraphicsPipeline {
     pub(crate) num_parameter_slots: usize, // signature parameter slots, see `PipelineLayout`
     pub(crate) topology: d3d12::D3D12_PRIMITIVE_TOPOLOGY,
     pub(crate) constants: Vec<RootConstant>,
+    pub(crate) vertex_strides: [UINT; MAX_VERTEX_BUFFERS],
 }
 unsafe impl Send for GraphicsPipeline { }
 unsafe impl Sync for GraphicsPipeline { }
@@ -135,7 +136,6 @@ pub struct Framebuffer {
 pub struct Buffer {
     pub(crate) resource: *mut d3d12::ID3D12Resource,
     pub(crate) size_in_bytes: u32,
-    pub(crate) stride: u32,
     pub(crate) clear_uav: Option<DualHandle>,
 }
 unsafe impl Send for Buffer { }

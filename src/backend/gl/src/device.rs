@@ -413,7 +413,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_buffer(
-        &self, size: u64, stride: u64, usage: buffer::Usage,
+        &self, size: u64, usage: buffer::Usage,
     ) -> Result<UnboundBuffer, buffer::CreationError> {
         if !self.share.features.constant_buffer && usage.contains(buffer::Usage::UNIFORM) {
             error!("Constant buffers are not supported by this GL version");
@@ -440,7 +440,7 @@ impl d::Device<B> for Device {
             target,
             requirements: memory::Requirements {
                 size,
-                alignment: stride,
+                alignment: 1, // TODO: do we need specific alignment for any use-case?
                 type_mask: 0x7,
             },
         })

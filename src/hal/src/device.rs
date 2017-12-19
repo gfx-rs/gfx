@@ -226,7 +226,7 @@ pub trait Device<B: Backend> {
     ///
     /// The created buffer won't have associated memory until `bind_buffer_memory` is called.
     fn create_buffer(
-        &self, size: u64, stride: u64, buffer::Usage,
+        &self, size: u64, buffer::Usage,
     ) -> Result<B::UnboundBuffer, buffer::CreationError>;
 
     ///

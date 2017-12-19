@@ -118,7 +118,7 @@ impl<B: Backend> Device<B> {
     ) -> Result<(handle::raw::Buffer<B>, InitToken<B>), buffer::CreationError>
         where A: Allocator<B>
     {
-        let buffer = self.raw.create_buffer(size, stride, usage)?;
+        let buffer = self.raw.create_buffer(size, usage)?;
         let (buffer, memory) = allocator.allocate_buffer(self, usage, buffer);
         let info = buffer::Info::new(usage, memory, size, stride);
         let handle = handle::raw::Buffer::from(

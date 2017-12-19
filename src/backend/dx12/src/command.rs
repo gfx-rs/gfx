@@ -2,7 +2,7 @@ use wio::com::ComPtr;
 use hal::{command as com, image, memory, pass, pso, query};
 use hal::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset};
 use hal::buffer::IndexBufferView;
-use {conv, native as n, Backend, CmdSignatures};
+use {conv, native as n, Backend, CmdSignatures, MAX_VERTEX_BUFFERS};
 use root_constants::RootConstant;
 use smallvec::SmallVec;
 use std::{mem, ptr};
@@ -16,6 +16,13 @@ use winapi::shared::dxgiformat;
 // Fixed size of the root signature.
 // Limited by D3D12.
 const ROOT_SIGNATURE_SIZE: usize = 64;
+
+const NULL_VERTEX_BUFFER_VIEW: d3d12::D3D12_VERTEX_BUFFER_VIEW =
+    d3d12::D3D12_VERTEX_BUFFER_VIEW {
+        BufferLocation: 0,
+        SizeInBytes: 0,
+        StrideInBytes: 0,
+    };
 
 fn get_rect(rect: &com::Rect) -> d3d12::D3D12_RECT {
     d3d12::D3D12_RECT {
@@ -171,6 +178,11 @@ pub struct CommandBuffer {
     // occlusion queries share one queue type in Vulkan.
     occlusion_query: Option<OcclusionQuery>,
     pipeline_stats_query: Option<UINT>,
+
+    // Cached vertex buffer views to bind.
+    // `Stride` values are not known at `bind_vertex_buffers` time because they are only stored
+    // inside the pipeline state.
+    vertex_buffer_views: [d3d12::D3D12_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS],
 }
 
 unsafe impl Send for CommandBuffer { }
@@ -192,6 +204,7 @@ impl CommandBuffer {
             active_bindpoint: BindPoint::Graphics,
             occlusion_query: None,
             pipeline_stats_query: None,
+            vertex_buffer_views: [NULL_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS],
         }
     }
 
@@ -208,6 +221,7 @@ impl CommandBuffer {
         self.active_bindpoint = BindPoint::Graphics;
         self.occlusion_query = None;
         self.pipeline_stats_query = None;
+        self.vertex_buffer_views = [NULL_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS];
     }
 
     fn insert_subpass_barriers(&self) {
@@ -360,6 +374,23 @@ impl CommandBuffer {
         }
 
         let cmd_buffer = &mut self.raw;
+
+        // Bind vertex buffers
+        // We currently don't support offsets for vertex buffer binding, therefore,
+        // we only need to find out how many vertex buffer we need to bind.
+        let num_vbs = self.vertex_buffer_views
+            .iter()
+            .position(|view| view.SizeInBytes == 0)
+            .unwrap_or(MAX_VERTEX_BUFFERS);
+
+        unsafe {
+            cmd_buffer.IASetVertexBuffers(
+                0,
+                num_vbs as _,
+                self.vertex_buffer_views.as_ptr(),
+            );
+        }
+        // Flush root signature data
         Self::flush_user_data(
             &mut self.gr_pipeline,
             |slot, data| unsafe {
@@ -814,21 +845,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<Backend>) {
-        let buffers: SmallVec<[d3d12::D3D12_VERTEX_BUFFER_VIEW; 16]> = vbs.0
-            .iter()
-            .map(|&(ref buffer, offset)| {
-                let base = unsafe { (*buffer.resource).GetGPUVirtualAddress() };
-                d3d12::D3D12_VERTEX_BUFFER_VIEW {
-                    BufferLocation: base + offset as u64,
-                    SizeInBytes: buffer.size_in_bytes - offset as u32,
-                    StrideInBytes: buffer.stride,
-                }
-            })
-            .collect();
-
-        unsafe {
-            self.raw
-                .IASetVertexBuffers(0, vbs.0.len() as _, buffers.as_ptr());
+        // Only cache the vertex buffer views as we don't know the stride (PSO).
+        for (&(buffer, offset), view) in vbs.0.iter().zip(self.vertex_buffer_views.iter_mut()) {
+            let base = unsafe { (*buffer.resource).GetGPUVirtualAddress() };
+            view.BufferLocation = base + offset as u64;
+            view.SizeInBytes = buffer.size_in_bytes - offset as u32;
         }
     }
 
@@ -899,6 +920,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         self.active_bindpoint = BindPoint::Graphics;
         self.gr_pipeline.pipeline = Some((pipeline.raw, pipeline.signature));
+
+        // Update strides
+        for (view, stride) in self.vertex_buffer_views
+                                  .iter_mut()
+                                  .zip(pipeline.vertex_strides.iter())
+        {
+            view.StrideInBytes = *stride;
+        }
     }
 
     fn bind_graphics_descriptor_sets(

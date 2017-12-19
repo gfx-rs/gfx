@@ -190,7 +190,7 @@ impl<B: hal::Backend> Scene<B> {
                             let row_pitch = align(width_bytes, limits.min_buffer_copy_pitch_alignment);
                             let upload_size = row_pitch as u64 * h as u64 * d as u64;
                             // create upload buffer
-                            let unbound_buffer = device.create_buffer(upload_size, bits.total as _, buffer::Usage::TRANSFER_SRC)
+                            let unbound_buffer = device.create_buffer(upload_size, buffer::Usage::TRANSFER_SRC)
                                 .unwrap();
                             let upload_req = device.get_buffer_requirements(&unbound_buffer);
                             assert_ne!(upload_req.type_mask & (1<<upload_type.id), 0);
@@ -509,7 +509,7 @@ impl<B: hal::Backend> Scene<B> {
         let row_pitch = align(width_bytes, limits.min_buffer_copy_pitch_alignment);
         let down_size = row_pitch as u64 * height as u64 * depth as u64;
 
-        let unbound_buffer = self.device.create_buffer(down_size, bpp as _, buffer::Usage::TRANSFER_DST)
+        let unbound_buffer = self.device.create_buffer(down_size, buffer::Usage::TRANSFER_DST)
             .unwrap();
         let down_req = self.device.get_buffer_requirements(&unbound_buffer);
         assert_ne!(down_req.type_mask & (1<<self.download_type.id), 0);

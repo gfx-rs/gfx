@@ -129,7 +129,7 @@ impl hal::Device<Backend> for Device {
     fn create_sampler(&self, _: image::SamplerInfo) -> () {
         unimplemented!()
     }
-    fn create_buffer(&self, _: u64, _: u64, _: buffer::Usage) -> Result<(), buffer::CreationError> {
+    fn create_buffer(&self, _: u64, _: buffer::Usage) -> Result<(), buffer::CreationError> {
         unimplemented!()
     }
 
