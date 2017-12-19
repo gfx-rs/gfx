@@ -522,7 +522,6 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
             command_buffer.encoder_state = EncoderState::None;
 
             // FIXME: subpasses
-
             let pass_descriptor: metal::RenderPassDescriptor = msg_send![frame_buffer.0, copy];
             // TODO: validate number of clear colors
             for (i, value) in clear_values.iter().enumerate() {
@@ -570,6 +569,9 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         let pipeline_state = pipeline.raw.to_owned();
         if let EncoderState::Render(ref encoder) = inner.encoder_state {
             encoder.set_render_pipeline_state(&pipeline_state);
+            if let Some(ref depth_stencil_state) = pipeline.depth_stencil_state {
+                encoder.set_depth_stencil_state(depth_stencil_state);
+            }
         }
         inner.pipeline_state = Some(pipeline_state);
         inner.depth_stencil_state = pipeline.depth_stencil_state.as_ref().map(ToOwned::to_owned);
