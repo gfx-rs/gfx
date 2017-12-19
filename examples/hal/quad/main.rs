@@ -18,7 +18,7 @@ extern crate winit;
 extern crate image;
 
 use hal::{buffer, command, device as d, image as i, memory as m, pass, pso, pool};
-use hal::{Device, Instance, QueueFamily, Surface, Swapchain};
+use hal::{Device, Instance, PhysicalDevice, QueueFamily, Surface, Swapchain};
 use hal::{
     DescriptorPool, Gpu, FrameSync, Primitive,
     Backbuffer, SwapchainConfig,
@@ -112,8 +112,16 @@ fn main() {
         .find(|format| format.1 == ChannelType::Srgb)
         .unwrap();
 
+    let memory_types = adapter
+        .physical_device
+        .memory_properties()
+        .memory_types;
+    let limits = adapter
+        .physical_device
+        .get_limits();
+
     // Build a new device and associated command queues
-    let Gpu { device, mut queue_groups, memory_types, .. } =
+    let Gpu { device, mut queue_groups } =
         adapter.open_with(|family| {
             if family.supports_graphics() && surface.supports_queue_family(family) {
                 Some(1)
@@ -369,7 +377,7 @@ fn main() {
     let img = image::load(Cursor::new(&img_data[..]), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
     let kind = i::Kind::D2(width as i::Size, height as i::Size, i::AaMode::Single);
-    let row_alignment_mask = device.get_limits().min_buffer_copy_pitch_alignment as u32 - 1;
+    let row_alignment_mask = limits.min_buffer_copy_pitch_alignment as u32 - 1;
     let image_stride = 4usize;
     let row_pitch = (width * image_stride as u32 + row_alignment_mask) & !row_alignment_mask;
     let upload_size = (height * row_pitch) as u64;

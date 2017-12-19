@@ -15,7 +15,10 @@ extern crate gfx_backend_metal as back;
 use std::str::FromStr;
 use std::ops::Range;
 
-use hal::{Backend, Compute, Gpu, Device, DescriptorPool, Instance, QueueFamily, QueueGroup};
+use hal::{
+    Backend, Compute, Gpu, Device, DescriptorPool, Instance,
+    PhysicalDevice, QueueFamily, QueueGroup,
+};
 use hal::{queue, pso, memory, buffer, pool, command, device};
 
 #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
