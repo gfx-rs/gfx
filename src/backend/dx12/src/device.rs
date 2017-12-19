@@ -10,7 +10,7 @@ use winapi::shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, winerror};
 use wio::com::ComPtr;
 
 use hal::{self, buffer, device as d, format, image, mapping, memory, pass, pso, query};
-use hal::{Features, Limits, MemoryType};
+use hal::{MemoryType};
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
 
@@ -631,9 +631,6 @@ impl Device {
 }
 
 impl d::Device<B> for Device {
-    fn get_features(&self) -> &Features { &self.features }
-    fn get_limits(&self) -> &Limits { &self.limits }
-
     fn allocate_memory(
         &self,
         mem_type: &MemoryType,

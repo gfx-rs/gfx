@@ -84,6 +84,10 @@ impl PhysicalDevice {
     fn supports_any(&self, features_sets: &[MTLFeatureSet]) -> bool {
         features_sets.iter().cloned().any(|x| self.0.supports_feature_set(x))
     }
+
+    fn is_mac(&self) -> bool {
+        self.0.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1)
+    }
 }
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
@@ -96,34 +100,31 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let queue = queue_raw.0.clone();
         queue_group.add_queue(queue_raw);
 
-        let is_mac = self.0.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1);
-
         let private_caps = PrivateCapabilities {
             resource_heaps: self.supports_any(RESOURCE_HEAP_SUPPORT),
             argument_buffers: self.supports_any(ARGUMENT_BUFFER_SUPPORT) && false, //TODO
             max_buffers_per_stage: 31,
-            max_textures_per_stage: if is_mac {128} else {31},
+            max_textures_per_stage: if self.is_mac() {128} else {31},
             max_samplers_per_stage: 31,
         };
 
         let device = Device {
             device: self.0.clone(),
             private_caps,
-            limits: hal::Limits {
-                max_texture_size: 4096, // TODO: feature set
-                max_patch_size: 0, // No tessellation
-                max_viewports: 1,
-
-                min_buffer_copy_offset_alignment: if is_mac {256} else {64},
-                min_buffer_copy_pitch_alignment: 4, // TODO: made this up
-                min_uniform_buffer_offset_alignment: 1, // TODO
-
-                max_compute_group_count: [0; 3], // TODO
-                max_compute_group_size: [0; 3], // TODO
-            },
             queue,
         };
 
+        hal::Gpu {
+            device,
+            queue_groups: vec![queue_group],
+        }
+    }
+
+    fn format_properties(&self, _: format::Format) -> format::Properties {
+        unimplemented!()
+    }
+
+    fn memory_properties(&self) -> hal::MemoryProperties {
         let memory_types = vec![
             hal::MemoryType {
                 id: 0,
@@ -148,16 +149,29 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         ];
         let memory_heaps = vec![!0, !0]; //TODO
 
-        hal::Gpu {
-            device,
-            queue_groups: vec![queue_group],
-            memory_types,
+        hal::MemoryProperties {
             memory_heaps,
+            memory_types,
         }
     }
 
-    fn format_properties(&self, _: format::Format) -> format::Properties {
+    fn get_features(&self) -> hal::Features {
         unimplemented!()
+    }
+
+    fn get_limits(&self) -> hal::Limits {
+        hal::Limits {
+            max_texture_size: 4096, // TODO: feature set
+            max_patch_size: 0, // No tessellation
+            max_viewports: 1,
+
+            min_buffer_copy_offset_alignment: if self.is_mac() {256} else {64},
+            min_buffer_copy_pitch_alignment: 4, // TODO: made this up
+            min_uniform_buffer_offset_alignment: 1, // TODO
+
+            max_compute_group_count: [0; 3], // TODO
+            max_compute_group_size: [0; 3], // TODO
+        },
     }
 }
 
@@ -530,14 +544,6 @@ impl Device {
 }
 
 impl hal::Device<Backend> for Device {
-    fn get_features(&self) -> &hal::Features {
-        unimplemented!()
-    }
-
-    fn get_limits(&self) -> &hal::Limits {
-        &self.limits
-    }
-
     fn create_command_pool(
         &self, _family: &QueueFamily, flags: CommandPoolCreateFlags
     ) -> command::CommandPool {

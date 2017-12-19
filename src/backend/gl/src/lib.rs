@@ -203,6 +203,26 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             panic!("Error opening adapter: {:?}", err);
         }
 
+        hal::Gpu {
+            device: Device::new(self.0.clone()),
+            queue_groups: families
+                .into_iter()
+                .map(|(proto_family, priorities)| {
+                    assert_eq!(priorities.len(), 1);
+                    let mut family = hal::queue::RawQueueGroup::new(proto_family);
+                    let queue = queue::CommandQueue::new(&self.0, vao);
+                    family.add_queue(queue);
+                    family
+                })
+                .collect(),
+        }
+    }
+
+    fn format_properties(&self, _: hal::format::Format) -> hal::format::Properties {
+        unimplemented!()
+    }
+
+    fn memory_properties(&self) -> hal::MemoryProperties {
         use hal::memory::Properties;
 
         // COHERENT flags require that the backend does flushing and invalidation
@@ -235,25 +255,18 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             ]
         };
 
-        hal::Gpu {
-            device: Device::new(self.0.clone()),
-            queue_groups: families
-                .into_iter()
-                .map(|(proto_family, priorities)| {
-                    assert_eq!(priorities.len(), 1);
-                    let mut family = hal::queue::RawQueueGroup::new(proto_family);
-                    let queue = queue::CommandQueue::new(&self.0, vao);
-                    family.add_queue(queue);
-                    family
-                })
-                .collect(),
+        hal::MemoryProperties {
             memory_types,
             memory_heaps: vec![!0, !0],
         }
     }
 
-    fn format_properties(&self, _: hal::format::Format) -> hal::format::Properties {
-        unimplemented!()
+    fn get_features(&self) -> hal::Features {
+        self.0.features
+    }
+
+    fn get_limits(&self) -> hal::Limits {
+        self.0.limits
     }
 }
 

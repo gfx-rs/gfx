@@ -4,7 +4,7 @@ use std::fs::File;
 use std::slice;
 
 use hal::{self, buffer, image as i, memory, pso};
-use hal::{Device, DescriptorPool, QueueFamily};
+use hal::{Device, DescriptorPool, PhysicalDevice, QueueFamily};
 
 use raw;
 
@@ -79,6 +79,7 @@ pub struct Scene<B: hal::Backend> {
     command_pool: hal::CommandPool<B, hal::queue::Graphics>,
     upload_buffers: HashMap<String, (B::Buffer, B::Memory)>,
     download_type: hal::MemoryType,
+    limits: hal::Limits,
 }
 
 fn align(x: usize, y: usize) -> usize {
@@ -92,8 +93,16 @@ fn align(x: usize, y: usize) -> usize {
 impl<B: hal::Backend> Scene<B> {
     pub fn new(adapter: hal::Adapter<B>, raw: &raw::Scene, data_path: &str) -> Self {
         info!("creating Scene from {}", data_path);
+        let memory_types = adapter
+            .physical_device
+            .memory_properties()
+            .memory_types;
+        let limits = adapter
+            .physical_device
+            .get_limits();
+
         // initialize graphics
-        let hal::Gpu { device, mut queue_groups, memory_types, .. } =
+        let hal::Gpu { device, mut queue_groups } =
             adapter.open_with(|family| {
                 if family.supports_graphics() {
                     Some(1)
@@ -117,7 +126,6 @@ impl<B: hal::Backend> Scene<B> {
         info!("upload memory: {:?}", upload_type);
         info!("download memory: {:?}", &download_type);
 
-        let limits = device.get_limits().clone();
         let queue_group = hal::QueueGroup::<_, hal::Graphics>::new(queue_groups.remove(0));
         let mut command_pool = device.create_command_pool_typed(
             &queue_group,
@@ -479,6 +487,7 @@ impl<B: hal::Backend> Scene<B> {
             command_pool,
             upload_buffers,
             download_type,
+            limits,
         }
     }
 }
@@ -500,7 +509,7 @@ impl<B: hal::Backend> Scene<B> {
 
     pub fn fetch_image(&mut self, name: &str) -> FetchGuard<B> {
         let image = &self.resources.images[name];
-        let limits = self.device.get_limits().clone();
+        let limits = &self.limits;
 
         let (width, height, depth, aa) = image.kind.get_dimensions();
         assert_eq!(aa, i::AaMode::Single);

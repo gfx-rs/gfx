@@ -59,6 +59,18 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn format_properties(&self, _: format::Format) -> format::Properties {
         unimplemented!()
     }
+
+    fn memory_properties(&self) -> hal::MemoryProperties {
+        unimplemented!()
+    }
+
+    fn get_features(&self) -> hal::Features {
+        unimplemented!()
+    }
+
+    fn get_limits(&self) -> hal::Limits {
+        unimplemented!()
+    }
 }
 
 /// Dummy command queue doing nothing.
@@ -72,14 +84,6 @@ impl queue::RawCommandQueue<Backend> for RawCommandQueue {
 /// Dummy device doing nothing.
 pub struct Device;
 impl hal::Device<Backend> for Device {
-    fn get_features(&self) -> &hal::Features {
-        unimplemented!()
-    }
-
-    fn get_limits(&self) -> &hal::Limits {
-        unimplemented!()
-    }
-
     fn create_command_pool(&self, _: &QueueFamily, _: pool::CommandPoolCreateFlags) -> RawCommandPool {
         unimplemented!()
     }

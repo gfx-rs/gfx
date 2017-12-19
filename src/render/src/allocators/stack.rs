@@ -1,17 +1,38 @@
 use std::sync::{mpsc, Arc};
 use std::collections::HashMap;
 
-use hal::{self, MemoryType, Device as Device_};
+use hal::{self, MemoryType, Device as Device_, Limits};
 use hal::memory::Requirements;
 use memory::{self, Allocator, Memory, ReleaseFn, Provider, Dependency};
 use {buffer, image};
 use {Backend, Device};
+
+/// Retrieve the complete memory requirements for this buffer,
+/// taking usage and device limits into account
+pub fn complete_requirements<B: Backend>(
+    device: &B::Device,
+    buffer: &B::UnboundBuffer,
+    limits: &Limits,
+    usage: buffer::Usage,
+) -> Requirements {
+    use std::cmp::max;
+
+    let mut requirements = device.get_buffer_requirements(buffer);
+    if usage.can_transfer() {
+        requirements.alignment = max(
+            limits.min_buffer_copy_offset_alignment as u64,
+            requirements.alignment);
+    }
+    requirements
+}
+
 
 pub struct StackAllocator<B: Backend>(Provider<InnerStackAllocator<B>>);
 
 pub struct InnerStackAllocator<B: Backend> {
     device: Arc<B::Device>,
     usage: memory::Usage,
+    limits: Limits, // TODO: only store relevant data
     // stacks by memory type
     // TODO: VecMap ?
     stacks: HashMap<usize, ChunkStack<B>>,
@@ -25,19 +46,21 @@ impl<B: Backend> Drop for InnerStackAllocator<B> {
 }
 
 impl<B: Backend> StackAllocator<B> {
-    pub fn new(usage: memory::Usage, device: &Device<B>) -> Self {
+    pub fn new(usage: memory::Usage, device: &Device<B>, limits: Limits) -> Self {
         let mega = 1 << 20;
-        Self::with_chunk_size(usage, device, 128 * mega)
+        Self::with_chunk_size(usage, device, limits, 128 * mega)
     }
 
     pub fn with_chunk_size(
         usage: memory::Usage,
         device: &Device<B>,
+        limits: Limits,
         chunk_size: u64
     ) -> Self {
         StackAllocator(Provider::new(InnerStackAllocator {
             device: Arc::clone(&device.raw),
             usage,
+            limits,
             stacks: HashMap::new(),
             chunk_size,
         }))
@@ -64,8 +87,12 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
     ) -> (B::Buffer, Memory) {
         let dependency = self.0.dependency();
         let inner: &mut InnerStackAllocator<B> = &mut self.0;
-        let requirements = hal::buffer::complete_requirements::<B>(
-            &device.raw, &buffer, usage);
+        let requirements = complete_requirements::<B>(
+            &device.raw,
+            &buffer,
+            &inner.limits,
+            usage,
+        );
         let memory_type = device.find_usage_memory(inner.usage, requirements.type_mask)
             .expect("could not find suitable memory");
         let stack = inner.stacks.entry(memory_type.id)

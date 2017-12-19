@@ -2,11 +2,34 @@
 //!
 //! Physical devices are the main entry point for opening a [Device](../struct.Device).
 
-use {format, Backend, Gpu};
+use {format, memory, Backend, Gpu, Features, Limits};
 
 /// Scheduling hint for devices about the priority of a queue.
 /// Values ranging from `0.0` (low) to `1.0` (high).
 pub type QueuePriority = f32;
+
+///
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct MemoryType {
+    /// Id of the memory type.
+    pub id: usize,
+    /// Properties of the associated memory.
+    pub properties: memory::Properties,
+    /// Index to the underlying memory heap in `Gpu::memory_heaps`
+    pub heap_index: usize,
+}
+
+/// Types of memory supported by this adapter and available memory.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct MemoryProperties {
+    /// Each memory type is associated with one heap of `memory_heaps`.
+    /// Multiple types can point to the same heap.
+    pub memory_types: Vec<MemoryType>,
+    /// Memory heaps with their size in bytes.
+    pub memory_heaps: Vec<u64>,
+}
 
 /// Represents a physical or virtual device, which is capable of running the backend.
 pub trait PhysicalDevice<B: Backend>: Sized {
@@ -29,6 +52,16 @@ pub trait PhysicalDevice<B: Backend>: Sized {
 
     ///
     fn format_properties(&self, format::Format) -> format::Properties;
+
+    ///
+    fn memory_properties(&self) -> MemoryProperties;
+
+    /// Returns the features of this `Device`. This usually depends on the graphics API being
+    /// used.
+    fn get_features(&self) -> Features;
+
+    /// Returns the limits of this `Device`.
+    fn get_limits(&self) -> Limits;
 }
 
 /// Information about a backend adapter.
