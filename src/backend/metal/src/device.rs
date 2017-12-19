@@ -72,7 +72,6 @@ struct PrivateCapabilities {
 pub struct Device {
     pub(crate) device: metal::Device,
     private_caps: PrivateCapabilities,
-    limits: hal::Limits,
     queue: Arc<command::QueueInner>,
 }
 unsafe impl Send for Device {}
@@ -92,8 +91,6 @@ impl PhysicalDevice {
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(self, mut families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>) -> hal::Gpu<Backend> {
-        use self::memory::Properties;
-
         assert_eq!(families.len(), 1);
         let mut queue_group = hal::queue::RawQueueGroup::new(families.remove(0).0);
         let queue_raw = command::CommandQueue::new(&self.0);
@@ -125,6 +122,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn memory_properties(&self) -> hal::MemoryProperties {
+        use hal::memory::Properties;
+
         let memory_types = vec![
             hal::MemoryType {
                 id: 0,
@@ -171,7 +170,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
             max_compute_group_count: [0; 3], // TODO
             max_compute_group_size: [0; 3], // TODO
-        },
+        }
     }
 }
 

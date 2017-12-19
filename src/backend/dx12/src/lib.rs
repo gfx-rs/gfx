@@ -542,7 +542,7 @@ impl hal::Instance for Instance {
 
             // We have found a possible adapter
             // acquire the device information
-            let mut desc: dxgi1_2::DXGI_ADAPTER_DESC2 = unsafe { std::mem::uninitialized() };
+            let mut desc: dxgi1_2::DXGI_ADAPTER_DESC2 = unsafe { mem::zeroed() };
             unsafe { adapter.GetDesc2(&mut desc); }
 
             let device_name = {
