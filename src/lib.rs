@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[allow(unused_imports)]
 #[macro_use]
 extern crate log;
 extern crate env_logger;
@@ -117,6 +118,11 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
     use glutin::GlContext;
 
     env_logger::init().unwrap();
+    #[cfg(target_os = "emscripten")]
+    let gl_version = glutin::GlRequest::Specific(
+        glutin::Api::WebGl, (2, 0),
+    );
+    #[cfg(not(target_os = "emscripten"))]
     let gl_version = glutin::GlRequest::GlThenGles {
         opengl_version: (3, 2), // TODO: try more versions
         opengles_version: (2, 0),
@@ -142,41 +148,43 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
     });
 
     let mut harness = Harness::new();
-    let mut running = true;
-    while running {
-        events_loop.poll_events(|event| {
-            if let winit::Event::WindowEvent { event, .. } = event {
-                match event {
-                    winit::WindowEvent::Closed => running = false,
-                    winit::WindowEvent::KeyboardInput {
-                        input: winit::KeyboardInput {
-                            state: winit::ElementState::Pressed,
-                            virtual_keycode: key,
-                            ..
-                        },
+    events_loop.run_forever(move |event| {
+        use glutin::ControlFlow;
+
+        if let winit::Event::WindowEvent { event, .. } = event {
+            match event {
+                winit::WindowEvent::Closed => return ControlFlow::Break,
+                winit::WindowEvent::KeyboardInput {
+                    input: winit::KeyboardInput {
+                        state: winit::ElementState::Pressed,
+                        virtual_keycode: key,
                         ..
-                    } if key == A::get_exit_key() => return,
-                    winit::WindowEvent::Resized(width, height) => if width != cur_width || height != cur_height {
-                        window.resize(width, height);
-                        cur_width = width;
-                        cur_height = height;
-                        let (new_color, new_depth) = gfx_window_glutin::new_views(&window);
-                        app.on_resize(&mut factory, WindowTargets {
-                            color: new_color,
-                            depth: new_depth,
-                            aspect_ratio: width as f32 / height as f32,
-                        });
                     },
-                    _ => app.on(event),
-                }
+                    ..
+                } if key == A::get_exit_key() => return ControlFlow::Break,
+                winit::WindowEvent::Resized(width, height) => if width != cur_width || height != cur_height {
+                    window.resize(width, height);
+                    cur_width = width;
+                    cur_height = height;
+                    let (new_color, new_depth) = gfx_window_glutin::new_views(&window);
+                    app.on_resize(&mut factory, WindowTargets {
+                        color: new_color,
+                        depth: new_depth,
+                        aspect_ratio: width as f32 / height as f32,
+                    });
+                },
+                _ => app.on(event),
             }
-        });
+        }
+
         // draw a frame
         app.render(&mut device);
         window.swap_buffers().unwrap();
         device.cleanup();
+
         harness.bump();
-    }
+        ControlFlow::Continue
+    });
 }
 
 

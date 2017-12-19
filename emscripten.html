@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Rust emscripten</title>
+  </head>
+  <body>
+    <script type='text/javascript'>
+      var Module = {};
+      //TODO: use `build.rs` to put this path in
+      var base = "target/wasm32-unknown-emscripten/debug/examples/";
+      var name = "instancing-26e4300428e1216a"
+
+      fetch(base + name + ".wasm").then(response =>
+          response.arrayBuffer()
+          ).then(buffer => {
+
+        Module.canvas = document.getElementById("canvas");
+        Module.wasmBinary = buffer;
+
+        var script = document.createElement('script');
+        script.src = base + name + ".js";
+        script.onload = function() {
+          console.log("Emscripten boilerplate loaded.")
+        }
+        document.body.appendChild(script);
+      });
+    </script>
+    <canvas id="canvas" style="width:100%; height:100%"></canvas>
+  </body>
+</html>
