@@ -11,7 +11,7 @@ use std::{cmp, mem, ptr, slice};
 use hal::{self, image, pass, format, mapping, memory, buffer, pso, query};
 use hal::device::{WaitFor, BindError, OutOfMemory, FramebufferError, ShaderError, Extent};
 use hal::pool::CommandPoolCreateFlags;
-use hal::pso::{DescriptorSetWrite, DescriptorType, DescriptorSetLayoutBinding, AttributeDesc};
+use hal::pso::{DescriptorSetWrite, DescriptorType, DescriptorSetLayoutBinding, AttributeDesc, DepthTest, StencilTest, StencilFace};
 
 use cocoa::foundation::{NSRange, NSUInteger};
 use metal::{self, MTLFeatureSet, MTLLanguageVersion, MTLArgumentAccess, MTLDataType, MTLPrimitiveType, MTLPrimitiveTopologyClass};
@@ -418,14 +418,13 @@ impl Device {
 
         // Copy color target info from Subpass
         for (i, attachment) in pass_descriptor.main_pass.attachments.iter().enumerate() {
-            let descriptor = pipeline.color_attachments().object_at(i).expect("too many color attachments");
-
             let (mtl_format, is_depth) = map_format(attachment.format).expect("unsupported color format for Metal");
-            if is_depth {
-                continue;
+            if !is_depth {
+                let descriptor = pipeline.color_attachments().object_at(i).expect("too many color attachments");
+                descriptor.set_pixel_format(mtl_format);
+            } else {
+                pipeline.set_depth_attachment_pixel_format(mtl_format);
             }
-
-            descriptor.set_pixel_format(mtl_format);
         }
 
         // Blending
@@ -447,6 +446,27 @@ impl Device {
                 descriptor.set_destination_alpha_blend_factor(alpha_dst);
             }
         }
+
+        let depth_stencil_state = pipeline_desc.depth_stencil.map(|depth_stencil| {
+            let desc = metal::DepthStencilDescriptor::new();
+            
+            match depth_stencil.depth {
+                DepthTest::On { fun, write } => {
+                    desc.set_depth_compare_function(map_compare_function(fun));
+                    desc.set_depth_write_enabled(write);
+                }
+                DepthTest::Off => {}
+            }
+
+            match depth_stencil.stencil {
+                StencilTest::On { .. } => {
+                    unimplemented!()
+                }
+                StencilTest::Off => {}
+            }
+            
+            self.device.new_depth_stencil_state(&desc)
+        });
 
         // Vertex buffers
         let vertex_descriptor = metal::VertexDescriptor::new();
@@ -503,6 +523,7 @@ impl Device {
                 raw: unsafe { metal::RenderPipelineState::from_ptr(pso) },
                 primitive_type,
                 attribute_buffer_index: pipeline_layout.attribute_buffer_index,
+                depth_stencil_state,
             })
         }
     }
@@ -544,7 +565,6 @@ impl hal::Device<Backend> for Device {
         let pass = metal::RenderPassDescriptor::new().to_owned();
 
         let mut color_attachment_index = 0;
-        //let mut depth_attachment_index = 0;
         for attachment in attachments {
             let (_format, is_depth) = map_format(attachment.format).expect("unsupported attachment format");
 
@@ -555,7 +575,9 @@ impl hal::Device<Backend> for Device {
 
                 mtl_attachment = color_attachment;
             } else {
-                unimplemented!()
+                let depth_attachment = pass.depth_attachment().expect("no depth attachement");
+
+                mtl_attachment = depth_attachment;
             }
 
             mtl_attachment.set_load_action(map_load_operation(attachment.ops.load));

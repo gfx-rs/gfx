@@ -110,6 +110,7 @@ struct CommandBufferInner {
     resources_fs: StageResources,
     index_buffer: Option<(metal::Buffer, u64, MTLIndexType)>,
     attribute_buffer_index: usize,
+    depth_stencil_state: Option<metal::DepthStencilState>,
 }
 
 impl CommandBufferInner {
@@ -136,6 +137,9 @@ impl CommandBufferInner {
         }
         if let Some(ref pipeline_state) = self.pipeline_state {
             encoder.set_render_pipeline_state(pipeline_state);
+        }
+        if let Some(ref depth_stencil_state) = self.depth_stencil_state {
+            encoder.set_depth_stencil_state(depth_stencil_state);
         }
         // inherit vertex resources
         for (i, resource) in self.resources_vs.buffers.iter().enumerate() {
@@ -257,6 +261,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                     resources_fs: StageResources::new(),
                     index_buffer: None,
                     attribute_buffer_index: 0,
+                    depth_stencil_state: None,
                 })
             }),
             queue: if self.managed.is_some() {
@@ -517,21 +522,26 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
             command_buffer.encoder_state = EncoderState::None;
 
             // FIXME: subpasses
-
             let pass_descriptor: metal::RenderPassDescriptor = msg_send![frame_buffer.0, copy];
             // TODO: validate number of clear colors
             for (i, value) in clear_values.iter().enumerate() {
-                let color_desc = pass_descriptor.color_attachments().object_at(i).expect("too many clear values");
-                let mtl_color = match *value {
-                    ClearValue::Color(ClearColor::Float(values)) => MTLClearColor::new(
-                        values[0] as f64,
-                        values[1] as f64,
-                        values[2] as f64,
-                        values[3] as f64,
-                    ),
+                match *value {
+                    ClearValue::Color(ClearColor::Float(values)) => {
+                        let color_desc = pass_descriptor.color_attachments().object_at(i).expect("too many clear values");
+                        let mtl_color = MTLClearColor::new(
+                            values[0] as f64,
+                            values[1] as f64,
+                            values[2] as f64,
+                            values[3] as f64,
+                        );
+                        color_desc.set_clear_color(mtl_color);
+                    }
+                    ClearValue::DepthStencil(ClearDepthStencil(depth, _stencil)) => {
+                        let depth_desc = pass_descriptor.depth_attachment().expect("no depth attachment");
+                        depth_desc.set_clear_depth(depth as f64);
+                    }
                     _ => unimplemented!(),
                 };
-                color_desc.set_clear_color(mtl_color);
             }
 
             let render_encoder = command_buffer.command_buffer.new_render_command_encoder(&pass_descriptor).to_owned();
@@ -559,8 +569,12 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         let pipeline_state = pipeline.raw.to_owned();
         if let EncoderState::Render(ref encoder) = inner.encoder_state {
             encoder.set_render_pipeline_state(&pipeline_state);
+            if let Some(ref depth_stencil_state) = pipeline.depth_stencil_state {
+                encoder.set_depth_stencil_state(depth_stencil_state);
+            }
         }
         inner.pipeline_state = Some(pipeline_state);
+        inner.depth_stencil_state = pipeline.depth_stencil_state.as_ref().map(ToOwned::to_owned);
         inner.primitive_type = pipeline.primitive_type;
         inner.attribute_buffer_index = pipeline.attribute_buffer_index as usize;
     }

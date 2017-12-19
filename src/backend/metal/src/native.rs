@@ -60,6 +60,7 @@ pub struct GraphicsPipeline {
     pub(crate) raw: metal::RenderPipelineState,
     pub(crate) primitive_type: MTLPrimitiveType,
     pub(crate) attribute_buffer_index: u32,
+    pub(crate) depth_stencil_state: Option<metal::DepthStencilState>,
 }
 
 unsafe impl Send for GraphicsPipeline {}
