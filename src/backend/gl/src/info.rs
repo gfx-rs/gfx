@@ -19,7 +19,7 @@ use core::Capabilities;
 
 
 /// A version number for a specific component of an OpenGL implementation
-#[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub struct Version {
     pub is_embedded: bool,
     pub major: u32,
@@ -30,18 +30,23 @@ pub struct Version {
 
 impl Version {
     /// Create a new OpenGL version number
-    pub fn new(major: u32, minor: u32, revision: Option<u32>,
-               vendor_info: &'static str) -> Version {
+    pub fn new(
+        major: u32, minor: u32,
+        revision: Option<u32>,
+        vendor_info: &'static str,
+    ) -> Self {
         Version {
             is_embedded: false,
-            major: major,
-            minor: minor,
-            revision: revision,
-            vendor_info: vendor_info,
+            major,
+            minor,
+            revision,
+            vendor_info,
         }
     }
     /// Create a new OpenGL ES version number
-    pub fn new_embedded(major: u32, minor: u32, vendor_info: &'static str) -> Version {
+    pub fn new_embedded(
+        major: u32, minor: u32, vendor_info: &'static str
+    ) -> Version {
         Version {
             is_embedded: true,
             major: major,
@@ -67,8 +72,13 @@ impl Version {
     /// and will try to recover at least the first two version numbers without
     /// resulting in an `Err`.
     pub fn parse(mut src: &'static str) -> Result<Version, &'static str> {
+        info!("parsing version '{}'", src);
+        // cut out the extra (xxx) stuff
+        if let Some(pos) = src.find(" (") {
+            src = &src[.. pos];
+        }
         let es_sig = " ES ";
-        let is_es = match src.rfind(es_sig) {
+        let is_embedded = match src.rfind(es_sig) {
             Some(pos) => {
                 src = &src[pos + es_sig.len() ..];
                 true
@@ -89,11 +99,11 @@ impl Version {
 
         match (major, minor, revision) {
             (Some(major), Some(minor), revision) => Ok(Version {
-                is_embedded: is_es,
-                major: major,
-                minor: minor,
-                revision: revision,
-                vendor_info: vendor_info,
+                is_embedded,
+                major,
+                minor,
+                revision,
+                vendor_info,
             }),
             (_, _, _) => Err(src),
         }
@@ -152,7 +162,7 @@ pub struct PlatformName {
 }
 
 impl PlatformName {
-    fn get(gl: &gl::Gl) -> PlatformName {
+    fn get(gl: &gl::Gl) -> Self {
         PlatformName {
             vendor: get_string(gl, gl::VENDOR),
             renderer: get_string(gl, gl::RENDERER),
@@ -199,29 +209,33 @@ impl Info {
         let platform_name = PlatformName::get(gl);
         let version = Version::parse(get_string(gl, gl::VERSION)).unwrap();
         let shading_language = Version::parse(get_string(gl, gl::SHADING_LANGUAGE_VERSION)).unwrap();
-        let extensions = if version >= Version::new(3, 0, None, "") {
+        let extensions = if !version.is_embedded && version.major >= 3 {
             let num_exts = get_usize(gl, gl::NUM_EXTENSIONS) as gl::types::GLuint;
             (0..num_exts)
-                .map(|i| unsafe { c_str_as_static_str(gl.GetStringi(gl::EXTENSIONS, i) as *const i8) })
+                .map(|i| unsafe {
+                    c_str_as_static_str(gl.GetStringi(gl::EXTENSIONS, i) as *const i8)
+                })
                 .collect()
         } else {
             // Fallback
             get_string(gl, gl::EXTENSIONS).split(' ').collect()
         };
         Info {
-            platform_name: platform_name,
-            version: version,
-            shading_language: shading_language,
-            extensions: extensions,
+            platform_name,
+            version,
+            shading_language,
+            extensions,
         }
     }
 
     pub fn is_version_supported(&self, major: u32, minor: u32) -> bool {
-        !self.version.is_embedded && self.version >= Version::new(major, minor, None, "")
+        !self.version.is_embedded &&
+        (self.version.major, self.version.minor) >= (major, minor)
     }
 
     pub fn is_embedded_version_supported(&self, major: u32, minor: u32) -> bool {
-        self.version.is_embedded && self.version >= Version::new(major, minor, None, "")
+        self.version.is_embedded &&
+        (self.version.major, self.version.minor) >= (major, minor)
     }
 
     /// Returns `true` if the implementation supports the extension
@@ -251,9 +265,14 @@ impl Info {
 
 /// Load the information pertaining to the driver and the corresponding device
 /// capabilities.
-pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
+pub fn get_all(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
     use self::Requirement::*;
+
     let info = Info::get(gl);
+    // These extensions should be covered by the GL ES version checks,
+    // but Emscripten WebGL 2.0 support seems to be incomplete.
+    let is_emscripten = cfg!(target_os = "emscripten");
+
     let tessellation_supported =           info.is_supported(&[Core(4,0),
                                                                Ext("GL_ARB_tessellation_shader")]);
     let caps = Capabilities {
@@ -277,10 +296,11 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
                                                                Ext ("GL_ARB_framebuffer_sRGB")]),
         constant_buffer_supported:         info.is_supported(&[Core(3,1),
                                                                Es  (3,0),
-                                                               Ext ("GL_ARB_uniform_buffer_object")]),
+                                                               Ext ("GL_ARB_uniform_buffer_object")])
+                                           && !is_emscripten,
         unordered_access_view_supported:   info.is_supported(&[Core(4,0)]), //TODO: extension
         separate_blending_slots_supported: info.is_supported(&[Core(4,0),
-                                                               Es  (3,0),
+                                                               Es  (3,2),
                                                                Ext ("GL_ARB_draw_buffers_blend")]),
         copy_buffer_supported:             info.is_supported(&[Core(3,1),
                                                                Es  (3,0),
@@ -304,7 +324,8 @@ pub fn get(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
         buffer_storage_supported:          info.is_supported(&[Core(4,4),
                                                                Ext ("GL_ARB_buffer_storage")]),
         clear_buffer_supported:            info.is_supported(&[Core(3,0),
-                                                               Es  (3,0)]),
+                                                               Es  (3,0)])
+                                           && !is_emscripten,
         frag_data_location_supported:      !info.version.is_embedded,
         sampler_lod_bias_supported:        !info.version.is_embedded,
     };

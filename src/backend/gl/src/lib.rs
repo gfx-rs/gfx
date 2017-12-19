@@ -248,15 +248,10 @@ impl Device {
     {
         let gl = gl::Gl::load_with(fn_proc);
         // query information
-        let (info, caps, private) = info::get(&gl);
-        info!("Vendor: {:?}", info.platform_name.vendor);
-        info!("Renderer: {:?}", info.platform_name.renderer);
-        info!("Version: {:?}", info.version);
-        info!("Shading Language: {:?}", info.shading_language);
-        debug!("Loaded Extensions:");
-        for extension in info.extensions.iter() {
-            debug!("- {}", *extension);
-        }
+        let (info, caps, private) = info::get_all(&gl);
+        info!("{:?}", info);
+        info!("{:?}", caps);
+        info!("{:?}", private);
         // initialize permanent states
         if caps.srgb_color_supported {
             unsafe {
@@ -571,10 +566,10 @@ impl Device {
             Command::SetBlendState(slot, color) => {
                 if self.share.capabilities.separate_blending_slots_supported {
                     state::bind_blend_slot(&self.share.context, slot, color);
-                }else if slot == 0 {
+                } else if slot == 0 {
                     //self.temp.color = color; //TODO
                     state::bind_blend(&self.share.context, color);
-                }else if false {
+                } else if false {
                     error!("Separate blending slots are not supported");
                 }
             },

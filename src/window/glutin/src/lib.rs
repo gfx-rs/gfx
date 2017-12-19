@@ -28,6 +28,9 @@ use glutin::GlContext;
 
 #[cfg(feature = "headless")]
 mod headless;
+// this module just covers the holes of `winit`... hopefully, temporary
+#[cfg(target_os = "emscripten")]
+pub mod emscripten;
 
 /// Initialize with a window builder.
 /// Generically parametrized version over the main framebuffer format.
@@ -102,10 +105,20 @@ where
 }
 
 fn get_window_dimensions(window: &glutin::GlWindow) -> texture::Dimensions {
-    let (width, height) = window.get_inner_size().unwrap();
-    let aa = window.get_pixel_format().multisampling
-                   .unwrap_or(0) as texture::NumSamples;
-    ((width as f32 * window.hidpi_factor()) as texture::Size, (height as f32 * window.hidpi_factor()) as texture::Size, 1, aa.into())
+    // https://github.com/tomaka/winit/pull/370
+    #[cfg(target_os = "emscripten")]
+    let (width, height) = emscripten::get_canvas_size();
+    #[cfg(not(target_os = "emscripten"))]
+    let (width, height) = {
+        let (w, h) = window.get_inner_size().unwrap();
+        let factor = window.hidpi_factor();
+        ((w as f32 * factor) as _, (h as f32 * factor) as _)
+    };
+    let aa = window
+        .get_pixel_format().multisampling
+        .unwrap_or(0) as texture::NumSamples;
+
+    (width, height, 1, aa.into())
 }
 
 /// Initialize with a window builder. Raw version.
@@ -138,10 +151,11 @@ pub fn init_raw(window: glutin::WindowBuilder,
 }
 
 /// Initialize with an existing Glutin window. Raw version.
-pub fn init_existing_raw(window: &glutin::GlWindow,
-                color_format: format::Format, ds_format: format::Format) ->
-                (device_gl::Device, device_gl::Factory,
-                handle::RawRenderTargetView<R>, handle::RawDepthStencilView<R>)
+pub fn init_existing_raw(
+    window: &glutin::GlWindow,
+    color_format: format::Format, ds_format: format::Format,
+) -> (device_gl::Device, device_gl::Factory,
+      handle::RawRenderTargetView<R>, handle::RawDepthStencilView<R>)
 {
     unsafe { window.make_current().unwrap() };
     let (device, factory) = device_gl::create(|s|
