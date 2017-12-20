@@ -24,7 +24,7 @@ path = "compute/main.rs"
 env_logger = "0.4"
 image = "0.15"
 log = "0.3"
-winit = "0.7"
+winit = "0.9"
 gfx-hal = { path = "../../src/hal", version = "0.1" }
 
 [dependencies.gfx-backend-gl]
