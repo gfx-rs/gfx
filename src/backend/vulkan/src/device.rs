@@ -2,7 +2,7 @@ use ash::vk;
 use ash::extensions as ext;
 use ash::version::DeviceV1_0;
 use hal::{buffer, device as d, format, image, mapping, pass, pso, query};
-use hal::{Features, Limits, MemoryType, Backbuffer, SwapchainConfig};
+use hal::{Backbuffer, SwapchainConfig};
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
 use native as n;
@@ -55,19 +55,25 @@ impl Device {
 }
 
 impl d::Device<B> for Device {
-    fn allocate_memory(&self, memory_type: &MemoryType, size: u64) -> Result<n::Memory, d::OutOfMemory> {
+    fn allocate_memory(&self, mem_type: usize, size: u64) -> Result<n::Memory, d::OutOfMemory> {
         let info = vk::MemoryAllocateInfo {
             s_type: vk::StructureType::MemoryAllocateInfo,
             p_next: ptr::null(),
             allocation_size: size,
-            memory_type_index: memory_type.id as u32,
+            memory_type_index: mem_type as _,
         };
 
         let memory = unsafe {
             self.raw.0.allocate_memory(&info, None)
         }.expect("Error on memory allocation"); // TODO: error handling
 
-        let ptr = if memory_type.properties.contains(memory::Properties::CPU_VISIBLE) {
+        // Map all allocations persistently and unmap them when calling free.
+        let mappable = self
+            .memory_types[mem_type]
+            .properties
+            .contains(memory::Properties::CPU_VISIBLE);
+
+        let ptr = if mappable {
             unsafe {
                 self.raw.0.map_memory(
                     memory,

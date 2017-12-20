@@ -151,11 +151,9 @@ impl Device {
 
 impl d::Device<B> for Device {
     fn allocate_memory(
-        &self, mem_type: &c::MemoryType, _size: u64,
+        &self, mem_type: usize, _size: u64,
     ) -> Result<n::Memory, d::OutOfMemory> {
-        Ok(n::Memory {
-            properties: mem_type.properties,
-        })
+        unimplemented!()
     }
 
     fn create_command_pool(

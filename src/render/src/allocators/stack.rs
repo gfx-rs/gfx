@@ -1,7 +1,7 @@
 use std::sync::{mpsc, Arc};
 use std::collections::HashMap;
 
-use hal::{self, MemoryType, Device as Device_, Limits};
+use hal::{Device as Device_, Limits};
 use hal::memory::Requirements;
 use memory::{self, Allocator, Memory, ReleaseFn, Provider, Dependency};
 use {buffer, image};
@@ -95,7 +95,7 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
         );
         let memory_type = device.find_usage_memory(inner.usage, requirements.type_mask)
             .expect("could not find suitable memory");
-        let stack = inner.stacks.entry(memory_type.id)
+        let stack = inner.stacks.entry(memory_type)
             .or_insert_with(|| ChunkStack::new(memory_type));
         let (memory, offset, release) = stack.allocate(
             device,
@@ -119,7 +119,7 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
         let requirements = device.raw.get_image_requirements(&image);
         let memory_type = device.find_usage_memory(inner.usage, requirements.type_mask)
             .expect("could not find suitable memory");
-        let stack = inner.stacks.entry(memory_type.id)
+        let stack = inner.stacks.entry(memory_type)
             .or_insert_with(|| ChunkStack::new(memory_type));
         let (memory, offset, release) = stack.allocate(
             device,
@@ -135,7 +135,7 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
 }
 
 struct ChunkStack<B: Backend> {
-    memory_type: MemoryType,
+    memory_type: usize,
     chunks: Vec<B::Memory>,
     allocs: Vec<StackAlloc>,
     receiver: mpsc::Receiver<usize>,
@@ -149,7 +149,7 @@ struct StackAlloc {
 }
 
 impl<B: Backend> ChunkStack<B> {
-    fn new(memory_type: MemoryType) -> Self {
+    fn new(memory_type: usize) -> Self {
         let (sender, receiver) = mpsc::channel();
 
         ChunkStack {
@@ -214,7 +214,7 @@ impl<B: Backend> ChunkStack<B> {
         chunk_size: u64,
     ) {
         let memory = device.raw
-            .allocate_memory(&self.memory_type, chunk_size)
+            .allocate_memory(self.memory_type, chunk_size)
             .unwrap();
         self.chunks.push(memory);
     }

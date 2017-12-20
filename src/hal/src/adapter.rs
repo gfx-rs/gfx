@@ -12,8 +12,6 @@ pub type QueuePriority = f32;
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct MemoryType {
-    /// Id of the memory type.
-    pub id: usize,
     /// Properties of the associated memory.
     pub properties: memory::Properties,
     /// Index to the underlying memory heap in `Gpu::memory_heaps`

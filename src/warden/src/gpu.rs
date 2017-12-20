@@ -78,7 +78,7 @@ pub struct Scene<B: hal::Backend> {
     queue_group: hal::QueueGroup<B, hal::queue::Graphics>,
     command_pool: hal::CommandPool<B, hal::queue::Graphics>,
     upload_buffers: HashMap<String, (B::Buffer, B::Memory)>,
-    download_type: hal::MemoryType,
+    download_type: usize,
     limits: hal::Limits,
 }
 
@@ -111,14 +111,14 @@ impl<B: hal::Backend> Scene<B> {
 
         let upload_type = memory_types
             .iter()
-            .find(|mt| {
+            .position(|mt| {
                 mt.properties.contains(memory::Properties::CPU_VISIBLE)
                 //&&!mt.properties.contains(memory::Properties::CPU_CACHED)
             })
             .unwrap();
         let download_type = memory_types
             .iter()
-            .find(|mt| {
+            .position(|mt| {
                 mt.properties.contains(memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED)
             })
             .unwrap()
@@ -160,8 +160,9 @@ impl<B: hal::Backend> Scene<B> {
                         let requirements = device.get_image_requirements(&unbound);
                         let memory_type = memory_types
                             .iter()
-                            .find(|mt| {
-                                requirements.type_mask & (1 << mt.id) != 0 &&
+                            .enumerate()
+                            .position(|(id, mt)| {
+                                requirements.type_mask & (1 << id) != 0 &&
                                 mt.properties.contains(memory::Properties::DEVICE_LOCAL)
                             })
                             .unwrap();
@@ -201,7 +202,7 @@ impl<B: hal::Backend> Scene<B> {
                             let unbound_buffer = device.create_buffer(upload_size, buffer::Usage::TRANSFER_SRC)
                                 .unwrap();
                             let upload_req = device.get_buffer_requirements(&unbound_buffer);
-                            assert_ne!(upload_req.type_mask & (1<<upload_type.id), 0);
+                            assert_ne!(upload_req.type_mask & (1<<upload_type), 0);
                             let upload_memory = device.allocate_memory(upload_type, upload_req.size)
                                 .unwrap();
                             let upload_buffer = device.bind_buffer_memory(&upload_memory, 0, unbound_buffer)
@@ -521,8 +522,8 @@ impl<B: hal::Backend> Scene<B> {
         let unbound_buffer = self.device.create_buffer(down_size, buffer::Usage::TRANSFER_DST)
             .unwrap();
         let down_req = self.device.get_buffer_requirements(&unbound_buffer);
-        assert_ne!(down_req.type_mask & (1<<self.download_type.id), 0);
-        let down_memory = self.device.allocate_memory(&self.download_type, down_req.size)
+        assert_ne!(down_req.type_mask & (1<<self.download_type), 0);
+        let down_memory = self.device.allocate_memory(self.download_type, down_req.size)
             .unwrap();
         let down_buffer = self.device.bind_buffer_memory(&down_memory, 0, unbound_buffer)
             .unwrap();

@@ -10,19 +10,23 @@ use winapi::shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, winerror};
 use wio::com::ComPtr;
 
 use hal::{self, buffer, device as d, format, image, mapping, memory, pass, pso, query};
-use hal::{MemoryType};
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
 
 use {
     conv, free_list, native as n, root_constants, shade, window as w,
-    Backend as B, Device, QueueFamily, MAX_VERTEX_BUFFERS,
+    Backend as B, Device, QueueFamily, MAX_VERTEX_BUFFERS, NUM_HEAP_PROPERTIES,
 };
 use pool::RawCommandPool;
 use root_constants::RootConstant;
 
 // Register space used for root constants.
 const ROOT_CONSTANT_SPACE: u32 = 0;
+
+const MEM_TYPE_MASK: u64 = 0x7;
+const MEM_TYPE_BUFFER_SHIFT: u64 = 3;
+const MEM_TYPE_IMAGE_SHIFT: u64 = 6;
+const MEM_TYPE_TARGET_SHIFT: u64 = 9;
 
 /// Emit error during shader module creation. Used if we don't expect an error
 /// but might panic due to an exception in SPIRV-Cross.
@@ -633,15 +637,16 @@ impl Device {
 impl d::Device<B> for Device {
     fn allocate_memory(
         &self,
-        mem_type: &MemoryType,
+        mem_type: usize,
         size: u64,
     ) -> Result<n::Memory, d::OutOfMemory> {
-        let mut heap = ptr::null_mut();
+        let mem_base_id = mem_type % NUM_HEAP_PROPERTIES;
+        let heap_property = &self.heap_properties[mem_base_id];
 
         let properties = d3d12::D3D12_HEAP_PROPERTIES {
             Type: d3d12::D3D12_HEAP_TYPE_CUSTOM,
-            CPUPageProperty: self.heap_properties[mem_type.id % 4].page_property,
-            MemoryPoolPreference: self.heap_properties[mem_type.id % 4].memory_pool,
+            CPUPageProperty: heap_property.page_property,
+            MemoryPoolPreference: heap_property.memory_pool,
             CreationNodeMask: 0,
             VisibleNodeMask: 0,
         };
@@ -650,7 +655,7 @@ impl d::Device<B> for Device {
             SizeInBytes: size,
             Properties: properties,
             Alignment: 0, //Warning: has to be 4K for MSAA targets
-            Flags: match mem_type.id >> 2 {
+            Flags: match mem_type / NUM_HEAP_PROPERTIES {
                 0 => d3d12::D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES,
                 1 => d3d12::D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS,
                 2 => d3d12::D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES,
@@ -659,6 +664,7 @@ impl d::Device<B> for Device {
             },
         };
 
+        let mut heap = ptr::null_mut();
         let hr = unsafe {
             self.raw.clone().CreateHeap(&desc, &d3d12::IID_ID3D12Heap, &mut heap)
         };
@@ -669,7 +675,7 @@ impl d::Device<B> for Device {
 
         Ok(n::Memory {
             heap: unsafe { ComPtr::new(heap as _) },
-            ty: mem_type.clone(),
+            type_id: mem_type,
             size,
         })
     }
@@ -1268,7 +1274,11 @@ impl d::Device<B> for Device {
         let requirements = memory::Requirements {
             size,
             alignment: d3d12::D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT as u64,
-            type_mask: if self.private_caps.heterogeneous_resource_heaps { 0x7 } else { 0x7<<4 },
+            type_mask: if self.private_caps.heterogeneous_resource_heaps {
+                MEM_TYPE_MASK
+            } else {
+                MEM_TYPE_MASK << MEM_TYPE_BUFFER_SHIFT
+            },
         };
 
         Ok(UnboundBuffer {
@@ -1287,9 +1297,9 @@ impl d::Device<B> for Device {
         offset: u64,
         buffer: UnboundBuffer,
     ) -> Result<n::Buffer, d::BindError> {
-        if buffer.requirements.type_mask & (1 << memory.ty.id) == 0 {
+        if buffer.requirements.type_mask & (1 << memory.type_id) == 0 {
             error!("Bind memory failure: supported mask 0x{:x}, given id {}",
-                buffer.requirements.type_mask, memory.ty.id);
+                buffer.requirements.type_mask, memory.type_id);
             return Err(d::BindError::WrongMemory)
         }
         if offset + buffer.requirements.size > memory.size {
@@ -1423,14 +1433,21 @@ impl d::Device<B> for Device {
             self.raw.clone().GetResourceAllocationInfo(0, 1, &desc)
         };
 
+        let type_mask_shift = if self.private_caps.heterogeneous_resource_heaps {
+            0
+        } else if usage.can_target() {
+            MEM_TYPE_TARGET_SHIFT
+        } else {
+            MEM_TYPE_IMAGE_SHIFT
+        };
+
         Ok(UnboundImage {
             dsv_format: conv::map_format_dsv(format.0).unwrap_or(desc.Format),
             desc,
             requirements: memory::Requirements {
                 size: alloc_info.SizeInBytes,
                 alignment: alloc_info.Alignment,
-                type_mask: if self.private_caps.heterogeneous_resource_heaps { 0x7 }
-                    else if usage.can_target() { 0x7<<12 } else { 0x7<<8 },
+                type_mask: MEM_TYPE_MASK << type_mask_shift,
             },
             kind,
             usage,
@@ -1452,9 +1469,9 @@ impl d::Device<B> for Device {
         image: UnboundImage,
     ) -> Result<n::Image, d::BindError> {
         use self::image::{AspectFlags, Usage};
-        if image.requirements.type_mask & (1 << memory.ty.id) == 0 {
+        if image.requirements.type_mask & (1 << memory.type_id) == 0 {
             error!("Bind memory failure: supported mask 0x{:x}, given id {}",
-                image.requirements.type_mask, memory.ty.id);
+                image.requirements.type_mask, memory.type_id);
             return Err(d::BindError::WrongMemory)
         }
         if offset + image.requirements.size > memory.size {
