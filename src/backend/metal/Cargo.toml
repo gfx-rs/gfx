@@ -20,7 +20,7 @@ name = "gfx_backend_metal"
 [dependencies]
 gfx-hal = { path = "../../hal", version = "0.1" }
 log = "0.3"
-winit = { version = "0.7", optional = true }
+winit = { version = "0.9", optional = true }
 metal-rs = "0.6"
 foreign-types = "0.3"
 objc = "0.2"

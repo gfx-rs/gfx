@@ -54,7 +54,7 @@ fn main() {
         .with_title("quad".to_string())
         .build(&events_loop)
         .unwrap();
-    let window_size = window.get_inner_size_pixels().unwrap();
+    let window_size = window.get_inner_size().unwrap();
     let pixel_width = window_size.0 as u16;
     let pixel_height = window_size.1 as u16;
 

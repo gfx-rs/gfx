@@ -270,7 +270,7 @@ impl core::WindowExt<device_dx12::Backend> for Window {
         let mut instance = device_dx12::Instance::create();
         let adapters = instance.enumerate_adapters();
         let surface = {
-            let (width, height) = self.0.get_inner_size_pixels().unwrap();
+            let (width, height) = self.0.get_inner_size().unwrap();
             Surface12 {
                 factory: instance.factory.clone(),
                 wnd_handle: self.0.get_hwnd() as *mut _,
