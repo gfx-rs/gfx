@@ -75,7 +75,9 @@ pub enum Command {
     SetRasterizer(*const ID3D11RasterizerState),
     SetDepthStencil(*const ID3D11DepthStencilState, UINT),
     SetBlend(*const ID3D11BlendState, [FLOAT; 4], UINT),
-    CopyBuffer(Buffer, Buffer, UINT, UINT, UINT),
+    CopyBuffer(Buffer, UINT, Buffer, UINT, UINT),
+    CopyBufferToTexture(Buffer, UINT, tex::TextureCopyRegion<Texture>),
+    CopyTextureToBuffer(tex::TextureCopyRegion<Texture>, Buffer, UINT),
     CopyTexture(tex::TextureCopyRegion<Texture>, tex::TextureCopyRegion<Texture>),
     // resource updates
     UpdateBuffer(Buffer, DataPointer, usize),
@@ -317,23 +319,27 @@ impl<P: 'static + Parser> command::Buffer<Resources> for CommandBuffer<P> {
     fn copy_buffer(&mut self, src: Buffer, dst: Buffer,
                    src_offset_bytes: usize, dst_offset_bytes: usize,
                    size_bytes: usize) {
-        self.parser.parse(Command::CopyBuffer(src, dst,
-                                              src_offset_bytes as UINT,
-                                              dst_offset_bytes as UINT,
-                                              size_bytes as UINT));
+        self.parser.parse(Command::CopyBuffer(
+            src, src_offset_bytes as UINT,
+            dst, dst_offset_bytes as UINT,
+            size_bytes as UINT));
     }
 
     #[allow(unused_variables)]
     fn copy_buffer_to_texture(&mut self, src: Buffer, src_offset_bytes: usize,
                               dst: tex::TextureCopyRegion<Texture>) {
-        unimplemented!()
+        self.parser.parse(Command::CopyBufferToTexture(
+            src, src_offset_bytes as UINT,
+            dst));
     }
 
     #[allow(unused_variables)]
     fn copy_texture_to_buffer(&mut self,
                               src: tex::TextureCopyRegion<Texture>,
                               dst: Buffer, dst_offset_bytes: usize) {
-        unimplemented!()
+        self.parser.parse(Command::CopyTextureToBuffer(
+            src,
+            dst, dst_offset_bytes as UINT));
     }
 
     fn copy_texture_to_texture(&mut self,
