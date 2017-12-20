@@ -552,16 +552,25 @@ pub fn bind_sampler(gl: &gl::Gl, target: GLenum, info: &t::SamplerInfo, private_
     gl.TexParameteri(target, gl::TEXTURE_MIN_FILTER, min as GLint);
     gl.TexParameteri(target, gl::TEXTURE_MAG_FILTER, mag as GLint);
 
-    let (s, t, r) = info.wrap_mode;
-    gl.TexParameteri(target, gl::TEXTURE_WRAP_S, wrap_to_gl(s) as GLint);
-    gl.TexParameteri(target, gl::TEXTURE_WRAP_T, wrap_to_gl(t) as GLint);
-    gl.TexParameteri(target, gl::TEXTURE_WRAP_R, wrap_to_gl(r) as GLint);
-
     if private_caps.sampler_lod_bias_supported {
         gl.TexParameterf(target, gl::TEXTURE_LOD_BIAS, info.lod_bias.into());
     }
-    let border: [f32; 4] = info.border.into();
-    gl.TexParameterfv(target, gl::TEXTURE_BORDER_COLOR, &border[0]);
+
+    let (mut s, mut t, mut r) = info.wrap_mode;
+    if [s, t, r].iter().any(|wrap| *wrap == t::WrapMode::Border) {
+        if private_caps.texture_border_clamp_supported {
+            let border: [f32; 4] = info.border.into();
+            gl.TexParameterfv(target, gl::TEXTURE_BORDER_COLOR, &border[0]);
+        } else {
+            s = t::WrapMode::Clamp;
+            t = t::WrapMode::Clamp;
+            r = t::WrapMode::Clamp;
+            warn!("Unable to use `WrapMode::Border`, overriding with `Clamp`");
+        }
+    }
+    gl.TexParameteri(target, gl::TEXTURE_WRAP_S, wrap_to_gl(s) as GLint);
+    gl.TexParameteri(target, gl::TEXTURE_WRAP_T, wrap_to_gl(t) as GLint);
+    gl.TexParameteri(target, gl::TEXTURE_WRAP_R, wrap_to_gl(r) as GLint);
 
     let (min, max) = info.lod_range;
     gl.TexParameterf(target, gl::TEXTURE_MIN_LOD, min.into());
@@ -985,16 +994,25 @@ pub fn make_sampler(gl: &gl::Gl, info: &t::SamplerInfo, private_caps: &PrivateCa
     gl.SamplerParameteri(name, gl::TEXTURE_MIN_FILTER, min as GLint);
     gl.SamplerParameteri(name, gl::TEXTURE_MAG_FILTER, mag as GLint);
 
-    let (s, t, r) = info.wrap_mode;
-    gl.SamplerParameteri(name, gl::TEXTURE_WRAP_S, wrap_to_gl(s) as GLint);
-    gl.SamplerParameteri(name, gl::TEXTURE_WRAP_T, wrap_to_gl(t) as GLint);
-    gl.SamplerParameteri(name, gl::TEXTURE_WRAP_R, wrap_to_gl(r) as GLint);
-
     if private_caps.sampler_lod_bias_supported {
         gl.SamplerParameterf(name, gl::TEXTURE_LOD_BIAS, info.lod_bias.into());
     }
-    let border: [f32; 4] = info.border.into();
-    gl.SamplerParameterfv(name, gl::TEXTURE_BORDER_COLOR, &border[0]);
+
+    let (mut s, mut t, mut r) = info.wrap_mode;
+    if [s, t, r].iter().any(|wrap| *wrap == t::WrapMode::Border) {
+        if private_caps.texture_border_clamp_supported {
+            let border: [f32; 4] = info.border.into();
+            gl.SamplerParameterfv(name, gl::TEXTURE_BORDER_COLOR, &border[0]);
+        } else {
+            s = t::WrapMode::Clamp;
+            t = t::WrapMode::Clamp;
+            r = t::WrapMode::Clamp;
+            warn!("Unable to use `WrapMode::Border`, overriding with `Clamp`");
+        }
+    }
+    gl.SamplerParameteri(name, gl::TEXTURE_WRAP_S, wrap_to_gl(s) as GLint);
+    gl.SamplerParameteri(name, gl::TEXTURE_WRAP_T, wrap_to_gl(t) as GLint);
+    gl.SamplerParameteri(name, gl::TEXTURE_WRAP_R, wrap_to_gl(r) as GLint);
 
     let (min, max) = info.lod_range;
     gl.SamplerParameterf(name, gl::TEXTURE_MIN_LOD, min.into());

@@ -182,6 +182,7 @@ pub struct PrivateCaps {
     pub clear_buffer_supported: bool,
     pub frag_data_location_supported: bool,
     pub sampler_lod_bias_supported: bool,
+    pub texture_border_clamp_supported: bool,
 }
 
 /// OpenGL implementation information
@@ -300,7 +301,7 @@ pub fn get_all(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
                                            && !is_emscripten,
         unordered_access_view_supported:   info.is_supported(&[Core(4,0)]), //TODO: extension
         separate_blending_slots_supported: info.is_supported(&[Core(4,0),
-                                                               Es  (3,2),
+                                                               Es  (3,2), // see `glDisablei`
                                                                Ext ("GL_ARB_draw_buffers_blend")]),
         copy_buffer_supported:             info.is_supported(&[Core(3,1),
                                                                Es  (3,0),
@@ -318,7 +319,8 @@ pub fn get_all(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
                                                                Ext ("GL_ARB_texture_storage")]),
         sampler_objects_supported:         info.is_supported(&[Core(3,3),
                                                                Es  (3,0),
-                                                               Ext ("GL_ARB_sampler_objects")]),
+                                                               Ext ("GL_ARB_sampler_objects")])
+                                           && !is_emscripten,
         program_interface_supported:       info.is_supported(&[Core(4,3),
                                                                Ext ("GL_ARB_program_interface_query")]),
         buffer_storage_supported:          info.is_supported(&[Core(4,4),
@@ -328,6 +330,9 @@ pub fn get_all(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
                                            && !is_emscripten,
         frag_data_location_supported:      !info.version.is_embedded,
         sampler_lod_bias_supported:        !info.version.is_embedded,
+        texture_border_clamp_supported:    info.is_supported(&[Core(2,0), //TODO?
+                                                               Es  (3,2),
+                                                               Ext ("GL_EXT_texture_border_clamp")]),
     };
     (info, caps, private)
 }
