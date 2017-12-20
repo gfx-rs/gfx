@@ -127,7 +127,10 @@ pub mod shade;
 pub mod macros;
 
 use std::collections::VecDeque;
-use hal::{Capability, CommandQueue, QueueFamily, Surface, Swapchain, Device as Device_};
+use hal::{
+    Capability, CommandQueue, PhysicalDevice, QueueFamily, Surface, Swapchain,
+    Device as Device_,
+};
 use hal::format::RenderFormat;
 use hal::pool::CommandPoolCreateFlags;
 use memory::Typed;
@@ -217,11 +220,10 @@ impl<B: Backend, C> Context<B, C>
     where
         Cf: RenderFormat,
     {
+        let memory_properties = adapter.physical_device.memory_properties();
         let hal::Gpu {
             device,
             mut queue_groups,
-            memory_types,
-            memory_heaps,
         } = adapter.open_with(|family| {
             let ty = family.queue_type();
             if Graphics::supported_by(ty) && Compute::supported_by(ty) &&
@@ -275,7 +277,11 @@ impl<B: Backend, C> Context<B, C>
                 }
             }).collect();
 
-        let (device, garbage) = Device::new(device, memory_types, memory_heaps);
+        let (device, garbage) = Device::new(
+            device,
+            memory_properties.memory_types,
+            memory_properties.memory_heaps,
+        );
 
         let context = Context {
             surface,

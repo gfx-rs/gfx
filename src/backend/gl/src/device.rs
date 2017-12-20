@@ -150,14 +150,6 @@ impl Device {
 }
 
 impl d::Device<B> for Device {
-    fn get_features(&self) -> &c::Features {
-        &self.share.features
-    }
-
-    fn get_limits(&self) -> &c::Limits {
-        &self.share.limits
-    }
-
     fn allocate_memory(
         &self, mem_type: &c::MemoryType, _size: u64,
     ) -> Result<n::Memory, d::OutOfMemory> {

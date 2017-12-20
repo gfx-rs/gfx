@@ -55,9 +55,6 @@ impl Device {
 }
 
 impl d::Device<B> for Device {
-    fn get_features(&self) -> &Features { &self.features }
-    fn get_limits(&self) -> &Limits { &self.limits }
-
     fn allocate_memory(&self, memory_type: &MemoryType, size: u64) -> Result<n::Memory, d::OutOfMemory> {
         let info = vk::MemoryAllocateInfo {
             s_type: vk::StructureType::MemoryAllocateInfo,

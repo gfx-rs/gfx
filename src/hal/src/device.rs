@@ -9,7 +9,7 @@ use std::ops::Range;
 use {buffer, format, image, mapping, pass, pso, query};
 use pool::{CommandPool, CommandPoolCreateFlags};
 use queue::QueueGroup;
-use {Backend, Features, Limits, MemoryType};
+use {Backend, MemoryType};
 use memory::Requirements;
 use window::{Backbuffer, SwapchainConfig};
 
@@ -114,13 +114,6 @@ pub struct FramebufferError;
 /// benefit from the backends that support synchronization of the `Device`.
 ///
 pub trait Device<B: Backend> {
-    /// Returns the features of this `Device`. This usually depends on the graphics API being
-    /// used.
-    fn get_features(&self) -> &Features;
-
-    /// Returns the limits of this `Device`.
-    fn get_limits(&self) -> &Limits;
-
     /// Allocates a memory segment of a specified type.
     ///
     /// There is only a limited amount of allocations allowed depending on the implementation!

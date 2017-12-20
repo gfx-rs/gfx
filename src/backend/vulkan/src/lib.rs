@@ -351,44 +351,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             }
         };
 
-        let limits = &self.properties.limits;
-        let max_group_count = limits.max_compute_work_group_count;
-        let max_group_size = limits.max_compute_work_group_size;
-
         let device = Device {
             raw: Arc::new(RawDevice(device_raw)),
-            features: Features { //TODO
-                indirect_execution: limits.max_draw_indirect_count != 0,
-                draw_instanced: false,
-                draw_instanced_base: false,
-                draw_indexed_base: false,
-                draw_indexed_instanced: false,
-                draw_indexed_instanced_base_vertex: false,
-                draw_indexed_instanced_base: false,
-                instance_rate: false,
-                vertex_base: false,
-                srgb_color: false,
-                constant_buffer: false,
-                unordered_access_view: false,
-                separate_blending_slots: false,
-                copy_buffer: false,
-                sampler_anisotropy: false,
-                sampler_border_color: false,
-                sampler_lod_bias: false,
-                sampler_objects: false,
-                precise_occlusion_query: false,
-                pipeline_statistics_query: false,
-            },
-            limits: Limits {
-                max_texture_size: limits.max_image_dimension3d as _,
-                max_patch_size: limits.max_tessellation_patch_size as PatchSize,
-                max_viewports: limits.max_viewports as _,
-                max_compute_group_count: [max_group_count[0] as _, max_group_count[1] as _, max_group_count[2] as _],
-                max_compute_group_size: [max_group_size[0] as _, max_group_size[1] as _, max_group_size[2] as _],
-                min_buffer_copy_offset_alignment: limits.optimal_buffer_copy_offset_alignment as _,
-                min_buffer_copy_pitch_alignment: limits.optimal_buffer_copy_row_pitch_alignment as _,
-                min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as _,
-            },
         };
 
         let device_arc = device.raw.clone();
@@ -410,7 +374,27 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             })
             .collect();
 
-        let mem_properties =  self.instance.0.get_physical_device_memory_properties(self.handle);
+        hal::Gpu {
+            device,
+            queue_groups,
+        }
+    }
+
+    fn format_properties(&self, format: format::Format) -> format::Properties {
+        let properties = self.instance.0.get_physical_device_format_properties(
+            self.handle,
+            conv::map_format(format.0, format.1).unwrap(),
+        );
+
+        format::Properties {
+            linear_tiling: conv::map_image_features(properties.linear_tiling_features),
+            optimal_tiling: conv::map_image_features(properties.optimal_tiling_features),
+            buffer_features: conv::map_buffer_features(properties.buffer_features),
+        }
+    }
+
+    fn memory_properties(&self) -> hal::MemoryProperties {
+        let mem_properties = self.instance.0.get_physical_device_memory_properties(self.handle);
         let memory_heaps = mem_properties.memory_heaps[..mem_properties.memory_heap_count as usize]
             .iter()
             .map(|mem| mem.size).collect();
@@ -441,24 +425,52 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             }
         }).collect();
 
-        hal::Gpu {
-            device,
-            queue_groups,
-            memory_types,
+        hal::MemoryProperties {
             memory_heaps,
+            memory_types,
         }
     }
 
-    fn format_properties(&self, format: format::Format) -> format::Properties {
-        let properties = self.instance.0.get_physical_device_format_properties(
-            self.handle,
-            conv::map_format(format.0, format.1).unwrap(),
-        );
+    fn get_features(&self) -> Features {
+        let limits = &self.properties.limits;
 
-        format::Properties {
-            linear_tiling: conv::map_image_features(properties.linear_tiling_features),
-            optimal_tiling: conv::map_image_features(properties.optimal_tiling_features),
-            buffer_features: conv::map_buffer_features(properties.buffer_features),
+        Features { //TODO
+            indirect_execution: limits.max_draw_indirect_count != 0,
+            draw_instanced: false,
+            draw_instanced_base: false,
+            draw_indexed_base: false,
+            draw_indexed_instanced: false,
+            draw_indexed_instanced_base_vertex: false,
+            draw_indexed_instanced_base: false,
+            instance_rate: false,
+            vertex_base: false,
+            srgb_color: false,
+            constant_buffer: false,
+            unordered_access_view: false,
+            separate_blending_slots: false,
+            copy_buffer: false,
+            sampler_anisotropy: false,
+            sampler_border_color: false,
+            sampler_lod_bias: false,
+            sampler_objects: false,
+            precise_occlusion_query: false,
+            pipeline_statistics_query: false,
+        }
+    }
+    fn get_limits(&self) -> Limits {
+        let limits = &self.properties.limits;
+        let max_group_count = limits.max_compute_work_group_count;
+        let max_group_size = limits.max_compute_work_group_size;
+
+        Limits {
+            max_texture_size: limits.max_image_dimension3d as _,
+            max_patch_size: limits.max_tessellation_patch_size as PatchSize,
+            max_viewports: limits.max_viewports as _,
+            max_compute_group_count: [max_group_count[0] as _, max_group_count[1] as _, max_group_count[2] as _],
+            max_compute_group_size: [max_group_size[0] as _, max_group_size[1] as _, max_group_size[2] as _],
+            min_buffer_copy_offset_alignment: limits.optimal_buffer_copy_offset_alignment as _,
+            min_buffer_copy_pitch_alignment: limits.optimal_buffer_copy_row_pitch_alignment as _,
+            min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as _,
         }
     }
 }
@@ -530,8 +542,6 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
 
 pub struct Device {
     raw: Arc<RawDevice>,
-    features: Features,
-    limits: Limits,
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]

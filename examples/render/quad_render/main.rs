@@ -10,7 +10,7 @@ extern crate image;
 use std::io::Cursor;
 
 use hal::{command, device as d, image as i, pso};
-use hal::{Device, Instance, Primitive};
+use hal::{Device, Instance, PhysicalDevice, Primitive};
 use gfx::format::{Srgba8 as ColorFormat};
 use gfx::allocators::StackAllocator as Allocator;
 
@@ -66,6 +66,7 @@ fn main() {
         println!("{:?}", adapter.info);
     }
     let adapter = adapters.remove(0);
+    let limits = adapter.physical_device.get_limits();
 
     let (mut context, backbuffers) =
         gfx::Context::<back::Backend, hal::Graphics>
@@ -114,10 +115,14 @@ fn main() {
 
     let mut upload = Allocator::new(
         gfx::memory::Usage::Upload,
-        &context.ref_device());
+        &context.ref_device(),
+        limits,
+    );
     let mut data = Allocator::new(
         gfx::memory::Usage::Data,
-        &context.ref_device());
+        &context.ref_device(),
+        limits,
+    );
     println!("Memory types: {:?}", context.ref_device().memory_types());
     println!("Memory heaps: {:?}", context.ref_device().memory_heaps());
 
@@ -136,7 +141,7 @@ fn main() {
     let img = image::load(Cursor::new(&img_data[..]), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
     let kind = i::Kind::D2(width as i::Size, height as i::Size, i::AaMode::Single);
-    let row_alignment_mask = device.raw.get_limits().min_buffer_copy_pitch_alignment as u32 - 1;
+    let row_alignment_mask = limits.min_buffer_copy_pitch_alignment as u32 - 1;
     let image_stride = 4usize;
     let row_pitch = (width * image_stride as u32 + row_alignment_mask) & !row_alignment_mask;
     let upload_size = (height * row_pitch) as u64;

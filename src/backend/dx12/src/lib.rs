@@ -140,17 +140,21 @@ impl QueueFamily {
 pub struct PhysicalDevice {
     adapter: ComPtr<dxgi1_2::IDXGIAdapter2>,
     factory: ComPtr<dxgi1_4::IDXGIFactory4>,
+    features: hal::Features,
+    limits: hal::Limits,
+    private_caps: Capabilities,
+    heap_properties: &'static [HeapProperties],
+    memory_properties: hal::MemoryProperties,
 }
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(self, families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>) -> hal::Gpu<Backend> {
-        use self::memory::Properties;
         // Create D3D12 device
         let mut device_raw = ptr::null_mut();
         let hr = unsafe {
             d3d12::D3D12CreateDevice(
                 self.adapter.as_mut() as *mut _ as *mut _,
-                d3dcommon::D3D_FEATURE_LEVEL_12_0, // TODO: correct feature level?
+                d3dcommon::D3D_FEATURE_LEVEL_11_0, // Minimum required feature level
                 &d3d12::IID_ID3D12Device,
                 &mut device_raw as *mut *mut _ as *mut *mut _,
             )
@@ -158,21 +162,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         if !winerror::SUCCEEDED(hr) {
             error!("error on device creation: {:x}", hr);
         }
-        let mut device = Device::new(unsafe { ComPtr::new(device_raw) });
-
-        // Get the IDXGIAdapter3 from the created device to query video memory information.
-        let adapter_id = unsafe { device.raw.GetAdapterLuid() };
-        let adapter = {
-            let mut adapter: *mut dxgi1_4::IDXGIAdapter3 = ptr::null_mut();
-            unsafe {
-                assert_eq!(winerror::S_OK, self.factory.as_mut().EnumAdapterByLuid(
-                    adapter_id,
-                    &dxgi1_4::IID_IDXGIAdapter3,
-                    &mut adapter as *mut *mut _ as *mut *mut _,
-                ));
-                ComPtr::new(adapter)
-            }
-        };
+        let mut device = Device::new(
+            unsafe { ComPtr::new(device_raw) },
+            &self,
+        );
 
         // Always create the presentation queue in case we want to build a swapchain.
         let mut present_queue = {
@@ -252,122 +245,22 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             mem::forget(present_queue);
         }
 
-        // https://msdn.microsoft.com/en-us/library/windows/desktop/dn788678(v=vs.85).aspx
-        let base_memory_types = match device.private_caps.memory_architecture {
-            MemoryArchitecture::NUMA => [
-                // DEFAULT
-                hal::MemoryType {
-                    id: 0,
-                    properties: Properties::DEVICE_LOCAL,
-                    heap_index: 0,
-                },
-                // UPLOAD
-                hal::MemoryType {
-                    id: 1,
-                    properties: Properties::CPU_VISIBLE | Properties::COHERENT,
-                    heap_index: 1,
-                },
-                // READBACK
-                hal::MemoryType {
-                    id: 2,
-                    properties: Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
-                    heap_index: 1,
-                },
-            ],
-            MemoryArchitecture::UMA => [
-                // DEFAULT
-                hal::MemoryType {
-                    id: 0,
-                    properties: Properties::DEVICE_LOCAL,
-                    heap_index: 0,
-                },
-                // UPLOAD
-                hal::MemoryType {
-                    id: 1,
-                    properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT,
-                    heap_index: 0,
-                },
-                // READBACK
-                hal::MemoryType {
-                    id: 2,
-                    properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
-                    heap_index: 0,
-                },
-            ],
-            MemoryArchitecture::CacheCoherentUMA => [
-                // DEFAULT
-                hal::MemoryType {
-                    id: 0,
-                    properties: Properties::DEVICE_LOCAL,
-                    heap_index: 0,
-                },
-                // UPLOAD
-                hal::MemoryType {
-                    id: 1,
-                    properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
-                    heap_index: 0,
-                },
-                // READBACK
-                hal::MemoryType {
-                    id: 2,
-                    properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
-                    heap_index: 0,
-                },
-            ],
-        };
-
-        let memory_types = if device.private_caps.heterogeneous_resource_heaps {
-            base_memory_types.to_vec()
-        } else {
-            // the bit pattern of ID becomes 0bTTII, where
-            // TT=1 for buffers, TT=2 for images, and TT=3 for targets
-            // TT=0 is reserved for future use, helps to avoid ambiguity
-            // and II is the same `id` as the `base_memory_types` have
-            let mut types = Vec::new();
-            for &tt in &[1, 2, 3] {
-                types.extend(base_memory_types
-                    .iter()
-                    .map(|&mt| hal::MemoryType {
-                        id: mt.id + (tt << 2),
-                        .. mt
-                    })
-                );
-            }
-            types
-        };
-
-        let memory_heaps = {
-            let query_memory = |segment: dxgi1_4::DXGI_MEMORY_SEGMENT_GROUP| unsafe {
-                let mut mem_info: dxgi1_4::DXGI_QUERY_VIDEO_MEMORY_INFO = mem::uninitialized();
-                assert_eq!(winerror::S_OK, adapter.QueryVideoMemoryInfo(
-                    0,
-                    segment,
-                    &mut mem_info,
-                ));
-                mem_info.Budget
-            };
-
-            let local = query_memory(dxgi1_4::DXGI_MEMORY_SEGMENT_GROUP_LOCAL);
-            match device.private_caps.memory_architecture {
-                MemoryArchitecture::NUMA => {
-                    let non_local = query_memory(dxgi1_4::DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL);
-                    vec![local, non_local]
-                },
-                _ => vec![local],
-            }
-        };
-
         hal::Gpu {
             device,
             queue_groups,
-            memory_types,
-            memory_heaps,
         }
     }
 
     fn format_properties(&self, _: format::Format) -> format::Properties {
         unimplemented!()
     }
+
+    fn memory_properties(&self) -> hal::MemoryProperties {
+        self.memory_properties.clone()
+    }
+
+    fn get_features(&self) -> Features { self.features }
+    fn get_limits(&self) -> Limits { self.limits }
 }
 
 pub struct CommandQueue {
@@ -397,14 +290,14 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum MemoryArchitecture {
     NUMA,
     UMA,
     CacheCoherentUMA,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Capabilities {
     heterogeneous_resource_heaps: bool,
     memory_architecture: MemoryArchitecture,
@@ -419,8 +312,6 @@ struct CmdSignatures {
 
 pub struct Device {
     raw: ComPtr<d3d12::ID3D12Device>,
-    features: hal::Features,
-    limits: hal::Limits,
     private_caps: Capabilities,
     heap_properties: &'static [HeapProperties],
     // CPU only pools
@@ -442,21 +333,7 @@ unsafe impl Send for Device {} //blocked by ComPtr
 unsafe impl Sync for Device {} //blocked by ComPtr
 
 impl Device {
-    fn new(mut device: ComPtr<d3d12::ID3D12Device>) -> Self {
-        let mut features: d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS = unsafe { mem::zeroed() };
-        assert_eq!(winerror::S_OK, unsafe {
-            device.CheckFeatureSupport(d3d12::D3D12_FEATURE_D3D12_OPTIONS,
-                &mut features as *mut _ as *mut _,
-                mem::size_of::<d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS>() as _)
-        });
-
-        let mut features_architecture: d3d12::D3D12_FEATURE_DATA_ARCHITECTURE = unsafe { mem::zeroed() };
-        assert_eq!(winerror::S_OK, unsafe {
-            device.CheckFeatureSupport(d3d12::D3D12_FEATURE_ARCHITECTURE,
-                &mut features_architecture as *mut _ as *mut _,
-                mem::size_of::<d3d12::D3D12_FEATURE_DATA_ARCHITECTURE>() as _)
-        });
-
+    fn new(mut device: ComPtr<d3d12::ID3D12Device>, physical_device: &PhysicalDevice) -> Self {
         // Allocate descriptor heaps
         let max_rtvs = 256; // TODO
         let rtv_pool = native::DescriptorCpuPool {
@@ -537,15 +414,6 @@ impl Device {
             max_samplers,
         );
 
-        let uma = features_architecture.UMA == TRUE;
-        let cc_uma = features_architecture.CacheCoherentUMA == TRUE;
-
-        let (memory_architecture, heap_properties) = match (uma, cc_uma) {
-            (true, true)  => (MemoryArchitecture::CacheCoherentUMA, HEAPS_CCUMA),
-            (true, false) => (MemoryArchitecture::UMA, HEAPS_UMA),
-            (false, _)            => (MemoryArchitecture::NUMA, HEAPS_NUMA),
-        };
-
         let draw_signature = Self::create_command_signature(
             &mut device,
             device::CommandSignature::Draw,
@@ -563,51 +431,8 @@ impl Device {
 
         Device {
             raw: device,
-            features: Features { // TODO
-                indirect_execution: true,
-                draw_instanced: true,
-                draw_instanced_base: true,
-                draw_indexed_base: true,
-                draw_indexed_instanced: true,
-                draw_indexed_instanced_base_vertex: true,
-                draw_indexed_instanced_base: true,
-                instance_rate: false,
-                vertex_base: false,
-                srgb_color: false,
-                constant_buffer: false,
-                unordered_access_view: false,
-                separate_blending_slots: false,
-                copy_buffer: false,
-                sampler_anisotropy: false,
-                sampler_border_color: false,
-                sampler_lod_bias: false,
-                sampler_objects: false,
-                precise_occlusion_query: true,
-                pipeline_statistics_query: true,
-            },
-            limits: Limits { // TODO
-                max_texture_size: 0,
-                max_patch_size: 0,
-                max_viewports: 0,
-                max_compute_group_count: [
-                    d3d12::D3D12_CS_THREAD_GROUP_MAX_X  as _,
-                    d3d12::D3D12_CS_THREAD_GROUP_MAX_Y  as _,
-                    d3d12::D3D12_CS_THREAD_GROUP_MAX_Z  as _,
-                ],
-                max_compute_group_size: [
-                    d3d12::D3D12_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP as _,
-                    1, //TODO
-                    1, //TODO
-                ],
-                min_buffer_copy_offset_alignment: d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as _,
-                min_buffer_copy_pitch_alignment: d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as _,
-                min_uniform_buffer_offset_alignment: 256, // Required alignment for CBVs
-            },
-            private_caps: Capabilities {
-                heterogeneous_resource_heaps: features.ResourceHeapTier != d3d12::D3D12_RESOURCE_HEAP_TIER_1,
-                memory_architecture,
-            },
-            heap_properties,
+            private_caps: physical_device.private_caps,
+            heap_properties: physical_device.heap_properties,
             rtv_pool: Mutex::new(rtv_pool),
             dsv_pool: Mutex::new(dsv_pool),
             srv_pool: Mutex::new(srv_pool),
@@ -673,6 +498,8 @@ impl hal::Instance for Instance {
     type Backend = Backend;
 
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
+        use self::memory::Properties;
+
         // Enumerate adapters
         let mut cur_index = 0;
         let mut adapters = Vec::new();
@@ -692,55 +519,255 @@ impl hal::Instance for Instance {
                 unsafe { ComPtr::new(adapter as *mut dxgi1_2::IDXGIAdapter2) }
             };
 
+            cur_index += 1;
+
             // Check for D3D12 support
-            let hr = unsafe {
-                d3d12::D3D12CreateDevice(
-                    adapter.as_mut() as *mut _ as *mut _,
-                    d3dcommon::D3D_FEATURE_LEVEL_11_0, // TODO: correct feature level?
-                    &d3d12::IID_ID3D12Device,
-                    ptr::null_mut(),
-                )
+            // Create temporaty device to get physical device information
+            let device = {
+                let mut device = ptr::null_mut();
+                let hr = unsafe {
+                    d3d12::D3D12CreateDevice(
+                        adapter.as_mut() as *mut _ as *mut _,
+                        d3dcommon::D3D_FEATURE_LEVEL_11_0,
+                        &d3d12::IID_ID3D12Device,
+                        &mut device as *mut *mut _ as *mut *mut _,
+                    )
+                };
+                if !winerror::SUCCEEDED(hr) {
+                    continue;
+                }
+
+                unsafe { ComPtr::<d3d12::ID3D12Device>::new(device) }
             };
 
-            if winerror::SUCCEEDED(hr) {
-                // We have found a possible adapter
-                // acquire the device information
-                let mut desc: dxgi1_2::DXGI_ADAPTER_DESC2 = unsafe { std::mem::uninitialized() };
-                unsafe { adapter.GetDesc2(&mut desc); }
+            // We have found a possible adapter
+            // acquire the device information
+            let mut desc: dxgi1_2::DXGI_ADAPTER_DESC2 = unsafe { mem::zeroed() };
+            unsafe { adapter.GetDesc2(&mut desc); }
 
-                let device_name = {
-                    let len = desc.Description.iter().take_while(|&&c| c != 0).count();
-                    let name = <OsString as OsStringExt>::from_wide(&desc.Description[..len]);
-                    name.to_string_lossy().into_owned()
+            let device_name = {
+                let len = desc.Description.iter().take_while(|&&c| c != 0).count();
+                let name = <OsString as OsStringExt>::from_wide(&desc.Description[..len]);
+                name.to_string_lossy().into_owned()
+            };
+
+            let info = hal::AdapterInfo {
+                name: device_name,
+                vendor: desc.VendorId as usize,
+                device: desc.DeviceId as usize,
+                software_rendering: false, // TODO: check for WARP adapter (software rasterizer)?
+            };
+
+            let mut features: d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS = unsafe { mem::zeroed() };
+            assert_eq!(winerror::S_OK, unsafe {
+                device.CheckFeatureSupport(d3d12::D3D12_FEATURE_D3D12_OPTIONS,
+                    &mut features as *mut _ as *mut _,
+                    mem::size_of::<d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS>() as _)
+            });
+
+            let mut features_architecture: d3d12::D3D12_FEATURE_DATA_ARCHITECTURE = unsafe { mem::zeroed() };
+            assert_eq!(winerror::S_OK, unsafe {
+                device.CheckFeatureSupport(d3d12::D3D12_FEATURE_ARCHITECTURE,
+                    &mut features_architecture as *mut _ as *mut _,
+                    mem::size_of::<d3d12::D3D12_FEATURE_DATA_ARCHITECTURE>() as _)
+            });
+
+            let heterogeneous_resource_heaps = features.ResourceHeapTier != d3d12::D3D12_RESOURCE_HEAP_TIER_1;
+
+            let uma = features_architecture.UMA == TRUE;
+            let cc_uma = features_architecture.CacheCoherentUMA == TRUE;
+
+            let (memory_architecture, heap_properties) = match (uma, cc_uma) {
+                (true, true)  => (MemoryArchitecture::CacheCoherentUMA, HEAPS_CCUMA),
+                (true, false) => (MemoryArchitecture::UMA, HEAPS_UMA),
+                (false, _)    => (MemoryArchitecture::NUMA, HEAPS_NUMA),
+            };
+
+            // https://msdn.microsoft.com/en-us/library/windows/desktop/dn788678(v=vs.85).aspx
+            let base_memory_types = match memory_architecture {
+                MemoryArchitecture::NUMA => [
+                    // DEFAULT
+                    hal::MemoryType {
+                        id: 0,
+                        properties: Properties::DEVICE_LOCAL,
+                        heap_index: 0,
+                    },
+                    // UPLOAD
+                    hal::MemoryType {
+                        id: 1,
+                        properties: Properties::CPU_VISIBLE | Properties::COHERENT,
+                        heap_index: 1,
+                    },
+                    // READBACK
+                    hal::MemoryType {
+                        id: 2,
+                        properties: Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
+                        heap_index: 1,
+                    },
+                ],
+                MemoryArchitecture::UMA => [
+                    // DEFAULT
+                    hal::MemoryType {
+                        id: 0,
+                        properties: Properties::DEVICE_LOCAL,
+                        heap_index: 0,
+                    },
+                    // UPLOAD
+                    hal::MemoryType {
+                        id: 1,
+                        properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT,
+                        heap_index: 0,
+                    },
+                    // READBACK
+                    hal::MemoryType {
+                        id: 2,
+                        properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
+                        heap_index: 0,
+                    },
+                ],
+                MemoryArchitecture::CacheCoherentUMA => [
+                    // DEFAULT
+                    hal::MemoryType {
+                        id: 0,
+                        properties: Properties::DEVICE_LOCAL,
+                        heap_index: 0,
+                    },
+                    // UPLOAD
+                    hal::MemoryType {
+                        id: 1,
+                        properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
+                        heap_index: 0,
+                    },
+                    // READBACK
+                    hal::MemoryType {
+                        id: 2,
+                        properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
+                        heap_index: 0,
+                    },
+                ],
+            };
+
+            let memory_types = if heterogeneous_resource_heaps {
+                base_memory_types.to_vec()
+            } else {
+                // the bit pattern of ID becomes 0bTTII, where
+                // TT=1 for buffers, TT=2 for images, and TT=3 for targets
+                // TT=0 is reserved for future use, helps to avoid ambiguity
+                // and II is the same `id` as the `base_memory_types` have
+                let mut types = Vec::new();
+                for &tt in &[1, 2, 3] {
+                    types.extend(base_memory_types
+                        .iter()
+                        .map(|&mt| hal::MemoryType {
+                            id: mt.id + (tt << 2),
+                            .. mt
+                        })
+                    );
+                }
+                types
+            };
+
+            let memory_heaps = {
+                // Get the IDXGIAdapter3 from the created device to query video memory information.
+                let adapter_id = unsafe { device.GetAdapterLuid() };
+                let adapter = {
+                    let mut adapter: *mut dxgi1_4::IDXGIAdapter3 = ptr::null_mut();
+                    unsafe {
+                        assert_eq!(winerror::S_OK, self.factory.as_mut().EnumAdapterByLuid(
+                            adapter_id,
+                            &dxgi1_4::IID_IDXGIAdapter3,
+                            &mut adapter as *mut *mut _ as *mut *mut _,
+                        ));
+                        ComPtr::new(adapter)
+                    }
                 };
 
-                let info = hal::AdapterInfo {
-                    name: device_name,
-                    vendor: desc.VendorId as usize,
-                    device: desc.DeviceId as usize,
-                    software_rendering: false, // TODO: check for WARP adapter (software rasterizer)?
+                let query_memory = |segment: dxgi1_4::DXGI_MEMORY_SEGMENT_GROUP| unsafe {
+                    let mut mem_info: dxgi1_4::DXGI_QUERY_VIDEO_MEMORY_INFO = mem::uninitialized();
+                    assert_eq!(winerror::S_OK, adapter.QueryVideoMemoryInfo(
+                        0,
+                        segment,
+                        &mut mem_info,
+                    ));
+                    mem_info.Budget
                 };
 
-                let physical_device = PhysicalDevice {
-                    adapter,
-                    factory: self.factory.clone(),
-                };
+                let local = query_memory(dxgi1_4::DXGI_MEMORY_SEGMENT_GROUP_LOCAL);
+                match memory_architecture {
+                    MemoryArchitecture::NUMA => {
+                        let non_local = query_memory(dxgi1_4::DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL);
+                        vec![local, non_local]
+                    },
+                    _ => vec![local],
+                }
+            };
 
-                let queue_families = vec![
-                    QueueFamily::Present,
-                    QueueFamily::Normal(QueueType::General),
-                    QueueFamily::Normal(QueueType::Compute),
-                    QueueFamily::Normal(QueueType::Transfer),
-                ];
+            let physical_device = PhysicalDevice {
+                adapter,
+                factory: self.factory.clone(),
+                features: Features { // TODO
+                    indirect_execution: true,
+                    draw_instanced: true,
+                    draw_instanced_base: true,
+                    draw_indexed_base: true,
+                    draw_indexed_instanced: true,
+                    draw_indexed_instanced_base_vertex: true,
+                    draw_indexed_instanced_base: true,
+                    instance_rate: false,
+                    vertex_base: false,
+                    srgb_color: false,
+                    constant_buffer: false,
+                    unordered_access_view: false,
+                    separate_blending_slots: false,
+                    copy_buffer: false,
+                    sampler_anisotropy: false,
+                    sampler_border_color: false,
+                    sampler_lod_bias: false,
+                    sampler_objects: false,
+                    precise_occlusion_query: true,
+                    pipeline_statistics_query: true,
+                },
+                limits: Limits { // TODO
+                    max_texture_size: 0,
+                    max_patch_size: 0,
+                    max_viewports: 0,
+                    max_compute_group_count: [
+                        d3d12::D3D12_CS_THREAD_GROUP_MAX_X  as _,
+                        d3d12::D3D12_CS_THREAD_GROUP_MAX_Y  as _,
+                        d3d12::D3D12_CS_THREAD_GROUP_MAX_Z  as _,
+                    ],
+                    max_compute_group_size: [
+                        d3d12::D3D12_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP as _,
+                        1, //TODO
+                        1, //TODO
+                    ],
+                    min_buffer_copy_offset_alignment: d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as _,
+                    min_buffer_copy_pitch_alignment: d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as _,
+                    min_uniform_buffer_offset_alignment: 256, // Required alignment for CBVs
+                },
+                private_caps: Capabilities {
+                    heterogeneous_resource_heaps,
+                    memory_architecture,
+                },
+                heap_properties,
+                memory_properties: hal::MemoryProperties {
+                    memory_types,
+                    memory_heaps,
+                },
+            };
 
-                adapters.push(hal::Adapter {
-                    info,
-                    physical_device,
-                    queue_families
-                });
-            }
+            let queue_families = vec![
+                QueueFamily::Present,
+                QueueFamily::Normal(QueueType::General),
+                QueueFamily::Normal(QueueType::Compute),
+                QueueFamily::Normal(QueueType::Transfer),
+            ];
 
-            cur_index += 1;
+            adapters.push(hal::Adapter {
+                info,
+                physical_device,
+                queue_families
+            });
         }
         adapters
     }

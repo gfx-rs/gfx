@@ -21,7 +21,10 @@ use std::error::Error;
 use std::fmt::{self, Debug};
 use std::hash::Hash;
 
-pub use self::adapter::{Adapter, AdapterInfo, PhysicalDevice, QueuePriority};
+pub use self::adapter::{
+    Adapter, AdapterInfo, MemoryProperties, MemoryType,
+    PhysicalDevice, QueuePriority,
+};
 pub use self::device::Device;
 pub use self::pool::CommandPool;
 pub use self::pso::{DescriptorPool};
@@ -200,18 +203,6 @@ pub enum IndexType {
     U32,
 }
 
-///
-#[derive(Copy, Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct MemoryType {
-    /// Id of the memory type.
-    pub id: usize,
-    /// Properties of the associated memory.
-    pub properties: memory::Properties,
-    /// Index to the underlying memory heap in `Gpu::memory_heaps`
-    pub heap_index: usize,
-}
-
 /// Basic backend instance trait.
 pub trait Instance {
     /// Associated backend type of this instance.
@@ -293,11 +284,4 @@ pub struct Gpu<B: Backend> {
     /// Raw queue groups. Each element in this vector
     /// matches the corresponding argument in `Adapter::open`.
     pub queue_groups: Vec<queue::RawQueueGroup<B>>,
-    /// Types of memory.
-    ///
-    /// Each memory type is associated with one heap of `memory_heaps`.
-    /// Multiple types can point to the same heap.
-    pub memory_types: Vec<MemoryType>,
-    /// Memory heaps with their size in bytes.
-    pub memory_heaps: Vec<u64>,
 }

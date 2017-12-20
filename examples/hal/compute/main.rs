@@ -15,7 +15,10 @@ extern crate gfx_backend_metal as back;
 use std::str::FromStr;
 use std::ops::Range;
 
-use hal::{Backend, Compute, Gpu, Device, DescriptorPool, Instance, QueueFamily, QueueGroup};
+use hal::{
+    Backend, Compute, Gpu, Device, DescriptorPool, Instance,
+    PhysicalDevice, QueueFamily, QueueGroup,
+};
 use hal::{queue, pso, memory, buffer, pool, command, device};
 
 #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
@@ -33,12 +36,15 @@ fn main() {
     #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
     let instance = back::Instance::create("gfx-rs compute", 1);
 
-    let mut gpu = instance.enumerate_adapters().into_iter()
+    let adapter = instance.enumerate_adapters().into_iter()
         .find(|a| a.queue_families
             .iter()
             .any(|family| family.supports_compute())
         )
-        .expect("Failed to find a GPU with compute support!")
+        .expect("Failed to find a GPU with compute support!");
+
+    let memory_properties = adapter.physical_device.memory_properties();
+    let mut gpu = adapter
         .open_with(|family| {
             if family.supports_compute() {
                 Some(1)
@@ -83,6 +89,7 @@ fn main() {
 
     let (staging_memory, staging_buffer) = create_buffer(
         &mut gpu,
+        &memory_properties.memory_types,
         memory::Properties::CPU_VISIBLE | memory::Properties::COHERENT,
         buffer::Usage::TRANSFER_SRC,
         stride,
@@ -97,6 +104,7 @@ fn main() {
 
     let (device_memory, device_buffer) = create_buffer(
         &mut gpu,
+        &memory_properties.memory_types,
         memory::Properties::DEVICE_LOCAL,
         buffer::Usage::TRANSFER_DST,
         stride,
@@ -164,11 +172,18 @@ fn main() {
     gpu.device.destroy_compute_pipeline(pipeline);
 }
 
-fn create_buffer<B: Backend>(gpu: &mut Gpu<B>, properties: memory::Properties, usage: buffer::Usage, stride: u64, len: u64) -> (B::Memory, B::Buffer) {
+fn create_buffer<B: Backend>(
+    gpu: &mut Gpu<B>,
+    memory_types: &[hal::MemoryType],
+    properties: memory::Properties,
+    usage: buffer::Usage,
+    stride: u64,
+    len: u64,
+) -> (B::Memory, B::Buffer) {
     let buffer = gpu.device.create_buffer(stride * len, usage).unwrap();
     let requirements = gpu.device.get_buffer_requirements(&buffer);
 
-    let ty = (&gpu.memory_types).into_iter().find(|memory_type| {
+    let ty = memory_types.into_iter().find(|memory_type| {
         requirements.type_mask & (1 << memory_type.id) != 0 &&
         memory_type.properties.contains(properties)
     }).unwrap();
