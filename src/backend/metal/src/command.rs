@@ -1,6 +1,7 @@
 use {Backend};
 use native;
 
+use std::borrow::Borrow;
 use std::ops::{Deref, Range};
 use std::sync::{Arc};
 use std::cell::UnsafeCell;
@@ -361,11 +362,14 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
             .reset(self.queue.as_ref().unwrap());
     }
 
-    fn pipeline_barrier(
+    fn pipeline_barrier<'a, T>(
         &mut self,
         _stages: Range<pso::PipelineStage>,
-        _barriers: &[memory::Barrier<Backend>],
-    ) {
+        _barriers: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<memory::Barrier<'a, Backend>>,
+    {
         // TODO: MTLRenderCommandEncoder.textureBarrier on macOS?
     }
 
@@ -407,22 +411,30 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn clear_attachments(
+    fn clear_attachments<T, U>(
         &mut self,
-        _clears: &[AttachmentClear],
-        _rects: &[Rect],
-    ) {
+        _clears: T,
+        _rects: U,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<AttachmentClear>,
+        U: IntoIterator,
+        U::Item: Borrow<Rect>,
+    {
         unimplemented!()
     }
 
-    fn resolve_image(
+    fn resolve_image<T>(
         &mut self,
         _src: &native::Image,
         _src_layout: ImageLayout,
         _dst: &native::Image,
         _dst_layout: ImageLayout,
-        _regions: &[ImageResolve],
-    ) {
+        _regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<ImageResolve>,
+    {
         unimplemented!()
     }
 
@@ -455,12 +467,18 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_viewports(&mut self, vps: &[Viewport]) {
-        let inner = self.inner();
-        if vps.len() != 1 {
+    fn set_viewports<T>(&mut self, vps: T)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<Viewport>,
+    {
+        let mut vps = vps.into_iter();
+        let vp_borrowable = vps.next().expect("No viewport provided, Metal supports exactly one");
+        let vp = vp_borrowable.borrow();
+        if vps.next().is_some() {
             panic!("Metal supports only one viewport");
         }
-        let vp = &vps[0];
+        let inner = self.inner();
         let viewport = MTLViewport {
             originX: vp.rect.x as f64,
             originY: vp.rect.y as f64,
@@ -475,12 +493,18 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_scissors(&mut self, rects: &[Rect]) {
-        let inner = self.inner();
-        if rects.len() != 1 {
+    fn set_scissors<T>(&mut self, rects: T)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<Rect>,
+    {
+        let mut rects = rects.into_iter();
+        let rect_borrowable = rects.next().expect("No scissor provided, Metal supports exactly one");
+        let rect = rect_borrowable.borrow();
+        if rects.next().is_some() {
             panic!("Metal supports only one scissor");
         }
-        let rect = &rects[0];
+        let inner = self.inner();
         let scissor = MTLScissorRect {
             x: rect.x as _,
             y: rect.y as _,
@@ -501,14 +525,17 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn begin_renderpass(
+    fn begin_renderpass<T>(
         &mut self,
         _render_pass: &native::RenderPass,
         frame_buffer: &native::FrameBuffer,
         _render_area: Rect,
-        clear_values: &[ClearValue],
+        clear_values: T,
         _first_subpass: SubpassContents,
-    ) {
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<ClearValue>,
+    {
         unsafe {
             let command_buffer = self.inner();
 
@@ -524,8 +551,8 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
             // FIXME: subpasses
             let pass_descriptor: metal::RenderPassDescriptor = msg_send![frame_buffer.0, copy];
             // TODO: validate number of clear colors
-            for (i, value) in clear_values.iter().enumerate() {
-                match *value {
+            for (i, value) in clear_values.into_iter().enumerate() {
+                match *value.borrow() {
                     ClearValue::Color(ClearColor::Float(values)) => {
                         let color_desc = pass_descriptor.color_attachments().object_at(i).expect("too many clear values");
                         let mtl_color = MTLClearColor::new(
@@ -579,16 +606,19 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         inner.attribute_buffer_index = pipeline.attribute_buffer_index as usize;
     }
 
-    fn bind_graphics_descriptor_sets(
+    fn bind_graphics_descriptor_sets<'a, T>(
         &mut self,
         layout: &native::PipelineLayout,
         first_set: usize,
-        sets: &[&native::DescriptorSet],
-    ) {
+        sets: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<native::DescriptorSet>,
+    {
         use spirv_cross::{msl, spirv};
         let inner = self.inner();
 
-        for (set_index, &desc_set) in sets.iter().enumerate() {
+        for (set_index, desc_set) in sets.into_iter().enumerate() {
             let location_vs = msl::ResourceBindingLocation {
                 stage: spirv::ExecutionModel::Vertex,
                 desc_set: (first_set + set_index) as _,
@@ -599,7 +629,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
                 desc_set: (first_set + set_index) as _,
                 binding: 0,
             };
-            match *desc_set {
+            match *desc_set.borrow() {
                 native::DescriptorSet::Emulated(ref desc_inner) => {
                     use native::DescriptorSetBinding::*;
                     let set = desc_inner.lock().unwrap();
@@ -703,12 +733,15 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn bind_compute_descriptor_sets(
+    fn bind_compute_descriptor_sets<'a, T>(
         &mut self,
         _layout: &native::PipelineLayout,
         _first_set: usize,
-        _sets: &[&native::DescriptorSet],
-    ) {
+        _sets: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<native::DescriptorSet>,
+    {
         unimplemented!()
     }
 
@@ -720,33 +753,42 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn copy_buffer(
+    fn copy_buffer<T>(
         &mut self,
         _src: &native::Buffer,
         _dst: &native::Buffer,
-        _regions: &[BufferCopy],
-    ) {
+        _regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<BufferCopy>,
+    {
         unimplemented!()
     }
 
-    fn copy_image(
+    fn copy_image<T>(
         &mut self,
         _src: &native::Image,
         _src_layout: ImageLayout,
         _dst: &native::Image,
         _dst_layout: ImageLayout,
-        _regions: &[ImageCopy],
-    ) {
+        _regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<ImageCopy>,
+    {
         unimplemented!()
     }
 
-    fn copy_buffer_to_image(
+    fn copy_buffer_to_image<T>(
         &mut self,
         src: &native::Buffer,
         dst: &native::Image,
         _dst_layout: ImageLayout,
-        regions: &[BufferImageCopy],
-    ) {
+        regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<BufferImageCopy>,
+    {
         let encoder = self.encode_blit();
         let extent = MTLSize {
             width: dst.0.width(),
@@ -756,6 +798,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         // FIXME: layout
 
         for region in regions {
+            let region = region.borrow();
             let image_offset = &region.image_offset;
             let r = &region.image_layers;
 
@@ -778,13 +821,16 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn copy_image_to_buffer(
+    fn copy_image_to_buffer<T>(
         &mut self,
         src: &native::Image,
         _src_layout: ImageLayout,
         dst: &native::Buffer,
-        regions: &[BufferImageCopy],
-    ) {
+        regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<BufferImageCopy>,
+    {
         let encoder = self.encode_blit();
         let extent = MTLSize {
             width: src.0.width(),
@@ -794,6 +840,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         // FIXME: layout
 
         for region in regions {
+            let region = region.borrow();
             let image_offset = &region.image_offset;
             let r = &region.image_layers;
 

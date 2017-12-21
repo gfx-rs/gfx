@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::ops::Range;
 use Backend;
 use image;
@@ -85,11 +86,14 @@ pub struct BufferImageCopy {
 
 impl<'a, B: Backend, C: Supports<Transfer>> CommandBuffer<'a, B, C> {
     ///
-    pub fn pipeline_barrier(
+    pub fn pipeline_barrier<'i, T>(
         &mut self,
         stages: Range<PipelineStage>,
-        barriers: &[Barrier<B>],
-    ) {
+        barriers: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<Barrier<'i, B>>,
+    {
         self.raw.pipeline_barrier(stages, barriers)
     }
 
@@ -105,12 +109,15 @@ impl<'a, B: Backend, C: Supports<Transfer>> CommandBuffer<'a, B, C> {
     }
 
     ///
-    pub fn copy_buffer(
+    pub fn copy_buffer<T>(
         &mut self,
         src: &B::Buffer,
         dst: &B::Buffer,
-        regions: &[BufferCopy],
-    ) {
+        regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<BufferCopy>,
+    {
         self.raw.copy_buffer(src, dst, regions)
     }
 
@@ -125,36 +132,45 @@ impl<'a, B: Backend, C: Supports<Transfer>> CommandBuffer<'a, B, C> {
     }
 
     ///
-    pub fn copy_image(
+    pub fn copy_image<T>(
         &mut self,
         src: &B::Image,
         src_layout: image::ImageLayout,
         dst: &B::Image,
         dst_layout: image::ImageLayout,
-        regions: &[ImageCopy],
-    ) {
+        regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<ImageCopy>,
+    {
         self.raw.copy_image(src, src_layout, dst, dst_layout, regions)
     }
 
     ///
-    pub fn copy_buffer_to_image(
+    pub fn copy_buffer_to_image<T>(
         &mut self,
         src: &B::Buffer,
         dst: &B::Image,
         dst_layout: image::ImageLayout,
-        regions: &[BufferImageCopy],
-    ) {
+        regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<BufferImageCopy>,
+    {
         self.raw.copy_buffer_to_image(src, dst, dst_layout, regions)
     }
 
     ///
-    pub fn copy_image_to_buffer(
+    pub fn copy_image_to_buffer<T>(
         &mut self,
         src: &B::Image,
         src_layout: image::ImageLayout,
         dst: &B::Buffer,
-        regions: &[BufferImageCopy],
-    ) {
+        regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<BufferImageCopy>,
+    {
         self.raw.copy_image_to_buffer(src, src_layout, dst, regions)
     }
 }

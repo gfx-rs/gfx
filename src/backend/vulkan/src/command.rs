@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::{cmp, ptr};
 use std::ops::Range;
 use std::sync::Arc;
@@ -25,17 +26,22 @@ fn map_subpass_contents(contents: com::SubpassContents) -> vk::SubpassContents {
     }
 }
 
-fn map_buffer_image_regions(
+fn map_buffer_image_regions<T>(
     image: &n::Image,
-    regions: &[com::BufferImageCopy],
-) -> SmallVec<[vk::BufferImageCopy; 16]> {
+    regions: T,
+) -> SmallVec<[vk::BufferImageCopy; 16]>
+where
+    T: IntoIterator,
+    T::Item: Borrow<com::BufferImageCopy>,
+{
     fn div(a: u32, b: u32) -> u32 {
         assert_eq!(a % b, 0);
         a / b
     };
     regions
-        .iter()
+        .into_iter()
         .map(|region| {
+            let region = region.borrow();
             let r = &region.image_layers;
             let aspect_mask = conv::map_image_aspects(r.aspects);
             let row_length = div(region.buffer_row_pitch, image.bytes_per_texel as u32);
@@ -57,14 +63,17 @@ fn map_buffer_image_regions(
 }
 
 impl CommandBuffer {
-    fn bind_descriptor_sets(
+    fn bind_descriptor_sets<T>(
         &mut self,
         bind_point: vk::PipelineBindPoint,
         layout: &n::PipelineLayout,
         first_set: usize,
-        sets: &[&n::DescriptorSet],
-    ) {
-        let sets: SmallVec<[vk::DescriptorSet; 16]> = sets.iter().map(|set| set.raw).collect();
+        sets: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<n::DescriptorSet>,
+    {
+        let sets: SmallVec<[vk::DescriptorSet; 16]> = sets.into_iter().map(|set| set.borrow().raw).collect();
         let dynamic_offsets = &[]; // TODO
 
         unsafe {
@@ -112,14 +121,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         );
     }
 
-    fn begin_renderpass(
+    fn begin_renderpass<T>(
         &mut self,
         render_pass: &n::RenderPass,
         frame_buffer: &n::FrameBuffer,
         render_area: com::Rect,
-        clear_values: &[com::ClearValue],
+        clear_values: T,
         first_subpass: com::SubpassContents,
-    ) {
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<com::ClearValue>,
+    {
         let render_area = vk::Rect2D {
             offset: vk::Offset2D {
                 x: render_area.x as i32,
@@ -132,7 +144,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         };
 
         let clear_values: SmallVec<[vk::ClearValue; 16]> =
-            clear_values.iter().map(conv::map_clear_value).collect();
+            clear_values.into_iter().map(|clear| conv::map_clear_value(clear.borrow())).collect();
 
         let info = vk::RenderPassBeginInfo {
             s_type: vk::StructureType::RenderPassBeginInfo,
@@ -167,16 +179,19 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn pipeline_barrier(
+    fn pipeline_barrier<'a, T>(
         &mut self,
         stages: Range<pso::PipelineStage>,
-        barriers: &[memory::Barrier<Backend>],
-    ) {
+        barriers: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<memory::Barrier<'a, Backend>>,
+    {
         let mut buffer_bars: SmallVec<[vk::BufferMemoryBarrier; 4]> = SmallVec::new();
         let mut image_bars: SmallVec<[vk::ImageMemoryBarrier; 4]> = SmallVec::new();
 
         for barrier in barriers {
-            match *barrier {
+            match *barrier.borrow() {
                 memory::Barrier::Buffer { ref states, target} => {
                     buffer_bars.push(vk::BufferMemoryBarrier {
                         s_type: vk::StructureType::BufferMemoryBarrier,
@@ -302,15 +317,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         };
     }
 
-    fn clear_attachments(
-        &mut self,
-        clears: &[com::AttachmentClear],
-        rects: &[com::Rect],
-    ) {
+    fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<com::AttachmentClear>,
+        U: IntoIterator,
+        U::Item: Borrow<com::Rect>,
+    {
         let clears: SmallVec<[vk::ClearAttachment; 16]> = clears
-            .iter()
+            .into_iter()
             .map(|clear| {
-                match *clear {
+                match *clear.borrow() {
                     com::AttachmentClear::Color(index, cv) => {
                         vk::ClearAttachment {
                             aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
@@ -345,8 +362,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .collect();
 
         let rects: SmallVec<[vk::ClearRect; 16]> = rects
-            .iter()
+            .into_iter()
             .map(|rect| {
+                let rect = rect.borrow();
                 vk::ClearRect {
                     base_array_layer: 0,
                     layer_count: vk::VK_REMAINING_ARRAY_LAYERS,
@@ -367,17 +385,21 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         unsafe { self.device.0.cmd_clear_attachments(self.raw, &clears, &rects) };
     }
 
-    fn resolve_image(
+    fn resolve_image<T>(
         &mut self,
         src: &n::Image,
         src_layout: ImageLayout,
         dst: &n::Image,
         dst_layout: ImageLayout,
-        regions: &[com::ImageResolve],
-    ) {
+        regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<com::ImageResolve>,
+    {
         let regions = regions
-            .iter()
+            .into_iter()
             .map(|region| {
+                let region = region.borrow();
                 let offset = vk::Offset3D {
                     x: 0,
                     y: 0,
@@ -444,10 +466,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_viewports(&mut self, viewports: &[com::Viewport]) {
+    fn set_viewports<T>(&mut self, viewports: T)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<com::Viewport>,
+    {
         let viewports: SmallVec<[vk::Viewport; 16]> = viewports
-            .iter()
+            .into_iter()
             .map(|viewport| {
+                let viewport = viewport.borrow();
                 vk::Viewport {
                     x: viewport.rect.x as f32,
                     y: viewport.rect.y as f32,
@@ -464,10 +491,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_scissors(&mut self, scissors: &[com::Rect]) {
+    fn set_scissors<T>(&mut self, scissors: T)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<com::Rect>,
+    {
         let scissors: SmallVec<[vk::Rect2D; 16]> = scissors
-            .iter()
+            .into_iter()
             .map(|scissor| {
+                let scissor = scissor.borrow();
                 vk::Rect2D {
                     offset: vk::Offset2D {
                         x: scissor.x as i32,
@@ -529,12 +561,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_graphics_descriptor_sets(
+    fn bind_graphics_descriptor_sets<T>(
         &mut self,
         layout: &n::PipelineLayout,
         first_set: usize,
-        sets: &[&n::DescriptorSet],
-    ) {
+        sets: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<n::DescriptorSet>,
+    {
         self.bind_descriptor_sets(
             vk::PipelineBindPoint::Graphics,
             layout,
@@ -553,12 +588,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_compute_descriptor_sets(
+    fn bind_compute_descriptor_sets<T>(
         &mut self,
         layout: &n::PipelineLayout,
         first_set: usize,
-        sets: &[&n::DescriptorSet],
-    ) {
+        sets: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<n::DescriptorSet>,
+    {
         self.bind_descriptor_sets(
             vk::PipelineBindPoint::Compute,
             layout,
@@ -588,10 +626,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn copy_buffer(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: &[com::BufferCopy]) {
+    fn copy_buffer<T>(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: T)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<com::BufferCopy>,
+    {
         let regions: SmallVec<[vk::BufferCopy; 16]> = regions
-            .iter()
+            .into_iter()
             .map(|region| {
+                let region = region.borrow();
                 vk::BufferCopy {
                     src_offset: region.src,
                     dst_offset: region.dst,
@@ -610,17 +653,21 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn copy_image(
+    fn copy_image<T>(
         &mut self,
         src: &n::Image,
         src_layout: ImageLayout,
         dst: &n::Image,
         dst_layout: ImageLayout,
-        regions: &[com::ImageCopy],
-    ) {
+        regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<com::ImageCopy>,
+    {
         let regions: SmallVec<[vk::ImageCopy; 16]> = regions
-            .iter()
+            .into_iter()
             .map(|region| {
+                let region = region.borrow();
                 let aspect_mask = conv::map_image_aspects(region.aspect_mask);
                 vk::ImageCopy {
                     src_subresource: conv::map_subresource_with_layers(aspect_mask, region.src_subresource, region.num_layers),
@@ -644,13 +691,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn copy_buffer_to_image(
+    fn copy_buffer_to_image<T>(
         &mut self,
         src: &n::Buffer,
         dst: &n::Image,
         dst_layout: ImageLayout,
-        regions: &[com::BufferImageCopy],
-    ) {
+        regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<com::BufferImageCopy>,
+    {
         let regions = map_buffer_image_regions(dst, regions);
 
         unsafe {
@@ -664,13 +714,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn copy_image_to_buffer(
+    fn copy_image_to_buffer<T>(
         &mut self,
         src: &n::Image,
         src_layout: ImageLayout,
         dst: &n::Buffer,
-        regions: &[com::BufferImageCopy],
-    ) {
+        regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<com::BufferImageCopy>,
+    {
         let regions = map_buffer_image_regions(src, regions);
 
         unsafe {
