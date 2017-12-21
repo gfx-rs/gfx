@@ -642,11 +642,18 @@ impl hal::Instance for Instance {
             let memory_types = if heterogeneous_resource_heaps {
                 base_memory_types.to_vec()
             } else {
-                // We multiplicate the base memory types
+                // We multiplicate the base memory types depending on the resource usage:
                 //     0.. 3: Reserved for futures use
                 //     4.. 6: Buffers
                 //     7.. 9: Images
                 //    10..12: Targets
+                //
+                // The supported memory types for a resource can be requested by asking for
+                // the memory requirements. Memory type indices are encoded as bitflags.
+                // `device::MEM_TYPE_MASK` (0b111) defines the bitmask for one base memory type group.
+                // The corresponding shift masks (`device::MEM_TYPE_BUFFER_SHIFT`,
+                // `device::MEM_TYPE_IMAGE_SHIFT`, `device::MEM_TYPE_TARGET_SHIFT`)
+                // denote the usage group.
                 let mut types = Vec::new();
                 for _ in 0..3 {
                     types.extend(base_memory_types.iter());
