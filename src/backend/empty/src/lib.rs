@@ -3,6 +3,7 @@
 
 extern crate gfx_hal as hal;
 
+use std::borrow::Borrow;
 use std::ops::Range;
 use hal::{buffer, command, device, format, image, mapping, memory, pass, pool, pso, query, queue};
 
@@ -339,11 +340,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn pipeline_barrier(
-        &mut self,
-        _: Range<pso::PipelineStage>,
-        _: &[memory::Barrier<Backend>],
-    ) {
+    fn pipeline_barrier<'a, T>(&mut self, _: Range<pso::PipelineStage>, _: T)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<memory::Barrier<'a, Backend>>,
+    {
         unimplemented!()
     }
 
@@ -375,18 +376,27 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn clear_attachments(&mut self, _: &[command::AttachmentClear], _: &[command::Rect]) {
+    fn clear_attachments<T, U>(&mut self, _: T, _: U)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<command::AttachmentClear>,
+        U: IntoIterator,
+        U::Item: Borrow<command::Rect>,
+    {
         unimplemented!()
     }
 
-    fn resolve_image(
+    fn resolve_image<T>(
         &mut self,
         _: &(),
         _: image::ImageLayout,
         _: &(),
         _: image::ImageLayout,
-        _: &[command::ImageResolve],
-    ) {
+        _: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<command::ImageResolve>,
+    {
         unimplemented!()
     }
 
@@ -398,11 +408,19 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn set_viewports(&mut self, _: &[command::Viewport]) {
-
+    fn set_viewports<T>(&mut self, _: T)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<command::Viewport>,
+    {
+        unimplemented!()
     }
 
-    fn set_scissors(&mut self, _: &[command::Rect]) {
+    fn set_scissors<T>(&mut self, _: T)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<command::Rect>,
+    {
         unimplemented!()
     }
 
@@ -417,14 +435,17 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
 
-    fn begin_renderpass(
+    fn begin_renderpass<T>(
         &mut self,
         _: &(),
         _: &(),
         _: command::Rect,
-        _: &[command::ClearValue],
+        _: T,
         _: command::SubpassContents,
-    ) {
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<command::ClearValue>,
+    {
         unimplemented!()
     }
 
@@ -440,12 +461,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn bind_graphics_descriptor_sets(
-        &mut self,
-        _: &(),
-        _: usize,
-        _: &[&()],
-    ) {
+    fn bind_graphics_descriptor_sets<'a, T>(&mut self, _: &(), _: usize, _: T)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<()>,
+    {
         unimplemented!()
     }
 
@@ -453,12 +473,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn bind_compute_descriptor_sets(
-        &mut self,
-        _: &(),
-        _: usize,
-        _: &[&()],
-    ) {
+    fn bind_compute_descriptor_sets<'a, T>(&mut self, _: &(), _: usize, _: T)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<()>,
+    {
         unimplemented!()
     }
 
@@ -470,38 +489,51 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn copy_buffer(&mut self, _: &(), _: &(), _: &[command::BufferCopy]) {
+    fn copy_buffer<T>(&mut self, _: &(), _: &(), _: T)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<command::BufferCopy>,
+    {
         unimplemented!()
     }
 
-    fn copy_image(
+    fn copy_image<T>(
         &mut self,
         _: &(),
         _: image::ImageLayout,
         _: &(),
         _: image::ImageLayout,
-        _: &[command::ImageCopy],
-    ) {
+        _: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<command::ImageCopy>,
+    {
         unimplemented!()
     }
 
-    fn copy_buffer_to_image(
+    fn copy_buffer_to_image<T>(
         &mut self,
         _: &(),
         _: &(),
         _: image::ImageLayout,
-        _: &[command::BufferImageCopy],
-    ) {
+        _: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<command::BufferImageCopy>,
+    {
         unimplemented!()
     }
 
-    fn copy_image_to_buffer(
+    fn copy_image_to_buffer<T>(
         &mut self,
         _: &(),
         _: image::ImageLayout,
         _: &(),
-        _: &[command::BufferImageCopy],
-    ) {
+        _: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<command::BufferImageCopy>,
+    {
         unimplemented!()
     }
 

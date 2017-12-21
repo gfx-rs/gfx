@@ -6,6 +6,7 @@ use hal::buffer::IndexBufferView;
 use {native as n, Backend};
 use pool::{self, BufferMemory};
 
+use std::borrow::Borrow;
 use std::mem;
 use std::ops::Range;
 use std::sync::{Arc, Mutex};
@@ -289,11 +290,14 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     }
 
-    fn pipeline_barrier(
+    fn pipeline_barrier<'a, T>(
         &mut self,
         _stages: Range<hal::pso::PipelineStage>,
-        _barriers: &[memory::Barrier<Backend>],
-    ) {
+        _barriers: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<memory::Barrier<'a, Backend>>,
+    {
         unimplemented!()
     }
 
@@ -305,14 +309,17 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn begin_renderpass(
+    fn begin_renderpass<T>(
         &mut self,
         _render_pass: &n::RenderPass,
         _frame_buffer: &n::FrameBuffer,
         _render_area: command::Rect,
-        _clear_values: &[command::ClearValue],
+        _clear_values: T,
         _first_subpass: command::SubpassContents,
-    ) {
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<command::ClearValue>,
+    {
         unimplemented!()
     }
 
@@ -352,18 +359,27 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn clear_attachments(&mut self, _: &[command::AttachmentClear], _: &[command::Rect]) {
+    fn clear_attachments<T, U>(&mut self, _: T, _: U)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<command::AttachmentClear>,
+        U: IntoIterator,
+        U::Item: Borrow<command::Rect>,
+    {
         unimplemented!()
     }
 
-    fn resolve_image(
+    fn resolve_image<T>(
         &mut self,
         _src: &n::Image,
         _src_layout: image::ImageLayout,
         _dst: &n::Image,
         _dst_layout: image::ImageLayout,
-        _regions: &[command::ImageResolve],
-    ) {
+        _regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<command::ImageResolve>,
+    {
         unimplemented!()
     }
 
@@ -381,29 +397,35 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn set_viewports(&mut self, viewports: &[command::Viewport]) {
-        match viewports.len() {
+    fn set_viewports<T>(&mut self, viewports: T)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<command::Viewport>,
+    {
+        // OpenGL has two functions for setting the viewports.
+        // Configuring the rectangle area and setting the depth bounds are separated.
+        //
+        // We try to store everything into a contiguous block of memory,
+        // which allows us to avoid memory allocations when executing the commands.
+        let mut viewport_ptr = BufferSlice { offset: 0, size: 0 };
+        let mut depth_range_ptr = BufferSlice { offset: 0, size: 0 };
+
+        let mut len = 0;
+        for viewport in viewports {
+            let viewport = viewport.borrow();
+            let viewport_rect = &[viewport.rect.x as f32, viewport.rect.y as f32, viewport.rect.w as f32, viewport.rect.h as f32];
+            viewport_ptr.append(self.add::<f32>(viewport_rect));
+            let depth_range = &[viewport.depth.start as f64, viewport.depth.end as f64];
+            depth_range_ptr.append(self.add::<f64>(depth_range));
+            len += 1;
+        }
+
+        match len {
             0 => {
                 error!("Number of viewports can not be zero.");
                 self.cache.error_state = true;
             }
             n if n <= self.limits.max_viewports => {
-                // OpenGL has two functions for setting the viewports.
-                // Configuring the rectangle area and setting the depth bounds are separated.
-                //
-                // We try to store everything into a contiguous block of memory,
-                // which allows us to avoid memory allocations when executing the commands.
-                let mut viewport_ptr = BufferSlice { offset: 0, size: 0 };
-                let mut depth_range_ptr = BufferSlice { offset: 0, size: 0 };
-
-                for viewport in viewports {
-                    let viewport = &[viewport.rect.x as f32, viewport.rect.y as f32, viewport.rect.w as f32, viewport.rect.h as f32];
-                    viewport_ptr.append(self.add::<f32>(viewport));
-                }
-                for viewport in viewports {
-                    let depth_range = &[viewport.depth.start as f64, viewport.depth.end as f64];
-                    depth_range_ptr.append(self.add::<f64>(depth_range));
-                }
                 self.push_cmd(Command::SetViewports { viewport_ptr, depth_range_ptr });
             }
             _ => {
@@ -413,18 +435,26 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn set_scissors(&mut self, scissors: &[command::Rect]) {
-        match scissors.len() {
+    fn set_scissors<T>(&mut self, scissors: T)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<command::Rect>,
+    {
+        let mut scissors_ptr = BufferSlice { offset: 0, size: 0 };
+        let mut len = 0;
+        for scissor in scissors {
+            let scissor = scissor.borrow();
+            let scissor = &[scissor.x as i32, scissor.y as i32, scissor.w as i32, scissor.h as i32];
+            scissors_ptr.append(self.add::<i32>(scissor));
+            len += 1;
+        }
+
+        match len {
             0 => {
                 error!("Number of scissors can not be zero.");
                 self.cache.error_state = true;
             }
             n if n <= self.limits.max_viewports => {
-                let mut scissors_ptr = BufferSlice { offset: 0, size: 0 };
-                for scissor in scissors {
-                    let scissor = &[scissor.x as i32, scissor.y as i32, scissor.w as i32, scissor.h as i32];
-                    scissors_ptr.append(self.add::<i32>(scissor));
-                }
                 self.push_cmd(Command::SetScissors(scissors_ptr));
             }
             _ => {
@@ -452,12 +482,15 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn bind_graphics_descriptor_sets(
+    fn bind_graphics_descriptor_sets<'a, T>(
         &mut self,
         _layout: &n::PipelineLayout,
         _first_set: usize,
-        _sets: &[&n::DescriptorSet],
-    ) {
+        _sets: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<n::DescriptorSet>,
+    {
         unimplemented!()
     }
 
@@ -465,12 +498,15 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn bind_compute_descriptor_sets(
+    fn bind_compute_descriptor_sets<'a, T>(
         &mut self,
         _layout: &n::PipelineLayout,
         _first_set: usize,
-        _sets: &[&n::DescriptorSet],
-    ) {
+        _sets: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<n::DescriptorSet>,
+    {
         unimplemented!()
     }
 
@@ -482,38 +518,51 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         self.push_cmd(Command::DispatchIndirect(buffer.raw, offset));
     }
 
-    fn copy_buffer(&mut self, _src: &n::Buffer, _dst: &n::Buffer, _regions: &[command::BufferCopy]) {
+    fn copy_buffer<T>(&mut self, _src: &n::Buffer, _dst: &n::Buffer, _regions: T)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<command::BufferCopy>,
+    {
         unimplemented!()
     }
 
-    fn copy_image(
+    fn copy_image<T>(
         &mut self,
         _src: &n::Image,
         _src_layout: image::ImageLayout,
         _dst: &n::Image,
         _dst_layout: image::ImageLayout,
-        _regions: &[command::ImageCopy],
-    ) {
+        _regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<command::ImageCopy>,
+    {
         unimplemented!()
     }
 
-    fn copy_buffer_to_image(
+    fn copy_buffer_to_image<T>(
         &mut self,
         _src: &n::Buffer,
         _dst: &n::Image,
         _dst_layout: image::ImageLayout,
-        _regions: &[command::BufferImageCopy],
-    ) {
+        _regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<command::BufferImageCopy>,
+    {
         unimplemented!()
     }
 
-    fn copy_image_to_buffer(
+    fn copy_image_to_buffer<T>(
         &mut self,
         _src: &n::Image,
         _src_layout: image::ImageLayout,
         _dst: &n::Buffer,
-        _regions: &[command::BufferImageCopy],
-    ) {
+        _regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<command::BufferImageCopy>,
+    {
         unimplemented!()
     }
 

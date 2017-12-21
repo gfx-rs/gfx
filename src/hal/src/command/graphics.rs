@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::ops::Range;
 
 use Backend;
@@ -120,13 +121,16 @@ pub enum AttachmentClear {
 
 impl<'a, B: Backend, C: Supports<Graphics>> CommandBuffer<'a, B, C> {
     ///
-    pub fn begin_renderpass_inline(
+    pub fn begin_renderpass_inline<T>(
         &mut self,
         render_pass: &B::RenderPass,
         frame_buffer: &B::Framebuffer,
         render_area: Rect,
-        clear_values: &[ClearValue],
+        clear_values: T,
     ) -> RenderPassInlineEncoder<B>
+    where
+        T: IntoIterator,
+        T::Item: Borrow<ClearValue>,
     {
         RenderPassInlineEncoder::new(self, render_pass, frame_buffer, render_area, clear_values)
     }
@@ -169,22 +173,33 @@ impl<'a, B: Backend, C: Supports<Graphics>> CommandBuffer<'a, B, C> {
     }
 
     ///
-    pub fn bind_graphics_descriptor_sets(
+    pub fn bind_graphics_descriptor_sets<'i, T>(
         &mut self,
         layout: &B::PipelineLayout,
         first_set: usize,
-        sets: &[&B::DescriptorSet],
-    ) {
+        sets: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<B::DescriptorSet>,
+    {
         self.raw.bind_graphics_descriptor_sets(layout, first_set, sets)
     }
 
     ///
-    pub fn set_viewports(&mut self, viewports: &[Viewport]) {
+    pub fn set_viewports<T>(&mut self, viewports: T)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<Viewport>,
+    {
         self.raw.set_viewports(viewports)
     }
 
     ///
-    pub fn set_scissors(&mut self, scissors: &[Rect]) {
+    pub fn set_scissors<T>(&mut self, scissors: T)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<Rect>,
+    {
         self.raw.set_scissors(scissors)
     }
 

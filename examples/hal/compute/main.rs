@@ -137,7 +137,7 @@ fn main() {
                     target: &device_buffer
                 }]);
         command_buffer.bind_compute_pipeline(&pipeline);
-        command_buffer.bind_compute_descriptor_sets(&pipeline_layout, 0, &[&desc_set]);
+        command_buffer.bind_compute_descriptor_sets(&pipeline_layout, 0, &[desc_set]);
         command_buffer.dispatch(numbers.len() as u32, 1, 1);
         command_buffer.pipeline_barrier(
             Range { start: pso::PipelineStage::COMPUTE_SHADER, end: pso::PipelineStage::TRANSFER },

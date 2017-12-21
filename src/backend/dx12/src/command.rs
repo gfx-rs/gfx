@@ -6,6 +6,7 @@ use {conv, native as n, Backend, CmdSignatures, MAX_VERTEX_BUFFERS};
 use root_constants::RootConstant;
 use smallvec::SmallVec;
 use std::{mem, ptr};
+use std::borrow::Borrow;
 use std::ops::Range;
 
 use winapi::um::d3d12;
@@ -30,6 +31,83 @@ fn get_rect(rect: &com::Rect) -> d3d12::D3D12_RECT {
         top: rect.y as i32,
         right: (rect.x + rect.w) as i32,
         bottom: (rect.y + rect.h) as i32,
+    }
+}
+
+fn bind_descriptor_sets<'a, T>(
+    raw: &ComPtr<d3d12::ID3D12GraphicsCommandList>,
+    pipeline: &mut PipelineCache,
+    layout: &n::PipelineLayout,
+    first_set: usize,
+    sets: T,
+) where
+    T: IntoIterator,
+    T::Item: Borrow<n::DescriptorSet>,
+{
+    let mut sets = sets.into_iter().peekable();
+    let (srv_cbv_uav_start, sampler_start) = if let Some(set_0) = sets.peek().map(Borrow::borrow) {
+        // Bind descriptor heaps
+        unsafe {
+            // TODO: Can we bind them always or only once?
+            //       Resize while recording?
+            let mut heaps = [
+                set_0.heap_srv_cbv_uav.as_mut() as *mut _,
+                set_0.heap_samplers.as_mut() as *mut _
+            ];
+            raw.SetDescriptorHeaps(2, heaps.as_mut_ptr())
+        }
+
+        (set_0.srv_cbv_uav_gpu_start().ptr, set_0.sampler_gpu_start().ptr)
+    } else {
+        return
+    };
+
+    pipeline.srv_cbv_uav_start = srv_cbv_uav_start;
+    pipeline.sampler_start = sampler_start;
+
+    let mut table_id = 0;
+    for table in &layout.tables[..first_set] {
+        if table.contains(n::SRV_CBV_UAV) {
+            table_id += 1;
+        }
+        if table.contains(n::SAMPLERS) {
+            table_id += 1;
+        }
+    }
+
+    let table_base_offset = layout
+        .root_constants
+        .iter()
+        .fold(0, |sum, c| sum + c.range.end - c.range.start);
+
+    for (set, table) in sets.zip(layout.tables[first_set..].iter()) {
+        let set = set.borrow();
+        set.first_gpu_view.map(|gpu| {
+            assert!(table.contains(n::SRV_CBV_UAV));
+
+            let root_offset = table_id + table_base_offset;
+            // Cast is safe as offset **must** be in u32 range. Unable to
+            // create heaps with more descriptors.
+            let table_offset = (gpu.ptr - srv_cbv_uav_start) as u32;
+            pipeline
+                .user_data
+                .set_srv_cbv_uav_table(root_offset as _, table_offset);
+
+            table_id += 1;
+        });
+        set.first_gpu_sampler.map(|gpu| {
+            assert!(table.contains(n::SAMPLERS));
+
+            let root_offset = table_id + table_base_offset;
+            // Cast is safe as offset **must** be in u32 range. Unable to
+            // create heaps with more descriptors.
+            let table_offset = (gpu.ptr - sampler_start) as u32;
+            pipeline
+                .user_data
+                .set_sampler_table(root_offset as _, table_offset);
+
+            table_id += 1;
+        });
     }
 }
 
@@ -537,14 +615,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.reset();
     }
 
-    fn begin_renderpass(
+    fn begin_renderpass<T>(
         &mut self,
         render_pass: &n::RenderPass,
         framebuffer: &n::Framebuffer,
         target_rect: com::Rect,
-        clear_values: &[com::ClearValue],
+        clear_values: T,
         _first_subpass: com::SubpassContents,
-    ) {
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<com::ClearValue>,
+    {
         assert_eq!(framebuffer.attachments.len(), render_pass.attachments.len());
         // Make sure that no subpass works with Present as intermediate layout.
         // This wouldn't make much sense, and proceeding with this constraint
@@ -558,18 +639,19 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 any(|aref| aref.1 == image::ImageLayout::Present)
         }));
 
-        let mut clear_iter = clear_values.iter();
+        let mut clear_iter = clear_values.into_iter();
         let attachment_clears = render_pass.attachments.iter().enumerate().map(|(i, attachment)| {
             AttachmentClear {
                 subpass_id: render_pass.subpasses.iter().position(|sp| sp.is_using(i)),
                 value: if attachment.ops.load == pass::AttachmentLoadOp::Clear {
-                    Some(*clear_iter.next().unwrap())
+                    Some(*clear_iter.next().unwrap().borrow())
                 } else {
                     None
                 },
                 stencil_value: if attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
-                    match clear_iter.next() {
-                        Some(&com::ClearValue::DepthStencil(value)) => Some(value.1),
+                    let clear = clear_iter.next().expect("Must provide an addition DepthStencil clear value");
+                    match *clear.borrow() {
+                        com::ClearValue::DepthStencil(value) => Some(value.1),
                         other => panic!("Unexpected clear value: {:?}", other),
                     }
                 } else {
@@ -577,7 +659,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 },
             }
         }).collect();
-        assert_eq!(clear_iter.next(), None);
+
+        if let Some(_) = clear_iter.next() {
+            panic!("Too many clear values provided");
+        }
 
         self.pass_cache = Some(RenderPassCache {
             render_pass: render_pass.clone(),
@@ -602,15 +687,19 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.pass_cache = None;
     }
 
-    fn pipeline_barrier(
+    fn pipeline_barrier<'a, T>(
         &mut self,
         _stages: Range<pso::PipelineStage>,
-        barriers: &[memory::Barrier<Backend>],
-    ) {
+        barriers: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<memory::Barrier<'a, Backend>>,
+    {
         let mut raw_barriers = Vec::new();
 
         // transition barriers
         for barrier in barriers {
+            let barrier = barrier.borrow();
             match *barrier {
                 memory::Barrier::Buffer { ref states, target } => {
                     let state_src = conv::map_buffer_resource_state(states.start);
@@ -741,14 +830,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn clear_attachments(
-        &mut self,
-        clears: &[com::AttachmentClear],
-        rects: &[com::Rect],
-    ) {
+    fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<com::AttachmentClear>,
+        U: IntoIterator,
+        U::Item: Borrow<com::Rect>,
+    {
         assert!(self.pass_cache.is_some(), "`clear_attachments` can only be called inside a renderpass");
-        let rects: SmallVec<[d3d12::D3D12_RECT; 16]> = rects.iter().map(get_rect).collect();
+        let rects: SmallVec<[d3d12::D3D12_RECT; 16]> = rects.into_iter().map(|rect| get_rect(rect.borrow())).collect();
         for clear in clears {
+            let clear = clear.borrow();
             match *clear {
                 com::AttachmentClear::Color(index, cv) => {
                     let rtv = {
@@ -777,14 +869,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn resolve_image(
+    fn resolve_image<T>(
         &mut self,
         src: &n::Image,
         _: image::ImageLayout,
         dst: &n::Image,
         _: image::ImageLayout,
-        regions: &[com::ImageResolve],
-    ) {
+        regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<com::ImageResolve>,
+    {
         {
             // Insert barrier for `COPY_DEST` to `RESOLVE_DEST` as we only expose
             // `TRANSFER_WRITE` which is used for all copy commands.
@@ -800,6 +895,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
 
         for region in regions {
+            let region = region.borrow();
             for l in 0..region.num_layers as _ {
                 unsafe {
                     self.raw.ResolveSubresource(
@@ -853,10 +949,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_viewports(&mut self, viewports: &[com::Viewport]) {
+    fn set_viewports<T>(&mut self, viewports: T)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<com::Viewport>,
+    {
         let viewports: SmallVec<[d3d12::D3D12_VIEWPORT; 16]> = viewports
-            .iter()
+            .into_iter()
             .map(|viewport| {
+                let viewport = viewport.borrow();
                 d3d12::D3D12_VIEWPORT {
                     TopLeftX: viewport.rect.x as _,
                     TopLeftY: viewport.rect.y as _,
@@ -876,8 +977,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_scissors(&mut self, scissors: &[com::Rect]) {
-        let rects: SmallVec<[d3d12::D3D12_RECT; 16]> = scissors.iter().map(get_rect).collect();
+    fn set_scissors<T>(&mut self, scissors: T)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<com::Rect>,
+    {
+        let rects: SmallVec<[d3d12::D3D12_RECT; 16]> = scissors.into_iter().map(|rect| get_rect(rect.borrow())).collect();
         unsafe {
             self.raw
                 .RSSetScissorRects(rects.len() as _, rects.as_ptr())
@@ -930,74 +1035,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_graphics_descriptor_sets(
+    fn bind_graphics_descriptor_sets<'a, T>(
         &mut self,
         layout: &n::PipelineLayout,
         first_set: usize,
-        sets: &[&n::DescriptorSet],
-    ) {
-        // Bind descriptor heaps
-        unsafe {
-            // TODO: Can we bind them always or only once?
-            //       Resize while recording?
-            let mut heaps = [
-                sets[0].heap_srv_cbv_uav.as_mut() as *mut _,
-                sets[0].heap_samplers.as_mut() as *mut _
-            ];
-            self.raw.SetDescriptorHeaps(2, heaps.as_mut_ptr())
-        }
-
-        let srv_cbv_uav_base = sets[0].srv_cbv_uav_gpu_start();
-        let sampler_base = sets[0].sampler_gpu_start();
-
-        self.gr_pipeline.srv_cbv_uav_start = srv_cbv_uav_base.ptr;
-        self.gr_pipeline.sampler_start = sampler_base.ptr;
-
-        let mut table_id = 0;
-        for table in &layout.tables[.. first_set] {
-            if table.contains(n::SRV_CBV_UAV) {
-                table_id += 1;
-            }
-            if table.contains(n::SAMPLERS) {
-                table_id += 1;
-            }
-        }
-
-        let table_base_offset = layout
-            .root_constants
-            .iter()
-            .fold(0, |sum, c| sum + c.range.end - c.range.start);
-
-        for (set, table) in sets.iter().zip(layout.tables[first_set..].iter()) {
-            set.first_gpu_view.map(|gpu| {
-                assert!(table.contains(n::SRV_CBV_UAV));
-
-                let root_offset = table_id + table_base_offset;
-                // Cast is safe as offset **must** be in u32 range. Unable to
-                // create heaps with more descriptors.
-                let table_offset = (gpu.ptr - srv_cbv_uav_base.ptr) as u32;
-                self
-                    .gr_pipeline
-                    .user_data
-                    .set_srv_cbv_uav_table(root_offset as _, table_offset);
-
-                table_id += 1;
-            });
-            set.first_gpu_sampler.map(|gpu| {
-                assert!(table.contains(n::SAMPLERS));
-
-                let root_offset = table_id + table_base_offset;
-                // Cast is safe as offset **must** be in u32 range. Unable to
-                // create heaps with more descriptors.
-                let table_offset = (gpu.ptr - sampler_base.ptr) as u32;
-                self
-                    .gr_pipeline
-                    .user_data
-                    .set_sampler_table(root_offset as _, table_offset);
-
-                table_id += 1;
-            });
-        }
+        sets: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<n::DescriptorSet>,
+    {
+        bind_descriptor_sets(&self.raw, &mut self.gr_pipeline, layout, first_set, sets);
     }
 
     fn bind_compute_pipeline(&mut self, pipeline: &n::ComputePipeline) {
@@ -1021,72 +1068,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.comp_pipeline.pipeline = Some((pipeline.raw, pipeline.signature));
     }
 
-    fn bind_compute_descriptor_sets(
+    fn bind_compute_descriptor_sets<T>(
         &mut self,
         layout: &n::PipelineLayout,
         first_set: usize,
-        sets: &[&n::DescriptorSet],
-    ) {
-        unsafe {
-            // Bind descriptor heaps
-            // TODO: Can we bind them always or only once?
-            //       Resize while recording?
-            let mut heaps = [
-                sets[0].heap_srv_cbv_uav.as_mut() as *mut _,
-                sets[0].heap_samplers.as_mut() as *mut _
-            ];
-            self.raw.SetDescriptorHeaps(2, heaps.as_mut_ptr())
-        }
-
-        let srv_cbv_uav_base = sets[0].srv_cbv_uav_gpu_start();
-        let sampler_base = sets[0].sampler_gpu_start();
-
-        self.comp_pipeline.srv_cbv_uav_start = srv_cbv_uav_base.ptr;
-        self.comp_pipeline.sampler_start = sampler_base.ptr;
-
-        let mut table_id = 0;
-        for table in &layout.tables[.. first_set] {
-            if table.contains(n::SRV_CBV_UAV) {
-                table_id += 1;
-            }
-            if table.contains(n::SAMPLERS) {
-                table_id += 1;
-            }
-        }
-        let table_base_offset = layout
-            .root_constants
-            .iter()
-            .fold(0, |sum, c| sum + c.range.end - c.range.start);
-        for (set, table) in sets.iter().zip(layout.tables[first_set..].iter()) {
-            set.first_gpu_view.map(|gpu| {
-                assert!(table.contains(n::SRV_CBV_UAV));
-
-                let root_offset = table_id + table_base_offset;
-                // Cast is safe as offset **must** be in u32 range. Unable to
-                // create heaps with more descriptors.
-                let table_offset = (gpu.ptr - srv_cbv_uav_base.ptr) as u32;
-                self
-                    .comp_pipeline
-                    .user_data
-                    .set_srv_cbv_uav_table(root_offset as _, table_offset);
-
-                table_id += 1;
-            });
-            set.first_gpu_sampler.map(|gpu| {
-                assert!(table.contains(n::SAMPLERS));
-
-                let root_offset = table_id + table_base_offset;
-                // Cast is safe as offset **must** be in u32 range. Unable to
-                // create heaps with more descriptors.
-                let table_offset = (gpu.ptr - sampler_base.ptr) as u32;
-                self
-                    .comp_pipeline
-                    .user_data
-                    .set_sampler_table(root_offset as _, table_offset);
-
-                table_id += 1;
-            });
-        }
+        sets: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<n::DescriptorSet>,
+    {
+        bind_descriptor_sets(&self.raw, &mut self.comp_pipeline, layout, first_set, sets);
     }
 
     fn dispatch(&mut self, x: u32, y: u32, z: u32) {
@@ -1163,9 +1154,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn copy_buffer(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: &[com::BufferCopy]) {
+    fn copy_buffer<T>(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: T)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<com::BufferCopy>,
+    {
         // copy each region
         for region in regions {
+            let region = region.borrow();
             unsafe {
                 self.raw.CopyBufferRegion(
                     dst.resource,
@@ -1180,14 +1176,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         // TODO: Optimization: Copy whole resource if possible
     }
 
-    fn copy_image(
+    fn copy_image<T>(
         &mut self,
         src: &n::Image,
         _: image::ImageLayout,
         dst: &n::Image,
         _: image::ImageLayout,
-        regions: &[com::ImageCopy],
-    ) {
+        regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<com::ImageCopy>,
+    {
         let mut src_image = d3d12::D3D12_TEXTURE_COPY_LOCATION {
             pResource: src.resource,
             Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
@@ -1201,6 +1200,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         };
 
         for region in regions {
+            let region = region.borrow();
             for layer in 0..region.num_layers {
                 *unsafe { src_image.u.SubresourceIndex_mut() } =
                     src.calc_subresource(region.src_subresource.0 as _, (region.src_subresource.1 + layer) as _, 0);
@@ -1229,13 +1229,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn copy_buffer_to_image(
+    fn copy_buffer_to_image<T>(
         &mut self,
         buffer: &n::Buffer,
         image: &n::Image,
         _: image::ImageLayout,
-        regions: &[com::BufferImageCopy],
-    ) {
+        regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<com::BufferImageCopy>,
+    {
         let mut src = d3d12::D3D12_TEXTURE_COPY_LOCATION {
             pResource: buffer.resource,
             Type: d3d12::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
@@ -1248,6 +1251,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         };
         let (width, height, depth, _) = image.kind.get_dimensions();
         for region in regions {
+            let region = region.borrow();
             // Copy each layer in the region
             let layers = region.image_layers.layers.clone();
             for layer in layers {
@@ -1293,13 +1297,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn copy_image_to_buffer(
+    fn copy_image_to_buffer<T>(
         &mut self,
         image: &n::Image,
         _: image::ImageLayout,
         buffer: &n::Buffer,
-        regions: &[com::BufferImageCopy],
-    ) {
+        regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<com::BufferImageCopy>,
+    {
         let mut src = d3d12::D3D12_TEXTURE_COPY_LOCATION {
             pResource: image.resource,
             Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
@@ -1312,6 +1319,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         };
         let (width, height, depth, _) = image.kind.get_dimensions();
         for region in regions {
+            let region = region.borrow();
             // Copy each layer in the region
             let layers = region.image_layers.layers.clone();
             for layer in layers {

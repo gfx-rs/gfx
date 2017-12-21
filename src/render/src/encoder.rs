@@ -211,7 +211,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             }
         }
         let stage_transition = self.pipeline_stage..self.pipeline_stage;
-        self.buffer.pipeline_barrier(stage_transition, &barriers[..]);
+        self.buffer.pipeline_barrier(stage_transition, barriers);
     }
 
     fn init_image<'b>(
@@ -324,7 +324,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         }
         let current_stage = mem::replace(&mut self.pipeline_stage, stage);
         if (current_stage != stage) || !barriers.is_empty() {
-            self.buffer.pipeline_barrier(current_stage..stage, &barriers[..]);
+            self.buffer.pipeline_barrier(current_stage..stage, barriers);
         }
     }
 
@@ -348,7 +348,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             }
         }
         let stage_transition = self.pipeline_stage..PipelineStage::BOTTOM_OF_PIPE;
-        self.buffer.pipeline_barrier(stage_transition, &barriers[..]);
+        self.buffer.pipeline_barrier(stage_transition, barriers);
     }
 
     // TODO: fill buffer
@@ -372,16 +372,17 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             "missing TRANSFER_DST usage flag");
 
         let stride = mem::size_of::<MTB::Data>() as u64;
-        let mut byte_regions: Vec<_> = regions.iter()
+        let byte_regions = regions.iter()
             .map(|region| BufferCopy {
                 src: region.src * stride,
                 dst: region.dst * stride,
                 size: region.size * stride,
-            }).collect();
+            });
 
         // TODO: check alignement
         // TODO: check copy_buffer capability
         if cfg!(debug) {
+            let mut byte_regions: Vec<_> = byte_regions.collect();
             byte_regions.sort_by(|a, b| a.src.cmp(&b.src));
             let mut src_range = None;
             for &BufferCopy { src, size, .. } in &byte_regions {
@@ -409,18 +410,32 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             assert!(src_range.1 <= src.info().size, "out of source bounds");
             assert!(dst_range.1 <= dst.info().size, "out of destination bounds");
             // TODO: check if src == dst
+            self.require_state(
+                PipelineStage::TRANSFER,
+                &[
+                    (src, b::Access::TRANSFER_READ),
+                    (dst, b::Access::TRANSFER_WRITE)
+                ],
+                &[]);
+
+            self.buffer.copy_buffer(
+                src.resource(),
+                dst.resource(),
+                byte_regions);
+        } else {
+            self.require_state(
+                PipelineStage::TRANSFER,
+                &[
+                    (src, b::Access::TRANSFER_READ),
+                    (dst, b::Access::TRANSFER_WRITE)
+                ],
+                &[]);
+
+            self.buffer.copy_buffer(
+                src.resource(),
+                dst.resource(),
+                byte_regions);
         }
-
-        self.require_state(
-            PipelineStage::TRANSFER,
-            &[(src, b::Access::TRANSFER_READ),
-               (dst, b::Access::TRANSFER_WRITE)],
-            &[]);
-
-        self.buffer.copy_buffer(
-            src.resource(),
-            dst.resource(),
-            &byte_regions[..]);
     }
 
     /// Update a buffer with a slice of data.

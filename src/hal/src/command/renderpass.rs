@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::ops::Range;
 use {pso, Backend, IndexCount, InstanceCount, VertexCount, VertexOffset};
 use buffer::IndexBufferView;
@@ -22,15 +23,17 @@ where B::CommandBuffer: 'a;
 
 impl<'a, B: Backend> RenderPassInlineEncoder<'a, B> {
     ///
-    pub fn new<C>(
+    pub fn new<C, T>(
         cmd_buffer: &'a mut CommandBuffer<B, C>,
         render_pass: &B::RenderPass,
         frame_buffer: &B::Framebuffer,
         render_area: Rect,
-        clear_values: &[ClearValue],
+        clear_values: T,
     ) -> Self
     where
         C: Supports<Graphics>,
+        T: IntoIterator,
+        T::Item: Borrow<ClearValue>,
     {
         cmd_buffer.raw.begin_renderpass(
             render_pass,
@@ -48,7 +51,13 @@ impl<'a, B: Backend> RenderPassInlineEncoder<'a, B> {
     }
 
     ///
-    pub fn clear_attachments(&mut self, clears: &[AttachmentClear], rects: &[Rect]) {
+    pub fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<AttachmentClear>,
+        U: IntoIterator,
+        U::Item: Borrow<Rect>,
+    {
         self.0.clear_attachments(clears, rects)
     }
 
@@ -85,22 +94,33 @@ impl<'a, B: Backend> RenderPassInlineEncoder<'a, B> {
     }
 
     ///
-    pub fn bind_graphics_descriptor_sets(
+    pub fn bind_graphics_descriptor_sets<'i, T>(
         &mut self,
         layout: &B::PipelineLayout,
         first_set: usize,
-        sets: &[&B::DescriptorSet],
-    ) {
+        sets: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<B::DescriptorSet>,
+    {
         self.0.bind_graphics_descriptor_sets(layout, first_set, sets)
     }
 
     ///
-    pub fn set_viewports(&mut self, viewports: &[Viewport]) {
+    pub fn set_viewports<T>(&mut self, viewports: T)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<Viewport>,
+    {
         self.0.set_viewports(viewports)
     }
 
     ///
-    pub fn set_scissors(&mut self, scissors: &[Rect]) {
+    pub fn set_scissors<T>(&mut self, scissors: T)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<Rect>,
+    {
         self.0.set_scissors(scissors)
     }
 
