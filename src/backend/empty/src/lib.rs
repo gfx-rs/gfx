@@ -92,7 +92,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn allocate_memory(&self, _: usize, _: u64) -> Result<(), device::OutOfMemory> {
+    fn allocate_memory(&self, _: hal::MemoryTypeId, _: u64) -> Result<(), device::OutOfMemory> {
         unimplemented!()
     }
 

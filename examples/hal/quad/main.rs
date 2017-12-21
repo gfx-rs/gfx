@@ -359,7 +359,9 @@ fn main() {
         .position(|(id, mem_type)| {
             buffer_req.type_mask & (1 << id) != 0 &&
             mem_type.properties.contains(m::Properties::CPU_VISIBLE)
-        }).unwrap();
+        })
+        .unwrap()
+        .into();
 
     let buffer_memory = device.allocate_memory(upload_type, buffer_req.size).unwrap();
     let vertex_buffer = device.bind_buffer_memory(&buffer_memory, 0, buffer_unbound).unwrap();
@@ -414,7 +416,8 @@ fn main() {
             image_req.type_mask & (1 << id) != 0 &&
             memory_type.properties.contains(m::Properties::DEVICE_LOCAL)
         })
-        .unwrap();
+        .unwrap()
+        .into();
     let image_memory = device.allocate_memory(device_type, image_req.size).unwrap();
 
     let image_logo = device.bind_image_memory(&image_memory, 0, image_unbound).unwrap();

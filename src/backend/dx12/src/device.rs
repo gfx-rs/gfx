@@ -637,9 +637,10 @@ impl Device {
 impl d::Device<B> for Device {
     fn allocate_memory(
         &self,
-        mem_type: usize,
+        mem_type: hal::MemoryTypeId,
         size: u64,
     ) -> Result<n::Memory, d::OutOfMemory> {
+        let mem_type = mem_type.0;
         let mem_base_id = mem_type % NUM_HEAP_PROPERTIES;
         let heap_property = &self.heap_properties[mem_base_id];
 

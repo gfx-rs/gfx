@@ -9,6 +9,17 @@ use {format, memory, Backend, Gpu, Features, Limits};
 pub type QueuePriority = f32;
 
 ///
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct MemoryTypeId(pub usize);
+
+impl From<usize> for MemoryTypeId {
+    fn from(id: usize) -> Self {
+        MemoryTypeId(id)
+    }
+}
+
+///
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct MemoryType {

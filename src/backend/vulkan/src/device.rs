@@ -2,7 +2,7 @@ use ash::vk;
 use ash::extensions as ext;
 use ash::version::DeviceV1_0;
 use hal::{buffer, device as d, format, image, mapping, pass, pso, query};
-use hal::{Backbuffer, SwapchainConfig};
+use hal::{Backbuffer, MemoryTypeId, SwapchainConfig};
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
 use native as n;
@@ -55,12 +55,12 @@ impl Device {
 }
 
 impl d::Device<B> for Device {
-    fn allocate_memory(&self, mem_type: usize, size: u64) -> Result<n::Memory, d::OutOfMemory> {
+    fn allocate_memory(&self, mem_type: MemoryTypeId, size: u64) -> Result<n::Memory, d::OutOfMemory> {
         let info = vk::MemoryAllocateInfo {
             s_type: vk::StructureType::MemoryAllocateInfo,
             p_next: ptr::null(),
             allocation_size: size,
-            memory_type_index: mem_type as _,
+            memory_type_index: mem_type.0 as _,
         };
 
         let memory = unsafe {
@@ -69,7 +69,7 @@ impl d::Device<B> for Device {
 
         // Map all allocations persistently and unmap them when calling free.
         let mappable = self
-            .memory_types[mem_type]
+            .memory_types[mem_type.0]
             .properties
             .contains(memory::Properties::CPU_VISIBLE);
 

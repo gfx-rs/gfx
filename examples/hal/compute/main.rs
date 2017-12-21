@@ -190,7 +190,8 @@ fn create_buffer<B: Backend>(
             requirements.type_mask & (1 << id) != 0 &&
             memory_type.properties.contains(properties)
         })
-        .unwrap();
+        .unwrap()
+        .into();
 
     let memory = gpu.device.allocate_memory(ty, requirements.size).unwrap();
     let buffer = gpu.device.bind_buffer_memory(&memory, 0, buffer).unwrap();

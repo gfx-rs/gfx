@@ -22,7 +22,7 @@ use std::fmt::{self, Debug};
 use std::hash::Hash;
 
 pub use self::adapter::{
-    Adapter, AdapterInfo, MemoryProperties, MemoryType,
+    Adapter, AdapterInfo, MemoryProperties, MemoryType, MemoryTypeId,
     PhysicalDevice, QueuePriority,
 };
 pub use self::device::Device;

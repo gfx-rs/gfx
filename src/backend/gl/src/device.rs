@@ -151,7 +151,7 @@ impl Device {
 
 impl d::Device<B> for Device {
     fn allocate_memory(
-        &self, mem_type: usize, _size: u64,
+        &self, mem_type: c::MemoryTypeId, _size: u64,
     ) -> Result<n::Memory, d::OutOfMemory> {
         unimplemented!()
     }

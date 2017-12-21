@@ -1,7 +1,7 @@
 use std::sync::{mpsc, Arc};
 use std::collections::HashMap;
 
-use hal::{Device as Device_, Limits};
+use hal::{Device as Device_, Limits, MemoryTypeId};
 use hal::memory::Requirements;
 use memory::{self, Allocator, Memory, ReleaseFn, Provider, Dependency};
 use {buffer, image};
@@ -35,7 +35,7 @@ pub struct InnerStackAllocator<B: Backend> {
     limits: Limits, // TODO: only store relevant data
     // stacks by memory type
     // TODO: VecMap ?
-    stacks: HashMap<usize, ChunkStack<B>>,
+    stacks: HashMap<MemoryTypeId, ChunkStack<B>>,
     chunk_size: u64,
 }
 
@@ -135,7 +135,7 @@ impl<B: Backend> Allocator<B> for StackAllocator<B> {
 }
 
 struct ChunkStack<B: Backend> {
-    memory_type: usize,
+    memory_type: MemoryTypeId,
     chunks: Vec<B::Memory>,
     allocs: Vec<StackAlloc>,
     receiver: mpsc::Receiver<usize>,
@@ -149,7 +149,7 @@ struct StackAlloc {
 }
 
 impl<B: Backend> ChunkStack<B> {
-    fn new(memory_type: usize) -> Self {
+    fn new(memory_type: MemoryTypeId) -> Self {
         let (sender, receiver) = mpsc::channel();
 
         ChunkStack {

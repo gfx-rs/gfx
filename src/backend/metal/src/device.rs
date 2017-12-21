@@ -987,7 +987,8 @@ impl hal::Device<Backend> for Device {
         unsafe { n::dispatch_release(semaphore.0) }
     }
 
-    fn allocate_memory(&self, memory_type: usize, size: u64) -> Result<n::Memory, OutOfMemory> {
+    fn allocate_memory(&self, memory_type: hal::MemoryTypeId, size: u64) -> Result<n::Memory, OutOfMemory> {
+        let memory_type = memory_type.0;
         let memory_properties = memory_types()[memory_type].properties;
         let (storage, cache) = map_memory_properties_to_storage_and_cache(memory_properties);
 
