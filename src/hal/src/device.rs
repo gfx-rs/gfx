@@ -9,7 +9,7 @@ use std::ops::Range;
 use {buffer, format, image, mapping, pass, pso, query};
 use pool::{CommandPool, CommandPoolCreateFlags};
 use queue::QueueGroup;
-use {Backend, MemoryType};
+use {Backend, MemoryType, MemoryTypeId};
 use memory::Requirements;
 use window::{Backbuffer, SwapchainConfig};
 
@@ -117,7 +117,12 @@ pub trait Device<B: Backend> {
     /// Allocates a memory segment of a specified type.
     ///
     /// There is only a limited amount of allocations allowed depending on the implementation!
-    fn allocate_memory(&self, &MemoryType, size: u64) -> Result<B::Memory, OutOfMemory>;
+    ///
+    /// # Arguments
+    ///
+    /// * `memory_type` - Index of the memory type in the memory properties of the associated physical device.
+    /// * `size` - Size of the allocation.
+    fn allocate_memory(&self, memory_type: MemoryTypeId, size: u64) -> Result<B::Memory, OutOfMemory>;
 
     ///
     fn free_memory(&self, B::Memory);

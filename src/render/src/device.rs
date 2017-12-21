@@ -2,7 +2,7 @@ use std::mem;
 use std::ops::Range;
 use std::sync::Arc;
 
-use hal::{self, Device as CoreDevice, MemoryType};
+use hal::{self, Device as CoreDevice, MemoryType, MemoryTypeId};
 use hal::memory::{Properties};
 
 use memory::{self, Allocator, Typed};
@@ -56,18 +56,20 @@ impl<B: Backend> Device<B> {
         &self.memory_heaps
     }
 
-    pub fn find_memory<P>(&self, type_mask: u64, predicate: P) -> Option<MemoryType>
+    pub fn find_memory<P>(&self, type_mask: u64, predicate: P) -> Option<MemoryTypeId>
         where P: Fn(Properties) -> bool
     {
-        self.memory_types.iter()
-            .find(|memory_type| {
-                type_mask & (1 << memory_type.id) != 0 &&
+        self.memory_types
+            .iter()
+            .enumerate()
+            .position(|(id, memory_type)| {
+                type_mask & (1 << id) != 0 &&
                 predicate(memory_type.properties)
             })
-            .cloned()
+            .map(Into::into)
     }
 
-    pub fn find_usage_memory(&self, usage: memory::Usage, type_mask: u64) -> Option<MemoryType> {
+    pub fn find_usage_memory(&self, usage: memory::Usage, type_mask: u64) -> Option<MemoryTypeId> {
         use memory::Usage::*;
         match usage {
             Data => self.find_data_memory(type_mask),
@@ -78,7 +80,7 @@ impl<B: Backend> Device<B> {
 
     // TODO: fallbacks when out of memory
 
-    pub fn find_data_memory(&self, type_mask: u64) -> Option<MemoryType> {
+    pub fn find_data_memory(&self, type_mask: u64) -> Option<MemoryTypeId> {
         self.find_memory(type_mask, |props| {
             props.contains(Properties::DEVICE_LOCAL) && !props.contains(Properties::CPU_VISIBLE)
         }).or_else(|| self.find_memory(type_mask, |props| {
@@ -86,7 +88,7 @@ impl<B: Backend> Device<B> {
         }))
     }
 
-    pub fn find_upload_memory(&self, type_mask: u64) -> Option<MemoryType> {
+    pub fn find_upload_memory(&self, type_mask: u64) -> Option<MemoryTypeId> {
         self.find_memory(type_mask, |props| {
             props.contains(Properties::CPU_VISIBLE | Properties::COHERENT)
             && !props.contains(Properties::CPU_CACHED)
@@ -97,7 +99,7 @@ impl<B: Backend> Device<B> {
         }))
     }
 
-    pub fn find_download_memory(&self, type_mask: u64) -> Option<MemoryType> {
+    pub fn find_download_memory(&self, type_mask: u64) -> Option<MemoryTypeId> {
         self.find_memory(type_mask, |props| {
             props.contains(Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED)
         }).or_else(|| self.find_memory(type_mask, |props| {

@@ -230,17 +230,14 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let memory_types = if self.0.private_caps.map {
             vec![
                 hal::MemoryType {
-                    id: 0,
                     properties: Properties::DEVICE_LOCAL,
                     heap_index: 1,
                 },
                 hal::MemoryType { // upload
-                    id: 1,
                     properties: Properties::CPU_VISIBLE | Properties::COHERENT,
                     heap_index: 0,
                 },
                 hal::MemoryType { // download
-                    id: 2,
                     properties: Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
                     heap_index: 0,
                 },
@@ -248,7 +245,6 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         } else {
             vec![
                 hal::MemoryType {
-                    id: 0,
                     properties: Properties::DEVICE_LOCAL,
                     heap_index: 0,
                 },

@@ -10,6 +10,7 @@ use std::{cmp, mem, ptr, slice};
 
 use hal::{self, image, pass, format, mapping, memory, buffer, pso, query};
 use hal::device::{WaitFor, BindError, OutOfMemory, FramebufferError, ShaderError, Extent};
+use hal::memory::Properties;
 use hal::pool::CommandPoolCreateFlags;
 use hal::pso::{DescriptorSetWrite, DescriptorType, DescriptorSetLayoutBinding, AttributeDesc, DepthTest, StencilTest, StencilFace};
 
@@ -57,6 +58,27 @@ fn create_function_constants(specialization: &[pso::Specialization]) -> metal::F
         }
     }
     constants_raw
+}
+
+fn memory_types() -> [hal::MemoryType; 4] {
+    [
+        hal::MemoryType {
+            properties: Properties::CPU_VISIBLE | Properties::CPU_CACHED,
+            heap_index: 0,
+        },
+        hal::MemoryType {
+            properties: Properties::CPU_VISIBLE | Properties::CPU_CACHED,
+            heap_index: 0,
+        },
+        hal::MemoryType {
+            properties: Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
+            heap_index: 0,
+        },
+        hal::MemoryType {
+            properties: Properties::DEVICE_LOCAL,
+            heap_index: 1,
+        },
+    ]
 }
 
 #[derive(Clone, Copy)]
@@ -122,30 +144,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn memory_properties(&self) -> hal::MemoryProperties {
-        use hal::memory::Properties;
-
-        let memory_types = vec![
-            hal::MemoryType {
-                id: 0,
-                properties: Properties::CPU_VISIBLE | Properties::CPU_CACHED,
-                heap_index: 0,
-            },
-            hal::MemoryType {
-                id: 1,
-                properties: Properties::CPU_VISIBLE | Properties::CPU_CACHED,
-                heap_index: 0,
-            },
-            hal::MemoryType {
-                id: 2,
-                properties: Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
-                heap_index: 0,
-            },
-            hal::MemoryType {
-                id: 3,
-                properties: Properties::DEVICE_LOCAL,
-                heap_index: 1,
-            },
-        ];
+        let memory_types = memory_types().to_vec();
         let memory_heaps = vec![!0, !0]; //TODO
 
         hal::MemoryProperties {
@@ -462,7 +461,7 @@ impl Device {
 
         let depth_stencil_state = pipeline_desc.depth_stencil.map(|depth_stencil| {
             let desc = metal::DepthStencilDescriptor::new();
-            
+
             match depth_stencil.depth {
                 DepthTest::On { fun, write } => {
                     desc.set_depth_compare_function(map_compare_function(fun));
@@ -477,7 +476,7 @@ impl Device {
                 }
                 StencilTest::Off => {}
             }
-            
+
             self.device.new_depth_stencil_state(&desc)
         });
 
@@ -988,8 +987,10 @@ impl hal::Device<Backend> for Device {
         unsafe { n::dispatch_release(semaphore.0) }
     }
 
-    fn allocate_memory(&self, memory_type: &hal::MemoryType, size: u64) -> Result<n::Memory, OutOfMemory> {
-        let (storage, cache) = map_memory_properties_to_storage_and_cache(memory_type.properties);
+    fn allocate_memory(&self, memory_type: hal::MemoryTypeId, size: u64) -> Result<n::Memory, OutOfMemory> {
+        let memory_type = memory_type.0;
+        let memory_properties = memory_types()[memory_type].properties;
+        let (storage, cache) = map_memory_properties_to_storage_and_cache(memory_properties);
 
         // Heaps cannot be used for CPU coherent resources
         //TEMP: MacOS supports Private only, iOS and tvOS can do private/shared
@@ -1000,7 +1001,7 @@ impl hal::Device<Backend> for Device {
             descriptor.set_size(size);
             Ok(n::Memory::Native(self.device.new_heap(&descriptor)))
         } else {
-            Ok(n::Memory::Emulated { memory_type: *memory_type, size })
+            Ok(n::Memory::Emulated { memory_type, size })
         }
     }
 
@@ -1054,9 +1055,10 @@ impl hal::Device<Backend> for Device {
                         self.device.new_buffer(buffer.size, resource_options)
                     })
             }
-            n::Memory::Emulated { ref memory_type, size: _ } => {
+            n::Memory::Emulated { memory_type, size: _ } => {
                 // TODO: disable hazard tracking?
-                let resource_options = map_memory_properties_to_options(memory_type.properties);
+                let memory_properties = memory_types()[memory_type].properties;
+                let resource_options = map_memory_properties_to_options(memory_properties);
                 self.device.new_buffer(buffer.size, resource_options)
             }
         }))
@@ -1144,9 +1146,10 @@ impl hal::Device<Backend> for Device {
                         self.device.new_texture(&image.0)
                     })
             },
-            n::Memory::Emulated { ref memory_type, size: _ } => {
+            n::Memory::Emulated { memory_type, size: _ } => {
                 // TODO: disable hazard tracking?
-                let resource_options = map_memory_properties_to_options(memory_type.properties);
+                let memory_properties = memory_types()[memory_type].properties;
+                let resource_options = map_memory_properties_to_options(memory_properties);
                 image.0.set_resource_options(resource_options);
                 self.device.new_texture(&image.0)
             }

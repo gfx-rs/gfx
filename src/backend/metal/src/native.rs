@@ -222,7 +222,7 @@ pub enum DescriptorSetBinding {
 
 #[derive(Debug)]
 pub enum Memory {
-    Emulated { memory_type: hal::MemoryType, size: u64 },
+    Emulated { memory_type: usize, size: u64 },
     Native(metal::Heap),
 }
 

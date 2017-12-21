@@ -353,11 +353,15 @@ fn main() {
     println!("{:?}", buffer_unbound);
     let buffer_req = device.get_buffer_requirements(&buffer_unbound);
 
-    let upload_type =
-        memory_types.iter().find(|mem_type| {
-            buffer_req.type_mask & (1 << mem_type.id) != 0 &&
+    let upload_type = memory_types
+        .iter()
+        .enumerate()
+        .position(|(id, mem_type)| {
+            buffer_req.type_mask & (1 << id) != 0 &&
             mem_type.properties.contains(m::Properties::CPU_VISIBLE)
-        }).unwrap();
+        })
+        .unwrap()
+        .into();
 
     let buffer_memory = device.allocate_memory(upload_type, buffer_req.size).unwrap();
     let vertex_buffer = device.bind_buffer_memory(&buffer_memory, 0, buffer_unbound).unwrap();
@@ -407,11 +411,13 @@ fn main() {
 
     let device_type = memory_types
         .iter()
-        .find(|memory_type| {
-            image_req.type_mask & (1 << memory_type.id) != 0 &&
+        .enumerate()
+        .position(|(id, memory_type)| {
+            image_req.type_mask & (1 << id) != 0 &&
             memory_type.properties.contains(m::Properties::DEVICE_LOCAL)
         })
-        .unwrap();
+        .unwrap()
+        .into();
     let image_memory = device.allocate_memory(device_type, image_req.size).unwrap();
 
     let image_logo = device.bind_image_memory(&image_memory, 0, image_unbound).unwrap();

@@ -35,7 +35,7 @@ impl<B: Backend> Allocator<B> for BoxedAllocator<B> {
         let requirements = device.raw.get_buffer_requirements(&buffer);
         let mem_type = device.find_usage_memory(self.usage, requirements.type_mask).unwrap();
         let device = device.raw.clone();
-        let memory = device.allocate_memory(&mem_type, requirements.size)
+        let memory = device.allocate_memory(mem_type, requirements.size)
             .unwrap();
         let buffer = device.bind_buffer_memory(&memory, 0, buffer)
             .unwrap();
@@ -51,7 +51,7 @@ impl<B: Backend> Allocator<B> for BoxedAllocator<B> {
         let requirements = device.raw.get_image_requirements(&image);
         let mem_type = device.find_usage_memory(self.usage, requirements.type_mask).unwrap();
         let device = device.raw.clone();
-        let memory = device.allocate_memory(&mem_type, requirements.size)
+        let memory = device.allocate_memory(mem_type, requirements.size)
             .unwrap();
         let image = device.bind_image_memory(&memory, 0, image)
             .unwrap();

@@ -43,8 +43,10 @@ pub(crate) struct HeapProperties {
 // Only 16 input slots allowed.
 const MAX_VERTEX_BUFFERS: usize = 16;
 
+const NUM_HEAP_PROPERTIES: usize = 3;
+
 // https://msdn.microsoft.com/de-de/library/windows/desktop/dn788678(v=vs.85).aspx
-static HEAPS_NUMA: &'static [HeapProperties] = &[
+static HEAPS_NUMA: [HeapProperties; NUM_HEAP_PROPERTIES] = [
     // DEFAULT
     HeapProperties {
         page_property: d3d12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
@@ -63,7 +65,7 @@ static HEAPS_NUMA: &'static [HeapProperties] = &[
     },
 ];
 
-static HEAPS_UMA: &'static [HeapProperties] = &[
+static HEAPS_UMA: [HeapProperties; NUM_HEAP_PROPERTIES] = [
     // DEFAULT
     HeapProperties {
         page_property: d3d12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
@@ -81,7 +83,7 @@ static HEAPS_UMA: &'static [HeapProperties] = &[
     },
 ];
 
-static HEAPS_CCUMA: &'static [HeapProperties] = &[
+static HEAPS_CCUMA: [HeapProperties; NUM_HEAP_PROPERTIES] = [
     // DEFAULT
     HeapProperties {
         page_property: d3d12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
@@ -139,11 +141,10 @@ impl QueueFamily {
 
 pub struct PhysicalDevice {
     adapter: ComPtr<dxgi1_2::IDXGIAdapter2>,
-    factory: ComPtr<dxgi1_4::IDXGIFactory4>,
     features: hal::Features,
     limits: hal::Limits,
     private_caps: Capabilities,
-    heap_properties: &'static [HeapProperties],
+    heap_properties: &'static [HeapProperties; NUM_HEAP_PROPERTIES],
     memory_properties: hal::MemoryProperties,
 }
 
@@ -578,29 +579,26 @@ impl hal::Instance for Instance {
             let cc_uma = features_architecture.CacheCoherentUMA == TRUE;
 
             let (memory_architecture, heap_properties) = match (uma, cc_uma) {
-                (true, true)  => (MemoryArchitecture::CacheCoherentUMA, HEAPS_CCUMA),
-                (true, false) => (MemoryArchitecture::UMA, HEAPS_UMA),
-                (false, _)    => (MemoryArchitecture::NUMA, HEAPS_NUMA),
+                (true, true)  => (MemoryArchitecture::CacheCoherentUMA, &HEAPS_CCUMA),
+                (true, false) => (MemoryArchitecture::UMA, &HEAPS_UMA),
+                (false, _)    => (MemoryArchitecture::NUMA, &HEAPS_NUMA),
             };
 
             // https://msdn.microsoft.com/en-us/library/windows/desktop/dn788678(v=vs.85).aspx
-            let base_memory_types = match memory_architecture {
+            let base_memory_types: [hal::MemoryType; NUM_HEAP_PROPERTIES] = match memory_architecture {
                 MemoryArchitecture::NUMA => [
                     // DEFAULT
                     hal::MemoryType {
-                        id: 0,
                         properties: Properties::DEVICE_LOCAL,
                         heap_index: 0,
                     },
                     // UPLOAD
                     hal::MemoryType {
-                        id: 1,
                         properties: Properties::CPU_VISIBLE | Properties::COHERENT,
                         heap_index: 1,
                     },
                     // READBACK
                     hal::MemoryType {
-                        id: 2,
                         properties: Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
                         heap_index: 1,
                     },
@@ -608,19 +606,16 @@ impl hal::Instance for Instance {
                 MemoryArchitecture::UMA => [
                     // DEFAULT
                     hal::MemoryType {
-                        id: 0,
                         properties: Properties::DEVICE_LOCAL,
                         heap_index: 0,
                     },
                     // UPLOAD
                     hal::MemoryType {
-                        id: 1,
                         properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT,
                         heap_index: 0,
                     },
                     // READBACK
                     hal::MemoryType {
-                        id: 2,
                         properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
                         heap_index: 0,
                     },
@@ -628,19 +623,16 @@ impl hal::Instance for Instance {
                 MemoryArchitecture::CacheCoherentUMA => [
                     // DEFAULT
                     hal::MemoryType {
-                        id: 0,
                         properties: Properties::DEVICE_LOCAL,
                         heap_index: 0,
                     },
                     // UPLOAD
                     hal::MemoryType {
-                        id: 1,
                         properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
                         heap_index: 0,
                     },
                     // READBACK
                     hal::MemoryType {
-                        id: 2,
                         properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
                         heap_index: 0,
                     },
@@ -650,19 +642,21 @@ impl hal::Instance for Instance {
             let memory_types = if heterogeneous_resource_heaps {
                 base_memory_types.to_vec()
             } else {
-                // the bit pattern of ID becomes 0bTTII, where
-                // TT=1 for buffers, TT=2 for images, and TT=3 for targets
-                // TT=0 is reserved for future use, helps to avoid ambiguity
-                // and II is the same `id` as the `base_memory_types` have
+                // We multiplicate the base memory types depending on the resource usage:
+                //     0.. 3: Reserved for futures use
+                //     4.. 6: Buffers
+                //     7.. 9: Images
+                //    10..12: Targets
+                //
+                // The supported memory types for a resource can be requested by asking for
+                // the memory requirements. Memory type indices are encoded as bitflags.
+                // `device::MEM_TYPE_MASK` (0b111) defines the bitmask for one base memory type group.
+                // The corresponding shift masks (`device::MEM_TYPE_BUFFER_SHIFT`,
+                // `device::MEM_TYPE_IMAGE_SHIFT`, `device::MEM_TYPE_TARGET_SHIFT`)
+                // denote the usage group.
                 let mut types = Vec::new();
-                for &tt in &[1, 2, 3] {
-                    types.extend(base_memory_types
-                        .iter()
-                        .map(|&mt| hal::MemoryType {
-                            id: mt.id + (tt << 2),
-                            .. mt
-                        })
-                    );
+                for _ in 0..3 {
+                    types.extend(base_memory_types.iter());
                 }
                 types
             };
@@ -704,7 +698,6 @@ impl hal::Instance for Instance {
 
             let physical_device = PhysicalDevice {
                 adapter,
-                factory: self.factory.clone(),
                 features: Features { // TODO
                     indirect_execution: true,
                     draw_instanced: true,

@@ -3,7 +3,7 @@ use winapi::shared::dxgiformat::DXGI_FORMAT;
 use winapi::um::{d3d12, d3dcommon};
 use wio::com::ComPtr;
 
-use hal::{image, pass, pso, MemoryType, DescriptorPool as HalDescriptorPool};
+use hal::{image, pass, pso, DescriptorPool as HalDescriptorPool};
 use {free_list, Backend, MAX_VERTEX_BUFFERS};
 use root_constants::RootConstant;
 
@@ -232,7 +232,7 @@ unsafe impl Sync for Semaphore {}
 pub struct Memory {
     #[derivative(Debug="ignore")]
     pub(crate) heap: ComPtr<d3d12::ID3D12Heap>,
-    pub(crate) ty: MemoryType,
+    pub(crate) type_id: usize,
     pub(crate) size: u64,
 }
 

@@ -353,6 +353,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
         let device = Device {
             raw: Arc::new(RawDevice(device_raw)),
+            memory_types: self.memory_properties().memory_types,
         };
 
         let device_arc = device.raw.clone();
@@ -398,32 +399,35 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let memory_heaps = mem_properties.memory_heaps[..mem_properties.memory_heap_count as usize]
             .iter()
             .map(|mem| mem.size).collect();
-        let memory_types = mem_properties.memory_types[..mem_properties.memory_type_count as usize].iter().enumerate().map(|(i, mem)| {
-            use memory::Properties;
-            let mut type_flags = Properties::empty();
+        let memory_types = mem_properties
+            .memory_types[..mem_properties.memory_type_count as usize]
+            .iter()
+            .map(|mem| {
+                use memory::Properties;
+                let mut type_flags = Properties::empty();
 
-            if mem.property_flags.intersects(vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
-                type_flags |= Properties::DEVICE_LOCAL;
-            }
-            if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_COHERENT_BIT) {
-                type_flags |= Properties::COHERENT;
-            }
-            if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_CACHED_BIT) {
-                type_flags |= Properties::CPU_CACHED;
-            }
-            if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
-                type_flags |= Properties::CPU_VISIBLE;
-            }
-            if mem.property_flags.intersects(vk::MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) {
-                type_flags |= Properties::LAZILY_ALLOCATED;
-            }
+                if mem.property_flags.intersects(vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+                    type_flags |= Properties::DEVICE_LOCAL;
+                }
+                if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_COHERENT_BIT) {
+                    type_flags |= Properties::COHERENT;
+                }
+                if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_CACHED_BIT) {
+                    type_flags |= Properties::CPU_CACHED;
+                }
+                if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+                    type_flags |= Properties::CPU_VISIBLE;
+                }
+                if mem.property_flags.intersects(vk::MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) {
+                    type_flags |= Properties::LAZILY_ALLOCATED;
+                }
 
-            hal::MemoryType {
-                id: i,
-                properties: type_flags,
-                heap_index: mem.heap_index as usize,
-            }
-        }).collect();
+                hal::MemoryType {
+                    properties: type_flags,
+                    heap_index: mem.heap_index as usize,
+                }
+            })
+            .collect();
 
         hal::MemoryProperties {
             memory_heaps,
@@ -542,6 +546,10 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
 
 pub struct Device {
     raw: Arc<RawDevice>,
+    // Required for memory allocation.
+    // In the current iteration we persistently map all CPU visible memory on allocation.
+    // To check if the memory is mapable we need to store the memory properties.
+    memory_types: Vec<hal::MemoryType>,
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
