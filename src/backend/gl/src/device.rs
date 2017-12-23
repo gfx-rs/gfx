@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::iter::repeat;
 use std::ops::Range;
-use std::ptr;
+use std::{ptr, mem, slice};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
@@ -10,11 +10,21 @@ use gl::types::{GLint, GLenum, GLfloat};
 use hal::{self as c, device as d, image as i, memory, pass, pso, buffer, mapping, query};
 use hal::format::{Format, Swizzle};
 use hal::pool::CommandPoolCreateFlags;
+use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 
 use {Backend as B, QueueFamily, Share, Surface, Swapchain};
 use {conv, native as n, state};
 use pool::{BufferMemory, OwnedBuffer, RawCommandPool};
 
+/// Emit error during shader module creation. Used if we don't expect an error
+/// but might panic due to an exception in SPIRV-Cross.
+fn gen_unexpected_error(err: SpirvErrorCode) -> d::ShaderError {
+    let msg = match err {
+        SpirvErrorCode::CompilationError(msg) => msg,
+        SpirvErrorCode::Unhandled => "Unexpected error".into(),
+    };
+    d::ShaderError::CompilationFailed(msg)
+}
 
 fn get_shader_iv(gl: &gl::Gl, name: n::Shader, query: GLenum) -> gl::types::GLint {
     let mut iv = 0;
@@ -128,7 +138,7 @@ impl Device {
             if !log.is_empty() {
                 warn!("\tLog: {}", log);
             }
-            Ok(n::ShaderModule { raw: name })
+            Ok(n::ShaderModule::Raw(name))
         } else {
             Err(d::ShaderError::CompilationFailed(String::new())) // TODO
         }
@@ -147,11 +157,53 @@ impl Device {
             },
         }
     }
+
+    fn parse_spirv(&self, raw_data: &[u8]) -> Result<spirv::Ast<glsl::Target>, d::ShaderError> {
+        // spec requires "codeSize must be a multiple of 4"
+        assert_eq!(raw_data.len() & 3, 0);
+
+        let module = spirv::Module::from_words(unsafe {
+            slice::from_raw_parts(
+                raw_data.as_ptr() as *const u32,
+                raw_data.len() / mem::size_of::<u32>(),
+            )
+        });
+
+        spirv::Ast::parse(&module)
+            .map_err(|err| {
+                let msg =  match err {
+                    SpirvErrorCode::CompilationError(msg) => msg,
+                    SpirvErrorCode::Unhandled => "Unknown parsing error".into(),
+                };
+                d::ShaderError::CompilationFailed(msg)
+            })
+    }
+
+    fn translate_spirv(
+        &self,
+        ast: &mut spirv::Ast<glsl::Target>,
+        version: glsl::Version,
+    ) -> Result<String, d::ShaderError> {
+        let mut compile_options = glsl::CompilerOptions::default();
+        compile_options.version = version;
+        compile_options.vertex.invert_y = true;
+
+        ast.set_compiler_options(&compile_options)
+            .map_err(gen_unexpected_error)?;
+        ast.compile()
+            .map_err(|err| {
+                let msg =  match err {
+                    SpirvErrorCode::CompilationError(msg) => msg,
+                    SpirvErrorCode::Unhandled => "Unknown compile error".into(),
+                };
+                d::ShaderError::CompilationFailed(msg)
+            })
+    }
 }
 
 impl d::Device<B> for Device {
     fn allocate_memory(
-        &self, mem_type: c::MemoryTypeId, _size: u64,
+        &self, _mem_type: c::MemoryTypeId, _size: u64,
     ) -> Result<n::Memory, d::OutOfMemory> {
         unimplemented!()
     }
@@ -241,19 +293,31 @@ impl d::Device<B> for Device {
                 let program = {
                     let name = unsafe { gl.CreateProgram() };
 
-                    let attach_shader = |point_maybe: Option<&pso::EntryPoint<B>>| {
+                    let attach_shader = |point_maybe: Option<&pso::EntryPoint<B>>, stage: pso::Stage| {
                         if let Some(point) = point_maybe {
                             assert_eq!(point.entry, "main");
-                            unsafe { gl.AttachShader(name, point.module.raw); }
+                            let raw = match *point.module {
+                                n::ShaderModule::Raw(raw) => raw,
+                                n::ShaderModule::Spirv(ref spirv) => {
+                                    let mut ast = self.parse_spirv(spirv).unwrap();
+                                    let spirv = self.translate_spirv(&mut ast, glsl::Version::V4_10).unwrap();
+                                    info!("Generated:\n{:?}", spirv);
+                                    match self.create_shader_module_from_source(spirv.as_bytes(), stage).unwrap() {
+                                        n::ShaderModule::Raw(raw) => raw,
+                                        _ => panic!("Unhandled")
+                                    }
+                                }
+                            };
+                            unsafe { gl.AttachShader(name, raw); }
                         }
                     };
 
                     // Attach shaders to program
-                    attach_shader(Some(&desc.shaders.vertex));
-                    attach_shader(desc.shaders.hull.as_ref());
-                    attach_shader(desc.shaders.domain.as_ref());
-                    attach_shader(desc.shaders.geometry.as_ref());
-                    attach_shader(desc.shaders.fragment.as_ref());
+                    attach_shader(Some(&desc.shaders.vertex), pso::Stage::Vertex);
+                    attach_shader(desc.shaders.hull.as_ref(), pso::Stage::Hull);
+                    attach_shader(desc.shaders.domain.as_ref(), pso::Stage::Domain);
+                    attach_shader(desc.shaders.geometry.as_ref(), pso::Stage::Geometry);
+                    attach_shader(desc.shaders.fragment.as_ref(), pso::Stage::Fragment);
 
                     if !priv_caps.program_interface && priv_caps.frag_data_location {
                         for i in 0..subpass.color_attachments.len() {
@@ -336,10 +400,9 @@ impl d::Device<B> for Device {
 
     fn create_shader_module(
         &self,
-        _data: &[u8],
+        raw_data: &[u8],
     ) -> Result<n::ShaderModule, d::ShaderError> {
-        //TODO: SPIRV loading or conversion to GLSL
-        unimplemented!()
+        Ok(n::ShaderModule::Spirv(raw_data.into()))
     }
 
     fn create_sampler(&self, info: i::SamplerInfo) -> n::FatSampler {

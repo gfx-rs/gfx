@@ -8,6 +8,7 @@ extern crate log;
 extern crate gfx_gl as gl;
 extern crate gfx_hal as hal;
 extern crate smallvec;
+extern crate spirv_cross;
 #[cfg(feature = "glutin")]
 pub extern crate glutin;
 

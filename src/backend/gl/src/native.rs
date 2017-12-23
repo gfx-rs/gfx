@@ -85,9 +85,10 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
     }
 }
 
-#[derive(Clone, Copy, Debug, Hash)]
-pub struct ShaderModule {
-    pub(crate) raw: Shader,
+#[derive(Clone, Debug, Hash)]
+pub enum ShaderModule {
+    Raw(Shader),
+    Spirv(Vec<u8>),
 }
 
 #[derive(Debug)]
