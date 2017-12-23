@@ -153,19 +153,6 @@ fn main() {
         ).expect("Error on creating shader lib");
     */
 
-    #[cfg(feature = "gl")]
-    let vs_module = device
-        .create_shader_module_from_source(
-            include_bytes!("shader/quad_150.glslv"),
-            pso::Stage::Vertex,
-        ).unwrap();
-    #[cfg(feature = "gl")]
-    let fs_module = device
-        .create_shader_module_from_source(
-            include_bytes!("shader/quad_150.glslf"),
-            pso::Stage::Fragment,
-        ).unwrap();
-
     let set_layout = device.create_descriptor_set_layout(&[
             pso::DescriptorSetLayoutBinding {
                 binding: 0,

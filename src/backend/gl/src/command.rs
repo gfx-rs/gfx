@@ -653,10 +653,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     
     fn push_graphics_constants(
         &mut self,
-        layout: &n::PipelineLayout,
-        stages: pso::ShaderStageFlags,
-        offset: u32,
-        constants: &[u32],
+        _layout: &n::PipelineLayout,
+        _stages: pso::ShaderStageFlags,
+        _offset: u32,
+        _constants: &[u32],
     ) {
         unimplemented!()
     }
@@ -686,9 +686,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     
     fn push_compute_constants(
         &mut self,
-        layout: &n::PipelineLayout,
-        offset: u32,
-        constants: &[u32],
+        _layout: &n::PipelineLayout,
+        _offset: u32,
+        _constants: &[u32],
     ) {
         unimplemented!()
     }
