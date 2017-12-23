@@ -9,8 +9,10 @@ matrix:
   include:
     - os: linux
       rust: stable
+      compiler: gcc
     - os: linux
       rust: nightly
+      compiler: gcc
     - os: osx
       rust: stable
       osx_image: xcode9
@@ -40,7 +42,7 @@ before_install:
   # Will no longer be needed when Trusty build environment goes out of beta at Travis CI
   # (assuming it will have libsdl2-dev and Rust by then)
   # see https://docs.travis-ci.com/user/trusty-ci-environment/
-  - if [[ $TRAVIS_OS_NAME == "linux" ]]; then export DISPLAY=:99.0 && sh -e /etc/init.d/xvfb start && make travis-sdl2; fi
+  - if [[ $TRAVIS_OS_NAME == "linux" ]]; then export DISPLAY=:99.0 && sh -e /etc/init.d/xvfb start && make travis-sdl2 && export CXX=g++-5 && export CC=gcc-5; fi
   - if [[ $TRAVIS_OS_NAME == osx ]]; then brew update && brew install sdl2 && brew upgrade cmake && export CXX=clang++ && export CC=clang && export MACOSX_DEPLOYMENT_TARGET=10.7; fi
 
 addons:
@@ -48,6 +50,8 @@ addons:
     sources:
       # install a newer cmake since at this time Travis only has version 2.8.7
       - george-edison55-precise-backports
+      - llvm-toolchain-precise-3.8
+      - ubuntu-toolchain-r-test
     packages:
       - xdotool
       - cmake
@@ -61,6 +65,8 @@ addons:
       - libosmesa6-dev
       - libxi-dev
       - libxrandr-dev
+      - g++-5
+      - gcc
 
 script:
   - if [[ $TRAVIS_RUST_VERSION == "nightly" && $TRAVIS_BRANCH == "staging" ]]; then exit; fi
