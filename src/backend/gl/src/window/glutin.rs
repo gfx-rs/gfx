@@ -118,8 +118,21 @@ impl hal::Surface<B> for Surface {
     }
 
     fn capabilities_and_formats(&self, _: &PhysicalDevice) -> (hal::SurfaceCapabilities, Vec<f::Format>) {
-        let _formats = self.swapchain_formats();
-        unimplemented!()
+        let dim = get_window_dimensions(&self.window);
+        let extent = hal::window::Extent2d {
+            width: dim.0 as u32,
+            height: dim.1 as u32,
+        };
+        
+        (hal::SurfaceCapabilities {
+            image_count: if self.window.get_pixel_format().double_buffer { 2..3 } else { 1..2 },
+            current_extent: Some(extent),
+            extents: extent..hal::window::Extent2d {
+                width: dim.0 as u32 + 1,
+                height: dim.1 as u32 + 1
+            },
+            max_image_layers: 1,
+        }, self.swapchain_formats())
     }
 
     fn supports_queue_family(&self, _: &QueueFamily) -> bool { true }
