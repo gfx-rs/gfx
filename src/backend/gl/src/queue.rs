@@ -1,4 +1,4 @@
-use std::mem;
+use std::{mem, slice};
 use std::rc::Rc;
 
 use hal;
@@ -173,10 +173,17 @@ impl CommandQueue {
 
     /// Return a reference to a stored data object.
     fn get<T>(data: &[u8], ptr: com::BufferSlice) -> &[T] {
-        assert_eq!(ptr.size % mem::size_of::<T>() as u32, 0);
-        let raw_data = Self::get_raw(data, ptr);
-        unsafe { mem::transmute(raw_data) }
+        let u32_size = mem::size_of::<T>();
+        assert_eq!(ptr.size % u32_size as u32, 0);
+        let raw = Self::get_raw(data, ptr);
+        unsafe {
+            slice::from_raw_parts(
+                raw.as_ptr() as *const _,
+                raw.len() / u32_size,
+            )
+        }
     }
+
     /// Return a reference to a stored data object.
     fn get_raw(data: &[u8], ptr: com::BufferSlice) -> &[u8] {
         assert!(data.len() >= (ptr.offset + ptr.size) as usize);

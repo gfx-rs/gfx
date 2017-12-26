@@ -7,7 +7,7 @@ use {native as n, Backend};
 use pool::{self, BufferMemory};
 
 use std::borrow::Borrow;
-use std::mem;
+use std::{mem, slice};
 use std::ops::Range;
 use std::sync::{Arc, Mutex};
 
@@ -226,8 +226,14 @@ impl RawCommandBuffer {
 
     /// Copy a given vector slice into the data buffer.
     fn add<T>(&mut self, data: &[T]) -> BufferSlice {
-        self.add_raw(unsafe { mem::transmute(data) })
+        self.add_raw(unsafe {
+            slice::from_raw_parts(
+                data.as_ptr() as *const _,
+                data.len() * mem::size_of::<T>(),
+            )
+        })
     }
+
     /// Copy a given u8 slice into the data buffer.
     fn add_raw(&mut self, data: &[u8]) -> BufferSlice {
         let mut memory = self
