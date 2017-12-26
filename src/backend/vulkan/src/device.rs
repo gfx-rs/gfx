@@ -13,7 +13,7 @@ use std::ffi::CString;
 use std::ops::Range;
 
 use {Backend as B, Device, QueueFamily};
-use {conv, memory, window as w};
+use {conv, window as w};
 use pool::RawCommandPool;
 
 
@@ -67,26 +67,7 @@ impl d::Device<B> for Device {
             self.raw.0.allocate_memory(&info, None)
         }.expect("Error on memory allocation"); // TODO: error handling
 
-        // Map all allocations persistently and unmap them when calling free.
-        let mappable = self
-            .memory_types[mem_type.0]
-            .properties
-            .contains(memory::Properties::CPU_VISIBLE);
-
-        let ptr = if mappable {
-            unsafe {
-                self.raw.0.map_memory(
-                    memory,
-                    0,
-                    size,
-                    vk::MemoryMapFlags::empty(),
-                ).expect("Error on heap mapping") // TODO
-            }
-        } else {
-            ptr::null_mut()
-        } as *mut _;
-
-        Ok(n::Memory { inner: memory, ptr })
+        Ok(n::Memory { inner: memory })
     }
 
     fn create_command_pool(
@@ -801,12 +782,7 @@ impl d::Device<B> for Device {
                 .expect("Error on buffer creation") // TODO: error handling
         };
 
-        Ok(UnboundBuffer(n::Buffer {
-            raw: buffer,
-            memory: vk::DeviceMemory::null(),
-            offset: 0,
-            ptr: ptr::null_mut(),
-        }))
+        Ok(UnboundBuffer(n::Buffer { raw: buffer }))
     }
 
     fn get_buffer_requirements(&self, buffer: &UnboundBuffer) -> Requirements {
@@ -826,9 +802,6 @@ impl d::Device<B> for Device {
 
         let buffer = n::Buffer {
             raw: buffer.0.raw,
-            memory: memory.inner,
-            offset,
-            ptr: unsafe { memory.ptr.offset(offset as _) }
         };
 
         Ok(buffer)
@@ -1169,38 +1142,39 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn acquire_mapping_raw(&self, buf: &n::Buffer, read: Option<Range<u64>>)
-        -> Result<*mut u8, mapping::Error>
-    {
-        if let Some(read) = read {
-            let range = vk::MappedMemoryRange {
-                s_type: vk::StructureType::MappedMemoryRange,
-                p_next: ptr::null(),
-                memory: buf.memory,
-                offset: buf.offset + read.start,
-                size: read.end - read.start,
-            };
-            unsafe {
-                self.raw.0.invalidate_mapped_memory_ranges(&[range])
-                    .expect("memory invalidation failed"); // TODO
-            }
-        }
-        Ok(buf.ptr)
+    fn map_memory(&self, memory: &n::Memory, range: Range<u64>) -> Result<*mut u8, mapping::Error> {
+        let size = range.end - range.start;
+        let ptr = unsafe {
+            self.raw.0.map_memory(
+                memory.inner,
+                0,
+                size,
+                vk::MemoryMapFlags::empty(),
+            ).expect("Error on memory mapping") // TODO
+        };
+
+        Ok(ptr as *mut _)
     }
 
-    fn release_mapping_raw(&self, buf: &n::Buffer, wrote: Option<Range<u64>>) {
-        if let Some(wrote) = wrote {
-            let range = vk::MappedMemoryRange {
-                s_type: vk::StructureType::MappedMemoryRange,
-                p_next: ptr::null(),
-                memory: buf.memory,
-                offset: buf.offset + wrote.start,
-                size: wrote.end - wrote.start,
-            };
-            unsafe {
-                self.raw.0.flush_mapped_memory_ranges(&[range])
-                    .expect("memory flush failed"); // TODO
-            }
+    fn unmap_memory(&self, memory: &n::Memory) {
+        unsafe { self.raw.0.unmap_memory(memory.inner) }
+    }
+
+    fn flush_mapped_memory_ranges(&self, ranges: &[(&n::Memory, Range<u64>)]) {
+        let ranges = conv::map_memory_ranges(ranges);
+        unsafe {
+            self.raw.0
+                .flush_mapped_memory_ranges(&ranges)
+                .expect("Memory flush failed"); // TODO
+        }
+    }
+
+    fn invalidate_mapped_memory_ranges(&self, ranges: &[(&n::Memory, Range<u64>)]) {
+        let ranges = conv::map_memory_ranges(ranges);
+        unsafe {
+            self.raw.0
+                .invalidate_mapped_memory_ranges(&ranges)
+                .expect("Memory invalidation failed"); // TODO
         }
     }
 
@@ -1273,9 +1247,6 @@ impl d::Device<B> for Device {
     }
 
     fn free_memory(&self, memory: n::Memory) {
-        if !memory.ptr.is_null() {
-            unsafe { self.raw.0.unmap_memory(memory.inner) }
-        }
         unsafe { self.raw.0.free_memory(memory.inner, None); }
     }
 

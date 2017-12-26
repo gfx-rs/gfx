@@ -367,7 +367,6 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
         let device = Device {
             raw: Arc::new(RawDevice(device_raw)),
-            memory_types: self.memory_properties().memory_types,
         };
 
         let device_arc = device.raw.clone();
@@ -563,10 +562,6 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
 
 pub struct Device {
     raw: Arc<RawDevice>,
-    // Required for memory allocation.
-    // In the current iteration we persistently map all CPU visible memory on allocation.
-    // To check if the memory is mapable we need to store the memory properties.
-    memory_types: Vec<hal::MemoryType>,
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]

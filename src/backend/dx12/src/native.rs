@@ -236,6 +236,8 @@ pub struct Memory {
     pub(crate) heap: ComPtr<d3d12::ID3D12Heap>,
     pub(crate) type_id: usize,
     pub(crate) size: u64,
+    // Buffer containing the whole memory for mapping
+    pub(crate) resource: *mut d3d12::ID3D12Resource,
 }
 
 #[derive(Debug)]

@@ -20,15 +20,11 @@ pub struct ComputePipeline(pub vk::Pipeline);
 #[derive(Debug, Hash)]
 pub struct Memory {
     pub(crate) inner: vk::DeviceMemory,
-    pub(crate) ptr: *mut u8,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Buffer {
     pub(crate) raw: vk::Buffer,
-    pub(crate) memory: vk::DeviceMemory,
-    pub(crate) offset: u64,
-    pub(crate) ptr: *mut u8,
 }
 
 unsafe impl Sync for Buffer {}

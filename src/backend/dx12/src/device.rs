@@ -4,6 +4,7 @@ use std::{ffi, mem, ptr, slice};
 
 use spirv_cross::{hlsl, spirv, ErrorCode as SpirvErrorCode};
 
+use winapi::Interface;
 use winapi::um::{d3d12, d3dcommon, d3dcompiler, synchapi, winbase, winnt};
 use winapi::shared::minwindef::{FALSE, TRUE, UINT};
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, winerror};
@@ -677,10 +678,40 @@ impl d::Device<B> for Device {
         }
         assert_eq!(winerror::S_OK, hr);
 
+        let mut resource = ptr::null_mut();
+        let desc = d3d12::D3D12_RESOURCE_DESC {
+            Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
+            Alignment: 0,
+            Width: size,
+            Height: 1,
+            DepthOrArraySize: 1,
+            MipLevels: 1,
+            Format: dxgiformat::DXGI_FORMAT_UNKNOWN,
+            SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
+                Count: 1,
+                Quality: 0,
+            },
+            Layout: d3d12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+            Flags: d3d12::D3D12_RESOURCE_FLAG_NONE,
+        };
+
+        assert_eq!(winerror::S_OK, unsafe {
+            self.raw.clone().CreatePlacedResource(
+                heap as _,
+                0,
+                &desc,
+                d3d12::D3D12_RESOURCE_STATE_COMMON,
+                ptr::null(),
+                &d3d12::ID3D12Resource::uuidof(),
+                &mut resource as *mut *mut _ as *mut *mut _,
+            )
+        });
+
         Ok(n::Memory {
             heap: unsafe { ComPtr::new(heap as _) },
             type_id: mem_type,
             size,
+            resource,
         })
     }
 
@@ -1786,41 +1817,86 @@ impl d::Device<B> for Device {
             });
     }
 
-    fn acquire_mapping_raw(&self, buf: &n::Buffer, read: Option<Range<u64>>)
-        -> Result<*mut u8, mapping::Error>
-    {
-        let read_range = match read {
-            Some(r) => d3d12::D3D12_RANGE {
-                Begin: r.start as _,
-                End: r.end as _,
-            },
-            None => d3d12::D3D12_RANGE {
-                Begin: 0,
-                End: 0,
-            },
-        };
+    fn map_memory(&self, memory: &n::Memory, range: Range<u64>) -> Result<*mut u8, mapping::Error> {
+        assert!(range.start <= range.end);
 
         let mut ptr = ptr::null_mut();
         assert_eq!(winerror::S_OK, unsafe {
-            (*buf.resource).Map(0, &read_range, &mut ptr)
+            (*memory.resource).Map(
+                0,
+                &d3d12::D3D12_RANGE {
+                    Begin: 0,
+                    End: 0,
+                },
+                &mut ptr,
+            )
         });
-
+        unsafe { ptr.offset(range.start as _); }
         Ok(ptr as *mut _)
     }
 
-    fn release_mapping_raw(&self, buf: &n::Buffer, wrote: Option<Range<u64>>) {
-        let written_range = match wrote {
-            Some(w) => d3d12::D3D12_RANGE {
-                Begin: w.start as _,
-                End: w.end as _,
-            },
-            None => d3d12::D3D12_RANGE {
-                Begin: 0,
-                End: 0,
-            },
-        };
+    fn unmap_memory(&self, memory: &n::Memory) {
+        unsafe {
+            (*memory.resource).Unmap(
+                0,
+                &d3d12::D3D12_RANGE {
+                    Begin: 0,
+                    End: 0,
+                },
+            );
+        }
+    }
 
-        unsafe { (*buf.resource).Unmap(0, &written_range) };
+    fn flush_mapped_memory_ranges(&self, ranges: &[(&n::Memory, Range<u64>)]) {
+        for &(memory, ref range) in ranges {
+            // map and immediately unmap, hoping that dx12 drivers internally cache
+            // currently mapped buffers.
+            assert_eq!(winerror::S_OK, unsafe {
+                (*memory.resource).Map(
+                    0,
+                    &d3d12::D3D12_RANGE {
+                        Begin: 0,
+                        End: 0,
+                    },
+                    ptr::null_mut(),
+                )
+            });
+            unsafe {
+                (*memory.resource).Unmap(
+                    0,
+                    &d3d12::D3D12_RANGE {
+                        Begin: range.start as _,
+                        End: range.end as _,
+                    },
+                );
+            }
+        }
+    }
+
+    fn invalidate_mapped_memory_ranges(&self, ranges: &[(&n::Memory, Range<u64>)]) {
+        for &(memory, ref range) in ranges {
+            // map and immediately unmap, hoping that dx12 drivers internally cache
+            // currently mapped buffers.
+            assert_eq!(winerror::S_OK, unsafe {
+                (*memory.resource).Map(
+                    0,
+                    &d3d12::D3D12_RANGE {
+                        Begin: range.start as _,
+                        End: range.end as _,
+                    },
+                    ptr::null_mut(),
+                )
+            });
+            unsafe {
+                (*memory.resource).Unmap(
+                    0,
+                    &d3d12::D3D12_RANGE {
+                        Begin: 0,
+                        End: 0,
+                    },
+                );
+            }
+        }
     }
 
     fn create_semaphore(&self) -> n::Semaphore {

@@ -316,82 +316,74 @@ pub trait Device<B: Backend> {
     // TODO: copies
     fn update_descriptor_sets(&self, &[pso::DescriptorSetWrite<B>]);
 
-    // TODO: mapping requires further looking into.
-    // vulkan requires non-coherent mapping to round the range delimiters
-    // Nested mapping is not allowed in vulkan.
-    // How to handle it properly for backends? Explicit synchronization?
-
-    /// Acquire access to the buffer mapping.
     ///
-    /// If you will read, you have to specify in which range.
-    ///
-    /// While holding this access, you hold CPU-side exclusive access.
-    /// You must ensure that there is no GPU access to the buffer in the meantime.
-    fn acquire_mapping_raw(&self, buf: &B::Buffer, read: Option<Range<u64>>)
-        -> Result<*mut u8, mapping::Error>;
+    fn map_memory(&self, &B::Memory, Range<u64>) -> Result<*mut u8, mapping::Error>;
 
-    /// Release access to the buffer mapping.
     ///
-    /// If you wrote, you have to specify in which range.
-    fn release_mapping_raw(&self, buf: &B::Buffer, wrote: Option<Range<u64>>);
+    fn flush_mapped_memory_ranges(&self, &[(&B::Memory, Range<u64>)]);
 
-    /// Acquire a mapping Reader
+    ///
+    fn invalidate_mapped_memory_ranges(&self, &[(&B::Memory, Range<u64>)]);
+
+    ///
+    fn unmap_memory(&self, &B::Memory);
+
+    /// Acquire a mapping Reader.
     ///
     /// The accessible slice will correspond to the specified range (in bytes).
-    /// See `acquire_mapping_raw` for more information.
-    fn acquire_mapping_reader<'a, T>(&self, buffer: &'a B::Buffer, range: Range<u64>)
+    fn acquire_mapping_reader<'a, T>(&self, memory: &'a B::Memory, range: Range<u64>)
         -> Result<mapping::Reader<'a, B, T>, mapping::Error>
     where
         T: Copy,
     {
-        let count = (range.end - range.start) as usize / mem::size_of::<T>();
-        self.acquire_mapping_raw(buffer, Some(range.clone()))
+        let len = range.end - range.start;
+        let count = len as usize / mem::size_of::<T>();
+        self.map_memory(memory, range.clone())
             .map(|ptr| unsafe {
-                let start_ptr = ptr.offset(range.start as isize) as *const _;
+                let start_ptr = ptr.offset(0) as *const _;
+                self.invalidate_mapped_memory_ranges(&[(&memory, 0..len)]);
+
                 mapping::Reader {
                     slice: slice::from_raw_parts(start_ptr, count),
-                    buffer,
+                    memory,
                     released: false,
                 }
             })
     }
 
-    /// Release a mapping Reader
-    ///
-    /// See `acquire_mapping_raw` for more information.
+    /// Release a mapping Reader.
     fn release_mapping_reader<'a, T>(&self, mut reader: mapping::Reader<'a, B, T>) {
         reader.released = true;
-        self.release_mapping_raw(reader.buffer, None);
+        self.unmap_memory(reader.memory);
     }
 
-    /// Acquire a mapping Writer
+    /// Acquire a mapping Writer.
     ///
     /// The accessible slice will correspond to the specified range (in bytes).
-    /// See `acquire_mapping_raw` for more information.
-    fn acquire_mapping_writer<'a, T>(&self, buffer: &'a B::Buffer, range: Range<u64>)
+    fn acquire_mapping_writer<'a, T>(&self, memory: &'a B::Memory, range: Range<u64>)
         -> Result<mapping::Writer<'a, B, T>, mapping::Error>
     where
         T: Copy,
     {
         let count = (range.end - range.start) as usize / mem::size_of::<T>();
-        self.acquire_mapping_raw(buffer, None)
+        self.map_memory(memory, range.clone())
             .map(|ptr| unsafe {
-                let start_ptr = ptr.offset(range.start as isize) as *mut _;
+                let start_ptr = ptr.offset(0) as *mut _;
                 mapping::Writer {
                     slice: slice::from_raw_parts_mut(start_ptr, count),
-                    buffer,
+                    memory,
                     range,
                     released: false,
                 }
             })
     }
 
-    /// Release a mapping Writer
-    ///
-    /// See `acquire_mapping_raw` for more information.
+    /// Release a mapping Writer.
     fn release_mapping_writer<'a, T>(&self, mut writer: mapping::Writer<'a, B, T>) {
         writer.released = true;
-        self.release_mapping_raw(writer.buffer, Some(writer.range.clone()));
+        let len = writer.range.end - writer.range.start;
+        self.flush_mapped_memory_ranges(&[(&writer.memory, 0..len)]);
+        self.unmap_memory(writer.memory);
     }
 
     ///
