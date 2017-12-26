@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#![cfg_attr(target_os = "emscripten", allow(unused_mut))] // this is annoying...
 
 #[macro_use]
 extern crate gfx;
@@ -55,16 +56,29 @@ pub fn main() {
     let window_builder = glutin::WindowBuilder::new()
         .with_title("Gamma example".to_string())
         .with_dimensions(1024, 768);
+
+    let (api, version, vs_code, fs_code) = if cfg!(target_os = "emscripten") {
+        (
+            glutin::Api::WebGl, (2, 0),
+            include_bytes!("shader/quad_300_es.glslv").to_vec(),
+            include_bytes!("shader/quad_300_es.glslf").to_vec(),
+        )
+    } else {
+        (
+            glutin::Api::OpenGl, (3, 2),
+            include_bytes!("shader/quad_150_core.glslv").to_vec(),
+            include_bytes!("shader/quad_150_core.glslf").to_vec(),
+        )
+    };
+
     let context = glutin::ContextBuilder::new()
+        .with_gl(glutin::GlRequest::Specific(api, version))
         .with_vsync(true);
     let (window, mut device, mut factory, main_color, mut main_depth) =
         gfx_window_glutin::init::<ColorFormat, DepthFormat>(window_builder, context, &events_loop);
-    let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
-    let pso = factory.create_pipeline_simple(
-        include_bytes!("shader/quad_150.glslv"),
-        include_bytes!("shader/quad_150.glslf"),
-        pipe::new()
-    ).unwrap();
+    let mut encoder = gfx::Encoder::from(factory.create_command_buffer());
+    let pso = factory.create_pipeline_simple(&vs_code, &fs_code, pipe::new())
+        .unwrap();
     let (vertex_buffer, slice) = factory.create_vertex_buffer_with_slice(&QUAD, &[0u16, 1, 2, 2, 3, 0] as &[u16]);
     let mut data = pipe::Data {
         vbuf: vertex_buffer,
@@ -76,35 +90,36 @@ pub fn main() {
     let mut download = factory.create_download_buffer::<SurfaceData>(w as usize * h as usize)
         .unwrap();
 
-    let mut running = true;
-    while running {
-        events_loop.poll_events(|event| {
-            if let glutin::Event::WindowEvent { event, .. } = event {
-                match event {
-                    glutin::WindowEvent::KeyboardInput {
-                        input: glutin::KeyboardInput {
-                            virtual_keycode: Some(glutin::VirtualKeyCode::Escape),
-                            .. },
+    events_loop.run_forever(move |event| {
+        use glutin::{ControlFlow, ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
+
+        if let Event::WindowEvent { event, .. } = event {
+            match event {
+                WindowEvent::Closed |
+                WindowEvent::KeyboardInput {
+                    input: KeyboardInput {
+                        virtual_keycode: Some(VirtualKeyCode::Escape),
                         ..
-                    } | glutin::WindowEvent::Closed => running = false,
-                    glutin::WindowEvent::Resized(width, height) => {
-                        window.resize(width, height);
-                        gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
-                        download = factory.create_download_buffer(width as usize * height as usize)
-                            .unwrap();
                     },
-                    glutin::WindowEvent::KeyboardInput {
-                        input: glutin::KeyboardInput {
-                            virtual_keycode: Some(glutin::VirtualKeyCode::S),
-                            state: glutin::ElementState::Released,
-                            ..
-                        },
+                    ..
+                } => return ControlFlow::Break,
+                WindowEvent::Resized(width, height) => {
+                    window.resize(width, height);
+                    gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
+                    download = factory.create_download_buffer(width as usize * height as usize)
+                        .unwrap();
+                },
+                WindowEvent::KeyboardInput {
+                    input: KeyboardInput {
+                        virtual_keycode: Some(VirtualKeyCode::S),
+                        state: ElementState::Released,
                         ..
-                    } => screenshot = true,
-                    _ => (),
-                }
+                    },
+                    ..
+                } => screenshot = true,
+            _ => (),
             }
-        });
+        }
 
         if screenshot {
             println!("taking screenshot");
@@ -148,5 +163,7 @@ pub fn main() {
         encoder.flush(&mut device);
         window.swap_buffers().unwrap();
         device.cleanup();
-    }
+
+        ControlFlow::Continue
+    });
 }
