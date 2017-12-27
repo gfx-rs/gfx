@@ -1,4 +1,4 @@
-use hal::{self, image as i, pass};
+use hal::{self, image as i, pass, pso};
 use hal::memory::Properties;
 use gl;
 use Backend;
@@ -35,11 +35,12 @@ impl Fence {
     }
 }
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug)]
 pub struct GraphicsPipeline {
     pub(crate) program: Program,
     pub(crate) primitive: gl::types::GLenum,
     pub(crate) patch_size: Option<gl::types::GLint>,
+    pub(crate) blend_targets: Vec<pso::ColorBlendDesc>,
 }
 
 #[derive(Clone, Debug, Copy)]
