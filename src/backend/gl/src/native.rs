@@ -38,6 +38,8 @@ impl Fence {
 #[derive(Clone, Debug, Copy)]
 pub struct GraphicsPipeline {
     pub(crate) program: Program,
+    pub(crate) primitive: gl::types::GLenum,
+    pub(crate) patch_size: Option<gl::types::GLint>,
 }
 
 #[derive(Clone, Debug, Copy)]

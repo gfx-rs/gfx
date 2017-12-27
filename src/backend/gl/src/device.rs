@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use gl;
 use gl::types::{GLint, GLenum, GLfloat};
-use hal::{self as c, device as d, image as i, memory, pass, pso, buffer, mapping, query};
+use hal::{self as c, device as d, image as i, memory, pass, pso, buffer, mapping, query, Primitive};
 use hal::format::{Format, Swizzle};
 use hal::pool::CommandPoolCreateFlags;
 use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
@@ -347,8 +347,15 @@ impl d::Device<B> for Device {
                     name
                 };
 
+                let patch_size = match desc.input_assembler.primitive {
+                    Primitive::PatchList(size) => Some(size as _),
+                    _ => None
+                };
+
                 Ok(n::GraphicsPipeline {
                     program,
+                    primitive: conv::primitive_to_gl_primitive(desc.input_assembler.primitive),
+                    patch_size,
                 })
              })
              .collect()
