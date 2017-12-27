@@ -79,6 +79,7 @@ pub enum Command {
     BindFrameBuffer(FrameBufferTarget, n::FrameBuffer),
     BindTargetView(FrameBufferTarget, AttachmentPoint, n::ImageView),
     SetDrawColorBuffers(usize),
+    SetPatchSize(gl::types::GLint),
 }
 
 pub type FrameBufferTarget = gl::types::GLenum;
@@ -100,6 +101,8 @@ struct Cache {
     ///
     // Indicates that invalid commands have been recorded.
     error_state: bool,
+    // Vertices per patch for tessellation primitives (patches).
+    patch_size: Option<gl::types::GLint>,
 }
 
 impl Cache {
@@ -111,6 +114,7 @@ impl Cache {
             blend_color: None,
             framebuffer: None,
             error_state: false,
+            patch_size: None,
         }
     }
 }
@@ -478,8 +482,23 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn bind_graphics_pipeline(&mut self, _pipeline: &n::GraphicsPipeline) {
-        unimplemented!()
+    fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
+        let &n::GraphicsPipeline {
+            primitive,
+            patch_size,
+            ..
+        } = pipeline;
+
+        if self.cache.primitive != Some(primitive) {
+            self.cache.primitive = Some(primitive);
+        }
+
+        if self.cache.patch_size != patch_size {
+            self.cache.patch_size = patch_size;
+            if let Some(size) = patch_size {
+                self.push_cmd(Command::SetPatchSize(size));
+            }
+        }
     }
 
     fn bind_graphics_descriptor_sets<'a, T>(

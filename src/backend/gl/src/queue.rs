@@ -463,6 +463,9 @@ impl CommandQueue {
             com::Command::SetDrawColorBuffers(num) => {
                 state::bind_draw_color_buffers(&self.share.context, num);
             }
+            com::Command::SetPatchSize(num) => unsafe {
+                &self.share.context.PatchParameteri(gl::PATCH_VERTICES, num);
+            }
             /*
             com::Command::BindProgram(program) => unsafe {
                 self.share.context.UseProgram(program);
@@ -533,12 +536,6 @@ impl CommandQueue {
                     state::bind_blend(&self.share.context, color);
                 }else if false {
                     error!("Separate blending slots are not supported");
-                }
-            },
-            com::Command::SetPatches(num) => {
-                let gl = &self.share.context;
-                unsafe {
-                    gl.PatchParameteri(gl::PATCH_VERTICES, num as gl::types::GLint);
                 }
             },
             com::Command::CopyBuffer(src, dst, src_offset, dst_offset, size) => {
