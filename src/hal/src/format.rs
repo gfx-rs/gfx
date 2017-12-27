@@ -1,18 +1,42 @@
 //! Universal format specification.
 //! Applicable to textures, views, and vertex buffers.
 
-/// Description of the bits distribution of a format.
+bitflags!(
+    ///
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    pub struct AspectFlags: u8 {
+        /// Color aspect.
+        const COLOR = 0x1;
+        /// Depth aspect.
+        const DEPTH = 0x2;
+        /// Stencil aspect.
+        const STENCIL = 0x4;
+    }
+);
+
+/// Description of a format.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct FormatBits {
+pub struct FormatDesc {
     /// Total number of bits.
     ///
     /// * Depth/Stencil formats are opaque formats, where the total number of bits is unknown.
     ///   A dummy value is used for these formats instead (sum of depth and stencil bits).
     ///   For copy operations, the number of bits of the corresonding aspect should be used.
-    /// * The total number can be larger than the sum of `color`, `alpha`, `depth` and `stencil`
-    ///   for packed formats.
+    /// * The total number can be larger than the sum of individual format bits
+    ///   (`color`, `alpha`, `depth` and `stencil`) for packed formats.
     /// * For compressed formats, this denotes the number of bits per block.
-    pub total: u16,
+    pub bits: u16,
+    /// Format aspects
+    pub aspects: AspectFlags,
+    /// Dimensions (width, height) of the texel blocks.
+    ///
+    /// For uncompressed formats these are always (1, 1).
+    pub dim: (u32, u32),
+}
+
+/// Description of the bits distribution of a format.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct FormatBits {
     /// Number of color bits (summed for R/G/B).
     ///
     /// For compressed formats, this value is 0.
@@ -29,7 +53,6 @@ pub struct FormatBits {
 
 /// Format bits configuration with no bits assigned.
 pub const BITS_ZERO: FormatBits = FormatBits {
-    total: 0,
     color: 0,
     alpha: 0,
     depth: 0,
@@ -151,7 +174,7 @@ pub enum ChannelType {
 }
 
 macro_rules! surface_types {
-    { $($name:ident { $total:expr $( ,$component:ident : $bits:expr )*} ,)* } => {
+    { $($name:ident { $total:expr, $($aspect:ident)|*, $dim:expr $( ,$component:ident : $bits:expr )*} ,)* } => {
         /// Type of the allocated texture surface. It is supposed to only
         /// carry information about the number of bits per each channel.
         /// The actual types are up to the views to decide and interpret.
@@ -165,13 +188,23 @@ macro_rules! surface_types {
         }
 
         impl SurfaceType {
-            /// Return the total number of bits for this format.
+            /// Return the bits for this format.
             pub fn describe_bits(&self) -> FormatBits {
                 match *self {
                     $( SurfaceType::$name => FormatBits {
-                        total: $total,
                         $( $component: $bits, )*
                         .. BITS_ZERO
+                    }, )*
+                }
+            }
+
+            ///
+            pub fn desc(&self) -> FormatDesc {
+                match *self {
+                    $( SurfaceType::$name => FormatDesc {
+                        bits: $total,
+                        aspects: $(AspectFlags::$aspect)|*,
+                        dim: $dim,
                     }, )*
                 }
             }
@@ -179,72 +212,73 @@ macro_rules! surface_types {
     }
 }
 
+// #ident { num_bits, aspects, dim, (color, alpha, ..) }
 surface_types! {
-    R4_G4 { 8, color: 8 },
-    R4_G4_B4_A4 { 32, color: 24, alpha: 4 },
-    B4_G4_R4_A4 { 32, color: 24, alpha: 4 },
-    R5_G6_B5 { 16, color: 16 },
-    B5_G6_R5 { 16, color: 16 },
-    R5_G5_B5_A1 { 16, color: 15, alpha: 1 },
-    B5_G5_R5_A1 { 16, color: 15, alpha: 1 },
-    A1_R5_G5_B5 { 16, color: 15, alpha: 1 },
-    R8 { 8, color: 8 },
-    R8_G8 { 16, color: 16 },
-    R8_G8_B8 { 24, color: 24 },
-    B8_G8_R8 { 24, color: 24 },
-    R8_G8_B8_A8 { 32, color: 24, alpha: 8 },
-    B8_G8_R8_A8 { 32, color: 24, alpha: 8 },
-    A8_B8_G8_R8 { 32, color: 24, alpha: 8 },
-    A2_R10_G10_B10 { 32, color: 30, alpha: 2 },
-    A2_B10_G10_R10 { 32, color: 30, alpha: 2 },
-    R16 { 16, color: 16 },
-    R16_G16 { 32, color: 32 },
-    R16_G16_B16 { 48, color: 48 },
-    R16_G16_B16_A16 { 48, color: 48, alpha: 16 },
-    R32 { 32, color: 32 },
-    R32_G32 { 64, color: 64 },
-    R32_G32_B32 { 96, color: 96 },
-    R32_G32_B32_A32 { 128, color: 96, alpha: 32 },
-    R64 { 64, color: 64 },
-    R64_G64 { 128, color: 128 },
-    R64_G64_B64 { 192, color: 192 },
-    R64_G64_B64_A64 { 256, color: 192, alpha: 64 },
-    B10_G11_R11 { 32, color: 32 },
-    E5_B9_G9_R9 { 32, color: 27 }, // 32-bit packed format
-    D16 { 16, depth: 16 },
-    X8D24 { 32, depth: 24 },
-    D32 { 32, depth: 32 },
-    S8 { 8, stencil: 8 },
-    D16_S8 { 24, depth: 16, stencil: 8 },
-    D24_S8 { 32, depth: 24, stencil: 8 },
-    D32_S8 { 40, depth: 32, stencil: 8 },
-    BC1_RGB { 64 },
-    BC1_RGBA { 64 },
-    BC2 { 128 },
-    BC3 { 128 },
-    BC4 { 64 },
-    BC5 { 128 },
-    BC6 { 128 },
-    BC7 { 128 },
-    ETC2_R8_G8_B8 { 64 },
-    ETC2_R8_G8_B8_A1 { 64 },
-    ETC2_R8_G8_B8_A8 { 128 },
-    EAC_R11 { 64 },
-    EAC_R11_G11 { 128 },
-    ASTC_4x4 { 128 },
-    ASTC_5x4 { 128 },
-    ASTC_5x5 { 128 },
-    ASTC_6x5 { 128 },
-    ASTC_6x6 { 128 },
-    ASTC_8x5 { 128 },
-    ASTC_8x6 { 128 },
-    ASTC_8x8 { 128 },
-    ASTC_10x5 { 128 },
-    ASTC_10x6 { 128 },
-    ASTC_10x8 { 128 },
-    ASTC_10x10 { 128 },
-    ASTC_12x10 { 128 },
-    ASTC_12x12 { 128 },
+    R4_G4               {   8, COLOR, (1, 1), color: 8 },
+    R4_G4_B4_A4         {  32, COLOR, (1, 1), color: 24, alpha: 4 },
+    B4_G4_R4_A4         {  32, COLOR, (1, 1), color: 24, alpha: 4 },
+    R5_G6_B5            {  16, COLOR, (1, 1), color: 16 },
+    B5_G6_R5            {  16, COLOR, (1, 1), color: 16 },
+    R5_G5_B5_A1         {  16, COLOR, (1, 1), color: 15, alpha: 1 },
+    B5_G5_R5_A1         {  16, COLOR, (1, 1), color: 15, alpha: 1 },
+    A1_R5_G5_B5         {  16, COLOR, (1, 1), color: 15, alpha: 1 },
+    R8                  {   8, COLOR, (1, 1), color: 8 },
+    R8_G8               {  16, COLOR, (1, 1), color: 16 },
+    R8_G8_B8            {  24, COLOR, (1, 1), color: 24 },
+    B8_G8_R8            {  24, COLOR, (1, 1), color: 24 },
+    R8_G8_B8_A8         {  32, COLOR, (1, 1), color: 24, alpha: 8 },
+    B8_G8_R8_A8         {  32, COLOR, (1, 1), color: 24, alpha: 8 },
+    A8_B8_G8_R8         {  32, COLOR, (1, 1), color: 24, alpha: 8 },
+    A2_R10_G10_B10      {  32, COLOR, (1, 1), color: 30, alpha: 2 },
+    A2_B10_G10_R10      {  32, COLOR, (1, 1), color: 30, alpha: 2 },
+    R16                 {  16, COLOR, (1, 1), color: 16 },
+    R16_G16             {  32, COLOR, (1, 1), color: 32 },
+    R16_G16_B16         {  48, COLOR, (1, 1), color: 48 },
+    R16_G16_B16_A16     {  48, COLOR, (1, 1), color: 48, alpha: 16 },
+    R32                 {  32, COLOR, (1, 1), color: 32 },
+    R32_G32             {  64, COLOR, (1, 1), color: 64 },
+    R32_G32_B32         {  96, COLOR, (1, 1), color: 96 },
+    R32_G32_B32_A32     { 128, COLOR, (1, 1), color: 96, alpha: 32 },
+    R64                 {  64, COLOR, (1, 1), color: 64 },
+    R64_G64             { 128, COLOR, (1, 1), color: 128 },
+    R64_G64_B64         { 192, COLOR, (1, 1), color: 192 },
+    R64_G64_B64_A64     { 256, COLOR, (1, 1), color: 192, alpha: 64 },
+    B10_G11_R11         {  32, COLOR, (1, 1), color: 32 },
+    E5_B9_G9_R9         {  32, COLOR, (1, 1), color: 27 }, // 32-bit packed format
+    D16                 {  16, DEPTH, (1, 1), depth: 16 },
+    X8D24               {  32, DEPTH, (1, 1), depth: 24 },
+    D32                 {  32, DEPTH, (1, 1), depth: 32 },
+    S8                  {   8, STENCIL, (1, 1), stencil: 8 },
+    D16_S8              {  24, DEPTH | STENCIL, (1, 1), depth: 16, stencil: 8 },
+    D24_S8              {  32, DEPTH | STENCIL, (1, 1), depth: 24, stencil: 8 },
+    D32_S8              {  40, DEPTH | STENCIL, (1, 1), depth: 32, stencil: 8 },
+    BC1_RGB             {  64, COLOR, (4, 4) },
+    BC1_RGBA            {  64, COLOR, (4, 4) },
+    BC2                 { 128, COLOR, (4, 4) },
+    BC3                 { 128, COLOR, (4, 4) },
+    BC4                 {  64, COLOR, (4, 4) },
+    BC5                 { 128, COLOR, (4, 4) },
+    BC6                 { 128, COLOR, (4, 4) },
+    BC7                 { 128, COLOR, (4, 4) },
+    ETC2_R8_G8_B8       {  64, COLOR, (4, 4) },
+    ETC2_R8_G8_B8_A1    {  64, COLOR, (4, 4) },
+    ETC2_R8_G8_B8_A8    { 128, COLOR, (4, 4) },
+    EAC_R11             {  64, COLOR, (4, 4) },
+    EAC_R11_G11         { 128, COLOR, (4, 4) },
+    ASTC_4x4            { 128, COLOR, (4, 4) },
+    ASTC_5x4            { 128, COLOR, (5, 4) },
+    ASTC_5x5            { 128, COLOR, (5, 5) },
+    ASTC_6x5            { 128, COLOR, (6, 5) },
+    ASTC_6x6            { 128, COLOR, (6, 6) },
+    ASTC_8x5            { 128, COLOR, (8, 5) },
+    ASTC_8x6            { 128, COLOR, (8, 6) },
+    ASTC_8x8            { 128, COLOR, (8, 8) },
+    ASTC_10x5           { 128, COLOR, (10, 5) },
+    ASTC_10x6           { 128, COLOR, (10, 6) },
+    ASTC_10x8           { 128, COLOR, (10, 8) },
+    ASTC_10x10          { 128, COLOR, (10, 10) },
+    ASTC_12x10          { 128, COLOR, (12, 10) },
+    ASTC_12x12          { 128, COLOR, (12, 12) },
 }
 
 /// Gneric run-time base format.
@@ -256,7 +290,7 @@ macro_rules! formats {
     { $($name:ident = ($surface:ident, $channel:ident),)* } => {
         ///
         #[allow(missing_docs)]
-        #[repr(u8)]
+        #[repr(u32)]
         #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
         #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
         pub enum Format {
@@ -464,4 +498,13 @@ formats! {
     Astc12x10Srgb = (ASTC_12x10, Srgb),
     Astc12x12Unorm = (ASTC_12x12, Unorm),
     Astc12x12Srgb = (ASTC_12x12, Srgb),
+}
+
+impl Format {
+    /// Get base format.
+    ///
+    /// Returns `None` if format is `Undefined`.
+    pub fn base_format(self) -> Option<BaseFormat> {
+        self.into()
+    }
 }

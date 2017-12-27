@@ -11,7 +11,7 @@ use std::error::Error;
 use std::fmt;
 use std::ops::Range;
 
-use format;
+use format::{self, AspectFlags};
 use pso::Comparison;
 
 
@@ -537,19 +537,6 @@ pub enum ImageLayout {
     ///
     Present,
 }
-
-bitflags!(
-    ///
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct AspectFlags: u8 {
-        /// Color aspect.
-        const COLOR = 0x1;
-        /// Depth aspect.
-        const DEPTH = 0x2;
-        /// Stencil aspect.
-        const STENCIL = 0x4;
-    }
-);
 
 bitflags!(
     ///

@@ -9,7 +9,7 @@ use std::ops::Range;
 use {buffer, format, image, mapping, pass, pso, query};
 use pool::{CommandPool, CommandPoolCreateFlags};
 use queue::QueueGroup;
-use {Backend, MemoryType, MemoryTypeId};
+use {Backend, MemoryTypeId};
 use memory::Requirements;
 use window::{Backbuffer, SwapchainConfig};
 
