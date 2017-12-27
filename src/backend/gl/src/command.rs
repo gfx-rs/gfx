@@ -80,6 +80,7 @@ pub enum Command {
     BindTargetView(FrameBufferTarget, AttachmentPoint, n::ImageView),
     SetDrawColorBuffers(usize),
     SetPatchSize(gl::types::GLint),
+    BindProgram(gl::types::GLuint),
 }
 
 pub type FrameBufferTarget = gl::types::GLenum;
@@ -103,6 +104,8 @@ struct Cache {
     error_state: bool,
     // Vertices per patch for tessellation primitives (patches).
     patch_size: Option<gl::types::GLint>,
+    // Active program name.
+    program: Option<gl::types::GLuint>,
 }
 
 impl Cache {
@@ -115,6 +118,7 @@ impl Cache {
             framebuffer: None,
             error_state: false,
             patch_size: None,
+            program: None,
         }
     }
 }
@@ -492,6 +496,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         let &n::GraphicsPipeline {
             primitive,
             patch_size,
+            program,
             ..
         } = pipeline;
 
@@ -504,6 +509,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             if let Some(size) = patch_size {
                 self.push_cmd(Command::SetPatchSize(size));
             }
+        }
+
+        if self.cache.program != Some(program) {
+            self.cache.program = Some(program);
+            self.push_cmd(Command::BindProgram(program));
         }
     }
 

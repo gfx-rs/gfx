@@ -471,12 +471,12 @@ impl CommandQueue {
                 state::bind_draw_color_buffers(&self.share.context, num);
             }
             com::Command::SetPatchSize(num) => unsafe {
-                &self.share.context.PatchParameteri(gl::PATCH_VERTICES, num);
+                self.share.context.PatchParameteri(gl::PATCH_VERTICES, num);
             }
-            /*
             com::Command::BindProgram(program) => unsafe {
                 self.share.context.UseProgram(program);
-            },
+            }
+            /*
             com::Command::BindConstantBuffer(pso::ConstantBufferParam(buffer, _, slot)) => unsafe {
                 self.share.context.BindBufferBase(gl::UNIFORM_BUFFER, slot as gl::types::GLuint, buffer);
             },
