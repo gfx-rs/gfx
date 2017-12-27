@@ -313,9 +313,11 @@ impl RawCommandBuffer {
 
 impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn begin(&mut self) {
-        // Implicit buffer reset when individual reset is set.
         if self.individual_reset {
+            // Implicit buffer reset when individual reset is set.
             self.reset(false);
+        } else {
+            self.soft_reset();
         }
     }
 
