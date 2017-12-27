@@ -51,7 +51,7 @@
 
 use Backend;
 use image;
-use format::{self, Format, Formatted};
+use format::{self, Format};
 use queue::CommandQueue;
 use std::ops::Range;
 
@@ -157,9 +157,9 @@ pub enum FrameSync<'a, B: Backend> {
 #[derive(Debug, Clone)]
 pub struct SwapchainConfig {
     /// Color format of the backbuffer images.
-    pub color_format: format::Format,
+    pub color_format: Format,
     /// Depth stencil format of the backbuffer images (optional).
-    pub depth_stencil_format: Option<format::Format>,
+    pub depth_stencil_format: Option<Format>,
     /// Number of images in the swapchain.
     pub image_count: u32,
 }
@@ -174,7 +174,7 @@ impl SwapchainConfig {
     /// ```
     pub fn new() -> Self {
         SwapchainConfig {
-            color_format: format::Rgba8::SELF, // TODO: try to find best default format
+            color_format: Format::Bgra8Unorm, // TODO: try to find best default format
             depth_stencil_format: None,
             image_count: 2,
         }
@@ -187,21 +187,8 @@ impl SwapchainConfig {
     /// ```no_run
     ///
     /// ```
-    pub fn with_color(mut self, cf: format::Format) -> Self {
+    pub fn with_color(mut self, cf: Format) -> Self {
         self.color_format = cf;
-        self
-    }
-
-
-    /// Specify the color format for the backbuffer images.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    ///
-    /// ```
-    pub fn with_color_typed<Cf: format::RenderFormat>(mut self) -> Self {
-        self.color_format = Cf::SELF;
         self
     }
 
@@ -216,20 +203,6 @@ impl SwapchainConfig {
     /// ```
     pub fn with_depth_stencil(mut self, dsf: format::Format) -> Self {
         self.depth_stencil_format = Some(dsf);
-        self
-    }
-
-    /// Specify the depth stencil format for the backbuffer images.
-    ///
-    /// The Swapchain will create additional depth-stencil images for each backbuffer.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    ///
-    /// ```
-    pub fn with_depth_stencil_typed<Dsf: format::DepthStencilFormat>(mut self) -> Self {
-        self.depth_stencil_format = Some(Dsf::SELF);
         self
     }
 

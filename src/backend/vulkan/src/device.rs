@@ -138,7 +138,7 @@ impl d::Device<B> for Device {
         let attachments = attachments.iter().map(|attachment| {
             vk::AttachmentDescription {
                 flags: vk::AttachmentDescriptionFlags::empty(), // TODO: may even alias!
-                format: conv::map_format(attachment.format.0, attachment.format.1).unwrap(), // TODO: error handling
+                format: conv::map_format(attachment.format),
                 samples: vk::SAMPLE_COUNT_1_BIT, // TODO: multisampling
                 load_op: conv::map_attachment_load_op(attachment.ops.load),
                 store_op: conv::map_attachment_store_op(attachment.ops.store),
@@ -362,10 +362,7 @@ impl d::Device<B> for Device {
                     vertex_attributes.push(vk::VertexInputAttributeDescription {
                         location: attr.location as u32,
                         binding: attr.binding as u32,
-                        format: match conv::map_format(attr.element.format.0, attr.element.format.1) {
-                            Some(fm) => fm,
-                            None => return Err(pso::CreationError::Other),
-                        },
+                        format: conv::map_format(attr.element.format),
                         offset: attr.element.offset as u32,
                     });
                 }
@@ -845,7 +842,7 @@ impl d::Device<B> for Device {
             p_next: ptr::null(),
             flags: vk::BufferViewCreateFlags::empty(),
             buffer: buffer.raw,
-            format: conv::map_format(format.0, format.1).unwrap(),
+            format: conv::map_format(format),
             offset: range.start,
             range: range.end - range.start,
         };
@@ -924,7 +921,7 @@ impl d::Device<B> for Device {
             p_next: ptr::null(),
             flags,
             image_type,
-            format: conv::map_format(format.0, format.1).unwrap(), // TODO
+            format: conv::map_format(format),
             extent: extent.clone(),
             mip_levels: mip_levels as u32,
             array_layers: array_layers as u32,
@@ -986,7 +983,7 @@ impl d::Device<B> for Device {
             flags: vk::ImageViewCreateFlags::empty(), // TODO
             image: image.raw,
             view_type: vk::ImageViewType::Type2d, // TODO
-            format: conv::map_format(format.0, format.1).unwrap(), // TODO
+            format: conv::map_format(format),
             components: conv::map_swizzle(swizzle),
             subresource_range,
         };
@@ -1330,7 +1327,7 @@ impl d::Device<B> for Device {
             flags: vk::SwapchainCreateFlagsKHR::empty(),
             surface: surface.raw.handle,
             min_image_count: config.image_count,
-            image_format: conv::map_format(format.0, format.1).unwrap(),
+            image_format: conv::map_format(format),
             image_color_space: vk::ColorSpaceKHR::SrgbNonlinear,
             image_extent: vk::Extent2D {
                 width: surface.width,

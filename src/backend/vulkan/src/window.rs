@@ -289,10 +289,7 @@ impl hal::Surface<Backend> for Surface {
 
         let formats = formats
             .iter()
-            .filter_map(|sf| {
-                conv::map_vk_format(sf.format)
-                    .map(|(surface, channel)| Format(surface, channel))
-            })
+            .map(|sf| conv::map_vk_format(sf.format))
             .collect();
 
         (capabilities, formats)
