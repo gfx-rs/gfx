@@ -4,11 +4,22 @@
 /// Description of the bits distribution of a format.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct FormatBits {
-    /// Total number of bits
-    pub total: u8,
-    /// Number of color bits (summed for R/G/B)
+    /// Total number of bits.
+    ///
+    /// * Depth/Stencil formats are opaque formats, where the total number of bits is unknown.
+    ///   A dummy value is used for these formats instead (sum of depth and stencil bits).
+    ///   For copy operations, the number of bits of the corresonding aspect should be used.
+    /// * The total number can be larger than the sum of `color`, `alpha`, `depth` and `stencil`
+    ///   for packed formats.
+    /// * For compressed formats, this denotes the number of bits per block.
+    pub total: u16,
+    /// Number of color bits (summed for R/G/B).
+    ///
+    /// For compressed formats, this value is 0.
     pub color: u8,
-    /// Number of alpha bits
+    /// Number of alpha bits.
+    ///
+    /// For compressed formats, this value is 0.
     pub alpha: u8,
     /// Number of depth bits
     pub depth: u8,
@@ -139,80 +150,101 @@ pub enum ChannelType {
     Srgb,
 }
 
-/// Type of the allocated texture surface. It is supposed to only
-/// carry information about the number of bits per each channel.
-/// The actual types are up to the views to decide and interpret.
-/// The actual components are up to the swizzle to define.
-#[repr(u8)]
-#[allow(missing_docs, non_camel_case_types)]
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum SurfaceType {
-    R4_G4,
-    R4_G4_B4_A4,
-    B4_G4_R4_A4,
-    R5_G6_B5,
-    B5_G6_R5,
-    R5_G5_B5_A1,
-    B5_G5_R5_A1,
-    A1_R5_G5_B5,
-    R8,
-    R8_G8,
-    R8_G8_B8,
-    B8_G8_R8,
-    R8_G8_B8_A8,
-    B8_G8_R8_A8,
-    A8_B8_G8_R8,
-    A2_R10_G10_B10,
-    A2_B10_G10_R10,
-    R16,
-    R16_G16,
-    R16_G16_B16,
-    R16_G16_B16_A16,
-    R32,
-    R32_G32,
-    R32_G32_B32,
-    R32_G32_B32_A32,
-    R64,
-    R64_G64,
-    R64_G64_B64,
-    R64_G64_B64_A64,
-    B10_G11_R11,
-    E5_B9_G9_R9,
-    D16,
-    X8D24,
-    D32,
-    S8,
-    D16_S8,
-    D24_S8,
-    D32_S8,
-    BC1_RGB,
-    BC1_RGBA,
-    BC2,
-    BC3,
-    BC4,
-    BC5,
-    BC6,
-    BC7,
-    ETC2_R8_G8_B8,
-    ETC2_R8_G8_B8_A1,
-    ETC2_R8_G8_B8_A8,
-    EAC_R11,
-    EAC_R11_G11,
-    ASTC_4x4,
-    ASTC_5x4,
-    ASTC_5x5,
-    ASTC_6x5,
-    ASTC_6x6,
-    ASTC_8x5,
-    ASTC_8x6,
-    ASTC_8x8,
-    ASTC_10x5,
-    ASTC_10x6,
-    ASTC_10x8,
-    ASTC_10x10,
-    ASTC_12x10,
-    ASTC_12x12,
+macro_rules! surface_types {
+    { $($name:ident { $total:expr $( ,$component:ident : $bits:expr )*} ,)* } => {
+        /// Type of the allocated texture surface. It is supposed to only
+        /// carry information about the number of bits per each channel.
+        /// The actual types are up to the views to decide and interpret.
+        /// The actual components are up to the swizzle to define.
+        #[repr(u8)]
+        #[allow(missing_docs, non_camel_case_types)]
+        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+        #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+        pub enum SurfaceType {
+            $( $name, )*
+        }
+
+        impl SurfaceType {
+            /// Return the total number of bits for this format.
+            pub fn describe_bits(&self) -> FormatBits {
+                match *self {
+                    $( SurfaceType::$name => FormatBits {
+                        total: $total,
+                        $( $component: $bits, )*
+                        .. BITS_ZERO
+                    }, )*
+                }
+            }
+        }
+    }
+}
+
+surface_types! {
+    R4_G4 { 8, color: 8 },
+    R4_G4_B4_A4 { 32, color: 24, alpha: 4 },
+    B4_G4_R4_A4 { 32, color: 24, alpha: 4 },
+    R5_G6_B5 { 16, color: 16 },
+    B5_G6_R5 { 16, color: 16 },
+    R5_G5_B5_A1 { 16, color: 15, alpha: 1 },
+    B5_G5_R5_A1 { 16, color: 15, alpha: 1 },
+    A1_R5_G5_B5 { 16, color: 15, alpha: 1 },
+    R8 { 8, color: 8 },
+    R8_G8 { 16, color: 16 },
+    R8_G8_B8 { 24, color: 24 },
+    B8_G8_R8 { 24, color: 24 },
+    R8_G8_B8_A8 { 32, color: 24, alpha: 8 },
+    B8_G8_R8_A8 { 32, color: 24, alpha: 8 },
+    A8_B8_G8_R8 { 32, color: 24, alpha: 8 },
+    A2_R10_G10_B10 { 32, color: 30, alpha: 2 },
+    A2_B10_G10_R10 { 32, color: 30, alpha: 2 },
+    R16 { 16, color: 16 },
+    R16_G16 { 32, color: 32 },
+    R16_G16_B16 { 48, color: 48 },
+    R16_G16_B16_A16 { 48, color: 48, alpha: 16 },
+    R32 { 32, color: 32 },
+    R32_G32 { 64, color: 64 },
+    R32_G32_B32 { 96, color: 96 },
+    R32_G32_B32_A32 { 128, color: 96, alpha: 32 },
+    R64 { 64, color: 64 },
+    R64_G64 { 128, color: 128 },
+    R64_G64_B64 { 192, color: 192 },
+    R64_G64_B64_A64 { 256, color: 192, alpha: 64 },
+    B10_G11_R11 { 32, color: 32 },
+    E5_B9_G9_R9 { 32, color: 27 }, // 32-bit packed format
+    D16 { 16, depth: 16 },
+    X8D24 { 32, depth: 24 },
+    D32 { 32, depth: 32 },
+    S8 { 8, stencil: 8 },
+    D16_S8 { 24, depth: 16, stencil: 8 },
+    D24_S8 { 32, depth: 24, stencil: 8 },
+    D32_S8 { 40, depth: 32, stencil: 8 },
+    BC1_RGB { 64 },
+    BC1_RGBA { 64 },
+    BC2 { 128 },
+    BC3 { 128 },
+    BC4 { 64 },
+    BC5 { 128 },
+    BC6 { 128 },
+    BC7 { 128 },
+    ETC2_R8_G8_B8 { 64 },
+    ETC2_R8_G8_B8_A1 { 64 },
+    ETC2_R8_G8_B8_A8 { 128 },
+    EAC_R11 { 64 },
+    EAC_R11_G11 { 128 },
+    ASTC_4x4 { 128 },
+    ASTC_5x4 { 128 },
+    ASTC_5x5 { 128 },
+    ASTC_6x5 { 128 },
+    ASTC_6x6 { 128 },
+    ASTC_8x5 { 128 },
+    ASTC_8x6 { 128 },
+    ASTC_8x8 { 128 },
+    ASTC_10x5 { 128 },
+    ASTC_10x6 { 128 },
+    ASTC_10x8 { 128 },
+    ASTC_10x10 { 128 },
+    ASTC_12x10 { 128 },
+    ASTC_12x12 { 128 },
 }
 
 /// Gneric run-time base format.
