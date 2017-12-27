@@ -356,6 +356,7 @@ impl d::Device<B> for Device {
                     program,
                     primitive: conv::primitive_to_gl_primitive(desc.input_assembler.primitive),
                     patch_size,
+                    blend_targets: desc.blender.targets.clone(),
                 })
              })
              .collect()

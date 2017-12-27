@@ -476,6 +476,9 @@ impl CommandQueue {
             com::Command::BindProgram(program) => unsafe {
                 self.share.context.UseProgram(program);
             }
+            com::Command::BindBlendSlot(slot, blend) => {
+                state::bind_blend_slot(&self.share.context, slot, &blend);
+            }
             /*
             com::Command::BindConstantBuffer(pso::ConstantBufferParam(buffer, _, slot)) => unsafe {
                 self.share.context.BindBufferBase(gl::UNIFORM_BUFFER, slot as gl::types::GLuint, buffer);

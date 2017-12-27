@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 
 use gl;
-use hal::{self, command, image, memory, pso, query};
+use hal::{self, command, image, memory, pso, query, ColorSlot};
 use hal::buffer::IndexBufferView;
 use {native as n, Backend};
 use pool::{self, BufferMemory};
@@ -81,6 +81,7 @@ pub enum Command {
     SetDrawColorBuffers(usize),
     SetPatchSize(gl::types::GLint),
     BindProgram(gl::types::GLuint),
+    BindBlendSlot(ColorSlot, pso::ColorBlendDesc),
 }
 
 pub type FrameBufferTarget = gl::types::GLenum;
@@ -106,6 +107,8 @@ struct Cache {
     patch_size: Option<gl::types::GLint>,
     // Active program name.
     program: Option<gl::types::GLuint>,
+    // Blend per attachment.
+    blend_targets: Option<Vec<Option<pso::ColorBlendDesc>>>,
 }
 
 impl Cache {
@@ -119,6 +122,7 @@ impl Cache {
             error_state: false,
             patch_size: None,
             program: None,
+            blend_targets: None,
         }
     }
 }
@@ -261,6 +265,49 @@ impl RawCommandBuffer {
             size: data.len() as u32,
         };
         slice
+    }
+
+    fn update_blend_targets(&mut self, blend_targets: &Vec<pso::ColorBlendDesc>) {
+        let max_blend_slots = blend_targets.len();
+
+        if max_blend_slots > 0 {
+            match self.cache.blend_targets {
+                Some(ref mut cached) => {
+                    if cached.len() < max_blend_slots {
+                        cached.resize(max_blend_slots, None);
+                    }
+                }
+                None => {
+                    self.cache.blend_targets = Some(vec![None; max_blend_slots]);
+                }
+            };
+        }
+
+        for (slot, blend_target) in blend_targets.iter().enumerate() {
+            let mut update_blend = false;
+            if let Some(ref mut cached_targets) = self.cache.blend_targets {
+                if let Some(cached_target) = cached_targets.get(slot) {
+                    match cached_target {
+                        &Some(ref cache) => {
+                            if cache != blend_target {
+                                update_blend = true;
+                            }
+                        }
+                        &None => {
+                            update_blend = true;
+                        }
+                    }
+                }
+
+                if update_blend {
+                    cached_targets[slot] = Some(*blend_target);
+                }
+            }
+
+            if update_blend {
+                self.push_cmd(Command::BindBlendSlot(slot as _, *blend_target));
+            }
+        }
     }
 }
 
@@ -497,6 +544,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             primitive,
             patch_size,
             program,
+            ref blend_targets,
             ..
         } = pipeline;
 
@@ -515,6 +563,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             self.cache.program = Some(program);
             self.push_cmd(Command::BindProgram(program));
         }
+
+        self.update_blend_targets(blend_targets);
     }
 
     fn bind_graphics_descriptor_sets<'a, T>(
