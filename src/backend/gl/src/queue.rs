@@ -475,9 +475,9 @@ impl CommandQueue {
             com::Command::BindBlendSlot(slot, ref blend) => {
                 state::bind_blend_slot(&self.share.context, slot, blend);
             }
-            com::Command::BindAttribute(ref attribute) => unsafe {
+            com::Command::BindAttribute(ref attribute, handle) => unsafe {
                 let gl = &self.share.context;
-                gl.BindBuffer(gl::ARRAY_BUFFER, attribute.binding);
+                gl.BindBuffer(gl::ARRAY_BUFFER, handle);
                 gl.VertexAttribPointer(attribute.location, attribute.size, gl::FLOAT, gl::FALSE,
                     attribute.stride, attribute.offset as *const gl::types::GLvoid);
                 gl.EnableVertexAttribArray(attribute.location);

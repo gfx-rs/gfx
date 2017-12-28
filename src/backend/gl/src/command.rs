@@ -82,7 +82,7 @@ pub enum Command {
     SetPatchSize(gl::types::GLint),
     BindProgram(gl::types::GLuint),
     BindBlendSlot(ColorSlot, pso::ColorBlendDesc),
-    BindAttribute(n::AttributeDesc),
+    BindAttribute(n::AttributeDesc, gl::types::GLuint),
     UnbindAttribute(n::AttributeDesc),
     CopyBufferToTexture(n::RawBuffer, gl::types::GLuint, command::BufferImageCopy),
 }
@@ -112,6 +112,10 @@ struct Cache {
     program: Option<gl::types::GLuint>,
     // Blend per attachment.
     blend_targets: Option<Vec<Option<pso::ColorBlendDesc>>>,
+    // Maps bound vertex buffer offset (index) to handle.
+    vertex_buffers: Option<Vec<u32>>,
+    // Active attributes.
+    attributes: Option<Vec<n::AttributeDesc>>,
 }
 
 impl Cache {
@@ -126,6 +130,8 @@ impl Cache {
             patch_size: None,
             program: None,
             blend_targets: None,
+            vertex_buffers: None,
+            attributes: None,
         }
     }
 }
@@ -338,7 +344,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         let mut memory = self
                 .memory
                 .try_lock()
-                .expect("Trying to reset a command buffers, while memory is in-use.");
+                .expect("Trying to reset a command buffer, while memory is in-use.");
 
         match *memory {
             // Linear` can't have individual reset ability.
@@ -395,6 +401,34 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                     unimplemented!();
                 }
             }
+        }
+
+        let mut attribute_commands = None;
+
+        if let Some(ref attributes) = self.cache.attributes {
+            attribute_commands = Some(attributes
+                .iter()
+                .map(|attribute| {
+                        let handle = match self.cache.vertex_buffers {
+                            Some(ref vbs) => vbs[attribute.binding as usize],
+                            None => {
+                                error!("No vertex buffers are bound");
+                                0
+                            },
+                        };
+                        Command::BindAttribute(*attribute, handle)
+                    })
+                .collect::<Vec<_>>()
+            );
+        };
+
+        match attribute_commands {
+            Some(cmds) => {
+                for cmd in cmds {
+                    self.push_cmd(cmd);
+                }
+            }
+            None => {}
         }
     }
 
@@ -468,8 +502,23 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         self.push_cmd(Command::BindIndexBuffer(ibv.buffer.raw));
     }
 
-    fn bind_vertex_buffers(&mut self, _vbs: hal::pso::VertexBufferSet<Backend>) {
-        unimplemented!()
+    fn bind_vertex_buffers(&mut self, vbs: hal::pso::VertexBufferSet<Backend>) {
+        if vbs.0.len() == 0 {
+            return
+        }
+
+        let needed_length = vbs.0.iter().map(|vb| vb.1).max().unwrap() + 1;
+
+        match self.cache.vertex_buffers {
+            Some(ref mut vbs) => vbs.resize(needed_length, 0),
+            None => self.cache.vertex_buffers = Some(vec![0; needed_length]),
+        }
+        
+        if let Some(ref mut cached) = self.cache.vertex_buffers {
+            for vb in vbs.0 {
+                cached[vb.1] = vb.0.raw;
+            }
+        }
     }
 
     fn set_viewports<T>(&mut self, viewports: T)
@@ -578,9 +627,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             self.push_cmd(Command::BindProgram(program));
         }
 
-        for attribute in attributes {
-            self.push_cmd(Command::BindAttribute(*attribute));
-        }
+        self.cache.attributes = Some(attributes.clone());
 
         self.update_blend_targets(blend_targets);
     }

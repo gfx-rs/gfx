@@ -367,7 +367,7 @@ impl d::Device<B> for Device {
                         .map(|&a| n::AttributeDesc {
                             location: a.location,
                             offset: a.element.offset,
-                            binding: a.binding + 1,
+                            binding: a.binding,
                             size: 2, // TODO
                             stride: 16, // TODO
                         })
