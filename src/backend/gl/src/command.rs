@@ -82,6 +82,8 @@ pub enum Command {
     SetPatchSize(gl::types::GLint),
     BindProgram(gl::types::GLuint),
     BindBlendSlot(ColorSlot, pso::ColorBlendDesc),
+    BindAttribute(n::AttributeDesc),
+    UnbindAttribute(n::AttributeDesc),
 }
 
 pub type FrameBufferTarget = gl::types::GLenum;
@@ -556,7 +558,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             patch_size,
             program,
             ref blend_targets,
-            ..
+            ref attributes,
         } = pipeline;
 
         if self.cache.primitive != Some(primitive) {
@@ -573,6 +575,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         if self.cache.program != Some(program) {
             self.cache.program = Some(program);
             self.push_cmd(Command::BindProgram(program));
+        }
+
+        for attribute in attributes {
+            self.push_cmd(Command::BindAttribute(*attribute));
         }
 
         self.update_blend_targets(blend_targets);

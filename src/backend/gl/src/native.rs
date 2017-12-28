@@ -4,7 +4,6 @@ use gl;
 use Backend;
 use std::cell::Cell;
 
-
 pub type RawBuffer   = gl::types::GLuint;
 pub type Shader      = gl::types::GLuint;
 pub type Program     = gl::types::GLuint;
@@ -41,6 +40,7 @@ pub struct GraphicsPipeline {
     pub(crate) primitive: gl::types::GLenum,
     pub(crate) patch_size: Option<gl::types::GLint>,
     pub(crate) blend_targets: Vec<pso::ColorBlendDesc>,
+    pub(crate) attributes: Vec<AttributeDesc>,
 }
 
 #[derive(Clone, Debug, Copy)]
@@ -125,3 +125,12 @@ pub struct PipelineLayout;
 #[derive(Debug)]
 // No inter-queue synchronization required for GL.
 pub struct Semaphore;
+
+#[derive(Debug, Clone, Copy)]
+pub struct AttributeDesc {
+    pub(crate) location: gl::types::GLuint,
+    pub(crate) offset: u32,
+    pub(crate) binding: gl::types::GLuint,
+    pub(crate) size: gl::types::GLint,
+    pub(crate) stride: gl::types::GLsizei,
+}

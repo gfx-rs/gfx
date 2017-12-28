@@ -472,8 +472,19 @@ impl CommandQueue {
             com::Command::BindProgram(program) => unsafe {
                 self.share.context.UseProgram(program);
             }
-            com::Command::BindBlendSlot(slot, blend) => {
-                state::bind_blend_slot(&self.share.context, slot, &blend);
+            com::Command::BindBlendSlot(slot, ref blend) => {
+                state::bind_blend_slot(&self.share.context, slot, blend);
+            }
+            com::Command::BindAttribute(ref attribute) => unsafe {
+                let gl = &self.share.context;
+                gl.BindBuffer(gl::ARRAY_BUFFER, attribute.binding);
+                gl.VertexAttribPointer(attribute.location, attribute.size, gl::FLOAT, gl::FALSE,
+                    attribute.stride, attribute.offset as *const gl::types::GLvoid);
+                gl.EnableVertexAttribArray(attribute.location);
+                gl.BindBuffer(gl::ARRAY_BUFFER, 0);
+            }
+            com::Command::UnbindAttribute(ref attribute) => unsafe {
+                self.share.context.DisableVertexAttribArray(attribute.location);
             }
             /*
             com::Command::BindConstantBuffer(pso::ConstantBufferParam(buffer, _, slot)) => unsafe {

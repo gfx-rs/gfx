@@ -359,6 +359,16 @@ impl d::Device<B> for Device {
                     primitive: conv::primitive_to_gl_primitive(desc.input_assembler.primitive),
                     patch_size,
                     blend_targets: desc.blender.targets.clone(),
+                    attributes: desc.attributes
+                        .iter()
+                        .map(|&a| n::AttributeDesc {
+                            location: a.location,
+                            offset: a.element.offset,
+                            binding: a.binding + 1,
+                            size: 2, // TODO
+                            stride: 16, // TODO
+                        })
+                        .collect::<Vec<_>>(),
                 })
              })
              .collect()
