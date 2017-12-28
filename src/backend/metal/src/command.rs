@@ -25,6 +25,11 @@ use block::{ConcreteBlock};
 use conversions::map_index_type;
 
 
+fn div(a: u32, b: u32) -> u32 {
+    assert_eq!(a % b, 0);
+    a / b
+}
+
 pub struct CommandQueue(pub(crate) Arc<QueueInner>);
 
 pub(crate) struct QueueInner {
@@ -791,9 +796,9 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
     {
         let encoder = self.encode_blit();
         let extent = MTLSize {
-            width: dst.0.width(),
-            height: dst.0.height(),
-            depth: dst.0.depth(),
+            width: dst.raw.width(),
+            height: dst.raw.height(),
+            depth: dst.raw.depth(),
         };
         // FIXME: layout
 
@@ -803,15 +808,18 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
             let r = &region.image_layers;
 
             for layer in r.layers.clone() {
-                let offset = region.buffer_offset + region.buffer_slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
+                let row_pitch = div(region.buffer_width, dst.block_dim.0 as _) * dst.bytes_per_block as u32;
+                let slice_pitch = div(region.buffer_height, dst.block_dim.1 as _) * row_pitch;
+
+                let offset = region.buffer_offset + slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
                 unsafe {
                     msg_send![encoder,
                         copyFromBuffer: &*src.0
                         sourceOffset: offset as NSUInteger
-                        sourceBytesPerRow: region.buffer_row_pitch as NSUInteger
-                        sourceBytesPerImage: region.buffer_slice_pitch as NSUInteger
+                        sourceBytesPerRow: row_pitch as NSUInteger
+                        sourceBytesPerImage: slice_pitch as NSUInteger
                         sourceSize: extent
-                        toTexture: &*dst.0
+                        toTexture: &*dst.raw
                         destinationSlice: layer as NSUInteger
                         destinationLevel: r.level as NSUInteger
                         destinationOrigin: MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ }
@@ -833,9 +841,9 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
     {
         let encoder = self.encode_blit();
         let extent = MTLSize {
-            width: src.0.width(),
-            height: src.0.height(),
-            depth: src.0.depth(),
+            width: src.raw.width(),
+            height: src.raw.height(),
+            depth: src.raw.depth(),
         };
         // FIXME: layout
 
@@ -845,18 +853,21 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
             let r = &region.image_layers;
 
             for layer in r.layers.clone() {
-                let offset = region.buffer_offset + region.buffer_slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
+                let row_pitch = div(region.buffer_width, src.block_dim.0 as _) * src.bytes_per_block as u32;
+                let slice_pitch = div(region.buffer_height, src.block_dim.1 as _) * row_pitch;
+
+                let offset = region.buffer_offset + slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
                 unsafe {
                     msg_send![encoder,
-                        copyFromTexture: &*src.0
+                        copyFromTexture: &*src.raw
                         sourceSlice: layer as NSUInteger
                         sourceLevel: r.level as NSUInteger
                         sourceOrigin: MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ }
                         sourceSize: extent
                         toBuffer: &*dst.0
                         destinationOffset: offset as NSUInteger
-                        destinationBytesPerRow: region.buffer_row_pitch as NSUInteger
-                        destinationBytesPerImage: region.buffer_slice_pitch as NSUInteger
+                        destinationBytesPerRow: row_pitch as NSUInteger
+                        destinationBytesPerImage: slice_pitch as NSUInteger
                     ]
                 }
             }
@@ -937,7 +948,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
     ) {
         unimplemented!()
     }
-    
+
     fn end_query(
         &mut self,
         _query: Query<Backend>,

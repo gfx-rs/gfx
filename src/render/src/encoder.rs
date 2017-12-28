@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 
 use hal::{self, buffer as b, image as i, CommandPool};
 use hal::command::CommandBuffer;
-use hal::image::AspectFlags;
+use hal::format::AspectFlags;
 use hal::memory::Barrier;
 use hal::pso::PipelineStage;
 
@@ -628,12 +628,11 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
     pub fn clear_color<F>(
         &mut self,
         image: &handle::Image<B, F>,
-        value: F::View,
+        value: ClearColor,
     ) where
-        F: format::RenderFormat,
-        F::View: Into<ClearColor>,
+        F: format::AsFormat,
     {
-        self.clear_color_raw(image.as_ref(), value.into());
+        self.clear_color_raw(image.as_ref(), value);
     }
 
     /// Clears `image`'s depth/stencil with `value`

@@ -9,9 +9,9 @@ extern crate image;
 
 use std::io::Cursor;
 
-use hal::{command, device as d, image as i, pso};
+use hal::{command, device as d, format as f, image as i, pso};
 use hal::{Device, Instance, PhysicalDevice, Primitive};
-use gfx::format::{Srgba8 as ColorFormat};
+use gfx::format::{Rgba8Srgb as ColorFormat};
 use gfx::allocators::StackAllocator as Allocator;
 
 gfx_buffer_struct! {
@@ -97,7 +97,7 @@ fn main() {
     ).unwrap();
 
     let image_range = gfx::image::SubresourceRange {
-        aspects: i::AspectFlags::COLOR,
+        aspects: f::AspectFlags::COLOR,
         levels: 0 .. 1,
         layers: 0 .. 1,
     };
@@ -151,7 +151,7 @@ fn main() {
         &mut upload,
         gfx::buffer::Usage::TRANSFER_SRC,
         upload_size,
-        image_stride as u64
+        image_stride as u64,
     ).unwrap();
 
     println!("copy image data into staging buffer");
@@ -208,10 +208,10 @@ fn main() {
         &image,
         &[command::BufferImageCopy {
             buffer_offset: 0,
-            buffer_row_pitch: row_pitch,
-            buffer_slice_pitch: row_pitch * (height as u32),
+            buffer_width: row_pitch / image_stride as u32,
+            buffer_height: height as u32,
             image_layers: gfx::image::SubresourceLayers {
-                aspects: i::AspectFlags::COLOR,
+                aspects: f::AspectFlags::COLOR,
                 level: 0,
                 layers: 0 .. 1,
             },

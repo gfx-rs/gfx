@@ -59,7 +59,7 @@ impl hal::Surface<Backend> for Surface {
             max_image_layers: 1,
         };
         (caps, vec![
-            format::Format(SurfaceType::R8_G8_B8_A8, ChannelType::Srgb),
+            format::Format::Rgba8Srgb,
         ])
     }
 
@@ -74,8 +74,8 @@ impl Device {
         surface: &mut Surface,
         config: SwapchainConfig,
     ) -> (Swapchain, Backbuffer<Backend>) {
-        let (mtl_format, cv_format) = match config.color_format {
-            format::Format(SurfaceType::R8_G8_B8_A8, ChannelType::Srgb) => (MTLPixelFormat::RGBA8Unorm_sRGB, kCVPixelFormatType_32RGBA),
+        let (mtl_format, cv_format, bytes_per_block) = match config.color_format {
+            format::Format::Rgba8Srgb => (MTLPixelFormat::RGBA8Unorm_sRGB, kCVPixelFormatType_32RGBA, 4),
             _ => panic!("unsupported backbuffer format"), // TODO: more formats
         };
 
@@ -121,7 +121,11 @@ impl Device {
                     iosurface: surface.obj
                     plane: 0
                 ];
-                native::Image(mapped_texture)
+                native::Image {
+                    raw: mapped_texture,
+                    bytes_per_block,
+                    block_dim: (1, 1),
+                }
             }).collect();
 
             let swapchain = Swapchain {

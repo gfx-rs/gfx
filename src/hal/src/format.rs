@@ -286,6 +286,12 @@ surface_types! {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BaseFormat(pub SurfaceType, pub ChannelType);
 
+/// Conversion trait into `Format`;
+pub trait AsFormat {
+    /// Associated format.
+    const SELF: Format;
+}
+
 macro_rules! formats {
     { $($name:ident = ($surface:ident, $channel:ident),)* } => {
         ///
@@ -312,6 +318,19 @@ macro_rules! formats {
         pub const BASE_FORMATS: [BaseFormat; NUM_FORMATS-1] = [
             $(BaseFormat(SurfaceType::$surface, ChannelType::$channel), )*
         ];
+
+        // Struct format types, for strong-typed APIs.
+        $(
+            #[allow(missing_docs)]
+            #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+            #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+            pub struct $name;
+
+            impl AsFormat for $name {
+                const SELF: Format = Format::$name;
+            }
+
+        )*
     }
 }
 
@@ -514,4 +533,39 @@ impl Format {
             _ => Some(BASE_FORMATS[self as usize - 1]),
         }
     }
+
+    /// Retuns aspect flags of the format.
+    pub fn aspect_flags(self) -> AspectFlags {
+        self.base_format()
+            .map(|BaseFormat(sf, _)| {
+               sf
+                .desc()
+                .aspects
+            })
+            .unwrap_or(AspectFlags::empty())
+    }
+
+    /// Returns if the format has a color aspect.
+    pub fn is_color(self) -> bool {
+        self.aspect_flags().contains(AspectFlags::COLOR)
+    }
+
+    /// Returns if the format has a depth aspect.
+    pub fn is_depth(self) -> bool {
+        self.aspect_flags().contains(AspectFlags::DEPTH)
+    }
+}
+
+// Common vertex attribute formats
+impl AsFormat for f32 {
+    const SELF: Format = Format::R32Float;
+}
+impl AsFormat for [f32; 2] {
+    const SELF: Format = Format::Rg32Float;
+}
+impl AsFormat for [f32; 3] {
+    const SELF: Format = Format::Rgb32Float;
+}
+impl AsFormat for [f32; 4] {
+    const SELF: Format = Format::Rgba32Float;
 }

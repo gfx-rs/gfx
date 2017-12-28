@@ -4,7 +4,7 @@ use hal::{buffer, command, format, image, pass, pso, query};
 use hal::device::Extent;
 use hal::{IndexType, Primitive};
 use smallvec::SmallVec;
-use std::{io, mem, ptr};
+use std::{io, mem};
 use std::ops::Range;
 
 
@@ -14,7 +14,7 @@ pub fn map_format(format: format::Format) -> vk::Format {
 }
 
 pub fn map_vk_format(format: vk::Format) -> Option<format::Format> {
-    if format < format::NUM_FORMATS {
+    if (format as usize) < format::NUM_FORMATS {
         // Safe due to equivalence of HAL format values and Vulkan format values
         Some(unsafe { mem::transmute(format) })
     } else {

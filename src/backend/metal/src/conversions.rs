@@ -5,17 +5,13 @@ use metal::*;
 
 // The boolean indicates whether this is a depth format
 pub fn map_format(format: Format) -> Option<(MTLPixelFormat, bool)> {
-    use hal::format::SurfaceType::*;
-    use hal::format::ChannelType::*;
-
-    // TODO: more formats
     match format {
-        Format(R8_G8_B8_A8, Unorm) => Some((MTLPixelFormat::RGBA8Unorm, false)),
-        Format(R8_G8_B8_A8, Srgb) => Some((MTLPixelFormat::RGBA8Unorm_sRGB, false)),
-        Format(B8_G8_R8_A8, Unorm) => Some((MTLPixelFormat::BGRA8Unorm, false)),
-        Format(B8_G8_R8_A8, Srgb) => Some((MTLPixelFormat::BGRA8Unorm_sRGB, false)),
-        Format(D32, Float) => Some((MTLPixelFormat::Depth32Float, true)),
-        Format(D24_S8, Unorm) => Some((MTLPixelFormat::Depth24Unorm_Stencil8, true)),
+        Format::Rgba8Unorm => Some((MTLPixelFormat::RGBA8Unorm, false)),
+        Format::Rgba8Srgb => Some((MTLPixelFormat::RGBA8Unorm_sRGB, false)),
+        Format::Bgra8Unorm => Some((MTLPixelFormat::BGRA8Unorm, false)),
+        Format::Bgra8Srgb => Some((MTLPixelFormat::BGRA8Unorm_sRGB, false)),
+        Format::D32Float => Some((MTLPixelFormat::Depth32Float, true)),
+        Format::D24UnormS8Uint => Some((MTLPixelFormat::Depth24Unorm_Stencil8, true)),
         _ => None,
     }
 }
@@ -108,14 +104,11 @@ pub fn map_blend_op(operation: &pso::BlendOp) -> (MTLBlendOperation, MTLBlendFac
 
 
 pub fn map_vertex_format(format: Format) -> Option<MTLVertexFormat> {
-    use hal::format::SurfaceType::*;
-    use hal::format::ChannelType::*;
-
     // TODO: more formats
     Some(match format {
-        Format(R32_G32_B32_A32, Float) => MTLVertexFormat::Float4,
-        Format(R32_G32_B32, Float) => MTLVertexFormat::Float3,
-        Format(R32_G32, Float) => MTLVertexFormat::Float2,
+        Format::Rgba32Float => MTLVertexFormat::Float4,
+        Format::Rgb32Float => MTLVertexFormat::Float3,
+        Format::Rg32Float => MTLVertexFormat::Float2,
         _ => return None,
     })
 }

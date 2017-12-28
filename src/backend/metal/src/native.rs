@@ -70,7 +70,12 @@ unsafe impl Sync for GraphicsPipeline {}
 pub struct ComputePipeline {}
 
 #[derive(Debug)]
-pub struct Image(pub(crate) metal::Texture);
+pub struct Image {
+    pub(crate) raw: metal::Texture,
+    pub(crate) bytes_per_block: u8,
+    // Dimension of a texel block (compressed formats).
+    pub(crate) block_dim: (u8, u8),
+}
 
 unsafe impl Send for Image {}
 unsafe impl Sync for Image {}
@@ -235,8 +240,12 @@ unsafe impl Send for UnboundBuffer {}
 unsafe impl Sync for UnboundBuffer {}
 
 #[derive(Debug)]
-pub struct UnboundImage(pub metal::TextureDescriptor);
-
+pub struct UnboundImage {
+    pub desc: metal::TextureDescriptor,
+    pub bytes_per_block: u8,
+    // Dimension of a texel block (compressed formats).
+    pub block_dim: (u8, u8),
+}
 unsafe impl Send for UnboundImage {}
 unsafe impl Sync for UnboundImage {}
 

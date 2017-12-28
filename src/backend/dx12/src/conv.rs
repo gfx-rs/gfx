@@ -91,7 +91,7 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
 pub fn map_format_dsv(surface: SurfaceType) -> Option<DXGI_FORMAT> {
     Some(match surface {
         SurfaceType::D16    => DXGI_FORMAT_D16_UNORM,
-        SurfaceType::D24    => DXGI_FORMAT_D24_UNORM_S8_UINT,
+        SurfaceType::X8D24 |
         SurfaceType::D24_S8 => DXGI_FORMAT_D24_UNORM_S8_UINT,
         SurfaceType::D32    => DXGI_FORMAT_D32_FLOAT,
         SurfaceType::D32_S8 => DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
