@@ -75,7 +75,7 @@ pub enum Command {
     },
     SetScissors(BufferSlice),
     SetBlendColor(command::ColorValue),
-    ClearColor(n::ImageView, command::ClearColor),
+    ClearColor(command::ClearColor),
     BindFrameBuffer(FrameBufferTarget, n::FrameBuffer),
     BindTargetView(FrameBufferTarget, AttachmentPoint, n::ImageView),
     SetDrawColorBuffers(usize),
@@ -313,9 +313,11 @@ impl RawCommandBuffer {
 
 impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn begin(&mut self) {
-        // Implicit buffer reset when individual reset is set.
         if self.individual_reset {
+            // Implicit buffer reset when individual reset is set.
             self.reset(false);
+        } else {
+            self.soft_reset();
         }
     }
 
@@ -375,13 +377,22 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         _render_pass: &n::RenderPass,
         _frame_buffer: &n::FrameBuffer,
         _render_area: command::Rect,
-        _clear_values: T,
+        clear_values: T,
         _first_subpass: command::SubpassContents,
     ) where
         T: IntoIterator,
         T::Item: Borrow<command::ClearValue>,
     {
-        unimplemented!()
+        for clear_value in clear_values.into_iter().map(|cv| *cv.borrow()) {
+            match clear_value {
+                command::ClearValue::Color(value) => {
+                    self.push_cmd(Command::ClearColor(value));
+                }
+                command::ClearValue::DepthStencil(_) => {
+                    unimplemented!();
+                }
+            }
+        }
     }
 
     fn next_subpass(&mut self, _contents: command::SubpassContents) {
@@ -407,7 +418,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         self.push_cmd(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, fbo));
         self.push_cmd(Command::BindTargetView(gl::DRAW_FRAMEBUFFER, gl::COLOR_ATTACHMENT0, view));
         self.push_cmd(Command::SetDrawColorBuffers(1));
-        self.push_cmd(Command::ClearColor(view, value));
+        self.push_cmd(Command::ClearColor(value));
     }
 
     fn clear_depth_stencil_image(

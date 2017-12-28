@@ -423,23 +423,21 @@ impl CommandQueue {
             com::Command::SetBlendColor(color) => {
                 state::set_blend_color(&self.share.context, color);
             }
-            com::Command::ClearColor(_texture, c) => {
+            com::Command::ClearColor(c) => unsafe {
                 //TODO: check texture?
                 let gl = &self.share.context;
                 state::unlock_color_mask(gl);
                 if self.share.private_caps.clear_buffer {
                     // Render target view bound to the framebuffer at attachment slot 0.
-                    unsafe {
-                        match c {
-                            hal::command::ClearColor::Float(v) => {
-                                gl.ClearBufferfv(gl::COLOR, 0, &v[0]);
-                            }
-                            hal::command::ClearColor::Int(v) => {
-                                gl.ClearBufferiv(gl::COLOR, 0, &v[0]);
-                            }
-                            hal::command::ClearColor::Uint(v) => {
-                                gl.ClearBufferuiv(gl::COLOR, 0, &v[0]);
-                            }
+                    match c {
+                        hal::command::ClearColor::Float(v) => {
+                            gl.ClearBufferfv(gl::COLOR, 0, &v[0]);
+                        }
+                        hal::command::ClearColor::Int(v) => {
+                            gl.ClearBufferiv(gl::COLOR, 0, &v[0]);
+                        }
+                        hal::command::ClearColor::Uint(v) => {
+                            gl.ClearBufferuiv(gl::COLOR, 0, &v[0]);
                         }
                     }
                 } else {
@@ -450,10 +448,8 @@ impl CommandQueue {
                         [0.0, 0.0, 0.0, 0.0]
                     };
 
-                    unsafe {
-                        gl.ClearColor(v[0], v[1], v[2], v[3]);
-                        gl.Clear(gl::COLOR_BUFFER_BIT);
-                    }
+                    gl.ClearColor(v[0], v[1], v[2], v[3]);
+                    gl.Clear(gl::COLOR_BUFFER_BIT);
                 }
             }
             com::Command::BindFrameBuffer(point, frame_buffer) => {
