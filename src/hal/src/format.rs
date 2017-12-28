@@ -296,23 +296,26 @@ macro_rules! formats {
         pub enum Format {
             Undefined = 0,
             $( $name, )*
+
+            // This serves as safety net for conversion from Vulkan -> HAL,
+            // in case Vulkan adds new formats:
+            //  1. We can check if a format is out of range
+            //  2. We 'ensure' that backend implementations do non-exhaustive matching
+            #[doc(hidden)]
+            __NumFormats,
         }
 
-        impl From<Format> for Option<BaseFormat> {
-            fn from(format: Format) -> Self {
-                match format {
-                    Format::Undefined => None,
-                    $(
-                        Format::$name => Some(BaseFormat(SurfaceType::$surface, ChannelType::$channel)),
-                    )*
-                }
-            }
-        }
+        /// Number of formats.
+        pub const NUM_FORMATS: usize = Format::__NumFormats as _;
 
-        // TODO: test for equality hal <-> vk formats
+        /// Conversion table from `Format` to `BaseFormat`, excluding `Undefined`.
+        pub const BASE_FORMATS: [BaseFormat; NUM_FORMATS-1] = [
+            $(BaseFormat(SurfaceType::$surface, ChannelType::$channel), )*
+        ];
     }
 }
 
+// Format order has to match the order exposed by the Vulkan API.
 formats! {
     Rg4Unorm = (R4_G4, Unorm),
     Rgba4Unorm = (R4_G4_B4_A4, Unorm),
@@ -505,6 +508,10 @@ impl Format {
     ///
     /// Returns `None` if format is `Undefined`.
     pub fn base_format(self) -> Option<BaseFormat> {
-        self.into()
+        assert!(NUM_FORMATS > self as usize);
+        match self {
+            Format::Undefined => None,
+            _ => Some(BASE_FORMATS[self as usize - 1]),
+        }
     }
 }

@@ -9,14 +9,17 @@ use std::ops::Range;
 
 
 pub fn map_format(format: format::Format) -> vk::Format {
-    // secured by tests that values are equal
+    // Safe due to equivalence of HAL format values and Vulkan format values
     unsafe { mem::transmute(format) }
 }
 
-pub fn map_vk_format(format: vk::Format) -> format::Format {
-    // secured by tests that values are equal
-    // TODO: take care of extensions
-    unsafe { mem::transmute(format) }
+pub fn map_vk_format(format: vk::Format) -> Option<format::Format> {
+    if format < format::NUM_FORMATS {
+        // Safe due to equivalence of HAL format values and Vulkan format values
+        Some(unsafe { mem::transmute(format) })
+    } else {
+        None
+    }
 }
 
 pub fn map_component(component: format::Component) -> vk::ComponentSwizzle {
