@@ -1,6 +1,6 @@
 [package]
 name = "gfx_app"
-version = "0.8.0"
+version = "0.6.0"
 description = "GFX example application framework"
 homepage = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
@@ -23,16 +23,15 @@ unstable = []
 name = "gfx_app"
 
 [dependencies]
-log = "0.3"
+log = "0.4"
 env_logger = "0.4"
-#glutin = "0.11"
-glutin = { git = "https://github.com/tomaka/glutin", rev = "e71a6575f23c022e8fdc03846cc647e5df4537ab" }
-winit = "0.9"
-gfx_core = { path = "src/core", version = "0.7.1" }
+glutin = "0.12"
+winit = "0.10"
+gfx_core = { path = "src/core", version = "0.8" }
 gfx_corell = { path = "src/corell", version = "0.1" }
-gfx = { path = "src/render", version = "0.16" }
+gfx = { path = "src/render", version = "0.17" }
 gfx_macros = { path = "src/macros", version = "0.2" }
-gfx_device_gl = { path = "src/backend/gl", version = "0.14" }
+gfx_device_gl = { path = "src/backend/gl", version = "0.15" }
 gfx_window_glutin = { path = "src/window/glutin", version = "0.19" }
 
 [dependencies.gfx_device_vulkan]
@@ -66,17 +65,12 @@ version = "0.2"
 optional = true
 #features = ["native_fence"]
 
-[dependencies.gfx_window_sdl]
-path = "src/window/sdl"
-version = "0.7"
-optional = true
-
 [target.'cfg(all(unix, not(target_os = "emscripten")))'.dependencies]
-gfx_window_glfw = { path = "src/window/glfw", version = "0.15" }
-gfx_window_sdl = { path = "src/window/sdl", version = "0.7" }
+gfx_window_glfw = { path = "src/window/glfw", version = "0.16" }
+gfx_window_sdl = { path = "src/window/sdl", version = "0.8", optional = true }
 
 [target.'cfg(windows)'.dependencies]
-gfx_device_dx11 = { path = "src/backend/dx11", version = "0.6" }
+gfx_device_dx11 = { path = "src/backend/dx11", version = "0.7" }
 gfx_device_dx12ll = { path = "src/backend/dx12ll", version = "0.1" }
 gfx_window_dxgi = { path = "src/window/dxgi", version = "0.11" }
 
@@ -147,7 +141,7 @@ path = "examples/render_target/main.rs"
 [dev-dependencies]
 cgmath = "0.15"
 gfx_gl = "0.4"
-rand = "0.3"
-genmesh = "0.4"
-noise = "0.1"
+rand = "0.4"
+genmesh = "0.5"
+noise = "0.4"
 image = "0.18"

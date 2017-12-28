@@ -52,13 +52,13 @@ bitflags!(
     /// This information is used to create resources
     /// (see [gfx::Factory](trait.Factory.html#overview)).
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-    pub flags Access: u8 {
+    pub struct Access: u8 {
         /// Read access
-        const READ  = 0x1,
+        const READ  = 0x1;
         /// Write access
-        const WRITE = 0x2,
+        const WRITE = 0x2;
         /// Full access
-        const RW    = 0x3,
+        const RW    = 0x3;
     }
 );
 
@@ -78,26 +78,27 @@ bitflags!(
     /// This information is used to create resources
     /// (see [gfx::Factory](trait.Factory.html#overview)).
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-    pub flags Bind: u8 {
+    pub struct Bind: u8 {
         /// Can be rendered into.
-        const RENDER_TARGET    = 0x1,
+        const RENDER_TARGET    = 0x1;
         /// Can serve as a depth/stencil target.
-        const DEPTH_STENCIL    = 0x2,
+        const DEPTH_STENCIL    = 0x2;
         /// Can be bound to the shader for reading.
-        const SHADER_RESOURCE  = 0x4,
+        const SHADER_RESOURCE  = 0x4;
         /// Can be bound to the shader for writing.
-        const UNORDERED_ACCESS = 0x8,
+        const UNORDERED_ACCESS = 0x8;
         /// Can be transfered from.
-        const TRANSFER_SRC     = 0x10,
+        const TRANSFER_SRC     = 0x10;
         /// Can be transfered into.
-        const TRANSFER_DST     = 0x20,
+        const TRANSFER_DST     = 0x20;
     }
 );
 
 impl Bind {
     /// Is this memory bound to be mutated ?
     pub fn is_mutable(&self) -> bool {
-        let mutable = TRANSFER_DST | UNORDERED_ACCESS | RENDER_TARGET | DEPTH_STENCIL;
+        let mutable = Self::TRANSFER_DST | Self::UNORDERED_ACCESS |
+                      Self::RENDER_TARGET | Self::DEPTH_STENCIL;
         self.intersects(mutable)
     }
 }

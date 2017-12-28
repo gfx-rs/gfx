@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx_core"
-version = "0.7.2"
+version = "0.8.0"
 description = "Core library of Gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -28,14 +28,13 @@ name = "gfx_core"
 path = "src/lib.rs"
 
 [dependencies]
-bitflags = "0.8"
-mint = { version = "0.4.1", optional = true }
-derivative = "1.0"
-draw_state = "0.7"
-log = "0.3"
-serde = { version = "1.0", optional = true }
-serde_derive = { version = "1.0", optional = true }
+bitflags = "1"
+mint = { version = "0.5", optional = true }
+derivative = "1"
+draw_state = "0.8"
+log = "0.4"
+serde = { version = "1", features = ["serde_derive"], optional = true }
 
 [features]
-serialize = ["serde", "serde_derive", "draw_state/serialize"]
+serialize = ["serde", "draw_state/serde"]
 unstable = []

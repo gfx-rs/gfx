@@ -111,7 +111,7 @@ impl<'a, T: format::RenderFormat> DataLink<'a> for RenderTarget<T> {
                    Option<Result<pso::ColorTargetDesc, format::Format>> {
         if out.name.is_empty() || &out.name == init {
             self.0 = Some(out.slot);
-            let desc = (T::get_format(), state::MASK_ALL.into());
+            let desc = (T::get_format(), state::ColorMask::all().into());
             Some(Ok(desc))
         } else {
             None

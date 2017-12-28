@@ -22,8 +22,7 @@ use std::{mem, fmt};
 use {buffer, handle, format, mapping, pso, shade, target, texture};
 use {Capabilities, Resources, ShaderSet,
      VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
-use memory::{Usage, Typed, Pod, cast_slice};
-use memory::{Bind, RENDER_TARGET, DEPTH_STENCIL, SHADER_RESOURCE, UNORDERED_ACCESS};
+use memory::{Bind, Usage, Typed, Pod, cast_slice};
 
 /// Error creating either a ShaderResourceView, or UnorderedAccessView.
 #[derive(Clone, Debug, PartialEq)]
@@ -363,7 +362,7 @@ pub trait Factory<R: Resources> {
                                        levels: (target::Level, target::Level), swizzle: format::Swizzle)
                                        -> Result<handle::ShaderResourceView<R, T::View>, ResourceViewError>
     {
-        if !tex.get_info().bind.contains(SHADER_RESOURCE) {
+        if !tex.get_info().bind.contains(Bind::SHADER_RESOURCE) {
             return Err(ResourceViewError::NoBindFlag)
         }
         assert!(levels.0 <= levels.1);
@@ -381,7 +380,7 @@ pub trait Factory<R: Resources> {
     fn view_texture_as_unordered_access<T: format::TextureFormat>(&mut self, tex: &handle::Texture<R, T::Surface>)
                                         -> Result<handle::UnorderedAccessView<R, T::View>, ResourceViewError>
     {
-        if !tex.get_info().bind.contains(UNORDERED_ACCESS) {
+        if !tex.get_info().bind.contains(Bind::UNORDERED_ACCESS) {
             return Err(ResourceViewError::NoBindFlag)
         }
         self.view_texture_as_unordered_access_raw(tex.raw())
@@ -392,7 +391,7 @@ pub trait Factory<R: Resources> {
                                      level: target::Level, layer: Option<target::Layer>)
                                      -> Result<handle::RenderTargetView<R, T>, TargetViewError>
     {
-        if !tex.get_info().bind.contains(RENDER_TARGET) {
+        if !tex.get_info().bind.contains(Bind::RENDER_TARGET) {
             return Err(TargetViewError::NoBindFlag)
         }
         let desc = texture::RenderDesc {
@@ -408,7 +407,7 @@ pub trait Factory<R: Resources> {
                                      level: target::Level, layer: Option<target::Layer>, flags: texture::DepthStencilFlags)
                                      -> Result<handle::DepthStencilView<R, T>, TargetViewError>
     {
-        if !tex.get_info().bind.contains(DEPTH_STENCIL) {
+        if !tex.get_info().bind.contains(Bind::DEPTH_STENCIL) {
             return Err(TargetViewError::NoBindFlag)
         }
         let desc = texture::DepthStencilDesc {
@@ -446,7 +445,7 @@ pub trait Factory<R: Resources> {
             kind: kind,
             levels: levels,
             format: surface,
-            bind: SHADER_RESOURCE,
+            bind: Bind::SHADER_RESOURCE,
             usage: Usage::Data,
         };
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
@@ -484,7 +483,7 @@ pub trait Factory<R: Resources> {
         let kind = texture::Kind::D2(width, height, texture::AaMode::Single);
         let levels = 1;
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let tex = try!(self.create_texture(kind, levels, SHADER_RESOURCE | RENDER_TARGET, Usage::Data, Some(cty)));
+        let tex = try!(self.create_texture(kind, levels, Bind::SHADER_RESOURCE | Bind::RENDER_TARGET, Usage::Data, Some(cty)));
         let resource = try!(self.view_texture_as_shader_resource::<T>(&tex, (0, levels-1), format::Swizzle::new()));
         let target = try!(self.view_texture_as_render_target(&tex, 0, None));
         Ok((tex, resource, target))
@@ -499,7 +498,7 @@ pub trait Factory<R: Resources> {
     {
         let kind = texture::Kind::D2(width, height, texture::AaMode::Single);
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let tex = try!(self.create_texture(kind, 1, SHADER_RESOURCE | DEPTH_STENCIL, Usage::Data, Some(cty)));
+        let tex = try!(self.create_texture(kind, 1, Bind::SHADER_RESOURCE | Bind::DEPTH_STENCIL, Usage::Data, Some(cty)));
         let resource = try!(self.view_texture_as_shader_resource::<T>(&tex, (0, 0), format::Swizzle::new()));
         let target = try!(self.view_texture_as_depth_stencil_trivial(&tex));
         Ok((tex, resource, target))
@@ -511,7 +510,7 @@ pub trait Factory<R: Resources> {
     {
         let kind = texture::Kind::D2(width, height, texture::AaMode::Single);
         let cty = <T::Channel as format::ChannelTyped>::get_channel_type();
-        let tex = try!(self.create_texture(kind, 1, DEPTH_STENCIL, Usage::Data, Some(cty)));
+        let tex = try!(self.create_texture(kind, 1, Bind::DEPTH_STENCIL, Usage::Data, Some(cty)));
         let target = try!(self.view_texture_as_depth_stencil_trivial(&tex));
         Ok(target)
     }
