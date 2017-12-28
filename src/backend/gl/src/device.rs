@@ -6,7 +6,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use gl;
-use gl::types::{GLint, GLenum, GLfloat};
+use gl::types::{GLint, GLenum, GLfloat, GLuint};
 use hal::{self as c, device as d, image as i, memory, pass, pso, buffer, mapping, query, Primitive};
 use hal::format::{Format, Swizzle};
 use hal::pool::CommandPoolCreateFlags;
@@ -87,7 +87,10 @@ pub struct UnboundBuffer {
 }
 
 #[derive(Debug)]
-pub struct UnboundImage;
+pub struct UnboundImage {
+    raw: GLuint,
+    requirements: memory::Requirements,
+}
 
 /// GL device.
 pub struct Device {
@@ -592,18 +595,49 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn create_image(&self, _: i::Kind, _: i::Level, _: Format, _: i::Usage)
+    fn create_image(&self, kind: i::Kind, _: i::Level, _: Format, _: i::Usage)
          -> Result<UnboundImage, i::CreationError>
     {
-        unimplemented!()
+        let gl = &self.share.context;
+
+        let raw = unsafe {
+            let mut raw = mem::uninitialized();
+            gl.GenTextures(1, &mut raw);
+            raw
+        };
+
+        let width;
+        let height;
+
+        match kind {
+            i::Kind::D2(w, h, _aa) => unsafe {
+                width = w;
+                height = h;
+                gl.BindTexture(gl::TEXTURE_2D, raw);
+                gl.TexStorage2D(gl::TEXTURE_2D, 1, gl::SRGB8_ALPHA8, w as _, h as _);
+                gl.BindTexture(gl::TEXTURE_2D, 0);
+            }
+            _ => {
+                unimplemented!();
+            }
+        }
+
+        Ok(UnboundImage {
+            raw,
+            requirements: memory::Requirements {
+                size: width as u64 * height as u64 * 4, // TODO
+                alignment: 1,
+                type_mask: 0x7,
+            }
+        })
     }
 
-    fn get_image_requirements(&self, _: &UnboundImage) -> memory::Requirements {
-        unimplemented!()
+    fn get_image_requirements(&self, unbound: &UnboundImage) -> memory::Requirements {
+        unbound.requirements
     }
 
-    fn bind_image_memory(&self, _: &n::Memory, _: u64, _: UnboundImage) -> Result<n::Image, d::BindError> {
-        unimplemented!()
+    fn bind_image_memory(&self, _memory: &n::Memory, _offset: u64, image: UnboundImage) -> Result<n::Image, d::BindError> {
+        Ok(n::Image::Texture(image.raw))
     }
 
     fn create_image_view(&self,
