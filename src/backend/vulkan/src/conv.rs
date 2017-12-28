@@ -63,8 +63,8 @@ pub fn map_image_layout(layout: image::ImageLayout) -> vk::ImageLayout {
     }
 }
 
-pub fn map_image_aspects(aspects: image::AspectFlags) -> vk::ImageAspectFlags {
-    use self::image::AspectFlags;
+pub fn map_image_aspects(aspects: format::AspectFlags) -> vk::ImageAspectFlags {
+    use self::format::AspectFlags;
     let mut flags = vk::ImageAspectFlags::empty();
     if aspects.contains(AspectFlags::COLOR) {
         flags |= vk::IMAGE_ASPECT_COLOR_BIT;

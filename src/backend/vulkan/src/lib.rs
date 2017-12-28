@@ -384,7 +384,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn format_properties(&self, format: format::Format) -> format::Properties {
         let properties = self.instance.0.get_physical_device_format_properties(
             self.handle,
-            conv::map_format(format.0, format.1).unwrap(),
+            conv::map_format(format),
         );
 
         format::Properties {

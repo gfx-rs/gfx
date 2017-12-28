@@ -69,12 +69,12 @@ pub struct ImageCopy {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BufferImageCopy {
-    ///
+    /// Buffer ofset in bytes.
     pub buffer_offset: u64,
-    ///
-    pub buffer_row_pitch: u32,
-    ///
-    pub buffer_slice_pitch: u32,
+    /// Width of a buffer 'row' in texels.
+    pub buffer_width: u32,
+    /// Height of a buffer 'image slice' in texels.
+    pub buffer_height: u32,
     ///
     pub image_layers: image::SubresourceLayers,
     ///

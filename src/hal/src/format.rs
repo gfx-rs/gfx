@@ -26,12 +26,12 @@ pub struct FormatDesc {
     ///   (`color`, `alpha`, `depth` and `stencil`) for packed formats.
     /// * For compressed formats, this denotes the number of bits per block.
     pub bits: u16,
-    /// Format aspects
-    pub aspects: AspectFlags,
     /// Dimensions (width, height) of the texel blocks.
     ///
     /// For uncompressed formats these are always (1, 1).
-    pub dim: (u32, u32),
+    pub dim: (u8, u8),
+    /// Format aspects
+    pub aspects: AspectFlags,
 }
 
 /// Description of the bits distribution of a format.
@@ -212,7 +212,7 @@ macro_rules! surface_types {
     }
 }
 
-// #ident { num_bits, aspects, dim, (color, alpha, ..) }
+// ident { num_bits, aspects, dim, (color, alpha, ..) }
 surface_types! {
     R4_G4               {   8, COLOR, (1, 1), color: 8 },
     R4_G4_B4_A4         {  32, COLOR, (1, 1), color: 24, alpha: 4 },

@@ -910,7 +910,6 @@ impl d::Device<B> for Device {
             ),
         };
 
-        let bytes_per_texel = format.0.describe_bits().total / 8;
         let samples = match aa_mode {
             image::AaMode::Single => vk::SAMPLE_COUNT_1_BIT,
             _ => unimplemented!(),
@@ -939,7 +938,7 @@ impl d::Device<B> for Device {
                 .expect("Error on image creation") // TODO: error handling
         };
 
-        Ok(UnboundImage(n::Image{ raw, bytes_per_texel, extent }))
+        Ok(UnboundImage(n::Image{ raw, extent }))
     }
 
     fn get_image_requirements(&self, image: &UnboundImage) -> Requirements {
@@ -1362,7 +1361,6 @@ impl d::Device<B> for Device {
             .map(|image| {
                 n::Image {
                     raw: image,
-                    bytes_per_texel: 4,
                     extent: vk::Extent3D {
                         width: surface.width,
                         height: surface.height,

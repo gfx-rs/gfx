@@ -10,6 +10,7 @@ use winapi::shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, winerror};
 use wio::com::ComPtr;
 
 use hal::{self, buffer, device as d, format, image, mapping, memory, pass, pso, query};
+use hal::format::AspectFlags;
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
 
@@ -85,8 +86,10 @@ pub struct UnboundImage {
     requirements: memory::Requirements,
     kind: image::Kind,
     usage: image::Usage,
-    aspects: image::AspectFlags,
-    bits_per_texel: u8,
+    aspects: AspectFlags,
+    bytes_per_block: u8,
+    // Dimension of a texel block (compressed formats).
+    block_dim: (u8, u8),
     num_levels: image::Level,
     num_layers: image::Layer,
 }
@@ -1388,18 +1391,12 @@ impl d::Device<B> for Device {
         format: format::Format,
         usage: image::Usage,
     ) -> Result<UnboundImage, image::CreationError> {
-        use self::image::AspectFlags;
-        let mut aspects = AspectFlags::empty();
-        let bits = format.0.describe_bits();
-        if bits.color + bits.alpha != 0 {
-            aspects |= AspectFlags::COLOR;
-        }
-        if bits.depth != 0 {
-            aspects |= AspectFlags::DEPTH;
-        }
-        if bits.stencil != 0 {
-            aspects |= AspectFlags::STENCIL;
-        }
+        let base_format = format.base_format();
+        let format_desc = format.0.desc();
+
+        let aspects = format_desc.aspects;
+        let bytes_per_block = format_desc.bits / 8;
+        let block_dim = format_desc.dim;
 
         let (width, height, depth, aa) = kind.get_dimensions();
         let dimension = match kind {
@@ -1453,7 +1450,8 @@ impl d::Device<B> for Device {
             kind,
             usage,
             aspects,
-            bits_per_texel: bits.total,
+            bytes_per_block,
+            block_dim,
             num_levels: mip_levels,
             num_layers: kind.get_num_layers(),
         })
@@ -1469,7 +1467,8 @@ impl d::Device<B> for Device {
         offset: u64,
         image: UnboundImage,
     ) -> Result<n::Image, d::BindError> {
-        use self::image::{AspectFlags, Usage};
+        use self::image::Usage;
+
         if image.requirements.type_mask & (1 << memory.type_id) == 0 {
             error!("Bind memory failure: supported mask 0x{:x}, given id {}",
                 image.requirements.type_mask, memory.type_id);
@@ -1502,7 +1501,7 @@ impl d::Device<B> for Device {
             kind: image.kind,
             usage: image.usage,
             dxgi_format: image.desc.Format,
-            bits_per_texel: image.bits_per_texel,
+            bytes_per_block: image.bytes_per_block,
             num_levels: image.num_levels,
             num_layers: image.num_layers,
             clear_cv: if image.aspects.contains(AspectFlags::COLOR) && image.usage.contains(Usage::COLOR_ATTACHMENT) {
@@ -2082,13 +2081,24 @@ impl d::Device<B> for Device {
                 self.raw.clone().CreateRenderTargetView(resource, &rtv_desc, rtv_handle);
             }
 
+            let format_desc = config
+                .color_format
+                .base_format()
+                .unwrap()
+                .0
+                .desc();
+
+            let bytes_per_block = format_desc.bits / 8;
+            let block_dim = format_desc.dim;
+
             let kind = image::Kind::D2(surface.width as u16, surface.height as u16, 1.into());
             n::Image {
                 resource,
                 kind,
                 usage: image::Usage::COLOR_ATTACHMENT,
                 dxgi_format: format,
-                bits_per_texel: config.color_format.0.describe_bits().total,
+                bytes_per_block,
+                block_dim,
                 num_levels: 1,
                 num_layers: 1,
                 clear_cv: Some(rtv_handle),

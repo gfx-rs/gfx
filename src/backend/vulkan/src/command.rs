@@ -9,7 +9,8 @@ use ash::version::DeviceV1_0;
 use hal::{command as com, memory, pso, query};
 use hal::{IndexCount, InstanceCount, VertexCount, VertexOffset};
 use hal::buffer::IndexBufferView;
-use hal::image::{AspectFlags, ImageLayout, SubresourceRange};
+use hal::format::AspectFlags;
+use hal::image::{ImageLayout, SubresourceRange};
 use {conv, native as n};
 use {Backend, RawDevice};
 
@@ -34,22 +35,17 @@ where
     T: IntoIterator,
     T::Item: Borrow<com::BufferImageCopy>,
 {
-    fn div(a: u32, b: u32) -> u32 {
-        assert_eq!(a % b, 0);
-        a / b
-    };
     regions
         .into_iter()
         .map(|region| {
             let region = region.borrow();
             let r = &region.image_layers;
-            let aspect_mask = conv::map_image_aspects(r.aspects);
-            let row_length = div(region.buffer_row_pitch, image.bytes_per_texel as u32);
+            let aspect_mask = conv::map_image_aspects(r.aspects);;
             let image_subresource = conv::map_subresource_layers(aspect_mask, r.level, &r.layers);
             vk::BufferImageCopy {
                 buffer_offset: region.buffer_offset,
-                buffer_row_length: row_length,
-                buffer_image_height: div(region.buffer_slice_pitch, row_length),
+                buffer_row_length: region.buffer_width,
+                buffer_image_height: region.buffer_height,
                 image_subresource,
                 image_offset: vk::Offset3D {
                     x: region.image_offset.x,
