@@ -1,4 +1,4 @@
-#version 150
+#version 300 es
 
 in vec2 a_Pos;
 in vec2 a_Uv;

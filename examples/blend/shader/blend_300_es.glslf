@@ -42,7 +42,7 @@ void main() {
             result = vec3(1.0) - ((vec3(1.0) - lena) / lena);
             break;
         case OVERLAY:
-            result = lena * (lena + (tint * 2) * (vec3(1.0) - lena));
+            result = lena * (lena + (tint * 2.0) * (vec3(1.0) - lena));
             break;
         case MULTIPLY:
             result = lena * tint;

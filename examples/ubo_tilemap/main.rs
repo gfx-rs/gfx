@@ -68,6 +68,8 @@ gfx_defines!{
         world_size: [f32; 4] = "u_WorldSize",
         tilesheet_size: [f32; 4] = "u_TilesheetSize",
         offsets: [f32; 2] = "u_TileOffsets",
+        pad1: [f32; 2] = "u_Pad1",
+        pad2: [f32; 4] = "u_Pad2",
     }
 
     vertex VertexData {
@@ -196,6 +198,8 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
                 world_size: [width as f32, height as f32, tile_size as f32, 0.0],
                 tilesheet_size: [tilesheet_width as f32, tilesheet_height as f32, tilesheet_total_width as f32, tilesheet_total_height as f32],
                 offsets: [0.0, 0.0],
+                pad1: [0.0; 2],
+                pad2: [0.0; 4],
             },
             tm_dirty: true,
             data: charmap_data,
@@ -402,12 +406,14 @@ impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
-            glsl_150: include_bytes!("shader/tilemap_150.glslv"),
+            glsl_150: include_bytes!("shader/tilemap_150_core.glslv"),
+            glsl_es_300: include_bytes!("shader/tilemap_300_es.glslv"),
             hlsl_40:  include_bytes!("data/vertex.fx"),
             .. gfx_app::shade::Source::empty()
         };
         let ps = gfx_app::shade::Source {
-            glsl_150: include_bytes!("shader/tilemap_150.glslf"),
+            glsl_150: include_bytes!("shader/tilemap_150_core.glslf"),
+            glsl_es_300: include_bytes!("shader/tilemap_300_es.glslf"),
             hlsl_40:  include_bytes!("data/pixel.fx"),
             .. gfx_app::shade::Source::empty()
         };

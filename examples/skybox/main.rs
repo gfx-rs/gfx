@@ -93,12 +93,14 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         use gfx::traits::FactoryExt;
 
         let vs = gfx_app::shade::Source {
-            glsl_150: include_bytes!("shader/cubemap_150.glslv"),
+            glsl_150: include_bytes!("shader/cubemap_150_core.glslv"),
+            glsl_es_300: include_bytes!("shader/cubemap_300_es.glslv"),
             hlsl_40:  include_bytes!("data/vertex.fx"),
             .. gfx_app::shade::Source::empty()
         };
         let ps = gfx_app::shade::Source {
-            glsl_150: include_bytes!("shader/cubemap_150.glslf"),
+            glsl_150: include_bytes!("shader/cubemap_150_core.glslf"),
+            glsl_es_300: include_bytes!("shader/cubemap_300_es.glslf"),
             hlsl_40:  include_bytes!("data/pixel.fx"),
             .. gfx_app::shade::Source::empty()
         };

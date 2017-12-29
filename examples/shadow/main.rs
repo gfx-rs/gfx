@@ -451,13 +451,15 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
 
         let forward_pso = {
             let vs = Source {
-                glsl_150: include_bytes!("shader/forward_150.glslv"),
+                glsl_150: include_bytes!("shader/forward_150_core.glslv"),
+                glsl_es_300: include_bytes!("shader/forward_300_es.glslv"),
                 hlsl_41:  include_bytes!("data/forward_vs.fx"),
                 msl_11:   include_bytes!("shader/forward_vertex.metal"),
                 .. Source::empty()
             };
             let ps = Source {
-                glsl_150: include_bytes!("shader/forward_150.glslf"),
+                glsl_150: include_bytes!("shader/forward_150_core.glslf"),
+                glsl_es_300: include_bytes!("shader/forward_300_es.glslf"),
                 hlsl_41:  include_bytes!("data/forward_ps.fx"),
                 msl_11:   include_bytes!("shader/forward_frag.metal"),
                 .. Source::empty()
@@ -471,13 +473,15 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
 
         let shadow_pso = {
             let vs = Source {
-                glsl_150: include_bytes!("shader/shadow_150.glslv"),
+                glsl_150: include_bytes!("shader/shadow_150_core.glslv"),
+                glsl_es_300: include_bytes!("shader/shadow_300_es.glslv"),
                 hlsl_41:  include_bytes!("data/shadow_vs.fx"),
                 msl_11:   include_bytes!("shader/shadow_vertex.metal"),
                 .. Source::empty()
             };
             let ps = Source {
-                glsl_150: include_bytes!("shader/shadow_150.glslf"),
+                glsl_150: include_bytes!("shader/shadow_150_core.glslf"),
+                glsl_es_300: include_bytes!("shader/shadow_300_es.glslf"),
                 hlsl_41:  include_bytes!("data/shadow_ps.fx"),
                 msl_11:   b"\n",
                 .. Source::empty()

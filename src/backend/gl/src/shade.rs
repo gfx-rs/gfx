@@ -210,7 +210,7 @@ fn query_attributes(gl: &gl::Gl, prog: super::Program) -> Vec<s::AttributeVar> {
     .collect()
 }
 
-fn query_blocks(gl: &gl::Gl, caps: &c::Capabilities, prog: super::Program,
+fn query_blocks(gl: &gl::Gl, caps: &c::Capabilities, prog: super::Program, prog_usage: s::Usage,
                 block_indices: &[gl::types::GLint], block_offsets: &[gl::types::GLint])
                 -> Vec<s::ConstantBufferVar> {
     let num = if caps.constant_buffer_supported {
@@ -222,7 +222,7 @@ fn query_blocks(gl: &gl::Gl, caps: &c::Capabilities, prog: super::Program,
     let bindings: Vec<gl::types::GLuint> = (0..num).map(
         |idx| get_block_iv(gl, prog, idx as gl::types::GLuint, gl::UNIFORM_BLOCK_BINDING) as gl::types::GLuint
     ).collect();
-    
+
     // check if the shader specifies binding points manually via
     // `layout(binding = n)`
     let explicit_binding = bindings.iter().any(|&i| i > 0);
@@ -255,7 +255,7 @@ fn query_blocks(gl: &gl::Gl, caps: &c::Capabilities, prog: super::Program,
             ];
             let mut usage = s::Usage::empty();
             for &(stage, eval) in usage_list.iter() {
-                if get_block_iv(gl, prog, idx, eval) != 0 {
+                if prog_usage.contains(stage) && get_block_iv(gl, prog, idx, eval) != 0 {
                     usage = usage | stage;
                 }
             }
@@ -275,10 +275,10 @@ fn query_blocks(gl: &gl::Gl, caps: &c::Capabilities, prog: super::Program,
 
         info!("\t\tBlock[{}] = '{}' of size {}", slot, name, total_size);
         s::ConstantBufferVar {
-            name: name,
+            name,
             slot: slot as c::ConstantBufferSlot,
             size: total_size as usize,
-            usage: usage,
+            usage,
             elements: block_indices.iter().zip(block_offsets.iter()).enumerate().filter_map(|(i, (parent, offset))| {
                 if *parent == idx as gl::types::GLint {
                     let mut length = 0;
@@ -506,7 +506,7 @@ pub fn create_program(gl: &gl::Gl, caps: &c::Capabilities, private: &PrivateCaps
         let mut info = s::ProgramInfo {
             vertex_attributes: query_attributes(gl, name),
             globals: uniforms,
-            constant_buffers: query_blocks(gl, caps, name, &block_indices, &block_offsets),
+            constant_buffers: query_blocks(gl, caps, name, usage, &block_indices, &block_offsets),
             textures: textures,
             unordereds: Vec::new(), //TODO
             samplers: samplers,

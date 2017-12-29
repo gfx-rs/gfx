@@ -17,6 +17,8 @@ uniform b_PsLocals {
     vec4 u_WorldSize;
     vec4 u_TilesheetSize;
     vec2 u_TileOffsets;
+    vec2 u_Pad1; //reaching 64 bytes
+    vec4 u_Pad2;
 };
 uniform sampler2D t_TileSheet;
 
