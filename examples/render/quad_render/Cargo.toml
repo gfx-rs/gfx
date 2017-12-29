@@ -8,6 +8,11 @@ workspace = "../../.."
 name = "quad_render"
 path = "main.rs"
 
+[features]
+default = ["vulkan"]
+vulkan = ["gfx-backend-vulkan"]
+metal = ["gfx-backend-metal"]
+
 [dependencies]
 env_logger = "0.4"
 glutin = { version = "0.11", optional = true }
@@ -17,4 +22,8 @@ winit = "0.9"
 gfx-hal = { path = "../../../src/hal", version = "0.1" }
 gfx-render = { path = "../../../src/render", version = "0.1" }
 
-gfx-backend-vulkan = { path = "../../../src/backend/vulkan", version = "0.1" }
+gfx-backend-vulkan = { path = "../../../src/backend/vulkan", version = "0.1", optional = true }
+gfx-backend-metal = { path = "../../../src/backend/metal", optional = true }
+
+
+
