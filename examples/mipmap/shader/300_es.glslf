@@ -1,4 +1,5 @@
-#version 150
+#version 300 es
+precision mediump float;
 
 uniform sampler2D t_Tex;
 in vec2 v_Uv;
