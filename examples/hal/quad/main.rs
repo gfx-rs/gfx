@@ -134,7 +134,7 @@ fn main() {
             if family.supports_graphics() && surface.supports_queue_family(family) {
                 Some(1)
             } else { None }
-        });
+        }).unwrap();
 
     let mut queue_group = hal::QueueGroup::<_, hal::Graphics>::new(queue_groups.remove(0));
     let mut command_pool = device.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty(), 16);

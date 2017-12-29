@@ -20,7 +20,7 @@ path = "src/lib.rs"
 [dependencies]
 bitflags = "1.0"
 mint = { version = "0.4.1", optional = true }
-log = "0.3"
+failure = "0.1"
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
 smallvec = "0.4"
 

@@ -149,7 +149,9 @@ pub struct PhysicalDevice {
 }
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
-    fn open(self, families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>) -> hal::Gpu<Backend> {
+    fn open(
+        self, families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>
+    ) -> Result<hal::Gpu<Backend>, hal::adapter::DeviceCreationError> {
         // Create D3D12 device
         let mut device_raw = ptr::null_mut();
         let hr = unsafe {
@@ -246,10 +248,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             mem::forget(present_queue);
         }
 
-        hal::Gpu {
+        Ok(hal::Gpu {
             device,
             queue_groups,
-        }
+        })
     }
 
     fn format_properties(&self, _: Option<format::Format>) -> format::Properties {

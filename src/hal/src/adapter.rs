@@ -42,7 +42,7 @@ pub struct MemoryProperties {
 
 /// Represents a physical or virtual device, which is capable of running the backend.
 pub trait PhysicalDevice<B: Backend>: Sized {
-    /// Create a new logical GPU.
+    /// Create a new logical device.
     ///
     /// # Examples
     ///
@@ -57,7 +57,7 @@ pub trait PhysicalDevice<B: Backend>: Sized {
     /// let gpu = physical_device.open(vec![(family, vec![1.0; 1])]);
     /// # }
     /// ```
-    fn open(self, Vec<(B::QueueFamily, Vec<QueuePriority>)>) -> Gpu<B>;
+    fn open(self, Vec<(B::QueueFamily, Vec<QueuePriority>)>) -> Result<Gpu<B>, DeviceCreationError>;
 
     ///
     fn format_properties(&self, Option<format::Format>) -> format::Properties;
@@ -71,6 +71,46 @@ pub trait PhysicalDevice<B: Backend>: Sized {
 
     /// Returns the limits of this `Device`.
     fn get_limits(&self) -> Limits;
+}
+
+/// Device creation errors during `open`.
+#[derive(Fail, Debug, Clone, PartialEq, Eq)]
+pub enum DeviceCreationError {
+    /// Memory allocation on the host side failed.
+    /// This could be caused by a lack of memory.
+    #[fail(display = "Host memory allocation failed.")]
+    OutOfHostMemory,
+    /// Memory allocation on the device side failed.
+    /// This could be caused by a lack of memory.
+    #[fail(display = "Device memory allocation failed.")]
+    OutOfDeviceMemory,
+    /// Device initialization failed due to implementation specific errors.
+    #[fail(display = "Device initialization failed.")]
+    InitializationFailed,
+    /// At least one of the user requested extensions if not supported by the
+    /// physical device.
+    #[fail(display = "One or multiple extensions are not supported.")]
+    MissingExtension,
+    /// At least one of the user requested features if not supported by the
+    /// physical device.
+    ///
+    /// Use [`get_features`](trait.PhysicalDevice.html#tymethod.get_features)
+    /// for checking the supported features.
+    #[fail(display = "One or multiple features are not supported.")]
+    MissingFeature,
+    /// Too many logical devices have been created from this physical device.
+    ///
+    /// The implementation may only support one logical device for each physical
+    /// device or lacks resources to allocate a new device.
+    #[fail(display = "Too many device objects have been created.")]
+    TooManyObjects,
+    /// The logical or physical device are lost during the device creation
+    /// process.
+    ///
+    /// This may be caused by hardware failure, physical device removal,
+    /// power outage, etc.
+    #[fail(display = "Physical or logical device lost.")]
+    DeviceLost,
 }
 
 /// Information about a backend adapter.
@@ -115,7 +155,7 @@ impl<B: Backend> Adapter<B> {
     /// let gpu = adapter.open_with(|_| Some(1));
     /// # }
     /// ```
-    pub fn open_with<F>(mut self, selector: F) -> Gpu<B>
+    pub fn open_with<F>(mut self, selector: F) -> Result<Gpu<B>, DeviceCreationError>
     where F: Fn(&B::QueueFamily) -> Option<usize>
     {
         use queue::QueueFamily;
