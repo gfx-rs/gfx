@@ -32,7 +32,7 @@ gfx_corell = { path = "src/corell", version = "0.1" }
 gfx = { path = "src/render", version = "0.17" }
 gfx_macros = { path = "src/macros", version = "0.2" }
 gfx_device_gl = { path = "src/backend/gl", version = "0.15" }
-gfx_window_glutin = { path = "src/window/glutin", version = "0.19" }
+gfx_window_glutin = { path = "src/window/glutin", version = "0.20" }
 
 [dependencies.gfx_device_vulkan]
 path = "src/backend/vulkan"

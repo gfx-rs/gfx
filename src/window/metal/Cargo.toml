@@ -27,10 +27,10 @@ documentation = "https://docs.rs/gfx_window_metal"
 name = "gfx_window_metal"
 
 [dependencies]
-log = "0.3"
+log = "0.4"
 cocoa = "0.9"
 objc = "0.2"
 winit = "0.9"
 metal-rs = "0.4"
-gfx_core = { path = "../../core", version = "0.7" }
+gfx_core = { path = "../../core", version = "0.8" }
 gfx_device_metal = { path = "../../backend/metal", version = "0.3" }

@@ -28,8 +28,8 @@ documentation = "https://docs.rs/gfx_device_metal"
 name = "gfx_device_metal"
 
 [dependencies]
-log = "0.3"
-gfx_core = { path = "../../core", version = "0.7" }
+log = "0.4"
+gfx_core = { path = "../../core", version = "0.8" }
 cocoa = "0.9"
 libc = "0.2"
 objc = "0.2"

@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx_window_glutin"
-version = "0.19.0"
+version = "0.20.0"
 description = "Glutin window for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -28,10 +28,9 @@ documentation = "https://docs.rs/gfx_window_glutin"
 name = "gfx_window_glutin"
 
 [dependencies]
-#glutin = "0.11"
-glutin = { git = "https://github.com/tomaka/glutin", rev = "e71a6575f23c022e8fdc03846cc647e5df4537ab" }
-gfx_core = { path = "../../core", version = "0.7" }
-gfx_device_gl = { path = "../../backend/gl", version = "0.14" }
+glutin = "0.12"
+gfx_core = { path = "../../core", version = "0.8" }
+gfx_device_gl = { path = "../../backend/gl", version = "0.15" }
 
 [features]
 headless = []

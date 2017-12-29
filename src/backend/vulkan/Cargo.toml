@@ -14,9 +14,9 @@ documentation = "https://docs.rs/gfx_device_vulkan"
 name = "gfx_device_vulkan"
 
 [dependencies]
-log = "0.3"
+log = "0.4"
 vk = "0.0"
 vk-sys = { git = "https://github.com/sectopod/vulkano", branch = "bind" }
 shared_library = "0.1"
-gfx_core = { path = "../../core", version = "0.7" }
+gfx_core = { path = "../../core", version = "0.8" }
 spirv-utils = { git = "https://github.com/msiglreith/spirv-utils.git", branch = "gfx" }
