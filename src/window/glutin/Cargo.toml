@@ -29,7 +29,7 @@ name = "gfx_window_glutin"
 
 [dependencies]
 #glutin = "0.11"
-glutin = { git = "https://github.com/tomaka/glutin" }
+glutin = { git = "https://github.com/tomaka/glutin", rev = "e71a6575f23c022e8fdc03846cc647e5df4537ab" }
 gfx_core = { path = "../../core", version = "0.7" }
 gfx_device_gl = { path = "../../backend/gl", version = "0.14" }
 

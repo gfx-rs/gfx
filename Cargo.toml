@@ -26,7 +26,7 @@ name = "gfx_app"
 log = "0.3"
 env_logger = "0.4"
 #glutin = "0.11"
-glutin = { git = "https://github.com/tomaka/glutin" }
+glutin = { git = "https://github.com/tomaka/glutin", rev = "e71a6575f23c022e8fdc03846cc647e5df4537ab" }
 winit = "0.9"
 gfx_core = { path = "src/core", version = "0.7.1" }
 gfx_corell = { path = "src/corell", version = "0.1" }
