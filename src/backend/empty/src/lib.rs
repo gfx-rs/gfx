@@ -57,7 +57,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         unimplemented!()
     }
 
-    fn format_properties(&self, _: format::Format) -> format::Properties {
+    fn format_properties(&self, _: Option<format::Format>) -> format::Properties {
         unimplemented!()
     }
 
@@ -146,7 +146,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_buffer_view(&self, _: &(), _: format::Format, _: Range<u64>) -> Result<(), buffer::ViewError> {
+    fn create_buffer_view(&self, _: &(), _: Option<format::Format>, _: Range<u64>) -> Result<(), buffer::ViewError> {
         unimplemented!()
     }
 
@@ -640,7 +640,7 @@ impl hal::Surface<Backend> for Surface {
 
     fn capabilities_and_formats(
         &self, _: &PhysicalDevice,
-    ) -> (hal::SurfaceCapabilities, Vec<format::Format>) {
+    ) -> (hal::SurfaceCapabilities, Option<Vec<format::Format>>) {
         unimplemented!()
     }
 

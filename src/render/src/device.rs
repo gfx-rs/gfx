@@ -149,7 +149,7 @@ impl<B: Backend> Device<B> {
     pub fn create_buffer_view_raw(
         &mut self,
         buffer: &handle::raw::Buffer<B>,
-        format: format::Format,
+        format: Option<format::Format>,
         range: Range<u64>,
     ) -> Result<handle::raw::BufferView<B>, buffer::ViewError> {
         self.raw.create_buffer_view(buffer.resource(), format, range)
@@ -163,7 +163,7 @@ impl<B: Backend> Device<B> {
     pub fn create_buffer_view<T>(
         &mut self,
         buffer: &handle::Buffer<B, T>,
-        format: format::Format,
+        format: Option<format::Format>,
         range: Range<u64>,
     ) -> Result<handle::BufferView<B, T>, buffer::ViewError> {
         self.create_buffer_view_raw(buffer.as_ref(), format, range)

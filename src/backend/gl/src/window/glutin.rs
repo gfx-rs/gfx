@@ -114,7 +114,7 @@ impl hal::Surface<B> for Surface {
         hal::image::Kind::D2(w, h, a)
     }
 
-    fn capabilities_and_formats(&self, _: &PhysicalDevice) -> (hal::SurfaceCapabilities, Vec<f::Format>) {
+    fn capabilities_and_formats(&self, _: &PhysicalDevice) -> (hal::SurfaceCapabilities, Option<Vec<f::Format>>) {
         let dim = get_window_dimensions(&self.window);
         let extent = hal::window::Extent2d {
             width: dim.0 as u32,
@@ -129,7 +129,7 @@ impl hal::Surface<B> for Surface {
                 height: dim.1 as u32 + 1
             },
             max_image_layers: 1,
-        }, self.swapchain_formats())
+        }, Some(self.swapchain_formats()))
     }
 
     fn supports_queue_family(&self, _: &QueueFamily) -> bool { true }
@@ -164,16 +164,10 @@ pub fn config_context(
     ds_format: Option<f::Format>,
 ) -> glutin::ContextBuilder
 {
-    let color_base = color_format
-        .base_format()
-        .expect("Invalid color format");
-
+    let color_base = color_format.base_format();
     let color_bits = color_base.0.describe_bits();
     let depth_bits = match ds_format {
-        Some(fm) => {
-            let base = fm.base_format().expect("Invalid depth format");
-            base.0.describe_bits()
-        },
+        Some(fm) => fm.base_format().0.describe_bits(),
         None => f::BITS_ZERO,
     };
     builder

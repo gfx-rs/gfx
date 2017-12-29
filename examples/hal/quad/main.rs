@@ -108,14 +108,17 @@ fn main() {
     let surface_format = surface
         .capabilities_and_formats(&adapter.physical_device)
         .1
-        .into_iter()
-        .find(|format| {
-            format
-            .base_format()
-            .map(|fmt| fmt.1 == ChannelType::Srgb)
-            .unwrap_or(false)
-        })
-        .unwrap();
+        .map_or(
+            f::Format::Rgba8Srgb,
+            |formats| {
+                formats
+                    .into_iter()
+                    .find(|format| {
+                        format.base_format().1 == ChannelType::Srgb
+                    })
+                    .unwrap()
+            }
+        );
 
     let memory_types = adapter
         .physical_device
@@ -183,7 +186,7 @@ fn main() {
 
     let render_pass = {
         let attachment = pass::Attachment {
-            format: surface_format,
+            format: Some(surface_format),
             ops: pass::AttachmentOps::new(pass::AttachmentLoadOp::Clear, pass::AttachmentStoreOp::Store),
             stencil_ops: pass::AttachmentOps::DONT_CARE,
             layouts: i::ImageLayout::Undefined .. i::ImageLayout::Present,

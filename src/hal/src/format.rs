@@ -293,15 +293,18 @@ pub trait AsFormat {
 }
 
 macro_rules! formats {
-    { $($name:ident = ($surface:ident, $channel:ident),)* } => {
+    {
+        $name:ident = ($surface:ident, $channel:ident),
+        $($name_tail:ident = ($surface_tail:ident, $channel_tail:ident),)*
+    } => {
         ///
         #[allow(missing_docs)]
         #[repr(u32)]
         #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
         #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
         pub enum Format {
-            Undefined = 0,
-            $( $name, )*
+            $name = 1,
+            $( $name_tail, )*
 
             // This serves as safety net for conversion from Vulkan -> HAL,
             // in case Vulkan adds new formats:
@@ -316,11 +319,11 @@ macro_rules! formats {
 
         /// Conversion table from `Format` to `BaseFormat`, excluding `Undefined`.
         pub const BASE_FORMATS: [BaseFormat; NUM_FORMATS-1] = [
-            $(BaseFormat(SurfaceType::$surface, ChannelType::$channel), )*
+              BaseFormat(SurfaceType::$surface, ChannelType::$channel),
+            $(BaseFormat(SurfaceType::$surface_tail, ChannelType::$channel_tail), )*
         ];
 
         // Struct format types, for strong-typed APIs.
-        $(
             #[allow(missing_docs)]
             #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
             #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -328,6 +331,16 @@ macro_rules! formats {
 
             impl AsFormat for $name {
                 const SELF: Format = Format::$name;
+            }
+
+        $(
+            #[allow(missing_docs)]
+            #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+            #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+            pub struct $name_tail;
+
+            impl AsFormat for $name_tail {
+                const SELF: Format = Format::$name_tail;
             }
 
         )*
@@ -526,23 +539,17 @@ impl Format {
     /// Get base format.
     ///
     /// Returns `None` if format is `Undefined`.
-    pub fn base_format(self) -> Option<BaseFormat> {
+    pub fn base_format(self) -> BaseFormat {
         assert!(NUM_FORMATS > self as usize);
-        match self {
-            Format::Undefined => None,
-            _ => Some(BASE_FORMATS[self as usize - 1]),
-        }
+        BASE_FORMATS[self as usize - 1]
     }
 
     /// Retuns aspect flags of the format.
     pub fn aspect_flags(self) -> AspectFlags {
         self.base_format()
-            .map(|BaseFormat(sf, _)| {
-               sf
-                .desc()
-                .aspects
-            })
-            .unwrap_or(AspectFlags::empty())
+            .0
+            .desc()
+            .aspects
     }
 
     /// Returns if the format has a color aspect.

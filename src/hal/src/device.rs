@@ -247,7 +247,7 @@ pub trait Device<B: Backend> {
 
     ///
     fn create_buffer_view(
-        &self, &B::Buffer, format::Format, Range<u64>
+        &self, &B::Buffer, Option<format::Format>, Range<u64>
     ) -> Result<B::BufferView, buffer::ViewError>;
 
     ///

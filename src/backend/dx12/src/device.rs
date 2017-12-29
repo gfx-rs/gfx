@@ -737,7 +737,7 @@ impl d::Device<B> for Device {
             .iter()
             .map(|att| AttachmentInfo {
                 sub_states: vec![SubState::Undefined; subpasses.len()],
-                target_state: if att.format.is_depth() {
+                target_state: if att.format.map_or(false, |f| f.is_depth()) {
                     d3d12::D3D12_RESOURCE_STATE_DEPTH_WRITE //TODO?
                 } else {
                     d3d12::D3D12_RESOURCE_STATE_RENDER_TARGET
@@ -1103,7 +1103,7 @@ impl d::Device<B> for Device {
                     .zip(pass.color_attachments.iter())
                 {
                     let format = desc.subpass.main_pass.attachments[target.0].format;
-                    *rtv = conv::map_format(format).unwrap_or(dxgiformat::DXGI_FORMAT_UNKNOWN);
+                    *rtv = format.and_then(conv::map_format).unwrap_or(dxgiformat::DXGI_FORMAT_UNKNOWN);
                     num_rtvs += 1;
                 }
                 (rtvs, num_rtvs)
@@ -1142,16 +1142,11 @@ impl d::Device<B> for Device {
                 RTVFormats: rtvs,
                 DSVFormat: pass.depth_stencil_attachment
                     .and_then(|att_ref|
-                        conv::map_format_dsv(
-                            desc
-                            .subpass
+                        desc.subpass
                             .main_pass
                             .attachments[att_ref.0]
                             .format
-                            .base_format()
-                            .unwrap()
-                            .0
-                        )
+                            .and_then(|f| conv::map_format_dsv(f.base_format().0))
                     )
                     .unwrap_or(dxgiformat::DXGI_FORMAT_UNKNOWN),
                 SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
@@ -1380,7 +1375,7 @@ impl d::Device<B> for Device {
     fn create_buffer_view(
         &self,
         _buffer: &n::Buffer,
-        _format: format::Format,
+        _format: Option<format::Format>,
         _range: Range<u64>,
     ) -> Result<n::BufferView, buffer::ViewError> {
         unimplemented!()
@@ -1393,9 +1388,7 @@ impl d::Device<B> for Device {
         format: format::Format,
         usage: image::Usage,
     ) -> Result<UnboundImage, image::CreationError> {
-        let base_format = format
-            .base_format()
-            .expect("`Format::Undefined` is not valid.");
+        let base_format = format.base_format();
         let format_desc = base_format.0.desc();
 
         let aspects = format_desc.aspects;
@@ -1565,9 +1558,7 @@ impl d::Device<B> for Device {
                 None
             },
             handle_dsv: if image.usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
-                let fmt = format
-                    .base_format()
-                    .and_then(|format| conv::map_format_dsv(format.0))
+                let fmt = conv::map_format_dsv(format.base_format().0)
                     .ok_or(image::ViewError::BadFormat);
                 Some(self.view_image_as_depth_stencil(image.resource, image.kind, fmt?, &range)?)
             } else {
@@ -2098,7 +2089,6 @@ impl d::Device<B> for Device {
             let format_desc = config
                 .color_format
                 .base_format()
-                .unwrap()
                 .0
                 .desc();
 

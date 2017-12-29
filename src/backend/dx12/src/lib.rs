@@ -252,7 +252,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
-    fn format_properties(&self, _: format::Format) -> format::Properties {
+    fn format_properties(&self, _: Option<format::Format>) -> format::Properties {
         unimplemented!()
     }
 

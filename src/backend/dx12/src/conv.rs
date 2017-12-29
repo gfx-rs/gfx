@@ -16,7 +16,6 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
 
     // TODO: list may be incomplete or partially wrong..
     let format = match format {
-        Undefined => DXGI_FORMAT_UNKNOWN,
         R5g6b5Unorm => DXGI_FORMAT_B5G6R5_UNORM,
         R5g5b5a1Unorm => DXGI_FORMAT_B5G5R5A1_UNORM,
         R8Unorm => DXGI_FORMAT_R8_UNORM,

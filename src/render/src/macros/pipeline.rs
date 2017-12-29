@@ -53,7 +53,7 @@ macro_rules! gfx_graphics_pipeline {
                             if let Some(attach) = <$cmp as pso::Component<'a, B>>::attachment(&self.$cmp_name) {
                                 let attach_id = attachments.len();
                                 attachments.push(cpass::Attachment {
-                                    format: attach.format,
+                                    format: Some(attach.format),
                                     ops: attach.ops,
                                     stencil_ops: attach.stencil_ops,
                                     layouts: attach.required_layout .. attach.required_layout,

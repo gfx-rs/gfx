@@ -66,7 +66,11 @@ impl AttachmentOps {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Attachment {
     /// Attachment format
-    pub format: Format,
+    ///
+    /// In the most cases `format` is not `None`. It should be only used for
+    /// creating dummy renderpasses, which are used as placeholder for compatible
+    /// renderpasses.
+    pub format: Option<Format>,
     /// Load and store operations of the attachment
     pub ops: AttachmentOps,
     /// Load and store operations of the stencil aspect, if any

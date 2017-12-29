@@ -138,7 +138,7 @@ impl d::Device<B> for Device {
         let attachments = attachments.iter().map(|attachment| {
             vk::AttachmentDescription {
                 flags: vk::AttachmentDescriptionFlags::empty(), // TODO: may even alias!
-                format: conv::map_format(attachment.format),
+                format: attachment.format.map_or(vk::Format::Undefined, conv::map_format),
                 samples: vk::SAMPLE_COUNT_1_BIT, // TODO: multisampling
                 load_op: conv::map_attachment_load_op(attachment.ops.load),
                 store_op: conv::map_attachment_store_op(attachment.ops.store),
@@ -835,14 +835,14 @@ impl d::Device<B> for Device {
     }
 
     fn create_buffer_view(
-        &self, buffer: &n::Buffer, format: format::Format, range: Range<u64>
+        &self, buffer: &n::Buffer, format: Option<format::Format>, range: Range<u64>
     ) -> Result<n::BufferView, buffer::ViewError> {
         let info = vk::BufferViewCreateInfo {
             s_type: vk::StructureType::BufferViewCreateInfo,
             p_next: ptr::null(),
             flags: vk::BufferViewCreateFlags::empty(),
             buffer: buffer.raw,
-            format: conv::map_format(format),
+            format: format.map_or(vk::Format::Undefined, conv::map_format),
             offset: range.start,
             range: range.end - range.start,
         };

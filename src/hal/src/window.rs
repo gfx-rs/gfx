@@ -109,7 +109,11 @@ pub trait Surface<B: Backend> {
     /// Query surface capabilities and formats for this physical device.
     ///
     /// Use this function for configuring your swapchain creation.
-    fn capabilities_and_formats(&self, &B::PhysicalDevice) -> (SurfaceCapabilities, Vec<Format>);
+    ///
+    /// Returns a tuple of surface capabilities and formats.
+    /// If formats is `None` than the surface has no preferred format and the
+    /// application may use any desired format.
+    fn capabilities_and_formats(&self, &B::PhysicalDevice) -> (SurfaceCapabilities, Option<Vec<Format>>);
 }
 
 /// Handle to a backbuffer of the swapchain.

@@ -51,16 +51,15 @@ impl hal::Surface<Backend> for Surface {
 
     fn capabilities_and_formats(
         &self, _: &PhysicalDevice,
-    ) -> (hal::SurfaceCapabilities, Vec<format::Format>) {
+    ) -> (hal::SurfaceCapabilities, Option<Vec<format::Format>>) {
         let caps = hal::SurfaceCapabilities {
             image_count: 1..8,
             current_extent: None,
             extents: Extent2d { width: 4, height: 4} .. Extent2d { width: 4096, height: 4096 },
             max_image_layers: 1,
         };
-        (caps, vec![
-            format::Format::Rgba8Srgb,
-        ])
+        let formats = Some(vec![format::Format::Rgba8Srgb]);
+        (caps, formats)
     }
 
     fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {

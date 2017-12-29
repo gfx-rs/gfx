@@ -14,7 +14,9 @@ pub fn map_format(format: format::Format) -> vk::Format {
 }
 
 pub fn map_vk_format(format: vk::Format) -> Option<format::Format> {
-    if (format as usize) < format::NUM_FORMATS {
+    if (format as usize) < format::NUM_FORMATS &&
+        format != vk::Format::Undefined
+    {
         // Safe due to equivalence of HAL format values and Vulkan format values
         Some(unsafe { mem::transmute(format) })
     } else {

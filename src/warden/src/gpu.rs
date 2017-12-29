@@ -197,7 +197,7 @@ impl<B: hal::Backend> Scene<B> {
                             let (w, h, d, aa) = kind.get_dimensions();
                             assert_eq!(aa, i::AaMode::Single);
 
-                            let base_format = format.base_format().unwrap();
+                            let base_format = format.base_format();
                             let format_desc = base_format.0.desc();
                             let (block_width, block_height) = format_desc.dim;
 
@@ -528,7 +528,7 @@ impl<B: hal::Backend> Scene<B> {
         assert_eq!(aa, i::AaMode::Single);
 
         // TODO:
-        let base_format = image.format.base_format().unwrap();
+        let base_format = image.format.base_format();
         let format_desc = base_format.0.desc();
         let (block_width, block_height) = format_desc.dim;
 
