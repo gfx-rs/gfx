@@ -127,7 +127,8 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             .create_buffer(instance_count as usize,
                            gfx::buffer::Role::Vertex,
                            gfx::memory::Usage::Data,
-                           gfx::TRANSFER_DST).unwrap();
+                           gfx::memory::Bind::TRANSFER_DST
+            ).unwrap();
 
 
         let (quad_vertices, mut slice) = factory
@@ -146,7 +147,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
                 instance: instances,
                 scale: size,
                 locals: factory
-                    .create_buffer_immutable(&[locals], gfx::buffer::Role::Constant, gfx::Bind::empty())
+                    .create_buffer_immutable(&[locals], gfx::buffer::Role::Constant, gfx::memory::Bind::empty())
                     .unwrap(),
                 out: window_targets.color,
             },

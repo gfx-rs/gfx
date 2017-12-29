@@ -143,5 +143,5 @@ cgmath = "0.15"
 gfx_gl = "0.4"
 rand = "0.4"
 genmesh = "0.5"
-noise = "0.4"
+noise = "0.2" #TODO: update
 image = "0.18"

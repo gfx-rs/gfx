@@ -215,11 +215,12 @@ fn create_scene<R, F>(factory: &mut F,
 
     // create shadows
     let (shadow_tex, shadow_resource) = {
+        use gfx::memory::{Bind, Usage};
         use gfx::texture as t;
         let kind = t::Kind::D2Array(512, 512, MAX_LIGHTS as gfx::Layer, t::AaMode::Single);
-        let bind = gfx::SHADER_RESOURCE | gfx::DEPTH_STENCIL;
+        let bind = Bind::SHADER_RESOURCE | Bind::DEPTH_STENCIL;
         let cty = gfx::format::ChannelType::Unorm;
-        let tex = factory.create_texture(kind, 1, bind, gfx::memory::Usage::Data, Some(cty)).unwrap();
+        let tex = factory.create_texture(kind, 1, bind, Usage::Data, Some(cty)).unwrap();
         let resource = factory.view_texture_as_shader_resource::<Depth>(
             &tex, (0, 0), gfx::format::Swizzle::new()).unwrap();
         (tex, resource)
@@ -317,7 +318,7 @@ fn create_scene<R, F>(factory: &mut F,
         vbuf: cube_buf.clone(),
         vs_locals: factory.create_constant_buffer(1),
         ps_locals: factory.create_buffer_immutable(&[locals],
-            gfx::buffer::Role::Constant, gfx::Bind::empty()
+            gfx::buffer::Role::Constant, gfx::memory::Bind::empty()
             ).unwrap(),
         light_buf: light_buf.clone(),
         shadow: (shadow_resource, shadow_sampler),

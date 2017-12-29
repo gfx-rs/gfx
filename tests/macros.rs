@@ -11,12 +11,12 @@ gfx_defines!{
         _x: i8 = "x",
         _y: f32 = "y",
     }
-    
+
     vertex Instance {
         pos: [f32; 2] = "pos",
         color: [f32; 3] = "color",
     }
-    
+
     constant Local {
         pos: [u32; 4] = "pos",
     }
@@ -24,7 +24,7 @@ gfx_defines!{
     constant LocalMeta {
         pos: [u32; 4] = "pos_meta",
     }
-    
+
     pipeline testpipe {
         vertex: gfx::VertexBuffer<Vertex> = (),
         instance: gfx::InstanceBuffer<Instance> = (),
@@ -35,7 +35,7 @@ gfx_defines!{
         buf_frequency: gfx::UnorderedAccess<[f32; 4]> = "Frequency",
         pixel_color: gfx::RenderTarget<fm::Rgba8> = "Color",
         blend_target: gfx::BlendTarget<Rg16> =
-            ("o_Color1", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
+            ("o_Color1", gfx::state::ColorMask::all(), gfx::preset::blend::ADD),
         depth: gfx::DepthTarget<gfx::format::DepthStencil> =
             gfx::preset::depth::LESS_EQUAL_TEST,
         blend_ref: gfx::BlendRef = (),
@@ -72,7 +72,7 @@ fn _test_raw<R, F>(factory: &mut F) -> gfx::PipelineState<R, testraw::Meta> wher
         tex: "Specular",
         target: ("o_Color2",
             fm::Format(fm::SurfaceType::R8_G8_B8_A8, fm::ChannelType::Unorm),
-            gfx::state::MASK_ALL, None),
+            gfx::state::ColorMask::all(), None),
     };
     factory.create_pipeline_simple(&[], &[], init).unwrap()
 }

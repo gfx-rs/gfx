@@ -51,7 +51,7 @@ gfx_defines! {
         pos: [f32; 3] = "pos",
         far_plane: f32 = "farPlane",
     }
-    
+
     constant Matrix {
         matrix: [[f32; 4]; 4] = "matrix",
     }
@@ -109,7 +109,7 @@ where
     // Get texture info
     let kind = texture::Kind::Cube(size);
     let levels = 1;
-    let bind = gfx::DEPTH_STENCIL | gfx::SHADER_RESOURCE;
+    let bind = gfx::memory::Bind::DEPTH_STENCIL | gfx::memory::Bind::SHADER_RESOURCE;
     let channel_type = <DF::Channel as format::ChannelTyped>::get_channel_type();
 
     // Create texture

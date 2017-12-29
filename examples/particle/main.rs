@@ -20,7 +20,8 @@ extern crate gfx_app;
 use std::time::Instant;
 
 pub use gfx_app::{ColorFormat, DepthFormat};
-use gfx::{Bundle, ShaderSet, Primitive, buffer, Bind, Slice};
+use gfx::{Bundle, ShaderSet, Primitive, buffer, Slice};
+use gfx::memory::Bind;
 use gfx::state::Rasterizer;
 
 // Declare the vertex format suitable for drawing,
