@@ -60,6 +60,41 @@ fn create_function_constants(specialization: &[pso::Specialization]) -> metal::F
     constants_raw
 }
 
+fn get_final_function(library: &metal::LibraryRef, entry: &str, specialization: &[pso::Specialization]) -> Result<metal::Function, ()> {
+    let initial_constants = if specialization.is_empty() {
+        None
+    } else {
+        Some(create_function_constants(specialization))
+    };
+
+    let mut mtl_function = library
+        .get_function(entry, initial_constants)
+        .map_err(|_| {
+            error!("Invalid vertex shader entry point");
+            ()
+        })?;
+    let has_more_function_constants = unsafe {
+        let dictionary: *mut ::objc::runtime::Object = msg_send![mtl_function, functionConstantsDictionary];
+        let count: NSUInteger = msg_send![dictionary, count];
+        count > 0
+    };
+    if has_more_function_constants {
+        // TODO: check that all remaining function constants are optional, otherwise return an error
+        if specialization.is_empty() {
+            // These may be optional function constants, in which case we need to specialize the function with an empty set of constants
+            // or we'll get an error when we make the PSO
+            mtl_function = library
+                .get_function(entry, Some(create_function_constants(&[])))
+                .map_err(|_| {
+                    error!("Invalid vertex shader entry point");
+                    ()
+                })?;
+        }
+    }
+
+    Ok(mtl_function)
+}
+
 fn memory_types() -> [hal::MemoryType; 4] {
     [
         hal::MemoryType {
@@ -364,14 +399,7 @@ impl Device {
             pipeline_desc.shaders.vertex.entry
         };
 
-        let vs_constants = if pipeline_desc.shaders.vertex.specialization.is_empty() {
-            None
-        } else {
-            Some(create_function_constants(pipeline_desc.shaders.vertex.specialization))
-        };
-
-        let mtl_vertex_function = vs_lib
-            .get_function(vs_entry, vs_constants)
+        let mtl_vertex_function = get_final_function(&vs_lib, vs_entry, pipeline_desc.shaders.vertex.specialization)
             .map_err(|_| {
                 error!("Invalid vertex shader entry point");
                 pso::CreationError::Other
@@ -396,16 +424,9 @@ impl Device {
                 fragment_entry.entry
             };
 
-            let fs_constants = if fragment_entry.specialization.is_empty() {
-                None
-            } else {
-                Some(create_function_constants(fragment_entry.specialization))
-            };
-
-            let mtl_fragment_function = fs_lib
-                .get_function(fs_entry, fs_constants)
+            let mtl_fragment_function = get_final_function(&fs_lib, fs_entry, fragment_entry.specialization)
                 .map_err(|_| {
-                    error!("invalid pixel shader entry point");
+                    error!("Invalid vertex shader entry point");
                     pso::CreationError::Other
                 })?;
             pipeline.set_fragment_function(Some(&mtl_fragment_function));

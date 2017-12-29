@@ -18,6 +18,7 @@ use core_foundation::dictionary::CFDictionary;
 use core_foundation::number::{CFNumber, CFNumberRef};
 use core_graphics::base::CGFloat;
 use core_graphics::geometry::CGRect;
+use cocoa::foundation::{NSRect};
 use io_surface::{self, IOSurface};
 
 pub struct Surface(pub(crate) Rc<SurfaceInner>);
@@ -46,7 +47,9 @@ const kCVPixelFormatType_32RGBA: u32 = (b'R' as u32) << 24 | (b'G' as u32) << 16
 
 impl hal::Surface<Backend> for Surface {
     fn get_kind(&self) -> image::Kind {
-        unimplemented!()
+        let (width, height) = self.pixel_dimensions();
+
+        image::Kind::D2(width, height, image::AaMode::Single)
     }
 
     fn capabilities_and_formats(
@@ -65,6 +68,19 @@ impl hal::Surface<Backend> for Surface {
 
     fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {
         true // TODO: Not sure this is the case, don't know associativity of IOSurface
+    }
+}
+
+impl Surface {
+    fn pixel_dimensions(&self) -> (u16, u16) {
+        unsafe {
+            // NSView bounds are measured in DIPs
+            let bounds: NSRect = msg_send![self.0.nsview, bounds];
+            let window: *mut Object = msg_send![self.0.nsview, window];
+            assert!(!window.is_null());
+            let scale: CGFloat = msg_send![window, backingScaleFactor];
+            ((bounds.size.width * scale) as u16, (bounds.size.height * scale) as u16)
+        }
     }
 }
 
