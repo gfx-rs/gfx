@@ -249,9 +249,9 @@ fn query_blocks(gl: &gl::Gl, caps: &c::Capabilities, prog: super::Program, prog_
 
         let usage = {
             let usage_list = [
-                (s::VERTEX,   gl::UNIFORM_BLOCK_REFERENCED_BY_VERTEX_SHADER),
-                (s::GEOMETRY, gl::UNIFORM_BLOCK_REFERENCED_BY_GEOMETRY_SHADER),
-                (s::PIXEL,    gl::UNIFORM_BLOCK_REFERENCED_BY_FRAGMENT_SHADER),
+                (s::Usage::VERTEX,   gl::UNIFORM_BLOCK_REFERENCED_BY_VERTEX_SHADER),
+                (s::Usage::GEOMETRY, gl::UNIFORM_BLOCK_REFERENCED_BY_GEOMETRY_SHADER),
+                (s::Usage::PIXEL,    gl::UNIFORM_BLOCK_REFERENCED_BY_FRAGMENT_SHADER),
             ];
             let mut usage = s::Usage::empty();
             for &(stage, eval) in usage_list.iter() {

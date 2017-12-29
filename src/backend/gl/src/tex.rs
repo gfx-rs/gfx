@@ -16,7 +16,7 @@ use {gl, FrameBuffer, Surface, Texture, NewTexture, Buffer, Sampler};
 use gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
 use state;
 use info::PrivateCaps;
-use core::memory::SHADER_RESOURCE;
+use core::memory::Bind;
 use core::format::{Format as NewFormat, ChannelType};
 use core::texture as t;
 
@@ -405,7 +405,7 @@ pub fn make_without_storage(gl: &gl::Gl, desc: &t::Info, cty: ChannelType) ->
         Err(_) => return Err(t::CreationError::Format(desc.format, Some(cty))),
     };
 
-    let fixed_loc = desc.bind.contains(SHADER_RESOURCE);
+    let fixed_loc = desc.bind.contains(Bind::SHADER_RESOURCE);
     make_widout_storage_impl(gl, desc.kind, gl_format, gl_pixel_format, gl_data_type,
                              desc.levels, fixed_loc)
 }
@@ -534,7 +534,7 @@ pub fn make_with_storage(gl: &gl::Gl, desc: &t::Info, cty: ChannelType) ->
         Ok(f) => f,
         Err(_) => return Err(t::CreationError::Format(desc.format, Some(cty))),
     };
-    let fixed_loc = desc.bind.contains(SHADER_RESOURCE);
+    let fixed_loc = desc.bind.contains(Bind::SHADER_RESOURCE);
     make_with_storage_impl(gl, desc.kind, gl_format, desc.levels, fixed_loc)
 }
 

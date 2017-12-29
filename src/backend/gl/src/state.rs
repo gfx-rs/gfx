@@ -221,6 +221,7 @@ pub fn set_output_masks(gl: &gl::Gl, color: bool, depth: bool, stencil: bool) {
 }
 
 pub fn bind_blend(gl: &gl::Gl, color: s::Color) {
+    use core::state::ColorMask as Cm;
     match color.blend {
         Some(b) => unsafe {
             gl.Enable(gl::BLEND);
@@ -240,14 +241,15 @@ pub fn bind_blend(gl: &gl::Gl, color: s::Color) {
         },
     }
     unsafe { gl.ColorMask(
-        if (color.mask & s::RED  ).is_empty() {gl::FALSE} else {gl::TRUE},
-        if (color.mask & s::GREEN).is_empty() {gl::FALSE} else {gl::TRUE},
-        if (color.mask & s::BLUE ).is_empty() {gl::FALSE} else {gl::TRUE},
-        if (color.mask & s::ALPHA).is_empty() {gl::FALSE} else {gl::TRUE}
+        color.mask.contains(Cm::RED) as _,
+        color.mask.contains(Cm::GREEN) as _,
+        color.mask.contains(Cm::BLUE) as _,
+        color.mask.contains(Cm::ALPHA) as _,
     )};
 }
 
 pub fn bind_blend_slot(gl: &gl::Gl, slot: ColorSlot, color: s::Color) {
+    use core::state::ColorMask as Cm;
     let buf = slot as gl::types::GLuint;
     match color.blend {
         Some(b) => unsafe {
@@ -269,10 +271,10 @@ pub fn bind_blend_slot(gl: &gl::Gl, slot: ColorSlot, color: s::Color) {
         },
     };
     unsafe { gl.ColorMaski(buf,
-        if (color.mask & s::RED  ).is_empty() {gl::FALSE} else {gl::TRUE},
-        if (color.mask & s::GREEN).is_empty() {gl::FALSE} else {gl::TRUE},
-        if (color.mask & s::BLUE ).is_empty() {gl::FALSE} else {gl::TRUE},
-        if (color.mask & s::ALPHA).is_empty() {gl::FALSE} else {gl::TRUE}
+        color.mask.contains(Cm::RED) as _,
+        color.mask.contains(Cm::GREEN) as _,
+        color.mask.contains(Cm::BLUE) as _,
+        color.mask.contains(Cm::ALPHA) as _,
     )};
 }
 
