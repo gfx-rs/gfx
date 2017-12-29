@@ -55,10 +55,7 @@ impl hal::Surface<Backend> for Surface {
 
     fn capabilities_and_formats(
         &self, _: &PhysicalDevice,
-    ) -> (hal::SurfaceCapabilities, Vec<f::Format>) {
-        use hal::format::ChannelType::*;
-        use hal::format::SurfaceType::*;
-
+    ) -> (hal::SurfaceCapabilities, Option<Vec<f::Format>>) {
         let extent = hal::window::Extent2d {
             width: self.width,
             height: self.height,
@@ -75,15 +72,15 @@ impl hal::Surface<Backend> for Surface {
         // We also expose sRGB buffers but they are handled internally as UNORM.
         // Roughly ordered by popularity..
         let formats = vec![
-            f::Format(B8_G8_R8_A8, Srgb),
-            f::Format(B8_G8_R8_A8, Unorm),
-            f::Format(R8_G8_B8_A8, Srgb),
-            f::Format(R8_G8_B8_A8, Unorm),
-            f::Format(R10_G10_B10_A2, Unorm),
-            f::Format(R16_G16_B16_A16, Float),
+            f::Format::Bgra8Srgb,
+            f::Format::Bgra8Unorm,
+            f::Format::Rgba8Srgb,
+            f::Format::Rgba8Unorm,
+            f::Format::A2b10g10r10Unorm,
+            f::Format::Rgba16Float,
         ];
 
-        (capabilities, formats)
+        (capabilities, Some(formats))
     }
 }
 

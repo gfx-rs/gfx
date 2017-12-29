@@ -255,10 +255,12 @@ pub struct Attachment {
     pub required_layout: ImageLayout,
 }
 
-pub struct RenderTarget<F: format::RenderFormat>(PhantomData<F>);
+pub struct RenderTarget<F: format::AsFormat>(PhantomData<F>);
 
 impl<'a, B, F> Component<'a, B> for RenderTarget<F>
-    where B: Backend, F: 'a + format::RenderFormat
+where
+    B: Backend,
+    F: 'a + format::AsFormat,
 {
     type Init = hal::pso::ColorBlendDesc;
     type Data = &'a handle::ImageView<B, F>;

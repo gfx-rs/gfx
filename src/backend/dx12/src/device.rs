@@ -10,6 +10,7 @@ use winapi::shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, winerror};
 use wio::com::ComPtr;
 
 use hal::{self, buffer, device as d, format, image, mapping, memory, pass, pso, query};
+use hal::format::AspectFlags;
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
 
@@ -85,8 +86,10 @@ pub struct UnboundImage {
     requirements: memory::Requirements,
     kind: image::Kind,
     usage: image::Usage,
-    aspects: image::AspectFlags,
-    bits_per_texel: u8,
+    aspects: AspectFlags,
+    bytes_per_block: u8,
+    // Dimension of a texel block (compressed formats).
+    block_dim: (u8, u8),
     num_levels: image::Level,
     num_layers: image::Layer,
 }
@@ -734,7 +737,7 @@ impl d::Device<B> for Device {
             .iter()
             .map(|att| AttachmentInfo {
                 sub_states: vec![SubState::Undefined; subpasses.len()],
-                target_state: if att.format.0.is_depth() {
+                target_state: if att.format.map_or(false, |f| f.is_depth()) {
                     d3d12::D3D12_RESOURCE_STATE_DEPTH_WRITE //TODO?
                 } else {
                     d3d12::D3D12_RESOURCE_STATE_RENDER_TARGET
@@ -1100,7 +1103,7 @@ impl d::Device<B> for Device {
                     .zip(pass.color_attachments.iter())
                 {
                     let format = desc.subpass.main_pass.attachments[target.0].format;
-                    *rtv = conv::map_format(format).unwrap_or(dxgiformat::DXGI_FORMAT_UNKNOWN);
+                    *rtv = format.and_then(conv::map_format).unwrap_or(dxgiformat::DXGI_FORMAT_UNKNOWN);
                     num_rtvs += 1;
                 }
                 (rtvs, num_rtvs)
@@ -1139,14 +1142,11 @@ impl d::Device<B> for Device {
                 RTVFormats: rtvs,
                 DSVFormat: pass.depth_stencil_attachment
                     .and_then(|att_ref|
-                        conv::map_format_dsv(
-                            desc
-                            .subpass
+                        desc.subpass
                             .main_pass
                             .attachments[att_ref.0]
                             .format
-                            .0
-                        )
+                            .and_then(|f| conv::map_format_dsv(f.base_format().0))
                     )
                     .unwrap_or(dxgiformat::DXGI_FORMAT_UNKNOWN),
                 SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
@@ -1375,7 +1375,7 @@ impl d::Device<B> for Device {
     fn create_buffer_view(
         &self,
         _buffer: &n::Buffer,
-        _format: format::Format,
+        _format: Option<format::Format>,
         _range: Range<u64>,
     ) -> Result<n::BufferView, buffer::ViewError> {
         unimplemented!()
@@ -1388,18 +1388,12 @@ impl d::Device<B> for Device {
         format: format::Format,
         usage: image::Usage,
     ) -> Result<UnboundImage, image::CreationError> {
-        use self::image::AspectFlags;
-        let mut aspects = AspectFlags::empty();
-        let bits = format.0.describe_bits();
-        if bits.color + bits.alpha != 0 {
-            aspects |= AspectFlags::COLOR;
-        }
-        if bits.depth != 0 {
-            aspects |= AspectFlags::DEPTH;
-        }
-        if bits.stencil != 0 {
-            aspects |= AspectFlags::STENCIL;
-        }
+        let base_format = format.base_format();
+        let format_desc = base_format.0.desc();
+
+        let aspects = format_desc.aspects;
+        let bytes_per_block = (format_desc.bits / 8) as _;
+        let block_dim = format_desc.dim;
 
         let (width, height, depth, aa) = kind.get_dimensions();
         let dimension = match kind {
@@ -1420,7 +1414,7 @@ impl d::Device<B> for Device {
             MipLevels: mip_levels as u16,
             Format: match conv::map_format(format) {
                 Some(format) => format,
-                None => return Err(image::CreationError::Format(format.0, Some(format.1))),
+                None => return Err(image::CreationError::Format(format)),
             },
             SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
                 Count: aa.get_num_fragments() as u32,
@@ -1443,7 +1437,7 @@ impl d::Device<B> for Device {
         };
 
         Ok(UnboundImage {
-            dsv_format: conv::map_format_dsv(format.0).unwrap_or(desc.Format),
+            dsv_format: conv::map_format_dsv(base_format.0).unwrap_or(desc.Format),
             desc,
             requirements: memory::Requirements {
                 size: alloc_info.SizeInBytes,
@@ -1453,7 +1447,8 @@ impl d::Device<B> for Device {
             kind,
             usage,
             aspects,
-            bits_per_texel: bits.total,
+            bytes_per_block,
+            block_dim,
             num_levels: mip_levels,
             num_layers: kind.get_num_layers(),
         })
@@ -1469,7 +1464,8 @@ impl d::Device<B> for Device {
         offset: u64,
         image: UnboundImage,
     ) -> Result<n::Image, d::BindError> {
-        use self::image::{AspectFlags, Usage};
+        use self::image::Usage;
+
         if image.requirements.type_mask & (1 << memory.type_id) == 0 {
             error!("Bind memory failure: supported mask 0x{:x}, given id {}",
                 image.requirements.type_mask, memory.type_id);
@@ -1502,7 +1498,8 @@ impl d::Device<B> for Device {
             kind: image.kind,
             usage: image.usage,
             dxgi_format: image.desc.Format,
-            bits_per_texel: image.bits_per_texel,
+            bytes_per_block: image.bytes_per_block,
+            block_dim: image.block_dim,
             num_levels: image.num_levels,
             num_layers: image.num_layers,
             clear_cv: if image.aspects.contains(AspectFlags::COLOR) && image.usage.contains(Usage::COLOR_ATTACHMENT) {
@@ -1561,7 +1558,8 @@ impl d::Device<B> for Device {
                 None
             },
             handle_dsv: if image.usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
-                let fmt = conv::map_format_dsv(format.0).ok_or(image::ViewError::BadFormat);
+                let fmt = conv::map_format_dsv(format.base_format().0)
+                    .ok_or(image::ViewError::BadFormat);
                 Some(self.view_image_as_depth_stencil(image.resource, image.kind, fmt?, &range)?)
             } else {
                 None
@@ -2010,13 +2008,19 @@ impl d::Device<B> for Device {
         config: hal::SwapchainConfig,
     ) -> (w::Swapchain, hal::Backbuffer<B>) {
         let mut swap_chain: *mut dxgi1_2::IDXGISwapChain1 = ptr::null_mut();
-        let mut format = config.color_format;
-        if format.1 == format::ChannelType::Srgb {
+
+        let format = match config.color_format {
             // Apparently, swap chain doesn't like sRGB, but the RTV can still have some:
             // https://www.gamedev.net/forums/topic/670546-d3d12srgb-buffer-format-for-swap-chain/
-            // [15716] DXGI ERROR: IDXGIFactory::CreateSwapchain: Flip model swapchains (DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL and DXGI_SWAP_EFFECT_FLIP_DISCARD) only support the following Formats: (DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R10G10B10A2_UNORM), assuming the underlying Device does as well.
-            format.1 = format::ChannelType::Unorm;
-        }
+            // [15716] DXGI ERROR: IDXGIFactory::CreateSwapchain: Flip model swapchains
+            //                     (DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL and DXGI_SWAP_EFFECT_FLIP_DISCARD) only support the following Formats:
+            //                     (DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R10G10B10A2_UNORM),
+            //                     assuming the underlying Device does as well.
+            format::Format::Bgra8Srgb => format::Format::Bgra8Unorm,
+            format::Format::Rgba8Srgb => format::Format::Rgba8Unorm,
+            format => format,
+        };
+
         let format = conv::map_format(format).unwrap(); // TODO: error handling
 
         let rtv_desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
@@ -2082,13 +2086,23 @@ impl d::Device<B> for Device {
                 self.raw.clone().CreateRenderTargetView(resource, &rtv_desc, rtv_handle);
             }
 
+            let format_desc = config
+                .color_format
+                .base_format()
+                .0
+                .desc();
+
+            let bytes_per_block = (format_desc.bits / 8) as _;
+            let block_dim = format_desc.dim;
+
             let kind = image::Kind::D2(surface.width as u16, surface.height as u16, 1.into());
             n::Image {
                 resource,
                 kind,
                 usage: image::Usage::COLOR_ATTACHMENT,
                 dxgi_format: format,
-                bits_per_texel: config.color_format.0.describe_bits().total,
+                bytes_per_block,
+                block_dim,
                 num_levels: 1,
                 num_layers: 1,
                 clear_cv: Some(rtv_handle),

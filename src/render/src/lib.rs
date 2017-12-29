@@ -131,7 +131,7 @@ use hal::{
     Capability, CommandQueue, PhysicalDevice, QueueFamily, Surface, Swapchain,
     Device as Device_,
 };
-use hal::format::RenderFormat;
+use hal::format::AsFormat;
 use hal::pool::CommandPoolCreateFlags;
 use memory::Typed;
 
@@ -176,7 +176,7 @@ pub struct Context<B: Backend, C> {
     garbage: handle::GarbageCollector<B>,
 }
 
-pub struct Backbuffer<B: Backend, Cf: RenderFormat> {
+pub struct Backbuffer<B: Backend, Cf: AsFormat> {
     pub color: handle::Image<B, Cf>,
 }
 
@@ -218,7 +218,7 @@ impl<B: Backend, C> Context<B, C>
         mut surface: B::Surface, adapter: hal::Adapter<B>
     ) -> (Self, Vec<Backbuffer<B, Cf>>)
     where
-        Cf: RenderFormat,
+        Cf: AsFormat,
     {
         let memory_properties = adapter.physical_device.memory_properties();
         let hal::Gpu {
@@ -235,7 +235,7 @@ impl<B: Backend, C> Context<B, C>
         let queue = Queue::new(queue_groups.remove(0));
 
         let swap_config = hal::SwapchainConfig::new()
-            .with_color_typed::<Cf>(); // TODO: check support
+            .with_color(Cf::SELF); // TODO: check support
         let (swapchain, backbuffer) = device.create_swapchain(&mut surface, swap_config);
 
         let backbuffer_images = match backbuffer {
@@ -263,7 +263,7 @@ impl<B: Backend, C> Context<B, C>
                 let handle = handle::inner::Image::without_garbage(
                     raw,
                     image::Info {
-                        aspects: hal::image::AspectFlags::COLOR,
+                        aspects: format::AspectFlags::COLOR,
                         usage: image::Usage::TRANSFER_SRC | image::Usage::COLOR_ATTACHMENT,
                         kind: surface.get_kind(),
                         mip_levels: 1,

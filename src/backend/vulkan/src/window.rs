@@ -240,7 +240,7 @@ impl hal::Surface<Backend> for Surface {
         hal::image::Kind::D2(self.width as Size, self.height as Size, aa)
     }
 
-    fn capabilities_and_formats(&self, physical_device: &PhysicalDevice) -> (hal::SurfaceCapabilities, Vec<Format>) {
+    fn capabilities_and_formats(&self, physical_device: &PhysicalDevice) -> (hal::SurfaceCapabilities, Option<Vec<Format>>) {
         // Capabilities
         let caps =
             self.raw.functor.get_physical_device_surface_capabilities_khr(
@@ -287,13 +287,19 @@ impl hal::Surface<Backend> for Surface {
                 self.raw.handle,
             ).expect("Unable to query surface formats");
 
-        let formats = formats
-            .iter()
-            .filter_map(|sf| {
-                conv::map_vk_format(sf.format)
-                    .map(|(surface, channel)| Format(surface, channel))
-            })
-            .collect();
+        let formats = match formats[0].format {
+            // If pSurfaceFormats includes just one entry, whose value for format is
+            // VK_FORMAT_UNDEFINED, surface has no preferred format. In this case, the application
+            // can use any valid VkFormat value.
+            vk::Format::Undefined => None,
+            _ => {
+                Some(formats
+                    .iter()
+                    .filter_map(|sf| conv::map_vk_format(sf.format))
+                    .collect()
+                )
+            }
+        };
 
         (capabilities, formats)
     }

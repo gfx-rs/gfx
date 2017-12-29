@@ -60,7 +60,7 @@ pub trait PhysicalDevice<B: Backend>: Sized {
     fn open(self, Vec<(B::QueueFamily, Vec<QueuePriority>)>) -> Gpu<B>;
 
     ///
-    fn format_properties(&self, format::Format) -> format::Properties;
+    fn format_properties(&self, Option<format::Format>) -> format::Properties;
 
     ///
     fn memory_properties(&self) -> MemoryProperties;

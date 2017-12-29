@@ -1,7 +1,7 @@
 use std::borrow::Borrow;
 use std::ops::Range;
 use Backend;
-use image;
+use {format, image};
 use device::Extent;
 use memory::Barrier;
 use pso::PipelineStage;
@@ -50,7 +50,7 @@ pub struct ImageResolve {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ImageCopy {
     ///
-    pub aspect_mask: image::AspectFlags,
+    pub aspect_mask: format::AspectFlags,
     ///
     pub src_subresource: image::Subresource,
     ///
@@ -69,12 +69,12 @@ pub struct ImageCopy {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BufferImageCopy {
-    ///
+    /// Buffer ofset in bytes.
     pub buffer_offset: u64,
-    ///
-    pub buffer_row_pitch: u32,
-    ///
-    pub buffer_slice_pitch: u32,
+    /// Width of a buffer 'row' in texels.
+    pub buffer_width: u32,
+    /// Height of a buffer 'image slice' in texels.
+    pub buffer_height: u32,
     ///
     pub image_layers: image::SubresourceLayers,
     ///

@@ -1,9 +1,10 @@
 use hal;
 use memory::Memory;
 
+pub use hal::format::AspectFlags;
 pub use hal::image::{
     CreationError, Kind, AaMode, Size, Level, Layer, Dimensions,
-    AspectFlags, SamplerInfo, ViewError, Usage,
+    SamplerInfo, ViewError, Usage,
     Subresource, SubresourceLayers, SubresourceRange,
 };
 

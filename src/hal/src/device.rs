@@ -9,7 +9,7 @@ use std::ops::Range;
 use {buffer, format, image, mapping, pass, pso, query};
 use pool::{CommandPool, CommandPoolCreateFlags};
 use queue::QueueGroup;
-use {Backend, MemoryType, MemoryTypeId};
+use {Backend, MemoryTypeId};
 use memory::Requirements;
 use window::{Backbuffer, SwapchainConfig};
 
@@ -247,7 +247,7 @@ pub trait Device<B: Backend> {
 
     ///
     fn create_buffer_view(
-        &self, &B::Buffer, format::Format, Range<u64>
+        &self, &B::Buffer, Option<format::Format>, Range<u64>
     ) -> Result<B::BufferView, buffer::ViewError>;
 
     ///
@@ -440,13 +440,12 @@ pub trait Device<B: Backend> {
     /// # extern crate gfx_hal;
     /// # fn main() {
     /// use gfx_hal::{Device, SwapchainConfig};
-    /// use gfx_hal::format::Srgba8;
+    /// use gfx_hal::format::Format;
     /// # use gfx_hal::{CommandQueue, Graphics};
     ///
     /// # let mut surface: empty::Surface = return;
     /// # let device: empty::Device = return;
-    /// let swapchain_config = SwapchainConfig::new()
-    ///                             .with_color_typed::<Srgba8>();
+    /// let swapchain_config = SwapchainConfig::new().with_color(Format::Rgba8Srgb);
     /// device.create_swapchain(&mut surface, swapchain_config);
     /// # }
     /// ```

@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use format::Srgba8 as ColorFormat;
+use format;
 
 gfx_buffer_struct! {
     Vertex {
@@ -18,7 +18,7 @@ gfx_descriptors! {
 gfx_graphics_pipeline! {
     pipe {
         desc: desc::Component,
-        color: pso::RenderTarget<ColorFormat>,
+        color: pso::RenderTarget<format::Rgba8Srgb>,
         vertices: pso::VertexBuffer<Vertex>,
     }
 }

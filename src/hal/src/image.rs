@@ -11,7 +11,7 @@ use std::error::Error;
 use std::fmt;
 use std::ops::Range;
 
-use format;
+use format::{self, AspectFlags};
 use pso::Comparison;
 
 
@@ -25,8 +25,8 @@ pub const MAX_LEVEL: Level = 15;
 /// Pure texture object creation error.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CreationError {
-    /// Failed to map a given format to the device.
-    Format(format::SurfaceType, Option<format::ChannelType>),
+    /// The format is not supported by the device.
+    Format(format::Format),
     /// The kind doesn't support a particular operation.
     Kind,
     /// Failed to map a given multisampled kind to the device.
@@ -42,8 +42,7 @@ pub enum CreationError {
 impl fmt::Display for CreationError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            CreationError::Format(surf, chan) => write!(f, "{}: ({:?}, {:?})",
-                                                self.description(), surf, chan),
+            CreationError::Format(format) => write!(f, "{}: {:?}", self.description(), format),
             CreationError::Samples(aa) => write!(f, "{}: {:?}", self.description(), aa),
             CreationError::Size(size) => write!(f, "{}: {}", self.description(), size),
             CreationError::Data(data) => write!(f, "{}: {}", self.description(), data),
@@ -537,19 +536,6 @@ pub enum ImageLayout {
     ///
     Present,
 }
-
-bitflags!(
-    ///
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct AspectFlags: u8 {
-        /// Color aspect.
-        const COLOR = 0x1;
-        /// Depth aspect.
-        const DEPTH = 0x2;
-        /// Stencil aspect.
-        const STENCIL = 0x4;
-    }
-);
 
 bitflags!(
     ///

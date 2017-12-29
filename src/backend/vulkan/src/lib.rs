@@ -381,11 +381,14 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
-    fn format_properties(&self, format: format::Format) -> format::Properties {
-        let properties = self.instance.0.get_physical_device_format_properties(
-            self.handle,
-            conv::map_format(format.0, format.1).unwrap(),
-        );
+    fn format_properties(&self, format: Option<format::Format>) -> format::Properties {
+        let properties = self
+            .instance
+            .0
+            .get_physical_device_format_properties(
+                self.handle,
+                format.map_or(vk::Format::Undefined, conv::map_format),
+            );
 
         format::Properties {
             linear_tiling: conv::map_image_features(properties.linear_tiling_features),

@@ -3,7 +3,7 @@ use winapi::shared::dxgiformat::DXGI_FORMAT;
 use winapi::um::{d3d12, d3dcommon};
 use wio::com::ComPtr;
 
-use hal::{image, pass, pso, DescriptorPool as HalDescriptorPool};
+use hal::{format, image, pass, pso, DescriptorPool as HalDescriptorPool};
 use {free_list, Backend, MAX_VERTEX_BUFFERS};
 use root_constants::RootConstant;
 
@@ -152,7 +152,9 @@ pub struct Image {
     pub(crate) kind: image::Kind,
     pub(crate) usage: image::Usage,
     pub(crate) dxgi_format: DXGI_FORMAT,
-    pub(crate) bits_per_texel: u8,
+    pub(crate) bytes_per_block: u8,
+    // Dimension of a texel block (compressed formats).
+    pub(crate) block_dim: (u8, u8),
     pub(crate) num_levels: image::Level,
     pub(crate) num_layers: image::Layer,
     #[derivative(Debug="ignore")]
@@ -167,7 +169,7 @@ unsafe impl Sync for Image { }
 
 impl Image {
     /// Get `SubresourceRange` of the whole image.
-    pub fn to_subresource_range(&self, aspects: image::AspectFlags) -> image::SubresourceRange {
+    pub fn to_subresource_range(&self, aspects: format::AspectFlags) -> image::SubresourceRange {
         image::SubresourceRange {
             aspects,
             levels: 0 .. self.num_levels,

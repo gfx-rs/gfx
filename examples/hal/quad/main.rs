@@ -17,13 +17,13 @@ extern crate gfx_backend_gl as back;
 extern crate winit;
 extern crate image;
 
-use hal::{buffer, command, device as d, image as i, memory as m, pass, pso, pool};
+use hal::{buffer, command, device as d, format as f, image as i, memory as m, pass, pso, pool};
 use hal::{Device, Instance, PhysicalDevice, QueueFamily, Surface, Swapchain};
 use hal::{
     DescriptorPool, Gpu, FrameSync, Primitive,
     Backbuffer, SwapchainConfig,
 };
-use hal::format::{ChannelType, Formatted, Srgba8 as ColorFormat, Swizzle, Vec2};
+use hal::format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle};
 use hal::pass::Subpass;
 use hal::pso::{PipelineStage, ShaderStageFlags, Specialization};
 use hal::queue::Submission;
@@ -50,7 +50,7 @@ const QUAD: [Vertex; 6] = [
 ];
 
 const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
-    aspects: i::AspectFlags::COLOR,
+    aspects: f::AspectFlags::COLOR,
     levels: 0 .. 1,
     layers: 0 .. 1,
 };
@@ -108,9 +108,17 @@ fn main() {
     let surface_format = surface
         .capabilities_and_formats(&adapter.physical_device)
         .1
-        .into_iter()
-        .find(|format| format.1 == ChannelType::Srgb)
-        .unwrap();
+        .map_or(
+            f::Format::Rgba8Srgb,
+            |formats| {
+                formats
+                    .into_iter()
+                    .find(|format| {
+                        format.base_format().1 == ChannelType::Srgb
+                    })
+                    .unwrap()
+            }
+        );
 
     let memory_types = adapter
         .physical_device
@@ -178,7 +186,7 @@ fn main() {
 
     let render_pass = {
         let attachment = pass::Attachment {
-            format: surface_format,
+            format: Some(surface_format),
             ops: pass::AttachmentOps::new(pass::AttachmentLoadOp::Clear, pass::AttachmentStoreOp::Store),
             stencil_ops: pass::AttachmentOps::DONT_CARE,
             layouts: i::ImageLayout::Undefined .. i::ImageLayout::Present,
@@ -271,7 +279,7 @@ fn main() {
             location: 0,
             binding: 0,
             element: pso::Element {
-                format: Vec2::<f32>::SELF,
+                format: f::Format::Rg32Float,
                 offset: 0,
             },
         });
@@ -279,7 +287,7 @@ fn main() {
             location: 1,
             binding: 0,
             element: pso::Element {
-                format: Vec2::<f32>::SELF,
+                format: f::Format::Rg32Float,
                 offset: 8
             },
         });
@@ -463,10 +471,10 @@ fn main() {
                 i::ImageLayout::TransferDstOptimal,
                 &[command::BufferImageCopy {
                     buffer_offset: 0,
-                    buffer_row_pitch: row_pitch,
-                    buffer_slice_pitch: row_pitch * (height as u32),
+                    buffer_width: row_pitch / (image_stride as u32),
+                    buffer_height: height as u32,
                     image_layers: i::SubresourceLayers {
-                        aspects: i::AspectFlags::COLOR,
+                        aspects: f::AspectFlags::COLOR,
                         level: 0,
                         layers: 0 .. 1,
                     },

@@ -1,22 +1,49 @@
 //! Universal format specification.
 //! Applicable to textures, views, and vertex buffers.
 
-//TODO:
-//  DXT 1-5, BC7
-//  ETC2_RGB, // Use the EXT2 algorithm on 3 components.
-//  ETC2_SRGB, // Use the EXT2 algorithm on 4 components (RGBA) in the sRGB color space.
-//  ETC2_EAC_RGBA8, // Use the EXT2 EAC algorithm on 4 components.
-use memory::Pod;
+bitflags!(
+    ///
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    pub struct AspectFlags: u8 {
+        /// Color aspect.
+        const COLOR = 0x1;
+        /// Depth aspect.
+        const DEPTH = 0x2;
+        /// Stencil aspect.
+        const STENCIL = 0x4;
+    }
+);
 
+/// Description of a format.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct FormatDesc {
+    /// Total number of bits.
+    ///
+    /// * Depth/Stencil formats are opaque formats, where the total number of bits is unknown.
+    ///   A dummy value is used for these formats instead (sum of depth and stencil bits).
+    ///   For copy operations, the number of bits of the corresonding aspect should be used.
+    /// * The total number can be larger than the sum of individual format bits
+    ///   (`color`, `alpha`, `depth` and `stencil`) for packed formats.
+    /// * For compressed formats, this denotes the number of bits per block.
+    pub bits: u16,
+    /// Dimensions (width, height) of the texel blocks.
+    ///
+    /// For uncompressed formats these are always (1, 1).
+    pub dim: (u8, u8),
+    /// Format aspects
+    pub aspects: AspectFlags,
+}
 
 /// Description of the bits distribution of a format.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct FormatBits {
-    /// Total number of bits
-    pub total: u8,
-    /// Number of color bits (summed for R/G/B)
+    /// Number of color bits (summed for R/G/B).
+    ///
+    /// For compressed formats, this value is 0.
     pub color: u8,
-    /// Number of alpha bits
+    /// Number of alpha bits.
+    ///
+    /// For compressed formats, this value is 0.
     pub alpha: u8,
     /// Number of depth bits
     pub depth: u8,
@@ -26,228 +53,11 @@ pub struct FormatBits {
 
 /// Format bits configuration with no bits assigned.
 pub const BITS_ZERO: FormatBits = FormatBits {
-    total: 0,
     color: 0,
     alpha: 0,
     depth: 0,
     stencil: 0,
 };
-
-macro_rules! impl_channel_type {
-    { $($name:ident = $shader_type:ident [ $($imp_trait:ident),* ] ,)* } => {
-        /// Type of a surface channel. This is how we interpret the
-        /// storage allocated with `SurfaceType`.
-        #[allow(missing_docs)]
-        #[repr(u8)]
-        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-        #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-        pub enum ChannelType {
-            $( $name, )*
-        }
-        $(
-            #[allow(missing_docs)]
-            #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-            #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-            pub enum $name {}
-            impl ChannelTyped for $name {
-                const SELF: ChannelType = ChannelType::$name;
-                type ShaderType = $shader_type;
-            }
-            $(
-                impl $imp_trait for $name {}
-            )*
-        )*
-    }
-}
-
-impl_channel_type! {
-    Int     = i32 [TextureChannel, RenderChannel],
-    Uint    = u32 [TextureChannel, RenderChannel],
-    Inorm   = f32 [TextureChannel, RenderChannel, BlendChannel],
-    Unorm   = f32 [TextureChannel, RenderChannel, BlendChannel],
-    Float   = f32 [TextureChannel, RenderChannel, BlendChannel],
-    Srgb    = f32 [TextureChannel, RenderChannel, BlendChannel],
-}
-
-macro_rules! impl_formats {
-    { $($name:ident : $container:ident < $($channel:ident),* > = $data_type:ty
-        {$total:expr $( ,$component:ident : $bits:expr )*} [ $($imp_trait:ident),* ] ,)* } => {
-        /// Type of the allocated texture surface. It is supposed to only
-        /// carry information about the number of bits per each channel.
-        /// The actual types are up to the views to decide and interpret.
-        /// The actual components are up to the swizzle to define.
-        #[repr(u8)]
-        #[allow(missing_docs, non_camel_case_types)]
-        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-        #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-        pub enum SurfaceType {
-            $( $name, )*
-        }
-        impl SurfaceType {
-            /// Return the total number of bits for this format.
-            pub fn describe_bits(&self) -> FormatBits {
-                match *self {
-                    $( SurfaceType::$name => FormatBits {
-                        total: $total,
-                        $( $component: $bits, )*
-                        .. BITS_ZERO
-                    }, )*
-                }
-            }
-        }
-
-        $(
-            #[allow(missing_docs, non_camel_case_types)]
-            #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-            #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-            pub enum $name {}
-            impl SurfaceTyped for $name {
-                const SELF: SurfaceType = SurfaceType::$name;
-                const BITS: FormatBits = FormatBits {
-                    total: $total,
-                    $( $component: $bits, )*
-                    .. BITS_ZERO
-                };
-                type DataType = $data_type;
-            }
-            $(
-                impl $imp_trait for $name {}
-            )*
-            $(
-                impl Formatted for ($name, $channel) {
-                    type Surface = $name;
-                    type Channel = $channel;
-                    type View = $container< <$channel as ChannelTyped>::ShaderType >;
-                }
-            )*
-        )*
-
-        #[cfg(test)]
-        mod test {
-            use std::mem::size_of;
-            use super::F16;
-            // Verify that the total number of bits specified for each format
-            // matches the run-time representation. This can be nicer once every
-            // Rust type gets a `SIZEOF` kind of associated constant.
-            #[test]
-            fn test_formats() {
-                $(
-                    assert_eq!(size_of::<$data_type>() * 8, $total);
-                )*
-            }
-        }
-    }
-}
-
-
-impl_formats! {
-    R4_G4:
-        Vec2<Unorm> = u8
-        { 8, color: 8 }
-        [TextureSurface, RenderSurface],
-    R4_G4_B4_A4:
-        Vec4<Unorm> = u16
-        { 16, color: 12, alpha: 4 }
-        [TextureSurface, RenderSurface],
-    R5_G5_B5_A1:
-        Vec4<Unorm> = u16
-        { 16, color: 15, alpha: 1 }
-        [TextureSurface, RenderSurface],
-    R5_G6_B5:
-        Vec3<Unorm> = u16
-        { 16, color: 16 }
-        [TextureSurface, RenderSurface],
-    R8:
-        Vec1<Int, Uint, Inorm, Unorm> = u8
-        { 8, color: 8 }
-        [BufferSurface, TextureSurface, RenderSurface],
-    R8_G8:
-        Vec2<Int, Uint, Inorm, Unorm> = [u8; 2]
-        { 16, color: 16 }
-        [BufferSurface, TextureSurface, RenderSurface],
-    R8_G8_B8_A8:
-        Vec4<Int, Uint, Inorm, Unorm, Srgb> = [u8; 4]
-        { 32, color: 24, alpha: 8 }
-        [BufferSurface, TextureSurface, RenderSurface],
-    R10_G10_B10_A2:
-        Vec4<Uint, Unorm> = u32
-        { 32, color: 30, alpha: 2 }
-        [BufferSurface, TextureSurface, RenderSurface],
-    R11_G11_B10:
-        Vec4<Unorm, Float> = u32
-        { 32, color: 32 }
-        [BufferSurface, TextureSurface, RenderSurface],
-    R16:
-        Vec1<Int, Uint, Inorm, Unorm, Float> = u16
-        { 16, color: 16 }
-        [BufferSurface, TextureSurface, RenderSurface],
-    R16_G16:
-        Vec2<Int, Uint, Inorm, Unorm, Float> = [u16; 2]
-        { 32, color: 32 }
-        [BufferSurface, TextureSurface, RenderSurface],
-    R16_G16_B16:
-        Vec3<Int, Uint, Inorm, Unorm, Float> = [u16; 3]
-        { 48, color: 48 }
-        [BufferSurface, TextureSurface, RenderSurface],
-    R16_G16_B16_A16:
-        Vec4<Int, Uint, Inorm, Unorm, Float> = [u16; 4]
-        { 64, color: 48, alpha: 16 }
-        [BufferSurface, TextureSurface, RenderSurface],
-    R32:
-        Vec1<Int, Uint, Float> = u32
-        { 32, color: 32 }
-        [BufferSurface, TextureSurface, RenderSurface],
-    R32_G32:
-        Vec2<Int, Uint, Float> = [u32; 2]
-        { 64, color: 64 }
-        [BufferSurface, TextureSurface, RenderSurface],
-    R32_G32_B32:
-        Vec3<Int, Uint, Float> = [u32; 3]
-        { 96, color: 96 }
-        [BufferSurface, TextureSurface, RenderSurface],
-    R32_G32_B32_A32:
-        Vec4<Int, Uint, Float> = [u32; 4]
-        { 128, color: 96, alpha: 32 }
-        [BufferSurface, TextureSurface, RenderSurface],
-    B8_G8_R8_A8:
-        Vec4<Unorm, Srgb> = [u8; 4]
-        { 32, color: 24, alpha: 8 }
-        [BufferSurface, TextureSurface, RenderSurface],
-    D16:
-        Vec1<Unorm> = F16
-        { 16, depth: 16 }
-        [TextureSurface, DepthSurface],
-    D24: Vec1<Unorm> = f32
-        { 32, depth: 24 }
-        [TextureSurface, DepthSurface],
-    D24_S8:
-        Vec1<Unorm, Uint> = u32
-        { 32, depth: 24, stencil: 8 }
-        [TextureSurface, DepthSurface, StencilSurface],
-    D32:
-        Vec1<Float> = f32
-        { 32, depth: 32 }
-        [TextureSurface, DepthSurface],
-    D32_S8:
-        Vec1<Unorm, Float, Uint> = (f32, u32)
-        { 64, depth: 32, stencil: 8 } //TODO: verify
-        [TextureSurface, DepthSurface, StencilSurface],
-}
-
-impl SurfaceType {
-    /// Return true if it's a depth surface type.
-    pub fn is_depth(self) -> bool {
-        match self {
-            SurfaceType::D16 |
-            SurfaceType::D24 |
-            SurfaceType::D24_S8 |
-            SurfaceType::D32 |
-            SurfaceType::D32_S8 => true,
-            _ => false,
-        }
-    }
-}
-
 
 /// Source channel in a swizzle configuration. Some may redirect onto
 /// different physical channels, some may be hardcoded to 0 or 1.
@@ -281,11 +91,6 @@ impl Default for Swizzle {
         Self::NO
     }
 }
-
-/// Complete run-time surface format.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Format(pub SurfaceType, pub ChannelType);
 
 /// Format properties of the physical device.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -341,237 +146,433 @@ bitflags!(
     }
 );
 
-/// Compile-time surface type trait.
-pub trait SurfaceTyped {
-    /// Associated run-time value of the type.
-    const SELF: SurfaceType;
-    /// Bits distribution.
-    const BITS: FormatBits;
-    /// The corresponding data type to be passed from CPU.
-    type DataType: Pod;
+/// Type of a surface channel. This is how we interpret the
+/// storage allocated with `SurfaceType`.
+#[allow(missing_docs)]
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ChannelType {
+    /// Unsigned normalized.
+    Unorm,
+    /// Signed normalized.
+    Inorm,
+    /// Unsigned integer.
+    Uint,
+    /// Signed integer.
+    Int,
+    /// Unsigned floating-point.
+    Ufloat,
+    /// Signed floating-point.
+    Float,
+    /// Unsigned scaled integer.
+    Uscaled,
+    /// Signed scaled integer.
+    Iscaled,
+    /// Unsigned normalized, SRGB non-linear encoded.
+    Srgb,
 }
-/// An ability of a surface type to be used for vertex buffers.
-pub trait BufferSurface: SurfaceTyped {}
-/// An ability of a surface type to be used for textures.
-pub trait TextureSurface: SurfaceTyped {}
-/// An ability of a surface type to be used for render targets.
-pub trait RenderSurface: SurfaceTyped {}
-/// An ability of a surface type to be used for depth targets.
-pub trait DepthSurface: SurfaceTyped {}
-/// An ability of a surface type to be used for stencil targets.
-pub trait StencilSurface: SurfaceTyped {}
 
-/// Compile-time channel type trait.
-pub trait ChannelTyped {
-    /// Associated run-time value of the type.
-    const SELF: ChannelType;
-    /// Shader-visible type that corresponds to this channel.
-    /// For example, normalized integers are visible as floats.
-    type ShaderType;
+macro_rules! surface_types {
+    { $($name:ident { $total:expr, $($aspect:ident)|*, $dim:expr $( ,$component:ident : $bits:expr )*} ,)* } => {
+        /// Type of the allocated texture surface. It is supposed to only
+        /// carry information about the number of bits per each channel.
+        /// The actual types are up to the views to decide and interpret.
+        /// The actual components are up to the swizzle to define.
+        #[repr(u8)]
+        #[allow(missing_docs, non_camel_case_types)]
+        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+        #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+        pub enum SurfaceType {
+            $( $name, )*
+        }
+
+        impl SurfaceType {
+            /// Return the bits for this format.
+            pub fn describe_bits(&self) -> FormatBits {
+                match *self {
+                    $( SurfaceType::$name => FormatBits {
+                        $( $component: $bits, )*
+                        .. BITS_ZERO
+                    }, )*
+                }
+            }
+
+            ///
+            pub fn desc(&self) -> FormatDesc {
+                match *self {
+                    $( SurfaceType::$name => FormatDesc {
+                        bits: $total,
+                        aspects: $(AspectFlags::$aspect)|*,
+                        dim: $dim,
+                    }, )*
+                }
+            }
+        }
+    }
 }
-/// An ability of a channel type to be used for textures.
-pub trait TextureChannel: ChannelTyped {}
-/// An ability of a channel type to be used for render targets.
-pub trait RenderChannel: ChannelTyped {}
-/// An ability of a channel type to be used for blended render targets.
-pub trait BlendChannel: RenderChannel {}
 
-/// Compile-time full format trait.
-pub trait Formatted {
-    /// Associated run-time value of the type.
-    const SELF: Format = Format(Self::Surface::SELF, Self::Channel::SELF);
-    /// Associated surface type.
-    type Surface: SurfaceTyped;
-    /// Associated channel type.
-    type Channel: ChannelTyped;
-    /// Shader view type of this format.
-    type View;
+// ident { num_bits, aspects, dim, (color, alpha, ..) }
+surface_types! {
+    R4_G4               {   8, COLOR, (1, 1), color: 8 },
+    R4_G4_B4_A4         {  32, COLOR, (1, 1), color: 24, alpha: 4 },
+    B4_G4_R4_A4         {  32, COLOR, (1, 1), color: 24, alpha: 4 },
+    R5_G6_B5            {  16, COLOR, (1, 1), color: 16 },
+    B5_G6_R5            {  16, COLOR, (1, 1), color: 16 },
+    R5_G5_B5_A1         {  16, COLOR, (1, 1), color: 15, alpha: 1 },
+    B5_G5_R5_A1         {  16, COLOR, (1, 1), color: 15, alpha: 1 },
+    A1_R5_G5_B5         {  16, COLOR, (1, 1), color: 15, alpha: 1 },
+    R8                  {   8, COLOR, (1, 1), color: 8 },
+    R8_G8               {  16, COLOR, (1, 1), color: 16 },
+    R8_G8_B8            {  24, COLOR, (1, 1), color: 24 },
+    B8_G8_R8            {  24, COLOR, (1, 1), color: 24 },
+    R8_G8_B8_A8         {  32, COLOR, (1, 1), color: 24, alpha: 8 },
+    B8_G8_R8_A8         {  32, COLOR, (1, 1), color: 24, alpha: 8 },
+    A8_B8_G8_R8         {  32, COLOR, (1, 1), color: 24, alpha: 8 },
+    A2_R10_G10_B10      {  32, COLOR, (1, 1), color: 30, alpha: 2 },
+    A2_B10_G10_R10      {  32, COLOR, (1, 1), color: 30, alpha: 2 },
+    R16                 {  16, COLOR, (1, 1), color: 16 },
+    R16_G16             {  32, COLOR, (1, 1), color: 32 },
+    R16_G16_B16         {  48, COLOR, (1, 1), color: 48 },
+    R16_G16_B16_A16     {  48, COLOR, (1, 1), color: 48, alpha: 16 },
+    R32                 {  32, COLOR, (1, 1), color: 32 },
+    R32_G32             {  64, COLOR, (1, 1), color: 64 },
+    R32_G32_B32         {  96, COLOR, (1, 1), color: 96 },
+    R32_G32_B32_A32     { 128, COLOR, (1, 1), color: 96, alpha: 32 },
+    R64                 {  64, COLOR, (1, 1), color: 64 },
+    R64_G64             { 128, COLOR, (1, 1), color: 128 },
+    R64_G64_B64         { 192, COLOR, (1, 1), color: 192 },
+    R64_G64_B64_A64     { 256, COLOR, (1, 1), color: 192, alpha: 64 },
+    B10_G11_R11         {  32, COLOR, (1, 1), color: 32 },
+    E5_B9_G9_R9         {  32, COLOR, (1, 1), color: 27 }, // 32-bit packed format
+    D16                 {  16, DEPTH, (1, 1), depth: 16 },
+    X8D24               {  32, DEPTH, (1, 1), depth: 24 },
+    D32                 {  32, DEPTH, (1, 1), depth: 32 },
+    S8                  {   8, STENCIL, (1, 1), stencil: 8 },
+    D16_S8              {  24, DEPTH | STENCIL, (1, 1), depth: 16, stencil: 8 },
+    D24_S8              {  32, DEPTH | STENCIL, (1, 1), depth: 24, stencil: 8 },
+    D32_S8              {  40, DEPTH | STENCIL, (1, 1), depth: 32, stencil: 8 },
+    BC1_RGB             {  64, COLOR, (4, 4) },
+    BC1_RGBA            {  64, COLOR, (4, 4) },
+    BC2                 { 128, COLOR, (4, 4) },
+    BC3                 { 128, COLOR, (4, 4) },
+    BC4                 {  64, COLOR, (4, 4) },
+    BC5                 { 128, COLOR, (4, 4) },
+    BC6                 { 128, COLOR, (4, 4) },
+    BC7                 { 128, COLOR, (4, 4) },
+    ETC2_R8_G8_B8       {  64, COLOR, (4, 4) },
+    ETC2_R8_G8_B8_A1    {  64, COLOR, (4, 4) },
+    ETC2_R8_G8_B8_A8    { 128, COLOR, (4, 4) },
+    EAC_R11             {  64, COLOR, (4, 4) },
+    EAC_R11_G11         { 128, COLOR, (4, 4) },
+    ASTC_4x4            { 128, COLOR, (4, 4) },
+    ASTC_5x4            { 128, COLOR, (5, 4) },
+    ASTC_5x5            { 128, COLOR, (5, 5) },
+    ASTC_6x5            { 128, COLOR, (6, 5) },
+    ASTC_6x6            { 128, COLOR, (6, 6) },
+    ASTC_8x5            { 128, COLOR, (8, 5) },
+    ASTC_8x6            { 128, COLOR, (8, 6) },
+    ASTC_8x8            { 128, COLOR, (8, 8) },
+    ASTC_10x5           { 128, COLOR, (10, 5) },
+    ASTC_10x6           { 128, COLOR, (10, 6) },
+    ASTC_10x8           { 128, COLOR, (10, 8) },
+    ASTC_10x10          { 128, COLOR, (10, 10) },
+    ASTC_12x10          { 128, COLOR, (12, 10) },
+    ASTC_12x12          { 128, COLOR, (12, 12) },
 }
-/// Ability to be used for vertex buffers.
-pub trait BufferFormat: Formatted {}
-/// Ability to be used for depth targets.
-pub trait DepthFormat: Formatted {}
-/// Ability to be used for vertex buffers.
-pub trait StencilFormat: Formatted {}
-/// Ability to be used for depth+stencil targets.
-pub trait DepthStencilFormat: DepthFormat + StencilFormat {}
-/// Ability to be used for textures.
-pub trait ImageFormat: Formatted {}
-/// Ability to be used for render targets.
-pub trait RenderFormat: Formatted {}
-/// Ability to be used for blended render targets.
-pub trait BlendFormat: RenderFormat {}
 
-impl<F> BufferFormat for F where
-    F: Formatted,
-    F::Surface: BufferSurface,
-    F::Channel: ChannelTyped,
-{}
-impl<F> DepthFormat for F where
-    F: Formatted,
-    F::Surface: DepthSurface,
-    F::Channel: RenderChannel,
-{}
-impl<F> StencilFormat for F where
-    F: Formatted,
-    F::Surface: StencilSurface,
-    F::Channel: RenderChannel,
-{}
-impl<F> DepthStencilFormat for F where
-    F: DepthFormat + StencilFormat
-{}
-impl<F> ImageFormat for F where
-    F: Formatted,
-    F::Surface: TextureSurface,
-    F::Channel: TextureChannel,
-{}
-impl<F> RenderFormat for F where
-    F: Formatted,
-    F::Surface: RenderSurface,
-    F::Channel: RenderChannel,
-{}
-impl<F> BlendFormat for F where
-    F: Formatted,
-    F::Surface: RenderSurface,
-    F::Channel: BlendChannel,
-{}
+/// Gneric run-time base format.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct BaseFormat(pub SurfaceType, pub ChannelType);
 
-macro_rules! alias {
-    { $( $name:ident = $ty:ty, )* } => {
+/// Conversion trait into `Format`;
+pub trait AsFormat {
+    /// Associated format.
+    const SELF: Format;
+}
+
+macro_rules! formats {
+    {
+        $name:ident = ($surface:ident, $channel:ident),
+        $($name_tail:ident = ($surface_tail:ident, $channel_tail:ident),)*
+    } => {
+        ///
+        #[allow(missing_docs)]
+        #[repr(u32)]
+        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+        #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+        pub enum Format {
+            $name = 1,
+            $( $name_tail, )*
+
+            // This serves as safety net for conversion from Vulkan -> HAL,
+            // in case Vulkan adds new formats:
+            //  1. We can check if a format is out of range
+            //  2. We 'ensure' that backend implementations do non-exhaustive matching
+            #[doc(hidden)]
+            __NumFormats,
+        }
+
+        /// Number of formats.
+        pub const NUM_FORMATS: usize = Format::__NumFormats as _;
+
+        /// Conversion table from `Format` to `BaseFormat`, excluding `Undefined`.
+        pub const BASE_FORMATS: [BaseFormat; NUM_FORMATS-1] = [
+              BaseFormat(SurfaceType::$surface, ChannelType::$channel),
+            $(BaseFormat(SurfaceType::$surface_tail, ChannelType::$channel_tail), )*
+        ];
+
+        // Struct format types, for strong-typed APIs.
+            #[allow(missing_docs)]
+            #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+            #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+            pub struct $name;
+
+            impl AsFormat for $name {
+                const SELF: Format = Format::$name;
+            }
+
         $(
             #[allow(missing_docs)]
             #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
             #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-            pub struct $name(pub $ty);
-            impl From<$ty> for $name {
-                fn from(v: $ty) -> $name {
-                    $name(v)
-                }
+            pub struct $name_tail;
+
+            impl AsFormat for $name_tail {
+                const SELF: Format = Format::$name_tail;
             }
 
-            unsafe impl Pod for $name {}
-
-            impl $name {
-                /// Convert a 2-element slice.
-                pub fn cast2(v: [$ty; 2]) -> [$name; 2] {
-                    [$name(v[0]), $name(v[1])]
-                }
-                /// Convert a 3-element slice.
-                pub fn cast3(v: [$ty; 3]) -> [$name; 3] {
-                    [$name(v[0]), $name(v[1]), $name(v[2])]
-                }
-                /// Convert a 4-element slice.
-                pub fn cast4(v: [$ty; 4]) -> [$name; 4] {
-                    [$name(v[0]), $name(v[1]), $name(v[2]), $name(v[3])]
-                }
-                /// Convert a generic slice by transmutation.
-                pub fn cast_slice(slice: &[$ty]) -> &[$name] {
-                    use std::mem::transmute;
-                    unsafe { transmute(slice) }
-                }
-            }
         )*
     }
 }
 
-alias! {
-    U8Norm = u8,
-    I8Norm = i8,
-    U16Norm = u16,
-    I16Norm = i16,
-    F16 = u16, // half-float
+// Format order has to match the order exposed by the Vulkan API.
+formats! {
+    Rg4Unorm = (R4_G4, Unorm),
+    Rgba4Unorm = (R4_G4_B4_A4, Unorm),
+    Bgra4Unorm = (B4_G4_R4_A4, Unorm),
+    R5g6b5Unorm = (R5_G6_B5, Unorm),
+    B5g6r5Unorm = (B5_G6_R5, Unorm),
+    R5g5b5a1Unorm = (R5_G5_B5_A1, Unorm),
+    B5g5r5a1Unorm = (B5_G5_R5_A1, Unorm),
+    A1r5g5b5Unorm = (A1_R5_G5_B5, Unorm),
+    R8Unorm = (R8, Unorm),
+    R8Inorm = (R8, Inorm),
+    R8Uscaled = (R8, Uscaled),
+    R8Iscaled = (R8, Iscaled),
+    R8Uint = (R8, Uint),
+    R8Int = (R8, Int),
+    R8Srgb = (R8, Srgb),
+    Rg8Unorm = (R8_G8, Unorm),
+    Rg8Inorm = (R8_G8, Inorm),
+    Rg8Uscaled = (R8_G8, Uscaled),
+    Rg8Iscaled = (R8_G8, Iscaled),
+    Rg8Uint = (R8_G8, Uint),
+    Rg8Int = (R8_G8, Int),
+    Rg8Srgb = (R8_G8, Srgb),
+    Rgb8Unorm = (R8_G8_B8, Unorm),
+    Rgb8Inorm = (R8_G8_B8, Inorm),
+    Rgb8Uscaled = (R8_G8_B8, Uscaled),
+    Rgb8Iscaled = (R8_G8_B8, Iscaled),
+    Rgb8Uint = (R8_G8_B8, Uint),
+    Rgb8Int = (R8_G8_B8, Int),
+    Rgb8Srgb = (R8_G8_B8, Srgb),
+    Bgr8Unorm = (B8_G8_R8, Unorm),
+    Bgr8Inorm = (B8_G8_R8, Inorm),
+    Bgr8Uscaled = (B8_G8_R8, Uscaled),
+    Bgr8Iscaled = (B8_G8_R8, Iscaled),
+    Bgr8Uint = (B8_G8_R8, Uint),
+    Bgr8Int = (B8_G8_R8, Int),
+    Bgr8Srgb = (B8_G8_R8, Srgb),
+    Rgba8Unorm = (R8_G8_B8_A8, Unorm),
+    Rgba8Inorm = (R8_G8_B8_A8, Inorm),
+    Rgba8Uscaled = (R8_G8_B8_A8, Uscaled),
+    Rgba8Iscaled = (R8_G8_B8_A8, Iscaled),
+    Rgba8Uint = (R8_G8_B8_A8, Uint),
+    Rgba8Int = (R8_G8_B8_A8, Int),
+    Rgba8Srgb = (R8_G8_B8_A8, Srgb),
+    Bgra8Unorm = (B8_G8_R8_A8, Unorm),
+    Bgra8Inorm = (B8_G8_R8_A8, Inorm),
+    Bgra8Uscaled = (B8_G8_R8_A8, Uscaled),
+    Bgra8Iscaled = (B8_G8_R8_A8, Iscaled),
+    Bgra8Uint = (B8_G8_R8_A8, Uint),
+    Bgra8Int = (B8_G8_R8_A8, Int),
+    Bgra8Srgb = (B8_G8_R8_A8, Srgb),
+    Abgr8Unorm = (A8_B8_G8_R8, Unorm),
+    Abgr8Inorm = (A8_B8_G8_R8, Inorm),
+    Abgr8Uscaled = (A8_B8_G8_R8, Uscaled),
+    Abgr8Iscaled = (A8_B8_G8_R8, Iscaled),
+    Abgr8Uint = (A8_B8_G8_R8, Uint),
+    Abgr8Int = (A8_B8_G8_R8, Int),
+    Abgr8Srgb = (A8_B8_G8_R8, Srgb),
+    A2r10g10b10Unorm = (A2_R10_G10_B10, Unorm),
+    A2r10g10b10Inorm = (A2_R10_G10_B10, Inorm),
+    A2r10g10b10Uscaled = (A2_R10_G10_B10, Uscaled),
+    A2r10g10b10Iscaled = (A2_R10_G10_B10, Iscaled),
+    A2r10g10b10Uint = (A2_R10_G10_B10, Uint),
+    A2r10g10b10Int = (A2_R10_G10_B10, Int),
+    A2b10g10r10Unorm = (A2_B10_G10_R10, Unorm),
+    A2b10g10r10Inorm = (A2_B10_G10_R10, Inorm),
+    A2b10g10r10Uscaled = (A2_B10_G10_R10, Uscaled),
+    A2b10g10r10Iscaled = (A2_B10_G10_R10, Iscaled),
+    A2b10g10r10Uint = (A2_B10_G10_R10, Uint),
+    A2b10g10r10Int = (A2_B10_G10_R10, Int),
+    R16Unorm = (R16, Unorm),
+    R16Inorm = (R16, Inorm),
+    R16Uscaled = (R16, Uscaled),
+    R16Iscaled = (R16, Iscaled),
+    R16Uint = (R16, Uint),
+    R16Int = (R16, Int),
+    R16Float = (R16, Float),
+    Rg16Unorm = (R16_G16, Unorm),
+    Rg16Inorm = (R16_G16, Inorm),
+    Rg16Uscaled = (R16_G16, Uscaled),
+    Rg16Iscaled = (R16_G16, Iscaled),
+    Rg16Uint = (R16_G16, Uint),
+    Rg16Int = (R16_G16, Int),
+    Rg16Float = (R16_G16, Float),
+    Rgb16Unorm = (R16_G16_B16, Unorm),
+    Rgb16Inorm = (R16_G16_B16, Inorm),
+    Rgb16Uscaled = (R16_G16_B16, Uscaled),
+    Rgb16Iscaled = (R16_G16_B16, Iscaled),
+    Rgb16Uint = (R16_G16_B16, Uint),
+    Rgb16Int = (R16_G16_B16, Int),
+    Rgb16Float = (R16_G16_B16, Float),
+    Rgba16Unorm = (R16_G16_B16_A16, Unorm),
+    Rgba16Inorm = (R16_G16_B16_A16, Inorm),
+    Rgba16Uscaled = (R16_G16_B16_A16, Uscaled),
+    Rgba16Iscaled = (R16_G16_B16_A16, Iscaled),
+    Rgba16Uint = (R16_G16_B16_A16, Uint),
+    Rgba16Int = (R16_G16_B16_A16, Int),
+    Rgba16Float = (R16_G16_B16_A16, Float),
+    R32Uint = (R32, Uint),
+    R32Int = (R32, Int),
+    R32Float = (R32, Float),
+    Rg32Uint = (R32_G32, Uint),
+    Rg32Int = (R32_G32, Int),
+    Rg32Float = (R32_G32, Float),
+    Rgb32Uint = (R32_G32_B32, Uint),
+    Rgb32Int = (R32_G32_B32, Int),
+    Rgb32Float = (R32_G32_B32, Float),
+    Rgba32Uint = (R32_G32_B32_A32, Uint),
+    Rgba32Int = (R32_G32_B32_A32, Int),
+    Rgba32Float = (R32_G32_B32_A32, Float),
+    R64Uint = (R64, Uint),
+    R64Int = (R64, Int),
+    R64Float = (R64, Float),
+    Rg64Uint = (R64_G64, Uint),
+    Rg64Int = (R64_G64, Int),
+    Rg64Float = (R64_G64, Float),
+    Rgb64Uint = (R64_G64_B64, Uint),
+    Rgb64Int = (R64_G64_B64, Int),
+    Rgb64Float = (R64_G64_B64, Float),
+    Rgba64Uint = (R64_G64_B64_A64, Uint),
+    Rgba64Int = (R64_G64_B64_A64, Int),
+    Rgba64Float = (R64_G64_B64_A64, Float),
+    B10g11r11Ufloat = (B10_G11_R11, Ufloat),
+    E5b9g9r9Ufloat = (E5_B9_G9_R9, Ufloat),
+    D16Unorm = (D16, Unorm),
+    X8D24Unorm = (X8D24, Unorm),
+    D32Float = (D32, Float),
+    S8Uint = (S8, Uint),
+    D16UnormS8Uint = (D16_S8, Unorm),
+    D24UnormS8Uint = (D24_S8, Unorm),
+    D32FloatS8Uint = (D32_S8, Float),
+    Bc1RgbUnorm = (BC1_RGB, Unorm),
+    Bc1RgbSrgb = (BC1_RGB, Srgb),
+    Bc1RgbaUnorm = (BC1_RGBA, Unorm),
+    Bc1RgbaSrgb = (BC1_RGBA, Srgb),
+    Bc2Unorm = (BC2, Unorm),
+    Bc2Srgb = (BC2, Srgb),
+    Bc3Unorm = (BC3, Unorm),
+    Bc3Srgb = (BC3, Srgb),
+    Bc4Unorm = (BC4, Unorm),
+    Bc4Inorm = (BC4, Inorm),
+    Bc5Unorm = (BC5, Unorm),
+    Bc5Inorm = (BC5, Inorm),
+    Bc6hUfloat = (BC6, Ufloat),
+    Bc6hFloat = (BC6, Float),
+    Bc7Unorm = (BC7, Unorm),
+    Bc7Srgb = (BC7, Srgb),
+    Etc2R8g8b8Unorm = (ETC2_R8_G8_B8, Unorm),
+    Etc2R8g8b8Srgb = (ETC2_R8_G8_B8, Srgb),
+    Etc2R8g8b8a1Unorm = (ETC2_R8_G8_B8_A1, Unorm),
+    Etc2R8g8b8a1Srgb = (ETC2_R8_G8_B8_A1, Srgb),
+    Etc2R8g8b8a8Unorm = (ETC2_R8_G8_B8_A8, Unorm),
+    Etc2R8g8b8a8Srgb = (ETC2_R8_G8_B8_A8, Srgb),
+    EacR11Unorm = (EAC_R11, Unorm),
+    EacR11Inorm = (EAC_R11, Unorm),
+    EacR11g11Unorm = (EAC_R11_G11, Unorm),
+    EacR11g11Inorm = (EAC_R11_G11, Inorm),
+    Astc4x4Unorm = (ASTC_4x4, Unorm),
+    Astc4x4Srgb = (ASTC_4x4, Srgb),
+    Astc5x4Unorm = (ASTC_5x4, Unorm),
+    Astc5x4Srgb = (ASTC_5x4, Srgb),
+    Astc5x5Unorm = (ASTC_5x5, Unorm),
+    Astc5x5Srgb = (ASTC_5x5, Srgb),
+    Astc6x5Unorm = (ASTC_6x5, Unorm),
+    Astc6x5Srgb = (ASTC_6x5, Srgb),
+    Astc6x6Unorm = (ASTC_6x6, Unorm),
+    Astc6x6Srgb = (ASTC_6x6, Srgb),
+    Astc8x5Unorm = (ASTC_8x5, Unorm),
+    Astc8x5Srgb = (ASTC_8x5, Srgb),
+    Astc8x6Unorm = (ASTC_8x6, Unorm),
+    Astc8x6Srgb = (ASTC_8x6, Srgb),
+    Astc8x8Unorm = (ASTC_8x8, Unorm),
+    Astc8x8Srgb = (ASTC_8x8, Srgb),
+    Astc10x5Unorm = (ASTC_10x5, Unorm),
+    Astc10x5Srgb = (ASTC_10x5, Srgb),
+    Astc10x6Unorm = (ASTC_10x6, Unorm),
+    Astc10x6Srgb = (ASTC_10x6, Srgb),
+    Astc10x8Unorm = (ASTC_10x8, Unorm),
+    Astc10x8Srgb = (ASTC_10x8, Srgb),
+    Astc10x10Unorm = (ASTC_10x10, Unorm),
+    Astc10x10Srgb = (ASTC_10x10, Srgb),
+    Astc12x10Unorm = (ASTC_12x10, Unorm),
+    Astc12x10Srgb = (ASTC_12x10, Srgb),
+    Astc12x12Unorm = (ASTC_12x12, Unorm),
+    Astc12x12Srgb = (ASTC_12x12, Srgb),
 }
 
-/// Abstracted 1-element container for macro internal use
-pub type Vec1<T> = T;
-/// Abstracted 2-element container for macro internal use
-pub type Vec2<T> = [T; 2];
-/// Abstracted 3-element container for macro internal use
-pub type Vec3<T> = [T; 3];
-/// Abstracted 4-element container for macro internal use
-pub type Vec4<T> = [T; 4];
+impl Format {
+    /// Get base format.
+    ///
+    /// Returns `None` if format is `Undefined`.
+    pub fn base_format(self) -> BaseFormat {
+        assert!(NUM_FORMATS > self as usize);
+        BASE_FORMATS[self as usize - 1]
+    }
 
-/// Standard 8bits RGBA format.
-pub type Rgba8 = (R8_G8_B8_A8, Unorm);
-/// Standard 8bit gamma transforming RGB format.
-pub type Srgba8 = (R8_G8_B8_A8, Srgb);
-/// Standard HDR floating-point format with 10 bits for RGB components
-/// and 2 bits for the alpha.
-pub type Rgb10a2F = (R10_G10_B10_A2, Float);
-/// Standard 16-bit floating-point RGBA format.
-pub type Rgba16F = (R16_G16_B16_A16, Float);
-/// Standard 32-bit floating-point RGBA format.
-pub type Rgba32F = (R32_G32_B32_A32, Float);
-/// Standard 8bits BGRA format.
-pub type Bgra8 = (B8_G8_R8_A8, Unorm);
-/// Standard 24-bit depth format.
-pub type Depth = (D24, Unorm);
-/// Standard 24-bit depth format with 8-bit stencil.
-pub type DepthStencil = (D24_S8, Unorm);
-/// Standard 32-bit floating-point depth format.
-pub type Depth32F = (D32, Float);
+    /// Retuns aspect flags of the format.
+    pub fn aspect_flags(self) -> AspectFlags {
+        self.base_format()
+            .0
+            .desc()
+            .aspects
+    }
 
-macro_rules! impl_simple_formats {
-    { $( $container:ident< $ty:ty > = $channel:ident $surface:ident, )* } => {
-        $(
-            impl Formatted for $container<$ty> {
-                type Surface = $surface;
-                type Channel = $channel;
-                type View = $container<<$channel as ChannelTyped>::ShaderType>;
-            }
-        )*
+    /// Returns if the format has a color aspect.
+    pub fn is_color(self) -> bool {
+        self.aspect_flags().contains(AspectFlags::COLOR)
+    }
+
+    /// Returns if the format has a depth aspect.
+    pub fn is_depth(self) -> bool {
+        self.aspect_flags().contains(AspectFlags::DEPTH)
     }
 }
 
-macro_rules! impl_formats_8bit {
-    { $( $ty:ty = $channel:ident, )* } => {
-        impl_simple_formats! {$(
-            Vec1<$ty> = $channel R8,
-            Vec2<$ty> = $channel R8_G8,
-            Vec4<$ty> = $channel R8_G8_B8_A8,
-        )*}
-    }
+// Common vertex attribute formats
+impl AsFormat for f32 {
+    const SELF: Format = Format::R32Float;
 }
-
-macro_rules! impl_formats_16bit {
-    { $( $ty:ty = $channel:ident, )* } => {
-        impl_simple_formats! {$(
-            Vec1<$ty> = $channel R16,
-            Vec2<$ty> = $channel R16_G16,
-            Vec3<$ty> = $channel R16_G16_B16,
-            Vec4<$ty> = $channel R16_G16_B16_A16,
-        )*}
-    }
+impl AsFormat for [f32; 2] {
+    const SELF: Format = Format::Rg32Float;
 }
-
-macro_rules! impl_formats_32bit {
-    { $( $ty:ty = $channel:ident, )* } => {
-        impl_simple_formats! {$(
-            Vec1<$ty> = $channel R32,
-            Vec2<$ty> = $channel R32_G32,
-            Vec3<$ty> = $channel R32_G32_B32,
-            Vec4<$ty> = $channel R32_G32_B32_A32,
-        )*}
-    }
+impl AsFormat for [f32; 3] {
+    const SELF: Format = Format::Rgb32Float;
 }
-
-impl_formats_8bit! {
-    u8 = Uint,
-    i8 = Int,
-    U8Norm = Unorm,
-    I8Norm = Inorm,
-}
-
-impl_formats_16bit! {
-    u16 = Uint,
-    i16 = Int,
-    U16Norm = Unorm,
-    I16Norm = Inorm,
-    F16 = Float,
-}
-
-impl_formats_32bit! {
-    u32 = Uint,
-    i32 = Int,
-    f32 = Float,
+impl AsFormat for [f32; 4] {
+    const SELF: Format = Format::Rgba32Float;
 }

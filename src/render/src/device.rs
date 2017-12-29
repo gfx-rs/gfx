@@ -149,7 +149,7 @@ impl<B: Backend> Device<B> {
     pub fn create_buffer_view_raw(
         &mut self,
         buffer: &handle::raw::Buffer<B>,
-        format: format::Format,
+        format: Option<format::Format>,
         range: Range<u64>,
     ) -> Result<handle::raw::BufferView<B>, buffer::ViewError> {
         self.raw.create_buffer_view(buffer.resource(), format, range)
@@ -163,7 +163,7 @@ impl<B: Backend> Device<B> {
     pub fn create_buffer_view<T>(
         &mut self,
         buffer: &handle::Buffer<B, T>,
-        format: format::Format,
+        format: Option<format::Format>,
         range: Range<u64>,
     ) -> Result<handle::BufferView<B, T>, buffer::ViewError> {
         self.create_buffer_view_raw(buffer.as_ref(), format, range)
@@ -282,20 +282,9 @@ impl<B: Backend> Device<B> {
         where A: Allocator<B>
     {
         use image::Usage;
-        use hal::image::{AspectFlags, ImageLayout};
+        use hal::image::ImageLayout;
 
-        let bits = format.0.describe_bits();
-        let mut aspects = AspectFlags::empty();
-        if bits.color + bits.alpha != 0 {
-            aspects |= AspectFlags::COLOR;
-        }
-        if bits.depth != 0 {
-            aspects |= AspectFlags::DEPTH;
-        }
-        if bits.stencil != 0 {
-            aspects |= AspectFlags::STENCIL;
-        }
-
+        let aspects = format.aspect_flags();
         let image = self.raw.create_image(kind, mip_levels, format, usage)?;
         let (image, memory) = allocator.allocate_image(self, usage, image);
         let origin = image::Origin::User(memory);
@@ -328,8 +317,9 @@ impl<B: Backend> Device<B> {
         kind: image::Kind,
         mip_levels: image::Level,
     ) -> Result<(handle::Image<B, F>, InitToken<B>), image::CreationError>
-        where F: format::Formatted,
-              A: Allocator<B>
+    where
+        F: format::AsFormat,
+        A: Allocator<B>,
     {
         self.create_image_raw(
             allocator,
@@ -359,7 +349,8 @@ impl<B: Backend> Device<B> {
         image: &handle::Image<B, F>,
         range: image::SubresourceRange,
     ) -> Result<handle::ImageView<B, F>, image::ViewError>
-        where F: format::RenderFormat
+    where
+        F: format::AsFormat,
     {
         self.create_image_view_raw(image.as_ref(), F::SELF, range)
             .map(Typed::new)

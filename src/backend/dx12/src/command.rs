@@ -1,10 +1,9 @@
-use wio::com::ComPtr;
+
 use hal::{command as com, image, memory, pass, pso, query};
 use hal::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset};
 use hal::buffer::IndexBufferView;
-use {conv, native as n, Backend, CmdSignatures, MAX_VERTEX_BUFFERS};
-use root_constants::RootConstant;
-use smallvec::SmallVec;
+use hal::format::AspectFlags;
+
 use std::{mem, ptr};
 use std::borrow::Borrow;
 use std::ops::Range;
@@ -13,6 +12,12 @@ use winapi::um::d3d12;
 use winapi::shared::minwindef::{FALSE, UINT};
 use winapi::shared::basetsd::UINT64;
 use winapi::shared::dxgiformat;
+
+use wio::com::ComPtr;
+
+use {conv, native as n, Backend, CmdSignatures, MAX_VERTEX_BUFFERS};
+use root_constants::RootConstant;
+use smallvec::SmallVec;
 
 // Fixed size of the root signature.
 // Limited by D3D12.
@@ -32,6 +37,11 @@ fn get_rect(rect: &com::Rect) -> d3d12::D3D12_RECT {
         right: (rect.x + rect.w) as i32,
         bottom: (rect.y + rect.h) as i32,
     }
+}
+
+fn div(a: u32, b: u32) -> u32 {
+    assert_eq!(a % b, 0);
+    a / b
 }
 
 fn bind_descriptor_sets<'a, T>(
@@ -805,7 +815,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         range: image::SubresourceRange,
         value: com::ClearColor,
     ) {
-        assert_eq!(range, image.to_subresource_range(image::AspectFlags::COLOR));
+        assert_eq!(range, image.to_subresource_range(AspectFlags::COLOR));
         let rtv = image.clear_cv.unwrap();
         self.clear_render_target_view(rtv, value, &[]);
     }
@@ -817,7 +827,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         range: image::SubresourceRange,
         value: com::ClearDepthStencil,
     ) {
-        use self::image::AspectFlags;
         assert!((AspectFlags::DEPTH | AspectFlags::STENCIL).contains(range.aspects));
         assert_eq!(range, image.to_subresource_range(range.aspects));
         if range.aspects.contains(AspectFlags::DEPTH) {
@@ -1255,22 +1264,25 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             // Copy each layer in the region
             let layers = region.image_layers.layers.clone();
             for layer in layers {
+                assert!(region.buffer_width >= width as u32);
                 assert_eq!(region.buffer_offset % d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64, 0);
-                assert_eq!(region.buffer_row_pitch % d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32, 0);
-                assert!(region.buffer_row_pitch >= width as u32 * image.bits_per_texel as u32 / 8);
+
+                let row_pitch = div(region.buffer_width, image.block_dim.0 as _) * image.bytes_per_block as u32;
+                let slice_pitch = div(region.buffer_height, image.block_dim.1 as _) * row_pitch;
+                assert_eq!(row_pitch % d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32, 0);
 
                 let height = height as _;
                 let depth = depth as _;
 
                 // Advance buffer offset with each layer
                 *unsafe { src.u.PlacedFootprint_mut() } = d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
-                    Offset: region.buffer_offset as UINT64 + (layer as u32 * region.buffer_row_pitch * height * depth) as UINT64,
+                    Offset: region.buffer_offset as UINT64 + (layer as u32 * slice_pitch * depth) as UINT64,
                     Footprint: d3d12::D3D12_SUBRESOURCE_FOOTPRINT {
                         Format: image.dxgi_format,
                         Width: width as _,
                         Height: height,
                         Depth: depth,
-                        RowPitch: region.buffer_row_pitch,
+                        RowPitch: row_pitch,
                     },
                 };
                 *unsafe { dst.u.SubresourceIndex_mut() } =
@@ -1323,9 +1335,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             // Copy each layer in the region
             let layers = region.image_layers.layers.clone();
             for layer in layers {
+                assert!(region.buffer_width >= width as u32);
                 assert_eq!(region.buffer_offset % d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64, 0);
-                assert_eq!(region.buffer_row_pitch % d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32, 0);
-                assert!(region.buffer_row_pitch >= width as u32 * image.bits_per_texel as u32 / 8);
+
+                let row_pitch = div(region.buffer_width, image.block_dim.0 as _) * image.bytes_per_block as u32;
+                let slice_pitch = div(region.buffer_height, image.block_dim.1 as _) * row_pitch;
+                assert_eq!(row_pitch % d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32, 0);
 
                 let height = height as _;
                 let depth = depth as _;
@@ -1334,13 +1349,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 *unsafe { src.u.SubresourceIndex_mut() } =
                     image.calc_subresource(region.image_layers.level as _, layer as _, 0);
                 *unsafe { dst.u.PlacedFootprint_mut() } = d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
-                    Offset: region.buffer_offset as UINT64 + (layer as u32 * region.buffer_row_pitch * height * depth) as UINT64,
+                    Offset: region.buffer_offset as UINT64 + (layer as u32 * slice_pitch * depth) as UINT64,
                     Footprint: d3d12::D3D12_SUBRESOURCE_FOOTPRINT {
                         Format: image.dxgi_format,
                         Width: width as _,
                         Height: height,
                         Depth: depth,
-                        RowPitch: region.buffer_row_pitch,
+                        RowPitch: row_pitch,
                     },
                 };
                 let src_box = d3d12::D3D12_BOX {

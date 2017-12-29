@@ -3,14 +3,14 @@ use std::io::Read;
 use std::fs::File;
 use std::slice;
 
-use hal::{self, buffer, image as i, memory, pso};
+use hal::{self, buffer, format as f, image as i, memory, pso};
 use hal::{Device, DescriptorPool, PhysicalDevice, QueueFamily};
 
 use raw;
 
 
 const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
-    aspects: i::AspectFlags::COLOR,
+    aspects: f::AspectFlags::COLOR,
     levels: 0 .. 1,
     layers: 0 .. 1,
 };
@@ -172,14 +172,13 @@ impl<B: hal::Backend> Scene<B> {
                             .unwrap();
                         let image = device.bind_image_memory(&memory, 0, unbound)
                             .unwrap();
-                        let bits = format.0.describe_bits();
 
                         // process initial data for the image
                         let stable_state = if data.is_empty() {
-                            let (aspects, access, layout) = if bits.color != 0 {
-                                (i::AspectFlags::COLOR, i::Access::COLOR_ATTACHMENT_WRITE, i::ImageLayout::ColorAttachmentOptimal)
+                            let (aspects, access, layout) = if format.is_color() {
+                                (f::AspectFlags::COLOR, i::Access::COLOR_ATTACHMENT_WRITE, i::ImageLayout::ColorAttachmentOptimal)
                             } else {
-                                (i::AspectFlags::DEPTH | i::AspectFlags::STENCIL, i::Access::DEPTH_STENCIL_ATTACHMENT_WRITE, i::ImageLayout::DepthStencilAttachmentOptimal)
+                                (f::AspectFlags::DEPTH | f::AspectFlags::STENCIL, i::Access::DEPTH_STENCIL_ATTACHMENT_WRITE, i::ImageLayout::DepthStencilAttachmentOptimal)
                             };
                             if false { //TODO
                                 let image_barrier = memory::Barrier::Image {
@@ -197,9 +196,18 @@ impl<B: hal::Backend> Scene<B> {
                             // calculate required sizes
                             let (w, h, d, aa) = kind.get_dimensions();
                             assert_eq!(aa, i::AaMode::Single);
-                            let width_bytes = bits.total as usize * w as usize / 8;
+
+                            let base_format = format.base_format();
+                            let format_desc = base_format.0.desc();
+                            let (block_width, block_height) = format_desc.dim;
+
+                            // Width and height need to be multiple of the block dimensions.
+                            let w = align(w as usize, block_width as usize);
+                            let h = align(h as usize, block_height as usize);
+
+                            let width_bytes = (format_desc.bits as usize * w as usize) / (8 * block_width as usize);
                             let row_pitch = align(width_bytes, limits.min_buffer_copy_pitch_alignment);
-                            let upload_size = row_pitch as u64 * h as u64 * d as u64;
+                            let upload_size = (row_pitch as u64 * h as u64 * d as u64) / block_height as u64;
                             // create upload buffer
                             let unbound_buffer = device.create_buffer(upload_size, buffer::Usage::TRANSFER_SRC)
                                 .unwrap();
@@ -231,16 +239,18 @@ impl<B: hal::Backend> Scene<B> {
                                 range: COLOR_RANGE.clone(), //TODO
                             };
                             init_cmd.pipeline_barrier(pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER, &[image_barrier]);
+
+                            let buffer_width = (row_pitch as u32 * 8) / format_desc.bits as u32;
                             init_cmd.copy_buffer_to_image(
                                 &upload_buffer,
                                 &image,
                                 i::ImageLayout::TransferDstOptimal,
                                 &[hal::command::BufferImageCopy {
                                     buffer_offset: 0,
-                                    buffer_row_pitch: row_pitch as u32,
-                                    buffer_slice_pitch: row_pitch as u32 * h as u32,
+                                    buffer_width,
+                                    buffer_height: h as u32,
                                     image_layers: i::SubresourceLayers {
-                                        aspects: i::AspectFlags::COLOR,
+                                        aspects: f::AspectFlags::COLOR,
                                         level: 0,
                                         layers: 0 .. 1,
                                     },
@@ -516,10 +526,19 @@ impl<B: hal::Backend> Scene<B> {
 
         let (width, height, depth, aa) = image.kind.get_dimensions();
         assert_eq!(aa, i::AaMode::Single);
-        let bpp = image.format.0.describe_bits().total as usize;
-        let width_bytes = bpp * width as usize / 8;
+
+        // TODO:
+        let base_format = image.format.base_format();
+        let format_desc = base_format.0.desc();
+        let (block_width, block_height) = format_desc.dim;
+
+        // Width and height need to be multiple of the block dimensions.
+        let width = align(width as usize, block_width as usize);
+        let height = align(height as usize, block_height as usize);
+
+        let width_bytes = (format_desc.bits as usize * width as usize) / (8 * block_width as usize);
         let row_pitch = align(width_bytes, limits.min_buffer_copy_pitch_alignment);
-        let down_size = row_pitch as u64 * height as u64 * depth as u64;
+        let down_size = (row_pitch as u64 * height as u64 * depth as u64) / block_height as u64;
 
         let unbound_buffer = self.device.create_buffer(down_size, buffer::Usage::TRANSFER_DST)
             .unwrap();
@@ -543,16 +562,18 @@ impl<B: hal::Backend> Scene<B> {
                 range: COLOR_RANGE.clone(), //TODO
             };
             cmd_buffer.pipeline_barrier(pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER, &[image_barrier]);
+
+            let buffer_width = (row_pitch as u32 * 8) / format_desc.bits as u32;
             cmd_buffer.copy_image_to_buffer(
                 &image.handle,
                 i::ImageLayout::TransferSrcOptimal,
                 &down_buffer,
                 &[hal::command::BufferImageCopy {
                     buffer_offset: 0,
-                    buffer_row_pitch: row_pitch as u32,
-                    buffer_slice_pitch: row_pitch as u32 * height as u32,
+                    buffer_width,
+                    buffer_height: height as u32,
                     image_layers: i::SubresourceLayers {
-                        aspects: i::AspectFlags::COLOR,
+                        aspects: f::AspectFlags::COLOR,
                         level: 0,
                         layers: 0 .. 1,
                     },

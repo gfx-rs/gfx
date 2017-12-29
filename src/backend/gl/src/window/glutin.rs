@@ -88,9 +88,6 @@ impl Surface {
     }
 
     fn swapchain_formats(&self) -> Vec<f::Format> {
-        use hal::format::ChannelType::*;
-        use hal::format::SurfaceType::*;
-
         let pixel_format = self.window.get_pixel_format();
         let color_bits = pixel_format.color_bits;
         let alpha_bits = pixel_format.alpha_bits;
@@ -99,12 +96,12 @@ impl Surface {
         // TODO: expose more formats
         match (color_bits, alpha_bits, srgb) {
             (24, 8, true) => vec![
-                f::Format(R8_G8_B8_A8, Srgb),
-                f::Format(B8_G8_R8_A8, Srgb),
+                f::Format::Rgba8Srgb,
+                f::Format::Bgra8Srgb,
             ],
             (24, 8, false) => vec![
-                f::Format(R8_G8_B8_A8, Unorm),
-                f::Format(B8_G8_R8_A8, Unorm),
+                f::Format::Rgba8Unorm,
+                f::Format::Bgra8Unorm,
             ],
             _ => vec![],
         }
@@ -117,13 +114,13 @@ impl hal::Surface<B> for Surface {
         hal::image::Kind::D2(w, h, a)
     }
 
-    fn capabilities_and_formats(&self, _: &PhysicalDevice) -> (hal::SurfaceCapabilities, Vec<f::Format>) {
+    fn capabilities_and_formats(&self, _: &PhysicalDevice) -> (hal::SurfaceCapabilities, Option<Vec<f::Format>>) {
         let dim = get_window_dimensions(&self.window);
         let extent = hal::window::Extent2d {
             width: dim.0 as u32,
             height: dim.1 as u32,
         };
-        
+
         (hal::SurfaceCapabilities {
             image_count: if self.window.get_pixel_format().double_buffer { 2..3 } else { 1..2 },
             current_extent: Some(extent),
@@ -132,7 +129,7 @@ impl hal::Surface<B> for Surface {
                 height: dim.1 as u32 + 1
             },
             max_image_layers: 1,
-        }, self.swapchain_formats())
+        }, Some(self.swapchain_formats()))
     }
 
     fn supports_queue_family(&self, _: &QueueFamily) -> bool { true }
@@ -167,16 +164,17 @@ pub fn config_context(
     ds_format: Option<f::Format>,
 ) -> glutin::ContextBuilder
 {
-    let color_bits = color_format.0.describe_bits();
+    let color_base = color_format.base_format();
+    let color_bits = color_base.0.describe_bits();
     let depth_bits = match ds_format {
-        Some(fm) => fm.0.describe_bits(),
+        Some(fm) => fm.base_format().0.describe_bits(),
         None => f::BITS_ZERO,
     };
     builder
         .with_depth_buffer(depth_bits.depth)
         .with_stencil_buffer(depth_bits.stencil)
         .with_pixel_format(color_bits.color, color_bits.alpha)
-        .with_srgb(color_format.1 == f::ChannelType::Srgb)
+        .with_srgb(color_base.1 == f::ChannelType::Srgb)
 }
 
 
