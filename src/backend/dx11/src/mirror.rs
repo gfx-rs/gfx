@@ -13,19 +13,20 @@
 // limitations under the License.
 
 use std::{mem, ptr};
-use d3dcompiler;
-use dxguid;
-use winapi;
+
+use winapi::shared::{winerror};
+use winapi::um::{d3dcommon, d3dcompiler, d3d11shader};
+
 use core::{self, shade as s};
 
-pub fn reflect_shader(code: &[u8]) -> *mut winapi::ID3D11ShaderReflection {
+pub fn reflect_shader(code: &[u8]) -> *mut d3d11shader::ID3D11ShaderReflection {
     let mut reflection = ptr::null_mut();
     let hr = unsafe {
-        d3dcompiler::D3DReflect(code.as_ptr() as *const winapi::VOID,
-            code.len() as winapi::SIZE_T, &dxguid::IID_ID3D11ShaderReflection, &mut reflection)
+        d3dcompiler::D3DReflect(code.as_ptr() as *const _,
+            code.len() as _, &d3d11shader::IID_ID3D11ShaderReflection, &mut reflection)
     };
-    if winapi::SUCCEEDED(hr) {
-        reflection as *mut winapi::ID3D11ShaderReflection
+    if winerror::SUCCEEDED(hr) {
+        reflection as *mut d3d11shader::ID3D11ShaderReflection
     }else {
         panic!("Shader reflection failed with code {:x}", hr);
     }
@@ -38,80 +39,78 @@ fn convert_str(pchar: *const i8) -> String {
     }
 }
 
-fn map_base_type_from_component(ct: winapi::D3D_REGISTER_COMPONENT_TYPE) -> s::BaseType {
+fn map_base_type_from_component(ct: d3dcommon::D3D_REGISTER_COMPONENT_TYPE) -> s::BaseType {
     match ct {
-        winapi::D3D_REGISTER_COMPONENT_UINT32 => s::BaseType::U32,
-        winapi::D3D_REGISTER_COMPONENT_SINT32 => s::BaseType::I32,
-        winapi::D3D_REGISTER_COMPONENT_FLOAT32 => s::BaseType::F32,
-        winapi::D3D_REGISTER_COMPONENT_TYPE(t) => {
-            error!("Unknown register component type {} detected!", t);
+        d3dcommon::D3D_REGISTER_COMPONENT_UINT32 => s::BaseType::U32,
+        d3dcommon::D3D_REGISTER_COMPONENT_SINT32 => s::BaseType::I32,
+        d3dcommon::D3D_REGISTER_COMPONENT_FLOAT32 => s::BaseType::F32,
+        _ => {
+            error!("Unknown register component type {} detected!", ct);
             s::BaseType::F32
         }
     }
 }
 
-fn map_base_type_from_return(rt: winapi::D3D_RESOURCE_RETURN_TYPE) -> s::BaseType {
+fn map_base_type_from_return(rt: d3dcommon::D3D_RESOURCE_RETURN_TYPE) -> s::BaseType {
     match rt {
-        winapi::D3D_RETURN_TYPE_UINT => s::BaseType::U32,
-        winapi::D3D_RETURN_TYPE_SINT => s::BaseType::I32,
-        winapi::D3D_RETURN_TYPE_FLOAT => s::BaseType::F32,
-        winapi::D3D_RESOURCE_RETURN_TYPE(t) => {
-            error!("Unknown return type {} detected!", t);
+        d3dcommon::D3D_RETURN_TYPE_UINT => s::BaseType::U32,
+        d3dcommon::D3D_RETURN_TYPE_SINT => s::BaseType::I32,
+        d3dcommon::D3D_RETURN_TYPE_FLOAT => s::BaseType::F32,
+        _ => {
+            error!("Unknown return type {} detected!", rt);
             s::BaseType::F32
         }
     }
 }
 
-fn map_texture_type(tt: winapi::D3D_SRV_DIMENSION) -> s::TextureType {
-    use winapi::*;
+fn map_texture_type(tt: d3dcommon::D3D_SRV_DIMENSION) -> s::TextureType {
     use core::shade::IsArray::*;
     use core::shade::IsMultiSample::*;
     match tt {
-        D3D_SRV_DIMENSION_BUFFER            => s::TextureType::Buffer,
-        D3D_SRV_DIMENSION_TEXTURE1D         => s::TextureType::D1(NoArray),
-        D3D_SRV_DIMENSION_TEXTURE1DARRAY    => s::TextureType::D1(Array),
-        D3D_SRV_DIMENSION_TEXTURE2D         => s::TextureType::D2(NoArray, NoMultiSample),
-        D3D_SRV_DIMENSION_TEXTURE2DARRAY    => s::TextureType::D2(Array, NoMultiSample),
-        D3D_SRV_DIMENSION_TEXTURE2DMS       => s::TextureType::D2(NoArray, MultiSample),
-        D3D_SRV_DIMENSION_TEXTURE2DMSARRAY  => s::TextureType::D2(Array, MultiSample),
-        D3D_SRV_DIMENSION_TEXTURE3D         => s::TextureType::D3,
-        D3D_SRV_DIMENSION_TEXTURECUBE       => s::TextureType::Cube(NoArray),
-        D3D_SRV_DIMENSION_TEXTURECUBEARRAY  => s::TextureType::Cube(Array),
-        D3D_SRV_DIMENSION(t) => {
-            error!("Unknow texture dimension {}", t);
+        d3dcommon::D3D_SRV_DIMENSION_BUFFER            => s::TextureType::Buffer,
+        d3dcommon::D3D_SRV_DIMENSION_TEXTURE1D         => s::TextureType::D1(NoArray),
+        d3dcommon::D3D_SRV_DIMENSION_TEXTURE1DARRAY    => s::TextureType::D1(Array),
+        d3dcommon::D3D_SRV_DIMENSION_TEXTURE2D         => s::TextureType::D2(NoArray, NoMultiSample),
+        d3dcommon::D3D_SRV_DIMENSION_TEXTURE2DARRAY    => s::TextureType::D2(Array, NoMultiSample),
+        d3dcommon::D3D_SRV_DIMENSION_TEXTURE2DMS       => s::TextureType::D2(NoArray, MultiSample),
+        d3dcommon::D3D_SRV_DIMENSION_TEXTURE2DMSARRAY  => s::TextureType::D2(Array, MultiSample),
+        d3dcommon::D3D_SRV_DIMENSION_TEXTURE3D         => s::TextureType::D3,
+        d3dcommon::D3D_SRV_DIMENSION_TEXTURECUBE       => s::TextureType::Cube(NoArray),
+        d3dcommon::D3D_SRV_DIMENSION_TEXTURECUBEARRAY  => s::TextureType::Cube(Array),
+        _ => {
+            error!("Unknow texture dimension {}", tt);
             s::TextureType::Buffer
         }
     }
 }
 
-fn map_container(stype: &winapi::D3D11_SHADER_TYPE_DESC) -> s::ContainerType {
+fn map_container(stype: &d3d11shader::D3D11_SHADER_TYPE_DESC) -> s::ContainerType {
     use core::shade::Dimension as Dim;
     //TODO: use `match` when winapi allows
-    if stype.Class == winapi::D3D_SVC_SCALAR {
+    if stype.Class == d3dcommon::D3D_SVC_SCALAR {
         s::ContainerType::Single
-    } else if stype.Class == winapi::D3D_SVC_VECTOR {
+    } else if stype.Class == d3dcommon::D3D_SVC_VECTOR {
         s::ContainerType::Vector(stype.Columns as Dim)
-    } else if stype.Class == winapi::D3D_SVC_MATRIX_ROWS {
+    } else if stype.Class == d3dcommon::D3D_SVC_MATRIX_ROWS {
         s::ContainerType::Matrix(s::MatrixFormat::RowMajor, stype.Rows as Dim, stype.Columns as Dim)
-    } else if stype.Class == winapi::D3D_SVC_MATRIX_COLUMNS {
+    } else if stype.Class == d3dcommon::D3D_SVC_MATRIX_COLUMNS {
         s::ContainerType::Matrix(s::MatrixFormat::ColumnMajor, stype.Rows as Dim, stype.Columns as Dim)
     } else  {
-        error!("Unexpected type to classify as container: {:?}", stype);
+        error!("Unexpected type to classify as container ?"/*, stype*/);
         s::ContainerType::Single
     }
 }
 
-fn map_base_type(_svt: winapi::D3D_SHADER_VARIABLE_TYPE) -> s::BaseType {
+fn map_base_type(_svt: d3dcommon::D3D_SHADER_VARIABLE_TYPE) -> s::BaseType {
     s::BaseType::F32 //TODO
 }
 
 pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
-                     reflection: *mut winapi::ID3D11ShaderReflection) {
-    use winapi::{UINT, SUCCEEDED};
+                     reflection: *mut d3d11shader::ID3D11ShaderReflection) {
     let usage = stage.into();
     let (shader_desc, _feature_level) = unsafe {
         let mut desc = mem::zeroed();
-        let mut level = winapi::D3D_FEATURE_LEVEL_9_1;
+        let mut level = d3dcommon::D3D_FEATURE_LEVEL_9_1;
         (*reflection).GetDesc(&mut desc);
         (*reflection).GetMinFeatureLevel(&mut level);
         (desc, level)
@@ -129,13 +128,13 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
         for i in 0 .. shader_desc.InputParameters {
             let (hr, desc) = unsafe {
                 let mut desc = mem::zeroed();
-                let hr = (*reflection).GetInputParameterDesc(i as UINT, &mut desc);
+                let hr = (*reflection).GetInputParameterDesc(i as _, &mut desc);
                 (hr, desc)
             };
-            assert!(SUCCEEDED(hr));
+            assert!(winerror::SUCCEEDED(hr));
             info!("\tAttribute {}, system type {:?}, mask {}, read-write mask {}",
                 convert_str(desc.SemanticName), desc.SystemValueType, desc.Mask, desc.ReadWriteMask);
-            if desc.SystemValueType != winapi::D3D_NAME_UNDEFINED {
+            if desc.SystemValueType != d3dcommon::D3D_NAME_UNDEFINED {
                 // system value semantic detected, skipping
                 continue
             }
@@ -160,23 +159,23 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
         for i in 0 .. shader_desc.OutputParameters {
             let (hr, desc) = unsafe {
                 let mut desc = mem::zeroed();
-                let hr = (*reflection).GetOutputParameterDesc(i as UINT, &mut desc);
+                let hr = (*reflection).GetOutputParameterDesc(i as _, &mut desc);
                 (hr, desc)
             };
-            assert!(SUCCEEDED(hr));
+            assert!(winerror::SUCCEEDED(hr));
             let name = convert_str(desc.SemanticName);
             info!("\tOutput {}, system type {:?}, mask {}, read-write mask {}",
                 name, desc.SystemValueType, desc.Mask, desc.ReadWriteMask);
             match desc.SystemValueType {
-                winapi::D3D_NAME_TARGET =>
+                d3dcommon::D3D_NAME_TARGET =>
                     info.outputs.push(s::OutputVar {
                         name: format!("Target{}", desc.SemanticIndex), //care!
                         slot: desc.Register as core::ColorSlot,
                         base_type: map_base_type_from_component(desc.ComponentType),
                         container: mask_to_vector(desc.Mask),
                     }),
-                winapi::D3D_NAME_DEPTH => info.output_depth = true,
-                winapi::D3D_NAME_UNDEFINED =>
+                d3dcommon::D3D_NAME_DEPTH => info.output_depth = true,
+                d3dcommon::D3D_NAME_UNDEFINED =>
                     warn!("Custom PS output semantic is ignored: {}", name),
                 _ =>
                     warn!("Unhandled PS output semantic {} of type {:?}", name, desc.SystemValueType),
@@ -187,13 +186,13 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
     for i in 0 .. shader_desc.BoundResources {
         let (hr, res_desc) = unsafe {
             let mut desc = mem::zeroed();
-            let hr = (*reflection).GetResourceBindingDesc(i as UINT, &mut desc);
+            let hr = (*reflection).GetResourceBindingDesc(i as _, &mut desc);
             (hr, desc)
         };
-        assert!(SUCCEEDED(hr));
+        assert!(winerror::SUCCEEDED(hr));
         let name = convert_str(res_desc.Name);
         info!("\tResource {}, type {:?}", name, res_desc.Type);
-        if res_desc.Type == winapi::D3D_SIT_CBUFFER {
+        if res_desc.Type == d3dcommon::D3D_SIT_CBUFFER {
             if let Some(cb) = info.constant_buffers.iter_mut().find(|cb| cb.name == name) {
                 cb.usage = cb.usage | usage;
                 continue;
@@ -204,7 +203,7 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
             let desc = unsafe {
                 let mut desc = mem::zeroed();
                 let hr = (*cbuf).GetDesc(&mut desc);
-                assert!(SUCCEEDED(hr));
+                assert!(winerror::SUCCEEDED(hr));
                 desc
             };
             let mut elements = Vec::new();
@@ -215,7 +214,7 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                 let var_desc = unsafe {
                     let mut vd = mem::zeroed();
                     let hr1 = (*var).GetDesc(&mut vd);
-                    assert!(SUCCEEDED(hr1));
+                    assert!(winerror::SUCCEEDED(hr1));
                     vd
                 };
                 let vtype = unsafe {
@@ -224,12 +223,12 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                 let vtype_desc = unsafe {
                     let mut vtd = mem::zeroed();
                     let hr2 = (*vtype).GetDesc(&mut vtd);
-                    assert!(SUCCEEDED(hr2));
+                    assert!(winerror::SUCCEEDED(hr2));
                     vtd
                 };
                 let el_name = convert_str(var_desc.Name);
                 debug!("\t\tElement at {}\t= '{}'", var_desc.StartOffset, el_name);
-                if vtype_desc.Class == winapi::D3D_SVC_STRUCT {
+                if vtype_desc.Class == d3dcommon::D3D_SVC_STRUCT {
                     let stride = var_desc.Size / vtype_desc.Elements;
                     for j in 0 .. vtype_desc.Members {
                         let member = unsafe {
@@ -241,7 +240,7 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                         let mem_desc = unsafe {
                             let mut mtd = mem::zeroed();
                             let hr3 = (*member).GetDesc(&mut mtd);
-                            assert!(SUCCEEDED(hr3));
+                            assert!(winerror::SUCCEEDED(hr3));
                             mtd
                         };
                         let mem_name = convert_str(mem_name_ptr); //mem_desc.Name
@@ -276,7 +275,7 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                 usage: usage,
                 elements: elements,
             });
-        }else if res_desc.Type == winapi::D3D_SIT_TEXTURE {
+        }else if res_desc.Type == d3dcommon::D3D_SIT_TEXTURE {
             if let Some(t) = info.textures.iter_mut().find(|t| t.name == name) {
                 t.usage = t.usage | usage;
                 continue;
@@ -288,13 +287,13 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                 ty: map_texture_type(res_desc.Dimension),
                 usage: usage,
             });
-        }else if res_desc.Type == winapi::D3D_SIT_SAMPLER {
+        }else if res_desc.Type == d3dcommon::D3D_SIT_SAMPLER {
             let name = name.trim_right_matches('_');
             if let Some(s) = info.samplers.iter_mut().find(|s| s.name == name) {
                 s.usage = s.usage | usage;
                 continue;
             }
-            let cmp = if res_desc.uFlags & winapi::D3D_SIF_COMPARISON_SAMPLER.0 != 0 {
+            let cmp = if res_desc.uFlags & d3dcommon::D3D_SIF_COMPARISON_SAMPLER != 0 {
                 s::IsComparison::Compare
             }else {
                 s::IsComparison::NoCompare

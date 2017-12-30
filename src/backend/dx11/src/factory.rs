@@ -12,14 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{cmp, ptr, slice};
+use std::{cmp, mem, ptr, slice};
 use std::collections::BTreeMap as Map;
 use std::os::raw::c_void;
 use std::sync::Arc;
-use winapi;
+
+use winapi::um::{d3d11, d3dcommon};
+use winapi::shared::{dxgiformat, minwindef, winerror};
+
 use core::{self, factory as f, buffer, texture, mapping};
 use core::format::SurfaceTyped;
-use core::memory::{self, Bind, Typed};
+use core::memory::{Bind, Typed, Usage};
 use core::handle::{self as h, Producer};
 use {Resources as R, Share, Buffer, Texture, Pipeline, Program, Shader};
 use command::CommandBuffer;
@@ -51,16 +54,16 @@ impl core::mapping::Gate<R> for MappingGate {
 
 #[derive(Debug)]
 struct TextureParam {
-    levels: winapi::UINT,
-    format: winapi::DXGI_FORMAT,
-    bytes_per_texel: winapi::UINT,
-    bind: winapi::D3D11_BIND_FLAG,
-    usage: winapi::D3D11_USAGE,
-    cpu_access: winapi::D3D11_CPU_ACCESS_FLAG,
+    levels: minwindef::UINT,
+    format: dxgiformat::DXGI_FORMAT,
+    bytes_per_texel: minwindef::UINT,
+    bind: d3d11::D3D11_BIND_FLAG,
+    usage: d3d11::D3D11_USAGE,
+    cpu_access: d3d11::D3D11_CPU_ACCESS_FLAG,
 }
 
 pub struct Factory {
-    device: *mut winapi::ID3D11Device,
+    device: *mut d3d11::ID3D11Device,
     share: Arc<Share>,
     frame_handles: h::Manager<R>,
     vs_cache: Map<u64, Vec<u8>>,
@@ -68,7 +71,7 @@ pub struct Factory {
     /// with PIX, since it doesn't understand typeless formats. This may also prevent
     /// some valid views to be created because the typed formats can't be reinterpret.
     use_texture_format_hint: bool,
-    sub_data_array: Vec<winapi::D3D11_SUBRESOURCE_DATA>,
+    sub_data_array: Vec<d3d11::D3D11_SUBRESOURCE_DATA>,
 }
 
 impl Clone for Factory {
@@ -86,7 +89,7 @@ impl Drop for Factory {
 
 impl Factory {
     /// Create a new `Factory`.
-    pub fn new(device: *mut winapi::ID3D11Device, share: Arc<Share>) -> Factory {
+    pub fn new(device: *mut d3d11::ID3D11Device, share: Arc<Share>) -> Factory {
         Factory {
             device: device,
             share: share,
@@ -98,7 +101,7 @@ impl Factory {
     }
 
     #[doc(hidden)]
-    pub fn wrap_back_buffer(&mut self, back_buffer: *mut winapi::ID3D11Texture2D, info: texture::Info,
+    pub fn wrap_back_buffer(&mut self, back_buffer: *mut d3d11::ID3D11Texture2D, info: texture::Info,
                             desc: texture::RenderDesc) -> h::RawRenderTargetView<R> {
         use core::Factory;
         let raw_tex = Texture(native::Texture::D2(back_buffer));
@@ -115,7 +118,7 @@ impl Factory {
         let hr = unsafe {
             (*self.device).CreateDeferredContext(0, &mut dc)
         };
-        if winapi::SUCCEEDED(hr) {
+        if winerror::SUCCEEDED(hr) {
             DeferredContext::new(dc).into()
         }else {
             panic!("Failed to create a deferred context")
@@ -124,104 +127,100 @@ impl Factory {
 
     fn create_buffer_internal(&self, info: buffer::Info, raw_data: Option<*const c_void>)
                               -> Result<h::RawBuffer<R>, buffer::CreationError> {
-        use winapi::d3d11::*;
         use data::{map_bind, map_usage};
 
         let (subind, size) = match info.role {
             buffer::Role::Vertex   =>
-                (D3D11_BIND_VERTEX_BUFFER, info.size),
+                (d3d11::D3D11_BIND_VERTEX_BUFFER, info.size),
             buffer::Role::Index    => {
                 if info.stride != 2 && info.stride != 4 {
                     error!("Only U16 and U32 index buffers are allowed");
                     return Err(buffer::CreationError::Other);
                 }
-                (D3D11_BIND_INDEX_BUFFER, info.size)
+                (d3d11::D3D11_BIND_INDEX_BUFFER, info.size)
             },
             buffer::Role::Constant  => // 16 bit alignment
-                (D3D11_BIND_CONSTANT_BUFFER, (info.size + 0xF) & !0xF),
+                (d3d11::D3D11_BIND_CONSTANT_BUFFER, (info.size + 0xF) & !0xF),
             buffer::Role::Staging =>
-                (D3D11_BIND_FLAG(0), info.size)
+                (0, info.size)
         };
 
         assert!(size >= info.size);
         let (usage, cpu) = map_usage(info.usage, info.bind);
         let bind = map_bind(info.bind) | subind;
-        if info.bind.contains(memory::RENDER_TARGET) | info.bind.contains(memory::DEPTH_STENCIL) {
+        if info.bind.contains(Bind::RENDER_TARGET) | info.bind.contains(Bind::DEPTH_STENCIL) {
             return Err(buffer::CreationError::UnsupportedBind(info.bind))
         }
-        let native_desc = D3D11_BUFFER_DESC {
-            ByteWidth: size as winapi::UINT,
+        let native_desc = d3d11::D3D11_BUFFER_DESC {
+            ByteWidth: size as _,
             Usage: usage,
-            BindFlags: bind.0,
-            CPUAccessFlags: cpu.0,
+            BindFlags: bind,
+            CPUAccessFlags: cpu,
             MiscFlags: 0,
             StructureByteStride: 0, //TODO
         };
-        let mut sub = D3D11_SUBRESOURCE_DATA {
+        let mut sub = d3d11::D3D11_SUBRESOURCE_DATA {
             pSysMem: ptr::null(),
             SysMemPitch: 0,
             SysMemSlicePitch: 0,
         };
         let sub_raw = match raw_data {
             Some(data) => {
-                sub.pSysMem = data;
+                sub.pSysMem = data as _;
                 &sub as *const _
             },
             None => ptr::null(),
         };
 
-        debug!("Creating Buffer with info {:?} and sub-data {:?}", info, sub);
+        debug!("Creating Buffer with info {:?} and sub-data ?", info/*, sub*/);
         let mut raw_buf = native::Buffer(ptr::null_mut());
         let hr = unsafe {
             (*self.device).CreateBuffer(&native_desc, sub_raw, &mut raw_buf.0)
         };
-        if winapi::SUCCEEDED(hr) {
+        if winerror::SUCCEEDED(hr) {
             let buf = Buffer(raw_buf);
 
-            use core::memory::Usage::*;
             let mapping = match info.usage {
-                Data | Dynamic => None,
-                Upload | Download => Some(MappingGate { pointer: ptr::null_mut() }),
+                Usage::Data | Usage::Dynamic => None,
+                Usage::Upload | Usage::Download => Some(MappingGate { pointer: ptr::null_mut() }),
             };
 
             Ok(self.share.handles.borrow_mut().make_buffer(buf, info, mapping))
         } else {
-            error!("Failed to create a buffer with desc {:#?}, error {:x}", native_desc, hr);
+            error!("Failed to create a buffer with desc ?, error {:x}"/*, native_desc*/, hr);
             Err(buffer::CreationError::Other)
         }
     }
 
-    fn update_sub_data(&mut self, w: texture::Size, h: texture::Size, bpt: winapi::UINT)
-                       -> *const winapi::D3D11_SUBRESOURCE_DATA {
-        use winapi::UINT;
+    fn update_sub_data(&mut self, w: texture::Size, h: texture::Size, bpt: minwindef::UINT)
+                       -> *const d3d11::D3D11_SUBRESOURCE_DATA {
         for sub in self.sub_data_array.iter_mut() {
-            sub.SysMemPitch = w as UINT * bpt;
-            sub.SysMemSlicePitch = (h as UINT) * sub.SysMemPitch;
+            sub.SysMemPitch = w as minwindef::UINT * bpt;
+            sub.SysMemSlicePitch = (h as minwindef::UINT) * sub.SysMemPitch;
         }
         self.sub_data_array.as_ptr()
     }
 
     fn create_texture_1d(&mut self, size: texture::Size, array: texture::Layer,
-                         tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG)
-                         -> Result<native::Texture, winapi::HRESULT>
+                         tp: TextureParam, misc: d3d11::D3D11_RESOURCE_MISC_FLAG)
+                         -> Result<native::Texture, winerror::HRESULT>
     {
-        use winapi::UINT;
-        let native_desc = winapi::D3D11_TEXTURE1D_DESC {
-            Width: size as UINT,
+        let native_desc = d3d11::D3D11_TEXTURE1D_DESC {
+            Width: size as _,
             MipLevels: tp.levels,
-            ArraySize: array as UINT,
+            ArraySize: array as _,
             Format: tp.format,
             Usage: tp.usage,
-            BindFlags: tp.bind.0,
-            CPUAccessFlags: tp.cpu_access.0,
-            MiscFlags: misc.0,
+            BindFlags: tp.bind,
+            CPUAccessFlags: tp.cpu_access,
+            MiscFlags: misc,
         };
         let sub_data = if self.sub_data_array.len() > 0 {
             let num_data = array as usize * cmp::max(1, tp.levels) as usize;
             if num_data != self.sub_data_array.len() {
                 error!("Texture1D with {} slices and {} levels is given {} data chunks",
                     array, tp.levels, self.sub_data_array.len());
-                return Err(winapi::S_OK)
+                return Err(winerror::S_OK)
             }
             self.update_sub_data(size, 0, tp.bytes_per_texel)
         }else {
@@ -234,39 +233,38 @@ impl Factory {
         let hr = unsafe {
             (*self.device).CreateTexture1D(&native_desc, sub_data, &mut raw)
         };
-        if winapi::SUCCEEDED(hr) {
+        if winerror::SUCCEEDED(hr) {
             Ok(native::Texture::D1(raw))
         }else {
-            error!("CreateTexture1D failed on {:#?} with error {:x}", native_desc, hr);
+            error!("CreateTexture1D failed on ? with error {:x}"/*, native_desc*/, hr);
             Err(hr)
         }
     }
 
     fn create_texture_2d(&mut self, size: [texture::Size; 2], array: texture::Layer, aa: texture::AaMode,
-                         tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG)
-                         -> Result<native::Texture, winapi::HRESULT>
+                         tp: TextureParam, misc: d3d11::D3D11_RESOURCE_MISC_FLAG)
+                         -> Result<native::Texture, winerror::HRESULT>
     {
-        use winapi::UINT;
         use data::map_anti_alias;
 
-        let native_desc = winapi::D3D11_TEXTURE2D_DESC {
-            Width: size[0] as UINT,
-            Height: size[1] as UINT,
+        let native_desc = d3d11::D3D11_TEXTURE2D_DESC {
+            Width: size[0] as _,
+            Height: size[1] as _,
             MipLevels: tp.levels,
-            ArraySize: array as UINT,
+            ArraySize: array as _,
             Format: tp.format,
             SampleDesc: map_anti_alias(aa),
             Usage: tp.usage,
-            BindFlags: tp.bind.0,
-            CPUAccessFlags: tp.cpu_access.0,
-            MiscFlags: misc.0,
+            BindFlags: tp.bind,
+            CPUAccessFlags: tp.cpu_access,
+            MiscFlags: misc,
         };
         let sub_data = if self.sub_data_array.len() > 0 {
             let num_data = array as usize * cmp::max(1, tp.levels) as usize;
             if num_data != self.sub_data_array.len() {
                 error!("Texture2D with {} slices and {} levels is given {} data chunks",
                     array, tp.levels, self.sub_data_array.len());
-                return Err(winapi::S_OK)
+                return Err(winerror::S_OK)
             }
             self.update_sub_data(size[0], size[1], tp.bytes_per_texel)
         }else {
@@ -279,35 +277,34 @@ impl Factory {
         let hr = unsafe {
             (*self.device).CreateTexture2D(&native_desc, sub_data, &mut raw)
         };
-        if winapi::SUCCEEDED(hr) {
+        if winerror::SUCCEEDED(hr) {
             Ok(native::Texture::D2(raw))
         }else {
-            error!("CreateTexture2D failed on {:#?} with error {:x}", native_desc, hr);
+            error!("CreateTexture2D failed on ? with error {:x}"/*, native_desc*/, hr);
             Err(hr)
         }
     }
 
     fn create_texture_3d(&mut self, size: [texture::Size; 3],
-                         tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG)
-                         -> Result<native::Texture, winapi::HRESULT>
+                         tp: TextureParam, misc: d3d11::D3D11_RESOURCE_MISC_FLAG)
+                         -> Result<native::Texture, winerror::HRESULT>
     {
-        use winapi::UINT;
-        let native_desc = winapi::D3D11_TEXTURE3D_DESC {
-            Width: size[0] as UINT,
-            Height: size[1] as UINT,
-            Depth: size[2] as UINT,
+        let native_desc = d3d11::D3D11_TEXTURE3D_DESC {
+            Width: size[0] as _,
+            Height: size[1] as _,
+            Depth: size[2] as _,
             MipLevels: tp.levels,
             Format: tp.format,
             Usage: tp.usage,
-            BindFlags: tp.bind.0,
-            CPUAccessFlags: tp.cpu_access.0,
-            MiscFlags: misc.0,
+            BindFlags: tp.bind,
+            CPUAccessFlags: tp.cpu_access,
+            MiscFlags: misc,
         };
         let sub_data = if self.sub_data_array.len() > 0 {
             if cmp::max(1, tp.levels) as usize != self.sub_data_array.len() {
                 error!("Texture3D with {} levels is given {} data chunks",
                     tp.levels, self.sub_data_array.len());
-                return Err(winapi::S_OK)
+                return Err(winerror::S_OK)
             }
             self.update_sub_data(size[0], size[1], tp.bytes_per_texel)
         }else {
@@ -320,10 +317,10 @@ impl Factory {
         let hr = unsafe {
             (*self.device).CreateTexture3D(&native_desc, sub_data, &mut raw)
         };
-        if winapi::SUCCEEDED(hr) {
+        if winerror::SUCCEEDED(hr) {
             Ok(native::Texture::D3(raw))
         }else {
-            error!("CreateTexture3D failed on {:#?} with error {:x}", native_desc, hr);
+            error!("CreateTexture3D failed on ? with error {:x}"/*, native_desc*/, hr);
             Err(hr)
         }
     }
@@ -338,9 +335,9 @@ impl Factory {
     ) -> (&'b [S::DataType], usize) {
         let info = texture.get_info();
         let (width, height, _, aa) = info.kind.get_dimensions();
-        assert_eq!(info.usage, memory::Usage::Download);
+        assert_eq!(info.usage, Usage::Download);
         assert_eq!(aa, texture::AaMode::Single);
-        let mip0_texels = width as usize * height as usize;
+        let _mip0_texels = width as usize * height as usize;
         let texel_size = S::get_surface_type().get_total_bits() / 8;
 
         let mut ctx = ptr::null_mut();
@@ -348,7 +345,7 @@ impl Factory {
             (*self.device).GetImmediateContext(&mut ctx);
         }
 
-        let mut sres = winapi::d3d11::D3D11_MAPPED_SUBRESOURCE {
+        let mut sres = d3d11::D3D11_MAPPED_SUBRESOURCE {
             pData: ptr::null_mut(),
             RowPitch: 0,
             DepthPitch: 0,
@@ -358,10 +355,10 @@ impl Factory {
             .ref_texture(texture.raw())
             .as_resource();
         let hr = unsafe {
-            (*ctx).Map(resource as *mut _, 0, winapi::d3d11::D3D11_MAP_READ, 0, &mut sres)
+            (*ctx).Map(resource as *mut _, 0, d3d11::D3D11_MAP_READ, 0, &mut sres)
         };
 
-        if winapi::SUCCEEDED(hr) {
+        if winerror::SUCCEEDED(hr) {
             unsafe {
                 (slice::from_raw_parts(sres.pData as *const _, sres.DepthPitch as usize / texel_size as usize), sres.RowPitch as usize / texel_size as usize)
             }
@@ -374,7 +371,7 @@ impl Factory {
         let resource = self.frame_handles
             .ref_texture(texture.raw())
             .as_resource()
-            as *mut winapi::d3d11::ID3D11Resource;
+            as *mut d3d11::ID3D11Resource;
 
         let mut ctx = ptr::null_mut();
         unsafe {
@@ -397,7 +394,7 @@ impl core::Factory<R> for Factory {
                                 -> Result<h::RawBuffer<R>, buffer::CreationError> {
         let info = buffer::Info {
             role: role,
-            usage: memory::Usage::Data,
+            usage: Usage::Data,
             bind: bind,
             size: data.len(),
             stride: stride,
@@ -407,52 +404,50 @@ impl core::Factory<R> for Factory {
 
     fn create_shader(&mut self, stage: core::shade::Stage, code: &[u8])
                      -> Result<h::Shader<R>, core::shade::CreateShaderError> {
-        use winapi::ID3D11DeviceChild;
         use core::shade::{CreateShaderError, Stage};
         use mirror::reflect_shader;
 
         let dev = self.device;
-        let len = code.len() as winapi::SIZE_T;
         let (hr, object) = match stage {
             Stage::Vertex => {
                 let mut ret = ptr::null_mut();
                 let hr = unsafe {
-                    (*dev).CreateVertexShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
+                    (*dev).CreateVertexShader(code.as_ptr() as *const _, code.len() as _, ptr::null_mut(), &mut ret)
                 };
-                (hr, ret as *mut ID3D11DeviceChild)
+                (hr, ret as *mut d3d11::ID3D11DeviceChild)
             },
             Stage::Hull => {
                 let mut ret = ptr::null_mut();
                 let hr = unsafe {
-                    (*dev).CreateHullShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
+                    (*dev).CreateHullShader(code.as_ptr() as *const _, code.len() as _, ptr::null_mut(), &mut ret)
                 };
-                (hr, ret as *mut ID3D11DeviceChild)
+                (hr, ret as *mut d3d11::ID3D11DeviceChild)
             },
             Stage::Domain => {
                 let mut ret = ptr::null_mut();
                 let hr = unsafe {
-                    (*dev).CreateDomainShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
+                    (*dev).CreateDomainShader(code.as_ptr() as *const _, code.len() as _, ptr::null_mut(), &mut ret)
                 };
-                (hr, ret as *mut ID3D11DeviceChild)
+                (hr, ret as *mut d3d11::ID3D11DeviceChild)
             },
             Stage::Geometry => {
                 let mut ret = ptr::null_mut();
                 let hr = unsafe {
-                    (*dev).CreateGeometryShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
+                    (*dev).CreateGeometryShader(code.as_ptr() as *const _, code.len() as _, ptr::null_mut(), &mut ret)
                 };
-                (hr, ret as *mut ID3D11DeviceChild)
+                (hr, ret as *mut d3d11::ID3D11DeviceChild)
             },
             Stage::Pixel => {
                 let mut ret = ptr::null_mut();
                 let hr = unsafe {
-                    (*dev).CreatePixelShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
+                    (*dev).CreatePixelShader(code.as_ptr() as *const _, code.len() as _, ptr::null_mut(), &mut ret)
                 };
-                (hr, ret as *mut ID3D11DeviceChild)
+                (hr, ret as *mut d3d11::ID3D11DeviceChild)
             },
             //_ => return Err(CreateShaderError::StageNotSupported(stage))
         };
 
-        if winapi::SUCCEEDED(hr) {
+        if winerror::SUCCEEDED(hr) {
             let reflection = reflect_shader(code);
             let hash = {
                 use std::collections::hash_map::DefaultHasher;
@@ -477,7 +472,6 @@ impl core::Factory<R> for Factory {
 
     fn create_program(&mut self, shader_set: &core::ShaderSet<R>)
                       -> Result<h::Program<R>, core::shade::CreateProgramError> {
-        use winapi::{ID3D11VertexShader, ID3D11HullShader, ID3D11DomainShader, ID3D11GeometryShader, ID3D11PixelShader};
         use core::shade::{ProgramInfo, Stage};
         use mirror::populate_info;
 
@@ -500,11 +494,11 @@ impl core::Factory<R> for Factory {
                 populate_info(&mut info, Stage::Pixel,  ps.reflection);
                 unsafe { (*vs.object).AddRef(); (*ps.object).AddRef(); }
                 Program {
-                    vs: vs.object as *mut ID3D11VertexShader,
+                    vs: vs.object as *mut d3d11::ID3D11VertexShader,
                     hs: ptr::null_mut(),
                     ds: ptr::null_mut(),
                     gs: ptr::null_mut(),
-                    ps: ps.object as *mut ID3D11PixelShader,
+                    ps: ps.object as *mut d3d11::ID3D11PixelShader,
                     vs_hash: vs.code_hash,
                 }
             },
@@ -515,11 +509,11 @@ impl core::Factory<R> for Factory {
                 populate_info(&mut info, Stage::Pixel,    ps.reflection);
                 unsafe { (*vs.object).AddRef(); (*gs.object).AddRef(); (*ps.object).AddRef(); }
                 Program {
-                    vs: vs.object as *mut ID3D11VertexShader,
+                    vs: vs.object as *mut d3d11::ID3D11VertexShader,
                     hs: ptr::null_mut(),
                     ds: ptr::null_mut(),
-                    gs: gs.object as *mut ID3D11GeometryShader,
-                    ps: ps.object as *mut ID3D11PixelShader,
+                    gs: gs.object as *mut d3d11::ID3D11GeometryShader,
+                    ps: ps.object as *mut d3d11::ID3D11PixelShader,
                     vs_hash: vs.code_hash,
                 }
             },
@@ -532,11 +526,11 @@ impl core::Factory<R> for Factory {
                 populate_info(&mut info, Stage::Pixel,  ps.reflection);
                 unsafe { (*vs.object).AddRef(); (*hs.object).AddRef(); (*ds.object).AddRef(); (*ps.object).AddRef(); }
                 Program {
-                    vs: vs.object as *mut ID3D11VertexShader,
-                    hs: hs.object as *mut ID3D11HullShader,
-                    ds: ds.object as *mut ID3D11DomainShader,
+                    vs: vs.object as *mut d3d11::ID3D11VertexShader,
+                    hs: hs.object as *mut d3d11::ID3D11HullShader,
+                    ds: ds.object as *mut d3d11::ID3D11DomainShader,
                     gs: ptr::null_mut(),
-                    ps: ps.object as *mut ID3D11PixelShader,
+                    ps: ps.object as *mut d3d11::ID3D11PixelShader,
                     vs_hash: vs.code_hash,
                 }
             }
@@ -546,7 +540,6 @@ impl core::Factory<R> for Factory {
 
     fn create_pipeline_state_raw(&mut self, program: &h::Program<R>, desc: &core::pso::Descriptor)
                                  -> Result<h::RawPipelineState<R>, core::pso::CreationError> {
-        use winapi::d3dcommon::*;
         use core::Primitive::*;
         use data::map_format;
         use state;
@@ -555,7 +548,6 @@ impl core::Factory<R> for Factory {
         let mut charbuf = [0; 256];
         let mut charpos = 0;
         for (attrib, at_desc) in program.get_info().vertex_attributes.iter().zip(desc.attributes.iter()) {
-            use winapi::UINT;
             let (bdesc, elem) = match at_desc {
                 &Some((buf_id, ref el)) => match desc.vertex_buffers[buf_id as usize] {
                     Some(ref bd) => (bd, el),
@@ -568,7 +560,7 @@ impl core::Factory<R> for Factory {
                     attrib.name, elem.offset);
                 return Err(core::pso::CreationError);
             }
-            layouts.push(winapi::D3D11_INPUT_ELEMENT_DESC {
+            layouts.push(d3d11::D3D11_INPUT_ELEMENT_DESC {
                 SemanticName: &charbuf[charpos],
                 SemanticIndex: 0,
                 Format: match map_format(elem.format, false) {
@@ -578,14 +570,14 @@ impl core::Factory<R> for Factory {
                         return Err(core::pso::CreationError);
                     }
                 },
-                InputSlot: attrib.slot as UINT,
-                AlignedByteOffset: elem.offset as UINT,
+                InputSlot: attrib.slot as _,
+                AlignedByteOffset: elem.offset as _,
                 InputSlotClass: if bdesc.rate == 0 {
-                    winapi::D3D11_INPUT_PER_VERTEX_DATA
+                    d3d11::D3D11_INPUT_PER_VERTEX_DATA
                 }else {
-                    winapi::D3D11_INPUT_PER_INSTANCE_DATA
+                    d3d11::D3D11_INPUT_PER_INSTANCE_DATA
                 },
-                InstanceDataStepRate: bdesc.rate as UINT,
+                InstanceDataStepRate: bdesc.rate as _,
             });
             for (out, inp) in charbuf[charpos..].iter_mut().zip(attrib.name.as_bytes().iter()) {
                 *out = *inp as i8;
@@ -606,12 +598,12 @@ impl core::Factory<R> for Factory {
         let mut vertex_layout = ptr::null_mut();
         let hr = unsafe {
             (*dev).CreateInputLayout(
-                layouts.as_ptr(), layouts.len() as winapi::UINT,
-                vs_bin.as_ptr() as *const c_void, vs_bin.len() as winapi::SIZE_T,
+                layouts.as_ptr(), layouts.len() as _,
+                vs_bin.as_ptr() as *const _, vs_bin.len() as _,
                 &mut vertex_layout)
         };
-        if !winapi::SUCCEEDED(hr) {
-            error!("Failed to create input layout from {:#?}, error {:x}", layouts, hr);
+        if !winerror::SUCCEEDED(hr) {
+            error!("Failed to create input layout from ?, error {:x}"/*, layouts*/, hr);
             return Err(core::pso::CreationError);
         }
         let dummy_dsi = core::pso::DepthStencilInfo { depth: None, front: None, back: None };
@@ -620,20 +612,20 @@ impl core::Factory<R> for Factory {
 
         let pso = Pipeline {
             topology: match desc.primitive {
-                PointList       => D3D11_PRIMITIVE_TOPOLOGY_POINTLIST,
-                LineList        => D3D11_PRIMITIVE_TOPOLOGY_LINELIST,
-                LineStrip       => D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP,
-                TriangleList    => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-                TriangleStrip   => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
-                LineListAdjacency        => D3D11_PRIMITIVE_TOPOLOGY_LINELIST_ADJ,
-                LineStripAdjacency       => D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ,
-                TriangleListAdjacency    => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ,
-                TriangleStripAdjacency   => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ,
+                PointList       => d3dcommon::D3D11_PRIMITIVE_TOPOLOGY_POINTLIST,
+                LineList        => d3dcommon::D3D11_PRIMITIVE_TOPOLOGY_LINELIST,
+                LineStrip       => d3dcommon::D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP,
+                TriangleList    => d3dcommon::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+                TriangleStrip   => d3dcommon::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+                LineListAdjacency        => d3dcommon::D3D11_PRIMITIVE_TOPOLOGY_LINELIST_ADJ,
+                LineStripAdjacency       => d3dcommon::D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ,
+                TriangleListAdjacency    => d3dcommon::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ,
+                TriangleStripAdjacency   => d3dcommon::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ,
                 PatchList(num)  => {
                     if num == 0 || (num as usize) > caps.max_patch_size {
                         return Err(core::pso::CreationError)
                     }
-                    D3D_PRIMITIVE_TOPOLOGY(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST.0 + (num as u32) - 1)
+                    d3dcommon::D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST + (num as u32) - 1
                 },
             },
             layout: vertex_layout,
@@ -661,9 +653,9 @@ impl core::Factory<R> for Factory {
 
         let (usage, cpu_access) = map_usage(desc.usage, desc.bind);
         let tparam = TextureParam {
-            levels: desc.levels as winapi::UINT,
+            levels: desc.levels as _,
             format: match hint {
-                Some(channel) if self.use_texture_format_hint && !desc.bind.contains(memory::DEPTH_STENCIL) => {
+                Some(channel) if self.use_texture_format_hint && !desc.bind.contains(Bind::DEPTH_STENCIL) => {
                     match map_format(core::format::Format(desc.format, channel), true) {
                         Some(f) => f,
                         None => return Err(CreationError::Format(desc.format, Some(channel)))
@@ -674,7 +666,7 @@ impl core::Factory<R> for Factory {
                     None => return Err(CreationError::Format(desc.format, None))
                 },
             },
-            bytes_per_texel: (desc.format.get_total_bits() >> 3) as winapi::UINT,
+            bytes_per_texel: (desc.format.get_total_bits() >> 3) as _,
             bind: map_bind(desc.bind),
             usage: usage,
             cpu_access: cpu_access,
@@ -683,19 +675,19 @@ impl core::Factory<R> for Factory {
         self.sub_data_array.clear();
         if let Some(data) = data_opt {
             for sub in data.0.iter() {
-                self.sub_data_array.push(winapi::D3D11_SUBRESOURCE_DATA {
-                    pSysMem: sub.as_ptr() as *const c_void,
+                self.sub_data_array.push(d3d11::D3D11_SUBRESOURCE_DATA {
+                    pSysMem: sub.as_ptr() as *const _,
                     SysMemPitch: 0,
                     SysMemSlicePitch: 0,
                 });
             }
         };
-        let misc = if usage != winapi::D3D11_USAGE_IMMUTABLE &&
-            desc.bind.contains(memory::RENDER_TARGET | memory::SHADER_RESOURCE) &&
+        let misc = if usage != d3d11::D3D11_USAGE_IMMUTABLE &&
+            desc.bind.contains(Bind::RENDER_TARGET | Bind::SHADER_RESOURCE) &&
             desc.levels > 1 && data_opt.is_none() {
-            winapi::D3D11_RESOURCE_MISC_GENERATE_MIPS
+            d3d11::D3D11_RESOURCE_MISC_GENERATE_MIPS
         }else {
-            winapi::D3D11_RESOURCE_MISC_FLAG(0)
+            0
         };
 
         let texture_result = match desc.kind {
@@ -710,9 +702,9 @@ impl core::Factory<R> for Factory {
             Kind::D3(w, h, d) =>
                 self.create_texture_3d([w,h,d], tparam, misc),
             Kind::Cube(w) =>
-                self.create_texture_2d([w,w], 6*1, AaMode::Single, tparam, misc | winapi::D3D11_RESOURCE_MISC_TEXTURECUBE),
+                self.create_texture_2d([w,w], 6*1, AaMode::Single, tparam, misc | d3d11::D3D11_RESOURCE_MISC_TEXTURECUBE),
             Kind::CubeArray(w, d) =>
-                self.create_texture_2d([w,w], 6*d, AaMode::Single, tparam, misc | winapi::D3D11_RESOURCE_MISC_TEXTURECUBE),
+                self.create_texture_2d([w,w], 6*d, AaMode::Single, tparam, misc | d3d11::D3D11_RESOURCE_MISC_TEXTURECUBE),
         };
 
         match texture_result {
@@ -736,44 +728,46 @@ impl core::Factory<R> for Factory {
 
     fn view_texture_as_shader_resource_raw(&mut self, htex: &h::RawTexture<R>, desc: texture::ResourceDesc)
                                        -> Result<h::RawShaderResourceView<R>, f::ResourceViewError> {
-        use winapi::UINT;
         use core::texture::{AaMode, Kind};
         use data::map_format;
         //TODO: support desc.layer parsing
 
         let (dim, layers, has_levels) = match htex.get_info().kind {
             Kind::D1(_) =>
-                (winapi::D3D11_SRV_DIMENSION_TEXTURE1D, 1, true),
+                (d3dcommon::D3D11_SRV_DIMENSION_TEXTURE1D, 1, true),
             Kind::D1Array(_, d) =>
-                (winapi::D3D11_SRV_DIMENSION_TEXTURE1DARRAY, d, true),
+                (d3dcommon::D3D11_SRV_DIMENSION_TEXTURE1DARRAY, d, true),
             Kind::D2(_, _, AaMode::Single) =>
-                (winapi::D3D11_SRV_DIMENSION_TEXTURE2D, 1, true),
+                (d3dcommon::D3D11_SRV_DIMENSION_TEXTURE2D, 1, true),
             Kind::D2(_, _, _) =>
-                (winapi::D3D11_SRV_DIMENSION_TEXTURE2DMS, 1, false),
+                (d3dcommon::D3D11_SRV_DIMENSION_TEXTURE2DMS, 1, false),
             Kind::D2Array(_, _, d, AaMode::Single) =>
-                (winapi::D3D11_SRV_DIMENSION_TEXTURE2DARRAY, d, true),
+                (d3dcommon::D3D11_SRV_DIMENSION_TEXTURE2DARRAY, d, true),
             Kind::D2Array(_, _, d, _) =>
-                (winapi::D3D11_SRV_DIMENSION_TEXTURE2DMSARRAY, d, false),
+                (d3dcommon::D3D11_SRV_DIMENSION_TEXTURE2DMSARRAY, d, false),
             Kind::D3(_, _, _) =>
-                (winapi::D3D11_SRV_DIMENSION_TEXTURE3D, 1, true),
+                (d3dcommon::D3D11_SRV_DIMENSION_TEXTURE3D, 1, true),
             Kind::Cube(_) =>
-                (winapi::D3D11_SRV_DIMENSION_TEXTURECUBE, 1, true),
+                (d3dcommon::D3D11_SRV_DIMENSION_TEXTURECUBE, 1, true),
             Kind::CubeArray(_, d) =>
-                (winapi::D3D11_SRV_DIMENSION_TEXTURECUBEARRAY, d, true),
+                (d3dcommon::D3D11_SRV_DIMENSION_TEXTURECUBEARRAY, d, true),
         };
 
         let format = core::format::Format(htex.get_info().format, desc.channel);
-        let native_desc = winapi::D3D11_SHADER_RESOURCE_VIEW_DESC {
+        let native_desc = d3d11::D3D11_SHADER_RESOURCE_VIEW_DESC {
             Format: match map_format(format, false) {
                 Some(fm) => fm,
                 None => return Err(f::ResourceViewError::Channel(desc.channel)),
             },
             ViewDimension: dim,
-            u: if has_levels {
-                assert!(desc.max >= desc.min);
-                [desc.min as UINT, (desc.max + 1 - desc.min) as UINT, 0, layers as UINT]
-            }else {
-                [0, layers as UINT, 0, 0]
+            u: unsafe {
+                let array = if has_levels {
+                    assert!(desc.max >= desc.min);
+                    [desc.min as _, (desc.max + 1 - desc.min) as _, 0, layers as _]
+                }else {
+                    [0, layers as _, 0, 0]
+                };
+                mem::transmute(array) //TODO
             },
         };
 
@@ -782,8 +776,8 @@ impl core::Factory<R> for Factory {
         let hr = unsafe {
             (*self.device).CreateShaderResourceView(raw_tex, &native_desc, &mut raw_view)
         };
-        if !winapi::SUCCEEDED(hr) {
-            error!("Failed to create SRV from {:#?}, error {:x}", native_desc, hr);
+        if !winerror::SUCCEEDED(hr) {
+            error!("Failed to create SRV from ?, error {:x}"/*, native_desc*/, hr);
             return Err(f::ResourceViewError::Unsupported);
         }
         Ok(self.share.handles.borrow_mut().make_texture_srv(native::Srv(raw_view), htex))
@@ -797,61 +791,60 @@ impl core::Factory<R> for Factory {
     fn view_texture_as_render_target_raw(&mut self, htex: &h::RawTexture<R>, desc: texture::RenderDesc)
                                          -> Result<h::RawRenderTargetView<R>, f::TargetViewError>
     {
-        use winapi::UINT;
         use core::texture::{AaMode, Kind};
         use data::map_format;
 
-        let level = desc.level as UINT;
+        let level = desc.level as minwindef::UINT;
         let (dim, extra) = match (htex.get_info().kind, desc.layer) {
             (Kind::D1(..), None) =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE1D, [level, 0, 0]),
+                (d3d11::D3D11_RTV_DIMENSION_TEXTURE1D, [level, 0, 0]),
             (Kind::D1Array(_, nlayers), Some(lid)) if lid < nlayers =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE1DARRAY, [level, lid as UINT, 1+lid as UINT]),
+                (d3d11::D3D11_RTV_DIMENSION_TEXTURE1DARRAY, [level, lid as _, (1+lid) as _]),
             (Kind::D1Array(_, nlayers), None) =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE1DARRAY, [level, 0, nlayers as UINT]),
+                (d3d11::D3D11_RTV_DIMENSION_TEXTURE1DARRAY, [level, 0, nlayers as _]),
             (Kind::D2(_, _, AaMode::Single), None) =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2D, [level, 0, 0]),
+                (d3d11::D3D11_RTV_DIMENSION_TEXTURE2D, [level, 0, 0]),
             (Kind::D2(_, _, _), None) if level == 0 =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DMS, [0, 0, 0]),
+                (d3d11::D3D11_RTV_DIMENSION_TEXTURE2DMS, [0, 0, 0]),
             (Kind::D2Array(_, _, nlayers, AaMode::Single), None) =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 0, nlayers as UINT]),
+                (d3d11::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 0, nlayers as _]),
             (Kind::D2Array(_, _, nlayers, AaMode::Single), Some(lid)) if lid < nlayers =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, lid as UINT, 1+lid as UINT]),
+                (d3d11::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, lid as _, (1+lid) as _]),
             (Kind::D2Array(_, _, nlayers, _), None) if level == 0 =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY, [0, nlayers as UINT, 0]),
+                (d3d11::D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY, [0, nlayers as _, 0]),
             (Kind::D2Array(_, _, nlayers, _), Some(lid)) if level == 0 && lid < nlayers =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY, [lid as UINT, 1+lid as UINT, 0]),
+                (d3d11::D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY, [lid as _, (1+lid) as _, 0]),
             (Kind::D3(_, _, depth), None) =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE3D, [level, 0, depth as UINT]),
+                (d3d11::D3D11_RTV_DIMENSION_TEXTURE3D, [level, 0, depth as _]),
             (Kind::D3(_, _, depth), Some(lid)) if lid < depth =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE3D, [level, lid as UINT, 1+lid as UINT]),
+                (d3d11::D3D11_RTV_DIMENSION_TEXTURE3D, [level, lid as _, (1+lid) as _]),
             (Kind::Cube(..), None) =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6]),
+                (d3d11::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6]),
             (Kind::Cube(..), Some(lid)) if lid < 6 =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, lid as UINT, 1+lid as UINT]),
+                (d3d11::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, lid as _, (1+lid) as _]),
             (Kind::CubeArray(_, nlayers), None) =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6 * nlayers as UINT]),
+                (d3d11::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 0, (6 * nlayers) as _]),
             (Kind::CubeArray(_, nlayers), Some(lid)) if lid < nlayers =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 6 * lid as UINT, 6 * (1+lid) as UINT]),
+                (d3d11::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, (6 * lid) as _, (6 * (1+lid)) as _]),
             (_, None) => return Err(f::TargetViewError::Level(desc.level)),
             (_, Some(lid)) => return Err(f::TargetViewError::Layer(texture::LayerError::OutOfBounds(lid, 0))), //TODO
         };
         let format = core::format::Format(htex.get_info().format, desc.channel);
-        let native_desc = winapi::D3D11_RENDER_TARGET_VIEW_DESC {
+        let native_desc = d3d11::D3D11_RENDER_TARGET_VIEW_DESC {
             Format: match map_format(format, true) {
                 Some(fm) => fm,
                 None => return Err(f::TargetViewError::Channel(desc.channel)),
             },
             ViewDimension: dim,
-            u: extra,
+            u: unsafe { mem::transmute(extra) }, //TODO
         };
         let mut raw_view = ptr::null_mut();
         let raw_tex = self.frame_handles.ref_texture(htex).as_resource();
         let hr = unsafe {
             (*self.device).CreateRenderTargetView(raw_tex, &native_desc, &mut raw_view)
         };
-        if !winapi::SUCCEEDED(hr) {
-            error!("Failed to create RTV from {:#?}, error {:x}", native_desc, hr);
+        if !winerror::SUCCEEDED(hr) {
+            error!("Failed to create RTV from ?, error {:x}"/*, native_desc*/, hr);
             return Err(f::TargetViewError::Unsupported);
         }
         let size = htex.get_info().kind.get_level_dimensions(desc.level);
@@ -861,53 +854,52 @@ impl core::Factory<R> for Factory {
     fn view_texture_as_depth_stencil_raw(&mut self, htex: &h::RawTexture<R>, desc: texture::DepthStencilDesc)
                                          -> Result<h::RawDepthStencilView<R>, f::TargetViewError>
     {
-        use winapi::UINT;
         use core::texture::{AaMode, Kind};
         use data::{map_format, map_dsv_flags};
 
-        let level = desc.level as UINT;
+        let level = desc.level as minwindef::UINT;
         let (dim, extra) = match (htex.get_info().kind, desc.layer) {
             (Kind::D1(..), None) =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE1D, [level, 0, 0]),
+                (d3d11::D3D11_DSV_DIMENSION_TEXTURE1D, [level, 0, 0]),
             (Kind::D1Array(_, nlayers), Some(lid)) if lid < nlayers =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE1DARRAY, [level, lid as UINT, 1+lid as UINT]),
+                (d3d11::D3D11_DSV_DIMENSION_TEXTURE1DARRAY, [level, lid as _, (1+lid) as _]),
             (Kind::D1Array(_, nlayers), None) =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE1DARRAY, [level, 0, nlayers as UINT]),
+                (d3d11::D3D11_DSV_DIMENSION_TEXTURE1DARRAY, [level, 0, nlayers as _]),
             (Kind::D2(_, _, AaMode::Single), None) =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE2D, [level, 0, 0]),
+                (d3d11::D3D11_DSV_DIMENSION_TEXTURE2D, [level, 0, 0]),
             (Kind::D2(_, _, _), None) if level == 0 =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DMS, [0, 0, 0]),
+                (d3d11::D3D11_DSV_DIMENSION_TEXTURE2DMS, [0, 0, 0]),
             (Kind::D2Array(_, _, nlayers, AaMode::Single), None) =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 0, nlayers as UINT]),
+                (d3d11::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 0, nlayers as _]),
             (Kind::D2Array(_, _, nlayers, AaMode::Single), Some(lid)) if lid < nlayers =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, lid as UINT, 1+lid as UINT]),
+                (d3d11::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, lid as _, (1+lid) as _]),
             (Kind::D2Array(_, _, nlayers, _), None) if level == 0 =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY, [0, nlayers as UINT, 0]),
+                (d3d11::D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY, [0, nlayers as _, 0]),
             (Kind::D2Array(_, _, nlayers, _), Some(lid)) if level == 0 && lid < nlayers =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY, [lid as UINT, 1+lid as UINT, 0]),
+                (d3d11::D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY, [lid as _, (1+lid) as _, 0]),
             (Kind::D3(..), _) => return Err(f::TargetViewError::Unsupported),
             (Kind::Cube(..), None) =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6]),
+                (d3d11::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6]),
             (Kind::Cube(..), Some(lid)) if lid < 6 =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, lid as UINT, 1+lid as UINT]),
+                (d3d11::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, lid as _, (1+lid) as _]),
             (Kind::CubeArray(_, nlayers), None) =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6 * nlayers as UINT]),
+                (d3d11::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 0, (6 * nlayers) as _]),
             (Kind::CubeArray(_, nlayers), Some(lid)) if lid < nlayers =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 6 * lid as UINT, 6 * (1+lid) as UINT]),
+                (d3d11::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, (6 * lid) as _, (6 * (1+lid)) as _]),
             (_, None) => return Err(f::TargetViewError::Level(desc.level)),
             (_, Some(lid)) => return Err(f::TargetViewError::Layer(texture::LayerError::OutOfBounds(lid, 0))), //TODO
         };
 
         let channel = core::format::ChannelType::Uint; //doesn't matter
         let format = core::format::Format(htex.get_info().format, channel);
-        let native_desc = winapi::D3D11_DEPTH_STENCIL_VIEW_DESC {
+        let native_desc = d3d11::D3D11_DEPTH_STENCIL_VIEW_DESC {
             Format: match map_format(format, true) {
                 Some(fm) => fm,
                 None => return Err(f::TargetViewError::Channel(channel)),
             },
             ViewDimension: dim,
-            Flags: map_dsv_flags(desc.flags).0,
-            u: extra,
+            Flags: map_dsv_flags(desc.flags),
+            u: unsafe { mem::transmute(extra) }, //TODO
         };
 
         let mut raw_view = ptr::null_mut();
@@ -915,8 +907,8 @@ impl core::Factory<R> for Factory {
         let hr = unsafe {
             (*self.device).CreateDepthStencilView(raw_tex, &native_desc, &mut raw_view)
         };
-        if !winapi::SUCCEEDED(hr) {
-            error!("Failed to create DSV from {:#?}, error {:x}", native_desc, hr);
+        if !winerror::SUCCEEDED(hr) {
+            error!("Failed to create DSV from ?, error {:x}"/*, native_desc*/, hr);
             return Err(f::TargetViewError::Unsupported);
         }
         let dim = htex.get_info().kind.get_level_dimensions(desc.level);
@@ -928,14 +920,14 @@ impl core::Factory<R> for Factory {
         use data::{FilterOp, map_function, map_filter, map_wrap};
 
         let op = if info.comparison.is_some() {FilterOp::Comparison} else {FilterOp::Product};
-        let native_desc = winapi::D3D11_SAMPLER_DESC {
+        let native_desc = d3d11::D3D11_SAMPLER_DESC {
             Filter: map_filter(info.filter, op),
             AddressU: map_wrap(info.wrap_mode.0),
             AddressV: map_wrap(info.wrap_mode.1),
             AddressW: map_wrap(info.wrap_mode.2),
             MipLODBias: info.lod_bias.into(),
             MaxAnisotropy: match info.filter {
-                FilterMethod::Anisotropic(max) => max as winapi::UINT,
+                FilterMethod::Anisotropic(max) => max as _,
                 _ => 0,
             },
             ComparisonFunc: map_function(info.comparison.unwrap_or(core::state::Comparison::Always)),
@@ -948,7 +940,7 @@ impl core::Factory<R> for Factory {
         let hr = unsafe {
             (*self.device).CreateSamplerState(&native_desc, &mut raw_sampler)
         };
-        if winapi::SUCCEEDED(hr) {
+        if winerror::SUCCEEDED(hr) {
             self.share.handles.borrow_mut().make_sampler(native::Sampler(raw_sampler), info)
         } else {
             error!("Unable to create a sampler with desc {:#?}, error {:x}", info, hr);
@@ -963,7 +955,7 @@ impl core::Factory<R> for Factory {
     {
         unsafe {
             mapping::read(buf.raw(), |mut m| {
-                ensure_mapped(&mut m, buf.raw(), winapi::d3d11::D3D11_MAP_READ, self)
+                ensure_mapped(&mut m, buf.raw(), d3d11::D3D11_MAP_READ, self)
             })
         }
     }
@@ -976,7 +968,7 @@ impl core::Factory<R> for Factory {
         unsafe {
             mapping::write(buf.raw(), |mut m| {
                 // not MAP_WRITE_DISCARD because we are STAGING
-                ensure_mapped(&mut m, buf.raw(), winapi::d3d11::D3D11_MAP_WRITE, self)
+                ensure_mapped(&mut m, buf.raw(), d3d11::D3D11_MAP_WRITE, self)
             })
         }
     }
@@ -984,7 +976,7 @@ impl core::Factory<R> for Factory {
 
 pub fn ensure_mapped(mapping: &mut MappingGate,
                      buffer: &h::RawBuffer<R>,
-                     map_type: winapi::d3d11::D3D11_MAP,
+                     map_type: d3d11::D3D11_MAP,
                      factory: &Factory) {
     if mapping.pointer.is_null() {
         let raw_handle = *buffer.resource();
@@ -994,19 +986,19 @@ pub fn ensure_mapped(mapping: &mut MappingGate,
             (*factory.device).GetImmediateContext(&mut ctx);
         }
 
-        let mut sres = winapi::d3d11::D3D11_MAPPED_SUBRESOURCE {
+        let mut sres = d3d11::D3D11_MAPPED_SUBRESOURCE {
             pData: ptr::null_mut(),
             RowPitch: 0,
             DepthPitch: 0,
         };
 
-        let dst = raw_handle.as_resource() as *mut winapi::d3d11::ID3D11Resource;
+        let dst = raw_handle.as_resource() as *mut d3d11::ID3D11Resource;
         let hr = unsafe {
             (*ctx).Map(dst, 0, map_type, 0, &mut sres)
         };
 
-        if winapi::SUCCEEDED(hr) {
-            mapping.pointer = sres.pData;
+        if winerror::SUCCEEDED(hr) {
+            mapping.pointer = sres.pData as _;
         } else {
             panic!("Unable to map a buffer {:?}, error {:x}", buffer, hr);
         }
@@ -1015,11 +1007,11 @@ pub fn ensure_mapped(mapping: &mut MappingGate,
 
 pub fn ensure_unmapped(mapping: &mut MappingGate,
                        buffer: &buffer::Raw<R>,
-                       context: *mut winapi::ID3D11DeviceContext) {
+                       context: *mut d3d11::ID3D11DeviceContext) {
     if !mapping.pointer.is_null() {
         let raw_handle = *buffer.resource();
         unsafe {
-            (*context).Unmap(raw_handle.as_resource() as *mut winapi::d3d11::ID3D11Resource, 0);
+            (*context).Unmap(raw_handle.as_resource() as *mut d3d11::ID3D11Resource, 0);
         }
 
         mapping.pointer = ptr::null_mut();

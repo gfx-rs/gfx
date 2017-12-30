@@ -1,6 +1,6 @@
 ## Change Log
 
-### v0.17 (2017-12-29)
+### v0.17 (2017-12-30)
   - basic WebGL2 support via `wasm32-unknown-emscripten` target ([#1706](https://github.com/gfx-rs/gfx/pull/1706), [#1681](https://github.com/gfx-rs/gfx/pull/1681))
   - `mint` integration instead of `cgmath` ([#1301](https://github.com/gfx-rs/gfx/pull/1301))
   - `draw_state` update to v0.8, breaking the bit flags ([#1708](https://github.com/gfx-rs/gfx/pull/1708))

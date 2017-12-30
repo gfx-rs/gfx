@@ -15,10 +15,16 @@
 #![allow(missing_docs)]
 
 use std::ptr;
-use winapi::{FLOAT, INT, UINT, UINT8, DXGI_FORMAT,
-             DXGI_FORMAT_R16_UINT, DXGI_FORMAT_R32_UINT,
-             D3D11_CLEAR_FLAG, D3D11_PRIMITIVE_TOPOLOGY, D3D11_VIEWPORT, D3D11_RECT,
-             ID3D11RasterizerState, ID3D11DepthStencilState, ID3D11BlendState};
+
+use winapi::shared::minwindef::*;
+use winapi::shared::dxgiformat::{
+    DXGI_FORMAT, DXGI_FORMAT_R16_UINT, DXGI_FORMAT_R32_UINT,
+};
+use winapi::um::d3d11::{
+    D3D11_CLEAR_FLAG, D3D11_PRIMITIVE_TOPOLOGY, D3D11_VIEWPORT, D3D11_RECT,
+    ID3D11RasterizerState, ID3D11DepthStencilState, ID3D11BlendState,
+};
+
 use core::{command, pso, shade, state, target, texture as tex};
 use core::{IndexType, VertexCount};
 use core::{MAX_VERTEX_ATTRIBUTES, MAX_CONSTANT_BUFFERS,
@@ -58,7 +64,7 @@ impl DataBuffer {
 }
 
 ///Serialized device command.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Command {
     // states
     BindProgram(Program),
@@ -83,7 +89,7 @@ pub enum Command {
     GenerateMips(native::Srv),
     // drawing
     ClearColor(native::Rtv, [f32; 4]),
-    ClearDepthStencil(native::Dsv, D3D11_CLEAR_FLAG, FLOAT, UINT8),
+    ClearDepthStencil(native::Dsv, D3D11_CLEAR_FLAG, FLOAT, u8),
     Draw(UINT, UINT),
     DrawInstanced(UINT, UINT, UINT, UINT),
     DrawIndexed(UINT, UINT, INT),
@@ -368,11 +374,11 @@ impl<P: 'static + Parser> command::Buffer<Resources> for CommandBuffer<P> {
     fn clear_depth_stencil(&mut self, target: native::Dsv, depth: Option<target::Depth>,
                            stencil: Option<target::Stencil>) {
         let flags = //warning: magic constants ahead
-            D3D11_CLEAR_FLAG(if depth.is_some() {1} else {0}) |
-            D3D11_CLEAR_FLAG(if stencil.is_some() {2} else {0});
+            if depth.is_some() {1} else {0} |
+            if stencil.is_some() {2} else {0};
         self.parser.parse(Command::ClearDepthStencil(target, flags,
                       depth.unwrap_or_default() as FLOAT,
-                      stencil.unwrap_or_default() as UINT8
+                      stencil.unwrap_or_default() as u8
         ));
     }
 
