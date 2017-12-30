@@ -224,25 +224,7 @@ impl RawCommandBuffer {
     }
 
     fn push_cmd(&mut self, cmd: Command) {
-        let slice = {
-            let mut memory = self
-                .memory
-                .try_lock()
-                .expect("Trying to record a command buffers, while memory is in-use.");
-
-            let cmd_buffer = match *memory {
-                BufferMemory::Linear(ref mut buffer) => &mut buffer.commands,
-                BufferMemory::Individual { ref mut storage, .. } => {
-                    &mut storage.get_mut(&self.id).unwrap().commands
-                }
-            };
-            cmd_buffer.push(cmd);
-            BufferSlice {
-                offset: cmd_buffer.len() as u32 - 1,
-                size: 1,
-            }
-        };
-        self.buf.append(slice);
+        push_cmd_internal(&self.id, &mut self.memory, &mut self.buf, cmd);
     }
 
     /// Copy a given vector slice into the data buffer.
@@ -403,33 +385,23 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             }
         }
 
-        let mut attribute_commands = None;
-
         if let Some(ref attributes) = self.cache.attributes {
-            attribute_commands = Some(attributes
-                .iter()
-                .map(|attribute| {
-                        let handle = match self.cache.vertex_buffers {
-                            Some(ref vbs) => vbs[attribute.binding as usize],
-                            None => {
-                                error!("No vertex buffers are bound");
-                                0
-                            },
-                        };
-                        Command::BindAttribute(*attribute, handle)
-                    })
-                .collect::<Vec<_>>()
-            );
-        };
-
-        match attribute_commands {
-            Some(cmds) => {
-                for cmd in cmds {
-                    self.push_cmd(cmd);
-                }
+            for attribute in attributes {
+                let handle = match self.cache.vertex_buffers {
+                    Some(ref vbs) => vbs[attribute.binding as usize],
+                    None => {
+                        error!("No vertex buffers are bound");
+                        0
+                    },
+                };
+                push_cmd_internal(
+                    &self.id,
+                    &mut self.memory,
+                    &mut self.buf,
+                    Command::BindAttribute(*attribute, handle)
+                );
             }
-            None => {}
-        }
+        };
     }
 
     fn next_subpass(&mut self, _contents: command::SubpassContents) {
@@ -853,6 +825,27 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     ) {
         unimplemented!()
     }
+}
+
+fn push_cmd_internal(id: &u64, memory: &mut Arc<Mutex<pool::BufferMemory>>, buffer: &mut BufferSlice, cmd: Command) {
+    let slice = {
+        let mut memory = memory
+            .try_lock()
+            .expect("Trying to record a command buffers, while memory is in-use.");
+
+        let cmd_buffer = match *memory {
+            BufferMemory::Linear(ref mut buffer) => &mut buffer.commands,
+            BufferMemory::Individual { ref mut storage, .. } => {
+                &mut storage.get_mut(id).unwrap().commands
+            }
+        };
+        cmd_buffer.push(cmd);
+        BufferSlice {
+            offset: cmd_buffer.len() as u32 - 1,
+            size: 1,
+        }
+    };
+    buffer.append(slice);
 }
 
 /// A subpass command buffer abstraction for OpenGL
