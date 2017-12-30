@@ -14,9 +14,9 @@
 
 #[deny(missing_docs)]
 
-#[macro_use]
-extern crate log;
-#[macro_use]
+//#[macro_use]
+//extern crate log;
+//#[macro_use]
 extern crate objc;
 extern crate cocoa;
 extern crate winit;
@@ -45,6 +45,8 @@ use metal::*;
 
 use std::ops::Deref;
 use std::cell::Cell;
+use std::error::Error;
+use std::fmt;
 use std::mem;
 
 pub struct MetalWindow {
@@ -95,6 +97,27 @@ pub enum InitError {
     BackbufferFormat(Format),
     /// Unable to find a supported driver type.
     DriverType,
+}
+
+impl fmt::Display for InitError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            InitError::Format(ref fm) => write!(f, "{}: {:?}", self.description(), fm),
+            InitError::BackbufferFormat(ref fm) => write!(f, "{}: {:?}", self.description(), fm),
+            _ => f.write_str(self.description()),
+        }
+    }
+}
+
+impl Error for InitError {
+    fn description(&self) -> &str {
+        match *self {
+            InitError::Window => "unable to create a window",
+            InitError::Format(_) => "unable to map format",
+            InitError::BackbufferFormat(_) => "format not allowed by the backbuffer",
+            InitError::DriverType => "unable to find a supported driver type",
+        }
+    }
 }
 
 pub fn init<C: RenderFormat>(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop)
