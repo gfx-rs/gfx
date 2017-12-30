@@ -29,7 +29,7 @@ use metal::*;
 
 use core::{handle, texture as tex};
 use core::SubmissionResult;
-use core::memory::{self, Usage, Bind};
+use core::memory::{Usage, Bind};
 use core::command::{AccessInfo, AccessGuard};
 
 use std::cell::RefCell;
@@ -363,7 +363,7 @@ pub fn create(format: core::format::Format,
                             tex::AaMode::Single),
         levels: 1,
         format: format.0,
-        bind: memory::RENDER_TARGET,
+        bind: Bind::RENDER_TARGET,
         usage: raw_tex.1,
     };
     let color_tex = device.share.handles.borrow_mut().make_texture(raw_tex, color_info);

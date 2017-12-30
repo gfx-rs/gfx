@@ -16,8 +16,7 @@ use metal::*;
 
 use core::{state, shade};
 use core::{IndexType, Primitive};
-use core::memory;
-use core::memory::{Bind, Usage};
+use core::memory::{Access, Bind, Usage};
 use core::format::{Format, ChannelType, SurfaceType};
 use core::state::Comparison;
 use core::texture::{FilterMethod, WrapMode};
@@ -499,26 +498,26 @@ pub fn map_texture_type(tex_type: MTLTextureType) -> shade::TextureType {
 pub fn map_texture_bind(bind: Bind) -> MTLTextureUsage {
     let mut flags = MTLTextureUsageUnknown;
 
-    if bind.contains(memory::RENDER_TARGET) || bind.contains(memory::DEPTH_STENCIL) {
+    if bind.contains(Bind::RENDER_TARGET) || bind.contains(Bind::DEPTH_STENCIL) {
         flags = flags | MTLTextureUsageRenderTarget;
     }
 
-    if bind.contains(memory::SHADER_RESOURCE) {
+    if bind.contains(Bind::SHADER_RESOURCE) {
         flags = flags | MTLTextureUsageShaderRead;
     }
 
-    if bind.contains(memory::UNORDERED_ACCESS) {
+    if bind.contains(Bind::UNORDERED_ACCESS) {
         flags = flags | MTLTextureUsageShaderWrite;
     }
 
     flags
 }
 
-pub fn map_access(access: memory::Access) -> MTLResourceOptions {
+pub fn map_access(access: Access) -> MTLResourceOptions {
     match access {
-        memory::READ => MTLResourceCPUCacheModeDefaultCache,
-        memory::WRITE => MTLResourceCPUCacheModeWriteCombined,
-        memory::RW => MTLResourceCPUCacheModeDefaultCache,
+        Access::READ => MTLResourceCPUCacheModeDefaultCache,
+        Access::WRITE => MTLResourceCPUCacheModeWriteCombined,
+        Access::RW => MTLResourceCPUCacheModeDefaultCache,
         _ => unreachable!(),
     }
 }
@@ -531,8 +530,8 @@ pub fn map_texture_usage(usage: Usage, bind: Bind) -> (MTLResourceOptions, MTLSt
             (MTLResourceStorageModePrivate, MTLStorageMode::Managed)
         },
         Usage::Dynamic => (MTLResourceCPUCacheModeDefaultCache, MTLStorageMode::Managed),
-        Usage::Upload => (map_access(memory::WRITE), MTLStorageMode::Managed),
-        Usage::Download => (map_access(memory::READ), MTLStorageMode::Managed),
+        Usage::Upload => (map_access(Access::WRITE), MTLStorageMode::Managed),
+        Usage::Download => (map_access(Access::READ), MTLStorageMode::Managed),
     }
 }
 
@@ -544,8 +543,8 @@ pub fn map_buffer_usage(usage: Usage, bind: Bind) -> MTLResourceOptions {
             MTLResourceCPUCacheModeDefaultCache | MTLResourceStorageModeManaged
         },
         Usage::Dynamic => MTLResourceCPUCacheModeDefaultCache | MTLResourceStorageModeManaged,
-        Usage::Upload => map_access(memory::WRITE) | MTLResourceStorageModeManaged,
-        Usage::Download => map_access(memory::READ) | MTLResourceStorageModeManaged,
+        Usage::Upload => map_access(Access::WRITE) | MTLResourceStorageModeManaged,
+        Usage::Download => map_access(Access::READ) | MTLResourceStorageModeManaged,
     }
 }
 
@@ -578,19 +577,19 @@ pub fn map_wrap(wrap: WrapMode) -> MTLSamplerAddressMode {
 pub fn map_write_mask(mask: state::ColorMask) -> MTLColorWriteMask {
     let mut mtl_mask = MTLColorWriteMaskNone;
 
-    if mask.contains(state::RED) {
+    if mask.contains(state::ColorMask::RED) {
         mtl_mask.insert(MTLColorWriteMaskRed);
     }
 
-    if mask.contains(state::GREEN) {
+    if mask.contains(state::ColorMask::GREEN) {
         mtl_mask.insert(MTLColorWriteMaskGreen);
     }
 
-    if mask.contains(state::BLUE) {
+    if mask.contains(state::ColorMask::BLUE) {
         mtl_mask.insert(MTLColorWriteMaskBlue);
     }
 
-    if mask.contains(state::ALPHA) {
+    if mask.contains(state::ColorMask::ALPHA) {
         mtl_mask.insert(MTLColorWriteMaskAlpha);
     }
 
