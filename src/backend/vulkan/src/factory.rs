@@ -15,7 +15,7 @@
 use std::{cell, mem, ptr, slice};
 use std::os::raw::c_void;
 use core::{self, handle as h, pso, state, texture, buffer, mapping};
-use core::memory::{self, Bind};
+use core::memory::{Bind, Usage};
 use core::factory::{self as f};
 use core::format::{ChannelType, Format};
 use core::target::Layer;
@@ -161,8 +161,8 @@ impl Factory {
             kind: t::Kind::D2(size.0 as t::Size, size.1 as t::Size, t::AaMode::Single),
             levels: 1,
             format: format.0,
-            bind: memory::RENDER_TARGET,
-            usage: memory::Usage::Data,
+            bind: Bind::RENDER_TARGET,
+            usage: Usage::Data,
         };
         let tex = self.frame_handles.make_texture(raw_tex, tex_desc);
         let view_desc = t::RenderDesc {
@@ -215,10 +215,9 @@ impl Factory {
             vk.BindBufferMemory(dev, buf, mem, 0)
         });
 
-        use core::memory::Usage::*;
         let mapping = match info.usage {
-            Data | Dynamic => None,
-            Upload | Download => Some({
+            Usage::Data | Usage::Dynamic => None,
+            Usage::Upload | Usage::Download => Some({
                 let mut m = MappingGate {
                     pointer: ptr::null_mut(),
                     status: mapping::Status::clean(),
@@ -240,8 +239,7 @@ impl Factory {
         }, mapping)
     }
 
-    fn alloc(&self, usage: memory::Usage, reqs: vk::MemoryRequirements) -> vk::DeviceMemory {
-        use core::memory::Usage::*;
+    fn alloc(&self, usage: Usage, reqs: vk::MemoryRequirements) -> vk::DeviceMemory {
         let info = vk::MemoryAllocateInfo {
             sType: vk::STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
             pNext: ptr::null(),
@@ -249,8 +247,8 @@ impl Factory {
             memoryTypeIndex: match usage {
                 // TODO: more fine-grained memory selection
                 // HOST_CACHED if possible for Download
-                Upload | Download => self.mem_system_id,
-                Data | Dynamic => self.mem_video_id,
+                Usage::Upload | Usage::Download => self.mem_system_id,
+                Usage::Data | Usage::Dynamic => self.mem_video_id,
             },
         };
         let (dev, vk) = self.share.get_device();
@@ -327,7 +325,7 @@ impl core::Factory<R> for Factory {
         use core::handle::Producer;
         let info = buffer::Info {
             role: role,
-            usage: memory::Usage::Data,
+            usage: Usage::Data,
             bind: bind,
             size: data.len(),
             stride: stride,

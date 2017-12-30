@@ -96,11 +96,11 @@ fn map_image_to_texture_type(dim: desc::Dim, arrayed: bool, multisampled: bool) 
     let arrayed = if arrayed { shade::IsArray::Array } else { shade::IsArray::NoArray };
     let multisampled = if multisampled { shade::IsMultiSample::MultiSample } else { shade::IsMultiSample::NoMultiSample };
     match dim {
-        Dim::_1D => shade::TextureType::D1(arrayed),
-        Dim::_2D => shade::TextureType::D2(arrayed, multisampled),
-        Dim::_3D => shade::TextureType::D3,
-        Dim::Cube => shade::TextureType::Cube(arrayed),
-        Dim::Buffer => shade::TextureType::Buffer,
+        Dim::_1D => TextureType::D1(arrayed),
+        Dim::_2D => TextureType::D2(arrayed, multisampled),
+        Dim::_3D => TextureType::D3,
+        Dim::Cube => TextureType::Cube(arrayed),
+        Dim::Buffer => TextureType::Buffer,
 
         _ => unimplemented!(),
     }
@@ -346,7 +346,7 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage, reflect
                                 name: buffer_name,
                                 slot: slot as core::ConstantBufferSlot,
                                 size: 0, // TODO:
-                                usage: shade::VERTEX | shade::GEOMETRY | shade::PIXEL, // TODO:
+                                usage: shade::Usage::VERTEX | shade::Usage::GEOMETRY | shade::Usage::PIXEL, // TODO:
                                 elements: elements,
                             });
                         },
@@ -361,7 +361,7 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage, reflect
                                 name: sampler_name.to_owned(),
                                 slot: slot as core::SamplerSlot,
                                 ty: shade::SamplerType(shade::IsComparison::NoCompare, shade::IsRect::NoRect), // TODO:
-                                usage: shade::VERTEX | shade::GEOMETRY | shade::PIXEL, // TODO:
+                                usage: shade::Usage::VERTEX | shade::Usage::GEOMETRY | shade::Usage::PIXEL, // TODO:
                             });
                         },
 
@@ -376,7 +376,7 @@ pub fn populate_info(info: &mut shade::ProgramInfo, stage: shade::Stage, reflect
                                 slot: slot as core::ResourceViewSlot,
                                 base_type: base_type,
                                 ty: texture_type,
-                                usage: shade::VERTEX | shade::GEOMETRY | shade::PIXEL, // TODO:
+                                usage: shade::Usage::VERTEX | shade::Usage::GEOMETRY | shade::Usage::PIXEL, // TODO:
                             });
                         },
 
