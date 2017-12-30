@@ -291,7 +291,7 @@ A: Sized + ApplicationBase<gfx_device_metal::Resources, gfx_device_metal::Comman
     let mut events_loop = winit::EventsLoop::new();
     let (window, mut device, mut factory, main_color) = gfx_window_metal::init::<ColorFormat>(wb, &events_loop)
                                                                                 .unwrap();
-    let (width, height) = window.get_inner_size_points().unwrap();
+    let (width, height) = window.get_inner_size().unwrap();
     let main_depth = factory.create_depth_stencil_view_only(width as Size, height as Size).unwrap();
 
     let backend = shade::Backend::Msl(device.get_shader_model());
