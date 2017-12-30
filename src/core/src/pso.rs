@@ -73,7 +73,7 @@ impl From<s::ColorMask> for ColorInfo {
 impl From<s::Blend> for ColorInfo {
     fn from(blend: s::Blend) -> ColorInfo {
         ColorInfo {
-            mask: s::MASK_ALL,
+            mask: s::ColorMask::all(),
             color: Some(blend.color),
             alpha: Some(blend.alpha),
         }

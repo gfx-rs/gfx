@@ -13,9 +13,15 @@
 // limitations under the License.
 
 use std::ptr;
-use winapi::*;
+
+use winapi::shared::basetsd::UINT8;
+use winapi::shared::winerror::SUCCEEDED;
+use winapi::shared::minwindef::*;
+use winapi::um::d3d11::*;
+
 use core::{pso, state};
 use data::map_function;
+
 
 pub fn make_rasterizer(device: *mut ID3D11Device, rast: &state::Rasterizer, use_scissor: bool)
                        -> *const ID3D11RasterizerState {
@@ -60,7 +66,7 @@ pub fn make_rasterizer(device: *mut ID3D11Device, rast: &state::Rasterizer, use_
         (*device).CreateRasterizerState(&desc, &mut handle)
     };
     if !SUCCEEDED(hr) {
-        error!("Failed to create rasterizer state {:?}, descriptor {:#?}, code {:x}", rast, desc, hr);
+        error!("Failed to create rasterizer state {:?}, descriptor ?, code {:x}", rast/*, desc*/, hr);
     }
     handle as *const _
 }
@@ -107,10 +113,10 @@ pub fn make_depth_stencil(device: *mut ID3D11Device, dsi: &pso::DepthStencilInfo
                           -> *const ID3D11DepthStencilState {
     let desc = D3D11_DEPTH_STENCIL_DESC {
         DepthEnable: if dsi.depth.is_some() {TRUE} else {FALSE},
-        DepthWriteMask: D3D11_DEPTH_WRITE_MASK(match dsi.depth {
+        DepthWriteMask: match dsi.depth {
             Some(ref d) if d.write => 1,
             _ => 0,
-        }),
+        },
         DepthFunc: match dsi.depth {
             Some(ref d) => map_function(d.fun),
             None => D3D11_COMPARISON_NEVER,
@@ -127,7 +133,7 @@ pub fn make_depth_stencil(device: *mut ID3D11Device, dsi: &pso::DepthStencilInfo
         (*device).CreateDepthStencilState(&desc, &mut handle)
     };
     if !SUCCEEDED(hr) {
-        error!("Failed to create depth-stencil state {:?}, descriptor {:#?}, error {:x}", dsi, desc, hr);
+        error!("Failed to create depth-stencil state {:?}, descriptor ?, error {:x}", dsi/*, desc*/, hr);
     }
     handle as *const _
 }
@@ -196,7 +202,7 @@ pub fn make_blend(device: *mut ID3D11Device, targets: &[Option<pso::ColorTargetD
             &Some(ref d) => &d.1,
             &None => continue,
         };
-        out.RenderTargetWriteMask = info.mask.bits() as UINT8;
+        out.RenderTargetWriteMask = info.mask.bits() as _;
         if let Some(ref b) = info.color {
             out.BlendEnable = TRUE;
             out.SrcBlend = map_blend_factor(b.source, false);
@@ -216,7 +222,7 @@ pub fn make_blend(device: *mut ID3D11Device, targets: &[Option<pso::ColorTargetD
         (*device).CreateBlendState(&desc, &mut handle)
     };
     if !SUCCEEDED(hr) {
-        error!("Failed to create blend state {:?}, descriptor {:#?}, error {:x}", targets, desc, hr);
+        error!("Failed to create blend state {:?}, descriptor ?, error {:x}", targets/*, desc*/, hr);
     }
     handle as *const _
 }

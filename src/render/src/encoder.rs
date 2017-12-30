@@ -23,7 +23,7 @@ use std::{fmt, mem};
 
 use core::{Device, SubmissionResult, IndexType, Resources, VertexCount};
 use core::{command, format, handle, texture};
-use core::memory::{self, cast_slice, Typed, Pod, Usage};
+use core::memory::{cast_slice, Typed, Pod, Usage, Bind};
 use slice;
 use pso;
 
@@ -218,10 +218,10 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
     /// Copy part of a buffer to another
     pub fn copy_buffer<T: Pod>(&mut self, src: &handle::Buffer<R, T>, dst: &handle::Buffer<R, T>,
                                src_offset: usize, dst_offset: usize, size: usize) -> CopyBufferResult {
-        if !src.get_info().bind.contains(memory::TRANSFER_SRC) {
+        if !src.get_info().bind.contains(Bind::TRANSFER_SRC) {
             return Err(CopyError::NoSrcBindFlag);
         }
-        if !dst.get_info().bind.contains(memory::TRANSFER_DST) {
+        if !dst.get_info().bind.contains(Bind::TRANSFER_DST) {
             return Err(CopyError::NoDstBindFlag);
         }
 
@@ -268,10 +268,10 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
         dst: &handle::RawTexture<R>, cube_face: Option<texture::CubeFace>, info: texture::RawImageInfo)
         -> CopyBufferTextureResult
     {
-        if !src.get_info().bind.contains(memory::TRANSFER_SRC) {
+        if !src.get_info().bind.contains(Bind::TRANSFER_SRC) {
             return Err(CopyError::NoSrcBindFlag);
         }
-        if !dst.get_info().bind.contains(memory::TRANSFER_DST) {
+        if !dst.get_info().bind.contains(Bind::TRANSFER_DST) {
             return Err(CopyError::NoDstBindFlag);
         }
 
@@ -316,10 +316,10 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
         dst: &handle::RawBuffer<R>, dst_offset_bytes: usize)
         -> CopyTextureBufferResult
     {
-        if !src.get_info().bind.contains(memory::TRANSFER_SRC) {
+        if !src.get_info().bind.contains(Bind::TRANSFER_SRC) {
             return Err(CopyError::NoSrcBindFlag);
         }
-        if !dst.get_info().bind.contains(memory::TRANSFER_DST) {
+        if !dst.get_info().bind.contains(Bind::TRANSFER_DST) {
             return Err(CopyError::NoDstBindFlag);
         }
 
@@ -362,7 +362,7 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
         dst: &handle::RawTexture<R>, dst_face: Option<texture::CubeFace>, dst_info: texture::RawImageInfo)
         -> CopyTextureResult
     {
-        if !src.get_info().bind.contains(memory::TRANSFER_SRC) {
+        if !src.get_info().bind.contains(Bind::TRANSFER_SRC) {
             return Err(CopyError::NoSrcBindFlag);
         }
         let src_dim = src.get_info().kind.get_dimensions();
@@ -382,7 +382,7 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
             info: src_info,
         };
 
-        if !dst.get_info().bind.contains(memory::TRANSFER_DST) {
+        if !dst.get_info().bind.contains(Bind::TRANSFER_DST) {
             return Err(CopyError::NoDstBindFlag);
         }
         let dst_dim = dst.get_info().kind.get_dimensions();

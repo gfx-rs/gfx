@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx"
-version = "0.16.2"
+version = "0.17.0"
 description = "A high-performance, bindless graphics API"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -30,12 +30,12 @@ name = "gfx"
 path = "src/lib.rs"
 
 [features]
-serialize = ["gfx_core/serialize", "draw_state/serialize"]
+serialize = ["gfx_core/serialize", "draw_state/serde"]
 unstable = []
 
 [dependencies]
-mint = { version = "0.4.1", optional = true }
+mint = { version = "0.5", optional = true }
 derivative = "1.0"
-draw_state = "0.7"
-gfx_core = { path = "../core", version = "0.7.1" }
-log = "0.3"
+draw_state = "0.8"
+gfx_core = { path = "../core", version = "0.8" }
+log = "0.4"

@@ -24,7 +24,7 @@ use core::{buffer, format, handle, texture, state};
 use core::{Primitive, Resources, ShaderSet};
 use core::factory::Factory;
 use core::pso::{CreationError, Descriptor};
-use core::memory::{self, Bind, Pod};
+use core::memory::{Bind, Pod, Usage};
 use slice::{Slice, IndexBuffer, IntoIndexBuffer};
 use pso;
 use shade::ProgramError;
@@ -98,7 +98,7 @@ impl<S> From<CreationError> for PipelineStateError<S> {
 }
 
 /// This trait is responsible for creating and managing graphics resources, much like the `Factory`
-/// trait in the `gfx` crate. Every `Factory` automatically implements `FactoryExt`. 
+/// trait in the `gfx` crate. Every `Factory` automatically implements `FactoryExt`.
 pub trait FactoryExt<R: Resources>: Factory<R> {
     /// Creates an immutable vertex buffer from the supplied vertices.
     /// A `Slice` will have to manually be constructed.
@@ -135,7 +135,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
             IndexBuffer::Index16(ref ib) => ib.len(),
             IndexBuffer::Index32(ref ib) => ib.len(),
         };
-        
+
         (vertex_buffer, Slice {
             start: 0,
             end: buffer_length as u32,
@@ -151,7 +151,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     {
         self.create_buffer(num,
                            buffer::Role::Constant,
-                           memory::Usage::Dynamic,
+                           Usage::Dynamic,
                            Bind::empty()).unwrap()
     }
 
@@ -161,8 +161,8 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     {
         self.create_buffer(num,
                            buffer::Role::Staging,
-                           memory::Usage::Upload,
-                           memory::TRANSFER_SRC)
+                           Usage::Upload,
+                           Bind::TRANSFER_SRC)
     }
 
     /// Creates a download buffer for `num` elements of type `T`.
@@ -171,8 +171,8 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     {
         self.create_buffer(num,
                            buffer::Role::Staging,
-                           memory::Usage::Download,
-                           memory::TRANSFER_DST)
+                           Usage::Download,
+                           Bind::TRANSFER_DST)
     }
 
     /// Creates a `ShaderSet` from the supplied vertex and pixel shader source code.
@@ -243,7 +243,7 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     }
 
     /// Similar to `create_pipeline_from_program(..)`, but takes a `ShaderSet` as opposed to a
-    /// shader `Program`.  
+    /// shader `Program`.
     fn create_pipeline_state<I: pso::PipelineInit>(&mut self, shaders: &ShaderSet<R>,
                              primitive: Primitive, rasterizer: state::Rasterizer, init: I)
                              -> Result<pso::PipelineState<R, I::Meta>, PipelineStateError<String>>

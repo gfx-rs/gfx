@@ -317,29 +317,29 @@ impl_const_matrix_mint! {
 bitflags!(
     /// Parameter usage flags.
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-    pub flags Usage: u8 {
+    pub struct Usage: u8 {
         /// Used by the vertex shader
-        const VERTEX   = 0x1,
+        const VERTEX   = 0x1;
         /// Used by the geometry shader
-        const GEOMETRY = 0x2,
+        const GEOMETRY = 0x2;
         /// Used by the pixel shader
-        const PIXEL    = 0x4,
+        const PIXEL    = 0x4;
         /// Used by the hull shader
-        const HULL    = 0x8,
+        const HULL     = 0x8;
         /// Used by the pixel shader
-        const DOMAIN    = 0x16,
+        const DOMAIN   = 0x16;
 
     }
 );
 
 impl From<Stage> for Usage {
-    fn from(stage: Stage) -> Usage {
+    fn from(stage: Stage) -> Self {
         match stage {
-            Stage::Vertex => VERTEX,
-            Stage::Geometry => GEOMETRY,
-            Stage::Pixel => PIXEL,
-            Stage::Hull => HULL,
-            Stage::Domain => DOMAIN,
+            Stage::Vertex => Self::VERTEX,
+            Stage::Geometry => Self::GEOMETRY,
+            Stage::Pixel => Self::PIXEL,
+            Stage::Hull => Self::HULL,
+            Stage::Domain => Self::DOMAIN,
         }
     }
 }

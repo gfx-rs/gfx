@@ -13,9 +13,9 @@ documentation = "https://docs.rs/gfx_window_vulkan"
 name = "gfx_window_vulkan"
 
 [dependencies]
-winit = "0.9"
+winit = "0.10"
 vk-sys = { git = "https://github.com/sectopod/vulkano", branch = "bind" }
-gfx_core = { path = "../../core", version = "0.7" }
+gfx_core = { path = "../../core", version = "0.8" }
 gfx_device_vulkan = { path = "../../backend/vulkan", version = "0.2" }
 
 [target.'cfg(windows)'.dependencies]

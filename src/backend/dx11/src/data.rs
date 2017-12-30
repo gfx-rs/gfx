@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use winapi::*;
-use core::memory::{self, Bind, Usage};
+use winapi::shared::dxgiformat::*;
+use winapi::shared::dxgitype::{DXGI_SAMPLE_DESC};
+use winapi::um::d3d11::*;
+
+use core::memory::{Access, Bind, Usage};
 use core::format::{Format, SurfaceType};
 use core::state::Comparison;
 use core::texture::{AaMode, FilterMethod, WrapMode, DepthStencilFlags};
@@ -176,46 +179,46 @@ pub fn map_anti_alias(aa: AaMode) -> DXGI_SAMPLE_DESC {
             Quality: 0,
         },
         AaMode::Multi(count) => DXGI_SAMPLE_DESC {
-            Count: count as UINT,
+            Count: count as _,
             Quality: 0,
         },
         AaMode::Coverage(samples, fragments) => DXGI_SAMPLE_DESC {
-            Count: fragments as UINT,
-            Quality: (0..9).find(|q| (fragments<<q) >= samples).unwrap() as UINT,
+            Count: fragments as _,
+            Quality: (0..9).find(|q| (fragments<<q) >= samples).unwrap() as _,
         },
     }
 }
 
 pub fn map_bind(bind: Bind) -> D3D11_BIND_FLAG {
-    let mut flags = D3D11_BIND_FLAG(0);
-    if bind.contains(memory::RENDER_TARGET) {
+    let mut flags = 0;
+    if bind.contains(Bind::RENDER_TARGET) {
         flags = flags | D3D11_BIND_RENDER_TARGET;
     }
-    if bind.contains(memory::DEPTH_STENCIL) {
+    if bind.contains(Bind::DEPTH_STENCIL) {
         flags = flags | D3D11_BIND_DEPTH_STENCIL;
     }
-    if bind.contains(memory::SHADER_RESOURCE) {
+    if bind.contains(Bind::SHADER_RESOURCE) {
         flags = flags | D3D11_BIND_SHADER_RESOURCE;
     }
-    if bind.contains(memory::UNORDERED_ACCESS) {
+    if bind.contains(Bind::UNORDERED_ACCESS) {
         flags = flags | D3D11_BIND_UNORDERED_ACCESS;
     }
     flags
 }
 
-pub fn map_access(access: memory::Access) -> D3D11_CPU_ACCESS_FLAG {
-    let mut r = D3D11_CPU_ACCESS_FLAG(0);
-    if access.contains(memory::READ) { r = r | D3D11_CPU_ACCESS_READ }
-    if access.contains(memory::WRITE) { r = r | D3D11_CPU_ACCESS_WRITE }
+pub fn _map_access(access: Access) -> D3D11_CPU_ACCESS_FLAG {
+    let mut r = 0;
+    if access.contains(Access::READ) { r = r | D3D11_CPU_ACCESS_READ }
+    if access.contains(Access::WRITE) { r = r | D3D11_CPU_ACCESS_WRITE }
     r
 }
 
 pub fn map_usage(usage: Usage, bind: Bind) -> (D3D11_USAGE, D3D11_CPU_ACCESS_FLAG) {
     match usage {
         Usage::Data => if bind.is_mutable() {
-            (D3D11_USAGE_DEFAULT, D3D11_CPU_ACCESS_FLAG(0))
+            (D3D11_USAGE_DEFAULT, 0)
         } else {
-            (D3D11_USAGE_IMMUTABLE, D3D11_CPU_ACCESS_FLAG(0))
+            (D3D11_USAGE_IMMUTABLE, 0)
         },
         Usage::Dynamic => (D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_WRITE),
         Usage::Upload => (D3D11_USAGE_STAGING, D3D11_CPU_ACCESS_WRITE),
@@ -260,12 +263,12 @@ pub fn map_filter(filter: FilterMethod, op: FilterOp) -> D3D11_FILTER {
 }
 
 pub fn map_dsv_flags(dsf: DepthStencilFlags) -> D3D11_DSV_FLAG {
-    use core::texture as t;
-    let mut out = D3D11_DSV_FLAG(0);
-    if dsf.contains(t::RO_DEPTH) {
+    use core::texture::DepthStencilFlags as Dsf;
+    let mut out = 0;
+    if dsf.contains(Dsf::RO_DEPTH) {
         out = out | D3D11_DSV_READ_ONLY_DEPTH;
     }
-    if dsf.contains(t::RO_STENCIL) {
+    if dsf.contains(Dsf::RO_STENCIL) {
         out = out | D3D11_DSV_READ_ONLY_STENCIL;
     }
     out

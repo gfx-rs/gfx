@@ -17,12 +17,12 @@ use std::{slice, ptr};
 
 use {gl, tex};
 use core::{self as d, factory as f, texture as t, buffer, mapping};
-use core::memory::{self, Bind, SHADER_RESOURCE, UNORDERED_ACCESS, Typed};
+use core::memory::{Access, Bind, Typed, Usage};
 use core::format::{ChannelType, Format};
 use core::handle::{self, Producer};
 use core::target::{Layer, Level};
 
-use command::{CommandBuffer, COLOR_DEFAULT};
+use command::CommandBuffer;
 use {Resources as R, Share, OutputMerger};
 use {Buffer, BufferElement, FatSampler, NewTexture,
      PipelineState, ResourceView, TargetView, Fence};
@@ -37,18 +37,18 @@ pub fn role_to_target(role: buffer::Role) -> gl::types::GLenum {
     }
 }
 
-fn access_to_map_bits(access: memory::Access) -> gl::types::GLenum {
+fn access_to_map_bits(access: Access) -> gl::types::GLenum {
     let mut r = 0;
-    if access.contains(memory::READ) { r |= gl::MAP_READ_BIT; }
-    if access.contains(memory::WRITE) { r |= gl::MAP_WRITE_BIT; }
+    if access.contains(Access::READ) { r |= gl::MAP_READ_BIT; }
+    if access.contains(Access::WRITE) { r |= gl::MAP_WRITE_BIT; }
     r
 }
 
-fn access_to_gl(access: memory::Access) -> gl::types::GLenum {
+fn access_to_gl(access: Access) -> gl::types::GLenum {
     match access {
-        memory::RW => gl::READ_WRITE,
-        memory::READ => gl::READ_ONLY,
-        memory::WRITE => gl::WRITE_ONLY,
+        Access::RW => gl::READ_WRITE,
+        Access::READ => gl::READ_ONLY,
+        Access::WRITE => gl::WRITE_ONLY,
         _ => unreachable!(),
     }
 }
@@ -112,8 +112,6 @@ impl Factory {
                    buffer: Buffer,
                    info: &buffer::Info,
                    data_opt: Option<&[u8]>) -> Option<MappingGate> {
-        use core::memory::Usage::*;
-
         let gl = &self.share.context;
         let target = role_to_target(info.role);
         let mut data_ptr = if let Some(data) = data_opt {
@@ -125,11 +123,11 @@ impl Factory {
 
         if self.share.private_caps.buffer_storage_supported {
             let usage = match info.usage {
-                Data => 0,
+                Usage::Data => 0,
                 // TODO: we could use mapping instead of glBufferSubData
-                Dynamic => gl::DYNAMIC_STORAGE_BIT,
-                Upload => access_to_map_bits(memory::WRITE) | gl::MAP_PERSISTENT_BIT,
-                Download => access_to_map_bits(memory::READ) | gl::MAP_PERSISTENT_BIT,
+                Usage::Dynamic => gl::DYNAMIC_STORAGE_BIT,
+                Usage::Upload => access_to_map_bits(Access::WRITE) | gl::MAP_PERSISTENT_BIT,
+                Usage::Download => access_to_map_bits(Access::READ) | gl::MAP_PERSISTENT_BIT,
             };
             let size = if info.size == 0 {
                 // we are not allowed to pass size=0 into `glBufferStorage`
@@ -149,10 +147,10 @@ impl Factory {
         }
         else {
             let usage = match info.usage {
-                Data => gl::STATIC_DRAW,
-                Dynamic => gl::DYNAMIC_DRAW,
-                Upload => gl::STREAM_DRAW,
-                Download => gl::STREAM_READ,
+                Usage::Data => gl::STATIC_DRAW,
+                Usage::Dynamic => gl::DYNAMIC_DRAW,
+                Usage::Upload => gl::STREAM_DRAW,
+                Usage::Download => gl::STREAM_READ,
             };
             unsafe {
                 gl.BindBuffer(target, buffer);
@@ -168,16 +166,16 @@ impl Factory {
         }
 
         let mapping_access = match info.usage {
-            Data | Dynamic => None,
-            Upload => Some(memory::WRITE),
-            Download => Some(memory::READ),
+            Usage::Data | Usage::Dynamic => None,
+            Usage::Upload => Some(Access::WRITE),
+            Usage::Download => Some(Access::READ),
         };
 
         mapping_access.map(|access| {
             let (kind, ptr) = if self.share.private_caps.buffer_storage_supported {
                 let mut gl_access = access_to_map_bits(access) |
                                     gl::MAP_PERSISTENT_BIT;
-                if access.contains(memory::WRITE) {
+                if access.contains(Access::WRITE) {
                     gl_access |= gl::MAP_FLUSH_EXPLICIT_BIT;
                 }
                 let size = info.size as isize;
@@ -280,7 +278,7 @@ impl mapping::Gate<R> for MappingGate {
 pub fn temporary_ensure_mapped(pointer: &mut *mut ::std::os::raw::c_void,
                                target: gl::types::GLenum,
                                buffer: Buffer,
-                               access: memory::Access,
+                               access: Access,
                                gl: &gl::Gl) {
     if pointer.is_null() {
         unsafe {
@@ -325,7 +323,7 @@ impl f::Factory<R> for Factory {
         let name = self.create_buffer_internal();
         let info = buffer::Info {
             role: role,
-            usage: memory::Usage::Data,
+            usage: Usage::Data,
             bind: bind,
             size: data.len(),
             stride: stride,
@@ -355,6 +353,10 @@ impl f::Factory<R> for Factory {
                 return Err(d::pso::CreationError),
             _ => ()
         }
+        let color = s::Color {
+            mask: s::ColorMask::all(),
+            blend: None,
+        };
         let mut output = OutputMerger {
             draw_mask: 0,
             stencil: match desc.depth_stencil {
@@ -365,7 +367,7 @@ impl f::Factory<R> for Factory {
                 _ => None,
             },
             depth: desc.depth_stencil.and_then(|(_, t)| t.depth),
-            colors: [COLOR_DEFAULT; d::MAX_COLOR_TARGETS],
+            colors: [color; d::MAX_COLOR_TARGETS],
         };
         for i in 0 .. d::MAX_COLOR_TARGETS {
             if let Some((_, ref bi)) = desc.color_targets[i] {
@@ -414,7 +416,7 @@ impl f::Factory<R> for Factory {
         }
         let cty = hint.unwrap_or(ChannelType::Uint); //careful here
         let gl = &self.share.context;
-        let object = if desc.bind.intersects(SHADER_RESOURCE | UNORDERED_ACCESS) || data_opt.is_some() {
+        let object = if desc.bind.intersects(Bind::SHADER_RESOURCE | Bind::UNORDERED_ACCESS) || data_opt.is_some() {
             let name = if caps.immutable_storage_supported {
                 try!(tex::make_with_storage(gl, &desc, cty))
             } else {
@@ -523,7 +525,7 @@ impl f::Factory<R> for Factory {
                     temporary_ensure_mapped(&mut mapping.pointer,
                                             role_to_target(buf.get_info().role),
                                             *buf.raw().resource(),
-                                            memory::READ,
+                                            Access::READ,
                                             gl),
             })
         }
@@ -543,7 +545,7 @@ impl f::Factory<R> for Factory {
                     temporary_ensure_mapped(&mut mapping.pointer,
                                             role_to_target(buf.get_info().role),
                                             *buf.raw().resource(),
-                                            memory::WRITE,
+                                            Access::WRITE,
                                             gl),
             })
         }

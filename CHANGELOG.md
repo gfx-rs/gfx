@@ -1,5 +1,18 @@
 ## Change Log
 
+### v0.17 (2017-12-30)
+  - basic WebGL2 support via `wasm32-unknown-emscripten` target ([#1706](https://github.com/gfx-rs/gfx/pull/1706), [#1681](https://github.com/gfx-rs/gfx/pull/1681))
+  - `mint` integration instead of `cgmath` ([#1301](https://github.com/gfx-rs/gfx/pull/1301))
+  - `draw_state` update to v0.8, breaking the bit flags ([#1708](https://github.com/gfx-rs/gfx/pull/1708))
+  - Features:
+    - texture to texture copies ([#1544](https://github.com/gfx-rs/gfx/pull/1544), [#1641](https://github.com/gfx-rs/gfx/pull/1641), [#1549](https://github.com/gfx-rs/gfx/pull/1549))
+    - DX11 texture readback ([#1630](https://github.com/gfx-rs/gfx/pull/1630))
+    - GL mipmap generation ([#1470](https://github.com/gfx-rs/gfx/pull/1470))
+    - GL buffer resource views ([#1329](https://github.com/gfx-rs/gfx/pull/1329))
+  - Examples:
+    - new [render_target](examples/render_target) example
+    - screenshot function for [gamma](examples/gamma) example ([#1478](https://github.com/gfx-rs/gfx/pull/1478))
+
 ### v0.16 (2017-05-11)
   - `RawGlobal` PSO component ([#1262](https://github.com/gfx-rs/gfx/pull/1262))
   - run-time configurable instance rate ([#1256](https://github.com/gfx-rs/gfx/pull/1256))

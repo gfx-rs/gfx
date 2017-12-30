@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{shade, state, memory, Primitive};
+use core::{shade, state, Primitive};
 use core::memory::{Bind, Usage};
 use core::format::{SurfaceType, ChannelType, Swizzle, ChannelSource};
 use core::pso::ColorInfo;
@@ -83,22 +83,22 @@ pub fn map_swizzle(swizzle: Swizzle) -> vk::ComponentMapping {
 
 pub fn map_usage_tiling(gfx_usage: Usage, bind: Bind) -> (vk::ImageUsageFlags, vk::ImageTiling) {
     let mut usage = 0;
-    if bind.contains(memory::TRANSFER_SRC) {
+    if bind.contains(Bind::TRANSFER_SRC) {
         usage |= vk::IMAGE_USAGE_TRANSFER_SRC_BIT;
     }
-    if bind.contains(memory::TRANSFER_DST) {
+    if bind.contains(Bind::TRANSFER_DST) {
         usage |= vk::IMAGE_USAGE_TRANSFER_DST_BIT;
     }
-    if bind.contains(memory::RENDER_TARGET) {
+    if bind.contains(Bind::RENDER_TARGET) {
         usage |= vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     }
-    if bind.contains(memory::DEPTH_STENCIL) {
+    if bind.contains(Bind::DEPTH_STENCIL) {
         usage |= vk::IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     }
-    if bind.contains(memory::SHADER_RESOURCE) {
+    if bind.contains(Bind::SHADER_RESOURCE) {
         usage |= vk::IMAGE_USAGE_SAMPLED_BIT;
     }
-    if bind.contains(memory::UNORDERED_ACCESS) {
+    if bind.contains(Bind::UNORDERED_ACCESS) {
         usage |= vk::IMAGE_USAGE_STORAGE_BIT;
     }
     let tiling = match gfx_usage {
@@ -406,15 +406,15 @@ pub fn map_blend(ci: &ColorInfo) -> vk::PipelineColorBlendAttachmentState {
         dstAlphaBlendFactor: ci.alpha.map_or(0, |a| map_blend_factor(a.destination)),
         alphaBlendOp: ci.alpha.map_or(0, |a| map_blend_op(a.equation)),
         colorWriteMask:
-            if ci.mask.contains(state::RED)   {vk::COLOR_COMPONENT_R_BIT} else {0} |
-            if ci.mask.contains(state::GREEN) {vk::COLOR_COMPONENT_G_BIT} else {0} |
-            if ci.mask.contains(state::BLUE)  {vk::COLOR_COMPONENT_B_BIT} else {0} |
-            if ci.mask.contains(state::ALPHA) {vk::COLOR_COMPONENT_A_BIT} else {0},
+            if ci.mask.contains(state::ColorMask::RED)   {vk::COLOR_COMPONENT_R_BIT} else {0} |
+            if ci.mask.contains(state::ColorMask::GREEN) {vk::COLOR_COMPONENT_G_BIT} else {0} |
+            if ci.mask.contains(state::ColorMask::BLUE)  {vk::COLOR_COMPONENT_B_BIT} else {0} |
+            if ci.mask.contains(state::ColorMask::ALPHA) {vk::COLOR_COMPONENT_A_BIT} else {0},
     }
 }
 
 pub fn map_stage(usage: shade::Usage) -> vk::ShaderStageFlags {
-    (if usage.contains(shade::VERTEX)   { vk::SHADER_STAGE_VERTEX_BIT   } else { 0 }) |
-    (if usage.contains(shade::GEOMETRY) { vk::SHADER_STAGE_GEOMETRY_BIT } else { 0 }) |
-    (if usage.contains(shade::PIXEL)    { vk::SHADER_STAGE_FRAGMENT_BIT } else { 0 })
+    (if usage.contains(shade::Usage::VERTEX)   { vk::SHADER_STAGE_VERTEX_BIT   } else { 0 }) |
+    (if usage.contains(shade::Usage::GEOMETRY) { vk::SHADER_STAGE_GEOMETRY_BIT } else { 0 }) |
+    (if usage.contains(shade::Usage::PIXEL)    { vk::SHADER_STAGE_FRAGMENT_BIT } else { 0 })
 }

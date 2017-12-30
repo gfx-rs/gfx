@@ -124,9 +124,9 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
 
         // tilesheet info
         let tilesheet_bytes = &include_bytes!("scifitiles-sheet_0.png")[..];
-        let tilesheet_width = 14;
-        let tilesheet_height = 9;
-        let tilesheet_tilesize = 32;
+        let tilesheet_width = 14usize;
+        let tilesheet_height = 9usize;
+        let tilesheet_tilesize = 32usize;
 
         let tilesheet_total_width = tilesheet_width * tilesheet_tilesize;
         let tilesheet_total_height = tilesheet_height * tilesheet_tilesize;
@@ -138,12 +138,12 @@ impl<R> TileMapPlane<R> where R: gfx::Resources {
         // to the frag shader as a varying, used to determine the "current tile" and the frag's offset,
         // which is used to calculate the displayed frag color)
         let vertex_data: Vec<VertexData> = plane.shared_vertex_iter()
-            .map(|(raw_x, raw_y)| {
-                let vertex_x = half_width as f32 * raw_x;
-                let vertex_y = half_height as f32 * raw_y;
+            .map(|genmesh::Vertex { pos, .. }| {
+                let vertex_x = half_width as f32 * pos[0];
+                let vertex_y = half_height as f32 * pos[1];
 
-                let u_pos = (1.0 + raw_x) / 2.0;
-                let v_pos = (1.0 + raw_y) / 2.0;
+                let u_pos = (1.0 + pos[0]) / 2.0;
+                let v_pos = (1.0 + pos[1]) / 2.0;
                 let tilemap_x = (u_pos * width as f32).floor();
                 let tilemap_y = (v_pos * height as f32).floor();
 

@@ -17,10 +17,10 @@
 #[macro_use]
 extern crate log;
 extern crate gfx_core as core;
-extern crate d3d11;
-extern crate d3dcompiler;
-extern crate dxguid;
 extern crate winapi;
+
+use winapi::shared::{dxgi, minwindef, winerror};
+use winapi::um::{d3d11, d3d11shader, d3dcommon};
 
 pub use self::command::CommandBuffer;
 pub use self::data::map_format;
@@ -35,7 +35,7 @@ mod state;
 
 #[doc(hidden)]
 pub mod native {
-    use winapi::*;
+    use winapi::um::d3d11::*;
 
     #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
     pub struct Buffer(pub *mut ID3D11Buffer);
@@ -82,8 +82,8 @@ use core::command::{AccessInfo, AccessGuard};
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Buffer(native::Buffer);
 impl Buffer {
-    pub fn as_resource(&self) -> *mut winapi::ID3D11Resource {
-        type Res = *mut winapi::ID3D11Resource;
+    pub fn as_resource(&self) -> *mut d3d11::ID3D11Resource {
+        type Res = *mut d3d11::ID3D11Resource;
         match self.0 {
             native::Buffer(t) => t as Res,
         }
@@ -93,8 +93,8 @@ impl Buffer {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Texture(native::Texture);
 impl Texture {
-    pub fn as_resource(&self) -> *mut winapi::ID3D11Resource {
-        type Res = *mut winapi::ID3D11Resource;
+    pub fn as_resource(&self) -> *mut d3d11::ID3D11Resource {
+        type Res = *mut d3d11::ID3D11Resource;
         match self.0 {
             native::Texture::D1(t) => t as Res,
             native::Texture::D2(t) => t as Res,
@@ -106,8 +106,8 @@ impl Texture {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Shader {
-    object: *mut winapi::ID3D11DeviceChild,
-    reflection: *mut winapi::ID3D11ShaderReflection,
+    object: *mut d3d11::ID3D11DeviceChild,
+    reflection: *mut d3d11shader::ID3D11ShaderReflection,
     code_hash: u64,
 }
 unsafe impl Send for Shader {}
@@ -115,28 +115,28 @@ unsafe impl Sync for Shader {}
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Program {
-    vs: *mut winapi::ID3D11VertexShader,
-    hs: *mut winapi::ID3D11HullShader,
-    ds: *mut winapi::ID3D11DomainShader,
-    gs: *mut winapi::ID3D11GeometryShader,
-    ps: *mut winapi::ID3D11PixelShader,
+    vs: *mut d3d11::ID3D11VertexShader,
+    hs: *mut d3d11::ID3D11HullShader,
+    ds: *mut d3d11::ID3D11DomainShader,
+    gs: *mut d3d11::ID3D11GeometryShader,
+    ps: *mut d3d11::ID3D11PixelShader,
     vs_hash: u64,
 }
 unsafe impl Send for Program {}
 unsafe impl Sync for Program {}
 
-pub type InputLayout = *mut winapi::ID3D11InputLayout;
+pub type InputLayout = *mut d3d11::ID3D11InputLayout;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Pipeline {
-    topology: winapi::D3D11_PRIMITIVE_TOPOLOGY,
+    topology: d3d11::D3D11_PRIMITIVE_TOPOLOGY,
     layout: InputLayout,
     vertex_buffers: [Option<core::pso::VertexBufferDesc>; core::pso::MAX_VERTEX_BUFFERS],
     attributes: [Option<core::pso::AttributeDesc>; core::MAX_VERTEX_ATTRIBUTES],
     program: Program,
-    rasterizer: *const winapi::ID3D11RasterizerState,
-    depth_stencil: *const winapi::ID3D11DepthStencilState,
-    blend: *const winapi::ID3D11BlendState,
+    rasterizer: *const d3d11::ID3D11RasterizerState,
+    depth_stencil: *const d3d11::ID3D11DepthStencilState,
+    blend: *const d3d11::ID3D11BlendState,
 }
 unsafe impl Send for Pipeline {}
 unsafe impl Sync for Pipeline {}
@@ -167,23 +167,23 @@ pub struct Share {
 }
 
 pub struct Device {
-    context: *mut winapi::ID3D11DeviceContext,
-    feature_level: winapi::D3D_FEATURE_LEVEL,
+    context: *mut d3d11::ID3D11DeviceContext,
+    feature_level: d3dcommon::D3D_FEATURE_LEVEL,
     share: Arc<Share>,
     frame_handles: h::Manager<Resources>,
     max_resource_count: Option<usize>,
 }
 
-static FEATURE_LEVELS: [winapi::D3D_FEATURE_LEVEL; 3] = [
-    winapi::D3D_FEATURE_LEVEL_11_0,
-    winapi::D3D_FEATURE_LEVEL_10_1,
-    winapi::D3D_FEATURE_LEVEL_10_0,
+static FEATURE_LEVELS: [d3dcommon::D3D_FEATURE_LEVEL; 3] = [
+    d3dcommon::D3D_FEATURE_LEVEL_11_0,
+    d3dcommon::D3D_FEATURE_LEVEL_10_1,
+    d3dcommon::D3D_FEATURE_LEVEL_10_0,
 ];
 
-pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHAIN_DESC)
-              -> Result<(Device, Factory, *mut winapi::IDXGISwapChain), winapi::HRESULT> {
+pub fn create(driver_type: d3dcommon::D3D_DRIVER_TYPE, desc: &dxgi::DXGI_SWAP_CHAIN_DESC)
+              -> Result<(Device, Factory, *mut dxgi::IDXGISwapChain), winerror::HRESULT> {
     let mut swap_chain = ptr::null_mut();
-    let create_flags = winapi::D3D11_CREATE_DEVICE_FLAG(0); //D3D11_CREATE_DEVICE_DEBUG;
+    let create_flags = 0; //D3D11_CREATE_DEVICE_DEBUG;
     let mut device = ptr::null_mut();
     let share = Share {
         capabilities: core::Capabilities {
@@ -205,13 +205,13 @@ pub fn create(driver_type: winapi::D3D_DRIVER_TYPE, desc: &winapi::DXGI_SWAP_CHA
     };
 
     let mut context = ptr::null_mut();
-    let mut feature_level = winapi::D3D_FEATURE_LEVEL_10_0;
+    let mut feature_level = d3dcommon::D3D_FEATURE_LEVEL_10_0;
     let hr = unsafe {
-        d3d11::D3D11CreateDeviceAndSwapChain(ptr::null_mut(), driver_type, ptr::null_mut(), create_flags.0,
-            &FEATURE_LEVELS[0], FEATURE_LEVELS.len() as winapi::UINT, winapi::D3D11_SDK_VERSION, desc,
+        d3d11::D3D11CreateDeviceAndSwapChain(ptr::null_mut(), driver_type, ptr::null_mut(), create_flags,
+            &FEATURE_LEVELS[0], FEATURE_LEVELS.len() as _, d3d11::D3D11_SDK_VERSION, desc,
             &mut swap_chain, &mut device, &mut feature_level, &mut context)
     };
-    if !winapi::SUCCEEDED(hr) {
+    if !winerror::SUCCEEDED(hr) {
         return Err(hr)
     }
 
@@ -233,10 +233,10 @@ impl Device {
     /// Return the maximum supported shader model.
     pub fn get_shader_model(&self) -> ShaderModel {
         match self.feature_level {
-            winapi::D3D_FEATURE_LEVEL_10_0 => 40,
-            winapi::D3D_FEATURE_LEVEL_10_1 => 41,
-            winapi::D3D_FEATURE_LEVEL_11_0 => 50,
-            winapi::D3D_FEATURE_LEVEL_11_1 => 51,
+            d3dcommon::D3D_FEATURE_LEVEL_10_0 => 40,
+            d3dcommon::D3D_FEATURE_LEVEL_10_1 => 41,
+            d3dcommon::D3D_FEATURE_LEVEL_11_0 => 50,
+            d3dcommon::D3D_FEATURE_LEVEL_11_1 => 51,
             _ => {
                 error!("Unknown feature level {:?}", self.feature_level);
                 0
@@ -284,10 +284,10 @@ impl command::Parser for CommandList {
     }
 }
 
-pub struct DeferredContext(*mut winapi::ID3D11DeviceContext, Option<*mut winapi::ID3D11CommandList>);
+pub struct DeferredContext(*mut d3d11::ID3D11DeviceContext, Option<*mut d3d11::ID3D11CommandList>);
 unsafe impl Send for DeferredContext {}
 impl DeferredContext {
-    pub fn new(dc: *mut winapi::ID3D11DeviceContext) -> DeferredContext {
+    pub fn new(dc: *mut d3d11::ID3D11DeviceContext) -> Self {
         DeferredContext(dc, None)
     }
 }
@@ -389,7 +389,7 @@ impl core::Device for Device {
                 if p.ps != ptr::null_mut() { (*p.ps).Release(); }
             },
             |_, v| unsafe { //PSO
-                type Child = *mut winapi::ID3D11DeviceChild;
+                type Child = *mut d3d11::ID3D11DeviceChild;
                 (*v.layout).Release();
                 (*(v.rasterizer as Child)).Release();
                 (*(v.depth_stencil as Child)).Release();
@@ -440,15 +440,15 @@ impl core::Device for Deferred {
             None => {
                 let mut cl = ptr::null_mut();
                 let hr = unsafe {
-                    (*cb.parser.0).FinishCommandList(winapi::FALSE, &mut cl)
+                    (*cb.parser.0).FinishCommandList(minwindef::FALSE, &mut cl)
                 };
-                assert!(winapi::SUCCEEDED(hr));
+                assert!(winerror::SUCCEEDED(hr));
                 cb.parser.1 = Some(cl);
                 cl
             },
         };
         unsafe {
-            (*self.0.context).ExecuteCommandList(cl, winapi::TRUE)
+            (*self.0.context).ExecuteCommandList(cl, minwindef::TRUE)
         };
         match self.0.max_resource_count {
             Some(c) if self.0.frame_handles.count() > c => {

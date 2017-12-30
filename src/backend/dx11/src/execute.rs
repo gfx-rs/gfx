@@ -13,19 +13,23 @@
 // limitations under the License.
 
 use std::{cmp, mem, ptr};
-use winapi::{self, UINT};
+
+use winapi::um::d3d11;
+use winapi::shared::minwindef::UINT;
+use winapi::shared::winerror::SUCCEEDED;
+
 use core::{self, texture as tex};
 use command;
 use {Buffer, Texture};
 
 
-fn copy_buffer(context: *mut winapi::ID3D11DeviceContext,
+fn copy_buffer(context: *mut d3d11::ID3D11DeviceContext,
                src: &Buffer, dst: &Buffer,
                src_offset: UINT, dst_offset: UINT,
                size: UINT) {
     let src_resource = src.as_resource();
     let dst_resource = dst.as_resource();
-    let src_box = winapi::D3D11_BOX {
+    let src_box = d3d11::D3D11_BOX {
         left: src_offset,
         right: src_offset + size,
         top: 0,
@@ -39,7 +43,7 @@ fn copy_buffer(context: *mut winapi::ID3D11DeviceContext,
     };
 }
 
-fn copy_texture(context: *mut winapi::ID3D11DeviceContext,
+fn copy_texture(context: *mut d3d11::ID3D11DeviceContext,
                 src: &tex::TextureCopyRegion<Texture>,
                 dst: &tex::TextureCopyRegion<Texture>) {
     assert_eq!((src.info.width, src.info.height, src.info.depth),
@@ -54,7 +58,7 @@ fn copy_texture(context: *mut winapi::ID3D11DeviceContext,
         None => (0, dst.info.zoffset),
     };
 
-    let src_box = winapi::D3D11_BOX {
+    let src_box = d3d11::D3D11_BOX {
         left: src.info.xoffset as _,
         right: (src.info.xoffset + src.info.width) as _,
         top: src.info.yoffset as _,
@@ -64,10 +68,10 @@ fn copy_texture(context: *mut winapi::ID3D11DeviceContext,
     };
 
     unsafe {
-        let src_sub = winapi::D3D11CalcSubresource(src.info.mipmap as _,
+        let src_sub = d3d11::D3D11CalcSubresource(src.info.mipmap as _,
                                                    src.kind.get_num_levels() as _,
                                                    src_slice as _);
-        let dst_sub = winapi::D3D11CalcSubresource(dst.info.mipmap as _,
+        let dst_sub = d3d11::D3D11CalcSubresource(dst.info.mipmap as _,
                                                    dst.kind.get_num_levels() as _,
                                                    dst_slice as _);
         (*context).CopySubresourceRegion(dst.texture.as_resource(), dst_sub,
@@ -77,12 +81,12 @@ fn copy_texture(context: *mut winapi::ID3D11DeviceContext,
 
 }
 
-pub fn update_buffer(context: *mut winapi::ID3D11DeviceContext, buffer: &Buffer,
+pub fn update_buffer(context: *mut d3d11::ID3D11DeviceContext, buffer: &Buffer,
                      data: &[u8], offset_bytes: usize) {
-    let dst_resource = (buffer.0).0 as *mut winapi::ID3D11Resource;
+    let dst_resource = (buffer.0).0 as *mut d3d11::ID3D11Resource;
 
     // DYNAMIC only
-    let map_type = winapi::D3D11_MAP_WRITE_DISCARD;
+    let map_type = d3d11::D3D11_MAP_WRITE_DISCARD;
     let hr = unsafe {
         let mut sub = mem::zeroed();
         let hr = (*context).Map(dst_resource, 0, map_type, 0, &mut sub);
@@ -91,19 +95,19 @@ pub fn update_buffer(context: *mut winapi::ID3D11DeviceContext, buffer: &Buffer,
         (*context).Unmap(dst_resource, 0);
         hr
     };
-    if !winapi::SUCCEEDED(hr) {
+    if !SUCCEEDED(hr) {
         error!("Buffer {:?} failed to map, error {:x}", buffer, hr);
     }
 }
 
-pub fn update_texture(context: *mut winapi::ID3D11DeviceContext,
+pub fn update_texture(context: *mut d3d11::ID3D11DeviceContext,
                       tex: &tex::TextureCopyRegion<Texture>,
                       data: &[u8]) {
     let subres = texture_subres(tex.cube_face, &tex.info);
     let dst_resource = tex.texture.as_resource();
     // DYNAMIC only; This only works if the whole texture is covered.
     assert_eq!(tex.info.xoffset + tex.info.yoffset + tex.info.zoffset, 0);
-    let map_type = winapi::D3D11_MAP_WRITE_DISCARD;
+    let map_type = d3d11::D3D11_MAP_WRITE_DISCARD;
     let hr = unsafe {
         let mut sub = mem::zeroed();
         let hr = (*context).Map(dst_resource, subres, map_type, 0, &mut sub);
@@ -112,12 +116,12 @@ pub fn update_texture(context: *mut winapi::ID3D11DeviceContext,
         (*context).Unmap(dst_resource, 0);
         hr
     };
-    if !winapi::SUCCEEDED(hr) {
+    if !SUCCEEDED(hr) {
         error!("Texture {:?} failed to map, error {:x}", tex.texture, hr);
     }
 }
 
-fn texture_subres(face: Option<tex::CubeFace>, image: &tex::RawImageInfo) -> winapi::UINT {
+fn texture_subres(face: Option<tex::CubeFace>, image: &tex::RawImageInfo) -> UINT {
     use core::texture::CubeFace::*;
 
     let array_slice = match face {
@@ -133,15 +137,14 @@ fn texture_subres(face: Option<tex::CubeFace>, image: &tex::RawImageInfo) -> win
     array_slice * num_mipmap_levels + (image.mipmap as UINT)
 }
 
-pub fn process(ctx: *mut winapi::ID3D11DeviceContext, command: &command::Command, data_buf: &command::DataBuffer) {
-    use winapi::UINT;
+pub fn process(ctx: *mut d3d11::ID3D11DeviceContext, command: &command::Command, data_buf: &command::DataBuffer) {
     use core::shade::Stage;
     use command::Command::*;
 
     let max_cb  = core::MAX_CONSTANT_BUFFERS as UINT;
     let max_srv = core::MAX_RESOURCE_VIEWS   as UINT;
     let max_sm  = core::MAX_SAMPLERS         as UINT;
-    debug!("Processing {:?}", command);
+    //debug!("Processing {:?}", command);
     match *command {
         BindProgram(ref prog) => unsafe {
             (*ctx).VSSetShader(prog.vs, ptr::null_mut(), 0);
@@ -157,7 +160,7 @@ pub fn process(ctx: *mut winapi::ID3D11DeviceContext, command: &command::Command
             (*ctx).IASetIndexBuffer((buf.0).0, format, 0);
         },
         BindVertexBuffers(ref buffers, ref strides, ref offsets) => unsafe {
-            (*ctx).IASetVertexBuffers(0, core::MAX_VERTEX_ATTRIBUTES as UINT,
+            (*ctx).IASetVertexBuffers(0, core::MAX_VERTEX_ATTRIBUTES as _,
                 &buffers[0].0, strides.as_ptr(), offsets.as_ptr());
         },
         BindConstantBuffers(stage, ref buffers) => match stage {
@@ -212,7 +215,7 @@ pub fn process(ctx: *mut winapi::ID3D11DeviceContext, command: &command::Command
             },
         },
         BindPixelTargets(ref colors, ds) => unsafe {
-            (*ctx).OMSetRenderTargets(core::MAX_COLOR_TARGETS as UINT,
+            (*ctx).OMSetRenderTargets(core::MAX_COLOR_TARGETS as _,
                 &colors[0].0, ds.0);
         },
         SetPrimitive(topology) => unsafe {
@@ -254,7 +257,7 @@ pub fn process(ctx: *mut winapi::ID3D11DeviceContext, command: &command::Command
             (*ctx).ClearRenderTargetView(target.0, data);
         },
         ClearDepthStencil(target, flags, depth, stencil) => unsafe {
-            (*ctx).ClearDepthStencilView(target.0, flags.0, depth, stencil);
+            (*ctx).ClearDepthStencilView(target.0, flags, depth, stencil);
         },
         Draw(nvert, svert) => unsafe {
             (*ctx).Draw(nvert, svert);

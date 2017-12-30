@@ -104,7 +104,7 @@ gfx_defines!{
         tex_normal: gfx::TextureSampler<[f32; 4]> = "t_Normal",
         tex_diffuse: gfx::TextureSampler<[f32; 4]> = "t_Diffuse",
         out_color: gfx::BlendTarget<GFormat> =
-            ("Target0", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
+            ("Target0", gfx::state::ColorMask::all(), gfx::preset::blend::ADD),
         out_depth: gfx::DepthTarget<Depth> =
             gfx::preset::depth::LESS_EQUAL_TEST,
     }
@@ -132,7 +132,7 @@ gfx_defines!{
         locals: gfx::ConstantBuffer<CubeLocals> = "CubeLocals",
         light_pos_buf: gfx::ConstantBuffer<LightInfo> = "LightPosBlock",
         out_color: gfx::BlendTarget<GFormat> =
-            ("Target0", gfx::state::MASK_ALL, gfx::preset::blend::ADD),
+            ("Target0", gfx::state::ColorMask::all(), gfx::preset::blend::ADD),
         out_depth: gfx::DepthTarget<Depth> =
             gfx::preset::depth::LESS_EQUAL_TEST,
     }
@@ -257,11 +257,11 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         let terrain = {
             let plane = genmesh::generators::Plane::subdivide(256, 256);
             let vertex_data: Vec<TerrainVertex> = plane.shared_vertex_iter()
-                .map(|(x, y)| {
-                    let h = TERRAIN_SCALE[2] * perlin2(&seed, &[x, y]);
+                .map(|genmesh::Vertex { pos, .. }| {
+                    let h = TERRAIN_SCALE[2] * perlin2(&seed, &[pos[0], pos[1]]);
                     TerrainVertex {
-                        pos: [TERRAIN_SCALE[0] * x, TERRAIN_SCALE[1] * y, h],
-                        normal: calculate_normal(&seed, x, y),
+                        pos: [TERRAIN_SCALE[0] * pos[0], TERRAIN_SCALE[1] * pos[1], h],
+                        normal: calculate_normal(&seed, pos[0], pos[1]),
                         color: calculate_color(h),
                     }
                 })

@@ -62,10 +62,9 @@ script:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then HEADLESS_FEATURE="--features headless"; fi
   - cargo test --all
   - cargo test -p gfx -p gfx_core --features "mint serialize"
-  - cargo test -p gfx_window_sdl
+  - cargo test -p gfx_window_sdl --features "sdl"
+  - cargo test -p gfx_window_glfw --features "glfw"
   - cargo test -p gfx_device_gl
   - cargo test -p gfx_window_glutin $HEADLESS_FEATURE
-  - cargo test -p gfx_window_glfw
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo test --all --features vulkan; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cargo test --all --features metal; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cargo test --features "metal metal_argument_buffer"; fi

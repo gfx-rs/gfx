@@ -28,10 +28,8 @@ extern crate log;
 extern crate mint;
 
 #[cfg(feature = "serialize")]
-extern crate serde;
-#[cfg(feature = "serialize")]
 #[macro_use]
-extern crate serde_derive;
+extern crate serde;
 
 use std::fmt::{self, Debug};
 use std::error::Error;
@@ -124,10 +122,11 @@ pub enum ShaderSet<R: Resources> {
 impl<R: Resources> ShaderSet<R> {
     /// Return the aggregated stage usage for the set.
     pub fn get_usage(&self) -> shade::Usage {
-        match self {
-            &ShaderSet::Simple(..) => shade::VERTEX | shade::PIXEL,
-            &ShaderSet::Geometry(..) => shade::VERTEX | shade::GEOMETRY | shade::PIXEL,
-            &ShaderSet::Tessellated(..) => shade::VERTEX | shade::HULL | shade::DOMAIN | shade::PIXEL,
+        use shade::Usage;
+        match *self {
+            ShaderSet::Simple(..) => Usage::VERTEX | Usage::PIXEL,
+            ShaderSet::Geometry(..) => Usage::VERTEX | Usage::GEOMETRY | Usage::PIXEL,
+            ShaderSet::Tessellated(..) => Usage::VERTEX | Usage::HULL | Usage::DOMAIN | Usage::PIXEL,
         }
     }
 }

@@ -20,9 +20,9 @@ use std::path::Path;
 // use cocoa::base::{selector, class};
 // use cocoa::foundation::{NSUInteger};
 
-use core::{self, buffer, factory, mapping, memory};
+use core::{self, buffer, factory, mapping};
 use core::handle::{self, Producer};
-use core::memory::Typed;
+use core::memory::{Bind, Usage, Typed};
 
 use metal::*;
 
@@ -86,7 +86,7 @@ impl Factory {
 
         let usage = map_buffer_usage(info.usage, info.bind);
 
-        if info.bind.contains(memory::RENDER_TARGET) | info.bind.contains(memory::DEPTH_STENCIL) {
+        if info.bind.contains(Bind::RENDER_TARGET) | info.bind.contains(Bind::DEPTH_STENCIL) {
             return Err(buffer::CreationError::UnsupportedBind(info.bind));
         }
 
@@ -226,11 +226,11 @@ impl core::Factory<Resources> for Factory {
          data: &[u8],
          stride: usize,
          role: buffer::Role,
-         bind: memory::Bind)
+         bind: Bind)
          -> Result<handle::RawBuffer<Resources>, buffer::CreationError> {
         let info = buffer::Info {
             role: role,
-            usage: memory::Usage::Data,
+            usage: Usage::Data,
             bind: bind,
             size: data.len(),
             stride: stride,

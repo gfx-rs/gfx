@@ -24,7 +24,7 @@ extern crate gfx_core as core;
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use core::{self as c, handle, state as s, format, pso, texture, memory, command as com, buffer};
+use core::{self as c, handle, state as s, format, pso, texture, command as com, buffer};
 use core::target::{Layer, Level};
 use command::{Command, DataBuffer};
 use factory::MappingKind;
@@ -180,6 +180,8 @@ pub fn create<F>(fn_proc: F) -> (Device, Factory) where
 pub fn create_main_targets_raw(dim: texture::Dimensions, color_format: format::SurfaceType, depth_format: format::SurfaceType)
                                -> (handle::RawRenderTargetView<Resources>, handle::RawDepthStencilView<Resources>) {
     use core::handle::Producer;
+    use core::memory::{Bind, Usage};
+
     let mut temp = handle::Manager::new();
     let color_tex = temp.make_texture(
         NewTexture::Surface(0),
@@ -187,8 +189,8 @@ pub fn create_main_targets_raw(dim: texture::Dimensions, color_format: format::S
             levels: 1,
             kind: texture::Kind::D2(dim.0, dim.1, dim.3),
             format: color_format,
-            bind: memory::RENDER_TARGET | memory::TRANSFER_SRC,
-            usage: memory::Usage::Data,
+            bind: Bind::RENDER_TARGET | Bind::TRANSFER_SRC,
+            usage: Usage::Data,
         },
     );
     let depth_tex = temp.make_texture(
@@ -197,8 +199,8 @@ pub fn create_main_targets_raw(dim: texture::Dimensions, color_format: format::S
             levels: 1,
             kind: texture::Kind::D2(dim.0, dim.1, dim.3),
             format: depth_format,
-            bind: memory::DEPTH_STENCIL | memory::TRANSFER_SRC,
-            usage: memory::Usage::Data,
+            bind: Bind::DEPTH_STENCIL | Bind::TRANSFER_SRC,
+            usage: Usage::Data,
         },
     );
     let m_color = temp.make_rtv(TargetView::Surface(0), &color_tex, dim);
@@ -237,13 +239,14 @@ pub struct Device {
     vao: ArrayBuffer,
     frame_handles: handle::Manager<Resources>,
     max_resource_count: Option<usize>,
+    reset: Vec<Command>,
 }
 
 impl Device {
     /// Create a new device. Each GL context can only have a single
     /// Device on GFX side to represent it. //TODO: enforce somehow
     /// Also, load OpenGL symbols and detect driver information.
-    fn new<F>(fn_proc: F) -> Device where
+    fn new<F>(fn_proc: F) -> Self where
         F: FnMut(&str) -> *const std::os::raw::c_void
     {
         let gl = gl::Gl::load_with(fn_proc);
@@ -294,6 +297,7 @@ impl Device {
             vao: vao,
             frame_handles: handle::Manager::new(),
             max_resource_count: Some(999999),
+            reset: command::generate_reset(),
         }
     }
 
@@ -396,10 +400,14 @@ impl Device {
     }
 
     fn reset_state(&mut self) {
+        use std::mem;
         let data = DataBuffer::new();
-        for com in command::RESET.iter() {
+        // borrowck dance
+        let commands = mem::replace(&mut self.reset, Vec::new());
+        for com in &commands {
             self.process(com, &data);
         }
+        self.reset = commands;
     }
 
     fn process(&mut self, cmd: &Command, data_buf: &DataBuffer) {
@@ -731,11 +739,11 @@ impl Device {
                 // mirror
                 let mut s_end_x = s_rect.x + s_rect.w;
                 let mut s_end_y = s_rect.y + s_rect.h;
-                if mirror.intersects(c::target::MIRROR_X) {
+                if mirror.intersects(c::target::Mirror::X) {
                     s_end_x = s_rect.x;
                     s_rect.x += s_rect.w;
                 }
-                if mirror.intersects(c::target::MIRROR_Y) {
+                if mirror.intersects(c::target::Mirror::Y) {
                     s_end_y = s_rect.y;
                     s_rect.y += s_rect.h;
                 }

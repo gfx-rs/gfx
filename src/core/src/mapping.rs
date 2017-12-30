@@ -22,7 +22,8 @@ use std::cell::UnsafeCell;
 use std::ops::{Deref, DerefMut};
 use std::sync::atomic::{self, AtomicBool};
 use Resources;
-use {memory, buffer, handle};
+use {buffer, handle};
+use memory::{Access, Usage};
 
 /// Unsafe, backend-provided operations for a buffer mapping
 #[doc(hidden)]
@@ -39,7 +40,7 @@ pub trait Gate<R: Resources> {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Error {
     /// The requested mapping access did not match the expected usage.
-    InvalidAccess(memory::Access, memory::Usage),
+    InvalidAccess(Access, Usage),
     /// The requested mapping access overlaps with another.
     AccessOverlap,
 }
@@ -137,15 +138,14 @@ impl<'a, R: Resources> Drop for Guard<'a, R> {
     }
 }
 
-fn take_access_checked<R>(access: memory::Access, buffer: &buffer::Raw<R>)
+fn take_access_checked<R>(access: Access, buffer: &buffer::Raw<R>)
                           -> Result<Guard<R>, Error>
     where R: Resources
 {
     let usage = buffer.get_info().usage;
-    use memory::Usage::*;
     match usage {
-        Upload if access == memory::WRITE => (),
-        Download if access == memory::READ => (),
+        Usage::Upload if access == Access::WRITE => (),
+        Usage::Download if access == Access::READ => (),
         _ => return Err(Error::InvalidAccess(access, usage)),
     }
 
@@ -157,7 +157,7 @@ pub unsafe fn read<R, T, S>(buffer: &buffer::Raw<R>, sync: S)
                             -> Result<Reader<R, T>, Error>
     where R: Resources, T: Copy, S: FnOnce(&mut R::Mapping)
 {
-    let mut mapping = try!(take_access_checked(memory::READ, buffer));
+    let mut mapping = try!(take_access_checked(Access::READ, buffer));
     sync(&mut mapping);
 
     Ok(Reader {
@@ -171,7 +171,7 @@ pub unsafe fn write<R, T, S>(buffer: &buffer::Raw<R>, sync: S)
                              -> Result<Writer<R, T>, Error>
     where R: Resources, T: Copy, S: FnOnce(&mut R::Mapping)
 {
-    let mut mapping = try!(take_access_checked(memory::WRITE, buffer));
+    let mut mapping = try!(take_access_checked(Access::WRITE, buffer));
     sync(&mut mapping);
 
     Ok(Writer {

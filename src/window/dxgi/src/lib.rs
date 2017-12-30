@@ -16,7 +16,6 @@
 
 #[macro_use]
 extern crate log;
-extern crate dxguid;
 extern crate winapi;
 extern crate winit;
 extern crate gfx_core as core;
@@ -24,6 +23,9 @@ extern crate gfx_device_dx11 as device_dx11;
 
 use std::ptr;
 use winit::os::windows::WindowExt;
+use winapi::shared::{dxgi, dxgiformat, dxgitype, winerror};
+use winapi::um::{d3d11, d3dcommon};
+
 use core::{format, handle as h, factory as f, memory, texture as tex};
 use core::texture::Size;
 use device_dx11::{Device, Factory, Resources};
@@ -31,36 +33,36 @@ use device_dx11::{Device, Factory, Resources};
 
 pub struct Window {
     pub inner: winit::Window,
-    swap_chain: *mut winapi::IDXGISwapChain,
-    driver_type: winapi::D3D_DRIVER_TYPE,
+    swap_chain: *mut dxgi::IDXGISwapChain,
+    driver_type: d3dcommon::D3D_DRIVER_TYPE,
     color_format: format::Format,
     pub size: (Size, Size),
 }
 
 impl Window {
     pub fn is_accelerated(&self) -> bool {
-        self.driver_type == winapi::D3D_DRIVER_TYPE_HARDWARE
+        self.driver_type == d3dcommon::D3D_DRIVER_TYPE_HARDWARE
     }
 
     pub fn swap_buffers(&self, wait: u8) {
-        match unsafe {(*self.swap_chain).Present(wait as winapi::UINT, 0)} {
-            winapi::S_OK | winapi::DXGI_STATUS_OCCLUDED => {}
+        match unsafe {(*self.swap_chain).Present(wait as _, 0)} {
+            winerror::S_OK | winerror::DXGI_STATUS_OCCLUDED => {}
             hr => panic!("Present Error: {:X}", hr)
         }
     }
 
     fn make_back_buffer(&self, factory: &mut Factory) -> h::RawRenderTargetView<Resources> {
-        let mut back_buffer: *mut winapi::ID3D11Texture2D = ptr::null_mut();
-        assert_eq!(winapi::S_OK, unsafe {
-            (*self.swap_chain).GetBuffer(0, &dxguid::IID_ID3D11Texture2D,
-                &mut back_buffer as *mut *mut winapi::ID3D11Texture2D as *mut *mut _)
+        let mut back_buffer: *mut d3d11::ID3D11Texture2D = ptr::null_mut();
+        assert_eq!(winerror::S_OK, unsafe {
+            (*self.swap_chain).GetBuffer(0, &d3d11::IID_ID3D11Texture2D,
+                &mut back_buffer as *mut *mut d3d11::ID3D11Texture2D as *mut *mut _)
         });
 
         let info = tex::Info {
             kind: tex::Kind::D2(self.size.0, self.size.1, tex::AaMode::Single),
             levels: 1,
             format: self.color_format.0,
-            bind: memory::RENDER_TARGET | memory::TRANSFER_SRC,
+            bind: memory::Bind::RENDER_TARGET | memory::Bind::TRANSFER_SRC,
             usage: memory::Usage::Data,
         };
         let desc = tex::RenderDesc {
@@ -72,15 +74,15 @@ impl Window {
     }
 
     pub fn resize_swap_chain<Cf>(&mut self, factory: &mut Factory, width: Size, height: Size)
-                             -> Result<h::RenderTargetView<Resources, Cf>, winapi::HRESULT>
+                             -> Result<h::RenderTargetView<Resources, Cf>, winerror::HRESULT>
     where Cf: format::RenderFormat
     {
         let result = unsafe {
             (*self.swap_chain).ResizeBuffers(0,
-                width as winapi::UINT, height as winapi::UINT,
-                winapi::DXGI_FORMAT_UNKNOWN, 0)
+                width as _, height as _,
+                dxgiformat::DXGI_FORMAT_UNKNOWN, 0)
         };
-        if result == winapi::S_OK {
+        if result == winerror::S_OK {
             self.size = (width, height);
             let raw = self.make_back_buffer(factory);
             Ok(memory::Typed::new(raw))
@@ -123,38 +125,38 @@ pub fn init_raw(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop, color
 pub fn init_existing_raw(inner: winit::Window, color_format: format::Format)
                          -> Result<(Window, Device, Factory, h::RawRenderTargetView<Resources>), InitError>
 {
-    let (width, height) = inner.get_inner_size_pixels().unwrap();
+    let (width, height) = inner.get_inner_size().unwrap();
 
     let driver_types = [
-        winapi::D3D_DRIVER_TYPE_HARDWARE,
-        winapi::D3D_DRIVER_TYPE_WARP,
-        winapi::D3D_DRIVER_TYPE_REFERENCE,
+        d3dcommon::D3D_DRIVER_TYPE_HARDWARE,
+        d3dcommon::D3D_DRIVER_TYPE_WARP,
+        d3dcommon::D3D_DRIVER_TYPE_REFERENCE,
     ];
 
-    let swap_desc = winapi::DXGI_SWAP_CHAIN_DESC {
-        BufferDesc: winapi::DXGI_MODE_DESC {
-            Width: width as winapi::UINT,
-            Height: height as winapi::UINT,
+    let swap_desc = dxgi::DXGI_SWAP_CHAIN_DESC {
+        BufferDesc: dxgitype::DXGI_MODE_DESC {
+            Width: width as _,
+            Height: height as _,
             Format: match device_dx11::map_format(color_format, true) {
                 Some(fm) => fm,
                 None => return Err(InitError::Format(color_format)),
             },
-            RefreshRate: winapi::DXGI_RATIONAL {
+            RefreshRate: dxgitype::DXGI_RATIONAL {
                 Numerator: 60,
                 Denominator: 1,
             },
-            ScanlineOrdering: winapi::DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED,
-            Scaling: winapi::DXGI_MODE_SCALING_UNSPECIFIED,
+            ScanlineOrdering: dxgitype::DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED,
+            Scaling: dxgitype::DXGI_MODE_SCALING_UNSPECIFIED,
         },
-        SampleDesc: winapi::DXGI_SAMPLE_DESC {
+        SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
             Count: 1,
             Quality: 0,
         },
-        BufferUsage: winapi::DXGI_USAGE_RENDER_TARGET_OUTPUT,
+        BufferUsage: dxgitype::DXGI_USAGE_RENDER_TARGET_OUTPUT,
         BufferCount: 1,
-        OutputWindow: inner.get_hwnd() as winapi::HWND,
-        Windowed: winapi::TRUE,
-        SwapEffect: winapi::DXGI_SWAP_EFFECT_DISCARD,
+        OutputWindow: inner.get_hwnd() as _,
+        Windowed: true as _,
+        SwapEffect: dxgi::DXGI_SWAP_EFFECT_DISCARD,
         Flags: 0,
     };
 

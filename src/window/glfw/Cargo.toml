@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx_window_glfw"
-version = "0.15.0"
+version = "0.16.0"
 description = "GLFW window for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -28,11 +28,11 @@ documentation = "https://docs.rs/gfx_window_glfw"
 name = "gfx_window_glfw"
 
 [dependencies]
-glfw = "0.15"
-gfx_core = { path = "../../core", version = "0.7" }
-gfx_device_gl = { path = "../../backend/gl", version = "0.14" }
+glfw = "0.20"
+gfx_core = { path = "../../core", version = "0.8" }
+gfx_device_gl = { path = "../../backend/gl", version = "0.15" }
 
 # Currently there is an issue with cargo and dev-dependencies:
 # https://github.com/rust-lang/cargo/issues/860
 # TODO: move gfx to [dev-dependencies] once it gets resolved.
-gfx = { path = "../../render", version = "0.16" }
+gfx = { path = "../../render", version = "0.17" }

@@ -102,10 +102,10 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         let seed = Seed::new(rand_seed);
         let plane = Plane::subdivide(256, 256);
         let vertex_data: Vec<Vertex> = plane.shared_vertex_iter()
-            .map(|(x, y)| {
-                let h = perlin2(&seed, &[x, y]) * 32.0;
+            .map(|genmesh::Vertex { pos, .. }| {
+                let h = perlin2(&seed, &[pos[0], pos[1]]) * 32.0;
                 Vertex {
-                    pos: [25.0 * x, 25.0 * y, h],
+                    pos: [25.0 * pos[0], 25.0 * pos[1], h],
                     color: calculate_color(h),
                 }
             })

@@ -126,39 +126,40 @@ pub enum Command {
     _Blit(Rect, Rect, Mirror, usize),
 }
 
-pub const COLOR_DEFAULT: s::Color = s::Color {
-    mask: s::MASK_ALL,
-    blend: None,
-};
-
-pub const RESET: [Command; 14] = [
-    Command::BindProgram(0),
-    Command::BindVao,
-    // Command::UnbindAttribute, //not needed, handled by the cache
-    Command::BindIndex(0),
-    Command::BindFrameBuffer(gl::FRAMEBUFFER, 0),
-    Command::SetRasterizer(s::Rasterizer {
-        front_face: s::FrontFace::CounterClockwise,
-        cull_face: s::CullFace::Back,
-        method: s::RasterMethod::Fill,
-        offset: None,
-        samples: None,
-    }),
-    Command::SetViewport(Rect {
-        x: 0,
-        y: 0,
-        w: 0,
-        h: 0,
-    }),
-    Command::SetScissor(None),
-    Command::SetDepthState(None),
-    Command::SetStencilState(None, (0, 0), s::CullFace::Nothing),
-    Command::SetBlendState(0, COLOR_DEFAULT),
-    Command::SetBlendState(1, COLOR_DEFAULT),
-    Command::SetBlendState(2, COLOR_DEFAULT),
-    Command::SetBlendState(3, COLOR_DEFAULT),
-    Command::SetBlendColor([0f32; 4]),
-];
+pub fn generate_reset() -> Vec<Command> {
+    let color = s::Color {
+        mask: s::ColorMask::all(),
+        blend: None,
+    };
+    vec![
+        Command::BindProgram(0),
+        Command::BindVao,
+        // Command::UnbindAttribute, //not needed, handled by the cache
+        Command::BindIndex(0),
+        Command::BindFrameBuffer(gl::FRAMEBUFFER, 0),
+        Command::SetRasterizer(s::Rasterizer {
+            front_face: s::FrontFace::CounterClockwise,
+            cull_face: s::CullFace::Back,
+            method: s::RasterMethod::Fill,
+            offset: None,
+            samples: None,
+        }),
+        Command::SetViewport(Rect {
+            x: 0,
+            y: 0,
+            w: 0,
+            h: 0,
+        }),
+        Command::SetScissor(None),
+        Command::SetDepthState(None),
+        Command::SetStencilState(None, (0, 0), s::CullFace::Nothing),
+        Command::SetBlendState(0, color),
+        Command::SetBlendState(1, color),
+        Command::SetBlendState(2, color),
+        Command::SetBlendState(3, color),
+        Command::SetBlendColor([0f32; 4]),
+    ]
+}
 
 struct Cache {
     primitive: gl::types::GLenum,

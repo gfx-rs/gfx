@@ -575,13 +575,13 @@ pub struct RenderDesc {
 bitflags!(
     /// Depth-stencil read-only flags
     #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
-    pub flags DepthStencilFlags: u8 {
+    pub struct DepthStencilFlags: u8 {
         /// Depth is read-only in the view.
-        const RO_DEPTH    = 0x1,
+        const RO_DEPTH    = 0x1;
         /// Stencil is read-only in the view.
-        const RO_STENCIL  = 0x2,
+        const RO_STENCIL  = 0x2;
         /// Both depth and stencil are read-only.
-        const RO_DEPTH_STENCIL = 0x3,
+        const RO_DEPTH_STENCIL = 0x3;
     }
 );
 
