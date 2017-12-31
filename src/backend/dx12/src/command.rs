@@ -516,7 +516,7 @@ impl CommandBuffer {
                 )
             },
             |slot, gpu| unsafe {
-                cmd_buffer.clone().SetGraphicsRootDescriptorTable(slot, gpu);
+                cmd_buffer.clone().SetComputeRootDescriptorTable(slot, gpu);
             },
         );
     }
