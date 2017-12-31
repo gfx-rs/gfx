@@ -205,7 +205,9 @@ impl d::Device<B> for Device {
     fn allocate_memory(
         &self, _mem_type: c::MemoryTypeId, _size: u64,
     ) -> Result<n::Memory, d::OutOfMemory> {
-        unimplemented!()
+        Ok(n::Memory {
+            properties: memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED
+        })
     }
 
     fn create_command_pool(
@@ -635,7 +637,7 @@ impl d::Device<B> for Device {
     }
 
     fn update_descriptor_sets(&self, _: &[pso::DescriptorSetWrite<B>]) {
-        unimplemented!()
+        // TODO
     }
 
     fn acquire_mapping_raw(&self, buffer: &n::Buffer, read: Option<Range<u64>>)

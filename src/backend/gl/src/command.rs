@@ -361,7 +361,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<memory::Barrier<'a, Backend>>,
     {
-        unimplemented!()
+        // TODO
     }
 
     fn fill_buffer(&mut self, _buffer: &n::Buffer, _range: Range<u64>, _data: u32) {
@@ -400,7 +400,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
     fn end_renderpass(&mut self) {
-        unimplemented!()
+        // TODO
     }
 
     fn clear_color_image(
@@ -587,7 +587,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<n::DescriptorSet>,
     {
-        unimplemented!()
+        // TODO
     }
 
     fn bind_compute_pipeline(&mut self, _pipeline: &n::ComputePipeline) {
