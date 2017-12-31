@@ -486,6 +486,21 @@ impl CommandQueue {
             com::Command::UnbindAttribute(ref attribute) => unsafe {
                 self.share.context.DisableVertexAttribArray(attribute.location);
             }
+            com::Command::CopyBufferToTexture(buffer, image, ref region) => unsafe {
+                let gl = &self.share.context;
+                gl.ActiveTexture(gl::TEXTURE0);
+                gl.BindBuffer(gl::PIXEL_UNPACK_BUFFER, buffer);
+                gl.BindTexture(gl::TEXTURE_2D, image);
+                let &hal::command::BufferImageCopy {
+                    ref image_layers,
+                    ref image_offset,
+                    ref image_extent,
+                    ..
+                } = region;
+                gl.TexSubImage2D(gl::TEXTURE_2D, image_layers.level as _, image_offset.x, image_offset.y,
+                    image_extent.width as _, image_extent.height as _, gl::RGBA, gl::UNSIGNED_BYTE, 0 as *const _);
+                gl.BindBuffer(gl::PIXEL_UNPACK_BUFFER, 0);
+            }
             /*
             com::Command::BindConstantBuffer(pso::ConstantBufferParam(buffer, _, slot)) => unsafe {
                 self.share.context.BindBufferBase(gl::UNIFORM_BUFFER, slot as gl::types::GLuint, buffer);

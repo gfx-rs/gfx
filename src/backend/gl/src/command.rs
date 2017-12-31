@@ -84,6 +84,7 @@ pub enum Command {
     BindBlendSlot(ColorSlot, pso::ColorBlendDesc),
     BindAttribute(n::AttributeDesc),
     UnbindAttribute(n::AttributeDesc),
+    CopyBufferToTexture(n::RawBuffer, gl::types::GLuint, command::BufferImageCopy),
 }
 
 pub type FrameBufferTarget = gl::types::GLenum;
@@ -642,17 +643,28 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn copy_buffer_to_image<T>(
-        &mut self,
-        _src: &n::Buffer,
-        _dst: &n::Image,
-        _dst_layout: image::ImageLayout,
-        _regions: T,
-    ) where
-        T: IntoIterator,
-        T::Item: Borrow<command::BufferImageCopy>,
-    {
-        unimplemented!()
+     fn copy_buffer_to_image<T>(
+         &mut self,
+        src: &n::Buffer,
+        dst: &n::Image,
+        _: image::ImageLayout,
+        regions: T,
+     ) where
+         T: IntoIterator,
+         T::Item: Borrow<command::BufferImageCopy>,
+     {
+        let image_raw = match dst {
+            &n::Image::Surface(s) => s,
+            &n::Image::Texture(t) => t
+        };
+
+        let regs = regions.into_iter().collect::<Vec<_>>();
+
+        assert!(regs.len() >= 1);
+
+        for reg in regs {
+            self.push_cmd(Command::CopyBufferToTexture(src.raw, image_raw, reg.borrow().clone()));
+        }
     }
 
     fn copy_image_to_buffer<T>(
