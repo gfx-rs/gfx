@@ -475,11 +475,11 @@ impl CommandQueue {
             com::Command::BindBlendSlot(slot, ref blend) => {
                 state::bind_blend_slot(&self.share.context, slot, blend);
             }
-            com::Command::BindAttribute(ref attribute, handle) => unsafe {
+            com::Command::BindAttribute(ref attribute, handle, stride) => unsafe {
                 let gl = &self.share.context;
                 gl.BindBuffer(gl::ARRAY_BUFFER, handle);
-                gl.VertexAttribPointer(attribute.location, attribute.size, gl::FLOAT, gl::FALSE,
-                    attribute.stride, attribute.offset as *const gl::types::GLvoid);
+                gl.VertexAttribPointer(attribute.location, attribute.size, attribute.format, gl::FALSE,
+                    stride, attribute.offset as *const gl::types::GLvoid);
                 gl.EnableVertexAttribArray(attribute.location);
                 gl.BindBuffer(gl::ARRAY_BUFFER, 0);
             }
@@ -487,6 +487,7 @@ impl CommandQueue {
                 self.share.context.DisableVertexAttribArray(attribute.location);
             }
             com::Command::CopyBufferToTexture(buffer, image, ref region) => unsafe {
+                // TODO: Fix format and active texture
                 let gl = &self.share.context;
                 gl.ActiveTexture(gl::TEXTURE0);
                 gl.BindBuffer(gl::PIXEL_UNPACK_BUFFER, buffer);

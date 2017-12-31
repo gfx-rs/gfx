@@ -362,14 +362,18 @@ impl d::Device<B> for Device {
                     primitive: conv::primitive_to_gl_primitive(desc.input_assembler.primitive),
                     patch_size,
                     blend_targets: desc.blender.targets.clone(),
+                    vertex_buffers: desc.vertex_buffers.clone(),
                     attributes: desc.attributes
                         .iter()
-                        .map(|&a| n::AttributeDesc {
-                            location: a.location,
-                            offset: a.element.offset,
-                            binding: a.binding,
-                            size: 2, // TODO
-                            stride: 16, // TODO
+                        .map(|&a| {
+                            let (size, format) = conv::format_to_gl_format(a.element.format).unwrap();
+                            n::AttributeDesc {
+                                location: a.location,
+                                offset: a.element.offset,
+                                binding: a.binding,
+                                size,
+                                format,
+                            }
                         })
                         .collect::<Vec<_>>(),
                 })

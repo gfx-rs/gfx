@@ -41,6 +41,7 @@ pub struct GraphicsPipeline {
     pub(crate) patch_size: Option<gl::types::GLint>,
     pub(crate) blend_targets: Vec<pso::ColorBlendDesc>,
     pub(crate) attributes: Vec<AttributeDesc>,
+    pub(crate) vertex_buffers: Vec<pso::VertexBufferDesc>,
 }
 
 #[derive(Clone, Debug, Copy)]
@@ -132,5 +133,5 @@ pub struct AttributeDesc {
     pub(crate) offset: u32,
     pub(crate) binding: gl::types::GLuint,
     pub(crate) size: gl::types::GLint,
-    pub(crate) stride: gl::types::GLsizei,
+    pub(crate) format: gl::types::GLenum,
 }

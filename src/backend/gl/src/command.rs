@@ -82,7 +82,7 @@ pub enum Command {
     SetPatchSize(gl::types::GLint),
     BindProgram(gl::types::GLuint),
     BindBlendSlot(ColorSlot, pso::ColorBlendDesc),
-    BindAttribute(n::AttributeDesc, gl::types::GLuint),
+    BindAttribute(n::AttributeDesc, gl::types::GLuint, gl::types::GLsizei),
     UnbindAttribute(n::AttributeDesc),
     CopyBufferToTexture(n::RawBuffer, gl::types::GLuint, command::BufferImageCopy),
 }
@@ -113,7 +113,9 @@ struct Cache {
     // Blend per attachment.
     blend_targets: Option<Vec<Option<pso::ColorBlendDesc>>>,
     // Maps bound vertex buffer offset (index) to handle.
-    vertex_buffers: Option<Vec<u32>>,
+    vertex_buffers: Option<Vec<gl::types::GLuint>>,
+    // Active vertex buffer descriptions.
+    vertex_buffer_descs: Option<Vec<pso::VertexBufferDesc>>,
     // Active attributes.
     attributes: Option<Vec<n::AttributeDesc>>,
 }
@@ -131,6 +133,7 @@ impl Cache {
             program: None,
             blend_targets: None,
             vertex_buffers: None,
+            vertex_buffer_descs: None,
             attributes: None,
         }
     }
@@ -387,19 +390,26 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
         if let Some(ref attributes) = self.cache.attributes {
             for attribute in attributes {
-                let handle = match self.cache.vertex_buffers {
-                    Some(ref vbs) => vbs[attribute.binding as usize],
-                    None => {
-                        error!("No vertex buffers are bound");
-                        0
-                    },
-                };
-                push_cmd_internal(
-                    &self.id,
-                    &mut self.memory,
-                    &mut self.buf,
-                    Command::BindAttribute(*attribute, handle)
-                );
+                if let Some(ref vbs) = self.cache.vertex_buffers {
+                    let binding = attribute.binding as usize;
+                    if let Some(ref descs) = self.cache.vertex_buffer_descs {
+                        let desc = &descs[binding];
+                        let handle = vbs[binding];
+
+                        assert_eq!(desc.rate, 0); // TODO: Input rate
+
+                        push_cmd_internal(
+                            &self.id,
+                            &mut self.memory,
+                            &mut self.buf,
+                            Command::BindAttribute(*attribute, handle, desc.stride as _)
+                        ); 
+                    } else {
+                        error!("No vertex buffer descriptions are bound");
+                    }
+                } else {
+                    error!("No vertex buffers are bound");
+                }
             }
         };
     }
@@ -488,7 +498,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         
         if let Some(ref mut cached) = self.cache.vertex_buffers {
             for vb in vbs.0 {
-                cached[vb.1] = vb.0.raw;
+                let buffer = vb.0;
+                cached[vb.1] = buffer.raw;
             }
         }
     }
@@ -581,6 +592,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             program,
             ref blend_targets,
             ref attributes,
+            ref vertex_buffers,
         } = pipeline;
 
         if self.cache.primitive != Some(primitive) {
@@ -600,6 +612,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
 
         self.cache.attributes = Some(attributes.clone());
+
+        self.cache.vertex_buffer_descs = Some(vertex_buffers.clone());
 
         self.update_blend_targets(blend_targets);
     }
