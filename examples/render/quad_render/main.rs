@@ -77,7 +77,7 @@ fn main() {
 
     let (mut context, backbuffers) =
         gfx::Context::<back::Backend, hal::Graphics>
-        ::init::<ColorFormat>(surface, adapter);
+        ::init::<ColorFormat>(surface, adapter).unwrap();
     let mut device = (*context.ref_device()).clone();
 
     // Setup renderpass and pipeline

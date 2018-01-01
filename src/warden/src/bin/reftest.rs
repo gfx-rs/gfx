@@ -73,7 +73,11 @@ impl Harness {
                 .expect("failed to open/parse the scene");
 
             let data_path = format!("{}/data", self.base_path);
-            let mut scene = warden::gpu::Scene::<I::Backend>::new(adapter, &raw_scene, &data_path);
+            let mut scene = warden::gpu::Scene::<I::Backend>::new(
+                adapter,
+                &raw_scene,
+                &data_path,
+            ).unwrap();
 
             for (test_name, test) in tests {
                 print!("\t\tTest '{}' ...", test_name);

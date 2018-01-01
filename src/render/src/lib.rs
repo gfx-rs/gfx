@@ -92,6 +92,8 @@ extern crate serde;
 
 #[macro_use]
 extern crate log;
+extern crate failure;
+
 pub extern crate gfx_hal as hal;
 
 /// public re-exported traits
@@ -216,7 +218,7 @@ impl<B: Backend, C> Context<B, C>
 {
     pub fn init<Cf>(
         mut surface: B::Surface, adapter: hal::Adapter<B>
-    ) -> (Self, Vec<Backbuffer<B, Cf>>)
+    ) -> Result<(Self, Vec<Backbuffer<B, Cf>>), failure::Error>
     where
         Cf: AsFormat,
     {
@@ -230,7 +232,7 @@ impl<B: Backend, C> Context<B, C>
                 surface.supports_queue_family(family) {
                 Some(1)
             } else { None }
-        });
+        })?;
 
         let queue = Queue::new(queue_groups.remove(0));
 
@@ -293,7 +295,7 @@ impl<B: Backend, C> Context<B, C>
             garbage,
         };
 
-        (context, backbuffers)
+        Ok((context, backbuffers))
     }
 
     pub fn acquire_frame(&mut self) -> Frame {

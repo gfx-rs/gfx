@@ -147,7 +147,9 @@ impl PhysicalDevice {
 }
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
-    fn open(self, mut families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>) -> hal::Gpu<Backend> {
+    fn open(
+        self, mut families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>,
+    ) -> Result<hal::Gpu<Backend>, hal::adapter::DeviceCreationError> {
         assert_eq!(families.len(), 1);
         let mut queue_group = hal::queue::RawQueueGroup::new(families.remove(0).0);
         let queue_raw = command::CommandQueue::new(&self.0);
@@ -168,10 +170,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             queue,
         };
 
-        hal::Gpu {
+        Ok(hal::Gpu {
             device,
             queue_groups: vec![queue_group],
-        }
+        })
     }
 
     fn format_properties(&self, _: Option<format::Format>) -> format::Properties {

@@ -5,7 +5,10 @@ extern crate gfx_hal as hal;
 
 use std::borrow::Borrow;
 use std::ops::Range;
-use hal::{buffer, command, device, format, image, mapping, memory, pass, pool, pso, query, queue};
+use hal::{
+    adapter, buffer, command, device, format, image, mapping,
+    memory, pass, pool, pso, query, queue,
+};
 
 /// Dummy backend.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -53,7 +56,9 @@ impl hal::Backend for Backend {
 /// Dummy physical device.
 pub struct PhysicalDevice;
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
-    fn open(self, _: Vec<(QueueFamily, Vec<hal::QueuePriority>)>) -> hal::Gpu<Backend> {
+    fn open(
+        self, _: Vec<(QueueFamily, Vec<hal::QueuePriority>)>
+    ) -> Result<hal::Gpu<Backend>, adapter::DeviceCreationError> {
         unimplemented!()
     }
 

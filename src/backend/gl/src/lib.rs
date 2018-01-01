@@ -175,7 +175,9 @@ impl PhysicalDevice {
 }
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
-    fn open(self, families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>) -> hal::Gpu<Backend> {
+    fn open(
+        self, families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>,
+    ) -> Result<hal::Gpu<Backend>, hal::adapter::DeviceCreationError> {
         // initialize permanent states
         let gl = &self.0.context;
         if self.0.features.srgb_color {
@@ -204,7 +206,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             panic!("Error opening adapter: {:?}", err);
         }
 
-        hal::Gpu {
+        Ok(hal::Gpu {
             device: Device::new(self.0.clone()),
             queue_groups: families
                 .into_iter()
@@ -216,7 +218,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                     family
                 })
                 .collect(),
-        }
+        })
     }
 
     fn format_properties(&self, _: Option<hal::format::Format>) -> hal::format::Properties {

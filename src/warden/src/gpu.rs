@@ -1,3 +1,5 @@
+use failure::Error;
+
 use std::collections::HashMap;
 use std::io::Read;
 use std::fs::File;
@@ -91,7 +93,7 @@ fn align(x: usize, y: usize) -> usize {
 }
 
 impl<B: hal::Backend> Scene<B> {
-    pub fn new(adapter: hal::Adapter<B>, raw: &raw::Scene, data_path: &str) -> Self {
+    pub fn new(adapter: hal::Adapter<B>, raw: &raw::Scene, data_path: &str) -> Result<Self, Error> {
         info!("creating Scene from {}", data_path);
         let memory_types = adapter
             .physical_device
@@ -107,7 +109,7 @@ impl<B: hal::Backend> Scene<B> {
                 if family.supports_graphics() {
                     Some(1)
                 } else { None }
-            });
+            })?;
 
         let upload_type: hal::MemoryTypeId = memory_types
             .iter()
@@ -491,7 +493,7 @@ impl<B: hal::Backend> Scene<B> {
         }
 
         // done
-        Scene {
+        Ok(Scene {
             resources,
             jobs,
             init_submit,
@@ -501,7 +503,7 @@ impl<B: hal::Backend> Scene<B> {
             upload_buffers,
             download_type,
             limits,
-        }
+        })
     }
 }
 

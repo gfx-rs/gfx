@@ -23,8 +23,11 @@ use ash::{Entry, LoadingError};
 use ash::extensions as ext;
 use ash::version::{EntryV1_0, DeviceV1_0, InstanceV1_0, V1_0};
 use ash::vk;
+
 use hal::{format, memory};
 use hal::{Features, Limits, PatchSize, QueueType};
+use hal::adapter::DeviceCreationError;
+
 use std::{fmt, mem, ptr};
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
@@ -34,6 +37,7 @@ mod conv;
 mod device;
 mod native;
 mod pool;
+mod result;
 mod window;
 
 const LAYERS: &'static [&'static str] = &[
@@ -306,7 +310,9 @@ pub struct PhysicalDevice {
 }
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
-    fn open(self, families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>) -> hal::Gpu<Backend> {
+    fn open(
+        self, families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>
+    ) -> Result<hal::Gpu<Backend>, DeviceCreationError> {
         let family_infos = families
             .iter()
             .map(|&(ref family, ref priorities)| vk::DeviceQueueCreateInfo {
@@ -346,8 +352,16 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             };
 
             unsafe {
-                self.instance.0.create_device(self.handle, &info, None)
-                    .expect("Error on device creation")
+                self.instance
+                    .0
+                    .create_device(self.handle, &info, None)
+                    .map_err(|err| {
+                        match err {
+                            ash::DeviceError::LoadError(err) => panic!("{:?}", err),
+                            ash::DeviceError::VkError(err) => Into::<result::Error>::into(err),
+                        }
+                    })
+                    .map_err(Into::<DeviceCreationError>::into)?
             }
         };
 
@@ -375,10 +389,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             })
             .collect();
 
-        hal::Gpu {
+        Ok(hal::Gpu {
             device,
             queue_groups,
-        }
+        })
     }
 
     fn format_properties(&self, format: Option<format::Format>) -> format::Properties {

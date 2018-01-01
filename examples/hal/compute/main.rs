@@ -51,7 +51,8 @@ fn main() {
             } else {
                 None
             }
-        });
+        })
+        .unwrap();
 
     let shader = gpu.device.create_shader_module(include_bytes!("shader/collatz.spv")).unwrap();
 
