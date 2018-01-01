@@ -103,6 +103,12 @@ impl Device {
     }
 }
 
+impl Drop for Device {
+    fn drop(&mut self) {
+        self.share.open.set(false);
+    }
+}
+
 impl Device {
     pub fn create_shader_module_from_source(
         &self,

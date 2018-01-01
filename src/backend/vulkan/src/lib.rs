@@ -311,7 +311,7 @@ pub struct PhysicalDevice {
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(
-        self, families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>
+        &self, families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>
     ) -> Result<hal::Gpu<Backend>, DeviceCreationError> {
         let family_infos = families
             .iter()
