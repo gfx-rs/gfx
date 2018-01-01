@@ -1,6 +1,7 @@
 use gl::{self, types as t};
 use hal::{buffer, image as i, Primitive};
-use hal::format::{Format};
+use hal::format::Format;
+use native::VertexAttribFunction;
 
 pub fn _image_kind_to_gl(kind: i::Kind) -> t::GLenum {
     match kind {
@@ -61,37 +62,39 @@ pub fn primitive_to_gl_primitive(primitive: Primitive) -> t::GLenum {
     }
 }
 
-pub fn format_to_gl_format(format: Format) -> Option<(gl::types::GLint, gl::types::GLenum)> {
+pub fn format_to_gl_format(format: Format) -> Option<(gl::types::GLint, gl::types::GLenum, VertexAttribFunction)> {
     use hal::format::Format::*;
+    use gl::*;
+    use native::VertexAttribFunction::*;
     // TODO: Add more formats and error handling for `None`
     let format = match format {
-        R8Uint => (1, gl::UNSIGNED_BYTE),
-        R8Int => (1, gl::BYTE),
-        Rg8Uint => (2, gl::UNSIGNED_BYTE),
-        Rg8Int => (2, gl::BYTE),
-        Rgba8Uint => (4, gl::UNSIGNED_BYTE),
-        Rgba8Int => (4, gl::BYTE),
-        R16Uint => (1, gl::UNSIGNED_SHORT),
-        R16Int => (1, gl::SHORT),
-        R16Float => (1, gl::HALF_FLOAT),
-        Rg16Uint => (2, gl::UNSIGNED_SHORT),
-        Rg16Int => (2, gl::SHORT),
-        Rg16Float => (2, gl::HALF_FLOAT),
-        Rgba16Uint => (4, gl::UNSIGNED_SHORT),
-        Rgba16Int => (4, gl::SHORT),
-        Rgba16Float => (4, gl::HALF_FLOAT),
-        R32Uint => (1, gl::UNSIGNED_INT),
-        R32Int => (1, gl::INT),
-        R32Float => (1, gl::FLOAT),
-        Rg32Uint => (2, gl::UNSIGNED_INT),
-        Rg32Int => (2, gl::INT),
-        Rg32Float => (2, gl::FLOAT),
-        Rgb32Uint => (3, gl::UNSIGNED_INT),
-        Rgb32Int => (3, gl::INT),
-        Rgb32Float => (3, gl::FLOAT),
-        Rgba32Uint => (4, gl::UNSIGNED_INT),
-        Rgba32Int => (4, gl::INT),
-        Rgba32Float => (4, gl::FLOAT),
+        R8Uint => (1, UNSIGNED_BYTE, Integer),
+        R8Int => (1, BYTE, Integer),
+        Rg8Uint => (2, UNSIGNED_BYTE, Integer),
+        Rg8Int => (2, BYTE, Integer),
+        Rgba8Uint => (4, UNSIGNED_BYTE, Integer),
+        Rgba8Int => (4, BYTE, Integer),
+        R16Uint => (1, UNSIGNED_SHORT, Integer),
+        R16Int => (1, SHORT, Integer),
+        R16Float => (1, HALF_FLOAT, Float),
+        Rg16Uint => (2, UNSIGNED_SHORT, Integer),
+        Rg16Int => (2, SHORT, Integer),
+        Rg16Float => (2, HALF_FLOAT, Float),
+        Rgba16Uint => (4, UNSIGNED_SHORT, Integer),
+        Rgba16Int => (4, SHORT, Integer),
+        Rgba16Float => (4, HALF_FLOAT, Float),
+        R32Uint => (1, UNSIGNED_INT, Integer),
+        R32Int => (1, INT, Integer),
+        R32Float => (1, FLOAT, Float),
+        Rg32Uint => (2, UNSIGNED_INT, Integer),
+        Rg32Int => (2, INT, Integer),
+        Rg32Float => (2, FLOAT, Float),
+        Rgb32Uint => (3, UNSIGNED_INT, Integer),
+        Rgb32Int => (3, INT, Integer),
+        Rgb32Float => (3, FLOAT, Float),
+        Rgba32Uint => (4, UNSIGNED_INT, Integer),
+        Rgba32Int => (4, INT, Integer),
+        Rgba32Float => (4, FLOAT, Float),
         
         _ => return None,
     };

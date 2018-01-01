@@ -82,7 +82,7 @@ pub enum Command {
     SetPatchSize(gl::types::GLint),
     BindProgram(gl::types::GLuint),
     BindBlendSlot(ColorSlot, pso::ColorBlendDesc),
-    BindAttribute(n::AttributeDesc, gl::types::GLuint, gl::types::GLsizei),
+    BindAttribute(n::AttributeDesc, gl::types::GLuint, gl::types::GLsizei, n::VertexAttribFunction),
     UnbindAttribute(n::AttributeDesc),
     CopyBufferToTexture(n::RawBuffer, gl::types::GLuint, command::BufferImageCopy),
 }
@@ -113,11 +113,11 @@ struct Cache {
     // Blend per attachment.
     blend_targets: Option<Vec<Option<pso::ColorBlendDesc>>>,
     // Maps bound vertex buffer offset (index) to handle.
-    vertex_buffers: Option<Vec<gl::types::GLuint>>,
+    vertex_buffers: Vec<gl::types::GLuint>,
     // Active vertex buffer descriptions.
-    vertex_buffer_descs: Option<Vec<pso::VertexBufferDesc>>,
+    vertex_buffer_descs: Vec<pso::VertexBufferDesc>,
     // Active attributes.
-    attributes: Option<Vec<n::AttributeDesc>>,
+    attributes: Vec<n::AttributeDesc>,
 }
 
 impl Cache {
@@ -132,9 +132,9 @@ impl Cache {
             patch_size: None,
             program: None,
             blend_targets: None,
-            vertex_buffers: None,
-            vertex_buffer_descs: None,
-            attributes: None,
+            vertex_buffers: Vec::new(),
+            vertex_buffer_descs: Vec::new(),
+            attributes: Vec::new(),
         }
     }
 }
@@ -303,6 +303,40 @@ impl RawCommandBuffer {
             }
         }
     }
+
+    pub(crate) fn bind_attributes(&mut self) {
+        let Cache {
+            ref attributes,
+            ref vertex_buffers,
+            ref vertex_buffer_descs,
+            ..
+        } = self.cache;
+
+        for attribute in attributes {
+            let binding = attribute.binding as usize;
+
+            if vertex_buffers.len() <= binding {
+                error!("No vertex buffer bound at {}", binding);
+            }
+
+            let handle = vertex_buffers[binding];
+
+            if vertex_buffer_descs.len() <= binding {
+                error!("No vertex buffer description bound at {}", binding);
+            }
+
+            let desc = &vertex_buffer_descs[binding];
+
+            assert_eq!(desc.rate, 0); // TODO: Input rate
+
+            push_cmd_internal(
+                &self.id,
+                &mut self.memory,
+                &mut self.buf,
+                Command::BindAttribute(*attribute, handle, desc.stride as _, attribute.vertex_attrib_fn)
+            ); 
+        }
+    }
 }
 
 impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
@@ -387,31 +421,6 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                 }
             }
         }
-
-        if let Some(ref attributes) = self.cache.attributes {
-            for attribute in attributes {
-                if let Some(ref vbs) = self.cache.vertex_buffers {
-                    let binding = attribute.binding as usize;
-                    if let Some(ref descs) = self.cache.vertex_buffer_descs {
-                        let desc = &descs[binding];
-                        let handle = vbs[binding];
-
-                        assert_eq!(desc.rate, 0); // TODO: Input rate
-
-                        push_cmd_internal(
-                            &self.id,
-                            &mut self.memory,
-                            &mut self.buf,
-                            Command::BindAttribute(*attribute, handle, desc.stride as _)
-                        ); 
-                    } else {
-                        error!("No vertex buffer descriptions are bound");
-                    }
-                } else {
-                    error!("No vertex buffers are bound");
-                }
-            }
-        };
     }
 
     fn next_subpass(&mut self, _contents: command::SubpassContents) {
@@ -491,16 +500,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
         let needed_length = vbs.0.iter().map(|vb| vb.1).max().unwrap() + 1;
 
-        match self.cache.vertex_buffers {
-            Some(ref mut vbs) => vbs.resize(needed_length, 0),
-            None => self.cache.vertex_buffers = Some(vec![0; needed_length]),
-        }
+        self.cache.vertex_buffers.resize(needed_length, 0);
         
-        if let Some(ref mut cached) = self.cache.vertex_buffers {
-            for vb in vbs.0 {
-                let buffer = vb.0;
-                cached[vb.1] = buffer.raw;
-            }
+        for vb in vbs.0 {
+            self.cache.vertex_buffers[vb.1] = vb.0.raw;
         }
     }
 
@@ -611,9 +614,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             self.push_cmd(Command::BindProgram(program));
         }
 
-        self.cache.attributes = Some(attributes.clone());
+        self.cache.attributes = attributes.clone();
 
-        self.cache.vertex_buffer_descs = Some(vertex_buffers.clone());
+        self.cache.vertex_buffer_descs = vertex_buffers.clone();
 
         self.update_blend_targets(blend_targets);
     }
@@ -691,12 +694,15 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             &n::Image::Texture(t) => t
         };
 
-        let regs = regions.into_iter().collect::<Vec<_>>();
+        let mut no_commands_submitted = true;
 
-        assert!(regs.len() >= 1);
+        for region in regions.into_iter() {
+            no_commands_submitted = false;
+            self.push_cmd(Command::CopyBufferToTexture(src.raw, image_raw, region.borrow().clone()));
+        }
 
-        for reg in regs {
-            self.push_cmd(Command::CopyBufferToTexture(src.raw, image_raw, reg.borrow().clone()));
+        if no_commands_submitted {
+            error!("At least one region must be specified");
         }
     }
 
@@ -718,6 +724,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         vertices: Range<hal::VertexCount>,
         instances: Range<hal::InstanceCount>,
     ) {
+        self.bind_attributes();
+
         match self.cache.primitive {
             Some(primitive) => {
                 self.push_cmd(
@@ -741,6 +749,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         base_vertex: hal::VertexOffset,
         instances: Range<hal::InstanceCount>,
     ) {
+        self.bind_attributes();
+
         let (start, index_type) = match self.cache.index_type {
             Some(hal::IndexType::U16) => (indices.start * 2, gl::UNSIGNED_SHORT),
             Some(hal::IndexType::U32) => (indices.start * 4, gl::UNSIGNED_INT),
@@ -841,25 +851,29 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 }
 
+/// Avoids creating second mutable borrows of `self` by requiring mutable
+/// references only to the fields it needs. Many functions will simply use
+/// `push_cmd`, but this is needed when the caller would like to perform a
+/// partial borrow to `self`. For example, iterating through a field on
+/// `self` and calling `self.push_cmd` per iteration.
 fn push_cmd_internal(id: &u64, memory: &mut Arc<Mutex<pool::BufferMemory>>, buffer: &mut BufferSlice, cmd: Command) {
-    let slice = {
-        let mut memory = memory
-            .try_lock()
-            .expect("Trying to record a command buffers, while memory is in-use.");
+    let mut memory = memory
+        .try_lock()
+        .expect("Trying to record a command buffers, while memory is in-use.");
 
-        let cmd_buffer = match *memory {
-            BufferMemory::Linear(ref mut buffer) => &mut buffer.commands,
-            BufferMemory::Individual { ref mut storage, .. } => {
-                &mut storage.get_mut(id).unwrap().commands
-            }
-        };
-        cmd_buffer.push(cmd);
-        BufferSlice {
-            offset: cmd_buffer.len() as u32 - 1,
-            size: 1,
+    let cmd_buffer = match *memory {
+        BufferMemory::Linear(ref mut buffer) => &mut buffer.commands,
+        BufferMemory::Individual { ref mut storage, .. } => {
+            &mut storage.get_mut(id).unwrap().commands
         }
     };
-    buffer.append(slice);
+
+    cmd_buffer.push(cmd);
+    
+    buffer.append(BufferSlice {
+        offset: cmd_buffer.len() as u32 - 1,
+        size: 1,
+    });
 }
 
 /// A subpass command buffer abstraction for OpenGL

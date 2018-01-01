@@ -208,6 +208,7 @@ impl d::Device<B> for Device {
     fn allocate_memory(
         &self, _mem_type: c::MemoryTypeId, _size: u64,
     ) -> Result<n::Memory, d::OutOfMemory> {
+        // TODO
         Ok(n::Memory {
             properties: memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED
         })
@@ -366,13 +367,14 @@ impl d::Device<B> for Device {
                     attributes: desc.attributes
                         .iter()
                         .map(|&a| {
-                            let (size, format) = conv::format_to_gl_format(a.element.format).unwrap();
+                            let (size, format, vertex_attrib_fn) = conv::format_to_gl_format(a.element.format).unwrap();
                             n::AttributeDesc {
                                 location: a.location,
                                 offset: a.element.offset,
                                 binding: a.binding,
                                 size,
                                 format,
+                                vertex_attrib_fn,
                             }
                         })
                         .collect::<Vec<_>>(),
@@ -599,32 +601,30 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn create_image(&self, kind: i::Kind, _: i::Level, _: Format, _: i::Usage)
+    fn create_image(&self, kind: i::Kind, _: i::Level, format: Format, _: i::Usage)
          -> Result<UnboundImage, i::CreationError>
     {
         let gl = &self.share.context;
 
         let raw = unsafe {
-            let mut raw = mem::uninitialized();
+            let mut raw = 0;
             gl.GenTextures(1, &mut raw);
             raw
         };
 
-        let width;
-        let height;
+        assert_eq!(format, Format::Rgba8Srgb);
 
-        match kind {
-            i::Kind::D2(w, h, _aa) => unsafe {
-                width = w;
-                height = h;
+        let (width, height) = match kind {
+            i::Kind::D2(w, h, aa) => unsafe {
+                assert_eq!(aa, i::AaMode::Single);
                 gl.BindTexture(gl::TEXTURE_2D, raw);
                 gl.TexStorage2D(gl::TEXTURE_2D, 1, gl::SRGB8_ALPHA8, w as _, h as _);
-                gl.BindTexture(gl::TEXTURE_2D, 0);
+                (w, h)
             }
             _ => {
                 unimplemented!();
             }
-        }
+        };
 
         Ok(UnboundImage {
             raw,

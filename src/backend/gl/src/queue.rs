@@ -475,12 +475,22 @@ impl CommandQueue {
             com::Command::BindBlendSlot(slot, ref blend) => {
                 state::bind_blend_slot(&self.share.context, slot, blend);
             }
-            com::Command::BindAttribute(ref attribute, handle, stride) => unsafe {
+            com::Command::BindAttribute(ref attribute, handle, stride, function_type) => unsafe {
+                use native::VertexAttribFunction::*;
+
+                let &native::AttributeDesc { location, size, format, offset, .. } = attribute;
+                let offset = offset as *const gl::types::GLvoid;
                 let gl = &self.share.context;
+
                 gl.BindBuffer(gl::ARRAY_BUFFER, handle);
-                gl.VertexAttribPointer(attribute.location, attribute.size, attribute.format, gl::FALSE,
-                    stride, attribute.offset as *const gl::types::GLvoid);
-                gl.EnableVertexAttribArray(attribute.location);
+
+                match function_type {
+                    Float => gl.VertexAttribPointer(location, size, format, gl::FALSE, stride, offset),
+                    Integer => gl.VertexAttribIPointer(location, size, format, stride, offset),
+                    Double => gl.VertexAttribLPointer(location, size, format, stride, offset),
+                }
+                
+                gl.EnableVertexAttribArray(location);
                 gl.BindBuffer(gl::ARRAY_BUFFER, 0);
             }
             com::Command::UnbindAttribute(ref attribute) => unsafe {

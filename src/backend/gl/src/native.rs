@@ -134,4 +134,12 @@ pub struct AttributeDesc {
     pub(crate) binding: gl::types::GLuint,
     pub(crate) size: gl::types::GLint,
     pub(crate) format: gl::types::GLenum,
+    pub(crate) vertex_attrib_fn: VertexAttribFunction,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum VertexAttribFunction {
+    Float, // glVertexAttribPointer
+    Integer, // glVertexAttribIPointer
+    Double, // glVertexAttribLPointer
 }
