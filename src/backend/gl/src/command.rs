@@ -82,6 +82,9 @@ pub enum Command {
     SetPatchSize(gl::types::GLint),
     BindProgram(gl::types::GLuint),
     BindBlendSlot(ColorSlot, pso::ColorBlendDesc),
+    BindAttribute(n::AttributeDesc, gl::types::GLuint, gl::types::GLsizei, n::VertexAttribFunction),
+    UnbindAttribute(n::AttributeDesc),
+    CopyBufferToTexture(n::RawBuffer, gl::types::GLuint, command::BufferImageCopy),
 }
 
 pub type FrameBufferTarget = gl::types::GLenum;
@@ -109,6 +112,12 @@ struct Cache {
     program: Option<gl::types::GLuint>,
     // Blend per attachment.
     blend_targets: Option<Vec<Option<pso::ColorBlendDesc>>>,
+    // Maps bound vertex buffer offset (index) to handle.
+    vertex_buffers: Vec<gl::types::GLuint>,
+    // Active vertex buffer descriptions.
+    vertex_buffer_descs: Vec<pso::VertexBufferDesc>,
+    // Active attributes.
+    attributes: Vec<n::AttributeDesc>,
 }
 
 impl Cache {
@@ -123,6 +132,9 @@ impl Cache {
             patch_size: None,
             program: None,
             blend_targets: None,
+            vertex_buffers: Vec::new(),
+            vertex_buffer_descs: Vec::new(),
+            attributes: Vec::new(),
         }
     }
 }
@@ -215,25 +227,7 @@ impl RawCommandBuffer {
     }
 
     fn push_cmd(&mut self, cmd: Command) {
-        let slice = {
-            let mut memory = self
-                .memory
-                .try_lock()
-                .expect("Trying to record a command buffers, while memory is in-use.");
-
-            let cmd_buffer = match *memory {
-                BufferMemory::Linear(ref mut buffer) => &mut buffer.commands,
-                BufferMemory::Individual { ref mut storage, .. } => {
-                    &mut storage.get_mut(&self.id).unwrap().commands
-                }
-            };
-            cmd_buffer.push(cmd);
-            BufferSlice {
-                offset: cmd_buffer.len() as u32 - 1,
-                size: 1,
-            }
-        };
-        self.buf.append(slice);
+        push_cmd_internal(&self.id, &mut self.memory, &mut self.buf, cmd);
     }
 
     /// Copy a given vector slice into the data buffer.
@@ -309,6 +303,40 @@ impl RawCommandBuffer {
             }
         }
     }
+
+    pub(crate) fn bind_attributes(&mut self) {
+        let Cache {
+            ref attributes,
+            ref vertex_buffers,
+            ref vertex_buffer_descs,
+            ..
+        } = self.cache;
+
+        for attribute in attributes {
+            let binding = attribute.binding as usize;
+
+            if vertex_buffers.len() <= binding {
+                error!("No vertex buffer bound at {}", binding);
+            }
+
+            let handle = vertex_buffers[binding];
+
+            if vertex_buffer_descs.len() <= binding {
+                error!("No vertex buffer description bound at {}", binding);
+            }
+
+            let desc = &vertex_buffer_descs[binding];
+
+            assert_eq!(desc.rate, 0); // TODO: Input rate
+
+            push_cmd_internal(
+                &self.id,
+                &mut self.memory,
+                &mut self.buf,
+                Command::BindAttribute(*attribute, handle, desc.stride as _, attribute.vertex_attrib_fn)
+            ); 
+        }
+    }
 }
 
 impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
@@ -335,7 +363,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         let mut memory = self
                 .memory
                 .try_lock()
-                .expect("Trying to reset a command buffers, while memory is in-use.");
+                .expect("Trying to reset a command buffer, while memory is in-use.");
 
         match *memory {
             // Linear` can't have individual reset ability.
@@ -361,7 +389,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<memory::Barrier<'a, Backend>>,
     {
-        unimplemented!()
+        // TODO
     }
 
     fn fill_buffer(&mut self, _buffer: &n::Buffer, _range: Range<u64>, _data: u32) {
@@ -400,7 +428,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
     fn end_renderpass(&mut self) {
-        unimplemented!()
+        // TODO
     }
 
     fn clear_color_image(
@@ -465,8 +493,18 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         self.push_cmd(Command::BindIndexBuffer(ibv.buffer.raw));
     }
 
-    fn bind_vertex_buffers(&mut self, _vbs: hal::pso::VertexBufferSet<Backend>) {
-        unimplemented!()
+    fn bind_vertex_buffers(&mut self, vbs: hal::pso::VertexBufferSet<Backend>) {
+        if vbs.0.len() == 0 {
+            return
+        }
+
+        let needed_length = vbs.0.iter().map(|vb| vb.1).max().unwrap() + 1;
+
+        self.cache.vertex_buffers.resize(needed_length, 0);
+        
+        for vb in vbs.0 {
+            self.cache.vertex_buffers[vb.1] = vb.0.raw;
+        }
     }
 
     fn set_viewports<T>(&mut self, viewports: T)
@@ -556,7 +594,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             patch_size,
             program,
             ref blend_targets,
-            ..
+            ref attributes,
+            ref vertex_buffers,
         } = pipeline;
 
         if self.cache.primitive != Some(primitive) {
@@ -575,6 +614,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             self.push_cmd(Command::BindProgram(program));
         }
 
+        self.cache.attributes = attributes.clone();
+
+        self.cache.vertex_buffer_descs = vertex_buffers.clone();
+
         self.update_blend_targets(blend_targets);
     }
 
@@ -587,7 +630,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<n::DescriptorSet>,
     {
-        unimplemented!()
+        // TODO
     }
 
     fn bind_compute_pipeline(&mut self, _pipeline: &n::ComputePipeline) {
@@ -636,17 +679,31 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn copy_buffer_to_image<T>(
-        &mut self,
-        _src: &n::Buffer,
-        _dst: &n::Image,
-        _dst_layout: image::ImageLayout,
-        _regions: T,
-    ) where
-        T: IntoIterator,
-        T::Item: Borrow<command::BufferImageCopy>,
-    {
-        unimplemented!()
+     fn copy_buffer_to_image<T>(
+         &mut self,
+        src: &n::Buffer,
+        dst: &n::Image,
+        _: image::ImageLayout,
+        regions: T,
+     ) where
+         T: IntoIterator,
+         T::Item: Borrow<command::BufferImageCopy>,
+     {
+        let image_raw = match dst {
+            &n::Image::Surface(s) => s,
+            &n::Image::Texture(t) => t
+        };
+
+        let mut no_commands_submitted = true;
+
+        for region in regions.into_iter() {
+            no_commands_submitted = false;
+            self.push_cmd(Command::CopyBufferToTexture(src.raw, image_raw, region.borrow().clone()));
+        }
+
+        if no_commands_submitted {
+            error!("At least one region must be specified");
+        }
     }
 
     fn copy_image_to_buffer<T>(
@@ -667,6 +724,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         vertices: Range<hal::VertexCount>,
         instances: Range<hal::InstanceCount>,
     ) {
+        self.bind_attributes();
+
         match self.cache.primitive {
             Some(primitive) => {
                 self.push_cmd(
@@ -690,6 +749,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         base_vertex: hal::VertexOffset,
         instances: Range<hal::InstanceCount>,
     ) {
+        self.bind_attributes();
+
         let (start, index_type) = match self.cache.index_type {
             Some(hal::IndexType::U16) => (indices.start * 2, gl::UNSIGNED_SHORT),
             Some(hal::IndexType::U32) => (indices.start * 4, gl::UNSIGNED_INT),
@@ -788,6 +849,31 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     ) {
         unimplemented!()
     }
+}
+
+/// Avoids creating second mutable borrows of `self` by requiring mutable
+/// references only to the fields it needs. Many functions will simply use
+/// `push_cmd`, but this is needed when the caller would like to perform a
+/// partial borrow to `self`. For example, iterating through a field on
+/// `self` and calling `self.push_cmd` per iteration.
+fn push_cmd_internal(id: &u64, memory: &mut Arc<Mutex<pool::BufferMemory>>, buffer: &mut BufferSlice, cmd: Command) {
+    let mut memory = memory
+        .try_lock()
+        .expect("Trying to record a command buffers, while memory is in-use.");
+
+    let cmd_buffer = match *memory {
+        BufferMemory::Linear(ref mut buffer) => &mut buffer.commands,
+        BufferMemory::Individual { ref mut storage, .. } => {
+            &mut storage.get_mut(id).unwrap().commands
+        }
+    };
+
+    cmd_buffer.push(cmd);
+    
+    buffer.append(BufferSlice {
+        offset: cmd_buffer.len() as u32 - 1,
+        size: 1,
+    });
 }
 
 /// A subpass command buffer abstraction for OpenGL

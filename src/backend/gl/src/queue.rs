@@ -472,8 +472,45 @@ impl CommandQueue {
             com::Command::BindProgram(program) => unsafe {
                 self.share.context.UseProgram(program);
             }
-            com::Command::BindBlendSlot(slot, blend) => {
-                state::bind_blend_slot(&self.share.context, slot, &blend);
+            com::Command::BindBlendSlot(slot, ref blend) => {
+                state::bind_blend_slot(&self.share.context, slot, blend);
+            }
+            com::Command::BindAttribute(ref attribute, handle, stride, function_type) => unsafe {
+                use native::VertexAttribFunction::*;
+
+                let &native::AttributeDesc { location, size, format, offset, .. } = attribute;
+                let offset = offset as *const gl::types::GLvoid;
+                let gl = &self.share.context;
+
+                gl.BindBuffer(gl::ARRAY_BUFFER, handle);
+
+                match function_type {
+                    Float => gl.VertexAttribPointer(location, size, format, gl::FALSE, stride, offset),
+                    Integer => gl.VertexAttribIPointer(location, size, format, stride, offset),
+                    Double => gl.VertexAttribLPointer(location, size, format, stride, offset),
+                }
+                
+                gl.EnableVertexAttribArray(location);
+                gl.BindBuffer(gl::ARRAY_BUFFER, 0);
+            }
+            com::Command::UnbindAttribute(ref attribute) => unsafe {
+                self.share.context.DisableVertexAttribArray(attribute.location);
+            }
+            com::Command::CopyBufferToTexture(buffer, image, ref region) => unsafe {
+                // TODO: Fix format and active texture
+                let gl = &self.share.context;
+                gl.ActiveTexture(gl::TEXTURE0);
+                gl.BindBuffer(gl::PIXEL_UNPACK_BUFFER, buffer);
+                gl.BindTexture(gl::TEXTURE_2D, image);
+                let &hal::command::BufferImageCopy {
+                    ref image_layers,
+                    ref image_offset,
+                    ref image_extent,
+                    ..
+                } = region;
+                gl.TexSubImage2D(gl::TEXTURE_2D, image_layers.level as _, image_offset.x, image_offset.y,
+                    image_extent.width as _, image_extent.height as _, gl::RGBA, gl::UNSIGNED_BYTE, 0 as *const _);
+                gl.BindBuffer(gl::PIXEL_UNPACK_BUFFER, 0);
             }
             /*
             com::Command::BindConstantBuffer(pso::ConstantBufferParam(buffer, _, slot)) => unsafe {

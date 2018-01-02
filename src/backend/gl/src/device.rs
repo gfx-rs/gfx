@@ -6,7 +6,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use gl;
-use gl::types::{GLint, GLenum, GLfloat};
+use gl::types::{GLint, GLenum, GLfloat, GLuint};
 use hal::{self as c, device as d, image as i, memory, pass, pso, buffer, mapping, query, Primitive};
 use hal::format::{Format, Swizzle};
 use hal::pool::CommandPoolCreateFlags;
@@ -87,7 +87,10 @@ pub struct UnboundBuffer {
 }
 
 #[derive(Debug)]
-pub struct UnboundImage;
+pub struct UnboundImage {
+    raw: GLuint,
+    requirements: memory::Requirements,
+}
 
 /// GL device.
 pub struct Device {
@@ -205,7 +208,10 @@ impl d::Device<B> for Device {
     fn allocate_memory(
         &self, _mem_type: c::MemoryTypeId, _size: u64,
     ) -> Result<n::Memory, d::OutOfMemory> {
-        unimplemented!()
+        // TODO
+        Ok(n::Memory {
+            properties: memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED
+        })
     }
 
     fn create_command_pool(
@@ -357,6 +363,21 @@ impl d::Device<B> for Device {
                     primitive: conv::primitive_to_gl_primitive(desc.input_assembler.primitive),
                     patch_size,
                     blend_targets: desc.blender.targets.clone(),
+                    vertex_buffers: desc.vertex_buffers.clone(),
+                    attributes: desc.attributes
+                        .iter()
+                        .map(|&a| {
+                            let (size, format, vertex_attrib_fn) = conv::format_to_gl_format(a.element.format).unwrap();
+                            n::AttributeDesc {
+                                location: a.location,
+                                offset: a.element.offset,
+                                binding: a.binding,
+                                size,
+                                format,
+                                vertex_attrib_fn,
+                            }
+                        })
+                        .collect::<Vec<_>>(),
                 })
              })
              .collect()
@@ -580,18 +601,47 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn create_image(&self, _: i::Kind, _: i::Level, _: Format, _: i::Usage)
+    fn create_image(&self, kind: i::Kind, _: i::Level, format: Format, _: i::Usage)
          -> Result<UnboundImage, i::CreationError>
     {
-        unimplemented!()
+        let gl = &self.share.context;
+
+        let raw = unsafe {
+            let mut raw = 0;
+            gl.GenTextures(1, &mut raw);
+            raw
+        };
+
+        assert_eq!(format, Format::Rgba8Srgb);
+
+        let (width, height) = match kind {
+            i::Kind::D2(w, h, aa) => unsafe {
+                assert_eq!(aa, i::AaMode::Single);
+                gl.BindTexture(gl::TEXTURE_2D, raw);
+                gl.TexStorage2D(gl::TEXTURE_2D, 1, gl::SRGB8_ALPHA8, w as _, h as _);
+                (w, h)
+            }
+            _ => {
+                unimplemented!();
+            }
+        };
+
+        Ok(UnboundImage {
+            raw,
+            requirements: memory::Requirements {
+                size: width as u64 * height as u64 * 4, // TODO
+                alignment: 1,
+                type_mask: 0x7,
+            }
+        })
     }
 
-    fn get_image_requirements(&self, _: &UnboundImage) -> memory::Requirements {
-        unimplemented!()
+    fn get_image_requirements(&self, unbound: &UnboundImage) -> memory::Requirements {
+        unbound.requirements
     }
 
-    fn bind_image_memory(&self, _: &n::Memory, _: u64, _: UnboundImage) -> Result<n::Image, d::BindError> {
-        unimplemented!()
+    fn bind_image_memory(&self, _memory: &n::Memory, _offset: u64, image: UnboundImage) -> Result<n::Image, d::BindError> {
+        Ok(n::Image::Texture(image.raw))
     }
 
     fn create_image_view(&self,
@@ -635,7 +685,7 @@ impl d::Device<B> for Device {
     }
 
     fn update_descriptor_sets(&self, _: &[pso::DescriptorSetWrite<B>]) {
-        unimplemented!()
+        // TODO
     }
 
     fn acquire_mapping_raw(&self, buffer: &n::Buffer, read: Option<Range<u64>>)

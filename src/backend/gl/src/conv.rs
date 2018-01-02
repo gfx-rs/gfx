@@ -1,5 +1,7 @@
 use gl::{self, types as t};
 use hal::{buffer, image as i, Primitive};
+use hal::format::Format;
+use native::VertexAttribFunction;
 
 pub fn _image_kind_to_gl(kind: i::Kind) -> t::GLenum {
     match kind {
@@ -58,4 +60,44 @@ pub fn primitive_to_gl_primitive(primitive: Primitive) -> t::GLenum {
         Primitive::TriangleStripAdjacency => gl::TRIANGLE_STRIP_ADJACENCY,
         Primitive::PatchList(_) => gl::PATCHES,
     }
+}
+
+pub fn format_to_gl_format(format: Format) -> Option<(gl::types::GLint, gl::types::GLenum, VertexAttribFunction)> {
+    use hal::format::Format::*;
+    use gl::*;
+    use native::VertexAttribFunction::*;
+    // TODO: Add more formats and error handling for `None`
+    let format = match format {
+        R8Uint => (1, UNSIGNED_BYTE, Integer),
+        R8Int => (1, BYTE, Integer),
+        Rg8Uint => (2, UNSIGNED_BYTE, Integer),
+        Rg8Int => (2, BYTE, Integer),
+        Rgba8Uint => (4, UNSIGNED_BYTE, Integer),
+        Rgba8Int => (4, BYTE, Integer),
+        R16Uint => (1, UNSIGNED_SHORT, Integer),
+        R16Int => (1, SHORT, Integer),
+        R16Float => (1, HALF_FLOAT, Float),
+        Rg16Uint => (2, UNSIGNED_SHORT, Integer),
+        Rg16Int => (2, SHORT, Integer),
+        Rg16Float => (2, HALF_FLOAT, Float),
+        Rgba16Uint => (4, UNSIGNED_SHORT, Integer),
+        Rgba16Int => (4, SHORT, Integer),
+        Rgba16Float => (4, HALF_FLOAT, Float),
+        R32Uint => (1, UNSIGNED_INT, Integer),
+        R32Int => (1, INT, Integer),
+        R32Float => (1, FLOAT, Float),
+        Rg32Uint => (2, UNSIGNED_INT, Integer),
+        Rg32Int => (2, INT, Integer),
+        Rg32Float => (2, FLOAT, Float),
+        Rgb32Uint => (3, UNSIGNED_INT, Integer),
+        Rgb32Int => (3, INT, Integer),
+        Rgb32Float => (3, FLOAT, Float),
+        Rgba32Uint => (4, UNSIGNED_INT, Integer),
+        Rgba32Int => (4, INT, Integer),
+        Rgba32Float => (4, FLOAT, Float),
+        
+        _ => return None,
+    };
+
+    Some(format)
 }
