@@ -32,7 +32,7 @@ use wio::com::ComPtr;
 use std::{mem, ptr};
 use std::os::windows::ffi::OsStringExt;
 use std::ffi::OsString;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 pub(crate) struct HeapProperties {
     pub page_property: d3d12::D3D12_CPU_PAGE_PROPERTY,
@@ -146,12 +146,21 @@ pub struct PhysicalDevice {
     private_caps: Capabilities,
     heap_properties: &'static [HeapProperties; NUM_HEAP_PROPERTIES],
     memory_properties: hal::MemoryProperties,
+    // Indicates that there is currently an active logical device.
+    // Opening the same adapter multiple times will return the same D3D12Device again.
+    is_open: Arc<Mutex<bool>>,
 }
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(
-        self, families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>
+        &self, families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>
     ) -> Result<hal::Gpu<Backend>, hal::adapter::DeviceCreationError> {
+        let lock = self.is_open.try_lock();
+        let mut open_guard = match lock {
+            Ok(inner) => inner,
+            Err(_) => return Err(hal::adapter::DeviceCreationError::TooManyObjects),
+        };
+
         // Create D3D12 device
         let mut device_raw = ptr::null_mut();
         let hr = unsafe {
@@ -248,6 +257,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             mem::forget(present_queue);
         }
 
+        *open_guard = true;
+
         Ok(hal::Gpu {
             device,
             queue_groups,
@@ -331,6 +342,8 @@ pub struct Device {
     // Present queue exposed by the `Present` queue family.
     // Required for swapchain creation. Only a single queue supports presentation.
     present_queue: ComPtr<d3d12::ID3D12CommandQueue>,
+    // Indicates that there is currently an active device.
+    open: Arc<Mutex<bool>>,
 }
 unsafe impl Send for Device {} //blocked by ComPtr
 unsafe impl Sync for Device {} //blocked by ComPtr
@@ -450,7 +463,14 @@ impl Device {
                 dispatch: dispatch_signature,
             },
             present_queue: unsafe { ComPtr::new(ptr::null_mut()) }, // filled out on adapter opening
+            open: physical_device.is_open.clone(),
         }
+    }
+}
+
+impl Drop for Device {
+    fn drop(&mut self) {
+        *self.open.lock().unwrap() = false;
     }
 }
 
@@ -749,6 +769,7 @@ impl hal::Instance for Instance {
                     memory_types,
                     memory_heaps,
                 },
+                is_open: Arc::new(Mutex::new(false)),
             };
 
             let queue_families = vec![

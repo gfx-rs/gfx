@@ -44,6 +44,10 @@ pub struct MemoryProperties {
 pub trait PhysicalDevice<B: Backend>: Sized {
     /// Create a new logical device.
     ///
+    /// # Errors
+    ///
+    /// - Returns `TooManyObjects` if the implementation can't create a new logical device.
+    ///
     /// # Examples
     ///
     /// ```no_run
@@ -57,7 +61,7 @@ pub trait PhysicalDevice<B: Backend>: Sized {
     /// let gpu = physical_device.open(vec![(family, vec![1.0; 1])]);
     /// # }
     /// ```
-    fn open(self, Vec<(B::QueueFamily, Vec<QueuePriority>)>) -> Result<Gpu<B>, DeviceCreationError>;
+    fn open(&self, Vec<(B::QueueFamily, Vec<QueuePriority>)>) -> Result<Gpu<B>, DeviceCreationError>;
 
     ///
     fn format_properties(&self, Option<format::Format>) -> format::Properties;

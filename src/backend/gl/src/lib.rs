@@ -12,6 +12,7 @@ extern crate spirv_cross;
 #[cfg(feature = "glutin")]
 pub extern crate glutin;
 
+use std::cell::Cell;
 use std::rc::Rc;
 
 pub use self::device::Device;
@@ -97,13 +98,15 @@ impl Error {
     }
 }
 
-/// Internal struct of shared data between the device and its factories.
+/// Internal struct of shared data between the physical and logical device.
 struct Share {
     context: gl::Gl,
     info: Info,
     features: hal::Features,
     limits: hal::Limits,
     private_caps: info::PrivateCaps,
+    // Indicates if there is an active logical device.
+    open: Cell<bool>,
 }
 
 impl Share {
@@ -156,6 +159,7 @@ impl PhysicalDevice {
             features,
             limits,
             private_caps,
+            open: Cell::new(false),
         };
         if let Err(err) = share.check() {
             panic!("Error querying info: {:?}", err);
@@ -176,8 +180,15 @@ impl PhysicalDevice {
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(
-        self, families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>,
+        &self, families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>,
     ) -> Result<hal::Gpu<Backend>, hal::adapter::DeviceCreationError> {
+        // Can't have multiple logical devices at the same time
+        // as they would share the same context.
+        if self.0.open.get() {
+            return Err(hal::adapter::DeviceCreationError::TooManyObjects);
+        }
+        self.0.open.set(true);
+
         // initialize permanent states
         let gl = &self.0.context;
         if self.0.features.srgb_color {
