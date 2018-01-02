@@ -52,6 +52,7 @@ addons:
       - libxrandr-dev
 script:
   - export RUST_BACKTRACE=1
+  - export CARGO_INCREMENTAL=0 # We are running out of storage with incremental builds
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export PATH=$PATH:$HOME/deps/bin ; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export LIBRARY_PATH=$HOME/deps/usr/lib/x86_64-linux-gnu ; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export LD_LIBRARY_PATH=$LIBRARY_PATH ; fi

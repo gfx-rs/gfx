@@ -1,4 +1,4 @@
-# Copyright 2016 The Gfx-rs Developers.
+# Copyright 2017 The Gfx-rs Developers.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx"
-version = "0.16.2"
+version = "0.16.3"
 description = "A high-performance, bindless graphics API"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
