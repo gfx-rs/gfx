@@ -26,7 +26,7 @@ macro_rules! gfx_pipeline_inner {
             $( pub $field: <$ty as DataBind<R>>::Data, )*
         }
 
-        #[derive(Clone, Debug, PartialEq)]
+        #[derive(Clone, Debug, Hash, PartialEq)]
         pub struct Meta {
             $( $field: $ty, )*
         }
