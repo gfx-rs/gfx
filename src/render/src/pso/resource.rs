@@ -69,7 +69,8 @@ pub struct Sampler(Option<(SamplerSlot, shade::Usage)>);
 ///
 /// - init: `&str` = name of the sampler/texture (assuming they match)
 /// - data: (`ShaderResourceView<T>`, `Sampler`)
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Derivative)]
+#[derivative(Clone, Debug, Eq, Hash(bound=""), PartialEq)]
 pub struct TextureSampler<T>(ShaderResource<T>, Sampler);
 
 impl<'a, T> DataLink<'a> for ShaderResource<T> {
