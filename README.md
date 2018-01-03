@@ -29,11 +29,16 @@
   <a href="https://crates.io/crates/gfx">
       <img src="http://img.shields.io/crates/v/gfx.svg?label=gfx" alt = "gfx on crates.io">
   </a>
-  <a href="https://gitter.im/gfx-rs/gfx">
+  <a href="https://gitter.im/gfx-rs/pre-ll">
     <img src="https://img.shields.io/badge/GITTER-join%20chat-green.svg?style=flat-square" alt="Gitter Chat">
   </a>
   <br>
-  <strong><a href="http://docs.rs/gfx">Documentation</a> | <a href="https://wiki.alopex.li/LearningGfx">Tutorial</a> | <a href="http://gfx-rs.github.io/">Blog</a> </strong>
+  <strong>
+    <a href="http://docs.rs/gfx">Documentation</a> |
+    <a href="https://wiki.alopex.li/LearningGfx">LearningGfx tutorial</a> |
+    <a href="https://suhr.github.io/gsgt/">Graphics By Squares tutorial</a> |
+    <a href="http://gfx-rs.github.io/">Blog</a>
+  </strong>
 </p>
 
 ## gfx-rs
@@ -50,7 +55,7 @@
 
 Graphics backends:
   - [OpenGL 2.1+](src/backend/gl)
-  - [OpenGL ES2+](src/backend/gl) ([works](https://github.com/gfx-rs/gfx/pull/993) on Android)
+  - [OpenGL ES2+](src/backend/gl) ([works](https://github.com/gfx-rs/gfx/pull/993) on Android as well as WebGL2)
   - [Direct3D 11](src/backend/dx11)
   - [Metal](src/backend/metal) (WIP 75%)
   - ~~[Vulkan](src/backend/vulkan) (WIP 40%)~~
@@ -108,14 +113,14 @@ If you compile the example for the first time, it may take some while since all 
 If you want to build your own stand-alone gfx program, add the following to your new `Cargo.toml`:
 
 	[dependencies]
-	gfx = "0.16"
+	gfx = "0.17"
 
 
 For gfx to work, it needs access to the graphics system of the OS. This is typically provided through some window initialization API.
 gfx can use a couple of those to acquire graphical contexts.
 For example; [glfw](https://github.com/PistonDevelopers/glfw-rs) or [glutin](https://github.com/tomaka/glutin/).
 
-To see how the graphic context is acquired, see the [cube example](https://github.com/gfx-rs/gfx/tree/master/examples/cube) or the [triangle example](https://github.com/gfx-rs/gfx/tree/master/examples/triangle).
+To see how the graphic context is acquired, see the [cube example](https://github.com/gfx-rs/gfx/tree/pre-ll/examples/cube) or the [triangle example](https://github.com/gfx-rs/gfx/tree/pre-ll/examples/triangle).
 
 To use `glutin`, for example, your `Cargo.toml` must be extended with the following dependencies:
 
