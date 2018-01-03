@@ -39,7 +39,7 @@ impl<'a, B: hal::Backend> Drop for FetchGuard<'a, B> {
     fn drop(&mut self) {
         let buffer = self.buffer.take().unwrap();
         let memory = self.memory.take().unwrap();
-        self.device.release_mapping_raw(&buffer, None);
+        self.device.unmap_memory(&memory);
         self.device.destroy_buffer(buffer);
         self.device.free_memory(memory);
     }
@@ -223,7 +223,7 @@ impl<B: hal::Backend> Scene<B> {
                             {
                                 let mut file = File::open(&format!("{}/{}", data_path, data))
                                     .unwrap();
-                                let mut mapping = device.acquire_mapping_writer::<u8>(&upload_buffer, 0..upload_size)
+                                let mut mapping = device.acquire_mapping_writer::<u8>(&upload_memory, 0..upload_size)
                                     .unwrap();
                                 for y in 0 .. (h as usize * d as usize) {
                                     let dest_range = y as usize * row_pitch .. y as usize * row_pitch + width_bytes;
@@ -603,8 +603,10 @@ impl<B: hal::Backend> Scene<B> {
         self.device.wait_for_fences(&[&copy_fence], hal::device::WaitFor::Any, !0);
         self.device.destroy_fence(copy_fence);
 
-        let mapping = self.device.acquire_mapping_raw(&down_buffer, Some(0 .. down_size))
-            .unwrap() as *const _;
+        let mapping = self
+            .device
+            .map_memory(&down_memory, 0 .. down_size)
+            .unwrap();
 
         FetchGuard {
             device: &mut self.device,

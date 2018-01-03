@@ -792,33 +792,20 @@ impl hal::Device<Backend> for Device {
     fn destroy_sampler(&self, _sampler: n::Sampler) {
     }
 
-    fn acquire_mapping_raw(
-        &self, buf: &n::Buffer, read: Option<Range<u64>>
-    ) -> Result<*mut u8, mapping::Error> {
-        let base_ptr = buf.0.contents() as *mut u8;
-
-        if base_ptr.is_null() {
-            return Err(mapping::Error::InvalidAccess);
-        }
-
-        if let Some(range) = read {
-            if range.end > buf.0.length() {
-                return Err(mapping::Error::OutOfBounds);
-            }
-        }
-
-        Ok(base_ptr)
+    fn map_memory(&self, _: &n::Memory, _: Range<u64>) -> Result<*mut u8, mapping::Error> {
+        unimplemented!()
     }
 
-    fn release_mapping_raw(&self, buffer: &n::Buffer, wrote: Option<Range<u64>>) {
-        if let Some(range) = wrote {
-            if buffer.0.storage_mode() != MTLStorageMode::Shared {
-                buffer.0.did_modify_range(NSRange {
-                    location: range.start as NSUInteger,
-                    length: (range.end - range.start) as NSUInteger,
-                });
-            }
-        }
+    fn unmap_memory(&self, _: &n::Memory) {
+        unimplemented!()
+    }
+
+    fn flush_mapped_memory_ranges(&self, _: &[(&n::Memory, Range<u64>)]) {
+        unimplemented!()
+    }
+
+    fn invalidate_mapped_memory_ranges(&self, _: &[(&n::Memory, Range<u64>)]) {
+        unimplemented!()
     }
 
     fn create_semaphore(&self) -> n::Semaphore {

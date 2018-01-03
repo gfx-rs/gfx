@@ -601,6 +601,22 @@ impl d::Device<B> for Device {
         })
     }
 
+    fn map_memory(&self, _: &n::Memory, _: Range<u64>) -> Result<*mut u8, mapping::Error> {
+        unimplemented!()
+    }
+
+    fn unmap_memory(&self, _: &n::Memory) {
+        unimplemented!()
+    }
+
+    fn flush_mapped_memory_ranges(&self, _: &[(&n::Memory, Range<u64>)]) {
+        unimplemented!()
+    }
+
+    fn invalidate_mapped_memory_ranges(&self, _: &[(&n::Memory, Range<u64>)]) {
+        unimplemented!()
+    }
+
     fn create_buffer_view(
         &self, _: &n::Buffer, _: Option<Format>, _: Range<u64>
     ) -> Result<n::BufferView, buffer::ViewError> {
@@ -692,41 +708,6 @@ impl d::Device<B> for Device {
 
     fn update_descriptor_sets(&self, _: &[pso::DescriptorSetWrite<B>]) {
         // TODO
-    }
-
-    fn acquire_mapping_raw(&self, buffer: &n::Buffer, read: Option<Range<u64>>)
-        -> Result<*mut u8, mapping::Error>
-    {
-        let access = match read {
-            Some(_) if buffer.cpu_can_read && buffer.cpu_can_write => gl::READ_WRITE,
-            Some(_) if buffer.cpu_can_read => gl::READ_ONLY,
-            None if buffer.cpu_can_write => gl::WRITE_ONLY,
-            _ => return Err(mapping::Error::InvalidAccess)
-        };
-        let gl = &self.share.context;
-
-        let data = unsafe {
-            gl.BindBuffer(buffer.target, buffer.raw);
-            let ptr = gl.MapBuffer(buffer.target, access);
-            gl.BindBuffer(buffer.target, 0);
-            ptr
-        };
-
-        if let Err(err) = self.share.check() {
-            panic!("Error mapping buffer: {:?}, {:?}, access = {}", err, buffer, access);
-        }
-        debug_assert_ne!(data, ptr::null_mut());
-        Ok(data as _)
-    }
-
-    fn release_mapping_raw(&self, buffer: &n::Buffer, wrote: Option<Range<u64>>) {
-        assert!(wrote.is_none() || buffer.cpu_can_write);
-        let gl = &self.share.context;
-        unsafe {
-            gl.BindBuffer(buffer.target, buffer.raw);
-            gl.UnmapBuffer(buffer.target);
-            gl.BindBuffer(buffer.target, 0);
-        }
     }
 
     fn create_semaphore(&self) -> n::Semaphore {

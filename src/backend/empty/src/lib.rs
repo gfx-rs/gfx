@@ -190,16 +190,6 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn acquire_mapping_raw(&self, _: &(), _: Option<Range<u64>>)
-        -> Result<*mut u8, mapping::Error>
-    {
-        unimplemented!()
-    }
-
-    fn release_mapping_raw(&self, _: &(), _: Option<Range<u64>>) {
-        unimplemented!()
-    }
-
     fn create_semaphore(&self) -> () {
         unimplemented!()
     }
@@ -224,6 +214,22 @@ impl hal::Device<Backend> for Device {
     }
 
     fn destroy_query_pool(&self, _: ()) {
+        unimplemented!()
+    }
+
+    fn map_memory(&self, _: &(), _: Range<u64>) -> Result<*mut u8, mapping::Error> {
+        unimplemented!()
+    }
+
+    fn unmap_memory(&self, _: &()) {
+        unimplemented!()
+    }
+
+    fn flush_mapped_memory_ranges(&self, _: &[(&(), Range<u64>)]) {
+        unimplemented!()
+    }
+
+    fn invalidate_mapped_memory_ranges(&self, _: &[(&(), Range<u64>)]) {
         unimplemented!()
     }
 
