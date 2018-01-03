@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::collections::{BTreeMap, VecDeque};
 use std::ops::Range;
 use std::{ffi, mem, ptr, slice};
@@ -1847,8 +1848,13 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn flush_mapped_memory_ranges(&self, ranges: &[(&n::Memory, Range<u64>)]) {
-        for &(memory, ref range) in ranges {
+    fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
+    {
+        for range in ranges {
+            let &(ref memory, ref range) = range.borrow();
             // map and immediately unmap, hoping that dx12 drivers internally cache
             // currently mapped buffers.
             assert_eq!(winerror::S_OK, unsafe {
@@ -1873,8 +1879,13 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn invalidate_mapped_memory_ranges(&self, ranges: &[(&n::Memory, Range<u64>)]) {
-        for &(memory, ref range) in ranges {
+    fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
+    {
+        for range in ranges {
+            let &(ref memory, ref range) = range.borrow();
             // map and immediately unmap, hoping that dx12 drivers internally cache
             // currently mapped buffers.
             assert_eq!(winerror::S_OK, unsafe {

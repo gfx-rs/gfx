@@ -225,11 +225,19 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn flush_mapped_memory_ranges(&self, _: &[(&(), Range<u64>)]) {
+    fn flush_mapped_memory_ranges<'a, I>(&self, _: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<(&'a (), Range<u64>)>,
+    {
         unimplemented!()
     }
 
-    fn invalidate_mapped_memory_ranges(&self, _: &[(&(), Range<u64>)]) {
+    fn invalidate_mapped_memory_ranges<'a, I>(&self, _: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<(&'a (), Range<u64>)>,
+    {
         unimplemented!()
     }
 

@@ -4,6 +4,7 @@
 //! includes several items to facilitate this.
 
 use std::{fmt, mem, slice};
+use std::borrow::Borrow;
 use std::error::Error;
 use std::ops::Range;
 use {buffer, format, image, mapping, pass, pso, query};
@@ -320,10 +321,16 @@ pub trait Device<B: Backend> {
     fn map_memory(&self, &B::Memory, Range<u64>) -> Result<*mut u8, mapping::Error>;
 
     ///
-    fn flush_mapped_memory_ranges(&self, &[(&B::Memory, Range<u64>)]);
+    fn flush_mapped_memory_ranges<'a, I>(&self, I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<(&'a B::Memory, Range<u64>)>;
 
     ///
-    fn invalidate_mapped_memory_ranges(&self, &[(&B::Memory, Range<u64>)]);
+    fn invalidate_mapped_memory_ranges<'a, I>(&self, I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<(&'a B::Memory, Range<u64>)>;
 
     ///
     fn unmap_memory(&self, &B::Memory);
@@ -340,8 +347,8 @@ pub trait Device<B: Backend> {
         let count = len as usize / mem::size_of::<T>();
         self.map_memory(memory, range.clone())
             .map(|ptr| unsafe {
-                let start_ptr = ptr.offset(0) as *const _;
-                self.invalidate_mapped_memory_ranges(&[(&memory, 0..len)]);
+                let start_ptr = ptr as *const _;
+                self.invalidate_mapped_memory_ranges(Some((memory, 0..len)));
 
                 mapping::Reader {
                     slice: slice::from_raw_parts(start_ptr, count),
@@ -368,7 +375,7 @@ pub trait Device<B: Backend> {
         let count = (range.end - range.start) as usize / mem::size_of::<T>();
         self.map_memory(memory, range.clone())
             .map(|ptr| unsafe {
-                let start_ptr = ptr.offset(0) as *mut _;
+                let start_ptr = ptr as *mut _;
                 mapping::Writer {
                     slice: slice::from_raw_parts_mut(start_ptr, count),
                     memory,
@@ -382,7 +389,7 @@ pub trait Device<B: Backend> {
     fn release_mapping_writer<'a, T>(&self, mut writer: mapping::Writer<'a, B, T>) {
         writer.released = true;
         let len = writer.range.end - writer.range.start;
-        self.flush_mapped_memory_ranges(&[(&writer.memory, 0..len)]);
+        self.flush_mapped_memory_ranges(Some((writer.memory, 0..len)));
         self.unmap_memory(writer.memory);
     }
 

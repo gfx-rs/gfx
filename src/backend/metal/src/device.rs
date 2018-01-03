@@ -2,6 +2,7 @@ use {Backend, QueueFamily, Surface, Swapchain};
 use {native as n, command};
 use conversions::*;
 
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::path::Path;
@@ -800,11 +801,19 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn flush_mapped_memory_ranges(&self, _: &[(&n::Memory, Range<u64>)]) {
+    fn flush_mapped_memory_ranges<'a, I>(&self, _: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
+    {
         unimplemented!()
     }
 
-    fn invalidate_mapped_memory_ranges(&self, _: &[(&n::Memory, Range<u64>)]) {
+    fn invalidate_mapped_memory_ranges<'a, I>(&self, _: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
+    {
         unimplemented!()
     }
 

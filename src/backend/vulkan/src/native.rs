@@ -19,7 +19,7 @@ pub struct ComputePipeline(pub vk::Pipeline);
 
 #[derive(Debug, Hash)]
 pub struct Memory {
-    pub(crate) inner: vk::DeviceMemory,
+    pub(crate) raw: vk::DeviceMemory,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]

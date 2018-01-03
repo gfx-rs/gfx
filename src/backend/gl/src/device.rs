@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::iter::repeat;
 use std::ops::Range;
@@ -609,11 +610,19 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn flush_mapped_memory_ranges(&self, _: &[(&n::Memory, Range<u64>)]) {
+    fn flush_mapped_memory_ranges<'a, I>(&self, _: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
+    {
         unimplemented!()
     }
 
-    fn invalidate_mapped_memory_ranges(&self, _: &[(&n::Memory, Range<u64>)]) {
+    fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
+    {
         unimplemented!()
     }
 

@@ -7,7 +7,9 @@ use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
 use native as n;
 use smallvec::SmallVec;
+
 use std::{mem, ptr};
+use std::borrow::Borrow;
 use std::collections::VecDeque;
 use std::ffi::CString;
 use std::ops::Range;
@@ -67,7 +69,7 @@ impl d::Device<B> for Device {
             self.raw.0.allocate_memory(&info, None)
         }.expect("Error on memory allocation"); // TODO: error handling
 
-        Ok(n::Memory { inner: memory })
+        Ok(n::Memory { raw: memory })
     }
 
     fn create_command_pool(
@@ -797,7 +799,7 @@ impl d::Device<B> for Device {
 
     fn bind_buffer_memory(&self, memory: &n::Memory, offset: u64, buffer: UnboundBuffer) -> Result<n::Buffer, d::BindError> {
         assert_eq!(Ok(()), unsafe {
-            self.raw.0.bind_buffer_memory((buffer.0).raw, memory.inner, offset)
+            self.raw.0.bind_buffer_memory((buffer.0).raw, memory.raw, offset)
         });
 
         let buffer = n::Buffer {
@@ -928,7 +930,7 @@ impl d::Device<B> for Device {
         // TODO: error handling
         // TODO: check required type
         assert_eq!(Ok(()), unsafe {
-            self.raw.0.bind_image_memory(image.0.raw, memory.inner, offset)
+            self.raw.0.bind_image_memory(image.0.raw, memory.raw, offset)
         });
 
         Ok(image.0)
@@ -1146,7 +1148,7 @@ impl d::Device<B> for Device {
         let size = range.end - range.start;
         let ptr = unsafe {
             self.raw.0.map_memory(
-                memory.inner,
+                memory.raw,
                 0,
                 size,
                 vk::MemoryMapFlags::empty(),
@@ -1157,10 +1159,14 @@ impl d::Device<B> for Device {
     }
 
     fn unmap_memory(&self, memory: &n::Memory) {
-        unsafe { self.raw.0.unmap_memory(memory.inner) }
+        unsafe { self.raw.0.unmap_memory(memory.raw) }
     }
 
-    fn flush_mapped_memory_ranges(&self, ranges: &[(&n::Memory, Range<u64>)]) {
+    fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
+    {
         let ranges = conv::map_memory_ranges(ranges);
         unsafe {
             self.raw.0
@@ -1169,7 +1175,11 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn invalidate_mapped_memory_ranges(&self, ranges: &[(&n::Memory, Range<u64>)]) {
+    fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
+    {
         let ranges = conv::map_memory_ranges(ranges);
         unsafe {
             self.raw.0
@@ -1247,7 +1257,7 @@ impl d::Device<B> for Device {
     }
 
     fn free_memory(&self, memory: n::Memory) {
-        unsafe { self.raw.0.free_memory(memory.inner, None); }
+        unsafe { self.raw.0.free_memory(memory.raw, None); }
     }
 
     fn create_query_pool(&self, ty: query::QueryType, query_count: u32) -> n::QueryPool {
@@ -1376,8 +1386,8 @@ impl d::Device<B> for Device {
         unsafe { self.raw.0.destroy_buffer(buffer.raw, None); }
     }
 
-    fn destroy_buffer_view(&self, _: n::BufferView) {
-        //TODO?
+    fn destroy_buffer_view(&self, _view: n::BufferView) {
+        unimplemented!()
     }
 
     fn destroy_image(&self, image: n::Image) {
