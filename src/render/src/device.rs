@@ -8,7 +8,7 @@ use hal::memory::{Properties};
 use memory::{self, Allocator, Typed};
 use handle::{self, GarbageSender};
 use handle::inner::*;
-use {buffer, image, format, mapping, pso};
+use {buffer, image, format, pso};
 use {Backend, Primitive, Extent};
 
 pub use hal::device::{FramebufferError};

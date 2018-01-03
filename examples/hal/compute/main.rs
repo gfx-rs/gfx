@@ -98,7 +98,7 @@ fn main() {
     );
 
     {
-        let mut writer = gpu.device.acquire_mapping_writer::<u32>(&staging_buffer, 0..stride * numbers.len() as u64).unwrap();
+        let mut writer = gpu.device.acquire_mapping_writer::<u32>(&staging_memory, 0..stride * numbers.len() as u64).unwrap();
         writer.copy_from_slice(&numbers);
         gpu.device.release_mapping_writer(writer);
     }
@@ -156,7 +156,7 @@ fn main() {
     gpu.device.wait_for_fences(&[&fence], device::WaitFor::All, !0);
 
     {
-        let reader = gpu.device.acquire_mapping_reader::<u32>(&staging_buffer, 0..stride * numbers.len() as u64).unwrap();
+        let reader = gpu.device.acquire_mapping_reader::<u32>(&staging_memory, 0..stride * numbers.len() as u64).unwrap();
         println!("Times: {:?}", reader.into_iter().map(|n| *n).collect::<Vec<u32>>());
         gpu.device.release_mapping_reader(reader);
     }
