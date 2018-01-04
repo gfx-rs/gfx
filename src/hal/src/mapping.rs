@@ -38,7 +38,7 @@ impl StdError for Error {
 /// Mapping reader
 pub struct Reader<'a, B: Backend, T: 'a> {
     pub(crate) slice: &'a [T],
-    pub(crate) buffer: &'a B::Buffer,
+    pub(crate) memory: &'a B::Memory,
     pub(crate) released: bool,
 }
 
@@ -58,7 +58,7 @@ impl<'a, B: Backend, T: 'a> ops::Deref for Reader<'a, B, T> {
 /// to read from Writer, it will lead to an undefined behavior. Please do not read from it.
 pub struct Writer<'a, B: Backend, T: 'a> {
     pub(crate) slice: &'a mut [T],
-    pub(crate) buffer: &'a B::Buffer,
+    pub(crate) memory: &'a B::Memory,
     pub(crate) range: Range<u64>,
     pub(crate) released: bool,
 }

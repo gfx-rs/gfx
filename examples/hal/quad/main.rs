@@ -140,7 +140,7 @@ fn main() {
     let mut command_pool = device.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty(), 16);
     let mut queue = &mut queue_group.queues[0];
 
-    println!("{:?}", surface_format);
+    println!("Surface format: {:?}", surface_format);
     let swap_config = SwapchainConfig::new()
         .with_color(surface_format);
     let (mut swap_chain, backbuffer) = device.create_swapchain(&mut surface, swap_config);
@@ -296,7 +296,7 @@ fn main() {
         device.create_graphics_pipelines(&[pipeline_desc])
     };
 
-    println!("pipelines: {:?}", pipelines);
+    println!("Pipelines: {:?}", pipelines);
 
     // Descriptors
     let mut desc_pool = device.create_descriptor_pool(
@@ -345,7 +345,6 @@ fn main() {
     let buffer_len = QUAD.len() as u64 * buffer_stride;
 
     let buffer_unbound = device.create_buffer(buffer_len, buffer::Usage::VERTEX).unwrap();
-    println!("{:?}", buffer_unbound);
     let buffer_req = device.get_buffer_requirements(&buffer_unbound);
 
     let upload_type = memory_types
@@ -364,7 +363,7 @@ fn main() {
     // TODO: check transitions: read/write mapping and vertex buffer read
     {
         let mut vertices = device
-            .acquire_mapping_writer::<Vertex>(&vertex_buffer, 0..buffer_len)
+            .acquire_mapping_writer::<Vertex>(&buffer_memory, 0..buffer_len)
             .unwrap();
         vertices.copy_from_slice(&QUAD);
         device.release_mapping_writer(vertices);
@@ -380,7 +379,6 @@ fn main() {
     let image_stride = 4usize;
     let row_pitch = (width * image_stride as u32 + row_alignment_mask) & !row_alignment_mask;
     let upload_size = (height * row_pitch) as u64;
-    println!("upload row pitch {}, total size {}", row_pitch, upload_size);
 
     let image_buffer_unbound = device.create_buffer(upload_size, buffer::Usage::TRANSFER_SRC).unwrap();
     let image_mem_reqs = device.get_buffer_requirements(&image_buffer_unbound);
@@ -390,7 +388,7 @@ fn main() {
     // copy image data into staging buffer
     {
         let mut data = device
-            .acquire_mapping_writer::<u8>(&image_upload_buffer, 0..upload_size)
+            .acquire_mapping_writer::<u8>(&image_upload_memory, 0..upload_size)
             .unwrap();
         for y in 0 .. height as usize {
             let row = &(*img)[y*(width as usize)*image_stride .. (y+1)*(width as usize)*image_stride];
@@ -401,7 +399,6 @@ fn main() {
     }
 
     let image_unbound = device.create_image(kind, 1, ColorFormat::SELF, i::Usage::TRANSFER_DST | i::Usage::SAMPLED).unwrap(); // TODO: usage
-    println!("{:?}", image_unbound);
     let image_req = device.get_image_requirements(&image_unbound);
 
     let device_type = memory_types

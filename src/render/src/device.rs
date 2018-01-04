@@ -8,7 +8,7 @@ use hal::memory::{Properties};
 use memory::{self, Allocator, Typed};
 use handle::{self, GarbageSender};
 use handle::inner::*;
-use {buffer, image, format, mapping, pso};
+use {buffer, image, format, pso};
 use {Backend, Primitive, Extent};
 
 pub use hal::device::{FramebufferError};
@@ -168,107 +168,6 @@ impl<B: Backend> Device<B> {
     ) -> Result<handle::BufferView<B, T>, buffer::ViewError> {
         self.create_buffer_view_raw(buffer.as_ref(), format, range)
             .map(Typed::new)
-    }
-
-    /// Acquire a mapping Reader.
-    ///
-    /// The accessible slice will correspond to the specified range (in elements).
-    /// See `acquire_mapping_writer` for more information.
-    pub fn acquire_mapping_reader<'a, MTB>(
-        &mut self,
-        buffer: &'a MTB,
-        range: Range<u64>,
-    ) -> Result<mapping::Reader<'a, B, MTB::Data>, mapping::Error>
-        where MTB: buffer::MaybeTyped<B>
-    {
-        let (resource, info) = buffer.as_ref().resource_info();
-        assert!(info.access.acquire_exclusive(), "access overlap on mapping");
-        Ok(mapping::Reader {
-            inner: self.raw.acquire_mapping_reader(
-                resource,
-                range_in_bytes::<MTB::Data>(range)
-            )?,
-            info,
-        })
-    }
-
-    /// Release a mapping Reader.
-    ///
-    /// See `acquire_mapping_writer` for more information.
-    pub fn release_mapping_reader<'a, T>(
-        &mut self,
-        reader: mapping::Reader<'a, B, T>
-    ) {
-        self.raw.release_mapping_reader(reader.inner);
-        reader.info.access.release_exclusive();
-    }
-
-    /// Acquire a mapping Writer.
-    ///
-    /// The accessible slice will correspond to the specified range (in elements).
-    ///
-    /// While holding this access, you hold CPU-side exclusive access.
-    /// Any access overlap will panic.
-    /// Submitting commands involving this buffer to the device
-    /// implicitly requires exclusive access until frame synchronisation
-    /// on `acquire_frame`.
-    pub fn acquire_mapping_writer<'a, MTB>(
-        &mut self,
-        buffer: &'a MTB,
-        range: Range<u64>,
-    ) -> Result<mapping::Writer<'a, B, MTB::Data>, mapping::Error>
-        where MTB: buffer::MaybeTyped<B>
-    {
-        let (resource, info) = buffer.as_ref().resource_info();
-        assert!(info.access.acquire_exclusive(), "access overlap on mapping");
-        Ok(mapping::Writer {
-            inner: self.raw.acquire_mapping_writer(
-                resource,
-                range_in_bytes::<MTB::Data>(range)
-            )?,
-            info,
-        })
-    }
-
-    /// Release a mapping Writer.
-    ///
-    /// See `acquire_mapping_writer` for more information.
-    pub fn release_mapping_writer<'a, T>(
-        &mut self,
-        writer: mapping::Writer<'a, B, T>
-    ) {
-        self.raw.release_mapping_writer(writer.inner);
-        writer.info.access.release_exclusive();
-    }
-
-    /// Sugar to acquire and release a mapping reader.
-    pub fn read_mapping<'a, MTB>(
-        &'a mut self,
-        buffer: &'a MTB,
-        range: Range<u64>
-    ) -> Result<mapping::ReadScope<'a, B, MTB::Data>, mapping::Error>
-        where MTB: buffer::MaybeTyped<B>
-    {
-        let reader = self.acquire_mapping_reader(buffer, range)?;
-        Ok(mapping::ReadScope {
-            reader: Some(reader),
-            device: self,
-        })
-    }
-
-    /// Sugar to acquire and release a mapping writer.
-    pub fn write_mapping<'a, MTB>(
-        &'a mut self,
-        buffer: &'a MTB,
-        range: Range<u64>
-    ) -> Result<mapping::WriteScope<'a, B, MTB::Data>, mapping::Error>
-        where MTB: buffer::MaybeTyped<B>
-    {
-        let writer = self.acquire_mapping_writer(buffer, range)?;
-        Ok(mapping::WriteScope {
-            writer: Some(writer),
-            device: self,
-        })
     }
 
     pub fn create_image_raw<A: Allocator<B>>(

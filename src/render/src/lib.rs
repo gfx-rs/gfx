@@ -118,7 +118,6 @@ pub mod memory;
 pub mod allocators;
 pub mod buffer;
 pub mod image;
-pub mod mapping;
 /// Pipeline states
 pub mod pso;
 /*

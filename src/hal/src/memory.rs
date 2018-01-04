@@ -76,8 +76,8 @@ pub enum Barrier<'a, B: Backend> {
     },
 }
 
-#[derive(Clone, Copy, Debug)]
 /// Memory requirements for a certain resource (buffer/image).
+#[derive(Clone, Copy, Debug)]
 pub struct Requirements {
     /// Size in the memory.
     pub size: u64,

@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::collections::HashSet;
 use std::{ffi, fmt, mem, str};
 use gl;

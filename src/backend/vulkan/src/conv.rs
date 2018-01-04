@@ -3,9 +3,13 @@ use byteorder::{NativeEndian, WriteBytesExt};
 use hal::{buffer, command, format, image, pass, pso, query};
 use hal::device::Extent;
 use hal::{IndexType, Primitive};
+use native as n;
 use smallvec::SmallVec;
+
 use std::{io, mem};
+use std::borrow::Borrow;
 use std::ops::Range;
+use std::ptr;
 
 
 pub fn map_format(format: format::Format) -> vk::Format {
@@ -721,4 +725,24 @@ pub fn map_buffer_features(features: vk::FormatFeatureFlags) -> format::BufferFe
     }
 
     flags
+}
+
+pub fn map_memory_ranges<'a, I>(ranges: I) -> Vec<vk::MappedMemoryRange>
+where
+    I: IntoIterator,
+    I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
+{
+     ranges
+        .into_iter()
+        .map(|range| {
+            let &(ref memory, ref range) = range.borrow();
+            vk::MappedMemoryRange {
+                s_type: vk::StructureType::MappedMemoryRange,
+                p_next: ptr::null(),
+                memory: memory.raw,
+                offset: range.start,
+                size: range.end - range.start,
+            }
+        })
+        .collect()
 }
