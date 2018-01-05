@@ -1062,8 +1062,8 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn bind_buffer_memory(
-        &self, memory: &n::Memory, _offset: u64, buffer: n::UnboundBuffer
+    unsafe fn bind_buffer_memory_raw(
+        &self, memory: &n::Memory, _offset: u64, buffer: &mut n::UnboundBuffer
     ) -> Result<n::Buffer, BindError> {
         Ok(n::Buffer(match *memory {
             n::Memory::Native(ref heap) => {
@@ -1160,8 +1160,8 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn bind_image_memory(
-        &self, memory: &n::Memory, _offset: u64, image: n::UnboundImage
+    unsafe fn bind_image_memory_raw(
+        &self, memory: &n::Memory, _offset: u64, image: &mut n::UnboundImage
     ) -> Result<n::Image, BindError> {
         let raw = match *memory {
             n::Memory::Native(ref heap) => {

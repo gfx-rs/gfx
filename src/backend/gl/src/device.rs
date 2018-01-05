@@ -539,8 +539,8 @@ impl d::Device<B> for Device {
         unbound.requirements
     }
 
-    fn bind_buffer_memory(
-        &self, memory: &n::Memory, _offset: u64, unbound: UnboundBuffer,
+    unsafe fn bind_buffer_memory_raw(
+        &self, memory: &n::Memory, _offset: u64, unbound: &mut UnboundBuffer,
     ) -> Result<n::Buffer, d::BindError> {
         let gl = &self.share.context;
         let target = unbound.target;
@@ -671,7 +671,9 @@ impl d::Device<B> for Device {
         unbound.requirements
     }
 
-    fn bind_image_memory(&self, _memory: &n::Memory, _offset: u64, image: UnboundImage) -> Result<n::Image, d::BindError> {
+    unsafe fn bind_image_memory_raw(
+        &self, _memory: &n::Memory, _offset: u64, image: &mut UnboundImage,
+    ) -> Result<n::Image, d::BindError> {
         Ok(n::Image::Texture(image.raw))
     }
 

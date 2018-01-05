@@ -147,7 +147,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn bind_buffer_memory(&self, _: &(), _: u64, _: ()) -> Result<(), device::BindError> {
+    unsafe fn bind_buffer_memory_raw(&self, _: &(), _: u64, _: &mut ()) -> Result<(), device::BindError> {
         unimplemented!()
     }
 
@@ -165,7 +165,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn bind_image_memory(&self, _: &(), _: u64, _: ()) -> Result<(), device::BindError> {
+    unsafe fn bind_image_memory_raw(&self, _: &(), _: u64, _: &mut ()) -> Result<(), device::BindError> {
         unimplemented!()
     }
 

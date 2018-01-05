@@ -797,10 +797,8 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn bind_buffer_memory(&self, memory: &n::Memory, offset: u64, buffer: UnboundBuffer) -> Result<n::Buffer, d::BindError> {
-        assert_eq!(Ok(()), unsafe {
-            self.raw.0.bind_buffer_memory((buffer.0).raw, memory.raw, offset)
-        });
+    unsafe fn bind_buffer_memory_raw(&self, memory: &n::Memory, offset: u64, buffer: &mut UnboundBuffer) -> Result<n::Buffer, d::BindError> {
+        assert_eq!(Ok(()), self.raw.0.bind_buffer_memory((buffer.0).raw, memory.raw, offset));
 
         let buffer = n::Buffer {
             raw: buffer.0.raw,
@@ -926,12 +924,12 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn bind_image_memory(&self, memory: &n::Memory, offset: u64, image: UnboundImage) -> Result<n::Image, d::BindError> {
+    unsafe fn bind_image_memory_raw(
+        &self, memory: &n::Memory, offset: u64, image: &mut UnboundImage,
+    ) -> Result<n::Image, d::BindError> {
         // TODO: error handling
         // TODO: check required type
-        assert_eq!(Ok(()), unsafe {
-            self.raw.0.bind_image_memory(image.0.raw, memory.raw, offset)
-        });
+        assert_eq!(Ok(()), self.raw.0.bind_image_memory(image.0.raw, memory.raw, offset));
 
         Ok(image.0)
     }
