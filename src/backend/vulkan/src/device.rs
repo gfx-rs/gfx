@@ -710,7 +710,7 @@ impl d::Device<B> for Device {
             s_type: vk::StructureType::ShaderModuleCreateInfo,
             p_next: ptr::null(),
             flags: vk::ShaderModuleCreateFlags::empty(),
-            code_size: spirv_data.len(),
+            code_size: spirv_data.len() / 4,
             p_code: spirv_data as *const _ as *const u32,
         };
 
