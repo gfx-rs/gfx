@@ -50,7 +50,7 @@ pub struct Image<B: hal::Backend> {
     #[allow(dead_code)]
     memory: B::Memory,
     kind: i::Kind,
-    format: hal::format::Format,
+    format: f::Format,
     stable_state: i::State,
 }
 

@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use std::collections::HashSet;
 use std::{ffi, fmt, mem, str};
 use gl;
@@ -153,6 +152,8 @@ pub struct PrivateCaps {
     pub vertex_array: bool,
     /// FBO support
     pub framebuffer: bool,
+    /// FBO support to call `glFramebufferTexture`
+    pub framebuffer_texture: bool,
     /// Can bind a buffer to a different target than was
     /// used upon the buffer creation/initialization
     pub buffer_role_change: bool,
@@ -333,6 +334,7 @@ pub fn query_all(gl: &gl::Gl) -> (Info, Features, Limits, PrivateCaps) {
         framebuffer:                        info.is_supported(&[Core(3,0),
                                                                 Es  (2,0),
                                                                 Ext ("GL_ARB_framebuffer_object")]),
+        framebuffer_texture:                info.is_supported(&[Core(3,0)]), //TODO: double check
         buffer_role_change:                 !info.version.is_embedded,
         image_storage:                      info.is_supported(&[Core(3,2),
                                                                 Ext ("GL_ARB_texture_storage")]),

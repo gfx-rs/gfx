@@ -23,6 +23,7 @@ vulkan = ["gfx-backend-vulkan"]
 dx12 = ["gfx-backend-dx12"]
 metal = ["gfx-backend-metal"]
 gl = ["gfx-backend-gl"]
+gl-soft = ["gl"]
 
 #TODO: keep Warden backend-agnostic?
 

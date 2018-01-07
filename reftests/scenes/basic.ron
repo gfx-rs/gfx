@@ -3,13 +3,13 @@
 		"im-color": Image(
 			kind: D2(1, 1, Single),
 			num_levels: 1,
-			format: (R8_G8_B8_A8, Unorm),
+			format: Rgba8Unorm,
 			usage: (bits: 4),
 		),
 		"pass": RenderPass(
 			attachments: {
 				"c": (
-					format: (R8_G8_B8_A8, Unorm),
+					format: Some(Rgba8Unorm),
 					ops: (load: Clear, store: Store),
 					layouts: (start: General, end: General),
 				),
@@ -24,7 +24,7 @@
 		),
 		"im-color-view": ImageView(
 			image: "im-color",
-			format: (R8_G8_B8_A8, Unorm),
+			format: Rgba8Unorm,
 			range: (
 				aspects: (bits: 1),
 				levels: (start: 0, end: 1),
