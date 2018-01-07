@@ -39,10 +39,16 @@ struct Test {
 
 type Suite = HashMap<String, HashMap<String, Test>>;
 
+struct TestGroup {
+    name: String,
+    scene: warden::raw::Scene,
+    tests: HashMap<String, Test>,
+}
+
 
 struct Harness {
     base_path: &'static str,
-    suite: Suite,
+    suite: Vec<TestGroup>,
 }
 
 impl Harness {
@@ -51,10 +57,26 @@ impl Harness {
             env!("CARGO_MANIFEST_DIR"),
             "/../../reftests",
         );
+        println!("Parsing test suite...");
+
         let suite = File::open(format!("{}/{}.ron", base_path, suite_name))
             .map_err(de::Error::from)
-            .and_then(de::from_reader)
-            .expect("failed to parse the suite definition");
+            .and_then(de::from_reader::<_, Suite>)
+            .expect("failed to parse the suite definition")
+            .into_iter()
+            .map(|(name, tests)| {
+                let scene = File::open(format!("{}/scenes/{}.ron", base_path, name))
+                    .map_err(de::Error::from)
+                    .and_then(de::from_reader)
+                    .expect("failed to open/parse the scene");
+                TestGroup {
+                    name,
+                    scene,
+                    tests,
+                }
+            })
+            .collect();
+
         Harness {
             base_path,
             suite,
@@ -62,24 +84,20 @@ impl Harness {
     }
 
     fn run<I: hal::Instance>(&self, instance: I) {
-        for (scene_name, tests) in &self.suite {
+        for tg in &self.suite {
             let mut adapters = instance.enumerate_adapters();
             let adapter = adapters.remove(0);
             //println!("\t{:?}", adapter.info);
-            println!("\tLoading scene '{}':", scene_name);
-            let raw_scene = File::open(format!("{}/scenes/{}.ron", self.base_path, scene_name))
-                .map_err(de::Error::from)
-                .and_then(de::from_reader)
-                .expect("failed to open/parse the scene");
+            println!("\tScene '{}':", tg.name);
 
             let data_path = format!("{}/data", self.base_path);
             let mut scene = warden::gpu::Scene::<I::Backend>::new(
                 adapter,
-                &raw_scene,
+                &tg.scene,
                 &data_path,
             ).unwrap();
 
-            for (test_name, test) in tests {
+            for (test_name, test) in &tg.tests {
                 print!("\t\tTest '{}' ...", test_name);
                 scene.run(test.jobs.iter().map(|x| x.as_str()));
 
@@ -124,8 +142,22 @@ fn main() {
     }
     #[cfg(feature = "gl")]
     {
+        use gfx_backend_gl::glutin;
         println!("Warding GL:");
-        let context = gfx_backend_gl::glutin::HeadlessRendererBuilder::new(1,1)
+        let events_loop = glutin::EventsLoop::new();
+        let window = glutin::GlWindow::new(
+            glutin::WindowBuilder::new(),
+            glutin::ContextBuilder::new()
+                .with_gl_profile(glutin::GlProfile::Core),
+            &events_loop,
+            ).unwrap();
+        let instance = gfx_backend_gl::Surface::from_window(window);
+        harness.run(instance);
+    }
+    #[cfg(feature = "gl-soft")]
+    {
+        println!("Warding GL software:");
+        let context = gfx_backend_gl::glutin::HeadlessRendererBuilder::new(1, 1)
             .build()
             .unwrap();
         let instance = gfx_backend_gl::Headless(context);

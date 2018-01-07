@@ -58,6 +58,9 @@ test:
 reftests:
 	cd src/warden && cargo run --bin reftest --features "$(FEATURES_HAL) $(FEATURES_HAL2)"
 
+reftests-software:
+	cd src/warden && cargo run #TODO: --features "gl-soft"
+
 travis-sdl2:
 	#TODO
 	#if [ -e $(SDL2_CONFIG) ]; then exit 1; fi

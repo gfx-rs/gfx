@@ -154,6 +154,22 @@ impl Device {
         }
     }
 
+    fn bind_target_compat(gl: &gl::Gl, point: GLenum, attachment: GLenum, view: &n::ImageView) {
+        match *view {
+            n::ImageView::Surface(surface) => unsafe {
+                gl.FramebufferRenderbuffer(point, attachment, gl::RENDERBUFFER, surface);
+            },
+            n::ImageView::Texture(texture, level) => unsafe {
+                gl.BindTexture(gl::TEXTURE_2D, texture);
+                gl.FramebufferTexture2D(point, attachment, gl::TEXTURE_2D, texture, level as _);
+            },
+            n::ImageView::TextureLayer(texture, level, layer) => unsafe {
+                gl.BindTexture(gl::TEXTURE_2D, texture);
+                gl.FramebufferTexture3D(point, attachment, gl::TEXTURE_2D, texture, level as _, layer as _);
+            },
+        }
+    }
+
     fn bind_target(gl: &gl::Gl, point: GLenum, attachment: GLenum, view: &n::ImageView) {
         match *view {
             n::ImageView::Surface(surface) => unsafe {
@@ -415,20 +431,33 @@ impl d::Device<B> for Device {
             gl.BindFramebuffer(target, name);
         }
 
+        let att_points = [
+            gl::COLOR_ATTACHMENT0,
+            gl::COLOR_ATTACHMENT1,
+            gl::COLOR_ATTACHMENT2,
+            gl::COLOR_ATTACHMENT3,
+        ];
+
         assert_eq!(attachments.len(), pass.attachments.len());
         //TODO: exclude depth/stencil attachments from here
-        for (i, view) in attachments.iter().enumerate() {
-            let attachment = gl::COLOR_ATTACHMENT0 + i as GLenum;
-            Self::bind_target(gl, target, attachment, view);
+        for (&att_point, view) in att_points.iter().zip(attachments.iter()) {
+            if self.share.private_caps.framebuffer_texture {
+                Self::bind_target(gl, target, att_point, view);
+            } else {
+                Self::bind_target_compat(gl, target, att_point, view);
+            }
         }
 
         unsafe {
+            assert!(attachments.len() <= att_points.len());
+            gl.DrawBuffers(attachments.len() as _, att_points.as_ptr());
             let status = gl.CheckFramebufferStatus(target);
             assert_eq!(status, gl::FRAMEBUFFER_COMPLETE);
             gl.BindFramebuffer(target, 0);
         }
         if let Err(err) = self.share.check() {
-            panic!("Error creating FBO: {:?} for {:?} with attachments {:?}", err, pass, attachments);
+            panic!("Error creating FBO: {:?} for {:?} with attachments {:?}",
+                err, pass, attachments);
         }
 
         Ok(name)
@@ -632,24 +661,28 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn create_image(&self, kind: i::Kind, _: i::Level, format: Format, _: i::Usage)
-         -> Result<UnboundImage, i::CreationError>
-    {
+    fn create_image(
+        &self, kind: i::Kind, num_levels: i::Level, format: Format, _: i::Usage
+    ) -> Result<UnboundImage, i::CreationError> {
         let gl = &self.share.context;
 
-        let raw = unsafe {
+        let name = unsafe {
             let mut raw = 0;
             gl.GenTextures(1, &mut raw);
             raw
         };
 
-        assert_eq!(format, Format::Rgba8Srgb);
+        let int_format = match format {
+            Format::Rgba8Unorm => gl::RGBA8,
+            Format::Rgba8Srgb => gl::SRGB8_ALPHA8,
+            _ => unimplemented!()
+        };
 
         let (width, height) = match kind {
             i::Kind::D2(w, h, aa) => unsafe {
                 assert_eq!(aa, i::AaMode::Single);
-                gl.BindTexture(gl::TEXTURE_2D, raw);
-                gl.TexStorage2D(gl::TEXTURE_2D, 1, gl::SRGB8_ALPHA8, w as _, h as _);
+                gl.BindTexture(gl::TEXTURE_2D, name);
+                gl.TexStorage2D(gl::TEXTURE_2D, num_levels as _, int_format, w as _, h as _);
                 (w, h)
             }
             _ => {
@@ -657,10 +690,18 @@ impl d::Device<B> for Device {
             }
         };
 
+        let surface_desc = format.base_format().0.desc();
+        let bytes_per_texel  = surface_desc.bits / 8;
+
+        if let Err(err) = self.share.check() {
+            panic!("Error creating image: {:?} for kind {:?} of {:?}",
+                err, kind, format);
+        }
+
         Ok(UnboundImage {
-            raw,
+            raw: name,
             requirements: memory::Requirements {
-                size: width as u64 * height as u64 * 4, // TODO
+                size: width as u64 * height as u64 * bytes_per_texel as u64,
                 alignment: 1,
                 type_mask: 0x7,
             }
