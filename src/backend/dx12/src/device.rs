@@ -1324,11 +1324,11 @@ impl d::Device<B> for Device {
         buffer.requirements
     }
 
-    fn bind_buffer_memory(
+    unsafe fn bind_buffer_memory_raw(
         &self,
         memory: &n::Memory,
         offset: u64,
-        buffer: UnboundBuffer,
+        buffer: &mut UnboundBuffer,
     ) -> Result<n::Buffer, d::BindError> {
         if buffer.requirements.type_mask & (1 << memory.type_id) == 0 {
             error!("Bind memory failure: supported mask 0x{:x}, given id {}",
@@ -1490,11 +1490,11 @@ impl d::Device<B> for Device {
         image.requirements
     }
 
-    fn bind_image_memory(
+    unsafe fn bind_image_memory_raw(
         &self,
         memory: &n::Memory,
         offset: u64,
-        image: UnboundImage,
+        image: &mut UnboundImage,
     ) -> Result<n::Image, d::BindError> {
         use self::image::Usage;
 

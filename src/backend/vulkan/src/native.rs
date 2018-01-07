@@ -35,7 +35,7 @@ pub struct BufferView {
     pub(crate) raw: vk::BufferView,
 }
 
-#[derive(Debug, Hash, PartialEq, Eq)]
+#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone)]
 pub struct Image {
     pub(crate) raw: vk::Image,
     pub(crate) extent: vk::Extent3D,

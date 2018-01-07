@@ -231,14 +231,22 @@ pub trait Device<B: Backend> {
     ///
     fn get_buffer_requirements(&self, &B::UnboundBuffer) -> Requirements;
 
+    // Unsafe variant, not consuming the passed buffer.
+    #[doc(hidden)]
+    unsafe fn bind_buffer_memory_raw(
+        &self, &B::Memory, offset: u64, &mut B::UnboundBuffer
+    ) -> Result<B::Buffer, BindError>;
+
     /// Bind memory to a buffer.
     ///
     /// The unbound buffer will be consumed because the binding is *immutable*.
     /// Be sure to check that there is enough memory available for the buffer.
     /// Use `get_buffer_requirements` to acquire the memory requirements.
     fn bind_buffer_memory(
-        &self, &B::Memory, offset: u64, B::UnboundBuffer
-    ) -> Result<B::Buffer, BindError>;
+        &self, memory: &B::Memory, offset: u64, mut buffer: B::UnboundBuffer
+    ) -> Result<B::Buffer, BindError> {
+        unsafe { self.bind_buffer_memory_raw(memory, offset, &mut buffer) }
+    }
 
     /// Destroys a buffer.
     ///
@@ -262,10 +270,18 @@ pub trait Device<B: Backend> {
     ///
     fn get_image_requirements(&self, &B::UnboundImage) -> Requirements;
 
+    // Unsafe variant, not consuming the passed image.
+    #[doc(hidden)]
+    unsafe fn bind_image_memory_raw(
+        &self, memory: &B::Memory, offset: u64, image: &mut B::UnboundImage
+    ) -> Result<B::Image, BindError>;
+
     ///
     fn bind_image_memory(
-        &self, &B::Memory, offset: u64, B::UnboundImage
-    ) -> Result<B::Image, BindError>;
+        &self, memory: &B::Memory, offset: u64, mut image: B::UnboundImage
+    ) -> Result<B::Image, BindError> {
+        unsafe { self.bind_image_memory_raw(memory, offset, &mut image) }
+    }
 
     /// Destroys an image.
     ///
