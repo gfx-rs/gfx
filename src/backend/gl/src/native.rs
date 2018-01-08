@@ -24,7 +24,7 @@ pub struct Buffer {
 pub struct BufferView;
 
 #[derive(Debug)]
-pub struct Fence(pub Cell<gl::types::GLsync>);
+pub struct Fence(pub(crate) Cell<gl::types::GLsync>);
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 

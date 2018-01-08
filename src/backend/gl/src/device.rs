@@ -647,7 +647,7 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I)
+    fn invalidate_mapped_memory_ranges<'a, I>(&self, _ranges: I)
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
@@ -900,8 +900,10 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn destroy_fence(&self, _: n::Fence) {
-        unimplemented!()
+    fn destroy_fence(&self, fence: n::Fence) {
+        unsafe {
+            self.share.context.DeleteSync(fence.0.get());
+        }
     }
 
     fn destroy_semaphore(&self, _: n::Semaphore) {

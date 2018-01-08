@@ -49,7 +49,7 @@ check:
 	cd examples/hal && cargo check --features "$(FEATURES_HAL)"
 	cd examples/hal && cargo check --features "$(FEATURES_HAL2)"
 	cd examples/render/quad_render && $(CMD_QUAD_RENDER)
-	cd src/warden && cargo check --features "gl $(FEATURES_HAL) $(FEATURES_HAL2)" #TODO: run
+	cd src/warden && cargo check --features "gl gl-soft $(FEATURES_HAL) $(FEATURES_HAL2)"
 
 test:
 	cargo test --all $(EXCLUDES)

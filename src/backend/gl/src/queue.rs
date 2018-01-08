@@ -1,4 +1,4 @@
-use std::{mem, slice};
+use std::{mem, ptr, slice};
 use std::rc::Rc;
 
 use hal;
@@ -489,28 +489,48 @@ impl CommandQueue {
                     Integer => gl.VertexAttribIPointer(location, size, format, stride, offset),
                     Double => gl.VertexAttribLPointer(location, size, format, stride, offset),
                 }
-                
+
                 gl.EnableVertexAttribArray(location);
                 gl.BindBuffer(gl::ARRAY_BUFFER, 0);
             }
+            /*
             com::Command::UnbindAttribute(ref attribute) => unsafe {
                 self.share.context.DisableVertexAttribArray(attribute.location);
-            }
-            com::Command::CopyBufferToTexture(buffer, image, ref region) => unsafe {
+            }*/
+            com::Command::CopyBufferToTexture(buffer, texture, ref r) => unsafe {
                 // TODO: Fix format and active texture
                 let gl = &self.share.context;
                 gl.ActiveTexture(gl::TEXTURE0);
                 gl.BindBuffer(gl::PIXEL_UNPACK_BUFFER, buffer);
-                gl.BindTexture(gl::TEXTURE_2D, image);
-                let &hal::command::BufferImageCopy {
-                    ref image_layers,
-                    ref image_offset,
-                    ref image_extent,
-                    ..
-                } = region;
-                gl.TexSubImage2D(gl::TEXTURE_2D, image_layers.level as _, image_offset.x, image_offset.y,
-                    image_extent.width as _, image_extent.height as _, gl::RGBA, gl::UNSIGNED_BYTE, 0 as *const _);
+                gl.BindTexture(gl::TEXTURE_2D, texture);
+                gl.TexSubImage2D(
+                    gl::TEXTURE_2D, r.image_layers.level as _,
+                    r.image_offset.x, r.image_offset.y,
+                    r.image_extent.width as _, r.image_extent.height as _,
+                    gl::RGBA, gl::UNSIGNED_BYTE, ptr::null(),
+                );
                 gl.BindBuffer(gl::PIXEL_UNPACK_BUFFER, 0);
+            }
+            com::Command::CopyBufferToSurface(..) => {
+                unimplemented!() //TODO: use FBO
+            }
+            com::Command::CopyTextureToBuffer(texture, buffer, ref r) => unsafe {
+                // TODO: Fix format and active texture
+                // TODO: handle partial copies gracefully
+                let gl = &self.share.context;
+                gl.ActiveTexture(gl::TEXTURE0);
+                gl.BindBuffer(gl::PIXEL_PACK_BUFFER, buffer);
+                gl.BindTexture(gl::TEXTURE_2D, texture);
+                gl.GetTexImage(
+                    gl::TEXTURE_2D, r.image_layers.level as _,
+                    //r.image_offset.x, r.image_offset.y,
+                    //r.image_extent.width as _, r.image_extent.height as _,
+                    gl::RGBA, gl::UNSIGNED_BYTE, ptr::null_mut(),
+                );
+                gl.BindBuffer(gl::PIXEL_PACK_BUFFER, 0);
+            }
+            com::Command::CopySurfaceToBuffer(..) => {
+                unimplemented!() //TODO: use FBO
             }
             /*
             com::Command::BindConstantBuffer(pso::ConstantBufferParam(buffer, _, slot)) => unsafe {
@@ -613,19 +633,6 @@ impl CommandQueue {
                     }
                 }
             },
-            com::Command::CopyBufferToTexture(src, src_offset, dst, kind, face, img) => {
-                match tex::copy_from_buffer(&self.share.context, dst, kind, face, &img, src, src_offset) {
-                    Ok(_) => (),
-                    Err(e) => error!("GL: {:?} failed: {:?}", cmd, e)
-                }
-            },
-            com::Command::CopyTextureToBuffer(src, kind, face, img, dst, dst_offset) => {
-                match tex::copy_to_buffer(&self.share.context, src, kind, face, &img, dst, dst_offset) {
-                    Ok(_) => (),
-                    Err(e) => error!("GL: {:?} failed: {:?}", cmd, e)
-                }
-            },
-
             */
         }
         if let Err(err) = self.share.check() {
