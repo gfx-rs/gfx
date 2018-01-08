@@ -38,6 +38,7 @@ before_install:
   # Do not run bors builds against the nightly compiler.
   # We want to find out about nightly bugs, so they're done in master, but we don't block on them.
   - if [[ $TRAVIS_RUST_VERSION == "nightly" && $TRAVIS_BRANCH == "staging" ]]; then exit; fi
+  #- if [[ $TRAVIS_RUST_VERSION == "nightly" ]]; then sudo add-apt-repository ppa:xorg-edgers/ppa -y && sudo apt-get update -q && sudo apt-get install libosmesa6-dev -y; fi
   # Extract SDL2 .deb into a cached directory (see cache section above and LIBRARY_PATH exports below)
   # Will no longer be needed when Trusty build environment goes out of beta at Travis CI
   # (assuming it will have libsdl2-dev and Rust by then)
@@ -74,4 +75,4 @@ script:
   - export LIBRARY_PATH=$HOME/deps/usr/lib/x86_64-linux-gnu
   - export LD_LIBRARY_PATH=$LIBRARY_PATH
   - make all
-  - if [[ $TRAVIS_OS_NAME == "linux" ]]; then make reftests-software; fi
+  - if [[ $TRAVIS_OS_NAME == "linux" ]]; then make reftests-ci; fi

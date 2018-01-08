@@ -49,7 +49,7 @@ check:
 	cd examples/hal && cargo check --features "$(FEATURES_HAL)"
 	cd examples/hal && cargo check --features "$(FEATURES_HAL2)"
 	cd examples/render/quad_render && $(CMD_QUAD_RENDER)
-	cd src/warden && cargo check --features "gl gl-soft $(FEATURES_HAL) $(FEATURES_HAL2)"
+	cd src/warden && cargo check --features "ci gl gl-headless $(FEATURES_HAL) $(FEATURES_HAL2)"
 
 test:
 	cargo test --all $(EXCLUDES)
@@ -58,8 +58,8 @@ test:
 reftests:
 	cd src/warden && cargo run --bin reftest --features "$(FEATURES_HAL) $(FEATURES_HAL2)"
 
-reftests-software:
-	cd src/warden && cargo run #TODO: --features "gl-soft"
+reftests-ci:
+	cd src/warden && cargo run --features "ci gl" #TODO: "gl-headless"
 
 travis-sdl2:
 	#TODO

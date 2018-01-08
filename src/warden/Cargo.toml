@@ -18,12 +18,13 @@ path = "src/lib.rs"
 
 [features]
 default = []
+ci = []
 logger = ["env_logger"]
 vulkan = ["gfx-backend-vulkan"]
 dx12 = ["gfx-backend-dx12"]
 metal = ["gfx-backend-metal"]
 gl = ["gfx-backend-gl"]
-gl-soft = ["gl"]
+gl-headless = ["gfx-backend-gl"]
 
 #TODO: keep Warden backend-agnostic?
 

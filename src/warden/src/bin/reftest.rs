@@ -17,7 +17,7 @@ extern crate gfx_backend_vulkan;
 extern crate gfx_backend_dx12;
 #[cfg(feature = "metal")]
 extern crate gfx_backend_metal;
-#[cfg(feature = "gl")]
+#[cfg(any(feature = "gl", feature = "gl-headless"))]
 extern crate gfx_backend_gl;
 
 use std::collections::HashMap;
@@ -84,6 +84,7 @@ impl Harness {
     }
 
     fn run<I: hal::Instance>(&self, instance: I) {
+        let mut num_failures = 0;
         for tg in &self.suite {
             let mut adapters = instance.enumerate_adapters();
             let adapter = adapters.remove(0);
@@ -109,11 +110,14 @@ impl Harness {
                             println!("PASS");
                         } else {
                             println!("FAIL {:?}", guard.row(row));
+                            num_failures += 1;
                         }
                     }
                 }
             }
         }
+        #[cfg(feature = "ci")]
+        assert_eq!(num_failures, 0);
     }
 }
 
@@ -154,9 +158,9 @@ fn main() {
         let instance = gfx_backend_gl::Surface::from_window(window);
         harness.run(instance);
     }
-    #[cfg(feature = "gl-soft")]
+    #[cfg(feature = "gl-headless")]
     {
-        println!("Warding GL software:");
+        println!("Warding GL headless:");
         let context = gfx_backend_gl::glutin::HeadlessRendererBuilder::new(1, 1)
             .build()
             .unwrap();
