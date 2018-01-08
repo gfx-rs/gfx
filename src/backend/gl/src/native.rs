@@ -1,8 +1,11 @@
+use std::cell::Cell;
+
 use hal::{self, image as i, pass, pso};
 use hal::memory::Properties;
+
 use gl;
 use Backend;
-use std::cell::Cell;
+
 
 pub type RawBuffer   = gl::types::GLuint;
 pub type Shader      = gl::types::GLuint;
@@ -16,8 +19,6 @@ pub type Sampler     = gl::types::GLuint;
 pub struct Buffer {
     pub(crate) raw: RawBuffer,
     pub(crate) target: gl::types::GLenum,
-    pub(crate) cpu_can_read: bool,
-    pub(crate) cpu_can_write: bool,
 }
 
 #[derive(Debug)]
@@ -98,14 +99,27 @@ pub enum ShaderModule {
 #[derive(Debug)]
 pub struct Memory {
     pub(crate) properties: Properties,
+    pub(crate) first_bound_buffer: Cell<RawBuffer>,
 }
 
 impl Memory {
     pub fn can_upload(&self) -> bool {
         self.properties.contains(Properties::CPU_VISIBLE)
     }
+
     pub fn can_download(&self) -> bool {
         self.properties.contains(Properties::CPU_VISIBLE | Properties::CPU_CACHED)
+    }
+
+    pub fn map_flags(&self) -> gl::types::GLenum {
+        let mut flags = 0;
+        if self.can_download() {
+            flags |= gl::MAP_READ_BIT;
+        }
+        if self.can_upload() {
+            flags |= gl::MAP_WRITE_BIT;
+        }
+        flags
     }
 }
 

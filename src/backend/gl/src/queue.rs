@@ -499,6 +499,7 @@ impl CommandQueue {
             }*/
             com::Command::CopyBufferToTexture(buffer, texture, ref r) => unsafe {
                 // TODO: Fix format and active texture
+                assert_eq!(r.image_offset.z, 0);
                 let gl = &self.share.context;
                 gl.ActiveTexture(gl::TEXTURE0);
                 gl.BindBuffer(gl::PIXEL_UNPACK_BUFFER, buffer);
@@ -517,6 +518,7 @@ impl CommandQueue {
             com::Command::CopyTextureToBuffer(texture, buffer, ref r) => unsafe {
                 // TODO: Fix format and active texture
                 // TODO: handle partial copies gracefully
+                assert_eq!(r.image_offset, hal::command::Offset { x: 0, y: 0, z: 0 });
                 let gl = &self.share.context;
                 gl.ActiveTexture(gl::TEXTURE0);
                 gl.BindBuffer(gl::PIXEL_PACK_BUFFER, buffer);

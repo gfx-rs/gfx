@@ -406,7 +406,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn begin_renderpass<T>(
         &mut self,
         _render_pass: &n::RenderPass,
-        _frame_buffer: &n::FrameBuffer,
+        frame_buffer: &n::FrameBuffer,
         _render_area: command::Rect,
         clear_values: T,
         _first_subpass: command::SubpassContents,
@@ -414,6 +414,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::ClearValue>,
     {
+        self.push_cmd(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, *frame_buffer));
+
         for clear_value in clear_values.into_iter().map(|cv| *cv.borrow()) {
             match clear_value {
                 command::ClearValue::Color(value) => {
