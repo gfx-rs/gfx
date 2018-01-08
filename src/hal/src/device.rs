@@ -140,7 +140,7 @@ pub trait Device<B: Backend> {
         flags: CommandPoolCreateFlags,
         max_buffers: usize,
     ) -> CommandPool<B, C> {
-        let raw = self.create_command_pool(group.family, flags);
+        let raw = self.create_command_pool(group.family(), flags);
         CommandPool::new(raw, max_buffers)
     }
 

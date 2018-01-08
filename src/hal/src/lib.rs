@@ -51,6 +51,8 @@ pub mod query;
 pub mod queue;
 pub mod window;
 
+#[doc(hidden)]
+pub mod backend;
 
 /// Draw vertex count.
 pub type VertexCount = u32;

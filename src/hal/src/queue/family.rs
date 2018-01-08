@@ -1,6 +1,7 @@
 //! Queue family and groups.
 
 use Backend;
+use backend::RawQueueGroup;
 use queue::{CommandQueue, QueueType};
 use queue::capability::{Capability, Graphics, Compute};
 
@@ -30,34 +31,18 @@ pub trait QueueFamily: Debug {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct QueueFamilyId(pub usize);
 
-// Only needed for backend implementations.
-#[doc(hidden)]
-pub struct RawQueueGroup<B: Backend> {
-    pub family: B::QueueFamily,
-    pub queues: Vec<B::CommandQueue>,
-}
-
-impl<B: Backend> RawQueueGroup<B> {
-    #[doc(hidden)]
-    pub fn new(family: B::QueueFamily) -> Self {
-        RawQueueGroup {
-            family,
-            queues: Vec::new(),
-        }
-    }
-    #[doc(hidden)]
-    pub fn add_queue(&mut self, queue: B::CommandQueue) {
-        assert!(self.queues.len() < self.family.max_queues());
-        self.queues.push(queue);
-    }
-}
-
-
 /// Strong-typed group of queues of the same queue family.
 pub struct QueueGroup<B: Backend, C> {
-    pub(crate) family: QueueFamilyId,
+    family: QueueFamilyId,
     /// Command queues created in this family.
     pub queues: Vec<CommandQueue<B, C>>,
+}
+
+impl<B: Backend, C> QueueGroup<B, C> {
+    /// Return the associated queue family id.
+    pub fn family(&self) -> QueueFamilyId {
+        self.family
+    }
 }
 
 impl<B: Backend, C: Capability> QueueGroup<B, C> {
@@ -80,14 +65,9 @@ impl<B: Backend, C: Capability> QueueGroup<B, C> {
 
 /// Contains a list of all instantiated queue queues, grouped by their
 /// associated queue family.
-pub struct Queues<B: Backend>(HashMap<QueueFamilyId, RawQueueGroup<B>>);
+pub struct Queues<B: Backend>(pub(crate) HashMap<QueueFamilyId, RawQueueGroup<B>>);
 
 impl<B: Backend> Queues<B> {
-    #[doc(hidden)]
-    pub fn new(queues: HashMap<QueueFamilyId, RawQueueGroup<B>>) -> Self {
-        Queues(queues)
-    }
-
     /// Removes the queue family with the passed id from the queue list and
     /// returns the queue group.
     ///
