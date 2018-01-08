@@ -9,7 +9,7 @@ use std::error::Error;
 use std::ops::Range;
 use {buffer, format, image, mapping, pass, pso, query};
 use pool::{CommandPool, CommandPoolCreateFlags};
-use queue::QueueGroup;
+use queue::{QueueFamilyId, QueueGroup};
 use {Backend, MemoryTypeId};
 use memory::Requirements;
 use window::{Backbuffer, SwapchainConfig};
@@ -131,7 +131,7 @@ pub trait Device<B: Backend> {
     /// Creates a new command pool for a given queue family.
     ///
     /// *Note*: the family has to be associated by one as the `Gpu::queue_groups`.
-    fn create_command_pool(&self, &B::QueueFamily, CommandPoolCreateFlags) -> B::CommandPool;
+    fn create_command_pool(&self, QueueFamilyId, CommandPoolCreateFlags) -> B::CommandPool;
 
     /// Creates a strongly typed command pool wrapper.
     fn create_command_pool_typed<C>(
@@ -140,7 +140,7 @@ pub trait Device<B: Backend> {
         flags: CommandPoolCreateFlags,
         max_buffers: usize,
     ) -> CommandPool<B, C> {
-        let raw = self.create_command_pool(&group.family, flags);
+        let raw = self.create_command_pool(group.family, flags);
         CommandPool::new(raw, max_buffers)
     }
 

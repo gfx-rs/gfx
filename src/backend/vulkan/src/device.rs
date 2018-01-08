@@ -1,7 +1,7 @@
 use ash::vk;
 use ash::extensions as ext;
 use ash::version::DeviceV1_0;
-use hal::{buffer, device as d, format, image, mapping, pass, pso, query};
+use hal::{buffer, device as d, format, image, mapping, pass, pso, query, queue};
 use hal::{Backbuffer, MemoryTypeId, SwapchainConfig};
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
@@ -14,8 +14,7 @@ use std::collections::VecDeque;
 use std::ffi::CString;
 use std::ops::Range;
 
-use {Backend as B, Device, QueueFamily};
-use {conv, window as w};
+use {Backend as B, Device};use {conv, window as w};
 use pool::RawCommandPool;
 
 
@@ -73,7 +72,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_command_pool(
-        &self, family: &QueueFamily, create_flags: CommandPoolCreateFlags
+        &self, family: queue::QueueFamilyId, create_flags: CommandPoolCreateFlags
     ) -> RawCommandPool {
         let mut flags = vk::CommandPoolCreateFlags::empty();
         if create_flags.contains(CommandPoolCreateFlags::TRANSIENT) {
@@ -87,7 +86,7 @@ impl d::Device<B> for Device {
             s_type: vk::StructureType::CommandPoolCreateInfo,
             p_next: ptr::null(),
             flags,
-            queue_family_index: family.index,
+            queue_family_index: family.0 as _,
         };
 
         let command_pool_raw = unsafe {

@@ -281,7 +281,6 @@ pub type SubmissionResult<T> = Result<T, SubmissionError>;
 pub struct Gpu<B: Backend> {
     /// Logical device.
     pub device: B::Device,
-    /// Raw queue groups. Each element in this vector
-    /// matches the corresponding argument in `Adapter::open`.
-    pub queue_groups: Vec<queue::RawQueueGroup<B>>,
+    ///
+    pub queues: queue::Queues<B>,
 }
