@@ -18,9 +18,9 @@ extern crate winit;
 extern crate image;
 
 use hal::{buffer, command, device as d, format as f, image as i, memory as m, pass, pso, pool};
-use hal::{Device, Instance, PhysicalDevice, QueueFamily, Surface, Swapchain};
+use hal::{Device, Instance, PhysicalDevice, Surface, Swapchain};
 use hal::{
-    DescriptorPool, Gpu, FrameSync, Primitive,
+    DescriptorPool, FrameSync, Primitive,
     Backbuffer, SwapchainConfig,
 };
 use hal::format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle};
@@ -129,14 +129,13 @@ fn main() {
         .get_limits();
 
     // Build a new device and associated command queues
-    let Gpu { device, mut queue_groups } =
-        adapter.open_with(|family| {
-            if family.supports_graphics() && surface.supports_queue_family(family) {
+    let (device, mut queue_group) =
+        adapter.open_with::<_, hal::Graphics>(|family| {
+            if surface.supports_queue_family(family) {
                 Some(1)
             } else { None }
         }).unwrap();
 
-    let mut queue_group = hal::QueueGroup::<_, hal::Graphics>::new(queue_groups.remove(0));
     let mut command_pool = device.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty(), 16);
     let mut queue = &mut queue_group.queues[0];
 

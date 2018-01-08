@@ -16,8 +16,7 @@ use std::str::FromStr;
 use std::ops::Range;
 
 use hal::{
-    Backend, Compute, Gpu, Device, DescriptorPool, Instance,
-    PhysicalDevice, QueueFamily, QueueGroup,
+    Backend, Compute, Device, DescriptorPool, Instance, PhysicalDevice, QueueFamily,
 };
 use hal::{queue, pso, memory, buffer, pool, command, device};
 
@@ -44,20 +43,14 @@ fn main() {
         .expect("Failed to find a GPU with compute support!");
 
     let memory_properties = adapter.physical_device.memory_properties();
-    let mut gpu = adapter
-        .open_with(|family| {
-            if family.supports_compute() {
-                Some(1)
-            } else {
-                None
-            }
-        })
+    let (mut device, mut queue_group) = adapter
+        .open_with::<_, Compute>(|family| Some(1))
         .unwrap();
 
-    let shader = gpu.device.create_shader_module(include_bytes!("shader/collatz.spv")).unwrap();
+    let shader = device.create_shader_module(include_bytes!("shader/collatz.spv")).unwrap();
 
     let (pipeline_layout, pipeline, set_layout, mut desc_pool) = {
-        let set_layout = gpu.device.create_descriptor_set_layout(&[
+        let set_layout = device.create_descriptor_set_layout(&[
                 pso::DescriptorSetLayoutBinding {
                     binding: 0,
                     ty: pso::DescriptorType::StorageBuffer,
@@ -67,16 +60,16 @@ fn main() {
             ],
         );
 
-        let pipeline_layout = gpu.device.create_pipeline_layout(&[&set_layout], &[]);
+        let pipeline_layout = device.create_pipeline_layout(&[&set_layout], &[]);
         let entry_point = pso::EntryPoint { entry: "main", module: &shader, specialization: &[] };
-        let pipeline = gpu.device
+        let pipeline = device
             .create_compute_pipelines(&[
                 pso::ComputePipelineDesc::new(entry_point, &pipeline_layout)
             ])
             .remove(0)
             .expect("Error creating compute pipeline!");
 
-        let desc_pool = gpu.device.create_descriptor_pool(
+        let desc_pool = device.create_descriptor_pool(
             1,
             &[
                 pso::DescriptorRangeDesc {
@@ -88,8 +81,8 @@ fn main() {
         (pipeline_layout, pipeline, set_layout, desc_pool)
     };
 
-    let (staging_memory, staging_buffer) = create_buffer(
-        &mut gpu,
+    let (staging_memory, staging_buffer) = create_buffer::<back::Backend>(
+        &mut device,
         &memory_properties.memory_types,
         memory::Properties::CPU_VISIBLE | memory::Properties::COHERENT,
         buffer::Usage::TRANSFER_SRC,
@@ -98,13 +91,13 @@ fn main() {
     );
 
     {
-        let mut writer = gpu.device.acquire_mapping_writer::<u32>(&staging_memory, 0..stride * numbers.len() as u64).unwrap();
+        let mut writer = device.acquire_mapping_writer::<u32>(&staging_memory, 0..stride * numbers.len() as u64).unwrap();
         writer.copy_from_slice(&numbers);
-        gpu.device.release_mapping_writer(writer);
+        device.release_mapping_writer(writer);
     }
 
-    let (device_memory, device_buffer) = create_buffer(
-        &mut gpu,
+    let (device_memory, device_buffer) = create_buffer::<back::Backend>(
+        &mut device,
         &memory_properties.memory_types,
         memory::Properties::DEVICE_LOCAL,
         buffer::Usage::TRANSFER_DST,
@@ -113,7 +106,7 @@ fn main() {
     );
 
     let desc_set = desc_pool.allocate_sets(&[&set_layout]).remove(0);
-    gpu.device.update_descriptor_sets(&[
+    device.update_descriptor_sets(&[
         pso::DescriptorSetWrite {
             set: &desc_set,
             binding: 0,
@@ -122,9 +115,8 @@ fn main() {
         }
     ]);
 
-    let mut queue_group = QueueGroup::<_, Compute>::new(gpu.queue_groups.remove(0));
-    let mut command_pool = gpu.device.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty(), 16);
-    let fence = gpu.device.create_fence(false);
+    let mut command_pool = device.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty(), 16);
+    let fence = device.create_fence(false);
     let submission = queue::Submission::new().submit(&[{
         let mut command_buffer = command_pool.acquire_command_buffer();
         command_buffer.copy_buffer(&staging_buffer, &device_buffer, &[command::BufferCopy { src: 0, dst: 0, size: stride * numbers.len() as u64}]);
@@ -153,36 +145,36 @@ fn main() {
         command_buffer.finish()
     }]);
     queue_group.queues[0].submit(submission, Some(&fence));
-    gpu.device.wait_for_fences(&[&fence], device::WaitFor::All, !0);
+    device.wait_for_fences(&[&fence], device::WaitFor::All, !0);
 
     {
-        let reader = gpu.device.acquire_mapping_reader::<u32>(&staging_memory, 0..stride * numbers.len() as u64).unwrap();
+        let reader = device.acquire_mapping_reader::<u32>(&staging_memory, 0..stride * numbers.len() as u64).unwrap();
         println!("Times: {:?}", reader.into_iter().map(|n| *n).collect::<Vec<u32>>());
-        gpu.device.release_mapping_reader(reader);
+        device.release_mapping_reader(reader);
     }
 
-    gpu.device.destroy_descriptor_pool(desc_pool);
-    gpu.device.destroy_descriptor_set_layout(set_layout);
-    gpu.device.destroy_shader_module(shader);
-    gpu.device.destroy_buffer(device_buffer);
-    gpu.device.destroy_buffer(staging_buffer);
-    gpu.device.destroy_fence(fence);
-    gpu.device.destroy_pipeline_layout(pipeline_layout);
-    gpu.device.free_memory(device_memory);
-    gpu.device.free_memory(staging_memory);
-    gpu.device.destroy_compute_pipeline(pipeline);
+    device.destroy_descriptor_pool(desc_pool);
+    device.destroy_descriptor_set_layout(set_layout);
+    device.destroy_shader_module(shader);
+    device.destroy_buffer(device_buffer);
+    device.destroy_buffer(staging_buffer);
+    device.destroy_fence(fence);
+    device.destroy_pipeline_layout(pipeline_layout);
+    device.free_memory(device_memory);
+    device.free_memory(staging_memory);
+    device.destroy_compute_pipeline(pipeline);
 }
 
 fn create_buffer<B: Backend>(
-    gpu: &mut Gpu<B>,
+    device: &mut B::Device,
     memory_types: &[hal::MemoryType],
     properties: memory::Properties,
     usage: buffer::Usage,
     stride: u64,
     len: u64,
 ) -> (B::Memory, B::Buffer) {
-    let buffer = gpu.device.create_buffer(stride * len, usage).unwrap();
-    let requirements = gpu.device.get_buffer_requirements(&buffer);
+    let buffer = device.create_buffer(stride * len, usage).unwrap();
+    let requirements = device.get_buffer_requirements(&buffer);
 
     let ty = memory_types
         .into_iter()
@@ -194,8 +186,8 @@ fn create_buffer<B: Backend>(
         .unwrap()
         .into();
 
-    let memory = gpu.device.allocate_memory(ty, requirements.size).unwrap();
-    let buffer = gpu.device.bind_buffer_memory(&memory, 0, buffer).unwrap();
+    let memory = device.allocate_memory(ty, requirements.size).unwrap();
+    let buffer = device.bind_buffer_memory(&memory, 0, buffer).unwrap();
 
     (memory, buffer)
 }

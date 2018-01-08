@@ -300,8 +300,8 @@ impl hal::queue::QueueFamily for QueueFamily {
     fn max_queues(&self) -> usize {
         self.properties.queue_count as _
     }
-    fn id(&self) -> QueueFamilyId {
-        QueueFamilyId(self.index as _)
+    fn id(&self) -> queue::QueueFamilyId {
+        queue::QueueFamilyId(self.index as _)
     }
 }
 
