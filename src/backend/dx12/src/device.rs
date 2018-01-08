@@ -15,10 +15,11 @@ use hal::{self, buffer, device as d, format, image, mapping, memory, pass, pso, 
 use hal::format::AspectFlags;
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
+use hal::queue::QueueFamilyId;
 
 use {
     conv, free_list, native as n, root_constants, shade, window as w,
-    Backend as B, Device, QueueFamily, MAX_VERTEX_BUFFERS, NUM_HEAP_PROPERTIES,
+    Backend as B, Device, QUEUE_FAMILIES, MAX_VERTEX_BUFFERS, NUM_HEAP_PROPERTIES,
 };
 use pool::RawCommandPool;
 use root_constants::RootConstant;
@@ -717,9 +718,9 @@ impl d::Device<B> for Device {
     }
 
     fn create_command_pool(
-        &self, family: &QueueFamily, _create_flags: CommandPoolCreateFlags
+        &self, family: QueueFamilyId, _create_flags: CommandPoolCreateFlags
     ) -> RawCommandPool {
-        let list_type = family.native_type();
+        let list_type = QUEUE_FAMILIES[family.0].native_type();
         // create command allocator
         let mut command_allocator: *mut d3d12::ID3D12CommandAllocator = ptr::null_mut();
         let hr = unsafe {

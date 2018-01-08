@@ -14,6 +14,7 @@ use hal::device::{WaitFor, BindError, OutOfMemory, FramebufferError, ShaderError
 use hal::memory::Properties;
 use hal::pool::CommandPoolCreateFlags;
 use hal::pso::{DescriptorSetWrite, DescriptorType, DescriptorSetLayoutBinding, AttributeDesc, DepthTest, StencilTest, StencilFace};
+use hal::queue::QueueFamilyId;
 
 use cocoa::foundation::{NSRange, NSUInteger};
 use metal::{self, MTLFeatureSet, MTLLanguageVersion, MTLArgumentAccess, MTLDataType, MTLPrimitiveType, MTLPrimitiveTopologyClass};
@@ -569,7 +570,7 @@ impl Device {
 
 impl hal::Device<Backend> for Device {
     fn create_command_pool(
-        &self, _family: &QueueFamily, flags: CommandPoolCreateFlags
+        &self, _family: QueueFamilyId, flags: CommandPoolCreateFlags
     ) -> command::CommandPool {
         command::CommandPool {
             queue: self.queue.clone(),

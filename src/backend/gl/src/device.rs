@@ -8,12 +8,15 @@ use std::sync::{Arc, Mutex};
 
 use gl;
 use gl::types::{GLint, GLenum, GLfloat, GLuint};
+
 use hal::{self as c, device as d, image as i, memory, pass, pso, buffer, mapping, query, Primitive};
 use hal::format::{Format, Swizzle};
 use hal::pool::CommandPoolCreateFlags;
+use hal::queue::QueueFamilyId;
+
 use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 
-use {Backend as B, QueueFamily, Share, Surface, Swapchain};
+use {Backend as B, Share, Surface, Swapchain};
 use {conv, native as n, state};
 use pool::{BufferMemory, OwnedBuffer, RawCommandPool};
 
@@ -239,7 +242,7 @@ impl d::Device<B> for Device {
 
     fn create_command_pool(
         &self,
-        _family: &QueueFamily,
+        _family: QueueFamilyId,
         flags: CommandPoolCreateFlags,
     ) -> RawCommandPool {
         let fbo = create_fbo_internal(&self.share.context);

@@ -25,6 +25,8 @@ pub trait QueueFamily: Debug {
     fn supports_compute(&self) -> bool {
         Compute::supported_by(self.queue_type())
     }
+    ///
+    fn id(&self) -> QueueFamilyId;
 }
 
 /// Identifier for a queue family of a physical device.

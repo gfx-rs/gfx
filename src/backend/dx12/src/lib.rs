@@ -23,6 +23,7 @@ mod shade;
 mod window;
 
 use hal::{format, memory, Features, Limits, QueueType};
+use hal::queue::{QueueFamilyId, Queues};
 
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, winerror};
 use winapi::shared::minwindef::TRUE;
@@ -137,7 +138,25 @@ impl QueueFamily {
             QueueType::Transfer => d3d12::D3D12_COMMAND_LIST_TYPE_COPY,
         }
     }
+
+    fn id(&self) -> QueueFamilyId {
+        // This must match the order exposed by `QUEUE_FAMILIES`
+        QueueFamilyId(match *self {
+            QueueFamily::Present => 0,
+            QueueFamily::Normal(QueueType::General) => 1,
+            QueueFamily::Normal(QueueType::Compute) => 2,
+            QueueFamily::Normal(QueueType::Transfer) => 3,
+            _ => unreachable!(),
+        })
+    }
 }
+
+static QUEUE_FAMILIES: [QueueFamily; 4] = [
+    QueueFamily::Present,
+    QueueFamily::Normal(QueueType::General),
+    QueueFamily::Normal(QueueType::Compute),
+    QueueFamily::Normal(QueueType::Transfer),
+];
 
 pub struct PhysicalDevice {
     adapter: ComPtr<dxgi1_2::IDXGIAdapter2>,
@@ -207,7 +226,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let queue_groups = families
             .into_iter()
             .map(|(family, priorities)| {
-                let mut group = hal::queue::RawQueueGroup::new(family);
+                let mut group = hal::backend::RawQueueGroup::new(family);
 
                 match family {
                     QueueFamily::Present => {
@@ -247,7 +266,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                     }
                 }
 
-                group
+                (family.id(), group)
             })
             .collect();
 
@@ -261,7 +280,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
         Ok(hal::Gpu {
             device,
-            queue_groups,
+            queues: Queues::new(queue_groups),
         })
     }
 
@@ -772,17 +791,12 @@ impl hal::Instance for Instance {
                 is_open: Arc::new(Mutex::new(false)),
             };
 
-            let queue_families = vec![
-                QueueFamily::Present,
-                QueueFamily::Normal(QueueType::General),
-                QueueFamily::Normal(QueueType::Compute),
-                QueueFamily::Normal(QueueType::Transfer),
-            ];
+            let queue_families = QUEUE_FAMILIES.to_vec();
 
             adapters.push(hal::Adapter {
                 info,
                 physical_device,
-                queue_families
+                queue_families,
             });
         }
         adapters
