@@ -1,4 +1,5 @@
 use std::borrow::Borrow;
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::iter::repeat;
 use std::ops::Range;
@@ -233,7 +234,8 @@ impl d::Device<B> for Device {
     ) -> Result<n::Memory, d::OutOfMemory> {
         // TODO
         Ok(n::Memory {
-            properties: memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED
+            properties: memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED,
+            first_bound_buffer: Cell::new(0),
         })
     }
 
@@ -569,23 +571,23 @@ impl d::Device<B> for Device {
     }
 
     fn bind_buffer_memory(
-        &self, memory: &n::Memory, _offset: u64, unbound: UnboundBuffer,
+        &self, memory: &n::Memory, offset: u64, unbound: UnboundBuffer,
     ) -> Result<n::Buffer, d::BindError> {
         let gl = &self.share.context;
         let target = unbound.target;
+
+        if offset == 0 {
+            memory.first_bound_buffer.set(unbound.name);
+        } else {
+            assert_ne!(0, memory.first_bound_buffer.get());
+        }
 
         let cpu_can_read = memory.can_download();
         let cpu_can_write = memory.can_upload();
 
         if self.share.private_caps.buffer_storage {
             //TODO: gl::DYNAMIC_STORAGE_BIT | gl::MAP_PERSISTENT_BIT
-            let mut flags = 0;
-            if cpu_can_read {
-                flags |= gl::MAP_READ_BIT;
-            }
-            if cpu_can_write {
-                flags |= gl::MAP_WRITE_BIT;
-            }
+            let flags = memory.map_flags();
             //TODO: use *Named calls to avoid binding
             unsafe {
                 gl.BindBuffer(target, unbound.name);
@@ -626,17 +628,55 @@ impl d::Device<B> for Device {
         Ok(n::Buffer {
             raw: unbound.name,
             target,
-            cpu_can_read,
-            cpu_can_write,
         })
     }
 
-    fn map_memory(&self, _: &n::Memory, _: Range<u64>) -> Result<*mut u8, mapping::Error> {
-        unimplemented!()
+    fn map_memory(
+        &self, memory: &n::Memory, range: Range<u64>
+    ) -> Result<*mut u8, mapping::Error> {
+        let gl = &self.share.context;
+        let buffer = match memory.first_bound_buffer.get() {
+            0 => panic!("No buffer has been bound yet, can't map memory!"),
+            other => other,
+        };
+
+        assert!(self.share.private_caps.buffer_role_change);
+        let target = gl::PIXEL_PACK_BUFFER;
+        let access = memory.map_flags();
+
+        let ptr = unsafe {
+            gl.BindBuffer(target, buffer);
+            let ptr = gl.MapBufferRange(target, range.start as _, (range.end - range.start) as _, access);
+            gl.BindBuffer(target, 0);
+            ptr as *mut _
+        };
+
+        if let Err(err) = self.share.check() {
+            panic!("Error mapping memory: {:?} for memory {:?} with range {:?}",
+                err, memory, range);
+        }
+
+        Ok(ptr)
     }
 
-    fn unmap_memory(&self, _: &n::Memory) {
-        unimplemented!()
+    fn unmap_memory(&self, memory: &n::Memory) {
+        let gl = &self.share.context;
+        let buffer = match memory.first_bound_buffer.get() {
+            0 => panic!("No buffer has been bound yet, can't map memory!"),
+            other => other,
+        };
+        let target = gl::PIXEL_PACK_BUFFER;
+
+        unsafe {
+            gl.BindBuffer(target, buffer);
+            gl.UnmapBuffer(target);
+            gl.BindBuffer(target, 0);
+        }
+
+        if let Err(err) = self.share.check() {
+            panic!("Error unmapping memory: {:?} for memory {:?}",
+                err, memory);
+        }
     }
 
     fn flush_mapped_memory_ranges<'a, I>(&self, _: I)
@@ -647,7 +687,7 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I)
+    fn invalidate_mapped_memory_ranges<'a, I>(&self, _ranges: I)
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
@@ -843,8 +883,8 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn free_memory(&self, _: n::Memory) {
-        unimplemented!()
+    fn free_memory(&self, _memory: n::Memory) {
+        // nothing to do
     }
 
     fn create_query_pool(&self, _ty: query::QueryType, _count: u32) -> () {
@@ -876,8 +916,10 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn destroy_buffer(&self, _: n::Buffer) {
-        unimplemented!()
+    fn destroy_buffer(&self, buffer: n::Buffer) {
+        unsafe {
+            self.share.context.DeleteBuffers(1, &buffer.raw);
+        }
     }
     fn destroy_buffer_view(&self, _: n::BufferView) {
         unimplemented!()
@@ -900,8 +942,10 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn destroy_fence(&self, _: n::Fence) {
-        unimplemented!()
+    fn destroy_fence(&self, fence: n::Fence) {
+        unsafe {
+            self.share.context.DeleteSync(fence.0.get());
+        }
     }
 
     fn destroy_semaphore(&self, _: n::Semaphore) {

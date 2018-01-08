@@ -83,8 +83,11 @@ pub enum Command {
     BindProgram(gl::types::GLuint),
     BindBlendSlot(ColorSlot, pso::ColorBlendDesc),
     BindAttribute(n::AttributeDesc, gl::types::GLuint, gl::types::GLsizei, n::VertexAttribFunction),
-    UnbindAttribute(n::AttributeDesc),
-    CopyBufferToTexture(n::RawBuffer, gl::types::GLuint, command::BufferImageCopy),
+    //UnbindAttribute(n::AttributeDesc),
+    CopyBufferToTexture(n::RawBuffer, n::Texture, command::BufferImageCopy),
+    CopyBufferToSurface(n::RawBuffer, n::Surface, command::BufferImageCopy),
+    CopyTextureToBuffer(n::Texture, n::RawBuffer, command::BufferImageCopy),
+    CopySurfaceToBuffer(n::Surface, n::RawBuffer, command::BufferImageCopy),
 }
 
 pub type FrameBufferTarget = gl::types::GLenum;
@@ -334,7 +337,7 @@ impl RawCommandBuffer {
                 &mut self.memory,
                 &mut self.buf,
                 Command::BindAttribute(*attribute, handle, desc.stride as _, attribute.vertex_attrib_fn)
-            ); 
+            );
         }
     }
 }
@@ -403,7 +406,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn begin_renderpass<T>(
         &mut self,
         _render_pass: &n::RenderPass,
-        _frame_buffer: &n::FrameBuffer,
+        frame_buffer: &n::FrameBuffer,
         _render_area: command::Rect,
         clear_values: T,
         _first_subpass: command::SubpassContents,
@@ -411,6 +414,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::ClearValue>,
     {
+        self.push_cmd(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, *frame_buffer));
+
         for clear_value in clear_values.into_iter().map(|cv| *cv.borrow()) {
             match clear_value {
                 command::ClearValue::Color(value) => {
@@ -501,7 +506,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         let needed_length = vbs.0.iter().map(|vb| vb.1).max().unwrap() + 1;
 
         self.cache.vertex_buffers.resize(needed_length, 0);
-        
+
         for vb in vbs.0 {
             self.cache.vertex_buffers[vb.1] = vb.0.raw;
         }
@@ -689,34 +694,46 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
          T: IntoIterator,
          T::Item: Borrow<command::BufferImageCopy>,
      {
-        let image_raw = match dst {
-            &n::Image::Surface(s) => s,
-            &n::Image::Texture(t) => t
-        };
+        let old_offset = self.buf.offset;
 
-        let mut no_commands_submitted = true;
-
-        for region in regions.into_iter() {
-            no_commands_submitted = false;
-            self.push_cmd(Command::CopyBufferToTexture(src.raw, image_raw, region.borrow().clone()));
+        for region in regions {
+            let r = region.borrow().clone();
+            let cmd = match *dst {
+                n::Image::Surface(s) => Command::CopyBufferToSurface(src.raw, s, r),
+                n::Image::Texture(t) => Command::CopyBufferToTexture(src.raw, t, r),
+            };
+            self.push_cmd(cmd);
         }
 
-        if no_commands_submitted {
+        if self.buf.offset == old_offset {
             error!("At least one region must be specified");
         }
     }
 
     fn copy_image_to_buffer<T>(
         &mut self,
-        _src: &n::Image,
-        _src_layout: image::ImageLayout,
-        _dst: &n::Buffer,
-        _regions: T,
+        src: &n::Image,
+        _: image::ImageLayout,
+        dst: &n::Buffer,
+        regions: T,
     ) where
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
-        unimplemented!()
+        let old_offset = self.buf.offset;
+
+        for region in regions {
+            let r = region.borrow().clone();
+            let cmd = match *src {
+                n::Image::Surface(s) => Command::CopySurfaceToBuffer(s, dst.raw, r),
+                n::Image::Texture(t) => Command::CopyTextureToBuffer(t, dst.raw, r),
+            };
+            self.push_cmd(cmd);
+        }
+
+        if self.buf.offset == old_offset {
+            error!("At least one region must be specified");
+        }
     }
 
     fn draw(
@@ -807,7 +824,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     ) {
         unimplemented!()
     }
-    
+
     fn push_graphics_constants(
         &mut self,
         _layout: &n::PipelineLayout,
@@ -840,7 +857,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     ) {
         unimplemented!()
     }
-    
+
     fn push_compute_constants(
         &mut self,
         _layout: &n::PipelineLayout,
@@ -869,7 +886,7 @@ fn push_cmd_internal(id: &u64, memory: &mut Arc<Mutex<pool::BufferMemory>>, buff
     };
 
     cmd_buffer.push(cmd);
-    
+
     buffer.append(BufferSlice {
         offset: cmd_buffer.len() as u32 - 1,
         size: 1,

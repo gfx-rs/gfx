@@ -10,7 +10,7 @@ use super::{CommandBuffer, RawCommandBuffer};
 
 
 ///
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Offset {
     ///
