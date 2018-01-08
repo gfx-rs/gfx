@@ -316,6 +316,9 @@ impl queue::QueueFamily for QueueFamily {
     fn max_queues(&self) -> usize {
         unimplemented!()
     }
+    fn id(&self) -> queue::QueueFamilyId {
+        unimplemented!()
+    }
 }
 
 /// Dummy subpass command buffer.

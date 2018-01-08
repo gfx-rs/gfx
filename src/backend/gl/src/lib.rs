@@ -228,7 +228,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                     let mut family = hal::backend::RawQueueGroup::new(proto_family);
                     let queue = queue::CommandQueue::new(&self.0, vao);
                     family.add_queue(queue);
-                    (QueueFamilyId(1), family)
+                    (QueueFamilyId(0), family)
                 })
                 .collect()),
         })
@@ -288,4 +288,5 @@ pub struct QueueFamily(hal::QueueType);
 impl hal::QueueFamily for QueueFamily {
     fn queue_type(&self) -> hal::QueueType { self.0 }
     fn max_queues(&self) -> usize { 1 }
+    fn id(&self) -> QueueFamilyId { QueueFamilyId(0) }
 }

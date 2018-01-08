@@ -23,7 +23,7 @@ mod shade;
 mod window;
 
 use hal::{format, memory, Features, Limits, QueueType};
-use hal::queue::{QueueFamilyId, Queues};
+use hal::queue::{QueueFamily as HalQueueFamily, QueueFamilyId, Queues};
 
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, winerror};
 use winapi::shared::minwindef::TRUE;
@@ -126,6 +126,16 @@ impl hal::QueueFamily for QueueFamily {
             QueueFamily::Normal(_) => MAX_QUEUES,
         }
     }
+    fn id(&self) -> QueueFamilyId {
+        // This must match the order exposed by `QUEUE_FAMILIES`
+        QueueFamilyId(match *self {
+            QueueFamily::Present => 0,
+            QueueFamily::Normal(QueueType::General) => 1,
+            QueueFamily::Normal(QueueType::Compute) => 2,
+            QueueFamily::Normal(QueueType::Transfer) => 3,
+            _ => unreachable!(),
+        })
+    }
 }
 
 impl QueueFamily {
@@ -137,17 +147,6 @@ impl QueueFamily {
             QueueType::Compute => d3d12::D3D12_COMMAND_LIST_TYPE_COMPUTE,
             QueueType::Transfer => d3d12::D3D12_COMMAND_LIST_TYPE_COPY,
         }
-    }
-
-    fn id(&self) -> QueueFamilyId {
-        // This must match the order exposed by `QUEUE_FAMILIES`
-        QueueFamilyId(match *self {
-            QueueFamily::Present => 0,
-            QueueFamily::Normal(QueueType::General) => 1,
-            QueueFamily::Normal(QueueType::Compute) => 2,
-            QueueFamily::Normal(QueueType::Transfer) => 3,
-            _ => unreachable!(),
-        })
     }
 }
 

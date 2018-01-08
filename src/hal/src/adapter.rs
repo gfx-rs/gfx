@@ -153,11 +153,12 @@ impl<B: Backend> Adapter<B> {
     ///
     /// ```no_run
     /// # extern crate gfx_backend_empty as empty;
-    /// # extern crate gfx_hal;
+    /// # extern crate gfx_hal as hal;
+    /// use hal::General;
     /// # fn main() {
     ///
-    /// # let adapter: gfx_hal::Adapter<empty::Backend> = return;
-    /// let gpu = adapter.open_with(|_| Some(1));
+    /// # let adapter: hal::Adapter<empty::Backend> = return;
+    /// let gpu = adapter.open_with::<_, General>(|_| Some(1));
     /// # }
     /// ```
     ///
