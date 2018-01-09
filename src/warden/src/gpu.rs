@@ -66,10 +66,12 @@ pub struct Resources<B: hal::Backend> {
     pub image_views: HashMap<String, B::ImageView>,
     pub render_passes: HashMap<String, RenderPass<B>>,
     pub framebuffers: HashMap<String, (B::Framebuffer, hal::device::Extent)>,
+    pub shaders: HashMap<String, B::ShaderModule>,
     pub desc_set_layouts: HashMap<String, B::DescriptorSetLayout>,
     pub desc_pools: HashMap<String, B::DescriptorPool>,
     pub desc_sets: HashMap<String, B::DescriptorSet>,
     pub pipeline_layouts: HashMap<String, B::PipelineLayout>,
+    pub graphics_pipelines: HashMap<String, B::GraphicsPipeline>,
 }
 
 pub struct Scene<B: hal::Backend> {
@@ -143,10 +145,12 @@ impl<B: hal::Backend> Scene<B> {
             image_views: HashMap::new(),
             render_passes: HashMap::new(),
             framebuffers: HashMap::new(),
+            shaders: HashMap::new(),
             desc_set_layouts: HashMap::new(),
             desc_pools: HashMap::new(),
             desc_sets: HashMap::new(),
             pipeline_layouts: HashMap::new(),
+            graphics_pipelines: HashMap::new(),
         };
         let mut upload_buffers = HashMap::new();
         let init_submit = {
@@ -156,6 +160,7 @@ impl<B: hal::Backend> Scene<B> {
             for (name, resource) in &raw.resources {
                 match *resource {
                     raw::Resource::Buffer => {
+                        //TODO
                     }
                     raw::Resource::Image { kind, num_levels, format, usage, ref data } => {
                         let unbound = device.create_image(kind, num_levels, format, usage)
@@ -394,7 +399,7 @@ impl<B: hal::Backend> Scene<B> {
                 }
             }
 
-            // Pass[3]: framebuffers
+            // Pass[3]: framebuffers and pipelines
             for (name, resource) in &raw.resources {
                 match *resource {
                     raw::Resource::Framebuffer { ref pass, ref views, extent } => {
@@ -402,10 +407,10 @@ impl<B: hal::Backend> Scene<B> {
                         let framebuffer = {
                             let image_views = rp.attachments
                                 .iter()
-                                .map(|name| {
+                                .map(|s| {
                                     let entry = views
                                         .iter()
-                                        .find(|entry| entry.0 == name)
+                                        .find(|entry| entry.0 == s)
                                         .unwrap();
                                     &resources.image_views[entry.1]
                                 })
@@ -414,6 +419,53 @@ impl<B: hal::Backend> Scene<B> {
                                 .unwrap()
                         };
                         resources.framebuffers.insert(name.clone(), (framebuffer, extent));
+                    }
+                    raw::Resource::GraphicsPipeline {
+                        ref shaders, ref rasterizer, ref vertex_buffers, ref attributes,
+                        ref input_assembler, ref blender, depth_stencil, ref layout, ref subpass,
+                    } => {
+                        let reshaders = &resources.shaders;
+                        let entry = |shader: &String| -> Option<pso::EntryPoint<B>> {
+                            if shader.is_empty() {
+                                None
+                            } else {
+                                Some(pso::EntryPoint {
+                                    entry: "main",
+                                    module: &reshaders[shader],
+                                    specialization: &[],
+                                })
+                            }
+                        };
+                        let desc = pso::GraphicsPipelineDesc {
+                            shaders: pso::GraphicsShaderSet {
+                                vertex: pso::EntryPoint {
+                                    entry: "main",
+                                    module: &reshaders[&shaders.vertex],
+                                    specialization: &[],
+                                },
+                                hull: entry(&shaders.hull),
+                                domain: entry(&shaders.domain),
+                                geometry: entry(&shaders.geometry),
+                                fragment: entry(&shaders.fragment),
+                            },
+                            rasterizer: rasterizer.clone(),
+                            vertex_buffers: vertex_buffers.clone(),
+                            attributes: attributes.clone(),
+                            input_assembler: input_assembler.clone(),
+                            blender: blender.clone(),
+                            depth_stencil: depth_stencil.clone(),
+                            layout: &resources.pipeline_layouts[layout],
+                            subpass: hal::pass::Subpass {
+                                main_pass: &resources.render_passes[&subpass.parent].handle,
+                                index: subpass.index,
+                            },
+                            flags: pso::PipelineCreationFlags::empty(),
+                            parent: pso::BasePipeline::None,
+                        };
+                        let pso = device.create_graphics_pipelines(&[desc])
+                            .swap_remove(0)
+                            .unwrap();
+                        resources.graphics_pipelines.insert(name.clone(), pso);
                     }
                     _ => {}
                 }
@@ -472,8 +524,9 @@ impl<B: hal::Backend> Scene<B> {
                                     let set = pso::VertexBufferSet(buffers_raw);
                                     encoder.bind_vertex_buffers(set);
                                 }
-                                Dc::BindPipeline(_) => {
-                                    unimplemented!()
+                                Dc::BindPipeline(ref name) => {
+                                    let pso = &resources.graphics_pipelines[name];
+                                    encoder.bind_graphics_pipeline(pso);
                                 }
                                 Dc::BindDescriptorSets { .. } => { //ref layout, first, ref sets
                                     unimplemented!()

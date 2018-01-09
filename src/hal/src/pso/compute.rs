@@ -1,7 +1,7 @@
 //! Compute pipeline descriptor.
 
 use Backend;
-use super::{BaseCompute, BasePipeline, EntryPoint, PipelineCreationFlags};
+use super::{BasePipeline, EntryPoint, PipelineCreationFlags};
 
 ///
 #[derive(Debug)]
@@ -13,7 +13,7 @@ pub struct ComputePipelineDesc<'a, B: Backend> {
     ///
     pub flags: PipelineCreationFlags,
     ///
-    pub parent: BaseCompute<'a, B>,
+    pub parent: BasePipeline<'a, B::ComputePipeline>,
 }
 
 impl<'a, B: Backend> ComputePipelineDesc<'a, B> {

@@ -25,6 +25,21 @@ pub struct SubpassDependency {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct GraphicsShaderSet {
+    pub vertex: String,
+    pub hull: String,
+    pub domain: String,
+    pub geometry: String,
+    pub fragment: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SubpassRef {
+    pub parent: String,
+    pub index: usize,
+}
+
+#[derive(Debug, Deserialize)]
 pub enum Resource {
     Shader,
     Buffer,
@@ -63,7 +78,20 @@ pub enum Resource {
         set_layouts: Vec<String>,
         push_constant_ranges: Vec<(hal::pso::ShaderStageFlags, Range<u32>)>
     },
-    GraphicsPipeline,
+    GraphicsPipeline {
+        shaders: GraphicsShaderSet,
+        rasterizer: hal::pso::Rasterizer,
+        #[serde(default)]
+        vertex_buffers: Vec<hal::pso::VertexBufferDesc>,
+        #[serde(default)]
+        attributes: Vec<hal::pso::AttributeDesc>,
+        input_assembler: hal::pso::InputAssemblerDesc,
+        blender: hal::pso::BlendDesc,
+        #[serde(default)]
+        depth_stencil: Option<hal::pso::DepthStencilDesc>,
+        layout: String,
+        subpass: SubpassRef,
+    },
     Framebuffer {
         pass: String,
         views: HashMap<String, String>,

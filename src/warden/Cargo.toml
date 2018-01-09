@@ -18,7 +18,6 @@ path = "src/lib.rs"
 
 [features]
 default = []
-ci = []
 logger = ["env_logger"]
 vulkan = ["gfx-backend-vulkan"]
 dx12 = ["gfx-backend-dx12"]

@@ -116,7 +116,6 @@ impl Harness {
                 }
             }
         }
-        #[cfg(feature = "ci")]
         assert_eq!(num_failures, 0);
     }
 }

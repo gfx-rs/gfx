@@ -1,7 +1,7 @@
 //! Graphics pipeline descriptor.
 
 use {pass, Backend, Primitive};
-use super::{BaseGraphics, BasePipeline, EntryPoint, PipelineCreationFlags};
+use super::{BasePipeline, EntryPoint, PipelineCreationFlags};
 use super::input_assembler::{AttributeDesc, InputAssemblerDesc, VertexBufferDesc};
 use super::output_merger::{ColorBlendDesc, DepthStencilDesc};
 
@@ -44,7 +44,7 @@ pub struct GraphicsPipelineDesc<'a, B: Backend> {
     ///
     pub flags: PipelineCreationFlags,
     ///
-    pub parent: BaseGraphics<'a, B>,
+    pub parent: BasePipeline<'a, B::GraphicsPipeline>,
 }
 
 impl<'a, B: Backend> GraphicsPipelineDesc<'a, B> {
