@@ -22,6 +22,7 @@ extern crate gfx_backend_gl;
 
 use std::collections::HashMap;
 use std::fs::File;
+use std::path::PathBuf;
 
 use ron::de;
 
@@ -47,25 +48,32 @@ struct TestGroup {
 
 
 struct Harness {
-    base_path: &'static str,
+    base_path: PathBuf,
     suite: Vec<TestGroup>,
 }
 
 impl Harness {
     fn new(suite_name: &str) -> Self {
-        let base_path = concat!(
+        let base_path = PathBuf::from(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../reftests",
-        );
+        ));
         println!("Parsing test suite...");
 
-        let suite = File::open(format!("{}/{}.ron", base_path, suite_name))
+        let suite_path = base_path
+            .join(suite_name)
+            .with_extension("ron");
+        let suite = File::open(suite_path)
             .map_err(de::Error::from)
             .and_then(de::from_reader::<_, Suite>)
             .expect("failed to parse the suite definition")
             .into_iter()
             .map(|(name, tests)| {
-                let scene = File::open(format!("{}/scenes/{}.ron", base_path, name))
+                let path = base_path
+                    .join("scenes")
+                    .join(&name)
+                    .with_extension("ron");
+                let scene = File::open(path)
                     .map_err(de::Error::from)
                     .and_then(de::from_reader)
                     .expect("failed to open/parse the scene");
@@ -91,11 +99,10 @@ impl Harness {
             //println!("\t{:?}", adapter.info);
             println!("\tScene '{}':", tg.name);
 
-            let data_path = format!("{}/data", self.base_path);
             let mut scene = warden::gpu::Scene::<I::Backend>::new(
                 adapter,
                 &tg.scene,
-                &data_path,
+                &self.base_path.join("data"),
             ).unwrap();
 
             for (test_name, test) in &tg.tests {

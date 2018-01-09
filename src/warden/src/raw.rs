@@ -27,9 +27,13 @@ pub struct SubpassDependency {
 #[derive(Debug, Deserialize)]
 pub struct GraphicsShaderSet {
     pub vertex: String,
+    #[serde(default)]
     pub hull: String,
+    #[serde(default)]
     pub domain: String,
+    #[serde(default)]
     pub geometry: String,
+    #[serde(default)]
     pub fragment: String,
 }
 
@@ -41,7 +45,6 @@ pub struct SubpassRef {
 
 #[derive(Debug, Deserialize)]
 pub enum Resource {
-    Shader,
     Buffer,
     Image {
         kind: hal::image::Kind,
@@ -63,6 +66,7 @@ pub enum Resource {
         subpasses: HashMap<String, Subpass>,
         dependencies: Vec<SubpassDependency>,
     },
+    Shader(String),
     DescriptorSetLayout {
         bindings: Vec<hal::pso::DescriptorSetLayoutBinding>,
     },

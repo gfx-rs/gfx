@@ -7,6 +7,7 @@ extern crate log;
 #[macro_use]
 extern crate serde;
 extern crate failure;
+extern crate glsl_to_spirv;
 
 pub mod gpu;
 pub mod raw;

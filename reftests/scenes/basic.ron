@@ -42,6 +42,42 @@
 				depth: 1,
 			),
 		),
+		"pipe-layout": PipelineLayout(
+			set_layouts: [],
+			push_constant_ranges: [],
+		),
+		"passthrough.vs": Shader("passthrough.vert"),
+		"passthrough.fs": Shader("passthrough.frag"),
+		"passthrough.pipe": GraphicsPipeline(
+			shaders: (
+				vertex: "passthrough.vs",
+				fragment: "passthrough.fs",
+			),
+			rasterizer: (
+				polygon_mode: Fill,
+				cull_face: None,
+				front_face: Clockwise,
+				depth_clamping: false,
+				depth_bias: None,
+				conservative: false,
+			),
+			input_assembler: (
+				primitive: TriangleList,
+				primitive_restart: Disabled,
+			),
+			blender: (
+				alpha_coverage: false,
+				logic_op: None,
+				targets: [
+					((bits: 15), Off),
+				],
+			),
+			layout: "pipe-layout",
+			subpass: (
+				parent: "pass",
+				index: 0,
+			),
+		),
 	},
 	jobs: {
 		"empty": Graphics(
