@@ -31,6 +31,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::os::raw::c_void;
 
+use hal::queue::QueueFamilyId;
+
 use objc::runtime::{Object, Class};
 use cocoa::base::YES;
 use cocoa::foundation::NSAutoreleasePool;
@@ -43,6 +45,7 @@ pub struct QueueFamily {}
 impl hal::QueueFamily for QueueFamily {
     fn queue_type(&self) -> hal::QueueType { hal::QueueType::General }
     fn max_queues(&self) -> usize { 1 }
+    fn id(&self) -> QueueFamilyId { QueueFamilyId(0) }
 }
 
 pub struct Instance {}

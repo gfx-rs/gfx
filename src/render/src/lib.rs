@@ -104,7 +104,7 @@ pub mod traits {
 // public re-exports
 pub use hal::format;
 pub use hal::{Backend, Frame, Primitive};
-pub use hal::queue::{Supports, Transfer, Compute, Graphics, General};
+pub use hal::queue::{Supports, Transfer, General, Graphics};
 pub use hal::{VertexCount, InstanceCount};
 pub use hal::device::Extent;
 // pub use hal::{ShaderSet, VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
@@ -129,7 +129,7 @@ pub mod macros;
 
 use std::collections::VecDeque;
 use hal::{
-    Capability, CommandQueue, PhysicalDevice, QueueFamily, Surface, Swapchain,
+    Capability, CommandQueue, PhysicalDevice, Surface, Swapchain,
     Device as Device_,
 };
 use hal::format::AsFormat;
@@ -143,8 +143,7 @@ struct Queue<B: Backend, C> {
 }
 
 impl<B: Backend, C: hal::Capability> Queue<B, C> {
-    fn new(group_raw: hal::queue::RawQueueGroup<B>) -> Self {
-        let group = hal::QueueGroup::new(group_raw);
+    fn new(group: hal::queue::QueueGroup<B, C>) -> Self {
         let (pool_sender, pool_receiver) =
             encoder::command_pool_channel();
         Queue { group, pool_sender, pool_receiver }
@@ -222,18 +221,13 @@ impl<B: Backend, C> Context<B, C>
         Cf: AsFormat,
     {
         let memory_properties = adapter.physical_device.memory_properties();
-        let hal::Gpu {
-            device,
-            mut queue_groups,
-        } = adapter.open_with(|family| {
-            let ty = family.queue_type();
-            if Graphics::supported_by(ty) && Compute::supported_by(ty) &&
-                surface.supports_queue_family(family) {
+        let (device, queues) = adapter.open_with(|family| {
+            if surface.supports_queue_family(family) {
                 Some(1)
             } else { None }
         })?;
 
-        let queue = Queue::new(queue_groups.remove(0));
+        let queue = Queue::new(queues);
 
         let swap_config = hal::SwapchainConfig::new()
             .with_color(Cf::SELF); // TODO: check support

@@ -3,6 +3,7 @@
 //! Physical devices are the main entry point for opening a [Device](../struct.Device).
 
 use {format, memory, Backend, Gpu, Features, Limits};
+use queue::{Capability, QueueGroup};
 
 /// Scheduling hint for devices about the priority of a queue.
 /// Values ranging from `0.0` (low) to `1.0` (high).
@@ -143,7 +144,7 @@ pub struct Adapter<B: Backend> {
 
 impl<B: Backend> Adapter<B> {
     /// Open the physical device with active queue families
-    /// specified by a selector function.
+    /// specified by a selector function with a specified queue capability.
     ///
     /// Selector returns `Some(count)` for the `count` number of queues
     /// to be created for a given queue family.
@@ -152,29 +153,47 @@ impl<B: Backend> Adapter<B> {
     ///
     /// ```no_run
     /// # extern crate gfx_backend_empty as empty;
-    /// # extern crate gfx_hal;
+    /// # extern crate gfx_hal as hal;
+    /// use hal::General;
     /// # fn main() {
     ///
-    /// # let adapter: gfx_hal::Adapter<empty::Backend> = return;
-    /// let gpu = adapter.open_with(|_| Some(1));
+    /// # let adapter: hal::Adapter<empty::Backend> = return;
+    /// let gpu = adapter.open_with::<_, General>(|_| Some(1));
     /// # }
     /// ```
-    pub fn open_with<F>(mut self, selector: F) -> Result<Gpu<B>, DeviceCreationError>
-    where F: Fn(&B::QueueFamily) -> Option<usize>
+    ///
+    /// # Return
+    ///
+    /// Returns the same errors as `open` and `InitializationFailed` if no suitable
+    /// queue family could be found.
+    pub fn open_with<F, C>(mut self, selector: F) -> Result<(B::Device, QueueGroup<B, C>), DeviceCreationError>
+    where
+        F: Fn(&B::QueueFamily) -> Option<usize>,
+        C: Capability,
     {
         use queue::QueueFamily;
 
-        let requested_families = self.queue_families
+        let requested_family = self.queue_families
             .drain(..)
             .flat_map(|family| {
-                selector(&family)
-                    .map(|count| {
-                        assert!(count != 0 && count <= family.max_queues());
-                        (family, vec![1.0; count])
-                    })
+                if C::supported_by(family.queue_type()) {
+                    selector(&family)
+                        .map(|count| {
+                            assert!(count != 0 && count <= family.max_queues());
+                            (family, vec![1.0; count])
+                        })
+                } else {
+                    None
+                }
             })
-            .collect();
+            .next();
 
-        self.physical_device.open(requested_families)
+        let (id, family) = match requested_family {
+            Some((family, priorities)) => (family.id(), vec![(family, priorities)]),
+            _ => return Err(DeviceCreationError::InitializationFailed),
+        };
+
+        let Gpu { device, mut queues } = self.physical_device.open(family)?;
+        Ok((device, queues.take(id).unwrap()))
     }
 }

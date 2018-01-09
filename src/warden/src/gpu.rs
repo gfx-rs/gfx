@@ -6,7 +6,7 @@ use std::fs::File;
 use std::slice;
 
 use hal::{self, buffer, format as f, image as i, memory, pso};
-use hal::{Device, DescriptorPool, PhysicalDevice, QueueFamily};
+use hal::{Device, DescriptorPool, PhysicalDevice};
 
 use raw;
 
@@ -104,12 +104,7 @@ impl<B: hal::Backend> Scene<B> {
             .get_limits();
 
         // initialize graphics
-        let hal::Gpu { device, mut queue_groups } =
-            adapter.open_with(|family| {
-                if family.supports_graphics() {
-                    Some(1)
-                } else { None }
-            })?;
+        let (device, queue_group) = adapter.open_with(|_| Some(1))?;
 
         let upload_type: hal::MemoryTypeId = memory_types
             .iter()
@@ -129,7 +124,6 @@ impl<B: hal::Backend> Scene<B> {
         info!("upload memory: {:?}", upload_type);
         info!("download memory: {:?}", &download_type);
 
-        let queue_group = hal::QueueGroup::<_, hal::Graphics>::new(queue_groups.remove(0));
         let mut command_pool = device.create_command_pool_typed(
             &queue_group,
             hal::pool::CommandPoolCreateFlags::empty(),

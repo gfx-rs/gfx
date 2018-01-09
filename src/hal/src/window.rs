@@ -119,14 +119,9 @@ pub trait Surface<B: Backend> {
 /// Handle to a backbuffer of the swapchain.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Frame(usize);
+pub struct Frame(pub(crate) usize);
 
 impl Frame {
-    #[doc(hidden)]
-    pub fn new(id: usize) -> Self {
-        Frame(id)
-    }
-
     /// Retrieve frame id.
     ///
     /// The can be used to access the currently used backbuffer image

@@ -15,6 +15,8 @@ pub extern crate glutin;
 use std::cell::Cell;
 use std::rc::Rc;
 
+use hal::queue::{Queues, QueueFamilyId};
+
 pub use self::device::Device;
 pub use self::info::{Info, PlatformName, Version};
 
@@ -219,16 +221,16 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
         Ok(hal::Gpu {
             device: Device::new(self.0.clone()),
-            queue_groups: families
+            queues: Queues::new(families
                 .into_iter()
                 .map(|(proto_family, priorities)| {
                     assert_eq!(priorities.len(), 1);
-                    let mut family = hal::queue::RawQueueGroup::new(proto_family);
+                    let mut family = hal::backend::RawQueueGroup::new(proto_family);
                     let queue = queue::CommandQueue::new(&self.0, vao);
                     family.add_queue(queue);
-                    family
+                    (QueueFamilyId(0), family)
                 })
-                .collect(),
+                .collect()),
         })
     }
 
@@ -286,4 +288,5 @@ pub struct QueueFamily(hal::QueueType);
 impl hal::QueueFamily for QueueFamily {
     fn queue_type(&self) -> hal::QueueType { self.0 }
     fn max_queues(&self) -> usize { 1 }
+    fn id(&self) -> QueueFamilyId { QueueFamilyId(0) }
 }

@@ -24,7 +24,7 @@ use ash::extensions as ext;
 use ash::version::{EntryV1_0, DeviceV1_0, InstanceV1_0, V1_0};
 use ash::vk;
 
-use hal::{format, memory};
+use hal::{format, memory, queue};
 use hal::{Features, Limits, PatchSize, QueueType};
 use hal::adapter::DeviceCreationError;
 
@@ -300,6 +300,9 @@ impl hal::queue::QueueFamily for QueueFamily {
     fn max_queues(&self) -> usize {
         self.properties.queue_count as _
     }
+    fn id(&self) -> queue::QueueFamilyId {
+        queue::QueueFamilyId(self.index as _)
+    }
 }
 
 
@@ -370,11 +373,11 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         };
 
         let device_arc = device.raw.clone();
-        let queue_groups = families
+        let queues = families
             .into_iter()
             .map(|(family, priorities)| {
                 let family_index = family.index;
-                let mut family_raw = hal::queue::RawQueueGroup::new(family);
+                let mut family_raw = hal::backend::RawQueueGroup::new(family);
                 for id in 0 .. priorities.len() {
                     let queue_raw = unsafe {
                         device_arc.0.get_device_queue(family_index, id as _)
@@ -384,13 +387,13 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                         device: device_arc.clone(),
                     });
                 }
-                family_raw
+                (queue::QueueFamilyId(family_index as _), family_raw)
             })
             .collect();
 
         Ok(hal::Gpu {
             device,
-            queue_groups,
+            queues: queue::Queues::new(queues),
         })
     }
 

@@ -14,6 +14,7 @@ use hal::device::{WaitFor, BindError, OutOfMemory, FramebufferError, ShaderError
 use hal::memory::Properties;
 use hal::pool::CommandPoolCreateFlags;
 use hal::pso::{DescriptorSetWrite, DescriptorType, DescriptorSetLayoutBinding, AttributeDesc, DepthTest, StencilTest, StencilFace};
+use hal::queue::{QueueFamily as HalQueueFamily, QueueFamilyId, Queues};
 
 use cocoa::foundation::{NSRange, NSUInteger};
 use metal::{self, MTLFeatureSet, MTLLanguageVersion, MTLArgumentAccess, MTLDataType, MTLPrimitiveType, MTLPrimitiveTopologyClass};
@@ -154,7 +155,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         // TODO: Handle opening a physical device multiple times
 
         assert_eq!(families.len(), 1);
-        let mut queue_group = hal::queue::RawQueueGroup::new(families.remove(0).0);
+        let family = families.remove(0).0;
+        let id = family.id();
+
+        let mut queue_group = hal::backend::RawQueueGroup::new(family);
         let queue_raw = command::CommandQueue::new(&self.0);
         let queue = queue_raw.0.clone();
         queue_group.add_queue(queue_raw);
@@ -173,9 +177,12 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             queue,
         };
 
+        let mut queues = HashMap::new();
+        queues.insert(id, queue_group);
+
         Ok(hal::Gpu {
             device,
-            queue_groups: vec![queue_group],
+            queues: Queues::new(queues),
         })
     }
 
@@ -569,7 +576,7 @@ impl Device {
 
 impl hal::Device<Backend> for Device {
     fn create_command_pool(
-        &self, _family: &QueueFamily, flags: CommandPoolCreateFlags
+        &self, _family: QueueFamilyId, flags: CommandPoolCreateFlags
     ) -> command::CommandPool {
         command::CommandPool {
             queue: self.queue.clone(),

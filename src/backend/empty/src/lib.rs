@@ -90,7 +90,7 @@ impl queue::RawCommandQueue<Backend> for RawCommandQueue {
 /// Dummy device doing nothing.
 pub struct Device;
 impl hal::Device<Backend> for Device {
-    fn create_command_pool(&self, _: &QueueFamily, _: pool::CommandPoolCreateFlags) -> RawCommandPool {
+    fn create_command_pool(&self, _: queue::QueueFamilyId, _: pool::CommandPoolCreateFlags) -> RawCommandPool {
         unimplemented!()
     }
 
@@ -314,6 +314,9 @@ impl queue::QueueFamily for QueueFamily {
         unimplemented!()
     }
     fn max_queues(&self) -> usize {
+        unimplemented!()
+    }
+    fn id(&self) -> queue::QueueFamilyId {
         unimplemented!()
     }
 }
