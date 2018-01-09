@@ -1,8 +1,13 @@
 {
 	"basic": {
-		"render-pass-clear": (
-			jobs: ["empty"],
-			expect: ImageRow("im-color", 0, [204,204,204,255])
+		// enable after https://github.com/gfx-rs/gfx/pull/1712
+		//"render-pass-clear": (
+		//	jobs: ["empty"],
+		//	expect: ImageRow("im-color", 0, [204,204,204,255])
+		//),
+		"pass-through": (
+			jobs: ["pass-through"],
+			expect: ImageRow("im-color", 0, [0,255,0,255])
 		),
 	},
 }

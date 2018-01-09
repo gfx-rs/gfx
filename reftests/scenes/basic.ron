@@ -91,5 +91,18 @@
 				]),
 			}),
 		),
+		"pass-through": Graphics(
+			descriptors: {},
+			framebuffer: "fbo",
+			pass: ("pass", {
+				"main": (commands: [
+					BindPipeline("passthrough.pipe"),
+					Draw(
+						vertices: (start: 0, end: 3),
+						//instances: (begin: 0, end: 1),
+					),
+				]),
+			}),
+		),
 	},
 )

@@ -114,6 +114,10 @@ pub struct DescriptorSetData {
     //TODO: update_descriptor_sets
 }
 
+fn default_instance_range() -> Range<hal::InstanceCount> {
+    0 .. 1
+}
+
 #[derive(Debug, Deserialize)]
 pub enum DrawCommand {
     BindIndexBuffer {
@@ -130,6 +134,7 @@ pub enum DrawCommand {
     },
     Draw {
         vertices: Range<hal::VertexCount>,
+        #[serde(default = "default_instance_range")]
         instances: Range<hal::InstanceCount>,
     },
     DrawIndexed {
@@ -152,6 +157,7 @@ pub enum Job {
     Graphics {
         descriptors: HashMap<String, DescriptorSetData>,
         framebuffer: String,
+        #[serde(default)]
         clear_values: Vec<hal::command::ClearValue>,
         pass: (String, HashMap<String, DrawPass>),
     },
