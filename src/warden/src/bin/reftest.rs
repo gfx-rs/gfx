@@ -23,6 +23,7 @@ extern crate gfx_backend_gl;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
+use std::process;
 
 use ron::de;
 
@@ -91,7 +92,7 @@ impl Harness {
         }
     }
 
-    fn run<I: hal::Instance>(&self, instance: I) {
+    fn run<I: hal::Instance>(&self, instance: I) -> usize {
         let mut num_failures = 0;
         for tg in &self.suite {
             let mut adapters = instance.enumerate_adapters();
@@ -123,32 +124,33 @@ impl Harness {
                 }
             }
         }
-        assert_eq!(num_failures, 0);
+        num_failures
     }
 }
 
 fn main() {
     #[cfg(feature = "logger")]
     env_logger::init().unwrap();
+    let mut num_failures = 0;
 
     let harness = Harness::new("suite");
     #[cfg(feature = "vulkan")]
     {
         println!("Warding Vulkan:");
         let instance = gfx_backend_vulkan::Instance::create("warden", 1);
-        harness.run(instance);
+        num_failures += harness.run(instance);
     }
     #[cfg(feature = "dx12")]
     {
         println!("Warding DX12:");
         let instance = gfx_backend_dx12::Instance::create("warden", 1);
-        harness.run(instance);
+        num_failures += harness.run(instance);
     }
     #[cfg(feature = "metal")]
     {
         println!("Warding Metal:");
         let instance = gfx_backend_metal::Instance::create("warden", 1);
-        harness.run(instance);
+        num_failures += harness.run(instance);
     }
     #[cfg(feature = "gl")]
     {
@@ -162,7 +164,7 @@ fn main() {
             &events_loop,
             ).unwrap();
         let instance = gfx_backend_gl::Surface::from_window(window);
-        harness.run(instance);
+        num_failures += harness.run(instance);
     }
     #[cfg(feature = "gl-headless")]
     {
@@ -171,7 +173,8 @@ fn main() {
             .build()
             .unwrap();
         let instance = gfx_backend_gl::Headless(context);
-        harness.run(instance);
+        num_failures += harness.run(instance);
     }
     let _ = harness;
+    process::exit(num_failures as _);
 }

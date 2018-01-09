@@ -52,17 +52,17 @@ check:
 	cd examples/hal && cargo check --features "$(FEATURES_HAL)"
 	cd examples/hal && cargo check --features "$(FEATURES_HAL2)"
 	cd examples/render/quad_render && $(CMD_QUAD_RENDER)
-	cd src/warden && cargo check --features "gl gl-headless $(FEATURES_HAL) $(FEATURES_HAL2)"
+	cd src/warden && cargo check --features "logger gl gl-headless $(FEATURES_HAL) $(FEATURES_HAL2)"
 
 test:
 	cargo test --all $(EXCLUDES)
 	cd src/render && cargo test --features "$(FEATURES_RENDER) $(FEATURES_EXTRA)"
 
 reftests:
-	cd src/warden && cargo run --bin reftest --features "$(FEATURES_HAL) $(FEATURES_HAL2)"
+	cd src/warden && cargo run --bin reftest --features "gl glsl-to-spirv $(FEATURES_HAL) $(FEATURES_HAL2)"
 
 reftests-ci:
-	cd src/warden && cargo run --features "gl" #TODO: "gl-headless"
+	cd src/warden && cargo run --features "gl glsl-to-spirv" #TODO: "gl-headless"
 
 travis-sdl2:
 	#TODO

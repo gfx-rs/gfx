@@ -1,4 +1,5 @@
 use failure::Error;
+#[cfg(feature = "glsl-to-spirv")]
 use glsl_to_spirv;
 
 use std::collections::HashMap;
@@ -365,12 +366,14 @@ impl<B: hal::Backend> Scene<B> {
                             .to_string_lossy()
                         {
                             "spirv" => base_file,
+                            #[cfg(feature = "glsl-to-spirv")]
                             "vert" => {
                                 let mut code = String::new();
                                 base_file.read_to_string(&mut code).unwrap();
                                 glsl_to_spirv::compile(&code, glsl_to_spirv::ShaderType::Vertex)
                                     .unwrap()
                             }
+                            #[cfg(feature = "glsl-to-spirv")]
                             "frag" => {
                                 let mut code = String::new();
                                 base_file.read_to_string(&mut code).unwrap();
