@@ -13,6 +13,41 @@ use super::{
     ImageCopy, ImageResolve, SubpassContents,
 };
 
+/// Unsafe variant of `ClearColor`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub union ClearColorRaw {
+    ///
+    pub float32: [f32; 4],
+    ///
+    pub int32: [i32; 4],
+    ///
+    pub uint32: [u32; 4],
+    _align: [u32; 4],
+}
+///
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ClearDepthStencilRaw {
+    ///
+    pub depth: f32,
+    ///
+    pub stencil: u32,
+}
+/// Unsafe variant of `ClearValue`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub union ClearValueRaw {
+    ///
+    pub color: ClearColorRaw,
+    ///
+    pub depth_stencil: ClearDepthStencilRaw,
+    _align: [u32; 4],
+}
+
 ///
 pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     ///
@@ -52,19 +87,54 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     /// Clear color image
     fn clear_color_image(
         &mut self,
+        image: &B::Image,
+        layout: ImageLayout,
+        range: SubresourceRange,
+        cv: ClearColor,
+    ) {
+        self.clear_color_image_raw(
+            image,
+            layout,
+            range,
+            match cv {
+                ClearColor::Float(cv) => ClearColorRaw { float32: cv },
+                ClearColor::Int(cv) => ClearColorRaw { int32: cv },
+                ClearColor::Uint(cv) => ClearColorRaw { uint32: cv },
+            },
+        )
+    }
+
+    /// Clear color image
+    fn clear_color_image_raw(
+        &mut self,
         &B::Image,
         ImageLayout,
         SubresourceRange,
-        ClearColor,
+        ClearColorRaw,
     );
 
     /// Clear depth-stencil image
     fn clear_depth_stencil_image(
         &mut self,
+        image: &B::Image,
+        layout: ImageLayout,
+        range: SubresourceRange,
+        cv: ClearDepthStencil,
+    ) {
+        let cv = ClearDepthStencilRaw {
+            depth: cv.0,
+            stencil: cv.1,
+        };
+        self.clear_depth_stencil_image_raw(image, layout, range, cv)
+    }
+
+    /// Clear depth-stencil image
+    fn clear_depth_stencil_image_raw(
+        &mut self,
         &B::Image,
         ImageLayout,
         SubresourceRange,
-        ClearDepthStencil,
+        ClearDepthStencilRaw,
     );
 
     ///
@@ -147,13 +217,50 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     fn begin_renderpass<T>(
         &mut self,
         render_pass: &B::RenderPass,
-        frame_buffer: &B::Framebuffer,
+        framebuffer: &B::Framebuffer,
         render_area: Rect,
         clear_values: T,
         first_subpass: SubpassContents,
     ) where
         T: IntoIterator,
-        T::Item: Borrow<ClearValue>;
+        T::Item: Borrow<ClearValue>
+    {
+        let clear_values = clear_values
+            .into_iter()
+            .map(|cv| {
+                match *cv.borrow() {
+                    ClearValue::Color(ClearColor::Float(cv)) =>
+                        ClearValueRaw { color: ClearColorRaw { float32: cv }},
+                    ClearValue::Color(ClearColor::Int(cv)) =>
+                        ClearValueRaw { color: ClearColorRaw { int32: cv }},
+                    ClearValue::Color(ClearColor::Uint(cv)) =>
+                        ClearValueRaw { color: ClearColorRaw { uint32: cv }},
+                    ClearValue::DepthStencil(ClearDepthStencil(depth, stencil)) =>
+                        ClearValueRaw { depth_stencil: ClearDepthStencilRaw { depth, stencil }},
+                }
+            });
+
+        self.begin_renderpass_raw(
+            render_pass,
+            framebuffer,
+            render_area,
+            clear_values,
+            first_subpass,
+        )
+    }
+
+    ///
+    fn begin_renderpass_raw<T>(
+        &mut self,
+        render_pass: &B::RenderPass,
+        framebuffer: &B::Framebuffer,
+        render_area: Rect,
+        clear_values: T,
+        first_subpass: SubpassContents,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<ClearValueRaw>;
+
     ///
     fn next_subpass(&mut self, contents: SubpassContents);
 
