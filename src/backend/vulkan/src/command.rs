@@ -1,5 +1,5 @@
 use std::borrow::Borrow;
-use std::{cmp, ptr};
+use std::{cmp, mem, ptr};
 use std::ops::Range;
 use std::sync::Arc;
 use smallvec::SmallVec;
@@ -117,7 +117,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         );
     }
 
-    fn begin_renderpass<T>(
+    fn begin_renderpass_raw<T>(
         &mut self,
         render_pass: &n::RenderPass,
         frame_buffer: &n::FrameBuffer,
@@ -126,7 +126,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         first_subpass: com::SubpassContents,
     ) where
         T: IntoIterator,
-        T::Item: Borrow<com::ClearValue>,
+        T::Item: Borrow<com::ClearValueRaw>,
     {
         let render_area = vk::Rect2D {
             offset: vk::Offset2D {
@@ -140,7 +140,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         };
 
         let clear_values: SmallVec<[vk::ClearValue; 16]> =
-            clear_values.into_iter().map(|clear| conv::map_clear_value(clear.borrow())).collect();
+            clear_values
+                .into_iter()
+                .map(|clear| unsafe {
+                    // Vulkan and HAL share same memory layout
+                    mem::transmute(*clear.borrow())
+                })
+                .collect();
 
         let info = vk::RenderPassBeginInfo {
             s_type: vk::StructureType::RenderPassBeginInfo,
@@ -266,16 +272,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn clear_color_image(
+    fn clear_color_image_raw(
         &mut self,
         image: &n::Image,
         layout: ImageLayout,
         range: SubresourceRange,
-        value: com::ClearColor,
+        value: com::ClearColorRaw,
     ) {
         assert!(AspectFlags::COLOR.contains(range.aspects));
         let range = conv::map_subresource_range(&range);
-        let clear_value = conv::map_clear_color(value);
+        // Vulkan and HAL share same memory layout
+        let clear_value = unsafe { mem::transmute(value) };
 
         unsafe {
             self.device.0.cmd_clear_color_image(
@@ -288,18 +295,18 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         };
     }
 
-    fn clear_depth_stencil_image(
+    fn clear_depth_stencil_image_raw(
         &mut self,
         image: &n::Image,
         layout: ImageLayout,
         range: SubresourceRange,
-        value: com::ClearDepthStencil,
+        value: com::ClearDepthStencilRaw,
     ) {
         assert!((AspectFlags::DEPTH | AspectFlags::STENCIL).contains(range.aspects));
         let range = conv::map_subresource_range(&range);
         let clear_value = vk::ClearDepthStencilValue {
-            depth: value.0,
-            stencil: value.1,
+            depth: value.depth,
+            stencil: value.stencil,
         };
 
         unsafe {

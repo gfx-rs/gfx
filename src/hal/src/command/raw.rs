@@ -1,5 +1,7 @@
+use std::mem;
 use std::borrow::Borrow;
 use std::ops::Range;
+
 use pso;
 use {Backend, IndexCount, InstanceCount, VertexCount, VertexOffset};
 use buffer::IndexBufferView;
@@ -16,7 +18,6 @@ use super::{
 /// Unsafe variant of `ClearColor`.
 #[repr(C)]
 #[derive(Clone, Copy)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub union ClearColorRaw {
     ///
     pub float32: [f32; 4],
@@ -29,7 +30,6 @@ pub union ClearColorRaw {
 ///
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ClearDepthStencilRaw {
     ///
     pub depth: f32,
@@ -39,7 +39,6 @@ pub struct ClearDepthStencilRaw {
 /// Unsafe variant of `ClearValue`.
 #[repr(C)]
 #[derive(Clone, Copy)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub union ClearValueRaw {
     ///
     pub color: ClearColorRaw,
