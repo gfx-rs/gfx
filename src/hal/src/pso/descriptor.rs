@@ -68,7 +68,7 @@ pub struct DescriptorRangeDesc {
 }
 
 ///
-pub trait DescriptorPool<B: Backend>: Send + fmt::Debug {
+pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
     /// Allocate one or multiple descriptor sets from the pool.
     ///
     /// Each descriptor set will be allocated from the pool according to the corresponding set layout.
