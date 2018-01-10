@@ -96,11 +96,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
             image,
             layout,
             range,
-            match cv {
-                ClearColor::Float(cv) => ClearColorRaw { float32: cv },
-                ClearColor::Int(cv) => ClearColorRaw { int32: cv },
-                ClearColor::Uint(cv) => ClearColorRaw { uint32: cv },
-            },
+            cv.into(),
         )
     }
 

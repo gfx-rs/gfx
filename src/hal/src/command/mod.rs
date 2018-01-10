@@ -11,7 +11,7 @@ mod renderpass;
 mod transfer;
 
 pub use self::graphics::*;
-pub use self::raw::RawCommandBuffer;
+pub use self::raw::{ClearValueRaw, ClearColorRaw, ClearDepthStencilRaw, RawCommandBuffer};
 pub use self::renderpass::*;
 pub use self::transfer::*;
 
@@ -50,7 +50,7 @@ impl<'a, B: Backend, C> CommandBuffer<'a, B, C> {
     }
 
     /// Downgrade a command buffer to a lesser capability type.
-    /// 
+    ///
     /// This is safe as you can't `submit` downgraded version since `submit`
     /// requires `self` by move.
     pub fn downgrade<D>(&mut self) -> &mut CommandBuffer<'a, B, D>

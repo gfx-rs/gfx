@@ -7,7 +7,7 @@ use buffer::IndexBufferView;
 use image::{ImageLayout, SubresourceRange};
 use query::{Query, QueryControl, QueryId};
 use queue::capability::{Graphics, GraphicsOrCompute, Supports};
-use super::{CommandBuffer, RawCommandBuffer, RenderPassInlineEncoder};
+use super::{ClearColorRaw, CommandBuffer, RawCommandBuffer, RenderPassInlineEncoder};
 
 
 #[allow(missing_docs)]
@@ -85,6 +85,16 @@ impl From<i32> for ClearColor {
 impl From<u32> for ClearColor {
     fn from(v: u32) -> ClearColor {
         ClearColor::Uint([v, 0, 0, 0])
+    }
+}
+
+impl From<ClearColor> for ClearColorRaw {
+    fn from(cv: ClearColor) -> Self {
+        match cv {
+            ClearColor::Float(cv) => ClearColorRaw { float32: cv },
+            ClearColor::Int(cv) => ClearColorRaw { int32: cv },
+            ClearColor::Uint(cv) => ClearColorRaw { uint32: cv },
+        }
     }
 }
 

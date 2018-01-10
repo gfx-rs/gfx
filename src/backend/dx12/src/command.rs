@@ -121,10 +121,10 @@ fn bind_descriptor_sets<'a, T>(
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct AttachmentClear {
     subpass_id: Option<pass::SubpassId>,
-    value: Option<com::ClearValue>,
+    value: Option<com::ClearValueRaw>,
     stencil_value: Option<u32>,
 }
 
@@ -377,20 +377,18 @@ impl CommandBuffer {
             if clear.subpass_id != Some(self.cur_subpass) {
                 continue;
             }
-            match clear.value {
-                Some(com::ClearValue::Color(value)) => {
-                    let handle = view.handle_rtv.unwrap();
-                    self.clear_render_target_view(handle, value, &[state.target_rect]);
-                }
-                Some(com::ClearValue::DepthStencil(value)) => {
-                    let handle = view.handle_dsv.unwrap();
-                    self.clear_depth_stencil_view(handle, Some(value.0), None, &[state.target_rect]);
-                }
-                None => {}
+
+            if let (Some(handle), Some(cv)) = (view.handle_rtv, clear.value) {
+                self.clear_render_target_view(handle, unsafe { cv.color }, &[state.target_rect]);
             }
-            if let Some(value) = clear.stencil_value {
-                let handle = view.handle_dsv.unwrap();
-                self.clear_depth_stencil_view(handle, None, Some(value), &[state.target_rect]);
+
+            if let Some(handle) = view.handle_dsv {
+                let depth = clear.value.map(|cv| unsafe { cv.depth_stencil.depth });
+                let stencil = clear.stencil_value;
+
+                if depth.is_some() || stencil.is_some() {
+                    self.clear_depth_stencil_view(handle, depth, stencil, &[state.target_rect]);
+                }
             }
         }
     }
@@ -398,7 +396,7 @@ impl CommandBuffer {
     fn clear_render_target_view(
         &self,
         rtv: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
-        color: com::ClearColor,
+        color: com::ClearColorRaw,
         rects: &[d3d12::D3D12_RECT],
     ) {
         let num_rects = rects.len() as _;
@@ -408,14 +406,8 @@ impl CommandBuffer {
             ptr::null()
         };
 
-        match color {
-            com::ClearColor::Float(ref c) => unsafe {
-                self.raw.clone().ClearRenderTargetView(rtv, c, num_rects, rects);
-            },
-            _ => {
-                // TODO: Can we support uint/int?
-                error!("Unable to clear int/uint target");
-            }
+        unsafe {
+            self.raw.clone().ClearRenderTargetView(rtv, &color.float32, num_rects, rects);
         }
     }
 
@@ -625,7 +617,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.reset();
     }
 
-    fn begin_renderpass<T>(
+    fn begin_renderpass_raw<T>(
         &mut self,
         render_pass: &n::RenderPass,
         framebuffer: &n::Framebuffer,
@@ -634,7 +626,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         _first_subpass: com::SubpassContents,
     ) where
         T: IntoIterator,
-        T::Item: Borrow<com::ClearValue>,
+        T::Item: Borrow<com::ClearValueRaw>,
     {
         assert_eq!(framebuffer.attachments.len(), render_pass.attachments.len());
         // Make sure that no subpass works with Present as intermediate layout.
@@ -660,10 +652,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 },
                 stencil_value: if attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
                     let clear = clear_iter.next().expect("Must provide an addition DepthStencil clear value");
-                    match *clear.borrow() {
-                        com::ClearValue::DepthStencil(value) => Some(value.1),
-                        other => panic!("Unexpected clear value: {:?}", other),
-                    }
+                    Some(unsafe { clear.borrow().depth_stencil.stencil })
                 } else {
                     None
                 },
@@ -808,34 +797,34 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn clear_color_image(
+    fn clear_color_image_raw(
         &mut self,
         image: &n::Image,
         _: image::ImageLayout,
         range: image::SubresourceRange,
-        value: com::ClearColor,
+        value: com::ClearColorRaw,
     ) {
         assert_eq!(range, image.to_subresource_range(AspectFlags::COLOR));
         let rtv = image.clear_cv.unwrap();
         self.clear_render_target_view(rtv, value, &[]);
     }
 
-    fn clear_depth_stencil_image(
+    fn clear_depth_stencil_image_raw(
         &mut self,
         image: &n::Image,
         _layout: image::ImageLayout,
         range: image::SubresourceRange,
-        value: com::ClearDepthStencil,
+        value: com::ClearDepthStencilRaw,
     ) {
         assert!((AspectFlags::DEPTH | AspectFlags::STENCIL).contains(range.aspects));
         assert_eq!(range, image.to_subresource_range(range.aspects));
         if range.aspects.contains(AspectFlags::DEPTH) {
             let dsv = image.clear_dv.unwrap();
-            self.clear_depth_stencil_view(dsv, Some(value.0), None, &[]);
+            self.clear_depth_stencil_view(dsv, Some(value.depth), None, &[]);
         }
         if range.aspects.contains(AspectFlags::STENCIL) {
             let dsv = image.clear_sv.unwrap();
-            self.clear_depth_stencil_view(dsv, None, Some(value.1 as _), &[]);
+            self.clear_depth_stencil_view(dsv, None, Some(value.stencil as _), &[]);
         }
     }
 
@@ -869,7 +858,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                     self.clear_render_target_view(
                         rtv,
-                        cv,
+                        cv.into(),
                         &rects,
                     );
                 }
