@@ -1,8 +1,11 @@
 use failure::Error;
+#[cfg(feature = "glsl-to-spirv")]
+use glsl_to_spirv;
 
 use std::collections::HashMap;
 use std::io::Read;
 use std::fs::File;
+use std::path::PathBuf;
 use std::slice;
 
 use hal::{self, buffer, format as f, image as i, memory, pso};
@@ -66,10 +69,12 @@ pub struct Resources<B: hal::Backend> {
     pub image_views: HashMap<String, B::ImageView>,
     pub render_passes: HashMap<String, RenderPass<B>>,
     pub framebuffers: HashMap<String, (B::Framebuffer, hal::device::Extent)>,
+    pub shaders: HashMap<String, B::ShaderModule>,
     pub desc_set_layouts: HashMap<String, B::DescriptorSetLayout>,
     pub desc_pools: HashMap<String, B::DescriptorPool>,
     pub desc_sets: HashMap<String, B::DescriptorSet>,
     pub pipeline_layouts: HashMap<String, B::PipelineLayout>,
+    pub graphics_pipelines: HashMap<String, B::GraphicsPipeline>,
 }
 
 pub struct Scene<B: hal::Backend> {
@@ -93,8 +98,8 @@ fn align(x: usize, y: usize) -> usize {
 }
 
 impl<B: hal::Backend> Scene<B> {
-    pub fn new(adapter: hal::Adapter<B>, raw: &raw::Scene, data_path: &str) -> Result<Self, Error> {
-        info!("creating Scene from {}", data_path);
+    pub fn new(adapter: hal::Adapter<B>, raw: &raw::Scene, data_path: &PathBuf) -> Result<Self, Error> {
+        info!("creating Scene from {:?}", data_path);
         let memory_types = adapter
             .physical_device
             .memory_properties()
@@ -137,10 +142,12 @@ impl<B: hal::Backend> Scene<B> {
             image_views: HashMap::new(),
             render_passes: HashMap::new(),
             framebuffers: HashMap::new(),
+            shaders: HashMap::new(),
             desc_set_layouts: HashMap::new(),
             desc_pools: HashMap::new(),
             desc_sets: HashMap::new(),
             pipeline_layouts: HashMap::new(),
+            graphics_pipelines: HashMap::new(),
         };
         let mut upload_buffers = HashMap::new();
         let init_submit = {
@@ -150,6 +157,7 @@ impl<B: hal::Backend> Scene<B> {
             for (name, resource) in &raw.resources {
                 match *resource {
                     raw::Resource::Buffer => {
+                        //TODO
                     }
                     raw::Resource::Image { kind, num_levels, format, usage, ref data } => {
                         let unbound = device.create_image(kind, num_levels, format, usage)
@@ -215,7 +223,7 @@ impl<B: hal::Backend> Scene<B> {
                                 .unwrap();
                             // write the data
                             {
-                                let mut file = File::open(&format!("{}/{}", data_path, data))
+                                let mut file = File::open(data_path.join(data))
                                     .unwrap();
                                 let mut mapping = device.acquire_mapping_writer::<u8>(&upload_memory, 0..upload_size)
                                     .unwrap();
@@ -281,11 +289,11 @@ impl<B: hal::Backend> Scene<B> {
                             let id = attachments.keys().position(|s| s == &aref.0).unwrap();
                             (id, aref.1)
                         };
-                        let subpass_ref = |name: &String| {
-                            if name.is_empty() {
+                        let subpass_ref = |s: &String| {
+                            if s.is_empty() {
                                 hal::pass::SubpassRef::External
                             } else {
-                                let id = subpasses.keys().position(|s| s == name).unwrap();
+                                let id = subpasses.keys().position(|sp| s == sp).unwrap();
                                 hal::pass::SubpassRef::Pass(id)
                             }
                         };
@@ -310,8 +318,8 @@ impl<B: hal::Backend> Scene<B> {
                                     .collect::<Vec<_>>();
                                 let preserves = sp.preserves
                                     .iter()
-                                    .map(|name| {
-                                        attachments.keys().position(|s| s == name).unwrap()
+                                    .map(|sp| {
+                                        attachments.keys().position(|s| s == sp).unwrap()
                                     })
                                     .collect::<Vec<_>>();
                                 (colors, ds, inputs, preserves)
@@ -341,6 +349,38 @@ impl<B: hal::Backend> Scene<B> {
                             subpasses: subpasses.keys().cloned().collect(),
                         };
                         resources.render_passes.insert(name.clone(), rp);
+                    }
+                    raw::Resource::Shader(ref local_path) => {
+                        let full_path = data_path.join(local_path);
+                        let mut base_file = File::open(&full_path)
+                            .unwrap();
+                        let mut file = match &*full_path
+                            .extension()
+                            .unwrap()
+                            .to_string_lossy()
+                        {
+                            "spirv" => base_file,
+                            #[cfg(feature = "glsl-to-spirv")]
+                            "vert" => {
+                                let mut code = String::new();
+                                base_file.read_to_string(&mut code).unwrap();
+                                glsl_to_spirv::compile(&code, glsl_to_spirv::ShaderType::Vertex)
+                                    .unwrap()
+                            }
+                            #[cfg(feature = "glsl-to-spirv")]
+                            "frag" => {
+                                let mut code = String::new();
+                                base_file.read_to_string(&mut code).unwrap();
+                                glsl_to_spirv::compile(&code, glsl_to_spirv::ShaderType::Fragment)
+                                    .unwrap()
+                            }
+                            other => panic!("Unknown shader extension: {}", other),
+                        };
+                        let mut spirv = Vec::new();
+                        file.read_to_end(&mut spirv).unwrap();
+                        let module = device.create_shader_module(&spirv)
+                            .unwrap();
+                        resources.shaders.insert(name.clone(), module);
                     }
                     raw::Resource::DescriptorSetLayout { ref bindings } => {
                         let layout = device.create_descriptor_set_layout(bindings);
@@ -388,7 +428,7 @@ impl<B: hal::Backend> Scene<B> {
                 }
             }
 
-            // Pass[3]: framebuffers
+            // Pass[3]: framebuffers and pipelines
             for (name, resource) in &raw.resources {
                 match *resource {
                     raw::Resource::Framebuffer { ref pass, ref views, extent } => {
@@ -396,10 +436,10 @@ impl<B: hal::Backend> Scene<B> {
                         let framebuffer = {
                             let image_views = rp.attachments
                                 .iter()
-                                .map(|name| {
+                                .map(|s| {
                                     let entry = views
                                         .iter()
-                                        .find(|entry| entry.0 == name)
+                                        .find(|entry| entry.0 == s)
                                         .unwrap();
                                     &resources.image_views[entry.1]
                                 })
@@ -408,6 +448,53 @@ impl<B: hal::Backend> Scene<B> {
                                 .unwrap()
                         };
                         resources.framebuffers.insert(name.clone(), (framebuffer, extent));
+                    }
+                    raw::Resource::GraphicsPipeline {
+                        ref shaders, ref rasterizer, ref vertex_buffers, ref attributes,
+                        ref input_assembler, ref blender, depth_stencil, ref layout, ref subpass,
+                    } => {
+                        let reshaders = &resources.shaders;
+                        let entry = |shader: &String| -> Option<pso::EntryPoint<B>> {
+                            if shader.is_empty() {
+                                None
+                            } else {
+                                Some(pso::EntryPoint {
+                                    entry: "main",
+                                    module: &reshaders[shader],
+                                    specialization: &[],
+                                })
+                            }
+                        };
+                        let desc = pso::GraphicsPipelineDesc {
+                            shaders: pso::GraphicsShaderSet {
+                                vertex: pso::EntryPoint {
+                                    entry: "main",
+                                    module: &reshaders[&shaders.vertex],
+                                    specialization: &[],
+                                },
+                                hull: entry(&shaders.hull),
+                                domain: entry(&shaders.domain),
+                                geometry: entry(&shaders.geometry),
+                                fragment: entry(&shaders.fragment),
+                            },
+                            rasterizer: rasterizer.clone(),
+                            vertex_buffers: vertex_buffers.clone(),
+                            attributes: attributes.clone(),
+                            input_assembler: input_assembler.clone(),
+                            blender: blender.clone(),
+                            depth_stencil: depth_stencil.clone(),
+                            layout: &resources.pipeline_layouts[layout],
+                            subpass: hal::pass::Subpass {
+                                main_pass: &resources.render_passes[&subpass.parent].handle,
+                                index: subpass.index,
+                            },
+                            flags: pso::PipelineCreationFlags::empty(),
+                            parent: pso::BasePipeline::None,
+                        };
+                        let pso = device.create_graphics_pipelines(&[desc])
+                            .swap_remove(0)
+                            .unwrap();
+                        resources.graphics_pipelines.insert(name.clone(), pso);
                     }
                     _ => {}
                 }
@@ -466,8 +553,9 @@ impl<B: hal::Backend> Scene<B> {
                                     let set = pso::VertexBufferSet(buffers_raw);
                                     encoder.bind_vertex_buffers(set);
                                 }
-                                Dc::BindPipeline(_) => {
-                                    unimplemented!()
+                                Dc::BindPipeline(ref name) => {
+                                    let pso = &resources.graphics_pipelines[name];
+                                    encoder.bind_graphics_pipeline(pso);
                                 }
                                 Dc::BindDescriptorSets { .. } => { //ref layout, first, ref sets
                                     unimplemented!()

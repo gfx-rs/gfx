@@ -196,11 +196,6 @@ pub enum BasePipeline<'a, P: 'a> {
     None,
 }
 
-///
-pub type BaseGraphics<'a, B: Backend> = BasePipeline<'a, B::GraphicsPipeline>;
-///
-pub type BaseCompute<'a, B: Backend> = BasePipeline<'a, B::ComputePipeline>;
-
 /// Specialization information for pipelines.
 #[derive(Debug, Clone)]
 pub struct Specialization {

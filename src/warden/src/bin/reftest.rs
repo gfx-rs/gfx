@@ -22,6 +22,8 @@ extern crate gfx_backend_gl;
 
 use std::collections::HashMap;
 use std::fs::File;
+use std::path::PathBuf;
+use std::process;
 
 use ron::de;
 
@@ -47,25 +49,32 @@ struct TestGroup {
 
 
 struct Harness {
-    base_path: &'static str,
+    base_path: PathBuf,
     suite: Vec<TestGroup>,
 }
 
 impl Harness {
     fn new(suite_name: &str) -> Self {
-        let base_path = concat!(
+        let base_path = PathBuf::from(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../reftests",
-        );
+        ));
         println!("Parsing test suite...");
 
-        let suite = File::open(format!("{}/{}.ron", base_path, suite_name))
+        let suite_path = base_path
+            .join(suite_name)
+            .with_extension("ron");
+        let suite = File::open(suite_path)
             .map_err(de::Error::from)
             .and_then(de::from_reader::<_, Suite>)
             .expect("failed to parse the suite definition")
             .into_iter()
             .map(|(name, tests)| {
-                let scene = File::open(format!("{}/scenes/{}.ron", base_path, name))
+                let path = base_path
+                    .join("scenes")
+                    .join(&name)
+                    .with_extension("ron");
+                let scene = File::open(path)
                     .map_err(de::Error::from)
                     .and_then(de::from_reader)
                     .expect("failed to open/parse the scene");
@@ -83,7 +92,7 @@ impl Harness {
         }
     }
 
-    fn run<I: hal::Instance>(&self, instance: I) {
+    fn run<I: hal::Instance>(&self, instance: I) -> usize {
         let mut num_failures = 0;
         for tg in &self.suite {
             let mut adapters = instance.enumerate_adapters();
@@ -91,11 +100,10 @@ impl Harness {
             //println!("\t{:?}", adapter.info);
             println!("\tScene '{}':", tg.name);
 
-            let data_path = format!("{}/data", self.base_path);
             let mut scene = warden::gpu::Scene::<I::Backend>::new(
                 adapter,
                 &tg.scene,
-                &data_path,
+                &self.base_path.join("data"),
             ).unwrap();
 
             for (test_name, test) in &tg.tests {
@@ -116,33 +124,33 @@ impl Harness {
                 }
             }
         }
-        #[cfg(feature = "ci")]
-        assert_eq!(num_failures, 0);
+        num_failures
     }
 }
 
 fn main() {
     #[cfg(feature = "logger")]
     env_logger::init().unwrap();
+    let mut num_failures = 0;
 
     let harness = Harness::new("suite");
     #[cfg(feature = "vulkan")]
     {
         println!("Warding Vulkan:");
         let instance = gfx_backend_vulkan::Instance::create("warden", 1);
-        harness.run(instance);
+        num_failures += harness.run(instance);
     }
     #[cfg(feature = "dx12")]
     {
         println!("Warding DX12:");
         let instance = gfx_backend_dx12::Instance::create("warden", 1);
-        harness.run(instance);
+        num_failures += harness.run(instance);
     }
     #[cfg(feature = "metal")]
     {
         println!("Warding Metal:");
         let instance = gfx_backend_metal::Instance::create("warden", 1);
-        harness.run(instance);
+        num_failures += harness.run(instance);
     }
     #[cfg(feature = "gl")]
     {
@@ -156,7 +164,7 @@ fn main() {
             &events_loop,
             ).unwrap();
         let instance = gfx_backend_gl::Surface::from_window(window);
-        harness.run(instance);
+        num_failures += harness.run(instance);
     }
     #[cfg(feature = "gl-headless")]
     {
@@ -165,7 +173,8 @@ fn main() {
             .build()
             .unwrap();
         let instance = gfx_backend_gl::Headless(context);
-        harness.run(instance);
+        num_failures += harness.run(instance);
     }
     let _ = harness;
+    process::exit(num_failures as _);
 }

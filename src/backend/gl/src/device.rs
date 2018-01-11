@@ -311,8 +311,27 @@ impl d::Device<B> for Device {
         &self,
         descs: &[pso::GraphicsPipelineDesc<'a, B>],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
+        // see version table at https://en.wikipedia.org/wiki/OpenGL_Shading_Language
+        let glsl_version = match self.share.info.shading_language.tuple() {
+            (4, 60) => glsl::Version::V4_60,
+            (4, 50) => glsl::Version::V4_50,
+            (4, 40) => glsl::Version::V4_40,
+            (4, 30) => glsl::Version::V4_30,
+            (4, 20) => glsl::Version::V4_20,
+            (4, 10) => glsl::Version::V4_10,
+            (4, 00) => glsl::Version::V4_00,
+            (3, 30) => glsl::Version::V3_30,
+            (1, 50) => glsl::Version::V1_50,
+            (1, 40) => glsl::Version::V1_40,
+            (1, 30) => glsl::Version::V1_30,
+            (1, 20) => glsl::Version::V1_20,
+            (1, 10) => glsl::Version::V1_10,
+            other if other > (4, 60) => glsl::Version::V4_60,
+            other => panic!("GLSL version is note recognized: {:?}", other),
+        };
+        info!("Selected GLSL version {:?}", glsl_version);
+
         let gl = &self.share.context;
-        let priv_caps = &self.share.private_caps;
         let share = &self.share;
         descs.iter()
              .map(|desc| {
@@ -334,7 +353,7 @@ impl d::Device<B> for Device {
                                 n::ShaderModule::Raw(raw) => raw,
                                 n::ShaderModule::Spirv(ref spirv) => {
                                     let mut ast = self.parse_spirv(spirv).unwrap();
-                                    let spirv = self.translate_spirv(&mut ast, glsl::Version::V4_10).unwrap();
+                                    let spirv = self.translate_spirv(&mut ast, glsl_version).unwrap();
                                     info!("Generated:\n{:?}", spirv);
                                     match self.create_shader_module_from_source(spirv.as_bytes(), stage).unwrap() {
                                         n::ShaderModule::Raw(raw) => raw,
@@ -353,7 +372,7 @@ impl d::Device<B> for Device {
                     attach_shader(desc.shaders.geometry.as_ref(), pso::Stage::Geometry);
                     attach_shader(desc.shaders.fragment.as_ref(), pso::Stage::Fragment);
 
-                    if !priv_caps.program_interface && priv_caps.frag_data_location {
+                    if !share.private_caps.program_interface && share.private_caps.frag_data_location {
                         for i in 0..subpass.color_attachments.len() {
                             let color_name = format!("Target{}\0", i);
                             unsafe {

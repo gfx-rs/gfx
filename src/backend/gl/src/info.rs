@@ -15,8 +15,10 @@ pub struct Version {
 
 impl Version {
     /// Create a new OpenGL version number
-    pub fn new(major: u32, minor: u32, revision: Option<u32>,
-               vendor_info: &'static str) -> Version {
+    pub fn new(
+        major: u32, minor: u32, revision: Option<u32>,
+        vendor_info: &'static str,
+    ) -> Self {
         Version {
             is_embedded: false,
             major: major,
@@ -26,7 +28,7 @@ impl Version {
         }
     }
     /// Create a new OpenGL ES version number
-    pub fn new_embedded(major: u32, minor: u32, vendor_info: &'static str) -> Version {
+    pub fn new_embedded(major: u32, minor: u32, vendor_info: &'static str) -> Self {
         Version {
             is_embedded: true,
             major: major,
@@ -34,6 +36,11 @@ impl Version {
             revision: None,
             vendor_info: vendor_info,
         }
+    }
+
+    /// Get a tuple of (major, minor) versions
+    pub fn tuple(&self) -> (u32, u32) {
+        (self.major, self.minor)
     }
 
     /// According to the OpenGL specification, the version information is
@@ -124,6 +131,7 @@ fn get_usize(gl: &gl::Gl, name: gl::types::GLenum) -> usize {
 }
 
 unsafe fn c_str_as_static_str(c_str: *const i8) -> &'static str {
+    //TODO: avoid transmuting
     mem::transmute(str::from_utf8(ffi::CStr::from_ptr(c_str as *const _).to_bytes()).unwrap())
 }
 

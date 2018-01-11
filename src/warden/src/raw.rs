@@ -25,8 +25,26 @@ pub struct SubpassDependency {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct GraphicsShaderSet {
+    pub vertex: String,
+    #[serde(default)]
+    pub hull: String,
+    #[serde(default)]
+    pub domain: String,
+    #[serde(default)]
+    pub geometry: String,
+    #[serde(default)]
+    pub fragment: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SubpassRef {
+    pub parent: String,
+    pub index: usize,
+}
+
+#[derive(Debug, Deserialize)]
 pub enum Resource {
-    Shader,
     Buffer,
     Image {
         kind: hal::image::Kind,
@@ -48,6 +66,7 @@ pub enum Resource {
         subpasses: HashMap<String, Subpass>,
         dependencies: Vec<SubpassDependency>,
     },
+    Shader(String),
     DescriptorSetLayout {
         bindings: Vec<hal::pso::DescriptorSetLayoutBinding>,
     },
@@ -63,7 +82,20 @@ pub enum Resource {
         set_layouts: Vec<String>,
         push_constant_ranges: Vec<(hal::pso::ShaderStageFlags, Range<u32>)>
     },
-    GraphicsPipeline,
+    GraphicsPipeline {
+        shaders: GraphicsShaderSet,
+        rasterizer: hal::pso::Rasterizer,
+        #[serde(default)]
+        vertex_buffers: Vec<hal::pso::VertexBufferDesc>,
+        #[serde(default)]
+        attributes: Vec<hal::pso::AttributeDesc>,
+        input_assembler: hal::pso::InputAssemblerDesc,
+        blender: hal::pso::BlendDesc,
+        #[serde(default)]
+        depth_stencil: Option<hal::pso::DepthStencilDesc>,
+        layout: String,
+        subpass: SubpassRef,
+    },
     Framebuffer {
         pass: String,
         views: HashMap<String, String>,
@@ -82,6 +114,10 @@ pub struct DescriptorSetData {
     //TODO: update_descriptor_sets
 }
 
+fn default_instance_range() -> Range<hal::InstanceCount> {
+    0 .. 1
+}
+
 #[derive(Debug, Deserialize)]
 pub enum DrawCommand {
     BindIndexBuffer {
@@ -98,6 +134,7 @@ pub enum DrawCommand {
     },
     Draw {
         vertices: Range<hal::VertexCount>,
+        #[serde(default = "default_instance_range")]
         instances: Range<hal::InstanceCount>,
     },
     DrawIndexed {
@@ -120,6 +157,7 @@ pub enum Job {
     Graphics {
         descriptors: HashMap<String, DescriptorSetData>,
         framebuffer: String,
+        #[serde(default)]
         clear_values: Vec<hal::command::ClearValue>,
         pass: (String, HashMap<String, DrawPass>),
     },
