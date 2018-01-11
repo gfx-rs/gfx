@@ -566,6 +566,12 @@ impl<B: hal::Backend> Scene<B> {
                                 Dc::DrawIndexed { ref indices, base_vertex, ref instances } => {
                                     encoder.draw_indexed(indices.clone(), base_vertex, instances.clone());
                                 }
+                                Dc::SetViewports(ref viewports) => {
+                                    encoder.set_viewports(viewports);
+                                }
+                                Dc::SetScissors(ref scissors) => {
+                                    encoder.set_scissors(scissors);
+                                }
                             }
                         }
                     }

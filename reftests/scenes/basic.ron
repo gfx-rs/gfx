@@ -97,6 +97,15 @@
 			pass: ("pass", {
 				"main": (commands: [
 					BindPipeline("passthrough.pipe"),
+					SetViewports([
+						Viewport(
+							rect: Rect(x: 0, y: 0, w: 1, h: 1),
+							depth: (start: 0.0, end: 1.0),
+						)
+					]),
+					SetScissors([
+						Rect(x: 0, y: 0, w: 1, h: 1),
+					]),
 					Draw(
 						vertices: (start: 0, end: 3),
 						//instances: (begin: 0, end: 1),
