@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-use hal::{self, image as i, pass, pso};
+use hal::{self, format, image as i, pass, pso};
 use hal::memory::Properties;
 
 use gl;
@@ -51,7 +51,14 @@ pub struct ComputePipeline {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub enum Image {
+pub struct Image {
+    pub(crate) kind: ImageKind,
+    // Required for clearing operations
+    pub(crate) channel: format::ChannelType,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub enum ImageKind {
     Surface(Surface),
     Texture(Texture),
 }

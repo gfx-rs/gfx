@@ -423,6 +423,7 @@ impl CommandQueue {
             com::Command::SetBlendColor(color) => {
                 state::set_blend_color(&self.share.context, color);
             }
+            /*
             com::Command::ClearColor(c) => unsafe {
                 //TODO: check texture?
                 let gl = &self.share.context;
@@ -451,6 +452,26 @@ impl CommandQueue {
                     gl.ClearColor(v[0], v[1], v[2], v[3]);
                     gl.Clear(gl::COLOR_BUFFER_BIT);
                 }
+            }
+            */
+            com::Command::ClearBufferColorF(draw_buffer, cv) => unsafe {
+                self.share.context.ClearBufferfv(gl::COLOR, draw_buffer, cv.as_ptr());
+            }
+            com::Command::ClearBufferColorU(draw_buffer, cv) => unsafe {
+                self.share.context.ClearBufferuiv(gl::COLOR, draw_buffer, cv.as_ptr());
+            }
+            com::Command::ClearBufferColorI(draw_buffer, cv) => unsafe {
+                self.share.context.ClearBufferiv(gl::COLOR, draw_buffer, cv.as_ptr());
+            }
+            com::Command::ClearBufferDepthStencil(depth, stencil) => unsafe {
+                let (target, depth, stencil) = match (depth, stencil) {
+                    (Some(depth), Some(stencil)) => (gl::DEPTH_STENCIL, depth, stencil),
+                    (Some(depth), None) => (gl::DEPTH, depth, 0),
+                    (None, Some(stencil)) => (gl::STENCIL, 0.0, stencil),
+                    _ => unreachable!(),
+                };
+
+                self.share.context.ClearBufferfi(target, 0, depth, stencil as _);
             }
             com::Command::BindFrameBuffer(point, frame_buffer) => {
                 if self.share.private_caps.framebuffer {

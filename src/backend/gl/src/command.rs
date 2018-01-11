@@ -1,8 +1,11 @@
 #![allow(missing_docs)]
 
 use gl;
+
 use hal::{self, command, image, memory, pso, query, ColorSlot};
 use hal::buffer::IndexBufferView;
+use hal::format::ChannelType;
+
 use {native as n, Backend};
 use pool::{self, BufferMemory};
 
@@ -75,7 +78,16 @@ pub enum Command {
     },
     SetScissors(BufferSlice),
     SetBlendColor(command::ColorValue),
-    ClearColor(command::ClearColor),
+
+    /// Clear floating-point color drawbuffer of bound framebuffer.
+    ClearBufferColorF(DrawBuffer, [f32; 4]),
+    /// Clear unsigned integer color drawbuffer of bound framebuffer.
+    ClearBufferColorU(DrawBuffer, [u32; 4]),
+    /// Clear signed integer color drawbuffer of bound framebuffer.
+    ClearBufferColorI(DrawBuffer, [i32; 4]),
+    /// Clear depth-stencil drawbuffer of bound framebuffer.
+    ClearBufferDepthStencil(Option<command::DepthValue>, Option<command::StencilValue>),
+
     BindFrameBuffer(FrameBufferTarget, n::FrameBuffer),
     BindTargetView(FrameBufferTarget, AttachmentPoint, n::ImageView),
     SetDrawColorBuffers(usize),
@@ -92,6 +104,7 @@ pub enum Command {
 
 pub type FrameBufferTarget = gl::types::GLenum;
 pub type AttachmentPoint = gl::types::GLenum;
+pub type DrawBuffer = gl::types::GLint;
 
 // Cache current states of the command buffer
 #[derive(Clone)]
@@ -403,29 +416,33 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn begin_renderpass<T>(
+    fn begin_renderpass_raw<T>(
         &mut self,
         _render_pass: &n::RenderPass,
         frame_buffer: &n::FrameBuffer,
         _render_area: command::Rect,
-        clear_values: T,
+        _clear_values: T,
         _first_subpass: command::SubpassContents,
     ) where
         T: IntoIterator,
-        T::Item: Borrow<command::ClearValue>,
+        T::Item: Borrow<command::ClearValueRaw>,
     {
-        self.push_cmd(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, *frame_buffer));
+        // TODO: load ops: clearing strategy
+        //  1.  < GL 3.0 / GL ES 2.0: glClear, only single color attachment?
+        //  2.  = GL ES 2.0: glBindFramebuffer + glClear (no individual color clear values?)
+        //  3. >= GL 3.0 / GL ES 3.0: glBindFramerbuffer + glClearBuffer
+        //
+        // Clearing when entering a subpass:
+        //    * Acquire channel information from renderpass description to
+        //      select correct ClearBuffer variant.
+        //    * Check for attachment loading clearing strategy
 
-        for clear_value in clear_values.into_iter().map(|cv| *cv.borrow()) {
-            match clear_value {
-                command::ClearValue::Color(value) => {
-                    self.push_cmd(Command::ClearColor(value));
-                }
-                command::ClearValue::DepthStencil(_) => {
-                    unimplemented!();
-                }
-            }
-        }
+        // TODO: store ops:
+        //   < GL 4.5: Ignore
+        //  >= GL 4.5: Invalidate framebuffer attachment when store op is `DONT_CARE`.
+
+        // 2./3.
+        self.push_cmd(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, *frame_buffer));
     }
 
     fn next_subpass(&mut self, _contents: command::SubpassContents) {
@@ -436,30 +453,44 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         // TODO
     }
 
-    fn clear_color_image(
+    fn clear_color_image_raw(
         &mut self,
         image: &n::Image,
         _: image::ImageLayout,
         _range: image::SubresourceRange,
-        value: command::ClearColor,
+        value: command::ClearColorRaw,
     ) {
+        // TODO: clearing strategies
+        //  1.  < GL 3.0 / GL ES 3.0: glClear
+        //  2.  < GL 4.4: glClearBuffer
+        //  3. >= GL 4.4: glClearTexSubImage
+
+        // 2. ClearBuffer
+        // TODO: reset color mask
         let fbo = self.fbo;
-        let view = match *image {
-            n::Image::Surface(id) => n::ImageView::Surface(id),
-            n::Image::Texture(id) => n::ImageView::Texture(id, 0), //TODO
+        let view = match image.kind {
+            n::ImageKind::Surface(id) => n::ImageView::Surface(id),
+            n::ImageKind::Texture(id) => n::ImageView::Texture(id, 0), //TODO
         };
         self.push_cmd(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, fbo));
         self.push_cmd(Command::BindTargetView(gl::DRAW_FRAMEBUFFER, gl::COLOR_ATTACHMENT0, view));
         self.push_cmd(Command::SetDrawColorBuffers(1));
-        self.push_cmd(Command::ClearColor(value));
+
+        match image.channel {
+            ChannelType::Unorm | ChannelType::Inorm | ChannelType::Ufloat |
+            ChannelType::Float | ChannelType::Srgb | ChannelType::Uscaled |
+            ChannelType::Iscaled => self.push_cmd(Command::ClearBufferColorF(0, unsafe { value.float32 })),
+            ChannelType::Uint => self.push_cmd(Command::ClearBufferColorU(0, unsafe { value.uint32 })),
+            ChannelType::Int => self.push_cmd(Command::ClearBufferColorI(0, unsafe { value.int32 })),
+        }
     }
 
-    fn clear_depth_stencil_image(
+    fn clear_depth_stencil_image_raw(
         &mut self,
         _image: &n::Image,
         _: image::ImageLayout,
         _range: image::SubresourceRange,
-        _value: command::ClearDepthStencil,
+        _value: command::ClearDepthStencilRaw,
     ) {
         unimplemented!()
     }
@@ -698,9 +729,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
         for region in regions {
             let r = region.borrow().clone();
-            let cmd = match *dst {
-                n::Image::Surface(s) => Command::CopyBufferToSurface(src.raw, s, r),
-                n::Image::Texture(t) => Command::CopyBufferToTexture(src.raw, t, r),
+            let cmd = match dst.kind {
+                n::ImageKind::Surface(s) => Command::CopyBufferToSurface(src.raw, s, r),
+                n::ImageKind::Texture(t) => Command::CopyBufferToTexture(src.raw, t, r),
             };
             self.push_cmd(cmd);
         }
@@ -724,9 +755,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
         for region in regions {
             let r = region.borrow().clone();
-            let cmd = match *src {
-                n::Image::Surface(s) => Command::CopySurfaceToBuffer(s, dst.raw, r),
-                n::Image::Texture(t) => Command::CopyTextureToBuffer(t, dst.raw, r),
+            let cmd = match src.kind {
+                n::ImageKind::Surface(s) => Command::CopySurfaceToBuffer(s, dst.raw, r),
+                n::ImageKind::Texture(t) => Command::CopyTextureToBuffer(t, dst.raw, r),
             };
             self.push_cmd(cmd);
         }
