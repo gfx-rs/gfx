@@ -11,7 +11,7 @@ use hal::{VertexCount, VertexOffset, InstanceCount, IndexCount};
 use hal::buffer::{IndexBufferView};
 use hal::image::{ImageLayout, SubresourceRange};
 use hal::command::{
-    AttachmentClear, ClearColor, ClearDepthStencil, ClearValue,
+    AttachmentClear, ClearColorRaw, ClearDepthStencilRaw, ClearValueRaw,
     BufferImageCopy, BufferCopy, ImageCopy, ImageResolve,
     SubpassContents, RawCommandBuffer,
     ColorValue, StencilValue, Rect, Viewport,
@@ -396,22 +396,22 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn clear_color_image(
+    fn clear_color_image_raw(
         &mut self,
         _image: &native::Image,
         _layout: ImageLayout,
         _range: SubresourceRange,
-        _value: ClearColor,
+        _value: ClearColorRaw,
     ) {
         unimplemented!()
     }
 
-    fn clear_depth_stencil_image(
+    fn clear_depth_stencil_image_raw(
         &mut self,
         _image: &native::Image,
         _layout: ImageLayout,
         _range: SubresourceRange,
-        _value: ClearDepthStencil,
+        _value: ClearDepthStencilRaw,
     ) {
         unimplemented!()
     }
@@ -530,7 +530,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn begin_renderpass<T>(
+    fn begin_renderpass_raw<T>(
         &mut self,
         _render_pass: &native::RenderPass,
         frame_buffer: &native::FrameBuffer,
@@ -539,7 +539,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         _first_subpass: SubpassContents,
     ) where
         T: IntoIterator,
-        T::Item: Borrow<ClearValue>,
+        T::Item: Borrow<ClearValueRaw>,
     {
         unsafe {
             let command_buffer = self.inner();
@@ -556,6 +556,8 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
             // FIXME: subpasses
             let pass_descriptor: metal::RenderPassDescriptor = msg_send![frame_buffer.0, copy];
             // TODO: validate number of clear colors
+            // TODO: fix clearing with unions
+            /*
             for (i, value) in clear_values.into_iter().enumerate() {
                 match *value.borrow() {
                     ClearValue::Color(ClearColor::Float(values)) => {
@@ -575,6 +577,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
                     _ => unimplemented!(),
                 };
             }
+            */
 
             let render_encoder = command_buffer.command_buffer.new_render_command_encoder(&pass_descriptor).to_owned();
 
