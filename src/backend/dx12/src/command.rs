@@ -642,26 +642,25 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }));
 
         let mut clear_iter = clear_values.into_iter();
-        let attachment_clears = render_pass.attachments.iter().enumerate().map(|(i, attachment)| {
-            AttachmentClear {
-                subpass_id: render_pass.subpasses.iter().position(|sp| sp.is_using(i)),
-                value: if attachment.ops.load == pass::AttachmentLoadOp::Clear {
-                    Some(*clear_iter.next().unwrap().borrow())
-                } else {
-                    None
-                },
-                stencil_value: if attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
-                    let clear = clear_iter.next().expect("Must provide an addition DepthStencil clear value");
-                    Some(unsafe { clear.borrow().depth_stencil.stencil })
-                } else {
-                    None
-                },
-            }
-        }).collect();
-
-        if let Some(_) = clear_iter.next() {
-            panic!("Too many clear values provided");
-        }
+        let attachment_clears = render_pass.attachments
+            .iter()
+            .enumerate()
+            .map(|(i, attachment)| {
+                AttachmentClear {
+                    subpass_id: render_pass.subpasses.iter().position(|sp| sp.is_using(i)),
+                    value: if attachment.ops.load == pass::AttachmentLoadOp::Clear {
+                        Some(*clear_iter.next().unwrap().borrow())
+                    } else {
+                        None
+                    },
+                    stencil_value: if attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
+                        let clear = clear_iter.next().expect("Must provide an addition DepthStencil clear value");
+                        Some(unsafe { clear.borrow().depth_stencil.stencil })
+                    } else {
+                        None
+                    },
+                }
+            }).collect();
 
         self.pass_cache = Some(RenderPassCache {
             render_pass: render_pass.clone(),

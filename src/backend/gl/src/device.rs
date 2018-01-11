@@ -707,7 +707,8 @@ impl d::Device<B> for Device {
         I: IntoIterator,
         I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
     {
-        unimplemented!()
+        // unimplemented!()
+        warn!("memory range invalidation not implemented!");
     }
 
     fn invalidate_mapped_memory_ranges<'a, I>(&self, _ranges: I)

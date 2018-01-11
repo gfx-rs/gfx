@@ -15,6 +15,8 @@ pub type Surface     = gl::types::GLuint;
 pub type Texture     = gl::types::GLuint;
 pub type Sampler     = gl::types::GLuint;
 
+pub const DEFAULT_FRAMEBUFFER: FrameBuffer = 0;
+
 #[derive(Debug)]
 pub struct Buffer {
     pub(crate) raw: RawBuffer,
@@ -130,15 +132,23 @@ impl Memory {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RenderPass {
     pub(crate) attachments: Vec<pass::Attachment>,
     pub(crate) subpasses: Vec<SubpassDesc>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SubpassDesc {
     pub(crate) color_attachments: Vec<usize>,
+}
+
+impl SubpassDesc {
+    /// Check if an attachment is used by this sub-pass.
+    pub(crate) fn is_using(&self, at_id: pass::AttachmentId) -> bool {
+        self.color_attachments.iter()
+            .any(|id| *id == at_id)
+    }
 }
 
 #[derive(Debug)]
