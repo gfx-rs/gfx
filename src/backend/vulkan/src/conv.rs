@@ -116,19 +116,6 @@ pub fn map_clear_stencil(stencil: command::StencilValue) -> vk::ClearDepthStenci
     }
 }
 
-pub fn map_clear_value(value: &command::ClearValue) -> vk::ClearValue {
-    match *value {
-        command::ClearValue::Color(cv) => {
-            let cv = map_clear_color(cv);
-            vk::ClearValue::new_color(cv)
-        },
-        command::ClearValue::DepthStencil(dsv) => {
-            let dsv = map_clear_depth_stencil(dsv);
-            vk::ClearValue::new_depth_stencil(dsv)
-        },
-    }
-}
-
 pub fn map_offset(offset: command::Offset) -> vk::Offset3D {
     vk::Offset3D {
         x: offset.x,

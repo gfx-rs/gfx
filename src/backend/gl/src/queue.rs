@@ -423,34 +423,31 @@ impl CommandQueue {
             com::Command::SetBlendColor(color) => {
                 state::set_blend_color(&self.share.context, color);
             }
-            com::Command::ClearColor(c) => unsafe {
-                //TODO: check texture?
-                let gl = &self.share.context;
-                state::unlock_color_mask(gl);
-                if self.share.private_caps.clear_buffer {
-                    // Render target view bound to the framebuffer at attachment slot 0.
-                    match c {
-                        hal::command::ClearColor::Float(v) => {
-                            gl.ClearBufferfv(gl::COLOR, 0, &v[0]);
-                        }
-                        hal::command::ClearColor::Int(v) => {
-                            gl.ClearBufferiv(gl::COLOR, 0, &v[0]);
-                        }
-                        hal::command::ClearColor::Uint(v) => {
-                            gl.ClearBufferuiv(gl::COLOR, 0, &v[0]);
-                        }
-                    }
-                } else {
-                    let v = if let hal::command::ClearColor::Float(v) = c {
-                        v
-                    } else {
-                        warn!("Integer clears are not supported on GL2");
-                        [0.0, 0.0, 0.0, 0.0]
-                    };
+            com::Command::ClearBufferColorF(draw_buffer, cv) => unsafe {
+                self.share.context.ClearBufferfv(gl::COLOR, draw_buffer, cv.as_ptr());
+            }
+            com::Command::ClearBufferColorU(draw_buffer, cv) => unsafe {
+                self.share.context.ClearBufferuiv(gl::COLOR, draw_buffer, cv.as_ptr());
+            }
+            com::Command::ClearBufferColorI(draw_buffer, cv) => unsafe {
+                self.share.context.ClearBufferiv(gl::COLOR, draw_buffer, cv.as_ptr());
+            }
+            com::Command::ClearBufferDepthStencil(depth, stencil) => unsafe {
+                let (target, depth, stencil) = match (depth, stencil) {
+                    (Some(depth), Some(stencil)) => (gl::DEPTH_STENCIL, depth, stencil),
+                    (Some(depth), None) => (gl::DEPTH, depth, 0),
+                    (None, Some(stencil)) => (gl::STENCIL, 0.0, stencil),
+                    _ => unreachable!(),
+                };
 
-                    gl.ClearColor(v[0], v[1], v[2], v[3]);
-                    gl.Clear(gl::COLOR_BUFFER_BIT);
-                }
+                self.share.context.ClearBufferfi(target, 0, depth, stencil as _);
+            }
+            com::Command::DrawBuffers(draw_buffers) => unsafe {
+                let draw_buffers = Self::get::<gl::types::GLenum>(data_buf, draw_buffers);
+                self.share.context.DrawBuffers(
+                    draw_buffers.len() as _,
+                    draw_buffers.as_ptr(),
+                );
             }
             com::Command::BindFrameBuffer(point, frame_buffer) => {
                 if self.share.private_caps.framebuffer {

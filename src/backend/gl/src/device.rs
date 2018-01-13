@@ -11,7 +11,7 @@ use gl;
 use gl::types::{GLint, GLenum, GLfloat, GLuint};
 
 use hal::{self as c, device as d, image as i, memory, pass, pso, buffer, mapping, query, Primitive};
-use hal::format::{Format, Swizzle};
+use hal::format::{ChannelType, Format, Swizzle};
 use hal::pool::CommandPoolCreateFlags;
 use hal::queue::QueueFamilyId;
 
@@ -94,6 +94,7 @@ pub struct UnboundBuffer {
 #[derive(Debug)]
 pub struct UnboundImage {
     raw: GLuint,
+    channel: ChannelType,
     requirements: memory::Requirements,
 }
 
@@ -706,7 +707,8 @@ impl d::Device<B> for Device {
         I: IntoIterator,
         I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
     {
-        unimplemented!()
+        // unimplemented!()
+        warn!("memory range invalidation not implemented!");
     }
 
     fn invalidate_mapped_memory_ranges<'a, I>(&self, _ranges: I)
@@ -740,6 +742,8 @@ impl d::Device<B> for Device {
             _ => unimplemented!()
         };
 
+        let channel = format.base_format().1;
+
         let (width, height) = match kind {
             i::Kind::D2(w, h, aa) => unsafe {
                 assert_eq!(aa, i::AaMode::Single);
@@ -762,6 +766,7 @@ impl d::Device<B> for Device {
 
         Ok(UnboundImage {
             raw: name,
+            channel,
             requirements: memory::Requirements {
                 size: width as u64 * height as u64 * bytes_per_texel as u64,
                 alignment: 1,
@@ -775,7 +780,10 @@ impl d::Device<B> for Device {
     }
 
     fn bind_image_memory(&self, _memory: &n::Memory, _offset: u64, image: UnboundImage) -> Result<n::Image, d::BindError> {
-        Ok(n::Image::Texture(image.raw))
+        Ok(n::Image {
+            kind: n::ImageKind::Texture(image.raw),
+            channel: image.channel,
+        })
     }
 
     fn create_image_view(&self,
@@ -787,8 +795,8 @@ impl d::Device<B> for Device {
         //assert_eq!(format, image.format);
         assert_eq!(swizzle, Swizzle::NO);
         //TODO: check format
-        match *image {
-            n::Image::Surface(surface) => {
+        match image.kind {
+            n::ImageKind::Surface(surface) => {
                 if range.levels.start == 0 && range.layers.start == 0 {
                     Ok(n::ImageView::Surface(surface))
                 } else if level != 0 {
@@ -797,7 +805,7 @@ impl d::Device<B> for Device {
                     Err(i::ViewError::Layer(i::LayerError::OutOfBounds(range.layers)))
                 }
             }
-            n::Image::Texture(texture) => {
+            n::ImageKind::Texture(texture) => {
                 //TODO: check that `level` exists
                 if range.layers.start == 0 {
                     Ok(n::ImageView::Texture(texture, level))

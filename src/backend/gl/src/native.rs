@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-use hal::{self, image as i, pass, pso};
+use hal::{self, format, image as i, pass, pso};
 use hal::memory::Properties;
 
 use gl;
@@ -14,6 +14,8 @@ pub type FrameBuffer = gl::types::GLuint;
 pub type Surface     = gl::types::GLuint;
 pub type Texture     = gl::types::GLuint;
 pub type Sampler     = gl::types::GLuint;
+
+pub const DEFAULT_FRAMEBUFFER: FrameBuffer = 0;
 
 #[derive(Debug)]
 pub struct Buffer {
@@ -51,7 +53,14 @@ pub struct ComputePipeline {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub enum Image {
+pub struct Image {
+    pub(crate) kind: ImageKind,
+    // Required for clearing operations
+    pub(crate) channel: format::ChannelType,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub enum ImageKind {
     Surface(Surface),
     Texture(Texture),
 }
@@ -123,15 +132,23 @@ impl Memory {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RenderPass {
     pub(crate) attachments: Vec<pass::Attachment>,
     pub(crate) subpasses: Vec<SubpassDesc>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SubpassDesc {
     pub(crate) color_attachments: Vec<usize>,
+}
+
+impl SubpassDesc {
+    /// Check if an attachment is used by this sub-pass.
+    pub(crate) fn is_using(&self, at_id: pass::AttachmentId) -> bool {
+        self.color_attachments.iter()
+            .any(|id| *id == at_id)
+    }
 }
 
 #[derive(Debug)]

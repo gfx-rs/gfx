@@ -561,6 +561,11 @@ impl Format {
     pub fn is_depth(self) -> bool {
         self.aspect_flags().contains(AspectFlags::DEPTH)
     }
+
+    /// Returns if the format has a stencil aspect.
+    pub fn is_stencil(self) -> bool {
+        self.aspect_flags().contains(AspectFlags::STENCIL)
+    }
 }
 
 // Common vertex attribute formats
