@@ -29,6 +29,7 @@ use hal::{Features, Limits, PatchSize, QueueType};
 use hal::adapter::DeviceCreationError;
 
 use std::{fmt, mem, ptr};
+use std::borrow::{Borrow, BorrowMut};
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
@@ -368,6 +369,16 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             }
         };
 
+        let swapchain_fn = vk::SwapchainFn::load(|name| unsafe {
+            mem::transmute(
+                self.instance.0
+                    .get_device_proc_addr(
+                        device_raw.handle(),
+                        name.as_ptr(),
+                    )
+            )
+        }).unwrap();
+
         let device = Device {
             raw: Arc::new(RawDevice(device_raw)),
         };
@@ -385,6 +396,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                     family_raw.add_queue(CommandQueue {
                         raw: Arc::new(queue_raw),
                         device: device_arc.clone(),
+                        swapchain_fn: swapchain_fn.clone(),
                     });
                 }
                 (queue::QueueFamilyId(family_index as _), family_raw)
@@ -517,6 +529,7 @@ pub type RawCommandQueue = Arc<vk::Queue>;
 pub struct CommandQueue {
     raw: RawCommandQueue,
     device: Arc<RawDevice>,
+    swapchain_fn: vk::SwapchainFn,
 }
 
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
@@ -560,6 +573,48 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
 
         let result = self.device.0.queue_submit(*self.raw, &[info], fence_raw);
         assert_eq!(Ok(()), result);
+    }
+
+    fn present<IS, IW>(&mut self, swapchains: IS, wait_semaphores: IW)
+    where
+        IS: IntoIterator,
+        IS::Item: BorrowMut<window::Swapchain>,
+        IW: IntoIterator,
+        IW::Item: Borrow<native::Semaphore>,
+    {
+        let semaphores = wait_semaphores
+            .into_iter()
+            .map(|sem| sem.borrow().0)
+            .collect::<Vec<_>>();
+
+        let mut frames = Vec::new();
+        let mut vk_swapchains = Vec::new();
+        for mut swapchain in swapchains {
+            let swapchain = swapchain.borrow_mut();
+
+            frames.push(swapchain
+                .frame_queue
+                .pop_front()
+                .expect("No frame currently acquired.") as _
+            );
+            vk_swapchains.push(swapchain.raw);
+        }
+
+        let info = vk::PresentInfoKHR {
+            s_type: vk::StructureType::PresentInfoKhr,
+            p_next: ptr::null(),
+            wait_semaphore_count: semaphores.len() as _,
+            p_wait_semaphores: semaphores.as_ptr(),
+            swapchain_count: vk_swapchains.len() as _,
+            p_swapchains: vk_swapchains.as_ptr(),
+            p_image_indices: frames.as_ptr(),
+            p_results: ptr::null_mut(),
+        };
+
+        assert_eq!(vk::Result::Success, unsafe {
+            self.swapchain_fn
+                .queue_present_khr(*self.raw, &info)
+        });
     }
 }
 

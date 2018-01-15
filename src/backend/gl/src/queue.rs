@@ -1,11 +1,12 @@
 use std::{mem, ptr, slice};
+use std::borrow::{Borrow, BorrowMut};
 use std::rc::Rc;
 
 use hal;
 use gl;
 use smallvec::SmallVec;
 
-use {command as com, native, state};
+use {command as com, native, state, window};
 use {Backend, Share};
 
 
@@ -680,5 +681,24 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
             }
         }
         fence.map(|fence| self.signal_fence(fence));
+    }
+
+    #[cfg(feature = "glutin")]
+    fn present<IS, IW>(&mut self, swapchains: IS, _wait_semaphores: IW)
+    where
+        IS: IntoIterator,
+        IS::Item: BorrowMut<window::glutin::Swapchain>,
+        IW: IntoIterator,
+        IW::Item: Borrow<native::Semaphore>,
+    {
+        use glutin::GlContext;
+
+        for swapchain in swapchains {
+            swapchain
+                .borrow()
+                .window
+                .swap_buffers()
+                .unwrap();
+        }
     }
 }

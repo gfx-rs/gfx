@@ -109,13 +109,4 @@ impl hal::Swapchain<Backend> for Swapchain {
         let index = unsafe { self.inner.GetCurrentBackBufferIndex() };
         hal::Frame::new(index as usize)
     }
-
-    fn present<C>(
-        &mut self,
-        _: &mut hal::CommandQueue<Backend, C>,
-        _wait_semaphores: &[&n::Semaphore],
-    ) {
-        // TODO: wait semaphores
-        unsafe { self.inner.Present(1, 0); }
-    }
 }

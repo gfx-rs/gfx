@@ -53,6 +53,8 @@ use Backend;
 use image;
 use format::{self, Format};
 use queue::CommandQueue;
+
+use std::borrow::{Borrow, BorrowMut};
 use std::ops::Range;
 
 ///
@@ -233,7 +235,7 @@ pub enum Backbuffer<B: Backend> {
 
 /// The `Swapchain` is the backend representation of the surface.
 /// It consists of multiple buffers, which will be presented on the surface.
-pub trait Swapchain<B: Backend> {
+pub trait Swapchain<B: Backend> : Sized {
     /// Acquire a new frame for rendering. This needs to be called before presenting.
     ///
     /// # Synchronization
@@ -262,9 +264,17 @@ pub trait Swapchain<B: Backend> {
     /// ```no_run
     ///
     /// ```
-    fn present<C>(
-        &mut self,
+    fn present<'a, C, IW>(
+        &'a mut self,
         present_queue: &mut CommandQueue<B, C>,
-        wait_semaphores: &[&B::Semaphore],
-    );
+        wait_semaphores: IW,
+    )
+    where
+        &'a mut Self: BorrowMut<B::Swapchain>,
+        Self: 'a,
+        IW: IntoIterator,
+        IW::Item: Borrow<B::Semaphore>,
+    {
+        present_queue.present(Some(self), wait_semaphores)
+    }
 }

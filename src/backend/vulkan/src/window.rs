@@ -12,7 +12,7 @@ use hal::format::Format;
 #[cfg(feature = "winit")]
 use winit;
 
-use {conv, native};
+use conv;
 use {VK_ENTRY, Backend, Instance, PhysicalDevice, QueueFamily, RawInstance};
 
 
@@ -335,35 +335,5 @@ impl hal::Swapchain<Backend> for Swapchain {
 
         self.frame_queue.push_back(index as usize);
         hal::Frame::new(index as usize)
-    }
-
-    fn present<C>(
-        &mut self,
-        present_queue: &mut hal::CommandQueue<Backend, C>,
-        wait_semaphores: &[&native::Semaphore],
-    ) {
-        let frame = self.frame_queue.pop_front().expect(
-            "No frame currently queued up. Need to acquire a frame first.",
-        );
-
-        let semaphores = wait_semaphores.iter().map(|sem| sem.0).collect::<Vec<_>>();
-
-        // TODO: wait semaphores
-        let info = vk::PresentInfoKHR {
-            s_type: vk::StructureType::PresentInfoKhr,
-            p_next: ptr::null(),
-            wait_semaphore_count: semaphores.len() as u32,
-            p_wait_semaphores: semaphores.as_ptr(),
-            swapchain_count: 1,
-            p_swapchains: &self.raw,
-            p_image_indices: &(frame as u32),
-            p_results: ptr::null_mut(),
-        };
-
-        assert_eq!(Ok(()), unsafe {
-            self.functor
-                .queue_present_khr(*present_queue.as_raw().raw, &info)
-        });
-        // TODO: handle result and return code
     }
 }

@@ -31,6 +31,7 @@ use winapi::um::{d3d12, d3d12sdklayers, d3dcommon, winnt};
 use wio::com::ComPtr;
 
 use std::{mem, ptr};
+use std::borrow::{Borrow, BorrowMut};
 use std::os::windows::ffi::OsStringExt;
 use std::ffi::OsString;
 use std::sync::{Arc, Mutex};
@@ -318,6 +319,19 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
             assert_eq!(winerror::S_OK,
                 self.raw.Signal(fence.raw.as_mut(), 1)
             );
+        }
+    }
+
+    fn present<IS, IW>(&mut self, swapchains: IS, _wait_semaphores: IW)
+    where
+        IS: IntoIterator,
+        IS::Item: BorrowMut<window::Swapchain>,
+        IW: IntoIterator,
+        IW::Item: Borrow<native::Semaphore>,
+    {
+        // TODO: semaphores
+        for swapchain in swapchains {
+            unsafe { swapchain.borrow().inner.Present(1, 0); }
         }
     }
 }
