@@ -37,7 +37,7 @@
 //! let frame = swapchain.acquire_frame(FrameSync::Semaphore(&acquisition_semaphore));
 //! // render the scene..
 //! // `render_semaphore` will be signalled once rendering has been finished
-//! swapchain.present(&mut present_queue, &[&render_semaphore]);
+//! swapchain.present(&mut present_queue, &[render_semaphore]);
 //! # }
 //! ```
 //!
