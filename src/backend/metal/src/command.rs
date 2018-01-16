@@ -444,7 +444,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn bind_index_buffer(&mut self, view: IndexBufferView<Backend>) {
-        let buffer = view.buffer.0.clone();
+        let buffer = view.buffer.raw.clone();
         let offset = view.offset;
         let index_type = map_index_type(view.index_type);
         self.inner().index_buffer = Some((
@@ -461,13 +461,13 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
             buffers.push(None)
         }
         for (ref mut out, &(ref buffer, offset)) in buffers[inner.attribute_buffer_index..].iter_mut().zip(buffer_set.0.iter()) {
-            **out = Some((buffer.0.clone(), offset));
+            **out = Some((buffer.raw.clone(), offset));
         }
         //TODO: reuse the binding code from the cache to state between this and `begin_renderpass`
         if let EncoderState::Render(ref encoder) = inner.encoder_state {
             for (i, &(buffer, offset)) in buffer_set.0.iter().enumerate() {
                 let msl_buffer_index = inner.attribute_buffer_index + i;
-                encoder.set_vertex_buffer(msl_buffer_index as _, offset as _, Some(&buffer.0));
+                encoder.set_vertex_buffer(msl_buffer_index as _, offset as _, Some(&buffer.raw));
             }
         }
     }
@@ -817,7 +817,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
                 let offset = region.buffer_offset + slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
                 unsafe {
                     msg_send![encoder,
-                        copyFromBuffer: &*src.0
+                        copyFromBuffer: &*src.raw
                         sourceOffset: offset as NSUInteger
                         sourceBytesPerRow: row_pitch as NSUInteger
                         sourceBytesPerImage: slice_pitch as NSUInteger
@@ -867,7 +867,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
                         sourceLevel: r.level as NSUInteger
                         sourceOrigin: MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ }
                         sourceSize: extent
-                        toBuffer: &*dst.0
+                        toBuffer: &*dst.raw
                         destinationOffset: offset as NSUInteger
                         destinationBytesPerRow: row_pitch as NSUInteger
                         destinationBytesPerImage: slice_pitch as NSUInteger

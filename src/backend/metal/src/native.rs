@@ -1,13 +1,15 @@
 use {Backend};
 
-use std::collections::HashMap;
+use std::collections::{Bound, BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
+use std::ops::Range;
 use std::os::raw::{c_void, c_long, c_int};
 use std::ptr;
 
 use hal::{self, image, pass, pso};
 
 use cocoa::foundation::{NSRange, NSUInteger};
+use foreign_types::ForeignType;
 use metal::{self, MTLPrimitiveType};
 use objc;
 use spirv_cross::msl;
@@ -102,7 +104,11 @@ unsafe impl Send for Semaphore {}
 unsafe impl Sync for Semaphore {}
 
 #[derive(Debug)]
-pub struct Buffer(pub(crate) metal::Buffer);
+pub struct Buffer {
+    pub(crate) raw: metal::Buffer,
+    pub(crate) memory: Option<Arc<Mutex<MemoryAllocations>>>,
+    pub(crate) offset: u64,
+}
 
 unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
@@ -226,7 +232,64 @@ pub enum DescriptorSetBinding {
 }
 
 #[derive(Debug)]
-pub enum Memory {
+pub struct Memory {
+    pub(crate) heap: MemoryHeap,
+    pub(crate) allocations: Arc<Mutex<MemoryAllocations>>,
+    pub(crate) mapping: Mutex<Option<MemoryMapping>>,
+}
+
+impl Memory {
+    pub(crate) fn new(heap: MemoryHeap) -> Self {
+        Memory {
+            heap,
+            allocations: Arc::new(Mutex::new(MemoryAllocations {
+                starts: BTreeMap::new(),
+                ends: BTreeMap::new(),
+            })),
+            mapping: Mutex::new(None),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct MemoryMapping {
+    pub(crate) range: Range<u64>,
+    pub(crate) buffer: metal::Buffer,
+    pub(crate) location: NSUInteger,
+    pub(crate) length: NSUInteger,
+}
+
+#[derive(Debug)]
+pub(crate) struct MemoryAllocations {
+    starts: BTreeMap<u64, (u64, metal::Buffer)>,
+    ends: BTreeMap<u64, (u64, metal::Buffer)>,
+}
+
+impl MemoryAllocations {
+    pub(crate) fn find(&self, range: Range<u64>) -> Vec<(Range<u64>, metal::Buffer)> {
+        /// Get all unique buffers that intersects specified range
+        let mut buffers = Vec::new();
+        buffers.extend(self.starts.range(range.clone()).map(|(&start, &(end, ref b))| (start .. end, b.clone())));
+        let range = (Bound::Excluded(range.start), Bound::Included(range.end));
+        buffers.extend(self.ends.range(range).map(|(&end, &(start, ref b))| (start .. end, b.clone())));
+        buffers.sort_unstable_by_key(|&(_, ref b)| b.as_ptr());
+        buffers.dedup_by_key(|&mut (_, ref b)| b.as_ptr());
+        buffers
+    }
+
+    pub(crate) fn insert(&mut self, range: Range<u64>, buffer: metal::Buffer) {
+        self.starts.insert(range.start, (range.end, buffer.clone()));
+        self.ends.insert(range.end, (range.start, buffer));
+    }
+
+    pub(crate) fn remove(&mut self, range: Range<u64>) {
+        self.starts.remove(&range.start);
+        self.ends.remove(&range.end);
+    }
+}
+
+#[derive(Debug)]
+pub(crate) enum MemoryHeap {
     Emulated { memory_type: usize, size: u64 },
     Native(metal::Heap),
 }

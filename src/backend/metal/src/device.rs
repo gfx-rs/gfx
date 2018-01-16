@@ -800,20 +800,56 @@ impl hal::Device<Backend> for Device {
     fn destroy_sampler(&self, _sampler: n::Sampler) {
     }
 
-    fn map_memory(&self, _: &n::Memory, _: Range<u64>) -> Result<*mut u8, mapping::Error> {
-        unimplemented!()
+    fn map_memory(&self, memory: &n::Memory, range: Range<u64>) -> Result<*mut u8, mapping::Error> {
+        let allocations = memory.allocations.lock().unwrap();
+        let mut mapping = memory.mapping.lock().unwrap();
+
+        assert!(mapping.is_none(), "Only one mapping per `Memory` at a time is allowed");
+        let buffers = allocations.find(range.clone());
+
+        assert_eq!(buffers.len(), 1, "Only mapping range within single buffer is alowed for now");
+        let (buffer_range, buffer) = buffers.into_iter().next().unwrap();
+
+        debug_assert!(range.start >= buffer_range.start);
+        debug_assert!(range.end <= buffer_range.end);
+        debug_assert_eq!(buffer.length(), buffer_range.end - buffer_range.start);
+
+        let offset = range.start - buffer_range.start;
+        let length = range.end - range.start;
+        let ptr = unsafe {
+            (buffer.contents() as *mut u8).offset(offset as isize)
+        };
+
+        *mapping = Some(n::MemoryMapping {
+            range,
+            buffer,
+            location: offset as _,
+            length: length as _,
+        });
+        Ok(ptr)
     }
 
-    fn unmap_memory(&self, _: &n::Memory) {
-        unimplemented!()
+    fn unmap_memory(&self, memory: &n::Memory) {
+        memory.mapping.lock().unwrap().take();
     }
 
-    fn flush_mapped_memory_ranges<'a, I>(&self, _: I)
+    fn flush_mapped_memory_ranges<'a, I>(&self, iter: I)
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
     {
-        unimplemented!()
+        for item in iter.into_iter() {
+            let (memory, ref range) = *item.borrow();
+            let mut mapping = memory.mapping.lock().unwrap();
+            assert!(mapping.is_some());
+            let mapping = mapping.as_ref().unwrap();
+            assert!(mapping.range.start <= range.start);
+            assert!(mapping.range.end >= range.end);
+            mapping.buffer.did_modify_range(NSRange {
+                location: (mapping.location + range.start - mapping.range.start) as _,
+                length: (range.end - range.start) as _,
+            });
+        }
     }
 
     fn invalidate_mapped_memory_ranges<'a, I>(&self, _: I)
@@ -821,7 +857,7 @@ impl hal::Device<Backend> for Device {
         I: IntoIterator,
         I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
     {
-        unimplemented!()
+        // Do nothing.
     }
 
     fn create_semaphore(&self) -> n::Semaphore {
@@ -932,8 +968,8 @@ impl hal::Device<Backend> for Device {
                             let target_iter = vec[write.array_offset..(write.array_offset + buffers.len())].iter_mut();
 
                             for (new, old) in buffers.iter().zip(target_iter) {
-                                assert!(new.1.end <= ((new.0).0).length());
-                                *old = Some(((new.0).0.clone(), new.1.start));
+                                assert!(new.1.end <= ((new.0).raw).length());
+                                *old = Some(((new.0).raw.clone(), new.1.start));
                             }
                         }
 
@@ -961,7 +997,7 @@ impl hal::Device<Backend> for Device {
                         },
                         UniformBuffer(ref buffers) | StorageBuffer(ref buffers) => {
                             mtl_buffers.clear();
-                            mtl_buffers.extend(buffers.iter().map(|buffer| &*((buffer.0).0)));
+                            mtl_buffers.extend(buffers.iter().map(|buffer| &*((buffer.0).raw)));
                             mtl_offsets.clear();
                             mtl_offsets.extend(buffers.iter().map(|buffer| buffer.1.clone()));
 
@@ -1027,9 +1063,9 @@ impl hal::Device<Backend> for Device {
             descriptor.set_storage_mode(storage);
             descriptor.set_cpu_cache_mode(cache);
             descriptor.set_size(size);
-            Ok(n::Memory::Native(self.device.new_heap(&descriptor)))
+            Ok(n::Memory::new(n::MemoryHeap::Native(self.device.new_heap(&descriptor))))
         } else {
-            Ok(n::Memory::Emulated { memory_type, size })
+            Ok(n::Memory::new(n::MemoryHeap::Emulated { memory_type, size }))
         }
     }
 
@@ -1070,29 +1106,47 @@ impl hal::Device<Backend> for Device {
     }
 
     fn bind_buffer_memory(
-        &self, memory: &n::Memory, _offset: u64, buffer: n::UnboundBuffer
+        &self, memory: &n::Memory, offset: u64, buffer: n::UnboundBuffer
     ) -> Result<n::Buffer, BindError> {
-        Ok(n::Buffer(match *memory {
-            n::Memory::Native(ref heap) => {
+        let (raw, mappable) = match memory.heap {
+            n::MemoryHeap::Native(ref heap) => {
                 let resource_options = resource_options_from_storage_and_cache(
                     heap.storage_mode(),
                     heap.cpu_cache_mode());
-                heap.new_buffer(buffer.size, resource_options)
+                (heap.new_buffer(buffer.size, resource_options)
                     .unwrap_or_else(|| {
                         // TODO: disable hazard tracking?
                         self.device.new_buffer(buffer.size, resource_options)
-                    })
+                    }), heap.storage_mode() != MTLStorageMode::Private)
             }
-            n::Memory::Emulated { memory_type, size: _ } => {
+            n::MemoryHeap::Emulated { memory_type, size: _ } => {
                 // TODO: disable hazard tracking?
                 let memory_properties = memory_types()[memory_type].properties;
                 let resource_options = map_memory_properties_to_options(memory_properties);
-                self.device.new_buffer(buffer.size, resource_options)
+                (self.device.new_buffer(buffer.size, resource_options), memory_properties.contains(memory::Properties::CPU_VISIBLE))
             }
-        }))
+        };
+
+        if mappable {
+            memory.allocations.lock().unwrap().insert(offset .. (offset + buffer.size), raw.clone());
+            Ok(n::Buffer {
+                raw,
+                memory: Some(memory.allocations.clone()),
+                offset,
+            })
+        } else {
+            Ok(n::Buffer {
+                raw,
+                memory: None,
+                offset,
+            })
+        }
     }
 
-    fn destroy_buffer(&self, _buffer: n::Buffer) {
+    fn destroy_buffer(&self, buffer: n::Buffer) {
+        if let Some(memory) = buffer.memory {
+            memory.lock().unwrap().remove(buffer.offset .. (buffer.offset + buffer.raw.length()));
+        }
     }
 
     fn create_buffer_view(
@@ -1170,8 +1224,8 @@ impl hal::Device<Backend> for Device {
     fn bind_image_memory(
         &self, memory: &n::Memory, _offset: u64, image: n::UnboundImage
     ) -> Result<n::Image, BindError> {
-        let raw = match *memory {
-            n::Memory::Native(ref heap) => {
+        let raw = match memory.heap {
+            n::MemoryHeap::Native(ref heap) => {
                 let resource_options = resource_options_from_storage_and_cache(
                     heap.storage_mode(),
                     heap.cpu_cache_mode());
@@ -1182,7 +1236,7 @@ impl hal::Device<Backend> for Device {
                         self.device.new_texture(&image.desc)
                     })
             },
-            n::Memory::Emulated { memory_type, size: _ } => {
+            n::MemoryHeap::Emulated { memory_type, size: _ } => {
                 // TODO: disable hazard tracking?
                 let memory_properties = memory_types()[memory_type].properties;
                 let resource_options = map_memory_properties_to_options(memory_properties);
