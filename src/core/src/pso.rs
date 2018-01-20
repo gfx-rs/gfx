@@ -29,7 +29,7 @@ use std::error::Error;
 use std::fmt;
 
 /// Maximum number of vertex buffers used in a PSO definition.
-pub const MAX_VERTEX_BUFFERS: usize = 4;
+pub const MAX_VERTEX_BUFFERS: usize = 16;
 
 /// An offset inside a vertex buffer, in bytes.
 pub type BufferOffset = usize;
