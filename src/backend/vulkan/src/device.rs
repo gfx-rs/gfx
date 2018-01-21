@@ -1,12 +1,13 @@
 use ash::vk;
 use ash::extensions as ext;
 use ash::version::DeviceV1_0;
+use smallvec::SmallVec;
+
 use hal::{buffer, device as d, format, image, mapping, pass, pso, query, queue};
 use hal::{Backbuffer, MemoryTypeId, SwapchainConfig};
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
-use native as n;
-use smallvec::SmallVec;
+use hal::range::RangeArg;
 
 use std::{mem, ptr};
 use std::borrow::Borrow;
@@ -14,7 +15,8 @@ use std::collections::VecDeque;
 use std::ffi::CString;
 use std::ops::Range;
 
-use {Backend as B, Device};use {conv, window as w};
+use {Backend as B, Device};
+use {conv, native as n, window as w};
 use pool::RawCommandPool;
 
 
@@ -808,17 +810,18 @@ impl d::Device<B> for Device {
         Ok(buffer)
     }
 
-    fn create_buffer_view(
-        &self, buffer: &n::Buffer, format: Option<format::Format>, range: Range<u64>
+    fn create_buffer_view<R: RangeArg<u64>>(
+        &self, buffer: &n::Buffer, format: Option<format::Format>, range: R
     ) -> Result<n::BufferView, buffer::ViewError> {
+        let (offset, size) = conv::map_range_arg(&range);
         let info = vk::BufferViewCreateInfo {
             s_type: vk::StructureType::BufferViewCreateInfo,
             p_next: ptr::null(),
             flags: vk::BufferViewCreateFlags::empty(),
             buffer: buffer.raw,
             format: format.map_or(vk::Format::Undefined, conv::map_format),
-            offset: range.start,
-            range: range.end - range.start,
+            offset,
+            range: size,
         };
 
         let view = unsafe {
@@ -1034,7 +1037,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn update_descriptor_sets(&self, writes: &[pso::DescriptorSetWrite<B>]) {
+    fn update_descriptor_sets<R: RangeArg<u64>>(&self, writes: &[pso::DescriptorSetWrite<B, R>]) {
         let mut image_infos = Vec::new();
         let mut buffer_infos = Vec::new();
         let mut texel_buffer_views = Vec::new();
@@ -1064,10 +1067,11 @@ impl d::Device<B> for Device {
                 pso::DescriptorWrite::UniformBuffer(ref buffers) |
                 pso::DescriptorWrite::StorageBuffer(ref buffers) => {
                     for &(buffer, ref range) in buffers {
+                        let (offset, size) = conv::map_range_arg(range);
                         buffer_infos.push(vk::DescriptorBufferInfo {
                             buffer: buffer.raw,
-                            offset: range.start,
-                            range: range.end - range.start,
+                            offset,
+                            range: size,
                         });
                     }
                 }
@@ -1143,12 +1147,15 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn map_memory(&self, memory: &n::Memory, range: Range<u64>) -> Result<*mut u8, mapping::Error> {
-        let size = range.end - range.start;
+    fn map_memory<R>(&self, memory: &n::Memory, range: R) -> Result<*mut u8, mapping::Error>
+    where
+        R: RangeArg<u64>,
+    {
+        let (offset, size) = conv::map_range_arg(&range);
         let ptr = unsafe {
             self.raw.0.map_memory(
                 memory.raw,
-                0,
+                offset,
                 size,
                 vk::MemoryMapFlags::empty(),
             ).expect("Error on memory mapping") // TODO
@@ -1161,10 +1168,11 @@ impl d::Device<B> for Device {
         unsafe { self.raw.0.unmap_memory(memory.raw) }
     }
 
-    fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I)
+    fn flush_mapped_memory_ranges<'a, I, R>(&self, ranges: I)
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
+        I::Item: Borrow<(&'a n::Memory, R)>,
+        R: RangeArg<u64>,
     {
         let ranges = conv::map_memory_ranges(ranges);
         unsafe {
@@ -1174,10 +1182,11 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I)
+    fn invalidate_mapped_memory_ranges<'a, I, R>(&self, ranges: I)
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
+        I::Item: Borrow<(&'a n::Memory, R)>,
+        R: RangeArg<u64>,
     {
         let ranges = conv::map_memory_ranges(ranges);
         unsafe {

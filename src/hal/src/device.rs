@@ -7,11 +7,14 @@ use std::{fmt, mem, slice};
 use std::borrow::Borrow;
 use std::error::Error;
 use std::ops::Range;
+
 use {buffer, format, image, mapping, pass, pso, query};
+use {Backend, MemoryTypeId};
+
+use memory::Requirements;
 use pool::{CommandPool, CommandPoolCreateFlags};
 use queue::{QueueFamilyId, QueueGroup};
-use {Backend, MemoryTypeId};
-use memory::Requirements;
+use range::RangeArg;
 use window::{Backbuffer, SwapchainConfig};
 
 
@@ -247,8 +250,8 @@ pub trait Device<B: Backend> {
     fn destroy_buffer(&self, B::Buffer);
 
     ///
-    fn create_buffer_view(
-        &self, &B::Buffer, Option<format::Format>, Range<u64>
+    fn create_buffer_view<R: RangeArg<u64>>(
+        &self, &B::Buffer, Option<format::Format>, R
     ) -> Result<B::BufferView, buffer::ViewError>;
 
     ///
@@ -315,22 +318,26 @@ pub trait Device<B: Backend> {
 
     ///
     // TODO: copies
-    fn update_descriptor_sets(&self, &[pso::DescriptorSetWrite<B>]);
+    fn update_descriptor_sets<R: RangeArg<u64>>(&self, &[pso::DescriptorSetWrite<B, R>]);
 
     ///
-    fn map_memory(&self, &B::Memory, Range<u64>) -> Result<*mut u8, mapping::Error>;
+    fn map_memory<R>(&self, &B::Memory, R) -> Result<*mut u8, mapping::Error>
+    where
+        R: RangeArg<u64>;
 
     ///
-    fn flush_mapped_memory_ranges<'a, I>(&self, I)
+    fn flush_mapped_memory_ranges<'a, I, R>(&self, I)
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a B::Memory, Range<u64>)>;
+        I::Item: Borrow<(&'a B::Memory, R)>,
+        R: RangeArg<u64>;
 
     ///
-    fn invalidate_mapped_memory_ranges<'a, I>(&self, I)
+    fn invalidate_mapped_memory_ranges<'a, I, R>(&self, I)
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a B::Memory, Range<u64>)>;
+        I::Item: Borrow<(&'a B::Memory, R)>,
+        R: RangeArg<u64>;
 
     ///
     fn unmap_memory(&self, &B::Memory);

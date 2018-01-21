@@ -49,6 +49,7 @@ pub mod pool;
 pub mod pso;
 pub mod query;
 pub mod queue;
+pub mod range;
 pub mod window;
 
 #[doc(hidden)]
