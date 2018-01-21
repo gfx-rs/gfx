@@ -16,6 +16,7 @@ use hal::format::AspectFlags;
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
 use hal::queue::QueueFamilyId;
+use hal::range::RangeArg;
 
 use {
     conv, free_list, native as n, root_constants, shade, window as w,
@@ -430,13 +431,14 @@ impl Device {
         }
     }
 
-    fn update_descriptor_sets_impl<F>(
+    fn update_descriptor_sets_impl<F, R>(
         &self,
-        writes: &[pso::DescriptorSetWrite<B>],
+        writes: &[pso::DescriptorSetWrite<B, R>],
         heap_type: d3d12::D3D12_DESCRIPTOR_HEAP_TYPE,
         mut fun: F,
     ) where
-        F: FnMut(&pso::DescriptorWrite<B>, &mut Vec<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>),
+        F: FnMut(&pso::DescriptorWrite<B, R>, &mut Vec<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>),
+        R: RangeArg<u64>,
     {
         let mut dst_starts = Vec::new();
         let mut dst_sizes = Vec::new();
@@ -1405,11 +1407,11 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn create_buffer_view(
+    fn create_buffer_view<R: RangeArg<u64>>(
         &self,
         _buffer: &n::Buffer,
         _format: Option<format::Format>,
-        _range: Range<u64>,
+        _range: R,
     ) -> Result<n::BufferView, buffer::ViewError> {
         unimplemented!()
     }
@@ -1707,7 +1709,7 @@ impl d::Device<B> for Device {
         n::DescriptorSetLayout { bindings: bindings.to_vec() }
     }
 
-    fn update_descriptor_sets(&self, writes: &[pso::DescriptorSetWrite<B>]) {
+    fn update_descriptor_sets<R: RangeArg<u64>>(&self, writes: &[pso::DescriptorSetWrite<B, R>]) {
         // Create temporary non-shader visible views for uniform and storage buffers.
         let mut num_views = 0;
         for sw in writes {
@@ -1740,14 +1742,17 @@ impl d::Device<B> for Device {
                     pso::DescriptorWrite::UniformBuffer(ref views) => {
                         handles.extend(views.iter().map(|&(buffer, ref range)| {
                             let handle = heap.alloc_handles(1).cpu;
+                            let start = *range.start().unwrap_or(&0);
+                            let end = *range.end().unwrap_or(&(buffer.size_in_bytes as _));
+
                             // Making the size field of buffer requirements for uniform
                             // buffers a multiple of 256 and setting the required offset
                             // alignment to 256 allows us to patch the size here.
                             // We can always enforce the size to be aligned to 256 for
                             // CBVs without going out-of-bounds.
-                            let size = ((range.end - range.start) + 255) & !255;
+                            let size = ((end - start) + 255) & !255;
                             let desc = d3d12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
-                                BufferLocation: unsafe { (*buffer.resource).GetGPUVirtualAddress() },
+                                BufferLocation: unsafe { (*buffer.resource).GetGPUVirtualAddress() } + start,
                                 SizeInBytes: size as _,
                             };
                             unsafe {
@@ -1767,9 +1772,12 @@ impl d::Device<B> for Device {
                                 u: unsafe { mem::zeroed() },
                             };
 
+                            let start = *range.start().unwrap_or(&0);
+                            let size = *range.end().unwrap_or(&(buffer.size_in_bytes as _)) - start;
+
                            *unsafe { desc.u.Buffer_mut() } = d3d12::D3D12_BUFFER_UAV {
-                                FirstElement: range.start as _,
-                                NumElements: ((range.end - range.start) / 4) as _,
+                                FirstElement: start as _,
+                                NumElements: (size / 4) as _,
                                 StructureByteStride: 0,
                                 CounterOffsetInBytes: 0,
                                 Flags: d3d12::D3D12_BUFFER_UAV_FLAG_RAW,
@@ -1819,8 +1827,13 @@ impl d::Device<B> for Device {
             });
     }
 
-    fn map_memory(&self, memory: &n::Memory, range: Range<u64>) -> Result<*mut u8, mapping::Error> {
-        assert!(range.start <= range.end);
+    fn map_memory<R>(&self, memory: &n::Memory, range: R) -> Result<*mut u8, mapping::Error>
+    where
+        R: RangeArg<u64>,
+    {
+        let start = range.start().unwrap_or(&0);
+        let end = range.end().unwrap_or(&memory.size);
+        assert!(start <= end);
 
         let mut ptr = ptr::null_mut();
         assert_eq!(winerror::S_OK, unsafe {
@@ -1833,7 +1846,7 @@ impl d::Device<B> for Device {
                 &mut ptr,
             )
         });
-        unsafe { ptr.offset(range.start as _); }
+        unsafe { ptr.offset(*start as _); }
         Ok(ptr as *mut _)
     }
 
@@ -1849,10 +1862,11 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I)
+    fn flush_mapped_memory_ranges<'a, I, R>(&self, ranges: I)
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
+        I::Item: Borrow<(&'a n::Memory, R)>,
+        R: RangeArg<u64>,
     {
         for range in ranges {
             let &(ref memory, ref range) = range.borrow();
@@ -1868,37 +1882,46 @@ impl d::Device<B> for Device {
                     ptr::null_mut(),
                 )
             });
+
+            let start = *range.start().unwrap_or(&0);
+            let end = *range.end().unwrap_or(&memory.size); // TODO: only need to be end of current mapping
+
             unsafe {
                 (*memory.resource).Unmap(
                     0,
                     &d3d12::D3D12_RANGE {
-                        Begin: range.start as _,
-                        End: range.end as _,
+                        Begin: start as _,
+                        End: end as _,
                     },
                 );
             }
         }
     }
 
-    fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I)
+    fn invalidate_mapped_memory_ranges<'a, I, R>(&self, ranges: I)
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
+        I::Item: Borrow<(&'a n::Memory, R)>,
+        R: RangeArg<u64>,
     {
         for range in ranges {
             let &(ref memory, ref range) = range.borrow();
+            let start = *range.start().unwrap_or(&0);
+            let end = *range.end().unwrap_or(&memory.size); // TODO: only need to be end of current mapping
+
             // map and immediately unmap, hoping that dx12 drivers internally cache
             // currently mapped buffers.
             assert_eq!(winerror::S_OK, unsafe {
                 (*memory.resource).Map(
                     0,
                     &d3d12::D3D12_RANGE {
-                        Begin: range.start as _,
-                        End: range.end as _,
+                        Begin: start as _,
+                        End: end as _,
                     },
                     ptr::null_mut(),
                 )
             });
+
             unsafe {
                 (*memory.resource).Unmap(
                     0,
