@@ -1,10 +1,13 @@
 use ash::vk;
 use byteorder::{NativeEndian, WriteBytesExt};
-use hal::{buffer, command, format, image, pass, pso, query};
-use hal::device::Extent;
-use hal::{IndexType, Primitive};
-use native as n;
 use smallvec::SmallVec;
+
+use hal::{buffer, command, format, image, pass, pso, query};
+use hal::{IndexType, Primitive};
+use hal::device::Extent;
+use hal::range::RangeArg;
+
+use native as n;
 
 use std::{io, mem};
 use std::borrow::Borrow;
@@ -714,22 +717,41 @@ pub fn map_buffer_features(features: vk::FormatFeatureFlags) -> format::BufferFe
     flags
 }
 
-pub fn map_memory_ranges<'a, I>(ranges: I) -> Vec<vk::MappedMemoryRange>
+pub fn map_memory_ranges<'a, I, R>(ranges: I) -> Vec<vk::MappedMemoryRange>
 where
     I: IntoIterator,
-    I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
+    I::Item: Borrow<(&'a n::Memory, R)>,
+    R: RangeArg<u64>,
 {
      ranges
         .into_iter()
         .map(|range| {
             let &(ref memory, ref range) = range.borrow();
+            let (offset, size) = map_range_arg(range);
             vk::MappedMemoryRange {
                 s_type: vk::StructureType::MappedMemoryRange,
                 p_next: ptr::null(),
                 memory: memory.raw,
-                offset: range.start,
-                size: range.end - range.start,
+                offset,
+                size,
             }
         })
         .collect()
+}
+
+/// Returns (offset, size) of the range.
+///
+/// Unbound start indices will be mapped to 0.
+/// Unbound end indices will be mapped to VK_WHOLE_SIZE.
+pub fn map_range_arg<R>(range: &R) -> (u64, u64)
+where
+    R: RangeArg<u64>,
+{
+    let offset = *range.start().unwrap_or(&0);
+    let size = match range.end() {
+        Some(end) => end - offset,
+        None => vk::VK_WHOLE_SIZE,
+    };
+
+    (offset, size)
 }

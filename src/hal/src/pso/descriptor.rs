@@ -1,11 +1,12 @@
 //! Descriptor sets and layouts.
 
 use std::fmt;
-use std::ops::Range;
 
 use {Backend};
 use image::ImageLayout;
-use super::ShaderStageFlags;
+use pso::ShaderStageFlags;
+use range::RangeArg;
+
 
 ///
 // TODO: Grasping and remembering the differences between these
@@ -82,21 +83,21 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
 }
 
 #[allow(missing_docs)] //TODO
-pub struct DescriptorSetWrite<'a, 'b, B: Backend> {
+pub struct DescriptorSetWrite<'a, 'b, B: Backend, R: RangeArg<u64>> {
     pub set: &'a B::DescriptorSet,
     pub binding: usize,
     pub array_offset: usize,
-    pub write: DescriptorWrite<'b, B>,
+    pub write: DescriptorWrite<'b, B, R>,
 }
 
 #[allow(missing_docs)] //TODO
-pub enum DescriptorWrite<'a, B: Backend> {
+pub enum DescriptorWrite<'a, B: Backend, R: RangeArg<u64>> {
     Sampler(Vec<&'a B::Sampler>),
     SampledImage(Vec<(&'a B::ImageView, ImageLayout)>),
     StorageImage(Vec<(&'a B::ImageView, ImageLayout)>),
     InputAttachment(Vec<(&'a B::ImageView, ImageLayout)>),
-    UniformBuffer(Vec<(&'a B::Buffer, Range<u64>)>),
-    StorageBuffer(Vec<(&'a B::Buffer, Range<u64>)>),
+    UniformBuffer(Vec<(&'a B::Buffer, R)>),
+    StorageBuffer(Vec<(&'a B::Buffer, R)>),
     UniformTexelBuffer(Vec<&'a B::BufferView>),
     StorageTexelBuffer(Vec<&'a B::BufferView>),
 }

@@ -9,6 +9,7 @@ use hal::{
     adapter, buffer, command, device, format, image, mapping,
     memory, pass, pool, pso, query, queue,
 };
+use hal::range::RangeArg;
 
 /// Dummy backend.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -161,7 +162,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_buffer_view(&self, _: &(), _: Option<format::Format>, _: Range<u64>) -> Result<(), buffer::ViewError> {
+    fn create_buffer_view<R: RangeArg<u64>>(&self, _: &(), _: Option<format::Format>, _: R) -> Result<(), buffer::ViewError> {
         unimplemented!()
     }
 
@@ -196,7 +197,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn update_descriptor_sets(&self, _: &[pso::DescriptorSetWrite<Backend>]) {
+    fn update_descriptor_sets<R: RangeArg<u64>>(&self, _: &[pso::DescriptorSetWrite<Backend, R>]) {
         unimplemented!()
     }
 
@@ -227,7 +228,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn map_memory(&self, _: &(), _: Range<u64>) -> Result<*mut u8, mapping::Error> {
+    fn map_memory<R: RangeArg<u64>>(&self, _: &(), _: R) -> Result<*mut u8, mapping::Error> {
         unimplemented!()
     }
 
@@ -235,18 +236,20 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn flush_mapped_memory_ranges<'a, I>(&self, _: I)
+    fn flush_mapped_memory_ranges<'a, I, R>(&self, _: I)
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a (), Range<u64>)>,
+        I::Item: Borrow<(&'a (), R)>,
+        R: RangeArg<u64>,
     {
         unimplemented!()
     }
 
-    fn invalidate_mapped_memory_ranges<'a, I>(&self, _: I)
+    fn invalidate_mapped_memory_ranges<'a, I, R>(&self, _: I)
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a (), Range<u64>)>,
+        I::Item: Borrow<(&'a (), R)>,
+        R: RangeArg<u64>,
     {
         unimplemented!()
     }
