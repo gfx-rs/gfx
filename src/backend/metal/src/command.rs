@@ -532,7 +532,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
 
     fn begin_renderpass_raw<T>(
         &mut self,
-        _render_pass: &native::RenderPass,
+        render_pass: &native::RenderPass,
         frame_buffer: &native::FrameBuffer,
         _render_area: Rect,
         clear_values: T,
@@ -555,29 +555,23 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
 
             // FIXME: subpasses
             let pass_descriptor: metal::RenderPassDescriptor = msg_send![frame_buffer.0, copy];
-            // TODO: validate number of clear colors
-            // TODO: fix clearing with unions
-            /*
+            
             for (i, value) in clear_values.into_iter().enumerate() {
-                match *value.borrow() {
-                    ClearValue::Color(ClearColor::Float(values)) => {
-                        let color_desc = pass_descriptor.color_attachments().object_at(i).expect("too many clear values");
-                        let mtl_color = MTLClearColor::new(
-                            values[0] as f64,
-                            values[1] as f64,
-                            values[2] as f64,
-                            values[3] as f64,
-                        );
-                        color_desc.set_clear_color(mtl_color);
-                    }
-                    ClearValue::DepthStencil(ClearDepthStencil(depth, _stencil)) => {
-                        let depth_desc = pass_descriptor.depth_attachment().expect("no depth attachment");
-                        depth_desc.set_clear_depth(depth as f64);
-                    }
-                    _ => unimplemented!(),
-                };
+                let value = *value.borrow();
+                if i < render_pass.num_colors {
+                    let color_desc = pass_descriptor.color_attachments().object_at(i).expect("too many clear values");
+                    let mtl_color = MTLClearColor::new(
+                        value.color.float32[0] as f64,
+                        value.color.float32[1] as f64,
+                        value.color.float32[2] as f64,
+                        value.color.float32[3] as f64,
+                    );
+                    color_desc.set_clear_color(mtl_color);
+                } else {
+                    let depth_desc = pass_descriptor.depth_attachment().expect("no depth attachment");
+                    depth_desc.set_clear_depth(value.depth_stencil.depth as f64);
+                }
             }
-            */
 
             let render_encoder = command_buffer.command_buffer.new_render_command_encoder(&pass_descriptor).to_owned();
 

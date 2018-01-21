@@ -28,7 +28,7 @@ fn map_subpass_contents(contents: com::SubpassContents) -> vk::SubpassContents {
 }
 
 fn map_buffer_image_regions<T>(
-    image: &n::Image,
+    _image: &n::Image,
     regions: T,
 ) -> SmallVec<[vk::BufferImageCopy; 16]>
 where
@@ -52,7 +52,11 @@ where
                     y: region.image_offset.y,
                     z: region.image_offset.z,
                 },
-                image_extent: image.extent.clone(),
+                image_extent: vk::Extent3D {
+                    width: region.image_extent.width,
+                    height: region.image_extent.height,
+                    depth: region.image_extent.depth,
+                }
             }
         })
         .collect()

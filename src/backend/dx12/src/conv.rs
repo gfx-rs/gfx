@@ -477,6 +477,10 @@ pub fn map_execution_model(model: spirv::ExecutionModel) -> pso::Stage {
     match model {
         spirv::ExecutionModel::Vertex => pso::Stage::Vertex,
         spirv::ExecutionModel::Fragment => pso::Stage::Fragment,
-        _ => unimplemented!(), // TODO: geometry, tessellation and compute seem to unsupported for now
+        spirv::ExecutionModel::Geometry => pso::Stage::Geometry,
+        spirv::ExecutionModel::GlCompute => pso::Stage::Compute,
+        spirv::ExecutionModel::TessellationControl => pso::Stage::Hull,
+        spirv::ExecutionModel::TessellationEvaluation => pso::Stage::Domain,
+        spirv::ExecutionModel::Kernel => panic!("Kernel is not a valid exeuction model."),
     }
 }
