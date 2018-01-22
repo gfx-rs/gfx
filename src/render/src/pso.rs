@@ -6,6 +6,7 @@ use std::marker::PhantomData;
 use {hal, handle};
 use hal::image::{self, ImageLayout};
 use hal::pass::{AttachmentOps, AttachmentLoadOp, AttachmentStoreOp};
+
 use format::{self, Format};
 use {Backend, Device, Primitive, Supports, Transfer, Graphics, Encoder};
 
@@ -38,7 +39,7 @@ pub trait BindDesc {
 pub trait Bind<B: Backend>: BindDesc {
     type Handle: 'static + Clone;
 
-    fn write<'a>(&[&'a Self::Handle]) -> hal::pso::DescriptorWrite<'a, B>;
+    fn write<'a>(&[&'a Self::Handle]) -> hal::pso::DescriptorWrite<'a, B, (Option<u64>, Option<u64>)>;
     fn require<'a>(
         &'a Self::Handle,
         &mut Vec<(&'a handle::raw::Buffer<B>, hal::buffer::State)>,
@@ -60,7 +61,7 @@ macro_rules! define_descriptors {
             {
                 type Handle = T::Handle;
 
-                fn write<'a>(handles: &[&'a Self::Handle]) -> hal::pso::DescriptorWrite<'a, B> {
+                fn write<'a>(handles: &[&'a Self::Handle]) -> hal::pso::DescriptorWrite<'a, B, (Option<u64>, Option<u64>)> {
                     T::write(handles)
                 }
 
@@ -95,7 +96,7 @@ define_descriptors! {
 impl<B: Backend> Bind<B> for SampledImage {
     type Handle = handle::raw::ImageView<B>;
 
-    fn write<'a>(views: &[&'a Self::Handle]) -> hal::pso::DescriptorWrite<'a, B> {
+    fn write<'a>(views: &[&'a Self::Handle]) -> hal::pso::DescriptorWrite<'a, B, (Option<u64>, Option<u64>)> {
         hal::pso::DescriptorWrite::SampledImage(views.iter()
             .map(|&view| {
                 let layout = ImageLayout::ShaderReadOnlyOptimal;
@@ -124,7 +125,7 @@ impl<B: Backend> Bind<B> for SampledImage {
 impl<B: Backend> Bind<B> for Sampler {
     type Handle = handle::raw::Sampler<B>;
 
-    fn write<'a>(samplers: &[&'a Self::Handle]) -> hal::pso::DescriptorWrite<'a, B> {
+    fn write<'a>(samplers: &[&'a Self::Handle]) -> hal::pso::DescriptorWrite<'a, B, (Option<u64>, Option<u64>)> {
         hal::pso::DescriptorWrite::Sampler(samplers.iter()
             .map(|&sampler| sampler.resource())
             .collect())
@@ -148,7 +149,7 @@ pub struct DescriptorSetBindRef<'a, 'b, B: Backend, T: Bind<B>> {
 
 pub struct DescriptorSetsUpdate<'a, B: Backend> {
     device: &'a mut Device<B>,
-    writes: Vec<hal::pso::DescriptorSetWrite<'a, 'a, B>>,
+    writes: Vec<hal::pso::DescriptorSetWrite<'a, 'a, B, (Option<u64>, Option<u64>)>>,
 }
 
 impl<'a, B: Backend> DescriptorSetsUpdate<'a, B> {
