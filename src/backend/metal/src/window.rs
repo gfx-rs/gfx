@@ -35,11 +35,11 @@ impl Drop for SurfaceInner {
 }
 
 pub struct Swapchain {
-    surface: Rc<SurfaceInner>,
+    pub(crate) surface: Rc<SurfaceInner>,
     _size_pixels: (u64, u64),
-    io_surfaces: Vec<IOSurface>,
+    pub(crate) io_surfaces: Vec<IOSurface>,
     frame_index: usize,
-    present_index: usize,
+    pub(crate) present_index: usize,
 }
 
 #[allow(bad_style)]
@@ -171,24 +171,6 @@ impl hal::Swapchain<Backend> for Swapchain {
             self.frame_index += 1;
             frame
         }
-    }
-
-    fn present<C>(
-        &mut self,
-        _present_queue: &mut CommandQueue<Backend, C>,
-        _wait_semaphores: &[&native::Semaphore],
-    ) {
-        // TODO: wait for semaphores
-        let buffer_index = self.present_index % self.io_surfaces.len();
-
-        unsafe {
-            let io_surface = &mut self.io_surfaces[buffer_index];
-            let render_layer_borrow = self.surface.render_layer.borrow_mut();
-            let render_layer = *render_layer_borrow;
-            msg_send![render_layer, setContents: io_surface.obj];
-        }
-
-        self.present_index += 1;
     }
 }
 

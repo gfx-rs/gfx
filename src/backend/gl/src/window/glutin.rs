@@ -45,7 +45,7 @@
 
 use hal::{self, format as f, image};
 
-use {native as n, Backend as B, Device, PhysicalDevice, QueueFamily};
+use {Backend as B, Device, PhysicalDevice, QueueFamily};
 
 use glutin::{self, GlContext};
 use std::rc::Rc;
@@ -59,17 +59,13 @@ fn get_window_dimensions(window: &glutin::GlWindow) -> image::Dimensions {
 
 pub struct Swapchain {
     // Underlying window, required for presentation
-    window: Rc<glutin::GlWindow>,
+    pub(crate) window: Rc<glutin::GlWindow>,
 }
 
 impl hal::Swapchain<B> for Swapchain {
     fn acquire_frame(&mut self, _sync: hal::FrameSync<B>) -> hal::Frame {
         // TODO: sync
         hal::Frame::new(0)
-    }
-
-    fn present<C>(&mut self, _: &mut hal::CommandQueue<B, C>, _: &[&n::Semaphore]) {
-        self.window.swap_buffers().unwrap();
     }
 }
 

@@ -1,4 +1,3 @@
-use std::mem;
 use std::borrow::Borrow;
 use std::ops::Range;
 

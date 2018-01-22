@@ -353,7 +353,8 @@ impl<B: Backend, C> Context<B, C>
 
         self.swapchain.present(
             &mut self.queue.group.queues[0],
-            &[&bundle.signal_semaphore]);
+            Some(&bundle.signal_semaphore),
+        );
 
         self.frame_bundles.push_back(bundle);
     }

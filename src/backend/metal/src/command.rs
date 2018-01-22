@@ -1,7 +1,7 @@
 use {Backend};
-use native;
+use {native, window};
 
-use std::borrow::Borrow;
+use std::borrow::{Borrow, BorrowMut};
 use std::ops::{Deref, Range};
 use std::sync::{Arc};
 use std::cell::UnsafeCell;
@@ -237,6 +237,27 @@ impl RawCommandQueue<Backend> for CommandQueue {
                 }
             }
             command_buffer.commit();
+        }
+    }
+
+    fn present<IS, IW>(&mut self, swapchains: IS, _wait_semaphores: IW)
+    where
+        IS: IntoIterator,
+        IS::Item: BorrowMut<window::Swapchain>,
+        IW: IntoIterator,
+        IW::Item: Borrow<native::Semaphore>,
+    {
+        for mut swapchain in swapchains {
+            // TODO: wait for semaphores
+            let swapchain = swapchain.borrow_mut();
+            let buffer_index = swapchain.present_index % swapchain.io_surfaces.len();
+
+            unsafe {
+                let io_surface = &mut swapchain.io_surfaces[buffer_index];
+                let render_layer_borrow = swapchain.surface.render_layer.borrow_mut();
+                let render_layer = *render_layer_borrow;
+                msg_send![render_layer, setContents: io_surface.obj];
+            }
         }
     }
 }
