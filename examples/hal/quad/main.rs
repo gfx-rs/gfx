@@ -29,6 +29,7 @@ use hal::pso::{PipelineStage, ShaderStageFlags, Specialization};
 use hal::queue::Submission;
 
 use std::io::Cursor;
+use std::ops::Range;
 
 const ENTRY_NAME: &str = "main";
 
@@ -421,7 +422,7 @@ fn main() {
         )
     );
 
-    device.update_descriptor_sets(&[
+    device.update_descriptor_sets::<Range<_>>(&[
         pso::DescriptorSetWrite {
             set: &desc_sets[0],
             binding: 0,
