@@ -234,14 +234,16 @@ pub enum DescriptorSetBinding {
 #[derive(Debug)]
 pub struct Memory {
     pub(crate) heap: MemoryHeap,
+    pub(crate) size: u64,
     pub(crate) allocations: Arc<Mutex<MemoryAllocations>>,
     pub(crate) mapping: Mutex<Option<MemoryMapping>>,
 }
 
 impl Memory {
-    pub(crate) fn new(heap: MemoryHeap) -> Self {
+    pub(crate) fn new(heap: MemoryHeap, size: u64) -> Self {
         Memory {
             heap,
+            size,
             allocations: Arc::new(Mutex::new(MemoryAllocations {
                 starts: BTreeMap::new(),
                 ends: BTreeMap::new(),
@@ -290,7 +292,7 @@ impl MemoryAllocations {
 
 #[derive(Debug)]
 pub(crate) enum MemoryHeap {
-    Emulated { memory_type: usize, size: u64 },
+    Emulated { memory_type: usize },
     Native(metal::Heap),
 }
 

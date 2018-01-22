@@ -15,6 +15,7 @@ use hal::memory::Properties;
 use hal::pool::CommandPoolCreateFlags;
 use hal::pso::{DescriptorSetWrite, DescriptorType, DescriptorSetLayoutBinding, AttributeDesc, DepthTest, StencilTest, StencilFace};
 use hal::queue::{QueueFamily as HalQueueFamily, QueueFamilyId, Queues};
+use hal::range::RangeArg;
 
 use cocoa::foundation::{NSRange, NSUInteger};
 use metal::{self, MTLFeatureSet, MTLLanguageVersion, MTLArgumentAccess, MTLDataType, MTLPrimitiveType, MTLPrimitiveTopologyClass};
@@ -313,7 +314,7 @@ impl Device {
         let mut remapped_entry_point_names = HashMap::new();
 
         for entry_point in entry_points {
-            println!("Entry point {:?}", entry_point);
+            info!("Entry point {:?}", entry_point);
             let cleansed = ast.get_cleansed_entry_point_name(&entry_point.name)
                 .map_err(|err| {
                     let msg = match err {
@@ -800,28 +801,32 @@ impl hal::Device<Backend> for Device {
     fn destroy_sampler(&self, _sampler: n::Sampler) {
     }
 
-    fn map_memory(&self, memory: &n::Memory, range: Range<u64>) -> Result<*mut u8, mapping::Error> {
+    fn map_memory<R: RangeArg<u64>>(
+        &self, memory: &n::Memory, range: R
+    ) -> Result<*mut u8, mapping::Error> {
         let allocations = memory.allocations.lock().unwrap();
         let mut mapping = memory.mapping.lock().unwrap();
 
         assert!(mapping.is_none(), "Only one mapping per `Memory` at a time is allowed");
-        let buffers = allocations.find(range.clone());
+        let range_start = *range.start().unwrap_or(&0);
+        let range_end = *range.end().unwrap_or(&memory.size);
+        let buffers = allocations.find(range_start .. range_end);
 
         assert_eq!(buffers.len(), 1, "Only mapping range within single buffer is alowed for now");
         let (buffer_range, buffer) = buffers.into_iter().next().unwrap();
 
-        debug_assert!(range.start >= buffer_range.start);
-        debug_assert!(range.end <= buffer_range.end);
+        debug_assert!(range_start >= buffer_range.start);
+        debug_assert!(range_end <= buffer_range.end);
         debug_assert_eq!(buffer.length(), buffer_range.end - buffer_range.start);
 
-        let offset = range.start - buffer_range.start;
-        let length = range.end - range.start;
+        let offset = range_start - buffer_range.start;
+        let length = range_end - range_start;
         let ptr = unsafe {
             (buffer.contents() as *mut u8).offset(offset as isize)
         };
 
         *mapping = Some(n::MemoryMapping {
-            range,
+            range: range_start .. range_end,
             buffer,
             location: offset as _,
             length: length as _,
@@ -833,29 +838,33 @@ impl hal::Device<Backend> for Device {
         memory.mapping.lock().unwrap().take();
     }
 
-    fn flush_mapped_memory_ranges<'a, I>(&self, iter: I)
+    fn flush_mapped_memory_ranges<'a, I, R>(&self, iter: I)
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
+        I::Item: Borrow<(&'a n::Memory, R)>,
+        R: RangeArg<u64>,
     {
         for item in iter.into_iter() {
             let (memory, ref range) = *item.borrow();
-            let mut mapping = memory.mapping.lock().unwrap();
+            let range_start = *range.start().unwrap_or(&0);
+            let range_end = *range.end().unwrap_or(&memory.size);
+            let mapping = memory.mapping.lock().unwrap();
             assert!(mapping.is_some());
             let mapping = mapping.as_ref().unwrap();
-            assert!(mapping.range.start <= range.start);
-            assert!(mapping.range.end >= range.end);
+            assert!(mapping.range.start <= range_start);
+            assert!(mapping.range.end >= range_end);
             mapping.buffer.did_modify_range(NSRange {
-                location: (mapping.location + range.start - mapping.range.start) as _,
-                length: (range.end - range.start) as _,
+                location: (mapping.location + range_start - mapping.range.start) as _,
+                length: (range_end - range_start) as _,
             });
         }
     }
 
-    fn invalidate_mapped_memory_ranges<'a, I>(&self, _: I)
+    fn invalidate_mapped_memory_ranges<'a, I, R>(&self, _ranges: I)
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
+        I::Item: Borrow<(&'a n::Memory, R)>,
+        R: RangeArg<u64>,
     {
         // Do nothing.
     }
@@ -918,7 +927,7 @@ impl hal::Device<Backend> for Device {
         n::DescriptorSetLayout::ArgumentBuffer(encoder, stage_flags)
     }
 
-    fn update_descriptor_sets(&self, writes: &[DescriptorSetWrite<Backend>]) {
+    fn update_descriptor_sets<R: RangeArg<u64>>(&self, writes: &[pso::DescriptorSetWrite<Backend, R>]) {
         use hal::pso::DescriptorWrite::*;
 
         let mut mtl_samplers = Vec::new();
@@ -968,8 +977,11 @@ impl hal::Device<Backend> for Device {
                             let target_iter = vec[write.array_offset..(write.array_offset + buffers.len())].iter_mut();
 
                             for (new, old) in buffers.iter().zip(target_iter) {
-                                assert!(new.1.end <= ((new.0).raw).length());
-                                *old = Some(((new.0).raw.clone(), new.1.start));
+                                let buf_length = (new.0).raw.length();
+                                let start = *new.1.start().unwrap_or(&0);
+                                let end = *new.1.end().unwrap_or(&buf_length);
+                                assert!(end <= buf_length);
+                                *old = Some(((new.0).raw.clone(), start));
                             }
                         }
 
@@ -997,9 +1009,9 @@ impl hal::Device<Backend> for Device {
                         },
                         UniformBuffer(ref buffers) | StorageBuffer(ref buffers) => {
                             mtl_buffers.clear();
-                            mtl_buffers.extend(buffers.iter().map(|buffer| &*((buffer.0).raw)));
+                            mtl_buffers.extend(buffers.iter().map(|buf| &*((buf.0).raw)));
                             mtl_offsets.clear();
-                            mtl_offsets.extend(buffers.iter().map(|buffer| buffer.1.clone()));
+                            mtl_offsets.extend(buffers.iter().map(|buf| *buf.1.start().unwrap_or(&0)));
 
                             let encoder: &metal::ArgumentEncoderRef = &encoder;
 
@@ -1058,15 +1070,18 @@ impl hal::Device<Backend> for Device {
 
         // Heaps cannot be used for CPU coherent resources
         //TEMP: MacOS supports Private only, iOS and tvOS can do private/shared
-        if self.private_caps.resource_heaps && storage != MTLStorageMode::Shared && false {
+        let heap = if self.private_caps.resource_heaps && storage != MTLStorageMode::Shared && false {
             let descriptor = metal::HeapDescriptor::new();
             descriptor.set_storage_mode(storage);
             descriptor.set_cpu_cache_mode(cache);
             descriptor.set_size(size);
-            Ok(n::Memory::new(n::MemoryHeap::Native(self.device.new_heap(&descriptor))))
+            let heap_raw = self.device.new_heap(&descriptor);
+            n::MemoryHeap::Native(heap_raw)
         } else {
-            Ok(n::Memory::new(n::MemoryHeap::Emulated { memory_type, size }))
-        }
+            n::MemoryHeap::Emulated { memory_type }
+        };
+
+        Ok(n::Memory::new(heap, size))
     }
 
     fn free_memory(&self, _memory: n::Memory) {
@@ -1119,7 +1134,7 @@ impl hal::Device<Backend> for Device {
                         self.device.new_buffer(buffer.size, resource_options)
                     }), heap.storage_mode() != MTLStorageMode::Private)
             }
-            n::MemoryHeap::Emulated { memory_type, size: _ } => {
+            n::MemoryHeap::Emulated { memory_type } => {
                 // TODO: disable hazard tracking?
                 let memory_properties = memory_types()[memory_type].properties;
                 let resource_options = map_memory_properties_to_options(memory_properties);
@@ -1149,8 +1164,8 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn create_buffer_view(
-        &self, _buffer: &n::Buffer, _format: Option<format::Format>, _range: Range<u64>
+    fn create_buffer_view<R: RangeArg<u64>>(
+        &self, _buffer: &n::Buffer, _format: Option<format::Format>, _range: R
     ) -> Result<n::BufferView, buffer::ViewError> {
         unimplemented!()
     }
@@ -1236,7 +1251,7 @@ impl hal::Device<Backend> for Device {
                         self.device.new_texture(&image.desc)
                     })
             },
-            n::MemoryHeap::Emulated { memory_type, size: _ } => {
+            n::MemoryHeap::Emulated { memory_type } => {
                 // TODO: disable hazard tracking?
                 let memory_properties = memory_types()[memory_type].properties;
                 let resource_options = map_memory_properties_to_options(memory_properties);
