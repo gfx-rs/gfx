@@ -14,6 +14,7 @@ use hal::{self as c, device as d, image as i, memory, pass, pso, buffer, mapping
 use hal::format::{ChannelType, Format, Swizzle};
 use hal::pool::CommandPoolCreateFlags;
 use hal::queue::QueueFamilyId;
+use hal::range::RangeArg;
 
 use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 
@@ -234,12 +235,13 @@ impl Device {
 
 impl d::Device<B> for Device {
     fn allocate_memory(
-        &self, _mem_type: c::MemoryTypeId, _size: u64,
+        &self, _mem_type: c::MemoryTypeId, size: u64,
     ) -> Result<n::Memory, d::OutOfMemory> {
         // TODO
         Ok(n::Memory {
             properties: memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED,
             first_bound_buffer: Cell::new(0),
+            size,
         })
     }
 
@@ -654,8 +656,8 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn map_memory(
-        &self, memory: &n::Memory, range: Range<u64>
+    fn map_memory<R: RangeArg<u64>>(
+        &self, memory: &n::Memory, range: R
     ) -> Result<*mut u8, mapping::Error> {
         let gl = &self.share.context;
         let buffer = match memory.first_bound_buffer.get() {
@@ -667,16 +669,18 @@ impl d::Device<B> for Device {
         let target = gl::PIXEL_PACK_BUFFER;
         let access = memory.map_flags();
 
+        let offset = *range.start().unwrap_or(&0);
+        let size = *range.end().unwrap_or(&memory.size) - offset;
+
         let ptr = unsafe {
             gl.BindBuffer(target, buffer);
-            let ptr = gl.MapBufferRange(target, range.start as _, (range.end - range.start) as _, access);
+            let ptr = gl.MapBufferRange(target, offset as _, size as _, access);
             gl.BindBuffer(target, 0);
             ptr as *mut _
         };
 
         if let Err(err) = self.share.check() {
-            panic!("Error mapping memory: {:?} for memory {:?} with range {:?}",
-                err, memory, range);
+            panic!("Error mapping memory: {:?} for memory {:?}", err, memory);
         }
 
         Ok(ptr)
@@ -702,25 +706,27 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn flush_mapped_memory_ranges<'a, I>(&self, _: I)
+    fn flush_mapped_memory_ranges<'a, I, R>(&self, _: I)
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
+        I::Item: Borrow<(&'a n::Memory, R)>,
+        R: RangeArg<u64>,
     {
         // unimplemented!()
         warn!("memory range invalidation not implemented!");
     }
 
-    fn invalidate_mapped_memory_ranges<'a, I>(&self, _ranges: I)
+    fn invalidate_mapped_memory_ranges<'a, I, R>(&self, _ranges: I)
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, Range<u64>)>,
+        I::Item: Borrow<(&'a n::Memory, R)>,
+        R: RangeArg<u64>,
     {
         unimplemented!()
     }
 
-    fn create_buffer_view(
-        &self, _: &n::Buffer, _: Option<Format>, _: Range<u64>
+    fn create_buffer_view<R: RangeArg<u64>>(
+        &self, _: &n::Buffer, _: Option<Format>, _: R
     ) -> Result<n::BufferView, buffer::ViewError> {
         unimplemented!()
     }
@@ -826,7 +832,7 @@ impl d::Device<B> for Device {
         n::DescriptorSetLayout
     }
 
-    fn update_descriptor_sets(&self, _: &[pso::DescriptorSetWrite<B>]) {
+    fn update_descriptor_sets<R: RangeArg<u64>>(&self, _: &[pso::DescriptorSetWrite<B, R>]) {
         // TODO
     }
 

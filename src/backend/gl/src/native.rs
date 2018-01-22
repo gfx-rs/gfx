@@ -109,6 +109,8 @@ pub enum ShaderModule {
 pub struct Memory {
     pub(crate) properties: Properties,
     pub(crate) first_bound_buffer: Cell<RawBuffer>,
+    /// Allocation size
+    pub(crate) size: u64,
 }
 
 impl Memory {

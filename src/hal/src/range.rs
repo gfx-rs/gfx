@@ -56,4 +56,3 @@ impl<T> RangeArg<T> for (Option<T>, Option<T>) {
         self.1.as_ref()
     }
 }
-
