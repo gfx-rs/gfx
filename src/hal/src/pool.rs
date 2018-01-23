@@ -3,7 +3,7 @@
 use {Backend};
 use command::{
     CommandBuffer, RawCommandBuffer, SecondaryCommandBuffer, 
-    SubpassCommandBuffer, CommandBufferFlags, Shot
+    SubpassCommandBuffer, CommandBufferFlags, Shot, RawLevel
 };
 use queue::capability::{Supports, Graphics};
 use std::marker::PhantomData;
@@ -28,7 +28,7 @@ pub trait RawCommandPool<B: Backend>: Send {
     fn reset(&mut self);
 
     /// Allocate new command buffers from the pool.
-    fn allocate(&mut self, num: usize, secondary: bool) -> Vec<B::CommandBuffer>;
+    fn allocate(&mut self, num: usize, level: RawLevel) -> Vec<B::CommandBuffer>;
 
     /// Free command buffers which are allocated from this pool.
     unsafe fn free(&mut self, buffers: Vec<B::CommandBuffer>);
@@ -76,7 +76,7 @@ impl<B: Backend, C> CommandPool<B, C> {
     pub fn reserve(&mut self, additional: usize) {
         let available = self.buffers.len() - self.next_buffer;
         if additional > available {
-            let buffers = self.pool.allocate(additional - available, false);
+            let buffers = self.pool.allocate(additional - available, RawLevel::Primary);
             self.buffers.extend(buffers);
         }
     }
@@ -85,7 +85,7 @@ impl<B: Backend, C> CommandPool<B, C> {
     pub fn reserve_secondary(&mut self, additional: usize) {
         let available = self.secondary_buffers.len() - self.next_secondary_buffer;
         if additional > available {
-            let buffers = self.pool.allocate(additional - available, true);
+            let buffers = self.pool.allocate(additional - available, RawLevel::Secondary);
             self.secondary_buffers.extend(buffers);
         }
     }

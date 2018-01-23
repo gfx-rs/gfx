@@ -5,7 +5,8 @@ use ash::version::DeviceV1_0;
 use smallvec::SmallVec;
 
 use command::CommandBuffer;
-use hal::pool;
+use conv;
+use hal::{pool, command};
 use {Backend, RawDevice};
 
 
@@ -25,12 +26,12 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         }
     }
 
-    fn allocate(&mut self, num: usize, secondary: bool) -> Vec<CommandBuffer> {
+    fn allocate(&mut self, num: usize, level: command::RawLevel) -> Vec<CommandBuffer> {
         let info = vk::CommandBufferAllocateInfo {
             s_type: vk::StructureType::CommandBufferAllocateInfo,
             p_next: ptr::null(),
             command_pool: self.raw,
-            level: if secondary { vk::CommandBufferLevel::Secondary } else { vk::CommandBufferLevel::Primary },
+            level: conv::map_command_buffer_level(level),
             command_buffer_count: num as u32,
         };
 

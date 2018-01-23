@@ -321,7 +321,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         fence: Option<&native::Fence>,
     ) where 
         IC: IntoIterator, 
-        IC::Item: Borrow<command::CommandBuffer> 
+        IC::Item: Borrow<command::CommandBuffer>,
     {
         // TODO: semaphores
         let mut lists = submission

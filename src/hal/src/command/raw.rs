@@ -65,6 +65,15 @@ bitflags! {
 }
 
 ///
+#[derive(Clone, Copy)]
+pub enum Level {
+    ///
+    Primary,
+    ///
+    Secondary,
+}
+
+///
 pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     ///
     fn begin(&mut self, flags: CommandBufferFlags);
