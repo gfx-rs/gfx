@@ -20,7 +20,7 @@ use hal::range::RangeArg;
 
 use {
     conv, free_list, native as n, root_constants, shade, window as w,
-    Backend as B, Device, QUEUE_FAMILIES, MAX_VERTEX_BUFFERS, NUM_HEAP_PROPERTIES,
+    Backend as B, Device, MemoryGroup, QUEUE_FAMILIES, MAX_VERTEX_BUFFERS, NUM_HEAP_PROPERTIES,
 };
 use pool::RawCommandPool;
 use root_constants::RootConstant;
@@ -29,9 +29,12 @@ use root_constants::RootConstant;
 const ROOT_CONSTANT_SPACE: u32 = 0;
 
 const MEM_TYPE_MASK: u64 = 0x7;
-const MEM_TYPE_BUFFER_SHIFT: u64 = 3;
-const MEM_TYPE_IMAGE_SHIFT: u64 = 6;
-const MEM_TYPE_TARGET_SHIFT: u64 = 9;
+const MEM_TYPE_SHIFT: u64 = 3;
+
+const MEM_TYPE_UNIVERSAL_SHIFT: u64 = MEM_TYPE_SHIFT * MemoryGroup::Universal as u64;
+const MEM_TYPE_BUFFER_SHIFT: u64 = MEM_TYPE_SHIFT * MemoryGroup::BufferOnly as u64;
+const MEM_TYPE_IMAGE_SHIFT: u64 = MEM_TYPE_SHIFT * MemoryGroup::ImageOnly as u64;
+const MEM_TYPE_TARGET_SHIFT: u64 = MEM_TYPE_SHIFT * MemoryGroup::TargetOnly as u64;
 
 /// Emit error during shader module creation. Used if we don't expect an error
 /// but might panic due to an exception in SPIRV-Cross.
@@ -660,18 +663,15 @@ impl d::Device<B> for Device {
             VisibleNodeMask: 0,
         };
 
-        // Exposed memory types are grouped according to their capabilities
-        //  0 - All
-        //  1 - Buffers only
-        //  2 - Non-target Images only
-        //  3 - Targets only
+        // Exposed memory types are grouped according to their capabilities.
+        // See `MemoryGroup` for more details.
         let mem_group = mem_type / NUM_HEAP_PROPERTIES;
 
         let desc = d3d12::D3D12_HEAP_DESC {
             SizeInBytes: size,
             Properties: properties,
             Alignment: 0, //Warning: has to be 4K for MSAA targets
-            Flags: match mem_type / NUM_HEAP_PROPERTIES {
+            Flags: match mem_group {
                 0 => d3d12::D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES,
                 1 => d3d12::D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS,
                 2 => d3d12::D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES,
@@ -693,7 +693,8 @@ impl d::Device<B> for Device {
         // be mapped.
         // Devices supporting heap tier 1 can only created buffers on mem group 1 (ALLOW_ONLY_BUFFERS).
         // Devices supporting heap tier 2 always expose only mem group 0 and don't have any further restrictions.
-        let is_mapable = mem_group < 2 && mem_base_id != 0;
+        let is_mapable = mem_base_id != 0 &&
+            (mem_group == MemoryGroup::Universal as _ || mem_group == MemoryGroup::BufferOnly as _);
 
         // Create a buffer resource covering the whole memory slice to be able to map the whole memory.
         let resource = if is_mapable {
@@ -1327,14 +1328,16 @@ impl d::Device<B> for Device {
             size = (size + 255) & !255;
         }
 
+        let type_mask_shift = if self.private_caps.heterogeneous_resource_heaps {
+            MEM_TYPE_UNIVERSAL_SHIFT
+        } else {
+            MEM_TYPE_BUFFER_SHIFT
+        };
+
         let requirements = memory::Requirements {
             size,
             alignment: d3d12::D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT as u64,
-            type_mask: if self.private_caps.heterogeneous_resource_heaps {
-                MEM_TYPE_MASK
-            } else {
-                MEM_TYPE_MASK << MEM_TYPE_BUFFER_SHIFT
-            },
+            type_mask: MEM_TYPE_MASK << type_mask_shift,
         };
 
         Ok(UnboundBuffer {
@@ -1484,7 +1487,7 @@ impl d::Device<B> for Device {
         };
 
         let type_mask_shift = if self.private_caps.heterogeneous_resource_heaps {
-            0
+            MEM_TYPE_UNIVERSAL_SHIFT
         } else if usage.can_target() {
             MEM_TYPE_TARGET_SHIFT
         } else {
