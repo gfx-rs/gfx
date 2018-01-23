@@ -159,8 +159,9 @@ impl<'a, B: Backend> RenderPassInlineEncoder<'a, B, Primary> {
 
     ///
     pub fn next_subpass_secondary(mut self) -> RenderPassSecondaryEncoder<'a, B> {
-        self.0.as_mut().unwrap().0.next_subpass(SubpassContents::SecondaryBuffers);
-        RenderPassSecondaryEncoder(Some(self.0.take().unwrap().0))
+        let buffer = self.0.take().unwrap();
+        buffer.0.next_subpass(SubpassContents::SecondaryBuffers);
+        RenderPassSecondaryEncoder(Some(buffer.0))
     }
 }
 
@@ -225,8 +226,9 @@ impl<'a, B: Backend> RenderPassSecondaryEncoder<'a, B> {
 
     ///
     pub fn next_subpass_inline(mut self) -> RenderPassInlineEncoder<'a, B, Primary> {
-        self.0.as_mut().unwrap().next_subpass(SubpassContents::Inline);
-        RenderPassInlineEncoder(self.0.take().map(|b| RenderSubpassCommon(b)), PhantomData)
+        let buffer = self.0.take().unwrap();
+        buffer.next_subpass(SubpassContents::Inline);
+        RenderPassInlineEncoder(Some(RenderSubpassCommon(buffer)), PhantomData)
     }
 
     ///

@@ -1564,7 +1564,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         buffers: I,
     ) where
         I: IntoIterator,
-        I::Item: Borrow<CommandBuffer> 
+        I::Item: Borrow<CommandBuffer>,
     {
         unimplemented!()
     }

@@ -11,7 +11,7 @@ mod renderpass;
 mod transfer;
 
 pub use self::graphics::*;
-pub use self::raw::{ClearValueRaw, ClearColorRaw, ClearDepthStencilRaw, RawCommandBuffer, CommandBufferFlags};
+pub use self::raw::{ClearValueRaw, ClearColorRaw, ClearDepthStencilRaw, RawCommandBuffer, CommandBufferFlags, Level as RawLevel};
 pub use self::renderpass::*;
 pub use self::transfer::*;
 
@@ -39,13 +39,13 @@ pub enum Secondary { }
 impl Level for Secondary { }
 
 /// Thread-safe finished command buffer for submission.
-pub struct Submit<B: Backend, C, S: Shot, L: Level>(pub(crate) B::CommandBuffer, pub(crate) PhantomData<(C, S, L)>);
-impl<B: Backend, C, S: Shot, L: Level> Submit<B, C, S, L> {
+pub struct Submit<B: Backend, C, S, L>(pub(crate) B::CommandBuffer, pub(crate) PhantomData<(C, S, L)>);
+impl<B: Backend, C, S, L> Submit<B, C, S, L> {
     fn new(buffer: B::CommandBuffer) -> Self {
         Submit(buffer, PhantomData)
     }
 }
-unsafe impl<B: Backend, C, S: Shot, L: Level> Send for Submit<B, C, S, L> {}
+unsafe impl<B: Backend, C, S, L> Send for Submit<B, C, S, L> {}
 
 /// A trait representing a command buffer that can be added to a `Submission`.
 pub unsafe trait Submittable<'a, B: Backend, C, L: Level> {

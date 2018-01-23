@@ -1,4 +1,4 @@
-use hal::pool;
+use hal::{self, pool};
 use command::{self, Command, RawCommandBuffer};
 use native as n;
 use Backend;
@@ -78,7 +78,7 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         }
     }
 
-    fn allocate(&mut self, num: usize, secondary: bool) -> Vec<RawCommandBuffer> { // TODO: Implement secondary buffers
+    fn allocate(&mut self, num: usize, level: hal::command::RawLevel) -> Vec<RawCommandBuffer> { // TODO: Implement secondary buffers
         (0..num).map(|_|
                 RawCommandBuffer::new(
                     self.fbo,

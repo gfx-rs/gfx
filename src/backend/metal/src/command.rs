@@ -14,7 +14,7 @@ use hal::command::{
     AttachmentClear, ClearColorRaw, ClearDepthStencilRaw, ClearValueRaw,
     BufferImageCopy, BufferCopy, ImageCopy, ImageResolve,
     SubpassContents, RawCommandBuffer, CommandBufferFlags,
-    ColorValue, StencilValue, Rect, Viewport, 
+    ColorValue, StencilValue, Rect, Viewport, RawLevel,
 };
 use hal::query::{Query, QueryControl, QueryId};
 use hal::queue::{RawCommandQueue, RawSubmission};
@@ -207,7 +207,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
     unsafe fn submit_raw<IC>(&mut self, submit: RawSubmission<Backend, IC>, fence: Option<&native::Fence>) 
     where 
         IC: IntoIterator,
-        IC::Item: Borrow<CommandBuffer>
+        IC::Item: Borrow<CommandBuffer>,
     {
         // FIXME: wait for semaphores!
 
@@ -280,7 +280,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
         }
     }
 
-    fn allocate(&mut self, num: usize, secondary: bool) -> Vec<CommandBuffer> { //TODO: Implement secondary buffers
+    fn allocate(&mut self, num: usize, level: RawLevel) -> Vec<CommandBuffer> { //TODO: Implement secondary buffers
         let buffers: Vec<_> = (0..num).map(|_| CommandBuffer {
             inner: Arc::new({
                 // TODO: maybe use unretained command buffer for efficiency?

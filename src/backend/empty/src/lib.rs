@@ -84,7 +84,7 @@ impl queue::RawCommandQueue<Backend> for RawCommandQueue {
     unsafe fn submit_raw<IC>(&mut self, _: queue::RawSubmission<Backend, IC>, _: Option<&()>) 
     where
         IC: IntoIterator,
-        IC::Item: Borrow<RawCommandBuffer> 
+        IC::Item: Borrow<RawCommandBuffer>,
     {
         unimplemented!()
     }
@@ -343,7 +343,7 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         unimplemented!()
     }
 
-    fn allocate(&mut self, _: usize, _: bool) -> Vec<RawCommandBuffer> {
+    fn allocate(&mut self, _: usize, _: command::RawLevel) -> Vec<RawCommandBuffer> {
         unimplemented!()
     }
 

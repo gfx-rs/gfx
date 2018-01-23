@@ -4,8 +4,8 @@ use std::ptr;
 use winapi::um::d3d12;
 use winapi::shared::winerror::SUCCEEDED;
 
-use hal::pool;
-use command::CommandBuffer;
+use hal::{pool, command};
+use command::{CommandBuffer};
 use {Backend, CmdSignatures};
 
 pub struct RawCommandPool {
@@ -54,7 +54,7 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         unsafe { self.inner.Reset(); }
     }
 
-    fn allocate(&mut self, num: usize, secondary: bool) -> Vec<CommandBuffer> { // TODO: Implement secondary buffers
+    fn allocate(&mut self, num: usize, level: command::RawLevel) -> Vec<CommandBuffer> { // TODO: Implement secondary buffers
         (0..num)
             .map(|_| CommandBuffer::new(
                 self.create_command_list(),

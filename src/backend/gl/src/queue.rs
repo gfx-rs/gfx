@@ -657,7 +657,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         fence: Option<&native::Fence>,
     ) where
         IC: IntoIterator,
-        IC::Item: Borrow<com::RawCommandBuffer>
+        IC::Item: Borrow<com::RawCommandBuffer>,
     {
         use pool::BufferMemory;
         {

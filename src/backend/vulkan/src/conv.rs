@@ -769,3 +769,10 @@ pub fn map_command_buffer_flags(flags: command::CommandBufferFlags) -> vk::Comma
     }
     usage
 }
+
+pub fn map_command_buffer_level(level: command::RawLevel) -> vk::CommandBufferLevel {
+    match level {
+        command::RawLevel::Primary => vk::CommandBufferLevel::Primary,
+        command::RawLevel::Secondary => vk::CommandBufferLevel::Secondary,
+    }
+}
