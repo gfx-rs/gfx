@@ -47,6 +47,19 @@ const MAX_VERTEX_BUFFERS: usize = 16;
 
 const NUM_HEAP_PROPERTIES: usize = 3;
 
+// Memory types are grouped according to the supported resources.
+// Grouping is done to circumvent the limitations of heap tier 1 devices.
+// Devices with Tier 1 will expose `BuffersOnl`, `ImageOnly` and `TargetOnly`.
+// Devices with Tier 2 or higher will only expose `Universal`.
+enum MemoryGroup {
+    Universal = 0,
+    BufferOnly,
+    ImageOnly,
+    TargetOnly,
+
+    NumGroups,
+}
+
 // https://msdn.microsoft.com/de-de/library/windows/desktop/dn788678(v=vs.85).aspx
 static HEAPS_NUMA: [HeapProperties; NUM_HEAP_PROPERTIES] = [
     // DEFAULT
@@ -709,15 +722,15 @@ impl hal::Instance for Instance {
                 // `device::MEM_TYPE_IMAGE_SHIFT`, `device::MEM_TYPE_TARGET_SHIFT`)
                 // denote the usage group.
                 let mut types = Vec::new();
-                for i in 0..4 {
+                for i in 0 .. MemoryGroup::NumGroups as _ {
                     types.extend(base_memory_types
                         .iter()
                         .map(|mem_type| {
                             let mut ty = mem_type.clone();
 
-                            // Images and RenderTargets are not host visible as we can't create
-                            // a corresponding buffer for mapping
-                            if i >= 2 {
+                            // Images and Targets are not host visible as we can't create
+                            // a corresponding buffer for mapping.
+                            if i == MemoryGroup::ImageOnly as _ || i == MemoryGroup::TargetOnly as _ {
                                 ty.properties.remove(Properties::CPU_VISIBLE);
                             }
                             ty
