@@ -9,7 +9,6 @@ use smallvec::SmallVec;
 use {command as com, native, state, window};
 use {Backend, Share};
 
-
 pub type ArrayBuffer = gl::types::GLuint;
 
 // State caching system for command queue.
@@ -652,14 +651,18 @@ impl CommandQueue {
 }
 
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw(
+    unsafe fn submit_raw<IC>(
         &mut self,
-        submit_info: hal::queue::RawSubmission<Backend>,
+        submit_info: hal::queue::RawSubmission<Backend, IC>,
         fence: Option<&native::Fence>,
-    ) {
+    ) where
+        IC: IntoIterator,
+        IC::Item: Borrow<com::RawCommandBuffer>
+    {
         use pool::BufferMemory;
         {
-            for cb in submit_info.cmd_buffers {
+            for buf in submit_info.cmd_buffers {
+                let cb = buf.borrow();
                 let memory = cb
                     .memory
                     .try_lock()

@@ -226,7 +226,6 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type QueueFamily:         QueueFamily;
     type CommandQueue:        queue::RawCommandQueue<Self>;
     type CommandBuffer:       command::RawCommandBuffer<Self>;
-    type SubpassCommandBuffer;
 
     type ShaderModule:        Debug + Any + Send + Sync;
     type RenderPass:          Debug + Any + Send + Sync;
@@ -234,7 +233,6 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
 
     type Memory:              Debug + Any;
     type CommandPool:         pool::RawCommandPool<Self>;
-    type SubpassCommandPool:  pool::SubpassCommandPool<Self>;
 
     type UnboundBuffer:       Debug + Any + Send + Sync;
     type Buffer:              Debug + Any + Send + Sync;

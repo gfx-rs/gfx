@@ -79,8 +79,8 @@ pub struct Resources<B: hal::Backend> {
 
 pub struct Scene<B: hal::Backend> {
     pub resources: Resources<B>,
-    pub jobs: HashMap<String, hal::command::Submit<B, hal::queue::Graphics>>,
-    init_submit: Option<hal::command::Submit<B, hal::queue::Graphics>>,
+    pub jobs: HashMap<String, hal::command::Submit<B, hal::queue::Graphics, hal::command::OneShot, hal::command::Primary>>,
+    init_submit: Option<hal::command::Submit<B, hal::queue::Graphics, hal::command::OneShot, hal::command::Primary>>,
     device: B::Device,
     queue_group: hal::QueueGroup<B, hal::queue::Graphics>,
     command_pool: hal::CommandPool<B, hal::queue::Graphics>,
@@ -151,7 +151,7 @@ impl<B: hal::Backend> Scene<B> {
         };
         let mut upload_buffers = HashMap::new();
         let init_submit = {
-            let mut init_cmd = command_pool.acquire_command_buffer();
+            let mut init_cmd = command_pool.acquire_command_buffer(false);
 
             // Pass[1]: images, buffers, passes, descriptor set layouts/pools
             for (name, resource) in &raw.resources {
@@ -506,7 +506,7 @@ impl<B: hal::Backend> Scene<B> {
         // fill up command buffers
         let mut jobs = HashMap::new();
         for (name, job) in &raw.jobs {
-            let mut command_buf = command_pool.acquire_command_buffer();
+            let mut command_buf = command_pool.acquire_command_buffer(false);
             match *job {
                 raw::Job::Transfer { ref commands } => {
                     use raw::TransferCommand as Tc;
@@ -605,8 +605,8 @@ impl<B: hal::Backend> Scene<B> {
             .map(|name| self.jobs.remove(name).unwrap())
             .collect::<Vec<_>>();
         let submission = hal::queue::Submission::new()
-            .submit(&[self.init_submit.take().unwrap()])
-            .submit(&values);
+            .submit(self.init_submit.take())
+            .submit(values);
         self.queue_group.queues[0].submit(submission, None);
     }
 
@@ -645,7 +645,7 @@ impl<B: hal::Backend> Scene<B> {
             1,
         );
         let copy_submit = {
-            let mut cmd_buffer = command_pool.acquire_command_buffer();
+            let mut cmd_buffer = command_pool.acquire_command_buffer(false);
             let image_barrier = memory::Barrier::Image {
                 states: image.stable_state .. (i::Access::TRANSFER_READ, i::ImageLayout::TransferSrcOptimal),
                 target: &image.handle,
@@ -685,7 +685,7 @@ impl<B: hal::Backend> Scene<B> {
 
         let copy_fence = self.device.create_fence(false);
         let submission = hal::queue::Submission::new()
-            .submit(&[copy_submit]);
+            .submit(Some(copy_submit));
         self.queue_group.queues[0].submit(submission, Some(&copy_fence));
         //queue.destroy_command_pool(command_pool);
         self.device.wait_for_fences(&[&copy_fence], hal::device::WaitFor::Any, !0);

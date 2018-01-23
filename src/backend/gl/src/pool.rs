@@ -1,5 +1,5 @@
 use hal::pool;
-use command::{self, Command, RawCommandBuffer, SubpassCommandBuffer};
+use command::{self, Command, RawCommandBuffer};
 use native as n;
 use Backend;
 
@@ -78,7 +78,7 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         }
     }
 
-    fn allocate(&mut self, num: usize) -> Vec<RawCommandBuffer> {
+    fn allocate(&mut self, num: usize, secondary: bool) -> Vec<RawCommandBuffer> { // TODO: Implement secondary buffers
         (0..num).map(|_|
                 RawCommandBuffer::new(
                     self.fbo,
@@ -103,9 +103,3 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         //         only one Vec.
     }
 }
-
-pub struct SubpassCommandPool {
-    _command_buffers: Vec<SubpassCommandBuffer>,
-}
-
-impl pool::SubpassCommandPool<Backend> for SubpassCommandPool { }

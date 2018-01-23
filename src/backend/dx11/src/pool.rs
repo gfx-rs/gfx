@@ -1,7 +1,7 @@
 use core::{self, pool};
 use core::command::{Buffer, GeneralCommandBuffer, GraphicsCommandBuffer, ComputeCommandBuffer, TransferCommandBuffer, Encoder};
 use core::queue::{GeneralQueue, GraphicsQueue, ComputeQueue, TransferQueue};
-use command::{self, RawCommandBuffer, SubpassCommandBuffer};
+use command::{self, RawCommandBuffer};
 use {Backend, CommandQueue, CommandList, Resources};
 
 pub struct RawCommandPool {
@@ -44,29 +44,4 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         self.next_buffer += 1;
         buffer
     }
-}
-
-pub struct SubpassCommandPool {
-}
-
-impl pool::SubpassCommandPool<Backend> for SubpassCommandPool {
-    /*
-    fn reset(&mut self) {
-        unimplemented!()
-    }
-
-    fn reserve(&mut self, additional: usize) {
-        unimplemented!()
-    }
-
-    fn from_queue<'a, Q>(mut _queue: Q, capacity: usize) -> Self
-        where Q: Compatible<GraphicsQueue<Backend>> + AsRef<CommandQueue>
-    {
-        unimplemented!()
-    }
-
-    fn acquire_command_buffer<'a>(&'a mut self) -> Encoder<'a, Backend, SubpassCommandBuffer<CommandList>> {
-        unimplemented!()
-    }
-    */
 }

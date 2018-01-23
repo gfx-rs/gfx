@@ -4,7 +4,7 @@ use ash::vk;
 use ash::version::DeviceV1_0;
 use smallvec::SmallVec;
 
-use command::{CommandBuffer, SubpassCommandBuffer};
+use command::CommandBuffer;
 use hal::pool;
 use {Backend, RawDevice};
 
@@ -25,12 +25,12 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         }
     }
 
-    fn allocate(&mut self, num: usize) -> Vec<CommandBuffer> {
+    fn allocate(&mut self, num: usize, secondary: bool) -> Vec<CommandBuffer> {
         let info = vk::CommandBufferAllocateInfo {
             s_type: vk::StructureType::CommandBufferAllocateInfo,
             p_next: ptr::null(),
             command_pool: self.raw,
-            level: vk::CommandBufferLevel::Primary,
+            level: if secondary { vk::CommandBufferLevel::Secondary } else { vk::CommandBufferLevel::Primary },
             command_buffer_count: num as u32,
         };
 
@@ -57,12 +57,3 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         self.device.0.free_command_buffers(self.raw, &buffers);
     }
 }
-
-pub struct SubpassCommandPool {
-    _pool: vk::CommandPool,
-    _command_buffers: Vec<SubpassCommandBuffer>,
-    _next_buffer: usize,
-    _device: Arc<RawDevice>,
-}
-
-impl pool::SubpassCommandPool<Backend> for SubpassCommandPool { }

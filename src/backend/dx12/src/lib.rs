@@ -302,16 +302,19 @@ pub struct CommandQueue {
 unsafe impl Send for CommandQueue {} //blocked by ComPtr
 
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw(
+    unsafe fn submit_raw<IC>(
         &mut self,
-        submission: hal::queue::RawSubmission<Backend>,
+        submission: hal::queue::RawSubmission<Backend, IC>,
         fence: Option<&native::Fence>,
-    ) {
+    ) where 
+        IC: IntoIterator, 
+        IC::Item: Borrow<command::CommandBuffer> 
+    {
         // TODO: semaphores
         let mut lists = submission
             .cmd_buffers
-            .iter()
-            .map(|buf| buf.as_raw_list())
+            .into_iter()
+            .map(|buf| buf.borrow().as_raw_list())
             .collect::<Vec<_>>();
         self.raw.ExecuteCommandLists(lists.len() as _, lists.as_mut_ptr());
 
@@ -828,11 +831,9 @@ impl hal::Backend for Backend {
     type QueueFamily = QueueFamily;
     type CommandQueue = CommandQueue;
     type CommandBuffer = command::CommandBuffer;
-    type SubpassCommandBuffer = command::SubpassCommandBuffer;
 
     type Memory = native::Memory;
     type CommandPool = pool::RawCommandPool;
-    type SubpassCommandPool = pool::SubpassCommandPool;
 
     type ShaderModule = native::ShaderModule;
     type RenderPass = native::RenderPass;

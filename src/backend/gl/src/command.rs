@@ -472,7 +472,7 @@ impl RawCommandBuffer {
 }
 
 impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
-    fn begin(&mut self) {
+    fn begin(&mut self, flags: hal::command::CommandBufferFlags) { // TODO: Implement flags!
         if self.individual_reset {
             // Implicit buffer reset when individual reset is set.
             self.reset(false);
@@ -1043,6 +1043,16 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     ) {
         unimplemented!()
     }
+
+    fn execute_commands<I>(
+        &mut self,
+        buffers: I,
+    ) where
+        I: IntoIterator,
+        I::Item: Borrow<RawCommandBuffer> 
+    {
+        unimplemented!()
+    }
 }
 
 /// Avoids creating second mutable borrows of `self` by requiring mutable
@@ -1069,6 +1079,3 @@ fn push_cmd_internal(id: &u64, memory: &mut Arc<Mutex<pool::BufferMemory>>, buff
         size: 1,
     });
 }
-
-/// A subpass command buffer abstraction for OpenGL
-pub struct SubpassCommandBuffer;

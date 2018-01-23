@@ -90,11 +90,11 @@ impl CommandBuffer {
 }
 
 impl com::RawCommandBuffer<Backend> for CommandBuffer {
-    fn begin(&mut self) {
+    fn begin(&mut self, flags: com::CommandBufferFlags) {
         let info = vk::CommandBufferBeginInfo {
             s_type: vk::StructureType::CommandBufferBeginInfo,
             p_next: ptr::null(),
-            flags: vk::COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+            flags: conv::map_command_buffer_flags(flags),
             p_inheritance_info: ptr::null(),
         };
 
@@ -907,6 +907,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             );
         }
     }
-}
 
-pub struct SubpassCommandBuffer(pub CommandBuffer);
+    fn execute_commands<'a, I>(
+        &mut self,
+        buffers: I,
+    ) where
+        I: IntoIterator,
+        I::Item: Borrow<CommandBuffer>,
+    {
+        let command_buffers = buffers.into_iter().map(|b| b.borrow().raw).collect::<Vec<_>>();
+        unsafe { self.device.0.cmd_execute_commands(self.raw, &command_buffers); }
+    }
+}
