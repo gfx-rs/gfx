@@ -48,7 +48,10 @@ pub trait RawCommandQueue<B: Backend> {
     /// Unsafe because it's not checked that the queue can process the submitted command buffers.
     /// Trying to submit compute commands to a graphics queue will result in undefined behavior.
     /// Each queue implements safe wrappers according to their supported functionalities!
-    unsafe fn submit_raw(&mut self, RawSubmission<B>, Option<&B::Fence>);
+    unsafe fn submit_raw<IC>(&mut self, RawSubmission<B, IC>, Option<&B::Fence>)
+    where
+        IC: IntoIterator,
+        IC::Item: Borrow<B::CommandBuffer>;
 
     ///
     fn present<IS, IW>(&mut self, swapchains: IS, wait_semaphores: IW)

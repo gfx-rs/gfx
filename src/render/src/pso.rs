@@ -206,7 +206,7 @@ pub trait GraphicsPipelineData<B: Backend> {
         self,
         encoder: &'a mut Encoder<'b, B, C>,
         pipeline: &'a Self::Pipeline
-    ) -> hal::command::RenderPassInlineEncoder<'a, B>
+    ) -> hal::command::RenderPassInlineEncoder<'a, B, hal::command::Primary>
         where Self: 'a, 'b: 'a, C: Supports<Transfer> + Supports<Graphics>;
 }
 

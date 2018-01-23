@@ -189,13 +189,11 @@ impl core::Backend for Backend {
     type Resources = Resources;
     type CommandQueue = CommandQueue;
     type RawCommandBuffer = command::RawCommandBuffer<CommandList>; // TODO: deferred?
-    type SubpassCommandBuffer = command::SubpassCommandBuffer<CommandList>;
     type SubmitInfo = command::SubmitInfo<CommandList>;
     type Device = Device;
     type QueueFamily = QueueFamily;
 
     type RawCommandPool = pool::RawCommandPool;
-    type SubpassCommandPool = pool::SubpassCommandPool;
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]

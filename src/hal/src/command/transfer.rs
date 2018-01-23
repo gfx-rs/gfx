@@ -6,7 +6,7 @@ use device::Extent;
 use memory::Barrier;
 use pso::PipelineStage;
 use queue::capability::{Supports, Transfer};
-use super::{CommandBuffer, RawCommandBuffer};
+use super::{CommandBuffer, RawCommandBuffer, Shot, Level};
 
 
 ///
@@ -84,7 +84,7 @@ pub struct BufferImageCopy {
 }
 
 
-impl<'a, B: Backend, C: Supports<Transfer>> CommandBuffer<'a, B, C> {
+impl<'a, B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<'a, B, C, S, L> {
     ///
     pub fn pipeline_barrier<'i, T>(
         &mut self,

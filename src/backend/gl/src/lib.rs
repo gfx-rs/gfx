@@ -45,11 +45,9 @@ impl hal::Backend for Backend {
     type QueueFamily = QueueFamily;
     type CommandQueue = queue::CommandQueue;
     type CommandBuffer = command::RawCommandBuffer;
-    type SubpassCommandBuffer = command::SubpassCommandBuffer;
 
     type Memory = native::Memory;
     type CommandPool = pool::RawCommandPool;
-    type SubpassCommandPool = pool::SubpassCommandPool;
 
     type ShaderModule = native::ShaderModule;
     type RenderPass = native::RenderPass;

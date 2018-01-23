@@ -1,13 +1,14 @@
 use std::borrow::Borrow;
-use std::ops::Range;
+use std::ops::{Range, Deref, DerefMut};
+use std::marker::PhantomData;
 use {pso, Backend, IndexCount, InstanceCount, VertexCount, VertexOffset};
 use buffer::IndexBufferView;
 use queue::{Supports, Graphics};
 use super::{
     ColorValue, StencilValue, Rect, Viewport,
     AttachmentClear, ClearValue, CommandBuffer, RawCommandBuffer,
+    Shot, Level, Primary, Secondary, Submittable, Submit
 };
-
 
 /// Specifies how commands for the following renderpasses will be recorded.
 pub enum SubpassContents {
@@ -17,39 +18,11 @@ pub enum SubpassContents {
     SecondaryBuffers,
 }
 
-///
-pub struct RenderPassInlineEncoder<'a, B: Backend>(pub(crate) &'a mut B::CommandBuffer)
-where B::CommandBuffer: 'a;
+/// This struct contains all methods for all commands submittable during a subpass.
+/// It is used to implement the identical portions of RenderPassInlineEncoder and SubpassCommandBuffer.
+pub struct RenderSubpassCommon<'a, B: Backend>(pub(crate) &'a mut B::CommandBuffer);
 
-impl<'a, B: Backend> RenderPassInlineEncoder<'a, B> {
-    ///
-    pub fn new<C, T>(
-        cmd_buffer: &'a mut CommandBuffer<B, C>,
-        render_pass: &B::RenderPass,
-        frame_buffer: &B::Framebuffer,
-        render_area: Rect,
-        clear_values: T,
-    ) -> Self
-    where
-        C: Supports<Graphics>,
-        T: IntoIterator,
-        T::Item: Borrow<ClearValue>,
-    {
-        cmd_buffer.raw.begin_renderpass(
-            render_pass,
-            frame_buffer,
-            render_area,
-            clear_values,
-            SubpassContents::Inline);
-        RenderPassInlineEncoder(cmd_buffer.raw)
-    }
-
-    ///
-    pub fn next_subpass_inline(self) -> Self {
-        self.0.next_subpass(SubpassContents::Inline);
-        self
-    }
-
+impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
     ///
     pub fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
     where
@@ -148,8 +121,166 @@ impl<'a, B: Backend> RenderPassInlineEncoder<'a, B> {
     // TODO: begin/end query
 }
 
-impl<'a, B: Backend> Drop for RenderPassInlineEncoder<'a, B> {
+///
+pub struct RenderPassInlineEncoder<'a, B: Backend, L: Level>(pub(crate) Option<RenderSubpassCommon<'a, B>>, PhantomData<L>)
+where B::CommandBuffer: 'a;
+
+impl<'a, B: Backend, L: Level> RenderPassInlineEncoder<'a, B, L> {
+    ///
+    pub fn new<C, T, S: Shot>(
+        cmd_buffer: &'a mut CommandBuffer<B, C, S, L>,
+        render_pass: &B::RenderPass,
+        frame_buffer: &B::Framebuffer,
+        render_area: Rect,
+        clear_values: T,
+    ) -> Self
+    where
+        C: Supports<Graphics>,
+        T: IntoIterator,
+        T::Item: Borrow<ClearValue>,
+    {
+        cmd_buffer.raw.begin_renderpass(
+            render_pass,
+            frame_buffer,
+            render_area,
+            clear_values,
+            SubpassContents::Inline);
+        RenderPassInlineEncoder(Some(RenderSubpassCommon(cmd_buffer.raw)), PhantomData)
+    }
+
+    ///
+    pub fn next_subpass_inline(mut self) -> Self {
+        self.0.as_mut().unwrap().0.next_subpass(SubpassContents::Inline);
+        self
+    }
+}
+
+impl<'a, B: Backend> RenderPassInlineEncoder<'a, B, Primary> {
+
+    ///
+    pub fn next_subpass_secondary(mut self) -> RenderPassSecondaryEncoder<'a, B> {
+        self.0.as_mut().unwrap().0.next_subpass(SubpassContents::SecondaryBuffers);
+        RenderPassSecondaryEncoder(Some(self.0.take().unwrap().0))
+    }
+}
+
+impl<'a, B: Backend, L: Level> Deref for RenderPassInlineEncoder<'a, B, L> {
+    type Target = RenderSubpassCommon<'a, B>;
+    fn deref(&self) -> &RenderSubpassCommon<'a, B> {
+        self.0.as_ref().unwrap()
+    }
+}
+
+impl<'a, B: Backend, L: Level> DerefMut for RenderPassInlineEncoder<'a, B, L> {
+    fn deref_mut(&mut self) -> &mut RenderSubpassCommon<'a, B> {
+        self.0.as_mut().unwrap()
+    }
+}
+
+impl<'a, B: Backend, L: Level> Drop for RenderPassInlineEncoder<'a, B, L> {
     fn drop(&mut self) {
-        self.0.end_renderpass();
+        if let Some(ref mut b) = self.0 {
+            b.0.end_renderpass();
+        }
+    }
+}
+
+///
+pub struct RenderPassSecondaryEncoder<'a, B: Backend>(pub(crate) Option<&'a mut B::CommandBuffer>)
+where B::CommandBuffer: 'a;
+
+impl<'a, B: Backend> RenderPassSecondaryEncoder<'a, B> {
+    ///
+    pub fn new<C, T, S: Shot>(
+        cmd_buffer: &'a mut CommandBuffer<B, C, S, Primary>,
+        render_pass: &B::RenderPass,
+        frame_buffer: &B::Framebuffer,
+        render_area: Rect,
+        clear_values: T,
+    ) -> Self
+    where
+        C: Supports<Graphics>,
+        T: IntoIterator,
+        T::Item: Borrow<ClearValue>,
+    {
+        cmd_buffer.raw.begin_renderpass(
+            render_pass,
+            frame_buffer,
+            render_area,
+            clear_values,
+            SubpassContents::SecondaryBuffers
+        );
+        RenderPassSecondaryEncoder(Some(cmd_buffer.raw))
+    }
+
+    ///
+    pub fn execute_commands<I>(&mut self, submits: I)
+    where
+        I: IntoIterator,
+        I::Item: Submittable<'a, B, Subpass, Secondary>,
+    {
+        let submits = submits.into_iter().collect::<Vec<_>>();
+        self.0.as_mut().unwrap().execute_commands(submits.into_iter().map(|submit| unsafe { submit.as_buffer() }));
+    }
+
+    ///
+    pub fn next_subpass_inline(mut self) -> RenderPassInlineEncoder<'a, B, Primary> {
+        self.0.as_mut().unwrap().next_subpass(SubpassContents::Inline);
+        RenderPassInlineEncoder(self.0.take().map(|b| RenderSubpassCommon(b)), PhantomData)
+    }
+
+    ///
+    pub fn next_subpass_secondary(mut self) -> Self {
+        self.0.as_mut().unwrap().next_subpass(SubpassContents::SecondaryBuffers);
+        self
+    }
+}
+
+impl<'a, B: Backend> Drop for RenderPassSecondaryEncoder<'a, B> {
+    fn drop(&mut self) {
+        if let Some(ref mut b) = self.0 {
+            b.end_renderpass();
+        }
+    }
+}
+
+/// Capability used only for subpass command buffers' Submits.
+pub enum Subpass { }
+
+/// A secondary command buffer recorded entirely within a subpass.
+pub struct SubpassCommandBuffer<'a, B: Backend, S: Shot>(pub(crate) RenderSubpassCommon<'a, B>, pub(crate) PhantomData<S>);
+impl<'a, B: Backend, S: Shot> SubpassCommandBuffer<'a, B, S> {
+
+    ///
+    pub unsafe fn new(raw: &mut B::CommandBuffer) -> SubpassCommandBuffer<B, S> {
+        SubpassCommandBuffer(RenderSubpassCommon(raw), PhantomData)
+    }
+
+    /// Finish recording commands to the command buffer.
+    ///
+    /// The command buffer will be consumed and can't be modified further.
+    /// The command pool must be reset to able to re-record commands.
+    pub fn finish(self) -> Submit<B, Subpass, S, Secondary> {
+        Submit::new((self.0).0.clone())
+    }
+
+}
+
+impl<'a, B: Backend, S: Shot> Deref for SubpassCommandBuffer<'a, B, S> {
+    type Target = RenderSubpassCommon<'a, B>;
+    fn deref(&self) -> &RenderSubpassCommon<'a, B> {
+        &self.0
+    }
+}
+
+impl<'a, B: Backend, S: Shot> DerefMut for SubpassCommandBuffer<'a, B, S> {
+    fn deref_mut(&mut self) -> &mut RenderSubpassCommon<'a, B> {
+        &mut self.0
+    }
+}
+
+impl<'a, B: Backend, S: Shot> Drop for SubpassCommandBuffer<'a, B, S> {
+    fn drop(&mut self) {
+        (self.0).0.finish();
     }
 }

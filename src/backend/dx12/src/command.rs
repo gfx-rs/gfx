@@ -605,7 +605,8 @@ impl CommandBuffer {
 }
 
 impl com::RawCommandBuffer<Backend> for CommandBuffer {
-    fn begin(&mut self) {
+    fn begin(&mut self, flags: com::CommandBufferFlags) {
+        // TODO: Implement flags somehow.
         self.reset();
     }
 
@@ -1557,6 +1558,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     ) {
         Self::push_constants(&mut self.comp_pipeline.user_data, layout, offset, constants);
     }
-}
 
-pub struct SubpassCommandBuffer {}
+    fn execute_commands<I>(
+        &mut self,
+        buffers: I,
+    ) where
+        I: IntoIterator,
+        I::Item: Borrow<CommandBuffer> 
+    {
+        unimplemented!()
+    }
+}

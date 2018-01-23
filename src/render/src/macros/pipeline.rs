@@ -13,7 +13,7 @@ macro_rules! gfx_graphics_pipeline {
                 Device, Primitive
             };
             use $crate::hal::{pass as cpass, pso as cpso};
-            use $crate::hal::command::{RenderPassInlineEncoder, Rect, Viewport};
+            use $crate::hal::command::{RenderPassInlineEncoder, Rect, Viewport, Primary};
 
             pub struct Meta<B: Backend> {
                 layout: handle::raw::PipelineLayout<B>,
@@ -108,7 +108,7 @@ macro_rules! gfx_graphics_pipeline {
                     self,
                     encoder: &'b mut Encoder<'c, B, C>,
                     meta: &'b Self::Pipeline
-                ) -> RenderPassInlineEncoder<'b, B>
+                ) -> RenderPassInlineEncoder<'b, B, Primary>
                     where Self: 'a, 'c: 'b, C: Supports<Transfer> + Supports<Graphics>
                 {
                     let mut buffer_states = Vec::new();

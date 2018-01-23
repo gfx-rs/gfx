@@ -3,15 +3,21 @@
 //! // TODO
 
 use {pso, Backend};
-use command::{Submit};
+use command::{Submittable, Primary};
 use super::capability::{Transfer, Supports, Upper};
+use std::borrow::Borrow;
+use std::ops::Deref;
 use std::marker::PhantomData;
 use smallvec::SmallVec;
 
 /// Raw submission information for a command queue.
-pub struct RawSubmission<'a, B: Backend + 'a> {
+pub struct RawSubmission<'a, B: Backend + 'a, IC>
+where
+    IC: IntoIterator,
+    IC::Item: Borrow<B::CommandBuffer>,
+{
     /// Command buffers to submit.
-    pub cmd_buffers: &'a [B::CommandBuffer],
+    pub cmd_buffers: IC,
     /// Semaphores to wait being signalled before submission.
     pub wait_semaphores: &'a [(&'a B::Semaphore, pso::PipelineStage)],
     /// Semaphores which get signalled after submission.
@@ -20,7 +26,7 @@ pub struct RawSubmission<'a, B: Backend + 'a> {
 
 /// Submission information for a command queue.
 pub struct Submission<'a, B: Backend, C> {
-    cmd_buffers: SmallVec<[B::CommandBuffer; 16]>,
+    cmd_buffers: SmallVec<[Box<Borrow<B::CommandBuffer> + 'a>; 16]>,
     wait_semaphores: SmallVec<[(&'a B::Semaphore, pso::PipelineStage); 16]>,
     signal_semaphores: SmallVec<[&'a B::Semaphore; 16]>,
     marker: PhantomData<C>,
@@ -57,9 +63,9 @@ where
     }
 
     /// Convert strong-typed submission object into untyped equivalent.
-    pub(super) fn as_raw(&self) -> RawSubmission<B> {
+    pub(super) fn as_raw(&self) -> RawSubmission<B, Vec<&B::CommandBuffer>> {
         RawSubmission {
-            cmd_buffers: &self.cmd_buffers,
+            cmd_buffers: self.cmd_buffers.iter().map(|b| b.deref().borrow()).collect::<Vec<_>>(),
             wait_semaphores: &self.wait_semaphores,
             signal_semaphores: &self.signal_semaphores,
         }
@@ -67,14 +73,18 @@ where
 
     /// Append a new list of finished command buffers to this submission.
     ///
-    /// All submits for this call must be of the same capability.
+    /// All submits for this call must be of the same type.
     /// Submission will be automatically promoted to to the minimum required capability
     /// to hold all passed submits.
-    pub fn submit<S>(mut self, submits: &[Submit<B, S>]) -> Submission<'a, B, <(C, S) as Upper>::Result>
+    pub fn submit<I, K>(mut self, submits: I) -> Submission<'a, B, <(C, K) as Upper>::Result>
     where
-        (C, S): Upper
+        I: IntoIterator,
+        I::Item: Submittable<'a, B, K, Primary>,
+        (C, K): Upper
     {
-        self.cmd_buffers.extend(submits.iter().map(|submit| submit.0.clone()));
+        self.cmd_buffers.extend(submits.into_iter().map(
+            |s| { Box::new( unsafe { s.as_buffer() } ) as Box<_> }
+        ));
         Submission {
             cmd_buffers: self.cmd_buffers,
             wait_semaphores: self.wait_semaphores,
