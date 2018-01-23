@@ -557,13 +557,17 @@ pub struct CommandQueue {
 }
 
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw(&mut self,
-        submission: hal::queue::RawSubmission<Backend>,
+    unsafe fn submit_raw<IC>(&mut self,
+        submission: hal::queue::RawSubmission<Backend, IC>,
         fence: Option<&native::Fence>,
-    ) {
+    )
+    where
+        IC: IntoIterator,
+        IC::Item: Borrow<command::CommandBuffer>,
+    {
         let buffers = submission.cmd_buffers
-            .iter()
-            .map(|cmd| cmd.raw)
+            .into_iter()
+            .map(|cmd| cmd.borrow().raw)
             .collect::<Vec<_>>();
         let waits = submission.wait_semaphores
             .iter()
@@ -658,11 +662,9 @@ impl hal::Backend for Backend {
     type QueueFamily = QueueFamily;
     type CommandQueue = CommandQueue;
     type CommandBuffer = command::CommandBuffer;
-    type SubpassCommandBuffer = command::SubpassCommandBuffer;
 
     type Memory = native::Memory;
     type CommandPool = pool::RawCommandPool;
-    type SubpassCommandPool = pool::SubpassCommandPool;
 
     type ShaderModule = native::ShaderModule;
     type RenderPass = native::RenderPass;

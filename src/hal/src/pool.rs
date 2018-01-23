@@ -1,7 +1,11 @@
 //! Command pools
 
 use {Backend};
-use command::{CommandBuffer, RawCommandBuffer};
+use command::{
+    CommandBuffer, RawCommandBuffer, SecondaryCommandBuffer, 
+    SubpassCommandBuffer, CommandBufferFlags, Shot
+};
+use queue::capability::{Supports, Graphics};
 use std::marker::PhantomData;
 
 bitflags!(
@@ -24,7 +28,7 @@ pub trait RawCommandPool<B: Backend>: Send {
     fn reset(&mut self);
 
     /// Allocate new command buffers from the pool.
-    fn allocate(&mut self, num: usize) -> Vec<B::CommandBuffer>;
+    fn allocate(&mut self, num: usize, secondary: bool) -> Vec<B::CommandBuffer>;
 
     /// Free command buffers which are allocated from this pool.
     unsafe fn free(&mut self, buffers: Vec<B::CommandBuffer>);
@@ -38,8 +42,10 @@ pub trait RawCommandPool<B: Backend>: Send {
 /// `CommandBuffer` wrapper for encoding.
 pub struct CommandPool<B: Backend, C> {
     buffers: Vec<B::CommandBuffer>,
+    secondary_buffers: Vec<B::CommandBuffer>,
     pool: B::CommandPool,
     next_buffer: usize,
+    next_secondary_buffer: usize,
     _capability: PhantomData<C>,
 }
 
@@ -47,8 +53,10 @@ impl<B: Backend, C> CommandPool<B, C> {
     pub(crate) fn new(raw: B::CommandPool, capacity: usize) -> Self {
         let mut pool = CommandPool {
             buffers: Vec::new(),
+            secondary_buffers: Vec::new(),
             pool: raw,
             next_buffer: 0,
+            next_secondary_buffer: 0,
             _capability: PhantomData,
         };
         pool.reserve(capacity);
@@ -61,40 +69,95 @@ impl<B: Backend, C> CommandPool<B, C> {
     pub fn reset(&mut self) {
         self.pool.reset();
         self.next_buffer = 0;
+        self.next_secondary_buffer = 0;
     }
 
-    /// Reserve an additional amount of command buffers.
+    /// Reserve an additional amount of primary command buffers.
     pub fn reserve(&mut self, additional: usize) {
         let available = self.buffers.len() - self.next_buffer;
         if additional > available {
-            let buffers = self.pool.allocate(additional - available);
+            let buffers = self.pool.allocate(additional - available, false);
             self.buffers.extend(buffers);
         }
     }
 
-    /// Get a command buffer for recording.
+    /// Reserve an additional amount of secondary command buffers.
+    pub fn reserve_secondary(&mut self, additional: usize) {
+        let available = self.secondary_buffers.len() - self.next_secondary_buffer;
+        if additional > available {
+            let buffers = self.pool.allocate(additional - available, true);
+            self.secondary_buffers.extend(buffers);
+        }
+    }
+
+    /// Get a primary command buffer for recording.
     ///
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
-    pub fn acquire_command_buffer(&mut self) -> CommandBuffer<B, C> {
+    pub fn acquire_command_buffer<S: Shot>(&mut self, allow_pending_resubmit: bool) -> CommandBuffer<B, C, S> {
         self.reserve(1);
 
         let buffer = &mut self.buffers[self.next_buffer];
-        buffer.begin();
+        let mut flags = S::FLAGS;
+        if allow_pending_resubmit {
+            flags |= CommandBufferFlags::SIMULTANEOUS_USE;
+        }
+        buffer.begin(flags);
         self.next_buffer += 1;
         unsafe {
             CommandBuffer::new(buffer)
         }
     }
 
+    /// Get a secondary command buffer for recording.
+    ///
+    /// You can only record to one command buffer per pool at the same time.
+    /// If more command buffers are requested than allocated, new buffers will be reserved.
+    /// The command buffer will be returned in 'recording' state.
+    pub fn acquire_secondary_command_buffer<S: Shot>(&mut self, allow_pending_resubmit: bool) -> SecondaryCommandBuffer<B, C, S> {
+        self.reserve_secondary(1);
+
+        let buffer = &mut self.secondary_buffers[self.next_secondary_buffer];
+        let mut flags = S::FLAGS;
+        if allow_pending_resubmit {
+            flags |= CommandBufferFlags::SIMULTANEOUS_USE;
+        }
+        buffer.begin(flags);
+        self.next_secondary_buffer += 1;
+        unsafe {
+            SecondaryCommandBuffer::new(buffer)
+        }
+    }
+
     /// Downgrade a typed command pool to untyped one, free up the allocated command buffers.
     pub fn downgrade(mut self) -> B::CommandPool {
-        let free_list = self.buffers.drain(..).collect::<Vec<_>>();
-        unsafe { self.pool.free(free_list); }
+        unsafe {
+            self.pool.free(self.buffers.drain(..).collect::<Vec<_>>());
+            self.pool.free(self.secondary_buffers.drain(..).collect::<Vec<_>>());
+        }
         self.pool
     }
 }
 
-///
-pub trait SubpassCommandPool<B: Backend> { }
+impl<B: Backend, C: Supports<Graphics>> CommandPool<B, C> {
+    /// Get a subpass command buffer for recording.
+    ///
+    /// You can only record to one command buffer per pool at the same time.
+    /// If more command buffers are requested than allocated, new buffers will be reserved.
+    /// The command buffer will be returned in 'recording' state.
+    pub fn acquire_subpass_command_buffer<S: Shot>(&mut self, allow_pending_resubmit: bool) -> SubpassCommandBuffer<B, S> {
+        self.reserve_secondary(1);
+
+        let buffer = &mut self.secondary_buffers[self.next_secondary_buffer];
+        let mut flags = S::FLAGS;
+        if allow_pending_resubmit {
+            flags |= CommandBufferFlags::SIMULTANEOUS_USE;
+        }
+        buffer.begin(flags);
+        self.next_secondary_buffer += 1;
+        unsafe {
+            SubpassCommandBuffer::new(buffer)
+        }
+    }
+}

@@ -46,7 +46,7 @@ impl<B: Backend, C> Pool<B, C> {
     pub fn acquire_encoder<'a>(&'a mut self) -> Encoder<'a, B, C> {
         Encoder {
             pool: PoolDependency(self.0.dependency()),
-            buffer: self.mut_inner().acquire_command_buffer(),
+            buffer: self.mut_inner().acquire_command_buffer(false),
             // raw_data: pso::RawDataSet::new(),
             handles: handle::Bag::new(),
             pipeline_stage: PipelineStage::TOP_OF_PIPE,
@@ -93,7 +93,7 @@ pub struct Encoder<'a, B: Backend, C> {
 }
 
 pub struct Submit<B: Backend, C> {
-    pub(crate) inner: hal::command::Submit<B, C>,
+    pub(crate) inner: hal::command::Submit<B, C, hal::command::OneShot, hal::command::Primary>,
     pub(crate) access_info: AccessInfo<B>,
     pub(crate) handles: handle::Bag<B>,
     pub(crate) pool: PoolDependency<B, C>

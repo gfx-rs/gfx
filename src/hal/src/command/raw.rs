@@ -46,10 +46,28 @@ pub union ClearValueRaw {
     _align: [u32; 4],
 }
 
+bitflags! {
+    ///
+    #[derive(Default)]
+    pub struct CommandBufferFlags: u16 {
+        ///
+        const EMPTY = 0x0;
+
+        ///
+        const ONE_TIME_SUBMIT = 0x1;
+
+        ///
+        const RENDER_PASS_CONTINUE = 0x2;
+
+        ///
+        const SIMULTANEOUS_USE = 0x4;
+    }
+}
+
 ///
 pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     ///
-    fn begin(&mut self);
+    fn begin(&mut self, flags: CommandBufferFlags);
 
     ///
     fn finish(&mut self);
@@ -427,4 +445,12 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         offset: u32,
         constants: &[u32],
     );
+
+    ///
+    fn execute_commands<I>(
+        &mut self,
+        buffers: I,
+    ) where
+        I: IntoIterator,
+        I::Item: Borrow<B::CommandBuffer>;
 }

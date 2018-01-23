@@ -117,8 +117,8 @@ fn main() {
 
     let mut command_pool = device.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty(), 16);
     let fence = device.create_fence(false);
-    let submission = queue::Submission::new().submit(&[{
-        let mut command_buffer = command_pool.acquire_command_buffer();
+    let submission = queue::Submission::new().submit(Some({
+        let mut command_buffer = command_pool.acquire_command_buffer(false);
         command_buffer.copy_buffer(&staging_buffer, &device_buffer, &[command::BufferCopy { src: 0, dst: 0, size: stride * numbers.len() as u64}]);
         command_buffer.pipeline_barrier(
             Range { start: pso::PipelineStage::TRANSFER, end: pso::PipelineStage::COMPUTE_SHADER },
@@ -143,7 +143,7 @@ fn main() {
                 }]);
         command_buffer.copy_buffer(&device_buffer, &staging_buffer, &[command::BufferCopy { src: 0, dst: 0, size: stride * numbers.len() as u64}]);
         command_buffer.finish()
-    }]);
+    }));
     queue_group.queues[0].submit(submission, Some(&fence));
     device.wait_for_fences(&[&fence], device::WaitFor::All, !0);
 

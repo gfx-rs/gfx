@@ -13,8 +13,8 @@ use hal::image::{ImageLayout, SubresourceRange};
 use hal::command::{
     AttachmentClear, ClearColorRaw, ClearDepthStencilRaw, ClearValueRaw,
     BufferImageCopy, BufferCopy, ImageCopy, ImageResolve,
-    SubpassContents, RawCommandBuffer,
-    ColorValue, StencilValue, Rect, Viewport,
+    SubpassContents, RawCommandBuffer, CommandBufferFlags,
+    ColorValue, StencilValue, Rect, Viewport, 
 };
 use hal::query::{Query, QueryControl, QueryId};
 use hal::queue::{RawCommandQueue, RawSubmission};
@@ -204,7 +204,11 @@ impl CommandQueue {
 }
 
 impl RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw(&mut self, submit: RawSubmission<Backend>, fence: Option<&native::Fence>) {
+    unsafe fn submit_raw<IC>(&mut self, submit: RawSubmission<Backend, IC>, fence: Option<&native::Fence>) 
+    where 
+        IC: IntoIterator,
+        IC::Item: Borrow<CommandBuffer>
+    {
         // FIXME: wait for semaphores!
 
         // FIXME: multiple buffers signaling!
@@ -221,13 +225,17 @@ impl RawCommandQueue<Backend> for CommandQueue {
             None
         };
 
-        for buffer in submit.cmd_buffers {
+        let buffers = submit.cmd_buffers.into_iter().collect::<Vec<_>>();
+        let num_buffers = buffers.len();
+        let mut i = 1;
+        for buffer in buffers {
+            let buffer = buffer.borrow();
             let command_buffer: &metal::CommandBufferRef = &(&mut *buffer.inner.get()).command_buffer;
             if let Some(ref signal_block) = signal_block {
                 msg_send![command_buffer, addCompletedHandler: signal_block.deref() as *const _];
             }
-            // only append the fence handler to the last command buffer
-            if buffer as *const _ == submit.cmd_buffers.last().unwrap() as *const _ {
+            // only append the fence handler to the last buffer
+            if i == num_buffers {
                 if let Some(ref fence) = fence {
                     let value_ptr = fence.0.clone();
                     let fence_block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
@@ -237,6 +245,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                 }
             }
             command_buffer.commit();
+            i += 1;
         }
     }
 
@@ -271,7 +280,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
         }
     }
 
-    fn allocate(&mut self, num: usize) -> Vec<CommandBuffer> {
+    fn allocate(&mut self, num: usize, secondary: bool) -> Vec<CommandBuffer> { //TODO: Implement secondary buffers
         let buffers: Vec<_> = (0..num).map(|_| CommandBuffer {
             inner: Arc::new({
                 // TODO: maybe use unretained command buffer for efficiency?
@@ -325,9 +334,6 @@ impl pool::RawCommandPool<Backend> for CommandPool {
     }
 }
 
-impl pool::SubpassCommandPool<Backend> for CommandPool {
-}
-
 impl CommandBuffer {
     #[inline]
     fn inner(&mut self) -> &mut CommandBufferInner {
@@ -363,7 +369,7 @@ impl CommandBuffer {
 }
 
 impl RawCommandBuffer<Backend> for CommandBuffer {
-    fn begin(&mut self) {
+    fn begin(&mut self, flags: CommandBufferFlags) { // TODO: Implement flags somehow
         if let Some(ref queue) = self.queue {
             unsafe { &mut *self.inner.get() }
                 .reset(queue);
@@ -1006,6 +1012,16 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         _offset: u32,
         _constants: &[u32],
     ) {
+        unimplemented!()
+    }
+
+    fn execute_commands<I>(
+        &mut self,
+        buffers: I,
+    ) where
+        I: IntoIterator,
+        I::Item: Borrow<CommandBuffer> 
+    {
         unimplemented!()
     }
 

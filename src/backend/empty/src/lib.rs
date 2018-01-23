@@ -24,11 +24,9 @@ impl hal::Backend for Backend {
     type QueueFamily = QueueFamily;
     type CommandQueue = RawCommandQueue;
     type CommandBuffer = RawCommandBuffer;
-    type SubpassCommandBuffer = SubpassCommandBuffer;
 
     type Memory = ();
     type CommandPool = RawCommandPool;
-    type SubpassCommandPool = SubpassCommandPool;
 
     type ShaderModule = ();
     type RenderPass = ();
@@ -83,7 +81,11 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 /// Dummy command queue doing nothing.
 pub struct RawCommandQueue;
 impl queue::RawCommandQueue<Backend> for RawCommandQueue {
-    unsafe fn submit_raw(&mut self, _: queue::RawSubmission<Backend>, _: Option<&()>) {
+    unsafe fn submit_raw<IC>(&mut self, _: queue::RawSubmission<Backend, IC>, _: Option<&()>) 
+    where
+        IC: IntoIterator,
+        IC::Item: Borrow<RawCommandBuffer> 
+    {
         unimplemented!()
     }
 
@@ -334,9 +336,6 @@ impl queue::QueueFamily for QueueFamily {
     }
 }
 
-/// Dummy subpass command buffer.
-pub struct SubpassCommandBuffer;
-
 /// Dummy raw command pool.
 pub struct RawCommandPool;
 impl pool::RawCommandPool<Backend> for RawCommandPool {
@@ -344,7 +343,7 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         unimplemented!()
     }
 
-    fn allocate(&mut self, _: usize) -> Vec<RawCommandBuffer> {
+    fn allocate(&mut self, _: usize, _: bool) -> Vec<RawCommandBuffer> {
         unimplemented!()
     }
 
@@ -353,17 +352,11 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
     }
 }
 
-/// Dummy subpass command pool.
-pub struct SubpassCommandPool;
-impl pool::SubpassCommandPool<Backend> for SubpassCommandPool {
-
-}
-
 /// Dummy command buffer, which ignores all the calls.
 #[derive(Clone)]
 pub struct RawCommandBuffer;
 impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
-    fn begin(&mut self) {
+    fn begin(&mut self, _: command::CommandBufferFlags) {
         unimplemented!()
     }
 
@@ -651,6 +644,17 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     ) {
         unimplemented!()
     }
+
+    fn execute_commands<I>(
+        &mut self,
+        _: I,
+    ) where
+        I: IntoIterator,
+        I::Item: Borrow<RawCommandBuffer> 
+    {
+        unimplemented!()
+    }
+
 }
 
 // Dummy descriptor pool.

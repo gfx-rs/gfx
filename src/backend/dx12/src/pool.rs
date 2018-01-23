@@ -54,7 +54,7 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         unsafe { self.inner.Reset(); }
     }
 
-    fn allocate(&mut self, num: usize) -> Vec<CommandBuffer> {
+    fn allocate(&mut self, num: usize, secondary: bool) -> Vec<CommandBuffer> { // TODO: Implement secondary buffers
         (0..num)
             .map(|_| CommandBuffer::new(
                 self.create_command_list(),
@@ -68,6 +68,3 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         // Just let the command buffers drop
     }
 }
-
-pub struct SubpassCommandPool;
-impl pool::SubpassCommandPool<Backend> for SubpassCommandPool {}

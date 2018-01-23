@@ -394,15 +394,3 @@ impl<P: 'static + Parser> command::Buffer<Resources> for RawCommandBuffer<P> {
         });
     }
 }
-
-pub struct SubpassCommandBuffer<P> {
-    parser: P,
-}
-
-impl command::CommandBuffer<Backend> for SubpassCommandBuffer<CommandList> {
-    unsafe fn end(&mut self) -> SubmitInfo<CommandList> {
-        SubmitInfo {
-            parser: self.parser.clone(), // TODO: slow
-        }
-    }
-}

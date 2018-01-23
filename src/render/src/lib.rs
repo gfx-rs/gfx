@@ -345,7 +345,7 @@ impl<B: Backend, C> Context<B, C>
                 .wait_on(&[(&bundle.wait_semaphore, hal::pso::PipelineStage::BOTTOM_OF_PIPE)])
                 .signal(&[&bundle.signal_semaphore])
                 .promote::<C>()
-                .submit(&inner_submits);
+                .submit(inner_submits);
             let fence = Some(&bundle.signal_fence.inner);
             self.queue.group.queues[0].submit::<C>(submission, fence);
         }

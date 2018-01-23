@@ -755,3 +755,17 @@ where
 
     (offset, size)
 }
+
+pub fn map_command_buffer_flags(flags: command::CommandBufferFlags) -> vk::CommandBufferUsageFlags {
+    let mut usage = vk::CommandBufferUsageFlags::empty();
+    if flags.contains(command::CommandBufferFlags::ONE_TIME_SUBMIT) {
+        usage |= vk::COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    }
+    if flags.contains(command::CommandBufferFlags::RENDER_PASS_CONTINUE) {
+        usage |= vk::COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
+    }
+    if flags.contains(command::CommandBufferFlags::SIMULTANEOUS_USE) {
+        usage |= vk::COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+    }
+    usage
+}
