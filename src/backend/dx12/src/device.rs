@@ -660,6 +660,13 @@ impl d::Device<B> for Device {
             VisibleNodeMask: 0,
         };
 
+        // Exposed memory types are grouped according to their capabilities
+        //  0 - All
+        //  1 - Buffers only
+        //  2 - Non-target Images only
+        //  3 - Targets only
+        let mem_group = mem_type / NUM_HEAP_PROPERTIES;
+
         let desc = d3d12::D3D12_HEAP_DESC {
             SizeInBytes: size,
             Properties: properties,
@@ -682,34 +689,47 @@ impl d::Device<B> for Device {
         }
         assert_eq!(winerror::S_OK, hr);
 
-        let mut resource = ptr::null_mut();
-        let desc = d3d12::D3D12_RESOURCE_DESC {
-            Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
-            Alignment: 0,
-            Width: size,
-            Height: 1,
-            DepthOrArraySize: 1,
-            MipLevels: 1,
-            Format: dxgiformat::DXGI_FORMAT_UNKNOWN,
-            SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
-                Count: 1,
-                Quality: 0,
-            },
-            Layout: d3d12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-            Flags: d3d12::D3D12_RESOURCE_FLAG_NONE,
-        };
+        // The first memory heap of each group corresponds to the default heap, which is can never
+        // be mapped.
+        // Devices supporting heap tier 1 can only created buffers on mem group 1 (ALLOW_ONLY_BUFFERS).
+        // Devices supporting heap tier 2 always expose only mem group 0 and don't have any further restrictions.
+        let is_mapable = mem_group < 2 && mem_base_id != 0;
 
-        assert_eq!(winerror::S_OK, unsafe {
-            self.raw.clone().CreatePlacedResource(
-                heap as _,
-                0,
-                &desc,
-                d3d12::D3D12_RESOURCE_STATE_COMMON,
-                ptr::null(),
-                &d3d12::ID3D12Resource::uuidof(),
-                &mut resource as *mut *mut _ as *mut *mut _,
-            )
-        });
+        // Create a buffer resource covering the whole memory slice to be able to map the whole memory.
+        let resource = if is_mapable {
+            let mut resource = ptr::null_mut();
+            let desc = d3d12::D3D12_RESOURCE_DESC {
+                Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
+                Alignment: 0,
+                Width: size,
+                Height: 1,
+                DepthOrArraySize: 1,
+                MipLevels: 1,
+                Format: dxgiformat::DXGI_FORMAT_UNKNOWN,
+                SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
+                    Count: 1,
+                    Quality: 0,
+                },
+                Layout: d3d12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+                Flags: d3d12::D3D12_RESOURCE_FLAG_NONE,
+            };
+
+            assert_eq!(winerror::S_OK, unsafe {
+                self.raw.clone().CreatePlacedResource(
+                    heap as _,
+                    0,
+                    &desc,
+                    d3d12::D3D12_RESOURCE_STATE_COMMON,
+                    ptr::null(),
+                    &d3d12::ID3D12Resource::uuidof(),
+                    &mut resource as *mut *mut _ as *mut *mut _,
+                )
+            });
+
+            Some(resource)
+        } else {
+            None
+        };
 
         Ok(n::Memory {
             heap: unsafe { ComPtr::new(heap as _) },
@@ -1829,34 +1849,40 @@ impl d::Device<B> for Device {
     where
         R: RangeArg<u64>,
     {
-        let start = range.start().unwrap_or(&0);
-        let end = range.end().unwrap_or(&memory.size);
-        assert!(start <= end);
+        if let Some(mem) = memory.resource {
+            let start = range.start().unwrap_or(&0);
+            let end = range.end().unwrap_or(&memory.size);
+            assert!(start <= end);
 
-        let mut ptr = ptr::null_mut();
-        assert_eq!(winerror::S_OK, unsafe {
-            (*memory.resource).Map(
-                0,
-                &d3d12::D3D12_RANGE {
-                    Begin: 0,
-                    End: 0,
-                },
-                &mut ptr,
-            )
-        });
-        unsafe { ptr.offset(*start as _); }
-        Ok(ptr as *mut _)
+            let mut ptr = ptr::null_mut();
+            assert_eq!(winerror::S_OK, unsafe {
+                (*mem).Map(
+                    0,
+                    &d3d12::D3D12_RANGE {
+                        Begin: 0,
+                        End: 0,
+                    },
+                    &mut ptr,
+                )
+            });
+            unsafe { ptr.offset(*start as _); }
+            Ok(ptr as *mut _)
+        } else {
+            panic!("Memory not created with a memory type exposing `CPU_VISIBLE`.")
+        }
     }
 
     fn unmap_memory(&self, memory: &n::Memory) {
-        unsafe {
-            (*memory.resource).Unmap(
-                0,
-                &d3d12::D3D12_RANGE {
-                    Begin: 0,
-                    End: 0,
-                },
-            );
+        if let Some(mem) = memory.resource {
+            unsafe {
+                (*mem).Unmap(
+                    0,
+                    &d3d12::D3D12_RANGE {
+                        Begin: 0,
+                        End: 0,
+                    },
+                );
+            }
         }
     }
 
@@ -1868,30 +1894,32 @@ impl d::Device<B> for Device {
     {
         for range in ranges {
             let &(ref memory, ref range) = range.borrow();
-            // map and immediately unmap, hoping that dx12 drivers internally cache
-            // currently mapped buffers.
-            assert_eq!(winerror::S_OK, unsafe {
-                (*memory.resource).Map(
-                    0,
-                    &d3d12::D3D12_RANGE {
-                        Begin: 0,
-                        End: 0,
-                    },
-                    ptr::null_mut(),
-                )
-            });
+            if let Some(mem) = memory.resource {
+                // map and immediately unmap, hoping that dx12 drivers internally cache
+                // currently mapped buffers.
+                assert_eq!(winerror::S_OK, unsafe {
+                    (*mem).Map(
+                        0,
+                        &d3d12::D3D12_RANGE {
+                            Begin: 0,
+                            End: 0,
+                        },
+                        ptr::null_mut(),
+                    )
+                });
 
-            let start = *range.start().unwrap_or(&0);
-            let end = *range.end().unwrap_or(&memory.size); // TODO: only need to be end of current mapping
+                let start = *range.start().unwrap_or(&0);
+                let end = *range.end().unwrap_or(&memory.size); // TODO: only need to be end of current mapping
 
-            unsafe {
-                (*memory.resource).Unmap(
-                    0,
-                    &d3d12::D3D12_RANGE {
-                        Begin: start as _,
-                        End: end as _,
-                    },
-                );
+                unsafe {
+                    (*mem).Unmap(
+                        0,
+                        &d3d12::D3D12_RANGE {
+                            Begin: start as _,
+                            End: end as _,
+                        },
+                    );
+                }
             }
         }
     }
@@ -1904,30 +1932,32 @@ impl d::Device<B> for Device {
     {
         for range in ranges {
             let &(ref memory, ref range) = range.borrow();
-            let start = *range.start().unwrap_or(&0);
-            let end = *range.end().unwrap_or(&memory.size); // TODO: only need to be end of current mapping
+            if let Some(mem) = memory.resource {
+                let start = *range.start().unwrap_or(&0);
+                let end = *range.end().unwrap_or(&memory.size); // TODO: only need to be end of current mapping
 
-            // map and immediately unmap, hoping that dx12 drivers internally cache
-            // currently mapped buffers.
-            assert_eq!(winerror::S_OK, unsafe {
-                (*memory.resource).Map(
-                    0,
-                    &d3d12::D3D12_RANGE {
-                        Begin: start as _,
-                        End: end as _,
-                    },
-                    ptr::null_mut(),
-                )
-            });
+                // map and immediately unmap, hoping that dx12 drivers internally cache
+                // currently mapped buffers.
+                assert_eq!(winerror::S_OK, unsafe {
+                    (*mem).Map(
+                        0,
+                        &d3d12::D3D12_RANGE {
+                            Begin: start as _,
+                            End: end as _,
+                        },
+                        ptr::null_mut(),
+                    )
+                });
 
-            unsafe {
-                (*memory.resource).Unmap(
-                    0,
-                    &d3d12::D3D12_RANGE {
-                        Begin: 0,
-                        End: 0,
-                    },
-                );
+                unsafe {
+                    (*mem).Unmap(
+                        0,
+                        &d3d12::D3D12_RANGE {
+                            Begin: 0,
+                            End: 0,
+                        },
+                    );
+                }
             }
         }
     }
@@ -2005,8 +2035,10 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn free_memory(&self, _memory: n::Memory) {
-        // Just drop
+    fn free_memory(&self, memory: n::Memory) {
+        if let Some(buffer) = memory.resource {
+            unsafe { (*buffer).Release(); }
+        }
     }
 
     fn create_query_pool(&self, query_ty: query::QueryType, count: u32) -> n::QueryPool {

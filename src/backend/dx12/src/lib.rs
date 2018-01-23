@@ -709,8 +709,20 @@ impl hal::Instance for Instance {
                 // `device::MEM_TYPE_IMAGE_SHIFT`, `device::MEM_TYPE_TARGET_SHIFT`)
                 // denote the usage group.
                 let mut types = Vec::new();
-                for _ in 0..3 {
-                    types.extend(base_memory_types.iter());
+                for i in 0..4 {
+                    types.extend(base_memory_types
+                        .iter()
+                        .map(|mem_type| {
+                            let mut ty = mem_type.clone();
+
+                            // Images and RenderTargets are not host visible as we can't create
+                            // a corresponding buffer for mapping
+                            if i >= 2 {
+                                ty.properties.remove(Properties::CPU_VISIBLE);
+                            }
+                            ty
+                        })
+                    );
                 }
                 types
             };
