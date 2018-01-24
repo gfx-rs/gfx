@@ -351,6 +351,32 @@ impl Device {
         Ok((library, remapped_entry_point_names))
     }
 
+    fn load_shader(
+        &self, ep: &pso::EntryPoint<Backend>, layout: &n::PipelineLayout
+    ) -> Result<(metal::Library, metal::Function), pso::CreationError> {
+        let entries_owned;
+        let (lib, remapped_entries) = match ep.module {
+            &n::ShaderModule::Compiled {ref library, ref remapped_entry_point_names} => (library.to_owned(), remapped_entry_point_names),
+            &n::ShaderModule::Raw(ref data) => {
+                let raw = self.compile_shader_library(data, &layout.res_overrides).unwrap();
+                entries_owned = raw.1;
+                (raw.0, &entries_owned)
+            }
+        };
+
+        let fun_name = remapped_entries
+            .get(ep.entry)
+            .map(|s| s.as_str())
+            .unwrap_or(ep.entry);
+
+        let mtl_function = get_final_function(&lib, fun_name, ep.specialization)
+            .map_err(|_| {
+                error!("Invalid shader entry point");
+                pso::CreationError::Other
+            })?;
+        Ok((lib, mtl_function))
+    }
+
     fn describe_argument(ty: DescriptorType, index: usize, count: usize) -> metal::ArgumentDescriptor {
         let arg = metal::ArgumentDescriptor::new().to_owned();
         arg.set_array_length(count as NSUInteger);
@@ -408,56 +434,17 @@ impl Device {
         pipeline.set_input_primitive_topology(primitive_class);
 
         // Vertex shader
-        let vs_entries_owned;
-        let (vs_lib, vs_remapped_entries) = match pipeline_desc.shaders.vertex.module {
-            &n::ShaderModule::Compiled {ref library, ref remapped_entry_point_names} => (library.to_owned(), remapped_entry_point_names),
-            &n::ShaderModule::Raw(ref data) => {
-                //TODO: cache them all somewhere!
-                let raw = self.compile_shader_library(data, &pipeline_layout.res_overrides).unwrap();
-                vs_entries_owned = raw.1;
-                (raw.0, &vs_entries_owned)
-            }
-        };
-        let vs_entry = if vs_remapped_entries.contains_key(pipeline_desc.shaders.vertex.entry) {
-            vs_remapped_entries.get(pipeline_desc.shaders.vertex.entry).unwrap()
-        } else {
-            pipeline_desc.shaders.vertex.entry
-        };
-
-        let mtl_vertex_function = get_final_function(&vs_lib, vs_entry, pipeline_desc.shaders.vertex.specialization)
-            .map_err(|_| {
-                error!("Invalid vertex shader entry point");
-                pso::CreationError::Other
-            })?;
-        pipeline.set_vertex_function(Some(&mtl_vertex_function));
+        let (vs_lib, vs_function) = self.load_shader(&pipeline_desc.shaders.vertex, pipeline_layout)?;
+        pipeline.set_vertex_function(Some(&vs_function));
 
         // Fragment shader
-        let fs_lib = if let Some(ref fragment_entry) = pipeline_desc.shaders.fragment {
-            let fs_entries_owned;
-            let (fs_lib, fs_remapped_entries) = match fragment_entry.module {
-                &n::ShaderModule::Compiled {ref library, ref remapped_entry_point_names} => (library.to_owned(), remapped_entry_point_names),
-                &n::ShaderModule::Raw(ref data) => {
-                    let raw = self.compile_shader_library(data, &pipeline_layout.res_overrides).unwrap();
-                    fs_entries_owned = raw.1;
-                    (raw.0, &fs_entries_owned)
-                }
-            };
-
-            let fs_entry = if fs_remapped_entries.contains_key(fragment_entry.entry) {
-                fs_remapped_entries.get(fragment_entry.entry).unwrap()
-            } else {
-                fragment_entry.entry
-            };
-
-            let mtl_fragment_function = get_final_function(&fs_lib, fs_entry, fragment_entry.specialization)
-                .map_err(|_| {
-                    error!("Invalid vertex shader entry point");
-                    pso::CreationError::Other
-                })?;
-            pipeline.set_fragment_function(Some(&mtl_fragment_function));
-            Some(fs_lib)
-        } else {
-            None
+        let fs_lib = match pipeline_desc.shaders.fragment {
+            Some(ref ep) => {
+                let (lib, fun) = self.load_shader(ep, pipeline_layout)?;
+                pipeline.set_fragment_function(Some(&fun));
+                Some(lib)
+            }
+            None => None,
         };
 
         // Other shaders
@@ -591,34 +578,9 @@ impl Device {
         pipeline_desc: &pso::ComputePipelineDesc<'a, Backend>,
     ) -> Result<n::ComputePipeline, pso::CreationError> {
         let pipeline = metal::ComputePipelineDescriptor::new();
-        let pipeline_layout = &pipeline_desc.layout;
 
-        // FIXME: lots missing
-
-        // Compute shader
-        let cs_entries_owned;
-        let (cs_lib, cs_remapped_entries) = match pipeline_desc.shader.module {
-            &n::ShaderModule::Compiled {ref library, ref remapped_entry_point_names} => {
-                (library.to_owned(), remapped_entry_point_names)
-            }
-            &n::ShaderModule::Raw(ref data) => {
-                //TODO: cache them all somewhere!
-                let raw = self.compile_shader_library(data, &pipeline_layout.res_overrides).unwrap();
-                cs_entries_owned = raw.1;
-                (raw.0, &cs_entries_owned)
-            }
-        };
-        let cs_entry = cs_remapped_entries
-            .get(pipeline_desc.shader.entry)
-            .map(|s| s.as_str())
-            .unwrap_or(pipeline_desc.shader.entry);
-
-        let mtl_compute_function = get_final_function(&cs_lib, cs_entry, pipeline_desc.shader.specialization)
-            .map_err(|_| {
-                error!("Invalid compute shader entry point");
-                pso::CreationError::Other
-            })?;
-        pipeline.set_compute_function(Some(&mtl_compute_function));
+        let (cs_lib, cs_function) = self.load_shader(&pipeline_desc.shader, &pipeline_desc.layout)?;
+        pipeline.set_compute_function(Some(&cs_function));
 
         let mut err_ptr: *mut ObjcObject = ptr::null_mut();
         let pso: *mut metal::MTLComputePipelineState = unsafe {
