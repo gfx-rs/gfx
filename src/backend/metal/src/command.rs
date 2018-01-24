@@ -2,9 +2,10 @@ use {Backend};
 use {native, window};
 
 use std::borrow::{Borrow, BorrowMut};
+use std::cell::UnsafeCell;
 use std::ops::{Deref, Range};
 use std::sync::{Arc};
-use std::cell::UnsafeCell;
+use std::mem;
 
 use hal::{memory, pool, pso};
 use hal::{VertexCount, VertexOffset, InstanceCount, IndexCount};
@@ -112,6 +113,7 @@ struct CommandBufferInner {
     scissors: Option<MTLScissorRect>,
     render_pso: Option<metal::RenderPipelineState>,
     compute_pso: Option<metal::ComputePipelineState>,
+    work_group_size: MTLSize,
     primitive_type: MTLPrimitiveType,
     resources_vs: StageResources,
     resources_fs: StageResources,
@@ -130,13 +132,28 @@ impl CommandBufferInner {
         self.resources_cs.clear();
     }
 
+    fn stop(&mut self) {
+        match mem::replace(&mut self.encoder_state, EncoderState::None)  {
+            EncoderState::None => {}
+            EncoderState::Blit(ref blit_encoder) => {
+                blit_encoder.end_encoding();
+            }
+            EncoderState::Render(ref render_encoder) => {
+                render_encoder.end_encoding();
+            }
+        }
+    }
+
     fn begin_renderpass(&mut self, encoder: metal::RenderCommandEncoder) {
+        self.stop();
+
         self.encoder_state = EncoderState::Render(encoder);
         let encoder = if let EncoderState::Render(ref encoder) = self.encoder_state {
             encoder
         } else {
             unreachable!()
         };
+
         // Apply previously bound values for this command buffer
         if let Some(viewport) = self.viewport {
             encoder.set_viewport(viewport);
@@ -183,6 +200,31 @@ impl CommandBufferInner {
             }
         }
     }
+
+    fn begin_compute(&mut self) -> (&metal::ComputeCommandEncoderRef, MTLSize) {
+        self.stop();
+
+        let encoder = self.command_buffer.new_compute_command_encoder();
+        encoder.set_compute_pipeline_state(self.compute_pso.as_ref().unwrap());
+
+        for (i, resource) in self.resources_cs.buffers.iter().enumerate() {
+            if let Some((ref buffer, offset)) = *resource {
+                encoder.set_buffer(i as _, offset as _, Some(buffer));
+            }
+        }
+        for (i, resource) in self.resources_cs.textures.iter().enumerate() {
+            if let Some(ref texture) = *resource {
+                encoder.set_texture(i as _, Some(texture));
+            }
+        }
+        for (i, resource) in self.resources_cs.samplers.iter().enumerate() {
+            if let Some(ref sampler) = *resource {
+                encoder.set_sampler_state(i as _, Some(sampler));
+            }
+        }
+
+        (encoder, self.work_group_size)
+    }
 }
 
 unsafe impl Send for CommandBuffer {
@@ -192,6 +234,8 @@ enum EncoderState {
     None,
     Blit(metal::BlitCommandEncoder),
     Render(metal::RenderCommandEncoder),
+    //TODO: Compute() if we find cases where
+    // grouping compute-related calls is feasible
 }
 
 impl CommandQueue {
@@ -287,6 +331,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                     scissors: None,
                     render_pso: None,
                     compute_pso: None,
+                    work_group_size: MTLSize { width: 0, height: 0, depth: 0 },
                     primitive_type: MTLPrimitiveType::Point,
                     resources_vs: StageResources::new(),
                     resources_fs: StageResources::new(),
@@ -376,16 +421,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn finish(&mut self) {
-        match self.inner().encoder_state {
-            EncoderState::None => {},
-            EncoderState::Blit(ref blit_encoder) => {
-                blit_encoder.end_encoding();
-            },
-            EncoderState::Render(ref render_encoder) => {
-                render_encoder.end_encoding();
-            },
-        }
-        self.inner().encoder_state = EncoderState::None;
+        self.inner().stop();
     }
 
     fn reset(&mut self, _release_resources: bool) {
@@ -567,17 +603,17 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<ClearValueRaw>,
     {
-        unsafe {
-            let command_buffer = self.inner();
+        let inner = self.inner();
 
-            match command_buffer.encoder_state {
+        let encoder = unsafe {
+            match inner.encoder_state {
                 EncoderState::Render(_) => panic!("already in a renderpass"),
                 EncoderState::Blit(ref blit) => {
                     blit.end_encoding();
                 },
                 EncoderState::None => {},
             }
-            command_buffer.encoder_state = EncoderState::None;
+            inner.encoder_state = EncoderState::None;
 
             // FIXME: subpasses
             let pass_descriptor: metal::RenderPassDescriptor = msg_send![frame_buffer.0, copy];
@@ -599,10 +635,12 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
                 }
             }
 
-            let render_encoder = command_buffer.command_buffer.new_render_command_encoder(&pass_descriptor).to_owned();
+            inner.command_buffer
+                .new_render_command_encoder(&pass_descriptor)
+                .to_owned()
+        };
 
-            command_buffer.begin_renderpass(render_encoder);
-        }
+        inner.begin_renderpass(encoder);
     }
 
     fn next_subpass(&mut self, _contents: SubpassContents) {
@@ -759,6 +797,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
     fn bind_compute_pipeline(&mut self, pipeline: &native::ComputePipeline) {
         let inner = self.inner();
         inner.compute_pso = Some(pipeline.raw.to_owned());
+        inner.work_group_size = pipeline.work_group_size;
     }
 
     fn bind_compute_descriptor_sets<'a, T>(
@@ -821,12 +860,27 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn dispatch(&mut self, _x: u32, _y: u32, _z: u32) {
-        unimplemented!()
+    fn dispatch(&mut self, x: u32, y: u32, z: u32) {
+        let inner = self.inner();
+        let (encoder, wg_size) = inner.begin_compute();
+
+        let group_counts = MTLSize {
+            width: x as _,
+            height: y as _,
+            depth: z as _,
+        };
+        encoder.dispatch_thread_groups(group_counts, wg_size);
+
+        encoder.end_encoding();
     }
 
-    fn dispatch_indirect(&mut self, _buffer: &native::Buffer, _offset: u64) {
-        unimplemented!()
+    fn dispatch_indirect(&mut self, buffer: &native::Buffer, offset: u64) {
+        let inner = self.inner();
+        let (encoder, wg_size) = inner.begin_compute();
+
+        encoder.dispatch_thread_groups_indirect(&buffer.raw, offset, wg_size);
+
+        encoder.end_encoding();
     }
 
     fn copy_buffer<T>(
