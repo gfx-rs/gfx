@@ -69,7 +69,13 @@ unsafe impl Send for GraphicsPipeline {}
 unsafe impl Sync for GraphicsPipeline {}
 
 #[derive(Debug)]
-pub struct ComputePipeline {}
+pub struct ComputePipeline {
+    pub(crate) cs_lib: metal::Library,
+    pub(crate) raw: metal::ComputePipelineState,
+}
+
+unsafe impl Send for ComputePipeline {}
+unsafe impl Sync for ComputePipeline {}
 
 #[derive(Debug)]
 pub struct Image {
@@ -106,7 +112,7 @@ unsafe impl Sync for Semaphore {}
 #[derive(Debug)]
 pub struct Buffer {
     pub(crate) raw: metal::Buffer,
-    pub(crate) memory: Option<Arc<Mutex<MemoryAllocations>>>,
+    pub(crate) allocations: Option<Arc<Mutex<MemoryAllocations>>>,
     pub(crate) offset: u64,
 }
 
@@ -269,7 +275,7 @@ pub(crate) struct MemoryAllocations {
 
 impl MemoryAllocations {
     pub(crate) fn find(&self, range: Range<u64>) -> Vec<(Range<u64>, metal::Buffer)> {
-        /// Get all unique buffers that intersects specified range
+        // Get all unique buffers that intersects specified range
         let mut buffers = Vec::new();
         buffers.extend(self.starts.range(range.clone()).map(|(&start, &(end, ref b))| (start .. end, b.clone())));
         let range = (Bound::Excluded(range.start), Bound::Included(range.end));

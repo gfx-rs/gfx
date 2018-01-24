@@ -66,7 +66,7 @@ impl hal::Instance for Instance {
                     device: 0,
                     software_rendering: false,
                 },
-                physical_device: device::PhysicalDevice(device),
+                physical_device: device::PhysicalDevice::new(device),
                 queue_families: vec![QueueFamily{}],
             }
         ]
