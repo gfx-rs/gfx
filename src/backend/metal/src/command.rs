@@ -110,10 +110,12 @@ struct CommandBufferInner {
     encoder_state: EncoderState,
     viewport: Option<MTLViewport>,
     scissors: Option<MTLScissorRect>,
-    pipeline_state: Option<metal::RenderPipelineState>,
+    render_pso: Option<metal::RenderPipelineState>,
+    compute_pso: Option<metal::ComputePipelineState>,
     primitive_type: MTLPrimitiveType,
     resources_vs: StageResources,
     resources_fs: StageResources,
+    resources_cs: StageResources,
     index_buffer: Option<(metal::Buffer, u64, MTLIndexType)>,
     attribute_buffer_index: usize,
     depth_stencil_state: Option<metal::DepthStencilState>,
@@ -125,6 +127,7 @@ impl CommandBufferInner {
 
         self.resources_vs.clear();
         self.resources_fs.clear();
+        self.resources_cs.clear();
     }
 
     fn begin_renderpass(&mut self, encoder: metal::RenderCommandEncoder) {
@@ -141,7 +144,7 @@ impl CommandBufferInner {
         if let Some(scissors) = self.scissors {
             encoder.set_scissor_rect(scissors);
         }
-        if let Some(ref pipeline_state) = self.pipeline_state {
+        if let Some(ref pipeline_state) = self.render_pso {
             encoder.set_render_pipeline_state(pipeline_state);
         }
         if let Some(ref depth_stencil_state) = self.depth_stencil_state {
@@ -291,10 +294,12 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                     encoder_state: EncoderState::None,
                     viewport: None,
                     scissors: None,
-                    pipeline_state: None,
+                    render_pso: None,
+                    compute_pso: None,
                     primitive_type: MTLPrimitiveType::Point,
                     resources_vs: StageResources::new(),
                     resources_fs: StageResources::new(),
+                    resources_cs: StageResources::new(),
                     index_buffer: None,
                     attribute_buffer_index: 0,
                     depth_stencil_state: None,
@@ -629,7 +634,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
                 encoder.set_depth_stencil_state(depth_stencil_state);
             }
         }
-        inner.pipeline_state = Some(pipeline_state);
+        inner.render_pso = Some(pipeline_state);
         inner.depth_stencil_state = pipeline.depth_stencil_state.as_ref().map(ToOwned::to_owned);
         inner.primitive_type = pipeline.primitive_type;
         inner.attribute_buffer_index = pipeline.attribute_buffer_index as usize;
@@ -757,20 +762,69 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_compute_pipeline(&mut self, _pipeline: &native::ComputePipeline) {
-        unimplemented!()
+    fn bind_compute_pipeline(&mut self, pipeline: &native::ComputePipeline) {
+        let inner = self.inner();
+        inner.compute_pso = Some(pipeline.raw.to_owned());
     }
 
     fn bind_compute_descriptor_sets<'a, T>(
         &mut self,
-        _layout: &native::PipelineLayout,
-        _first_set: usize,
-        _sets: T,
+        layout: &native::PipelineLayout,
+        first_set: usize,
+        sets: T,
     ) where
         T: IntoIterator,
         T::Item: Borrow<native::DescriptorSet>,
     {
-        unimplemented!()
+        use spirv_cross::{msl, spirv};
+        let inner = self.inner();
+        let resources = &mut inner.resources_cs;
+
+        for (set_index, desc_set) in sets.into_iter().enumerate() {
+            let location_cs = msl::ResourceBindingLocation {
+                stage: spirv::ExecutionModel::GlCompute,
+                desc_set: (first_set + set_index) as _,
+                binding: 0,
+            };
+            match *desc_set.borrow() {
+                native::DescriptorSet::Emulated(ref desc_inner) => {
+                    use native::DescriptorSetBinding::*;
+                    let set = desc_inner.lock().unwrap();
+                    for (&binding, values) in set.bindings.iter() {
+                        let desc_layout = set.layout.iter().find(|x| x.binding == binding).unwrap();
+
+                        if desc_layout.stage_flags.contains(pso::ShaderStageFlags::COMPUTE) {
+                            let location = msl::ResourceBindingLocation {
+                                binding: binding as _,
+                                .. location_cs
+                            };
+                            let start = layout.res_overrides[&location].resource_id as usize;
+                            match *values {
+                                Sampler(ref samplers) => {
+                                    resources.add_samplers(start, samplers.as_slice());
+                                }
+                                SampledImage(ref images) => {
+                                    resources.add_textures(start, images.as_slice());
+                                }
+                                Buffer(ref buffers) => {
+                                    for (i, ref bref) in buffers.iter().enumerate() {
+                                        if let Some((ref buffer, offset)) = **bref {
+                                            resources.add_buffer(start + i, buffer.as_ref(), offset as _);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                native::DescriptorSet::ArgumentBuffer { ref buffer, offset, stage_flags, .. } => {
+                    if stage_flags.contains(pso::ShaderStageFlags::COMPUTE) {
+                        let slot = layout.res_overrides[&location_cs].resource_id;
+                        resources.add_buffer(slot as _, buffer, offset as _);
+                    }
+                }
+            }
+        }
     }
 
     fn dispatch(&mut self, _x: u32, _y: u32, _z: u32) {
@@ -783,14 +837,27 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
 
     fn copy_buffer<T>(
         &mut self,
-        _src: &native::Buffer,
-        _dst: &native::Buffer,
-        _regions: T,
+        src: &native::Buffer,
+        dst: &native::Buffer,
+        regions: T,
     ) where
         T: IntoIterator,
         T::Item: Borrow<BufferCopy>,
     {
-        unimplemented!()
+        let encoder = self.encode_blit();
+
+        for region in regions {
+            let region = region.borrow();
+            unsafe {
+                msg_send![encoder,
+                    copyFromBuffer: &*src.raw
+                    sourceOffset: region.src as NSUInteger
+                    toBuffer: &*dst.raw
+                    destinationOffset: region.dst as NSUInteger
+                    size: region.size as NSUInteger
+                ]
+            }
+        }
     }
 
     fn copy_image<T>(
