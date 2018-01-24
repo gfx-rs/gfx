@@ -84,6 +84,72 @@ pub type SamplerSlot = u8;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Features {
+    // Core features
+
+    /// Support for robust buffer access.
+    /// Buffer access by SPIR-V shaders is checked against the buffer/image boundaries.
+    pub robust_buffer_access: bool,
+    /// Support the full 32-bit range of indexed for draw calls.
+    /// If not supported, the maximum index value is determined by `Limits::max_draw_index_value`.
+    pub full_draw_index_u32: bool,
+    /// Support cube array image views.
+    pub image_cube_array: bool,
+    /// Support different color blending settings per attachments on graphics pipeline creation.
+    pub independent_blending: bool,
+    /// Support geometry shader.
+    pub geometry_shader: bool,
+    /// Support tessellation shaders.
+    pub tessellation_shader: bool,
+    /// Support per-sample shading and multisample interpolation.
+    pub sample_rate_shading: bool,
+    /// Support dual source blending.
+    pub dual_src_blending: bool,
+    /// Support logic operations.
+    pub logic_op: bool,
+    /// Support multiple draws per indirect call.
+    pub multi_draw_indirect: bool,
+    /// Support indirect drawing with first instance value.
+    /// If not supported the first instance value **must** be 0.
+    pub draw_indirect_first_instance: bool,
+    /// Support depth clamping.
+    pub depth_clamp: bool,
+    /// Support depth bias clamping.
+    pub depth_bias_clamp: bool,
+    /// Support non-fill polygon modes.
+    pub non_fill_polygon_mode: bool,
+    /// Support depth bounds test.
+    pub depth_bounds: bool,
+    /// Support lines with width other than 1.0.
+    pub line_width: bool,
+    /// Support points with size greater than 1.0.
+    pub point_size: bool,
+    /// Support replacing alpha values with 1.0.
+    pub alpha_to_one: bool,
+    /// Support multiple viewports and scissors.
+    pub multi_viewports: bool,
+    /// Support anisotropic filtering.
+    pub sampler_anisotropy: bool,
+    /// Support ETC2 texture compression formats.
+    pub format_etc2: bool,
+    /// Support ASTC (LDR) texture compression formats.
+    pub format_astc_ldr: bool,
+    /// Support BC texture compression formats.
+    pub format_bc: bool,
+    /// Support precise occlusion queries, returning the actual number of samples.
+    /// If not supported, queries return a non-zero value when at least **one** sample passes.
+    pub precise_occlusion_query: bool,
+    /// Support query of pipeline statistics.
+    pub pipeline_statistics_query: bool,
+    /// Support unordered access stores and atomic ops in the vertex, geometry
+    /// and tessellation shader stage.
+    /// If not supported, the shader resources **must** be annotated as read-only.
+    pub vertex_stores_and_atomics: bool,
+    /// Support unordered access stores and atomic ops in the fragment shader stage
+    /// If not supported, the shader resources **must** be annotated as read-only.
+    pub fragment_stores_and_atomics: bool,
+
+    // Legacy features
+
     /// Support indirect drawing and dispatching.
     pub indirect_execution: bool,
     /// Support instanced drawing.
@@ -98,8 +164,6 @@ pub struct Features {
     pub draw_indexed_instanced_base_vertex: bool,
     /// Support indexed, instanced drawing with base vertex and instance.
     pub draw_indexed_instanced_base: bool,
-    /// Support manually specified vertex attribute rates (divisors).
-    pub instance_rate: bool,
     /// Support base vertex offset for indexed drawing.
     pub vertex_base: bool,
     /// Support sRGB textures and rendertargets.
@@ -108,23 +172,19 @@ pub struct Features {
     pub constant_buffer: bool,
     /// Support unordered-access views.
     pub unordered_access_view: bool,
-    /// Support specifying the blend function and equation for each color target.
-    pub separate_blending_slots: bool,
     /// Support accelerated buffer copy.
     pub copy_buffer: bool,
     /// Support separation of textures and samplers.
     pub sampler_objects: bool,
     /// Support sampler LOD bias.
     pub sampler_lod_bias: bool,
-    /// Support anisotropic filtering.
-    pub sampler_anisotropy: bool,
     /// Support setting border texel colors.
     pub sampler_border_color: bool,
-    /// Support precise occlusion queries, returning the actual number of samples.
-    /// If not supported, queries return a non-zero value when at least **one** sample passes.
-    pub precise_occlusion_query: bool,
-    /// Support query of pipeline statistics.
-    pub pipeline_statistics_query: bool,
+
+    // Extension features
+
+    /// Support manually specified vertex attribute rates (divisors).
+    pub instance_rate: bool,
 }
 
 /// Limits of the device.
