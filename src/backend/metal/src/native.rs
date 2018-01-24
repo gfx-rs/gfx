@@ -12,7 +12,7 @@ use cocoa::foundation::{NSRange, NSUInteger};
 use foreign_types::ForeignType;
 use metal::{self, MTLPrimitiveType};
 use objc;
-use spirv_cross::msl;
+use spirv_cross::{msl, spirv};
 
 
 /// Shader module can be compiled in advance if it's resource bindings do not
@@ -21,7 +21,7 @@ use spirv_cross::msl;
 pub enum ShaderModule {
     Compiled {
         library: metal::Library,
-        remapped_entry_point_names: HashMap<String, String>
+        entry_point_map: HashMap<String, spirv::EntryPoint>,
     },
     Raw(Vec<u8>),
 }
@@ -72,6 +72,7 @@ unsafe impl Sync for GraphicsPipeline {}
 pub struct ComputePipeline {
     pub(crate) cs_lib: metal::Library,
     pub(crate) raw: metal::ComputePipelineState,
+    pub(crate) work_group_size: metal::MTLSize,
 }
 
 unsafe impl Send for ComputePipeline {}

@@ -265,7 +265,7 @@ impl Device {
         match self.device.new_library_with_source(source.as_ref(), &options) {
             Ok(library) => Ok(n::ShaderModule::Compiled {
                 library,
-                remapped_entry_point_names: HashMap::new()
+                entry_point_map: HashMap::new(),
             }),
             Err(err) => Err(ShaderError::CompilationFailed(err.into())),
         }
@@ -275,7 +275,7 @@ impl Device {
         &self,
         raw_data: &[u8],
         overrides: &HashMap<msl::ResourceBindingLocation, msl::ResourceBinding>,
-    ) -> Result<(metal::Library, HashMap<String, String>), ShaderError> {
+    ) -> Result<(metal::Library, HashMap<String, spirv::EntryPoint>), ShaderError> {
         // spec requires "codeSize must be a multiple of 4"
         assert_eq!(raw_data.len() & 3, 0);
 
@@ -323,8 +323,7 @@ impl Device {
                 ShaderError::CompilationFailed(msg)
             })?;
 
-        let mut remapped_entry_point_names = HashMap::new();
-
+        let mut entry_point_map = HashMap::new();
         for entry_point in entry_points {
             info!("Entry point {:?}", entry_point);
             let cleansed = ast.get_cleansed_entry_point_name(&entry_point.name)
@@ -335,7 +334,10 @@ impl Device {
                     };
                     ShaderError::CompilationFailed(msg)
                 })?;
-            remapped_entry_point_names.insert(entry_point.name, cleansed);
+            entry_point_map.insert(entry_point.name, spirv::EntryPoint {
+                name: cleansed,
+                .. entry_point
+            });
         }
 
         // done
@@ -348,33 +350,40 @@ impl Device {
             .new_library_with_source(shader_code.as_ref(), &options)
             .map_err(|err| ShaderError::CompilationFailed(err.into()))?;
 
-        Ok((library, remapped_entry_point_names))
+        Ok((library, entry_point_map))
     }
 
     fn load_shader(
         &self, ep: &pso::EntryPoint<Backend>, layout: &n::PipelineLayout
-    ) -> Result<(metal::Library, metal::Function), pso::CreationError> {
+    ) -> Result<(metal::Library, metal::Function, metal::MTLSize), pso::CreationError> {
         let entries_owned;
-        let (lib, remapped_entries) = match ep.module {
-            &n::ShaderModule::Compiled {ref library, ref remapped_entry_point_names} => (library.to_owned(), remapped_entry_point_names),
-            &n::ShaderModule::Raw(ref data) => {
+        let (lib, entry_point_map) = match *ep.module {
+            n::ShaderModule::Compiled {ref library, ref entry_point_map} => {
+                (library.to_owned(), entry_point_map)
+            }
+            n::ShaderModule::Raw(ref data) => {
                 let raw = self.compile_shader_library(data, &layout.res_overrides).unwrap();
                 entries_owned = raw.1;
                 (raw.0, &entries_owned)
             }
         };
 
-        let fun_name = remapped_entries
-            .get(ep.entry)
-            .map(|s| s.as_str())
-            .unwrap_or(ep.entry);
-
-        let mtl_function = get_final_function(&lib, fun_name, ep.specialization)
+        let (name, wg_size) = match entry_point_map.get(ep.entry) {
+            Some(p) => (p.name.as_str(), metal::MTLSize {
+                width : p.work_group_size.x as _,
+                height: p.work_group_size.y as _,
+                depth : p.work_group_size.z as _,
+            }),
+            // this can only happen if the shader came directly from the user 
+            None => (ep.entry, metal::MTLSize { width: 0, height: 0, depth: 0 }),
+        };
+        let mtl_function = get_final_function(&lib, name, ep.specialization)
             .map_err(|_| {
                 error!("Invalid shader entry point");
                 pso::CreationError::Other
             })?;
-        Ok((lib, mtl_function))
+
+        Ok((lib, mtl_function, wg_size))
     }
 
     fn describe_argument(ty: DescriptorType, index: usize, count: usize) -> metal::ArgumentDescriptor {
@@ -434,13 +443,13 @@ impl Device {
         pipeline.set_input_primitive_topology(primitive_class);
 
         // Vertex shader
-        let (vs_lib, vs_function) = self.load_shader(&pipeline_desc.shaders.vertex, pipeline_layout)?;
+        let (vs_lib, vs_function, _) = self.load_shader(&pipeline_desc.shaders.vertex, pipeline_layout)?;
         pipeline.set_vertex_function(Some(&vs_function));
 
         // Fragment shader
         let fs_lib = match pipeline_desc.shaders.fragment {
             Some(ref ep) => {
-                let (lib, fun) = self.load_shader(ep, pipeline_layout)?;
+                let (lib, fun, _) = self.load_shader(ep, pipeline_layout)?;
                 pipeline.set_fragment_function(Some(&fun));
                 Some(lib)
             }
@@ -579,7 +588,7 @@ impl Device {
     ) -> Result<n::ComputePipeline, pso::CreationError> {
         let pipeline = metal::ComputePipelineDescriptor::new();
 
-        let (cs_lib, cs_function) = self.load_shader(&pipeline_desc.shader, &pipeline_desc.layout)?;
+        let (cs_lib, cs_function, work_group_size) = self.load_shader(&pipeline_desc.shader, &pipeline_desc.layout)?;
         pipeline.set_compute_function(Some(&cs_function));
 
         let mut err_ptr: *mut ObjcObject = ptr::null_mut();
@@ -595,6 +604,7 @@ impl Device {
             Ok(n::ComputePipeline {
                 cs_lib,
                 raw: unsafe { metal::ComputePipelineState::from_ptr(pso) },
+                work_group_size,
             })
         }
     }
@@ -789,15 +799,15 @@ impl hal::Device<Backend> for Device {
     fn create_shader_module(&self, raw_data: &[u8]) -> Result<n::ShaderModule, ShaderError> {
         //TODO: we can probably at least parse here and save the `Ast`
         let depends_on_pipeline_layout = true; //TODO: !self.private_caps.argument_buffers
-        if depends_on_pipeline_layout {
-            Ok(n::ShaderModule::Raw(raw_data.to_vec()))
+        Ok(if depends_on_pipeline_layout {
+            n::ShaderModule::Raw(raw_data.to_vec())
         } else {
-            let (library, remapped_entry_point_names) = self.compile_shader_library(raw_data, &HashMap::new())?;
-            Ok(n::ShaderModule::Compiled {
+            let (library, entry_point_map) = self.compile_shader_library(raw_data, &HashMap::new())?;
+            n::ShaderModule::Compiled {
                 library,
-                remapped_entry_point_names
-            })
-        }
+                entry_point_map,
+            }
+        })
     }
 
     fn create_sampler(&self, info: image::SamplerInfo) -> n::Sampler {
@@ -1088,7 +1098,6 @@ impl hal::Device<Backend> for Device {
     }
 
     fn destroy_compute_pipeline(&self, _pipeline: n::ComputePipeline) {
-        unimplemented!()
     }
 
     fn destroy_framebuffer(&self, _buffer: n::FrameBuffer) {
