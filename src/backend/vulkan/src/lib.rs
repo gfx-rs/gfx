@@ -22,7 +22,7 @@ extern crate glsl_to_spirv;
 use ash::{Entry, LoadingError};
 use ash::extensions as ext;
 use ash::version::{EntryV1_0, DeviceV1_0, InstanceV1_0, V1_0};
-use ash::vk;
+use ash::vk::{self, VK_TRUE};
 
 use hal::{format, memory, queue};
 use hal::{Features, Limits, PatchSize, QueueType};
@@ -467,29 +467,53 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn get_features(&self) -> Features {
-        let limits = &self.properties.limits;
+        let features = self.instance.0.get_physical_device_features(self.handle);
 
-        Features { //TODO
-            indirect_execution: limits.max_draw_indirect_count != 0,
-            draw_instanced: false,
-            draw_instanced_base: false,
-            draw_indexed_base: false,
-            draw_indexed_instanced: false,
-            draw_indexed_instanced_base_vertex: false,
-            draw_indexed_instanced_base: false,
+        Features {
+            robust_buffer_access: features.robust_buffer_access == VK_TRUE,
+            full_draw_index_u32: features.full_draw_index_uint32 == VK_TRUE,
+            image_cube_array: features.image_cube_array == VK_TRUE,
+            independent_blending: features.independent_blend == VK_TRUE,
+            geometry_shader: features.geometry_shader == VK_TRUE,
+            tessellation_shader: features.tessellation_shader == VK_TRUE,
+            sample_rate_shading: features.sample_rate_shading == VK_TRUE,
+            dual_src_blending: features.dual_src_blend == VK_TRUE,
+            logic_op: features.logic_op == VK_TRUE,
+            multi_draw_indirect: features.multi_draw_indirect == VK_TRUE,
+            draw_indirect_first_instance: features.draw_indirect_first_instance == VK_TRUE,
+            depth_clamp: features.depth_clamp == VK_TRUE,
+            depth_bias_clamp: features.depth_bias_clamp == VK_TRUE,
+            non_fill_polygon_mode: features.depth_bounds == VK_TRUE,
+            depth_bounds: features.depth_bounds == VK_TRUE,
+            line_width: features.wide_lines == VK_TRUE,
+            point_size: features.large_points == VK_TRUE,
+            alpha_to_one: features.alpha_to_one == VK_TRUE,
+            multi_viewports: features.multi_viewport == VK_TRUE,
+            sampler_anisotropy: features.sampler_anisotropy == VK_TRUE,
+            format_etc2: features.texture_compression_etc2 == VK_TRUE,
+            format_astc_ldr: features.texture_compression_astc_ldr == VK_TRUE,
+            format_bc: features.texture_compression_bc == VK_TRUE,
+            precise_occlusion_query: features.occlusion_query_precise == VK_TRUE,
+            pipeline_statistics_query: features.pipeline_statistics_query == VK_TRUE,
+            vertex_stores_and_atomics: features.vertex_pipeline_stores_and_atomics == VK_TRUE,
+            fragment_stores_and_atomics: features.fragment_stores_and_atomics == VK_TRUE,
+
+            indirect_execution: true,
+            draw_instanced: true,
+            draw_instanced_base: true,
+            draw_indexed_base: true,
+            draw_indexed_instanced: true,
+            draw_indexed_instanced_base_vertex: true,
+            draw_indexed_instanced_base: true,
             instance_rate: false,
-            vertex_base: false,
-            srgb_color: false,
-            constant_buffer: false,
-            unordered_access_view: false,
-            separate_blending_slots: false,
-            copy_buffer: false,
-            sampler_anisotropy: false,
-            sampler_border_color: false,
-            sampler_lod_bias: false,
-            sampler_objects: false,
-            precise_occlusion_query: false,
-            pipeline_statistics_query: false,
+            vertex_base: true,
+            srgb_color: true,
+            constant_buffer: true,
+            unordered_access_view: true,
+            copy_buffer: true,
+            sampler_objects: true,
+            sampler_lod_bias: true,
+            sampler_border_color: true,
         }
     }
     fn get_limits(&self) -> Limits {

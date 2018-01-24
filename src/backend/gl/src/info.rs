@@ -293,6 +293,36 @@ pub fn query_all(gl: &gl::Gl) -> (Info, Features, Limits, PrivateCaps) {
 
     };
     let features = Features {
+        robust_buffer_access: false,
+        full_draw_index_u32: false,
+        image_cube_array: false,
+        independent_blending: false,
+        geometry_shader: false,
+        tessellation_shader: false,
+        sample_rate_shading: false,
+        dual_src_blending: false,
+        logic_op: false, // Optional on feature level 11_0
+        multi_draw_indirect: false,
+        draw_indirect_first_instance: false,
+        depth_clamp: false,
+        depth_bias_clamp: false,
+        non_fill_polygon_mode: false,
+        depth_bounds: false,
+        line_width: false,
+        point_size: false,
+        alpha_to_one: false,
+        multi_viewports: false,
+        sampler_anisotropy:                 info.is_supported(&[Core(4,6),
+                                                                Ext ("GL_ARB_texture_filter_anisotropic"),
+                                                                Ext ("GL_EXT_texture_filter_anisotropic")]),
+        format_etc2: false,
+        format_astc_ldr: false,
+        format_bc: false,
+        precise_occlusion_query: false,
+        pipeline_statistics_query: false,
+        vertex_stores_and_atomics: false,
+        fragment_stores_and_atomics: false,
+
         indirect_execution:                 info.is_supported(&[Core(4,3),
                                                                 Es  (3,1)]), // TODO: extension
         draw_instanced:                     info.is_supported(&[Core(3,1),
@@ -317,9 +347,6 @@ pub fn query_all(gl: &gl::Gl) -> (Info, Features, Limits, PrivateCaps) {
                                                                 Es  (3,0),
                                                                 Ext ("GL_ARB_uniform_buffer_object")]),
         unordered_access_view:              info.is_supported(&[Core(4,0)]), // TODO: extension
-        separate_blending_slots:            info.is_supported(&[Core(4,0),
-                                                                Es  (3,0),
-                                                                Ext ("GL_ARB_draw_buffers_blend")]),
         copy_buffer:                        info.is_supported(&[Core(3,1),
                                                                 Es  (3,0),
                                                                 Ext ("GL_ARB_copy_buffer"),
@@ -328,12 +355,7 @@ pub fn query_all(gl: &gl::Gl) -> (Info, Features, Limits, PrivateCaps) {
                                                                 Es  (3,0),
                                                                 Ext ("GL_ARB_sampler_objects")]),
         sampler_lod_bias:                   info.is_supported(&[Core(3,3)]), // TODO: extension
-        sampler_anisotropy:                 info.is_supported(&[Core(4,6),
-                                                                Ext ("GL_ARB_texture_filter_anisotropic"),
-                                                                Ext ("GL_EXT_texture_filter_anisotropic")]),
         sampler_border_color:               info.is_supported(&[Core(3,3)]), // TODO: extensions
-        precise_occlusion_query: false, // TODO
-        pipeline_statistics_query: false, // TODO
     };
     let private = PrivateCaps {
         vertex_array:                       info.is_supported(&[Core(3,0),
