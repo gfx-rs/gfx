@@ -6,8 +6,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use hal::{self, format, image};
-use hal::{Backbuffer, CommandQueue, SwapchainConfig};
-use hal::format::{ChannelType, SurfaceType};
+use hal::{Backbuffer, SwapchainConfig};
 use hal::window::Extent2d;
 
 use metal::{self, MTLPixelFormat, MTLTextureUsage};

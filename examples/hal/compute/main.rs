@@ -44,7 +44,7 @@ fn main() {
 
     let memory_properties = adapter.physical_device.memory_properties();
     let (mut device, mut queue_group) = adapter
-        .open_with::<_, Compute>(|family| Some(1))
+        .open_with::<_, Compute>(|_family| Some(1))
         .unwrap();
 
     let shader = device.create_shader_module(include_bytes!("shader/collatz.spv")).unwrap();

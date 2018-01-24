@@ -13,7 +13,7 @@ use hal::{self, image, pass, format, mapping, memory, buffer, pso, query};
 use hal::device::{WaitFor, BindError, OutOfMemory, FramebufferError, ShaderError, Extent};
 use hal::memory::Properties;
 use hal::pool::CommandPoolCreateFlags;
-use hal::pso::{DescriptorSetWrite, DescriptorType, DescriptorSetLayoutBinding, AttributeDesc, DepthTest, StencilTest, StencilFace};
+use hal::pso::{DescriptorType, DescriptorSetLayoutBinding, AttributeDesc, DepthTest, StencilTest};
 use hal::queue::{QueueFamily as HalQueueFamily, QueueFamilyId, Queues};
 use hal::range::RangeArg;
 
@@ -98,27 +98,6 @@ fn get_final_function(library: &metal::LibraryRef, entry: &str, specialization: 
     Ok(mtl_function)
 }
 
-fn memory_types() -> [hal::MemoryType; 4] {
-    [
-        hal::MemoryType {
-            properties: Properties::CPU_VISIBLE | Properties::CPU_CACHED,
-            heap_index: 0,
-        },
-        hal::MemoryType {
-            properties: Properties::CPU_VISIBLE | Properties::CPU_CACHED,
-            heap_index: 0,
-        },
-        hal::MemoryType {
-            properties: Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
-            heap_index: 0,
-        },
-        hal::MemoryType {
-            properties: Properties::DEVICE_LOCAL,
-            heap_index: 1,
-        },
-    ]
-}
-
 #[derive(Clone, Copy)]
 struct PrivateCapabilities {
     resource_heaps: bool,
@@ -133,19 +112,47 @@ pub struct Device {
     pub(crate) device: metal::Device,
     private_caps: PrivateCapabilities,
     queue: Arc<command::QueueInner>,
+    memory_types: [hal::MemoryType; 4],
 }
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
 
-pub struct PhysicalDevice(pub(crate) metal::Device);
+pub struct PhysicalDevice {
+    raw: metal::Device,
+    memory_types: [hal::MemoryType; 4],
+}
 
 impl PhysicalDevice {
+    pub(crate) fn new(raw: metal::Device) -> Self {
+        PhysicalDevice {
+            raw,
+            memory_types: [
+                hal::MemoryType {
+                    properties: Properties::CPU_VISIBLE | Properties::CPU_CACHED,
+                    heap_index: 0,
+                },
+                hal::MemoryType {
+                    properties: Properties::CPU_VISIBLE | Properties::CPU_CACHED,
+                    heap_index: 0,
+                },
+                hal::MemoryType {
+                    properties: Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
+                    heap_index: 0,
+                },
+                hal::MemoryType {
+                    properties: Properties::DEVICE_LOCAL,
+                    heap_index: 1,
+                },
+            ],
+        }
+    }
+
     fn supports_any(&self, features_sets: &[MTLFeatureSet]) -> bool {
-        features_sets.iter().cloned().any(|x| self.0.supports_feature_set(x))
+        features_sets.iter().cloned().any(|x| self.raw.supports_feature_set(x))
     }
 
     fn is_mac(&self) -> bool {
-        self.0.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1)
+        self.raw.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1)
     }
 }
 
@@ -160,7 +167,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let id = family.id();
 
         let mut queue_group = hal::backend::RawQueueGroup::new(family);
-        let queue_raw = command::CommandQueue::new(&self.0);
+        let queue_raw = command::CommandQueue::new(&self.raw);
         let queue = queue_raw.0.clone();
         queue_group.add_queue(queue_raw);
 
@@ -173,9 +180,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         };
 
         let device = Device {
-            device: self.0.clone(),
+            device: self.raw.clone(),
             private_caps,
             queue,
+            memory_types: self.memory_types,
         };
 
         let mut queues = HashMap::new();
@@ -192,12 +200,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn memory_properties(&self) -> hal::MemoryProperties {
-        let memory_types = memory_types().to_vec();
-        let memory_heaps = vec![!0, !0]; //TODO
-
         hal::MemoryProperties {
-            memory_heaps,
-            memory_types,
+            memory_heaps: vec![!0, !0], //TODO
+            memory_types: self.memory_types.to_vec(),
         }
     }
 
@@ -233,6 +238,13 @@ impl LanguageVersion {
 }
 
 impl Device {
+    fn is_heap_coherent(&self, heap: &n::MemoryHeap) -> bool {
+        match *heap {
+            n::MemoryHeap::Emulated { memory_type } => self.memory_types[memory_type].properties.contains(Properties::COHERENT),
+            n::MemoryHeap::Native(ref heap) => heap.storage_mode() == MTLStorageMode::Shared,
+        }
+    }
+
     pub fn create_shader_library_from_file<P>(
         &self, _path: P,
     ) -> Result<n::ShaderModule, ShaderError> where P: AsRef<Path> {
@@ -573,6 +585,57 @@ impl Device {
             })
         }
     }
+
+    fn create_compute_pipeline<'a>(
+        &self,
+        pipeline_desc: &pso::ComputePipelineDesc<'a, Backend>,
+    ) -> Result<n::ComputePipeline, pso::CreationError> {
+        let pipeline = metal::ComputePipelineDescriptor::new();
+        let pipeline_layout = &pipeline_desc.layout;
+
+        // FIXME: lots missing
+
+        // Compute shader
+        let cs_entries_owned;
+        let (cs_lib, cs_remapped_entries) = match pipeline_desc.shader.module {
+            &n::ShaderModule::Compiled {ref library, ref remapped_entry_point_names} => {
+                (library.to_owned(), remapped_entry_point_names)
+            }
+            &n::ShaderModule::Raw(ref data) => {
+                //TODO: cache them all somewhere!
+                let raw = self.compile_shader_library(data, &pipeline_layout.res_overrides).unwrap();
+                cs_entries_owned = raw.1;
+                (raw.0, &cs_entries_owned)
+            }
+        };
+        let cs_entry = cs_remapped_entries
+            .get(pipeline_desc.shader.entry)
+            .map(|s| s.as_str())
+            .unwrap_or(pipeline_desc.shader.entry);
+
+        let mtl_compute_function = get_final_function(&cs_lib, cs_entry, pipeline_desc.shader.specialization)
+            .map_err(|_| {
+                error!("Invalid compute shader entry point");
+                pso::CreationError::Other
+            })?;
+        pipeline.set_compute_function(Some(&mtl_compute_function));
+
+        let mut err_ptr: *mut ObjcObject = ptr::null_mut();
+        let pso: *mut metal::MTLComputePipelineState = unsafe {
+            msg_send![&*self.device, newComputePipelineStateWithDescriptor:&*pipeline error: &mut err_ptr]
+        };
+
+        if pso.is_null() {
+            error!("PSO creation failed: {}", unsafe { n::objc_err_description(err_ptr) });
+            unsafe { msg_send![err_ptr, release] };
+            Err(pso::CreationError::Other)
+        } else {
+            Ok(n::ComputePipeline {
+                cs_lib,
+                raw: unsafe { metal::ComputePipelineState::from_ptr(pso) },
+            })
+        }
+    }
 }
 
 impl hal::Device<Backend> for Device {
@@ -716,18 +779,20 @@ impl hal::Device<Backend> for Device {
         &self,
         params: &[pso::GraphicsPipelineDesc<'a, Backend>],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
-        let mut output = Vec::with_capacity(params.len());
-        for param in params {
-            output.push(self.create_graphics_pipeline(param));
-        }
-        output
+        params
+            .into_iter()
+            .map(|p| self.create_graphics_pipeline(p))
+            .collect()
     }
 
     fn create_compute_pipelines<'a>(
         &self,
-        _pipelines: &[pso::ComputePipelineDesc<'a, Backend>],
+        params: &[pso::ComputePipelineDesc<'a, Backend>],
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
-        unimplemented!()
+        params
+            .into_iter()
+            .map(|p| self.create_compute_pipeline(p))
+            .collect()
     }
 
     fn create_framebuffer(
@@ -846,6 +911,9 @@ impl hal::Device<Backend> for Device {
     {
         for item in iter.into_iter() {
             let (memory, ref range) = *item.borrow();
+            if self.is_heap_coherent(&memory.heap) {
+                continue
+            }
             let range_start = *range.start().unwrap_or(&0);
             let range_end = *range.end().unwrap_or(&memory.size);
             let mapping = memory.mapping.lock().unwrap();
@@ -1065,7 +1133,7 @@ impl hal::Device<Backend> for Device {
 
     fn allocate_memory(&self, memory_type: hal::MemoryTypeId, size: u64) -> Result<n::Memory, OutOfMemory> {
         let memory_type = memory_type.0;
-        let memory_properties = memory_types()[memory_type].properties;
+        let memory_properties = self.memory_types[memory_type].properties;
         let (storage, cache) = map_memory_properties_to_storage_and_cache(memory_properties);
 
         // Heaps cannot be used for CPU coherent resources
@@ -1127,40 +1195,39 @@ impl hal::Device<Backend> for Device {
             n::MemoryHeap::Native(ref heap) => {
                 let resource_options = resource_options_from_storage_and_cache(
                     heap.storage_mode(),
-                    heap.cpu_cache_mode());
-                (heap.new_buffer(buffer.size, resource_options)
+                    heap.cpu_cache_mode(),
+                );
+                let raw = heap.new_buffer(buffer.size, resource_options)
                     .unwrap_or_else(|| {
                         // TODO: disable hazard tracking?
                         self.device.new_buffer(buffer.size, resource_options)
-                    }), heap.storage_mode() != MTLStorageMode::Private)
+                    });
+                (raw, heap.storage_mode() != MTLStorageMode::Private)
             }
             n::MemoryHeap::Emulated { memory_type } => {
                 // TODO: disable hazard tracking?
-                let memory_properties = memory_types()[memory_type].properties;
+                let memory_properties = self.memory_types[memory_type].properties;
                 let resource_options = map_memory_properties_to_options(memory_properties);
-                (self.device.new_buffer(buffer.size, resource_options), memory_properties.contains(memory::Properties::CPU_VISIBLE))
+                let raw = self.device.new_buffer(buffer.size, resource_options);
+                (raw, memory_properties.contains(memory::Properties::CPU_VISIBLE))
             }
         };
 
-        if mappable {
-            memory.allocations.lock().unwrap().insert(offset .. (offset + buffer.size), raw.clone());
-            Ok(n::Buffer {
-                raw,
-                memory: Some(memory.allocations.clone()),
-                offset,
-            })
-        } else {
-            Ok(n::Buffer {
-                raw,
-                memory: None,
-                offset,
-            })
-        }
+        Ok(n::Buffer {
+            allocations: if mappable {
+                memory.allocations.lock().unwrap().insert(offset .. (offset + buffer.size), raw.clone());
+                Some(memory.allocations.clone())
+            } else {
+                None
+            },
+            raw,
+            offset,
+        })
     }
 
     fn destroy_buffer(&self, buffer: n::Buffer) {
-        if let Some(memory) = buffer.memory {
-            memory.lock().unwrap().remove(buffer.offset .. (buffer.offset + buffer.raw.length()));
+        if let Some(alloc) = buffer.allocations {
+            alloc.lock().unwrap().remove(buffer.offset .. (buffer.offset + buffer.raw.length()));
         }
     }
 
@@ -1253,7 +1320,7 @@ impl hal::Device<Backend> for Device {
             },
             n::MemoryHeap::Emulated { memory_type } => {
                 // TODO: disable hazard tracking?
-                let memory_properties = memory_types()[memory_type].properties;
+                let memory_properties = self.memory_types[memory_type].properties;
                 let resource_options = map_memory_properties_to_options(memory_properties);
                 image.desc.set_resource_options(resource_options);
                 self.device.new_texture(&image.desc)
