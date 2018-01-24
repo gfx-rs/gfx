@@ -987,7 +987,7 @@ impl hal::Device<Backend> for Device {
                             for (new, old) in samplers.iter().zip(target_iter) {
                                 *old = Some(new.0.clone());
                             }
-                        },
+                        }
                         (&SampledImage(ref images), Some(&mut n::DescriptorSetBinding::SampledImage(ref mut vec))) => {
                             if write.array_offset + images.len() > layout.count {
                                 panic!("out of range descriptor write");
@@ -995,11 +995,12 @@ impl hal::Device<Backend> for Device {
 
                             let target_iter = vec[write.array_offset..(write.array_offset + images.len())].iter_mut();
 
-                            for (new, old) in images.iter().zip(target_iter) {
-                                *old = Some(((new.0).0.clone(), new.1));
+                            for (&(image, offset), old) in images.iter().zip(target_iter) {
+                                *old = Some((image.0.clone(), offset));
                             }
-                        },
-                        (&UniformBuffer(ref buffers), Some(&mut n::DescriptorSetBinding::ConstantBuffer(ref mut vec))) => {
+                        }
+                        (&UniformBuffer(ref buffers), Some(&mut n::DescriptorSetBinding::Buffer(ref mut vec))) |
+                        (&StorageBuffer(ref buffers), Some(&mut n::DescriptorSetBinding::Buffer(ref mut vec))) => {
                             if write.array_offset + buffers.len() > layout.count {
                                 panic!("out of range descriptor write");
                             }
@@ -1007,15 +1008,18 @@ impl hal::Device<Backend> for Device {
                             let target_iter = vec[write.array_offset..(write.array_offset + buffers.len())].iter_mut();
 
                             for (new, old) in buffers.iter().zip(target_iter) {
-                                let buf_length = (new.0).raw.length();
-                                let start = *new.1.start().unwrap_or(&0);
-                                let end = *new.1.end().unwrap_or(&buf_length);
+                                let (buffer, ref range) = *new;
+                                let buf_length = buffer.raw.length();
+                                let start = *range.start().unwrap_or(&0);
+                                let end = *range.end().unwrap_or(&buf_length);
                                 assert!(end <= buf_length);
-                                *old = Some(((new.0).raw.clone(), start));
+                                *old = Some((buffer.raw.clone(), start));
                             }
                         }
 
-                        (&Sampler(_), _) | (&SampledImage(_), _) | (&UniformBuffer(_), _) => panic!("mismatched descriptor set type"),
+                        (&Sampler(_), _) | (&SampledImage(_), _) | (&UniformBuffer(_), _) | (&StorageBuffer(_), _) => {
+                            panic!("mismatched descriptor set type")
+                        }
                         _ => unimplemented!(),
                     }
                 }

@@ -688,7 +688,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
                                         }
                                     }
                                 }
-                                ConstantBuffer(ref buffers) => {
+                                Buffer(ref buffers) => {
                                     for (i, ref bref) in buffers.iter().enumerate() {
                                         if let Some((ref buffer, offset)) = **bref {
                                             inner.resources_vs.add_buffer(start + i, buffer.as_ref(), offset as _);
@@ -723,13 +723,12 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
                                         }
                                     }
                                 }
-                                ConstantBuffer(ref buffers) => {
+                                Buffer(ref buffers) => {
                                     for (i, ref bref) in buffers.iter().enumerate() {
-                                        if let Some(ref buffer) = **bref {
-                                            let offset = buffer.1;
-                                            inner.resources_fs.add_buffer(start + i, buffer.0.as_ref(), offset as _);
+                                        if let Some((ref buffer, offset)) = **bref {
+                                            inner.resources_fs.add_buffer(start + i, buffer.as_ref(), offset as _);
                                             if let EncoderState::Render(ref encoder) = inner.encoder_state {
-                                                encoder.set_fragment_buffer((start + i) as _,offset as _, Some(buffer.0.as_ref()));
+                                                encoder.set_fragment_buffer((start + i) as _,offset as _, Some(buffer.as_ref()));
                                             }
                                         }
                                     }
