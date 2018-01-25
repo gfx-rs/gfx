@@ -132,7 +132,7 @@ impl CommandBufferInner {
         self.resources_cs.clear();
     }
 
-    fn stop(&mut self) {
+    fn stop_ecoding(&mut self) {
         match mem::replace(&mut self.encoder_state, EncoderState::None)  {
             EncoderState::None => {}
             EncoderState::Blit(ref blit_encoder) => {
@@ -145,7 +145,7 @@ impl CommandBufferInner {
     }
 
     fn begin_renderpass(&mut self, encoder: metal::RenderCommandEncoder) {
-        self.stop();
+        self.stop_ecoding();
 
         self.encoder_state = EncoderState::Render(encoder);
         let encoder = if let EncoderState::Render(ref encoder) = self.encoder_state {
@@ -202,7 +202,7 @@ impl CommandBufferInner {
     }
 
     fn begin_compute(&mut self) -> (&metal::ComputeCommandEncoderRef, MTLSize) {
-        self.stop();
+        self.stop_ecoding();
 
         let encoder = self.command_buffer.new_compute_command_encoder();
         encoder.set_compute_pipeline_state(self.compute_pso.as_ref().unwrap());
@@ -421,7 +421,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn finish(&mut self) {
-        self.inner().stop();
+        self.inner().stop_ecoding();
     }
 
     fn reset(&mut self, _release_resources: bool) {
