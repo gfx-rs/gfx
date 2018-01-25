@@ -30,6 +30,7 @@ use ron::de;
 
 #[derive(Debug, Deserialize)]
 enum Expectation {
+    Buffer(String, Vec<u8>),
     ImageRow(String, usize, Vec<u8>),
 }
 
@@ -100,7 +101,7 @@ impl Harness {
             //println!("\t{:?}", adapter.info);
             println!("\tScene '{}':", tg.name);
 
-            let mut scene = warden::gpu::Scene::<I::Backend>::new(
+            let mut scene = warden::gpu::Scene::<I::Backend, _>::new(
                 adapter,
                 &tg.scene,
                 &self.base_path.join("data"),
@@ -111,16 +112,18 @@ impl Harness {
                 scene.run(test.jobs.iter().map(|x| x.as_str()));
 
                 print!("\tran: ");
-                match test.expect {
-                    Expectation::ImageRow(ref image, row, ref data) => {
-                        let guard = scene.fetch_image(image);
-                        if data.as_slice() == guard.row(row) {
-                            println!("PASS");
-                        } else {
-                            println!("FAIL {:?}", guard.row(row));
-                            num_failures += 1;
-                        }
-                    }
+                let (guard, row, data) = match test.expect {
+                    Expectation::Buffer(ref buffer, ref data) =>
+                        (scene.fetch_buffer(buffer), 0, data),
+                    Expectation::ImageRow(ref image, row, ref data) =>
+                        (scene.fetch_image(image), row, data),
+                };
+
+                if data.as_slice() == guard.row(row) {
+                    println!("PASS")
+                } else {
+                    println!("FAIL {:?}", guard.row(row));
+                    num_failures += 1;
                 }
             }
         }

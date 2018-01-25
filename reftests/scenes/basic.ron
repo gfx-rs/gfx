@@ -1,10 +1,10 @@
 (
 	resources: {
-		"im-color": Image(
+		"image.color": Image(
 			kind: D2(1, 1, Single),
 			num_levels: 1,
 			format: Rgba8Unorm,
-			usage: (bits: 4),
+			usage: (bits: 0x4), //COLOR_ATTACHMENT
 		),
 		"pass": RenderPass(
 			attachments: {
@@ -22,8 +22,8 @@
 			},
 			dependencies: [],
 		),
-		"im-color-view": ImageView(
-			image: "im-color",
+		"image.color.view": ImageView(
+			image: "image.color",
 			format: Rgba8Unorm,
 			range: (
 				aspects: (bits: 1),
@@ -34,7 +34,7 @@
 		"fbo": Framebuffer(
 			pass: "pass",
 			views: {
-				"c": "im-color-view"
+				"c": "image.color.view"
 			},
 			extent: (
 				width: 1,
@@ -46,12 +46,12 @@
 			set_layouts: [],
 			push_constant_ranges: [],
 		),
-		"passthrough.vs": Shader("passthrough.vert"),
-		"passthrough.fs": Shader("passthrough.frag"),
-		"passthrough.pipe": GraphicsPipeline(
+		"shader.passthrough.vs": Shader("passthrough.vert"),
+		"shader.passthrough.fs": Shader("passthrough.frag"),
+		"pipe.passthrough": GraphicsPipeline(
 			shaders: (
-				vertex: "passthrough.vs",
-				fragment: "passthrough.fs",
+				vertex: "shader.passthrough.vs",
+				fragment: "shader.passthrough.fs",
 			),
 			rasterizer: (
 				polygon_mode: Fill,
@@ -94,9 +94,12 @@
 		"pass-through": Graphics(
 			descriptors: {},
 			framebuffer: "fbo",
+			clear_values: [
+				Color(Float((0.8, 0.8, 0.8, 1.0))),
+			],
 			pass: ("pass", {
 				"main": (commands: [
-					BindPipeline("passthrough.pipe"),
+					BindPipeline("pipe.passthrough"),
 					SetViewports([
 						Viewport(
 							rect: Rect(x: 0, y: 0, w: 1, h: 1),
@@ -108,7 +111,6 @@
 					]),
 					Draw(
 						vertices: (start: 0, end: 3),
-						//instances: (begin: 0, end: 1),
 					),
 				]),
 			}),

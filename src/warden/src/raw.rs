@@ -45,7 +45,12 @@ pub struct SubpassRef {
 
 #[derive(Debug, Deserialize)]
 pub enum Resource {
-    Buffer,
+    Buffer {
+        size: usize,
+        usage: hal::buffer::Usage,
+        #[serde(default)]
+        data: String,
+    },
     Image {
         kind: hal::image::Kind,
         num_levels: hal::image::Level,
@@ -96,6 +101,10 @@ pub enum Resource {
         layout: String,
         subpass: SubpassRef,
     },
+    ComputePipeline {
+        shader: String,
+        layout: String,
+    },
     Framebuffer {
         pass: String,
         views: HashMap<String, String>,
@@ -109,9 +118,9 @@ pub enum TransferCommand {
     //CopyImageToBuffer,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct DescriptorSetData {
-    //TODO: update_descriptor_sets
+#[derive(Clone, Debug, Deserialize)]
+pub enum DescriptorWrite {
+    StorageBuffers(Vec<String>),
 }
 
 fn default_instance_range() -> Range<hal::InstanceCount> {
@@ -142,6 +151,7 @@ pub enum DrawCommand {
         base_vertex: hal::VertexOffset,
         instances: Range<hal::InstanceCount>,
     },
+    //TODO: set those by default, avoid the noise
     SetViewports(Vec<hal::command::Viewport>),
     SetScissors(Vec<hal::command::Rect>),
 }
@@ -157,11 +167,15 @@ pub enum Job {
         commands: Vec<TransferCommand>,
     },
     Graphics {
-        descriptors: HashMap<String, DescriptorSetData>,
+        descriptors: HashMap<String, Vec<DescriptorWrite>>,
         framebuffer: String,
-        #[serde(default)]
         clear_values: Vec<hal::command::ClearValue>,
         pass: (String, HashMap<String, DrawPass>),
+    },
+    Compute {
+        descriptors: Vec<(String, Vec<DescriptorWrite>)>,
+        pipeline: String,
+        dispatch: (u32, u32, u32),
     },
 }
 
