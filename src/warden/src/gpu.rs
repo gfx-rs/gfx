@@ -8,7 +8,7 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::{slice};
 
-use hal::{self, buffer as b, format as f, image as i, memory, pso};
+use hal::{self, buffer as b, command as c, format as f, image as i, memory, pso};
 use hal::{Device, DescriptorPool, PhysicalDevice};
 
 use raw;
@@ -85,13 +85,13 @@ pub struct Resources<B: hal::Backend> {
 }
 
 pub struct Job<B: hal::Backend, C> {
-    submission: hal::command::Submit<B, C, hal::command::MultiShot, hal::command::Primary>,
+    submission: c::Submit<B, C, c::MultiShot, c::Primary>,
 }
 
 pub struct Scene<B: hal::Backend, C> {
     pub resources: Resources<B>,
     pub jobs: HashMap<String, Job<B, C>>,
-    init_submit: hal::command::Submit<B, C, hal::command::MultiShot, hal::command::Primary>,
+    init_submit: c::Submit<B, C, c::MultiShot, c::Primary>,
     device: B::Device,
     queue_group: hal::QueueGroup<B, C>,
     command_pool: hal::CommandPool<B, C>,
@@ -233,7 +233,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                 pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
                                 &[pre_barrier],
                             );
-                            let copy = hal::command::BufferCopy {
+                            let copy = c::BufferCopy {
                                 src: 0,
                                 dst: 0,
                                 size: size as _,
@@ -353,7 +353,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             );
 
                             let buffer_width = (row_pitch as u32 * 8) / format_desc.bits as u32;
-                            let copy = hal::command::BufferImageCopy {
+                            let copy = c::BufferImageCopy {
                                 buffer_offset: 0,
                                 buffer_width,
                                 buffer_height: h as u32,
@@ -362,7 +362,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                     level: 0,
                                     layers: 0 .. 1,
                                 },
-                                image_offset: hal::command::Offset { x: 0, y: 0, z: 0 },
+                                image_offset: c::Offset { x: 0, y: 0, z: 0 },
                                 image_extent: hal::device::Extent {
                                     width: w as _,
                                     height: h as _,
@@ -678,13 +678,19 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                 raw::Job::Graphics { ref framebuffer, ref pass, ref clear_values } => {
                     let (ref fb, extent) = resources.framebuffers[framebuffer];
                     let rp = &resources.render_passes[&pass.0];
-                    let rect = hal::command::Rect {
+                    let rect = c::Rect {
                         x: 0,
                         y: 0,
                         w: extent.width as _,
                         h: extent.height as _,
                     };
                     let mut encoder = command_buf.begin_renderpass_inline(&rp.handle, fb, rect, clear_values);
+                    encoder.set_scissors(Some(rect));
+                    encoder.set_viewports(Some(c::Viewport {
+                        rect,
+                        depth: 0.0 .. 1.0,
+                    }));
+
                     for subpass in &rp.subpasses {
                         if Some(subpass) != rp.subpasses.first() {
                             encoder = encoder.next_subpass_inline();
@@ -844,7 +850,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                 &[pre_barrier],
             );
 
-            let copy = hal::command::BufferCopy {
+            let copy = c::BufferCopy {
                 src: 0,
                 dst: 0,
                 size: buffer.size as _,
@@ -937,7 +943,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                 &[pre_barrier],
             );
 
-            let copy = hal::command::BufferImageCopy {
+            let copy = c::BufferImageCopy {
                 buffer_offset: 0,
                 buffer_width: (row_pitch as u32 * 8) / format_desc.bits as u32,
                 buffer_height: height as u32,
@@ -946,7 +952,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                     level: 0,
                     layers: 0 .. 1,
                 },
-                image_offset: hal::command::Offset { x: 0, y: 0, z: 0 },
+                image_offset: c::Offset { x: 0, y: 0, z: 0 },
                 image_extent: hal::device::Extent {
                     width: width as _,
                     height: height as _,
