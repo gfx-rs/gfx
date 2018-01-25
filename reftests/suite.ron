@@ -13,7 +13,7 @@
 	"compute": {
 		"fill": (
 			jobs: ["fill"],
-			expect: Buffer("buf.output", [1]),
+			expect: Buffer("buffer.output", [1, 0, 0, 0]),
 		),
 	},
 }

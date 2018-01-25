@@ -78,14 +78,13 @@ pub struct Resources<B: hal::Backend> {
     pub shaders: HashMap<String, B::ShaderModule>,
     pub desc_set_layouts: HashMap<String, (Vec<usize>, B::DescriptorSetLayout)>,
     pub desc_pools: HashMap<String, B::DescriptorPool>,
-    pub desc_sets: HashMap<String, (String, B::DescriptorSet)>,
+    pub desc_sets: HashMap<String, B::DescriptorSet>,
     pub pipeline_layouts: HashMap<String, B::PipelineLayout>,
     pub graphics_pipelines: HashMap<String, B::GraphicsPipeline>,
     pub compute_pipelines: HashMap<String, (String, B::ComputePipeline)>,
 }
 
 pub struct Job<B: hal::Backend, C> {
-    descriptor_updates: HashMap<String, Vec<raw::DescriptorWrite>>,
     submission: hal::command::Submit<B, C, hal::command::OneShot, hal::command::Primary>,
 }
 
@@ -148,7 +147,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         );
 
         // create resources
-        let mut resources = Resources {
+        let mut resources = Resources::<B> {
             buffers: HashMap::new(),
             images: HashMap::new(),
             image_views: HashMap::new(),
@@ -516,16 +515,38 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             .unwrap();
                         resources.image_views.insert(name.clone(), view);
                     }
-                    raw::Resource::DescriptorSet { ref pool, ref layout } => {
-                        let set_layout = &resources.desc_set_layouts[layout].1;
-                        let desc_pool: &mut B::DescriptorPool = resources.desc_pools
+                    raw::Resource::DescriptorSet { ref pool, ref layout, ref data } => {
+                        // create a descriptor set
+                        let (ref binding_starts, ref set_layout) = resources.desc_set_layouts[layout];
+                        let desc_set = resources.desc_pools
                             .get_mut(pool)
-                            .unwrap();
-                        let set = desc_pool
+                            .expect(&format!("Missing descriptor pool: {}", pool))
                             .allocate_sets(&[set_layout])
                             .pop()
                             .unwrap();
-                        resources.desc_sets.insert(name.clone(), (layout.clone(), set));
+                        resources.desc_sets.insert(name.clone(), desc_set);
+                        // fill it up
+                        let set = &resources.desc_sets[name];
+                        let res_buffers = &resources.buffers;
+                        let updates = binding_starts
+                            .iter()
+                            .zip(data)
+                            .map(|(&binding, range)| hal::pso::DescriptorSetWrite {
+                                set,
+                                binding,
+                                array_offset: 0,
+                                write: match *range {
+                                    raw::DescriptorRange::StorageBuffers(ref names) => {
+                                        let buffers = names
+                                            .iter()
+                                            .map(|s| (&res_buffers[s].handle, ..))
+                                            .collect();
+                                        hal::pso::DescriptorWrite::StorageBuffer(buffers)
+                                    }
+                                },
+                            })
+                            .collect::<Vec<_>>();
+                        device.update_descriptor_sets(&updates);
                     }
                     raw::Resource::PipelineLayout { ref set_layouts, ref push_constant_ranges } => {
                         let layout = {
@@ -644,7 +665,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         let mut jobs = HashMap::new();
         for (name, job) in &raw.jobs {
             let mut command_buf = command_pool.acquire_command_buffer(false);
-            let descriptor_updates = match *job {
+            match *job {
                 raw::Job::Transfer { ref commands } => {
                     use raw::TransferCommand as Tc;
                     for command in commands {
@@ -653,10 +674,8 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             Tc::CopyBufferToImage => {}
                         }
                     }
-                    HashMap::new()
                 }
-                raw::Job::Graphics { ref descriptors, ref framebuffer, ref pass, ref clear_values } => {
-                    assert!(descriptors.is_empty()); //TODO!!!
+                raw::Job::Graphics { ref framebuffer, ref pass, ref clear_values } => {
                     let (ref fb, extent) = resources.framebuffers[framebuffer];
                     let rp = &resources.render_passes[&pass.0];
                     let rect = hal::command::Rect {
@@ -713,31 +732,24 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             }
                         }
                     }
-                    descriptors.clone()
                 }
-                raw::Job::Compute { ref descriptors, ref pipeline, ref dispatch } => {
+                raw::Job::Compute { ref pipeline, ref descriptor_sets, ref dispatch } => {
                     let (ref layout, ref pso) = resources.compute_pipelines[pipeline];
                     command_buf.bind_compute_pipeline(pso);
                     command_buf.bind_compute_descriptor_sets(
                         &resources.pipeline_layouts[layout],
                         0,
-                        descriptors.iter().map(|pair| {
-                            &resources.desc_sets
-                                .get(&pair.0)
-                                .expect(&format!("Missing descriptor set: {}", pair.0))
-                                .1
+                        descriptor_sets.iter().map(|name| {
+                            resources.desc_sets
+                                .get(name)
+                                .expect(&format!("Missing descriptor set: {}", name))
                         }),
                     );
                     command_buf.dispatch(dispatch.0, dispatch.1, dispatch.2);
-                    descriptors
-                        .iter()
-                        .map(|&(ref desc_name, ref writes)| (desc_name.clone(), writes.to_vec()))
-                        .collect()
                 }
-            };
+            }
 
             jobs.insert(name.clone(), Job {
-                descriptor_updates,
                 submission: command_buf.finish(),
             });
         }
@@ -763,35 +775,12 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         I: IntoIterator<Item = &'a str>
     {
         let mut submits = Vec::new();
-        let mut updates = Vec::new();
-        let res = &self.resources;
         for name in jobs {
             //TODO: re-use submits!
             let job = self.jobs.remove(name).unwrap();
             submits.push(job.submission);
-            for (desc_name, writes) in job.descriptor_updates {
-                let (ref desc_layout_name, ref set) = res.desc_sets[&desc_name];
-                let binding_starts = &res.desc_set_layouts[desc_layout_name].0;
-                for (&binding, write) in binding_starts.iter().zip(writes) {
-                    updates.push(hal::pso::DescriptorSetWrite {
-                        set,
-                        binding,
-                        array_offset: 0,
-                        write: match write {
-                            raw::DescriptorWrite::StorageBuffers(names) => {
-                                let buffers = names
-                                    .iter()
-                                    .map(|name| (&res.buffers[name].handle, ..))
-                                    .collect();
-                                hal::pso::DescriptorWrite::StorageBuffer(buffers)
-                            }
-                        }
-                    });
-                }
-            }
         }
 
-        self.device.update_descriptor_sets(&updates);
         let replacement = self.command_pool.acquire_command_buffer(false).finish();
         let init_submit = mem::replace(&mut self.init_submit, replacement);
         let submission = hal::queue::Submission::new()
@@ -801,7 +790,9 @@ impl<B: hal::Backend> Scene<B, hal::General> {
     }
 
     pub fn fetch_buffer(&mut self, name: &str) -> FetchGuard<B> {
-        let buffer = &self.resources.buffers[name];
+        let buffer = self.resources.buffers
+            .get(name)
+            .expect(&format!("Unable to find buffer to fetch: {}", name));
         let limits = &self.limits;
 
         let down_size = align(buffer.size, limits.min_buffer_copy_pitch_alignment) as u64;
@@ -877,7 +868,9 @@ impl<B: hal::Backend> Scene<B, hal::General> {
     }
 
     pub fn fetch_image(&mut self, name: &str) -> FetchGuard<B> {
-        let image = &self.resources.images[name];
+        let image = self.resources.images
+            .get(name)
+            .expect(&format!("Unable to find image to fetch: {}", name));
         let limits = &self.limits;
 
         let (width, height, depth, aa) = image.kind.get_dimensions();

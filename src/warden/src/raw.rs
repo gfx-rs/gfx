@@ -82,6 +82,7 @@ pub enum Resource {
     DescriptorSet {
         pool: String,
         layout: String,
+        data: Vec<DescriptorRange>,
     },
     PipelineLayout {
         set_layouts: Vec<String>,
@@ -119,7 +120,7 @@ pub enum TransferCommand {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-pub enum DescriptorWrite {
+pub enum DescriptorRange {
     StorageBuffers(Vec<String>),
 }
 
@@ -167,14 +168,13 @@ pub enum Job {
         commands: Vec<TransferCommand>,
     },
     Graphics {
-        descriptors: HashMap<String, Vec<DescriptorWrite>>,
         framebuffer: String,
         clear_values: Vec<hal::command::ClearValue>,
         pass: (String, HashMap<String, DrawPass>),
     },
     Compute {
-        descriptors: Vec<(String, Vec<DescriptorWrite>)>,
         pipeline: String,
+        descriptor_sets: Vec<String>,
         dispatch: (u32, u32, u32),
     },
 }

@@ -81,7 +81,6 @@
 	},
 	jobs: {
 		"empty": Graphics(
-			descriptors: {},
 			framebuffer: "fbo",
 			clear_values: [
 				Color(Float((0.8, 0.8, 0.8, 1.0))),
@@ -92,7 +91,6 @@
 			}),
 		),
 		"pass-through": Graphics(
-			descriptors: {},
 			framebuffer: "fbo",
 			clear_values: [
 				Color(Float((0.8, 0.8, 0.8, 1.0))),

@@ -1,5 +1,9 @@
 (
 	resources: {
+		"buffer.output": Buffer(
+			size: 4,
+			usage: (bits: 0x8), //STORAGE
+		),
 		"desc-layout": DescriptorSetLayout(
 			bindings: [
 				(
@@ -22,6 +26,9 @@
 		"desc": DescriptorSet(
 			layout: "desc-layout",
 			pool: "desc-pool",
+			data: [
+				StorageBuffers(["buffer.output"]),
+			],
 		),
 		"pipe-layout": PipelineLayout(
 			set_layouts: ["desc-layout"],
@@ -32,19 +39,11 @@
 			shader: "shader",
 			layout: "pipe-layout",
 		),
-		"buffer.output": Buffer(
-			size: 4,
-			usage: (bits: 0x8), //STORAGE
-		),
 	},
 	jobs: {
 		"fill": Compute(
-			descriptors: [
-				("desc", [
-					StorageBuffers(["buffer.output"]),
-				]),
-			],
 			pipeline: "pipe",
+			descriptor_sets: ["desc"],
 			dispatch: (1, 1, 1),
 		),
 	}
