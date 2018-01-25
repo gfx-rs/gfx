@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::fs::File;
 use std::path::PathBuf;
-use std::{mem, slice};
+use std::{slice};
 
 use hal::{self, buffer as b, format as f, image as i, memory, pso};
 use hal::{Device, DescriptorPool, PhysicalDevice};
@@ -85,13 +85,13 @@ pub struct Resources<B: hal::Backend> {
 }
 
 pub struct Job<B: hal::Backend, C> {
-    submission: hal::command::Submit<B, C, hal::command::OneShot, hal::command::Primary>,
+    submission: hal::command::Submit<B, C, hal::command::MultiShot, hal::command::Primary>,
 }
 
 pub struct Scene<B: hal::Backend, C> {
     pub resources: Resources<B>,
     pub jobs: HashMap<String, Job<B, C>>,
-    init_submit: hal::command::Submit<B, C, hal::command::OneShot, hal::command::Primary>,
+    init_submit: hal::command::Submit<B, C, hal::command::MultiShot, hal::command::Primary>,
     device: B::Device,
     queue_group: hal::QueueGroup<B, C>,
     command_pool: hal::CommandPool<B, C>,
@@ -694,7 +694,10 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             match *command {
                                 Dc::BindIndexBuffer { ref buffer, offset, index_type } => {
                                     let view = b::IndexBufferView {
-                                        buffer: &resources.buffers[buffer].handle,
+                                        buffer: &resources.buffers
+                                            .get(buffer)
+                                            .expect(&format!("Missing index buffer: {}", buffer))
+                                            .handle,
                                         offset,
                                         index_type,
                                     };
@@ -704,18 +707,34 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                     let buffers_raw = buffers
                                         .iter()
                                         .map(|&(ref name, offset)| {
-                                            (&resources.buffers[name].handle, offset)
+                                            let buf = &resources.buffers
+                                                .get(name)
+                                                .expect(&format!("Missing vertex buffer: {}", name))
+                                                .handle;
+                                            (buf, offset)
                                         })
                                         .collect::<Vec<_>>();
                                     let set = pso::VertexBufferSet(buffers_raw);
                                     encoder.bind_vertex_buffers(set);
                                 }
                                 Dc::BindPipeline(ref name) => {
-                                    let pso = &resources.graphics_pipelines[name];
+                                    let pso = resources.graphics_pipelines
+                                        .get(name)
+                                        .expect(&format!("Missing graphics pipeline: {}", name));
                                     encoder.bind_graphics_pipeline(pso);
                                 }
-                                Dc::BindDescriptorSets { .. } => { //ref layout, first, ref sets
-                                    unimplemented!()
+                                Dc::BindDescriptorSets { ref layout, first, ref sets } => {
+                                    encoder.bind_graphics_descriptor_sets(
+                                        resources.pipeline_layouts
+                                            .get(layout)
+                                            .expect(&format!("Missing pipeline layout: {}", layout)),
+                                        first,
+                                        sets.iter().map(|name| {
+                                            resources.desc_sets
+                                                .get(name)
+                                                .expect(&format!("Missing descriptor set: {}", name))
+                                        }),
+                                    );
                                 }
                                 Dc::Draw { ref vertices, ref instances } => {
                                     encoder.draw(vertices.clone(), instances.clone());
@@ -737,7 +756,9 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                     let (ref layout, ref pso) = resources.compute_pipelines[pipeline];
                     command_buf.bind_compute_pipeline(pso);
                     command_buf.bind_compute_descriptor_sets(
-                        &resources.pipeline_layouts[layout],
+                        resources.pipeline_layouts
+                            .get(layout)
+                            .expect(&format!("Missing pipeline layout: {}", layout)),
                         0,
                         descriptor_sets.iter().map(|name| {
                             resources.desc_sets
@@ -770,21 +791,22 @@ impl<B: hal::Backend> Scene<B, hal::General> {
 }
 
 impl<B: hal::Backend> Scene<B, hal::General> {
-    pub fn run<'a, I>(&mut self, jobs: I)
+    pub fn run<'a, I>(&mut self, job_names: I)
     where
         I: IntoIterator<Item = &'a str>
     {
-        let mut submits = Vec::new();
-        for name in jobs {
-            //TODO: re-use submits!
-            let job = self.jobs.remove(name).unwrap();
-            submits.push(job.submission);
-        }
+        let jobs = &self.jobs;
+        let submits = job_names
+            .into_iter()
+            .map(|name| {
+                &jobs
+                    .get(name)
+                    .expect(&format!("Missing job: {}", name))
+                    .submission
+            });
 
-        let replacement = self.command_pool.acquire_command_buffer(false).finish();
-        let init_submit = mem::replace(&mut self.init_submit, replacement);
         let submission = hal::queue::Submission::new()
-            .submit(Some(init_submit))
+            .submit(Some(&self.init_submit))
             .submit(submits);
         self.queue_group.queues[0].submit(submission, None);
     }

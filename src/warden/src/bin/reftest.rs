@@ -125,6 +125,12 @@ impl Harness {
                     println!("FAIL {:?}", guard.row(row));
                     num_failures += 1;
                 }
+
+                #[cfg(feature = "metal")]
+                {
+                    println!("Command buffer re-use is not ready on Metal, exiting");
+                    return !0;
+                }
             }
         }
         num_failures
