@@ -112,14 +112,14 @@ pub struct Device {
     pub(crate) device: metal::Device,
     private_caps: PrivateCapabilities,
     queue: Arc<command::QueueInner>,
-    memory_types: [hal::MemoryType; 4],
+    memory_types: [hal::MemoryType; 3],
 }
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
 
 pub struct PhysicalDevice {
     raw: metal::Device,
-    memory_types: [hal::MemoryType; 4],
+    memory_types: [hal::MemoryType; 3],
 }
 
 impl PhysicalDevice {
@@ -127,10 +127,6 @@ impl PhysicalDevice {
         PhysicalDevice {
             raw,
             memory_types: [
-                hal::MemoryType {
-                    properties: Properties::CPU_VISIBLE | Properties::CPU_CACHED,
-                    heap_index: 0,
-                },
                 hal::MemoryType {
                     properties: Properties::CPU_VISIBLE | Properties::CPU_CACHED,
                     heap_index: 0,
