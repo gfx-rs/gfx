@@ -45,7 +45,12 @@ pub struct SubpassRef {
 
 #[derive(Debug, Deserialize)]
 pub enum Resource {
-    Buffer,
+    Buffer {
+        size: usize,
+        usage: hal::buffer::Usage,
+        #[serde(default)]
+        data: String,
+    },
     Image {
         kind: hal::image::Kind,
         num_levels: hal::image::Level,
@@ -77,6 +82,7 @@ pub enum Resource {
     DescriptorSet {
         pool: String,
         layout: String,
+        data: Vec<DescriptorRange>,
     },
     PipelineLayout {
         set_layouts: Vec<String>,
@@ -96,6 +102,10 @@ pub enum Resource {
         layout: String,
         subpass: SubpassRef,
     },
+    ComputePipeline {
+        shader: String,
+        layout: String,
+    },
     Framebuffer {
         pass: String,
         views: HashMap<String, String>,
@@ -109,9 +119,9 @@ pub enum TransferCommand {
     //CopyImageToBuffer,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct DescriptorSetData {
-    //TODO: update_descriptor_sets
+#[derive(Clone, Debug, Deserialize)]
+pub enum DescriptorRange {
+    StorageBuffers(Vec<String>),
 }
 
 fn default_instance_range() -> Range<hal::InstanceCount> {
@@ -157,11 +167,14 @@ pub enum Job {
         commands: Vec<TransferCommand>,
     },
     Graphics {
-        descriptors: HashMap<String, DescriptorSetData>,
         framebuffer: String,
-        #[serde(default)]
         clear_values: Vec<hal::command::ClearValue>,
         pass: (String, HashMap<String, DrawPass>),
+    },
+    Compute {
+        pipeline: String,
+        descriptor_sets: Vec<String>,
+        dispatch: (u32, u32, u32),
     },
 }
 

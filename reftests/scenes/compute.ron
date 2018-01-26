@@ -1,0 +1,50 @@
+(
+	resources: {
+		"buffer.output": Buffer(
+			size: 4,
+			usage: (bits: 0x8), //STORAGE
+		),
+		"desc-layout": DescriptorSetLayout(
+			bindings: [
+				(
+					binding: 0,
+					ty: StorageBuffer,
+					count: 1,
+					stage_flags: (bits: 0x20), //COMPUTE
+				),
+			],
+		),
+		"desc-pool": DescriptorPool(
+			capacity: 1,
+			ranges: [
+				(
+					ty: StorageBuffer,
+					count: 1,
+				),
+			],
+		),
+		"desc": DescriptorSet(
+			layout: "desc-layout",
+			pool: "desc-pool",
+			data: [
+				StorageBuffers(["buffer.output"]),
+			],
+		),
+		"pipe-layout": PipelineLayout(
+			set_layouts: ["desc-layout"],
+			push_constant_ranges: [],
+		),
+		"shader": Shader("fill.comp"),
+		"pipe": ComputePipeline(
+			shader: "shader",
+			layout: "pipe-layout",
+		),
+	},
+	jobs: {
+		"fill": Compute(
+			pipeline: "pipe",
+			descriptor_sets: ["desc"],
+			dispatch: (1, 1, 1),
+		),
+	}
+)
