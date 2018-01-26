@@ -197,7 +197,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let mut device_raw = ptr::null_mut();
         let hr = unsafe {
             d3d12::D3D12CreateDevice(
-                self.adapter.as_mut() as *mut _ as *mut _,
+                self.adapter.as_raw() as *mut _,
                 d3dcommon::D3D_FEATURE_LEVEL_11_0, // Minimum required feature level
                 &d3d12::IID_ID3D12Device,
                 &mut device_raw as *mut *mut _ as *mut *mut _,
@@ -207,7 +207,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             error!("error on device creation: {:x}", hr);
         }
         let mut device = Device::new(
-            unsafe { ComPtr::new(device_raw) },
+            unsafe { ComPtr::from_raw(device_raw) },
             &self,
         );
 
@@ -233,7 +233,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 error!("error on queue creation: {:x}", hr);
             }
 
-            unsafe { ComPtr::<d3d12::ID3D12CommandQueue>::new(queue) }
+            unsafe { ComPtr::<d3d12::ID3D12CommandQueue>::from_raw(queue) }
         };
 
         let queue_groups = families
@@ -283,7 +283,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
                             if winerror::SUCCEEDED(hr) {
                                 let queue = CommandQueue {
-                                    raw: unsafe { ComPtr::new(queue) },
+                                    raw: unsafe { ComPtr::from_raw(queue) },
                                     idle_fence: device.create_raw_fence(false),
                                     idle_event: create_idle_event(),
                                 };
@@ -358,7 +358,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
 
         if let Some(fence) = fence {
             assert_eq!(winerror::S_OK,
-                self.raw.Signal(fence.raw.as_mut(), 1)
+                self.raw.Signal(fence.raw.as_raw(), 1)
             );
         }
     }
@@ -548,7 +548,7 @@ impl Device {
                 draw_indexed: draw_indexed_signature,
                 dispatch: dispatch_signature,
             },
-            present_queue: unsafe { ComPtr::new(ptr::null_mut()) }, // filled out on adapter opening
+            present_queue: unsafe { ComPtr::from_raw(ptr::null_mut()) }, // filled out on adapter opening
             queues: Vec::new(),
             open: physical_device.is_open.clone(),
         }
@@ -609,7 +609,7 @@ impl Instance {
         }
 
         Instance {
-            factory: unsafe { ComPtr::new(dxgi_factory) },
+            factory: unsafe { ComPtr::from_raw(dxgi_factory) },
         }
     }
 }
@@ -627,7 +627,7 @@ impl hal::Instance for Instance {
             let adapter = {
                 let mut adapter: *mut dxgi::IDXGIAdapter1 = ptr::null_mut();
                 let hr = unsafe {
-                    self.factory.as_mut().EnumAdapters1(
+                    self.factory.EnumAdapters1(
                         cur_index,
                         &mut adapter as *mut *mut _)
                 };
@@ -636,7 +636,7 @@ impl hal::Instance for Instance {
                     break;
                 }
 
-                unsafe { ComPtr::new(adapter as *mut dxgi1_2::IDXGIAdapter2) }
+                unsafe { ComPtr::from_raw(adapter as *mut dxgi1_2::IDXGIAdapter2) }
             };
 
             cur_index += 1;
@@ -647,7 +647,7 @@ impl hal::Instance for Instance {
                 let mut device = ptr::null_mut();
                 let hr = unsafe {
                     d3d12::D3D12CreateDevice(
-                        adapter.as_mut() as *mut _ as *mut _,
+                        adapter.as_raw() as *mut _,
                         d3dcommon::D3D_FEATURE_LEVEL_11_0,
                         &d3d12::IID_ID3D12Device,
                         &mut device as *mut *mut _ as *mut *mut _,
@@ -657,7 +657,7 @@ impl hal::Instance for Instance {
                     continue;
                 }
 
-                unsafe { ComPtr::<d3d12::ID3D12Device>::new(device) }
+                unsafe { ComPtr::<d3d12::ID3D12Device>::from_raw(device) }
             };
 
             // We have found a possible adapter
@@ -798,12 +798,12 @@ impl hal::Instance for Instance {
                 let adapter = {
                     let mut adapter: *mut dxgi1_4::IDXGIAdapter3 = ptr::null_mut();
                     unsafe {
-                        assert_eq!(winerror::S_OK, self.factory.as_mut().EnumAdapterByLuid(
+                        assert_eq!(winerror::S_OK, self.factory.EnumAdapterByLuid(
                             adapter_id,
                             &dxgi1_4::IID_IDXGIAdapter3,
                             &mut adapter as *mut *mut _ as *mut *mut _,
                         ));
-                        ComPtr::new(adapter)
+                        ComPtr::from_raw(adapter)
                     }
                 };
 

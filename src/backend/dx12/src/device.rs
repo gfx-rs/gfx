@@ -146,7 +146,7 @@ impl Device {
         };
         if !winerror::SUCCEEDED(hr) {
             error!("D3DCompile error {:x}", hr);
-            let error = unsafe { ComPtr::<d3dcommon::ID3DBlob>::new(error) };
+            let error = unsafe { ComPtr::<d3dcommon::ID3DBlob>::from_raw(error) };
             let message = unsafe {
                 let pointer = error.GetBufferPointer();
                 let size = error.GetBufferSize();
@@ -384,7 +384,7 @@ impl Device {
         if !winerror::SUCCEEDED(hr) {
             error!("error on command signature creation: {:x}", hr);
         }
-        unsafe { ComPtr::new(signature) }
+        unsafe { ComPtr::from_raw(signature) }
     }
 
     pub(crate) fn create_descriptor_heap_impl(
@@ -423,7 +423,7 @@ impl Device {
         let allocator = free_list::Allocator::new(capacity as _);
 
         n::DescriptorHeap {
-            raw: unsafe { ComPtr::new(heap) },
+            raw: unsafe { ComPtr::from_raw(heap) },
             handle_size: descriptor_size as _,
             total_handles: capacity as _,
             start: n::DualHandle {
@@ -746,7 +746,7 @@ impl d::Device<B> for Device {
         };
 
         Ok(n::Memory {
-            heap: unsafe { ComPtr::new(heap as _) },
+            heap: unsafe { ComPtr::from_raw(heap as _) },
             type_id: mem_type,
             size,
             resource,
@@ -772,7 +772,7 @@ impl d::Device<B> for Device {
         }
 
         RawCommandPool {
-            inner: unsafe { ComPtr::new(command_allocator) },
+            inner: unsafe { ComPtr::from_raw(command_allocator) },
             device: self.raw.clone(),
             list_type,
             signatures: self.signatures.clone(),
@@ -1397,7 +1397,7 @@ impl d::Device<B> for Device {
 
         assert_eq!(winerror::S_OK, unsafe {
             self.raw.clone().CreatePlacedResource(
-                memory.heap.as_mut(),
+                memory.heap.as_raw(),
                 offset,
                 &desc,
                 d3d12::D3D12_RESOURCE_STATE_COMMON,
@@ -1550,7 +1550,7 @@ impl d::Device<B> for Device {
 
         assert_eq!(winerror::S_OK, unsafe {
             self.raw.clone().CreatePlacedResource(
-                memory.heap.as_mut(),
+                memory.heap.as_raw(),
                 offset,
                 &image.desc,
                 d3d12::D3D12_RESOURCE_STATE_COMMON,
@@ -1987,7 +1987,7 @@ impl d::Device<B> for Device {
 
     fn create_fence(&self, signalled: bool) -> n::Fence {
         n::Fence {
-            raw: unsafe { ComPtr::new(self.create_raw_fence(signalled)) },
+            raw: unsafe { ComPtr::from(self.create_raw_fence(signalled)) },
         }
     }
 
@@ -2073,7 +2073,7 @@ impl d::Device<B> for Device {
         });
 
         n::QueryPool {
-            raw: unsafe { ComPtr::new(handle as *mut _) },
+            raw: unsafe { ComPtr::from_raw(handle as *mut _) },
             ty: heap_ty,
         }
     }
@@ -2203,7 +2203,7 @@ impl d::Device<B> for Device {
         let hr = unsafe {
             // TODO
             surface.factory.CreateSwapChainForHwnd(
-                self.present_queue.as_mut() as *mut _ as *mut _,
+                self.present_queue.as_raw() as *mut _,
                 surface.wnd_handle,
                 &desc,
                 ptr::null(),
@@ -2216,7 +2216,7 @@ impl d::Device<B> for Device {
             error!("error on swapchain creation 0x{:x}", hr);
         }
 
-        let swap_chain = unsafe { ComPtr::<dxgi1_4::IDXGISwapChain3>::new(swap_chain as _) };
+        let swap_chain = unsafe { ComPtr::<dxgi1_4::IDXGISwapChain3>::from_raw(swap_chain as _) };
 
         // Get backbuffer images
         let images = (0 .. config.image_count).map(|i| {
