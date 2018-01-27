@@ -24,11 +24,13 @@
 ## gfx-rs
 
 gfx-rs is a graphics abstraction library in Rust. It consists of the following layers/components:
-- `gfx_hal`: hardware abstraction layer - a Vulkan-ic mostly unsafe API translating to native graphics backends
-- `gfx_backend_*`: graphics backends for various platforms, include the windowing logic.
-- `gfx_render`: higher level wrapper around HAL, providing resources lifetime tracking, synchronization, and more
+- `gfx-hal`: hardware abstraction layer - a Vulkan-ic mostly unsafe API translating to native graphics backends.
+- `gfx-backend-*`: graphics backends for various platforms, include the windowing logic.
+- `gfx-warden`: data-driven reference test framework.
 
-The current `master` branch is heavy WIP, please refer to [pre-ll](https://github.com/gfx-rs/gfx/tree/pre-ll) for the latest stable code/examples. It also has a more complete README ;)
+## pre-LL
+
+If you are looking for information about the released crates (`gfx_core`, `gfx`, `gfx_device_*`, `gfx_window_`, etc), they are being developed and published from the [pre-ll](https://github.com/gfx-rs/gfx/tree/pre-ll) branch. Code in `master` is a complete rewrite that will be shipped in different crates.
 
 ### Features
 
@@ -36,8 +38,29 @@ Native API backends:
 - [Vulkan](src/backend/vulkan)
 - [Direct3D 12](src/backend/dx12)
 - [Metal](src/backend/metal)
-- (WIP) [OpenGL 2.1+/ES2+](src/backend/gl)
+- [OpenGL 2.1+/ES2+](src/backend/gl)
 
 ### Usage
 
-TODO
+You can run the examples this way:
+```bash
+git clone https://github.com/gfx-rs/gfx
+cd gfx/examples/hal
+cargo run --bin quad --features vulkan
+cargo run --bin compute --features dx12 1 2 3 4
+```
+The native API backend is selected by one of the features: `vulkan`, `dx12`, `metal`, or `gl`.
+
+## License
+[License]: #license
+
+This repository is currently in the process of being licensed under either of
+
+* Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+* MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+
+at your option. Some parts of the repository are already licensed according to those terms. See the [tracking issue](https://github.com/gfx-rs/gfx/issues/847).
+
+### Contributions
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
