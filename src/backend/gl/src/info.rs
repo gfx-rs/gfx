@@ -190,6 +190,40 @@ pub struct Info {
     pub extensions: HashSet<&'static str>,
 }
 
+/*
+pub struct LegacyFeatures {
+    /// Support indirect drawing and dispatching.
+    pub const indirect_execution = 0x01 << 48;
+    /// Support instanced drawing.
+    pub const draw_instanced = 0x02 << 48;
+    /// Support offsets for instanced drawing with base instance.
+    pub const draw_instanced_base = 0x00000000;
+    /// Support indexed drawing with base vertex.
+    pub const draw_indexed_base = 0x00000000;
+    /// Support indexed, instanced drawing.
+    pub const draw_indexed_instanced = 0x00000000;
+    /// Support indexed, instanced drawing with base vertex only.
+    pub const draw_indexed_instanced_base_vertex = 0x00000000;
+    /// Support indexed, instanced drawing with base vertex and instance.
+    pub const draw_indexed_instanced_base = 0x00000000;
+    /// Support base vertex offset for indexed drawing.
+    pub const vertex_base = 0x00000000;
+    /// Support sRGB textures and rendertargets.
+    pub const srgb_color = 0x00000000;
+    /// Support constant buffers.
+    pub const constant_buffer = 0x00000000;
+    /// Support unordered-access views.
+    pub const unordered_access_view = 0x00000000;
+    /// Support accelerated buffer copy.
+    pub const copy_buffer = 0x00000000;
+    /// Support separation of textures and samplers.
+    pub const sampler_objects = 0x00000000;
+    /// Support sampler LOD bias.
+    pub const sampler_lod_bias = 0x00000000;
+    /// Support setting border texel colors.
+    pub const sampler_border_color = 0x00000000;
+}*/
+
 #[derive(Copy, Clone)]
 pub enum Requirement {
     Core(u32,u32),

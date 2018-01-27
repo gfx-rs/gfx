@@ -36,6 +36,7 @@ enum Expectation {
 
 #[derive(Debug, Deserialize)]
 struct Test {
+    features: hal::Features,
     jobs: Vec<String>,
     expect: Expectation,
 }
@@ -46,6 +47,13 @@ struct TestGroup {
     name: String,
     scene: warden::raw::Scene,
     tests: HashMap<String, Test>,
+}
+
+#[derive(Debug)]
+struct TestResults {
+    pass: usize,
+    skip: usize,
+    fail: usize,
 }
 
 
@@ -94,10 +102,17 @@ impl Harness {
     }
 
     fn run<I: hal::Instance>(&self, instance: I) -> usize {
-        let mut num_failures = 0;
+        use hal::{PhysicalDevice};
+
+        let mut results = TestResults {
+            pass: 0,
+            skip: 0,
+            fail: 0,
+        };
         for tg in &self.suite {
             let mut adapters = instance.enumerate_adapters();
             let adapter = adapters.remove(0);
+            let features = adapter.physical_device.get_features();
             //println!("\t{:?}", adapter.info);
             println!("\tScene '{}':", tg.name);
 
@@ -109,6 +124,10 @@ impl Harness {
 
             for (test_name, test) in &tg.tests {
                 print!("\t\tTest '{}' ...", test_name);
+                if !features.contains(test.features) {
+                    println!("SKIP (features missing: {:?})", test.features - features);
+                    results.skip += 1;
+                }
                 scene.run(test.jobs.iter().map(|x| x.as_str()));
 
                 print!("\tran: ");
@@ -120,20 +139,24 @@ impl Harness {
                 };
 
                 if data.as_slice() == guard.row(row) {
-                    println!("PASS")
+                    println!("PASS");
+                    results.pass += 1;
                 } else {
                     println!("FAIL {:?}", guard.row(row));
-                    num_failures += 1;
+                    results.fail += 1;
                 }
 
                 #[cfg(feature = "metal")]
                 {
                     println!("Command buffer re-use is not ready on Metal, exiting");
-                    return num_failures + 1;
+                    results.fail += 1;
+                    return results;
                 }
             }
         }
-        num_failures
+
+        println!("\tTotal {:?}", results);
+        results.fail
     }
 }
 
@@ -185,5 +208,6 @@ fn main() {
         num_failures += harness.run(instance);
     }
     let _ = harness;
+    num_failures += 0;
     process::exit(num_failures as _);
 }
