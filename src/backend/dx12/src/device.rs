@@ -1987,7 +1987,7 @@ impl d::Device<B> for Device {
 
     fn create_fence(&self, signalled: bool) -> n::Fence {
         n::Fence {
-            raw: unsafe { ComPtr::from(self.create_raw_fence(signalled)) },
+            raw: unsafe { ComPtr::from_raw(self.create_raw_fence(signalled)) },
         }
     }
 

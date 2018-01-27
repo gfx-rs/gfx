@@ -194,22 +194,22 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         };
 
         // Create D3D12 device
-        let mut device_raw = ptr::null_mut();
-        let hr = unsafe {
-            d3d12::D3D12CreateDevice(
-                self.adapter.as_raw() as *mut _,
-                d3dcommon::D3D_FEATURE_LEVEL_11_0, // Minimum required feature level
-                &d3d12::IID_ID3D12Device,
-                &mut device_raw as *mut *mut _ as *mut *mut _,
-            )
+        let device_raw = {
+            let mut device_raw = ptr::null_mut();
+            let hr = unsafe {
+                d3d12::D3D12CreateDevice(
+                    self.adapter.as_raw() as *mut _,
+                    d3dcommon::D3D_FEATURE_LEVEL_11_0, // Minimum required feature level
+                    &d3d12::IID_ID3D12Device,
+                    &mut device_raw as *mut *mut _ as *mut *mut _,
+                )
+            };
+            if !winerror::SUCCEEDED(hr) {
+                error!("error on device creation: {:x}", hr);
+            }
+
+            unsafe { ComPtr::<d3d12::ID3D12Device>::from_raw(device_raw) }
         };
-        if !winerror::SUCCEEDED(hr) {
-            error!("error on device creation: {:x}", hr);
-        }
-        let mut device = Device::new(
-            unsafe { ComPtr::from_raw(device_raw) },
-            &self,
-        );
 
         // Always create the presentation queue in case we want to build a swapchain.
         let mut present_queue = {
@@ -222,7 +222,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
             let mut queue = ptr::null_mut();
             let hr = unsafe {
-                device.raw.CreateCommandQueue(
+                device_raw.CreateCommandQueue(
                     &queue_desc,
                     &d3d12::IID_ID3D12CommandQueue,
                     &mut queue as *mut *mut _ as *mut *mut _,
@@ -235,6 +235,12 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
             unsafe { ComPtr::<d3d12::ID3D12CommandQueue>::from_raw(queue) }
         };
+
+        let mut device = Device::new(
+            device_raw,
+            &self,
+            present_queue,
+        );
 
         let queue_groups = families
             .into_iter()
@@ -256,7 +262,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                         // Number of queues need to be larger than 0 else it
                         // violates the specification.
                         let queue = CommandQueue {
-                            raw: present_queue.clone(),
+                            raw: device.present_queue.clone(),
                             idle_fence: device.create_raw_fence(false),
                             idle_event: create_idle_event(),
                         };
@@ -299,12 +305,6 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 (family.id(), group)
             })
             .collect();
-
-        // Avoid calling drop on empty ComPtr
-        {
-            mem::swap(&mut device.present_queue, &mut present_queue);
-            mem::forget(present_queue);
-        }
 
         *open_guard = true;
 
@@ -435,7 +435,11 @@ unsafe impl Send for Device {} //blocked by ComPtr
 unsafe impl Sync for Device {} //blocked by ComPtr
 
 impl Device {
-    fn new(mut device: ComPtr<d3d12::ID3D12Device>, physical_device: &PhysicalDevice) -> Self {
+    fn new(
+        mut device: ComPtr<d3d12::ID3D12Device>,
+        physical_device: &PhysicalDevice,
+        present_queue: ComPtr<d3d12::ID3D12CommandQueue>,
+    ) -> Self {
         // Allocate descriptor heaps
         let max_rtvs = 256; // TODO
         let rtv_pool = native::DescriptorCpuPool {
@@ -548,7 +552,7 @@ impl Device {
                 draw_indexed: draw_indexed_signature,
                 dispatch: dispatch_signature,
             },
-            present_queue: unsafe { ComPtr::from_raw(ptr::null_mut()) }, // filled out on adapter opening
+            present_queue,
             queues: Vec::new(),
             open: physical_device.is_open.clone(),
         }
