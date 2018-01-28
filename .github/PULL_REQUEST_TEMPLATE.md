@@ -1,4 +1,4 @@
 PR checklist:
 - [ ] `make` succeeds (on *nix)
-- [ ] `make reftest` succeeds
+- [ ] `make reftests` succeeds (might be temporarily impossible, WIP)
 - [ ] tested examples with the following backends:
