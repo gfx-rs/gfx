@@ -65,8 +65,8 @@ impl<B: Backend, C: Capability> QueueGroup<B, C> {
     }
 }
 
-/// Contains a list of all instantiated queue queues, grouped by their
-/// associated queue family.
+/// Contains a list of all instantiated queues. Conceptually structured as a collection of
+/// `QueueGroup`s, one for each queue family.
 pub struct Queues<B: Backend>(pub(crate) HashMap<QueueFamilyId, RawQueueGroup<B>>);
 
 impl<B: Backend> Queues<B> {
