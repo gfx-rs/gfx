@@ -131,10 +131,8 @@ fn main() {
 
     // Build a new device and associated command queues
     let (device, mut queue_group) =
-        adapter.open_with::<_, hal::Graphics>(|family| {
-            if surface.supports_queue_family(family) {
-                Some(1)
-            } else { None }
+        adapter.open_with::<_, hal::Graphics>(1, |family| {
+            surface.supports_queue_family(family)
         }).unwrap();
 
     let mut command_pool = device.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty(), 16);

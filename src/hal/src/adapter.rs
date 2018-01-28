@@ -143,11 +143,9 @@ pub struct Adapter<B: Backend> {
 }
 
 impl<B: Backend> Adapter<B> {
-    /// Open the physical device with active queue families
-    /// specified by a selector function with a specified queue capability.
-    ///
-    /// Selector returns `Some(count)` for the `count` number of queues
-    /// to be created for a given queue family.
+    /// Open the physical device with `count` queues from some active queue family. The family is
+    /// the first that both provides the capability `C`, supports at least `count' queues, and for
+    /// which `selector` returns true.
     ///
     /// # Examples
     ///
@@ -158,7 +156,7 @@ impl<B: Backend> Adapter<B> {
     /// # fn main() {
     ///
     /// # let adapter: hal::Adapter<empty::Backend> = return;
-    /// let gpu = adapter.open_with::<_, General>(|_| Some(1));
+    /// let gpu = adapter.open_with::<_, General>(1, |_| true);
     /// # }
     /// ```
     ///
@@ -166,30 +164,24 @@ impl<B: Backend> Adapter<B> {
     ///
     /// Returns the same errors as `open` and `InitializationFailed` if no suitable
     /// queue family could be found.
-    pub fn open_with<F, C>(mut self, selector: F) -> Result<(B::Device, QueueGroup<B, C>), DeviceCreationError>
+    pub fn open_with<F, C>(mut self, count: usize, selector: F) -> Result<(B::Device, QueueGroup<B, C>), DeviceCreationError>
     where
-        F: Fn(&B::QueueFamily) -> Option<usize>,
+        F: Fn(&B::QueueFamily) -> bool,
         C: Capability,
     {
         use queue::QueueFamily;
 
         let requested_family = self.queue_families
             .drain(..)
-            .flat_map(|family| {
-                if C::supported_by(family.queue_type()) {
-                    selector(&family)
-                        .map(|count| {
-                            assert!(count != 0 && count <= family.max_queues());
-                            (family, vec![1.0; count])
-                        })
-                } else {
-                    None
-                }
+            .filter(|family| {
+                C::supported_by(family.queue_type()) &&
+                    selector(&family) &&
+                    count <= family.max_queues()
             })
             .next();
 
         let (id, family) = match requested_family {
-            Some((family, priorities)) => (family.id(), vec![(family, priorities)]),
+            Some(family) => (family.id(), vec![(family, vec![1.0; count])]),
             _ => return Err(DeviceCreationError::InitializationFailed),
         };
 
