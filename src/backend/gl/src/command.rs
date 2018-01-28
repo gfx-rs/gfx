@@ -395,7 +395,7 @@ impl RawCommandBuffer {
                 // We don't have influence on its layout and we treat it as single image.
                 //
                 // TODO: handle case where we don't du double-buffering?
-                vec![gl::BACK]
+                vec![gl::BACK_LEFT]
             } else {
                 subpass
                     .color_attachments
