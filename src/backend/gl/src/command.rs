@@ -395,7 +395,7 @@ impl RawCommandBuffer {
                 // We don't have influence on its layout and we treat it as single image.
                 //
                 // TODO: handle case where we don't du double-buffering?
-                vec![gl::BACK]
+                vec![gl::BACK_LEFT]
             } else {
                 subpass
                     .color_attachments
@@ -871,7 +871,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
          T: IntoIterator,
          T::Item: Borrow<command::BufferImageCopy>,
      {
-        let old_offset = self.buf.offset;
+        let old_size = self.buf.size;
 
         for region in regions {
             let r = region.borrow().clone();
@@ -882,7 +882,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             self.push_cmd(cmd);
         }
 
-        if self.buf.offset == old_offset {
+        if self.buf.size == old_size {
             error!("At least one region must be specified");
         }
     }
@@ -897,7 +897,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
-        let old_offset = self.buf.offset;
+        let old_size = self.buf.size;
 
         for region in regions {
             let r = region.borrow().clone();
@@ -908,7 +908,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             self.push_cmd(cmd);
         }
 
-        if self.buf.offset == old_offset {
+        if self.buf.size == old_size {
             error!("At least one region must be specified");
         }
     }
