@@ -5,8 +5,8 @@
 use {format, memory, Backend, Gpu, Features, Limits};
 use queue::{Capability, QueueGroup};
 
-/// Scheduling hint for devices about the priority of a queue.
-/// Values ranging from `0.0` (low) to `1.0` (high).
+/// Scheduling hint for devices about the priority of a queue.  Values range from `0.0` (low) to
+/// `1.0` (high).
 pub type QueuePriority = f32;
 
 ///
@@ -133,6 +133,10 @@ pub struct AdapterInfo {
 }
 
 /// The list of `Adapter` instances is obtained by calling `Instance::enumerate_adapters()`.
+///
+/// Given an `Adapter` a `Gpu` can be constructed by calling `PhysicalDevice::open()` on its
+/// `physical_device` field. However, if only a single queue family is needed, then the
+/// `Adapter::open_with` convenience method can be used instead.
 pub struct Adapter<B: Backend> {
     /// General information about this adapter.
     pub info: AdapterInfo,
