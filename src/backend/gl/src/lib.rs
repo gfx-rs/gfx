@@ -4,6 +4,8 @@
 #![allow(missing_docs, missing_copy_implementations)]
 
 #[macro_use]
+extern crate bitflags;
+#[macro_use]
 extern crate log;
 extern crate gfx_gl as gl;
 extern crate gfx_hal as hal;
@@ -103,6 +105,7 @@ struct Share {
     context: gl::Gl,
     info: Info,
     features: hal::Features,
+    legacy_features: info::LegacyFeatures,
     limits: hal::Limits,
     private_caps: info::PrivateCaps,
     // Indicates if there is an active logical device.
@@ -131,11 +134,13 @@ impl PhysicalDevice {
     {
         let gl = gl::Gl::load_with(fn_proc);
         // query information
-        let (info, features, limits, private_caps) = info::query_all(&gl);
+        let (info, features, legacy_features, limits, private_caps) = info::query_all(&gl);
         info!("Vendor: {:?}", info.platform_name.vendor);
         info!("Renderer: {:?}", info.platform_name.renderer);
         info!("Version: {:?}", info.version);
         info!("Shading Language: {:?}", info.shading_language);
+        info!("Features: {:?}", features);
+        info!("Legacy Features: {:?}", legacy_features);
         debug!("Loaded Extensions:");
         for extension in info.extensions.iter() {
             debug!("- {}", *extension);
@@ -157,6 +162,7 @@ impl PhysicalDevice {
             context: gl,
             info,
             features,
+            legacy_features,
             limits,
             private_caps,
             open: Cell::new(false),
@@ -176,6 +182,11 @@ impl PhysicalDevice {
             queue_families: vec![QueueFamily(queue_type)],
         }
     }
+
+    /// Get GL-specific legacy feature flags.
+    pub fn legacy_features(&self) -> &info::LegacyFeatures {
+        &self.0.legacy_features
+    }
 }
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
@@ -191,7 +202,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
         // initialize permanent states
         let gl = &self.0.context;
-        if self.0.features.srgb_color {
+        if self.0.legacy_features.contains(info::LegacyFeatures::SRGB_COLOR) {
             unsafe {
                 gl.Enable(gl::FRAMEBUFFER_SRGB);
             }

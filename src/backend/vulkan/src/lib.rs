@@ -22,7 +22,7 @@ extern crate glsl_to_spirv;
 use ash::{Entry, LoadingError};
 use ash::extensions as ext;
 use ash::version::{EntryV1_0, DeviceV1_0, InstanceV1_0, V1_0};
-use ash::vk::{self, VK_TRUE};
+use ash::vk;
 
 use hal::{format, memory, queue};
 use hal::{Features, Limits, PatchSize, QueueType};
@@ -468,54 +468,91 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn get_features(&self) -> Features {
         let features = self.instance.0.get_physical_device_features(self.handle);
+        let mut bits = Features::empty();
 
-        Features {
-            robust_buffer_access: features.robust_buffer_access == VK_TRUE,
-            full_draw_index_u32: features.full_draw_index_uint32 == VK_TRUE,
-            image_cube_array: features.image_cube_array == VK_TRUE,
-            independent_blending: features.independent_blend == VK_TRUE,
-            geometry_shader: features.geometry_shader == VK_TRUE,
-            tessellation_shader: features.tessellation_shader == VK_TRUE,
-            sample_rate_shading: features.sample_rate_shading == VK_TRUE,
-            dual_src_blending: features.dual_src_blend == VK_TRUE,
-            logic_op: features.logic_op == VK_TRUE,
-            multi_draw_indirect: features.multi_draw_indirect == VK_TRUE,
-            draw_indirect_first_instance: features.draw_indirect_first_instance == VK_TRUE,
-            depth_clamp: features.depth_clamp == VK_TRUE,
-            depth_bias_clamp: features.depth_bias_clamp == VK_TRUE,
-            non_fill_polygon_mode: features.depth_bounds == VK_TRUE,
-            depth_bounds: features.depth_bounds == VK_TRUE,
-            line_width: features.wide_lines == VK_TRUE,
-            point_size: features.large_points == VK_TRUE,
-            alpha_to_one: features.alpha_to_one == VK_TRUE,
-            multi_viewports: features.multi_viewport == VK_TRUE,
-            sampler_anisotropy: features.sampler_anisotropy == VK_TRUE,
-            format_etc2: features.texture_compression_etc2 == VK_TRUE,
-            format_astc_ldr: features.texture_compression_astc_ldr == VK_TRUE,
-            format_bc: features.texture_compression_bc == VK_TRUE,
-            precise_occlusion_query: features.occlusion_query_precise == VK_TRUE,
-            pipeline_statistics_query: features.pipeline_statistics_query == VK_TRUE,
-            vertex_stores_and_atomics: features.vertex_pipeline_stores_and_atomics == VK_TRUE,
-            fragment_stores_and_atomics: features.fragment_stores_and_atomics == VK_TRUE,
-
-            indirect_execution: true,
-            draw_instanced: true,
-            draw_instanced_base: true,
-            draw_indexed_base: true,
-            draw_indexed_instanced: true,
-            draw_indexed_instanced_base_vertex: true,
-            draw_indexed_instanced_base: true,
-            instance_rate: false,
-            vertex_base: true,
-            srgb_color: true,
-            constant_buffer: true,
-            unordered_access_view: true,
-            copy_buffer: true,
-            sampler_objects: true,
-            sampler_lod_bias: true,
-            sampler_border_color: true,
+        if features.robust_buffer_access != 0 {
+            bits |= Features::ROBUST_BUFFER_ACCESS;
         }
+        if features.full_draw_index_uint32 != 0 {
+            bits |= Features::FULL_DRAW_INDEX_U32;
+        }
+        if features.image_cube_array != 0 {
+            bits |= Features::IMAGE_CUBE_ARRAY;
+        }
+        if features.independent_blend != 0 {
+            bits |= Features::INDEPENDENT_BLENDING;
+        }
+        if features.geometry_shader != 0 {
+            bits |= Features::GEOMETRY_SHADER;
+        }
+        if features.tessellation_shader != 0 {
+            bits |= Features::TESSELLATION_SHADER;
+        }
+        if features.sample_rate_shading != 0 {
+            bits |= Features::SAMPLE_RATE_SHADING;
+        }
+        if features.dual_src_blend != 0 {
+            bits |= Features::DUAL_SRC_BLENDING;
+        }
+        if features.logic_op != 0 {
+            bits |= Features::LOGIC_OP;
+        }
+        if features.multi_draw_indirect != 0 {
+            bits |= Features::MULTI_DRAW_INDIRECT;
+        }
+        if features.draw_indirect_first_instance != 0 {
+            bits |= Features::DRAW_INDIRECT_FIRST_INSTANCE;
+        }
+        if features.depth_clamp != 0 {
+            bits |= Features::DEPTH_CLAMP;
+        }
+        if features.depth_bias_clamp != 0 {
+            bits |= Features::DEPTH_BIAS_CLAMP;
+        }
+        if features.depth_bounds != 0 {
+            bits |= Features::DEPTH_BOUNDS;
+        }
+        if features.wide_lines != 0 {
+            bits |= Features::LINE_WIDTH;
+        }
+        if features.large_points != 0 {
+            bits |= Features::POINT_SIZE;
+        }
+        if features.alpha_to_one != 0 {
+            bits |= Features::ALPHA_TO_ONE;
+        }
+        if features.multi_viewport != 0 {
+            bits |= Features::MULTI_VIEWPORTS;
+        }
+        if features.sampler_anisotropy != 0 {
+            bits |= Features::SAMPLER_ANISOTROPY;
+        }
+        if features.texture_compression_etc2 != 0 {
+            bits |= Features::FORMAT_ETC2;
+        }
+        if features.texture_compression_astc_ldr != 0 {
+            bits |= Features::FORMAT_ASTC_LDR;
+        }
+        if features.texture_compression_bc != 0 {
+            bits |= Features::FORMAT_BC;
+        }
+        if features.occlusion_query_precise != 0 {
+            bits |= Features::PRECISE_OCCLUSION_QUERY;
+        }
+        if features.pipeline_statistics_query != 0 {
+            bits |= Features::PIPELINE_STATISTICS_QUERY;
+        }
+        if features.vertex_pipeline_stores_and_atomics != 0 {
+            bits |= Features::VERTEX_STORES_AND_ATOMICS;
+        }
+        if features.fragment_stores_and_atomics != 0 {
+            bits |= Features::FRAGMENT_STORES_AND_ATOMICS;
+        }
+        //TODO: cover more features
+
+        bits
     }
+
     fn get_limits(&self) -> Limits {
         let limits = &self.properties.limits;
         let max_group_count = limits.max_compute_work_group_count;

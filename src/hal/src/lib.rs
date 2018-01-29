@@ -79,116 +79,145 @@ pub type ColorSlot = u8;
 /// Slot for a sampler.
 pub type SamplerSlot = u8;
 
-/// Features that the device supports.
-/// These only include features of the core interface and not API extensions.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Features {
-    // Core features
+bitflags! {
+    /// Features that the device supports.
+    /// These only include features of the core interface and not API extensions.
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    pub struct Features: u64 {
+        /// Bit mask of Vulkan Core features.
+        const CORE_MASK   = 0x0FFF_FFFF_FFFF_FFFF;
+        /// Bit mask of Vulkan Portability features.
+        const PORTABILITY_MASK  = 0xF000_0000_0000_0000;
 
-    /// Support for robust buffer access.
-    /// Buffer access by SPIR-V shaders is checked against the buffer/image boundaries.
-    pub robust_buffer_access: bool,
-    /// Support the full 32-bit range of indexed for draw calls.
-    /// If not supported, the maximum index value is determined by `Limits::max_draw_index_value`.
-    pub full_draw_index_u32: bool,
-    /// Support cube array image views.
-    pub image_cube_array: bool,
-    /// Support different color blending settings per attachments on graphics pipeline creation.
-    pub independent_blending: bool,
-    /// Support geometry shader.
-    pub geometry_shader: bool,
-    /// Support tessellation shaders.
-    pub tessellation_shader: bool,
-    /// Support per-sample shading and multisample interpolation.
-    pub sample_rate_shading: bool,
-    /// Support dual source blending.
-    pub dual_src_blending: bool,
-    /// Support logic operations.
-    pub logic_op: bool,
-    /// Support multiple draws per indirect call.
-    pub multi_draw_indirect: bool,
-    /// Support indirect drawing with first instance value.
-    /// If not supported the first instance value **must** be 0.
-    pub draw_indirect_first_instance: bool,
-    /// Support depth clamping.
-    pub depth_clamp: bool,
-    /// Support depth bias clamping.
-    pub depth_bias_clamp: bool,
-    /// Support non-fill polygon modes.
-    pub non_fill_polygon_mode: bool,
-    /// Support depth bounds test.
-    pub depth_bounds: bool,
-    /// Support lines with width other than 1.0.
-    pub line_width: bool,
-    /// Support points with size greater than 1.0.
-    pub point_size: bool,
-    /// Support replacing alpha values with 1.0.
-    pub alpha_to_one: bool,
-    /// Support multiple viewports and scissors.
-    pub multi_viewports: bool,
-    /// Support anisotropic filtering.
-    pub sampler_anisotropy: bool,
-    /// Support ETC2 texture compression formats.
-    pub format_etc2: bool,
-    /// Support ASTC (LDR) texture compression formats.
-    pub format_astc_ldr: bool,
-    /// Support BC texture compression formats.
-    pub format_bc: bool,
-    /// Support precise occlusion queries, returning the actual number of samples.
-    /// If not supported, queries return a non-zero value when at least **one** sample passes.
-    pub precise_occlusion_query: bool,
-    /// Support query of pipeline statistics.
-    pub pipeline_statistics_query: bool,
-    /// Support unordered access stores and atomic ops in the vertex, geometry
-    /// and tessellation shader stage.
-    /// If not supported, the shader resources **must** be annotated as read-only.
-    pub vertex_stores_and_atomics: bool,
-    /// Support unordered access stores and atomic ops in the fragment shader stage
-    /// If not supported, the shader resources **must** be annotated as read-only.
-    pub fragment_stores_and_atomics: bool,
+        /// Support for robust buffer access.
+        /// Buffer access by SPIR-V shaders is checked against the buffer/image boundaries.
+        const ROBUST_BUFFER_ACCESS = 0x000_0000_0000_0001;
+        /// Support the full 32-bit range of indexed for draw calls.
+        /// If not supported, the maximum index value is determined by `Limits::max_draw_index_value`.
+        const FULL_DRAW_INDEX_U32 = 0x000_0000_0000_0002;
+        /// Support cube array image views.
+        const IMAGE_CUBE_ARRAY = 0x000_0000_0000_0004;
+        /// Support different color blending settings per attachments on graphics pipeline creation.
+        const INDEPENDENT_BLENDING = 0x000_0000_0000_0008;
+        /// Support geometry shader.
+        const GEOMETRY_SHADER = 0x000_0000_0000_0010;
+        /// Support tessellation shaders.
+        const TESSELLATION_SHADER = 0x000_0000_0000_0020;
+        /// Support per-sample shading and multisample interpolation.
+        const SAMPLE_RATE_SHADING = 0x000_0000_0000_0040;
+        /// Support dual source blending.
+        const DUAL_SRC_BLENDING = 0x000_0000_0000_0080;
+        /// Support logic operations.
+        const LOGIC_OP = 0x000_0000_0000_0100;
+        /// Support multiple draws per indirect call.
+        const MULTI_DRAW_INDIRECT = 0x000_0000_0000_0200;
+        /// Support indirect drawing with first instance value.
+        /// If not supported the first instance value **must** be 0.
+        const DRAW_INDIRECT_FIRST_INSTANCE = 0x00_0000_0000_0400;
+        /// Support depth clamping.
+        const DEPTH_CLAMP = 0x000_0000_0000_0800;
+        /// Support depth bias clamping.
+        const DEPTH_BIAS_CLAMP = 0x000_0000_0000_1000;
+        /// Support non-fill polygon modes.
+        const NON_FILL_POLYGON_MODE = 0x000_0000_0000_2000;
+        /// Support depth bounds test.
+        const DEPTH_BOUNDS = 0x000_0000_0000_4000;
+        /// Support lines with width other than 1.0.
+        const LINE_WIDTH = 0x000_0000_0000_8000;
+        /// Support points with size greater than 1.0.
+        const POINT_SIZE = 0x000_0000_0001_0000;
+        /// Support replacing alpha values with 1.0.
+        const ALPHA_TO_ONE = 0x000_0000_0002_0000;
+        /// Support multiple viewports and scissors.
+        const MULTI_VIEWPORTS = 0x000_0000_0004_0000;
+        /// Support anisotropic filtering.
+        const SAMPLER_ANISOTROPY = 0x000_0000_0008_0000;
+        /// Support ETC2 texture compression formats.
+        const FORMAT_ETC2 = 0x000_0000_0010_0000;
+        /// Support ASTC (LDR) texture compression formats.
+        const FORMAT_ASTC_LDR = 0x000_0000_0020_0000;
+        /// Support BC texture compression formats.
+        const FORMAT_BC = 0x000_0000_0040_0000;
+        /// Support precise occlusion queries, returning the actual number of samples.
+        /// If not supported, queries return a non-zero value when at least **one** sample passes.
+        const PRECISE_OCCLUSION_QUERY = 0x000_0000_0080_0000;
+        /// Support query of pipeline statistics.
+        const PIPELINE_STATISTICS_QUERY = 0x000_0000_0100_0000;
+        /// Support unordered access stores and atomic ops in the vertex, geometry
+        /// and tessellation shader stage.
+        /// If not supported, the shader resources **must** be annotated as read-only.
+        const VERTEX_STORES_AND_ATOMICS = 0x000_0000_0200_0000;
+        /// Support unordered access stores and atomic ops in the fragment shader stage
+        /// If not supported, the shader resources **must** be annotated as read-only.
+        const FRAGMENT_STORES_AND_ATOMICS = 0x000_0000_0400_0000;
+        ///
+        const SHADER_TESSELLATION_AND_GEOMETRY_POINT_SIZE = 0x000_0000_0800_0000;
+        ///
+        const SHADER_IMAGE_GATHER_EXTENDED = 0x000_0000_1000_0000;
+        ///
+        const SHADER_STORAGE_IMAGE_EXTENDED_FORMATS = 0x000_0000_2000_0000;
+        ///
+        const SHADER_STORAGE_IMAGE_MULTISAMPLE = 0x000_0000_4000_0000;
+        ///
+        const SHADER_STORAGE_IMAGE_READ_WITHOUT_FORMAT = 0x000_0000_8000_0000;
+        ///
+        const SHADER_STORAGE_IMAGE_WRITE_WITHOUT_FORMAT = 0x000_0001_0000_0000;
+        ///
+        const SHADER_UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING = 0x000_0002_0000_0000;
+        ///
+        const SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING = 0x000_0004_0000_0000;
+        ///
+        const SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING = 0x000_0008_0000_0000;
+        ///
+        const SHADER_STORAGE_IMAGE_ARRAY_DYNAMIC_INDEXING = 0x000_0010_0000_0000;
+        ///
+        const SHADER_CLIP_DISTANCE = 0x000_0020_0000_0000;
+        ///
+        const SHADER_CULL_DISTANCE = 0x000_0040_0000_0000;
+        ///
+        const SHADER_FLOAT64 = 0x000_0080_0000_0000;
+        ///
+        const SHADER_INT64 = 0x000_0100_0000_0000;
+        ///
+        const SHADER_INT16 = 0x000_0200_0000_0000;
+        ///
+        const SHADER_RESOURCE_RESIDENCY = 0x000_0400_0000_0000;
+        ///
+        const SHADER_RESOURCE_MIN_LOD = 0x000_0800_0000_0000;
+        ///
+        const SPARSE_BINDING = 0x000_1000_0000_0000;
+        ///
+        const SPARSE_RESIDENCY_BUFFER = 0x000_2000_0000_0000;
+        ///
+        const SHADER_RESIDENCY_IMAGE_2D = 0x000_4000_0000_0000;
+        ///
+        const SHADER_RESIDENSY_IMAGE_3D = 0x000_8000_0000_0000;
+        ///
+        const SPARSE_RESIDENCY_2_SAMPLES = 0x001_0000_0000_0000;
+        ///
+        const SPARSE_RESIDENCY_4_SAMPLES = 0x002_0000_0000_0000;
+        ///
+        const SPARSE_RESIDENCY_8_SAMPLES = 0x004_0000_0000_0000;
+        ///
+        const SPARSE_RESIDENCY_16_SAMPLES = 0x008_0000_0000_0000;
+        ///
+        const SPARSE_RESIDENCY_ALIASED = 0x010_0000_0000_0000;
+        ///
+        const VARIABLE_MULTISAMPLE_RATE = 0x020_0000_0000_0000;
+        ///
+        const INHERITED_QUERIES = 0x040_0000_0000_0000;
 
-    // Legacy features
-
-    /// Support indirect drawing and dispatching.
-    pub indirect_execution: bool,
-    /// Support instanced drawing.
-    pub draw_instanced: bool,
-    /// Support offsets for instanced drawing with base instance.
-    pub draw_instanced_base: bool,
-    /// Support indexed drawing with base vertex.
-    pub draw_indexed_base: bool,
-    /// Support indexed, instanced drawing.
-    pub draw_indexed_instanced: bool,
-    /// Support indexed, instanced drawing with base vertex only.
-    pub draw_indexed_instanced_base_vertex: bool,
-    /// Support indexed, instanced drawing with base vertex and instance.
-    pub draw_indexed_instanced_base: bool,
-    /// Support base vertex offset for indexed drawing.
-    pub vertex_base: bool,
-    /// Support sRGB textures and rendertargets.
-    pub srgb_color: bool,
-    /// Support constant buffers.
-    pub constant_buffer: bool,
-    /// Support unordered-access views.
-    pub unordered_access_view: bool,
-    /// Support accelerated buffer copy.
-    pub copy_buffer: bool,
-    /// Support separation of textures and samplers.
-    pub sampler_objects: bool,
-    /// Support sampler LOD bias.
-    pub sampler_lod_bias: bool,
-    /// Support setting border texel colors.
-    pub sampler_border_color: bool,
-
-    // Extension features
-
-    /// Support manually specified vertex attribute rates (divisors).
-    pub instance_rate: bool,
+        /// Support triangle fan primitive topology.
+        const TRIANGLE_FAN = 0x1000_0000_0000_0000;
+        /// Support separate stencil reference values for front and back sides.
+        const SEPARATE_STENCIL_REF_VALUES = 0x2000_0000_0000_0000;
+        /// Support manually specified vertex attribute rates (divisors).
+        const INSTANCE_RATE = 0x8000_0000_0000_0000;
+    }
 }
 
 /// Limits of the device.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Limits {
     /// Maximum supported texture size.
@@ -198,9 +227,9 @@ pub struct Limits {
     /// Maximum number of viewports.
     pub max_viewports: usize,
     ///
-    pub max_compute_group_count: [usize; 3],
+    pub max_compute_group_count: [u32; 3],
     ///
-    pub max_compute_group_size: [usize; 3],
+    pub max_compute_group_size: [u32; 3],
 
     /// The alignment of the start of the buffer used as a GPU copy source, in bytes, non-zero.
     pub min_buffer_copy_offset_alignment: usize,

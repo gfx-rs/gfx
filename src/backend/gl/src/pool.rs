@@ -78,7 +78,9 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         }
     }
 
-    fn allocate(&mut self, num: usize, level: hal::command::RawLevel) -> Vec<RawCommandBuffer> { // TODO: Implement secondary buffers
+    fn allocate(
+        &mut self, num: usize, _level: hal::command::RawLevel
+    ) -> Vec<RawCommandBuffer> { // TODO: Implement secondary buffers
         (0..num).map(|_|
                 RawCommandBuffer::new(
                     self.fbo,

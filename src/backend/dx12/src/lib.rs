@@ -319,8 +319,8 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         &mut self,
         submission: hal::queue::RawSubmission<Backend, IC>,
         fence: Option<&native::Fence>,
-    ) where 
-        IC: IntoIterator, 
+    ) where
+        IC: IntoIterator,
         IC::Item: Borrow<command::CommandBuffer>,
     {
         // TODO: semaphores
@@ -780,65 +780,27 @@ impl hal::Instance for Instance {
 
             let physical_device = PhysicalDevice {
                 adapter,
-                features: Features {
-                    // TODO: `true` values should be correct, `false` needs to be checked
+                features:
+                    // TODO: add more features, based on
                     // https://msdn.microsoft.com/de-de/library/windows/desktop/mt186615(v=vs.85).aspx
-                    robust_buffer_access: false,
-                    full_draw_index_u32: false,
-                    image_cube_array: true,
-                    independent_blending: false,
-                    geometry_shader: true,
-                    tessellation_shader: true,
-                    sample_rate_shading: false,
-                    dual_src_blending: false,
-                    logic_op: false, // Optional on feature level 11_0
-                    multi_draw_indirect: true,
-                    draw_indirect_first_instance: false,
-                    depth_clamp: false,
-                    depth_bias_clamp: false,
-                    non_fill_polygon_mode: false,
-                    depth_bounds: false,
-                    line_width: false,
-                    point_size: false,
-                    alpha_to_one: false,
-                    multi_viewports: false,
-                    sampler_anisotropy: false,
-                    format_etc2: false,
-                    format_astc_ldr: false,
-                    format_bc: true,
-                    precise_occlusion_query: false,
-                    pipeline_statistics_query: false,
-                    vertex_stores_and_atomics: false,
-                    fragment_stores_and_atomics: false,
-
-                    indirect_execution: true,
-                    draw_instanced: true,
-                    draw_instanced_base: true,
-                    draw_indexed_base: true,
-                    draw_indexed_instanced: true,
-                    draw_indexed_instanced_base_vertex: true,
-                    draw_indexed_instanced_base: true,
-                    instance_rate: true,
-                    vertex_base: true,
-                    srgb_color: true,
-                    constant_buffer: true,
-                    unordered_access_view: true,
-                    copy_buffer: true,
-                    sampler_objects: true,
-                    sampler_lod_bias: true,
-                    sampler_border_color: true,
-                },
+                    Features::IMAGE_CUBE_ARRAY |
+                    Features::GEOMETRY_SHADER |
+                    Features::TESSELLATION_SHADER |
+                    //logic_op: false, // Optional on feature level 11_0
+                    Features::MULTI_DRAW_INDIRECT |
+                    Features::FORMAT_BC |
+                    Features::INSTANCE_RATE,
                 limits: Limits { // TODO
                     max_texture_size: 0,
                     max_patch_size: 0,
                     max_viewports: 0,
                     max_compute_group_count: [
-                        d3d12::D3D12_CS_THREAD_GROUP_MAX_X  as _,
-                        d3d12::D3D12_CS_THREAD_GROUP_MAX_Y  as _,
-                        d3d12::D3D12_CS_THREAD_GROUP_MAX_Z  as _,
+                        d3d12::D3D12_CS_THREAD_GROUP_MAX_X,
+                        d3d12::D3D12_CS_THREAD_GROUP_MAX_Y,
+                        d3d12::D3D12_CS_THREAD_GROUP_MAX_Z,
                     ],
                     max_compute_group_size: [
-                        d3d12::D3D12_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP as _,
+                        d3d12::D3D12_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP,
                         1, //TODO
                         1, //TODO
                     ],

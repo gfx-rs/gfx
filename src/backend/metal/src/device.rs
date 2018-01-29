@@ -203,7 +203,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn get_features(&self) -> hal::Features {
-        unimplemented!()
+        hal::Features::empty() //TODO
     }
 
     fn get_limits(&self) -> hal::Limits {
@@ -216,8 +216,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             min_buffer_copy_pitch_alignment: 4, // TODO: made this up
             min_uniform_buffer_offset_alignment: 1, // TODO
 
-            max_compute_group_count: [0; 3], // TODO
-            max_compute_group_size: [0; 3], // TODO
+            max_compute_group_count: [16; 3], // TODO
+            max_compute_group_size: [64; 3], // TODO
         }
     }
 }
@@ -370,7 +370,7 @@ impl Device {
                 height: p.work_group_size.y as _,
                 depth : p.work_group_size.z as _,
             }),
-            // this can only happen if the shader came directly from the user 
+            // this can only happen if the shader came directly from the user
             None => (ep.entry, metal::MTLSize { width: 0, height: 0, depth: 0 }),
         };
         let mtl_function = get_final_function(&lib, name, ep.specialization)

@@ -18,6 +18,7 @@ name = "gfx_backend_gl"
 default = ["glutin"]
 
 [dependencies]
+bitflags = "1"
 log = "0.3"
 gfx_gl = "0.3.1"
 gfx-hal = { path = "../../hal", version = "0.1" }

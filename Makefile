@@ -59,6 +59,7 @@ test:
 	cd src/render && cargo test --features "$(FEATURES_RENDER) $(FEATURES_EXTRA)"
 
 reftests:
+	cd src/warden && cargo test --features "gl glsl-to-spirv"
 	cd src/warden && cargo run --bin reftest --features "gl glsl-to-spirv $(FEATURES_HAL) $(FEATURES_HAL2)"
 
 reftests-ci:

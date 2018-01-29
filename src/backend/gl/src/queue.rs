@@ -7,6 +7,7 @@ use gl;
 use smallvec::SmallVec;
 
 use {command as com, native, state, window};
+use info::LegacyFeatures;
 use {Backend, Share};
 
 pub type ArrayBuffer = gl::types::GLuint;
@@ -205,7 +206,7 @@ impl CommandQueue {
         }
 
         // Reset indirect draw buffer
-        if self.share.features.indirect_execution {
+        if self.share.legacy_features.contains(LegacyFeatures::INDIRECT_EXECUTION) {
             unsafe { gl.BindBuffer(gl::DRAW_INDIRECT_BUFFER, 0) };
         }
 
@@ -259,7 +260,7 @@ impl CommandQueue {
 //          com::Command::BindVertexBuffers(_data_ptr) =>
             com::Command::Draw { primitive, ref vertices, ref instances } => {
                 let gl = &self.share.context;
-                let features = &self.share.features;
+                let legacy = &self.share.legacy_features;
                 if instances == &(0u32..1) {
                     unsafe {
                         gl.DrawArrays(
@@ -268,7 +269,7 @@ impl CommandQueue {
                             (vertices.end - vertices.start) as _,
                         );
                     }
-                } else if features.draw_instanced {
+                } else if legacy.contains(LegacyFeatures::DRAW_INSTANCED) {
                     if instances.start == 0 {
                         unsafe {
                             gl.DrawArraysInstanced(
@@ -278,7 +279,7 @@ impl CommandQueue {
                                 instances.end as _,
                             );
                         }
-                    } else if features.draw_instanced_base {
+                    } else if legacy.contains(LegacyFeatures::DRAW_INSTANCED_BASE) {
                         unsafe {
                             gl.DrawArraysInstancedBaseInstance(
                                 primitive,
@@ -297,7 +298,7 @@ impl CommandQueue {
             }
             com::Command::DrawIndexed { primitive, index_type, index_count, index_buffer_offset, base_vertex, ref instances } => {
                 let gl = &self.share.context;
-                let features = &self.share.features;
+                let legacy = &self.share.legacy_features;
                 let offset = index_buffer_offset as *const gl::types::GLvoid;
 
                 if instances == &(0u32..1) {
@@ -310,7 +311,7 @@ impl CommandQueue {
                                 offset,
                             );
                         }
-                    } else if features.draw_indexed_base {
+                    } else if legacy.contains(LegacyFeatures::DRAW_INDEXED_BASE) {
                         unsafe {
                             gl.DrawElementsBaseVertex(
                                 primitive,
@@ -323,7 +324,7 @@ impl CommandQueue {
                     } else {
                         error!("Base vertex with indexed drawing not supported");
                     }
-                } else if features.draw_indexed_instanced {
+                } else if legacy.contains(LegacyFeatures::DRAW_INDEXED_INSTANCED) {
                     if base_vertex == 0 && instances.start == 0 {
                         unsafe {
                             gl.DrawElementsInstanced(
@@ -334,7 +335,7 @@ impl CommandQueue {
                                 instances.end as _,
                             );
                         }
-                    } else if instances.start == 0 && features.draw_indexed_instanced_base_vertex {
+                    } else if instances.start == 0 && legacy.contains(LegacyFeatures::DRAW_INDEXED_INSTANCED_BASE_VERTEX) {
                         unsafe {
                             gl.DrawElementsInstancedBaseVertex(
                                 primitive,
@@ -347,7 +348,7 @@ impl CommandQueue {
                         }
                     } else if instances.start == 0 {
                         error!("Base vertex with instanced indexed drawing is not supported");
-                    } else if features.draw_indexed_instanced_base {
+                    } else if legacy.contains(LegacyFeatures::DRAW_INDEXED_INSTANCED_BASE) {
                         unsafe {
                             gl.DrawElementsInstancedBaseVertexBaseInstance(
                                 primitive,
@@ -494,6 +495,9 @@ impl CommandQueue {
             com::Command::UnbindAttribute(ref attribute) => unsafe {
                 self.share.context.DisableVertexAttribArray(attribute.location);
             }*/
+            com::Command::CopyBufferToBuffer(_src, _dst, ref _r) => unsafe {
+                unimplemented!(); //TODO
+            }
             com::Command::CopyBufferToTexture(buffer, texture, ref r) => unsafe {
                 // TODO: Fix format and active texture
                 assert_eq!(r.image_offset.z, 0);
