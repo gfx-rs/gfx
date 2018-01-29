@@ -217,7 +217,7 @@ bitflags! {
 }
 
 /// Limits of the device.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Limits {
     /// Maximum supported texture size.
@@ -227,9 +227,9 @@ pub struct Limits {
     /// Maximum number of viewports.
     pub max_viewports: usize,
     ///
-    pub max_compute_group_count: [usize; 3],
+    pub max_compute_group_count: [u32; 3],
     ///
-    pub max_compute_group_size: [usize; 3],
+    pub max_compute_group_size: [u32; 3],
 
     /// The alignment of the start of the buffer used as a GPU copy source, in bytes, non-zero.
     pub min_buffer_copy_offset_alignment: usize,

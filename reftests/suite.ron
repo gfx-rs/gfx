@@ -1,16 +1,19 @@
 {
 	"basic": {
 		"render-pass-clear": (
+			features: (bits: 0),
 			jobs: ["empty"],
 			expect: ImageRow("image.color", 0, [204,204,204,255]),
 		),
 		"pass-through": (
+			features: (bits: 0),
 			jobs: ["pass-through"],
 			expect: ImageRow("image.color", 0, [0,255,0,255]),
 		),
 	},
 	"compute": {
 		"fill": (
+			features: (bits: 0),
 			jobs: ["fill"],
 			expect: Buffer("buffer.output", [1, 0, 0, 0]),
 		),

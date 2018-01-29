@@ -113,6 +113,7 @@ impl Harness {
             let mut adapters = instance.enumerate_adapters();
             let adapter = adapters.remove(0);
             let features = adapter.physical_device.get_features();
+            let limits = adapter.physical_device.get_limits();
             //println!("\t{:?}", adapter.info);
             println!("\tScene '{}':", tg.name);
 
@@ -125,9 +126,26 @@ impl Harness {
             for (test_name, test) in &tg.tests {
                 print!("\t\tTest '{}' ...", test_name);
                 if !features.contains(test.features) {
-                    println!("SKIP (features missing: {:?})", test.features - features);
+                    println!("\tskipped (features missing: {:?})", test.features - features);
                     results.skip += 1;
                 }
+                let mut max_compute_groups = [0; 3];
+                for job_name in &test.jobs {
+                    if let warden::raw::Job::Compute { dispatch, .. } = tg.scene.jobs[job_name] {
+                         max_compute_groups[0] = max_compute_groups[0].max(dispatch.0);
+                         max_compute_groups[1] = max_compute_groups[1].max(dispatch.1);
+                         max_compute_groups[2] = max_compute_groups[2].max(dispatch.2);
+                    }
+                }
+                if  max_compute_groups[0] > limits.max_compute_group_size[0] ||
+                    max_compute_groups[1] > limits.max_compute_group_size[1] ||
+                    max_compute_groups[2] > limits.max_compute_group_size[2]
+                {
+                    println!("\tskipped (compute {:?})", max_compute_groups);
+                    results.skip += 1;
+                    continue
+                }
+
                 scene.run(test.jobs.iter().map(|x| x.as_str()));
 
                 print!("\tran: ");
@@ -149,13 +167,12 @@ impl Harness {
                 #[cfg(feature = "metal")]
                 {
                     println!("Command buffer re-use is not ready on Metal, exiting");
-                    results.fail += 1;
-                    return results;
+                    return results.fail + 1;
                 }
             }
         }
 
-        println!("\tTotal {:?}", results);
+        println!("\t{:?}", results);
         results.fail
     }
 }

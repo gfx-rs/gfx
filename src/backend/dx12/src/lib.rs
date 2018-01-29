@@ -795,12 +795,12 @@ impl hal::Instance for Instance {
                     max_patch_size: 0,
                     max_viewports: 0,
                     max_compute_group_count: [
-                        d3d12::D3D12_CS_THREAD_GROUP_MAX_X  as _,
-                        d3d12::D3D12_CS_THREAD_GROUP_MAX_Y  as _,
-                        d3d12::D3D12_CS_THREAD_GROUP_MAX_Z  as _,
+                        d3d12::D3D12_CS_THREAD_GROUP_MAX_X,
+                        d3d12::D3D12_CS_THREAD_GROUP_MAX_Y,
+                        d3d12::D3D12_CS_THREAD_GROUP_MAX_Z,
                     ],
                     max_compute_group_size: [
-                        d3d12::D3D12_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP as _,
+                        d3d12::D3D12_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP,
                         1, //TODO
                         1, //TODO
                     ],

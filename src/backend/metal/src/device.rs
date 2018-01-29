@@ -216,8 +216,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             min_buffer_copy_pitch_alignment: 4, // TODO: made this up
             min_uniform_buffer_offset_alignment: 1, // TODO
 
-            max_compute_group_count: [0; 3], // TODO
-            max_compute_group_size: [0; 3], // TODO
+            max_compute_group_count: [16; 3], // TODO
+            max_compute_group_size: [64; 3], // TODO
         }
     }
 }
