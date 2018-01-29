@@ -3,6 +3,8 @@ use std::borrow::{Borrow, BorrowMut};
 use std::rc::Rc;
 
 use hal;
+use hal::error;
+
 use gl;
 use smallvec::SmallVec;
 
@@ -707,5 +709,10 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
                 .swap_buffers()
                 .unwrap();
         }
+    }
+
+    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+        unsafe { self.share.context.Finish(); }
+        Ok(())
     }
 }
