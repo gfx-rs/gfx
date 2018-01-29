@@ -40,6 +40,7 @@ pub mod adapter;
 pub mod buffer;
 pub mod command;
 pub mod device;
+pub mod error;
 pub mod format;
 pub mod image;
 pub mod mapping;

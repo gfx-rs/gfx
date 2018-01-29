@@ -11,10 +11,11 @@ pub mod capability;
 pub mod family;
 pub mod submission;
 
-use Backend;
-
 use std::borrow::{Borrow, BorrowMut};
 use std::marker::PhantomData;
+
+use error::HostExecutionError;
+use Backend;
 
 pub use self::capability::{
     Capability, Supports,
@@ -24,6 +25,7 @@ pub use self::family::{
     QueueFamily, QueueFamilyId, QueueGroup, Queues,
 };
 pub use self::submission::{RawSubmission, Submission};
+
 
 ///
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -60,6 +62,9 @@ pub trait RawCommandQueue<B: Backend> {
         IS::Item: BorrowMut<B::Swapchain>,
         IW: IntoIterator,
         IW::Item: Borrow<B::Semaphore>;
+
+    /// Wait for the queue to idle.
+    fn wait_idle(&self) -> Result<(), HostExecutionError>;
 }
 
 /// Stronger-typed and safer `CommandQueue` wraps around `RawCommandQueue`.
@@ -97,5 +102,10 @@ impl<B: Backend, C> CommandQueue<B, C> {
         IW::Item: Borrow<B::Semaphore>
     {
         self.0.present(swapchains, wait_semaphores)
+    }
+
+    /// Wait for the queue to idle.
+    pub fn wait_idle(&self) -> Result<(), HostExecutionError> {
+        self.0.wait_idle()
     }
 }
