@@ -182,6 +182,11 @@ impl PhysicalDevice {
             queue_families: vec![QueueFamily(queue_type)],
         }
     }
+
+    /// Get GL-specific legacy feature flags.
+    pub fn legacy_features(&self) -> &info::LegacyFeatures {
+        &self.0.legacy_features
+    }
 }
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {

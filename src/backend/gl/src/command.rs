@@ -100,6 +100,7 @@ pub enum Command {
     BindBlendSlot(ColorSlot, pso::ColorBlendDesc),
     BindAttribute(n::AttributeDesc, gl::types::GLuint, gl::types::GLsizei, n::VertexAttribFunction),
     //UnbindAttribute(n::AttributeDesc),
+    CopyBufferToBuffer(n::RawBuffer, n::RawBuffer, command::BufferCopy),
     CopyBufferToTexture(n::RawBuffer, n::Texture, command::BufferImageCopy),
     CopyBufferToSurface(n::RawBuffer, n::Surface, command::BufferImageCopy),
     CopyTextureToBuffer(n::Texture, n::RawBuffer, command::BufferImageCopy),
@@ -771,14 +772,14 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
     fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
-        let &n::GraphicsPipeline {
+        let n::GraphicsPipeline {
             primitive,
             patch_size,
             program,
             ref blend_targets,
             ref attributes,
             ref vertex_buffers,
-        } = pipeline;
+        } = *pipeline;
 
         if self.cache.primitive != Some(primitive) {
             self.cache.primitive = Some(primitive);
@@ -815,8 +816,15 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         // TODO
     }
 
-    fn bind_compute_pipeline(&mut self, _pipeline: &n::ComputePipeline) {
-        unimplemented!()
+    fn bind_compute_pipeline(&mut self, pipeline: &n::ComputePipeline) {
+        let n::ComputePipeline {
+            program,
+        } = *pipeline;
+
+        if self.cache.program != Some(program) {
+            self.cache.program = Some(program);
+            self.push_cmd(Command::BindProgram(program));
+        }
     }
 
     fn bind_compute_descriptor_sets<'a, T>(
@@ -828,7 +836,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<n::DescriptorSet>,
     {
-        unimplemented!()
+        // TODO
     }
 
     fn dispatch(&mut self, x: u32, y: u32, z: u32) {
@@ -839,12 +847,22 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         self.push_cmd(Command::DispatchIndirect(buffer.raw, offset));
     }
 
-    fn copy_buffer<T>(&mut self, _src: &n::Buffer, _dst: &n::Buffer, _regions: T)
+    fn copy_buffer<T>(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: T)
     where
         T: IntoIterator,
         T::Item: Borrow<command::BufferCopy>,
     {
-        unimplemented!()
+        let old_offset = self.buf.offset;
+
+        for region in regions {
+            let r = region.borrow().clone();
+            let cmd = Command::CopyBufferToBuffer(src.raw, dst.raw, r);
+            self.push_cmd(cmd);
+        }
+
+        if self.buf.offset == old_offset {
+            error!("At least one region must be specified");
+        }
     }
 
     fn copy_image<T>(

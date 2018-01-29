@@ -294,18 +294,34 @@ impl Info {
 pub fn query_all(gl: &gl::Gl) -> (Info, Features, LegacyFeatures, Limits, PrivateCaps) {
     use self::Requirement::*;
     let info = Info::get(gl);
-    let tessellation_supported =           info.is_supported(&[Core(4,0),
-                                                               Ext("GL_ARB_tessellation_shader")]);
-    let multi_viewports_supported =        info.is_supported(&[Core(4,1)]); // TODO: extension
-    let compute_supported =                info.is_supported(&[Core(4,3),
-                                                               Ext("GL_ARB_compute_shader")]);
-    let mut max_compute_group_count = [0usize; 3];
-    let mut max_compute_group_size = [0usize; 3];
-    if compute_supported {
+
+    let mut limits = Limits {
+        max_texture_size: get_usize(gl, gl::MAX_TEXTURE_SIZE),
+        max_viewports: 1,
+        min_buffer_copy_offset_alignment: 1,
+        min_buffer_copy_pitch_alignment: 1,
+        min_uniform_buffer_offset_alignment: 1, // TODO
+        .. Limits::default()
+    };
+
+    if info.is_supported(&[
+        Core(4,0),
+        Ext("GL_ARB_tessellation_shader"),
+    ]) {
+        limits.max_patch_size = get_usize(gl, gl::MAX_PATCH_VERTICES) as _;
+    }
+    if info.is_supported(&[Core(4,1)]) { // TODO: extension
+        limits.max_viewports = get_usize(gl, gl::MAX_VIEWPORTS);
+    }
+
+    if false && info.is_supported(&[ //TODO: enable when compute is implemented
+        Core(4, 3),
+        Ext("GL_ARB_compute_shader"),
+    ]) {
         let mut values = [0 as gl::types::GLint; 2];
-        for (i, (count, size)) in max_compute_group_count
+        for (i, (count, size)) in limits.max_compute_group_count
             .iter_mut()
-            .zip(max_compute_group_size.iter_mut())
+            .zip(limits.max_compute_group_size.iter_mut())
             .enumerate()
         {
             unsafe {
@@ -317,18 +333,6 @@ pub fn query_all(gl: &gl::Gl) -> (Info, Features, LegacyFeatures, Limits, Privat
         }
     }
 
-    let limits = Limits {
-        max_texture_size: get_usize(gl, gl::MAX_TEXTURE_SIZE),
-        max_patch_size: if tessellation_supported { get_usize(gl, gl::MAX_PATCH_VERTICES) as u8 } else {0},
-        max_viewports: if multi_viewports_supported { get_usize(gl, gl::MAX_VIEWPORTS) } else {1},
-        max_compute_group_count,
-        max_compute_group_size,
-
-        min_buffer_copy_offset_alignment: 1,
-        min_buffer_copy_pitch_alignment: 1,
-        min_uniform_buffer_offset_alignment: 1, // TODO
-
-    };
     let mut features = Features::empty();
     let mut legacy = LegacyFeatures::empty();
 

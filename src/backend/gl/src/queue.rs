@@ -495,6 +495,9 @@ impl CommandQueue {
             com::Command::UnbindAttribute(ref attribute) => unsafe {
                 self.share.context.DisableVertexAttribArray(attribute.location);
             }*/
+            com::Command::CopyBufferToBuffer(_src, _dst, ref _r) => unsafe {
+                unimplemented!(); //TODO
+            }
             com::Command::CopyBufferToTexture(buffer, texture, ref r) => unsafe {
                 // TODO: Fix format and active texture
                 assert_eq!(r.image_offset.z, 0);

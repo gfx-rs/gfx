@@ -105,15 +105,6 @@ pub struct Device {
     share: Rc<Share>,
 }
 
-impl Device {
-    /// Create a new `Device`.
-    pub(crate) fn new(share: Rc<Share>) -> Device {
-        Device {
-            share: share,
-        }
-    }
-}
-
 impl Drop for Device {
     fn drop(&mut self) {
         self.share.open.set(false);
@@ -121,6 +112,13 @@ impl Drop for Device {
 }
 
 impl Device {
+    /// Create a new `Device`.
+    pub(crate) fn new(share: Rc<Share>) -> Self {
+        Device {
+            share: share,
+        }
+    }
+
     pub fn create_shader_module_from_source(
         &self,
         data: &[u8],
@@ -215,11 +213,28 @@ impl Device {
     fn translate_spirv(
         &self,
         ast: &mut spirv::Ast<glsl::Target>,
-        version: glsl::Version,
     ) -> Result<String, d::ShaderError> {
         let mut compile_options = glsl::CompilerOptions::default();
-        compile_options.version = version;
+        // see version table at https://en.wikipedia.org/wiki/OpenGL_Shading_Language
+        compile_options.version = match self.share.info.shading_language.tuple() {
+            (4, 60) => glsl::Version::V4_60,
+            (4, 50) => glsl::Version::V4_50,
+            (4, 40) => glsl::Version::V4_40,
+            (4, 30) => glsl::Version::V4_30,
+            (4, 20) => glsl::Version::V4_20,
+            (4, 10) => glsl::Version::V4_10,
+            (4, 00) => glsl::Version::V4_00,
+            (3, 30) => glsl::Version::V3_30,
+            (1, 50) => glsl::Version::V1_50,
+            (1, 40) => glsl::Version::V1_40,
+            (1, 30) => glsl::Version::V1_30,
+            (1, 20) => glsl::Version::V1_20,
+            (1, 10) => glsl::Version::V1_10,
+            other if other > (4, 60) => glsl::Version::V4_60,
+            other => panic!("GLSL version is note recognized: {:?}", other),
+        };
         compile_options.vertex.invert_y = true;
+        debug!("SPIR-V options {:?}", compile_options);
 
         ast.set_compiler_options(&compile_options)
             .map_err(gen_unexpected_error)?;
@@ -231,6 +246,24 @@ impl Device {
                 };
                 d::ShaderError::CompilationFailed(msg)
             })
+    }
+
+    fn compile_shader(
+        &self, point: &pso::EntryPoint<B>, stage: pso::Stage
+    ) -> n::Shader {
+        assert_eq!(point.entry, "main");
+        match *point.module {
+            n::ShaderModule::Raw(raw) => raw,
+            n::ShaderModule::Spirv(ref spirv) => {
+                let mut ast = self.parse_spirv(spirv).unwrap();
+                let spirv = self.translate_spirv(&mut ast).unwrap();
+                info!("Generated:\n{:?}", spirv);
+                match self.create_shader_module_from_source(spirv.as_bytes(), stage).unwrap() {
+                    n::ShaderModule::Raw(raw) => raw,
+                    _ => panic!("Unhandled")
+                }
+            }
+        }
     }
 }
 
@@ -315,30 +348,10 @@ impl d::Device<B> for Device {
         &self,
         descs: &[pso::GraphicsPipelineDesc<'a, B>],
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
-        // see version table at https://en.wikipedia.org/wiki/OpenGL_Shading_Language
-        let glsl_version = match self.share.info.shading_language.tuple() {
-            (4, 60) => glsl::Version::V4_60,
-            (4, 50) => glsl::Version::V4_50,
-            (4, 40) => glsl::Version::V4_40,
-            (4, 30) => glsl::Version::V4_30,
-            (4, 20) => glsl::Version::V4_20,
-            (4, 10) => glsl::Version::V4_10,
-            (4, 00) => glsl::Version::V4_00,
-            (3, 30) => glsl::Version::V3_30,
-            (1, 50) => glsl::Version::V1_50,
-            (1, 40) => glsl::Version::V1_40,
-            (1, 30) => glsl::Version::V1_30,
-            (1, 20) => glsl::Version::V1_20,
-            (1, 10) => glsl::Version::V1_10,
-            other if other > (4, 60) => glsl::Version::V4_60,
-            other => panic!("GLSL version is note recognized: {:?}", other),
-        };
-        info!("Selected GLSL version {:?}", glsl_version);
-
         let gl = &self.share.context;
         let share = &self.share;
         descs.iter()
-             .map(|desc| {
+            .map(|desc| {
                 let subpass = {
                     let subpass = desc.subpass;
                     match subpass.main_pass.subpasses.get(subpass.index) {
@@ -350,31 +363,20 @@ impl d::Device<B> for Device {
                 let program = {
                     let name = unsafe { gl.CreateProgram() };
 
-                    let attach_shader = |point_maybe: Option<&pso::EntryPoint<B>>, stage: pso::Stage| {
-                        if let Some(point) = point_maybe {
-                            assert_eq!(point.entry, "main");
-                            let raw = match *point.module {
-                                n::ShaderModule::Raw(raw) => raw,
-                                n::ShaderModule::Spirv(ref spirv) => {
-                                    let mut ast = self.parse_spirv(spirv).unwrap();
-                                    let spirv = self.translate_spirv(&mut ast, glsl_version).unwrap();
-                                    info!("Generated:\n{:?}", spirv);
-                                    match self.create_shader_module_from_source(spirv.as_bytes(), stage).unwrap() {
-                                        n::ShaderModule::Raw(raw) => raw,
-                                        _ => panic!("Unhandled")
-                                    }
-                                }
-                            };
-                            unsafe { gl.AttachShader(name, raw); }
-                        }
-                    };
-
                     // Attach shaders to program
-                    attach_shader(Some(&desc.shaders.vertex), pso::Stage::Vertex);
-                    attach_shader(desc.shaders.hull.as_ref(), pso::Stage::Hull);
-                    attach_shader(desc.shaders.domain.as_ref(), pso::Stage::Domain);
-                    attach_shader(desc.shaders.geometry.as_ref(), pso::Stage::Geometry);
-                    attach_shader(desc.shaders.fragment.as_ref(), pso::Stage::Fragment);
+                    let shaders = [
+                        (pso::Stage::Vertex, Some(&desc.shaders.vertex)),
+                        (pso::Stage::Hull, desc.shaders.hull.as_ref()),
+                        (pso::Stage::Domain, desc.shaders.domain.as_ref()),
+                        (pso::Stage::Geometry, desc.shaders.geometry.as_ref()),
+                        (pso::Stage::Fragment, desc.shaders.fragment.as_ref()),
+                    ];
+                    for &(stage, point_maybe) in &shaders {
+                        if let Some(ref point) = point_maybe {
+                            let shader = self.compile_shader(point, stage);
+                            unsafe { gl.AttachShader(name, shader); }
+                        }
+                    }
 
                     if !share.private_caps.program_interface && share.private_caps.frag_data_location {
                         for i in 0..subpass.color_attachments.len() {
@@ -436,9 +438,42 @@ impl d::Device<B> for Device {
 
     fn create_compute_pipelines<'a>(
         &self,
-        _descs: &[pso::ComputePipelineDesc<'a, B>],
+        descs: &[pso::ComputePipelineDesc<'a, B>],
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
-        unimplemented!()
+        let gl = &self.share.context;
+        let share = &self.share;
+        descs.iter()
+            .map(|desc| {
+                let program = {
+                    let name = unsafe { gl.CreateProgram() };
+
+                    let shader = self.compile_shader(&desc.shader, pso::Stage::Compute);
+                    unsafe { gl.AttachShader(name, shader) };
+
+                    unsafe { gl.LinkProgram(name) };
+                    info!("\tLinked program {}", name);
+                    if let Err(err) = share.check() {
+                        panic!("Error linking program: {:?}", err);
+                    }
+
+                    let status = get_program_iv(gl, name, gl::LINK_STATUS);
+                    let log = get_program_log(gl, name);
+                    if status != 0 {
+                        if !log.is_empty() {
+                            warn!("\tLog: {}", log);
+                        }
+                    } else {
+                        return Err(pso::CreationError::Other);
+                    }
+
+                    name
+                };
+
+                Ok(n::ComputePipeline {
+                    program,
+                })
+            })
+            .collect()
     }
 
     fn create_framebuffer(
