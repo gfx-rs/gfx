@@ -50,6 +50,7 @@ bitflags! {
     ///
     #[derive(Default)]
     pub struct CommandBufferFlags: u16 {
+        // TODO: Remove once 'const fn' is stabilized: https://github.com/rust-lang/rust/issues/24111
         ///
         const EMPTY = 0x0;
 
