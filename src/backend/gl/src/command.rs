@@ -472,7 +472,7 @@ impl RawCommandBuffer {
 }
 
 impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
-    fn begin(&mut self, flags: hal::command::CommandBufferFlags) { // TODO: Implement flags!
+    fn begin(&mut self, _flags: hal::command::CommandBufferFlags) { // TODO: Implement flags!
         if self.individual_reset {
             // Implicit buffer reset when individual reset is set.
             self.reset(false);
@@ -1046,10 +1046,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     fn execute_commands<I>(
         &mut self,
-        buffers: I,
+        _buffers: I,
     ) where
         I: IntoIterator,
-        I::Item: Borrow<RawCommandBuffer> 
+        I::Item: Borrow<RawCommandBuffer>
     {
         unimplemented!()
     }

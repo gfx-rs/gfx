@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use gl;
 use gl::types::{GLint, GLenum, GLfloat, GLuint};
 
-use hal::{self as c, device as d, image as i, memory, pass, pso, buffer, mapping, query, Primitive};
+use hal::{self as c, device as d, image as i, memory, pass, pso, buffer, mapping, query};
 use hal::format::{ChannelType, Format, Swizzle};
 use hal::pool::CommandPoolCreateFlags;
 use hal::queue::QueueFamilyId;
@@ -20,6 +20,7 @@ use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 
 use {Backend as B, Share, Surface, Swapchain};
 use {conv, native as n, state};
+use info::LegacyFeatures;
 use pool::{BufferMemory, OwnedBuffer, RawCommandPool};
 
 /// Emit error during shader module creation. Used if we don't expect an error
@@ -404,7 +405,7 @@ impl d::Device<B> for Device {
                 };
 
                 let patch_size = match desc.input_assembler.primitive {
-                    Primitive::PatchList(size) => Some(size as _),
+                    c::Primitive::PatchList(size) => Some(size as _),
                     _ => None
                 };
 
@@ -498,7 +499,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_sampler(&self, info: i::SamplerInfo) -> n::FatSampler {
-        if !self.share.features.sampler_objects {
+        if !self.share.legacy_features.contains(LegacyFeatures::SAMPLER_OBJECTS) {
             return n::FatSampler::Info(info);
         }
 
@@ -514,7 +515,7 @@ impl d::Device<B> for Device {
                 i::FilterMethod::Anisotropic(fac) if fac > 1 => {
                     if self.share.private_caps.sampler_anisotropy_ext {
                         gl.SamplerParameterf(name, gl::TEXTURE_MAX_ANISOTROPY_EXT, fac as GLfloat);
-                    } else if self.share.features.sampler_anisotropy {
+                    } else if self.share.features.contains(c::Features::SAMPLER_ANISOTROPY) {
                         // TODO: Uncomment once `gfx_gl` supports GL 4.6
                         // gl.SamplerParameterf(name, gl::TEXTURE_MAX_ANISOTROPY, fac as GLfloat);
                     }
@@ -530,10 +531,10 @@ impl d::Device<B> for Device {
             gl.SamplerParameteri(name, gl::TEXTURE_WRAP_T, conv::wrap_to_gl(t) as GLint);
             gl.SamplerParameteri(name, gl::TEXTURE_WRAP_R, conv::wrap_to_gl(r) as GLint);
 
-            if self.share.features.sampler_lod_bias {
+            if self.share.legacy_features.contains(LegacyFeatures::SAMPLER_LOD_BIAS) {
                 gl.SamplerParameterf(name, gl::TEXTURE_LOD_BIAS, info.lod_bias.into());
             }
-            if self.share.features.sampler_border_color {
+            if self.share.legacy_features.contains(LegacyFeatures::SAMPLER_BORDER_COLOR) {
                 let border: [f32; 4] = info.border.into();
                 gl.SamplerParameterfv(name, gl::TEXTURE_BORDER_COLOR, &border[0]);
             }
@@ -560,7 +561,8 @@ impl d::Device<B> for Device {
     fn create_buffer(
         &self, size: u64, usage: buffer::Usage,
     ) -> Result<UnboundBuffer, buffer::CreationError> {
-        if !self.share.features.constant_buffer && usage.contains(buffer::Usage::UNIFORM) {
+        if !self.share.legacy_features.contains(LegacyFeatures::CONSTANT_BUFFER) &&
+            usage.contains(buffer::Usage::UNIFORM) {
             error!("Constant buffers are not supported by this GL version");
             return Err(buffer::CreationError::Other);
         }

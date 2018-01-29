@@ -145,7 +145,7 @@ pub struct PlatformName {
 }
 
 impl PlatformName {
-    fn get(gl: &gl::Gl) -> PlatformName {
+    fn get(gl: &gl::Gl) -> Self {
         PlatformName {
             vendor: get_string(gl, gl::VENDOR),
             renderer: get_string(gl, gl::RENDERER),
@@ -154,6 +154,8 @@ impl PlatformName {
 }
 
 /// Private capabilities that don't need to be exposed.
+/// The affect the implementation code paths but not the
+/// provided API surface.
 #[derive(Debug)]
 pub struct PrivateCaps {
     /// VAO support
@@ -190,39 +192,40 @@ pub struct Info {
     pub extensions: HashSet<&'static str>,
 }
 
-/*
-pub struct LegacyFeatures {
-    /// Support indirect drawing and dispatching.
-    pub const indirect_execution = 0x01 << 48;
-    /// Support instanced drawing.
-    pub const draw_instanced = 0x02 << 48;
-    /// Support offsets for instanced drawing with base instance.
-    pub const draw_instanced_base = 0x00000000;
-    /// Support indexed drawing with base vertex.
-    pub const draw_indexed_base = 0x00000000;
-    /// Support indexed, instanced drawing.
-    pub const draw_indexed_instanced = 0x00000000;
-    /// Support indexed, instanced drawing with base vertex only.
-    pub const draw_indexed_instanced_base_vertex = 0x00000000;
-    /// Support indexed, instanced drawing with base vertex and instance.
-    pub const draw_indexed_instanced_base = 0x00000000;
-    /// Support base vertex offset for indexed drawing.
-    pub const vertex_base = 0x00000000;
-    /// Support sRGB textures and rendertargets.
-    pub const srgb_color = 0x00000000;
-    /// Support constant buffers.
-    pub const constant_buffer = 0x00000000;
-    /// Support unordered-access views.
-    pub const unordered_access_view = 0x00000000;
-    /// Support accelerated buffer copy.
-    pub const copy_buffer = 0x00000000;
-    /// Support separation of textures and samplers.
-    pub const sampler_objects = 0x00000000;
-    /// Support sampler LOD bias.
-    pub const sampler_lod_bias = 0x00000000;
-    /// Support setting border texel colors.
-    pub const sampler_border_color = 0x00000000;
-}*/
+bitflags! {
+    pub struct LegacyFeatures: u16 {
+        /// Support indirect drawing and dispatching.
+        const INDIRECT_EXECUTION = 0x0001;
+        /// Support instanced drawing.
+        const DRAW_INSTANCED = 0x0002;
+        /// Support offsets for instanced drawing with base instance.
+        const DRAW_INSTANCED_BASE = 0x0004;
+        /// Support indexed drawing with base vertex.
+        const DRAW_INDEXED_BASE = 0x0008;
+        /// Support indexed, instanced drawing.
+        const DRAW_INDEXED_INSTANCED = 0x0010;
+        /// Support indexed, instanced drawing with base vertex only.
+        const DRAW_INDEXED_INSTANCED_BASE_VERTEX = 0x0020;
+        /// Support indexed, instanced drawing with base vertex and instance.
+        const DRAW_INDEXED_INSTANCED_BASE = 0x0040;
+        /// Support base vertex offset for indexed drawing.
+        const VERTEX_BASE = 0x0080;
+        /// Support sRGB textures and rendertargets.
+        const SRGB_COLOR = 0x0100;
+        /// Support constant buffers.
+        const CONSTANT_BUFFER = 0x0200;
+        /// Support unordered-access views.
+        const UNORDERED_ACCESS_VIEW = 0x0400;
+        /// Support accelerated buffer copy.
+        const COPY_BUFFER = 0x0800;
+        /// Support separation of textures and samplers.
+        const SAMPLER_OBJECTS = 0x1000;
+        /// Support sampler LOD bias.
+        const SAMPLER_LOD_BIAS = 0x2000;
+        /// Support setting border texel colors.
+        const SAMPLER_BORDER_COLOR = 0x4000;
+    }
+}
 
 #[derive(Copy, Clone)]
 pub enum Requirement {
@@ -288,7 +291,7 @@ impl Info {
 
 /// Load the information pertaining to the driver and the corresponding device
 /// capabilities.
-pub fn query_all(gl: &gl::Gl) -> (Info, Features, Limits, PrivateCaps) {
+pub fn query_all(gl: &gl::Gl) -> (Info, Features, LegacyFeatures, Limits, PrivateCaps) {
     use self::Requirement::*;
     let info = Info::get(gl);
     let tessellation_supported =           info.is_supported(&[Core(4,0),
@@ -326,71 +329,97 @@ pub fn query_all(gl: &gl::Gl) -> (Info, Features, Limits, PrivateCaps) {
         min_uniform_buffer_offset_alignment: 1, // TODO
 
     };
-    let features = Features {
-        robust_buffer_access: false,
-        full_draw_index_u32: false,
-        image_cube_array: false,
-        independent_blending: false,
-        geometry_shader: false,
-        tessellation_shader: false,
-        sample_rate_shading: false,
-        dual_src_blending: false,
-        logic_op: false, // Optional on feature level 11_0
-        multi_draw_indirect: false,
-        draw_indirect_first_instance: false,
-        depth_clamp: false,
-        depth_bias_clamp: false,
-        non_fill_polygon_mode: false,
-        depth_bounds: false,
-        line_width: false,
-        point_size: false,
-        alpha_to_one: false,
-        multi_viewports: false,
-        sampler_anisotropy:                 info.is_supported(&[Core(4,6),
-                                                                Ext ("GL_ARB_texture_filter_anisotropic"),
-                                                                Ext ("GL_EXT_texture_filter_anisotropic")]),
-        format_etc2: false,
-        format_astc_ldr: false,
-        format_bc: false,
-        precise_occlusion_query: false,
-        pipeline_statistics_query: false,
-        vertex_stores_and_atomics: false,
-        fragment_stores_and_atomics: false,
+    let mut features = Features::empty();
+    let mut legacy = LegacyFeatures::empty();
 
-        indirect_execution:                 info.is_supported(&[Core(4,3),
-                                                                Es  (3,1)]), // TODO: extension
-        draw_instanced:                     info.is_supported(&[Core(3,1),
-                                                                Es  (3,0),
-                                                                Ext ("GL_ARB_draw_instanced")]),
-        draw_instanced_base:                info.is_supported(&[Core(4,2),
-                                                                Ext ("GL_ARB_base_instance")]),
-        draw_indexed_base:                  info.is_supported(&[Core(3,2)]), // TODO: extension
-        draw_indexed_instanced:             info.is_supported(&[Core(3,1),
-                                                                Es  (3,0)]), // TODO: extension
-        draw_indexed_instanced_base_vertex: info.is_supported(&[Core(3,2)]), // TODO: extension
-        draw_indexed_instanced_base:        info.is_supported(&[Core(4,2)]), // TODO: extension
-        instance_rate:                      info.is_supported(&[Core(3,3),
-                                                                Es  (3,0),
-                                                                Ext ("GL_ARB_instanced_arrays")]),
-        vertex_base:                        info.is_supported(&[Core(3,2),
-                                                                Es  (3,2),
-                                                                Ext ("GL_ARB_draw_elements_base_vertex")]),
-        srgb_color:                         info.is_supported(&[Core(3,2),
-                                                                Ext ("GL_ARB_framebuffer_sRGB")]),
-        constant_buffer:                    info.is_supported(&[Core(3,1),
-                                                                Es  (3,0),
-                                                                Ext ("GL_ARB_uniform_buffer_object")]),
-        unordered_access_view:              info.is_supported(&[Core(4,0)]), // TODO: extension
-        copy_buffer:                        info.is_supported(&[Core(3,1),
-                                                                Es  (3,0),
-                                                                Ext ("GL_ARB_copy_buffer"),
-                                                                Ext ("GL_NV_copy_buffer")]),
-        sampler_objects:                    info.is_supported(&[Core(3,3),
-                                                                Es  (3,0),
-                                                                Ext ("GL_ARB_sampler_objects")]),
-        sampler_lod_bias:                   info.is_supported(&[Core(3,3)]), // TODO: extension
-        sampler_border_color:               info.is_supported(&[Core(3,3)]), // TODO: extensions
-    };
+    if info.is_supported(&[
+        Core(4, 6),
+        Ext("GL_ARB_texture_filter_anisotropic"),
+        Ext("GL_EXT_texture_filter_anisotropic"),
+    ]) {
+        features |= Features::SAMPLER_ANISOTROPY;
+    }
+    if info.is_supported(&[
+        Core(3, 3),
+        Es(3, 0),
+        Ext("GL_ARB_instanced_arrays"),
+    ]) {
+        features |= Features::INSTANCE_RATE;
+    }
+
+    if info.is_supported(&[Core(4, 3), Es(3, 1)]) { // TODO: extension
+        legacy |= LegacyFeatures::INDIRECT_EXECUTION;
+    }
+    if info.is_supported(&[
+        Core(3, 1),
+        Es(3, 0),
+        Ext("GL_ARB_draw_instanced"),
+    ]) {
+        legacy |= LegacyFeatures::DRAW_INSTANCED;
+    }
+    if info.is_supported(&[
+        Core(4, 2),
+        Ext("GL_ARB_base_instance"),
+    ]) {
+        legacy |= LegacyFeatures::DRAW_INSTANCED_BASE;
+    }
+    if info.is_supported(&[Core(3, 2)]) { // TODO: extension
+        legacy |= LegacyFeatures::DRAW_INDEXED_BASE;
+    }
+    if info.is_supported(&[Core(3, 1), Es(3, 0)]) { // TODO: extension
+        legacy |= LegacyFeatures::DRAW_INDEXED_INSTANCED;
+    }
+    if info.is_supported(&[Core(3, 2)]) { // TODO: extension
+        legacy |= LegacyFeatures::DRAW_INDEXED_INSTANCED_BASE_VERTEX;
+    }
+    if info.is_supported(&[Core(4, 2)]) { // TODO: extension
+        legacy |= LegacyFeatures::DRAW_INDEXED_INSTANCED_BASE;
+    }
+    if info.is_supported(&[
+        Core(3, 2),
+        Es(3, 2),
+        Ext("GL_ARB_draw_elements_base_vertex"),
+    ]) {
+        legacy |= LegacyFeatures::VERTEX_BASE;
+    }
+    if info.is_supported(&[
+        Core(3, 2),
+        Ext("GL_ARB_framebuffer_sRGB"),
+    ]) {
+        legacy |= LegacyFeatures::SRGB_COLOR;
+    }
+    if info.is_supported(&[
+        Core(3, 1),
+        Es(3, 0),
+        Ext("GL_ARB_uniform_buffer_object"),
+    ]) {
+        legacy |= LegacyFeatures::CONSTANT_BUFFER;
+    }
+    if info.is_supported(&[Core(4, 0)]) { // TODO: extension
+        legacy |= LegacyFeatures::UNORDERED_ACCESS_VIEW;
+    }
+    if info.is_supported(&[
+        Core(3, 1),
+        Es(3, 0),
+        Ext("GL_ARB_copy_buffer"),
+        Ext("GL_NV_copy_buffer"),
+    ]) {
+        legacy |= LegacyFeatures::COPY_BUFFER;
+    }
+    if info.is_supported(&[
+        Core(3, 3),
+        Es(3, 0),
+        Ext("GL_ARB_sampler_objects"),
+    ]) {
+        legacy |= LegacyFeatures::SAMPLER_OBJECTS;
+    }
+    if info.is_supported(&[Core(3, 3)]) { // TODO: extension
+        legacy |= LegacyFeatures::SAMPLER_LOD_BIAS;
+    }
+    if info.is_supported(&[Core(3, 3)]) { // TODO: extension
+        legacy |= LegacyFeatures::SAMPLER_BORDER_COLOR;
+    }
+
     let private = PrivateCaps {
         vertex_array:                       info.is_supported(&[Core(3,0),
                                                                 Es  (3,0),
@@ -418,7 +447,7 @@ pub fn query_all(gl: &gl::Gl) -> (Info, Features, Limits, PrivateCaps) {
                                             info.is_supported(&[Ext ("GL_EXT_texture_filter_anisotropic")]),
     };
 
-    (info, features, limits, private)
+    (info, features, legacy, limits, private)
 }
 
 #[cfg(test)]
