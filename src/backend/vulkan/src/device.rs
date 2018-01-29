@@ -5,6 +5,7 @@ use smallvec::SmallVec;
 
 use hal::{buffer, device as d, format, image, mapping, pass, pso, query, queue};
 use hal::{Backbuffer, MemoryTypeId, SwapchainConfig};
+use hal::error::HostExecutionError;
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
 use hal::range::RangeArg;
@@ -16,7 +17,7 @@ use std::ffi::CString;
 use std::ops::Range;
 
 use {Backend as B, Device};
-use {conv, native as n, window as w};
+use {conv, native as n, result, window as w};
 use pool::RawCommandPool;
 
 
@@ -1424,6 +1425,14 @@ impl d::Device<B> for Device {
 
     fn destroy_semaphore(&self, semaphore: n::Semaphore) {
         unsafe { self.raw.0.destroy_semaphore(semaphore.0, None); }
+    }
+
+    fn wait_idle(&self) -> Result<(), HostExecutionError> {
+        self.raw
+            .0
+            .device_wait_idle()
+            .map_err(From::from)
+            .map_err(From::<result::Error>::from)
     }
 }
 

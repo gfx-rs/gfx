@@ -11,6 +11,7 @@ use std::ops::Range;
 use {buffer, format, image, mapping, pass, pso, query};
 use {Backend, MemoryTypeId};
 
+use error::HostExecutionError;
 use memory::Requirements;
 use pool::{CommandPool, CommandPoolCreateFlags};
 use queue::{QueueFamilyId, QueueGroup};
@@ -460,4 +461,9 @@ pub trait Device<B: Backend> {
         surface: &mut B::Surface,
         config: SwapchainConfig,
     ) -> (B::Swapchain, Backbuffer<B>);
+
+    /// Wait for all queues associated with this device to idle.
+    ///
+    /// Host access to all queues needs to be **externally** sycnhronized!
+    fn wait_idle(&self) -> Result<(), HostExecutionError>;
 }

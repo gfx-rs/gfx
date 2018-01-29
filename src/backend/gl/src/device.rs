@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use gl;
 use gl::types::{GLint, GLenum, GLfloat, GLuint};
 
-use hal::{self as c, device as d, image as i, memory, pass, pso, buffer, mapping, query};
+use hal::{self as c, device as d, error, image as i, memory, pass, pso, buffer, mapping, query};
 use hal::format::{ChannelType, Format, Swizzle};
 use hal::pool::CommandPoolCreateFlags;
 use hal::queue::QueueFamilyId;
@@ -1031,6 +1031,11 @@ impl d::Device<B> for Device {
         config: c::SwapchainConfig,
     ) -> (Swapchain, c::Backbuffer<B>) {
         self.create_swapchain_impl(surface, config)
+    }
+
+    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+        unsafe { self.share.context.Finish(); }
+        Ok(())
     }
 }
 

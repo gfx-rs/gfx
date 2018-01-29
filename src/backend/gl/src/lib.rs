@@ -17,6 +17,7 @@ pub extern crate glutin;
 use std::cell::Cell;
 use std::rc::Rc;
 
+use hal::error;
 use hal::queue::{Queues, QueueFamilyId};
 
 pub use self::device::Device;
@@ -192,11 +193,11 @@ impl PhysicalDevice {
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(
         &self, families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>,
-    ) -> Result<hal::Gpu<Backend>, hal::adapter::DeviceCreationError> {
+    ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
         // Can't have multiple logical devices at the same time
         // as they would share the same context.
         if self.0.open.get() {
-            return Err(hal::adapter::DeviceCreationError::TooManyObjects);
+            return Err(error::DeviceCreationError::TooManyObjects);
         }
         self.0.open.set(true);
 

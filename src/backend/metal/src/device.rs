@@ -9,7 +9,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::{cmp, mem, ptr, slice};
 
-use hal::{self, image, pass, format, mapping, memory, buffer, pso, query};
+use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query};
 use hal::device::{WaitFor, BindError, OutOfMemory, FramebufferError, ShaderError, Extent};
 use hal::memory::Properties;
 use hal::pool::CommandPoolCreateFlags;
@@ -155,7 +155,7 @@ impl PhysicalDevice {
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(
         &self, mut families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>,
-    ) -> Result<hal::Gpu<Backend>, hal::adapter::DeviceCreationError> {
+    ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
         // TODO: Handle opening a physical device multiple times
 
         assert_eq!(families.len(), 1);
@@ -1381,6 +1381,10 @@ impl hal::Device<Backend> for Device {
         config: hal::SwapchainConfig,
     ) -> (Swapchain, hal::Backbuffer<Backend>) {
         self.build_swapchain(surface, config)
+    }
+
+    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+        unimplemented!()
     }
 }
 

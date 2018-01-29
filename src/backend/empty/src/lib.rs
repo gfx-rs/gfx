@@ -6,7 +6,7 @@ extern crate gfx_hal as hal;
 use std::borrow::{Borrow, BorrowMut};
 use std::ops::Range;
 use hal::{
-    adapter, buffer, command, device, format, image, mapping,
+    buffer, command, device, error, format, image, mapping,
     memory, pass, pool, pso, query, queue,
 };
 use hal::range::RangeArg;
@@ -57,7 +57,7 @@ pub struct PhysicalDevice;
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(
         &self, _: Vec<(QueueFamily, Vec<hal::QueuePriority>)>
-    ) -> Result<hal::Gpu<Backend>, adapter::DeviceCreationError> {
+    ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
         unimplemented!()
     }
 
@@ -81,7 +81,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 /// Dummy command queue doing nothing.
 pub struct RawCommandQueue;
 impl queue::RawCommandQueue<Backend> for RawCommandQueue {
-    unsafe fn submit_raw<IC>(&mut self, _: queue::RawSubmission<Backend, IC>, _: Option<&()>) 
+    unsafe fn submit_raw<IC>(&mut self, _: queue::RawSubmission<Backend, IC>, _: Option<&()>)
     where
         IC: IntoIterator,
         IC::Item: Borrow<RawCommandBuffer>,
@@ -96,6 +96,10 @@ impl queue::RawCommandQueue<Backend> for RawCommandQueue {
         IW: IntoIterator,
         IW::Item: Borrow<()>,
     {
+        unimplemented!()
+    }
+
+    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
         unimplemented!()
     }
 }
@@ -318,6 +322,10 @@ impl hal::Device<Backend> for Device {
         _: &mut Surface,
         _: hal::SwapchainConfig,
     ) -> (Swapchain, hal::Backbuffer<Backend>) {
+        unimplemented!()
+    }
+
+    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
         unimplemented!()
     }
 }
@@ -650,7 +658,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         _: I,
     ) where
         I: IntoIterator,
-        I::Item: Borrow<RawCommandBuffer> 
+        I::Item: Borrow<RawCommandBuffer>
     {
         unimplemented!()
     }

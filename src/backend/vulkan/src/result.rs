@@ -1,7 +1,7 @@
 
 use ash::vk;
 
-use hal::adapter::DeviceCreationError;
+use hal::error::{DeviceCreationError, HostExecutionError};
 
 // Generic error codes from Vulkan
 #[derive(Debug)]
@@ -89,3 +89,10 @@ from_error! {
     },
 }
 
+from_error! {
+    HostExecutionError {
+        OutOfHostMemory => OutOfHostMemory,
+        OutOfDeviceMemory => OutOfDeviceMemory,
+        DeviceLost => DeviceLost,
+    },
+}

@@ -26,7 +26,7 @@ use ash::vk;
 
 use hal::{format, memory, queue};
 use hal::{Features, Limits, PatchSize, QueueType};
-use hal::adapter::DeviceCreationError;
+use hal::error::{DeviceCreationError, HostExecutionError};
 
 use std::{fmt, mem, ptr};
 use std::borrow::{Borrow, BorrowMut};
@@ -680,6 +680,16 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
             self.swapchain_fn
                 .queue_present_khr(*self.raw, &info)
         });
+    }
+
+    fn wait_idle(&self) -> Result<(), HostExecutionError> {
+        unsafe {
+            self.device
+                .0
+                .queue_wait_idle(*self.raw)
+                .map_err(From::from)
+                .map_err(From::<result::Error>::from) // HostExecutionError
+        }
     }
 }
 
