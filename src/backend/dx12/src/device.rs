@@ -15,7 +15,7 @@ use hal::{self, buffer, device as d, error, format, image, mapping, memory, pass
 use hal::format::AspectFlags;
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
-use hal::queue::QueueFamilyId;
+use hal::queue::{RawCommandQueue, QueueFamilyId};
 use hal::range::RangeArg;
 
 use {
@@ -2269,6 +2269,9 @@ impl d::Device<B> for Device {
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+        for queue in &self.queues {
+            queue.wait_idle()?;
+        }
         Ok(())
     }
 }
