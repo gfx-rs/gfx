@@ -193,6 +193,8 @@ pub struct Info {
 }
 
 bitflags! {
+    /// Flags for features that are required for Vulkan but may not
+    /// be supported by legacy backends (GL/DX11).
     pub struct LegacyFeatures: u16 {
         /// Support indirect drawing and dispatching.
         const INDIRECT_EXECUTION = 0x0001;

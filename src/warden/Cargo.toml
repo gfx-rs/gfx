@@ -56,3 +56,7 @@ path = "../../src/backend/gl"
 version = "0.1"
 features = ["glutin"]
 optional = true
+
+[[example]]
+name = "basic"
+required-features = ["gl", "glsl-to-spirv"]

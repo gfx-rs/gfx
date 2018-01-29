@@ -75,4 +75,4 @@ script:
   - export LIBRARY_PATH=$HOME/deps/usr/lib/x86_64-linux-gnu
   - export LD_LIBRARY_PATH=$LIBRARY_PATH
   - make all
-  - if [[ $TRAVIS_OS_NAME == "linux" ]]; then make reftests-ci; fi
+  #- if [[ $TRAVIS_OS_NAME == "linux" ]]; then make reftests-ci; fi # TODO

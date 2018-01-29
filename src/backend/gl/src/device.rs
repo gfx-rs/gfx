@@ -231,7 +231,7 @@ impl Device {
             (1, 20) => glsl::Version::V1_20,
             (1, 10) => glsl::Version::V1_10,
             other if other > (4, 60) => glsl::Version::V4_60,
-            other => panic!("GLSL version is note recognized: {:?}", other),
+            other => panic!("GLSL version is not recognized: {:?}", other),
         };
         compile_options.vertex.invert_y = true;
         debug!("SPIR-V options {:?}", compile_options);

@@ -109,7 +109,9 @@ fn align(x: usize, y: usize) -> usize {
 }
 
 impl<B: hal::Backend> Scene<B, hal::General> {
-    pub fn new(adapter: hal::Adapter<B>, raw: &raw::Scene, data_path: &PathBuf) -> Result<Self, Error> {
+    pub fn new(
+        adapter: hal::Adapter<B>, raw: &raw::Scene, data_path: PathBuf
+    ) -> Result<Self, Error> {
         info!("creating Scene from {:?}", data_path);
         let memory_types = adapter
             .physical_device

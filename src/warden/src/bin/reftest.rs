@@ -120,7 +120,7 @@ impl Harness {
             let mut scene = warden::gpu::Scene::<I::Backend, _>::new(
                 adapter,
                 &tg.scene,
-                &self.base_path.join("data"),
+                self.base_path.join("data"),
             ).unwrap();
 
             for (test_name, test) in &tg.tests {
@@ -225,6 +225,6 @@ fn main() {
         num_failures += harness.run(instance);
     }
     let _ = harness;
-    num_failures += 0;
+    num_failures += 0; // mark as mutated
     process::exit(num_failures as _);
 }
