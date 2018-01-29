@@ -22,12 +22,12 @@ mod root_constants;
 mod shade;
 mod window;
 
-use hal::{format, memory, Features, Limits, QueueType};
+use hal::{error, format, memory, Features, Limits, QueueType};
 use hal::queue::{QueueFamily as HalQueueFamily, QueueFamilyId, Queues};
 
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, winerror};
-use winapi::shared::minwindef::TRUE;
-use winapi::um::{d3d12, d3d12sdklayers, d3dcommon, winnt};
+use winapi::shared::minwindef::{FALSE, TRUE};
+use winapi::um::{d3d12, d3d12sdklayers, d3dcommon, handleapi, synchapi, winbase, winnt};
 use wio::com::ComPtr;
 
 use std::{mem, ptr};
@@ -186,11 +186,11 @@ pub struct PhysicalDevice {
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(
         &self, families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>
-    ) -> Result<hal::Gpu<Backend>, hal::adapter::DeviceCreationError> {
+    ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
         let lock = self.is_open.try_lock();
         let mut open_guard = match lock {
             Ok(inner) => inner,
-            Err(_) => return Err(hal::adapter::DeviceCreationError::TooManyObjects),
+            Err(_) => return Err(error::DeviceCreationError::TooManyObjects),
         };
 
         // Create D3D12 device
@@ -241,14 +241,27 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             .map(|(family, priorities)| {
                 let mut group = hal::backend::RawQueueGroup::new(family);
 
+                let create_idle_event = || unsafe {
+                    synchapi::CreateEventA(
+                        ptr::null_mut(),
+                        TRUE, // Want to manually reset in case multiple threads wait for idle
+                        FALSE,
+                        ptr::null(),
+                    )
+                };
+
                 match family {
                     QueueFamily::Present => {
                         // Exactly **one** present queue!
                         // Number of queues need to be larger than 0 else it
                         // violates the specification.
-                        group.add_queue(CommandQueue {
+                        let queue = CommandQueue {
                             raw: present_queue.clone(),
-                        });
+                            idle_fence: device.create_raw_fence(false),
+                            idle_event: create_idle_event(),
+                        };
+                        device.append_queue(queue.clone());
+                        group.add_queue(queue);
                     }
                     QueueFamily::Normal(_) => {
                         let queue_desc = d3d12::D3D12_COMMAND_QUEUE_DESC {
@@ -269,9 +282,13 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                             };
 
                             if winerror::SUCCEEDED(hr) {
-                                group.add_queue(CommandQueue {
+                                let queue = CommandQueue {
                                     raw: unsafe { ComPtr::new(queue) },
-                                });
+                                    idle_fence: device.create_raw_fence(false),
+                                    idle_event: create_idle_event(),
+                                };
+                                device.append_queue(queue.clone());
+                                group.add_queue(queue);
                             } else {
                                 error!("error on queue creation: {:x}", hr);
                             }
@@ -309,8 +326,11 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn get_limits(&self) -> Limits { self.limits }
 }
 
+#[derive(Clone)]
 pub struct CommandQueue {
     pub(crate) raw: ComPtr<d3d12::ID3D12CommandQueue>,
+    idle_fence: *mut d3d12::ID3D12Fence,
+    idle_event: winnt::HANDLE,
 }
 unsafe impl Send for CommandQueue {} //blocked by ComPtr
 
@@ -323,6 +343,11 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         IC: IntoIterator,
         IC::Item: Borrow<command::CommandBuffer>,
     {
+        // Reset idle fence and event
+        // That's safe here due to exclusive access to the queue
+        (*self.idle_fence).Signal(0);
+        synchapi::ResetEvent(self.idle_event);
+
         // TODO: semaphores
         let mut lists = submission
             .cmd_buffers
@@ -349,6 +374,16 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         for swapchain in swapchains {
             unsafe { swapchain.borrow().inner.Present(1, 0); }
         }
+    }
+
+    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+        unsafe {
+            self.raw.Signal(self.idle_fence, 1);
+            assert_eq!(winerror::S_OK, (*self.idle_fence).SetEventOnCompletion(1, self.idle_event));
+            synchapi::WaitForSingleObject(self.idle_event, winbase::INFINITE);
+        }
+
+        Ok(())
     }
 }
 
@@ -390,6 +425,9 @@ pub struct Device {
     // Present queue exposed by the `Present` queue family.
     // Required for swapchain creation. Only a single queue supports presentation.
     present_queue: ComPtr<d3d12::ID3D12CommandQueue>,
+    // List of all queues created from this device, including present queue.
+    // Needed for `wait_idle`.
+    queues: Vec<CommandQueue>,
     // Indicates that there is currently an active device.
     open: Arc<Mutex<bool>>,
 }
@@ -511,14 +549,25 @@ impl Device {
                 dispatch: dispatch_signature,
             },
             present_queue: unsafe { ComPtr::new(ptr::null_mut()) }, // filled out on adapter opening
+            queues: Vec::new(),
             open: physical_device.is_open.clone(),
         }
+    }
+
+    fn append_queue(&mut self, queue: CommandQueue) {
+        self.queues.push(queue);
     }
 }
 
 impl Drop for Device {
     fn drop(&mut self) {
         *self.open.lock().unwrap() = false;
+        for queue in &mut self.queues {
+            unsafe {
+                (*queue.idle_fence).Release();
+                handleapi::CloseHandle(queue.idle_event);
+            }
+        }
     }
 }
 

@@ -11,7 +11,7 @@ use winapi::shared::minwindef::{FALSE, TRUE, UINT};
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, winerror};
 use wio::com::ComPtr;
 
-use hal::{self, buffer, device as d, format, image, mapping, memory, pass, pso, query};
+use hal::{self, buffer, device as d, error, format, image, mapping, memory, pass, pso, query};
 use hal::format::AspectFlags;
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
@@ -642,6 +642,19 @@ impl Device {
         }
 
         Ok(handle)
+    }
+
+    pub(crate) fn create_raw_fence(&self, signalled: bool) -> *mut d3d12::ID3D12Fence {
+        let mut handle = ptr::null_mut();
+        assert_eq!(winerror::S_OK, unsafe {
+            self.raw.clone().CreateFence(
+                if signalled { 1 } else { 0 },
+                d3d12::D3D12_FENCE_FLAG_NONE,
+                &d3d12::IID_ID3D12Fence,
+                &mut handle,
+            )
+        });
+        handle as *mut _
     }
 }
 
@@ -1973,18 +1986,8 @@ impl d::Device<B> for Device {
     }
 
     fn create_fence(&self, signalled: bool) -> n::Fence {
-        let mut handle = ptr::null_mut();
-        assert_eq!(winerror::S_OK, unsafe {
-            self.raw.clone().CreateFence(
-                if signalled { 1 } else { 0 },
-                d3d12::D3D12_FENCE_FLAG_NONE,
-                &d3d12::IID_ID3D12Fence,
-                &mut handle,
-            )
-        });
-
         n::Fence {
-            raw: unsafe { ComPtr::new(handle as *mut _) },
+            raw: unsafe { ComPtr::new(self.create_raw_fence(signalled)) },
         }
     }
 
@@ -2263,5 +2266,9 @@ impl d::Device<B> for Device {
         };
 
         (swapchain, hal::Backbuffer::Images(images))
+    }
+
+    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+        Ok(())
     }
 }
