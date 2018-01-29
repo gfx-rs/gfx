@@ -155,7 +155,7 @@ impl Device {
             }
             Ok(n::ShaderModule::Raw(name))
         } else {
-            Err(d::ShaderError::CompilationFailed(String::new())) // TODO
+            Err(d::ShaderError::CompilationFailed(log))
         }
     }
 
