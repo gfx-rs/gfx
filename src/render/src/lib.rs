@@ -221,10 +221,8 @@ impl<B: Backend, C> Context<B, C>
         Cf: AsFormat,
     {
         let memory_properties = adapter.physical_device.memory_properties();
-        let (device, queues) = adapter.open_with(|family| {
-            if surface.supports_queue_family(family) {
-                Some(1)
-            } else { None }
+        let (device, queues) = adapter.open_with(1, |family| {
+            surface.supports_queue_family(family)
         })?;
 
         let queue = Queue::new(queues);

@@ -120,7 +120,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             .get_limits();
 
         // initialize graphics
-        let (device, queue_group) = adapter.open_with(|_| Some(1))?;
+        let (device, queue_group) = adapter.open_with(1, |_| true)?;
 
         let upload_type: hal::MemoryTypeId = memory_types
             .iter()
