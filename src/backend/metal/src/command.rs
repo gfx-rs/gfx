@@ -7,7 +7,7 @@ use std::ops::{Deref, Range};
 use std::sync::{Arc};
 use std::mem;
 
-use hal::{memory, pool, pso};
+use hal::{error, memory, pool, pso};
 use hal::{VertexCount, VertexOffset, InstanceCount, IndexCount};
 use hal::buffer::{IndexBufferView};
 use hal::image::{ImageLayout, SubresourceRange};
@@ -251,8 +251,8 @@ impl CommandQueue {
 }
 
 impl RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw<IC>(&mut self, submit: RawSubmission<Backend, IC>, fence: Option<&native::Fence>) 
-    where 
+    unsafe fn submit_raw<IC>(&mut self, submit: RawSubmission<Backend, IC>, fence: Option<&native::Fence>)
+    where
         IC: IntoIterator,
         IC::Item: Borrow<CommandBuffer>,
     {
@@ -315,6 +315,10 @@ impl RawCommandQueue<Backend> for CommandQueue {
                 msg_send![render_layer, setContents: io_surface.obj];
             }
         }
+    }
+
+    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+        unimplemented!()
     }
 }
 
@@ -623,7 +627,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
 
             // FIXME: subpasses
             let pass_descriptor: metal::RenderPassDescriptor = msg_send![frame_buffer.0, copy];
-            
+
             for (i, value) in clear_values.into_iter().enumerate() {
                 let value = *value.borrow();
                 if i < render_pass.num_colors {
@@ -1140,7 +1144,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         buffers: I,
     ) where
         I: IntoIterator,
-        I::Item: Borrow<CommandBuffer> 
+        I::Item: Borrow<CommandBuffer>
     {
         unimplemented!()
     }
