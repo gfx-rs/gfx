@@ -16,6 +16,8 @@ extern crate winapi;
 extern crate winit;
 #[cfg(all(unix, not(target_os = "android")))]
 extern crate x11;
+#[cfg(all(unix, not(target_os = "android"), feature = "xcb"))]
+extern crate xcb;
 #[cfg(feature = "glsl-to-spirv")]
 extern crate glsl_to_spirv;
 
