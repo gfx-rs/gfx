@@ -144,21 +144,6 @@ fn main() {
     let (mut swap_chain, backbuffer) = device.create_swapchain(&mut surface, swap_config);
 
     // Setup renderpass and pipeline
-    let vs_module = device
-        .create_shader_module(include_bytes!("data/vert.spv"))
-        .unwrap();
-    let fs_module = device
-        .create_shader_module(include_bytes!("data/frag.spv"))
-        .unwrap();
-
-    /*
-    #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
-    let shader_lib = device.create_shader_library_from_source(
-            include_str!("shader/quad_indirect.metal"),
-            back::LanguageVersion::new(2, 0),
-        ).expect("Error on creating shader lib");
-    */
-
     let set_layout = device.create_descriptor_set_layout(&[
             pso::DescriptorSetLayoutBinding {
                 binding: 0,
@@ -208,90 +193,116 @@ fn main() {
 
     //
     let pipelines = {
-        let (vs_entry, fs_entry) = (
-            pso::EntryPoint::<back::Backend> {
-                entry: ENTRY_NAME,
-                module: &vs_module,
-                specialization: &[
-                    Specialization {
-                        id: 0,
-                        value: pso::Constant::F32(0.8),
-                    }
-                ],
-            },
-            pso::EntryPoint::<back::Backend> {
-                entry: ENTRY_NAME,
-                module: &fs_module,
-                specialization: &[],
-            },
-        );
+        let vs_module = device
+            .create_shader_module(include_bytes!("data/vert.spv"))
+            .unwrap();
+        let fs_module = device
+            .create_shader_module(include_bytes!("data/frag.spv"))
+            .unwrap();
 
         /*
         #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
-        let (vs_entry, fs_entry) = (
-            pso::EntryPoint {
-                entry: "vs_main",
-                module: &shader_lib,
-                specialization: &[
-                    Specialization {
-                        id: 0,
-                        value: pso::Constant::F32(0.8),
-                    }
-                ],
-            },
-            pso::EntryPoint {
-                entry: "ps_main",
-                module: &shader_lib,
-                specialization: &[],
-            },
-        );
+        let shader_lib = device.create_shader_library_from_source(
+                include_str!("shader/quad_indirect.metal"),
+                back::LanguageVersion::new(2, 0),
+            ).expect("Error on creating shader lib");
         */
 
-        let shader_entries = pso::GraphicsShaderSet {
-            vertex: vs_entry,
-            hull: None,
-            domain: None,
-            geometry: None,
-            fragment: Some(fs_entry),
+        let pipelines = {
+            let (vs_entry, fs_entry) = (
+                pso::EntryPoint::<back::Backend> {
+                    entry: ENTRY_NAME,
+                    module: &vs_module,
+                    specialization: &[
+                        Specialization {
+                            id: 0,
+                            value: pso::Constant::F32(0.8),
+                        }
+                    ],
+                },
+                pso::EntryPoint::<back::Backend> {
+                    entry: ENTRY_NAME,
+                    module: &fs_module,
+                    specialization: &[],
+                },
+            );
+
+            /*
+            #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
+            let (vs_entry, fs_entry) = (
+                pso::EntryPoint {
+                    entry: "vs_main",
+                    module: &shader_lib,
+                    specialization: &[
+                        Specialization {
+                            id: 0,
+                            value: pso::Constant::F32(0.8),
+                        }
+                    ],
+                },
+                pso::EntryPoint {
+                    entry: "ps_main",
+                    module: &shader_lib,
+                    specialization: &[],
+                },
+            );
+            */
+
+            let shader_entries = pso::GraphicsShaderSet {
+                vertex: vs_entry,
+                hull: None,
+                domain: None,
+                geometry: None,
+                fragment: Some(fs_entry),
+            };
+
+            let subpass = Subpass { index: 0, main_pass: &render_pass };
+
+            let mut pipeline_desc = pso::GraphicsPipelineDesc::new(
+                shader_entries,
+                Primitive::TriangleList,
+                pso::Rasterizer::FILL,
+                &pipeline_layout,
+                subpass,
+            );
+            pipeline_desc.blender.targets.push(pso::ColorBlendDesc(
+                pso::ColorMask::ALL,
+                pso::BlendState::ALPHA,
+            ));
+            pipeline_desc.vertex_buffers.push(pso::VertexBufferDesc {
+                stride: std::mem::size_of::<Vertex>() as u32,
+                rate: 0,
+            });
+
+            pipeline_desc.attributes.push(pso::AttributeDesc {
+                location: 0,
+                binding: 0,
+                element: pso::Element {
+                    format: f::Format::Rg32Float,
+                    offset: 0,
+                },
+            });
+            pipeline_desc.attributes.push(pso::AttributeDesc {
+                location: 1,
+                binding: 0,
+                element: pso::Element {
+                    format: f::Format::Rg32Float,
+                    offset: 8
+                },
+            });
+
+
+            device.create_graphics_pipelines(&[pipeline_desc])
         };
 
-        let subpass = Subpass { index: 0, main_pass: &render_pass };
+        device.destroy_shader_module(vs_module);
+        device.destroy_shader_module(fs_module);
+        /*
+        #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
+        device.destroy_shader_module(shader_lib);
+        */
 
-        let mut pipeline_desc = pso::GraphicsPipelineDesc::new(
-            shader_entries,
-            Primitive::TriangleList,
-            pso::Rasterizer::FILL,
-            &pipeline_layout,
-            subpass,
-        );
-        pipeline_desc.blender.targets.push(pso::ColorBlendDesc(
-            pso::ColorMask::ALL,
-            pso::BlendState::ALPHA,
-        ));
-        pipeline_desc.vertex_buffers.push(pso::VertexBufferDesc {
-            stride: std::mem::size_of::<Vertex>() as u32,
-            rate: 0,
-        });
-
-        pipeline_desc.attributes.push(pso::AttributeDesc {
-            location: 0,
-            binding: 0,
-            element: pso::Element {
-                format: f::Format::Rg32Float,
-                offset: 0,
-            },
-        });
-        pipeline_desc.attributes.push(pso::AttributeDesc {
-            location: 1,
-            binding: 0,
-            element: pso::Element {
-                format: f::Format::Rg32Float,
-                offset: 8
-            },
-        });
-
-
-        device.create_graphics_pipelines(&[pipeline_desc])
+        pipelines
     };
 
     println!("Pipelines: {:?}", pipelines);
@@ -560,15 +571,6 @@ fn main() {
     device.destroy_command_pool(command_pool.downgrade());
     device.destroy_descriptor_pool(desc_pool);
     device.destroy_descriptor_set_layout(set_layout);
-
-    {
-        device.destroy_shader_module(vs_module);
-        device.destroy_shader_module(fs_module);
-    }
-    /*
-    #[cfg(all(feature = "metal", feature = "metal_argument_buffer"))]
-    device.destroy_shader_module(shader_lib);
-    */
 
     device.destroy_buffer(vertex_buffer);
     device.destroy_buffer(image_upload_buffer);
