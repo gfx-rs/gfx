@@ -40,7 +40,9 @@ impl Drop for RawSurface {
 
 impl Instance {
     #[cfg(all(unix, not(target_os = "android")))]
-    pub fn create_surface_from_xlib(&self, display: *mut c_void, window: usize) -> Surface {
+    pub fn create_surface_from_xlib(
+        &self, dpy: *mut vk::Display, window: vk::Window
+    ) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
             .expect("Unable to load Vulkan entry points");
@@ -51,25 +53,25 @@ impl Instance {
 
         let surface = {
             let xlib_loader = ext::XlibSurface::new(entry, &self.raw.0)
-                                .expect("XlibSurface failed");
+                .expect("XlibSurface::new() failed");
 
             let info = vk::XlibSurfaceCreateInfoKHR {
                 s_type: vk::StructureType::XlibSurfaceCreateInfoKhr,
                 p_next: ptr::null(),
                 flags: vk::XlibSurfaceCreateFlagsKHR::empty(),
-                window: window as _,
-                dpy: display as *mut _,
+                window,
+                dpy,
             };
 
             unsafe { xlib_loader.create_xlib_surface_khr(&info, None) }
-                .expect("XlibSurface failed")
+                .expect("XlibSurface::create_xlib_surface_khr() failed")
         };
 
         let (width, height) = unsafe {
             use x11::xlib::{XGetWindowAttributes, XWindowAttributes};
             use std::mem::zeroed;
             let mut attribs: XWindowAttributes = zeroed();
-            let result = XGetWindowAttributes(display as *mut _, window as _, &mut attribs);
+            let result = XGetWindowAttributes(dpy as _, window, &mut attribs);
             if result == 0 {
                 panic!("XGetGeometry failed");
             }
@@ -79,8 +81,55 @@ impl Instance {
         self.create_surface_from_vk_surface_khr(surface, width, height)
     }
 
+    #[cfg(all(unix, not(target_os = "android"), feature = "xcb"))]
+    pub fn create_surface_from_xcb(
+        &self, connection: *mut vk::xcb_connection_t, window: vk::xcb_window_t
+    ) -> Surface {
+        let entry = VK_ENTRY
+            .as_ref()
+            .expect("Unable to load Vulkan entry points");
+
+        if !self.extensions.contains(&vk::VK_KHR_XCB_SURFACE_EXTENSION_NAME) {
+            panic!("Vulkan driver does not support VK_KHR_XCB_SURFACE");
+        }
+
+        let surface = {
+            let xcb_loader = ext::XcbSurface::new(entry, &self.raw.0)
+                .expect("XcbSurface::new() failed");
+
+            let info = vk::XcbSurfaceCreateInfoKHR {
+                s_type: vk::StructureType::XcbSurfaceCreateInfoKhr,
+                p_next: ptr::null(),
+                flags: vk::XcbSurfaceCreateFlagsKHR::empty(),
+                window,
+                connection,
+            };
+
+            unsafe { xcb_loader.create_xcb_surface_khr(&info, None) }
+                .expect("XcbSurface::create_xcb_surface_khr() failed")
+        };
+
+        let (width, height) = unsafe {
+            use std::mem;
+            use xcb::{Connection, xproto};
+            let conn = Connection::from_raw_conn(connection as _);
+            let geometry = xproto::get_geometry(&conn, window)
+                .get_reply()
+                .expect("xcb_get_geometry failed")
+                .ptr
+                .as_ref()
+                .expect("unexpected NULL XCB geometry");
+            mem::forget(conn); //TODO: use `into_raw_conn`
+            (geometry.width as _, geometry.height as _)
+        };
+
+        self.create_surface_from_vk_surface_khr(surface, width, height)
+    }
+
     #[cfg(all(unix, not(target_os = "android")))]
-    pub fn create_surface_from_wayland(&self, display: *mut c_void, surface: *mut c_void, width: u32, height: u32) -> Surface {
+    pub fn create_surface_from_wayland(
+        &self, display: *mut c_void, surface: *mut c_void, width: u32, height: u32
+    ) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
             .expect("Unable to load Vulkan entry points");
@@ -109,7 +158,9 @@ impl Instance {
     }
 
     #[cfg(target_os = "android")]
-    pub fn create_surface_android(&self, window: *const c_void, width: u32, height: u32) -> Surface {
+    pub fn create_surface_android(
+        &self, window: *const c_void, width: u32, height: u32
+    ) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
             .expect("Unable to load Vulkan entry points");
@@ -133,7 +184,9 @@ impl Instance {
     }
 
     #[cfg(windows)]
-    pub fn create_surface_from_hwnd(&self, hinstance: *mut c_void, hwnd: *mut c_void) -> Surface {
+    pub fn create_surface_from_hwnd(
+        &self, hinstance: *mut c_void, hwnd: *mut c_void
+    ) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
             .expect("Unable to load Vulkan entry points");
@@ -190,9 +243,8 @@ impl Instance {
             }
             if self.extensions.contains(&vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME) {
                 if let Some(display) = window.get_xlib_display() {
-                    let display: *mut c_void = display as *mut _;
-                    let window: usize = window.get_xlib_window().unwrap() as _;
-                    return self.create_surface_from_xlib(display, window);
+                    let window = window.get_xlib_window().unwrap();
+                    return self.create_surface_from_xlib(display as _, window);
                 }
             }
             panic!("The Vulkan driver does not support surface creation!");
