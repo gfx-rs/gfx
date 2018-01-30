@@ -420,6 +420,12 @@ impl CommandBuffer {
             panic!("only valid inside renderpass")
         }
     }
+
+    pub fn device(&self) -> &metal::DeviceRef {
+        unsafe {
+            msg_send![&*(&*self.inner.get()).command_buffer, device]
+        }
+    }
 }
 
 impl RawCommandBuffer<Backend> for CommandBuffer {
@@ -461,11 +467,22 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
 
     fn update_buffer(
         &mut self,
-        _buffer: &native::Buffer,
-        _offset: u64,
-        _data: &[u8],
+        dst: &native::Buffer,
+        offset: u64,
+        data: &[u8],
     ) {
-        unimplemented!()
+        let src = self.device().new_buffer_with_data(data as *const _ as _, data.len() as _, metal::MTLResourceOptions::StorageModePrivate);
+        let encoder = self.encode_blit();
+
+        unsafe {
+            msg_send![encoder,
+                copyFromBuffer: &*src
+                sourceOffset: 0 as NSUInteger
+                toBuffer: &*dst.raw
+                destinationOffset: offset as NSUInteger
+                size: data.len() as NSUInteger
+            ];
+        }
     }
 
     fn clear_color_image_raw(
