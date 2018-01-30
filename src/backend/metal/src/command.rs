@@ -471,7 +471,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         offset: u64,
         data: &[u8],
     ) {
-        let src = self.device().new_buffer_with_data(data as *const _ as _, data.len() as _, metal::MTLResourceOptions::StorageModePrivate);
+        let src = self.device().new_buffer_with_data(data.as_ptr() as _, data.len() as _, metal::MTLResourceOptions::StorageModePrivate);
         let encoder = self.encode_blit();
 
         unsafe {
