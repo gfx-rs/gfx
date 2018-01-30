@@ -61,8 +61,8 @@ fn bind_descriptor_sets<'a, T>(
             // TODO: Can we bind them always or only once?
             //       Resize while recording?
             let mut heaps = [
-                set_0.heap_srv_cbv_uav.as_mut() as *mut _,
-                set_0.heap_samplers.as_mut() as *mut _
+                set_0.heap_srv_cbv_uav.as_raw(),
+                set_0.heap_samplers.as_raw(),
             ];
             raw.SetDescriptorHeaps(2, heaps.as_mut_ptr())
         }
@@ -297,11 +297,11 @@ impl CommandBuffer {
     }
 
     pub(crate) unsafe fn as_raw_list(&self) -> *mut d3d12::ID3D12CommandList {
-        self.raw.as_mut() as *mut _ as *mut _
+        self.raw.as_raw() as *mut _
     }
 
     fn reset(&mut self) {
-        unsafe { self.raw.Reset(self.allocator.as_mut(), ptr::null_mut()); }
+        unsafe { self.raw.Reset(self.allocator.as_raw(), ptr::null_mut()); }
         self.pass_cache = None;
         self.cur_subpass = !0;
         self.gr_pipeline = PipelineCache::new();
@@ -1089,7 +1089,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.set_compute_bind_point();
         unsafe {
             self.raw.ExecuteIndirect(
-                self.signatures.dispatch.as_mut() as *mut _,
+                self.signatures.dispatch.as_raw(),
                 1,
                 buffer.resource,
                 offset,
@@ -1410,7 +1410,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.set_graphics_bind_point();
         unsafe {
             self.raw.ExecuteIndirect(
-                self.signatures.draw.as_mut() as *mut _,
+                self.signatures.draw.as_raw(),
                 draw_count,
                 buffer.resource,
                 offset,
@@ -1431,7 +1431,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.set_graphics_bind_point();
         unsafe {
             self.raw.ExecuteIndirect(
-                self.signatures.draw_indexed.as_mut() as *mut _,
+                self.signatures.draw_indexed.as_raw(),
                 draw_count,
                 buffer.resource,
                 offset,
@@ -1470,7 +1470,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         unsafe {
             self.raw.BeginQuery(
-                query.pool.raw.as_mut() as *mut _,
+                query.pool.raw.as_raw(),
                 query_ty,
                 query.id,
             );
@@ -1506,7 +1506,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         unsafe {
             self.raw.EndQuery(
-                query.pool.raw.as_mut() as *mut _,
+                query.pool.raw.as_raw(),
                 query_ty,
                 id,
             );
@@ -1533,7 +1533,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     ) {
         unsafe {
             self.raw.EndQuery(
-                query.pool.raw.as_mut() as *mut _,
+                query.pool.raw.as_raw(),
                 d3d12::D3D12_QUERY_TYPE_TIMESTAMP,
                 query.id,
             );

@@ -18,7 +18,7 @@ pub fn reflect_shader(code: &d3d12::D3D12_SHADER_BYTECODE) -> ComPtr<d3d12shader
         panic!("Shader reflection failed with code {:x}", hr);
     }
 
-    unsafe { ComPtr::new(reflection) }
+    unsafe { ComPtr::from_raw(reflection) }
 }
 
 #[derive(Debug)]

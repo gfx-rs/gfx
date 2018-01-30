@@ -24,7 +24,7 @@ impl RawCommandPool {
                 self.device.CreateCommandList(
                     0, // single gpu only atm
                     self.list_type,
-                    self.inner.as_mut() as *mut _,
+                    self.inner.as_raw(),
                     ptr::null_mut(),
                     &d3d12::IID_ID3D12GraphicsCommandList,
                     &mut command_list as *mut *mut _ as *mut *mut _,
@@ -36,7 +36,7 @@ impl RawCommandPool {
                 error!("error on command list creation: {:x}", hr);
             }
 
-            unsafe { ComPtr::new(command_list) }
+            unsafe { ComPtr::from_raw(command_list) }
         };
 
         // Close command list as they are initiated as recording.

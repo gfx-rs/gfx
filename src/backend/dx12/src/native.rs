@@ -289,7 +289,6 @@ impl DescriptorSet {
         unsafe {
             self
                 .heap_srv_cbv_uav
-                .as_mut()
                 .GetGPUDescriptorHandleForHeapStart()
         }
     }
@@ -298,7 +297,6 @@ impl DescriptorSet {
         unsafe {
             self
                 .heap_samplers
-                .as_mut()
                 .GetGPUDescriptorHandleForHeapStart()
         }
     }
