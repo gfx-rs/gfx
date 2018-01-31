@@ -4,7 +4,6 @@ FEATURES_RENDER:=
 FEATURES_EXTRA:=mint serialize
 FEATURES_HAL:=
 FEATURES_HAL2:=
-FEATURES_WARDEN:=gl
 CMD_QUAD_RENDER:=cargo check
 CMD_CHECK_XCB:=
 
@@ -30,7 +29,6 @@ else
 	ifeq ($(UNAME_S),Linux)
 		EXCLUDES+= --exclude gfx-backend-metal
 		FEATURES_HAL=vulkan
-		FEATURES_WARDEN+= glsl-to-spirv
 		CMD_CHECK_XCB=cd src/backend/vulkan && cargo check --features xcb
 	endif
 	ifeq ($(UNAME_S),Darwin)
@@ -57,6 +55,7 @@ check:
 	cd examples/hal && cargo check --features "$(FEATURES_HAL)"
 	cd examples/hal && cargo check --features "$(FEATURES_HAL2)"
 	cd examples/render/quad_render && $(CMD_QUAD_RENDER)
+	cd src/warden && cargo check --no-default-features
 	cd src/warden && cargo check --features "env_logger gl gl-headless $(FEATURES_HAL) $(FEATURES_HAL2)"
 
 test:
@@ -64,11 +63,11 @@ test:
 	cd src/render && cargo test --features "$(FEATURES_RENDER) $(FEATURES_EXTRA)"
 
 reftests:
-	cd src/warden && cargo test --features "$(FEATURES_WARDEN)"
-	cd src/warden && cargo run --features "$(FEATURES_WARDEN) $(FEATURES_HAL) $(FEATURES_HAL2)" -- local
+	cd src/warden && cargo test --features "gl"
+	cd src/warden && cargo run --features "gl $(FEATURES_HAL) $(FEATURES_HAL2)" -- local
 
 reftests-ci:
-	cd src/warden && cargo run --features "$(FEATURES_WARDEN)" -- ci #TODO: "gl-headless"
+	cd src/warden && cargo run --features "gl" -- ci #TODO: "gl-headless"
 
 travis-sdl2:
 	#TODO
