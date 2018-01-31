@@ -947,7 +947,7 @@ impl d::Device<B> for Device {
         range: image::SubresourceRange,
     ) -> Result<n::ImageView, image::ViewError> {
         let subresource_range = vk::ImageSubresourceRange {
-            aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT, //TODO
+            aspect_mask: conv::map_image_aspects(range.aspects),
             base_mip_level: range.levels.start as _,
             level_count: (range.levels.end - range.levels.start) as _,
             base_array_layer: range.layers.start as _,
