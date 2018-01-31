@@ -9,7 +9,7 @@ extern crate ron;
 #[macro_use]
 extern crate serde;
 
-#[cfg(feature = "logger")]
+#[cfg(feature = "env_logger")]
 extern crate env_logger;
 #[cfg(feature = "vulkan")]
 extern crate gfx_backend_vulkan;
@@ -23,7 +23,6 @@ extern crate gfx_backend_gl;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
-use std::process;
 
 use ron::de;
 
@@ -68,7 +67,7 @@ impl Harness {
             env!("CARGO_MANIFEST_DIR"),
             "/../../reftests",
         ));
-        println!("Parsing test suite...");
+        println!("Parsing test suite '{}'...", suite_name);
 
         let suite_path = base_path
             .join(suite_name)
@@ -76,7 +75,7 @@ impl Harness {
         let suite = File::open(suite_path)
             .map_err(de::Error::from)
             .and_then(de::from_reader::<_, Suite>)
-            .expect("failed to parse the suite definition")
+            .expect("failed to open/parse the suite")
             .into_iter()
             .map(|(name, tests)| {
                 let path = base_path
@@ -116,6 +115,21 @@ impl Harness {
             let limits = adapter.physical_device.get_limits();
             //println!("\t{:?}", adapter.info);
             println!("\tScene '{}':", tg.name);
+
+            #[cfg(not(feature = "glsl-to-spirv"))]
+            {
+                let all_spirv = tg.scene.resources
+                    .values()
+                    .all(|res| match *res {
+                        warden::raw::Resource::Shader(ref name) => name.ends_with(".spirv"),
+                        _ => true,
+                    });
+                if !all_spirv {
+                    println!("\t\tskipped {} tests (GLSL shaders)", tg.tests.len());
+                    results.skip += tg.tests.len();
+                    continue
+                }
+            }
 
             let mut scene = warden::gpu::Scene::<I::Backend, _>::new(
                 adapter,
@@ -178,11 +192,21 @@ impl Harness {
 }
 
 fn main() {
-    #[cfg(feature = "logger")]
-    env_logger::init().unwrap();
+    use std::{env, process};
+
+    #[cfg(feature = "env_logger")]
+    env_logger::init();
     let mut num_failures = 0;
 
-    let harness = Harness::new("suite");
+    let suite_name = match env::args().nth(1) {
+        Some(name) => name,
+        None => {
+            println!("Call with the argument of the reftest suite name");
+            return
+        }
+    };
+
+    let harness = Harness::new(&suite_name);
     #[cfg(feature = "vulkan")]
     {
         println!("Warding Vulkan:");

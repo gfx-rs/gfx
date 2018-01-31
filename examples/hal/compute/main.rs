@@ -22,7 +22,7 @@ use hal::{queue, pso, memory, buffer, pool, command, device};
 
 #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
 fn main() {
-    env_logger::init().unwrap();
+    env_logger::init();
 
     // For now this just panics if you didn't pass numbers. Could add proper error handling.
     if std::env::args().len() == 1 { panic!("You must pass a list of positive integers!") }

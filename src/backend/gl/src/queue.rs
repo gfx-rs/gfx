@@ -497,8 +497,16 @@ impl CommandQueue {
             com::Command::UnbindAttribute(ref attribute) => unsafe {
                 self.share.context.DisableVertexAttribArray(attribute.location);
             }*/
-            com::Command::CopyBufferToBuffer(_src, _dst, ref _r) => unsafe {
-                unimplemented!(); //TODO
+            com::Command::CopyBufferToBuffer(src, dst, ref r) => unsafe {
+                let gl = &self.share.context;
+                gl.BindBuffer(gl::PIXEL_UNPACK_BUFFER, src);
+                gl.BindBuffer(gl::PIXEL_PACK_BUFFER, dst);
+                gl.CopyBufferSubData(
+                    gl::PIXEL_UNPACK_BUFFER, gl::PIXEL_PACK_BUFFER,
+                    r.src as _, r.dst as _, r.size as _,
+                );
+                gl.BindBuffer(gl::PIXEL_UNPACK_BUFFER, 0);
+                gl.BindBuffer(gl::PIXEL_PACK_BUFFER, 0);
             }
             com::Command::CopyBufferToTexture(buffer, texture, ref r) => unsafe {
                 // TODO: Fix format and active texture

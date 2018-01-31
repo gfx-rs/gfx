@@ -55,6 +55,21 @@ pub struct Buffer<B: hal::Backend> {
     stable_state: b::State,
 }
 
+impl<B: hal::Backend> Buffer<B> {
+    fn barrier_to(&self, state: b::State) -> memory::Barrier<B> {
+        memory::Barrier::Buffer {
+            states: self.stable_state .. state,
+            target: &self.handle,
+        }
+    }
+    fn barrier_from(&self, state: b::State) -> memory::Barrier<B> {
+        memory::Barrier::Buffer {
+            states: state .. self.stable_state,
+            target: &self.handle,
+        }
+    }
+}
+
 pub struct Image<B: hal::Backend> {
     handle: B::Image,
     _memory: B::Memory,
@@ -217,7 +232,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                 .unwrap();
                             // write the data
                             {
-                                let mut mapping = device.acquire_mapping_writer::<u8>(&upload_memory, 0..upload_size)
+                                let mut mapping = device.acquire_mapping_writer::<u8>(&upload_memory, 0 .. size as _)
                                     .unwrap();
                                 File::open(data_path.join(data))
                                     .unwrap()
@@ -672,8 +687,31 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                     use raw::TransferCommand as Tc;
                     for command in commands {
                         match *command {
-                            //TODO
-                            Tc::CopyBufferToImage => {}
+                            Tc::CopyBuffer { ref src, ref dst, ref regions } => {
+                                let sb = resources.buffers
+                                    .get(src)
+                                    .expect(&format!("Missing source buffer: {}", src));
+                                let db = resources.buffers
+                                    .get(dst)
+                                    .expect(&format!("Missing destination buffer: {}", dst));
+                                command_buf.pipeline_barrier(
+                                    pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
+                                    vec![
+                                        sb.barrier_to(b::State::TRANSFER_READ),
+                                        db.barrier_to(b::State::TRANSFER_WRITE),
+                                    ],
+                                );
+                                command_buf.copy_buffer(&sb.handle, &db.handle, regions);
+                                command_buf.pipeline_barrier(
+                                    pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
+                                    vec![
+                                        sb.barrier_from(b::State::TRANSFER_READ),
+                                        db.barrier_from(b::State::TRANSFER_WRITE),
+                                    ],
+                                );
+                            }
+                            Tc::CopyBufferToImage => unimplemented!(),
+                            Tc::CopyImageToBuffer => unimplemented!(),
                         }
                     }
                 }
