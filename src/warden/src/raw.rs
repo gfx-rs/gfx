@@ -115,8 +115,13 @@ pub enum Resource {
 
 #[derive(Debug, Deserialize)]
 pub enum TransferCommand {
+    CopyBuffer {
+        src: String,
+        dst: String,
+        regions: Vec<hal::command::BufferCopy>,
+    },
     CopyBufferToImage,
-    //CopyImageToBuffer,
+    CopyImageToBuffer,
 }
 
 #[derive(Clone, Debug, Deserialize)]

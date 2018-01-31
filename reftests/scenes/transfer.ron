@@ -1,0 +1,30 @@
+(
+	resources: {
+		"buffer.input": Buffer(
+			size: 4,
+			usage: (bits: 0x3), //TRANSFER_SRC | TRANSFER_DST
+			data: "buffer.raw",
+		),
+		"buffer.output": Buffer(
+			size: 4,
+			usage: (bits: 0x2), //TRANSFER_DST
+		),
+	},
+	jobs: {
+		"copy": Transfer(
+			commands: [
+				CopyBuffer(
+					src: "buffer.input",
+					dst: "buffer.output",
+					regions: [
+						(
+							src: 0,
+							dst: 0,
+							size: 4,
+						),
+					],
+				),
+			],
+		),
+	}
+)

@@ -76,7 +76,7 @@ impl Harness {
         let suite = File::open(suite_path)
             .map_err(de::Error::from)
             .and_then(de::from_reader::<_, Suite>)
-            .expect("failed to parse the suite definition")
+            .expect(&format!("failed to parse the suite: {}", suite_name))
             .into_iter()
             .map(|(name, tests)| {
                 let path = base_path
@@ -116,6 +116,21 @@ impl Harness {
             let limits = adapter.physical_device.get_limits();
             //println!("\t{:?}", adapter.info);
             println!("\tScene '{}':", tg.name);
+
+            #[cfg(not(feature = "glsl-to-spirv"))]
+            {
+                let all_spirv = tg.scene.resources
+                    .values()
+                    .all(|res| match *res {
+                        warden::raw::Resource::Shader(ref name) => name.ends_with(".spirv"),
+                        _ => true,
+                    });
+                if !all_spirv {
+                    println!("\t\tskipped {} tests (GLSL shaders)", tg.tests.len());
+                    results.skip += tg.tests.len();
+                    continue
+                }
+            }
 
             let mut scene = warden::gpu::Scene::<I::Backend, _>::new(
                 adapter,

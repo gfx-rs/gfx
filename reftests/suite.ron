@@ -1,4 +1,11 @@
 {
+	"transfer": {
+		"copy": (
+			features: (bits: 0),
+			jobs: ["copy"],
+			expect: Buffer("buffer.output", [72, 65, 76, 80]),
+		),
+	},
 	"basic": {
 		"render-pass-clear": (
 			features: (bits: 0),
