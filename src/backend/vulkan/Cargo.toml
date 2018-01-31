@@ -29,9 +29,7 @@ winit = { version = "0.10", optional = true }
 glsl-to-spirv = { version = "0.1", optional = true }
 
 [target.'cfg(windows)'.dependencies]
-winapi = "0.2"
-kernel32-sys = "0.2"
-user32-sys = "0.2"
+winapi = { version = "0.3", features = ["libloaderapi", "windef", "winuser"] }
 
 [target.'cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))'.dependencies]
 x11 = { version = "2.15", features = ["xlib"]}
