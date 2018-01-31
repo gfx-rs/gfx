@@ -691,6 +691,7 @@ impl hal::Device<Backend> for Device {
                                 DescriptorType::UniformBuffer |
                                 DescriptorType::StorageBuffer => &mut counters.buffers,
                                 DescriptorType::SampledImage => &mut counters.textures,
+                                DescriptorType::StorageImage => &mut counters.textures,
                                 DescriptorType::Sampler => &mut counters.samplers,
                                 _ => unimplemented!()
                             };
@@ -995,7 +996,8 @@ impl hal::Device<Backend> for Device {
                                 *old = Some(new.0.clone());
                             }
                         }
-                        (&SampledImage(ref images), Some(&mut n::DescriptorSetBinding::SampledImage(ref mut vec))) => {
+                        (&SampledImage(ref images), Some(&mut n::DescriptorSetBinding::Image(ref mut vec))) |
+                        (&StorageImage(ref images), Some(&mut n::DescriptorSetBinding::Image(ref mut vec))) => {
                             if write.array_offset + images.len() > layout.count {
                                 panic!("out of range descriptor write");
                             }
