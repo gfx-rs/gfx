@@ -169,7 +169,7 @@ pub fn map_texture_usage(usage: image::Usage) -> MTLTextureUsage {
         texture_usage |= MTLTextureUsage::MTLTextureUsageShaderRead;
     }
     if usage.contains(image::Usage::STORAGE) {
-        texture_usage |= MTLTextureUsage::MTLTextureUsageShaderWrite;
+        texture_usage |= MTLTextureUsage::MTLTextureUsageShaderRead | MTLTextureUsage::MTLTextureUsageShaderWrite;
     }
     // TODO shader write
     texture_usage

@@ -74,10 +74,7 @@ impl Surface {
         unsafe {
             // NSView bounds are measured in DIPs
             let bounds: NSRect = msg_send![self.0.nsview, bounds];
-            let window: *mut Object = msg_send![self.0.nsview, window];
-            assert!(!window.is_null());
-            let scale: CGFloat = msg_send![window, backingScaleFactor];
-            ((bounds.size.width * scale) as u16, (bounds.size.height * scale) as u16)
+            (bounds.size.width as u16, bounds.size.height as u16)
         }
     }
 }
@@ -107,26 +104,26 @@ impl Device {
             }
             let scale_factor: CGFloat = msg_send![view_window, backingScaleFactor];
             msg_send![render_layer, setContentsScale: scale_factor];
-            let pixel_width = (view_points_size.size.width * scale_factor) as u64;
-            let pixel_height = (view_points_size.size.height * scale_factor) as u64;
-            let pixel_size = conversions::get_format_bytes_per_pixel(mtl_format) as u64;
+            let pixel_width = view_points_size.size.width as u64;
+            let pixel_height = view_points_size.size.height as u64;
+            let pixel_size = conversions::get_format_bytes_per_pixel(mtl_format) as i32;
 
             info!("allocating {} IOSurface backbuffers of size {}x{} with pixel format 0x{:x}", config.image_count, pixel_width, pixel_height, cv_format);
             // Create swap chain surfaces
             let io_surfaces: Vec<_> = (0..config.image_count).map(|_| {
                 io_surface::new(&CFDictionary::from_CFType_pairs::<CFStringRef, CFNumberRef, CFString, CFNumber>(&[
-                    (TCFType::wrap_under_get_rule(io_surface::kIOSurfaceWidth), CFNumber::from_i32(pixel_width as i32)),
-                    (TCFType::wrap_under_get_rule(io_surface::kIOSurfaceHeight), CFNumber::from_i32(pixel_height as i32)),
-                    (TCFType::wrap_under_get_rule(io_surface::kIOSurfaceBytesPerRow), CFNumber::from_i32((pixel_width * pixel_size) as i32)),
-                    (TCFType::wrap_under_get_rule(io_surface::kIOSurfaceBytesPerElement), CFNumber::from_i32(pixel_size as i32)),
-                    (TCFType::wrap_under_get_rule(io_surface::kIOSurfacePixelFormat), CFNumber::from_i32(cv_format as i32)),
+                    (TCFType::wrap_under_get_rule(io_surface::kIOSurfaceWidth), CFNumber::from(pixel_width as i32)),
+                    (TCFType::wrap_under_get_rule(io_surface::kIOSurfaceHeight), CFNumber::from(pixel_height as i32)),
+                    (TCFType::wrap_under_get_rule(io_surface::kIOSurfaceBytesPerRow), CFNumber::from(pixel_width as i32 * pixel_size)),
+                    (TCFType::wrap_under_get_rule(io_surface::kIOSurfaceBytesPerElement), CFNumber::from(pixel_size)),
+                    (TCFType::wrap_under_get_rule(io_surface::kIOSurfacePixelFormat), CFNumber::from(cv_format as i32)),
                 ]))
             }).collect();
 
             let backbuffer_descriptor = metal::TextureDescriptor::new();
             backbuffer_descriptor.set_pixel_format(mtl_format);
-            backbuffer_descriptor.set_width(pixel_width as u64);
-            backbuffer_descriptor.set_height(pixel_height as u64);
+            backbuffer_descriptor.set_width(pixel_width);
+            backbuffer_descriptor.set_height(pixel_height);
             backbuffer_descriptor.set_usage(MTLTextureUsage::MTLTextureUsageRenderTarget);
 
             let images = io_surfaces.iter().map(|surface| {
