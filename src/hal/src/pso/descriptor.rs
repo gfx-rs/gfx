@@ -1,5 +1,6 @@
 //! Descriptor sets and layouts.
 
+use std::borrow::Borrow;
 use std::fmt;
 
 use {Backend};
@@ -70,13 +71,29 @@ pub struct DescriptorRangeDesc {
 
 ///
 pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
+    /// Allocate a descriptor set from the pool.
+    ///
+    /// The descriptor set will be allocated from the pool according to the corresponding set layout.
+    /// The descriptor pool _must_ have enough space in to allocate the required descriptor.
+    /// Descriptors will become invalid once the pool is reset. Usage of invalidated descriptor sets results
+    /// in undefined behavior.
+    fn allocate_set(&mut self, layout: &B::DescriptorSetLayout) -> B::DescriptorSet {
+        self.allocate_sets(Some(layout)).remove(0)
+    }
+
     /// Allocate one or multiple descriptor sets from the pool.
     ///
     /// Each descriptor set will be allocated from the pool according to the corresponding set layout.
     /// The descriptor pool _must_ have enough space in to allocate the required descriptors.
-    /// Descriptors will become invalid once the pool got reset. Usage of invalidated descriptor sets results
+    /// Descriptors will become invalid once the pool is reset. Usage of invalidated descriptor sets results
     /// in undefined behavior.
-    fn allocate_sets(&mut self, layouts: &[&B::DescriptorSetLayout]) -> Vec<B::DescriptorSet>;
+    fn allocate_sets<I>(&mut self, layouts: I) -> Vec<B::DescriptorSet>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<B::DescriptorSetLayout>,
+    {
+        layouts.into_iter().map(|layout| self.allocate_set(layout.borrow())).collect()
+    }
 
     ///
     fn reset(&mut self);

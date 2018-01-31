@@ -161,7 +161,7 @@ fn main() {
     );
 
     let pipeline_layout = device.create_pipeline_layout(
-        &[&set_layout],
+        Some(&set_layout),
         &[
             (pso::ShaderStageFlags::VERTEX, 0..8),
         ],
@@ -192,7 +192,7 @@ fn main() {
     };
 
     //
-    let pipelines = {
+    let pipeline = {
         let vs_module = device
             .create_shader_module(include_bytes!("data/vert.spv"))
             .unwrap();
@@ -208,7 +208,7 @@ fn main() {
             ).expect("Error on creating shader lib");
         */
 
-        let pipelines = {
+        let pipeline = {
             let (vs_entry, fs_entry) = (
                 pso::EntryPoint::<back::Backend> {
                     entry: ENTRY_NAME,
@@ -292,7 +292,7 @@ fn main() {
             });
 
 
-            device.create_graphics_pipelines(&[pipeline_desc])
+            device.create_graphics_pipeline(&pipeline_desc)
         };
 
         device.destroy_shader_module(vs_module);
@@ -302,10 +302,10 @@ fn main() {
         device.destroy_shader_module(shader_lib);
         */
 
-        pipelines
+        pipeline
     };
 
-    println!("Pipelines: {:?}", pipelines);
+    println!("Pipeline: {:?}", pipeline);
 
     // Descriptors
     let mut desc_pool = device.create_descriptor_pool(
@@ -321,7 +321,7 @@ fn main() {
             },
         ],
     );
-    let desc_sets = desc_pool.allocate_sets(&[&set_layout]);
+    let desc_set = desc_pool.allocate_set(&set_layout);
 
     // Framebuffer and render target creation
     let (frame_images, framebuffers) = match backbuffer {
@@ -337,7 +337,7 @@ fn main() {
             let fbos = pairs
                 .iter()
                 .map(|&(_, ref rtv)| {
-                    device.create_framebuffer(&render_pass, &[rtv], extent).unwrap()
+                    device.create_framebuffer(&render_pass, Some(rtv), extent).unwrap()
                 })
                 .collect();
             (pairs, fbos)
@@ -431,15 +431,15 @@ fn main() {
         )
     );
 
-    device.update_descriptor_sets::<Range<_>>(&[
+    device.update_descriptor_sets::<_,Range<_>>(&[
         pso::DescriptorSetWrite {
-            set: &desc_sets[0],
+            set: &desc_set,
             binding: 0,
             array_offset: 0,
             write: pso::DescriptorWrite::SampledImage(vec![(&image_srv, i::ImageLayout::Undefined)]),
         },
         pso::DescriptorSetWrite {
-            set: &desc_sets[0],
+            set: &desc_set,
             binding: 1,
             array_offset: 0,
             write: pso::DescriptorWrite::Sampler(vec![&sampler]),
@@ -503,7 +503,7 @@ fn main() {
             .submit(Some(submit));
         queue.submit(submission, Some(&mut frame_fence));
 
-        device.wait_for_fences(&[&frame_fence], d::WaitFor::All, !0);
+        device.wait_for_fence(&frame_fence, !0);
     }
 
     //
@@ -523,7 +523,7 @@ fn main() {
             }
         });
 
-        device.reset_fences(&[&frame_fence]);
+        device.reset_fence(&frame_fence);
         command_pool.reset();
         let frame = swap_chain.acquire_frame(FrameSync::Semaphore(&mut frame_semaphore));
 
@@ -533,9 +533,9 @@ fn main() {
 
             cmd_buffer.set_viewports(&[viewport.clone()]);
             cmd_buffer.set_scissors(&[viewport.rect]);
-            cmd_buffer.bind_graphics_pipeline(&pipelines[0].as_ref().unwrap());
+            cmd_buffer.bind_graphics_pipeline(&pipeline.as_ref().unwrap());
             cmd_buffer.bind_vertex_buffers(pso::VertexBufferSet(vec![(&vertex_buffer, 0)]));
-            cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, &desc_sets[0..1]); //TODO
+            cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, Some(&desc_set)); //TODO
 
             {
                 let mut encoder = cmd_buffer.begin_renderpass_inline(
@@ -551,12 +551,12 @@ fn main() {
         };
 
         let submission = Submission::new()
-            .wait_on(&[(&mut frame_semaphore, PipelineStage::BOTTOM_OF_PIPE)])
+            .wait_on(&[(&frame_semaphore, PipelineStage::BOTTOM_OF_PIPE)])
             .submit(Some(submit));
         queue.submit(submission, Some(&mut frame_fence));
 
         // TODO: replace with semaphore
-        device.wait_for_fences(&[&frame_fence], d::WaitFor::All, !0);
+        device.wait_for_fence(&frame_fence, !0);
 
         // present frame
         swap_chain.present(&mut queue, &[]);
@@ -584,10 +584,8 @@ fn main() {
     device.free_memory(buffer_memory);
     device.free_memory(image_memory);
     device.free_memory(image_upload_memory);
-    for pipeline in pipelines {
-        if let Ok(pipeline) = pipeline {
-            device.destroy_graphics_pipeline(pipeline);
-        }
+    if let Ok(pipeline) = pipeline {
+        device.destroy_graphics_pipeline(pipeline);
     }
     for framebuffer in framebuffers {
         device.destroy_framebuffer(framebuffer);

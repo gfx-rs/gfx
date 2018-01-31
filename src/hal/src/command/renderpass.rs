@@ -67,7 +67,7 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
     }
 
     ///
-    pub fn bind_graphics_descriptor_sets<'i, T>(
+    pub fn bind_graphics_descriptor_sets<T>(
         &mut self,
         layout: &B::PipelineLayout,
         first_set: usize,
