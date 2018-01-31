@@ -17,8 +17,7 @@ name = "gfx_warden"
 path = "src/lib.rs"
 
 [features]
-default = []
-logger = ["env_logger"]
+default = ["glsl-to-spirv"]
 vulkan = ["gfx-backend-vulkan"]
 dx12 = ["gfx-backend-dx12"]
 metal = ["gfx-backend-metal"]

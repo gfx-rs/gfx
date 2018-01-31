@@ -232,7 +232,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                 .unwrap();
                             // write the data
                             {
-                                let mut mapping = device.acquire_mapping_writer::<u8>(&upload_memory, 0..upload_size)
+                                let mut mapping = device.acquire_mapping_writer::<u8>(&upload_memory, 0 .. size as _)
                                     .unwrap();
                                 File::open(data_path.join(data))
                                     .unwrap()
