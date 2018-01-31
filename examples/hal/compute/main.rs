@@ -85,7 +85,7 @@ fn main() {
         &mut device,
         &memory_properties.memory_types,
         memory::Properties::CPU_VISIBLE | memory::Properties::COHERENT,
-        buffer::Usage::TRANSFER_SRC,
+        buffer::Usage::TRANSFER_SRC | buffer::Usage::TRANSFER_DST,
         stride,
         numbers.len() as u64,
     );
@@ -100,7 +100,7 @@ fn main() {
         &mut device,
         &memory_properties.memory_types,
         memory::Properties::DEVICE_LOCAL,
-        buffer::Usage::TRANSFER_DST,
+        buffer::Usage::TRANSFER_SRC | buffer::Usage::TRANSFER_DST | buffer::Usage::STORAGE,
         stride,
         numbers.len() as u64,
     );
@@ -153,6 +153,7 @@ fn main() {
         device.release_mapping_reader(reader);
     }
 
+    device.destroy_command_pool(command_pool.downgrade());
     device.destroy_descriptor_pool(desc_pool);
     device.destroy_descriptor_set_layout(set_layout);
     device.destroy_shader_module(shader);
