@@ -6,10 +6,7 @@ extern crate gfx_hal as hal;
 #[macro_use]
 extern crate lazy_static;
 extern crate smallvec;
-#[cfg(windows)]
-extern crate kernel32;
-#[cfg(windows)]
-extern crate user32;
+
 #[cfg(windows)]
 extern crate winapi;
 #[cfg(feature = "winit")]
@@ -18,6 +15,7 @@ extern crate winit;
 extern crate x11;
 #[cfg(all(unix, not(target_os = "android"), feature = "xcb"))]
 extern crate xcb;
+
 #[cfg(feature = "glsl-to-spirv")]
 extern crate glsl_to_spirv;
 

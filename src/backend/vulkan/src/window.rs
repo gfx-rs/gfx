@@ -214,9 +214,10 @@ impl Instance {
         };
 
         let (width, height) = unsafe {
-            use winapi::RECT;
-            use user32::GetClientRect;
+            use winapi::shared::windef::RECT;
+            use winapi::um::winuser::GetClientRect;
             use std::mem::zeroed;
+
             let mut rect: RECT = zeroed();
             if GetClientRect(hwnd as *mut _, &mut rect as *mut RECT) == 0 {
                 panic!("GetClientRect failed");
@@ -258,9 +259,10 @@ impl Instance {
         }
         #[cfg(windows)]
         {
-            use kernel32;
+            use winapi::um::libloaderapi::GetModuleHandleW;
             use winit::os::windows::WindowExt;
-            let hinstance = unsafe { kernel32::GetModuleHandleW(ptr::null()) };
+
+            let hinstance = unsafe { GetModuleHandleW(ptr::null()) };
             let hwnd = window.get_hwnd();
             self.create_surface_from_hwnd(hinstance as *mut _, hwnd as *mut _)
         }
