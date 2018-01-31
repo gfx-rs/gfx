@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use hal::{self, Device as CoreDevice, MemoryType, MemoryTypeId};
 use hal::memory::{Properties};
-use hal::range::RangeArg;
 
 use memory::{self, Allocator, Typed};
 use handle::{self, GarbageSender};

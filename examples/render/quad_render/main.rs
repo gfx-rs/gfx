@@ -50,7 +50,7 @@ gfx_graphics_pipeline! {
 }
 
 fn main() {
-    env_logger::init().unwrap();
+    env_logger::init();
 
     #[cfg(feature = "metal")]
     let mut autorelease_pool = unsafe { back::AutoreleasePool::new() };

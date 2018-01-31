@@ -195,7 +195,7 @@ fn main() {
     use std::{env, process};
 
     #[cfg(feature = "env_logger")]
-    env_logger::init().unwrap();
+    env_logger::init();
     let mut num_failures = 0;
 
     let suite_name = match env::args().nth(1) {

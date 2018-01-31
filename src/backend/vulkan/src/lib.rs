@@ -115,9 +115,9 @@ extern "system" fn callback(
 ) -> vk::Bool32 {
     unsafe {
         let level = match type_ {
-            vk::DEBUG_REPORT_ERROR_BIT_EXT => log::LogLevel::Error,
-            vk::DEBUG_REPORT_DEBUG_BIT_EXT => log::LogLevel::Debug,
-            _ => log::LogLevel::Warn,
+            vk::DEBUG_REPORT_ERROR_BIT_EXT => log::Level::Error,
+            vk::DEBUG_REPORT_DEBUG_BIT_EXT => log::Level::Debug,
+            _ => log::Level::Warn,
         };
         let layer_prefix = CStr::from_ptr(layer_prefix).to_str().unwrap();
         let description = CStr::from_ptr(description).to_str().unwrap();

@@ -58,7 +58,7 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
 
 #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]
 fn main() {
-    env_logger::init().unwrap();
+    env_logger::init();
 
     #[cfg(feature = "metal")]
     let mut autorelease_pool = unsafe { back::AutoreleasePool::new() };
