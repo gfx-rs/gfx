@@ -50,15 +50,23 @@ impl<'a, B, C> Submission<'a, B, C>
 where
     B: Backend
 {
-    /// Set semaphores which will waited on to be signalled before the submission will be executed.
-    pub fn wait_on(mut self, semaphores: &[(&'a B::Semaphore, pso::PipelineStage)]) -> Self {
-        self.wait_semaphores.extend_from_slice(semaphores);
+    /// Add to semaphores which will waited on to be signalled before the submission will be executed.
+    pub fn wait_on<I>(mut self, semaphores: I) -> Self
+    where
+        I: IntoIterator,
+        I::Item: Borrow<(&'a B::Semaphore, pso::PipelineStage)>,
+    {
+        self.wait_semaphores.extend(semaphores.into_iter().map(|semaphore| *semaphore.borrow()));
         self
     }
 
-    /// Set semaphores which will be signalled once this submission has finished executing.
-    pub fn signal(mut self, semaphores: &[&'a B::Semaphore]) -> Self {
-        self.signal_semaphores.extend_from_slice(semaphores);
+    /// Add to semaphores which will be signalled once this submission has finished executing.
+    pub fn signal<I>(mut self, semaphores: I) -> Self
+    where
+        I: IntoIterator,
+        I::Item: Borrow<&'a B::Semaphore>,
+    {
+        self.signal_semaphores.extend(semaphores.into_iter().map(|semaphore| *semaphore.borrow()));
         self
     }
 

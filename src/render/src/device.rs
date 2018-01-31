@@ -1,10 +1,10 @@
+use std::borrow::Borrow;
 use std::mem;
 use std::ops::Range;
 use std::sync::Arc;
 
 use hal::{self, Device as CoreDevice, MemoryType, MemoryTypeId};
 use hal::memory::{Properties};
-use hal::range::RangeArg;
 
 use memory::{self, Allocator, Typed};
 use handle::{self, GarbageSender};
@@ -267,21 +267,22 @@ impl<B: Backend> Device<B> {
         where D: pso::Descriptors<B>
     {
         use hal::DescriptorPool as CDP;
+        let bindings = D::layout_bindings();
+        let mut pool = {
+            let ranges = bindings.iter().map(|binding| {
+                hal::pso::DescriptorRangeDesc {
+                    ty: binding.ty,
+                    count: binding.count * count,
+                }
+            });
 
-        let bindings = &D::layout_bindings()[..];
+            self.raw.create_descriptor_pool(count, ranges)
+        };
+
         let layout = self.create_descriptor_set_layout(bindings);
-        let ranges = bindings.iter().map(|binding| {
-            hal::pso::DescriptorRangeDesc {
-                ty: binding.ty,
-                count: binding.count * count,
-            }
-        }).collect::<Vec<_>>();
-
-        let mut pool = self.raw.create_descriptor_pool(count, &ranges[..]);
         let sets = {
-            let layout_refs = (0..count).map(|_| layout.resource())
-                .collect::<Vec<_>>();
-            pool.allocate_sets(&layout_refs[..])
+            let layout_refs = (0..count).map(|_| layout.resource());
+            pool.allocate_sets(layout_refs)
         };
 
         let pool = handle::raw::DescriptorPool::from(
@@ -294,10 +295,11 @@ impl<B: Backend> Device<B> {
         }).collect()
     }
 
-    fn create_descriptor_set_layout(
-        &mut self,
-        bindings: &[hal::pso::DescriptorSetLayoutBinding]
-    ) -> handle::raw::DescriptorSetLayout<B> {
+    fn create_descriptor_set_layout<I>(&mut self, bindings: I) -> handle::raw::DescriptorSetLayout<B>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<hal::pso::DescriptorSetLayoutBinding>,
+    {
         let layout = self.raw.create_descriptor_set_layout(bindings);
         DescriptorSetLayout::new(layout, (), self.garbage.clone()).into()
     }
@@ -307,22 +309,36 @@ impl<B: Backend> Device<B> {
     }
 
     #[doc(hidden)]
-    pub fn create_render_pass_raw(
+    pub fn create_render_pass_raw<'a, IA, IS, ID>(
         &mut self,
-        attachments: &[hal::pass::Attachment],
-        subpasses: &[hal::pass::SubpassDesc],
-        dependencies: &[hal::pass::SubpassDependency],
-    ) -> handle::raw::RenderPass<B> {
+        attachments: IA,
+        subpasses: IS,
+        dependencies: ID,
+    ) -> handle::raw::RenderPass<B>
+    where
+        IA: IntoIterator,
+        IA::Item: Borrow<hal::pass::Attachment>,
+        IS: IntoIterator,
+        IS::Item: Borrow<hal::pass::SubpassDesc<'a>>,
+        ID: IntoIterator,
+        ID::Item: Borrow<hal::pass::SubpassDependency>,
+    {
         let pass = self.raw.create_render_pass(attachments, subpasses, dependencies);
         RenderPass::new(pass, (), self.garbage.clone()).into()
     }
 
     #[doc(hidden)]
-    pub fn create_pipeline_layout_raw(
+    pub fn create_pipeline_layout_raw<IS, IR>(
         &mut self,
-        layouts: &[&B::DescriptorSetLayout],
-        push_constant_ranges: &[(hal::pso::ShaderStageFlags, Range<u32>)],
-    ) -> handle::raw::PipelineLayout<B> {
+        layouts: IS,
+        push_constant_ranges: IR,
+    ) -> handle::raw::PipelineLayout<B>
+    where
+        IS: IntoIterator,
+        IS::Item: Borrow<B::DescriptorSetLayout>,
+        IR: IntoIterator,
+        IR::Item: Borrow<(hal::pso::ShaderStageFlags, Range<u32>)>,
+    {
         let layout = self.raw.create_pipeline_layout(layouts, push_constant_ranges);
         PipelineLayout::new(layout, (), self.garbage.clone()).into()
     }
@@ -330,9 +346,9 @@ impl<B: Backend> Device<B> {
     #[doc(hidden)]
     pub fn create_graphics_pipeline_raw(
         &mut self,
-        desc: hal::pso::GraphicsPipelineDesc<B>,
+        desc: &hal::pso::GraphicsPipelineDesc<B>,
     ) -> Result<handle::raw::GraphicsPipeline<B>, pso::CreationError> {
-        let pipeline = self.raw.create_graphics_pipelines(&[desc]).pop().unwrap()?;
+        let pipeline = self.raw.create_graphics_pipeline(desc)?;
         Ok(GraphicsPipeline::new(pipeline, (), self.garbage.clone()).into())
     }
 
@@ -357,9 +373,8 @@ impl<B: Backend> Device<B> {
     ) -> Result<handle::raw::Framebuffer<B>, FramebufferError>
         where P: pso::GraphicsPipelineMeta<B>
     {
-        let resources: Vec<_> = attachments.iter().map(|&view| view.resource()).collect();
-        let buffer = self.raw.create_framebuffer(
-            pipeline.render_pass(), &resources[..], extent)?;
+        let resources = attachments.iter().map(|&view| view.resource());
+        let buffer = self.raw.create_framebuffer(pipeline.render_pass(), resources, extent)?;
         let info = handle::FramebufferInfo {
             attachments: attachments.iter().cloned().cloned().collect(),
             extent,

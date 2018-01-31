@@ -119,33 +119,49 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_render_pass(&self, _: &[pass::Attachment], _: &[pass::SubpassDesc], _: &[pass::SubpassDependency]) -> () {
+    fn create_render_pass<'a ,IA, IS, ID>(&self, _: IA, _: IS, _: ID) -> ()
+    where
+        IA: IntoIterator,
+        IA::Item: Borrow<pass::Attachment>,
+        IS: IntoIterator,
+        IS::Item: Borrow<pass::SubpassDesc<'a>>,
+        ID: IntoIterator,
+        ID::Item: Borrow<pass::SubpassDependency>,
+    {
         unimplemented!()
     }
 
-    fn create_pipeline_layout(&self, _: &[&()], _: &[(pso::ShaderStageFlags, Range<u32>)]) -> () {
+    fn create_pipeline_layout<IS, IR>(&self, _: IS, _: IR) -> ()
+    where
+        IS: IntoIterator,
+        IS::Item: Borrow<()>,
+        IR: IntoIterator,
+        IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
+    {
         unimplemented!()
     }
 
-    fn create_graphics_pipelines<'a>(
+    fn create_graphics_pipeline<'a>(
         &self,
-        _: &[pso::GraphicsPipelineDesc<'a, Backend>],
-    ) -> Vec<Result<(), pso::CreationError>> {
+        _: &pso::GraphicsPipelineDesc<'a, Backend>
+    ) -> Result<(), pso::CreationError> {
         unimplemented!()
     }
 
-    fn create_compute_pipelines<'a>(
+    fn create_compute_pipeline<'a>(
         &self,
-        _: &[pso::ComputePipelineDesc<'a, Backend>],
-    ) -> Vec<Result<(), pso::CreationError>> {
+        _: &pso::ComputePipelineDesc<'a, Backend>
+    ) -> Result<(), pso::CreationError> {
         unimplemented!()
     }
 
-    fn create_framebuffer(
-        &self, _: &(),
-        _: &[&()],
-        _: device::Extent,
-    ) -> Result<(), device::FramebufferError> {
+    fn create_framebuffer<I>(
+        &self, _: &(), _: I, _: device::Extent
+    ) -> Result<(), device::FramebufferError>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<()>,
+    {
         unimplemented!()
     }
 
@@ -196,14 +212,28 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_descriptor_pool(&self, _: usize, _: &[pso::DescriptorRangeDesc]) -> DescriptorPool {
-        unimplemented!()
-    }
-    fn create_descriptor_set_layout(&self, _: &[pso::DescriptorSetLayoutBinding]) -> () {
+    fn create_descriptor_pool<I>(&self, _: usize, _: I) -> DescriptorPool
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorRangeDesc>,
+    {
         unimplemented!()
     }
 
-    fn update_descriptor_sets<R: RangeArg<u64>>(&self, _: &[pso::DescriptorSetWrite<Backend, R>]) {
+    fn create_descriptor_set_layout<I>(&self, _: I) -> ()
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
+    {
+        unimplemented!()
+    }
+
+    fn update_descriptor_sets<'a, I, R>(&self, _: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorSetWrite<'a, 'a, Backend, R>>,
+        R: RangeArg<u64>,
+    {
         unimplemented!()
     }
 
@@ -215,11 +245,11 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn reset_fences(&self, _: &[&()]) {
+    fn reset_fence(&self, _: &()) {
         unimplemented!()
     }
 
-    fn wait_for_fences(&self, _: &[&()], _: device::WaitFor, _: u32) -> bool {
+    fn wait_for_fence(&self, _: &(), _: u32) -> bool {
         unimplemented!()
     }
     fn get_fence_status(&self, _: &()) -> bool {
@@ -497,10 +527,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn bind_graphics_descriptor_sets<'a, T>(&mut self, _: &(), _: usize, _: T)
+    fn bind_graphics_descriptor_sets<I>(&mut self, _: &(), _: usize, _: I)
     where
-        T: IntoIterator,
-        T::Item: Borrow<()>,
+        I: IntoIterator,
+        I::Item: Borrow<()>,
     {
         unimplemented!()
     }
@@ -509,10 +539,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn bind_compute_descriptor_sets<'a, T>(&mut self, _: &(), _: usize, _: T)
+    fn bind_compute_descriptor_sets<I>(&mut self, _: &(), _: usize, _: I)
     where
-        T: IntoIterator,
-        T::Item: Borrow<()>,
+        I: IntoIterator,
+        I::Item: Borrow<()>,
     {
         unimplemented!()
     }
@@ -669,7 +699,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 #[derive(Debug)]
 pub struct DescriptorPool;
 impl hal::DescriptorPool<Backend> for DescriptorPool {
-    fn allocate_sets(&mut self, _: &[&()]) -> Vec<()> {
+    fn allocate_set(&mut self, _: &()) -> () {
         unimplemented!()
     }
 

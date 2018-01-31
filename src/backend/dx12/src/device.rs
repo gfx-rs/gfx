@@ -434,13 +434,14 @@ impl Device {
         }
     }
 
-    fn update_descriptor_sets_impl<F, R>(
+    fn update_descriptor_sets_impl<'a, F, I, R: 'a>(
         &self,
-        writes: &[pso::DescriptorSetWrite<B, R>],
+        writes: I,
         heap_type: d3d12::D3D12_DESCRIPTOR_HEAP_TYPE,
         mut fun: F,
     ) where
         F: FnMut(&pso::DescriptorWrite<B, R>, &mut Vec<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>),
+        I: Iterator<Item=&'a pso::DescriptorSetWrite<'a, 'a, B, R>>,
         R: RangeArg<u64>,
     {
         let mut dst_starts = Vec::new();
@@ -448,7 +449,7 @@ impl Device {
         let mut src_starts = Vec::new();
         let mut src_sizes = Vec::new();
 
-        for sw in writes.iter() {
+        for sw in writes {
             let old_count = src_starts.len();
             fun(&sw.write, &mut src_starts);
             if old_count != src_starts.len() {
@@ -783,12 +784,20 @@ impl d::Device<B> for Device {
         // automatic
     }
 
-    fn create_render_pass(
+    fn create_render_pass<'a, IA, IS, ID>(
         &self,
-        attachments: &[pass::Attachment],
-        subpasses: &[pass::SubpassDesc],
-        dependencies: &[pass::SubpassDependency],
-    ) -> n::RenderPass {
+        attachments: IA,
+        subpasses: IS,
+        dependencies: ID,
+    ) -> n::RenderPass
+    where
+        IA: IntoIterator,
+        IA::Item: Borrow<pass::Attachment>,
+        IS: IntoIterator,
+        IS::Item: Borrow<pass::SubpassDesc<'a>>,
+        ID: IntoIterator,
+        ID::Item: Borrow<pass::SubpassDependency>,
+    {
         #[derive(Copy, Clone, Debug, PartialEq)]
         pub enum SubState {
             New(d3d12::D3D12_RESOURCE_STATES),
@@ -802,6 +811,11 @@ impl d::Device<B> for Device {
             barrier_start_index: usize,
         }
 
+        let attachments = attachments.into_iter()
+                                     .map(|attachment| attachment.borrow().clone())
+                                     .collect::<Vec<_>>();
+        let subpasses = subpasses.into_iter().collect::<Vec<_>>();
+        let dependencies = dependencies.into_iter().collect::<Vec<_>>();
         let mut att_infos = attachments
             .iter()
             .map(|att| AttachmentInfo {
@@ -818,6 +832,7 @@ impl d::Device<B> for Device {
 
         // Fill out subpass known layouts
         for (sid, sub) in subpasses.iter().enumerate() {
+            let sub = sub.borrow();
             for &(id, _layout) in sub.colors {
                 let state = SubState::New(att_infos[id].target_state);
                 let old = mem::replace(&mut att_infos[id].sub_states[sid], state);
@@ -840,7 +855,8 @@ impl d::Device<B> for Device {
         }
 
         let mut deps_left = vec![0u16; subpasses.len()];
-        for dep in dependencies {
+        for dep in &dependencies {
+            let dep = dep.borrow();
             //Note: self-dependencies are ignored
             if dep.passes.start != dep.passes.end && dep.passes.start != pass::SubpassRef::External {
                 if let pass::SubpassRef::Pass(sid) = dep.passes.end {
@@ -850,14 +866,15 @@ impl d::Device<B> for Device {
         }
 
         let mut rp = n::RenderPass {
-            attachments: attachments.to_vec(),
+            attachments: attachments.clone(),
             subpasses: Vec::new(),
             post_barriers: Vec::new(),
         };
 
         while let Some(sid) = deps_left.iter().position(|count| *count == 0) {
             deps_left[sid] = !0; // mark as done
-            for dep in dependencies {
+            for dep in &dependencies {
+                let dep = dep.borrow();
                 if dep.passes.start != dep.passes.end && dep.passes.start == pass::SubpassRef::Pass(sid) {
                     if let pass::SubpassRef::Pass(other) = dep.passes.end {
                         deps_left[other] -= 1;
@@ -889,9 +906,9 @@ impl d::Device<B> for Device {
             }
 
             rp.subpasses.push(n::SubpassDesc {
-                color_attachments: subpasses[sid].colors.iter().cloned().collect(),
-                depth_stencil_attachment: subpasses[sid].depth_stencil.cloned(),
-                input_attachments: subpasses[sid].inputs.iter().cloned().collect(),
+                color_attachments: subpasses[sid].borrow().colors.iter().cloned().collect(),
+                depth_stencil_attachment: subpasses[sid].borrow().depth_stencil.cloned(),
+                input_attachments: subpasses[sid].borrow().inputs.iter().cloned().collect(),
                 pre_barriers,
             });
         }
@@ -919,11 +936,17 @@ impl d::Device<B> for Device {
         rp
     }
 
-    fn create_pipeline_layout(
+    fn create_pipeline_layout<IS, IR>(
         &self,
-        sets: &[&n::DescriptorSetLayout],
-        push_constant_ranges: &[(pso::ShaderStageFlags, Range<u32>)],
-    ) -> n::PipelineLayout {
+        sets: IS,
+        push_constant_ranges: IR,
+    ) -> n::PipelineLayout
+    where
+        IS: IntoIterator,
+        IS::Item: Borrow<n::DescriptorSetLayout>,
+        IR: IntoIterator,
+        IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
+    {
         // Pipeline layouts are implemented as RootSignature for D3D12.
         //
         // Each descriptor set layout will be one table entry of the root signature.
@@ -938,6 +961,7 @@ impl d::Device<B> for Device {
         //     DescriptorTable1: Space: 4 (+1) (SrvCbvUav)
         //     ...
 
+        let sets = sets.into_iter().collect::<Vec<_>>();
         let root_constants = root_constants::split(push_constant_ranges)
             .iter()
             .map(|constant| {
@@ -972,11 +996,12 @@ impl d::Device<B> for Device {
         // `space0`.
         let table_space_offset = if !root_constants.is_empty() { 1 } else { 0 };
 
-        let total = sets.iter().map(|desc_sec| desc_sec.bindings.len()).sum();
+        let total = sets.iter().map(|desc_sec| desc_sec.borrow().bindings.len()).sum();
         let mut ranges = Vec::with_capacity(total);
         let mut set_tables = Vec::with_capacity(sets.len());
 
         for (i, set) in sets.iter().enumerate() {
+            let set = set.borrow();
             let mut table_type = n::SetTableTypes::empty();
 
             let mut param = d3d12::D3D12_ROOT_PARAMETER {
@@ -1079,249 +1104,249 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_graphics_pipelines<'a>(
+    fn create_graphics_pipeline<'a>(
         &self,
-        descs: &[pso::GraphicsPipelineDesc<'a, B>],
-    ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
-        descs.iter().map(|desc| {
-            let build_shader =
-                |stage: pso::Stage, source: Option<&pso::EntryPoint<'a, B>>| {
-                    let source = match source {
-                        Some(src) => src,
-                        None => return Ok((ptr::null_mut(), false)),
-                    };
-
-                    Self::extract_entry_point(stage, source, desc.layout)
-                        .map_err(|err| pso::CreationError::Shader(err))
+        desc: &pso::GraphicsPipelineDesc<'a, B>,
+    ) -> Result<n::GraphicsPipeline, pso::CreationError> {
+        let build_shader =
+            |stage: pso::Stage, source: Option<&pso::EntryPoint<'a, B>>| {
+                let source = match source {
+                    Some(src) => src,
+                    None => return Ok((ptr::null_mut(), false)),
                 };
 
-            let (vs, vs_destroy) = build_shader(pso::Stage::Vertex, Some(&desc.shaders.vertex))?;
-            let (fs, fs_destroy) = build_shader(pso::Stage::Fragment, desc.shaders.fragment.as_ref())?;
-            let (gs, gs_destroy) = build_shader(pso::Stage::Geometry, desc.shaders.geometry.as_ref())?;
-            let (ds, ds_destroy) = build_shader(pso::Stage::Domain, desc.shaders.domain.as_ref())?;
-            let (hs, hs_destroy) = build_shader(pso::Stage::Hull, desc.shaders.hull.as_ref())?;
+                Self::extract_entry_point(stage, source, desc.layout)
+                    .map_err(|err| pso::CreationError::Shader(err))
+            };
 
-            // Define input element descriptions
-            let mut vs_reflect = shade::reflect_shader(&shader_bytecode(vs));
-            let input_element_descs = {
-                let input_descs = shade::reflect_input_elements(&mut vs_reflect);
-                desc.attributes
-                    .iter()
-                    .map(|attrib| {
-                        let buffer_desc = if let Some(buffer_desc) = desc.vertex_buffers.get(attrib.binding as usize) {
-                                buffer_desc
-                            } else {
-                                error!("Couldn't find associated vertex buffer description {:?}", attrib.binding);
-                                return Err(pso::CreationError::Other);
-                            };
+        let (vs, vs_destroy) = build_shader(pso::Stage::Vertex, Some(&desc.shaders.vertex))?;
+        let (fs, fs_destroy) = build_shader(pso::Stage::Fragment, desc.shaders.fragment.as_ref())?;
+        let (gs, gs_destroy) = build_shader(pso::Stage::Geometry, desc.shaders.geometry.as_ref())?;
+        let (ds, ds_destroy) = build_shader(pso::Stage::Domain, desc.shaders.domain.as_ref())?;
+        let (hs, hs_destroy) = build_shader(pso::Stage::Hull, desc.shaders.hull.as_ref())?;
 
-                        let input_elem =
-                            if let Some(input_elem) = input_descs.iter().find(|elem| elem.semantic_index == attrib.location) {
-                                input_elem
-                            } else {
-                                error!("Couldn't find associated input element slot in the shader {:?}", attrib.location);
-                                return Err(pso::CreationError::Other);
-                            };
+        // Define input element descriptions
+        let mut vs_reflect = shade::reflect_shader(&shader_bytecode(vs));
+        let input_element_descs = {
+            let input_descs = shade::reflect_input_elements(&mut vs_reflect);
+            desc.attributes
+                .iter()
+                .map(|attrib| {
+                    let buffer_desc = if let Some(buffer_desc) = desc.vertex_buffers.get(attrib.binding as usize) {
+                        buffer_desc
+                    } else {
+                        error!("Couldn't find associated vertex buffer description {:?}", attrib.binding);
+                        return Err(pso::CreationError::Other);
+                    };
 
-                        let slot_class = match buffer_desc.rate {
-                            0 => d3d12::D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-                            _ => d3d12::D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA,
+                    let input_elem =
+                        if let Some(input_elem) = input_descs.iter().find(|elem| elem.semantic_index == attrib.location) {
+                            input_elem
+                        } else {
+                            error!("Couldn't find associated input element slot in the shader {:?}", attrib.location);
+                            return Err(pso::CreationError::Other);
                         };
-                        let format = attrib.element.format;
 
-                        Ok(d3d12::D3D12_INPUT_ELEMENT_DESC {
-                            SemanticName: input_elem.semantic_name,
-                            SemanticIndex: input_elem.semantic_index,
-                            Format: match conv::map_format(format) {
-                                Some(fm) => fm,
-                                None => {
-                                    error!("Unable to find DXGI format for {:?}", format);
-                                    return Err(pso::CreationError::Other);
-                                }
-                            },
-                            InputSlot: attrib.binding as _,
-                            AlignedByteOffset: attrib.element.offset,
-                            InputSlotClass: slot_class,
-                            InstanceDataStepRate: buffer_desc.rate as _,
-                        })
+                    let slot_class = match buffer_desc.rate {
+                        0 => d3d12::D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+                        _ => d3d12::D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA,
+                    };
+                    let format = attrib.element.format;
+
+                    Ok(d3d12::D3D12_INPUT_ELEMENT_DESC {
+                        SemanticName: input_elem.semantic_name,
+                        SemanticIndex: input_elem.semantic_index,
+                        Format: match conv::map_format(format) {
+                            Some(fm) => fm,
+                            None => {
+                                error!("Unable to find DXGI format for {:?}", format);
+                                return Err(pso::CreationError::Other);
+                            }
+                        },
+                        InputSlot: attrib.binding as _,
+                        AlignedByteOffset: attrib.element.offset,
+                        InputSlotClass: slot_class,
+                        InstanceDataStepRate: buffer_desc.rate as _,
                     })
-                    .collect::<Result<Vec<_>, _>>()?
-            };
-
-            // Input slots
-            let mut vertex_strides = [0; MAX_VERTEX_BUFFERS];
-            for (stride, buffer) in vertex_strides.iter_mut().zip(desc.vertex_buffers.iter()) {
-                *stride = buffer.stride;
-            }
-
-            // TODO: check maximum number of rtvs
-            // Get associated subpass information
-            let pass = {
-                let subpass = &desc.subpass;
-                match subpass.main_pass.subpasses.get(subpass.index) {
-                    Some(subpass) => subpass,
-                    None => return Err(pso::CreationError::InvalidSubpass(subpass.index)),
-                }
-            };
-
-            // Get color attachment formats from subpass
-            let (rtvs, num_rtvs) = {
-                let mut rtvs = [dxgiformat::DXGI_FORMAT_UNKNOWN; 8];
-                let mut num_rtvs = 0;
-                for (rtv, target) in rtvs.iter_mut()
-                    .zip(pass.color_attachments.iter())
-                {
-                    let format = desc.subpass.main_pass.attachments[target.0].format;
-                    *rtv = format.and_then(conv::map_format).unwrap_or(dxgiformat::DXGI_FORMAT_UNKNOWN);
-                    num_rtvs += 1;
-                }
-                (rtvs, num_rtvs)
-            };
-
-            // Setup pipeline description
-            let pso_desc = d3d12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
-                pRootSignature: desc.layout.raw,
-                VS: shader_bytecode(vs),
-                PS: shader_bytecode(fs),
-                GS: shader_bytecode(gs),
-                DS: shader_bytecode(ds),
-                HS: shader_bytecode(hs),
-                StreamOutput: d3d12::D3D12_STREAM_OUTPUT_DESC {
-                    pSODeclaration: ptr::null(),
-                    NumEntries: 0,
-                    pBufferStrides: ptr::null(),
-                    NumStrides: 0,
-                    RasterizedStream: 0,
-                },
-                BlendState: d3d12::D3D12_BLEND_DESC {
-                    AlphaToCoverageEnable: if desc.blender.alpha_coverage { TRUE } else { FALSE },
-                    IndependentBlendEnable: TRUE,
-                    RenderTarget: conv::map_render_targets(&desc.blender.targets),
-                },
-                SampleMask: UINT::max_value(),
-                RasterizerState: conv::map_rasterizer(&desc.rasterizer),
-                DepthStencilState: desc.depth_stencil.as_ref().map_or(unsafe { mem::zeroed() }, conv::map_depth_stencil),
-                InputLayout: d3d12::D3D12_INPUT_LAYOUT_DESC {
-                    pInputElementDescs: input_element_descs.as_ptr(),
-                    NumElements: input_element_descs.len() as u32,
-                },
-                IBStripCutValue: d3d12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED, // TODO
-                PrimitiveTopologyType: conv::map_topology_type(desc.input_assembler.primitive),
-                NumRenderTargets: num_rtvs,
-                RTVFormats: rtvs,
-                DSVFormat: pass.depth_stencil_attachment
-                    .and_then(|att_ref|
-                        desc.subpass
-                            .main_pass
-                            .attachments[att_ref.0]
-                            .format
-                            .and_then(|f| conv::map_format_dsv(f.base_format().0))
-                    )
-                    .unwrap_or(dxgiformat::DXGI_FORMAT_UNKNOWN),
-                SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
-                    Count: 1, // TODO
-                    Quality: 0, // TODO
-                },
-                NodeMask: 0,
-                CachedPSO: d3d12::D3D12_CACHED_PIPELINE_STATE {
-                    pCachedBlob: ptr::null(),
-                    CachedBlobSizeInBytes: 0,
-                },
-                Flags: d3d12::D3D12_PIPELINE_STATE_FLAG_NONE,
-            };
-
-            let topology = conv::map_topology(desc.input_assembler.primitive);
-
-            // Create PSO
-            let mut pipeline = ptr::null_mut();
-            let hr = unsafe {
-                self.raw.clone().CreateGraphicsPipelineState(
-                    &pso_desc,
-                    &d3d12::IID_ID3D12PipelineState,
-                    &mut pipeline as *mut *mut _ as *mut *mut _)
-            };
-
-            let destroy_shader = |shader: *mut d3dcommon::ID3DBlob| unsafe { (*shader).Release() };
-
-            if vs_destroy { destroy_shader(vs); }
-            if fs_destroy { destroy_shader(fs); }
-            if gs_destroy { destroy_shader(gs); }
-            if hs_destroy { destroy_shader(hs); }
-            if ds_destroy { destroy_shader(ds); }
-
-            if winerror::SUCCEEDED(hr) {
-                Ok(n::GraphicsPipeline {
-                    raw: pipeline,
-                    signature: desc.layout.raw,
-                    num_parameter_slots: desc.layout.num_parameter_slots,
-                    topology,
-                    constants: desc.layout.root_constants.clone(),
-                    vertex_strides,
                 })
-            } else {
-                Err(pso::CreationError::Other)
-            }
-        }).collect()
-    }
+                .collect::<Result<Vec<_>, _>>()?
+        };
 
-    fn create_compute_pipelines<'a>(
-        &self,
-        descs: &[pso::ComputePipelineDesc<'a, B>],
-    ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
-        descs.iter().map(|desc| {
-            let (cs, cs_destroy) =
-                Self::extract_entry_point(
-                    pso::Stage::Compute,
-                    &desc.shader,
-                    desc.layout,
+        // Input slots
+        let mut vertex_strides = [0; MAX_VERTEX_BUFFERS];
+        for (stride, buffer) in vertex_strides.iter_mut().zip(desc.vertex_buffers.iter()) {
+            *stride = buffer.stride;
+        }
+
+        // TODO: check maximum number of rtvs
+        // Get associated subpass information
+        let pass = {
+            let subpass = &desc.subpass;
+            match subpass.main_pass.subpasses.get(subpass.index) {
+                Some(subpass) => subpass,
+                None => return Err(pso::CreationError::InvalidSubpass(subpass.index)),
+            }
+        };
+
+        // Get color attachment formats from subpass
+        let (rtvs, num_rtvs) = {
+            let mut rtvs = [dxgiformat::DXGI_FORMAT_UNKNOWN; 8];
+            let mut num_rtvs = 0;
+            for (rtv, target) in rtvs.iter_mut()
+                .zip(pass.color_attachments.iter())
+            {
+                let format = desc.subpass.main_pass.attachments[target.0].format;
+                *rtv = format.and_then(conv::map_format).unwrap_or(dxgiformat::DXGI_FORMAT_UNKNOWN);
+                num_rtvs += 1;
+            }
+            (rtvs, num_rtvs)
+        };
+
+        // Setup pipeline description
+        let pso_desc = d3d12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
+            pRootSignature: desc.layout.raw,
+            VS: shader_bytecode(vs),
+            PS: shader_bytecode(fs),
+            GS: shader_bytecode(gs),
+            DS: shader_bytecode(ds),
+            HS: shader_bytecode(hs),
+            StreamOutput: d3d12::D3D12_STREAM_OUTPUT_DESC {
+                pSODeclaration: ptr::null(),
+                NumEntries: 0,
+                pBufferStrides: ptr::null(),
+                NumStrides: 0,
+                RasterizedStream: 0,
+            },
+            BlendState: d3d12::D3D12_BLEND_DESC {
+                AlphaToCoverageEnable: if desc.blender.alpha_coverage { TRUE } else { FALSE },
+                IndependentBlendEnable: TRUE,
+                RenderTarget: conv::map_render_targets(&desc.blender.targets),
+            },
+            SampleMask: UINT::max_value(),
+            RasterizerState: conv::map_rasterizer(&desc.rasterizer),
+            DepthStencilState: desc.depth_stencil.as_ref().map_or(unsafe { mem::zeroed() }, conv::map_depth_stencil),
+            InputLayout: d3d12::D3D12_INPUT_LAYOUT_DESC {
+                pInputElementDescs: input_element_descs.as_ptr(),
+                NumElements: input_element_descs.len() as u32,
+            },
+            IBStripCutValue: d3d12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED, // TODO
+            PrimitiveTopologyType: conv::map_topology_type(desc.input_assembler.primitive),
+            NumRenderTargets: num_rtvs,
+            RTVFormats: rtvs,
+            DSVFormat: pass.depth_stencil_attachment
+                .and_then(|att_ref|
+                    desc.subpass
+                        .main_pass
+                        .attachments[att_ref.0]
+                        .format
+                        .and_then(|f| conv::map_format_dsv(f.base_format().0))
                 )
-                .map_err(|err| pso::CreationError::Shader(err))?;
+                .unwrap_or(dxgiformat::DXGI_FORMAT_UNKNOWN),
+            SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
+                Count: 1, // TODO
+                Quality: 0, // TODO
+            },
+            NodeMask: 0,
+            CachedPSO: d3d12::D3D12_CACHED_PIPELINE_STATE {
+                pCachedBlob: ptr::null(),
+                CachedBlobSizeInBytes: 0,
+            },
+            Flags: d3d12::D3D12_PIPELINE_STATE_FLAG_NONE,
+        };
 
-            let pso_desc = d3d12::D3D12_COMPUTE_PIPELINE_STATE_DESC {
-                pRootSignature: desc.layout.raw,
-                CS: shader_bytecode(cs),
-                NodeMask: 0,
-                CachedPSO: d3d12::D3D12_CACHED_PIPELINE_STATE {
-                    pCachedBlob: ptr::null(),
-                    CachedBlobSizeInBytes: 0,
-                },
-                Flags: d3d12::D3D12_PIPELINE_STATE_FLAG_NONE,
-            };
+        let topology = conv::map_topology(desc.input_assembler.primitive);
 
-            // Create PSO
-            let mut pipeline = ptr::null_mut();
-            let hr = unsafe {
-                self.raw.clone().CreateComputePipelineState(
-                    &pso_desc,
-                    &d3d12::IID_ID3D12PipelineState,
-                    &mut pipeline as *mut *mut _ as *mut *mut _)
-            };
+        // Create PSO
+        let mut pipeline = ptr::null_mut();
+        let hr = unsafe {
+            self.raw.clone().CreateGraphicsPipelineState(
+                &pso_desc,
+                &d3d12::IID_ID3D12PipelineState,
+                &mut pipeline as *mut *mut _ as *mut *mut _)
+        };
 
-            if cs_destroy {
-                unsafe { (*cs).Release(); }
-            }
+        let destroy_shader = |shader: *mut d3dcommon::ID3DBlob| unsafe { (*shader).Release() };
 
-            if winerror::SUCCEEDED(hr) {
-                Ok(n::ComputePipeline {
-                    raw: pipeline,
-                    signature: desc.layout.raw,
-                    num_parameter_slots: desc.layout.num_parameter_slots,
-                    constants: desc.layout.root_constants.clone(),
-                })
-            } else {
-                Err(pso::CreationError::Other)
-            }
-        }).collect()
+        if vs_destroy { destroy_shader(vs); }
+        if fs_destroy { destroy_shader(fs); }
+        if gs_destroy { destroy_shader(gs); }
+        if hs_destroy { destroy_shader(hs); }
+        if ds_destroy { destroy_shader(ds); }
+
+        if winerror::SUCCEEDED(hr) {
+            Ok(n::GraphicsPipeline {
+                raw: pipeline,
+                signature: desc.layout.raw,
+                num_parameter_slots: desc.layout.num_parameter_slots,
+                topology,
+                constants: desc.layout.root_constants.clone(),
+                vertex_strides,
+            })
+        } else {
+            Err(pso::CreationError::Other)
+        }
     }
 
-    fn create_framebuffer(
+    fn create_compute_pipeline<'a>(
+        &self,
+        desc: &pso::ComputePipelineDesc<'a, B>,
+    ) -> Result<n::ComputePipeline, pso::CreationError> {
+        let (cs, cs_destroy) =
+            Self::extract_entry_point(
+                pso::Stage::Compute,
+                &desc.shader,
+                desc.layout,
+            )
+            .map_err(|err| pso::CreationError::Shader(err))?;
+
+        let pso_desc = d3d12::D3D12_COMPUTE_PIPELINE_STATE_DESC {
+            pRootSignature: desc.layout.raw,
+            CS: shader_bytecode(cs),
+            NodeMask: 0,
+            CachedPSO: d3d12::D3D12_CACHED_PIPELINE_STATE {
+                pCachedBlob: ptr::null(),
+                CachedBlobSizeInBytes: 0,
+            },
+            Flags: d3d12::D3D12_PIPELINE_STATE_FLAG_NONE,
+        };
+
+        // Create PSO
+        let mut pipeline = ptr::null_mut();
+        let hr = unsafe {
+            self.raw.clone().CreateComputePipelineState(
+                &pso_desc,
+                &d3d12::IID_ID3D12PipelineState,
+                &mut pipeline as *mut *mut _ as *mut *mut _)
+        };
+
+        if cs_destroy {
+            unsafe { (*cs).Release(); }
+        }
+
+        if winerror::SUCCEEDED(hr) {
+            Ok(n::ComputePipeline {
+                raw: pipeline,
+                signature: desc.layout.raw,
+                num_parameter_slots: desc.layout.num_parameter_slots,
+                constants: desc.layout.root_constants.clone(),
+            })
+        } else {
+            Err(pso::CreationError::Other)
+        }
+    }
+
+    fn create_framebuffer<I>(
         &self,
         _renderpass: &n::RenderPass,
-        attachments: &[&n::ImageView],
+        attachments: I,
         _extent: d::Extent,
-    ) -> Result<n::Framebuffer, d::FramebufferError> {
+    ) -> Result<n::Framebuffer, d::FramebufferError>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<n::ImageView>
+    {
         Ok(n::Framebuffer {
-            attachments: attachments.iter().cloned().cloned().collect(),
+            attachments: attachments.into_iter().map(|att| *att.borrow()).collect(),
         })
     }
 
@@ -1673,15 +1698,22 @@ impl d::Device<B> for Device {
         n::Sampler { handle }
     }
 
-    fn create_descriptor_pool(
+    fn create_descriptor_pool<I>(
         &self,
         max_sets: usize,
-        descriptor_pools: &[pso::DescriptorRangeDesc],
-    ) -> n::DescriptorPool {
+        descriptor_pools: I,
+    ) -> n::DescriptorPool
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorRangeDesc>
+    {
         let mut num_srv_cbv_uav = 0;
         let mut num_samplers = 0;
 
-        for desc in descriptor_pools {
+        let descriptor_pools = descriptor_pools.into_iter()
+                                               .map(|desc| *desc.borrow())
+                                               .collect::<Vec<_>>();
+        for desc in &descriptor_pools {
             match desc.ty {
                 pso::DescriptorType::Sampler => {
                     num_samplers += desc.count;
@@ -1733,22 +1765,35 @@ impl d::Device<B> for Device {
         n::DescriptorPool {
             heap_srv_cbv_uav,
             heap_sampler,
-            pools: descriptor_pools.to_vec(),
+            pools: descriptor_pools,
             max_size: max_sets as _,
         }
     }
 
-    fn create_descriptor_set_layout(
+    fn create_descriptor_set_layout<I>(
         &self,
-        bindings: &[pso::DescriptorSetLayoutBinding],
-    )-> n::DescriptorSetLayout {
-        n::DescriptorSetLayout { bindings: bindings.to_vec() }
+        bindings: I,
+    )-> n::DescriptorSetLayout
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorSetLayoutBinding>
+    {
+        n::DescriptorSetLayout {
+            bindings: bindings.into_iter().map(|bind| *bind.borrow()).collect()
+        }
     }
 
-    fn update_descriptor_sets<R: RangeArg<u64>>(&self, writes: &[pso::DescriptorSetWrite<B, R>]) {
+    fn update_descriptor_sets<'a, I, R>(&self, writes: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorSetWrite<'a, 'a, B, R>>,
+        R: RangeArg<u64>,
+    {
+        let writes = writes.into_iter().collect::<Vec<_>>();
         // Create temporary non-shader visible views for uniform and storage buffers.
         let mut num_views = 0;
-        for sw in writes {
+        for sw in &writes {
+            let sw = sw.borrow();
             match sw.write {
                 pso::DescriptorWrite::UniformBuffer(ref views) |
                 pso::DescriptorWrite::StorageBuffer(ref views) => {
@@ -1773,7 +1818,8 @@ impl d::Device<B> for Device {
                 max_size: num_views as _,
             };
             // Create views
-            for sw in writes {
+            for sw in &writes {
+                let sw = sw.borrow();
                 match sw.write {
                     pso::DescriptorWrite::UniformBuffer(ref views) => {
                         handles.extend(views.iter().map(|&(buffer, ref range)| {
@@ -1833,7 +1879,7 @@ impl d::Device<B> for Device {
         };
 
         let mut cur_view = 0;
-        self.update_descriptor_sets_impl(writes,
+        self.update_descriptor_sets_impl(writes.iter().map(Borrow::borrow),
             d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
             |dw, starts| match *dw {
                 pso::DescriptorWrite::SampledImage(ref images) => {
@@ -1851,7 +1897,7 @@ impl d::Device<B> for Device {
                 _ => unimplemented!()
             });
 
-        self.update_descriptor_sets_impl(writes,
+        self.update_descriptor_sets_impl(writes.iter().map(Borrow::borrow),
             d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
             |dw, starts| match *dw {
                 pso::DescriptorWrite::Sampler(ref samplers) => {
@@ -1991,15 +2037,18 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn reset_fences(&self, fences: &[&n::Fence]) {
-        for fence in fences {
-            assert_eq!(winerror::S_OK, unsafe {
-                fence.raw.clone().Signal(0)
-            });
-        }
+    fn reset_fence(&self, fence: &n::Fence) {
+        assert_eq!(winerror::S_OK, unsafe {
+            fence.raw.clone().Signal(0)
+        });
     }
 
-    fn wait_for_fences(&self, fences: &[&n::Fence], wait: d::WaitFor, timeout_ms: u32) -> bool {
+    fn wait_for_fences<I>(&self, fences: I, wait: d::WaitFor, timeout_ms: u32) -> bool
+    where
+        I: IntoIterator,
+        I::Item: Borrow<n::Fence>,
+    {
+        let fences = fences.into_iter().collect::<Vec<_>>();
         let mut events = self.events.lock().unwrap();
         for _ in events.len() .. fences.len() {
             events.push(unsafe {
@@ -2015,7 +2064,7 @@ impl d::Device<B> for Device {
         for (&event, fence) in events.iter().zip(fences.iter()) {
             assert_eq!(winerror::S_OK, unsafe {
                 synchapi::ResetEvent(event);
-                fence.raw.clone().SetEventOnCompletion(1, event)
+                fence.borrow().raw.clone().SetEventOnCompletion(1, event)
             });
         }
 

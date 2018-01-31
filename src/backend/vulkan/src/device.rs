@@ -110,8 +110,16 @@ impl d::Device<B> for Device {
         };
     }
 
-    fn create_render_pass(&self, attachments: &[pass::Attachment],
-        subpasses: &[pass::SubpassDesc], dependencies: &[pass::SubpassDependency]) -> n::RenderPass
+    fn create_render_pass<'a, IA, IS, ID>(
+        &self, attachments: IA, subpasses: IS, dependencies: ID
+    ) -> n::RenderPass
+    where
+        IA: IntoIterator,
+        IA::Item: Borrow<pass::Attachment>,
+        IS: IntoIterator,
+        IS::Item: Borrow<pass::SubpassDesc<'a>>,
+        ID: IntoIterator,
+        ID::Item: Borrow<pass::SubpassDependency>,
     {
         let map_subpass_ref = |pass: pass::SubpassRef| {
             match pass {
@@ -120,7 +128,8 @@ impl d::Device<B> for Device {
             }
         };
 
-        let attachments = attachments.iter().map(|attachment| {
+        let attachments = attachments.into_iter().map(|attachment| {
+            let attachment = attachment.borrow();
             vk::AttachmentDescription {
                 flags: vk::AttachmentDescriptionFlags::empty(), // TODO: may even alias!
                 format: attachment.format.map_or(vk::Format::Undefined, conv::map_format),
@@ -136,7 +145,8 @@ impl d::Device<B> for Device {
 
         let mut attachment_refs = Vec::new();
 
-        let subpasses = subpasses.iter().map(|subpass| {
+        let subpasses = subpasses.into_iter().map(|subpass| {
+            let subpass = subpass.borrow();
             {
                 fn make_ref(&(id, layout): &pass::AttachmentRef) -> vk::AttachmentReference {
                     vk::AttachmentReference {
@@ -179,7 +189,8 @@ impl d::Device<B> for Device {
             }
         }).collect::<Vec<_>>();
 
-        let dependencies = dependencies.iter().map(|dependency| {
+        let dependencies = dependencies.into_iter().map(|dependency| {
+            let dependency = dependency.borrow();
             // TODO: checks
             vk::SubpassDependency {
                 src_subpass: map_subpass_ref(dependency.passes.start),
@@ -212,14 +223,25 @@ impl d::Device<B> for Device {
         n::RenderPass { raw: renderpass }
     }
 
-    fn create_pipeline_layout(&self, sets: &[&n::DescriptorSetLayout], push_constant_ranges: &[(pso::ShaderStageFlags, Range<u32>)]) -> n::PipelineLayout {
-        debug!("create_pipeline_layout {:?}", sets);
+    fn create_pipeline_layout<IS, IR>(&self, sets: IS, push_constant_ranges: IR) -> n::PipelineLayout
+    where
+        IS: IntoIterator,
+        IS::Item: Borrow<n::DescriptorSetLayout>,
+        IR: IntoIterator,
+        IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
+    {
+        let set_layouts = sets
+            .into_iter()
+            .map(|set| {
+                set.borrow().raw
+            }).collect::<Vec<_>>();
 
-        let set_layouts = sets.iter().map(|set| {
-            set.raw
-        }).collect::<Vec<_>>();
+        debug!("create_pipeline_layout {:?}", set_layouts);
 
-        let push_constant_ranges = push_constant_ranges.iter().map(|&(s, ref r)| {
+        let push_constant_ranges = push_constant_ranges
+            .into_iter()
+            .map(|range| {
+                let &(s, ref r) = range.borrow();
                 vk::PushConstantRange {
                     stage_flags: conv::map_stage_flags(s),
                     offset: r.start * 4,
@@ -245,11 +267,15 @@ impl d::Device<B> for Device {
         n::PipelineLayout { raw }
     }
 
-    fn create_graphics_pipelines<'a>(
-        &self,
-        descs: &[pso::GraphicsPipelineDesc<'a, B>],
-    ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
-        debug!("create_graphics_pipelines {:?}", descs);
+    fn create_graphics_pipelines<'a, T>(
+        &self, descs: T
+    ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>>
+    where
+        T: IntoIterator,
+        T::Item: Borrow<pso::GraphicsPipelineDesc<'a, B>>,
+    {
+        let descs = descs.into_iter().collect::<Vec<_>>();
+        debug!("create_graphics_pipelines {:?}", descs.iter().map(Borrow::borrow).collect::<Vec<_>>());
         const NUM_STAGES: usize = 5;
 
         // Store pipeline parameters to avoid stack usage
@@ -304,6 +330,7 @@ impl d::Device<B> for Device {
         };
 
         let infos = descs.iter().map(|desc| {
+            let desc = desc.borrow();
             let mut stages = Vec::new();
             // Vertex stage
             if true { //vertex shader is required
@@ -573,15 +600,20 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_compute_pipelines<'a>(
-        &self,
-        descs: &[pso::ComputePipelineDesc<'a, B>],
-    ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
+    fn create_compute_pipelines<'a, T>(
+        &self, descs: T
+    ) -> Vec<Result<n::ComputePipeline, pso::CreationError>>
+    where
+        T: IntoIterator,
+        T::Item: Borrow<pso::ComputePipelineDesc<'a, B>>,
+    {
+        let descs = descs.into_iter().collect::<Vec<_>>();
         let mut c_strings = Vec::new(); // hold the C strings temporarily
         let mut info_specializations = Vec::with_capacity(descs.len());
         let mut specialization_data = Vec::with_capacity(descs.len());
 
         let infos = descs.iter().map(|desc| {
+            let desc = desc.borrow();
             let string = CString::new(desc.shader.entry).unwrap();
             let p_name = string.as_ptr();
             c_strings.push(string);
@@ -674,15 +706,19 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_framebuffer(
+    fn create_framebuffer<T>(
         &self,
         renderpass: &n::RenderPass,
-        attachments: &[&n::ImageView],
+        attachments: T,
         extent: d::Extent,
-    ) -> Result<n::FrameBuffer, d::FramebufferError> {
+    ) -> Result<n::FrameBuffer, d::FramebufferError>
+    where
+        T: IntoIterator,
+        T::Item: Borrow<n::ImageView>,
+    {
         let attachments_raw = attachments
-            .iter()
-            .map(|attachment| attachment.view)
+            .into_iter()
+            .map(|attachment| attachment.borrow().view)
             .collect::<SmallVec<[_; 4]>>();
 
         let info = vk::FramebufferCreateInfo {
@@ -976,12 +1012,13 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn create_descriptor_pool(&self,
-        max_sets: usize,
-        descriptor_pools: &[pso::DescriptorRangeDesc],
-    ) -> n::DescriptorPool
+    fn create_descriptor_pool<T>(&self, max_sets: usize, descriptor_pools: T) -> n::DescriptorPool
+    where
+        T: IntoIterator,
+        T::Item: Borrow<pso::DescriptorRangeDesc>,
     {
-        let pools = descriptor_pools.iter().map(|pool| {
+        let pools = descriptor_pools.into_iter().map(|pool| {
+            let pool = pool.borrow();
             vk::DescriptorPoolSize {
                 typ: conv::map_descriptor_type(pool.ty),
                 descriptor_count: pool.count as u32,
@@ -1008,10 +1045,13 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_descriptor_set_layout(&self, bindings: &[pso::DescriptorSetLayoutBinding])-> n::DescriptorSetLayout {
-        debug!("create_descriptor_set_layout {:?}", bindings);
-
-        let bindings = bindings.iter().map(|binding| {
+    fn create_descriptor_set_layout<T>(&self, bindings: T)-> n::DescriptorSetLayout
+    where
+        T: IntoIterator,
+        T::Item: Borrow<pso::DescriptorSetLayoutBinding>,
+    {
+        let bindings = bindings.into_iter().map(|binding| {
+            let binding = binding.borrow();
             vk::DescriptorSetLayoutBinding {
                 binding: binding.binding as u32,
                 descriptor_type: conv::map_descriptor_type(binding.ty),
@@ -1020,6 +1060,8 @@ impl d::Device<B> for Device {
                 p_immutable_samplers: ptr::null(), // TODO
             }
         }).collect::<Vec<_>>();
+
+        debug!("create_descriptor_set_layout {:?}", bindings);
 
         let info = vk::DescriptorSetLayoutCreateInfo {
             s_type: vk::StructureType::DescriptorSetLayoutCreateInfo,
@@ -1038,12 +1080,20 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn update_descriptor_sets<R: RangeArg<u64>>(&self, writes: &[pso::DescriptorSetWrite<B, R>]) {
+    fn update_descriptor_sets<'a, I, R>(&self, writes: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorSetWrite<'a, 'a, B, R>>,
+        R: RangeArg<u64>
+    {
+        let writes = writes.into_iter().collect::<Vec<_>>();
+
         let mut image_infos = Vec::new();
         let mut buffer_infos = Vec::new();
         let mut texel_buffer_views = Vec::new();
 
-        for write in writes {
+        for write in &writes {
+            let write = write.borrow();
             match write.write {
                 pso::DescriptorWrite::Sampler(ref samplers) => {
                     for sampler in samplers {
@@ -1091,6 +1141,7 @@ impl d::Device<B> for Device {
         let mut cur_view_index = 0;
 
         let writes = writes.iter().map(|write| {
+            let write = write.borrow();
             let ty = match write.write {
                 pso::DescriptorWrite::Sampler(_) => vk::DescriptorType::Sampler,
                 pso::DescriptorWrite::SampledImage(_) => vk::DescriptorType::SampledImage,
@@ -1231,15 +1282,23 @@ impl d::Device<B> for Device {
         n::Fence(fence)
     }
 
-    fn reset_fences(&self, fences: &[&n::Fence]) {
-        let fences = fences.iter().map(|fence| fence.0).collect::<Vec<_>>();
+    fn reset_fences<I>(&self, fences: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<n::Fence>,
+    {
+        let fences = fences.into_iter().map(|fence| fence.borrow().0).collect::<Vec<_>>();
         assert_eq!(Ok(()), unsafe {
             self.raw.0.reset_fences(&fences)
         });
     }
 
-    fn wait_for_fences(&self, fences: &[&n::Fence], wait: d::WaitFor, timeout_ms: u32) -> bool {
-        let fences = fences.iter().map(|fence| fence.0).collect::<Vec<_>>();
+    fn wait_for_fences<I>(&self, fences: I, wait: d::WaitFor, timeout_ms: u32) -> bool
+    where
+        I: IntoIterator,
+        I::Item: Borrow<n::Fence>,
+    {
+        let fences = fences.into_iter().map(|fence| fence.borrow().0).collect::<Vec<_>>();
         let all = match wait {
             d::WaitFor::Any => false,
             d::WaitFor::All => true,

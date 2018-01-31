@@ -385,57 +385,52 @@ unsafe impl Send for DescriptorPool {}
 unsafe impl Sync for DescriptorPool {}
 
 impl HalDescriptorPool<Backend> for DescriptorPool {
-    fn allocate_sets(&mut self, layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
-        layouts
-            .iter()
-            .map(|layout| {
-                let mut ranges = Vec::new();
-                let mut first_gpu_sampler = None;
-                let mut first_gpu_view = None;
+    fn allocate_set(&mut self, layout: &DescriptorSetLayout) -> DescriptorSet {
+        let mut ranges = Vec::new();
+        let mut first_gpu_sampler = None;
+        let mut first_gpu_view = None;
 
-                for binding in &layout.bindings {
-                    let range = match binding.ty {
-                        pso::DescriptorType::Sampler => {
-                            let handle = self.heap_sampler.alloc_handles(binding.count as u64);
-                            if first_gpu_sampler.is_none() {
-                                first_gpu_sampler = Some(handle.gpu);
-                            }
-                            DescriptorRangeBinding::Sampler(DescriptorRange {
-                                handle,
-                                ty: binding.ty,
-                                count: binding.count as _,
-                                handle_size: self.heap_sampler.handle_size,
-                            })
-                        },
-                        _ => {
-                            let handle = self.heap_srv_cbv_uav.alloc_handles(binding.count as u64);
-                            if first_gpu_view.is_none() {
-                                first_gpu_view = Some(handle.gpu);
-                            }
-                            DescriptorRangeBinding::View(DescriptorRange {
-                                handle,
-                                ty: binding.ty,
-                                count: binding.count as _,
-                                handle_size: self.heap_sampler.handle_size,
-                            })
-                        }
-                    };
-
-                    while ranges.len() <= binding.binding as usize {
-                        ranges.push(DescriptorRangeBinding::Empty);
+        for binding in &layout.bindings {
+            let range = match binding.ty {
+                pso::DescriptorType::Sampler => {
+                    let handle = self.heap_sampler.alloc_handles(binding.count as u64);
+                    if first_gpu_sampler.is_none() {
+                        first_gpu_sampler = Some(handle.gpu);
                     }
-                    ranges[binding.binding as usize] = range;
+                    DescriptorRangeBinding::Sampler(DescriptorRange {
+                        handle,
+                        ty: binding.ty,
+                        count: binding.count as _,
+                        handle_size: self.heap_sampler.handle_size,
+                    })
+                },
+                _ => {
+                    let handle = self.heap_srv_cbv_uav.alloc_handles(binding.count as u64);
+                    if first_gpu_view.is_none() {
+                        first_gpu_view = Some(handle.gpu);
+                    }
+                    DescriptorRangeBinding::View(DescriptorRange {
+                        handle,
+                        ty: binding.ty,
+                        count: binding.count as _,
+                        handle_size: self.heap_sampler.handle_size,
+                    })
                 }
+            };
 
-                DescriptorSet {
-                    heap_srv_cbv_uav: self.heap_srv_cbv_uav.heap.clone(),
-                    heap_samplers: self.heap_sampler.heap.clone(),
-                    ranges,
-                    first_gpu_sampler,
-                    first_gpu_view,
-                }
-            })
-            .collect()
+            while ranges.len() <= binding.binding as usize {
+                ranges.push(DescriptorRangeBinding::Empty);
+            }
+            ranges[binding.binding as usize] = range;
+        }
+
+        DescriptorSet {
+            heap_srv_cbv_uav: self.heap_srv_cbv_uav.heap.clone(),
+            heap_samplers: self.heap_sampler.heap.clone(),
+            ranges,
+            first_gpu_sampler,
+            first_gpu_view,
+        }
     }
 
     fn reset(&mut self) {

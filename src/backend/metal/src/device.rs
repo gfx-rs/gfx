@@ -412,6 +412,161 @@ impl Device {
 
         arg
     }
+}
+
+impl hal::Device<Backend> for Device {
+    fn create_command_pool(
+        &self, _family: QueueFamilyId, flags: CommandPoolCreateFlags
+    ) -> command::CommandPool {
+        command::CommandPool {
+            queue: self.queue.clone(),
+            managed: if flags.contains(CommandPoolCreateFlags::RESET_INDIVIDUAL) {
+                None
+            } else {
+                Some(Vec::new())
+            },
+        }
+    }
+
+    fn destroy_command_pool(&self, _pool: command::CommandPool) {
+        //TODO?
+    }
+
+    fn create_render_pass<'a, IA, IS, ID>(
+        &self,
+        attachments: IA,
+        _subpasses: IS,
+        _dependencies: ID,
+    ) -> n::RenderPass
+    where
+        IA: IntoIterator,
+        IA::Item: Borrow<pass::Attachment>,
+        IS: IntoIterator,
+        IS::Item: Borrow<pass::SubpassDesc<'a>>,
+        ID: IntoIterator,
+        ID::Item: Borrow<pass::SubpassDependency>,
+    {
+        //TODO: subpasses, dependencies
+        let pass = metal::RenderPassDescriptor::new().to_owned();
+        let attachments = attachments.into_iter()
+                                     .map(|attachment| attachment.borrow().clone())
+                                     .collect::<Vec<_>>();
+        let mut color_attachment_index = 0;
+        for attachment in &attachments {
+            if let Some((_format, is_depth)) = attachment.format.and_then(map_format) {
+                let mtl_attachment: &metal::RenderPassAttachmentDescriptorRef;
+                if !is_depth {
+                    let color_attachment = pass.color_attachments().object_at(color_attachment_index).expect("too many color attachments");
+                    color_attachment_index += 1;
+
+                    mtl_attachment = color_attachment;
+                } else {
+                    let depth_attachment = pass.depth_attachment().expect("no depth attachement");
+
+                    mtl_attachment = depth_attachment;
+                }
+
+                mtl_attachment.set_load_action(map_load_operation(attachment.ops.load));
+                mtl_attachment.set_store_action(map_store_operation(attachment.ops.store));
+            }
+        }
+
+        n::RenderPass {
+            desc: pass,
+            attachments,
+            num_colors: color_attachment_index,
+        }
+    }
+
+    fn create_pipeline_layout<T, U>(
+        &self,
+        set_layouts: T,
+        _push_constant_ranges: U,
+    ) -> n::PipelineLayout
+    where
+        T: IntoIterator,
+        T::Item: Borrow<n::DescriptorSetLayout>,
+        U: IntoIterator,
+        U::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>
+    {
+        use hal::pso::ShaderStageFlags;
+
+        struct Counters {
+            buffers: usize,
+            textures: usize,
+            samplers: usize,
+        }
+        let mut stage_infos = [
+            (ShaderStageFlags::VERTEX,   spirv::ExecutionModel::Vertex,    Counters { buffers:0, textures:0, samplers:0 }),
+            (ShaderStageFlags::FRAGMENT, spirv::ExecutionModel::Fragment,  Counters { buffers:0, textures:0, samplers:0 }),
+            (ShaderStageFlags::COMPUTE,  spirv::ExecutionModel::GlCompute, Counters { buffers:0, textures:0, samplers:0 }),
+        ];
+        let mut res_overrides = HashMap::new();
+
+        for (set_index, set_layout) in set_layouts.into_iter().enumerate() {
+            match set_layout.borrow() {
+                &n::DescriptorSetLayout::Emulated(ref set_bindings) => {
+                    for set_binding in set_bindings {
+                        for &mut(stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
+                            if !set_binding.stage_flags.contains(stage_bit) {
+                                continue
+                            }
+                            let count = match set_binding.ty {
+                                DescriptorType::UniformBuffer |
+                                DescriptorType::StorageBuffer => &mut counters.buffers,
+                                DescriptorType::SampledImage => &mut counters.textures,
+                                DescriptorType::Sampler => &mut counters.samplers,
+                                _ => unimplemented!()
+                            };
+                            for i in 0 .. set_binding.count {
+                                let location = msl::ResourceBindingLocation {
+                                    stage,
+                                    desc_set: set_index as _,
+                                    binding: (set_binding.binding + i) as _,
+                                };
+                                let res_binding = msl::ResourceBinding {
+                                    resource_id: *count as _,
+                                    force_used: false,
+                                };
+                                *count += 1;
+                                res_overrides.insert(location, res_binding);
+                            }
+                        }
+                    }
+                }
+                &n::DescriptorSetLayout::ArgumentBuffer(_, stage_flags) => {
+                    for &mut(stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
+                        if !stage_flags.contains(stage_bit) {
+                            continue
+                        }
+                        let location = msl::ResourceBindingLocation {
+                            stage,
+                            desc_set: set_index as _,
+                            binding: 0,
+                        };
+                        let res_binding = msl::ResourceBinding {
+                            resource_id: counters.buffers as _,
+                            force_used: false,
+                        };
+                        res_overrides.insert(location, res_binding);
+                        counters.buffers += 1;
+                    }
+                }
+            }
+        }
+
+        // TODO: return an `Err` when HAL signature of the function supports it
+        for &(_, _, ref counters) in &stage_infos {
+            assert!(counters.buffers <= self.private_caps.max_buffers_per_stage);
+            assert!(counters.textures <= self.private_caps.max_textures_per_stage);
+            assert!(counters.samplers <= self.private_caps.max_samplers_per_stage);
+        }
+
+        n::PipelineLayout {
+            attribute_buffer_index: stage_infos[0].2.buffers as _,
+            res_overrides,
+        }
+    }
 
     fn create_graphics_pipeline<'a>(
         &self,
@@ -604,185 +759,34 @@ impl Device {
             })
         }
     }
-}
 
-impl hal::Device<Backend> for Device {
-    fn create_command_pool(
-        &self, _family: QueueFamilyId, flags: CommandPoolCreateFlags
-    ) -> command::CommandPool {
-        command::CommandPool {
-            queue: self.queue.clone(),
-            managed: if flags.contains(CommandPoolCreateFlags::RESET_INDIVIDUAL) {
-                None
-            } else {
-                Some(Vec::new())
-            },
-        }
-    }
-
-    fn destroy_command_pool(&self, _pool: command::CommandPool) {
-        //TODO?
-    }
-
-    fn create_render_pass(
-        &self,
-        attachments: &[pass::Attachment],
-        _subpasses: &[pass::SubpassDesc],
-        _dependencies: &[pass::SubpassDependency],
-    ) -> n::RenderPass {
-        //TODO: subpasses, dependencies
-        let pass = metal::RenderPassDescriptor::new().to_owned();
-
-        let mut color_attachment_index = 0;
-        for attachment in attachments {
-            if let Some((_format, is_depth)) = attachment.format.and_then(map_format) {
-                let mtl_attachment: &metal::RenderPassAttachmentDescriptorRef;
-                if !is_depth {
-                    let color_attachment = pass.color_attachments().object_at(color_attachment_index).expect("too many color attachments");
-                    color_attachment_index += 1;
-
-                    mtl_attachment = color_attachment;
-                } else {
-                    let depth_attachment = pass.depth_attachment().expect("no depth attachement");
-
-                    mtl_attachment = depth_attachment;
-                }
-
-                mtl_attachment.set_load_action(map_load_operation(attachment.ops.load));
-                mtl_attachment.set_store_action(map_store_operation(attachment.ops.store));
-            }
-        }
-
-        n::RenderPass {
-            desc: pass,
-            attachments: attachments.into(),
-            num_colors: color_attachment_index,
-        }
-    }
-
-    fn create_pipeline_layout(
-        &self,
-        set_layouts: &[&n::DescriptorSetLayout],
-        _push_constant_ranges: &[(pso::ShaderStageFlags, Range<u32>)],
-    ) -> n::PipelineLayout {
-        use hal::pso::ShaderStageFlags;
-
-        struct Counters {
-            buffers: usize,
-            textures: usize,
-            samplers: usize,
-        }
-        let mut stage_infos = [
-            (ShaderStageFlags::VERTEX,   spirv::ExecutionModel::Vertex,    Counters { buffers:0, textures:0, samplers:0 }),
-            (ShaderStageFlags::FRAGMENT, spirv::ExecutionModel::Fragment,  Counters { buffers:0, textures:0, samplers:0 }),
-            (ShaderStageFlags::COMPUTE,  spirv::ExecutionModel::GlCompute, Counters { buffers:0, textures:0, samplers:0 }),
-        ];
-        let mut res_overrides = HashMap::new();
-
-        for (set_index, set_layout) in set_layouts.iter().enumerate() {
-            match set_layout {
-                &&n::DescriptorSetLayout::Emulated(ref set_bindings) => {
-                    for set_binding in set_bindings {
-                        for &mut(stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
-                            if !set_binding.stage_flags.contains(stage_bit) {
-                                continue
-                            }
-                            let count = match set_binding.ty {
-                                DescriptorType::UniformBuffer |
-                                DescriptorType::StorageBuffer => &mut counters.buffers,
-                                DescriptorType::SampledImage => &mut counters.textures,
-                                DescriptorType::Sampler => &mut counters.samplers,
-                                _ => unimplemented!()
-                            };
-                            for i in 0 .. set_binding.count {
-                                let location = msl::ResourceBindingLocation {
-                                    stage,
-                                    desc_set: set_index as _,
-                                    binding: (set_binding.binding + i) as _,
-                                };
-                                let res_binding = msl::ResourceBinding {
-                                    resource_id: *count as _,
-                                    force_used: false,
-                                };
-                                *count += 1;
-                                res_overrides.insert(location, res_binding);
-                            }
-                        }
-                    }
-                }
-                &&n::DescriptorSetLayout::ArgumentBuffer(_, stage_flags) => {
-                    for &mut(stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
-                        if !stage_flags.contains(stage_bit) {
-                            continue
-                        }
-                        let location = msl::ResourceBindingLocation {
-                            stage,
-                            desc_set: set_index as _,
-                            binding: 0,
-                        };
-                        let res_binding = msl::ResourceBinding {
-                            resource_id: counters.buffers as _,
-                            force_used: false,
-                        };
-                        res_overrides.insert(location, res_binding);
-                        counters.buffers += 1;
-                    }
-                }
-            }
-        }
-
-        // TODO: return an `Err` when HAL signature of the function supports it
-        for &(_, _, ref counters) in &stage_infos {
-            assert!(counters.buffers <= self.private_caps.max_buffers_per_stage);
-            assert!(counters.textures <= self.private_caps.max_textures_per_stage);
-            assert!(counters.samplers <= self.private_caps.max_samplers_per_stage);
-        }
-
-        n::PipelineLayout {
-            attribute_buffer_index: stage_infos[0].2.buffers as _,
-            res_overrides,
-        }
-    }
-
-    fn create_graphics_pipelines<'a>(
-        &self,
-        params: &[pso::GraphicsPipelineDesc<'a, Backend>],
-    ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
-        params
-            .into_iter()
-            .map(|p| self.create_graphics_pipeline(p))
-            .collect()
-    }
-
-    fn create_compute_pipelines<'a>(
-        &self,
-        params: &[pso::ComputePipelineDesc<'a, Backend>],
-    ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
-        params
-            .into_iter()
-            .map(|p| self.create_compute_pipeline(p))
-            .collect()
-    }
-
-    fn create_framebuffer(
-        &self, renderpass: &n::RenderPass, attachments: &[&n::ImageView], extent: Extent
-    ) -> Result<n::FrameBuffer, FramebufferError> {
+    fn create_framebuffer<I>(
+        &self, renderpass: &n::RenderPass, attachments: I, extent: Extent
+    ) -> Result<n::FrameBuffer, FramebufferError>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<n::ImageView>
+    {
         let descriptor = unsafe {
             let desc: metal::RenderPassDescriptor = msg_send![renderpass.desc, copy];
 
             msg_send![&*desc, setRenderTargetArrayLength: extent.depth as usize];
 
-            for (i, attachment) in attachments[..renderpass.num_colors].iter().enumerate() {
+            let mut attachments = attachments.into_iter();
+            for i in 0..renderpass.num_colors {
                 let mtl_attachment = desc.color_attachments().object_at(i).expect("too many color attachments");
-                mtl_attachment.set_texture(Some(&attachment.0));
+                let attachment = attachments.next().expect("Not enough colour attachments provided");
+                mtl_attachment.set_texture(Some(&attachment.borrow().0));
             }
 
-            assert!(renderpass.num_colors + 1 >= attachments.len(),
-                "Metal does not support multiple depth attachments");
+            let depth_attachment = attachments.next();
+            if let Some(_) = attachments.next() {
+                panic!("Metal does not support multiple depth attachments")
+            }
 
-            if let Some(attachment) = attachments.get(renderpass.num_colors) {
+            if let Some(attachment) = depth_attachment {
                 let mtl_attachment = desc.depth_attachment().unwrap();
-                mtl_attachment.set_texture(Some(&attachment.0));
+                mtl_attachment.set_texture(Some(&attachment.borrow().0));
                 // TODO: stencil
             }
 
@@ -910,9 +914,11 @@ impl hal::Device<Backend> for Device {
         unsafe { n::Semaphore(n::dispatch_semaphore_create(1)) } // Returns retained
     }
 
-    fn create_descriptor_pool(
-        &self, _max_sets: usize, descriptor_ranges: &[pso::DescriptorRangeDesc]
-    ) -> n::DescriptorPool {
+    fn create_descriptor_pool<I>(&self, _max_sets: usize, descriptor_ranges: I) -> n::DescriptorPool
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorRangeDesc>,
+    {
         if !self.private_caps.argument_buffers {
             return n::DescriptorPool::Emulated;
         }
@@ -921,7 +927,8 @@ impl hal::Device<Backend> for Device {
         let mut num_textures = 0;
         let mut num_uniforms = 0;
 
-        let arguments = descriptor_ranges.iter().map(|desc| {
+        let arguments = descriptor_ranges.into_iter().map(|desc| {
+            let desc = desc.borrow();
             let offset_ref = match desc.ty {
                 DescriptorType::Sampler => &mut num_samplers,
                 DescriptorType::SampledImage => &mut num_textures,
@@ -946,15 +953,20 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn create_descriptor_set_layout(
-        &self, bindings: &[DescriptorSetLayoutBinding]
-    ) -> n::DescriptorSetLayout {
+    fn create_descriptor_set_layout<I>(&self, bindings: I) -> n::DescriptorSetLayout
+    where
+        I: IntoIterator,
+        I::Item: Borrow<DescriptorSetLayoutBinding>,
+    {
         if !self.private_caps.argument_buffers {
-            return n::DescriptorSetLayout::Emulated(bindings.to_vec())
+            return n::DescriptorSetLayout::Emulated(
+                bindings.into_iter().map(|desc| *desc.borrow()).collect()
+            )
         }
 
         let mut stage_flags = pso::ShaderStageFlags::empty();
-        let arguments = bindings.iter().map(|desc| {
+        let arguments = bindings.into_iter().map(|desc| {
+            let desc = desc.borrow();
             stage_flags |= desc.stage_flags;
             Self::describe_argument(desc.ty, desc.binding, desc.count)
         }).collect::<Vec<_>>();
@@ -964,7 +976,12 @@ impl hal::Device<Backend> for Device {
         n::DescriptorSetLayout::ArgumentBuffer(encoder, stage_flags)
     }
 
-    fn update_descriptor_sets<R: RangeArg<u64>>(&self, writes: &[pso::DescriptorSetWrite<Backend, R>]) {
+    fn update_descriptor_sets<'a, I, R>(&self, writes: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorSetWrite<'a, 'a, Backend, R>>,
+        R: RangeArg<u64>,
+    {
         use hal::pso::DescriptorWrite::*;
 
         let mut mtl_samplers = Vec::new();
@@ -972,7 +989,8 @@ impl hal::Device<Backend> for Device {
         let mut mtl_buffers = Vec::new();
         let mut mtl_offsets = Vec::new();
 
-        for write in writes {
+        for write in writes.into_iter() {
+            let write = write.borrow();
             match *write.set {
                 n::DescriptorSet::Emulated(ref inner) => {
                     let mut set = inner.lock().unwrap();
@@ -1337,20 +1355,14 @@ impl hal::Device<Backend> for Device {
     fn create_fence(&self, signaled: bool) -> n::Fence {
         n::Fence(Arc::new(Mutex::new(signaled)))
     }
-    fn reset_fences(&self, fences: &[&n::Fence]) {
-        for fence in fences {
-            *fence.0.lock().unwrap() = false;
-        }
+    fn reset_fence(&self, fence: &n::Fence) {
+        *fence.0.lock().unwrap() = false;
     }
-    fn wait_for_fences(&self, fences: &[&n::Fence], wait: WaitFor, mut timeout_ms: u32) -> bool {
+    fn wait_for_fence(&self, fence: &n::Fence, mut timeout_ms: u32) -> bool {
         use std::{thread, time};
         let tick = 1;
         loop {
-            let done = match wait {
-                WaitFor::Any => fences.iter().any(|fence| *fence.0.lock().unwrap()),
-                WaitFor::All => fences.iter().all(|fence| *fence.0.lock().unwrap()),
-            };
-            if done {
+            if *fence.0.lock().unwrap() {
                 return true
             }
             if timeout_ms < tick {

@@ -6,6 +6,7 @@
 //! ranges. The disjunct ranges can be then converted into root signature entries.
 
 use hal::pso;
+use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::ops::Range;
 
@@ -52,9 +53,11 @@ impl Ord for RootConstant {
     }
 }
 
-pub fn split(
-    ranges: &[(pso::ShaderStageFlags, Range<u32>)],
-) -> Vec<RootConstant> {
+pub fn split<I>(ranges: I) -> Vec<RootConstant>
+where
+    I: IntoIterator,
+    I::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
+{
     // Frontier of unexplored root constant ranges, sorted descending
     // (less element shifting for Vec) regarding to the start of ranges.
     let mut ranges = into_vec(ranges);
@@ -113,8 +116,13 @@ pub fn split(
     disjunct
 }
 
-fn into_vec(ranges: &[(pso::ShaderStageFlags, Range<u32>)]) -> Vec<RootConstant> {
-    ranges.iter().map(|&(stages, ref range)| {
+fn into_vec<I>(ranges: I) -> Vec<RootConstant>
+where
+    I: IntoIterator,
+    I::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
+{
+    ranges.into_iter().map(|borrowable| {
+        let &(stages, ref range) = borrowable.borrow();
         RootConstant { stages, range: range.clone() }
     }).collect()
 }

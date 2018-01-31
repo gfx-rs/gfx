@@ -135,56 +135,52 @@ unsafe impl Send for DescriptorPool {}
 unsafe impl Sync for DescriptorPool {}
 
 impl hal::DescriptorPool<Backend> for DescriptorPool {
-    fn allocate_sets(&mut self, layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
+    fn allocate_set(&mut self, layout: &DescriptorSetLayout) -> DescriptorSet {
         match *self {
             DescriptorPool::Emulated => {
-                layouts.iter().map(|layout| {
-                    let layout_bindings = match layout {
-                        &&DescriptorSetLayout::Emulated(ref bindings) => bindings,
-                        _ => panic!("Incompatible descriptor set layout type"),
-                    };
+                let layout_bindings = match layout {
+                    &DescriptorSetLayout::Emulated(ref bindings) => bindings,
+                    _ => panic!("Incompatible descriptor set layout type"),
+                };
 
-                    let bindings = layout_bindings.iter().map(|layout| {
-                        let binding = match layout.ty {
-                            pso::DescriptorType::Sampler => {
-                                DescriptorSetBinding::Sampler(vec![None; layout.count])
-                            }
-                            pso::DescriptorType::SampledImage => {
-                                DescriptorSetBinding::SampledImage(vec![None; layout.count])
-                            }
-                            pso::DescriptorType::UniformBuffer | pso::DescriptorType::StorageBuffer => {
-                                DescriptorSetBinding::Buffer(vec![None; layout.count])
-                            }
-                            _ => unimplemented!()
-                        };
-                        (layout.binding, binding)
-                    }).collect();
-
-                    let inner = DescriptorSetInner {
-                        layout: layout_bindings.to_vec(),
-                        bindings,
+                let bindings = layout_bindings.iter().map(|layout| {
+                    let binding = match layout.ty {
+                        pso::DescriptorType::Sampler => {
+                            DescriptorSetBinding::Sampler(vec![None; layout.count])
+                        }
+                        pso::DescriptorType::SampledImage => {
+                            DescriptorSetBinding::SampledImage(vec![None; layout.count])
+                        }
+                        pso::DescriptorType::UniformBuffer | pso::DescriptorType::StorageBuffer => {
+                            DescriptorSetBinding::Buffer(vec![None; layout.count])
+                        }
+                        _ => unimplemented!()
                     };
-                    DescriptorSet::Emulated(Arc::new(Mutex::new(inner)))
-                }).collect()
+                    (layout.binding, binding)
+                }).collect();
+
+                let inner = DescriptorSetInner {
+                    layout: layout_bindings.to_vec(),
+                    bindings,
+                };
+                DescriptorSet::Emulated(Arc::new(Mutex::new(inner)))
             }
             DescriptorPool::ArgumentBuffer { ref buffer, total_size, ref mut offset } => {
-                layouts.iter().map(|layout| {
-                    let (encoder, stage_flags) = match layout {
-                        &&DescriptorSetLayout::ArgumentBuffer(ref encoder, stages) => (encoder, stages),
-                        _ => panic!("Incompatible descriptor set layout type"),
-                    };
+                let (encoder, stage_flags) = match layout {
+                    &DescriptorSetLayout::ArgumentBuffer(ref encoder, stages) => (encoder, stages),
+                    _ => panic!("Incompatible descriptor set layout type"),
+                };
 
-                    let cur_offset = *offset;
-                    *offset += encoder.encoded_length();
-                    assert!(*offset <= total_size);
+                let cur_offset = *offset;
+                *offset += encoder.encoded_length();
+                assert!(*offset <= total_size);
 
-                    DescriptorSet::ArgumentBuffer {
-                        buffer: buffer.clone(),
-                        offset: cur_offset,
-                        encoder: encoder.clone(),
-                        stage_flags,
-                    }
-                }).collect()
+                DescriptorSet::ArgumentBuffer {
+                    buffer: buffer.clone(),
+                    offset: cur_offset,
+                    encoder: encoder.clone(),
+                    stage_flags,
+                }
             }
         }
     }
