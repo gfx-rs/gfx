@@ -744,7 +744,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
                                         }
                                     }
                                 }
-                                SampledImage(ref images) => {
+                                Image(ref images) => {
                                     inner.resources_vs.add_textures(start, images.as_slice());
                                     if let EncoderState::Render(ref encoder) = inner.encoder_state {
                                         for (i, ref texture) in images.iter().enumerate() {
@@ -779,7 +779,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
                                         }
                                     }
                                 }
-                                SampledImage(ref images) => {
+                                Image(ref images) => {
                                     inner.resources_fs.add_textures(start, images.as_slice());
                                     if let EncoderState::Render(ref encoder) = inner.encoder_state {
                                         for (i, texture) in images.iter().enumerate() {
@@ -863,7 +863,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
                                 Sampler(ref samplers) => {
                                     resources.add_samplers(start, samplers.as_slice());
                                 }
-                                SampledImage(ref images) => {
+                                Image(ref images) => {
                                     resources.add_textures(start, images.as_slice());
                                 }
                                 Buffer(ref buffers) => {

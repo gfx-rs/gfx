@@ -5,15 +5,17 @@ use metal::*;
 
 // The boolean indicates whether this is a depth format
 pub fn map_format(format: Format) -> Option<(MTLPixelFormat, bool)> {
-    match format {
-        Format::Rgba8Unorm => Some((MTLPixelFormat::RGBA8Unorm, false)),
-        Format::Rgba8Srgb => Some((MTLPixelFormat::RGBA8Unorm_sRGB, false)),
-        Format::Bgra8Unorm => Some((MTLPixelFormat::BGRA8Unorm, false)),
-        Format::Bgra8Srgb => Some((MTLPixelFormat::BGRA8Unorm_sRGB, false)),
-        Format::D32Float => Some((MTLPixelFormat::Depth32Float, true)),
-        Format::D24UnormS8Uint => Some((MTLPixelFormat::Depth24Unorm_Stencil8, true)),
-        _ => None,
-    }
+    Some(match format {
+        Format::Rgba8Unorm => (MTLPixelFormat::RGBA8Unorm, false),
+        Format::Rgba8Srgb => (MTLPixelFormat::RGBA8Unorm_sRGB, false),
+        Format::Bgra8Unorm => (MTLPixelFormat::BGRA8Unorm, false),
+        Format::Bgra8Srgb => (MTLPixelFormat::BGRA8Unorm_sRGB, false),
+        Format::Rgba32Float => (MTLPixelFormat::RGBA32Float, false),
+        Format::D32Float => (MTLPixelFormat::Depth32Float, true),
+        Format::D24UnormS8Uint => (MTLPixelFormat::Depth24Unorm_Stencil8, true),
+        Format::D32FloatS8Uint => (MTLPixelFormat::Depth32Float_Stencil8, true),
+        _ => return None,
+    })
 }
 
 pub fn get_format_bytes_per_pixel(format: MTLPixelFormat) -> usize {
@@ -165,6 +167,9 @@ pub fn map_texture_usage(usage: image::Usage) -> MTLTextureUsage {
     }
     if usage.contains(image::Usage::SAMPLED) {
         texture_usage |= MTLTextureUsage::MTLTextureUsageShaderRead;
+    }
+    if usage.contains(image::Usage::STORAGE) {
+        texture_usage |= MTLTextureUsage::MTLTextureUsageShaderWrite;
     }
     // TODO shader write
     texture_usage
