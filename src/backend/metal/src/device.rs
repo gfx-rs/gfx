@@ -529,13 +529,8 @@ impl Device {
             mtl_buffer_desc.set_stride(vertex_buffer.stride as u64);
             match vertex_buffer.rate {
                 0 => {
-                    // FIXME: should this use MTLVertexStepFunction::Constant?
                     mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerVertex);
-                },
-                1 => {
-                    // FIXME: how to determine instancing in this case?
-                    mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerVertex);
-                },
+                }
                 c => {
                     mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerInstance);
                     mtl_buffer_desc.set_step_rate(c as u64);

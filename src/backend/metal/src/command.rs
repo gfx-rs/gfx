@@ -306,11 +306,9 @@ impl RawCommandQueue<Backend> for CommandQueue {
         for mut swapchain in swapchains {
             // TODO: wait for semaphores
             let swapchain = swapchain.borrow_mut();
-            let buffer_index = swapchain.present_index % swapchain.io_surfaces.len();
-
+            let (surface, io_surface) = swapchain.present();
             unsafe {
-                let io_surface = &mut swapchain.io_surfaces[buffer_index];
-                let render_layer_borrow = swapchain.surface.render_layer.borrow_mut();
+                let render_layer_borrow = surface.render_layer.borrow_mut();
                 let render_layer = *render_layer_borrow;
                 msg_send![render_layer, setContents: io_surface.obj];
             }

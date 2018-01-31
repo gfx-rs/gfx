@@ -34,11 +34,19 @@ impl Drop for SurfaceInner {
 }
 
 pub struct Swapchain {
-    pub(crate) surface: Rc<SurfaceInner>,
+     surface: Rc<SurfaceInner>,
     _size_pixels: (u64, u64),
-    pub(crate) io_surfaces: Vec<IOSurface>,
+    io_surfaces: Vec<IOSurface>,
     frame_index: usize,
-    pub(crate) present_index: usize,
+    present_index: usize,
+}
+
+impl Swapchain {
+    pub(crate) fn present(&mut self) -> (&SurfaceInner, &mut IOSurface) {
+        let id = self.present_index;
+        self.present_index = (id + 1) % self.io_surfaces.len();
+        (&self.surface, &mut self.io_surfaces[id])
+    }
 }
 
 #[allow(bad_style)]
