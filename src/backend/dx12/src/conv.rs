@@ -65,6 +65,7 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
         B10g11r11Ufloat => DXGI_FORMAT_R11G11B10_FLOAT,
         E5b9g9r9Ufloat => DXGI_FORMAT_R9G9B9E5_SHAREDEXP,
         D16Unorm => DXGI_FORMAT_D16_UNORM,
+        D32Float => DXGI_FORMAT_D32_FLOAT,
         D32FloatS8Uint => DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
         Bc1RgbUnorm => DXGI_FORMAT_BC1_UNORM,
         Bc1RgbSrgb => DXGI_FORMAT_BC1_UNORM_SRGB,
