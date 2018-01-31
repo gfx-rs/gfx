@@ -30,7 +30,7 @@ pub use self::pool::CommandPool;
 pub use self::pso::{DescriptorPool};
 pub use self::queue::{
     CommandQueue, QueueGroup, QueueFamily, QueueType, Submission,
-    Capability, General, Graphics, Compute, Transfer,
+    Capability, Supports, General, Graphics, Compute, Transfer,
 };
 pub use self::window::{
     Backbuffer, Frame, FrameSync, Surface, SurfaceCapabilities, Swapchain, SwapchainConfig,

@@ -148,16 +148,6 @@ impl PhysicalDevice {
         }
         let name = info.platform_name.renderer.into();
 
-        let queue_type = {
-            use info::Requirement::{Core, Es};
-            let compute_supported = info.is_supported(&[Core(4,3), Es(3, 1)]); // TODO: extension
-            if compute_supported {
-                hal::QueueType::General
-            } else {
-                hal::QueueType::Graphics
-            }
-        };
-
         // create the shared context
         let share = Share {
             context: gl,
@@ -180,7 +170,7 @@ impl PhysicalDevice {
                 software_rendering: false, // not always true ..
             },
             physical_device: PhysicalDevice(Rc::new(share)),
-            queue_families: vec![QueueFamily(queue_type)],
+            queue_families: vec![QueueFamily],
         }
     }
 
@@ -293,10 +283,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 }
 
 #[derive(Debug)]
-pub struct QueueFamily(hal::QueueType);
+pub struct QueueFamily;
 
 impl hal::QueueFamily for QueueFamily {
-    fn queue_type(&self) -> hal::QueueType { self.0 }
+    fn queue_type(&self) -> hal::QueueType { hal::QueueType::General }
     fn max_queues(&self) -> usize { 1 }
     fn id(&self) -> QueueFamilyId { QueueFamilyId(0) }
 }
