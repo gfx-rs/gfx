@@ -278,9 +278,8 @@ impl<B: Backend> Device<B> {
 
         let mut pool = self.raw.create_descriptor_pool(count, &ranges[..]);
         let sets = {
-            let layout_refs = (0..count).map(|_| layout.resource())
-                .collect::<Vec<_>>();
-            pool.allocate_sets(&layout_refs[..])
+            let layout_refs = (0..count).map(|_| layout.resource());
+            pool.allocate_sets(layout_refs)
         };
 
         let pool = handle::raw::DescriptorPool::from(
@@ -295,7 +294,7 @@ impl<B: Backend> Device<B> {
 
     fn create_descriptor_set_layout(
         &mut self,
-        bindings: &[hal::pso::DescriptorSetLayoutBinding]
+        bindings: &[hal::pso::DescriptorSetLayoutBinding],
     ) -> handle::raw::DescriptorSetLayout<B> {
         let layout = self.raw.create_descriptor_set_layout(bindings);
         DescriptorSetLayout::new(layout, (), self.garbage.clone()).into()
@@ -322,7 +321,7 @@ impl<B: Backend> Device<B> {
         layouts: &[&B::DescriptorSetLayout],
         push_constant_ranges: &[(hal::pso::ShaderStageFlags, Range<u32>)],
     ) -> handle::raw::PipelineLayout<B> {
-        let layout = self.raw.create_pipeline_layout(layouts, push_constant_ranges);
+        let layout = self.raw.create_pipeline_layout(layouts.iter().cloned(), push_constant_ranges);
         PipelineLayout::new(layout, (), self.garbage.clone()).into()
     }
 
@@ -356,9 +355,8 @@ impl<B: Backend> Device<B> {
     ) -> Result<handle::raw::Framebuffer<B>, FramebufferError>
         where P: pso::GraphicsPipelineMeta<B>
     {
-        let resources: Vec<_> = attachments.iter().map(|&view| view.resource()).collect();
-        let buffer = self.raw.create_framebuffer(
-            pipeline.render_pass(), &resources[..], extent)?;
+        let resources = attachments.iter().map(|&view| view.resource());
+        let buffer = self.raw.create_framebuffer(pipeline.render_pass(), resources, extent)?;
         let info = handle::FramebufferInfo {
             attachments: attachments.iter().cloned().cloned().collect(),
             extent,

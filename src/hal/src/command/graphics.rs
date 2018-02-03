@@ -186,7 +186,7 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
     }
 
     ///
-    pub fn bind_graphics_descriptor_sets<'i, T>(
+    pub fn bind_graphics_descriptor_sets<T>(
         &mut self,
         layout: &B::PipelineLayout,
         first_set: usize,

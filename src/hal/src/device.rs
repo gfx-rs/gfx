@@ -152,12 +152,19 @@ pub trait Device<B: Backend> {
     fn destroy_command_pool(&self, B::CommandPool);
 
     ///
-    fn create_render_pass(
+    fn create_render_pass<'a, IA, IS, ID>(
         &self,
-        &[pass::Attachment],
-        &[pass::SubpassDesc],
-        &[pass::SubpassDependency],
-    ) -> B::RenderPass;
+        attachments: IA,
+        subpasses: IS,
+        dependencies: ID,
+    ) -> B::RenderPass
+    where
+        IA: IntoIterator,
+        IA::Item: Borrow<pass::Attachment>,
+        IS: IntoIterator,
+        IS::Item: Borrow<pass::SubpassDesc<'a>>,
+        ID: IntoIterator,
+        ID::Item: Borrow<pass::SubpassDependency>;
 
     ///
     fn destroy_renderpass(&self, B::RenderPass);
@@ -170,20 +177,38 @@ pub trait Device<B: Backend> {
     /// * `push_constants` - Ranges of push constants. A shader stage may only contain one push
     ///     constant block. The length of the range indicates the number of u32 constants occupied
     ///     by the push constant block.
-    fn create_pipeline_layout(
+    fn create_pipeline_layout<IS, IR>(
         &self,
-        set_layouts: &[&B::DescriptorSetLayout],
-        push_constants: &[(pso::ShaderStageFlags, Range<u32>)]
-    ) -> B::PipelineLayout;
+        set_layouts: IS,
+        push_constant: IR,
+    ) -> B::PipelineLayout
+    where
+        IS: IntoIterator,
+        IS::Item: Borrow<B::DescriptorSetLayout>,
+        IR: IntoIterator,
+        IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>;
 
     ///
     fn destroy_pipeline_layout(&self, B::PipelineLayout);
 
-    /// Create graphics pipelines.
-    fn create_graphics_pipelines<'a>(
+    /// Create a graphics pipeline.
+    fn create_graphics_pipeline<'a>(
         &self,
-        &[pso::GraphicsPipelineDesc<'a, B>],
-    ) -> Vec<Result<B::GraphicsPipeline, pso::CreationError>>;
+        desc: &pso::GraphicsPipelineDesc<'a, B>
+    ) -> Result<B::GraphicsPipeline, pso::CreationError> {
+        self.create_graphics_pipelines(Some(desc)).remove(0)
+    }
+
+    /// Create graphics pipelines.
+    fn create_graphics_pipelines<'a, I>(
+        &self, descs: I
+    ) -> Vec<Result<B::GraphicsPipeline, pso::CreationError>>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::GraphicsPipelineDesc<'a, B>>,
+    {
+        descs.into_iter().map(|desc| self.create_graphics_pipeline(desc.borrow())).collect()
+    }
 
     /// Destroys a graphics pipeline.
     ///
@@ -191,11 +216,24 @@ pub trait Device<B: Backend> {
     /// which references the graphics pipeline, has finished execution.
     fn destroy_graphics_pipeline(&self, B::GraphicsPipeline);
 
-    /// Create compute pipelines.
-    fn create_compute_pipelines<'a>(
+    /// Create a compute pipeline.
+    fn create_compute_pipeline<'a>(
         &self,
-        &[pso::ComputePipelineDesc<'a, B>],
-    ) -> Vec<Result<B::ComputePipeline, pso::CreationError>>;
+        desc: &pso::ComputePipelineDesc<'a, B>
+    ) -> Result<B::ComputePipeline, pso::CreationError> {
+        self.create_compute_pipelines(Some(desc)).remove(0)
+    }
+
+    /// Create compute pipelines.
+    fn create_compute_pipelines<'a, I>(
+        &self, descs: I
+    ) -> Vec<Result<B::ComputePipeline, pso::CreationError>>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::ComputePipelineDesc<'a, B>>,
+    {
+        descs.into_iter().map(|desc| self.create_compute_pipeline(desc.borrow())).collect()
+    }
 
     /// Destroys a compute pipeline.
     ///
@@ -204,12 +242,15 @@ pub trait Device<B: Backend> {
     fn destroy_compute_pipeline(&self, B::ComputePipeline);
 
     ///
-    fn create_framebuffer(
+    fn create_framebuffer<I>(
         &self,
-        &B::RenderPass,
-        &[&B::ImageView],
-        Extent,
-    ) -> Result<B::Framebuffer, FramebufferError>;
+        pass: &B::RenderPass,
+        attachments: I,
+        extent: Extent,
+    ) -> Result<B::Framebuffer, FramebufferError>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<B::ImageView>;
 
     /// Destroys a framebuffer.
     ///
@@ -298,28 +339,31 @@ pub trait Device<B: Backend> {
     /// Create a descriptor pool.
     ///
     /// Descriptor pools allow allocation of descriptor sets.
-    /// The pool can't be modified directly, only trough updating descriptor sets.
-    fn create_descriptor_pool(
-        &self,
-        max_sets: usize,
-        &[pso::DescriptorRangeDesc],
-    ) -> B::DescriptorPool;
+    /// Ihe pool can't be modified directly, only through updating descriptor sets.
+    fn create_descriptor_pool<I>(&self, max_sets: usize, descriptor_ranges: I) -> B::DescriptorPool
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorRangeDesc>;
 
     ///
     fn destroy_descriptor_pool(&self, B::DescriptorPool);
 
     /// Create a descriptor set layout.
-    fn create_descriptor_set_layout(
-        &self,
-        &[pso::DescriptorSetLayoutBinding],
-    ) -> B::DescriptorSetLayout;
+    fn create_descriptor_set_layout<I>(&self, bindings: I) -> B::DescriptorSetLayout
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorSetLayoutBinding>;
 
     ///
     fn destroy_descriptor_set_layout(&self, B::DescriptorSetLayout);
 
     ///
     // TODO: copies
-    fn update_descriptor_sets<R: RangeArg<u64>>(&self, &[pso::DescriptorSetWrite<B, R>]);
+    fn update_descriptor_sets<'a, I, R>(&self, writes: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorSetWrite<'a, 'a, B, R>>,
+        R: RangeArg<u64>;
 
     ///
     fn map_memory<R>(&self, &B::Memory, R) -> Result<*mut u8, mapping::Error>
@@ -411,11 +455,70 @@ pub trait Device<B: Backend> {
     fn create_fence(&self, signaled: bool) -> B::Fence;
 
     ///
-    fn reset_fences(&self, &[&B::Fence]);
+    fn reset_fence(&self, fence: &B::Fence) {
+        self.reset_fences(Some(fence));
+    }
+
+    ///
+    fn reset_fences<I>(&self, fences: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<B::Fence>,
+    {
+        for fence in fences {
+            self.reset_fence(fence.borrow());
+        }
+    }
+
+    /// Blocks until the given fence is signaled.
+    /// Returns true if the fence was signaled before the timeout.
+    fn wait_for_fence(&self, fence: &B::Fence, timeout_ms: u32) -> bool {
+        self.wait_for_fences(Some(fence), WaitFor::All, timeout_ms)
+    }
 
     /// Blocks until all or one of the given fences are signaled.
     /// Returns true if fences were signaled before the timeout.
-    fn wait_for_fences(&self, &[&B::Fence], WaitFor, timeout_ms: u32) -> bool;
+    fn wait_for_fences<I>(&self, fences: I, wait: WaitFor, timeout_ms: u32) -> bool
+    where
+        I: IntoIterator,
+        I::Item: Borrow<B::Fence>,
+    {
+        use std::{time, thread};
+        let start = time::Instant::now();
+        fn as_ms(duration: time::Duration) -> u32 {
+            duration.as_secs() as u32 * 1000 + duration.subsec_nanos() / 1_000_000
+        }
+        match wait {
+            WaitFor::All => {
+                for fence in fences {
+                    if !self.wait_for_fence(fence.borrow(), 0) {
+                        let elapsed_ms = as_ms(start.elapsed());
+                        if elapsed_ms > timeout_ms {
+                            return false;
+                        }
+                        if !self.wait_for_fence(fence.borrow(), timeout_ms - elapsed_ms) {
+                            return false;
+                        }
+                    }
+                }
+                true
+            },
+            WaitFor::Any => {
+                let fences: Vec<_> = fences.into_iter().collect();
+                loop {
+                    for fence in &fences {
+                        if self.wait_for_fence(fence.borrow(), 0) {
+                            return true;
+                        }
+                    }
+                    if as_ms(start.elapsed()) >= timeout_ms {
+                        return false;
+                    }
+                    thread::sleep(time::Duration::from_millis(1));
+                }
+            }
+        }
+    }
 
     /// true for signaled, false for not ready
     fn get_fence_status(&self, &B::Fence) -> bool;

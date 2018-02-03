@@ -428,10 +428,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             }
                         };
 
-                        let raw_atts = attachments
-                            .values()
-                            .cloned()
-                            .collect::<Vec<_>>();
+                        let raw_atts = attachments.values().cloned();
                         let temp = subpasses
                             .values()
                             .map(|sp| {
@@ -470,11 +467,10 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                 passes: subpass_ref(&dep.passes.start) .. subpass_ref(&dep.passes.end),
                                 stages: dep.stages.clone(),
                                 accesses: dep.accesses.clone(),
-                            })
-                            .collect::<Vec<_>>();
+                            });
 
                         let rp = RenderPass {
-                            handle: device.create_render_pass(&raw_atts, &raw_subs, &raw_deps),
+                            handle: device.create_render_pass(raw_atts, raw_subs, raw_deps),
                             attachments: attachments.keys().cloned().collect(),
                             subpasses: subpasses.keys().cloned().collect(),
                         };
@@ -538,9 +534,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         let desc_set = resources.desc_pools
                             .get_mut(pool)
                             .expect(&format!("Missing descriptor pool: {}", pool))
-                            .allocate_sets(&[set_layout])
-                            .pop()
-                            .unwrap();
+                            .allocate_set(set_layout);
                         resources.desc_sets.insert(name.clone(), desc_set);
                         // fill it up
                         let set = &resources.desc_sets[name];
@@ -569,9 +563,8 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         let layout = {
                             let layouts = set_layouts
                                 .iter()
-                                .map(|sl| &resources.desc_set_layouts[sl].1)
-                                .collect::<Vec<_>>();
-                            device.create_pipeline_layout(&layouts, &push_constant_ranges)
+                                .map(|sl| &resources.desc_set_layouts[sl].1);
+                            device.create_pipeline_layout(layouts, push_constant_ranges)
                         };
                         resources.pipeline_layouts.insert(name.clone(), layout);
                     }
@@ -593,9 +586,8 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                         .find(|entry| entry.0 == s)
                                         .unwrap();
                                     &resources.image_views[entry.1]
-                                })
-                                .collect::<Vec<_>>();
-                            device.create_framebuffer(&rp.handle, &image_views, extent)
+                                });
+                            device.create_framebuffer(&rp.handle, image_views, extent)
                                 .unwrap()
                         };
                         resources.framebuffers.insert(name.clone(), (framebuffer, extent));
@@ -917,7 +909,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             .submit(Some(copy_submit));
         self.queue_group.queues[0].submit(submission, Some(&copy_fence));
         //queue.destroy_command_pool(command_pool);
-        self.device.wait_for_fences(&[&copy_fence], hal::device::WaitFor::Any, !0);
+        self.device.wait_for_fence(&copy_fence, !0);
         self.device.destroy_fence(copy_fence);
 
         let mapping = self
@@ -1023,7 +1015,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             .submit(Some(copy_submit));
         self.queue_group.queues[0].submit(submission, Some(&copy_fence));
         //queue.destroy_command_pool(command_pool);
-        self.device.wait_for_fences(&[&copy_fence], hal::device::WaitFor::Any, !0);
+        self.device.wait_for_fence(&copy_fence, !0);
         self.device.destroy_fence(copy_fence);
 
         let mapping = self

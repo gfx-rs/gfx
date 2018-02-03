@@ -311,18 +311,24 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_render_pass(
-        &self,
-        attachments: &[pass::Attachment],
-        subpasses: &[pass::SubpassDesc],
-        _dependencies: &[pass::SubpassDependency],
-    ) -> n::RenderPass {
+    fn create_render_pass<'a, IA, IS, ID>(
+        &self, attachments: IA, subpasses: IS, _dependencies: ID
+    ) -> n::RenderPass
+    where
+        IA: IntoIterator,
+        IA::Item: Borrow<pass::Attachment>,
+        IS: IntoIterator,
+        IS::Item: Borrow<pass::SubpassDesc<'a>>,
+        ID: IntoIterator,
+        ID::Item: Borrow<pass::SubpassDependency>,
+    {
         let subpasses =
             subpasses
-                .iter()
+                .into_iter()
                 .map(|subpass| {
                     let color_attachments =
                         subpass
+                            .borrow()
                             .colors
                             .iter()
                             .map(|&(index, _)| index)
@@ -335,153 +341,155 @@ impl d::Device<B> for Device {
                 .collect();
 
         n::RenderPass {
-            attachments: attachments.into(),
+            attachments: attachments.into_iter().map(|attachment| attachment.borrow().clone()).collect::<Vec<_>>(),
             subpasses,
         }
     }
 
-    fn create_pipeline_layout(&self, _: &[&n::DescriptorSetLayout], _: &[(pso::ShaderStageFlags, Range<u32>)]) -> n::PipelineLayout {
+    fn create_pipeline_layout<IS, IR>(&self, _: IS, _: IR) -> n::PipelineLayout
+    where
+        IS: IntoIterator,
+        IS::Item: Borrow<n::DescriptorSetLayout>,
+        IR: IntoIterator,
+        IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
+    {
         n::PipelineLayout
     }
 
-    fn create_graphics_pipelines<'a>(
-        &self,
-        descs: &[pso::GraphicsPipelineDesc<'a, B>],
-    ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>> {
+    fn create_graphics_pipeline<'a>(
+        &self, desc: &pso::GraphicsPipelineDesc<'a, B>
+    ) -> Result<n::GraphicsPipeline, pso::CreationError> {
         let gl = &self.share.context;
         let share = &self.share;
-        descs.iter()
-            .map(|desc| {
-                let subpass = {
-                    let subpass = desc.subpass;
-                    match subpass.main_pass.subpasses.get(subpass.index) {
-                        Some(sp) => sp,
-                        None => return Err(pso::CreationError::InvalidSubpass(subpass.index)),
+        let desc = desc.borrow();
+        let subpass = {
+            let subpass = desc.subpass;
+            match subpass.main_pass.subpasses.get(subpass.index) {
+                Some(sp) => sp,
+                None => return Err(pso::CreationError::InvalidSubpass(subpass.index)),
+            }
+        };
+
+        let program = {
+            let name = unsafe { gl.CreateProgram() };
+
+            // Attach shaders to program
+            let shaders = [
+                (pso::Stage::Vertex, Some(&desc.shaders.vertex)),
+                (pso::Stage::Hull, desc.shaders.hull.as_ref()),
+                (pso::Stage::Domain, desc.shaders.domain.as_ref()),
+                (pso::Stage::Geometry, desc.shaders.geometry.as_ref()),
+                (pso::Stage::Fragment, desc.shaders.fragment.as_ref()),
+            ];
+            for &(stage, point_maybe) in &shaders {
+                if let Some(ref point) = point_maybe {
+                    let shader = self.compile_shader(point, stage);
+                    unsafe { gl.AttachShader(name, shader); }
+                }
+            }
+
+            if !share.private_caps.program_interface && share.private_caps.frag_data_location {
+                for i in 0..subpass.color_attachments.len() {
+                    let color_name = format!("Target{}\0", i);
+                    unsafe {
+                        gl.BindFragDataLocation(name, i as u32, (&color_name[..]).as_ptr() as *mut gl::types::GLchar);
                     }
-                };
+                }
+            }
 
-                let program = {
-                    let name = unsafe { gl.CreateProgram() };
+            unsafe { gl.LinkProgram(name) };
+            info!("\tLinked program {}", name);
+            if let Err(err) = share.check() {
+                panic!("Error linking program: {:?}", err);
+            }
 
-                    // Attach shaders to program
-                    let shaders = [
-                        (pso::Stage::Vertex, Some(&desc.shaders.vertex)),
-                        (pso::Stage::Hull, desc.shaders.hull.as_ref()),
-                        (pso::Stage::Domain, desc.shaders.domain.as_ref()),
-                        (pso::Stage::Geometry, desc.shaders.geometry.as_ref()),
-                        (pso::Stage::Fragment, desc.shaders.fragment.as_ref()),
-                    ];
-                    for &(stage, point_maybe) in &shaders {
-                        if let Some(ref point) = point_maybe {
-                            let shader = self.compile_shader(point, stage);
-                            unsafe { gl.AttachShader(name, shader); }
-                        }
+            let status = get_program_iv(gl, name, gl::LINK_STATUS);
+            let log = get_program_log(gl, name);
+            if status != 0 {
+                if !log.is_empty() {
+                    warn!("\tLog: {}", log);
+                }
+            } else {
+                return Err(pso::CreationError::Other);
+            }
+
+            name
+        };
+
+        let patch_size = match desc.input_assembler.primitive {
+            c::Primitive::PatchList(size) => Some(size as _),
+            _ => None
+        };
+
+        Ok(n::GraphicsPipeline {
+            program,
+            primitive: conv::primitive_to_gl_primitive(desc.input_assembler.primitive),
+            patch_size,
+            blend_targets: desc.blender.targets.clone(),
+            vertex_buffers: desc.vertex_buffers.clone(),
+            attributes: desc.attributes
+                .iter()
+                .map(|&a| {
+                    let (size, format, vertex_attrib_fn) = conv::format_to_gl_format(a.element.format).unwrap();
+                    n::AttributeDesc {
+                        location: a.location,
+                        offset: a.element.offset,
+                        binding: a.binding,
+                        size,
+                        format,
+                        vertex_attrib_fn,
                     }
-
-                    if !share.private_caps.program_interface && share.private_caps.frag_data_location {
-                        for i in 0..subpass.color_attachments.len() {
-                            let color_name = format!("Target{}\0", i);
-                            unsafe {
-                                gl.BindFragDataLocation(name, i as u32, (&color_name[..]).as_ptr() as *mut gl::types::GLchar);
-                            }
-                         }
-                    }
-
-                    unsafe { gl.LinkProgram(name) };
-                    info!("\tLinked program {}", name);
-                    if let Err(err) = share.check() {
-                        panic!("Error linking program: {:?}", err);
-                    }
-
-                    let status = get_program_iv(gl, name, gl::LINK_STATUS);
-                    let log = get_program_log(gl, name);
-                    if status != 0 {
-                        if !log.is_empty() {
-                            warn!("\tLog: {}", log);
-                        }
-                    } else {
-                        return Err(pso::CreationError::Other);
-                    }
-
-                    name
-                };
-
-                let patch_size = match desc.input_assembler.primitive {
-                    c::Primitive::PatchList(size) => Some(size as _),
-                    _ => None
-                };
-
-                Ok(n::GraphicsPipeline {
-                    program,
-                    primitive: conv::primitive_to_gl_primitive(desc.input_assembler.primitive),
-                    patch_size,
-                    blend_targets: desc.blender.targets.clone(),
-                    vertex_buffers: desc.vertex_buffers.clone(),
-                    attributes: desc.attributes
-                        .iter()
-                        .map(|&a| {
-                            let (size, format, vertex_attrib_fn) = conv::format_to_gl_format(a.element.format).unwrap();
-                            n::AttributeDesc {
-                                location: a.location,
-                                offset: a.element.offset,
-                                binding: a.binding,
-                                size,
-                                format,
-                                vertex_attrib_fn,
-                            }
-                        })
-                        .collect::<Vec<_>>(),
                 })
-             })
-             .collect()
+                .collect::<Vec<_>>(),
+        })
     }
 
-    fn create_compute_pipelines<'a>(
+    fn create_compute_pipeline<'a>(
         &self,
-        descs: &[pso::ComputePipelineDesc<'a, B>],
-    ) -> Vec<Result<n::ComputePipeline, pso::CreationError>> {
+        desc: &pso::ComputePipelineDesc<'a, B>,
+    ) -> Result<n::ComputePipeline, pso::CreationError> {
         let gl = &self.share.context;
         let share = &self.share;
-        descs.iter()
-            .map(|desc| {
-                let program = {
-                    let name = unsafe { gl.CreateProgram() };
+        let program = {
+            let name = unsafe { gl.CreateProgram() };
 
-                    let shader = self.compile_shader(&desc.shader, pso::Stage::Compute);
-                    unsafe { gl.AttachShader(name, shader) };
+            let shader = self.compile_shader(&desc.shader, pso::Stage::Compute);
+            unsafe { gl.AttachShader(name, shader) };
 
-                    unsafe { gl.LinkProgram(name) };
-                    info!("\tLinked program {}", name);
-                    if let Err(err) = share.check() {
-                        panic!("Error linking program: {:?}", err);
-                    }
+            unsafe { gl.LinkProgram(name) };
+            info!("\tLinked program {}", name);
+            if let Err(err) = share.check() {
+                panic!("Error linking program: {:?}", err);
+            }
 
-                    let status = get_program_iv(gl, name, gl::LINK_STATUS);
-                    let log = get_program_log(gl, name);
-                    if status != 0 {
-                        if !log.is_empty() {
-                            warn!("\tLog: {}", log);
-                        }
-                    } else {
-                        return Err(pso::CreationError::Other);
-                    }
+            let status = get_program_iv(gl, name, gl::LINK_STATUS);
+            let log = get_program_log(gl, name);
+            if status != 0 {
+                if !log.is_empty() {
+                    warn!("\tLog: {}", log);
+                }
+            } else {
+                return Err(pso::CreationError::Other);
+            }
 
-                    name
-                };
+            name
+        };
 
-                Ok(n::ComputePipeline {
-                    program,
-                })
-            })
-            .collect()
+        Ok(n::ComputePipeline {
+            program,
+        })
     }
 
-    fn create_framebuffer(
+    fn create_framebuffer<I>(
         &self,
         pass: &n::RenderPass,
-        attachments: &[&n::ImageView],
+        attachments: I,
         _extent: d::Extent,
-    ) -> Result<n::FrameBuffer, d::FramebufferError> {
+    ) -> Result<n::FrameBuffer, d::FramebufferError>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<n::ImageView>,
+    {
         if !self.share.private_caps.framebuffer {
             return Err(d::FramebufferError);
         }
@@ -501,26 +509,30 @@ impl d::Device<B> for Device {
             gl::COLOR_ATTACHMENT3,
         ];
 
-        assert_eq!(attachments.len(), pass.attachments.len());
+        let mut attachments_len = 0;
         //TODO: exclude depth/stencil attachments from here
-        for (&att_point, view) in att_points.iter().zip(attachments.iter()) {
+        for (&att_point, view) in att_points.iter().zip(attachments.into_iter()) {
+            attachments_len += 1;
             if self.share.private_caps.framebuffer_texture {
-                Self::bind_target(gl, target, att_point, view);
+                Self::bind_target(gl, target, att_point, view.borrow());
             } else {
-                Self::bind_target_compat(gl, target, att_point, view);
+                Self::bind_target_compat(gl, target, att_point, view.borrow());
             }
         }
+        assert_eq!(attachments_len, pass.attachments.len());
+        // attachments_len actually equals min(attachments.len(), att_points.len()) until the next assert
 
         unsafe {
-            assert!(attachments.len() <= att_points.len());
-            gl.DrawBuffers(attachments.len() as _, att_points.as_ptr());
+            assert!(pass.attachments.len() <= att_points.len());
+            gl.DrawBuffers(attachments_len as _, att_points.as_ptr());
             let status = gl.CheckFramebufferStatus(target);
             assert_eq!(status, gl::FRAMEBUFFER_COMPLETE);
             gl.BindFramebuffer(target, 0);
         }
         if let Err(err) = self.share.check() {
-            panic!("Error creating FBO: {:?} for {:?} with attachments {:?}",
-                err, pass, attachments);
+            //TODO: attachments have been consumed
+            panic!("Error creating FBO: {:?} for {:?}"/* with attachments {:?}"*/,
+               err, pass/*, attachments*/);
         }
 
         Ok(name)
@@ -861,15 +873,28 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_descriptor_pool(&self, _: usize, _: &[pso::DescriptorRangeDesc]) -> n::DescriptorPool {
+    fn create_descriptor_pool<I>(&self, _: usize, _: I) -> n::DescriptorPool
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorRangeDesc>,
+    {
         n::DescriptorPool { }
     }
 
-    fn create_descriptor_set_layout(&self, _: &[pso::DescriptorSetLayoutBinding]) -> n::DescriptorSetLayout {
+    fn create_descriptor_set_layout<I>(&self, _: I) -> n::DescriptorSetLayout
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
+    {
         n::DescriptorSetLayout
     }
 
-    fn update_descriptor_sets<R: RangeArg<u64>>(&self, _: &[pso::DescriptorSetWrite<B, R>]) {
+    fn update_descriptor_sets<'a, I, R>(&self, _: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorSetWrite<'a, 'a, B, R>>,
+        R: RangeArg<u64>,
+    {
         // TODO
     }
 
@@ -887,13 +912,18 @@ impl d::Device<B> for Device {
         n::Fence::new(sync)
     }
 
-    fn reset_fences(&self, fences: &[&n::Fence]) {
+    fn reset_fences<I>(&self, fences: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<n::Fence>,
+    {
         if !self.share.private_caps.sync {
             return
         }
 
         let gl = &self.share.context;
         for fence in fences {
+            let fence = fence.borrow();
             let sync = fence.0.get();
             unsafe {
                 if gl.IsSync(sync) == gl::TRUE {
@@ -904,51 +934,19 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn wait_for_fences(&self, fences: &[&n::Fence], wait: d::WaitFor, timeout_ms: u32) -> bool {
+    fn wait_for_fence(&self, fence: &n::Fence, timeout_ms: u32) -> bool {
         if !self.share.private_caps.sync {
             return true;
         }
-
-        match wait {
-            d::WaitFor::All => {
-                for fence in fences {
-                    match wait_fence(fence, &self.share.context, timeout_ms) {
-                        gl::TIMEOUT_EXPIRED => return false,
-                        gl::WAIT_FAILED => {
-                            if let Err(err) = self.share.check() {
-                                error!("Error when waiting on fence: {:?}", err);
-                            }
-                            return false
-                        }
-                        _ => (),
-                    }
+        match wait_fence(fence, &self.share.context, timeout_ms) {
+            gl::TIMEOUT_EXPIRED => false,
+            gl::WAIT_FAILED => {
+                if let Err(err) = self.share.check() {
+                    error!("Error when waiting on fence: {:?}", err);
                 }
-                // All fences have indicated a positive result
-                true
-            },
-            d::WaitFor::Any => {
-                let waiting = |_timeout_ms: u32| {
-                    for fence in fences {
-                        match wait_fence(fence, &self.share.context, 0) {
-                            gl::ALREADY_SIGNALED | gl::CONDITION_SATISFIED => return true,
-                            gl::WAIT_FAILED => {
-                                if let Err(err) = self.share.check() {
-                                    error!("Error when waiting on fence: {:?}", err);
-                                }
-                                return false
-                            }
-                            _ => (),
-                        }
-                    }
-                    // No fence has indicated a positive result
-                    false
-                };
-
-                // Short-circuit:
-                //   Check current state of all fences first,
-                //   else go trough each fence and wait till at least one has finished
-                waiting(0) || waiting(timeout_ms)
-            },
+                false
+            }
+            _ => true,
         }
     }
 

@@ -804,7 +804,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         self.update_blend_targets(blend_targets);
     }
 
-    fn bind_graphics_descriptor_sets<'a, T>(
+    fn bind_graphics_descriptor_sets<T>(
         &mut self,
         _layout: &n::PipelineLayout,
         _first_set: usize,
@@ -827,7 +827,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn bind_compute_descriptor_sets<'a, T>(
+    fn bind_compute_descriptor_sets<T>(
         &mut self,
         _layout: &n::PipelineLayout,
         _first_set: usize,

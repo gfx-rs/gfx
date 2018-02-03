@@ -1,5 +1,6 @@
 //! A typed high-level pipeline interface.
 
+use std::borrow::Borrow;
 use std::mem;
 use std::marker::PhantomData;
 
@@ -39,7 +40,11 @@ pub trait BindDesc {
 pub trait Bind<B: Backend>: BindDesc {
     type Handle: 'static + Clone;
 
-    fn write<'a>(&[&'a Self::Handle]) -> hal::pso::DescriptorWrite<'a, B, (Option<u64>, Option<u64>)>;
+    fn write<'a, I>(views: I) -> hal::pso::DescriptorWrite<'a, B, (Option<u64>, Option<u64>)>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<&'a Self::Handle>;
+
     fn require<'a>(
         &'a Self::Handle,
         &mut Vec<(&'a handle::raw::Buffer<B>, hal::buffer::State)>,
@@ -61,7 +66,11 @@ macro_rules! define_descriptors {
             {
                 type Handle = T::Handle;
 
-                fn write<'a>(handles: &[&'a Self::Handle]) -> hal::pso::DescriptorWrite<'a, B, (Option<u64>, Option<u64>)> {
+                fn write<'a, I>(handles: I) -> hal::pso::DescriptorWrite<'a, B, (Option<u64>, Option<u64>)>
+                where
+                    I: IntoIterator,
+                    I::Item: Borrow<&'a Self::Handle>
+                {
                     T::write(handles)
                 }
 
@@ -96,11 +105,16 @@ define_descriptors! {
 impl<B: Backend> Bind<B> for SampledImage {
     type Handle = handle::raw::ImageView<B>;
 
-    fn write<'a>(views: &[&'a Self::Handle]) -> hal::pso::DescriptorWrite<'a, B, (Option<u64>, Option<u64>)> {
-        hal::pso::DescriptorWrite::SampledImage(views.iter()
-            .map(|&view| {
+    fn write<'a, I>(views: I) -> hal::pso::DescriptorWrite<'a, B, (Option<u64>, Option<u64>)>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<&'a Self::Handle>,
+    {
+        hal::pso::DescriptorWrite::SampledImage(views
+            .into_iter()
+            .map(|view| {
                 let layout = ImageLayout::ShaderReadOnlyOptimal;
-                (view.resource(), layout)
+                (view.borrow().resource(), layout)
             }).collect())
     }
 
@@ -125,9 +139,14 @@ impl<B: Backend> Bind<B> for SampledImage {
 impl<B: Backend> Bind<B> for Sampler {
     type Handle = handle::raw::Sampler<B>;
 
-    fn write<'a>(samplers: &[&'a Self::Handle]) -> hal::pso::DescriptorWrite<'a, B, (Option<u64>, Option<u64>)> {
-        hal::pso::DescriptorWrite::Sampler(samplers.iter()
-            .map(|&sampler| sampler.resource())
+    fn write<'a, I>(samplers: I) -> hal::pso::DescriptorWrite<'a, B, (Option<u64>, Option<u64>)>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<&'a Self::Handle>,
+    {
+        hal::pso::DescriptorWrite::Sampler(samplers
+            .into_iter()
+            .map(|sampler| sampler.borrow().resource())
             .collect())
     }
 
@@ -157,12 +176,17 @@ impl<'a, B: Backend> DescriptorSetsUpdate<'a, B> {
         DescriptorSetsUpdate { device, writes: Vec::new() }
     }
 
-    pub fn write<'b, T: Bind<B>>(
+    pub fn write<'b, T: Bind<B>, I>(
         mut self,
         bind_ref: DescriptorSetBindRef<'a, 'b, B, T>,
         array_offset: usize,
-        handles: &[&'a T::Handle],
-    ) -> Self {
+        handles: I,
+    ) -> Self
+    where
+        I: IntoIterator,
+        I::Item: Borrow<&'a T::Handle>,
+    {
+        let handles: Vec<_> = handles.into_iter().map(|handle| *handle.borrow()).collect();
         for (slot, &handle) in bind_ref.handles[array_offset..].iter_mut().zip(handles.iter()) {
             *slot = Some(handle.clone());
         }
@@ -178,7 +202,7 @@ impl<'a, B: Backend> DescriptorSetsUpdate<'a, B> {
 
     pub fn finish(self) {
         use hal::Device;
-        self.device.raw.update_descriptor_sets(&self.writes[..]);
+        self.device.raw.update_descriptor_sets(&self.writes);
     }
 }
 

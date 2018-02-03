@@ -5,6 +5,7 @@ use hal::memory::Properties;
 
 use gl;
 use Backend;
+use std::borrow::Borrow;
 
 
 pub type RawBuffer   = gl::types::GLuint;
@@ -90,8 +91,12 @@ pub struct DescriptorSet;
 pub struct DescriptorPool {}
 
 impl hal::DescriptorPool<Backend> for DescriptorPool {
-    fn allocate_sets(&mut self, layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
-        layouts.iter().map(|_| DescriptorSet).collect()
+    fn allocate_sets<I>(&mut self, layouts: I) -> Vec<DescriptorSet>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<DescriptorSetLayout>,
+    {
+        layouts.into_iter().map(|_| DescriptorSet).collect()
     }
 
     fn reset(&mut self) {

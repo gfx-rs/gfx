@@ -296,13 +296,9 @@ impl<B: Backend, C> Context<B, C>
             .expect("no frame bundles");
 
         if bundle.signal_fence.signal == Pending {
-            self.device.raw.wait_for_fences(
-                &[&bundle.signal_fence.inner],
-                hal::device::WaitFor::All,
-                !0,
-            );
+            self.device.raw.wait_for_fence(&bundle.signal_fence.inner, !0);
         }
-        self.device.raw.reset_fences(&[&bundle.signal_fence.inner]);
+        self.device.raw.reset_fence(&bundle.signal_fence.inner);
         bundle.signal_fence.signal = Reached;
 
         bundle.handles.clear();
@@ -363,7 +359,7 @@ impl<B: Backend, C> Context<B, C> {
         assert!(self.frame_acquired.is_none());
 
         // TODO?: WaitIdle on queue instead
-        let fences: Vec<_> = self.frame_bundles.iter_mut()
+        let fences = self.frame_bundles.iter_mut()
             .filter_map(|bundle| {
                 // self can drop the handles before waiting because
                 // self will be the one receiving the garbage afterwards
@@ -374,9 +370,9 @@ impl<B: Backend, C> Context<B, C> {
                 } else {
                     None
                 }
-            }).collect();
+            });
 
-        self.device.raw.wait_for_fences(&fences, hal::device::WaitFor::All, !0);
+        self.device.raw.wait_for_fences(fences, hal::device::WaitFor::All, !0);
     }
 
     pub fn ref_device(&self) -> &Device<B> {
