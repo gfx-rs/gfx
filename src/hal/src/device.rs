@@ -400,7 +400,7 @@ pub trait Device<B: Backend> {
         self.map_memory(memory, range.clone())
             .map(|ptr| unsafe {
                 let start_ptr = ptr as *const _;
-                self.invalidate_mapped_memory_ranges(Some((memory, 0..len)));
+                self.invalidate_mapped_memory_ranges(Some((memory, range.clone())));
 
                 mapping::Reader {
                     slice: slice::from_raw_parts(start_ptr, count),
@@ -440,8 +440,7 @@ pub trait Device<B: Backend> {
     /// Release a mapping Writer.
     fn release_mapping_writer<'a, T>(&self, mut writer: mapping::Writer<'a, B, T>) {
         writer.released = true;
-        let len = writer.range.end - writer.range.start;
-        self.flush_mapped_memory_ranges(Some((writer.memory, 0..len)));
+        self.flush_mapped_memory_ranges(Some((writer.memory, writer.range.clone())));
         self.unmap_memory(writer.memory);
     }
 
