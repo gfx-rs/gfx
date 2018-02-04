@@ -2,6 +2,7 @@ use ash::vk;
 use ash::version::DeviceV1_0;
 use hal;
 use hal::image::SubresourceRange;
+use std::borrow::Borrow;
 use std::sync::Arc;
 use {Backend, RawDevice};
 
@@ -88,11 +89,15 @@ pub struct DescriptorPool {
 }
 
 impl hal::DescriptorPool<Backend> for DescriptorPool {
-    fn allocate_sets(&mut self, layouts: &[&DescriptorSetLayout]) -> Vec<DescriptorSet> {
+    fn allocate_sets<I>(&mut self, layouts: I) -> Vec<DescriptorSet>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<DescriptorSetLayout>,
+    {
         use std::ptr;
 
-        let layouts = layouts.iter().map(|layout| {
-            layout.raw
+        let layouts = layouts.into_iter().map(|layout| {
+            layout.borrow().raw
         }).collect::<Vec<_>>();
 
         let info = vk::DescriptorSetAllocateInfo {

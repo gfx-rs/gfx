@@ -18,7 +18,7 @@ use std::ops::Range;
 use hal::{
     Backend, Compute, Device, DescriptorPool, Instance, PhysicalDevice, QueueFamily,
 };
-use hal::{queue, pso, memory, buffer, pool, command, device};
+use hal::{queue, pso, memory, buffer, pool, command};
 
 #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
 fn main() {
@@ -60,13 +60,10 @@ fn main() {
             ],
         );
 
-        let pipeline_layout = device.create_pipeline_layout(&[&set_layout], &[]);
+        let pipeline_layout = device.create_pipeline_layout(Some(&set_layout), &[]);
         let entry_point = pso::EntryPoint { entry: "main", module: &shader, specialization: &[] };
         let pipeline = device
-            .create_compute_pipelines(&[
-                pso::ComputePipelineDesc::new(entry_point, &pipeline_layout)
-            ])
-            .remove(0)
+            .create_compute_pipeline(&pso::ComputePipelineDesc::new(entry_point, &pipeline_layout))
             .expect("Error creating compute pipeline!");
 
         let desc_pool = device.create_descriptor_pool(
@@ -105,7 +102,7 @@ fn main() {
         numbers.len() as u64,
     );
 
-    let desc_set = desc_pool.allocate_sets(&[&set_layout]).remove(0);
+    let desc_set = desc_pool.allocate_set(&set_layout);
     device.update_descriptor_sets(&[
         pso::DescriptorSetWrite {
             set: &desc_set,
@@ -145,7 +142,7 @@ fn main() {
         command_buffer.finish()
     }));
     queue_group.queues[0].submit(submission, Some(&fence));
-    device.wait_for_fences(&[&fence], device::WaitFor::All, !0);
+    device.wait_for_fence(&fence, !0);
 
     {
         let reader = device.acquire_mapping_reader::<u32>(&staging_memory, 0..stride * numbers.len() as u64).unwrap();

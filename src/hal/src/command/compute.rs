@@ -11,7 +11,7 @@ impl<'a, B: Backend, C: Supports<Compute>, S: Shot, L: Level> CommandBuffer<'a, 
     }
 
     ///
-    pub fn bind_compute_descriptor_sets<'i, T>(
+    pub fn bind_compute_descriptor_sets<T>(
         &mut self,
         layout: &B::PipelineLayout,
         first_set: usize,

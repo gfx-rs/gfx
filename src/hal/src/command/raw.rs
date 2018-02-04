@@ -301,7 +301,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     fn bind_graphics_pipeline(&mut self, &B::GraphicsPipeline);
 
     ///
-    fn bind_graphics_descriptor_sets<'a, T>(
+    fn bind_graphics_descriptor_sets<T>(
         &mut self,
         layout: &B::PipelineLayout,
         first_set: usize,
