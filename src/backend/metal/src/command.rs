@@ -394,6 +394,13 @@ impl CommandBuffer {
         }
     }
 
+    #[inline]
+    fn inner_ref(&self) -> &CommandBufferInner {
+        unsafe {
+            &*self.inner.get()
+        }
+    }
+
     fn encode_blit(&mut self) -> &metal::BlitCommandEncoderRef {
         let inner = self.inner();
         match inner.encoder_state {
@@ -411,8 +418,8 @@ impl CommandBuffer {
         }
     }
 
-    fn except_renderpass(&mut self) -> &metal::RenderCommandEncoderRef {
-        if let EncoderState::Render(ref encoder) = self.inner().encoder_state {
+    fn expect_renderpass(&self) -> &metal::RenderCommandEncoderRef {
+        if let EncoderState::Render(ref encoder) = self.inner_ref().encoder_state {
             encoder
         } else {
             panic!("only valid inside renderpass")
@@ -421,7 +428,7 @@ impl CommandBuffer {
 
     pub fn device(&self) -> &metal::DeviceRef {
         unsafe {
-            msg_send![&*(&*self.inner.get()).command_buffer, device]
+            msg_send![self.inner_ref().command_buffer, device]
         }
     }
 }
@@ -1043,7 +1050,7 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         instances: Range<InstanceCount>,
     ) {
         let primitive_type = self.inner().primitive_type;
-        let encoder = self.except_renderpass();
+        let encoder = self.expect_renderpass();
 
         unsafe {
             msg_send![encoder,
@@ -1062,10 +1069,10 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         base_vertex: VertexOffset,
         instances: Range<InstanceCount>,
     ) {
-        let (buffer, offset, index_type) = self.inner().index_buffer.take().expect("must bind index buffer");
-        let primitive_type = self.inner().primitive_type;
-        let encoder = self.except_renderpass();
-        let index_offset = match index_type {
+        let (ref buffer, ref offset, ref index_type) = *self.inner_ref().index_buffer.as_ref().expect("must bind index buffer");
+        let primitive_type = self.inner_ref().primitive_type;
+        let encoder = self.expect_renderpass();
+        let index_offset = match *index_type {
             MTLIndexType::UInt16 => indices.start as u64 * 2,
             MTLIndexType::UInt32 => indices.start as u64 * 4,
         };
