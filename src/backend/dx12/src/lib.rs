@@ -15,6 +15,7 @@ extern crate wio;
 mod command;
 mod conv;
 mod device;
+mod format;
 mod free_list;
 mod native;
 mod pool;
@@ -22,7 +23,7 @@ mod root_constants;
 mod shade;
 mod window;
 
-use hal::{error, format, memory, Features, Limits, QueueType};
+use hal::{error, format as f, memory, Features, Limits, QueueType};
 use hal::queue::{QueueFamily as HalQueueFamily, QueueFamilyId, Queues};
 
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, winerror};
@@ -314,8 +315,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         })
     }
 
-    fn format_properties(&self, _: Option<format::Format>) -> format::Properties {
-        unimplemented!()
+    fn format_properties(&self, fmt: Option<f::Format>) -> f::Properties {
+        let idx = fmt.map(|fmt| fmt as usize).unwrap_or(0);
+        format::query_properties()[idx]
     }
 
     fn memory_properties(&self) -> hal::MemoryProperties {
