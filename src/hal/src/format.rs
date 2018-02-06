@@ -215,8 +215,8 @@ macro_rules! surface_types {
 // ident { num_bits, aspects, dim, (color, alpha, ..) }
 surface_types! {
     R4_G4               {   8, COLOR, (1, 1), color: 8 },
-    R4_G4_B4_A4         {  32, COLOR, (1, 1), color: 24, alpha: 4 },
-    B4_G4_R4_A4         {  32, COLOR, (1, 1), color: 24, alpha: 4 },
+    R4_G4_B4_A4         {  16, COLOR, (1, 1), color: 12, alpha: 4 },
+    B4_G4_R4_A4         {  16, COLOR, (1, 1), color: 12, alpha: 4 },
     R5_G6_B5            {  16, COLOR, (1, 1), color: 16 },
     B5_G6_R5            {  16, COLOR, (1, 1), color: 16 },
     R5_G5_B5_A1         {  16, COLOR, (1, 1), color: 15, alpha: 1 },
