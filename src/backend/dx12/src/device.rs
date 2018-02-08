@@ -227,21 +227,24 @@ impl Device {
         compile_options.vertex.invert_y = true;
 
         let stage_flag = stage.into();
-        compile_options.root_constants_layout = layout
+        let root_constant_layout = layout
             .root_constants
             .iter()
             .filter_map(|constant| if constant.stages.contains(stage_flag) {
                 Some(hlsl::RootConstant {
-                    start: constant.range.start,
-                    end: constant.range.end,
+                    start: constant.range.start * 4,
+                    end: constant.range.end * 4,
+                    binding: constant.range.start,
+                    space: 0,
                 })
             } else {
                 None
             })
             .collect();
-
         ast.set_compiler_options(&compile_options)
-           .map_err(gen_unexpected_error)?;
+            .map_err(gen_unexpected_error)?;
+        ast.set_root_constant_layout(root_constant_layout)
+            .map_err(gen_unexpected_error)?;
         ast.compile()
             .map_err(|err| {
                 let msg =  match err {
