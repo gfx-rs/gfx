@@ -1069,10 +1069,10 @@ impl RawCommandBuffer<Backend> for CommandBuffer {
         base_vertex: VertexOffset,
         instances: Range<InstanceCount>,
     ) {
-        let (ref buffer, ref offset, ref index_type) = *self.inner_ref().index_buffer.as_ref().expect("must bind index buffer");
+        let (buffer, offset, index_type) = self.inner_ref().index_buffer.as_ref().cloned().expect("must bind index buffer");
         let primitive_type = self.inner_ref().primitive_type;
         let encoder = self.expect_renderpass();
-        let index_offset = match *index_type {
+        let index_offset = match index_type {
             MTLIndexType::UInt16 => indices.start as u64 * 2,
             MTLIndexType::UInt32 => indices.start as u64 * 4,
         };
