@@ -260,6 +260,7 @@ impl DescriptorRange {
 pub enum DescriptorRangeBinding {
     Sampler(DescriptorRange),
     View(DescriptorRange),
+    SamplerView(DescriptorRange, DescriptorRange),
     Empty,
 }
 
@@ -404,6 +405,31 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                         handle_size: self.heap_sampler.handle_size,
                     })
                 },
+                pso::DescriptorType::CombinedImageSampler => {
+                    let handle_sampler = self.heap_sampler.alloc_handles(binding.count as u64);
+                    if first_gpu_sampler.is_none() {
+                        first_gpu_sampler = Some(handle_sampler.gpu);
+                    }
+
+                    let handle_view = self.heap_srv_cbv_uav.alloc_handles(binding.count as u64);
+                    if first_gpu_view.is_none() {
+                        first_gpu_view = Some(handle_view.gpu);
+                    }
+                    DescriptorRangeBinding::SamplerView(
+                        DescriptorRange {
+                            handle: handle_sampler,
+                            ty: binding.ty,
+                            count: binding.count as _,
+                            handle_size: self.heap_sampler.handle_size,
+                        },
+                        DescriptorRange {
+                            handle: handle_view,
+                            ty: binding.ty,
+                            count: binding.count as _,
+                            handle_size: self.heap_srv_cbv_uav.handle_size,
+                        },
+                    )
+                },
                 _ => {
                     let handle = self.heap_srv_cbv_uav.alloc_handles(binding.count as u64);
                     if first_gpu_view.is_none() {
@@ -413,7 +439,7 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                         handle,
                         ty: binding.ty,
                         count: binding.count as _,
-                        handle_size: self.heap_sampler.handle_size,
+                        handle_size: self.heap_srv_cbv_uav.handle_size,
                     })
                 }
             };

@@ -647,16 +647,22 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .iter()
             .enumerate()
             .map(|(i, attachment)| {
+                let cv = if attachment.ops.load == pass::AttachmentLoadOp::Clear || attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
+                    Some(*clear_iter.next().unwrap().borrow())
+                } else {
+                    None
+                };
+
                 AttachmentClear {
                     subpass_id: render_pass.subpasses.iter().position(|sp| sp.is_using(i)),
                     value: if attachment.ops.load == pass::AttachmentLoadOp::Clear {
-                        Some(*clear_iter.next().unwrap().borrow())
+                        assert!(cv.is_some());
+                        cv
                     } else {
                         None
                     },
                     stencil_value: if attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
-                        let clear = clear_iter.next().expect("Must provide an addition DepthStencil clear value");
-                        Some(unsafe { clear.borrow().depth_stencil.stencil })
+                        Some(unsafe { cv.unwrap().depth_stencil.stencil })
                     } else {
                         None
                     },
@@ -1253,11 +1259,23 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             // Copy each layer in the region
             let layers = region.image_layers.layers.clone();
             for layer in layers {
-                assert!(region.buffer_width >= width as u32);
+                let buffer_width = if region.buffer_width == 0 {
+                    region.image_extent.width
+                } else {
+                    region.buffer_width
+                };
+
+                let buffer_height = if region.buffer_height == 0 {
+                    region.image_extent.height
+                } else {
+                    region.buffer_height
+                };
+
+                assert!(buffer_width >= width as u32);
                 assert_eq!(region.buffer_offset % d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64, 0);
 
-                let row_pitch = div(region.buffer_width, image.block_dim.0 as _) * image.bytes_per_block as u32;
-                let slice_pitch = div(region.buffer_height, image.block_dim.1 as _) * row_pitch;
+                let row_pitch = div(buffer_width, image.block_dim.0 as _) * image.bytes_per_block as u32;
+                let slice_pitch = div(buffer_height, image.block_dim.1 as _) * row_pitch;
                 assert_eq!(row_pitch % d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32, 0);
 
                 let height = height as _;

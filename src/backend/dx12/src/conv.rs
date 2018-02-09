@@ -426,7 +426,7 @@ pub fn map_image_resource_state(access: image::Access, layout: image::ImageLayou
     state
 }
 
-pub fn map_descriptor_range(bind: &DescriptorSetLayoutBinding, register_space: u32) -> D3D12_DESCRIPTOR_RANGE {
+pub fn map_descriptor_range(bind: &DescriptorSetLayoutBinding, register_space: u32, sampler: bool) -> D3D12_DESCRIPTOR_RANGE {
     D3D12_DESCRIPTOR_RANGE {
         RangeType: match bind.ty {
             pso::DescriptorType::Sampler => D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
@@ -434,6 +434,11 @@ pub fn map_descriptor_range(bind: &DescriptorSetLayoutBinding, register_space: u
             pso::DescriptorType::StorageBuffer |
             pso::DescriptorType::StorageImage => D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
             pso::DescriptorType::UniformBuffer => D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
+            pso::DescriptorType::CombinedImageSampler => if sampler {
+                D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER
+            } else {
+                D3D12_DESCRIPTOR_RANGE_TYPE_SRV
+            },
             _ => panic!("unsupported binding type {:?}", bind.ty)
         },
         NumDescriptors: bind.count as _,
