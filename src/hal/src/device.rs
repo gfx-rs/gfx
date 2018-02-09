@@ -71,15 +71,15 @@ pub enum WaitFor {
     All,
 }
 
-///
+/// DOC TODO
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Extent {
-    ///
+    /// DOC TODO
     pub width: u32,
-    ///
+    /// DOC TODO
     pub height: u32,
-    ///
+    /// DOC TODO
     pub depth: u32,
 }
 

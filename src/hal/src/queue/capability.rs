@@ -13,7 +13,9 @@ pub enum Transfer {}
 /// Graphics or compute capability.
 pub enum GraphicsOrCompute {}
 
-///
+/// A Capability is an object that specifies what kind of operations
+/// a queue type performs, allowing what types support what queue operations
+/// to be described at runtime by the type system.
 pub trait Capability {
     /// Return true if this type level capability is supported by
     /// a run-time queue type.
@@ -53,7 +55,8 @@ impl Capability for Transfer {
     }
 }
 
-///
+/// A trait that indicates that a particular type of queue supports
+/// a particular `Capability`.
 pub trait Supports<T> { }
 impl<T> Supports<T> for T { }
 impl Supports<Graphics> for General { }

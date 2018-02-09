@@ -1,4 +1,4 @@
-//! Output Merger(OM) stage description.
+//! Output Merger (OM) stage description.
 
 use command::StencilValue;
 
@@ -29,19 +29,19 @@ bitflags!(
     /// Target output color mask.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct ColorMask: u8 {
-        ///
+        /// Red mask
         const RED     = 0x1;
-        ///
+        /// Green mask
         const GREEN   = 0x2;
-        ///
+        /// Blue mask
         const BLUE    = 0x4;
-        ///
+        /// Alpha channel mask
         const ALPHA   = 0x8;
-        ///
+        /// Mask for RGB channels
         const COLOR   = 0x7;
-        ///
+        /// Mask all channels
         const ALL     = 0xF;
-        ///
+        /// Mask no channels.
         const NONE    = 0x0;
     }
 );
@@ -52,6 +52,7 @@ impl Default for ColorMask {
     }
 }
 
+// DOC TODO
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -78,7 +79,6 @@ pub enum Factor {
 }
 
 /// Blending operation.
-#[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BlendOp {
@@ -98,36 +98,39 @@ pub enum BlendOp {
 }
 
 impl BlendOp {
-    ///
+    /// Replaces the destination value with the source.
     pub const REPLACE: Self = BlendOp::Add {
         src: Factor::One,
         dst: Factor::Zero,
     };
-    ///
+    /// Add the source and destination together.
     pub const ADD: Self = BlendOp::Add {
         src: Factor::One,
         dst: Factor::One,
     };
-    ///
+    /// Alpha blend the source and destination together.
     pub const ALPHA: Self = BlendOp::Add {
         src: Factor::SrcAlpha,
         dst: Factor::OneMinusSrcAlpha,
     };
-    ///
+    /// Alpha blend a premultiplied-alpha source with the destination.
     pub const PREMULTIPLIED_ALPHA: Self = BlendOp::Add {
         src: Factor::One,
         dst: Factor::OneMinusSrcAlpha,
     };
 }
 
-#[allow(missing_docs)]
+/// Specifies whether to use blending, and if so,
+/// which operatiosn to use for color and alpha channels.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BlendState {
+    /// Enabled blending
     On {
         color: BlendOp,
         alpha: BlendOp,
     },
+    /// Disabled blending
     Off,
 }
 
@@ -199,17 +202,17 @@ impl Default for DepthTest {
 }
 
 impl DepthTest {
-    ///
+    /// DOC TODO
     pub const FAIL: Self = DepthTest::On {
         fun: Comparison::Never,
         write: false,
     };
-    ///
+    /// DOC TODO
     pub const PASS_TEST: Self = DepthTest::On {
         fun: Comparison::Always,
         write: false,
     };
-    ///
+    /// DOC TODO
     pub const PASS_WRITE: Self = DepthTest::On {
         fun: Comparison::Always,
         write: true,
@@ -217,7 +220,6 @@ impl DepthTest {
 }
 
 /// Stencil mask operation.
-#[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum StencilOp {
@@ -258,6 +260,7 @@ pub struct StencilFace {
     pub op_pass: StencilOp,
 }
 
+/// DOC TODO
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
