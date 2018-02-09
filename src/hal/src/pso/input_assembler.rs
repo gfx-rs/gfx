@@ -1,4 +1,5 @@
-//! Input Assembler(IA) stage description.
+//! Input Assembler (IA) stage description.
+//! The input assembler collects raw vertex and index data.
 
 use format;
 use {Backend, Primitive};
@@ -49,7 +50,13 @@ pub struct AttributeDesc {
     pub element: Element<format::Format>,
 }
 
+/// Describes whether or not primitive restart is supported for
+/// an input assembler.  Primitive restart is a feature that
+/// allows you to essentially mark places where an index buffer
+/// is "broken" into multiple parts.
 ///
+/// See <https://www.khronos.org/opengl/wiki/Vertex_Rendering#Primitive_Restart>
+/// for more detail.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum PrimitiveRestart {
@@ -61,13 +68,13 @@ pub enum PrimitiveRestart {
     U32,
 }
 
-///
+/// All the information needed to create an input assembler.
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct InputAssemblerDesc {
     /// Type of the primitive
     pub primitive: Primitive,
-    ///
+    /// The primitive restart specification.
     pub primitive_restart: PrimitiveRestart,
 }
 

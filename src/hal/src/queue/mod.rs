@@ -4,7 +4,8 @@
     submitted commands buffers.
 
     There are different types of queues, which can only handle associated command buffers.
-    `CommandQueue<B, C>` has the capability defined by `C`: graphics, compute and transfer.
+    `CommandQueue<B, C>` has the capability defined by `C` for backend `B`: graphics, 
+    compute and transfer.
 !*/
 
 pub mod capability;
@@ -27,17 +28,17 @@ pub use self::family::{
 pub use self::submission::{RawSubmission, Submission};
 
 
-///
+/// An enum describing the queue type at runtime.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum QueueType {
-    ///
+    /// The queue supports graphics, compute and transfer operations.
     General,
-    ///
+    /// The queue supports graphics operations.
     Graphics,
-    ///
+    /// The queue supports compute operations.
     Compute,
-    ///
+    /// The queue supports transfer operations.
     Transfer,
 }
 
@@ -55,7 +56,7 @@ pub trait RawCommandQueue<B: Backend> {
         IC: IntoIterator,
         IC::Item: Borrow<B::CommandBuffer>;
 
-    ///
+    /// DOC TODO
     fn present<IS, IW>(&mut self, swapchains: IS, wait_semaphores: IW)
     where
         IS: IntoIterator,
@@ -81,7 +82,7 @@ impl<B: Backend, C> CommandQueue<B, C> {
         &mut self.0
     }
 
-    ///
+    /// Calls `submit_raw()` for the underlying `RawCommandQueue`.
     pub fn submit<D>(&mut self,
         submission: Submission<B, D>,
         fence: Option<&B::Fence>,
@@ -93,7 +94,7 @@ impl<B: Backend, C> CommandQueue<B, C> {
         }
     }
 
-    ///
+    /// DOC TODO
     pub fn present<IS, IW>(&mut self, swapchains: IS, wait_semaphores: IW)
     where
         IS: IntoIterator,

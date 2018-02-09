@@ -1,4 +1,5 @@
 //! Descriptor sets and layouts.
+//! DOC TODO: Define `descriptor` precisely.
 
 use std::borrow::Borrow;
 use std::fmt;
@@ -9,7 +10,7 @@ use pso::ShaderStageFlags;
 use range::RangeArg;
 
 
-///
+/// DOC TODO
 // TODO: Grasping and remembering the differences between these
 //       types is a tough task. We might be able to come up with better names?
 //       Or even use tuples to describe functionality instead of coming up with fancy names.
@@ -37,7 +38,7 @@ pub enum DescriptorType {
     // TODO: Dynamic descriptors
 }
 
-/// Binding descriptiong of a descriptor set
+/// Binding description of a descriptor set
 ///
 /// A descriptor set consists of multiple binding points.
 /// Each binding point contains one or multiple descriptors of a certain type.
@@ -69,7 +70,7 @@ pub struct DescriptorRangeDesc {
     pub count: usize,
 }
 
-///
+/// DOC TODO
 pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
     /// Allocate a descriptor set from the pool.
     ///
@@ -95,11 +96,11 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
         layouts.into_iter().map(|layout| self.allocate_set(layout.borrow())).collect()
     }
 
-    ///
+    /// DOC TODO
     fn reset(&mut self);
 }
 
-#[allow(missing_docs)] //TODO
+/// DOC TODO
 pub struct DescriptorSetWrite<'a, 'b, B: Backend, R: RangeArg<u64>> {
     pub set: &'a B::DescriptorSet,
     pub binding: usize,
@@ -107,7 +108,7 @@ pub struct DescriptorSetWrite<'a, 'b, B: Backend, R: RangeArg<u64>> {
     pub write: DescriptorWrite<'b, B, R>,
 }
 
-#[allow(missing_docs)] //TODO
+/// DOC TODO
 pub enum DescriptorWrite<'a, B: Backend, R: RangeArg<u64>> {
     Sampler(Vec<&'a B::Sampler>),
     SampledImage(Vec<(&'a B::ImageView, ImageLayout)>),
