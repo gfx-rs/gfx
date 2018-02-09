@@ -2,7 +2,11 @@
 //! Applicable to textures, views, and vertex buffers.
 
 bitflags!(
-    ///
+    /// Bitflags that describes what properties of a buffer
+    /// a format specifies or does not specify.  For example,
+    /// the `Rgba8Unorm` format only specifies a `COLOR` aspect,
+    /// while `D32FloatS8Uint` specifies both a depth and stencil
+    /// aspect but no color.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct AspectFlags: u8 {
         /// Color aspect.
@@ -281,7 +285,7 @@ surface_types! {
     ASTC_12x12          { 128, COLOR, (12, 12) },
 }
 
-/// Gneric run-time base format.
+/// Generic run-time base format.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BaseFormat(pub SurfaceType, pub ChannelType);
