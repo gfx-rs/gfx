@@ -2,7 +2,7 @@
 //! Applicable to textures, views, and vertex buffers.
 
 bitflags!(
-    /// Bitflags that describes what properties of a buffer
+    /// Bitflags which describe what properties of an image
     /// a format specifies or does not specify.  For example,
     /// the `Rgba8Unorm` format only specifies a `COLOR` aspect,
     /// while `D32FloatS8Uint` specifies both a depth and stencil

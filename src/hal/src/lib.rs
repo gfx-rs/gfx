@@ -306,7 +306,7 @@ pub trait Instance {
 }
 
 /// The `Backend` trait wraps together all the types needed
-/// to implement a graphics backend.  Each backend, such as OpenGL
+/// for a graphics backend.  Each backend module, such as OpenGL
 /// or Metal, will implement this trait with its own concrete types.
 #[allow(missing_docs)]
 pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
@@ -369,8 +369,8 @@ impl Error for SubmissionError {
 pub type SubmissionResult<T> = Result<T, SubmissionError>;
 
 
-/// Represents a handle to a physical device, such as a particular
-/// GPU.
+/// Represents a combination of a logical device and the
+/// hardware queues it provides.
 ///
 /// This structure is typically created using an `Adapter`.
 pub struct Gpu<B: Backend> {
