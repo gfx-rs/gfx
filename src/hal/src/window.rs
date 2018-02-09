@@ -154,7 +154,20 @@ pub enum FrameSync<'a, B: Backend> {
     Fence(&'a B::Fence),
 }
 
-/// Allows you to configure a `Swapchain` for creation.
+/// Contains all the data necessary to create a new `SwapChain`:
+/// color, depth, and number of images.
+///
+/// # Examples
+///
+/// This type implements the builder pattern, so you can
+/// easily chain method calls.
+///
+/// ```no_run
+/// let config = SwapchainConfig::new()
+///     .with_color(Format::Bgra8Unorm)
+///     .with_depth_stencil(Some(Format::D16Unorm))
+///     .with_imamge_count(2);
+/// ```
 #[derive(Debug, Clone)]
 pub struct SwapchainConfig {
     /// Color format of the backbuffer images.

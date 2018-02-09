@@ -217,7 +217,7 @@ bitflags! {
     }
 }
 
-/// Limits of the device.
+/// Resource limits of a particular graphics device.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Limits {
@@ -241,7 +241,8 @@ pub struct Limits {
     pub min_uniform_buffer_offset_alignment: usize,
 }
 
-/// Describes what geometric primitives are created from vertex data.
+/// Describes the type of geometric primitives,
+/// created from vertex data.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[repr(u8)]
@@ -286,7 +287,7 @@ pub enum Primitive {
     PatchList(PatchSize),
 }
 
-/// A type of each index value in the slice's index buffer
+/// An enum describing the type of an index value in a slice's index buffer
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -304,7 +305,9 @@ pub trait Instance {
     fn enumerate_adapters(&self) -> Vec<Adapter<Self::Backend>>;
 }
 
-/// Different types of a specific API.
+/// The `Backend` trait wraps together all the types needed
+/// to implement a graphics backend.  Each backend, such as OpenGL
+/// or Metal, will implement this trait with its own concrete types.
 #[allow(missing_docs)]
 pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     //type Instance:          Instance<Self>;
@@ -366,12 +369,13 @@ impl Error for SubmissionError {
 pub type SubmissionResult<T> = Result<T, SubmissionError>;
 
 
-/// Represents a handle to a physical device.
+/// Represents a handle to a physical device, such as a particular
+/// GPU.
 ///
 /// This structure is typically created using an `Adapter`.
 pub struct Gpu<B: Backend> {
     /// Logical device.
     pub device: B::Device,
-    ///
+    /// The command queues that the device provides.
     pub queues: queue::Queues<B>,
 }
