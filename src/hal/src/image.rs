@@ -373,7 +373,6 @@ pub enum WrapMode {
     /// Tile the texture, that is, sample the coordinate modulo `1.0`, so 
     /// addressing the texture beyond an edge will "wrap" back from the
     /// other edge.
-    /// This is the default.
     Tile,
     /// Mirror the texture. Like tile, but uses abs(coord) before the modulo.
     Mirror,
@@ -400,7 +399,7 @@ impl Into<f32> for Lod {
     }
 }
 
-/// A wrapper for an RGBA color with 8 bits per pixel, encoded as a u32.
+/// A wrapper for an RGBA color with 8 bits per texel, encoded as a u32.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PackedColor(pub u32);

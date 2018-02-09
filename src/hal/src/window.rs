@@ -154,7 +154,7 @@ pub enum FrameSync<'a, B: Backend> {
     Fence(&'a B::Fence),
 }
 
-/// Contains all the data necessary to create a new `SwapChain`:
+/// Contains all the data necessary to create a new `Swapchain`:
 /// color, depth, and number of images.
 ///
 /// # Examples
