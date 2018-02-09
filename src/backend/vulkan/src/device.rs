@@ -1132,6 +1132,15 @@ impl d::Device<B> for Device {
                         texel_buffer_views.push(view.raw)
                     }
                 }
+                pso::DescriptorWrite::CombinedImageSampler(ref sampler_images) => {
+                    for &(sampler, view, layout) in sampler_images {
+                        image_infos.push(vk::DescriptorImageInfo {
+                            sampler: sampler.0,
+                            image_view: view.view,
+                            image_layout: conv::map_image_layout(layout),
+                        });
+                    }
+                }
             };
         }
 
@@ -1151,6 +1160,7 @@ impl d::Device<B> for Device {
                 pso::DescriptorWrite::StorageBuffer(_) => vk::DescriptorType::StorageBuffer,
                 pso::DescriptorWrite::UniformTexelBuffer(_) => vk::DescriptorType::UniformTexelBuffer,
                 pso::DescriptorWrite::StorageTexelBuffer(_) => vk::DescriptorType::StorageTexelBuffer,
+                pso::DescriptorWrite::CombinedImageSampler(_) => vk::DescriptorType::CombinedImageSampler,
             };
 
             let (count, image_info, buffer_info, texel_buffer_view) = match write.write {
@@ -1177,6 +1187,11 @@ impl d::Device<B> for Device {
                     let info_ptr = &texel_buffer_views[cur_view_index] as *const _;
                     cur_view_index += views.len();
                     (views.len(), ptr::null(), ptr::null(), info_ptr)
+                }
+                pso::DescriptorWrite::CombinedImageSampler(ref sampler_images) => {
+                    let info_ptr = &image_infos[cur_image_index] as *const _;
+                    cur_image_index += sampler_images.len();
+                    (sampler_images.len(), info_ptr, ptr::null(), ptr::null())
                 }
             };
 

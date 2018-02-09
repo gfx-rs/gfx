@@ -34,6 +34,9 @@ pub enum DescriptorType {
     /// Allows unfiltered loads of pixel local data in the fragment shader.
     InputAttachment,
 
+    ///
+    CombinedImageSampler,
+
     // TODO: Dynamic descriptors
 }
 
@@ -117,4 +120,5 @@ pub enum DescriptorWrite<'a, B: Backend, R: RangeArg<u64>> {
     StorageBuffer(Vec<(&'a B::Buffer, R)>),
     UniformTexelBuffer(Vec<&'a B::BufferView>),
     StorageTexelBuffer(Vec<&'a B::BufferView>),
+    CombinedImageSampler(Vec<(&'a B::Sampler, &'a B::ImageView, ImageLayout)>),
 }

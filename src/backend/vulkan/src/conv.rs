@@ -401,6 +401,7 @@ pub fn map_descriptor_type(ty: pso::DescriptorType) -> vk::DescriptorType {
         Dt::UniformBuffer      => vk::DescriptorType::UniformBuffer,
         Dt::StorageBuffer      => vk::DescriptorType::StorageBuffer,
         Dt::InputAttachment    => vk::DescriptorType::InputAttachment,
+        Dt::CombinedImageSampler => vk::DescriptorType::CombinedImageSampler,
     }
 }
 
