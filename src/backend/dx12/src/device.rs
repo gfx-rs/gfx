@@ -211,6 +211,12 @@ impl Device {
                .map_err(gen_unexpected_error)?;
         }
 
+        for image in &shader_resources.sampled_images {
+            let set = ast.get_decoration(image.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
+            ast.set_decoration(image.id, spirv::Decoration::DescriptorSet, space_offset + 2*set)
+               .map_err(gen_unexpected_error)?;
+        }
+
         // TODO: other resources
 
         Ok(())
@@ -1162,20 +1168,20 @@ impl d::Device<B> for Device {
             let input_descs = shade::reflect_input_elements(&mut vs_reflect);
             desc.attributes
                 .iter()
-                .map(|attrib| {
+                .filter_map(|attrib| {
                     let buffer_desc = if let Some(buffer_desc) = desc.vertex_buffers.get(attrib.binding as usize) {
                         buffer_desc
                     } else {
                         error!("Couldn't find associated vertex buffer description {:?}", attrib.binding);
-                        return Err(pso::CreationError::Other);
+                        return Some(Err(pso::CreationError::Other));
                     };
 
                     let input_elem =
                         if let Some(input_elem) = input_descs.iter().find(|elem| elem.semantic_index == attrib.location) {
                             input_elem
                         } else {
-                            error!("Couldn't find associated input element slot in the shader {:?}", attrib.location);
-                            return Err(pso::CreationError::Other);
+                            // Attribute not used in the shader, just skip it
+                            return None;
                         };
 
                     let slot_class = match buffer_desc.rate {
@@ -1184,21 +1190,21 @@ impl d::Device<B> for Device {
                     };
                     let format = attrib.element.format;
 
-                    Ok(d3d12::D3D12_INPUT_ELEMENT_DESC {
+                    Some(Ok(d3d12::D3D12_INPUT_ELEMENT_DESC {
                         SemanticName: input_elem.semantic_name,
                         SemanticIndex: input_elem.semantic_index,
                         Format: match conv::map_format(format) {
                             Some(fm) => fm,
                             None => {
                                 error!("Unable to find DXGI format for {:?}", format);
-                                return Err(pso::CreationError::Other);
+                                return Some(Err(pso::CreationError::Other));
                             }
                         },
                         InputSlot: attrib.binding as _,
                         AlignedByteOffset: attrib.element.offset,
                         InputSlotClass: slot_class,
                         InstanceDataStepRate: buffer_desc.rate as _,
-                    })
+                    }))
                 })
                 .collect::<Result<Vec<_>, _>>()?
         };
