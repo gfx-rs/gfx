@@ -158,6 +158,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                         }
                         pso::DescriptorType::UniformTexelBuffer |
                         pso::DescriptorType::StorageTexelBuffer |
+                        pso::DescriptorType::CombinedImageSampler |
                         pso::DescriptorType::InputAttachment => unimplemented!()
                     };
                     (layout.binding, binding)
