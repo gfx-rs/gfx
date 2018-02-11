@@ -211,6 +211,12 @@ impl Device {
                .map_err(gen_unexpected_error)?;
         }
 
+        for image in &shader_resources.sampled_images {
+            let set = ast.get_decoration(image.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
+            ast.set_decoration(image.id, spirv::Decoration::DescriptorSet, space_offset + 2*set)
+               .map_err(gen_unexpected_error)?;
+        }
+
         // TODO: other resources
 
         Ok(())
@@ -464,7 +470,9 @@ impl Device {
                 let range_binding = &sw.set.ranges[sw.binding as usize];
                 let range = match (heap_type, range_binding) {
                     (d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, &n::DescriptorRangeBinding::Sampler(ref range)) => range,
+                    (d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, &n::DescriptorRangeBinding::SamplerView(ref range, _)) => range,
                     (d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, &n::DescriptorRangeBinding::View(ref range)) => range,
+                    (d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, &n::DescriptorRangeBinding::SamplerView(_, ref range)) => range,
                     _ => unreachable!(),
                 };
                 dst_starts.push(range.at(sw.array_offset as _));
@@ -1001,7 +1009,28 @@ impl d::Device<B> for Device {
         // `space0`.
         let table_space_offset = if !root_constants.is_empty() { 1 } else { 0 };
 
-        let total = sets.iter().map(|desc_sec| desc_sec.borrow().bindings.len()).sum();
+        // Collect the whole number of bindings we will create upfront.
+        // It allows us to preallocate enough storage to avoid reallocation,
+        // which could cause invalid pointers.
+        let total = sets
+            .iter()
+            .map(|desc_set| {
+                let mut sum = 0;
+                let bindings = &desc_set
+                    .borrow()
+                    .bindings;
+
+                for binding in bindings {
+                    sum += if binding.ty == pso::DescriptorType::CombinedImageSampler {
+                        2
+                    } else {
+                        1
+                    };
+                }
+
+                sum
+            })
+            .sum();
         let mut ranges = Vec::with_capacity(total);
         let mut set_tables = Vec::with_capacity(sets.len());
 
@@ -1020,7 +1049,7 @@ impl d::Device<B> for Device {
                 .bindings
                 .iter()
                 .filter(|bind| bind.ty != pso::DescriptorType::Sampler)
-                .map(|bind| conv::map_descriptor_range(bind, (table_space_offset + 2*i) as u32)));
+                .map(|bind| conv::map_descriptor_range(bind, (table_space_offset + 2*i) as u32, false)));
 
             if ranges.len() > range_base {
                 *unsafe{ param.u.DescriptorTable_mut() } = d3d12::D3D12_ROOT_DESCRIPTOR_TABLE {
@@ -1036,11 +1065,12 @@ impl d::Device<B> for Device {
             ranges.extend(set
                 .bindings
                 .iter()
-                .filter(|bind| bind.ty == pso::DescriptorType::Sampler)
+                .filter(|bind| bind.ty == pso::DescriptorType::Sampler || bind.ty == pso::DescriptorType::CombinedImageSampler)
                 .map(|bind| {
                     conv::map_descriptor_range(
                         bind,
                         (table_space_offset + 2*i+1) as u32,
+                        true,
                     )
                 }));
 
@@ -1056,6 +1086,9 @@ impl d::Device<B> for Device {
 
             set_tables.push(table_type);
         }
+
+        // Ensure that we didn't reallocate!
+        debug_assert_eq!(ranges.len(), total);
 
         ranges.get_mut(0).map(|range| {
             range.OffsetInDescriptorsFromTableStart = 0; // careful!
@@ -1084,10 +1117,9 @@ impl d::Device<B> for Device {
 
             if !error.is_null() {
                 //TODO
-                //let error_output = (*error).GetBufferPointer();
-                //let message = <ffi::OsString as OsStringExt>::from_ptr(error_output)
-                //    .to_string_lossy();
-                //error!("D3D12SerializeRootSignature error: {}", message);
+                let error_output = (*error).GetBufferPointer();
+                let message = ::std::ffi::CStr::from_ptr(error_output as *const _ as *const _);
+                error!("D3D12SerializeRootSignature error: {:?}", message.to_str().unwrap());
                 (*error).Release();
             }
 
@@ -1136,20 +1168,20 @@ impl d::Device<B> for Device {
             let input_descs = shade::reflect_input_elements(&mut vs_reflect);
             desc.attributes
                 .iter()
-                .map(|attrib| {
+                .filter_map(|attrib| {
                     let buffer_desc = if let Some(buffer_desc) = desc.vertex_buffers.get(attrib.binding as usize) {
                         buffer_desc
                     } else {
                         error!("Couldn't find associated vertex buffer description {:?}", attrib.binding);
-                        return Err(pso::CreationError::Other);
+                        return Some(Err(pso::CreationError::Other));
                     };
 
                     let input_elem =
                         if let Some(input_elem) = input_descs.iter().find(|elem| elem.semantic_index == attrib.location) {
                             input_elem
                         } else {
-                            error!("Couldn't find associated input element slot in the shader {:?}", attrib.location);
-                            return Err(pso::CreationError::Other);
+                            // Attribute not used in the shader, just skip it
+                            return None;
                         };
 
                     let slot_class = match buffer_desc.rate {
@@ -1158,21 +1190,21 @@ impl d::Device<B> for Device {
                     };
                     let format = attrib.element.format;
 
-                    Ok(d3d12::D3D12_INPUT_ELEMENT_DESC {
+                    Some(Ok(d3d12::D3D12_INPUT_ELEMENT_DESC {
                         SemanticName: input_elem.semantic_name,
                         SemanticIndex: input_elem.semantic_index,
                         Format: match conv::map_format(format) {
                             Some(fm) => fm,
                             None => {
                                 error!("Unable to find DXGI format for {:?}", format);
-                                return Err(pso::CreationError::Other);
+                                return Some(Err(pso::CreationError::Other));
                             }
                         },
                         InputSlot: attrib.binding as _,
                         AlignedByteOffset: attrib.element.offset,
                         InputSlotClass: slot_class,
                         InstanceDataStepRate: buffer_desc.rate as _,
-                    })
+                    }))
                 })
                 .collect::<Result<Vec<_>, _>>()?
         };
@@ -1723,6 +1755,10 @@ impl d::Device<B> for Device {
                 pso::DescriptorType::Sampler => {
                     num_samplers += desc.count;
                 }
+                pso::DescriptorType::CombinedImageSampler => {
+                    num_samplers += desc.count;
+                    num_srv_cbv_uav += desc.count;
+                }
                 _ => {
                     num_srv_cbv_uav += desc.count;
                 }
@@ -1898,6 +1934,9 @@ impl d::Device<B> for Device {
                 pso::DescriptorWrite::StorageImage(ref images) => {
                     starts.extend(images.iter().map(|&(ref uav, _layout)| uav.handle_uav.unwrap()));
                 }
+                pso::DescriptorWrite::CombinedImageSampler(ref images) => {
+                    starts.extend(images.iter().map(|&(_, ref srv, _layout)| srv.handle_srv.unwrap()));
+                }
                 pso::DescriptorWrite::Sampler(_) => (), // done separately
                 _ => unimplemented!()
             });
@@ -1907,6 +1946,9 @@ impl d::Device<B> for Device {
             |dw, starts| match *dw {
                 pso::DescriptorWrite::Sampler(ref samplers) => {
                     starts.extend(samplers.iter().map(|sm| sm.handle))
+                }
+                pso::DescriptorWrite::CombinedImageSampler(ref samplers) => {
+                    starts.extend(samplers.iter().map(|&(ref sm, _, _)| sm.handle));
                 }
                 _ => ()
             });
