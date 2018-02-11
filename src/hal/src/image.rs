@@ -1,7 +1,7 @@
 //! Texture creation and modification.
 //!
 //! "Texture" is an overloaded term. In gfx-rs, a texture consists of two
-//! separate pieces of information: image storage description (which is
+//! separate pieces of information: an image storage description (which is
 //! immutable for a single texture object), and image data. To actually use a
 //! texture, a "sampler" is needed, which provides a way of accessing the
 //! image data.  Image data consists of an array of "texture elements", or
@@ -246,10 +246,11 @@ pub const CUBE_FACES: [CubeFace; 6] = [
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Kind {
-    /// A single row of texels.
+    /// A single one-dimensional row of texels.
     D1(Size),
     /// An array of rows of texels. Equivalent to Texture2D except that texels
-    /// in a different row are not sampled.
+    /// in different rows are not sampled, so filtering will be constrained
+    /// to a single row of texels at a time.
     D1Array(Size, Layer),
     /// A traditional 2D texture, with rows arranged contiguously.
     D2(Size, Size, AaMode),
@@ -302,7 +303,8 @@ impl Kind {
             1 // anti-aliased textures can't have mipmaps
         }
     }
-    /// Return the number of slices for an array, or None for non-arrays.
+    /// Return the number of slices in a texture array type, 
+    /// or None for non-arrays.
     pub fn get_num_slices(&self) -> Option<Layer> {
         match *self {
             Kind::D1(..) | Kind::D2(..) | Kind::D3(..) | Kind::Cube(..) => None,
@@ -311,7 +313,7 @@ impl Kind {
             Kind::CubeArray(_, a) => Some(a),
         }
     }
-    /// Return the number of layers.
+    /// Return the number of layers in an array type.
     ///
     /// Each cube face counts as separate layer.
     pub fn get_num_layers(&self) -> Layer {
@@ -323,7 +325,7 @@ impl Kind {
             Kind::CubeArray(_, a) => 6*a,
         }
     }
-    /// Check if it's one of the cube kinds.
+    /// Checks whether the `Kind` is `Cube` or `CubeArray`.
     pub fn is_cube(&self) -> bool {
         match *self {
             Kind::Cube(_) | Kind::CubeArray(_, _) => true,
@@ -353,12 +355,12 @@ bitflags!(
 );
 
 impl Usage {
-    /// Can this image be used in transfer operations ?
+    /// Returns true if this image can be used in transfer operations.
     pub fn can_transfer(&self) -> bool {
         self.intersects(Usage::TRANSFER_SRC | Usage::TRANSFER_DST)
     }
 
-    /// Can this image be used as a target ?
+    /// Returns true if this image can be used as a target.
     pub fn can_target(&self) -> bool {
         self.intersects(Usage::COLOR_ATTACHMENT | Usage::DEPTH_STENCIL_ATTACHMENT)
     }
@@ -368,8 +370,9 @@ impl Usage {
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum WrapMode {
-    /// Tile the texture. That is, sample the coordinate modulo `1.0`. This is
-    /// the default.
+    /// Tile the texture, that is, sample the coordinate modulo `1.0`, so 
+    /// addressing the texture beyond an edge will "wrap" back from the
+    /// other edge.
     Tile,
     /// Mirror the texture. Like tile, but uses abs(coord) before the modulo.
     Mirror,
@@ -396,7 +399,7 @@ impl Into<f32> for Lod {
     }
 }
 
-/// A wrapper for the 8bpp RGBA color, encoded as u32.
+/// A wrapper for an RGBA color with 8 bits per texel, encoded as a u32.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PackedColor(pub u32);
@@ -571,7 +574,7 @@ bitflags!(
     }
 );
 
-/// Image state
+/// Image state, combining access methods and the image's layout.
 pub type State = (Access, ImageLayout);
 
 /// Selector of a concrete subresource in an image.

@@ -12,9 +12,9 @@ use super::{
 
 /// Specifies how commands for the following renderpasses will be recorded.
 pub enum SubpassContents {
-    ///
+    /// DOC TODO
     Inline,
-    ///
+    /// DOC TODO
     SecondaryBuffers,
 }
 
@@ -23,7 +23,7 @@ pub enum SubpassContents {
 pub struct RenderSubpassCommon<'a, B: Backend>(pub(crate) &'a mut B::CommandBuffer);
 
 impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
-    ///
+    /// DOC TODO
     pub fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
     where
         T: IntoIterator,
@@ -34,19 +34,19 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
         self.0.clear_attachments(clears, rects)
     }
 
-    ///
+    /// DOC TODO
     pub fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {
         self.0.draw(vertices, instances)
     }
-    ///
+    /// DOC TODO
     pub fn draw_indexed(&mut self, indices: Range<IndexCount>, base_vertex: VertexOffset, instances: Range<InstanceCount>) {
         self.0.draw_indexed(indices, base_vertex, instances)
     }
-    ///
+    /// DOC TODO
     pub fn draw_indirect(&mut self, buffer: &B::Buffer, offset: u64, draw_count: u32, stride: u32) {
         self.0.draw_indirect(buffer, offset, draw_count, stride)
     }
-    ///
+    /// DOC TODO
     pub fn draw_indexed_indirect(&mut self, buffer: &B::Buffer, offset: u64, draw_count: u32, stride: u32) {
         self.0.draw_indexed_indirect(buffer, offset, draw_count, stride)
     }
@@ -66,7 +66,7 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
         self.0.bind_graphics_pipeline(pipeline)
     }
 
-    ///
+    /// DOC TODO
     pub fn bind_graphics_descriptor_sets<T>(
         &mut self,
         layout: &B::PipelineLayout,
@@ -79,7 +79,7 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
         self.0.bind_graphics_descriptor_sets(layout, first_set, sets)
     }
 
-    ///
+    /// DOC TODO
     pub fn set_viewports<T>(&mut self, viewports: T)
     where
         T: IntoIterator,
@@ -88,7 +88,7 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
         self.0.set_viewports(viewports)
     }
 
-    ///
+    /// DOC TODO
     pub fn set_scissors<T>(&mut self, scissors: T)
     where
         T: IntoIterator,
@@ -97,17 +97,17 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
         self.0.set_scissors(scissors)
     }
 
-    ///
+    /// DOC TODO
     pub fn set_stencil_reference(&mut self, front: StencilValue, back: StencilValue) {
         self.0.set_stencil_reference(front, back)
     }
 
-    ///
+    /// DOC TODO
     pub fn set_blend_constants(&mut self, cv: ColorValue) {
         self.0.set_blend_constants(cv)
     }
 
-    ///
+    /// DOC TODO
     pub fn push_graphics_constants(&mut self, layout: &B::PipelineLayout, stages: pso::ShaderStageFlags, offset: u32, constants: &[u32]) {
         self.0.push_graphics_constants(layout, stages, offset, constants);
     }
@@ -121,12 +121,12 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
     // TODO: begin/end query
 }
 
-///
+/// DOC TODO
 pub struct RenderPassInlineEncoder<'a, B: Backend, L: Level>(pub(crate) Option<RenderSubpassCommon<'a, B>>, PhantomData<L>)
 where B::CommandBuffer: 'a;
 
 impl<'a, B: Backend, L: Level> RenderPassInlineEncoder<'a, B, L> {
-    ///
+    /// DOC TODO
     pub fn new<C, T, S: Shot>(
         cmd_buffer: &'a mut CommandBuffer<B, C, S, L>,
         render_pass: &B::RenderPass,
@@ -148,7 +148,7 @@ impl<'a, B: Backend, L: Level> RenderPassInlineEncoder<'a, B, L> {
         RenderPassInlineEncoder(Some(RenderSubpassCommon(cmd_buffer.raw)), PhantomData)
     }
 
-    ///
+    /// DOC TODO
     pub fn next_subpass_inline(mut self) -> Self {
         self.0.as_mut().unwrap().0.next_subpass(SubpassContents::Inline);
         self
@@ -157,7 +157,7 @@ impl<'a, B: Backend, L: Level> RenderPassInlineEncoder<'a, B, L> {
 
 impl<'a, B: Backend> RenderPassInlineEncoder<'a, B, Primary> {
 
-    ///
+    /// DOC TODO
     pub fn next_subpass_secondary(mut self) -> RenderPassSecondaryEncoder<'a, B> {
         let buffer = self.0.take().unwrap();
         buffer.0.next_subpass(SubpassContents::SecondaryBuffers);
@@ -186,12 +186,12 @@ impl<'a, B: Backend, L: Level> Drop for RenderPassInlineEncoder<'a, B, L> {
     }
 }
 
-///
+/// DOC TODO
 pub struct RenderPassSecondaryEncoder<'a, B: Backend>(pub(crate) Option<&'a mut B::CommandBuffer>)
 where B::CommandBuffer: 'a;
 
 impl<'a, B: Backend> RenderPassSecondaryEncoder<'a, B> {
-    ///
+    /// DOC TODO
     pub fn new<C, T, S: Shot>(
         cmd_buffer: &'a mut CommandBuffer<B, C, S, Primary>,
         render_pass: &B::RenderPass,
@@ -214,7 +214,7 @@ impl<'a, B: Backend> RenderPassSecondaryEncoder<'a, B> {
         RenderPassSecondaryEncoder(Some(cmd_buffer.raw))
     }
 
-    ///
+    /// DOC TODO
     pub fn execute_commands<I>(&mut self, submits: I)
     where
         I: IntoIterator,
@@ -224,14 +224,14 @@ impl<'a, B: Backend> RenderPassSecondaryEncoder<'a, B> {
         self.0.as_mut().unwrap().execute_commands(submits.into_iter().map(|submit| unsafe { submit.as_buffer() }));
     }
 
-    ///
+    /// DOC TODO
     pub fn next_subpass_inline(mut self) -> RenderPassInlineEncoder<'a, B, Primary> {
         let buffer = self.0.take().unwrap();
         buffer.next_subpass(SubpassContents::Inline);
         RenderPassInlineEncoder(Some(RenderSubpassCommon(buffer)), PhantomData)
     }
 
-    ///
+    /// DOC TODO
     pub fn next_subpass_secondary(mut self) -> Self {
         self.0.as_mut().unwrap().next_subpass(SubpassContents::SecondaryBuffers);
         self

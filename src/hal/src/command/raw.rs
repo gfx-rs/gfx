@@ -18,36 +18,39 @@ use super::{
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub union ClearColorRaw {
-    ///
+    /// `f32` variant
     pub float32: [f32; 4],
-    ///
+    /// `i32` variant
     pub int32: [i32; 4],
-    ///
+    /// `u32` variant
     pub uint32: [u32; 4],
     _align: [u32; 4],
 }
-///
+
+/// A variant of `ClearDepthStencil` that has a `#[repr(C)]` layout
+/// and so is used when a known layout is needed.
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct ClearDepthStencilRaw {
-    ///
+    /// Depth value
     pub depth: f32,
-    ///
+    /// Stencil value
     pub stencil: u32,
 }
+
 /// Unsafe variant of `ClearValue`.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub union ClearValueRaw {
-    ///
+    /// Clear color
     pub color: ClearColorRaw,
-    ///
+    /// Clear depth and stencil
     pub depth_stencil: ClearDepthStencilRaw,
     _align: [u32; 4],
 }
 
 bitflags! {
-    ///
+    /// DOC TODO
     #[derive(Default)]
     pub struct CommandBufferFlags: u16 {
         // TODO: Remove once 'const fn' is stabilized: https://github.com/rust-lang/rust/issues/24111
@@ -65,7 +68,11 @@ bitflags! {
     }
 }
 
-///
+/// An enum that indicates at runtime whether a command buffer
+/// is primary or secondary, similar to what `command::Primary`
+/// and `command::Secondary` do at compile-time.
+/// 
+/// DOC TODO: Is this correct?
 #[derive(Clone, Copy)]
 pub enum Level {
     ///
@@ -74,18 +81,19 @@ pub enum Level {
     Secondary,
 }
 
-///
+/// A trait that describes all the operations that must be
+/// provided by a `Backend`'s command buffer.
 pub trait RawCommandBuffer<B: Backend>: Clone + Send {
-    ///
+    /// DOC TODO
     fn begin(&mut self, flags: CommandBufferFlags);
 
-    ///
+    /// DOC TODO
     fn finish(&mut self);
 
-    ///
+    /// DOC TODO
     fn reset(&mut self, release_resources: bool);
 
-    ///
+    /// DOC TODO
     fn pipeline_barrier<'a, T>(
         &mut self,
         stages: Range<pso::PipelineStage>,
@@ -94,7 +102,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         T: IntoIterator,
         T::Item: Borrow<Barrier<'a, B>>;
 
-    ///
+    /// DOC TODO
     fn fill_buffer(
         &mut self,
         buffer: &B::Buffer,
@@ -102,7 +110,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         data: u32,
     );
 
-    ///
+    /// DOC TODO
     fn update_buffer(
         &mut self,
         buffer: &B::Buffer,
@@ -159,7 +167,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         ClearDepthStencilRaw,
     );
 
-    ///
+    /// DOC TODO
     fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
     where
         T: IntoIterator,
@@ -167,7 +175,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         U: IntoIterator,
         U::Item: Borrow<Rect>;
 
-    ///
+    /// DOC TODO
     fn resolve_image<T>(
         &mut self,
         src: &B::Image,
@@ -229,13 +237,13 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         T: IntoIterator,
         T::Item: Borrow<Rect>;
 
-    ///
+    /// DOC TODO
     fn set_stencil_reference(&mut self, front: StencilValue, back: StencilValue);
 
-    ///
+    /// DOC TODO
     fn set_blend_constants(&mut self, ColorValue);
 
-    ///
+    /// DOC TODO
     fn begin_renderpass<T>(
         &mut self,
         render_pass: &B::RenderPass,
@@ -271,7 +279,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         )
     }
 
-    ///
+    /// DOC TODO
     fn begin_renderpass_raw<T>(
         &mut self,
         render_pass: &B::RenderPass,
@@ -283,10 +291,10 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         T: IntoIterator,
         T::Item: Borrow<ClearValueRaw>;
 
-    ///
+    /// DOC TODO
     fn next_subpass(&mut self, contents: SubpassContents);
 
-    ///
+    /// DOC TODO
     fn end_renderpass(&mut self);
 
     /// Bind a graphics pipeline.
@@ -300,7 +308,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     /// - Only queues with graphics capability support this function.
     fn bind_graphics_pipeline(&mut self, &B::GraphicsPipeline);
 
-    ///
+    /// DOC TODO
     fn bind_graphics_descriptor_sets<T>(
         &mut self,
         layout: &B::PipelineLayout,
@@ -321,7 +329,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     /// - Only queues with compute capability support this function.
     fn bind_compute_pipeline(&mut self, &B::ComputePipeline);
 
-    ///
+    /// DOC TODO
     fn bind_compute_descriptor_sets<T>(
         &mut self,
         layout: &B::PipelineLayout,
@@ -347,10 +355,10 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     /// TODO:
     fn dispatch(&mut self, x: u32, y: u32, z: u32);
 
-    ///
+    /// DOC TODO
     fn dispatch_indirect(&mut self, buffer: &B::Buffer, offset: u64);
 
-    ///
+    /// DOC TODO
     fn copy_buffer<T>(
         &mut self,
         src: &B::Buffer,
@@ -360,7 +368,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         T: IntoIterator,
         T::Item: Borrow<BufferCopy>;
 
-    ///
+    /// DOC TODO
     fn copy_image<T>(
         &mut self,
         src: &B::Image,
@@ -372,7 +380,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         T: IntoIterator,
         T::Item: Borrow<ImageCopy>;
 
-    ///
+    /// DOC TODO
     fn copy_buffer_to_image<T>(
         &mut self,
         src: &B::Buffer,
@@ -383,7 +391,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         T: IntoIterator,
         T::Item: Borrow<BufferImageCopy>;
 
-    ///
+    /// DOC TODO
     fn copy_image_to_buffer<T>(
         &mut self,
         src: &B::Image,
@@ -394,14 +402,14 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         T: IntoIterator,
         T::Item: Borrow<BufferImageCopy>;
 
-    ///
+    /// DOC TODO
     fn draw(
         &mut self,
         vertices: Range<VertexCount>,
         instances: Range<InstanceCount>,
     );
 
-    ///
+    /// DOC TODO
     fn draw_indexed(
         &mut self,
         indices: Range<IndexCount>,
@@ -409,7 +417,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         instances: Range<InstanceCount>,
     );
 
-    ///
+    /// DOC TODO
     fn draw_indirect(
         &mut self,
         buffer: &B::Buffer,
@@ -418,7 +426,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         stride: u32,
     );
 
-    ///
+    /// DOC TODO
     fn draw_indexed_indirect(
         &mut self,
         buffer: &B::Buffer,
@@ -427,19 +435,19 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         stride: u32,
     );
 
-    ///
+    /// DOC TODO
     fn begin_query(&mut self, query: Query<B>, flags: QueryControl);
 
-    ///
+    /// DOC TODO
     fn end_query(&mut self, query: Query<B>);
 
-    ///
+    /// DOC TODO
     fn reset_query_pool(&mut self, pool: &B::QueryPool, queries: Range<QueryId>);
 
-    ///
+    /// DOC TODO
     fn write_timestamp(&mut self, pso::PipelineStage, Query<B>);
 
-    ///
+    /// DOC TODO
     fn push_graphics_constants(
         &mut self,
         layout: &B::PipelineLayout,
@@ -448,7 +456,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         constants: &[u32],
     );
 
-    ///
+    /// DOC TODO
     fn push_compute_constants(
         &mut self,
         layout: &B::PipelineLayout,
@@ -456,7 +464,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
         constants: &[u32],
     );
 
-    ///
+    /// DOC TODO
     fn execute_commands<I>(
         &mut self,
         buffers: I,

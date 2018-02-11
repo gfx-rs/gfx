@@ -56,7 +56,7 @@ impl Error for CreationError {
 bitflags!(
     /// Stages of the logical pipeline.
     ///
-    /// The pipeline is structured as given the by the ordering of the flags.
+    /// The pipeline is structured by the ordering of the flags.
     /// Some stages are queue type dependent.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct PipelineStage: u32 {
@@ -183,7 +183,7 @@ bitflags!(
     }
 );
 
-///
+/// DOC TODO
 #[derive(Debug)]
 pub enum BasePipeline<'a, P: 'a> {
     /// Referencing an existing pipeline as parent.
@@ -192,7 +192,7 @@ pub enum BasePipeline<'a, P: 'a> {
     ///
     /// The index of the parent must be lower than the index of the child.
     Index(usize),
-    ///
+    /// DOC TODO
     None,
 }
 
@@ -206,6 +206,7 @@ pub struct Specialization {
 }
 
 /// Scalar specialization constant with value for overriding.
+/// DOC TODO, don't know what this means.
 #[derive(Debug, Clone)]
 pub enum Constant {
     ///
