@@ -44,6 +44,16 @@ mod window;
 const LAYERS: &'static [&'static str] = &[
     #[cfg(debug_assertions)]
     "VK_LAYER_LUNARG_standard_validation",
+    #[cfg(debug_assertions)]
+    "VK_LAYER_LUNARG_core_validation",
+    #[cfg(debug_assertions)]
+    "VK_LAYER_LUNARG_parameter_validation",
+    #[cfg(debug_assertions)]
+    "VK_LAYER_LUNARG_object_tracker",
+    #[cfg(debug_assertions)]
+    "VK_LAYER_GOOGLE_unique_objects",
+    #[cfg(debug_assertions)]
+    "VK_LAYER_GOOGLE_threading",
 ];
 const EXTENSIONS: &'static [&'static str] = &[
     #[cfg(debug_assertions)]
@@ -56,11 +66,17 @@ const SURFACE_EXTENSIONS: &'static [&'static str] = &[
     vk::VK_KHR_SURFACE_EXTENSION_NAME,
 
     // Platform-specific WSI extensions
+    #[cfg(unix)]
     vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
+    #[cfg(unix)]
     vk::VK_KHR_XCB_SURFACE_EXTENSION_NAME,
+    #[cfg(unix)]
     vk::VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME,
+    #[cfg(unix)]
     vk::VK_KHR_MIR_SURFACE_EXTENSION_NAME,
+    #[cfg(target_os = "android")]
     vk::VK_KHR_ANDROID_SURFACE_EXTENSION_NAME,
+    #[cfg(windows)]
     vk::VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
 ];
 
