@@ -40,9 +40,18 @@ Native API backends:
 - [Metal](src/backend/metal)
 - [OpenGL 2.1+/ES2+](src/backend/gl)
 
+### Dependencies
+
+For Fedora
+``` bash
+sudo dnf install -y libX11-devel vulkan
+```
 ### Usage
 
 You can run the examples this way:
+
+Note: ```dx12``` works only in windows.
+
 ```bash
 git clone https://github.com/gfx-rs/gfx
 cd gfx/examples/hal
