@@ -15,7 +15,7 @@ pub use self::raw::{ClearValueRaw, ClearColorRaw, ClearDepthStencilRaw, RawComma
 pub use self::renderpass::*;
 pub use self::transfer::*;
 
-use std::borrow::Borrow;
+use std::borrow::{Borrow, Cow};
 
 /// Trait indicating how many times a Submit can be submitted.
 pub trait Shot {
@@ -47,21 +47,19 @@ impl<B: Backend, C, S, L> Submit<B, C, S, L> {
 }
 unsafe impl<B: Backend, C, S, L> Send for Submit<B, C, S, L> {}
 
+
 /// A trait representing a command buffer that can be added to a `Submission`.
 pub unsafe trait Submittable<'a, B: Backend, C, L: Level> {
     ///
-    type RawBuffer: Borrow<B::CommandBuffer> + 'a;
-    ///
-    unsafe fn as_buffer(self) -> Self::RawBuffer;
+    unsafe fn as_buffer(self) -> Cow<'a, B::CommandBuffer>;
 }
 
 unsafe impl<'a, B: Backend, C, L: Level> Submittable<'a, B, C, L> for Submit<B, C, OneShot, L> {
-    type RawBuffer = B::CommandBuffer;
-    unsafe fn as_buffer(self) -> B::CommandBuffer { self.0 }
+    unsafe fn as_buffer(self) -> Cow<'a, B::CommandBuffer> { Cow::Owned(self.0) }
 }
+
 unsafe impl<'a, B: Backend, C, L: Level> Submittable<'a, B, C, L> for &'a Submit<B, C, MultiShot, L> {
-    type RawBuffer = &'a B::CommandBuffer;
-    unsafe fn as_buffer(self) -> &'a B::CommandBuffer { &self.0 }
+    unsafe fn as_buffer(self) -> Cow<'a, B::CommandBuffer> { Cow::Borrowed(&self.0) }
 }
 
 /// A convenience for not typing out the full signature of a secondary command buffer.
