@@ -98,7 +98,7 @@ pub enum BlendOp {
 }
 
 impl BlendOp {
-    /// Replaces the destination value with the source.
+    /// Replace the destination value with the source.
     pub const REPLACE: Self = BlendOp::Add {
         src: Factor::One,
         dst: Factor::Zero,

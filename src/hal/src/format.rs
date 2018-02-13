@@ -1,5 +1,8 @@
 //! Universal format specification.
 //! Applicable to textures, views, and vertex buffers.
+//!
+//! For a more detailed description of all the specific format specifiers,
+//! please see [the official Vulkan documentation](https://www.khronos.org/registry/vulkan/specs/1.0/man/html/VkFormat.html)
 
 bitflags!(
     /// Bitflags which describe what properties of an image

@@ -43,9 +43,9 @@ impl Level for Primary { }
 /// Indicates a secondary command buffer.
 ///
 /// Vulkan describes a secondary command buffer as one which cannot be directly submitted
-/// to a queue, but can be executed by a primary command buffer.  This allows you to
-/// construct multiple secondary command buffers that do specific things, and compose
-/// them together into primary command buffers.
+/// to a queue, but can be executed by a primary command buffer.  This allows
+/// multiple secondary command buffers to be constructed which do specific 
+/// things, which can then be composed together into primary command buffers.
 pub enum Secondary { }
 impl Level for Secondary { }
 
@@ -75,7 +75,7 @@ unsafe impl<'a, B: Backend, C, L: Level> Submittable<'a, B, C, L> for &'a Submit
     unsafe fn as_buffer(self) -> &'a B::CommandBuffer { &self.0 }
 }
 
-/// A convenience type for not typing out the full signature of a secondary command buffer.
+/// A convenience alias for not typing out the full signature of a secondary command buffer.
 pub type SecondaryCommandBuffer<'a, B: Backend, C, S: Shot = OneShot> = CommandBuffer<'a, B, C, S, Secondary>;
 
 /// Command buffer with compute, graphics and transfer functionality.

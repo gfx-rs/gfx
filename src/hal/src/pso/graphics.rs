@@ -7,9 +7,16 @@ use super::output_merger::{ColorBlendDesc, DepthStencilDesc};
 
 /// A complete set of shaders to build a graphics pipeline.
 ///
-/// All except the vertex shader are optional.
-/// DOC TODO: What happens if, say, a fragment shader is not defined?
-/// does it use a default?
+/// All except the vertex shader are optional; omitting them
+/// passes through the inputs without change.
+/// 
+/// If a fragment shader is omitted, the results of fragment 
+/// processing are undefined. Specifically, any fragment color 
+/// outputs are considered to have undefined values, and the 
+/// fragment depth is considered to be unmodified. This can 
+/// be useful for depth-only rendering.
+
+
 #[derive(Clone, Debug)]
 pub struct GraphicsShaderSet<'a, B: Backend> {
     /// A shader that outputs a vertex in a model.
@@ -22,10 +29,10 @@ pub struct GraphicsShaderSet<'a, B: Backend> {
     /// A shader that takes in domains produced from a hull shader's output
     /// patches and computes actual vertex positions.
     pub domain: Option<EntryPoint<'a, B>>,
-    /// A shader that takes given input vertexes and outputs one
+    /// A shader that takes given input vertexes and outputs zero
     /// or more output vertexes.
     pub geometry: Option<EntryPoint<'a, B>>,
-    /// A shader that outputs a value for a texel.
+    /// A shader that outputs a value for a fragment.
     /// Usually this value is a color that is then displayed as a
     /// pixel on a screen.
     pub fragment: Option<EntryPoint<'a, B>>,
@@ -121,8 +128,10 @@ pub enum FrontFace {
     CounterClockwise,
 }
 
-/// A depth bias allows you to specify a hint for how to draw
-/// polygons that are in the same plane, such as shadows on a wall.
+/// A depth bias allows changing the produced depth values 
+/// for fragments slightly but consistently.  This permits 
+/// drawing of multiple layers of the same geometry without 
+/// Z-fighting, such as when trying to draw shadows on a wall.
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DepthBias {
@@ -165,7 +174,7 @@ impl Rasterizer {
     };
 }
 
-/// A description of an equation for how to blend transparent, overlapping texels.
+/// A description of an equation for how to blend transparent, overlapping fragments.
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BlendDesc {

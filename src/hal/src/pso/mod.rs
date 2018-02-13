@@ -197,6 +197,15 @@ pub enum BasePipeline<'a, P: 'a> {
 }
 
 /// Specialization information for pipelines.
+/// 
+/// Specialization constants allow for easy configuration of 
+/// multiple similar pipelines.  For example, there may be a 
+/// boolean exposed to the shader that switches the specularity on/off
+/// provided via a specialization constant.
+/// That would produce separate PSO's for the "on" and "off" states 
+/// but they share most of the internal stuff and are fast to produce. 
+/// More importantly, they are fast to execute, since the driver 
+/// can optimize out the branch on that other PSO creation.
 #[derive(Debug, Clone)]
 pub struct Specialization {
     /// Constant identifier in shader source.
@@ -206,21 +215,20 @@ pub struct Specialization {
 }
 
 /// Scalar specialization constant with value for overriding.
-/// DOC TODO, don't know what this means.
 #[derive(Debug, Clone)]
 pub enum Constant {
-    ///
+    /// `bool` value.
     Bool(bool),
-    ///
+    /// `u32` value.
     U32(u32),
-    ///
+    /// `u64` value.
     U64(u64),
-    ///
+    /// `i32` value.
     I32(i32),
-    ///
+    /// `i64` value.
     I64(i64),
-    ///
+    /// `f32` value.
     F32(f32),
-    ///
+    /// `f64` value.
     F64(f64),
 }

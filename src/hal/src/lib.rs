@@ -306,7 +306,7 @@ pub trait Instance {
 }
 
 /// The `Backend` trait wraps together all the types needed
-/// for a graphics backend.  Each backend module, such as OpenGL
+/// for a graphics backend. Each backend module, such as OpenGL
 /// or Metal, will implement this trait with its own concrete types.
 #[allow(missing_docs)]
 pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {

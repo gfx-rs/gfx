@@ -24,8 +24,8 @@ pub struct Offset {
 }
 
 /// Specifies a source region and a destination
-/// region in a buffer for copying.
-/// DOC TODO: What units for src, dst, size?
+/// region in a buffer for copying.  All values
+/// are in bytes.
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BufferCopy {
@@ -56,13 +56,13 @@ pub struct ImageResolve {
 pub struct ImageCopy {
     /// The aspect mask of what to copy: color, depth and/or stencil information.
     pub aspect_mask: format::AspectFlags,
-    /// The image subresource to copy from
+    /// The image subresource to copy from.
     pub src_subresource: image::Subresource,
-    /// The source offset
+    /// The source offset.
     pub src_offset: Offset,
-    /// The image subresource to copy from
+    /// The image subresource to copy from.
     pub dst_subresource: image::Subresource,
-    /// The destination offset
+    /// The destination offset.
     pub dst_offset: Offset,
     /// DOC TODO
     pub extent: Extent,
