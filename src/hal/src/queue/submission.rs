@@ -5,7 +5,7 @@
 use {pso, Backend};
 use command::{Submittable, Primary};
 use super::capability::{Transfer, Supports, Upper};
-use std::borrow::Borrow;
+use std::borrow::{Borrow, Cow};
 use std::ops::Deref;
 use std::marker::PhantomData;
 use smallvec::SmallVec;
@@ -26,7 +26,7 @@ where
 
 /// Submission information for a command queue.
 pub struct Submission<'a, B: Backend, C> {
-    cmd_buffers: SmallVec<[Box<Borrow<B::CommandBuffer> + 'a>; 16]>,
+    cmd_buffers: SmallVec<[Cow<'a, B::CommandBuffer>; 16]>,
     wait_semaphores: SmallVec<[(&'a B::Semaphore, pso::PipelineStage); 16]>,
     signal_semaphores: SmallVec<[&'a B::Semaphore; 16]>,
     marker: PhantomData<C>,
@@ -91,7 +91,7 @@ where
         (C, K): Upper
     {
         self.cmd_buffers.extend(submits.into_iter().map(
-            |s| { Box::new( unsafe { s.as_buffer() } ) as Box<_> }
+            |s| { unsafe { s.as_buffer() } }
         ));
         Submission {
             cmd_buffers: self.cmd_buffers,
