@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::{cmp, mem, ptr, slice};
 
 use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query};
-use hal::device::{WaitFor, BindError, OutOfMemory, FramebufferError, ShaderError, Extent};
+use hal::device::{BindError, OutOfMemory, FramebufferError, ShaderError, Extent};
 use hal::memory::Properties;
 use hal::pool::CommandPoolCreateFlags;
 use hal::pso::{DescriptorType, DescriptorSetLayoutBinding, AttributeDesc, DepthTest, StencilTest};

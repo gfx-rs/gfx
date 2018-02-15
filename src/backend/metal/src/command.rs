@@ -324,7 +324,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
         }
     }
 
-    fn allocate(&mut self, num: usize, level: com::RawLevel) -> Vec<CommandBuffer> { //TODO: Implement secondary buffers
+    fn allocate(&mut self, num: usize, _level: com::RawLevel) -> Vec<CommandBuffer> { //TODO: Implement secondary buffers
         let buffers: Vec<_> = (0..num).map(|_| CommandBuffer {
             inner: Arc::new({
                 // TODO: maybe use unretained command buffer for efficiency?
@@ -429,7 +429,7 @@ impl CommandBuffer {
 }
 
 impl com::RawCommandBuffer<Backend> for CommandBuffer {
-    fn begin(&mut self, flags: com::CommandBufferFlags) { // TODO: Implement flags somehow
+    fn begin(&mut self, _flags: com::CommandBufferFlags) { // TODO: Implement flags somehow
         if let Some(ref queue) = self.queue {
             unsafe { &mut *self.inner.get() }
                 .reset(queue);
@@ -534,10 +534,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn blit_image<T>(
         &mut self,
-        _src: &n::Image,
-        _src_layout: image::ImageLayout,
-        _dst: &n::Image,
-        _dst_layout: image::ImageLayout,
+        _src: &native::Image,
+        _src_layout: ImageLayout,
+        _dst: &native::Image,
+        _dst_layout: ImageLayout,
         _filter: com::BlitFilter,
         _regions: T,
     ) where
@@ -1173,7 +1173,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn execute_commands<I>(
         &mut self,
-        buffers: I,
+        _buffers: I,
     ) where
         I: IntoIterator,
         I::Item: Borrow<CommandBuffer>

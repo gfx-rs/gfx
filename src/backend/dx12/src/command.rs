@@ -900,13 +900,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         for region in regions {
             let r = region.borrow();
-            for l in 0..r.num_layers as _ {
+            for layer in 0 .. r.extent.depth as UINT {
                 unsafe {
                     self.raw.ResolveSubresource(
                         src.resource,
-                        src.calc_subresource(r.src_subresource.0 as UINT, l + r.src_subresource.1 as UINT, 0),
+                        src.calc_subresource(r.src_subresource.level as UINT, r.src_subresource.layers.start as UINT + layer, 0),
                         dst.resource,
-                        dst.calc_subresource(r.dst_subresource.0 as UINT, l + r.dst_subresource.1 as UINT, 0),
+                        dst.calc_subresource(r.dst_subresource.level as UINT, r.dst_subresource.layers.start as UINT + layer, 0),
                         src.dxgi_format,
                     );
                 }
