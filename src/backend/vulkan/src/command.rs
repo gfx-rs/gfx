@@ -1,5 +1,5 @@
 use std::borrow::Borrow;
-use std::{cmp, mem, ptr};
+use std::{mem, ptr};
 use std::ops::Range;
 use std::sync::Arc;
 use smallvec::SmallVec;
@@ -38,25 +38,15 @@ where
     regions
         .into_iter()
         .map(|region| {
-            let region = region.borrow();
-            let r = &region.image_layers;
-            let aspect_mask = conv::map_image_aspects(r.aspects);;
-            let image_subresource = conv::map_subresource_layers(aspect_mask, r.level, &r.layers);
+            let r = region.borrow();
+            let image_subresource = conv::map_subresource_layers(&r.image_layers);
             vk::BufferImageCopy {
-                buffer_offset: region.buffer_offset,
-                buffer_row_length: region.buffer_width,
-                buffer_image_height: region.buffer_height,
+                buffer_offset: r.buffer_offset,
+                buffer_row_length: r.buffer_width,
+                buffer_image_height: r.buffer_height,
                 image_subresource,
-                image_offset: vk::Offset3D {
-                    x: region.image_offset.x,
-                    y: region.image_offset.y,
-                    z: region.image_offset.z,
-                },
-                image_extent: vk::Extent3D {
-                    width: region.image_extent.width,
-                    height: region.image_extent.height,
-                    depth: region.image_extent.depth,
-                }
+                image_offset: conv::map_offset(r.image_offset),
+                image_extent: conv::map_extent(r.image_extent),
             }
         })
         .collect()
@@ -406,34 +396,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let regions = regions
             .into_iter()
             .map(|region| {
-                let region = region.borrow();
-                let offset = vk::Offset3D {
-                    x: 0,
-                    y: 0,
-                    z: 0,
-                };
-
+                let r = region.borrow();
                 vk::ImageResolve {
-                    src_subresource: conv::map_subresource_with_layers(
-                        vk::IMAGE_ASPECT_COLOR_BIT, // Specs [1.0.42] 18.6
-                        region.src_subresource,
-                        region.num_layers,
-                    ),
-                    src_offset: offset.clone(),
-                    dst_subresource: conv::map_subresource_with_layers(
-                        vk::IMAGE_ASPECT_COLOR_BIT, // Specs [1.0.42] 18.6
-                        region.dst_subresource,
-                        region.num_layers,
-                    ),
-                    dst_offset: offset,
-                    extent: vk::Extent3D {
-                        width:  cmp::max(1, src.extent.width  >> region.src_subresource.0),
-                        height: cmp::max(1, src.extent.height >> region.src_subresource.0),
-                        depth:  cmp::max(1, src.extent.depth  >> region.src_subresource.0),
-                    },
+                    src_subresource: conv::map_subresource_layers(&r.src_subresource),
+                    src_offset: conv::map_offset(r.src_offset),
+                    dst_subresource: conv::map_subresource_layers(&r.dst_subresource),
+                    dst_offset: conv::map_offset(r.dst_offset),
+                    extent: conv::map_extent(r.extent),
                 }
             })
-            .collect::<SmallVec<[_; 16]>>();
+            .collect::<SmallVec<[_; 4]>>();
+
         unsafe {
             self.device.0.cmd_resolve_image(
                 self.raw,
@@ -442,6 +415,45 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 dst.raw,
                 conv::map_image_layout(dst_layout),
                 &regions,
+            );
+        }
+    }
+
+    fn blit_image<T>(
+        &mut self,
+        src: &n::Image,
+        src_layout: ImageLayout,
+        dst: &n::Image,
+        dst_layout: ImageLayout,
+        filter: com::BlitFilter,
+        regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<com::ImageBlit>
+    {
+        let regions = regions
+            .into_iter()
+            .map(|region| {
+                let r = region.borrow();
+                vk::ImageBlit {
+                    src_subresource: conv::map_subresource_layers(&r.src_subresource),
+                    src_offsets: [conv::map_offset(r.src_bounds.start), conv::map_offset(r.src_bounds.end)],
+                    dst_subresource: conv::map_subresource_layers(&r.dst_subresource),
+                    dst_offsets: [conv::map_offset(r.dst_bounds.start), conv::map_offset(r.dst_bounds.end)],
+                }
+            })
+            .collect::<SmallVec<[_; 4]>>();
+
+        unsafe {
+            self.device.0.cmd_blit_image(
+                self.raw,
+                src.raw,
+                conv::map_image_layout(src_layout),
+                dst.raw,
+                conv::map_image_layout(dst_layout),
+                &regions,
+                // Vulkan and HAL share same filter
+                unsafe { mem::transmute(filter) },
             );
         }
     }
@@ -674,14 +686,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let regions: SmallVec<[vk::ImageCopy; 16]> = regions
             .into_iter()
             .map(|region| {
-                let region = region.borrow();
-                let aspect_mask = conv::map_image_aspects(region.aspect_mask);
+                let r = region.borrow();
                 vk::ImageCopy {
-                    src_subresource: conv::map_subresource_with_layers(aspect_mask, region.src_subresource, region.num_layers),
-                    src_offset: conv::map_offset(region.src_offset),
-                    dst_subresource: conv::map_subresource_with_layers(aspect_mask, region.dst_subresource, region.num_layers),
-                    dst_offset: conv::map_offset(region.dst_offset),
-                    extent: conv::map_extent(region.extent),
+                    src_subresource: conv::map_subresource_with_layers(r.aspect_mask, r.src_subresource, r.num_layers),
+                    src_offset: conv::map_offset(r.src_offset),
+                    dst_subresource: conv::map_subresource_with_layers(r.aspect_mask, r.dst_subresource, r.num_layers),
+                    dst_offset: conv::map_offset(r.dst_offset),
+                    extent: conv::map_extent(r.extent),
                 }
             })
             .collect();

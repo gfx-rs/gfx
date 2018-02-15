@@ -4,6 +4,7 @@ use std::ops::Range;
 use Backend;
 use {image, pso};
 use buffer::IndexBufferView;
+use device::Extent;
 use query::{Query, QueryControl, QueryId};
 use queue::capability::{Graphics, GraphicsOrCompute, Supports};
 use super::{
@@ -134,6 +135,8 @@ pub enum AttachmentClear {
 
 /// Filtering mode for image blit operations.
 #[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BlitFilter {
     /// Pick nearest texel.
     Nearest = 0,
@@ -146,11 +149,15 @@ pub enum BlitFilter {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ImageResolve {
     ///
-    pub src_subresource: image::Subresource,
+    pub src_subresource: image::SubresourceLayers,
     ///
-    pub dst_subresource: image::Subresource,
+    pub src_offset: Offset,
     ///
-    pub num_layers: image::Layer,
+    pub dst_subresource: image::SubresourceLayers,
+    ///
+    pub dst_offset: Offset,
+    ///
+    pub extent: Extent,
 }
 
 ///
@@ -158,13 +165,13 @@ pub struct ImageResolve {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ImageBlit {
     ///
-    pub src_subresource: image::Subresource,
+    pub src_subresource: image::SubresourceLayers,
     ///
-    pub src_offset: Offset,
+    pub src_bounds: Range<Offset>,
     ///
-    pub dst_subresource: image::Subresource,
+    pub dst_subresource: image::SubresourceLayers,
     ///
-    pub dst_offset: Offset,
+    pub dst_bounds: Range<Offset>,
 }
 
 impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a, B, C, S, L> {

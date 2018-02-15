@@ -11,7 +11,6 @@ use native as n;
 
 use std::{io, mem};
 use std::borrow::Borrow;
-use std::ops::Range;
 use std::ptr;
 
 
@@ -136,24 +135,26 @@ pub fn map_extent(offset: Extent) -> vk::Extent3D {
 }
 
 pub fn map_subresource_layers(
-    aspect_mask: vk::ImageAspectFlags,
-    level: image::Level,
-    layers: &Range<image::Layer>,
+    sub: &image::SubresourceLayers,
 ) -> vk::ImageSubresourceLayers {
     vk::ImageSubresourceLayers {
-        aspect_mask,
-        mip_level: level as _,
-        base_array_layer: layers.start as _,
-        layer_count: (layers.end - layers.start) as _,
+        aspect_mask: map_image_aspects(sub.aspects),
+        mip_level: sub.level as _,
+        base_array_layer: sub.layers.start as _,
+        layer_count: (sub.layers.end - sub.layers.start) as _,
     }
 }
 
 pub fn map_subresource_with_layers(
-    aspect_mask: vk::ImageAspectFlags,
+    aspects: format::AspectFlags,
     (mip_level, base_layer): image::Subresource,
     layers: image::Layer,
 ) -> vk::ImageSubresourceLayers {
-    map_subresource_layers(aspect_mask, mip_level, &(base_layer..base_layer+layers))
+    map_subresource_layers(&image::SubresourceLayers {
+        aspects,
+        level: mip_level,
+        layers: base_layer..base_layer+layers,
+    })
 }
 
 pub fn map_subresource_range(

@@ -876,9 +876,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn resolve_image<T>(
         &mut self,
         src: &n::Image,
-        _: image::ImageLayout,
+        _src_layout: image::ImageLayout,
         dst: &n::Image,
-        _: image::ImageLayout,
+        _dst_layout: image::ImageLayout,
         regions: T,
     ) where
         T: IntoIterator,
@@ -899,14 +899,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
 
         for region in regions {
-            let region = region.borrow();
-            for l in 0..region.num_layers as _ {
+            let r = region.borrow();
+            for l in 0..r.num_layers as _ {
                 unsafe {
                     self.raw.ResolveSubresource(
                         src.resource,
-                        src.calc_subresource(region.src_subresource.0 as UINT, l + region.src_subresource.1 as UINT, 0),
+                        src.calc_subresource(r.src_subresource.0 as UINT, l + r.src_subresource.1 as UINT, 0),
                         dst.resource,
-                        dst.calc_subresource(region.dst_subresource.0 as UINT, l + region.dst_subresource.1 as UINT, 0),
+                        dst.calc_subresource(r.dst_subresource.0 as UINT, l + r.dst_subresource.1 as UINT, 0),
                         src.dxgi_format,
                     );
                 }
@@ -925,6 +925,21 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             );
             unsafe { self.raw.ResourceBarrier(1, &transition_barrier) };
         }
+    }
+
+    fn blit_image<T>(
+        &mut self,
+        _src: &n::Image,
+        _src_layout: image::ImageLayout,
+        _dst: &n::Image,
+        _dst_layout: image::ImageLayout,
+        _filter: com::BlitFilter,
+        _regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<com::ImageBlit>
+    {
+        unimplemented!()
     }
 
     fn bind_index_buffer(&mut self, ibv: IndexBufferView<Backend>) {
