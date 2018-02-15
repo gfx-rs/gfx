@@ -59,7 +59,7 @@ use std::ops::Range;
 
 /// An extent describes the size of a rectangle, such as
 /// a window or texture.  It's not used for referring to a
-/// sub-rectangle; for that you want `command::Rect`.
+/// sub-rectangle; for that see `command::Rect`.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Extent2d {
@@ -117,7 +117,7 @@ pub trait Surface<B: Backend> {
 
     /// Query surface capabilities and formats for this physical device.
     ///
-    /// Use this function for configuring your swapchain creation.
+    /// Use this function for configuring swapchain creation.
     ///
     /// Returns a tuple of surface capabilities and formats.
     /// If formats is `None` than the surface has no preferred format and the
@@ -171,8 +171,8 @@ pub enum FrameSync<'a, B: Backend> {
 ///
 /// # Examples
 ///
-/// This type implements the builder pattern, so you can
-/// easily chain method calls.
+/// This type implements the builder pattern, method calls can be
+/// easily chained.
 ///
 /// ```no_run
 /// let config = SwapchainConfig::new()

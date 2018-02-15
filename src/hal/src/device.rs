@@ -6,7 +6,7 @@
 //! The `Adapter` and `Device` are very similar to the Vulkan concept of 
 //! "physical devices" vs. "logical devices"; an `Adapter` is single GPU 
 //! (or CPU) that implements a backend, a `Device` is a 
-//! handle to that GPU that fulfills the capabilities you request.
+//! handle to that GPU that fulfills the requested capabilities..
 
 
 //! used for creating and managing graphics resources, and

@@ -52,8 +52,8 @@ pub struct AttributeDesc {
 
 /// Describes whether or not primitive restart is supported for
 /// an input assembler.  Primitive restart is a feature that
-/// allows you to essentially mark places where an index buffer
-/// is "broken" into multiple parts.
+/// allows a mark to be placed in an index buffer where it is
+/// is "broken" into multiple pieces of geometry.
 ///
 /// See <https://www.khronos.org/opengl/wiki/Vertex_Rendering#Primitive_Restart>
 /// for more detail.

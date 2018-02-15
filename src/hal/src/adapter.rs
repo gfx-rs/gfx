@@ -3,8 +3,8 @@
 //! The `PhysicalDevice` trait specifies the API a backend must provide for dealing with
 //! and querying a physical device, such as a particular GPU.  An `Adapter` is a struct
 //! containing a `PhysicalDevice` and metadata for a particular GPU, generally created
-//! from an `Instance` of that backend.  From an `Adapter` you can get a `Device` via
-//! `adapter.open_with(...)`, which lets you specify properties of the `Device` you want.
+//! from an `Instance` of that backend.  `adapter.open_with(...)` will return a `Device`
+//! that has the properties specified.
 
 use {format, memory, Backend, Gpu, Features, Limits};
 use error::DeviceCreationError;

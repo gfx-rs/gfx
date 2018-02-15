@@ -103,8 +103,8 @@ impl<'a, B: Backend, C, S: Shot, L: Level> CommandBuffer<'a, B, C, S, L> {
 
     /// Downgrade a command buffer to a lesser capability type.
     ///
-    /// This is safe as you can't `submit` downgraded version since `submit`
-    /// requires `self` by move.
+    /// This is safe as a downgraded version can't be `submit`'ed
+    /// since `submit` requires `self` by move.
     pub fn downgrade<D>(&mut self) -> &mut CommandBuffer<'a, B, D, S>
     where
         C: Supports<D>
