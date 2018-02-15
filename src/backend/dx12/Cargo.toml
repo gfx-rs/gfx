@@ -23,7 +23,7 @@ derivative = "1"
 gfx-hal = { path = "../../hal", version = "0.1" }
 log = "0.4"
 smallvec = "0.6"
-spirv_cross = "0.5"
+spirv_cross = "0.6"
 winapi = { version = "0.3", features = ["basetsd","d3d12","d3d12sdklayers","d3d12shader","d3dcommon","d3dcompiler","dxgi1_2","dxgi1_3","dxgi1_4","dxgiformat","dxgitype","handleapi","minwindef","synchapi","unknwnbase","winbase","windef","winerror","winnt","winuser"] }
 winit = { version = "0.10", optional = true }
 wio = "0.2"
