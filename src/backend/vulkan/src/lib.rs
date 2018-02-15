@@ -287,7 +287,7 @@ impl hal::Instance for Instance {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct QueueFamily {
     properties: vk::QueueFamilyProperties,
     device: vk::PhysicalDevice,
@@ -315,7 +315,7 @@ pub struct PhysicalDevice {
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(
-        &self, families: Vec<(QueueFamily, Vec<hal::QueuePriority>)>
+        &self, families: Vec<(&QueueFamily, Vec<hal::QueuePriority>)>
     ) -> Result<hal::Gpu<Backend>, DeviceCreationError> {
         let family_infos = families
             .iter()
@@ -388,7 +388,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             .into_iter()
             .map(|(family, priorities)| {
                 let family_index = family.index;
-                let mut family_raw = hal::backend::RawQueueGroup::new(family);
+                let mut family_raw = hal::backend::RawQueueGroup::new(family.clone());
                 for id in 0 .. priorities.len() {
                     let queue_raw = unsafe {
                         device_arc.0.get_device_queue(family_index, id as _)
