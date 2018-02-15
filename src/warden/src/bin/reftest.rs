@@ -55,6 +55,11 @@ struct TestResults {
     fail: usize,
 }
 
+#[derive(Default)]
+struct Disabilities {
+    no_command_buffer_reuse: bool,
+}
+
 
 struct Harness {
     base_path: PathBuf,
@@ -100,7 +105,11 @@ impl Harness {
         }
     }
 
-    fn run<I: hal::Instance>(&self, instance: I) -> usize {
+    fn run<I: hal::Instance>(
+        &self,
+        instance: I,
+        disabilities: Disabilities,
+    ) -> usize {
         use hal::{PhysicalDevice};
 
         let mut results = TestResults {
@@ -178,10 +187,9 @@ impl Harness {
                     results.fail += 1;
                 }
 
-                #[cfg(feature = "metal")]
-                {
-                    println!("Command buffer re-use is not ready on Metal, exiting");
-                    return results.fail + 1;
+                if disabilities.no_command_buffer_reuse {
+                    println!("Command buffer re-use is not ready, exiting");
+                    return results.fail;
                 }
             }
         }
@@ -211,19 +219,22 @@ fn main() {
     {
         println!("Warding Vulkan:");
         let instance = gfx_backend_vulkan::Instance::create("warden", 1);
-        num_failures += harness.run(instance);
+        num_failures += harness.run(instance, Disabilities::default());
     }
     #[cfg(feature = "dx12")]
     {
         println!("Warding DX12:");
         let instance = gfx_backend_dx12::Instance::create("warden", 1);
-        num_failures += harness.run(instance);
+        num_failures += harness.run(instance, Disabilities::default());
     }
     #[cfg(feature = "metal")]
     {
         println!("Warding Metal:");
         let instance = gfx_backend_metal::Instance::create("warden", 1);
-        num_failures += harness.run(instance);
+        num_failures += harness.run(instance, Disabilities {
+            no_command_buffer_reuse: true,
+            .. Disabilities::default()
+        });
     }
     #[cfg(feature = "gl")]
     {
@@ -237,7 +248,7 @@ fn main() {
             &events_loop,
             ).unwrap();
         let instance = gfx_backend_gl::Surface::from_window(window);
-        num_failures += harness.run(instance);
+        num_failures += harness.run(instance, Disabilities::default());
     }
     #[cfg(feature = "gl-headless")]
     {
@@ -246,7 +257,7 @@ fn main() {
             .build()
             .unwrap();
         let instance = gfx_backend_gl::Headless(context);
-        num_failures += harness.run(instance);
+        num_failures += harness.run(instance, Disabilities::default());
     }
     let _ = harness;
     num_failures += 0; // mark as mutated
