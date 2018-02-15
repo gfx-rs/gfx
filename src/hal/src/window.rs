@@ -7,11 +7,11 @@
 //!
 //! ## Window
 //!
-//! // TODO
+//! // DOC TODO
 //!
 //! ## Surface
 //!
-//! // TODO
+//! // DOC TODO
 //!
 //! ## Swapchain
 //!
@@ -47,7 +47,7 @@
 //!
 //! ### Recreation
 //!
-//! //TODO
+//! DOC TODO
 
 use Backend;
 use image;
@@ -57,17 +57,20 @@ use queue::CommandQueue;
 use std::borrow::{Borrow, BorrowMut};
 use std::ops::Range;
 
-///
+/// An extent describes the size of a rectangle, such as
+/// a window or texture.  It's not used for referring to a
+/// sub-rectangle; for that you want `command::Rect`.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Extent2d {
-    ///
+    /// Width
     pub width: u32,
-    ///
+    /// Height
     pub height: u32,
 }
 
-///
+/// Describes information about what a `Surface`'s properties are.
+/// Fetch this with `surface.capabilities_and_formats(device)`.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SurfaceCapabilities {
@@ -95,11 +98,15 @@ pub struct SurfaceCapabilities {
 }
 
 /// A `Surface` abstracts the surface of a native window, which will be presented
+/// on the display.
 pub trait Surface<B: Backend> {
     /// Retrieve the surface image kind.
     fn get_kind(&self) -> image::Kind;
 
-    /// Check if the queue family supports presentation for this surface.
+    /// Check if the queue family supports presentation to this surface.
+    ///
+    /// For example, a queue family with only the `queue::QueueType::Compute` 
+    /// capability will not allow drawing commands to be issued.
     ///
     /// # Examples
     ///
@@ -119,6 +126,11 @@ pub trait Surface<B: Backend> {
 }
 
 /// Handle to a backbuffer of the swapchain.
+///
+/// The swapchain is a series of one or more images, usually
+/// with one being drawn on while the other is displayed by
+/// the GPU (aka double-buffering).  A `Frame` refers to a
+/// particular image in the swapchain.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Frame(pub(crate) usize);

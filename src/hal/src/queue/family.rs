@@ -11,7 +11,7 @@ use std::marker::PhantomData;
 
 /// General information about a queue family, available upon adapter discovery.
 ///
-/// *Note*: A backend can expose multiple queue families with the same properties.
+/// Note that a backend can expose multiple queue families with the same properties.
 pub trait QueueFamily: Debug {
     /// Returns the type of queues.
     fn queue_type(&self) -> QueueType;

@@ -1,12 +1,10 @@
-/*! Command queues.
-
-    Queues are the execution paths of the graphical processing units. These process
-    submitted commands buffers.
-
-    There are different types of queues, which can only handle associated command buffers.
-    `CommandQueue<B, C>` has the capability defined by `C` for backend `B`: graphics, 
-    compute and transfer.
-!*/
+//! Command queues.
+//!
+//! Queues are the execution paths of the graphical processing units. These process
+//! submitted commands buffers.
+//!
+//! There are different types of queues, which can only handle associated command buffers.
+//! `CommandQueue<B, C>` has the capability defined by `C`: graphics, compute and transfer.
 
 pub mod capability;
 pub mod family;

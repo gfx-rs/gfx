@@ -301,7 +301,7 @@ pub enum IndexType {
 pub trait Instance {
     /// Associated backend type of this instance.
     type Backend: Backend;
-    /// Enumerate all available adapters.
+    /// Return all available adapters.
     fn enumerate_adapters(&self) -> Vec<Adapter<Self::Backend>>;
 }
 
@@ -348,7 +348,7 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type QueryPool:           Debug + Any + Send + Sync;
 }
 
-#[allow(missing_docs)]
+/// Marks that an error occured submitting  a
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SubmissionError {}
@@ -365,7 +365,7 @@ impl Error for SubmissionError {
     }
 }
 
-#[allow(missing_docs)]
+/// DOC TODO
 pub type SubmissionResult<T> = Result<T, SubmissionError>;
 
 
@@ -374,7 +374,7 @@ pub type SubmissionResult<T> = Result<T, SubmissionError>;
 ///
 /// This structure is typically created using an `Adapter`.
 pub struct Gpu<B: Backend> {
-    /// Logical device.
+    /// Logical device for a given backend.
     pub device: B::Device,
     /// The command queues that the device provides.
     pub queues: queue::Queues<B>,

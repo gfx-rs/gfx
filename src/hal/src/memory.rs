@@ -62,7 +62,7 @@ bitflags!(
     }
 );
 
-#[allow(missing_docs)] //TODO
+/// DOC TODO //TODO
 #[derive(Clone, Debug)]
 pub enum Barrier<'a, B: Backend> {
     Buffer {

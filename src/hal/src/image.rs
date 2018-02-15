@@ -222,7 +222,7 @@ pub enum FilterMethod {
 }
 
 /// The face of a cube texture to do an operation on.
-#[allow(missing_docs)]
+/// DOC TODO
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[repr(u8)]
@@ -461,7 +461,7 @@ impl SamplerInfo {
 }
 
 /// Texture resource view descriptor.
-#[allow(missing_docs)]
+/// DOC TODO
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ResourceDesc {
@@ -472,7 +472,7 @@ pub struct ResourceDesc {
 }
 
 /// Texture render view descriptor.
-#[allow(missing_docs)]
+/// DOC TODO
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RenderDesc {
@@ -495,7 +495,7 @@ bitflags!(
 );
 
 /// Texture depth-stencil view descriptor.
-#[allow(missing_docs)]
+/// DOC TODO
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DepthStencilDesc {
