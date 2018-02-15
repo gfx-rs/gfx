@@ -68,16 +68,21 @@ pub const BITS_ZERO: FormatBits = FormatBits {
 
 /// Source channel in a swizzle configuration. Some may redirect onto
 /// different physical channels, some may be hardcoded to 0 or 1.
-/// DOC TODO
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Component {
+    /// Hardcoded zero
     Zero,
+    /// Hardcoded one
     One,
+    /// Red channel
     R,
+    /// Green channel
     G,
+    /// Blue channel
     B,
+    /// Alpha channel.
     A,
 }
 
@@ -304,8 +309,10 @@ macro_rules! formats {
         $name:ident = ($surface:ident, $channel:ident),
         $($name_tail:ident = ($surface_tail:ident, $channel_tail:ident),)*
     } => {
-        ///
         /// DOC TODO
+        /// Though you want to keep the missing_docs so you don't have to
+        /// put a docstring for every variant.
+        #[allow(missing_docs)]
         #[repr(u32)]
         #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
         #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -342,6 +349,7 @@ macro_rules! formats {
 
         $(
             /// DOC TODO
+            #[allow(missing_docs)]
             #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
             #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
             pub struct $name_tail;

@@ -60,11 +60,11 @@ pub struct AttributeDesc {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum PrimitiveRestart {
-    ///
+    /// No primitive restart.
     Disabled,
-    ///
+    /// Primitive restart using a 16-bit index value.
     U16,
-    ///
+    /// Primitive restart using a 32-bit index value.
     U32,
 }
 

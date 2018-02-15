@@ -222,7 +222,7 @@ pub enum FilterMethod {
 }
 
 /// The face of a cube texture to do an operation on.
-/// DOC TODO
+#[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[repr(u8)]
@@ -465,9 +465,13 @@ impl SamplerInfo {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ResourceDesc {
+    /// DOC TODO
     pub channel: format::ChannelType,
+    /// DOC TODO
     pub layer: Option<Layer>,
+    /// DOC TODO
     pub levels: Range<Level>,
+    /// DOC TODO
     pub swizzle: format::Swizzle,
 }
 
@@ -476,8 +480,11 @@ pub struct ResourceDesc {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RenderDesc {
+    /// DOC TODO
     pub channel: format::ChannelType,
+    /// DOC TODO
     pub level: Level,
+    /// DOC TODO
     pub layer: Option<Layer>,
 }
 
@@ -499,8 +506,11 @@ bitflags!(
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DepthStencilDesc {
+    /// DOC TODO
     pub level: Level,
+    /// DOC TODO
     pub layer: Option<Layer>,
+    /// DOC TODO
     pub flags: DepthStencilFlags,
 }
 
@@ -514,41 +524,41 @@ impl From<RenderDesc> for DepthStencilDesc {
     }
 }
 
-///
+/// DOC TODO
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ImageLayout {
-    ///
+    /// DOC TODO
     General,
-    ///
+    /// DOC TODO
     ColorAttachmentOptimal,
-    ///
+    /// DOC TODO
     DepthStencilAttachmentOptimal,
-    ///
+    /// DOC TODO
     DepthStencilReadOnlyOptimal,
-    ///
+    /// DOC TODO
     ShaderReadOnlyOptimal,
-    ///
+    /// DOC TODO
     TransferSrcOptimal,
-    ///
+    /// DOC TODO
     TransferDstOptimal,
-    ///
+    /// DOC TODO
     Undefined, //TODO: consider Option<> instead?
-    ///
+    /// DOC TODO
     Preinitialized,
-    ///
+    /// DOC TODO
     Present,
 }
 
 bitflags!(
-    ///
+    /// DOC TODO
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct Access: u16 {
         /// Read state but can only be combined with `COLOR_ATTACHMENT_WRITE`.
         const COLOR_ATTACHMENT_READ = 0x1;
         /// Write-only state but can be combined with `COLOR_ATTACHMENT_READ`.
         const COLOR_ATTACHMENT_WRITE = 0x2;
-        ///
+        /// DOC TODO
         const TRANSFER_READ = 0x4;
         /// Write-only state of copy commands.
         const TRANSFER_WRITE = 0x8;
@@ -557,19 +567,19 @@ bitflags!(
         /// Write state for UAV access.
         /// Combine with `SHADER_READ` to have r/w access to UAV.
         const SHADER_WRITE = 0x20;
-        ///
+        /// DOC TODO
         const DEPTH_STENCIL_ATTACHMENT_READ = 0x40;
         /// Write-only state for depth stencil writes.
         const DEPTH_STENCIL_ATTACHMENT_WRITE = 0x80;
-        ///
+        /// DOC TODO
         const HOST_READ = 0x100;
-        ///
+        /// DOC TODO
         const HOST_WRITE = 0x200;
-        ///
+        /// DOC TODO
         const MEMORY_READ = 0x400;
-        ///
+        /// DOC TODO
         const MEMORY_WRITE = 0x800;
-        ///
+        /// DOC TODO
         const INPUT_ATTACHMENT_READ = 0x1000;
     }
 );

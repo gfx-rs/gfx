@@ -18,9 +18,13 @@ use super::{
 #[derive(Clone, Copy, Debug, Hash, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Rect {
+    /// X position.
     pub x: u16,
+    /// Y position.
     pub y: u16,
+    /// Width.
     pub w: u16,
+    /// Height.
     pub h: u16,
 }
 
@@ -28,7 +32,9 @@ pub struct Rect {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Viewport {
+    /// The viewport boundaries.
     pub rect: Rect,
+    /// The viewport depth limits.
     pub depth: Range<f32>,
 }
 

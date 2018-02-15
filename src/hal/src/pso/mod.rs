@@ -120,7 +120,7 @@ bitflags!(
 
 // Note: this type is only needed for backends, not used anywhere within gfx_hal.
 /// Which program stage this shader represents.
-/// DOC TODO
+#[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[repr(u8)]

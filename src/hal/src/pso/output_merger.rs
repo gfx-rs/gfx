@@ -127,7 +127,9 @@ impl BlendOp {
 pub enum BlendState {
     /// Enabled blending
     On {
+        /// The blend operation to use for the color channels.
         color: BlendOp,
+        /// The blend operation to use for the alpha channel.
         alpha: BlendOp,
     },
     /// Disabled blending

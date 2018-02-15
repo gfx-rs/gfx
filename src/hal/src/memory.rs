@@ -57,21 +57,28 @@ bitflags!(
         /// Cached memory by the CPU
         const CPU_CACHED = 0x8;
 
-        ///
+        /// DOC TODO
         const LAZILY_ALLOCATED = 0x20;
     }
 );
 
-/// DOC TODO //TODO
+/// DOC TODO
 #[derive(Clone, Debug)]
 pub enum Barrier<'a, B: Backend> {
+    /// DOC TODO
     Buffer {
+        /// DOC TODO
         states: Range<buffer::State>,
+        /// DOC TODO
         target: &'a B::Buffer,
     },
+    /// DOC TODO
     Image {
+        /// DOC TODO
         states: Range<image::State>,
+        /// DOC TODO
         target: &'a B::Image,
+        /// DOC TODO
         range: image::SubresourceRange,
     },
 }
