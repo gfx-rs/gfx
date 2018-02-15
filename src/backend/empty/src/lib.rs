@@ -445,6 +445,21 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
+    fn blit_image<T>(
+        &mut self,
+        _: &(),
+        _: image::ImageLayout,
+        _: &(),
+        _: image::ImageLayout,
+        _: command::BlitFilter,
+        _: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<command::ImageBlit>,
+    {
+        unimplemented!()
+    }
+
     fn bind_index_buffer(&mut self, _: buffer::IndexBufferView<Backend>) {
         unimplemented!()
     }

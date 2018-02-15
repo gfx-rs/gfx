@@ -15,7 +15,7 @@ pub use self::raw::{ClearValueRaw, ClearColorRaw, ClearDepthStencilRaw, RawComma
 pub use self::renderpass::*;
 pub use self::transfer::*;
 
-use std::borrow::{Borrow, Cow};
+use std::borrow::{Cow};
 
 /// Trait indicating how many times a Submit can be submitted.
 pub trait Shot {
