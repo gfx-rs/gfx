@@ -49,7 +49,7 @@ pub struct ImageResolve {
     pub num_layers: image::Layer,
 }
 
-/// Bundles together all the data need to copy data from one `Image`
+/// Bundles together all the data needed to copy data from one `Image`
 /// to another.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

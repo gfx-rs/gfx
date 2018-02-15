@@ -338,17 +338,17 @@ bitflags!(
     /// Image usage flags
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct Usage: u8 {
-        ///
+        /// The image is used as a transfer source.
         const TRANSFER_SRC = 0x1;
-        ///
+        /// The image is used as a transfer destination.
         const TRANSFER_DST = 0x2;
-        ///
+        /// The image is used as a color attachment -- that is, color input to a rendering pass.
         const COLOR_ATTACHMENT = 0x4;
-        ///
+        /// The image is used as a depth attachment.
         const DEPTH_STENCIL_ATTACHMENT = 0x8;
-        ///
+        /// The image is a [storage image](https://www.khronos.org/registry/vulkan/specs/1.0/html/vkspec.html#descriptorsets-storageimage)
         const STORAGE = 0x10;
-        ///
+        /// The image is a [sampled image](https://www.khronos.org/registry/vulkan/specs/1.0/html/vkspec.html#descriptorsets-sampledimage)
         const SAMPLED = 0x20;
         // TODO
     }

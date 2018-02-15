@@ -3,6 +3,11 @@
 //!
 //! For a more detailed description of all the specific format specifiers,
 //! please see [the official Vulkan documentation](https://www.khronos.org/registry/vulkan/specs/1.0/man/html/VkFormat.html)
+//!
+//! `gfx-rs` splits a `Format` into two sub-components, a `SurfaceType` and
+//! a `ChannelType`.  The `SurfaceType` specifies how the large the channels are, 
+//! for instance `R32_G32_B32_A32`.  The `ChannelType` specifies how the 
+//! components are interpreted, for instance `Float` or `Int`.
 
 bitflags!(
     /// Bitflags which describe what properties of an image
@@ -87,6 +92,11 @@ pub enum Component {
 }
 
 /// Channel swizzle configuration for the resource views.
+/// This specifies a "swizzle" operation which remaps the various
+/// channels of a format into a different order.  For example,
+/// `Swizzle(Component::B, Component::G, Component::R, Component::A)`
+/// will swap `RGBA` formats into `BGRA` formats and back.
+///
 /// Note: It's not currently mirrored at compile-time,
 /// thus providing less safety and convenience.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -94,7 +104,7 @@ pub enum Component {
 pub struct Swizzle(pub Component, pub Component, pub Component, pub Component);
 
 impl Swizzle {
-    /// A trivially non-swizzling configuration.
+    /// A trivially non-swizzling configuration; performs no changes.
     pub const NO: Swizzle = Swizzle(Component::R, Component::G, Component::B, Component::A);
 }
 
@@ -108,11 +118,11 @@ impl Default for Swizzle {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Properties {
-    ///
+    /// DOC TODO
     pub linear_tiling: ImageFeature,
-    ///
+    /// DOC TODO
     pub optimal_tiling: ImageFeature,
-    ///
+    /// DOC TODO
     pub buffer_features: BufferFeature,
 }
 
@@ -160,7 +170,6 @@ bitflags!(
 
 /// Type of a surface channel. This is how we interpret the
 /// storage allocated with `SurfaceType`.
-/// DOC TODO
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

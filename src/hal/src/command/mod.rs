@@ -1,4 +1,4 @@
-//! DOC TODO
+//! DOC TODO: Need to understand the relationship between this and command pools.
 
 use Backend;
 use queue::capability::Supports;

@@ -365,7 +365,7 @@ impl Error for SubmissionError {
     }
 }
 
-/// DOC TODO
+/// Submission result for DX11 backend.  Currently mostly unused.
 pub type SubmissionResult<T> = Result<T, SubmissionError>;
 
 

@@ -57,28 +57,30 @@ bitflags!(
         /// Cached memory by the CPU
         const CPU_CACHED = 0x8;
 
-        /// DOC TODO
+        /// Memory that may be lazily allocated as needed on the GPU
+        /// and *must not* be visible to the CPU.
         const LAZILY_ALLOCATED = 0x20;
     }
 );
 
-/// DOC TODO
+/// A [memory barrier](https://www.khronos.org/registry/vulkan/specs/1.0/html/vkspec.html#synchronization-memory-barriers)
+/// type for either buffers or images.
 #[derive(Clone, Debug)]
 pub enum Barrier<'a, B: Backend> {
-    /// DOC TODO
+    /// A memory barrier that defines access to a buffer.
     Buffer {
-        /// DOC TODO
+        /// The access flags controlling the buffer.
         states: Range<buffer::State>,
-        /// DOC TODO
+        /// The buffer the barrier controls.
         target: &'a B::Buffer,
     },
-    /// DOC TODO
+    /// A memory barrier that defines access to (a subset of) an image.
     Image {
-        /// DOC TODO
+        /// The access flags controlling the image.
         states: Range<image::State>,
-        /// DOC TODO
+        /// The image the barrier controls.
         target: &'a B::Image,
-        /// DOC TODO
+        /// A `SubresourceRange` that defines which section of an image the barrier applies to.
         range: image::SubresourceRange,
     },
 }
