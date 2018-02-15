@@ -1,4 +1,5 @@
+Fixes #issue
 PR checklist:
 - [ ] `make` succeeds (on *nix)
-- [ ] `make reftests` succeeds (might be temporarily impossible, WIP)
+- [ ] `make reftests` succeeds
 - [ ] tested examples with the following backends:

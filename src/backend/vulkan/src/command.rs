@@ -453,7 +453,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 conv::map_image_layout(dst_layout),
                 &regions,
                 // Vulkan and HAL share same filter
-                unsafe { mem::transmute(filter) },
+                mem::transmute(filter),
             );
         }
     }
@@ -506,7 +506,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .collect();
 
         unsafe {
-            self.device.0.cmd_set_viewport(self.raw, &viewports);
+            self.device.0.cmd_set_viewport(self.raw, 0, &viewports);
         }
     }
 
@@ -896,7 +896,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 layout.raw,
                 vk::SHADER_STAGE_COMPUTE_BIT,
                 offset * 4,
-                constants,
+                memory::cast_slice(constants),
             );
         }
     }
@@ -914,7 +914,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 layout.raw,
                 conv::map_stage_flags(stages),
                 offset * 4,
-                constants,
+                memory::cast_slice(constants),
             );
         }
     }
