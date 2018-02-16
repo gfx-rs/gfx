@@ -33,4 +33,4 @@ winapi = { version = "0.3", features = ["libloaderapi", "windef", "winuser"] }
 
 [target.'cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))'.dependencies]
 x11 = { version = "2.15", features = ["xlib"]}
-xcb = { version = "0.8", optional = true }
+xcb = { version = "0.8" }
