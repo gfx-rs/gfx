@@ -36,18 +36,6 @@ pub struct BufferCopy {
 ///
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct ImageResolve {
-    ///
-    pub src_subresource: image::Subresource,
-    ///
-    pub dst_subresource: image::Subresource,
-    ///
-    pub num_layers: image::Layer,
-}
-
-///
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ImageCopy {
     ///
     pub aspect_mask: format::AspectFlags,

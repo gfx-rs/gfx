@@ -8,10 +8,10 @@ use image::{ImageLayout, SubresourceRange};
 use memory::Barrier;
 use query::{Query, QueryControl, QueryId};
 use super::{
-    ColorValue, StencilValue, Rect, Viewport,
+    BlitFilter, ColorValue, StencilValue, Rect, Viewport,
     AttachmentClear, BufferCopy, BufferImageCopy,
     ClearColor, ClearDepthStencil, ClearValue,
-    ImageCopy, ImageResolve, SubpassContents,
+    ImageBlit, ImageCopy, ImageResolve, SubpassContents,
 };
 
 /// Unsafe variant of `ClearColor`.
@@ -178,6 +178,19 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     ) where
         T: IntoIterator,
         T::Item: Borrow<ImageResolve>;
+
+    ///
+    fn blit_image<T>(
+        &mut self,
+        src: &B::Image,
+        src_layout: ImageLayout,
+        dst: &B::Image,
+        dst_layout: ImageLayout,
+        filter: BlitFilter,
+        regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<ImageBlit>;
 
     /// Bind index buffer view.
     fn bind_index_buffer(&mut self, IndexBufferView<B>);

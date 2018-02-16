@@ -2,14 +2,15 @@ use std::borrow::Borrow;
 use std::ops::Range;
 
 use Backend;
-use pso;
+use {image, pso};
 use buffer::IndexBufferView;
-use image::{ImageLayout, SubresourceRange};
+use device::Extent;
 use query::{Query, QueryControl, QueryId};
 use queue::capability::{Graphics, GraphicsOrCompute, Supports};
 use super::{
-    CommandBuffer, RawCommandBuffer, RenderPassInlineEncoder, 
-    RenderPassSecondaryEncoder, Shot, Level, Primary, ClearColorRaw
+    CommandBuffer, RawCommandBuffer, RenderPassInlineEncoder,
+    RenderPassSecondaryEncoder, Shot, Level, Primary,
+    ClearColorRaw, Offset,
 };
 
 
@@ -132,6 +133,47 @@ pub enum AttachmentClear {
     DepthStencil(ClearDepthStencil),
 }
 
+/// Filtering mode for image blit operations.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum BlitFilter {
+    /// Pick nearest texel.
+    Nearest = 0,
+    /// Take a weighted average of 2x2 texel group.
+    Linear = 1,
+}
+
+///
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ImageResolve {
+    ///
+    pub src_subresource: image::SubresourceLayers,
+    ///
+    pub src_offset: Offset,
+    ///
+    pub dst_subresource: image::SubresourceLayers,
+    ///
+    pub dst_offset: Offset,
+    ///
+    pub extent: Extent,
+}
+
+///
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ImageBlit {
+    ///
+    pub src_subresource: image::SubresourceLayers,
+    ///
+    pub src_bounds: Range<Offset>,
+    ///
+    pub dst_subresource: image::SubresourceLayers,
+    ///
+    pub dst_bounds: Range<Offset>,
+}
+
 impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a, B, C, S, L> {
     ///
     pub fn begin_renderpass_inline<T>(
@@ -152,8 +194,8 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
     pub fn clear_color_image(
         &mut self,
         image: &B::Image,
-        layout: ImageLayout,
-        range: SubresourceRange,
+        layout: image::ImageLayout,
+        range: image::SubresourceRange,
         value: ClearColor,
     ) {
         self.raw.clear_color_image(image, layout, range, value)
@@ -163,8 +205,8 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
     pub fn clear_depth_stencil_image(
         &mut self,
         image: &B::Image,
-        layout: ImageLayout,
-        range: SubresourceRange,
+        layout: image::ImageLayout,
+        range: image::SubresourceRange,
         value: ClearDepthStencil,
     ) {
         self.raw.clear_depth_stencil_image(image, layout, range, value)
@@ -228,7 +270,38 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
 
     ///
     pub fn push_graphics_constants(&mut self, layout: &B::PipelineLayout, stages: pso::ShaderStageFlags, offset: u32, constants: &[u32]) {
-        self.raw.push_graphics_constants(layout, stages, offset, constants);
+        self.raw.push_graphics_constants(layout, stages, offset, constants)
+    }
+
+    ///
+    pub fn resolve_image<T>(
+        &mut self,
+        src: &B::Image,
+        src_layout: image::ImageLayout,
+        dst: &B::Image,
+        dst_layout: image::ImageLayout,
+        regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<ImageResolve>
+    {
+        self.raw.resolve_image(src, src_layout, dst, dst_layout, regions)
+    }
+
+    ///
+    pub fn blit_image<T>(
+        &mut self,
+        src: &B::Image,
+        src_layout: image::ImageLayout,
+        dst: &B::Image,
+        dst_layout: image::ImageLayout,
+        filter: BlitFilter,
+        regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<ImageBlit>,
+    {
+        self.raw.blit_image(src, src_layout, dst, dst_layout, filter, regions)
     }
 }
 

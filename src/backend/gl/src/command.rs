@@ -666,6 +666,21 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
+    fn blit_image<T>(
+        &mut self,
+        _src: &n::Image,
+        _src_layout: image::ImageLayout,
+        _dst: &n::Image,
+        _dst_layout: image::ImageLayout,
+        _filter: command::BlitFilter,
+        _regions: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<command::ImageBlit>
+    {
+        unimplemented!()
+    }
+
     fn bind_index_buffer(&mut self, ibv: IndexBufferView<Backend>) {
         // TODO: how can we incorporate the buffer offset?
         if ibv.offset > 0 {
