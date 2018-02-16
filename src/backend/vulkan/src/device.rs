@@ -1080,14 +1080,15 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn update_descriptor_sets<'a, I, R>(&self, writes: I)
+    fn write_descriptor_sets<'a, I, R>(&self, writes: I)
     where
         I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetWrite<'a, 'a, B, R>>,
-        R: RangeArg<u64>
+        I::Item: Borrow<pso::DescriptorSetWrite<'a, B, R>>,
+        R: 'a + RangeArg<u64>,
     {
         let writes = writes.into_iter().collect::<Vec<_>>();
 
+        //TODO: refactor this to avoid collecting and double matching
         let mut image_infos = Vec::new();
         let mut buffer_infos = Vec::new();
         let mut texel_buffer_views = Vec::new();
@@ -1095,7 +1096,7 @@ impl d::Device<B> for Device {
         for write in &writes {
             let write = write.borrow();
             match write.write {
-                pso::DescriptorWrite::Sampler(ref samplers) => {
+                pso::DescriptorWrite::Sampler(samplers) => {
                     for sampler in samplers {
                         image_infos.push(vk::DescriptorImageInfo {
                             sampler: sampler.0,
@@ -1104,9 +1105,9 @@ impl d::Device<B> for Device {
                         });
                     }
                 }
-                pso::DescriptorWrite::SampledImage(ref images) |
-                pso::DescriptorWrite::StorageImage(ref images) |
-                pso::DescriptorWrite::InputAttachment(ref images) => {
+                pso::DescriptorWrite::SampledImage(images) |
+                pso::DescriptorWrite::StorageImage(images) |
+                pso::DescriptorWrite::InputAttachment(images) => {
                     for &(view, layout) in images {
                         image_infos.push(vk::DescriptorImageInfo {
                             sampler: vk::Sampler::null(),
@@ -1115,8 +1116,8 @@ impl d::Device<B> for Device {
                         });
                     }
                 }
-                pso::DescriptorWrite::UniformBuffer(ref buffers) |
-                pso::DescriptorWrite::StorageBuffer(ref buffers) => {
+                pso::DescriptorWrite::UniformBuffer(buffers) |
+                pso::DescriptorWrite::StorageBuffer(buffers) => {
                     for &(buffer, ref range) in buffers {
                         let (offset, size) = conv::map_range_arg(range);
                         buffer_infos.push(vk::DescriptorBufferInfo {
@@ -1126,13 +1127,13 @@ impl d::Device<B> for Device {
                         });
                     }
                 }
-                pso::DescriptorWrite::UniformTexelBuffer(ref views) |
-                pso::DescriptorWrite::StorageTexelBuffer(ref views) => {
+                pso::DescriptorWrite::UniformTexelBuffer(views) |
+                pso::DescriptorWrite::StorageTexelBuffer(views) => {
                     for view in views {
                         texel_buffer_views.push(view.raw)
                     }
                 }
-                pso::DescriptorWrite::CombinedImageSampler(ref sampler_images) => {
+                pso::DescriptorWrite::CombinedImageSampler(sampler_images) => {
                     for &(sampler, view, layout) in sampler_images {
                         image_infos.push(vk::DescriptorImageInfo {
                             sampler: sampler.0,
@@ -1211,6 +1212,31 @@ impl d::Device<B> for Device {
 
         unsafe {
             self.raw.0.update_descriptor_sets(&writes, &[]);
+        }
+    }
+
+    fn copy_descriptor_sets<'a, I>(&self, copies: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>,
+    {
+        let copies = copies.into_iter().map(|copy| {
+            let c = copy.borrow();
+            vk::CopyDescriptorSet {
+                s_type: vk::StructureType::CopyDescriptorSet,
+                p_next: ptr::null(),
+                src_set: c.src_set.raw,
+                src_binding: c.src_binding as u32,
+                src_array_element: c.src_array_offset as u32,
+                dst_set: c.dst_set.raw,
+                dst_binding: c.dst_binding as u32,
+                dst_array_element: c.dst_array_offset as u32,
+                descriptor_count: c.count as u32,
+            }
+        }).collect::<Vec<_>>();
+
+        unsafe {
+            self.raw.0.update_descriptor_sets(&[], &copies);
         }
     }
 

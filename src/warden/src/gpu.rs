@@ -539,7 +539,14 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         // fill it up
                         let set = &resources.desc_sets[name];
                         let res_buffers = &resources.buffers;
-                        let updates = binding_starts
+                        // pre-allocate the buffers
+                        let desc_buffers = data.iter().flat_map(|range| match *range {
+                            raw::DescriptorRange::StorageBuffers(ref names) => {
+                                names.iter().map(|s| (&res_buffers[s].handle, ..))
+                            }
+                        }).collect::<Vec<_>>();
+                        let mut count_buffers = 0;
+                        let writes = binding_starts
                             .iter()
                             .zip(data)
                             .map(|(&binding, range)| hal::pso::DescriptorSetWrite {
@@ -548,16 +555,13 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                 array_offset: 0,
                                 write: match *range {
                                     raw::DescriptorRange::StorageBuffers(ref names) => {
-                                        let buffers = names
-                                            .iter()
-                                            .map(|s| (&res_buffers[s].handle, ..))
-                                            .collect();
-                                        hal::pso::DescriptorWrite::StorageBuffer(buffers)
+                                        let r = count_buffers .. count_buffers + names.len();
+                                        count_buffers += names.len();
+                                        hal::pso::DescriptorWrite::StorageBuffer(&desc_buffers[r])
                                     }
                                 },
-                            })
-                            .collect::<Vec<_>>();
-                        device.update_descriptor_sets(&updates);
+                            });
+                        device.write_descriptor_sets(writes);
                     }
                     raw::Resource::PipelineLayout { ref set_layouts, ref push_constant_ranges } => {
                         let layout = {

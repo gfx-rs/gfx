@@ -889,13 +889,26 @@ impl d::Device<B> for Device {
         n::DescriptorSetLayout
     }
 
-    fn update_descriptor_sets<'a, I, R>(&self, _: I)
+    fn write_descriptor_sets<'a, I, R>(&self, writes: I)
     where
         I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetWrite<'a, 'a, B, R>>,
-        R: RangeArg<u64>,
+        I::Item: Borrow<pso::DescriptorSetWrite<'a, B, R>>,
+        R: 'a + RangeArg<u64>,
     {
-        // TODO
+        for _write in writes {
+            //unimplemented!() // not panicing because of Warden
+            error!("TODO: implement `write_descriptor_sets`");
+        }
+    }
+
+    fn copy_descriptor_sets<'a, I>(&self, copies: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>,
+    {
+        for _copy in copies {
+            unimplemented!()
+        }
     }
 
     fn create_semaphore(&self) -> n::Semaphore {

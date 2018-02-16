@@ -103,14 +103,14 @@ fn main() {
     );
 
     let desc_set = desc_pool.allocate_set(&set_layout);
-    device.update_descriptor_sets(&[
+    device.write_descriptor_sets(Some(
         pso::DescriptorSetWrite {
             set: &desc_set,
             binding: 0,
             array_offset: 0,
-            write: pso::DescriptorWrite::StorageBuffer(vec![(&device_buffer, 0..stride * numbers.len() as u64)])
+            write: pso::DescriptorWrite::StorageBuffer(&[(&device_buffer, 0..stride * numbers.len() as u64)])
         }
-    ]);
+    ));
 
     let mut command_pool = device.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty(), 16);
     let fence = device.create_fence(false);
