@@ -39,7 +39,7 @@ use cocoa::foundation::NSAutoreleasePool;
 use core_graphics::geometry::CGRect;
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct QueueFamily {}
 
 impl hal::QueueFamily for QueueFamily {

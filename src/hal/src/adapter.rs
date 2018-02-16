@@ -60,10 +60,10 @@ pub trait PhysicalDevice<B: Backend>: Sized {
     ///
     /// # let physical_device: empty::PhysicalDevice = return;
     /// # let family: empty::QueueFamily = return;
-    /// let gpu = physical_device.open(vec![(family, vec![1.0; 1])]);
+    /// let gpu = physical_device.open(vec![(&family, vec![1.0; 1])]);
     /// # }
     /// ```
-    fn open(&self, Vec<(B::QueueFamily, Vec<QueuePriority>)>) -> Result<Gpu<B>, DeviceCreationError>;
+    fn open(&self, Vec<(&B::QueueFamily, Vec<QueuePriority>)>) -> Result<Gpu<B>, DeviceCreationError>;
 
     ///
     fn format_properties(&self, Option<format::Format>) -> format::Properties;
@@ -146,7 +146,7 @@ impl<B: Backend> Adapter<B> {
             .next();
 
         let (id, family) = match requested_family {
-            Some(family) => (family.id(), vec![(family, vec![1.0; count])]),
+            Some(ref family) => (family.id(), vec![(family, vec![1.0; count])]),
             _ => return Err(DeviceCreationError::InitializationFailed),
         };
 
