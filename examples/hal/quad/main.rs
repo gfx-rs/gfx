@@ -431,18 +431,18 @@ fn main() {
         )
     );
 
-    device.update_descriptor_sets::<_,Range<_>>(&[
+    device.write_descriptor_sets::<_, Range<_>>(vec![
         pso::DescriptorSetWrite {
             set: &desc_set,
             binding: 0,
             array_offset: 0,
-            write: pso::DescriptorWrite::SampledImage(vec![(&image_srv, i::ImageLayout::Undefined)]),
+            write: pso::DescriptorWrite::SampledImage(&[(&image_srv, i::ImageLayout::Undefined)]),
         },
         pso::DescriptorSetWrite {
             set: &desc_set,
             binding: 1,
             array_offset: 0,
-            write: pso::DescriptorWrite::Sampler(vec![&sampler]),
+            write: pso::DescriptorWrite::Sampler(&[&sampler]),
         },
     ]);
 

@@ -214,11 +214,19 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn update_descriptor_sets<'a, I, R>(&self, _: I)
+    fn write_descriptor_sets<'a, I, R>(&self, _: I)
     where
         I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetWrite<'a, 'a, Backend, R>>,
-        R: RangeArg<u64>,
+        I::Item: Borrow<pso::DescriptorSetWrite<'a, Backend, R>>,
+        R: 'a + RangeArg<u64>,
+    {
+        unimplemented!()
+    }
+
+    fn copy_descriptor_sets<'a, I>(&self, _: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorSetCopy<'a, Backend>>
     {
         unimplemented!()
     }

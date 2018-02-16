@@ -358,12 +358,17 @@ pub trait Device<B: Backend> {
     fn destroy_descriptor_set_layout(&self, B::DescriptorSetLayout);
 
     ///
-    // TODO: copies
-    fn update_descriptor_sets<'a, I, R>(&self, writes: I)
+    fn write_descriptor_sets<'a, I, R>(&self, I)
     where
         I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetWrite<'a, 'a, B, R>>,
-        R: RangeArg<u64>;
+        I::Item: Borrow<pso::DescriptorSetWrite<'a, B, R>>,
+        R: 'a + RangeArg<u64>;
+
+    ///
+    fn copy_descriptor_sets<'a, I>(&self, I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>;
 
     ///
     fn map_memory<R>(&self, &B::Memory, R) -> Result<*mut u8, mapping::Error>

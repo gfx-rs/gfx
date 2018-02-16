@@ -451,8 +451,8 @@ impl Device {
     ) where
         F: FnMut(&pso::DescriptorWrite<B, R>, &mut Vec<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>),
         I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetWrite<'a, 'a, B, R>>,
-        R: RangeArg<u64>,
+        I::Item: Borrow<pso::DescriptorSetWrite<'a, B, R>>,
+        R: 'a + RangeArg<u64>,
     {
         let mut dst_starts = Vec::new();
         let mut dst_sizes = Vec::new();
@@ -1824,17 +1824,17 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn update_descriptor_sets<'a, I, R>(&self, writes: I)
+    fn write_descriptor_sets<'a, I, R>(&self, writes: I)
     where
         I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetWrite<'a, 'a, B, R>>,
-        R: RangeArg<u64>,
+        I::Item: Borrow<pso::DescriptorSetWrite<'a, B, R>>,
+        R: 'a + RangeArg<u64>,
     {
         let writes = writes.into_iter().collect::<Vec<_>>();
         // Create temporary non-shader visible views for uniform and storage buffers.
         let mut num_views = 0;
-        for sw in &writes {
-            let sw = sw.borrow();
+        for write in &writes {
+            let sw = write.borrow();
             match sw.write {
                 pso::DescriptorWrite::UniformBuffer(ref views) |
                 pso::DescriptorWrite::StorageBuffer(ref views) => {
@@ -1859,8 +1859,8 @@ impl d::Device<B> for Device {
                 max_size: num_views as _,
             };
             // Create views
-            for sw in &writes {
-                let sw = sw.borrow();
+            for write in &writes {
+                let sw = write.borrow();
                 match sw.write {
                     pso::DescriptorWrite::UniformBuffer(ref views) => {
                         handles.extend(views.iter().map(|&(buffer, ref range)| {
@@ -1952,6 +1952,16 @@ impl d::Device<B> for Device {
                 }
                 _ => ()
             });
+    }
+
+    fn copy_descriptor_sets<'a, I>(&self, copies: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>,
+    {
+        for _copy in copies {
+            unimplemented!()
+        }
     }
 
     fn map_memory<R>(&self, memory: &n::Memory, range: R) -> Result<*mut u8, mapping::Error>

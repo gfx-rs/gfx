@@ -103,22 +103,35 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
 }
 
 #[allow(missing_docs)] //TODO
-pub struct DescriptorSetWrite<'a, 'b, B: Backend, R: RangeArg<u64>> {
+pub struct DescriptorSetWrite<'a, B: Backend, R: 'a + RangeArg<u64>> {
     pub set: &'a B::DescriptorSet,
     pub binding: usize,
     pub array_offset: usize,
-    pub write: DescriptorWrite<'b, B, R>,
+    pub write: DescriptorWrite<'a, B, R>,
 }
 
 #[allow(missing_docs)] //TODO
-pub enum DescriptorWrite<'a, B: Backend, R: RangeArg<u64>> {
-    Sampler(Vec<&'a B::Sampler>),
-    SampledImage(Vec<(&'a B::ImageView, ImageLayout)>),
-    StorageImage(Vec<(&'a B::ImageView, ImageLayout)>),
-    InputAttachment(Vec<(&'a B::ImageView, ImageLayout)>),
-    UniformBuffer(Vec<(&'a B::Buffer, R)>),
-    StorageBuffer(Vec<(&'a B::Buffer, R)>),
-    UniformTexelBuffer(Vec<&'a B::BufferView>),
-    StorageTexelBuffer(Vec<&'a B::BufferView>),
-    CombinedImageSampler(Vec<(&'a B::Sampler, &'a B::ImageView, ImageLayout)>),
+#[derive(Clone, Copy)]
+pub enum DescriptorWrite<'a, B: Backend, R: 'a + RangeArg<u64>> {
+    Sampler(&'a [&'a B::Sampler]),
+    SampledImage(&'a [(&'a B::ImageView, ImageLayout)]),
+    StorageImage(&'a [(&'a B::ImageView, ImageLayout)]),
+    InputAttachment(&'a [(&'a B::ImageView, ImageLayout)]),
+    UniformBuffer(&'a [(&'a B::Buffer, R)]),
+    StorageBuffer(&'a [(&'a B::Buffer, R)]),
+    UniformTexelBuffer(&'a [&'a B::BufferView]),
+    StorageTexelBuffer(&'a [&'a B::BufferView]),
+    CombinedImageSampler(&'a [(&'a B::Sampler, &'a B::ImageView, ImageLayout)]),
+}
+
+#[allow(missing_docs)] //TODO
+#[derive(Clone, Copy)]
+pub struct DescriptorSetCopy<'a, B: Backend> {
+    pub src_set: &'a B::DescriptorSet,
+    pub src_binding: usize,
+    pub src_array_offset: usize,
+    pub dst_set: &'a B::DescriptorSet,
+    pub dst_binding: usize,
+    pub dst_array_offset: usize,
+    pub count: usize,
 }
