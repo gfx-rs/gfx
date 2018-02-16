@@ -1,6 +1,6 @@
-# gfx-backend-dx12
+# gfx-backend-metal
 
-DX12 backend for gfx.
+[Metal](https://developer.apple.com/metal/) backend for gfx-rs.
 
 ## Normalized Coordinates
 

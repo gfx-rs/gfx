@@ -1,4 +1,4 @@
-# gfx_device_gl
+# gfx-backend-gl
 
 [OpenGL](https://www.khronos.org/opengl/) backend for gfx.
 
@@ -9,19 +9,6 @@ Render | Depth | Texture
 ![render_coordinates](../../../info/gl_render_coordinates.png) | ![depth_coordinates](../../../info/gl_depth_coordinates.png) | ![texture_coordinates](../../../info/gl_texture_coordinates.png)
 
 ## GLSL Mirroring
-
-PSO component | GLSL component
---------------|----------------
-`Vertex/InstanceBuffer` | a collection of vertex shader inputs
-`ConstantBuffer` | [Uniform Buffer Object](https://www.opengl.org/wiki/Uniform_Buffer_Object)
-`Global` | [Uniform](https://www.opengl.org/wiki/Uniform_(GLSL))
-`Render/BlendTarget` | fragment shader output
-`Depth/StencilTarget` | [depth](https://www.opengl.org/wiki/Depth_Test), [stencil](https://www.opengl.org/wiki/Stencil_Test)
-`UnorderedAccess` | TODO
-`Scissor` | not visible
-`BlendRef` | not visible
-
-`TextureSampler`s correspond to the following [GLSL samplers](https://www.opengl.org/wiki/Sampler_(GLSL)), when you see a *g* preceding a sampler name, it represents any of the 3 possible prefixes (nothing for float, i for signed integer, and u for unsigned integer):
 
 Texture Kind | GLSL sampler
 -------------|-------------
