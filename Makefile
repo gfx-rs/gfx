@@ -6,7 +6,6 @@ FEATURES_HAL:=
 FEATURES_HAL2:=
 FEATURES_WARDEN:=gl
 CMD_QUAD_RENDER:=cargo check
-CMD_CHECK_XCB:=
 
 SDL2_DEST=$(HOME)/deps
 SDL2_CONFIG=$(SDL2_DEST)/usr/bin/sdl2-config
@@ -31,7 +30,6 @@ else
 		EXCLUDES+= --exclude gfx-backend-metal
 		FEATURES_HAL=vulkan
 		FEATURES_WARDEN+= glsl-to-spirv
-		CMD_CHECK_XCB=cd src/backend/vulkan && cargo check --features xcb
 	endif
 	ifeq ($(UNAME_S),Darwin)
 		EXCLUDES+= --exclude gfx-backend-vulkan
@@ -52,7 +50,6 @@ help:
 check:
 	#Note: excluding `warden` here, since it depends on serialization
 	cargo check --all $(EXCLUDES) --exclude gfx-warden
-	$(CMD_CHECK_XCB)
 	cd examples/hal && cargo check --features "gl"
 	cd examples/hal && cargo check --features "$(FEATURES_HAL)"
 	cd examples/hal && cargo check --features "$(FEATURES_HAL2)"

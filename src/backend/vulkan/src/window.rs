@@ -81,7 +81,7 @@ impl Instance {
         self.create_surface_from_vk_surface_khr(surface, width, height)
     }
 
-    #[cfg(all(unix, not(target_os = "android"), feature = "xcb"))]
+    #[cfg(all(unix, not(target_os = "android")))]
     pub fn create_surface_from_xcb(
         &self, connection: *mut vk::xcb_connection_t, window: vk::xcb_window_t
     ) -> Surface {

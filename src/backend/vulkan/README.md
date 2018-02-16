@@ -1,6 +1,6 @@
-# gfx_device_vulkan
+# gfx-backend-vulkan
 
-[Vulkan](https://www.khronos.org/vulkan/) backend for gfx.
+[Vulkan](https://www.khronos.org/vulkan/) backend for gfx-rs.
 
 ## Normalized Coordinates
 
@@ -10,4 +10,4 @@ Render | Depth | Texture
 
 ## Mirroring
 
-TODO
+HAL is modelled after Vulkan, so everything should be 1:1.
