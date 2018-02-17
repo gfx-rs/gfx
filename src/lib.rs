@@ -148,34 +148,37 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
     });
 
     let mut harness = Harness::new();
-    events_loop.run_forever(move |event| {
-        use glutin::ControlFlow;
-
-        if let winit::Event::WindowEvent { event, .. } = event {
-            match event {
-                winit::WindowEvent::Closed => return ControlFlow::Break,
-                winit::WindowEvent::KeyboardInput {
-                    input: winit::KeyboardInput {
-                        state: winit::ElementState::Pressed,
-                        virtual_keycode: key,
+    let mut running = true;
+    while running {
+        events_loop.poll_events(|event| {
+            if let winit::Event::WindowEvent { event, .. } = event {
+                match event {
+                    winit::WindowEvent::Closed => running = false,
+                    winit::WindowEvent::KeyboardInput {
+                        input: winit::KeyboardInput {
+                            state: winit::ElementState::Pressed,
+                            virtual_keycode: key,
+                            ..
+                        },
                         ..
+                    } if key == A::get_exit_key() => running = false,
+                    winit::WindowEvent::Resized(width, height) => {
+                        if width != cur_width || height != cur_height {
+                            window.resize(width, height);
+                            cur_width = width;
+                            cur_height = height;
+                            let (new_color, new_depth) = gfx_window_glutin::new_views(&window);
+                            app.on_resize(&mut factory, WindowTargets {
+                                color: new_color,
+                                depth: new_depth,
+                                aspect_ratio: width as f32 / height as f32,
+                            });
+                        }
                     },
-                    ..
-                } if key == A::get_exit_key() => return ControlFlow::Break,
-                winit::WindowEvent::Resized(width, height) => if width != cur_width || height != cur_height {
-                    window.resize(width, height);
-                    cur_width = width;
-                    cur_height = height;
-                    let (new_color, new_depth) = gfx_window_glutin::new_views(&window);
-                    app.on_resize(&mut factory, WindowTargets {
-                        color: new_color,
-                        depth: new_depth,
-                        aspect_ratio: width as f32 / height as f32,
-                    });
-                },
-                _ => app.on(event),
+                    _ => app.on(event),
+                }
             }
-        }
+        });
 
         // draw a frame
         app.render(&mut device);
@@ -183,8 +186,7 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
         device.cleanup();
 
         harness.bump();
-        ControlFlow::Continue
-    });
+    }
 }
 
 
