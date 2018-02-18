@@ -381,12 +381,17 @@ impl d::Device<B> for Device {
                 (pso::Stage::Geometry, desc.shaders.geometry.as_ref()),
                 (pso::Stage::Fragment, desc.shaders.fragment.as_ref()),
             ];
-            for &(stage, point_maybe) in &shaders {
-                if let Some(ref point) = point_maybe {
-                    let shader = self.compile_shader(point, stage);
-                    unsafe { gl.AttachShader(name, shader); }
-                }
-            }
+
+            let shader_names = &shaders
+                .iter()
+                .filter_map(|&(stage, point_maybe)| {
+                    point_maybe.map(|point| {
+                        let shader_name = self.compile_shader(point, stage);
+                        unsafe { gl.AttachShader(name, shader_name); }
+                        shader_name
+                    })
+                })
+                .collect::<Vec<_>>();
 
             if !share.private_caps.program_interface && share.private_caps.frag_data_location {
                 for i in 0..subpass.color_attachments.len() {
@@ -401,6 +406,13 @@ impl d::Device<B> for Device {
             info!("\tLinked program {}", name);
             if let Err(err) = share.check() {
                 panic!("Error linking program: {:?}", err);
+            }
+
+            for shader_name in shader_names {
+                unsafe {
+                    gl.DetachShader(name, *shader_name);
+                    gl.DeleteShader(*shader_name);
+                }
             }
 
             let status = get_program_iv(gl, name, gl::LINK_STATUS);
@@ -460,6 +472,11 @@ impl d::Device<B> for Device {
             info!("\tLinked program {}", name);
             if let Err(err) = share.check() {
                 panic!("Error linking program: {:?}", err);
+            }
+
+            unsafe {
+                gl.DetachShader(name, shader);
+                gl.DeleteShader(shader);
             }
 
             let status = get_program_iv(gl, name, gl::LINK_STATUS);
@@ -980,7 +997,7 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_shader_module(&self, _: n::ShaderModule) {
-        unimplemented!()
+        // Assumes compiled shaders are managed internally
     }
 
     fn destroy_render_pass(&self, _: n::RenderPass) {
