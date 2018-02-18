@@ -52,7 +52,7 @@ impl<B: Backend> InnerGarbageCollector<B> {
             use self::Garbage::*;
             match garbage {
                 // ShaderLib(sl) => dev.destroy_shader_lib(sl),
-                RenderPass(rp) => dev.destroy_renderpass(rp),
+                RenderPass(rp) => dev.destroy_render_pass(rp),
                 PipelineLayout(pl) => dev.destroy_pipeline_layout(pl),
                 GraphicsPipeline(pl) => dev.destroy_graphics_pipeline(pl),
                 Framebuffer(fb) => dev.destroy_framebuffer(fb),

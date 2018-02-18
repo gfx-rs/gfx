@@ -533,7 +533,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn begin_renderpass_raw<T>(
+    fn begin_render_pass_raw<T>(
         &mut self,
         render_pass: &n::RenderPass,
         framebuffer: &n::FrameBuffer,
@@ -596,7 +596,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn end_renderpass(&mut self) {
+    fn end_render_pass(&mut self) {
         // TODO
     }
 

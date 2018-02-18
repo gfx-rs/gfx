@@ -983,7 +983,7 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn destroy_renderpass(&self, _: n::RenderPass) {
+    fn destroy_render_pass(&self, _: n::RenderPass) {
         unimplemented!()
     }
 

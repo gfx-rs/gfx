@@ -148,7 +148,7 @@ macro_rules! gfx_graphics_pipeline {
                         w: extent.width as u16,
                         h: extent.height as u16
                     };
-                    cmd_buffer.begin_renderpass_inline(
+                    cmd_buffer.begin_render_pass_inline(
                         meta.render_pass.resource(),
                         self.framebuffer.resource(),
                         render_rect,

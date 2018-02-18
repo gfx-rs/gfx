@@ -538,7 +538,7 @@ fn main() {
             cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, Some(&desc_set)); //TODO
 
             {
-                let mut encoder = cmd_buffer.begin_renderpass_inline(
+                let mut encoder = cmd_buffer.begin_render_pass_inline(
                     &render_pass,
                     &framebuffers[frame.id()],
                     viewport.rect,
@@ -580,7 +580,7 @@ fn main() {
     device.destroy_fence(frame_fence);
     device.destroy_semaphore(frame_semaphore);
     device.destroy_pipeline_layout(pipeline_layout);
-    device.destroy_renderpass(render_pass);
+    device.destroy_render_pass(render_pass);
     device.free_memory(buffer_memory);
     device.free_memory(image_memory);
     device.free_memory(image_upload_memory);

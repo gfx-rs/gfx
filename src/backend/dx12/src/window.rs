@@ -56,7 +56,7 @@ impl hal::Surface<Backend> for Surface {
     fn capabilities_and_formats(
         &self, _: &PhysicalDevice,
     ) -> (hal::SurfaceCapabilities, Option<Vec<f::Format>>) {
-        let extent = hal::window::Extent2d {
+        let extent = hal::window::Extent2D {
             width: self.width,
             height: self.height,
         };

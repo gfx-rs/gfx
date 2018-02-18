@@ -285,7 +285,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn destroy_renderpass(&self, _: ()) {
+    fn destroy_render_pass(&self, _: ()) {
         unimplemented!()
     }
 
@@ -503,7 +503,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
 
-    fn begin_renderpass_raw<T>(
+    fn begin_render_pass_raw<T>(
         &mut self,
         _: &(),
         _: &(),
@@ -521,7 +521,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn end_renderpass(&mut self) {
+    fn end_render_pass(&mut self) {
         unimplemented!()
     }
 

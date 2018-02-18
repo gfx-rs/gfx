@@ -711,7 +711,7 @@ impl d::Device<B> for Device {
         renderpass: &n::RenderPass,
         attachments: T,
         extent: d::Extent,
-    ) -> Result<n::FrameBuffer, d::FramebufferError>
+    ) -> Result<n::Framebuffer, d::FramebufferError>
     where
         T: IntoIterator,
         T::Item: Borrow<n::ImageView>,
@@ -737,7 +737,7 @@ impl d::Device<B> for Device {
             self.raw.0.create_framebuffer(&info, None)
         }.expect("error on framebuffer creation");
 
-        Ok(n::FrameBuffer { raw: framebuffer })
+        Ok(n::Framebuffer { raw: framebuffer })
     }
 
     fn create_shader_module(&self, spirv_data: &[u8]) -> Result<n::ShaderModule, d::ShaderError> {
@@ -1471,7 +1471,7 @@ impl d::Device<B> for Device {
         unsafe { self.raw.0.destroy_shader_module(module.raw, None); }
     }
 
-    fn destroy_renderpass(&self, rp: n::RenderPass) {
+    fn destroy_render_pass(&self, rp: n::RenderPass) {
         unsafe { self.raw.0.destroy_render_pass(rp.raw, None); }
     }
 
@@ -1487,7 +1487,7 @@ impl d::Device<B> for Device {
         unsafe { self.raw.0.destroy_pipeline(pipeline.0, None); }
     }
 
-    fn destroy_framebuffer(&self, fb: n::FrameBuffer) {
+    fn destroy_framebuffer(&self, fb: n::Framebuffer) {
         unsafe { self.raw.0.destroy_framebuffer(fb.raw, None); }
     }
 
