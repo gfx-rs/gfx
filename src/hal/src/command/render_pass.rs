@@ -139,7 +139,7 @@ impl<'a, B: Backend, L: Level> RenderPassInlineEncoder<'a, B, L> {
         T: IntoIterator,
         T::Item: Borrow<ClearValue>,
     {
-        cmd_buffer.raw.begin_renderpass(
+        cmd_buffer.raw.begin_render_pass(
             render_pass,
             frame_buffer,
             render_area,
@@ -181,7 +181,7 @@ impl<'a, B: Backend, L: Level> DerefMut for RenderPassInlineEncoder<'a, B, L> {
 impl<'a, B: Backend, L: Level> Drop for RenderPassInlineEncoder<'a, B, L> {
     fn drop(&mut self) {
         if let Some(ref mut b) = self.0 {
-            b.0.end_renderpass();
+            b.0.end_render_pass();
         }
     }
 }
@@ -204,7 +204,7 @@ impl<'a, B: Backend> RenderPassSecondaryEncoder<'a, B> {
         T: IntoIterator,
         T::Item: Borrow<ClearValue>,
     {
-        cmd_buffer.raw.begin_renderpass(
+        cmd_buffer.raw.begin_render_pass(
             render_pass,
             frame_buffer,
             render_area,
@@ -241,7 +241,7 @@ impl<'a, B: Backend> RenderPassSecondaryEncoder<'a, B> {
 impl<'a, B: Backend> Drop for RenderPassSecondaryEncoder<'a, B> {
     fn drop(&mut self) {
         if let Some(ref mut b) = self.0 {
-            b.end_renderpass();
+            b.end_render_pass();
         }
     }
 }

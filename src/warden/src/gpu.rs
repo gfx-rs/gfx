@@ -720,7 +720,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         w: extent.width as _,
                         h: extent.height as _,
                     };
-                    let mut encoder = command_buf.begin_renderpass_inline(&rp.handle, fb, rect, clear_values);
+                    let mut encoder = command_buf.begin_render_pass_inline(&rp.handle, fb, rect, clear_values);
                     encoder.set_scissors(Some(rect));
                     encoder.set_viewports(Some(c::Viewport {
                         rect,

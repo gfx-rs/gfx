@@ -58,7 +58,7 @@ pub struct RenderPass {
 }
 
 #[derive(Debug, Hash)]
-pub struct FrameBuffer {
+pub struct Framebuffer {
     pub(crate)  raw: vk::Framebuffer,
 }
 

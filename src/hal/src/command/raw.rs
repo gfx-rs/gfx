@@ -249,7 +249,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     fn set_blend_constants(&mut self, ColorValue);
 
     ///
-    fn begin_renderpass<T>(
+    fn begin_render_pass<T>(
         &mut self,
         render_pass: &B::RenderPass,
         framebuffer: &B::Framebuffer,
@@ -275,7 +275,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
                 }
             });
 
-        self.begin_renderpass_raw(
+        self.begin_render_pass_raw(
             render_pass,
             framebuffer,
             render_area,
@@ -285,7 +285,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     }
 
     ///
-    fn begin_renderpass_raw<T>(
+    fn begin_render_pass_raw<T>(
         &mut self,
         render_pass: &B::RenderPass,
         framebuffer: &B::Framebuffer,
@@ -300,7 +300,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Send {
     fn next_subpass(&mut self, contents: SubpassContents);
 
     ///
-    fn end_renderpass(&mut self);
+    fn end_render_pass(&mut self);
 
     /// Bind a graphics pipeline.
     ///

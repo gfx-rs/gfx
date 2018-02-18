@@ -111,10 +111,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         );
     }
 
-    fn begin_renderpass_raw<T>(
+    fn begin_render_pass_raw<T>(
         &mut self,
         render_pass: &n::RenderPass,
-        frame_buffer: &n::FrameBuffer,
+        frame_buffer: &n::Framebuffer,
         render_area: com::Rect,
         clear_values: T,
         first_subpass: com::SubpassContents,
@@ -169,7 +169,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn end_renderpass(&mut self) {
+    fn end_render_pass(&mut self) {
         unsafe {
             self.device.0.cmd_end_render_pass(self.raw);
         }

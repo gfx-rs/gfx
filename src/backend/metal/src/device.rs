@@ -1113,7 +1113,7 @@ impl hal::Device<Backend> for Device {
     fn destroy_shader_module(&self, _module: n::ShaderModule) {
     }
 
-    fn destroy_renderpass(&self, _pass: n::RenderPass) {
+    fn destroy_render_pass(&self, _pass: n::RenderPass) {
     }
 
     fn destroy_graphics_pipeline(&self, _pipeline: n::GraphicsPipeline) {

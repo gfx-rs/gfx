@@ -2196,7 +2196,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn destroy_renderpass(&self, _rp: n::RenderPass) {
+    fn destroy_render_pass(&self, _rp: n::RenderPass) {
         // Just drop
     }
 

@@ -715,7 +715,7 @@ impl hal::Backend for Backend {
 
     type ShaderModule = native::ShaderModule;
     type RenderPass = native::RenderPass;
-    type Framebuffer = native::FrameBuffer;
+    type Framebuffer = native::Framebuffer;
 
     type UnboundBuffer = device::UnboundBuffer;
     type Buffer = native::Buffer;

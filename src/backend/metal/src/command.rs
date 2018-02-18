@@ -139,7 +139,7 @@ impl CommandBufferInner {
         }
     }
 
-    fn begin_renderpass(&mut self, encoder: metal::RenderCommandEncoder) {
+    fn begin_render_pass(&mut self, encoder: metal::RenderCommandEncoder) {
         self.stop_ecoding();
 
         self.encoder_state = EncoderState::Render(encoder);
@@ -413,7 +413,7 @@ impl CommandBuffer {
         }
     }
 
-    fn expect_renderpass(&self) -> &metal::RenderCommandEncoderRef {
+    fn expect_render_pass(&self) -> &metal::RenderCommandEncoderRef {
         if let EncoderState::Render(ref encoder) = self.inner_ref().encoder_state {
             encoder
         } else {
@@ -634,7 +634,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn begin_renderpass_raw<T>(
+    fn begin_render_pass_raw<T>(
         &mut self,
         render_pass: &native::RenderPass,
         frame_buffer: &native::FrameBuffer,
@@ -682,14 +682,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 .to_owned()
         };
 
-        inner.begin_renderpass(encoder);
+        inner.begin_render_pass(encoder);
     }
 
     fn next_subpass(&mut self, _contents: com::SubpassContents) {
         unimplemented!()
     }
 
-    fn end_renderpass(&mut self) {
+    fn end_render_pass(&mut self) {
         match self.inner().encoder_state {
             EncoderState::Render(ref encoder) => {
                 encoder.end_encoding();
@@ -1060,7 +1060,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         instances: Range<InstanceCount>,
     ) {
         let primitive_type = self.inner().primitive_type;
-        let encoder = self.expect_renderpass();
+        let encoder = self.expect_render_pass();
 
         unsafe {
             msg_send![encoder,
@@ -1081,7 +1081,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     ) {
         let (buffer, offset, index_type) = self.inner_ref().index_buffer.as_ref().cloned().expect("must bind index buffer");
         let primitive_type = self.inner_ref().primitive_type;
-        let encoder = self.expect_renderpass();
+        let encoder = self.expect_render_pass();
         let index_offset = match index_type {
             MTLIndexType::UInt16 => indices.start as u64 * 2,
             MTLIndexType::UInt32 => indices.start as u64 * 4,

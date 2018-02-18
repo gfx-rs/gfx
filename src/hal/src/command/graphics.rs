@@ -176,7 +176,7 @@ pub struct ImageBlit {
 
 impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a, B, C, S, L> {
     ///
-    pub fn begin_renderpass_inline<T>(
+    pub fn begin_render_pass_inline<T>(
         &mut self,
         render_pass: &B::RenderPass,
         frame_buffer: &B::Framebuffer,
@@ -307,7 +307,7 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
 
 impl<'a, B: Backend, C: Supports<Graphics>, S: Shot> CommandBuffer<'a, B, C, S, Primary> {
     ///
-    pub fn begin_renderpass_secondary<T>(
+    pub fn begin_render_pass_secondary<T>(
         &mut self,
         render_pass: &B::RenderPass,
         frame_buffer: &B::Framebuffer,

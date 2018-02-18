@@ -7,12 +7,12 @@ use std::marker::PhantomData;
 mod compute;
 mod graphics;
 mod raw;
-mod renderpass;
+mod render_pass;
 mod transfer;
 
 pub use self::graphics::*;
 pub use self::raw::{ClearValueRaw, ClearColorRaw, ClearDepthStencilRaw, RawCommandBuffer, CommandBufferFlags, Level as RawLevel};
-pub use self::renderpass::*;
+pub use self::render_pass::*;
 pub use self::transfer::*;
 
 use std::borrow::{Cow};

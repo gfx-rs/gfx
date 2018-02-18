@@ -618,7 +618,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.reset();
     }
 
-    fn begin_renderpass_raw<T>(
+    fn begin_render_pass_raw<T>(
         &mut self,
         render_pass: &n::RenderPass,
         framebuffer: &n::Framebuffer,
@@ -686,7 +686,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.bind_targets();
     }
 
-    fn end_renderpass(&mut self) {
+    fn end_render_pass(&mut self) {
         self.cur_subpass = !0;
         self.insert_subpass_barriers();
         self.pass_cache = None;

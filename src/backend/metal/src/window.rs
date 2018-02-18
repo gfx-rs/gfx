@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use hal::{self, format, image};
 use hal::{Backbuffer, SwapchainConfig};
-use hal::window::Extent2d;
+use hal::window::Extent2D;
 
 use metal::{self, MTLPixelFormat, MTLTextureUsage};
 use objc::runtime::{Object};
@@ -65,7 +65,7 @@ impl hal::Surface<Backend> for Surface {
         let caps = hal::SurfaceCapabilities {
             image_count: 1..8,
             current_extent: None,
-            extents: Extent2d { width: 4, height: 4} .. Extent2d { width: 4096, height: 4096 },
+            extents: Extent2D { width: 4, height: 4} .. Extent2D { width: 4096, height: 4096 },
             max_image_layers: 1,
         };
         let formats = Some(vec![format::Format::Rgba8Srgb]);
