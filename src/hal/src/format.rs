@@ -118,11 +118,11 @@ impl Default for Swizzle {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Properties {
-    /// DOC TODO
+    /// A bitmask of the features supported when a device with linear tiling is requested.
     pub linear_tiling: ImageFeature,
-    /// DOC TODO
+    /// A bitmask of the features supported when a device with optimal tiling is requested.
     pub optimal_tiling: ImageFeature,
-    /// DOC TODO
+    /// The features supported by buffers.
     pub buffer_features: BufferFeature,
 }
 
@@ -318,9 +318,10 @@ macro_rules! formats {
         $name:ident = ($surface:ident, $channel:ident),
         $($name_tail:ident = ($surface_tail:ident, $channel_tail:ident),)*
     } => {
-        /// DOC TODO
-        /// Though you want to keep the missing_docs so you don't have to
-        /// put a docstring for every variant.
+        /// A format descriptor that describes the channels present in a
+        /// texture or view, how they are laid out, what size they are,
+        /// and how the elements of the channels are interpreted (integer,
+        /// float, etc.)
         #[allow(missing_docs)]
         #[repr(u32)]
         #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -346,8 +347,8 @@ macro_rules! formats {
             $(BaseFormat(SurfaceType::$surface_tail, ChannelType::$channel_tail), )*
         ];
 
-        // Struct format types, for strong-typed APIs.
-            /// DOC TODO
+            /// A struct equivalent to the matching `Format` enum member, which allows
+            /// an API to be strongly typed on particular formats.
             #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
             #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
             pub struct $name;
@@ -357,7 +358,8 @@ macro_rules! formats {
             }
 
         $(
-            /// DOC TODO
+            /// A struct equivalent to the matching `Format` enum member, which allows
+            /// an API to be strongly typed on particular formats.
             #[allow(missing_docs)]
             #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
             #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

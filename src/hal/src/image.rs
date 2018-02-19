@@ -461,30 +461,25 @@ impl SamplerInfo {
 }
 
 /// Texture resource view descriptor.
-/// DOC TODO
+/// Legacy code to be removed, per msiglreith.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[allow(missing_docs)]
 pub struct ResourceDesc {
-    /// DOC TODO
     pub channel: format::ChannelType,
-    /// DOC TODO
     pub layer: Option<Layer>,
-    /// DOC TODO
     pub levels: Range<Level>,
-    /// DOC TODO
     pub swizzle: format::Swizzle,
 }
 
 /// Texture render view descriptor.
-/// DOC TODO
+/// Legacy code to be removed, per msiglreith.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[allow(missing_docs)]
 pub struct RenderDesc {
-    /// DOC TODO
     pub channel: format::ChannelType,
-    /// DOC TODO
     pub level: Level,
-    /// DOC TODO
     pub layer: Option<Layer>,
 }
 
@@ -502,15 +497,13 @@ bitflags!(
 );
 
 /// Texture depth-stencil view descriptor.
-/// DOC TODO
+/// Legacy code to be removed, per msiglreith.
+#[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DepthStencilDesc {
-    /// DOC TODO
     pub level: Level,
-    /// DOC TODO
     pub layer: Option<Layer>,
-    /// DOC TODO
     pub flags: DepthStencilFlags,
 }
 
@@ -524,62 +517,76 @@ impl From<RenderDesc> for DepthStencilDesc {
     }
 }
 
-/// DOC TODO
+/// Specifies options for how memory for an image is arranged.
+/// These are hints to the GPU driver and may or may not have actual
+/// performance effects, but describe constraints on how the data
+/// may be used that a program *must* obey.  They do not specify
+/// how channel values or such are laid out in memory; the actual
+/// image data is considered opaque.
+///
+/// Details may be found in [the Vulkan spec](https://www.khronos.org/registry/vulkan/specs/1.0/html/vkspec.html#resources-image-layouts)
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ImageLayout {
-    /// DOC TODO
+    /// General purpose, no restrictions on usage.
     General,
-    /// DOC TODO
+    /// Must only be used as a color attachment in a framebuffer.
     ColorAttachmentOptimal,
-    /// DOC TODO
+    /// Must only be used as a depth attachment in a framebuffer.
     DepthStencilAttachmentOptimal,
-    /// DOC TODO
+    /// Must only be used as a depth attachment in a framebuffer,
+    /// or as a read-only depth or stencil buffer in a shader.
     DepthStencilReadOnlyOptimal,
-    /// DOC TODO
+    /// Must only be used as a read-only image in a shader.
     ShaderReadOnlyOptimal,
-    /// DOC TODO
+    /// Must only be used as the source for a transfer command.
     TransferSrcOptimal,
-    /// DOC TODO
+    /// Must only be used as the destination for a transfer command.
     TransferDstOptimal,
-    /// DOC TODO
+    /// No layout, does not support device access.  Only valid as a
+    /// source layout when transforming data to a specific destination
+    /// layout or initializing data.  Does NOT guarentee that the contents 
+    /// of the source buffer are preserved.
     Undefined, //TODO: consider Option<> instead?
-    /// DOC TODO
+    /// Like `Undefined`, but does guarentee that the contents of the source
+    /// buffer are preserved.
     Preinitialized,
-    /// DOC TODO
+    /// The layout that an image must be in to be presented to the display.
     Present,
 }
 
 bitflags!(
-    /// DOC TODO
+    /// Bitflags to describe how memory in an image or buffer can be accessed.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct Access: u16 {
         /// Read state but can only be combined with `COLOR_ATTACHMENT_WRITE`.
         const COLOR_ATTACHMENT_READ = 0x1;
         /// Write-only state but can be combined with `COLOR_ATTACHMENT_READ`.
         const COLOR_ATTACHMENT_WRITE = 0x2;
-        /// DOC TODO
+        /// Read access to the buffer in a copy operation.
         const TRANSFER_READ = 0x4;
-        /// Write-only state of copy commands.
+        /// Write access to the buffer in a copy operation.
         const TRANSFER_WRITE = 0x8;
-        /// Read-only state for SRV access, or combine with `SHADER_WRITE` to have r/w access to UAV.
+        /// Read-only state for shader access, or combine with `SHADER_WRITE` to have r/w access to UAV.
         const SHADER_READ = 0x10;
-        /// Write state for UAV access.
+        /// Writeable state for UAV access.
         /// Combine with `SHADER_READ` to have r/w access to UAV.
         const SHADER_WRITE = 0x20;
-        /// DOC TODO
+        /// Read access to a depth/stencil attachment in a depth or stencil operation.
         const DEPTH_STENCIL_ATTACHMENT_READ = 0x40;
-        /// Write-only state for depth stencil writes.
+        /// Write access to a depth/stencil attachment in a depth or stencil operation.
         const DEPTH_STENCIL_ATTACHMENT_WRITE = 0x80;
-        /// DOC TODO
+        /// Read access for raw memory to be accessed by the host system (ie, CPU).
         const HOST_READ = 0x100;
-        /// DOC TODO
+        /// Write access for raw memory to be accessed by the host system.
         const HOST_WRITE = 0x200;
-        /// DOC TODO
+        /// Read access for memory to be accessed by a non-specific entity.  This may
+        /// be the host system, or it may be something undefined or specified by an
+        /// extension.
         const MEMORY_READ = 0x400;
-        /// DOC TODO
+        /// Write access for memory to be accessed by a non-specific entity.
         const MEMORY_WRITE = 0x800;
-        /// DOC TODO
+        /// Read access to an input attachment from within a fragment shader.
         const INPUT_ATTACHMENT_READ = 0x1000;
     }
 );
