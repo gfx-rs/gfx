@@ -6,13 +6,13 @@ use super::{BasePipeline, EntryPoint, PipelineCreationFlags};
 /// A description of the data needed to construct a compute pipeline.
 #[derive(Debug)]
 pub struct ComputePipelineDesc<'a, B: Backend> {
-    /// DOC TODO
+    /// The shader entry point that performs the computation.
     pub shader: EntryPoint<'a, B>,
     /// Pipeline layout.
     pub layout: &'a B::PipelineLayout,
-    /// DOC TODO
+    /// Any flags necessary for the pipeline creation.
     pub flags: PipelineCreationFlags,
-    /// DOC TODO
+    /// The parent pipeline to this one, if any.
     pub parent: BasePipeline<'a, B::ComputePipeline>,
 }
 

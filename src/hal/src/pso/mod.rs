@@ -176,14 +176,17 @@ bitflags!(
         ///
         /// May speedup pipeline creation.
         const DISABLE_OPTIMIZATION = 0x1;
-        /// Allow derivatives of the pipeline.
+        /// Allow derivatives (children) of the pipeline.
         ///
         /// Must be set when pipelines set the pipeline as base.
         const ALLOW_DERIVATIVES = 0x2;
     }
 );
 
-/// DOC TODO
+/// A reference to a parent pipeline.  The assumption is that
+/// a parent and derivative/child pipeline have most settings
+/// in common, and one may be switched for another more quickly 
+/// than entirely unrelated pipelines would be.
 #[derive(Debug)]
 pub enum BasePipeline<'a, P: 'a> {
     /// Referencing an existing pipeline as parent.
@@ -192,7 +195,7 @@ pub enum BasePipeline<'a, P: 'a> {
     ///
     /// The index of the parent must be lower than the index of the child.
     Index(usize),
-    /// DOC TODO
+    /// No parent pipeline exists.
     None,
 }
 

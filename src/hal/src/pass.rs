@@ -89,26 +89,29 @@ pub type AttachmentId = usize;
 /// Reference to an attachment by index and expected image layout.
 pub type AttachmentRef = (AttachmentId, AttachmentLayout);
 
-/// DOC TODO: I still don't actually understand what this means
+/// What other subpasses a particular subpass depends on.
 #[derive(Copy, Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SubpassRef {
-    ///
+    /// The subpass depends on something that was submitted to the
+    /// queue before the render pass began.
     External,
-    ///
+    /// The subpass depends on another subpass with the given index.
     Pass(usize),
 }
 
-/// DOC TODO: Don't understand this well enough either.
-/// Is this for src or dest dependencies?
+/// Expresses a dependency between multiple subpasses.  This is used
+/// both to describe a source or destination subpass; data either 
+/// explicitly passes from this subpass to the next or from another 
+/// subpass into this one.
 #[derive(Clone, Debug, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SubpassDependency {
-    /// 
+    /// Other subpasses this one depends on.
     pub passes: Range<SubpassRef>,
-    ///
+    /// Other pipeline stages this subpass depends on.
     pub stages: Range<PipelineStage>,
-    /// 
+    /// Resource accesses this subpass depends on.
     pub accesses: Range<image::Access>,
 }
 

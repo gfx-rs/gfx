@@ -1,6 +1,5 @@
-//! Queue submission.
-//!
-//! DOC TODO
+//! A `Submission` is simply a collection of data bundled up and ready
+//! to be submitted to a command queue.
 
 use {pso, Backend};
 use command::{Submittable, Primary};

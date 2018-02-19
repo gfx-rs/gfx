@@ -54,7 +54,11 @@ pub trait RawCommandQueue<B: Backend> {
         IC: IntoIterator,
         IC::Item: Borrow<B::CommandBuffer>;
 
-    /// DOC TODO
+    /// Presents the result of the queue to the given swapchains, after waiting on all the
+    /// semaphores given in `wait_semaphores`.  A given swapchain must not appear in this
+    /// list more than once.
+    ///
+    /// Unsafe for the same reasons as `submit_raw()`.
     fn present<IS, IW>(&mut self, swapchains: IS, wait_semaphores: IW)
     where
         IS: IntoIterator,
@@ -80,7 +84,8 @@ impl<B: Backend, C> CommandQueue<B, C> {
         &mut self.0
     }
 
-    /// Calls `submit_raw()` for the underlying `RawCommandQueue`.
+    /// Submits the submission command buffers to the queue for execution.
+    /// `fence` will be signalled after submission and _must_ be unsignalled.
     pub fn submit<D>(&mut self,
         submission: Submission<B, D>,
         fence: Option<&B::Fence>,
@@ -92,7 +97,9 @@ impl<B: Backend, C> CommandQueue<B, C> {
         }
     }
 
-    /// DOC TODO
+    /// Presents the result of the queue to the given swapchains, after waiting on all the
+    /// semaphores given in `wait_semaphores`.  A given swapchain must not appear in this
+    /// list more than once.
     pub fn present<IS, IW>(&mut self, swapchains: IS, wait_semaphores: IW)
     where
         IS: IntoIterator,
