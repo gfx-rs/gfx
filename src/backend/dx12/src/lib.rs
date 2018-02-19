@@ -324,8 +324,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         self.memory_properties.clone()
     }
 
-    fn get_features(&self) -> Features { self.features }
-    fn get_limits(&self) -> Limits { self.limits }
+    fn features(&self) -> Features { self.features }
+    fn limits(&self) -> Limits { self.limits }
 }
 
 #[derive(Clone)]

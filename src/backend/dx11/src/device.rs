@@ -88,7 +88,7 @@ impl Device {
     }
 
     /// Return the maximum supported shader model.
-    pub fn get_shader_model(&self) -> ShaderModel {
+    pub fn shader_model(&self) -> ShaderModel {
         match self.feature_level {
             winapi::D3D_FEATURE_LEVEL_10_0 => 40,
             winapi::D3D_FEATURE_LEVEL_10_1 => 41,
@@ -794,7 +794,7 @@ impl core::Device<R> for Device {
             error!("Failed to create RTV from {:#?}, error {:x}", native_desc, hr);
             return Err(d::TargetViewError::Unsupported);
         }
-        let size = htex.get_info().kind.get_level_dimensions(desc.level);
+        let size = htex.get_info().kind.level_dimensions(desc.level);
         Ok(self.share.handles.borrow_mut().make_rtv(native::Rtv(raw_view), htex, size))
     }
 
@@ -859,7 +859,7 @@ impl core::Device<R> for Device {
             error!("Failed to create DSV from {:#?}, error {:x}", native_desc, hr);
             return Err(d::TargetViewError::Unsupported);
         }
-        let dim = htex.get_info().kind.get_level_dimensions(desc.level);
+        let dim = htex.get_info().kind.level_dimensions(desc.level);
         Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_view), htex, dim))
     }
 

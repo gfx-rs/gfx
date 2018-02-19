@@ -48,7 +48,7 @@ pub fn update_texture(context: &mut ComPtr<winapi::ID3D11DeviceContext>, texture
                       face: Option<tex::CubeFace>, data: &[u8], image: &tex::RawImageInfo) {
     let subres = texture_subres(face, image);
     let dst_resource = texture.as_resource();
-    let (width, height, _, _) = kind.get_level_dimensions(image.mipmap);
+    let (width, height, _, _) = kind.level_dimensions(image.mipmap);
     let stride = image.format.0.get_total_bits() as usize;
     let row_pitch = width as usize * stride;
     let depth_pitch = height as usize * row_pitch;

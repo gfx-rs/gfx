@@ -180,7 +180,7 @@ impl From<NumSamples> for AaMode {
 
 impl AaMode {
     /// Return the number of actual data fragments stored per texel.
-    pub fn get_num_fragments(&self) -> NumFragments {
+    pub fn num_fragments(&self) -> NumFragments {
         match *self {
             AaMode::Single => 1,
             AaMode::Multi(n) => n,
@@ -189,7 +189,7 @@ impl AaMode {
     }
     /// Return true if the surface has to be resolved before sampling.
     pub fn needs_resolve(&self) -> bool {
-        self.get_num_fragments() > 1
+        self.num_fragments() > 1
     }
 }
 
@@ -266,7 +266,7 @@ pub enum Kind {
 
 impl Kind {
     /// Get texture dimensions
-    pub fn get_dimensions(&self) -> Dimensions {
+    pub fn dimensions(&self) -> Dimensions {
         let s0 = AaMode::Single;
         match *self {
             Kind::D1(w) => (w, 1, 1, s0),
@@ -279,12 +279,12 @@ impl Kind {
         }
     }
     /// Get the dimensionality of a particular mipmap level.
-    pub fn get_level_dimensions(&self, level: Level) -> Dimensions {
+    pub fn level_dimensions(&self, level: Level) -> Dimensions {
         use std::cmp::{max, min};
         // must be at least 1
         let map = |val| max(min(val, 1), val >> min(level, MAX_LEVEL));
-        let (w, h, da, _) = self.get_dimensions();
-        let dm = if self.get_num_slices().is_some() {
+        let (w, h, da, _) = self.dimensions();
+        let dm = if self.num_slices().is_some() {
             1
         } else {
             map(da)
@@ -292,9 +292,9 @@ impl Kind {
         (map(w), map(h), dm, AaMode::Single)
     }
     /// Count the number of mipmap levels.
-    pub fn get_num_levels(&self) -> Level {
+    pub fn num_levels(&self) -> Level {
         use std::cmp::max;
-        let (w, h, d, aa) = self.get_dimensions();
+        let (w, h, d, aa) = self.dimensions();
         let dominant = max(max(w, h), d);
         if aa == AaMode::Single {
             (1..).find(|level| dominant>>level <= 1).unwrap()
@@ -303,7 +303,7 @@ impl Kind {
         }
     }
     /// Return the number of slices for an array, or None for non-arrays.
-    pub fn get_num_slices(&self) -> Option<Layer> {
+    pub fn num_slices(&self) -> Option<Layer> {
         match *self {
             Kind::D1(..) | Kind::D2(..) | Kind::D3(..) | Kind::Cube(..) => None,
             Kind::D1Array(_, a) => Some(a),
@@ -314,7 +314,7 @@ impl Kind {
     /// Return the number of layers.
     ///
     /// Each cube face counts as separate layer.
-    pub fn get_num_layers(&self) -> Layer {
+    pub fn num_layers(&self) -> Layer {
         match *self {
             Kind::D1(..) | Kind::D2(..) | Kind::D3(..) => 1,
             Kind::Cube(..) => 6,

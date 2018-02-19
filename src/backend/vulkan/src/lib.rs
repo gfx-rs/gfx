@@ -466,7 +466,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
-    fn get_features(&self) -> Features {
+    fn features(&self) -> Features {
         let features = self.instance.0.get_physical_device_features(self.handle);
         let mut bits = Features::empty();
 
@@ -553,7 +553,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         bits
     }
 
-    fn get_limits(&self) -> Limits {
+    fn limits(&self) -> Limits {
         let limits = &self.properties.limits;
         let max_group_count = limits.max_compute_work_group_count;
         let max_group_size = limits.max_compute_work_group_size;

@@ -69,11 +69,11 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         unimplemented!()
     }
 
-    fn get_features(&self) -> hal::Features {
+    fn features(&self) -> hal::Features {
         unimplemented!()
     }
 
-    fn get_limits(&self) -> hal::Limits {
+    fn limits(&self) -> hal::Limits {
         unimplemented!()
     }
 }
@@ -709,7 +709,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
 /// Dummy surface.
 pub struct Surface;
 impl hal::Surface<Backend> for Surface {
-    fn get_kind(&self) -> hal::image::Kind {
+    fn kind(&self) -> hal::image::Kind {
         unimplemented!()
     }
 

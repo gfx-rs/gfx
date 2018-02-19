@@ -224,7 +224,7 @@ impl<B: gfx::Backend> gfx_support::Application<B> for App<B> {
     {
         use gfx::traits::DeviceExt;
 
-        let (width, height, _, _) = window_targets.views[0].0.get_dimensions();
+        let (width, height, _, _) = window_targets.views[0].0.dimensions();
         let (gpos, gnormal, gdiffuse, depth_resource, depth_target) =
             create_g_buffer(width, height, device);
         let res = {
@@ -479,7 +479,7 @@ impl<B: gfx::Backend> gfx_support::Application<B> for App<B> {
             Point3::new(0.0, 0.0, 0.0),
             Vector3::unit_z(),
         );
-        let (width, height, _, _) = self.terrain.data.out_depth.get_dimensions();
+        let (width, height, _, _) = self.terrain.data.out_depth.dimensions();
         let aspect = width as f32 / height as f32;
         let proj = cgmath::perspective(Deg(60.0f32), aspect, 5.0, 100.0);
         let (cur_color, _) = self.views[frame.id()].clone();
@@ -569,7 +569,7 @@ impl<B: gfx::Backend> gfx_support::Application<B> for App<B> {
     }
 
     fn on_resize_ext(&mut self, device: &mut B::Device, window_targets: gfx_support::WindowTargets<B::Resources>) {
-        let (width, height, _, _) = window_targets.views[0].0.get_dimensions();
+        let (width, height, _, _) = window_targets.views[0].0.dimensions();
 
         let (gpos, gnormal, gdiffuse, depth_resource, depth_target) =
             create_g_buffer(width, height, device);

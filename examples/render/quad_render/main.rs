@@ -73,7 +73,7 @@ fn main() {
         println!("{:?}", adapter.info);
     }
     let adapter = adapters.remove(0);
-    let limits = adapter.physical_device.get_limits();
+    let limits = adapter.physical_device.limits();
 
     let (mut context, backbuffers) =
         gfx::Context::<back::Backend, hal::Graphics>

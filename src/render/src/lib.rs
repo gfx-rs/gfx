@@ -258,7 +258,7 @@ impl<B: Backend, C> Context<B, C>
                     image::Info {
                         aspects: format::AspectFlags::COLOR,
                         usage: image::Usage::TRANSFER_SRC | image::Usage::COLOR_ATTACHMENT,
-                        kind: surface.get_kind(),
+                        kind: surface.kind(),
                         mip_levels: 1,
                         format: Cf::SELF,
                         origin: image::Origin::Backbuffer,

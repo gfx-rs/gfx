@@ -287,7 +287,7 @@ impl Instance {
 }
 
 impl hal::Surface<Backend> for Surface {
-    fn get_kind(&self) -> hal::image::Kind {
+    fn kind(&self) -> hal::image::Kind {
         use hal::image::Size;
 
         let aa = hal::image::AaMode::Single;

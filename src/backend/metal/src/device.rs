@@ -202,11 +202,11 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
-    fn get_features(&self) -> hal::Features {
+    fn features(&self) -> hal::Features {
         hal::Features::empty() //TODO
     }
 
-    fn get_limits(&self) -> hal::Limits {
+    fn limits(&self) -> hal::Limits {
         hal::Limits {
             max_texture_size: 4096, // TODO: feature set
             max_patch_size: 0, // No tessellation

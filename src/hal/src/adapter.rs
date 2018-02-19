@@ -73,10 +73,10 @@ pub trait PhysicalDevice<B: Backend>: Sized {
 
     /// Returns the features of this `Device`. This usually depends on the graphics API being
     /// used.
-    fn get_features(&self) -> Features;
+    fn features(&self) -> Features;
 
     /// Returns the limits of this `Device`.
-    fn get_limits(&self) -> Limits;
+    fn limits(&self) -> Limits;
 }
 
 /// Information about a backend adapter.

@@ -105,7 +105,7 @@ impl Surface {
 }
 
 impl hal::Surface<B> for Surface {
-    fn get_kind(&self) -> hal::image::Kind {
+    fn kind(&self) -> hal::image::Kind {
         let (w, h, _, a) = get_window_dimensions(&self.window);
         hal::image::Kind::D2(w, h, a)
     }

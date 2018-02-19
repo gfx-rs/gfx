@@ -43,21 +43,21 @@ impl ShadeExt for ::gfx_device_gl::Device {
 #[cfg(feature = "dx11")]
 impl ShadeExt for ::gfx_device_dx11::Device {
     fn shader_backend(&self) -> Backend {
-        Backend::Hlsl(self.get_shader_model())
+        Backend::Hlsl(self.shader_model())
     }
 }
 
 #[cfg(feature = "dx12")]
 impl ShadeExt for ::gfx_device_dx12::Device {
     fn shader_backend(&self) -> Backend {
-        Backend::Hlsl(self.get_shader_model())
+        Backend::Hlsl(self.shader_model())
     }
 }
 
 #[cfg(feature = "metal")]
 impl ShadeExt for ::gfx_device_metal::Device {
     fn shader_backend(&self) -> Backend {
-        Backend::Msl(self.get_shader_model())
+        Backend::Msl(self.shader_model())
     }
 }
 

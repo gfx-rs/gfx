@@ -127,7 +127,7 @@ impl<B: Backend> Bind<B> for SampledImage {
     ) {
         let img = view.info();
         let levels = img.info().mip_levels;
-        let layers = img.info().kind.get_num_layers();
+        let layers = img.info().kind.num_layers();
         let state = (image::Access::SHADER_READ, ImageLayout::ShaderReadOnlyOptimal);
         for level in 0..levels {
             for layer in 0..layers {
@@ -318,7 +318,7 @@ where
     ) where 'a: 'b {
         let img = data.as_ref().info();
         let levels = img.info().mip_levels;
-        let layers = img.info().kind.get_num_layers();
+        let layers = img.info().kind.num_layers();
         // TODO: READ not always necessary
         let state = (image::Access::COLOR_ATTACHMENT_READ | image::Access::COLOR_ATTACHMENT_WRITE,
             ImageLayout::ColorAttachmentOptimal);
