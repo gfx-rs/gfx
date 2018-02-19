@@ -126,7 +126,7 @@ impl<B: Backend> Adapter<B> {
     /// # fn main() {
     ///
     /// # let adapter: hal::Adapter<empty::Backend> = return;
-    /// let device = adapter.open_with::<_, General>(1, |_| true);
+    /// let (device, queues) = adapter.open_with::<_, General>(1, |_| true).unwrap();
     /// # }
     /// ```
     ///

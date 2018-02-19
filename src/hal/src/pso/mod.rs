@@ -215,20 +215,14 @@ pub struct Specialization {
 }
 
 /// Scalar specialization constant with value for overriding.
+#[allow(missing_docs)]
 #[derive(Debug, Clone)]
 pub enum Constant {
-    /// `bool` value.
     Bool(bool),
-    /// `u32` value.
     U32(u32),
-    /// `u64` value.
     U64(u64),
-    /// `i32` value.
     I32(i32),
-    /// `i64` value.
     I64(i64),
-    /// `f32` value.
     F32(f32),
-    /// `f64` value.
     F64(f64),
 }

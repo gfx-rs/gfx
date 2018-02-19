@@ -45,7 +45,7 @@ impl Level for Primary { }
 /// Vulkan describes a secondary command buffer as one which cannot be directly submitted
 /// to a queue, but can be executed by a primary command buffer.  This allows
 /// multiple secondary command buffers to be constructed which do specific 
-/// things, which can then be composed together into primary command buffers.
+/// things and can then be composed together into primary command buffers.
 pub enum Secondary { }
 impl Level for Secondary { }
 
