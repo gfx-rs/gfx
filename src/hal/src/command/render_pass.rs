@@ -221,7 +221,7 @@ impl<'a, B: Backend> RenderPassSecondaryEncoder<'a, B> {
         I::Item: Submittable<'a, B, Subpass, Secondary>,
     {
         let submits = submits.into_iter().collect::<Vec<_>>();
-        self.0.as_mut().unwrap().execute_commands(submits.into_iter().map(|submit| unsafe { submit.as_buffer() }));
+        self.0.as_mut().unwrap().execute_commands(submits.into_iter().map(|submit| unsafe { submit.into_buffer() }));
     }
 
     ///

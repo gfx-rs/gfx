@@ -489,14 +489,14 @@ pub trait Device<B: Backend> {
     {
         use std::{time, thread};
         let start = time::Instant::now();
-        fn as_ms(duration: time::Duration) -> u32 {
+        fn to_ms(duration: time::Duration) -> u32 {
             duration.as_secs() as u32 * 1000 + duration.subsec_nanos() / 1_000_000
         }
         match wait {
             WaitFor::All => {
                 for fence in fences {
                     if !self.wait_for_fence(fence.borrow(), 0) {
-                        let elapsed_ms = as_ms(start.elapsed());
+                        let elapsed_ms = to_ms(start.elapsed());
                         if elapsed_ms > timeout_ms {
                             return false;
                         }
@@ -515,7 +515,7 @@ pub trait Device<B: Backend> {
                             return true;
                         }
                     }
-                    if as_ms(start.elapsed()) >= timeout_ms {
+                    if to_ms(start.elapsed()) >= timeout_ms {
                         return false;
                     }
                     thread::sleep(time::Duration::from_millis(1));

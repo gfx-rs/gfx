@@ -51,15 +51,15 @@ unsafe impl<B: Backend, C, S, L> Send for Submit<B, C, S, L> {}
 /// A trait representing a command buffer that can be added to a `Submission`.
 pub unsafe trait Submittable<'a, B: Backend, C, L: Level> {
     ///
-    unsafe fn as_buffer(self) -> Cow<'a, B::CommandBuffer>;
+    unsafe fn into_buffer(self) -> Cow<'a, B::CommandBuffer>;
 }
 
 unsafe impl<'a, B: Backend, C, L: Level> Submittable<'a, B, C, L> for Submit<B, C, OneShot, L> {
-    unsafe fn as_buffer(self) -> Cow<'a, B::CommandBuffer> { Cow::Owned(self.0) }
+    unsafe fn into_buffer(self) -> Cow<'a, B::CommandBuffer> { Cow::Owned(self.0) }
 }
 
 unsafe impl<'a, B: Backend, C, L: Level> Submittable<'a, B, C, L> for &'a Submit<B, C, MultiShot, L> {
-    unsafe fn as_buffer(self) -> Cow<'a, B::CommandBuffer> { Cow::Borrowed(&self.0) }
+    unsafe fn into_buffer(self) -> Cow<'a, B::CommandBuffer> { Cow::Borrowed(&self.0) }
 }
 
 /// A convenience for not typing out the full signature of a secondary command buffer.
@@ -109,7 +109,7 @@ impl<'a, B: Backend, C, S: Shot> CommandBuffer<'a, B, C, S, Primary> {
         C: Supports<K>,
     {
         let submits = submits.into_iter().collect::<Vec<_>>();
-        self.raw.execute_commands(submits.into_iter().map(|submit| unsafe { submit.as_buffer() }));
+        self.raw.execute_commands(submits.into_iter().map(|submit| unsafe { submit.into_buffer() }));
     }
 }
 
