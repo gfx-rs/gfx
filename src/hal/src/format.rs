@@ -33,7 +33,7 @@ pub struct FormatDesc {
     ///
     /// * Depth/Stencil formats are opaque formats, where the total number of bits is unknown.
     ///   A dummy value is used for these formats instead (sum of depth and stencil bits).
-    ///   For copy operations, the number of bits of the corresonding aspect should be used.
+    ///   For copy operations, the number of bits of the corresponding aspect should be used.
     /// * The total number can be larger than the sum of individual format bits
     ///   (`color`, `alpha`, `depth` and `stencil`) for packed formats.
     /// * For compressed formats, this denotes the number of bits per block.
