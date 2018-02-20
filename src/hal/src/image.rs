@@ -589,7 +589,14 @@ pub struct SubresourceLayers {
     pub layers: Range<Layer>,
 }
 
-/// A subset of resources contained within an image.
+/// When creating an image view, used for describing the view's purpose and which part
+/// of the image should be accessed. Examples of purpose would be if the view should be
+/// used as a color, depth or, stencil target (or any combination). A range of mipmap levels
+/// and layers may be specified.
+///
+/// An example use case for an image view having multiple layers is a stereographic 3D effect.
+/// A swap chain with multiple layers coupled with multiple image views could create the 3D
+/// effect by accessing different image view layers for each eye.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SubresourceRange {
