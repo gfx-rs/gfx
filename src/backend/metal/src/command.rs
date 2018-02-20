@@ -1065,7 +1065,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             debug_assert!(is_offset_positive(&src_start));
             debug_assert!(is_offset_positive(&dst_start));
 
-
             let src_origin = MTLOrigin {
                 x: src_start.x as u64,
                 y: src_start.y as u64,
@@ -1076,14 +1075,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 y: dst_start.y as u64,
                 z: dst_start.z as u64
             };
-
             let (sx, sy, sz) = range_size(&region.dst_bounds);
             let src_size = MTLSize {
                 width: sx,
                 height: sy,
                 depth: sz
             };
-
 
             debug_assert_eq!(region.src_subresource.layers.len(), region.dst_subresource.layers.len());
             //TODO aspect flags?
