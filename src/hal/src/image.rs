@@ -591,7 +591,7 @@ pub struct SubresourceLayers {
 
 /// When creating an image view, used for describing the view's purpose and which part
 /// of the image should be accessed. Examples of purpose would be if the view should be
-/// used as a color, depth or, stencil target (or any combination). A range of mipmap levels
+/// used as a color, depth, or stencil target (or any combination). A range of mipmap levels
 /// and layers may be specified.
 ///
 /// An example use case for an image view having multiple layers is a stereographic 3D effect.
