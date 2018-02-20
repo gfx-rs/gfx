@@ -273,11 +273,11 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
-    fn get_features(&self) -> hal::Features {
+    fn features(&self) -> hal::Features {
         self.0.features
     }
 
-    fn get_limits(&self) -> hal::Limits {
+    fn limits(&self) -> hal::Limits {
         self.0.limits
     }
 }

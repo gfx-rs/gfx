@@ -21,7 +21,7 @@ pub enum DeviceCreationError {
     /// At least one of the user requested features if not supported by the
     /// physical device.
     ///
-    /// Use [`get_features`](trait.PhysicalDevice.html#tymethod.get_features)
+    /// Use [`features`](trait.PhysicalDevice.html#tymethod.features)
     /// for checking the supported features.
     #[fail(display = "One or multiple features are not supported.")]
     MissingFeature,

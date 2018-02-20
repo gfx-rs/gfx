@@ -505,7 +505,7 @@ impl Device {
         //TODO: use subresource range
         let handle = self.rtv_pool.lock().unwrap().alloc_handles(1).cpu;
 
-        if kind.get_dimensions().3 != image::AaMode::Single {
+        if kind.dimensions().3 != image::AaMode::Single {
             error!("No MSAA supported yet!");
         }
 
@@ -543,7 +543,7 @@ impl Device {
         //TODO: use subresource range
         let handle = self.dsv_pool.lock().unwrap().alloc_handles(1).cpu;
 
-        if kind.get_dimensions().3 != image::AaMode::Single {
+        if kind.dimensions().3 != image::AaMode::Single {
             error!("No MSAA supported yet!");
         }
 
@@ -1528,7 +1528,7 @@ impl d::Device<B> for Device {
         let bytes_per_block = (format_desc.bits / 8) as _;
         let block_dim = format_desc.dim;
 
-        let (width, height, depth, aa) = kind.get_dimensions();
+        let (width, height, depth, aa) = kind.dimensions();
         let dimension = match kind {
             image::Kind::D1(..) |
             image::Kind::D1Array(..) => d3d12::D3D12_RESOURCE_DIMENSION_TEXTURE1D,
@@ -1550,7 +1550,7 @@ impl d::Device<B> for Device {
                 None => return Err(image::CreationError::Format(format)),
             },
             SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
-                Count: aa.get_num_fragments() as u32,
+                Count: aa.num_fragments() as u32,
                 Quality: 0,
             },
             Layout: d3d12::D3D12_TEXTURE_LAYOUT_UNKNOWN,
@@ -1583,7 +1583,7 @@ impl d::Device<B> for Device {
             bytes_per_block,
             block_dim,
             num_levels: mip_levels,
-            num_layers: kind.get_num_layers(),
+            num_layers: kind.num_layers(),
         })
     }
 

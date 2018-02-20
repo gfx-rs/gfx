@@ -1268,7 +1268,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
             u: unsafe { mem::zeroed() },
         };
-        let (width, height, depth, _) = image.kind.get_dimensions();
+        let (width, height, depth, _) = image.kind.dimensions();
         for region in regions {
             let region = region.borrow();
             // Copy each layer in the region
@@ -1351,7 +1351,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             Type: d3d12::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
             u: unsafe { mem::zeroed() },
         };
-        let (width, height, depth, _) = image.kind.get_dimensions();
+        let (width, height, depth, _) = image.kind.dimensions();
         for region in regions {
             let region = region.borrow();
             // Copy each layer in the region

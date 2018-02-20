@@ -134,7 +134,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             .memory_types;
         let limits = adapter
             .physical_device
-            .get_limits();
+            .limits();
 
         // initialize graphics
         let (device, queue_group) = adapter.open_with(1, |_| true)?;
@@ -320,7 +320,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             (access, layout)
                         } else {
                             // calculate required sizes
-                            let (w, h, d, aa) = kind.get_dimensions();
+                            let (w, h, d, aa) = kind.dimensions();
                             assert_eq!(aa, i::AaMode::Single);
 
                             let base_format = format.base_format();
@@ -937,7 +937,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             .expect(&format!("Unable to find image to fetch: {}", name));
         let limits = &self.limits;
 
-        let (width, height, depth, aa) = image.kind.get_dimensions();
+        let (width, height, depth, aa) = image.kind.dimensions();
         assert_eq!(aa, i::AaMode::Single);
 
         // TODO:

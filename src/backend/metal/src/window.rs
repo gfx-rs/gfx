@@ -53,7 +53,7 @@ impl Swapchain {
 const kCVPixelFormatType_32RGBA: u32 = (b'R' as u32) << 24 | (b'G' as u32) << 16 | (b'B' as u32) << 8 | b'A' as u32;
 
 impl hal::Surface<Backend> for Surface {
-    fn get_kind(&self) -> image::Kind {
+    fn kind(&self) -> image::Kind {
         let (width, height) = self.pixel_dimensions();
 
         image::Kind::D2(width, height, image::AaMode::Single)

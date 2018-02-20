@@ -219,7 +219,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
     ) -> Barrier<'b, B> {
         let creation_state = (hal::image::Access::empty(), i::ImageLayout::Undefined);
         let num_levels = image.info().mip_levels;
-        let num_layers = image.info().kind.get_num_layers();
+        let num_layers = image.info().kind.num_layers();
         let stable_state = image.info().stable_state;
         let states = ImageStates::new(stable_state, num_levels, num_layers);
         self.image_states.insert(image.clone(), states);
@@ -257,7 +257,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
     ) -> Option<Barrier<'b, B>> {
         if !self.image_states.contains_key(image) {
             let levels = image.info().mip_levels;
-            let layers = image.info().kind.get_num_layers();
+            let layers = image.info().kind.num_layers();
             let states = ImageStates::new(image.info().stable_state, levels, layers);
             self.image_states.insert(image.clone(), states);
         }
@@ -591,7 +591,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
 {
     fn require_clear_state(&mut self, image: &handle::raw::Image<B>) -> i::ImageLayout {
         let levels = image.info().mip_levels;
-        let layers = image.info().kind.get_num_layers();
+        let layers = image.info().kind.num_layers();
         let state = (i::Access::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal);
         let mut image_states = Vec::new();
         for level in 0..levels {

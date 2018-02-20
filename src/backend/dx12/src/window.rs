@@ -48,7 +48,7 @@ pub struct Surface {
 
 impl hal::Surface<Backend> for Surface {
     fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool { true }
-    fn get_kind(&self) -> i::Kind {
+    fn kind(&self) -> i::Kind {
         let aa = i::AaMode::Single;
         i::Kind::D2(self.width as i::Size, self.height as i::Size, aa)
     }

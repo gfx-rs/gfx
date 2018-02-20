@@ -127,7 +127,7 @@ fn main() {
         .memory_types;
     let limits = adapter
         .physical_device
-        .get_limits();
+        .limits();
 
     // Build a new device and associated command queues
     let (device, mut queue_group) =

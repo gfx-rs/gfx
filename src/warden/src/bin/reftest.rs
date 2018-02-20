@@ -120,8 +120,8 @@ impl Harness {
         for tg in &self.suite {
             let mut adapters = instance.enumerate_adapters();
             let adapter = adapters.remove(0);
-            let features = adapter.physical_device.get_features();
-            let limits = adapter.physical_device.get_limits();
+            let features = adapter.physical_device.features();
+            let limits = adapter.physical_device.limits();
             //println!("\t{:?}", adapter.info);
             println!("\tScene '{}':", tg.name);
 
