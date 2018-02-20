@@ -71,7 +71,7 @@ where
     }
 
     /// Convert strong-typed submission object into untyped equivalent.
-    pub(super) fn as_raw(&self) -> RawSubmission<B, Vec<&B::CommandBuffer>> {
+    pub(super) fn to_raw(&self) -> RawSubmission<B, Vec<&B::CommandBuffer>> {
         RawSubmission {
             cmd_buffers: self.cmd_buffers.iter().map(|b| b.deref().borrow()).collect::<Vec<_>>(),
             wait_semaphores: &self.wait_semaphores,
@@ -91,7 +91,7 @@ where
         (C, K): Upper
     {
         self.cmd_buffers.extend(submits.into_iter().map(
-            |s| { unsafe { s.as_buffer() } }
+            |s| { unsafe { s.into_buffer() } }
         ));
         Submission {
             cmd_buffers: self.cmd_buffers,

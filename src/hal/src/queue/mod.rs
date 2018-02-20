@@ -89,7 +89,7 @@ impl<B: Backend, C> CommandQueue<B, C> {
         C: Supports<D>
     {
         unsafe {
-            self.0.submit_raw(submission.as_raw(), fence)
+            self.0.submit_raw(submission.to_raw(), fence)
         }
     }
 
