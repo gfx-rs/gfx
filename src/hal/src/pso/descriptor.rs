@@ -1,4 +1,16 @@
 //! Descriptor sets and layouts.
+//!
+//! Resource descriptors are used by shaders for accessing resources like buffers
+//! and images. The use of a descriptor has three stages:
+//!
+//! - Descriptor layout is specified during pipeline creation
+//! - Descriptor set is allocated from a descriptor pool
+//! - Descriptor set is bound during rendering
+//!
+//! A Descriptor Set Layout describes the types of resources to be used by a pipeline.
+//!
+//! A Descriptor Set contains the actual resources to be bound/used: eg. buffer, images
+//!
 
 use std::borrow::Borrow;
 use std::fmt;
@@ -40,7 +52,7 @@ pub enum DescriptorType {
     // TODO: Dynamic descriptors
 }
 
-/// Binding descriptiong of a descriptor set
+/// Binding description of a descriptor set
 ///
 /// A descriptor set consists of multiple binding points.
 /// Each binding point contains one or multiple descriptors of a certain type.
