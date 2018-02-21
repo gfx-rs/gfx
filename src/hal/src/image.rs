@@ -348,7 +348,11 @@ bitflags!(
         const STORAGE = 0x10;
         ///
         const SAMPLED = 0x20;
-        // TODO
+        ///
+        const TRANSIENT_ATTACHMENT = 0x40;
+        ///
+        const INPUT_ATTACHMENT = 0x80;
+        
     }
 );
 
