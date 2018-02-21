@@ -511,27 +511,32 @@ impl From<RenderDesc> for DepthStencilDesc {
     }
 }
 
-///
+/// ImageLayouts specify how image subresource data is laid out in memory. Optimal performance
+/// may be obtained by choosing the most appropriate memory layout for any given image subresource.
+/// Images may have image subresources with differing layouts as long as depth and stencil aspects
+/// of a given image resource are in the same layout.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ImageLayout {
-    ///
+    /// Supports all types of device access.
     General,
-    ///
+    /// Only valid for image subresources with COLOR_ATTACHMENT usage flag.
     ColorAttachmentOptimal,
-    ///
+    /// Only valid for image subresources with DEPTH_STENCIL_ATTACHMENT usage flag.
     DepthStencilAttachmentOptimal,
-    ///
+    /// Only valid for image subresources with DEPTH_STENCIL_ATTACHMENT usage flag.
     DepthStencilReadOnlyOptimal,
-    ///
+    /// Only valid for image subresources with SAMPLED or INPUT_ATTACHMENT usage flags.
     ShaderReadOnlyOptimal,
-    ///
+    /// Only valid for image subresources with TRANSFER usage flag.
     TransferSrcOptimal,
-    ///
+    /// Only valid for image subresources with TRANSFER usage flag.
     TransferDstOptimal,
-    ///
+    /// Does not support device access. May be used as an initial layout and then changed later.
+    /// Contents of memory are not guaranteed to be preserved when transitioning.
     Undefined, //TODO: consider Option<> instead?
-    ///
+    /// Does not support device access. Similar to Undefined. Currently only useful for images
+    /// with linear_tiling Properties since there is no standard format for optimal_tiling images.
     Preinitialized,
     ///
     Present,
