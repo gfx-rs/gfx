@@ -387,7 +387,13 @@ pub fn map_image_usage(usage: image::Usage) -> vk::ImageUsageFlags {
     if usage.contains(Usage::SAMPLED) {
         flags |= vk::IMAGE_USAGE_SAMPLED_BIT;
     }
-
+    if usage.contains(Usage::TRANSIENT_ATTACHMENT) {
+        flags |= vk::IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
+    }
+    if usage.contains(Usage::INPUT_ATTACHMENT) {
+        flags |= vk::IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+    }
+    
     flags
 }
 
