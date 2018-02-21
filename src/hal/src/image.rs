@@ -333,6 +333,8 @@ impl Kind {
 }
 
 bitflags!(
+    /// TODO: Find out if TRANSIENT_ATTACHMENT + INPUT_ATTACHMENT
+    /// are applicable on backends other than Vulkan. --AP
     /// Image usage flags
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct Usage: u8 {
@@ -348,7 +350,11 @@ bitflags!(
         const STORAGE = 0x10;
         ///
         const SAMPLED = 0x20;
-        // TODO
+        ///
+        const TRANSIENT_ATTACHMENT = 0x40;
+        ///
+        const INPUT_ATTACHMENT = 0x80;
+        
     }
 );
 
