@@ -1,17 +1,6 @@
 # Examples
 
-A collection of gfx examples which use the various gfx APIs.
-
-## Getting Started
-
-The gfx git repository contains a number of examples. Those examples are automatically downloaded if you clone the gfx directory by running
-
-    cd <my_dir>
-    git clone https://github.com/gfx-rs/gfx
-
-where `<my_dir>` is a directory name of your choice. Once gfx is downloaded you can build any of the gfx examples.
-
-### Why Three Example Directories?
+This directory contains a collection of examples which use the various gfx APIs.
 
 The examples are split across three directories, each pertaining to the gfx API they are using.
 
@@ -19,7 +8,7 @@ The examples are split across three directories, each pertaining to the gfx API 
 1. `examples/render` shows how to use the render crate directly.
 1. `examples/support` shows how to use the support crate, to demonstrate how you can build an application using minimal setup.
 
-*Please note that `support` is still being updated, so `support` examples will not run at the moment.*
+_Please note that `support` is still being updated, so `support` examples will not run at the moment._
 
 To run the examples, set your working directory to the examples directory and execute
 `cargo run --bin <example> --features=<backend>`, where `<example>` is the example you want to run and `<backend>` is the backend you would like to use (`vulkan`, `dx12`, `metal`, or `gl`).

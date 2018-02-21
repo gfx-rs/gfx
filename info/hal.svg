@@ -1,0 +1,32 @@
+<svg version="1.1" width="500" height="110" 
+    xmlns="http://www.w3.org/2000/svg" 
+    xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 500 110">
+    <g font-family="Arial" font-weight="bold" font-size="20">
+        <g fill="rgb(68,60,64)" transform="translate(0, 0)">
+            <g transform="translate(0, 0)">
+                <rect rx="8" ry="8" height="50" width="500"/>
+                <text text-anchor="middle" x="250" y="50" dy="-15" fill="rgb(192,100,65)" font-size="26">Hardware Abstraction Layer (HAL)</text>
+            </g>
+        </g>
+        <g fill="rgb(68,60,64)" transform="translate(0, 60)">
+            <g transform="translate(0, 0)">
+                <rect rx="8" ry="8" height="50" width="90"/>
+                <text text-anchor="middle" x="45" y="50" dy="-16" fill="rgb(192,100,65)">Vulkan</text>
+            </g>
+            <g transform="translate(97, 0)">
+                <rect rx="8" ry="8" height="50" width="116"/>
+                <text text-anchor="middle" x="58" y="50" dy="-16" fill="rgb(192,100,65)">DirectX 12</text>
+            </g>
+            <g transform="translate(220, 0)">
+                <rect rx="8" ry="8" height="50" width="90"/>
+                <text text-anchor="middle" x="45" y="50" dy="-16" fill="rgb(192,100,65)">Metal</text>
+            </g>
+            <g transform="translate(317, 0)">
+                <rect rx="8" ry="8" height="50" width="183"/>
+                <text text-anchor="middle" x="50" y="50" dy="-16" fill="rgb(192,100,65)">OpenGL</text>
+                <text text-anchor="middle" x="135" y="50" dy="-29" fill="rgb(192,100,65)" font-size="14">OpenGL ES</text>
+                <text text-anchor="middle" x="135" y="50" dy="-9" fill="rgb(192,100,65)" font-size="14">WebGL</text>
+            </g>
+        </g>
+    </g>
+</svg>
