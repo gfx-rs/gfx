@@ -538,35 +538,69 @@ pub enum ImageLayout {
 }
 
 bitflags!(
-    ///
+    /// Access types describe how memory is accessed in fixed-function stages of the pipeline.
+    /// Sets of access types are used in some synchronization commands to define the access
+    /// scopes of memory dependency. Access types are only applicable to a subset of pipeline stages.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct Access: u16 {
         /// Read state but can only be combined with `COLOR_ATTACHMENT_WRITE`.
+        /// Applicable PipelineStages:
+        /// - COLOR_ATTACHMENT_OUTPUT
         const COLOR_ATTACHMENT_READ = 0x1;
         /// Write-only state but can be combined with `COLOR_ATTACHMENT_READ`.
+        /// Applicable PipelineStages:
+        /// - COLOR_ATTACHMENT_OUTPUT
         const COLOR_ATTACHMENT_WRITE = 0x2;
-        ///
+        /// Read access to an image or buffer in a copy operation.
+        /// Applicable PipelineStages:
+        /// - TRANSFER
         const TRANSFER_READ = 0x4;
         /// Write-only state of copy commands.
+        /// Applicable PipelineStages:
+        /// - TRANSFER
         const TRANSFER_WRITE = 0x8;
         /// Read-only state for SRV access, or combine with `SHADER_WRITE` to have r/w access to UAV.
+        /// Applicable PipelineStages:
+        /// - VERTEX_SHADER
+        /// - GEOMETRY_SHADER
+        /// - FRAGMENT_SHADER
+        /// - COMPUTE_SHADER
         const SHADER_READ = 0x10;
         /// Write state for UAV access.
         /// Combine with `SHADER_READ` to have r/w access to UAV.
+        /// Applicable PipelineStages:
+        /// - VERTEX_SHADER
+        /// - GEOMETRY_SHADER
+        /// - FRAGMENT_SHADER
+        /// - COMPUTE_SHADER
         const SHADER_WRITE = 0x20;
-        ///
+        /// Read access to a depth/stencil attachment, via depth or stencil operations or via
+        /// certain subpass load operations.
+        /// Applicable PipelineStages:
+        /// - EARLY_FRAGMENT_TESTS
+        /// - LATE_FRAGMENT_TESTS
         const DEPTH_STENCIL_ATTACHMENT_READ = 0x40;
         /// Write-only state for depth stencil writes.
+        /// Applicable PipelineStages:
+        /// - EARLY_FRAGMENT_TESTS
+        /// - LATE_FRAGMENT_TESTS
         const DEPTH_STENCIL_ATTACHMENT_WRITE = 0x80;
-        ///
+        /// Read access by a host operation. Accesses of this type are not performed through a
+        /// resource, but directly on memory.
+        /// Applicable PipelineStages:
+        /// - HOST
         const HOST_READ = 0x100;
-        ///
+        /// Applicable PipelineStages:
+        /// - HOST
         const HOST_WRITE = 0x200;
-        ///
+        /// Applicable PipelineStages:
+        /// - N/A
         const MEMORY_READ = 0x400;
-        ///
+        /// Applicable PipelineStages:
+        /// - N/A
         const MEMORY_WRITE = 0x800;
-        ///
+        /// Applicable PipelineStages:
+        /// - FRAGMENT_SHADER
         const INPUT_ATTACHMENT_READ = 0x1000;
     }
 );
