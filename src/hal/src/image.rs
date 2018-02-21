@@ -589,14 +589,16 @@ pub struct SubresourceLayers {
     pub layers: Range<Layer>,
 }
 
-/// When creating an image view, used for describing the view's purpose and which part
-/// of the image should be accessed. Examples of purpose would be if the view should be
-/// used as a color, depth or, stencil target (or any combination). A range of mipmap levels
-/// and layers may be specified.
+/// Used for describing the aspect(s) and part of an image an image view should include.
+/// A valid range of mipmap levels and layers may be specified.
 ///
-/// An example use case for an image view having multiple layers is a stereographic 3D effect.
-/// A swap chain with multiple layers coupled with multiple image views could create the 3D
-/// effect by accessing different image view layers for each eye.
+/// Aspect may only be color, depth, or stencil if the image format is color, depth-only, or
+/// stencil-only respectively. If the image format is depth + stencil, the aspect may be
+/// depth, stencil or both.
+///
+/// For cube image views, the layers correspond to faces: +X, -X, +Y, -Y, +Z, -Z.
+/// For cube arrays, each six layers correspond to faces: +X, -X, +Y, -Y, +Z, -Z for each
+/// subsequent cube.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SubresourceRange {
