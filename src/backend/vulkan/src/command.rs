@@ -202,7 +202,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     });
                 }
                 memory::Barrier::Image { ref states, target, ref range } => {
-                    assert_eq!(range.aspects, AspectFlags::COLOR);
                     let subresource_range = conv::map_subresource_range(range);
                     image_bars.push(vk::ImageMemoryBarrier {
                         s_type: vk::StructureType::ImageMemoryBarrier,
