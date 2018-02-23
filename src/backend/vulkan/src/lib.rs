@@ -329,6 +329,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             })
             .collect::<Vec<_>>();
 
+        // enabled features mask
+        let features = Features::empty();
+
         // Create device
         let device_raw = {
             let cstrings = DEVICE_EXTENSIONS
@@ -341,7 +344,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 .map(|s| s.as_ptr())
                 .collect::<Vec<_>>();
 
-            let features = unsafe { mem::zeroed() };
+            // TODO: derive from `features`
+            let enabled_features = unsafe { mem::zeroed() };
             let info = vk::DeviceCreateInfo {
                 s_type: vk::StructureType::DeviceCreateInfo,
                 p_next: ptr::null(),
@@ -352,7 +356,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 pp_enabled_layer_names: ptr::null(),
                 enabled_extension_count: str_pointers.len() as u32,
                 pp_enabled_extension_names: str_pointers.as_ptr(),
-                p_enabled_features: &features,
+                p_enabled_features: &enabled_features,
             };
 
             unsafe {
@@ -380,7 +384,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         }).unwrap();
 
         let device = Device {
-            raw: Arc::new(RawDevice(device_raw)),
+            raw: Arc::new(RawDevice(device_raw, features)),
         };
 
         let device_arc = device.raw.clone();
@@ -572,7 +576,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 }
 
 #[doc(hidden)]
-pub struct RawDevice(pub ash::Device<V1_0>);
+pub struct RawDevice(pub ash::Device<V1_0>, Features);
 impl fmt::Debug for RawDevice {
     fn fmt(&self, _formatter: &mut fmt::Formatter) -> fmt::Result {
         unimplemented!()
