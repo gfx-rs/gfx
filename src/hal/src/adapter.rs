@@ -2,6 +2,8 @@
 //!
 //! Physical devices are the main entry point for opening a [Device](../struct.Device).
 
+use std::any::Any;
+
 use {format, memory, Backend, Gpu, Features, Limits};
 use error::DeviceCreationError;
 use queue::{Capability, QueueGroup};
@@ -43,7 +45,7 @@ pub struct MemoryProperties {
 }
 
 /// Represents a physical or virtual device, which is capable of running the backend.
-pub trait PhysicalDevice<B: Backend>: Sized {
+pub trait PhysicalDevice<B: Backend>: Any + Send + Sync {
     /// Create a new logical device.
     ///
     /// # Errors

@@ -184,6 +184,9 @@ pub struct PhysicalDevice {
     is_open: Arc<Mutex<bool>>,
 }
 
+unsafe impl Send for PhysicalDevice { }
+unsafe impl Sync for PhysicalDevice { }
+
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(
         &self, families: Vec<(&QueueFamily, Vec<hal::QueuePriority>)>
@@ -334,7 +337,9 @@ pub struct CommandQueue {
     idle_fence: *mut d3d12::ID3D12Fence,
     idle_event: winnt::HANDLE,
 }
-unsafe impl Send for CommandQueue {} //blocked by ComPtr
+
+unsafe impl Send for CommandQueue {}
+unsafe impl Sync for CommandQueue {}
 
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     unsafe fn submit_raw<IC>(
@@ -580,6 +585,9 @@ impl Drop for Device {
 pub struct Instance {
     pub(crate) factory: ComPtr<dxgi1_4::IDXGIFactory4>,
 }
+
+unsafe impl Send for Instance { }
+unsafe impl Sync for Instance { }
 
 impl Instance {
     pub fn create(_: &str, _: u32) -> Instance {

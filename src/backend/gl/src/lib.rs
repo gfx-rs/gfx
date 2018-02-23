@@ -15,7 +15,10 @@ extern crate spirv_cross;
 pub extern crate glutin;
 
 use std::cell::Cell;
-use std::rc::Rc;
+use std::fmt;
+use std::sync::Arc;
+use std::ops::Deref;
+use std::thread::{self, ThreadId};
 
 use hal::error;
 use hal::queue::{Queues, QueueFamilyId};
@@ -127,7 +130,51 @@ impl Share {
     }
 }
 
-pub struct PhysicalDevice(Rc<Share>);
+/// Single-threaded `Arc`.
+/// Wrapper for `Arc` that allows you to `Send` it even if `T: !Sync`.
+/// Yet internal data cannot be accessed outside of the thread where it was created.
+pub struct Starc<T: ?Sized> {
+    arc: Arc<T>,
+    thread: ThreadId,
+}
+
+impl<T: ?Sized> Clone for Starc<T> {
+    fn clone(&self) -> Self {
+        Self {
+            arc: self.arc.clone(),
+            thread: self.thread,
+        }
+    }
+}
+
+impl<T: ?Sized> fmt::Debug for Starc<T> {
+     fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+         write!(fmt, "{:p}@{:?}", self.arc, self.thread)
+     }
+}
+
+impl<T> Starc<T> {
+    fn new(value: T) -> Self {
+        Starc {
+            arc: Arc::new(value),
+            thread: thread::current().id(),
+        }
+    }
+}
+
+unsafe impl<T: ?Sized> Send for Starc<T> {}
+unsafe impl<T: ?Sized> Sync for Starc<T> {}
+
+impl<T: ?Sized> Deref for Starc<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        assert_eq!(thread::current().id(), self.thread);
+        &*self.arc
+    }
+}
+
+#[derive(Debug)]
+pub struct PhysicalDevice(Starc<Share>);
 
 impl PhysicalDevice {
     fn new_adapter<F>(fn_proc: F) -> hal::Adapter<Backend>
@@ -169,7 +216,7 @@ impl PhysicalDevice {
                 device: 0, // TODO
                 software_rendering: false, // not always true ..
             },
-            physical_device: PhysicalDevice(Rc::new(share)),
+            physical_device: PhysicalDevice(Starc::new(share)),
             queue_families: vec![QueueFamily],
         }
     }

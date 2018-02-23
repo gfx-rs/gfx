@@ -297,7 +297,7 @@ pub enum IndexType {
 }
 
 /// Basic backend instance trait.
-pub trait Instance {
+pub trait Instance: Any + Send + Sync {
     /// Associated backend type of this instance.
     type Backend: Backend;
     /// Enumerate all available adapters.
@@ -306,7 +306,7 @@ pub trait Instance {
 
 /// Different types of a specific API.
 #[allow(missing_docs)]
-pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
+pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any + Send + Sync {
     //type Instance:          Instance<Self>;
     type PhysicalDevice:      PhysicalDevice<Self>;
     type Device:              Device<Self>;
@@ -322,7 +322,7 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + Debug + Any {
     type RenderPass:          Debug + Any + Send + Sync;
     type Framebuffer:         Debug + Any + Send + Sync;
 
-    type Memory:              Debug + Any;
+    type Memory:              Debug + Any + Send + Sync;
     type CommandPool:         pool::RawCommandPool<Self>;
 
     type UnboundBuffer:       Debug + Any + Send + Sync;

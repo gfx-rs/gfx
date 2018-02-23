@@ -5,6 +5,7 @@ use backend::RawQueueGroup;
 use queue::{CommandQueue, QueueType};
 use queue::capability::{Capability, Graphics, Compute};
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -12,7 +13,7 @@ use std::marker::PhantomData;
 /// General information about a queue family, available upon adapter discovery.
 ///
 /// *Note*: A backend can expose multiple queue families with the same properties.
-pub trait QueueFamily: Debug {
+pub trait QueueFamily: Debug + Any + Send + Sync {
     /// Returns the type of queues.
     fn queue_type(&self) -> QueueType;
     /// Returns maximum number of queues created from this family.

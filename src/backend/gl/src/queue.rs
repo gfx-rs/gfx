@@ -1,6 +1,6 @@
 use std::{mem, ptr, slice};
 use std::borrow::{Borrow, BorrowMut};
-use std::rc::Rc;
+use Starc;
 
 use hal;
 use hal::error;
@@ -58,14 +58,14 @@ impl State {
 }
 
 pub struct CommandQueue {
-    pub(crate) share: Rc<Share>,
+    pub(crate) share: Starc<Share>,
     vao: ArrayBuffer,
     state: State,
 }
 
 impl CommandQueue {
     /// Create a new command queue.
-    pub(crate) fn new(share: &Rc<Share>, vao: ArrayBuffer) -> Self {
+    pub(crate) fn new(share: &Starc<Share>, vao: ArrayBuffer) -> Self {
         CommandQueue {
             share: share.clone(),
             vao,

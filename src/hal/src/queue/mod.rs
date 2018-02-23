@@ -11,6 +11,7 @@ pub mod capability;
 pub mod family;
 pub mod submission;
 
+use std::any::Any;
 use std::borrow::{Borrow, BorrowMut};
 use std::marker::PhantomData;
 
@@ -43,7 +44,7 @@ pub enum QueueType {
 
 /// `RawCommandQueue` are abstractions to the internal GPU execution engines.
 /// Commands are executed on the the device by submitting command buffers to queues.
-pub trait RawCommandQueue<B: Backend> {
+pub trait RawCommandQueue<B: Backend>: Any + Send + Sync {
     /// Submit command buffers to queue for execution.
     /// `fence` will be signalled after submission and _must_ be unsignalled.
     ///
@@ -52,12 +53,14 @@ pub trait RawCommandQueue<B: Backend> {
     /// Each queue implements safe wrappers according to their supported functionalities!
     unsafe fn submit_raw<IC>(&mut self, RawSubmission<B, IC>, Option<&B::Fence>)
     where
+        Self: Sized,
         IC: IntoIterator,
         IC::Item: Borrow<B::CommandBuffer>;
 
     ///
     fn present<IS, IW>(&mut self, swapchains: IS, wait_semaphores: IW)
     where
+        Self: Sized,
         IS: IntoIterator,
         IS::Item: BorrowMut<B::Swapchain>,
         IW: IntoIterator,

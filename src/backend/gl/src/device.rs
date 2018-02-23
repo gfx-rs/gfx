@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::iter::repeat;
 use std::ops::Range;
 use std::{ptr, mem, slice};
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use gl;
@@ -18,7 +17,7 @@ use hal::range::RangeArg;
 
 use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 
-use {Backend as B, Share, Surface, Swapchain};
+use {Backend as B, Share, Surface, Swapchain, Starc};
 use {conv, native as n, state};
 use info::LegacyFeatures;
 use pool::{BufferMemory, OwnedBuffer, RawCommandPool};
@@ -101,8 +100,9 @@ pub struct UnboundImage {
 }
 
 /// GL device.
+#[derive(Debug)]
 pub struct Device {
-    share: Rc<Share>,
+    share: Starc<Share>,
 }
 
 impl Drop for Device {
@@ -113,7 +113,7 @@ impl Drop for Device {
 
 impl Device {
     /// Create a new `Device`.
-    pub(crate) fn new(share: Rc<Share>) -> Self {
+    pub(crate) fn new(share: Starc<Share>) -> Self {
         Device {
             share: share,
         }

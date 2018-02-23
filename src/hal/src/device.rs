@@ -4,6 +4,7 @@
 //! includes several items to facilitate this.
 
 use std::{fmt, mem, slice};
+use std::any::Any;
 use std::borrow::Borrow;
 use std::error::Error;
 use std::ops::Range;
@@ -118,7 +119,7 @@ pub struct FramebufferError;
 /// are not enforced at the HAL level due to OpenGL constraint (to be revised). Users can still
 /// benefit from the backends that support synchronization of the `Device`.
 ///
-pub trait Device<B: Backend> {
+pub trait Device<B: Backend>: Any + Send + Sync {
     /// Allocates a memory segment of a specified type.
     ///
     /// There is only a limited amount of allocations allowed depending on the implementation!
