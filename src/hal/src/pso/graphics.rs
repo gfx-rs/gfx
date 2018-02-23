@@ -141,7 +141,7 @@ impl Rasterizer {
         polygon_mode: PolygonMode::Fill,
         cull_face: None,
         front_face: FrontFace::CounterClockwise,
-        depth_clamping: true,
+        depth_clamping: false,
         depth_bias: None,
         conservative: false,
     };

@@ -406,7 +406,16 @@ impl d::Device<B> for Device {
                 s_type: vk::StructureType::PipelineRasterizationStateCreateInfo,
                 p_next: ptr::null(),
                 flags: vk::PipelineRasterizationStateCreateFlags::empty(),
-                depth_clamp_enable: if desc.rasterizer.depth_clamping { vk::VK_TRUE } else { vk::VK_FALSE },
+                depth_clamp_enable: if desc.rasterizer.depth_clamping {
+                    if self.raw.1.contains(Features::DEPTH_CLAMP) {
+                        vk::VK_TRUE
+                    } else {
+                        warn!("Depth clamping was requested on a device with disabled feature");
+                        vk::VK_FALSE
+                    }
+                } else {
+                    vk::VK_FALSE
+                },
                 rasterizer_discard_enable: if desc.shaders.fragment.is_none() { vk::VK_TRUE } else { vk::VK_FALSE },
                 polygon_mode: polygon_mode,
                 cull_mode: desc.rasterizer.cull_face.map(conv::map_cull_face).unwrap_or(vk::CULL_MODE_NONE),
@@ -774,7 +783,7 @@ impl d::Device<B> for Device {
                 if self.raw.1.contains(Features::SAMPLER_ANISOTROPY) {
                     (vk::VK_TRUE, aniso as f32)
                 } else {
-                    warn!("Anisotropy({}) was requested on a device with disabled anisotropy feature", aniso);
+                    warn!("Anisotropy({}) was requested on a device with disabled feature", aniso);
                     (vk::VK_FALSE, 0.0)
                 }
             }
@@ -1434,7 +1443,7 @@ impl d::Device<B> for Device {
                 height: surface.height,
             },
             image_array_layers: 1,
-            image_usage: vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            image_usage: vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT | vk::IMAGE_USAGE_TRANSFER_DST_BIT,
             image_sharing_mode: vk::SharingMode::Exclusive,
             queue_family_index_count: 0,
             p_queue_family_indices: ptr::null(),
