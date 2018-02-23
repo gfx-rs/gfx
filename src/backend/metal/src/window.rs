@@ -3,7 +3,7 @@ use {native, conversions};
 use device::{Device, PhysicalDevice};
 
 use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use hal::{self, format, image};
 use hal::{Backbuffer, SwapchainConfig};
@@ -20,12 +20,15 @@ use core_graphics::geometry::CGRect;
 use cocoa::foundation::{NSRect};
 use io_surface::{self, IOSurface};
 
-pub struct Surface(pub(crate) Rc<SurfaceInner>);
+pub struct Surface(pub(crate) Arc<SurfaceInner>);
 
 pub(crate) struct SurfaceInner {
     pub(crate) nsview: *mut Object,
-    pub(crate) render_layer: RefCell<*mut Object>,
+    pub(crate) render_layer: Mutex<*mut Object>,
 }
+
+unsafe impl Send for SurfaceInner {}
+unsafe impl Sync for SurfaceInner {}
 
 impl Drop for SurfaceInner {
     fn drop(&mut self) {
@@ -34,18 +37,21 @@ impl Drop for SurfaceInner {
 }
 
 pub struct Swapchain {
-     surface: Rc<SurfaceInner>,
+     surface: Arc<SurfaceInner>,
     _size_pixels: (u64, u64),
     io_surfaces: Vec<IOSurface>,
     frame_index: usize,
     present_index: usize,
 }
 
+unsafe impl Send for Swapchain {}
+unsafe impl Sync for Swapchain {}
+
 impl Swapchain {
     pub(crate) fn present(&mut self) -> (&SurfaceInner, &mut IOSurface) {
         let id = self.present_index;
         self.present_index = (id + 1) % self.io_surfaces.len();
-        (&self.surface, &mut self.io_surfaces[id])
+        (&*self.surface, &mut self.io_surfaces[id])
     }
 }
 
@@ -98,7 +104,7 @@ impl Device {
             _ => panic!("unsupported backbuffer format"), // TODO: more formats
         };
 
-        let render_layer_borrow = surface.0.render_layer.borrow_mut();
+        let render_layer_borrow = surface.0.render_layer.lock().unwrap();
         let render_layer = *render_layer_borrow;
         let nsview = surface.0.nsview;
 

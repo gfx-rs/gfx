@@ -274,6 +274,7 @@ pub struct CommandBuffer {
 }
 
 unsafe impl Send for CommandBuffer { }
+unsafe impl Sync for CommandBuffer { }
 
 impl CommandBuffer {
     pub(crate) fn new(

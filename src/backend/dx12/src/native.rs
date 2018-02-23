@@ -226,6 +226,7 @@ pub struct Semaphore {
     #[derivative(Debug="ignore")]
     pub(crate) raw: ComPtr<d3d12::ID3D12Fence>,
 }
+
 unsafe impl Send for Semaphore {}
 unsafe impl Sync for Semaphore {}
 
@@ -239,6 +240,9 @@ pub struct Memory {
     // Buffer containing the whole memory for mapping (only for host visible heaps)
     pub(crate) resource: Option<*mut d3d12::ID3D12Resource>,
 }
+
+unsafe impl Send for Memory {}
+unsafe impl Sync for Memory {}
 
 #[derive(Debug)]
 pub struct DescriptorRange {

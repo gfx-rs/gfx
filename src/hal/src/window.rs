@@ -54,6 +54,7 @@ use image;
 use format::{self, Format};
 use queue::CommandQueue;
 
+use std::any::Any;
 use std::borrow::{Borrow, BorrowMut};
 use std::ops::Range;
 
@@ -95,7 +96,7 @@ pub struct SurfaceCapabilities {
 }
 
 /// A `Surface` abstracts the surface of a native window, which will be presented
-pub trait Surface<B: Backend> {
+pub trait Surface<B: Backend>: Any + Send + Sync {
     /// Retrieve the surface image kind.
     fn kind(&self) -> image::Kind;
 
@@ -235,7 +236,7 @@ pub enum Backbuffer<B: Backend> {
 
 /// The `Swapchain` is the backend representation of the surface.
 /// It consists of multiple buffers, which will be presented on the surface.
-pub trait Swapchain<B: Backend> : Sized {
+pub trait Swapchain<B: Backend>: Any + Send + Sync {
     /// Acquire a new frame for rendering. This needs to be called before presenting.
     ///
     /// # Synchronization
@@ -271,7 +272,7 @@ pub trait Swapchain<B: Backend> : Sized {
     )
     where
         &'a mut Self: BorrowMut<B::Swapchain>,
-        Self: 'a,
+        Self: Sized + 'a,
         IW: IntoIterator,
         IW::Item: Borrow<B::Semaphore>,
     {

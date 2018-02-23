@@ -225,6 +225,9 @@ impl CommandBufferInner {
 unsafe impl Send for CommandBuffer {
 }
 
+unsafe impl Sync for CommandBuffer {
+}
+
 enum EncoderState {
     None,
     Blit(metal::BlitCommandEncoder),
@@ -303,7 +306,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
             let swapchain = swapchain.borrow_mut();
             let (surface, io_surface) = swapchain.present();
             unsafe {
-                let render_layer_borrow = surface.render_layer.borrow_mut();
+                let render_layer_borrow = surface.render_layer.lock().unwrap();
                 let render_layer = *render_layer_borrow;
                 msg_send![render_layer, setContents: io_surface.obj];
             }

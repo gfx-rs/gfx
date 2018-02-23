@@ -46,6 +46,9 @@ pub struct Surface {
     pub(crate) height: u32,
 }
 
+unsafe impl Send for Surface { }
+unsafe impl Sync for Surface { }
+
 impl hal::Surface<Backend> for Surface {
     fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool { true }
     fn kind(&self) -> i::Kind {
@@ -110,3 +113,6 @@ impl hal::Swapchain<Backend> for Swapchain {
         hal::Frame::new(index as usize)
     }
 }
+
+unsafe impl Send for Swapchain { }
+unsafe impl Sync for Swapchain { }

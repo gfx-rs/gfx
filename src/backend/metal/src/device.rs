@@ -121,6 +121,8 @@ pub struct PhysicalDevice {
     raw: metal::Device,
     memory_types: [hal::MemoryType; 3],
 }
+unsafe impl Send for PhysicalDevice {}
+unsafe impl Sync for PhysicalDevice {}
 
 impl PhysicalDevice {
     pub(crate) fn new(raw: metal::Device) -> Self {

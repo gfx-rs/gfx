@@ -118,6 +118,9 @@ pub struct Memory {
     pub(crate) size: u64,
 }
 
+unsafe impl Send for Memory {}
+unsafe impl Sync for Memory {}
+
 impl Memory {
     pub fn can_upload(&self) -> bool {
         self.properties.contains(Properties::CPU_VISIBLE)

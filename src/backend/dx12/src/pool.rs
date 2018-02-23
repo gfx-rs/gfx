@@ -48,6 +48,7 @@ impl RawCommandPool {
 }
 
 unsafe impl Send for RawCommandPool { }
+unsafe impl Sync for RawCommandPool { }
 
 impl pool::RawCommandPool<Backend> for RawCommandPool {
     fn reset(&mut self) {

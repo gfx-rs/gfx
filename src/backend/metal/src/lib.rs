@@ -21,14 +21,13 @@ mod native;
 mod conversions;
 
 pub use command::{CommandQueue, CommandPool};
-pub use device::LanguageVersion;
+pub use device::{Device, LanguageVersion, PhysicalDevice};
 pub use window::{Surface, Swapchain};
 
 pub type GraphicsCommandPool = CommandPool;
 
 use std::mem;
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use std::os::raw::c_void;
 
 use hal::queue::QueueFamilyId;
@@ -93,9 +92,9 @@ impl Instance {
             msg_send![view_layer, addSublayer: render_layer];
 
             msg_send![view, retain];
-            window::Surface(Rc::new(window::SurfaceInner {
+            window::Surface(Arc::new(window::SurfaceInner {
                 nsview: view,
-                render_layer: RefCell::new(render_layer),
+                render_layer: Mutex::new(render_layer),
             }))
         }
     }

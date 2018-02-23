@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::borrow::Borrow;
 use std::ops::Range;
 
@@ -75,7 +76,7 @@ pub enum Level {
 }
 
 ///
-pub trait RawCommandBuffer<B: Backend>: Clone + Send {
+pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     ///
     fn begin(&mut self, flags: CommandBufferFlags);
 

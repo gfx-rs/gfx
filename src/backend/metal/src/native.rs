@@ -255,6 +255,9 @@ impl Memory {
     }
 }
 
+unsafe impl Send for Memory {}
+unsafe impl Sync for Memory {}
+
 #[derive(Debug)]
 pub(crate) struct MemoryMapping {
     pub(crate) range: Range<u64>,

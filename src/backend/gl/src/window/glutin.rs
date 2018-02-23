@@ -48,7 +48,7 @@ use hal::{self, format as f, image};
 use {Backend as B, Device, PhysicalDevice, QueueFamily};
 
 use glutin::{self, GlContext};
-use std::rc::Rc;
+use Starc;
 
 fn get_window_dimensions(window: &glutin::GlWindow) -> image::Dimensions {
     let (width, height) = window.get_inner_size().unwrap();
@@ -59,7 +59,7 @@ fn get_window_dimensions(window: &glutin::GlWindow) -> image::Dimensions {
 
 pub struct Swapchain {
     // Underlying window, required for presentation
-    pub(crate) window: Rc<glutin::GlWindow>,
+    pub(crate) window: Starc<glutin::GlWindow>,
 }
 
 impl hal::Swapchain<B> for Swapchain {
@@ -73,13 +73,13 @@ impl hal::Swapchain<B> for Swapchain {
 // we could spawn window + GL context when a swapchain is requested
 // and actually respect the swapchain configuration provided by the user.
 pub struct Surface {
-    window: Rc<glutin::GlWindow>,
+    window: Starc<glutin::GlWindow>,
 }
 
 impl Surface {
     pub fn from_window(window: glutin::GlWindow) -> Self {
         Surface {
-            window: Rc::new(window)
+            window: Starc::new(window)
         }
     }
 
@@ -175,6 +175,9 @@ pub fn config_context(
 
 
 pub struct Headless(pub glutin::HeadlessContext);
+
+unsafe impl Send for Headless {}
+unsafe impl Sync for Headless {}
 
 impl hal::Instance for Headless {
     type Backend = B;
