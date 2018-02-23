@@ -393,7 +393,7 @@ pub fn map_image_usage(usage: image::Usage) -> vk::ImageUsageFlags {
     if usage.contains(Usage::INPUT_ATTACHMENT) {
         flags |= vk::IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
     }
-    
+
     flags
 }
 
@@ -444,14 +444,14 @@ pub fn map_stage_flags(stages: pso::ShaderStageFlags) -> vk::ShaderStageFlags {
 }
 
 
-pub fn map_filter(filter: image::FilterMethod) -> (vk::Filter, vk::Filter, vk::SamplerMipmapMode, f32) {
+pub fn map_filter(filter: image::FilterMethod) -> (vk::Filter, vk::Filter, vk::SamplerMipmapMode) {
     use hal::image::FilterMethod as Fm;
     match filter {
-        Fm::Scale          => (vk::Filter::Nearest, vk::Filter::Nearest, vk::SamplerMipmapMode::Nearest, 1.0),
-        Fm::Mipmap         => (vk::Filter::Nearest, vk::Filter::Nearest, vk::SamplerMipmapMode::Linear,  1.0),
-        Fm::Bilinear       => (vk::Filter::Linear,  vk::Filter::Linear,  vk::SamplerMipmapMode::Nearest, 1.0),
-        Fm::Trilinear      => (vk::Filter::Linear,  vk::Filter::Linear,  vk::SamplerMipmapMode::Linear,  1.0),
-        Fm::Anisotropic(a) => (vk::Filter::Linear,  vk::Filter::Linear,  vk::SamplerMipmapMode::Linear,  a as f32),
+        Fm::Scale          => (vk::Filter::Nearest, vk::Filter::Nearest, vk::SamplerMipmapMode::Nearest),
+        Fm::Mipmap         => (vk::Filter::Nearest, vk::Filter::Nearest, vk::SamplerMipmapMode::Linear),
+        Fm::Bilinear       => (vk::Filter::Linear,  vk::Filter::Linear,  vk::SamplerMipmapMode::Nearest),
+        Fm::Trilinear      => (vk::Filter::Linear,  vk::Filter::Linear,  vk::SamplerMipmapMode::Linear),
+        Fm::Anisotropic(_) => (vk::Filter::Linear,  vk::Filter::Linear,  vk::SamplerMipmapMode::Linear),
     }
 }
 
