@@ -126,13 +126,16 @@ impl Device {
     ) -> Result<n::ShaderModule, d::ShaderError> {
         let gl = &self.share.context;
 
+        let can_compute = self.share.limits.max_compute_group_count[0] != 0;
+        let can_tessellate = self.share.limits.max_patch_size != 0;
         let target = match stage {
             pso::Stage::Vertex   => gl::VERTEX_SHADER,
-            pso::Stage::Hull     => gl::TESS_CONTROL_SHADER,
-            pso::Stage::Domain   => gl::TESS_EVALUATION_SHADER,
+            pso::Stage::Hull  if can_tessellate  => gl::TESS_CONTROL_SHADER,
+            pso::Stage::Domain if can_tessellate => gl::TESS_EVALUATION_SHADER,
             pso::Stage::Geometry => gl::GEOMETRY_SHADER,
             pso::Stage::Fragment => gl::FRAGMENT_SHADER,
-            pso::Stage::Compute  => gl::COMPUTE_SHADER,
+            pso::Stage::Compute if can_compute => gl::COMPUTE_SHADER,
+            _ => return Err(d::ShaderError::UnsupportedStage(stage)),
         };
 
         let name = unsafe { gl.CreateShader(target) };
@@ -256,9 +259,9 @@ impl Device {
             n::ShaderModule::Raw(raw) => raw,
             n::ShaderModule::Spirv(ref spirv) => {
                 let mut ast = self.parse_spirv(spirv).unwrap();
-                let spirv = self.translate_spirv(&mut ast).unwrap();
-                info!("Generated:\n{:?}", spirv);
-                match self.create_shader_module_from_source(spirv.as_bytes(), stage).unwrap() {
+                let glsl = self.translate_spirv(&mut ast).unwrap();
+                info!("Generated:\n{:?}", glsl);
+                match self.create_shader_module_from_source(glsl.as_bytes(), stage).unwrap() {
                     n::ShaderModule::Raw(raw) => raw,
                     _ => panic!("Unhandled")
                 }
@@ -422,7 +425,7 @@ impl d::Device<B> for Device {
                     warn!("\tLog: {}", log);
                 }
             } else {
-                return Err(pso::CreationError::Other);
+                return Err(pso::CreationError::Shader(d::ShaderError::CompilationFailed(log)));
             }
 
             name
@@ -452,7 +455,7 @@ impl d::Device<B> for Device {
                         vertex_attrib_fn,
                     }
                 })
-                .collect::<Vec<_>>(),
+                .collect(),
         })
     }
 
