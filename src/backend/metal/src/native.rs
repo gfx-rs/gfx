@@ -81,9 +81,7 @@ unsafe impl Sync for ComputePipeline {}
 #[derive(Debug)]
 pub struct Image {
     pub(crate) raw: metal::Texture,
-    pub(crate) bytes_per_block: u8,
-    // Dimension of a texel block (compressed formats).
-    pub(crate) block_dim: (u8, u8),
+    pub(crate) format_desc: hal::format::FormatDesc,
 }
 
 unsafe impl Send for Image {}
@@ -311,10 +309,8 @@ unsafe impl Sync for UnboundBuffer {}
 
 #[derive(Debug)]
 pub struct UnboundImage {
-    pub desc: metal::TextureDescriptor,
-    pub bytes_per_block: u8,
-    // Dimension of a texel block (compressed formats).
-    pub block_dim: (u8, u8),
+    pub(crate) texture_desc: metal::TextureDescriptor,
+    pub(crate) format_desc: hal::format::FormatDesc,
 }
 unsafe impl Send for UnboundImage {}
 unsafe impl Sync for UnboundImage {}

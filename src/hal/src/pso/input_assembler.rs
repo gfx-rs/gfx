@@ -14,7 +14,7 @@ pub type ElemStride = u32;
 /// The number of instances between each subsequent attribute value
 pub type InstanceRate = u8;
 /// An offset inside a vertex buffer, in bytes.
-pub type BufferOffset = usize;
+pub type BufferOffset = u64;
 
 /// A struct element descriptor.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]

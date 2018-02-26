@@ -1247,8 +1247,6 @@ impl hal::Device<Backend> for Device {
     {
         let base_format = format.base_format();
         let format_desc = base_format.0.desc();
-        let bytes_per_block = (format_desc.bits / 8) as _;
-        let block_dim = format_desc.dim;
         let (mtl_format, _) = map_format(format).ok_or(image::CreationError::Format(format))?;
 
         let descriptor = metal::TextureDescriptor::new();
@@ -1267,9 +1265,8 @@ impl hal::Device<Backend> for Device {
         descriptor.set_usage(map_texture_usage(usage));
 
         Ok(n::UnboundImage {
-            desc: descriptor,
-            bytes_per_block,
-            block_dim,
+            texture_desc: descriptor,
+            format_desc,
         })
     }
 
@@ -1284,8 +1281,8 @@ impl hal::Device<Backend> for Device {
                 MTLResourceOptions::StorageModeManaged | MTLResourceOptions::CPUCacheModeWriteCombined,
                 MTLResourceOptions::StorageModePrivate,
             ].iter() {
-                image.desc.set_resource_options(options);
-                let requirements = self.device.heap_texture_size_and_align(&image.desc);
+                image.texture_desc.set_resource_options(options);
+                let requirements = self.device.heap_texture_size_and_align(&image.texture_desc);
                 max_size = cmp::max(max_size, requirements.size);
                 max_alignment = cmp::max(max_alignment, requirements.align);
             }
@@ -1311,26 +1308,25 @@ impl hal::Device<Backend> for Device {
                 let resource_options = resource_options_from_storage_and_cache(
                     heap.storage_mode(),
                     heap.cpu_cache_mode());
-                image.desc.set_resource_options(resource_options);
-                heap.new_texture(&image.desc)
+                image.texture_desc.set_resource_options(resource_options);
+                heap.new_texture(&image.texture_desc)
                     .unwrap_or_else(|| {
                         // TODO: disable hazard tracking?
-                        self.device.new_texture(&image.desc)
+                        self.device.new_texture(&image.texture_desc)
                     })
             },
             n::MemoryHeap::Emulated { memory_type } => {
                 // TODO: disable hazard tracking?
                 let memory_properties = self.memory_types[memory_type].properties;
                 let resource_options = map_memory_properties_to_options(memory_properties);
-                image.desc.set_resource_options(resource_options);
-                self.device.new_texture(&image.desc)
+                image.texture_desc.set_resource_options(resource_options);
+                self.device.new_texture(&image.texture_desc)
             }
         };
 
         Ok(n::Image {
             raw,
-            bytes_per_block: image.bytes_per_block,
-            block_dim: image.block_dim,
+            format_desc: image.format_desc,
         })
     }
 

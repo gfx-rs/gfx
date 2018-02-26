@@ -19,6 +19,7 @@ mod window;
 mod command;
 mod native;
 mod conversions;
+mod soft;
 
 pub use command::{CommandQueue, CommandPool};
 pub use device::{Device, LanguageVersion, PhysicalDevice};

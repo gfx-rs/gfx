@@ -43,11 +43,11 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
         self.0.draw_indexed(indices, base_vertex, instances)
     }
     ///
-    pub fn draw_indirect(&mut self, buffer: &B::Buffer, offset: u64, draw_count: u32, stride: u32) {
+    pub fn draw_indirect(&mut self, buffer: &B::Buffer, offset: pso::BufferOffset, draw_count: u32, stride: u32) {
         self.0.draw_indirect(buffer, offset, draw_count, stride)
     }
     ///
-    pub fn draw_indexed_indirect(&mut self, buffer: &B::Buffer, offset: u64, draw_count: u32, stride: u32) {
+    pub fn draw_indexed_indirect(&mut self, buffer: &B::Buffer, offset: pso::BufferOffset, draw_count: u32, stride: u32) {
         self.0.draw_indexed_indirect(buffer, offset, draw_count, stride)
     }
 

@@ -698,10 +698,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
         let needed_length = vbs.0.iter().map(|vb| vb.1).max().unwrap() + 1;
 
-        self.cache.vertex_buffers.resize(needed_length, 0);
+        self.cache.vertex_buffers.resize(needed_length as usize, 0);
 
         for vb in vbs.0 {
-            self.cache.vertex_buffers[vb.1] = vb.0.raw;
+            self.cache.vertex_buffers[vb.1 as usize] = vb.0.raw;
         }
     }
 

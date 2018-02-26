@@ -103,7 +103,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let flags = if release_resources {
             vk::COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT
         } else {
-            vk::CommandBufferResetFlags ::empty()
+            vk::CommandBufferResetFlags::empty()
         };
 
         assert_eq!(Ok(()),

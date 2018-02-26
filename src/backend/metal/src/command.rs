@@ -5,12 +5,12 @@ use std::borrow::{Borrow, BorrowMut};
 use std::cell::UnsafeCell;
 use std::ops::{Deref, Range};
 use std::sync::{Arc};
-use std::mem;
+use std::{iter, mem};
 
-use hal::{error, memory, pool, pso};
+use hal::{command as com, error, memory, pool, pso};
 use hal::{VertexCount, VertexOffset, InstanceCount, IndexCount};
 use hal::buffer::{IndexBufferView};
-use hal::command as com;
+use hal::format::FormatDesc;
 use hal::image::{ImageLayout, SubresourceRange};
 use hal::query::{Query, QueryControl, QueryId};
 use hal::queue::{RawCommandQueue, RawSubmission};
@@ -19,12 +19,8 @@ use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLClearColor, 
 use cocoa::foundation::NSUInteger;
 use block::{ConcreteBlock};
 use conversions::map_index_type;
+use soft;
 
-
-fn div(a: u32, b: u32) -> u32 {
-    assert_eq!(a % b, 0);
-    a / b
-}
 
 pub struct CommandQueue(pub(crate) Arc<QueueInner>);
 
@@ -73,7 +69,7 @@ impl StageResources {
         self.samplers.clear();
     }
 
-    fn add_buffer(&mut self, slot: usize, buffer: &metal::BufferRef, offset: usize) {
+    fn add_buffer(&mut self, slot: usize, buffer: &metal::BufferRef, offset: pso::BufferOffset) {
         while self.buffers.len() <= slot {
             self.buffers.push(None)
         }
@@ -99,11 +95,174 @@ impl StageResources {
     }
 }
 
+enum CommandSink {
+    Immediate {
+        cmd_buffer: metal::CommandBuffer,
+        encoder_state: EncoderState,
+    },
+    Deferred {
+        passes: Vec<soft::Pass>,
+        encoding: bool,
+    },
+}
+
+impl CommandSink {
+    fn pre_render_commands<I>(&mut self, commands: I)
+    where
+        I: Iterator<Item = soft::RenderCommand>,
+    {
+        match *self {
+            CommandSink::Immediate { encoder_state: EncoderState::Render(ref encoder), .. } => {
+                for command in commands {
+                    exec_render(encoder, &command);
+                }
+            }
+            CommandSink::Deferred { ref mut passes, encoding: true } => {
+                if let Some(&mut soft::Pass::Render(_, ref mut list)) = passes.last_mut() {
+                    list.extend(commands);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn render_commands<I>(&mut self, commands: I)
+    where
+        I: Iterator<Item = soft::RenderCommand>,
+    {
+        match *self {
+            CommandSink::Immediate { ref mut encoder_state, .. } => {
+                match *encoder_state {
+                    EncoderState::Render(ref encoder) => {
+                        for command in commands {
+                            exec_render(encoder, &command);
+                        }
+                    }
+                    _ => panic!("Expected to be in render encoding state!")
+                }
+            }
+            CommandSink::Deferred { ref mut passes, encoding } => {
+                assert!(encoding);
+                match passes.last_mut() {
+                    Some(&mut soft::Pass::Render(_, ref mut list)) => {
+                        list.extend(commands);
+                    }
+                    _ => panic!("Active pass is not a render pass")
+                }
+            }
+        }
+    }
+
+    fn blit_commands<I>(&mut self, commands: I)
+    where
+        I: Iterator<Item = soft::BlitCommand>,
+    {
+        match *self {
+            CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state } => {
+                let current = match mem::replace(encoder_state, EncoderState::None) {
+                    EncoderState::None => None,
+                    EncoderState::Render(enc) => {
+                        enc.end_encoding();
+                        None
+                    },
+                    EncoderState::Blit(enc) => Some(enc),
+                    EncoderState::Compute(enc) => {
+                        enc.end_encoding();
+                        None
+                    },
+                };
+                let encoder = current.unwrap_or_else(|| {
+                    cmd_buffer.new_blit_command_encoder().to_owned()
+                });
+
+                for command in commands {
+                    exec_blit(&encoder, &command);
+                }
+
+                *encoder_state = EncoderState::Blit(encoder);
+            }
+            CommandSink::Deferred { ref mut passes, .. } => {
+                if let Some(&mut soft::Pass::Blit(ref mut list)) = passes.last_mut() {
+                    list.extend(commands);
+                    return;
+                }
+                passes.push(soft::Pass::Blit(commands.collect()));
+            }
+        }
+    }
+
+    fn pre_compute_commands<I>(&mut self, commands: I)
+    where
+        I: Iterator<Item = soft::ComputeCommand>,
+    {
+        match *self {
+            CommandSink::Immediate { encoder_state: EncoderState::Compute(ref encoder), .. } => {
+                for command in commands {
+                    exec_compute(encoder, &command);
+                }
+            }
+            CommandSink::Deferred { ref mut passes, encoding: true } => {
+                if let Some(&mut soft::Pass::Compute(ref mut list)) = passes.last_mut() {
+                    list.extend(commands);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn compute_commands<I>(&mut self, commands: I)
+    where
+        I: Iterator<Item = soft::ComputeCommand>,
+    {
+        match *self {
+            CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state } => {
+                let current = match mem::replace(encoder_state, EncoderState::None) {
+                    EncoderState::None => None,
+                    EncoderState::Render(enc) => {
+                        enc.end_encoding();
+                        None
+                    },
+                    EncoderState::Blit(enc) => {
+                        enc.end_encoding();
+                        None
+                    },
+                    EncoderState::Compute(enc) => Some(enc),
+                };
+                let encoder = current.unwrap_or_else(|| {
+                    cmd_buffer.new_compute_command_encoder().to_owned()
+                });
+
+                for command in commands {
+                    exec_compute(&encoder, &command);
+                }
+
+                *encoder_state = EncoderState::Compute(encoder);
+            }
+            CommandSink::Deferred { ref mut passes, .. } => {
+                if let Some(&mut soft::Pass::Compute(ref mut list)) = passes.last_mut() {
+                    list.extend(commands);
+                    return;
+                }
+                passes.push(soft::Pass::Compute(commands.collect()));
+            }
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct IndexBuffer {
+    buffer: metal::Buffer,
+    offset: pso::BufferOffset,
+    index_type: MTLIndexType,
+}
+
 struct CommandBufferInner {
-    command_buffer: metal::CommandBuffer,
+    sink: CommandSink,
+    // hopefully, this is temporary
+    // currently needed for `update_buffer` only
+    device: metal::Device,
     //TODO: would be cleaner to move the cache into `CommandBuffer` iself
     // it doesn't have to be in `Inner`
-    encoder_state: EncoderState,
     viewport: Option<MTLViewport>,
     scissors: Option<MTLScissorRect>,
     render_pso: Option<metal::RenderPipelineState>,
@@ -113,128 +272,370 @@ struct CommandBufferInner {
     resources_vs: StageResources,
     resources_fs: StageResources,
     resources_cs: StageResources,
-    index_buffer: Option<(metal::Buffer, u64, MTLIndexType)>,
+    index_buffer: Option<IndexBuffer>,
     attribute_buffer_index: usize,
     depth_stencil_state: Option<metal::DepthStencilState>,
 }
 
 impl CommandBufferInner {
-    fn reset(&mut self, queue: &QueueInner) {
-        self.command_buffer = queue.queue.new_command_buffer().to_owned();
-
+    fn reset_resources(&mut self) {
         self.resources_vs.clear();
         self.resources_fs.clear();
         self.resources_cs.clear();
     }
 
-    fn stop_ecoding(&mut self) {
-        match mem::replace(&mut self.encoder_state, EncoderState::None)  {
-            EncoderState::None => {}
-            EncoderState::Blit(ref blit_encoder) => {
-                blit_encoder.end_encoding();
+    fn reset(&mut self, queue: &QueueInner, release_resources: bool) {
+        match self.sink {
+            CommandSink::Immediate { ref mut cmd_buffer, ref mut encoder_state } => {
+                //TODO: release the old one?
+                *cmd_buffer = queue.queue.new_command_buffer().to_owned();
+                *encoder_state = EncoderState::None;
             }
-            EncoderState::Render(ref render_encoder) => {
-                render_encoder.end_encoding();
+            CommandSink::Deferred { ref mut passes, .. } => {
+                passes.clear();
+                if release_resources {
+                    passes.shrink_to_fit();
+                }
             }
-        }
-    }
-
-    fn begin_render_pass(&mut self, encoder: metal::RenderCommandEncoder) {
-        self.stop_ecoding();
-
-        self.encoder_state = EncoderState::Render(encoder);
-        let encoder = if let EncoderState::Render(ref encoder) = self.encoder_state {
-            encoder
-        } else {
-            unreachable!()
         };
+        self.reset_resources();
+    }
 
-        // Apply previously bound values for this command buffer
-        if let Some(viewport) = self.viewport {
-            encoder.set_viewport(viewport);
-        }
-        if let Some(scissors) = self.scissors {
-            encoder.set_scissor_rect(scissors);
-        }
-        if let Some(ref pipeline_state) = self.render_pso {
-            encoder.set_render_pipeline_state(pipeline_state);
-        }
-        if let Some(ref depth_stencil_state) = self.depth_stencil_state {
-            encoder.set_depth_stencil_state(depth_stencil_state);
-        }
-        // inherit vertex resources
-        for (i, resource) in self.resources_vs.buffers.iter().enumerate() {
-            if let Some((ref buffer, offset)) = *resource {
-                encoder.set_vertex_buffer(i as _, offset as _, Some(buffer));
+    fn stop_ecoding(&mut self) {
+        match self.sink {
+            CommandSink::Immediate { ref mut encoder_state, .. } => {
+                match mem::replace(encoder_state, EncoderState::None)  {
+                    EncoderState::None => {}
+                    EncoderState::Render(ref encoder) => {
+                        encoder.end_encoding();
+                    }
+                    EncoderState::Blit(ref encoder) => {
+                        encoder.end_encoding();
+                    }
+                    EncoderState::Compute(ref encoder) => {
+                        encoder.end_encoding();
+                    }
+                }
             }
-        }
-        for (i, resource) in self.resources_vs.textures.iter().enumerate() {
-            if let Some(ref texture) = *resource {
-                encoder.set_vertex_texture(i as _, Some(texture));
-            }
-        }
-        for (i, resource) in self.resources_vs.samplers.iter().enumerate() {
-            if let Some(ref sampler) = *resource {
-                encoder.set_vertex_sampler_state(i as _, Some(sampler));
-            }
-        }
-        // inherit fragment resources
-        for (i, resource) in self.resources_fs.buffers.iter().enumerate() {
-            if let Some((ref buffer, offset)) = *resource {
-                encoder.set_fragment_buffer(i as _, offset as _, Some(buffer));
-            }
-        }
-        for (i, resource) in self.resources_fs.textures.iter().enumerate() {
-            if let Some(ref texture) = *resource {
-                encoder.set_fragment_texture(i as _, Some(texture));
-            }
-        }
-        for (i, resource) in self.resources_fs.samplers.iter().enumerate() {
-            if let Some(ref sampler) = *resource {
-                encoder.set_fragment_sampler_state(i as _, Some(sampler));
+            CommandSink::Deferred { ref mut encoding, .. } => {
+                *encoding = false;
             }
         }
     }
 
-    fn begin_compute(&mut self) -> (&metal::ComputeCommandEncoderRef, MTLSize) {
+    fn begin_render_pass(&mut self, descriptor: metal::RenderPassDescriptor) {
         self.stop_ecoding();
 
-        let encoder = self.command_buffer.new_compute_command_encoder();
-        encoder.set_compute_pipeline_state(self.compute_pso.as_ref().unwrap());
+        // TODO: re-use storage
+        let mut commands = Vec::new();
+        // Apply previously bound values for this command buffer
+        commands.extend(self.viewport.map(soft::RenderCommand::SetViewport));
+        commands.extend(self.scissors.map(soft::RenderCommand::SetScissor));
+        let depth_stencil = self.depth_stencil_state.clone();
+        commands.extend(self.render_pso.clone().map(|pipeline| {
+            soft::RenderCommand::BindPipeline(pipeline, depth_stencil)
+        }));
+        let stages = [pso::Stage::Vertex, pso::Stage::Fragment];
+        for (&stage, resources) in stages.iter().zip(&[&self.resources_vs, &self.resources_fs]) {
+            commands.extend(resources.buffers.iter().enumerate().filter_map(|(i, resource)| {
+                resource.clone().map(|(buffer, offset)| {
+                    soft::RenderCommand::BindBuffer {
+                        stage,
+                        index: i as _,
+                        buffer: Some(buffer),
+                        offset,
+                    }
+                })
+            }));
+            commands.extend(resources.textures
+                .iter()
+                .cloned()
+                .enumerate()
+                .filter(|&(_, ref resource)| resource.is_some())
+                .map(|(i, texture)| soft::RenderCommand::BindTexture {
+                    stage,
+                    index: i as _,
+                    texture,
+                })
+            );
+            commands.extend(resources.samplers
+                .iter()
+                .cloned()
+                .enumerate()
+                .filter(|&(_, ref resource)| resource.is_some())
+                .map(|(i, sampler)| soft::RenderCommand::BindSampler {
+                    stage,
+                    index: i as _,
+                    sampler,
+                })
+            );
+        }
 
-        for (i, resource) in self.resources_cs.buffers.iter().enumerate() {
-            if let Some((ref buffer, offset)) = *resource {
-                encoder.set_buffer(i as _, offset as _, Some(buffer));
+        match self.sink {
+            CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state } => {
+                let encoder = cmd_buffer.new_render_command_encoder(&descriptor);
+                for command in commands {
+                    exec_render(encoder, &command);
+                }
+                *encoder_state = EncoderState::Render(encoder.to_owned());
+            }
+            CommandSink::Deferred { ref mut passes, ref mut encoding } => {
+                *encoding = true;
+                passes.push(soft::Pass::Render(descriptor, commands));
             }
         }
-        for (i, resource) in self.resources_cs.textures.iter().enumerate() {
-            if let Some(ref texture) = *resource {
-                encoder.set_texture(i as _, Some(texture));
-            }
-        }
-        for (i, resource) in self.resources_cs.samplers.iter().enumerate() {
-            if let Some(ref sampler) = *resource {
-                encoder.set_sampler_state(i as _, Some(sampler));
-            }
-        }
+    }
 
-        (encoder, self.work_group_size)
+    fn begin_compute(&mut self) -> MTLSize {
+        let mut commands = Vec::new();
+
+        commands.extend(self.compute_pso.clone().map(soft::ComputeCommand::BindPipeline));
+        commands.extend(self.resources_cs.buffers.iter().enumerate().filter_map(|(i, resource)| {
+            resource.clone().map(|(buffer, offset)| {
+                soft::ComputeCommand::BindBuffer {
+                    index: i as _,
+                    buffer: Some(buffer),
+                    offset,
+                }
+            })
+        }));
+        commands.extend(self.resources_cs.textures
+            .iter()
+            .cloned()
+            .enumerate()
+            .filter(|&(_, ref resource)| resource.is_some())
+            .map(|(i, texture)| soft::ComputeCommand::BindTexture {
+                index: i as _,
+                texture,
+            })
+        );
+        commands.extend(self.resources_cs.samplers
+            .iter()
+            .cloned()
+            .enumerate()
+            .filter(|&(_, ref resource)| resource.is_some())
+            .map(|(i, sampler)| soft::ComputeCommand::BindSampler {
+                index: i as _,
+                sampler,
+            })
+        );
+
+        self.work_group_size
     }
 }
 
 unsafe impl Send for CommandBuffer {
 }
 
-unsafe impl Sync for CommandBuffer {
-}
-
 enum EncoderState {
     None,
     Blit(metal::BlitCommandEncoder),
     Render(metal::RenderCommandEncoder),
-    //TODO: Compute() if we find cases where
-    // grouping compute-related calls is feasible
+    Compute(metal::ComputeCommandEncoder),
 }
+
+fn div(a: u32, b: u32) -> u32 {
+    assert_eq!(a % b, 0);
+    a / b
+}
+
+fn compute_pitches(region: &com::BufferImageCopy, fd: &FormatDesc) -> (u32, u32) {
+    let row_pitch = div(region.buffer_width, fd.dim.0 as _) * (fd.bits / 8) as u32;
+    let slice_pitch = div(region.buffer_height, fd.dim.1 as _) * row_pitch;
+    (row_pitch, slice_pitch)
+}
+
+fn exec_render(encoder: &metal::RenderCommandEncoderRef, command: &soft::RenderCommand) {
+    use soft::RenderCommand as Cmd;
+    match *command {
+        Cmd::SetViewport(viewport) => {
+            encoder.set_viewport(viewport);
+        }
+        Cmd::SetScissor(scissor) => {
+            encoder.set_scissor_rect(scissor);
+        }
+        Cmd::BindBuffer { stage, index, ref buffer, offset } => {
+            let buffer = buffer.as_ref().map(|x| x.as_ref());
+            match stage {
+                pso::Stage::Vertex =>
+                    encoder.set_vertex_buffer(index as _, offset as _, buffer),
+                pso::Stage::Fragment =>
+                    encoder.set_fragment_buffer(index as _, offset as _, buffer),
+                _ => unimplemented!()
+            }
+        }
+        Cmd::BindTexture { stage, index, ref texture } => {
+            let texture = texture.as_ref().map(|x| x.as_ref());
+            match stage {
+                pso::Stage::Vertex =>
+                    encoder.set_vertex_texture(index as _, texture),
+                pso::Stage::Fragment =>
+                    encoder.set_fragment_texture(index as _, texture),
+                _ => unimplemented!()
+            }
+        }
+        Cmd::BindSampler { stage, index, ref sampler } => {
+            let sampler = sampler.as_ref().map(|x| x.as_ref());
+            match stage {
+                pso::Stage::Vertex =>
+                    encoder.set_vertex_sampler_state(index as _, sampler),
+                pso::Stage::Fragment =>
+                    encoder.set_fragment_sampler_state(index as _, sampler),
+                _ => unimplemented!()
+            }
+        }
+        Cmd::BindPipeline(ref pipeline_state, ref depth_stencil) => {
+            encoder.set_render_pipeline_state(pipeline_state);
+            if let Some(ref depth_stencil_state) = *depth_stencil {
+                encoder.set_depth_stencil_state(depth_stencil_state);
+            }
+        }
+        Cmd::Draw { primitive_type, ref vertices, ref instances } => unsafe {
+            msg_send![encoder,
+                drawPrimitives: primitive_type
+                vertexStart: vertices.start as NSUInteger
+                vertexCount: (vertices.end - vertices.start) as NSUInteger
+                instanceCount: (instances.end - instances.start) as NSUInteger
+                baseInstance: instances.start as NSUInteger
+            ];
+        }
+        Cmd::DrawIndexed { ref index, primitive_type, ref indices, base_vertex, ref instances } => {
+            let index_offset = indices.start as pso::BufferOffset * match index.index_type {
+                MTLIndexType::UInt16 => 2,
+                MTLIndexType::UInt32 => 4,
+            };
+            unsafe {
+                msg_send![encoder,
+                    drawIndexedPrimitives: primitive_type
+                    indexCount: (indices.end - indices.start) as NSUInteger
+                    indexType: index.index_type
+                    indexBuffer: &index.buffer
+                    indexBufferOffset: (index_offset + index.offset) as NSUInteger
+                    instanceCount: (instances.end - instances.start) as NSUInteger
+                    baseVertex: base_vertex as NSUInteger
+                    baseInstance: instances.start as NSUInteger
+                ];
+            }
+        }
+    }
+}
+
+fn exec_blit(encoder: &metal::BlitCommandEncoderRef, command: &soft::BlitCommand) {
+    use soft::BlitCommand as Cmd;
+    match *command {
+        Cmd::CopyBuffer { ref src, ref dst, ref region } => unsafe {
+            msg_send![encoder,
+                copyFromBuffer: src
+                sourceOffset: region.src as NSUInteger
+                toBuffer: dst
+                destinationOffset: region.dst as NSUInteger
+                size: region.size as NSUInteger
+            ];
+        },
+        Cmd::CopyBufferToImage { ref src, ref dst, dst_desc, ref region } => unsafe {
+            let (row_pitch, slice_pitch) = compute_pitches(&region, &dst_desc);
+            let image_offset = &region.image_offset;
+            let r = &region.image_layers;
+            let extent = MTLSize {
+                width: dst.width(),
+                height: dst.height(),
+                depth: dst.depth(),
+            };
+
+            for layer in r.layers.clone() {
+                let offset = region.buffer_offset + slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
+                msg_send![encoder,
+                    copyFromBuffer: src
+                    sourceOffset: offset as NSUInteger
+                    sourceBytesPerRow: row_pitch as NSUInteger
+                    sourceBytesPerImage: slice_pitch as NSUInteger
+                    sourceSize: extent
+                    toTexture: dst
+                    destinationSlice: layer as NSUInteger
+                    destinationLevel: r.level as NSUInteger
+                    destinationOrigin: MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ }
+                ]
+            }
+        },
+        Cmd::CopyImageToBuffer { ref src, src_desc, ref dst, ref region } => unsafe {
+            let (row_pitch, slice_pitch) = compute_pitches(&region, &src_desc);
+            let image_offset = &region.image_offset;
+            let r = &region.image_layers;
+            let extent = MTLSize {
+                width: src.width(),
+                height: src.height(),
+                depth: src.depth(),
+            };
+
+            for layer in r.layers.clone() {
+                let offset = region.buffer_offset + slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
+                msg_send![encoder,
+                    copyFromTexture: src
+                    sourceSlice: layer as NSUInteger
+                    sourceLevel: r.level as NSUInteger
+                    sourceOrigin: MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ }
+                    sourceSize: extent
+                    toBuffer: dst
+                    destinationOffset: offset as NSUInteger
+                    destinationBytesPerRow: row_pitch as NSUInteger
+                    destinationBytesPerImage: slice_pitch as NSUInteger
+                ]
+            }
+        }
+    }
+}
+
+fn exec_compute(encoder: &metal::ComputeCommandEncoderRef, command: &soft::ComputeCommand) {
+    use soft::ComputeCommand as Cmd;
+    match *command {
+        Cmd::BindBuffer { index, ref buffer, offset } => {
+            encoder.set_buffer(index as _, offset, buffer.as_ref().map(|x| x.as_ref()));
+        }
+        Cmd::BindTexture { index, ref texture } => {
+            encoder.set_texture(index as _, texture.as_ref().map(|x| x.as_ref()));
+        }
+        Cmd::BindSampler { index, ref sampler } => {
+            encoder.set_sampler_state(index as _, sampler.as_ref().map(|x| x.as_ref()));
+        }
+        Cmd::BindPipeline(ref pipeline) => {
+            encoder.set_compute_pipeline_state(pipeline);
+        }
+        Cmd::Dispatch { wg_size, wg_count } => {
+            encoder.dispatch_thread_groups(wg_count, wg_size);
+        }
+        Cmd::DispatchIndirect { wg_size, ref buffer, offset } => {
+            encoder.dispatch_thread_groups_indirect(buffer, offset, wg_size);
+        }
+    }
+}
+
+fn record_commands(command_buf: &metal::CommandBufferRef, passes: &[soft::Pass]) {
+    for pass in passes {
+        match *pass {
+            soft::Pass::Render(ref desc, ref list) => {
+                let encoder = command_buf.new_render_command_encoder(desc);
+                for command in list {
+                    exec_render(&encoder, command);
+                }
+            }
+            soft::Pass::Blit(ref list) => {
+                let encoder = command_buf.new_blit_command_encoder();
+                for command in list {
+                    exec_blit(&encoder, command);
+                }
+            }
+            soft::Pass::Compute(ref list) => {
+                let encoder = command_buf.new_compute_command_encoder();
+                for command in list {
+                    exec_compute(&encoder, command);
+                }
+            }
+        }
+    }
+}
+
+unsafe impl Send for CommandBuffer {}
+unsafe impl Sync for CommandBuffer {}
 
 impl CommandQueue {
     pub fn new(device: &metal::DeviceRef) -> CommandQueue {
@@ -272,15 +673,21 @@ impl RawCommandQueue<Backend> for CommandQueue {
 
         let buffers = submit.cmd_buffers.into_iter().collect::<Vec<_>>();
         let num_buffers = buffers.len();
-        let mut i = 1;
-        for buffer in buffers {
+        for (i, buffer) in buffers.into_iter().enumerate() {
             let buffer = buffer.borrow();
-            let command_buffer: &metal::CommandBufferRef = &(&mut *buffer.inner.get()).command_buffer;
+            let command_buffer: &metal::CommandBufferRef = match buffer.inner_ref().sink {
+                 CommandSink::Immediate { ref cmd_buffer, .. } => cmd_buffer,
+                 CommandSink::Deferred { ref passes, .. } => {
+                    let cmd_buffer = self.0.queue.new_command_buffer();
+                    record_commands(cmd_buffer, passes);
+                    cmd_buffer
+                 }
+            };
             if let Some(ref signal_block) = signal_block {
                 msg_send![command_buffer, addCompletedHandler: signal_block.deref() as *const _];
             }
             // only append the fence handler to the last buffer
-            if i == num_buffers {
+            if i + 1 == num_buffers {
                 if let Some(ref fence) = fence {
                     let value_ptr = fence.0.clone();
                     let fence_block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
@@ -290,7 +697,6 @@ impl RawCommandQueue<Backend> for CommandQueue {
                 }
             }
             command_buffer.commit();
-            i += 1;
         }
     }
 
@@ -322,7 +728,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
     fn reset(&mut self) {
         if let Some(ref mut managed) = self.managed {
             for cmd_buffer in managed {
-                cmd_buffer.inner().reset(&self.queue);
+                cmd_buffer.inner().reset(&self.queue, false);
             }
         }
     }
@@ -330,12 +736,14 @@ impl pool::RawCommandPool<Backend> for CommandPool {
     fn allocate(&mut self, num: usize, _level: com::RawLevel) -> Vec<CommandBuffer> { //TODO: Implement secondary buffers
         let buffers: Vec<_> = (0..num).map(|_| CommandBuffer {
             inner: Arc::new({
-                // TODO: maybe use unretained command buffer for efficiency?
-                let command_buffer = self.queue.queue.new_command_buffer().to_owned();
-
                 UnsafeCell::new(CommandBufferInner {
-                    command_buffer,
-                    encoder_state: EncoderState::None,
+                    sink: CommandSink::Immediate {
+                        cmd_buffer: self.queue.queue.new_command_buffer().to_owned(),
+                        encoder_state: EncoderState::None,
+                    },
+                    device: unsafe {
+                        CommandQueue(self.queue.clone()).device().to_owned()
+                    },
                     viewport: None,
                     scissors: None,
                     render_pso: None,
@@ -365,14 +773,14 @@ impl pool::RawCommandPool<Backend> for CommandPool {
 
     /// Free command buffers which are allocated from this pool.
     unsafe fn free(&mut self, buffers: Vec<CommandBuffer>) {
-        for mut cmd_buf in buffers {
+        let managed = match self.managed {
+            Some(ref mut vec) => vec,
+            None => return,
+        };
+        for cmd_buf in buffers {
             //TODO: what else here?
-            let target = &*cmd_buf.inner().command_buffer;
-            let managed = match self.managed {
-                Some(ref mut vec) => vec,
-                None => continue,
-            };
-            match managed.iter_mut().position(|b| &*b.inner().command_buffer as *const metal::CommandBufferRef == target as *const metal::CommandBufferRef) {
+            let inner_ptr = cmd_buf.inner.get();
+            match managed.iter_mut().position(|b| inner_ptr == b.inner.get()) {
                 Some(index) => {
                     managed.swap_remove(index);
                 }
@@ -399,43 +807,39 @@ impl CommandBuffer {
         }
     }
 
-    fn encode_blit(&mut self) -> &metal::BlitCommandEncoderRef {
-        let inner = self.inner();
-        match inner.encoder_state {
-            EncoderState::None => {},
-            EncoderState::Blit(ref blit_encoder) => return blit_encoder,
-            EncoderState::Render(_) => panic!("invalid inside renderpass"),
-        }
-
-        let blit_encoder = inner.command_buffer.new_blit_command_encoder().to_owned();
-        inner.encoder_state = EncoderState::Blit(blit_encoder);
-        if let EncoderState::Blit(ref blit_encoder) = inner.encoder_state {
-            blit_encoder
-        } else {
-            unreachable!()
-        }
-    }
-
-    fn expect_render_pass(&self) -> &metal::RenderCommandEncoderRef {
-        if let EncoderState::Render(ref encoder) = self.inner_ref().encoder_state {
-            encoder
-        } else {
-            panic!("only valid inside renderpass")
-        }
-    }
-
+    #[inline]
     pub fn device(&self) -> &metal::DeviceRef {
-        unsafe {
-            msg_send![self.inner_ref().command_buffer, device]
-        }
+        &self.inner_ref().device
     }
 }
 
 impl com::RawCommandBuffer<Backend> for CommandBuffer {
-    fn begin(&mut self, _flags: com::CommandBufferFlags) { // TODO: Implement flags somehow
-        if let Some(ref queue) = self.queue {
-            unsafe { &mut *self.inner.get() }
-                .reset(queue);
+    fn begin(&mut self, flags: com::CommandBufferFlags) {
+        let inner = unsafe { &mut *self.inner.get() };
+        inner.reset_resources();
+
+        if flags.contains(com::CommandBufferFlags::ONE_TIME_SUBMIT) {
+            if let Some(ref queue) = self.queue {
+                inner.sink = CommandSink::Immediate {
+                    cmd_buffer: queue.queue.new_command_buffer().to_owned(),
+                    encoder_state: EncoderState::None,
+                };
+            }
+            //TODO: assert(CommandSink::Immediate);
+        } else {
+            let passes_storage = match inner.sink {
+                CommandSink::Immediate { .. } => {
+                    //TODO: release resources?
+                    Some(Vec::new())
+                }
+                CommandSink::Deferred { ref mut passes, .. } => {
+                    passes.clear();
+                    None
+                }
+            };
+            if let Some(passes) = passes_storage {
+                inner.sink = CommandSink::Deferred { passes, encoding: false };
+            }
         }
     }
 
@@ -443,9 +847,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.inner().stop_ecoding();
     }
 
-    fn reset(&mut self, _release_resources: bool) {
+    fn reset(&mut self, release_resources: bool) {
+        let queue = self.queue.as_ref()
+            .expect("unable to reset an individual command buffer from a pool that doesn't support that");
         unsafe { &mut *self.inner.get() }
-            .reset(self.queue.as_ref().unwrap());
+            .reset(queue, release_resources);
     }
 
     fn pipeline_barrier<'a, T>(
@@ -462,7 +868,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn fill_buffer(
         &mut self,
         _buffer: &native::Buffer,
-        _range: Range<u64>,
+        _range: Range<pso::BufferOffset>,
         _data: u32,
     ) {
         unimplemented!()
@@ -471,21 +877,26 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn update_buffer(
         &mut self,
         dst: &native::Buffer,
-        offset: u64,
+        offset: pso::BufferOffset,
         data: &[u8],
     ) {
-        let src = self.device().new_buffer_with_data(data.as_ptr() as _, data.len() as _, metal::MTLResourceOptions::StorageModePrivate);
-        let encoder = self.encode_blit();
-
-        unsafe {
-            msg_send![encoder,
-                copyFromBuffer: &*src
-                sourceOffset: 0 as NSUInteger
-                toBuffer: &*dst.raw
-                destinationOffset: offset as NSUInteger
-                size: data.len() as NSUInteger
-            ];
-        }
+        let inner = self.inner();
+        //TODO: allocate from command pool, don't retain automatically
+        let src = inner.device.new_buffer_with_data(
+            data.as_ptr() as _,
+            data.len() as _,
+            metal::MTLResourceOptions::StorageModePrivate,
+        );
+        let command = soft::BlitCommand::CopyBuffer {
+            src,
+            dst: dst.raw.clone(),
+            region: com::BufferCopy {
+                src: 0,
+                dst: offset,
+                size: data.len() as _,
+            },
+        };
+        inner.sink.blit_commands(iter::once(command));
     }
 
     fn clear_color_image_raw(
@@ -554,11 +965,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let buffer = view.buffer.raw.clone();
         let offset = view.offset;
         let index_type = map_index_type(view.index_type);
-        self.inner().index_buffer = Some((
+        self.inner().index_buffer = Some(IndexBuffer {
             buffer,
             offset,
             index_type,
-        ));
+        });
     }
 
     fn bind_vertex_buffers(&mut self, buffer_set: pso::VertexBufferSet<Backend>) {
@@ -570,13 +981,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         for (ref mut out, &(ref buffer, offset)) in buffers[inner.attribute_buffer_index..].iter_mut().zip(buffer_set.0.iter()) {
             **out = Some((buffer.raw.clone(), offset));
         }
-        //TODO: reuse the binding code from the cache to state between this and `begin_renderpass`
-        if let EncoderState::Render(ref encoder) = inner.encoder_state {
-            for (i, &(buffer, offset)) in buffer_set.0.iter().enumerate() {
-                let msl_buffer_index = inner.attribute_buffer_index + i;
-                encoder.set_vertex_buffer(msl_buffer_index as _, offset as _, Some(&buffer.raw));
+
+        let attribute_buffer_index = inner.attribute_buffer_index;
+        let commands = buffer_set.0.iter().enumerate().map(|(i, &(buffer, offset))| {
+            soft::RenderCommand::BindBuffer {
+                stage: pso::Stage::Vertex,
+                index: attribute_buffer_index + i,
+                buffer: Some(buffer.raw.clone()),
+                offset,
             }
-        }
+        });
+        inner.sink.pre_render_commands(commands);
     }
 
     fn set_viewports<T>(&mut self, vps: T)
@@ -600,9 +1015,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             zfar: vp.depth.end as f64,
         };
         inner.viewport = Some(viewport);
-        if let EncoderState::Render(ref encoder) = inner.encoder_state {
-            encoder.set_viewport(viewport);
-        }
+        let command = soft::RenderCommand::SetViewport(viewport);
+        inner.sink.pre_render_commands(iter::once(command));
     }
 
     fn set_scissors<T>(&mut self, rects: T)
@@ -624,9 +1038,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             height: rect.h as _,
         };
         inner.scissors = Some(scissor);
-        if let EncoderState::Render(ref encoder) = inner.encoder_state {
-            encoder.set_scissor_rect(scissor);
-        }
+        let command = soft::RenderCommand::SetScissor(scissor);
+        inner.sink.pre_render_commands(iter::once(command));
     }
 
     fn set_stencil_reference(&mut self, _front: com::StencilValue, _back: com::StencilValue) {
@@ -648,18 +1061,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::ClearValueRaw>,
     {
-        let inner = self.inner();
-
-        let encoder = unsafe {
-            match inner.encoder_state {
-                EncoderState::Render(_) => panic!("already in a renderpass"),
-                EncoderState::Blit(ref blit) => {
-                    blit.end_encoding();
-                },
-                EncoderState::None => {},
-            }
-            inner.encoder_state = EncoderState::None;
-
+        let descriptor = unsafe {
             // FIXME: subpasses
             let pass_descriptor: metal::RenderPassDescriptor = msg_send![frame_buffer.0, copy];
 
@@ -680,12 +1082,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 }
             }
 
-            inner.command_buffer
-                .new_render_command_encoder(&pass_descriptor)
-                .to_owned()
+            pass_descriptor
         };
 
-        inner.begin_render_pass(encoder);
+        self.inner().begin_render_pass(descriptor);
     }
 
     fn next_subpass(&mut self, _contents: com::SubpassContents) {
@@ -693,24 +1093,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn end_render_pass(&mut self) {
-        match self.inner().encoder_state {
-            EncoderState::Render(ref encoder) => {
-                encoder.end_encoding();
-            },
-            _ => panic!("not in a renderpass"),
-        }
-        self.inner().encoder_state = EncoderState::None;
+        self.inner().stop_ecoding();
     }
 
     fn bind_graphics_pipeline(&mut self, pipeline: &native::GraphicsPipeline) {
         let inner = self.inner();
         let pipeline_state = pipeline.raw.to_owned();
-        if let EncoderState::Render(ref encoder) = inner.encoder_state {
-            encoder.set_render_pipeline_state(&pipeline_state);
-            if let Some(ref depth_stencil_state) = pipeline.depth_stencil_state {
-                encoder.set_depth_stencil_state(depth_stencil_state);
-            }
-        }
+        let command = soft::RenderCommand::BindPipeline(pipeline_state.clone(), pipeline.depth_stencil_state.clone());
+        inner.sink.pre_render_commands(iter::once(command));
+
         inner.render_pso = Some(pipeline_state);
         inner.depth_stencil_state = pipeline.depth_stencil_state.as_ref().map(ToOwned::to_owned);
         inner.primitive_type = pipeline.primitive_type;
@@ -727,7 +1118,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T::Item: Borrow<native::DescriptorSet>,
     {
         use spirv_cross::{msl, spirv};
+
         let inner = self.inner();
+        let mut commands = Vec::new(); //TODO: re-use the storage
 
         for (set_index, desc_set) in sets.into_iter().enumerate() {
             let location_vs = msl::ResourceBindingLocation {
@@ -756,27 +1149,38 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             match *values {
                                 Sampler(ref samplers) => {
                                     inner.resources_vs.add_samplers(start, samplers.as_slice());
-                                    if let EncoderState::Render(ref encoder) = inner.encoder_state {
-                                        for (i, ref sampler) in samplers.iter().enumerate() {
-                                            encoder.set_vertex_sampler_state((start + i) as _, sampler.as_ref().map(|x| &**x));
+                                    commands.extend(samplers.iter().cloned().enumerate().map(|(i, sampler)| {
+                                        soft::RenderCommand::BindSampler {
+                                            stage: pso::Stage::Vertex,
+                                            index: start + i,
+                                            sampler,
                                         }
-                                    }
+                                    }));
                                 }
                                 Image(ref images) => {
                                     inner.resources_vs.add_textures(start, images.as_slice());
-                                    if let EncoderState::Render(ref encoder) = inner.encoder_state {
-                                        for (i, ref texture) in images.iter().enumerate() {
-                                            encoder.set_vertex_texture((start + i) as _, texture.as_ref().map(|&(ref texture, _)| &**texture));
+                                    commands.extend(images.iter().enumerate().map(|(i, texture)| {
+                                        soft::RenderCommand::BindTexture {
+                                            stage: pso::Stage::Vertex,
+                                            index: start + i,
+                                            texture: texture.as_ref().map(|&(ref texture, _)| texture.clone()),
                                         }
-                                    }
+                                    }));
                                 }
                                 Buffer(ref buffers) => {
-                                    for (i, ref bref) in buffers.iter().enumerate() {
-                                        if let Some((ref buffer, offset)) = **bref {
+                                    for (i, bref) in buffers.iter().enumerate() {
+                                        let (buffer, offset) = match *bref {
+                                            Some((ref buffer, offset)) => (Some(buffer.clone()), offset),
+                                            None => (None, 0),
+                                        };
+                                        commands.push(soft::RenderCommand::BindBuffer {
+                                            stage: pso::Stage::Vertex,
+                                            index: start + i,
+                                            buffer,
+                                            offset,
+                                        });
+                                        if let Some((ref buffer, offset)) = *bref {
                                             inner.resources_vs.add_buffer(start + i, buffer.as_ref(), offset as _);
-                                            if let EncoderState::Render(ref encoder) = inner.encoder_state {
-                                                encoder.set_vertex_buffer((start + i) as _,offset as _, Some(buffer.as_ref()));
-                                            }
                                         }
                                     }
                                 }
@@ -791,28 +1195,39 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             match *values {
                                 Sampler(ref samplers) => {
                                     inner.resources_fs.add_samplers(start, samplers.as_slice());
-                                    if let EncoderState::Render(ref encoder) = inner.encoder_state {
-                                        for (i, sampler) in samplers.iter().enumerate() {
-                                            encoder.set_fragment_sampler_state((start + i) as _, sampler.as_ref().map(|x| &**x));
+                                    commands.extend(samplers.iter().cloned().enumerate().map(|(i, sampler)| {
+                                        soft::RenderCommand::BindSampler {
+                                            stage: pso::Stage::Fragment,
+                                            index: start + i,
+                                            sampler,
                                         }
-                                    }
+                                    }));
                                 }
                                 Image(ref images) => {
                                     inner.resources_fs.add_textures(start, images.as_slice());
-                                    if let EncoderState::Render(ref encoder) = inner.encoder_state {
-                                        for (i, texture) in images.iter().enumerate() {
-                                            encoder.set_fragment_texture((start + i) as _, texture.as_ref().map(|&(ref texture, _)| &**texture));
+                                    commands.extend(images.iter().enumerate().map(|(i, texture)| {
+                                        soft::RenderCommand::BindTexture {
+                                            stage: pso::Stage::Fragment,
+                                            index: start + i,
+                                            texture: texture.as_ref().map(|&(ref texture, _)| texture.clone()),
                                         }
-                                    }
+                                    }));
                                 }
                                 Buffer(ref buffers) => {
-                                    for (i, ref bref) in buffers.iter().enumerate() {
-                                        if let Some((ref buffer, offset)) = **bref {
-                                            inner.resources_fs.add_buffer(start + i, buffer.as_ref(), offset as _);
-                                            if let EncoderState::Render(ref encoder) = inner.encoder_state {
-                                                encoder.set_fragment_buffer((start + i) as _,offset as _, Some(buffer.as_ref()));
-                                            }
-                                        }
+                                    for (i, bref) in buffers.iter().enumerate() {
+                                        let (buffer, offset) = match *bref {
+                                            Some((ref buffer, offset)) => {
+                                                inner.resources_fs.add_buffer(start + i, buffer.as_ref(), offset as _);
+                                                (Some(buffer.clone()), offset)
+                                            },
+                                            None => (None, 0),
+                                        };
+                                        commands.push(soft::RenderCommand::BindBuffer {
+                                            stage: pso::Stage::Fragment,
+                                            index: start + i,
+                                            buffer,
+                                            offset,
+                                        });
                                     }
                                 }
                             }
@@ -823,26 +1238,37 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     if stage_flags.contains(pso::ShaderStageFlags::VERTEX) {
                         let slot = layout.res_overrides[&location_vs].resource_id;
                         inner.resources_vs.add_buffer(slot as _, buffer, offset as _);
-                        if let EncoderState::Render(ref encoder) = inner.encoder_state {
-                            encoder.set_vertex_buffer(slot as _, offset as _, Some(buffer))
-                        }
+                        commands.push(soft::RenderCommand::BindBuffer {
+                            stage: pso::Stage::Vertex,
+                            index: slot as _,
+                            buffer: Some(buffer.clone()),
+                            offset,
+                        });
                     }
                     if stage_flags.contains(pso::ShaderStageFlags::FRAGMENT) {
                         let slot = layout.res_overrides[&location_fs].resource_id;
                         inner.resources_fs.add_buffer(slot as _, &buffer, offset as _);
-                        if let EncoderState::Render(ref encoder) = inner.encoder_state {
-                            encoder.set_fragment_buffer(slot as _, offset as _, Some(buffer))
-                        }
+                        commands.push(soft::RenderCommand::BindBuffer {
+                            stage: pso::Stage::Fragment,
+                            index: slot as _,
+                            buffer: Some(buffer.clone()),
+                            offset,
+                        });
                     }
                 }
             }
         }
+
+        inner.sink.pre_render_commands(commands.into_iter());
     }
 
     fn bind_compute_pipeline(&mut self, pipeline: &native::ComputePipeline) {
         let inner = self.inner();
-        inner.compute_pso = Some(pipeline.raw.to_owned());
+        inner.compute_pso = Some(pipeline.raw.clone());
         inner.work_group_size = pipeline.work_group_size;
+
+        let command = soft::ComputeCommand::BindPipeline(pipeline.raw.clone());
+        inner.sink.pre_compute_commands(iter::once(command));
     }
 
     fn bind_compute_descriptor_sets<'a, T>(
@@ -855,8 +1281,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T::Item: Borrow<native::DescriptorSet>,
     {
         use spirv_cross::{msl, spirv};
+
         let inner = self.inner();
         let resources = &mut inner.resources_cs;
+        let mut commands = Vec::new();
 
         for (set_index, desc_set) in sets.into_iter().enumerate() {
             let location_cs = msl::ResourceBindingLocation {
@@ -880,15 +1308,36 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             match *values {
                                 Sampler(ref samplers) => {
                                     resources.add_samplers(start, samplers.as_slice());
+                                    commands.extend(samplers.iter().cloned().enumerate().map(|(i, sampler)| {
+                                        soft::ComputeCommand::BindSampler {
+                                            index: start + i,
+                                            sampler,
+                                        }
+                                    }));
                                 }
                                 Image(ref images) => {
                                     resources.add_textures(start, images.as_slice());
+                                    commands.extend(images.iter().enumerate().map(|(i, texture)| {
+                                        soft::ComputeCommand::BindTexture {
+                                            index: start + i,
+                                            texture: texture.as_ref().map(|&(ref texture, _)| texture.clone()),
+                                        }
+                                    }));
                                 }
                                 Buffer(ref buffers) => {
-                                    for (i, ref bref) in buffers.iter().enumerate() {
-                                        if let Some((ref buffer, offset)) = **bref {
-                                            resources.add_buffer(start + i, buffer.as_ref(), offset as _);
-                                        }
+                                    for (i, bref) in buffers.iter().enumerate() {
+                                        let (buffer, offset) = match *bref {
+                                            Some((ref buffer, offset)) => {
+                                                resources.add_buffer(start + i, buffer.as_ref(), offset as _);
+                                                (Some(buffer.clone()), offset)
+                                            },
+                                            None => (None, 0),
+                                        };
+                                        commands.push(soft::ComputeCommand::BindBuffer {
+                                            index: start + i,
+                                            buffer,
+                                            offset,
+                                        });
                                     }
                                 }
                             }
@@ -903,29 +1352,39 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 }
             }
         }
+
+        inner.sink.pre_compute_commands(commands.into_iter());
     }
 
     fn dispatch(&mut self, x: u32, y: u32, z: u32) {
         let inner = self.inner();
-        let (encoder, wg_size) = inner.begin_compute();
 
-        let group_counts = MTLSize {
-            width: x as _,
-            height: y as _,
-            depth: z as _,
+        let command = soft::ComputeCommand::Dispatch {
+            wg_size: inner.begin_compute(),
+            wg_count: MTLSize {
+                width: x as _,
+                height: y as _,
+                depth: z as _,
+            },
         };
-        encoder.dispatch_thread_groups(group_counts, wg_size);
+        inner.sink.compute_commands(iter::once(command));
 
-        encoder.end_encoding();
+        //TODO: re-use compute encoders
+        inner.stop_ecoding();
     }
 
-    fn dispatch_indirect(&mut self, buffer: &native::Buffer, offset: u64) {
+    fn dispatch_indirect(&mut self, buffer: &native::Buffer, offset: pso::BufferOffset) {
         let inner = self.inner();
-        let (encoder, wg_size) = inner.begin_compute();
 
-        encoder.dispatch_thread_groups_indirect(&buffer.raw, offset, wg_size);
+        let command = soft::ComputeCommand::DispatchIndirect {
+            wg_size: inner.begin_compute(),
+            buffer: buffer.raw.clone(),
+            offset,
+        };
+        inner.sink.compute_commands(iter::once(command));
 
-        encoder.end_encoding();
+        //TODO: re-use compute encoders
+        inner.stop_ecoding();
     }
 
     fn copy_buffer<T>(
@@ -937,20 +1396,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::BufferCopy>,
     {
-        let encoder = self.encode_blit();
-
-        for region in regions {
-            let region = region.borrow();
-            unsafe {
-                msg_send![encoder,
-                    copyFromBuffer: &*src.raw
-                    sourceOffset: region.src as NSUInteger
-                    toBuffer: &*dst.raw
-                    destinationOffset: region.dst as NSUInteger
-                    size: region.size as NSUInteger
-                ]
+        let commands = regions.into_iter().map(|region| {
+            soft::BlitCommand::CopyBuffer {
+                src: src.raw.clone(),
+                dst: dst.raw.clone(),
+                region: region.borrow().clone(),
             }
-        }
+        });
+        self.inner().sink.blit_commands(commands);
     }
 
     fn copy_image<T>(
@@ -977,39 +1430,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::BufferImageCopy>,
     {
-        let encoder = self.encode_blit();
-        let extent = MTLSize {
-            width: dst.raw.width(),
-            height: dst.raw.height(),
-            depth: dst.raw.depth(),
-        };
         // FIXME: layout
-
-        for region in regions {
-            let region = region.borrow();
-            let image_offset = &region.image_offset;
-            let r = &region.image_layers;
-
-            for layer in r.layers.clone() {
-                let row_pitch = div(region.buffer_width, dst.block_dim.0 as _) * dst.bytes_per_block as u32;
-                let slice_pitch = div(region.buffer_height, dst.block_dim.1 as _) * row_pitch;
-
-                let offset = region.buffer_offset + slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
-                unsafe {
-                    msg_send![encoder,
-                        copyFromBuffer: &*src.raw
-                        sourceOffset: offset as NSUInteger
-                        sourceBytesPerRow: row_pitch as NSUInteger
-                        sourceBytesPerImage: slice_pitch as NSUInteger
-                        sourceSize: extent
-                        toTexture: &*dst.raw
-                        destinationSlice: layer as NSUInteger
-                        destinationLevel: r.level as NSUInteger
-                        destinationOrigin: MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ }
-                    ]
-                }
+        let commands = regions.into_iter().map(|region| {
+            soft::BlitCommand::CopyBufferToImage {
+                src: src.raw.clone(),
+                dst: dst.raw.clone(),
+                dst_desc: dst.format_desc.clone(),
+                region: region.borrow().clone(),
             }
-        }
+        });
+        self.inner().sink.blit_commands(commands);
     }
 
     fn copy_image_to_buffer<T>(
@@ -1022,39 +1452,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::BufferImageCopy>,
     {
-        let encoder = self.encode_blit();
-        let extent = MTLSize {
-            width: src.raw.width(),
-            height: src.raw.height(),
-            depth: src.raw.depth(),
-        };
         // FIXME: layout
-
-        for region in regions {
-            let region = region.borrow();
-            let image_offset = &region.image_offset;
-            let r = &region.image_layers;
-
-            for layer in r.layers.clone() {
-                let row_pitch = div(region.buffer_width, src.block_dim.0 as _) * src.bytes_per_block as u32;
-                let slice_pitch = div(region.buffer_height, src.block_dim.1 as _) * row_pitch;
-
-                let offset = region.buffer_offset + slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
-                unsafe {
-                    msg_send![encoder,
-                        copyFromTexture: &*src.raw
-                        sourceSlice: layer as NSUInteger
-                        sourceLevel: r.level as NSUInteger
-                        sourceOrigin: MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ }
-                        sourceSize: extent
-                        toBuffer: &*dst.raw
-                        destinationOffset: offset as NSUInteger
-                        destinationBytesPerRow: row_pitch as NSUInteger
-                        destinationBytesPerImage: slice_pitch as NSUInteger
-                    ]
-                }
+        let commands = regions.into_iter().map(|region| {
+            soft::BlitCommand::CopyImageToBuffer {
+                src: src.raw.clone(),
+                src_desc: src.format_desc.clone(),
+                dst: dst.raw.clone(),
+                region: region.borrow().clone(),
             }
-        }
+        });
+        self.inner().sink.blit_commands(commands);
     }
 
     fn draw(
@@ -1062,18 +1469,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         vertices: Range<VertexCount>,
         instances: Range<InstanceCount>,
     ) {
-        let primitive_type = self.inner().primitive_type;
-        let encoder = self.expect_render_pass();
-
-        unsafe {
-            msg_send![encoder,
-                drawPrimitives: primitive_type
-                vertexStart: vertices.start as NSUInteger
-                vertexCount: (vertices.end - vertices.start) as NSUInteger
-                instanceCount: (instances.end - instances.start) as NSUInteger
-                baseInstance: instances.start as NSUInteger
-            ];
-        }
+        let inner = self.inner();
+        let command = soft::RenderCommand::Draw {
+            primitive_type: inner.primitive_type,
+            vertices,
+            instances,
+        };
+        inner.sink.render_commands(iter::once(command));
     }
 
     fn draw_indexed(
@@ -1082,32 +1484,21 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         base_vertex: VertexOffset,
         instances: Range<InstanceCount>,
     ) {
-        let (buffer, offset, index_type) = self.inner_ref().index_buffer.as_ref().cloned().expect("must bind index buffer");
-        let primitive_type = self.inner_ref().primitive_type;
-        let encoder = self.expect_render_pass();
-        let index_offset = match index_type {
-            MTLIndexType::UInt16 => indices.start as u64 * 2,
-            MTLIndexType::UInt32 => indices.start as u64 * 4,
+        let inner = self.inner();
+        let command = soft::RenderCommand::DrawIndexed {
+            index: inner.index_buffer.clone().expect("must bind index buffer"),
+            primitive_type: inner.primitive_type,
+            indices,
+            base_vertex,
+            instances,
         };
-
-        unsafe {
-            msg_send![encoder,
-                drawIndexedPrimitives: primitive_type
-                indexCount: (indices.end - indices.start) as NSUInteger
-                indexType: index_type
-                indexBuffer: buffer
-                indexBufferOffset: (index_offset + offset) as NSUInteger
-                instanceCount: (instances.end - instances.start) as NSUInteger
-                baseVertex: base_vertex as NSUInteger
-                baseInstance: instances.start as NSUInteger
-            ];
-        }
+        inner.sink.render_commands(iter::once(command));
     }
 
     fn draw_indirect(
         &mut self,
         _buffer: &native::Buffer,
-        _offset: u64,
+        _offset: pso::BufferOffset,
         _draw_count: u32,
         _stride: u32,
     ) {
@@ -1117,7 +1508,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn draw_indexed_indirect(
         &mut self,
         _buffer: &native::Buffer,
-        _offset: u64,
+        _offset: pso::BufferOffset,
         _draw_count: u32,
         _stride: u32,
     ) {

@@ -99,7 +99,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn fill_buffer(
         &mut self,
         buffer: &B::Buffer,
-        range: Range<u64>,
+        range: Range<pso::BufferOffset>,
         data: u32,
     );
 
@@ -107,7 +107,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn update_buffer(
         &mut self,
         buffer: &B::Buffer,
-        offset: u64,
+        offset: pso::BufferOffset,
         data: &[u8],
     );
 
@@ -362,7 +362,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn dispatch(&mut self, x: u32, y: u32, z: u32);
 
     ///
-    fn dispatch_indirect(&mut self, buffer: &B::Buffer, offset: u64);
+    fn dispatch_indirect(&mut self, buffer: &B::Buffer, offset: pso::BufferOffset);
 
     ///
     fn copy_buffer<T>(
@@ -427,7 +427,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn draw_indirect(
         &mut self,
         buffer: &B::Buffer,
-        offset: u64,
+        offset: pso::BufferOffset,
         draw_count: u32,
         stride: u32,
     );
@@ -436,7 +436,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn draw_indexed_indirect(
         &mut self,
         buffer: &B::Buffer,
-        offset: u64,
+        offset: pso::BufferOffset,
         draw_count: u32,
         stride: u32,
     );
