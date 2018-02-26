@@ -57,7 +57,6 @@ struct TestResults {
 
 #[derive(Default)]
 struct Disabilities {
-    no_command_buffer_reuse: bool,
 }
 
 
@@ -108,7 +107,7 @@ impl Harness {
     fn run<I: hal::Instance>(
         &self,
         instance: I,
-        disabilities: Disabilities,
+        _disabilities: Disabilities,
     ) -> usize {
         use hal::{PhysicalDevice};
 
@@ -186,11 +185,6 @@ impl Harness {
                     println!("FAIL {:?}", guard.row(row));
                     results.fail += 1;
                 }
-
-                if disabilities.no_command_buffer_reuse {
-                    println!("Command buffer re-use is not ready, exiting");
-                    return results.fail;
-                }
             }
         }
 
@@ -232,7 +226,6 @@ fn main() {
         println!("Warding Metal:");
         let instance = gfx_backend_metal::Instance::create("warden", 1);
         num_failures += harness.run(instance, Disabilities {
-            no_command_buffer_reuse: true,
             .. Disabilities::default()
         });
     }

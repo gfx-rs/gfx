@@ -2,8 +2,7 @@ use {Backend, QueueFamily};
 use {native, conversions};
 use device::{Device, PhysicalDevice};
 
-use std::cell::RefCell;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 
 use hal::{self, format, image};
 use hal::{Backbuffer, SwapchainConfig};
@@ -19,6 +18,7 @@ use core_graphics::base::CGFloat;
 use core_graphics::geometry::CGRect;
 use cocoa::foundation::{NSRect};
 use io_surface::{self, IOSurface};
+
 
 pub struct Surface(pub(crate) Arc<SurfaceInner>);
 

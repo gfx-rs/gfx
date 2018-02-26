@@ -215,28 +215,15 @@ impl CommandSink {
         I: Iterator<Item = soft::ComputeCommand>,
     {
         match *self {
-            CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state } => {
-                let current = match mem::replace(encoder_state, EncoderState::None) {
-                    EncoderState::None => None,
-                    EncoderState::Render(enc) => {
-                        enc.end_encoding();
-                        None
-                    },
-                    EncoderState::Blit(enc) => {
-                        enc.end_encoding();
-                        None
-                    },
-                    EncoderState::Compute(enc) => Some(enc),
-                };
-                let encoder = current.unwrap_or_else(|| {
-                    cmd_buffer.new_compute_command_encoder().to_owned()
-                });
-
-                for command in commands {
-                    exec_compute(&encoder, &command);
+            CommandSink::Immediate { ref mut encoder_state, .. } => {
+                match *encoder_state {
+                    EncoderState::Compute(ref encoder) => {
+                        for command in commands {
+                            exec_compute(encoder, &command);
+                        }
+                    }
+                    _ => panic!("Expected to be in compute pass"),
                 }
-
-                *encoder_state = EncoderState::Compute(encoder);
             }
             CommandSink::Deferred { ref mut passes, .. } => {
                 if let Some(&mut soft::Pass::Compute(ref mut list)) = passes.last_mut() {
@@ -387,6 +374,7 @@ impl CommandBufferInner {
     }
 
     fn begin_compute(&mut self) -> MTLSize {
+        self.stop_ecoding(); //TODO: don't do this
         let mut commands = Vec::new();
 
         commands.extend(self.compute_pso.clone().map(soft::ComputeCommand::BindPipeline));
@@ -420,12 +408,24 @@ impl CommandBufferInner {
             })
         );
 
+        match self.sink {
+            CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state } => {
+                let encoder = cmd_buffer.new_compute_command_encoder();
+                for command in commands {
+                    exec_compute(encoder, &command);
+                }
+                *encoder_state = EncoderState::Compute(encoder.to_owned());
+            }
+            CommandSink::Deferred { ref mut passes, ref mut encoding } => {
+                *encoding = true;
+                passes.push(soft::Pass::Compute(commands));
+            }
+        }
+
         self.work_group_size
     }
 }
 
-unsafe impl Send for CommandBuffer {
-}
 
 enum EncoderState {
     None,
@@ -491,7 +491,7 @@ fn exec_render(encoder: &metal::RenderCommandEncoderRef, command: &soft::RenderC
             }
         }
         Cmd::Draw { primitive_type, ref vertices, ref instances } => unsafe {
-            msg_send![encoder,
+            msg_send![*encoder,
                 drawPrimitives: primitive_type
                 vertexStart: vertices.start as NSUInteger
                 vertexCount: (vertices.end - vertices.start) as NSUInteger
@@ -505,11 +505,11 @@ fn exec_render(encoder: &metal::RenderCommandEncoderRef, command: &soft::RenderC
                 MTLIndexType::UInt32 => 4,
             };
             unsafe {
-                msg_send![encoder,
+                msg_send![*encoder,
                     drawIndexedPrimitives: primitive_type
                     indexCount: (indices.end - indices.start) as NSUInteger
                     indexType: index.index_type
-                    indexBuffer: &index.buffer
+                    indexBuffer: index.buffer.as_ref()
                     indexBufferOffset: (index_offset + index.offset) as NSUInteger
                     instanceCount: (instances.end - instances.start) as NSUInteger
                     baseVertex: base_vertex as NSUInteger
@@ -524,10 +524,10 @@ fn exec_blit(encoder: &metal::BlitCommandEncoderRef, command: &soft::BlitCommand
     use soft::BlitCommand as Cmd;
     match *command {
         Cmd::CopyBuffer { ref src, ref dst, ref region } => unsafe {
-            msg_send![encoder,
-                copyFromBuffer: src
+            msg_send![*encoder,
+                copyFromBuffer: src.as_ref()
                 sourceOffset: region.src as NSUInteger
-                toBuffer: dst
+                toBuffer: dst.as_ref()
                 destinationOffset: region.dst as NSUInteger
                 size: region.size as NSUInteger
             ];
@@ -544,13 +544,13 @@ fn exec_blit(encoder: &metal::BlitCommandEncoderRef, command: &soft::BlitCommand
 
             for layer in r.layers.clone() {
                 let offset = region.buffer_offset + slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
-                msg_send![encoder,
-                    copyFromBuffer: src
+                msg_send![*encoder,
+                    copyFromBuffer: src.as_ref()
                     sourceOffset: offset as NSUInteger
                     sourceBytesPerRow: row_pitch as NSUInteger
                     sourceBytesPerImage: slice_pitch as NSUInteger
                     sourceSize: extent
-                    toTexture: dst
+                    toTexture: dst.as_ref()
                     destinationSlice: layer as NSUInteger
                     destinationLevel: r.level as NSUInteger
                     destinationOrigin: MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ }
@@ -569,13 +569,13 @@ fn exec_blit(encoder: &metal::BlitCommandEncoderRef, command: &soft::BlitCommand
 
             for layer in r.layers.clone() {
                 let offset = region.buffer_offset + slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
-                msg_send![encoder,
-                    copyFromTexture: src
+                msg_send![*encoder,
+                    copyFromTexture: src.as_ref()
                     sourceSlice: layer as NSUInteger
                     sourceLevel: r.level as NSUInteger
                     sourceOrigin: MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ }
                     sourceSize: extent
-                    toBuffer: dst
+                    toBuffer: dst.as_ref()
                     destinationOffset: offset as NSUInteger
                     destinationBytesPerRow: row_pitch as NSUInteger
                     destinationBytesPerImage: slice_pitch as NSUInteger
@@ -617,18 +617,21 @@ fn record_commands(command_buf: &metal::CommandBufferRef, passes: &[soft::Pass])
                 for command in list {
                     exec_render(&encoder, command);
                 }
+                encoder.end_encoding();
             }
             soft::Pass::Blit(ref list) => {
                 let encoder = command_buf.new_blit_command_encoder();
                 for command in list {
                     exec_blit(&encoder, command);
                 }
+                encoder.end_encoding();
             }
             soft::Pass::Compute(ref list) => {
                 let encoder = command_buf.new_compute_command_encoder();
                 for command in list {
                     exec_compute(&encoder, command);
                 }
+                encoder.end_encoding();
             }
         }
     }
