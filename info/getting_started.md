@@ -1,12 +1,22 @@
 # Getting Started
 
-## Dependencies
+## Vulkan Dependencies
+
+First, install the x11 and Vulkan dev libraries.
 
 For Fedora
 
 ```bash
 sudo dnf install -y libX11-devel vulkan
 ```
+
+For Ubuntu
+
+```bash
+sudo apt install -y libx11-dev libvulkan-dev
+```
+
+For Linux, a Vulkan compatible driver must also be installed. For example, the open source ``` mesa-vulkan-drivers ``` for Intel or Radeon gpu's. The proprietary Nvidia drivers support Vulkan out of the box but, as of time of writing, Nouveau users are currenty limited to OpenGL.
 
 ## Usage
 
