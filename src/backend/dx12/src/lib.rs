@@ -603,9 +603,8 @@ impl Instance {
 
             if winerror::SUCCEEDED(hr) {
                 unsafe { (*debug_controller).EnableDebugLayer() };
+                unsafe { (*debug_controller).Release(); }
             }
-
-            unsafe { (*debug_controller).Release(); }
         }
 
         // Create DXGI factory
