@@ -345,6 +345,10 @@ impl hal::Device<Backend> for Device {
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
         unimplemented!()
     }
+
+    fn id(&self) -> device::DeviceId {
+        unimplemented!()
+    }
 }
 
 #[derive(Debug)]

@@ -24,13 +24,17 @@ use ash::extensions as ext;
 use ash::version::{EntryV1_0, DeviceV1_0, InstanceV1_0, V1_0};
 use ash::vk;
 
+use byteorder::{LittleEndian, ReadBytesExt};
+
 use hal::{format, memory, queue};
 use hal::{Features, Limits, PatchSize, QueueType};
 use hal::error::{DeviceCreationError, HostExecutionError};
+use hal::device::DeviceId;
 
 use std::{fmt, mem, ptr};
 use std::borrow::{Borrow, BorrowMut};
 use std::ffi::{CStr, CString};
+use std::io::Cursor;
 use std::sync::Arc;
 
 mod command;
@@ -388,8 +392,15 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             )
         }).unwrap();
 
+        // pipeline_cache_uuid is a uuid representing the device, so truncating it probably
+        // won't cause collisions. TODO: Return error? Very unlikely to fail.
+        debug_assert!(ash::vk::types::VK_UUID_SIZE > 8);
+        let mut reader = Cursor::new(self.properties.pipeline_cache_uuid);
+        let device_uuid = reader.read_u64::<LittleEndian>().unwrap() as usize;
+
         let device = Device {
             raw: Arc::new(RawDevice(device_raw, features)),
+            _id: DeviceId(device_uuid),
         };
 
         let device_arc = device.raw.clone();
@@ -704,6 +715,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
 
 pub struct Device {
     raw: Arc<RawDevice>,
+    _id: DeviceId,
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]

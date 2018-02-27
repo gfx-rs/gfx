@@ -135,6 +135,8 @@ fn main() {
             surface.supports_queue_family(family)
         }).unwrap();
 
+    println!("Device ID: {:?}", device.id());
+
     let mut command_pool = device.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty(), 16);
     let mut queue = &mut queue_group.queues[0];
 

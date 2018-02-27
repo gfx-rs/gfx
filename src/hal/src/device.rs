@@ -101,6 +101,12 @@ pub enum ShaderError {
 #[derive(Clone, Debug, PartialEq)]
 pub struct FramebufferError;
 
+/// A locally unique identifier for the Device.
+/// Note that this value will change each time the program is run.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct DeviceId(pub usize);
+
 /// # Overview
 ///
 /// A `Device` is responsible for creating and managing resources for the physical device
@@ -576,4 +582,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     ///
     /// Host access to all queues needs to be **externally** sycnhronized!
     fn wait_idle(&self) -> Result<(), HostExecutionError>;
+
+    /// Get a locally unique identifier for this device
+    fn id(&self) -> DeviceId;
 }
