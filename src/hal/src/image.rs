@@ -11,7 +11,7 @@ use std::error::Error;
 use std::fmt;
 use std::ops::Range;
 
-use format::{self, AspectFlags};
+use format;
 use pso::Comparison;
 
 
@@ -21,6 +21,18 @@ pub type Layer = u16;
 pub type Level = u8;
 /// Maximum accessible mipmap level of a image.
 pub const MAX_LEVEL: Level = 15;
+
+///
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Offset {
+    ///
+    pub x: i32,
+    ///
+    pub y: i32,
+    ///
+    pub z: i32,
+}
 
 /// Pure texture object creation error.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -354,7 +366,7 @@ bitflags!(
         const TRANSIENT_ATTACHMENT = 0x40;
         ///
         const INPUT_ATTACHMENT = 0x80;
-        
+
     }
 );
 
@@ -588,7 +600,7 @@ pub type Subresource = (Level, Layer);
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SubresourceLayers {
     /// Included aspects: color/depth/stencil
-    pub aspects: AspectFlags,
+    pub aspects: format::Aspects,
     /// Selected mipmap level
     pub level: Level,
     /// Included array levels
@@ -600,7 +612,7 @@ pub struct SubresourceLayers {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SubresourceRange {
     /// Included aspects: color/depth/stencil
-    pub aspects: AspectFlags,
+    pub aspects: format::Aspects,
     /// Included mipmap levels
     pub levels: Range<Level>,
     /// Included array levels

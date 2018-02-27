@@ -8,9 +8,9 @@ use device::Extent;
 use query::{Query, QueryControl, QueryId};
 use queue::capability::{Graphics, GraphicsOrCompute, Supports};
 use super::{
-    CommandBuffer, RawCommandBuffer, RenderPassInlineEncoder,
-    RenderPassSecondaryEncoder, Shot, Level, Primary,
-    ClearColorRaw, Offset,
+    CommandBuffer, RawCommandBuffer,
+    RenderPassInlineEncoder, RenderPassSecondaryEncoder,
+    Shot, Level, Primary, ClearColorRaw,
 };
 
 
@@ -151,11 +151,11 @@ pub struct ImageResolve {
     ///
     pub src_subresource: image::SubresourceLayers,
     ///
-    pub src_offset: Offset,
+    pub src_offset: image::Offset,
     ///
     pub dst_subresource: image::SubresourceLayers,
     ///
-    pub dst_offset: Offset,
+    pub dst_offset: image::Offset,
     ///
     pub extent: Extent,
 }
@@ -167,11 +167,11 @@ pub struct ImageBlit {
     ///
     pub src_subresource: image::SubresourceLayers,
     ///
-    pub src_bounds: Range<Offset>,
+    pub src_bounds: Range<image::Offset>,
     ///
     pub dst_subresource: image::SubresourceLayers,
     ///
-    pub dst_bounds: Range<Offset>,
+    pub dst_bounds: Range<image::Offset>,
 }
 
 impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a, B, C, S, L> {

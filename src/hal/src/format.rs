@@ -4,7 +4,7 @@
 bitflags!(
     ///
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct AspectFlags: u8 {
+    pub struct Aspects: u8 {
         /// Color aspect.
         const COLOR = 0x1;
         /// Depth aspect.
@@ -31,7 +31,7 @@ pub struct FormatDesc {
     /// For uncompressed formats these are always (1, 1).
     pub dim: (u8, u8),
     /// Format aspects
-    pub aspects: AspectFlags,
+    pub aspects: Aspects,
 }
 
 /// Description of the bits distribution of a format.
@@ -203,7 +203,7 @@ macro_rules! surface_types {
                 match *self {
                     $( SurfaceType::$name => FormatDesc {
                         bits: $total,
-                        aspects: $(AspectFlags::$aspect)|*,
+                        aspects: $(Aspects::$aspect)|*,
                         dim: $dim,
                     }, )*
                 }
@@ -545,7 +545,7 @@ impl Format {
     }
 
     /// Retuns aspect flags of the format.
-    pub fn aspect_flags(self) -> AspectFlags {
+    pub fn aspects(self) -> Aspects {
         self.base_format()
             .0
             .desc()
@@ -554,17 +554,17 @@ impl Format {
 
     /// Returns if the format has a color aspect.
     pub fn is_color(self) -> bool {
-        self.aspect_flags().contains(AspectFlags::COLOR)
+        self.aspects().contains(Aspects::COLOR)
     }
 
     /// Returns if the format has a depth aspect.
     pub fn is_depth(self) -> bool {
-        self.aspect_flags().contains(AspectFlags::DEPTH)
+        self.aspects().contains(Aspects::DEPTH)
     }
 
     /// Returns if the format has a stencil aspect.
     pub fn is_stencil(self) -> bool {
-        self.aspect_flags().contains(AspectFlags::STENCIL)
+        self.aspects().contains(Aspects::STENCIL)
     }
 }
 

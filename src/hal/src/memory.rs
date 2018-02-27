@@ -62,9 +62,24 @@ bitflags!(
     }
 );
 
+bitflags!(
+    /// Barrier dependency flags.
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    pub struct Dependencies: u32 {
+        ///
+        const BY_REGION    = 0x1;
+        ///
+        const VIEW_LOCAL   = 0x2;
+        ///
+        const DEVICE_GROUP = 0x4;
+    }
+);
+
 #[allow(missing_docs)] //TODO
 #[derive(Clone, Debug)]
 pub enum Barrier<'a, B: Backend> {
+    AllBuffers(Range<buffer::Access>),
+    AllImages(Range<image::Access>),
     Buffer {
         states: Range<buffer::State>,
         target: &'a B::Buffer,

@@ -1,8 +1,9 @@
 use std::borrow::Borrow;
 use std::ops::{Range, Deref, DerefMut};
 use std::marker::PhantomData;
-use {pso, Backend, IndexCount, InstanceCount, VertexCount, VertexOffset};
-use buffer::IndexBufferView;
+
+use {buffer, pso};
+use {Backend, IndexCount, InstanceCount, VertexCount, VertexOffset};
 use queue::{Supports, Graphics};
 use super::{
     ColorValue, StencilValue, Rect, Viewport,
@@ -43,16 +44,16 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
         self.0.draw_indexed(indices, base_vertex, instances)
     }
     ///
-    pub fn draw_indirect(&mut self, buffer: &B::Buffer, offset: pso::BufferOffset, draw_count: u32, stride: u32) {
+    pub fn draw_indirect(&mut self, buffer: &B::Buffer, offset: buffer::Offset, draw_count: u32, stride: u32) {
         self.0.draw_indirect(buffer, offset, draw_count, stride)
     }
     ///
-    pub fn draw_indexed_indirect(&mut self, buffer: &B::Buffer, offset: pso::BufferOffset, draw_count: u32, stride: u32) {
+    pub fn draw_indexed_indirect(&mut self, buffer: &B::Buffer, offset: buffer::Offset, draw_count: u32, stride: u32) {
         self.0.draw_indexed_indirect(buffer, offset, draw_count, stride)
     }
 
     /// Bind index buffer view.
-    pub fn bind_index_buffer(&mut self, ibv: IndexBufferView<B>) {
+    pub fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<B>) {
         self.0.bind_index_buffer(ibv)
     }
 

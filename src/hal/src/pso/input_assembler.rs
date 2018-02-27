@@ -1,6 +1,7 @@
 //! Input Assembler(IA) stage description.
 
 use format;
+use buffer::Offset;
 use {Backend, Primitive};
 
 /// Shader binding location.
@@ -13,8 +14,6 @@ pub type ElemOffset = u32;
 pub type ElemStride = u32;
 /// The number of instances between each subsequent attribute value
 pub type InstanceRate = u8;
-/// An offset inside a vertex buffer, in bytes.
-pub type BufferOffset = u64;
 
 /// A struct element descriptor.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
@@ -85,7 +84,7 @@ impl InputAssemblerDesc {
 #[derive(Clone, Debug)]
 pub struct VertexBufferSet<'a, B: Backend>(
     /// Array of buffer handles with offsets in them
-    pub Vec<(&'a B::Buffer, BufferOffset)>,
+    pub Vec<(&'a B::Buffer, Offset)>,
 );
 
 impl<'a, B: Backend> VertexBufferSet<'a, B> {
