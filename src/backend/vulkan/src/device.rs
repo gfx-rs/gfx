@@ -1420,6 +1420,7 @@ impl d::Device<B> for Device {
         &self,
         surface: &mut w::Surface,
         config: SwapchainConfig,
+        _old_swapchain: Option<w::Swapchain>,
     ) -> (w::Swapchain, Backbuffer<B>) {
         let functor = ext::Swapchain::new(&surface.raw.instance.0, &self.raw.0)
             .expect("Unable to query swapchain function");
@@ -1481,6 +1482,10 @@ impl d::Device<B> for Device {
             .collect();
 
         (swapchain, Backbuffer::Images(images))
+    }
+
+    fn destroy_swapchain(&self, swapchain: w::Swapchain) {
+        unsafe { swapchain.functor.destroy_swapchain_khr(swapchain.raw, None); }
     }
 
     fn destroy_query_pool(&self, pool: n::QueryPool) {

@@ -2259,6 +2259,7 @@ impl d::Device<B> for Device {
         &self,
         surface: &mut w::Surface,
         config: hal::SwapchainConfig,
+        _old_swapchain: Option<w::Swapchain>,
     ) -> (w::Swapchain, hal::Backbuffer<B>) {
         let mut swap_chain: *mut dxgi1_2::IDXGISwapChain1 = ptr::null_mut();
 
@@ -2372,6 +2373,10 @@ impl d::Device<B> for Device {
         };
 
         (swapchain, hal::Backbuffer::Images(images))
+    }
+
+    fn destroy_swapchain(&self, _swapchain: w::Swapchain) {
+        // Just drop
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
