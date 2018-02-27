@@ -581,9 +581,9 @@ impl hal::Device<Backend> for Device {
         let pass_descriptor = &pipeline_desc.subpass;
 
         if pipeline_layout.attribute_buffer_index as usize + pipeline_desc.vertex_buffers.len() > self.private_caps.max_buffers_per_stage {
-            error!("Too many buffers inputs of the vertex stage: {} attributes + {} resources",
+            let msg = format!("Too many buffers inputs of the vertex stage: {} attributes + {} resources",
                 pipeline_desc.vertex_buffers.len(), pipeline_layout.attribute_buffer_index);
-            return Err(pso::CreationError::Other);
+            return Err(pso::CreationError::Shader(ShaderError::InterfaceMismatch(msg)));
         }
         // FIXME: lots missing
 
@@ -613,23 +613,25 @@ impl hal::Device<Backend> for Device {
 
         // Other shaders
         if pipeline_desc.shaders.hull.is_some() {
-            error!("Metal tessellation shaders are not supported");
-            return Err(pso::CreationError::Other);
+            return Err(pso::CreationError::Shader(ShaderError::UnsupportedStage(pso::Stage::Hull)));
         }
         if pipeline_desc.shaders.domain.is_some() {
-            error!("Metal tessellation shaders are not supported");
-            return Err(pso::CreationError::Other);
+            return Err(pso::CreationError::Shader(ShaderError::UnsupportedStage(pso::Stage::Domain)));
         }
         if pipeline_desc.shaders.geometry.is_some() {
-            error!("Metal geometry shaders are not supported");
-            return Err(pso::CreationError::Other);
+            return Err(pso::CreationError::Shader(ShaderError::UnsupportedStage(pso::Stage::Geometry)));
         }
 
         // Copy color target info from Subpass
         for (i, attachment) in pass_descriptor.main_pass.attachments.iter().enumerate() {
-            let (mtl_format, is_depth) = attachment.format.and_then(map_format).expect("unsupported color format for Metal");
+            let (mtl_format, is_depth) = attachment.format
+                .and_then(map_format)
+                .expect("unsupported color format");
             if !is_depth {
-                let descriptor = pipeline.color_attachments().object_at(i).expect("too many color attachments");
+                let descriptor = pipeline
+                    .color_attachments()
+                    .object_at(i)
+                    .expect("too many color attachments");
                 descriptor.set_pixel_format(mtl_format);
             } else {
                 pipeline.set_depth_attachment_pixel_format(mtl_format);
@@ -638,7 +640,10 @@ impl hal::Device<Backend> for Device {
 
         // Blending
         for (i, color_desc) in pipeline_desc.blender.targets.iter().enumerate() {
-            let descriptor = pipeline.color_attachments().object_at(i).expect("too many color attachments");
+            let descriptor = pipeline
+                .color_attachments()
+                .object_at(i)
+                .expect("too many color attachments");
             descriptor.set_write_mask(map_write_mask(color_desc.0));
 
             if let pso::BlendState::On { ref color, ref alpha } = color_desc.1 {
@@ -697,7 +702,8 @@ impl hal::Device<Backend> for Device {
             }
         }
         for (i, &AttributeDesc { binding, element, ..}) in pipeline_desc.attributes.iter().enumerate() {
-            let mtl_vertex_format = map_vertex_format(element.format).expect("unsupported vertex format for Metal");
+            let mtl_vertex_format = map_vertex_format(element.format)
+                .expect("unsupported vertex format");
             let mtl_attribute_desc = vertex_descriptor
                 .attributes()
                 .object_at(i)
@@ -1247,8 +1253,6 @@ impl hal::Device<Backend> for Device {
     {
         let base_format = format.base_format();
         let format_desc = base_format.0.desc();
-        let bytes_per_block = (format_desc.bits / 8) as _;
-        let block_dim = format_desc.dim;
         let (mtl_format, _) = map_format(format).ok_or(image::CreationError::Format(format))?;
 
         let descriptor = metal::TextureDescriptor::new();
@@ -1267,9 +1271,8 @@ impl hal::Device<Backend> for Device {
         descriptor.set_usage(map_texture_usage(usage));
 
         Ok(n::UnboundImage {
-            desc: descriptor,
-            bytes_per_block,
-            block_dim,
+            texture_desc: descriptor,
+            format_desc,
         })
     }
 
@@ -1284,8 +1287,8 @@ impl hal::Device<Backend> for Device {
                 MTLResourceOptions::StorageModeManaged | MTLResourceOptions::CPUCacheModeWriteCombined,
                 MTLResourceOptions::StorageModePrivate,
             ].iter() {
-                image.desc.set_resource_options(options);
-                let requirements = self.device.heap_texture_size_and_align(&image.desc);
+                image.texture_desc.set_resource_options(options);
+                let requirements = self.device.heap_texture_size_and_align(&image.texture_desc);
                 max_size = cmp::max(max_size, requirements.size);
                 max_alignment = cmp::max(max_alignment, requirements.align);
             }
@@ -1311,26 +1314,25 @@ impl hal::Device<Backend> for Device {
                 let resource_options = resource_options_from_storage_and_cache(
                     heap.storage_mode(),
                     heap.cpu_cache_mode());
-                image.desc.set_resource_options(resource_options);
-                heap.new_texture(&image.desc)
+                image.texture_desc.set_resource_options(resource_options);
+                heap.new_texture(&image.texture_desc)
                     .unwrap_or_else(|| {
                         // TODO: disable hazard tracking?
-                        self.device.new_texture(&image.desc)
+                        self.device.new_texture(&image.texture_desc)
                     })
             },
             n::MemoryHeap::Emulated { memory_type } => {
                 // TODO: disable hazard tracking?
                 let memory_properties = self.memory_types[memory_type].properties;
                 let resource_options = map_memory_properties_to_options(memory_properties);
-                image.desc.set_resource_options(resource_options);
-                self.device.new_texture(&image.desc)
+                image.texture_desc.set_resource_options(resource_options);
+                self.device.new_texture(&image.texture_desc)
             }
         };
 
         Ok(n::Image {
             raw,
-            bytes_per_block: image.bytes_per_block,
-            block_dim: image.block_dim,
+            format_desc: image.format_desc,
         })
     }
 

@@ -401,11 +401,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn fill_buffer(&mut self, _: &(), _: Range<u64>, _: u32) {
+    fn fill_buffer(&mut self, _: &(), _: Range<pso::BufferOffset>, _: u32) {
         unimplemented!()
     }
 
-    fn update_buffer(&mut self, _: &(), _: u64, _: &[u8]) {
+    fn update_buffer(&mut self, _: &(), _: pso::BufferOffset, _: &[u8]) {
         unimplemented!()
     }
 
@@ -553,7 +553,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn dispatch_indirect(&mut self, _: &(), _: u64) {
+    fn dispatch_indirect(&mut self, _: &(), _: pso::BufferOffset) {
         unimplemented!()
     }
 
@@ -621,14 +621,14 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn draw_indirect(&mut self, _: &(), _: u64, _: u32, _: u32) {
+    fn draw_indirect(&mut self, _: &(), _: pso::BufferOffset, _: u32, _: u32) {
         unimplemented!()
     }
 
     fn draw_indexed_indirect(
         &mut self,
         _: &(),
-        _: u64,
+        _: pso::BufferOffset,
         _: u32,
         _: u32,
     ) {

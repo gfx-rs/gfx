@@ -1,6 +1,7 @@
 use std::borrow::Borrow;
 
 use Backend;
+use pso::BufferOffset;
 use queue::capability::{Compute, Supports};
 use super::{CommandBuffer, RawCommandBuffer, Shot, Level};
 
@@ -29,7 +30,7 @@ impl<'a, B: Backend, C: Supports<Compute>, S: Shot, L: Level> CommandBuffer<'a, 
     }
 
     ///
-    pub fn dispatch_indirect(&mut self, buffer: &B::Buffer, offset: u64) {
+    pub fn dispatch_indirect(&mut self, buffer: &B::Buffer, offset: BufferOffset) {
         self.raw.dispatch_indirect(buffer, offset)
     }
 

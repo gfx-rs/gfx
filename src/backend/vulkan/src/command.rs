@@ -103,7 +103,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let flags = if release_resources {
             vk::COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT
         } else {
-            vk::CommandBufferResetFlags ::empty()
+            vk::CommandBufferResetFlags::empty()
         };
 
         assert_eq!(Ok(()),
@@ -235,7 +235,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn fill_buffer(
         &mut self,
         buffer: &n::Buffer,
-        range: Range<u64>,
+        range: Range<pso::BufferOffset>,
         data: u32,
     ) {
         unsafe {
@@ -252,7 +252,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn update_buffer(
         &mut self,
         buffer: &n::Buffer,
-        offset: u64,
+        offset: pso::BufferOffset,
         data: &[u8],
     ) {
         unsafe {
@@ -634,7 +634,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: u64) {
+    fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: pso::BufferOffset) {
         unsafe {
             self.device.0.cmd_dispatch_indirect(
                 self.raw,
@@ -787,7 +787,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn draw_indirect(
         &mut self,
         buffer: &n::Buffer,
-        offset: u64,
+        offset: pso::BufferOffset,
         draw_count: u32,
         stride: u32,
     ) {
@@ -805,7 +805,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn draw_indexed_indirect(
         &mut self,
         buffer: &n::Buffer,
-        offset: u64,
+        offset: pso::BufferOffset,
         draw_count: u32,
         stride: u32,
     ) {

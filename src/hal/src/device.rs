@@ -93,6 +93,8 @@ pub enum ShaderError {
     MissingEntryPoint(String),
     /// Mismatch of interface (e.g missing push constants).
     InterfaceMismatch(String),
+    /// Shader stage is not supported.
+    UnsupportedStage(pso::Stage),
 }
 
 /// An error from creating a framebuffer.

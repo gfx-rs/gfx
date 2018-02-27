@@ -2,8 +2,7 @@ use {Backend, QueueFamily};
 use {native, conversions};
 use device::{Device, PhysicalDevice};
 
-use std::cell::RefCell;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 
 use hal::{self, format, image};
 use hal::{Backbuffer, SwapchainConfig};
@@ -19,6 +18,7 @@ use core_graphics::base::CGFloat;
 use core_graphics::geometry::CGRect;
 use cocoa::foundation::{NSRect};
 use io_surface::{self, IOSurface};
+
 
 pub struct Surface(pub(crate) Arc<SurfaceInner>);
 
@@ -99,8 +99,9 @@ impl Device {
         surface: &mut Surface,
         config: SwapchainConfig,
     ) -> (Swapchain, Backbuffer<Backend>) {
-        let (mtl_format, cv_format, bytes_per_block) = match config.color_format {
-            format::Format::Rgba8Srgb => (MTLPixelFormat::RGBA8Unorm_sRGB, kCVPixelFormatType_32RGBA, 4),
+        let format_desc = config.color_format.base_format().0.desc();
+        let (mtl_format, cv_format) = match config.color_format {
+            format::Format::Rgba8Srgb => (MTLPixelFormat::RGBA8Unorm_sRGB, kCVPixelFormatType_32RGBA),
             _ => panic!("unsupported backbuffer format"), // TODO: more formats
         };
 
@@ -148,8 +149,7 @@ impl Device {
                 ];
                 native::Image {
                     raw: mapped_texture,
-                    bytes_per_block,
-                    block_dim: (1, 1),
+                    format_desc,
                 }
             }).collect();
 

@@ -56,7 +56,7 @@ impl BufferSlice {
 #[derive(Clone, Debug)]
 pub enum Command {
     Dispatch(u32, u32, u32),
-    DispatchIndirect(gl::types::GLuint, u64),
+    DispatchIndirect(gl::types::GLuint, pso::BufferOffset),
     Draw {
         primitive: gl::types::GLenum,
         vertices: Range<hal::VertexCount>,
@@ -66,7 +66,7 @@ pub enum Command {
         primitive: gl::types::GLenum,
         index_type: gl::types::GLenum,
         index_count: hal::IndexCount,
-        index_buffer_offset: u64,
+        index_buffer_offset: pso::BufferOffset,
         base_vertex: hal::VertexOffset,
         instances: Range<hal::InstanceCount>,
     },
@@ -525,11 +525,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         // TODO
     }
 
-    fn fill_buffer(&mut self, _buffer: &n::Buffer, _range: Range<u64>, _data: u32) {
+    fn fill_buffer(&mut self, _buffer: &n::Buffer, _range: Range<pso::BufferOffset>, _data: u32) {
         unimplemented!()
     }
 
-    fn update_buffer(&mut self, _buffer: &n::Buffer, _offset: u64, _data: &[u8]) {
+    fn update_buffer(&mut self, _buffer: &n::Buffer, _offset: pso::BufferOffset, _data: &[u8]) {
         unimplemented!()
     }
 
@@ -698,10 +698,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
         let needed_length = vbs.0.iter().map(|vb| vb.1).max().unwrap() + 1;
 
-        self.cache.vertex_buffers.resize(needed_length, 0);
+        self.cache.vertex_buffers.resize(needed_length as usize, 0);
 
         for vb in vbs.0 {
-            self.cache.vertex_buffers[vb.1] = vb.0.raw;
+            self.cache.vertex_buffers[vb.1 as usize] = vb.0.raw;
         }
     }
 
@@ -858,7 +858,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         self.push_cmd(Command::Dispatch(x, y, z));
     }
 
-    fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: u64) {
+    fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: pso::BufferOffset) {
         self.push_cmd(Command::DispatchIndirect(buffer.raw, offset));
     }
 
@@ -1010,7 +1010,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn draw_indirect(
         &mut self,
         _buffer: &n::Buffer,
-        _offset: u64,
+        _offset: pso::BufferOffset,
         _draw_count: u32,
         _stride: u32,
     ) {
@@ -1020,7 +1020,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn draw_indexed_indirect(
         &mut self,
         _buffer: &n::Buffer,
-        _offset: u64,
+        _offset: pso::BufferOffset,
         _draw_count: u32,
         _stride: u32,
     ) {

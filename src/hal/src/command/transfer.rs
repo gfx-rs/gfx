@@ -4,7 +4,7 @@ use Backend;
 use {format, image};
 use device::Extent;
 use memory::Barrier;
-use pso::PipelineStage;
+use pso::{BufferOffset, PipelineStage};
 use queue::capability::{Supports, Transfer};
 use super::{CommandBuffer, RawCommandBuffer, Shot, Level};
 
@@ -26,11 +26,11 @@ pub struct Offset {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BufferCopy {
     /// Buffer region source offset.
-    pub src: u64,
+    pub src: BufferOffset,
     /// Buffer region destination offset.
-    pub dst: u64,
+    pub dst: BufferOffset,
     /// Region size.
-    pub size: u64,
+    pub size: BufferOffset,
 }
 
 ///
@@ -58,7 +58,7 @@ pub struct ImageCopy {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BufferImageCopy {
     /// Buffer ofset in bytes.
-    pub buffer_offset: u64,
+    pub buffer_offset: BufferOffset,
     /// Width of a buffer 'row' in texels.
     pub buffer_width: u32,
     /// Height of a buffer 'image slice' in texels.
@@ -90,7 +90,7 @@ impl<'a, B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<'a,
     pub fn fill_buffer(
         &mut self,
         buffer: &B::Buffer,
-        range: Range<u64>,
+        range: Range<BufferOffset>,
         data: u32,
     ) {
         self.raw.fill_buffer(buffer, range, data)
@@ -113,7 +113,7 @@ impl<'a, B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<'a,
     pub fn update_buffer(
         &mut self,
         buffer: &B::Buffer,
-        offset: u64,
+        offset: BufferOffset,
         data: &[u8],
     ) {
         self.raw.update_buffer(buffer, offset, data)
