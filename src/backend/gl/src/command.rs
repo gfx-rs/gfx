@@ -2,8 +2,7 @@
 
 use gl;
 
-use hal::{self, command, image, memory, pass, pso, query, ColorSlot};
-use hal::buffer::IndexBufferView;
+use hal::{self, buffer, command, image, memory, pass, pso, query, ColorSlot};
 use hal::format::ChannelType;
 
 use {native as n, Backend};
@@ -55,8 +54,8 @@ impl BufferSlice {
 ///
 #[derive(Clone, Debug)]
 pub enum Command {
-    Dispatch(u32, u32, u32),
-    DispatchIndirect(gl::types::GLuint, pso::BufferOffset),
+    Dispatch(hal::WorkGroupCount),
+    DispatchIndirect(gl::types::GLuint, buffer::Offset),
     Draw {
         primitive: gl::types::GLenum,
         vertices: Range<hal::VertexCount>,
@@ -66,7 +65,7 @@ pub enum Command {
         primitive: gl::types::GLenum,
         index_type: gl::types::GLenum,
         index_count: hal::IndexCount,
-        index_buffer_offset: pso::BufferOffset,
+        index_buffer_offset: buffer::Offset,
         base_vertex: hal::VertexOffset,
         instances: Range<hal::InstanceCount>,
     },
@@ -517,6 +516,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn pipeline_barrier<'a, T>(
         &mut self,
         _stages: Range<hal::pso::PipelineStage>,
+        _dependencies: memory::Dependencies,
         _barriers: T,
     ) where
         T: IntoIterator,
@@ -525,11 +525,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         // TODO
     }
 
-    fn fill_buffer(&mut self, _buffer: &n::Buffer, _range: Range<pso::BufferOffset>, _data: u32) {
+    fn fill_buffer(&mut self, _buffer: &n::Buffer, _range: Range<buffer::Offset>, _data: u32) {
         unimplemented!()
     }
 
-    fn update_buffer(&mut self, _buffer: &n::Buffer, _offset: pso::BufferOffset, _data: &[u8]) {
+    fn update_buffer(&mut self, _buffer: &n::Buffer, _offset: buffer::Offset, _data: &[u8]) {
         unimplemented!()
     }
 
@@ -681,7 +681,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn bind_index_buffer(&mut self, ibv: IndexBufferView<Backend>) {
+    fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
         // TODO: how can we incorporate the buffer offset?
         if ibv.offset > 0 {
             warn!("Non-zero index buffer offset currently not handled.");
@@ -854,11 +854,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         // TODO
     }
 
-    fn dispatch(&mut self, x: u32, y: u32, z: u32) {
-        self.push_cmd(Command::Dispatch(x, y, z));
+    fn dispatch(&mut self, count: hal::WorkGroupCount) {
+        self.push_cmd(Command::Dispatch(count));
     }
 
-    fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: pso::BufferOffset) {
+    fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: buffer::Offset) {
         self.push_cmd(Command::DispatchIndirect(buffer.raw, offset));
     }
 
@@ -1010,7 +1010,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn draw_indirect(
         &mut self,
         _buffer: &n::Buffer,
-        _offset: pso::BufferOffset,
+        _offset: buffer::Offset,
         _draw_count: u32,
         _stride: u32,
     ) {
@@ -1020,7 +1020,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn draw_indexed_indirect(
         &mut self,
         _buffer: &n::Buffer,
-        _offset: pso::BufferOffset,
+        _offset: buffer::Offset,
         _draw_count: u32,
         _stride: u32,
     ) {
@@ -1093,7 +1093,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 /// `push_cmd`, but this is needed when the caller would like to perform a
 /// partial borrow to `self`. For example, iterating through a field on
 /// `self` and calling `self.push_cmd` per iteration.
-fn push_cmd_internal(id: &u64, memory: &mut Arc<Mutex<pool::BufferMemory>>, buffer: &mut BufferSlice, cmd: Command) {
+fn push_cmd_internal(id: &u64, memory: &mut Arc<Mutex<BufferMemory>>, buffer: &mut BufferSlice, cmd: Command) {
     let mut memory = memory
         .try_lock()
         .expect("Trying to record a command buffers, while memory is in-use.");
