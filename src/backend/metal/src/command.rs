@@ -102,11 +102,15 @@ enum CommandSink {
     },
     Deferred {
         passes: Vec<soft::Pass>,
-        encoding: bool,
+        is_encoding: bool,
     },
 }
 
 impl CommandSink {
+    /// Issue provided (state-setting) commands only when there is already
+    /// a render pass being actively encoded.
+    /// The caller is expected to change the cached state accordingly, so these commands
+    /// are going to be issued when a next pass starts, if not at this very moment.
     fn pre_render_commands<I>(&mut self, commands: I)
     where
         I: Iterator<Item = soft::RenderCommand>,
@@ -117,7 +121,7 @@ impl CommandSink {
                     exec_render(encoder, &command);
                 }
             }
-            CommandSink::Deferred { ref mut passes, encoding: true } => {
+            CommandSink::Deferred { ref mut passes, is_encoding: true } => {
                 if let Some(&mut soft::Pass::Render(_, ref mut list)) = passes.last_mut() {
                     list.extend(commands);
                 }
@@ -126,6 +130,7 @@ impl CommandSink {
         }
     }
 
+    /// Issue provided render commands, expecting that we are encoding a render pass.
     fn render_commands<I>(&mut self, commands: I)
     where
         I: Iterator<Item = soft::RenderCommand>,
@@ -141,8 +146,8 @@ impl CommandSink {
                     _ => panic!("Expected to be in render encoding state!")
                 }
             }
-            CommandSink::Deferred { ref mut passes, encoding } => {
-                assert!(encoding);
+            CommandSink::Deferred { ref mut passes, is_encoding } => {
+                assert!(is_encoding);
                 match passes.last_mut() {
                     Some(&mut soft::Pass::Render(_, ref mut list)) => {
                         list.extend(commands);
@@ -153,6 +158,8 @@ impl CommandSink {
         }
     }
 
+    /// Issue provided blit commands. This function doesn't expect an active blit pass,
+    /// it will automatically start one when needed.
     fn blit_commands<I>(&mut self, commands: I)
     where
         I: Iterator<Item = soft::BlitCommand>,
@@ -191,6 +198,10 @@ impl CommandSink {
         }
     }
 
+    /// Issue provided (state-setting) commands only when there is already
+    /// a compute pass being actively encoded.
+    /// The caller is expected to change the cached state accordingly, so these commands
+    /// are going to be issued when a next pass starts, if not at this very moment.
     fn pre_compute_commands<I>(&mut self, commands: I)
     where
         I: Iterator<Item = soft::ComputeCommand>,
@@ -201,7 +212,7 @@ impl CommandSink {
                     exec_compute(encoder, &command);
                 }
             }
-            CommandSink::Deferred { ref mut passes, encoding: true } => {
+            CommandSink::Deferred { ref mut passes, is_encoding: true } => {
                 if let Some(&mut soft::Pass::Compute(ref mut list)) = passes.last_mut() {
                     list.extend(commands);
                 }
@@ -210,6 +221,7 @@ impl CommandSink {
         }
     }
 
+    /// Issue provided compute commands, expecting that we are encoding a compute pass.
     fn compute_commands<I>(&mut self, commands: I)
     where
         I: Iterator<Item = soft::ComputeCommand>,
@@ -288,7 +300,7 @@ impl CommandBufferInner {
         self.reset_resources();
     }
 
-    fn stop_ecoding(&mut self) {
+    fn stop_encoding(&mut self) {
         match self.sink {
             CommandSink::Immediate { ref mut encoder_state, .. } => {
                 match mem::replace(encoder_state, EncoderState::None)  {
@@ -304,14 +316,14 @@ impl CommandBufferInner {
                     }
                 }
             }
-            CommandSink::Deferred { ref mut encoding, .. } => {
-                *encoding = false;
+            CommandSink::Deferred { ref mut is_encoding, .. } => {
+                *is_encoding = false;
             }
         }
     }
 
     fn begin_render_pass(&mut self, descriptor: metal::RenderPassDescriptor) {
-        self.stop_ecoding();
+        self.stop_encoding();
 
         // TODO: re-use storage
         let mut commands = Vec::new();
@@ -366,15 +378,20 @@ impl CommandBufferInner {
                 }
                 *encoder_state = EncoderState::Render(encoder.to_owned());
             }
-            CommandSink::Deferred { ref mut passes, ref mut encoding } => {
-                *encoding = true;
+            CommandSink::Deferred { ref mut passes, ref mut is_encoding } => {
+                *is_encoding = true;
                 passes.push(soft::Pass::Render(descriptor, commands));
             }
         }
     }
 
+    /// Start a compute encoder and flush the current state into it,
+    /// since Metal doesn't inherit state between passes, and it needs
+    /// dispatches to be contained within compute passes.
+    ///
+    /// Return the current work group size.
     fn begin_compute(&mut self) -> MTLSize {
-        self.stop_ecoding(); //TODO: don't do this
+        self.stop_encoding(); //TODO: don't do this
         let mut commands = Vec::new();
 
         commands.extend(self.compute_pso.clone().map(soft::ComputeCommand::BindPipeline));
@@ -416,8 +433,8 @@ impl CommandBufferInner {
                 }
                 *encoder_state = EncoderState::Compute(encoder.to_owned());
             }
-            CommandSink::Deferred { ref mut passes, ref mut encoding } => {
-                *encoding = true;
+            CommandSink::Deferred { ref mut passes, ref mut is_encoding } => {
+                *is_encoding = true;
                 passes.push(soft::Pass::Compute(commands));
             }
         }
@@ -504,6 +521,8 @@ fn exec_render(encoder: &metal::RenderCommandEncoderRef, command: &soft::RenderC
                 MTLIndexType::UInt16 => 2,
                 MTLIndexType::UInt32 => 4,
             };
+            // Metal requires `indexBufferOffset` alignment of 4
+            assert_eq!((index_offset + index.offset) & 3, 0);
             unsafe {
                 msg_send![*encoder,
                     drawIndexedPrimitives: primitive_type
@@ -841,13 +860,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 }
             };
             if let Some(passes) = passes_storage {
-                inner.sink = CommandSink::Deferred { passes, encoding: false };
+                inner.sink = CommandSink::Deferred { passes, is_encoding: false };
             }
         }
     }
 
     fn finish(&mut self) {
-        self.inner().stop_ecoding();
+        self.inner().stop_encoding();
     }
 
     fn reset(&mut self, release_resources: bool) {
@@ -1096,7 +1115,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn end_render_pass(&mut self) {
-        self.inner().stop_ecoding();
+        self.inner().stop_encoding();
     }
 
     fn bind_graphics_pipeline(&mut self, pipeline: &native::GraphicsPipeline) {
@@ -1373,7 +1392,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         inner.sink.compute_commands(iter::once(command));
 
         //TODO: re-use compute encoders
-        inner.stop_ecoding();
+        inner.stop_encoding();
     }
 
     fn dispatch_indirect(&mut self, buffer: &native::Buffer, offset: pso::BufferOffset) {
@@ -1387,7 +1406,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         inner.sink.compute_commands(iter::once(command));
 
         //TODO: re-use compute encoders
-        inner.stop_ecoding();
+        inner.stop_encoding();
     }
 
     fn copy_buffer<T>(
