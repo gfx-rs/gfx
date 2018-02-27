@@ -69,10 +69,19 @@ lazy_static! {
     pub static ref VK_ENTRY: Result<Entry<V1_0>, LoadingError> = Entry::new();
 }
 
-pub struct RawInstance(pub ash::Instance<V1_0>);
+pub struct RawInstance(pub ash::Instance<V1_0>, Option<(ext::DebugReport, vk::DebugReportCallbackEXT)>);
 impl Drop for RawInstance {
     fn drop(&mut self) {
-        unsafe { self.0.destroy_instance(None); }
+        unsafe {
+            #[cfg(debug_assertions)]
+            {
+                if let Some((ref ext, callback)) = self.1 {
+                    ext.destroy_debug_report_callback_ext(callback, None);
+                }
+            }
+
+            self.0.destroy_instance(None);
+        }
     }
 }
 
@@ -81,9 +90,6 @@ pub struct Instance {
 
     /// Supported extensions of this instance.
     pub extensions: Vec<&'static str>,
-
-    // TODO: move into `RawInstance`, destroy in `drop`
-    _debug_report: Option<(ext::DebugReport, vk::DebugReportCallbackEXT)>,
 }
 
 fn map_queue_type(flags: vk::QueueFlags) -> QueueType {
@@ -234,9 +240,8 @@ impl Instance {
         let debug_report = None;
 
         Instance {
-            raw: Arc::new(RawInstance(instance)),
+            raw: Arc::new(RawInstance(instance, debug_report)),
             extensions,
-            _debug_report: debug_report,
         }
     }
 }
