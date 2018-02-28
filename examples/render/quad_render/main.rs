@@ -104,7 +104,7 @@ fn main() {
     ).unwrap();
 
     let image_range = gfx::image::SubresourceRange {
-        aspects: f::AspectFlags::COLOR,
+        aspects: f::Aspects::COLOR,
         levels: 0 .. 1,
         layers: 0 .. 1,
     };
@@ -226,11 +226,11 @@ fn main() {
             buffer_width: row_pitch / image_stride as u32,
             buffer_height: height as u32,
             image_layers: gfx::image::SubresourceLayers {
-                aspects: f::AspectFlags::COLOR,
+                aspects: f::Aspects::COLOR,
                 level: 0,
                 layers: 0 .. 1,
             },
-            image_offset: command::Offset { x: 0, y: 0, z: 0 },
+            image_offset: i::Offset { x: 0, y: 0, z: 0 },
             image_extent: d::Extent { width, height, depth: 1 },
         }]);
 
