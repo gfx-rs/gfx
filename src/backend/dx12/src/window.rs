@@ -93,6 +93,9 @@ pub struct Swapchain {
     pub(crate) frame_queue: VecDeque<usize>,
     #[allow(dead_code)]
     pub(crate) rtv_heap: n::DescriptorHeap,
+    // need to associate presentable (backbuffer) images with swapchain so they can be dropped properly
+    // when the swapchain is destroyed
+    pub(crate) backbuffer_images: Vec<n::Image>,
 }
 
 impl hal::Swapchain<Backend> for Swapchain {

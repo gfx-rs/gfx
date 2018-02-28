@@ -2224,8 +2224,8 @@ impl d::Device<B> for Device {
         // empty
     }
 
-    fn destroy_image(&self, image: n::Image) {
-        unsafe { (*image.resource).Release(); }
+    fn destroy_image(&self, _image: n::Image) {
+       //  should be freed alongside swapchain in #destroy_swapchain
     }
 
     fn destroy_image_view(&self, _view: n::ImageView) {
@@ -2370,13 +2370,20 @@ impl d::Device<B> for Device {
             next_frame: 0,
             frame_queue: VecDeque::new(),
             rtv_heap,
+            backbuffer_images: images,
         };
 
         (swapchain, hal::Backbuffer::Images(images))
     }
 
-    fn destroy_swapchain(&self, _swapchain: w::Swapchain) {
-        // Just drop
+    fn destroy_swapchain(&self, swapchain: w::Swapchain) {
+        // need to also free presentable images that are associated with this swapchain here
+        // (instead of doing it in #destroy_image)
+        unsafe {
+            for image in swapchain.backbuffer_images {
+                (*image.resource).Release();
+            }
+        }
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
