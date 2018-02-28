@@ -95,7 +95,7 @@ pub struct Swapchain {
     pub(crate) rtv_heap: n::DescriptorHeap,
     // need to associate presentable (backbuffer) images with swapchain so they can be dropped properly
     // when the swapchain is destroyed
-    pub(crate) backbuffer_images: Vec<n::Image>,
+    pub(crate) backbuffer_images: &'static Vec<n::Image>,
 }
 
 impl hal::Swapchain<Backend> for Swapchain {

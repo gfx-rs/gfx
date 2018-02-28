@@ -2370,7 +2370,7 @@ impl d::Device<B> for Device {
             next_frame: 0,
             frame_queue: VecDeque::new(),
             rtv_heap,
-            backbuffer_images: images,
+            backbuffer_images: &images,
         };
 
         (swapchain, hal::Backbuffer::Images(images))
