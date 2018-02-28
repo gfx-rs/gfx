@@ -1,7 +1,7 @@
 use hal;
 use memory::Memory;
 
-pub use hal::format::AspectFlags;
+pub use hal::format::Aspects;
 pub use hal::image::{
     CreationError, Kind, AaMode, Size, Level, Layer, Dimensions,
     SamplerInfo, ViewError, Usage,
@@ -11,7 +11,7 @@ pub use hal::image::{
 #[allow(missing_docs)]
 #[derive(Debug)]
 pub struct Info {
-    pub aspects: AspectFlags,
+    pub aspects: Aspects,
     pub usage: Usage,
     pub kind: Kind,
     pub mip_levels: Level,

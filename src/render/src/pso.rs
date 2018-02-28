@@ -4,11 +4,10 @@ use std::borrow::Borrow;
 use std::mem;
 use std::marker::PhantomData;
 
-use {hal, handle};
-use hal::image::{self, ImageLayout};
+use {hal, format, handle};
+use hal::image::ImageLayout;
 use hal::pass::{AttachmentOps, AttachmentLoadOp, AttachmentStoreOp};
 
-use format::{self, Format};
 use {Backend, Device, Primitive, Supports, Transfer, Graphics, Encoder};
 
 pub use hal::pso::{Rasterizer, CreationError, InstanceRate};
@@ -48,7 +47,7 @@ pub trait Bind<B: Backend>: BindDesc {
     fn require<'a>(
         &'a Self::Handle,
         &mut Vec<(&'a handle::raw::Buffer<B>, hal::buffer::State)>,
-        &mut Vec<(&'a handle::raw::Image<B>, image::Subresource, hal::image::State)>,
+        &mut Vec<(&'a handle::raw::Image<B>, hal::image::Subresource, hal::image::State)>,
         &mut handle::Bag<B>,
     );
 }
@@ -77,7 +76,7 @@ macro_rules! define_descriptors {
                 fn require<'a>(
                     handle: &'a Self::Handle,
                     buffers: &mut Vec<(&'a handle::raw::Buffer<B>, hal::buffer::State)>,
-                    images: &mut Vec<(&'a handle::raw::Image<B>, image::Subresource, hal::image::State)>,
+                    images: &mut Vec<(&'a handle::raw::Image<B>, hal::image::Subresource, hal::image::State)>,
                     others: &mut handle::Bag<B>
                 ) {
                     T::require(handle, buffers, images, others)
@@ -122,13 +121,13 @@ impl<B: Backend> Bind<B> for SampledImage {
     fn require<'a>(
         view: &'a Self::Handle,
         _: &mut Vec<(&'a handle::raw::Buffer<B>, hal::buffer::State)>,
-        images: &mut Vec<(&'a handle::raw::Image<B>, image::Subresource, hal::image::State)>,
+        images: &mut Vec<(&'a handle::raw::Image<B>, hal::image::Subresource, hal::image::State)>,
         _: &mut handle::Bag<B>,
     ) {
         let img = view.info();
         let levels = img.info().mip_levels;
         let layers = img.info().kind.num_layers();
-        let state = (image::Access::SHADER_READ, ImageLayout::ShaderReadOnlyOptimal);
+        let state = (hal::image::Access::SHADER_READ, ImageLayout::ShaderReadOnlyOptimal);
         for level in 0..levels {
             for layer in 0..layers {
                 images.push((img, (level, layer), state));
@@ -156,7 +155,7 @@ impl<B: Backend> Bind<B> for Sampler {
     fn require<'a>(
         sampler: &'a Self::Handle,
         _: &mut Vec<(&'a handle::raw::Buffer<B>, hal::buffer::State)>,
-        _: &mut Vec<(&'a handle::raw::Image<B>, image::Subresource, hal::image::State)>,
+        _: &mut Vec<(&'a handle::raw::Image<B>, hal::image::Subresource, hal::image::State)>,
         others: &mut handle::Bag<B>,
     ) {
         others.add(sampler.clone());
@@ -259,11 +258,11 @@ pub trait Component<'a, B: Backend> {
     fn require<'b>(
         &'b Self::Data,
         &mut Vec<(&'b handle::raw::Buffer<B>, hal::buffer::State)>,
-        &mut Vec<(&'b handle::raw::Image<B>, image::Subresource, hal::image::State)>,
+        &mut Vec<(&'b handle::raw::Image<B>, hal::image::Subresource, hal::image::State)>,
         &mut handle::Bag<B>,
     ) where 'a: 'b {}
 
-    fn vertex_buffer<'b>(&'b Self::Data) -> Option<(&'b B::Buffer, hal::pso::BufferOffset)>
+    fn vertex_buffer<'b>(&'b Self::Data) -> Option<(&'b B::Buffer, hal::buffer::Offset)>
         where 'a: 'b
     {
         None
@@ -277,7 +276,7 @@ pub trait Component<'a, B: Backend> {
 }
 
 pub struct Attachment {
-    pub format: Format,
+    pub format: format::Format,
     pub ops: AttachmentOps,
     pub stencil_ops: AttachmentOps,
     pub required_layout: ImageLayout,
@@ -313,14 +312,14 @@ where
     fn require<'b>(
         data: &'b Self::Data,
         _: &mut Vec<(&'b handle::raw::Buffer<B>, hal::buffer::State)>,
-        images: &mut Vec<(&'b handle::raw::Image<B>, image::Subresource, hal::image::State)>,
+        images: &mut Vec<(&'b handle::raw::Image<B>, hal::image::Subresource, hal::image::State)>,
         _: &mut handle::Bag<B>,
     ) where 'a: 'b {
         let img = data.as_ref().info();
         let levels = img.info().mip_levels;
         let layers = img.info().kind.num_layers();
         // TODO: READ not always necessary
-        let state = (image::Access::COLOR_ATTACHMENT_READ | image::Access::COLOR_ATTACHMENT_WRITE,
+        let state = (hal::image::Access::COLOR_ATTACHMENT_READ | hal::image::Access::COLOR_ATTACHMENT_WRITE,
             ImageLayout::ColorAttachmentOptimal);
         for level in 0..levels {
             for layer in 0..layers {
@@ -331,7 +330,7 @@ where
 }
 
 pub trait Structure: Sized {
-    fn elements() -> Vec<hal::pso::Element<Format>>;
+    fn elements() -> Vec<hal::pso::Element<format::Format>>;
 }
 
 /// Helper trait to support variable instance rate.
@@ -391,13 +390,13 @@ impl<'a, B, T, I> Component<'a, B> for VertexBuffer<T, I>
     fn require<'b>(
         data: &'b Self::Data,
         buffers: &mut Vec<(&'b handle::raw::Buffer<B>, hal::buffer::State)>,
-        _: &mut Vec<(&'b handle::raw::Image<B>, image::Subresource, hal::image::State)>,
+        _: &mut Vec<(&'b handle::raw::Image<B>, hal::image::Subresource, hal::image::State)>,
         _: &mut handle::Bag<B>,
     ) where 'a: 'b {
         buffers.push((data.as_ref(), hal::buffer::Access::VERTEX_BUFFER_READ));
     }
 
-    fn vertex_buffer<'b>(data: &'b Self::Data) -> Option<(&'b B::Buffer, hal::pso::BufferOffset)>
+    fn vertex_buffer<'b>(data: &'b Self::Data) -> Option<(&'b B::Buffer, hal::buffer::Offset)>
         where 'a: 'b
     {
         // TODO: offset

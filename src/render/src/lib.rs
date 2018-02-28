@@ -256,7 +256,7 @@ impl<B: Backend, C> Context<B, C>
                 let handle = handle::inner::Image::without_garbage(
                     raw,
                     image::Info {
-                        aspects: format::AspectFlags::COLOR,
+                        aspects: format::Aspects::COLOR,
                         usage: image::Usage::TRANSFER_SRC | image::Usage::COLOR_ATTACHMENT,
                         kind: surface.kind(),
                         mip_levels: 1,

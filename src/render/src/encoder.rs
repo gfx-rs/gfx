@@ -7,8 +7,8 @@ use std::collections::{HashMap, HashSet};
 
 use hal::{self, buffer as b, image as i, CommandPool};
 use hal::command::CommandBuffer;
-use hal::format::AspectFlags;
-use hal::memory::Barrier;
+use hal::format::Aspects;
+use hal::memory::{Barrier, Dependencies};
 use hal::pso::PipelineStage;
 
 use memory::{Provider, Dependency, cast_slice};
@@ -211,7 +211,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             }
         }
         let stage_transition = self.pipeline_stage..self.pipeline_stage;
-        self.buffer.pipeline_barrier(stage_transition, barriers);
+        self.buffer.pipeline_barrier(stage_transition, Dependencies::empty(), barriers);
     }
 
     fn init_image<'b>(
@@ -324,7 +324,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         }
         let current_stage = mem::replace(&mut self.pipeline_stage, stage);
         if (current_stage != stage) || !barriers.is_empty() {
-            self.buffer.pipeline_barrier(current_stage..stage, barriers);
+            self.buffer.pipeline_barrier(current_stage..stage, Dependencies::empty(), barriers);
         }
     }
 
@@ -348,7 +348,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             }
         }
         let stage_transition = self.pipeline_stage..PipelineStage::BOTTOM_OF_PIPE;
-        self.buffer.pipeline_barrier(stage_transition, barriers);
+        self.buffer.pipeline_barrier(stage_transition, Dependencies::empty(), barriers);
     }
 
     // TODO: fill buffer
@@ -616,7 +616,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         let layout = self.require_clear_state(image);
         //TODO
         let range = i::SubresourceRange {
-            aspects: AspectFlags::COLOR,
+            aspects: Aspects::COLOR,
             levels: 0 .. 1,
             layers: 0 .. 1,
         };
@@ -644,7 +644,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         let layout = self.require_clear_state(image);
         //TODO
         let range = i::SubresourceRange {
-            aspects: AspectFlags::DEPTH | AspectFlags::STENCIL,
+            aspects: Aspects::DEPTH | Aspects::STENCIL,
             levels: 0 .. 1,
             layers: 0 .. 1,
         };
