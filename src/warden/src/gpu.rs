@@ -517,7 +517,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                     }
                     raw::Resource::DescriptorSetLayout { ref bindings } => {
                         let layout = device.create_descriptor_set_layout(bindings);
-                        let binding_starts = bindings.iter().map(|dsb| dsb.binding).collect();
+                        let binding_starts = bindings.iter().map(|dsb| dsb.bindings.start).collect();
                         resources.desc_set_layouts.insert(name.clone(), (binding_starts, layout));
                     }
                     raw::Resource::DescriptorPool { capacity, ref ranges } => {
@@ -547,26 +547,26 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         resources.desc_sets.insert(name.clone(), desc_set);
                         // fill it up
                         let set = &resources.desc_sets[name];
-                        let res_buffers = &resources.buffers;
-                        // pre-allocate the buffers
-                        let desc_buffers = data.iter().flat_map(|range| match *range {
-                            raw::DescriptorRange::StorageBuffers(ref names) => {
-                                names.iter().map(|s| (&res_buffers[s].handle, ..))
-                            }
-                        }).collect::<Vec<_>>();
-                        let mut count_buffers = 0;
                         let writes = binding_starts
                             .iter()
                             .zip(data)
                             .map(|(&binding, range)| hal::pso::DescriptorSetWrite {
                                 set,
                                 binding,
-                                array_offset: 0,
-                                write: match *range {
-                                    raw::DescriptorRange::StorageBuffers(ref names) => {
-                                        let r = count_buffers .. count_buffers + names.len();
-                                        count_buffers += names.len();
-                                        hal::pso::DescriptorWrite::StorageBuffer(&desc_buffers[r])
+                                writes: match *range {
+                                    raw::DescriptorRange::Buffers(ref names) => {
+                                        names
+                                            .iter()
+                                            .enumerate()
+                                            .map(|(i, s)| {
+                                                let buf = resources.buffers
+                                                    .get(s)
+                                                    .expect(&format!("Missing buffer: {}", s));
+                                                (i, hal::pso::Descriptor::Buffer(&buf.handle, 0 .. buf.size as u64))
+                                            })
+                                    }
+                                    raw::DescriptorRange::Images(_) => {
+                                        unimplemented!()
                                     }
                                 },
                             });

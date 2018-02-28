@@ -126,7 +126,8 @@ pub enum TransferCommand {
 
 #[derive(Clone, Debug, Deserialize)]
 pub enum DescriptorRange {
-    StorageBuffers(Vec<String>),
+    Buffers(Vec<String>),
+    Images(Vec<String>),
 }
 
 fn default_instance_range() -> Range<hal::InstanceCount> {

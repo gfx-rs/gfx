@@ -7,9 +7,8 @@
 		"desc-layout": DescriptorSetLayout(
 			bindings: [
 				(
-					binding: 0,
+					bindings: (start:0, end:1),
 					ty: StorageBuffer,
-					count: 1,
 					stage_flags: (bits: 0x20), //COMPUTE
 				),
 			],
@@ -27,7 +26,7 @@
 			layout: "desc-layout",
 			pool: "desc-pool",
 			data: [
-				StorageBuffers(["buffer.output"]),
+				Buffers(["buffer.output"]),
 			],
 		),
 		"pipe-layout": PipelineLayout(
