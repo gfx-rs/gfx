@@ -61,7 +61,7 @@ test:
 
 reftests:
 	cd src/warden && cargo test --features "gl"
-	cd src/warden && cargo run --features "gl $(FEATURES_HAL) $(FEATURES_HAL2)" -- local
+	cd src/warden && cargo run --features "$(FEATURES_HAL) $(FEATURES_HAL2)" -- local #TODO: gl
 
 reftests-ci:
 	cd src/warden && cargo run --features "gl" -- ci #TODO: "gl-headless"

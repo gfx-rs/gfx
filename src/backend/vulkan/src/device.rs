@@ -1002,14 +1002,6 @@ impl d::Device<B> for Device {
         swizzle: format::Swizzle,
         range: image::SubresourceRange,
     ) -> Result<n::ImageView, image::ViewError> {
-        let subresource_range = vk::ImageSubresourceRange {
-            aspect_mask: conv::map_image_aspects(range.aspects),
-            base_mip_level: range.levels.start as _,
-            level_count: (range.levels.end - range.levels.start) as _,
-            base_array_layer: range.layers.start as _,
-            layer_count: (range.layers.end - range.layers.start) as _,
-        };
-
         let info = vk::ImageViewCreateInfo {
             s_type: vk::StructureType::ImageViewCreateInfo,
             p_next: ptr::null(),
@@ -1018,7 +1010,7 @@ impl d::Device<B> for Device {
             view_type: vk::ImageViewType::Type2d, // TODO
             format: conv::map_format(format),
             components: conv::map_swizzle(swizzle),
-            subresource_range,
+            subresource_range: conv::map_subresource_range(&range),
         };
 
         let view = unsafe {

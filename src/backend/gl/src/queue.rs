@@ -369,12 +369,12 @@ impl CommandQueue {
                     error!("Instanced indexed drawing is not supported");
                 }
             }
-            com::Command::Dispatch(x, y, z) => {
+            com::Command::Dispatch(count) => {
                 // Capability support is given by which queue types will be exposed.
                 // If there is no compute support, this pattern should never be reached
                 // because no queue with compute capability can be created.
                 let gl = &self.share.context;
-                unsafe { gl.DispatchCompute(x, y, z) };
+                unsafe { gl.DispatchCompute(count[0], count[1], count[2]) };
             }
             com::Command::DispatchIndirect(buffer, offset) => {
                 // Capability support is given by which queue types will be exposed.
@@ -384,7 +384,7 @@ impl CommandQueue {
                 unsafe {
                     gl.BindBuffer(gl::DRAW_INDIRECT_BUFFER, buffer);
                     // TODO: possible integer conversion issue
-                    gl.DispatchComputeIndirect(offset as gl::types::GLintptr);
+                    gl.DispatchComputeIndirect(offset as _);
                 }
             }
             com::Command::SetViewports { viewport_ptr, depth_range_ptr } => {
@@ -529,7 +529,7 @@ impl CommandQueue {
             com::Command::CopyTextureToBuffer(texture, buffer, ref r) => unsafe {
                 // TODO: Fix format and active texture
                 // TODO: handle partial copies gracefully
-                assert_eq!(r.image_offset, hal::command::Offset { x: 0, y: 0, z: 0 });
+                assert_eq!(r.image_offset, hal::image::Offset { x: 0, y: 0, z: 0 });
                 let gl = &self.share.context;
                 gl.ActiveTexture(gl::TEXTURE0);
                 gl.BindBuffer(gl::PIXEL_PACK_BUFFER, buffer);

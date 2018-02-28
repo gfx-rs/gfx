@@ -5,6 +5,10 @@ use std::fmt;
 
 use {IndexType, Backend};
 
+
+/// An offset inside a buffer, in bytes.
+pub type Offset = u64;
+
 /// Error creating a buffer.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum CreationError {

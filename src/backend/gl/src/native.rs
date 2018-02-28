@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-use hal::{self, format, image as i, pass, pso};
+use hal::{format, image as i, pass, pso};
 use hal::memory::Properties;
 
 use gl;
@@ -90,7 +90,7 @@ pub struct DescriptorSet;
 #[derive(Debug)]
 pub struct DescriptorPool {}
 
-impl hal::DescriptorPool<Backend> for DescriptorPool {
+impl pso::DescriptorPool<Backend> for DescriptorPool {
     fn allocate_sets<I>(&mut self, layouts: I) -> Vec<DescriptorSet>
     where
         I: IntoIterator,

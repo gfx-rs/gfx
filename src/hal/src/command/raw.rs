@@ -2,11 +2,10 @@ use std::any::Any;
 use std::borrow::Borrow;
 use std::ops::Range;
 
-use pso;
-use {Backend, IndexCount, InstanceCount, VertexCount, VertexOffset};
-use buffer::IndexBufferView;
+use {buffer, pso};
+use {Backend, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 use image::{ImageLayout, SubresourceRange};
-use memory::Barrier;
+use memory::{Barrier, Dependencies};
 use query::{Query, QueryControl, QueryId};
 use super::{
     BlitFilter, ColorValue, StencilValue, Rect, Viewport,
@@ -90,6 +89,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn pipeline_barrier<'a, T>(
         &mut self,
         stages: Range<pso::PipelineStage>,
+        dependencies: Dependencies,
         barriers: T,
     ) where
         T: IntoIterator,
@@ -99,7 +99,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn fill_buffer(
         &mut self,
         buffer: &B::Buffer,
-        range: Range<pso::BufferOffset>,
+        range: Range<buffer::Offset>,
         data: u32,
     );
 
@@ -107,7 +107,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn update_buffer(
         &mut self,
         buffer: &B::Buffer,
-        offset: pso::BufferOffset,
+        offset: buffer::Offset,
         data: &[u8],
     );
 
@@ -194,7 +194,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
         T::Item: Borrow<ImageBlit>;
 
     /// Bind index buffer view.
-    fn bind_index_buffer(&mut self, IndexBufferView<B>);
+    fn bind_index_buffer(&mut self, buffer::IndexBufferView<B>);
 
     /// Bind vertex buffers.
     fn bind_vertex_buffers(&mut self, pso::VertexBufferSet<B>);
@@ -355,14 +355,14 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     /// - Command buffer must be in recording state.
     /// - A compute pipeline must be bound using `bind_compute_pipeline`.
     /// - Only queues with compute capability support this function.
-    /// - This function must be called outside of a renderpass.
-    /// - `(x, y, z)` must be less than or equal to `Limits::max_compute_group_size`
+    /// - This function must be called outside of a render pass.
+    /// - `count` must be less than or equal to `Limits::max_compute_group_count`
     ///
     /// TODO:
-    fn dispatch(&mut self, x: u32, y: u32, z: u32);
+    fn dispatch(&mut self, count: WorkGroupCount);
 
     ///
-    fn dispatch_indirect(&mut self, buffer: &B::Buffer, offset: pso::BufferOffset);
+    fn dispatch_indirect(&mut self, buffer: &B::Buffer, offset: buffer::Offset);
 
     ///
     fn copy_buffer<T>(
@@ -427,7 +427,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn draw_indirect(
         &mut self,
         buffer: &B::Buffer,
-        offset: pso::BufferOffset,
+        offset: buffer::Offset,
         draw_count: u32,
         stride: u32,
     );
@@ -436,7 +436,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn draw_indexed_indirect(
         &mut self,
         buffer: &B::Buffer,
-        offset: pso::BufferOffset,
+        offset: buffer::Offset,
         draw_count: u32,
         stride: u32,
     );

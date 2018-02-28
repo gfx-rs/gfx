@@ -183,7 +183,7 @@ impl<B: Backend> Device<B> {
         use image::Usage;
         use hal::image::ImageLayout;
 
-        let aspects = format.aspect_flags();
+        let aspects = format.aspects();
         let image = self.raw.create_image(kind, mip_levels, format, usage)?;
         let (image, memory) = allocator.allocate_image(self, usage, image);
         let origin = image::Origin::User(memory);
@@ -265,7 +265,7 @@ impl<B: Backend> Device<B> {
     pub fn create_descriptors<D>(&mut self, count: usize) -> Vec<(D, D::Data)>
         where D: pso::Descriptors<B>
     {
-        use hal::DescriptorPool as CDP;
+        use hal::pso::DescriptorPool as CDP;
 
         let bindings = &D::layout_bindings()[..];
         let layout = self.create_descriptor_set_layout(bindings);

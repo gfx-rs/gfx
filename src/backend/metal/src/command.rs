@@ -7,9 +7,8 @@ use std::ops::{Deref, Range};
 use std::sync::{Arc};
 use std::{iter, mem};
 
-use hal::{command as com, error, memory, pool, pso};
-use hal::{VertexCount, VertexOffset, InstanceCount, IndexCount};
-use hal::buffer::{IndexBufferView};
+use hal::{buffer, command as com, error, memory, pool, pso};
+use hal::{VertexCount, VertexOffset, InstanceCount, IndexCount, WorkGroupCount};
 use hal::format::FormatDesc;
 use hal::image::{ImageLayout, SubresourceRange};
 use hal::query::{Query, QueryControl, QueryId};
@@ -49,7 +48,7 @@ pub struct CommandBuffer {
 
 #[derive(Debug)]
 struct StageResources {
-    buffers: Vec<Option<(metal::Buffer, pso::BufferOffset)>>,
+    buffers: Vec<Option<(metal::Buffer, buffer::Offset)>>,
     textures: Vec<Option<metal::Texture>>,
     samplers: Vec<Option<metal::SamplerState>>,
 }
@@ -69,7 +68,7 @@ impl StageResources {
         self.samplers.clear();
     }
 
-    fn add_buffer(&mut self, slot: usize, buffer: &metal::BufferRef, offset: pso::BufferOffset) {
+    fn add_buffer(&mut self, slot: usize, buffer: &metal::BufferRef, offset: buffer::Offset) {
         while self.buffers.len() <= slot {
             self.buffers.push(None)
         }
@@ -251,7 +250,7 @@ impl CommandSink {
 #[derive(Clone)]
 pub struct IndexBuffer {
     buffer: metal::Buffer,
-    offset: pso::BufferOffset,
+    offset: buffer::Offset,
     index_type: MTLIndexType,
 }
 
@@ -517,7 +516,7 @@ fn exec_render(encoder: &metal::RenderCommandEncoderRef, command: &soft::RenderC
             ];
         }
         Cmd::DrawIndexed { ref index, primitive_type, ref indices, base_vertex, ref instances } => {
-            let index_offset = indices.start as pso::BufferOffset * match index.index_type {
+            let index_offset = indices.start as buffer::Offset * match index.index_type {
                 MTLIndexType::UInt16 => 2,
                 MTLIndexType::UInt32 => 4,
             };
@@ -879,6 +878,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn pipeline_barrier<'a, T>(
         &mut self,
         _stages: Range<pso::PipelineStage>,
+        _dependencies: memory::Dependencies,
         _barriers: T,
     ) where
         T: IntoIterator,
@@ -890,7 +890,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn fill_buffer(
         &mut self,
         _buffer: &native::Buffer,
-        _range: Range<pso::BufferOffset>,
+        _range: Range<buffer::Offset>,
         _data: u32,
     ) {
         unimplemented!()
@@ -899,7 +899,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn update_buffer(
         &mut self,
         dst: &native::Buffer,
-        offset: pso::BufferOffset,
+        offset: buffer::Offset,
         data: &[u8],
     ) {
         let inner = self.inner();
@@ -983,7 +983,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn bind_index_buffer(&mut self, view: IndexBufferView<Backend>) {
+    fn bind_index_buffer(&mut self, view: buffer::IndexBufferView<Backend>) {
         let buffer = view.buffer.raw.clone();
         let offset = view.offset;
         let index_type = map_index_type(view.index_type);
@@ -1378,15 +1378,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         inner.sink.pre_compute_commands(commands.into_iter());
     }
 
-    fn dispatch(&mut self, x: u32, y: u32, z: u32) {
+    fn dispatch(&mut self, count: WorkGroupCount) {
         let inner = self.inner();
 
         let command = soft::ComputeCommand::Dispatch {
             wg_size: inner.begin_compute(),
             wg_count: MTLSize {
-                width: x as _,
-                height: y as _,
-                depth: z as _,
+                width: count[0] as _,
+                height: count[1] as _,
+                depth: count[2] as _,
             },
         };
         inner.sink.compute_commands(iter::once(command));
@@ -1395,7 +1395,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         inner.stop_encoding();
     }
 
-    fn dispatch_indirect(&mut self, buffer: &native::Buffer, offset: pso::BufferOffset) {
+    fn dispatch_indirect(&mut self, buffer: &native::Buffer, offset: buffer::Offset) {
         let inner = self.inner();
 
         let command = soft::ComputeCommand::DispatchIndirect {
@@ -1520,7 +1520,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn draw_indirect(
         &mut self,
         _buffer: &native::Buffer,
-        _offset: pso::BufferOffset,
+        _offset: buffer::Offset,
         _draw_count: u32,
         _stride: u32,
     ) {
@@ -1530,7 +1530,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn draw_indexed_indirect(
         &mut self,
         _buffer: &native::Buffer,
-        _offset: pso::BufferOffset,
+        _offset: buffer::Offset,
         _draw_count: u32,
         _stride: u32,
     ) {

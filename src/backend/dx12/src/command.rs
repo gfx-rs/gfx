@@ -1,8 +1,7 @@
 
-use hal::{command as com, image, memory, pass, pso, query};
-use hal::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset};
-use hal::buffer::IndexBufferView;
-use hal::format::AspectFlags;
+use hal::{buffer, command as com, image, memory, pass, pso, query};
+use hal::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
+use hal::format::Aspects;
 
 use std::{mem, ptr};
 use std::borrow::Borrow;
@@ -696,6 +695,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn pipeline_barrier<'a, T>(
         &mut self,
         _stages: Range<pso::PipelineStage>,
+        _dependencies: memory::Dependencies,
         barriers: T,
     ) where
         T: IntoIterator,
@@ -705,8 +705,22 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         // transition barriers
         for barrier in barriers {
-            let barrier = barrier.borrow();
-            match *barrier {
+            match *barrier.borrow() {
+                memory::Barrier::AllBuffers(_) |
+                memory::Barrier::AllImages(_) => {
+                    // Aliasing barrier with NULL resource is the closest we can get to
+                    // a global memory barrier in Vulkan.
+                    // Was suggested by a Microsoft representative as well as some of the IHVs.
+                    let mut bar = d3d12::D3D12_RESOURCE_BARRIER {
+                        Type: d3d12::D3D12_RESOURCE_BARRIER_TYPE_UAV,
+                        Flags: d3d12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                        u: unsafe { mem::zeroed() },
+                    };
+                    *unsafe { bar.u.UAV_mut() } = d3d12::D3D12_RESOURCE_UAV_BARRIER {
+                        pResource: ptr::null_mut(),
+                    };
+                    raw_barriers.push(bar);
+                }
                 memory::Barrier::Buffer { ref states, target } => {
                     let state_src = conv::map_buffer_resource_state(states.start);
                     let state_dst = conv::map_buffer_resource_state(states.end);
@@ -715,7 +729,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         continue;
                     }
 
-                    let barrier = Self::transition_barrier(
+                    let bar = Self::transition_barrier(
                         d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
                             pResource: target.resource,
                             Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
@@ -724,7 +738,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         }
                     );
 
-                    raw_barriers.push(barrier);
+                    raw_barriers.push(bar);
                 }
                 memory::Barrier::Image { ref states, target, ref range } => {
                     let _ = range; //TODO: use subresource range
@@ -735,7 +749,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         continue;
                     }
 
-                    let mut barrier = Self::transition_barrier(
+                    let mut bar = Self::transition_barrier(
                         d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
                             pResource: target.resource,
                             Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
@@ -746,16 +760,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                     if *range == target.to_subresource_range(range.aspects) {
                         // Only one barrier if it affects the whole image.
-                        raw_barriers.push(barrier);
+                        raw_barriers.push(bar);
                     } else {
                         // Generate barrier for each layer/level combination.
                         for level in range.levels.clone() {
                             for layer in range.layers.clone() {
                                 {
-                                    let transition_barrier = &mut *unsafe { barrier.u.Transition_mut() };
+                                    let transition_barrier = &mut *unsafe { bar.u.Transition_mut() };
                                     transition_barrier.Subresource = target.calc_subresource(level as _, layer as _, 0);
                                 }
-                                raw_barriers.push(barrier);
+                                raw_barriers.push(bar);
                             }
                         }
                     }
@@ -811,7 +825,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         range: image::SubresourceRange,
         value: com::ClearColorRaw,
     ) {
-        assert_eq!(range, image.to_subresource_range(AspectFlags::COLOR));
+        assert_eq!(range, image.to_subresource_range(Aspects::COLOR));
         let rtv = image.clear_cv.unwrap();
         self.clear_render_target_view(rtv, value, &[]);
     }
@@ -823,13 +837,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         range: image::SubresourceRange,
         value: com::ClearDepthStencilRaw,
     ) {
-        assert!((AspectFlags::DEPTH | AspectFlags::STENCIL).contains(range.aspects));
+        assert!((Aspects::DEPTH | Aspects::STENCIL).contains(range.aspects));
         assert_eq!(range, image.to_subresource_range(range.aspects));
-        if range.aspects.contains(AspectFlags::DEPTH) {
+        if range.aspects.contains(Aspects::DEPTH) {
             let dsv = image.clear_dv.unwrap();
             self.clear_depth_stencil_view(dsv, Some(value.depth), None, &[]);
         }
-        if range.aspects.contains(AspectFlags::STENCIL) {
+        if range.aspects.contains(Aspects::STENCIL) {
             let dsv = image.clear_sv.unwrap();
             self.clear_depth_stencil_view(dsv, None, Some(value.stencil as _), &[]);
         }
@@ -943,7 +957,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn bind_index_buffer(&mut self, ibv: IndexBufferView<Backend>) {
+    fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
         let format = match ibv.index_type {
             IndexType::U16 => dxgiformat::DXGI_FORMAT_R16_UINT,
             IndexType::U32 => dxgiformat::DXGI_FORMAT_R32_UINT,
@@ -1100,14 +1114,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         bind_descriptor_sets(&self.raw, &mut self.comp_pipeline, layout, first_set, sets);
     }
 
-    fn dispatch(&mut self, x: u32, y: u32, z: u32) {
+    fn dispatch(&mut self, count: WorkGroupCount) {
         self.set_compute_bind_point();
         unsafe {
-            self.raw.Dispatch(x, y, z);
+            self.raw.Dispatch(count[0], count[1], count[2]);
         }
     }
 
-    fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: pso::BufferOffset) {
+    fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: buffer::Offset) {
         self.set_compute_bind_point();
         unsafe {
             self.raw.ExecuteIndirect(
@@ -1124,7 +1138,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn fill_buffer(
         &mut self,
         buffer: &n::Buffer,
-        range: Range<pso::BufferOffset>,
+        range: Range<buffer::Offset>,
         data: u32,
     ) {
         assert!(buffer.clear_uav.is_some(), "Buffer needs to be created with usage `TRANSFER_DST`");
@@ -1168,7 +1182,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn update_buffer(
         &mut self,
         _buffer: &n::Buffer,
-        _offset: pso::BufferOffset,
+        _offset: buffer::Offset,
         _data: &[u8],
     ) {
         unimplemented!()
@@ -1436,7 +1450,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn draw_indirect(
         &mut self,
         buffer: &n::Buffer,
-        offset: pso::BufferOffset,
+        offset: buffer::Offset,
         draw_count: u32,
         stride: u32,
     ) {
@@ -1457,7 +1471,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn draw_indexed_indirect(
         &mut self,
         buffer: &n::Buffer,
-        offset: pso::BufferOffset,
+        offset: buffer::Offset,
         draw_count: u32,
         stride: u32,
     ) {

@@ -137,10 +137,10 @@ fn default_instance_range() -> Range<hal::InstanceCount> {
 pub enum DrawCommand {
     BindIndexBuffer {
         buffer: String,
-        offset: u64,
+        offset: hal::buffer::Offset,
         index_type: hal::IndexType,
     },
-    BindVertexBuffers(Vec<(String, hal::pso::BufferOffset)>),
+    BindVertexBuffers(Vec<(String, hal::buffer::Offset)>),
     BindPipeline(String),
     BindDescriptorSets {
         layout: String,
@@ -179,7 +179,7 @@ pub enum Job {
     Compute {
         pipeline: String,
         descriptor_sets: Vec<String>,
-        dispatch: (u32, u32, u32),
+        dispatch: hal::WorkGroupCount,
     },
 }
 

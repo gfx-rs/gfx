@@ -1,36 +1,25 @@
 use std::borrow::Borrow;
 use std::ops::Range;
+
 use Backend;
-use {format, image};
+use {buffer, format, image};
 use device::Extent;
-use memory::Barrier;
-use pso::{BufferOffset, PipelineStage};
+use memory::{Barrier, Dependencies};
+use pso::PipelineStage;
 use queue::capability::{Supports, Transfer};
 use super::{CommandBuffer, RawCommandBuffer, Shot, Level};
 
-
-///
-#[derive(Clone, Copy, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Offset {
-    ///
-    pub x: i32,
-    ///
-    pub y: i32,
-    ///
-    pub z: i32,
-}
 
 /// Region of two buffers for copying.
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BufferCopy {
     /// Buffer region source offset.
-    pub src: BufferOffset,
+    pub src: buffer::Offset,
     /// Buffer region destination offset.
-    pub dst: BufferOffset,
+    pub dst: buffer::Offset,
     /// Region size.
-    pub size: BufferOffset,
+    pub size: buffer::Offset,
 }
 
 ///
@@ -38,15 +27,15 @@ pub struct BufferCopy {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ImageCopy {
     ///
-    pub aspect_mask: format::AspectFlags,
+    pub aspects: format::Aspects,
     ///
     pub src_subresource: image::Subresource,
     ///
-    pub src_offset: Offset,
+    pub src_offset: image::Offset,
     ///
     pub dst_subresource: image::Subresource,
     ///
-    pub dst_offset: Offset,
+    pub dst_offset: image::Offset,
     ///
     pub extent: Extent,
     ///
@@ -58,7 +47,7 @@ pub struct ImageCopy {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BufferImageCopy {
     /// Buffer ofset in bytes.
-    pub buffer_offset: BufferOffset,
+    pub buffer_offset: buffer::Offset,
     /// Width of a buffer 'row' in texels.
     pub buffer_width: u32,
     /// Height of a buffer 'image slice' in texels.
@@ -66,7 +55,7 @@ pub struct BufferImageCopy {
     ///
     pub image_layers: image::SubresourceLayers,
     ///
-    pub image_offset: Offset,
+    pub image_offset: image::Offset,
     ///
     pub image_extent: Extent,
 }
@@ -77,12 +66,13 @@ impl<'a, B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<'a,
     pub fn pipeline_barrier<'i, T>(
         &mut self,
         stages: Range<PipelineStage>,
+        dependencies: Dependencies,
         barriers: T,
     ) where
         T: IntoIterator,
         T::Item: Borrow<Barrier<'i, B>>,
     {
-        self.raw.pipeline_barrier(stages, barriers)
+        self.raw.pipeline_barrier(stages, dependencies, barriers)
     }
 
 
@@ -90,7 +80,7 @@ impl<'a, B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<'a,
     pub fn fill_buffer(
         &mut self,
         buffer: &B::Buffer,
-        range: Range<BufferOffset>,
+        range: Range<buffer::Offset>,
         data: u32,
     ) {
         self.raw.fill_buffer(buffer, range, data)
@@ -113,7 +103,7 @@ impl<'a, B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<'a,
     pub fn update_buffer(
         &mut self,
         buffer: &B::Buffer,
-        offset: BufferOffset,
+        offset: buffer::Offset,
         data: &[u8],
     ) {
         self.raw.update_buffer(buffer, offset, data)

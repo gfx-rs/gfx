@@ -393,19 +393,23 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn pipeline_barrier<'a, T>(&mut self, _: Range<pso::PipelineStage>, _: T)
-    where
+    fn pipeline_barrier<'a, T>(
+        &mut self,
+        _: Range<pso::PipelineStage>,
+        _: memory::Dependencies,
+        _: T,
+    ) where
         T: IntoIterator,
         T::Item: Borrow<memory::Barrier<'a, Backend>>,
     {
         unimplemented!()
     }
 
-    fn fill_buffer(&mut self, _: &(), _: Range<pso::BufferOffset>, _: u32) {
+    fn fill_buffer(&mut self, _: &(), _: Range<buffer::Offset>, _: u32) {
         unimplemented!()
     }
 
-    fn update_buffer(&mut self, _: &(), _: pso::BufferOffset, _: &[u8]) {
+    fn update_buffer(&mut self, _: &(), _: buffer::Offset, _: &[u8]) {
         unimplemented!()
     }
 
@@ -549,11 +553,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn dispatch(&mut self, _: u32, _: u32, _: u32) {
+    fn dispatch(&mut self, _: hal::WorkGroupCount) {
         unimplemented!()
     }
 
-    fn dispatch_indirect(&mut self, _: &(), _: pso::BufferOffset) {
+    fn dispatch_indirect(&mut self, _: &(), _: buffer::Offset) {
         unimplemented!()
     }
 
@@ -621,14 +625,14 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn draw_indirect(&mut self, _: &(), _: pso::BufferOffset, _: u32, _: u32) {
+    fn draw_indirect(&mut self, _: &(), _: buffer::Offset, _: u32, _: u32) {
         unimplemented!()
     }
 
     fn draw_indexed_indirect(
         &mut self,
         _: &(),
-        _: pso::BufferOffset,
+        _: buffer::Offset,
         _: u32,
         _: u32,
     ) {
@@ -700,7 +704,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 // Dummy descriptor pool.
 #[derive(Debug)]
 pub struct DescriptorPool;
-impl hal::DescriptorPool<Backend> for DescriptorPool {
+impl pso::DescriptorPool<Backend> for DescriptorPool {
     fn reset(&mut self) {
         unimplemented!()
     }

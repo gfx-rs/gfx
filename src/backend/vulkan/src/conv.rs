@@ -74,16 +74,16 @@ pub fn map_image_layout(layout: image::ImageLayout) -> vk::ImageLayout {
     }
 }
 
-pub fn map_image_aspects(aspects: format::AspectFlags) -> vk::ImageAspectFlags {
-    use self::format::AspectFlags;
+pub fn map_image_aspects(aspects: format::Aspects) -> vk::ImageAspectFlags {
+    use self::format::Aspects;
     let mut flags = vk::ImageAspectFlags::empty();
-    if aspects.contains(AspectFlags::COLOR) {
+    if aspects.contains(Aspects::COLOR) {
         flags |= vk::IMAGE_ASPECT_COLOR_BIT;
     }
-    if aspects.contains(AspectFlags::DEPTH) {
+    if aspects.contains(Aspects::DEPTH) {
         flags |= vk::IMAGE_ASPECT_DEPTH_BIT;
     }
-    if aspects.contains(AspectFlags::STENCIL) {
+    if aspects.contains(Aspects::STENCIL) {
         flags |= vk::IMAGE_ASPECT_STENCIL_BIT;
     }
     flags
@@ -118,7 +118,7 @@ pub fn map_clear_stencil(stencil: command::StencilValue) -> vk::ClearDepthStenci
     }
 }
 
-pub fn map_offset(offset: command::Offset) -> vk::Offset3D {
+pub fn map_offset(offset: image::Offset) -> vk::Offset3D {
     vk::Offset3D {
         x: offset.x,
         y: offset.y,
@@ -146,7 +146,7 @@ pub fn map_subresource_layers(
 }
 
 pub fn map_subresource_with_layers(
-    aspects: format::AspectFlags,
+    aspects: format::Aspects,
     (mip_level, base_layer): image::Subresource,
     layers: image::Layer,
 ) -> vk::ImageSubresourceLayers {

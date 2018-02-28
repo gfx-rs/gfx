@@ -51,7 +51,7 @@ const QUAD: [Vertex; 6] = [
 ];
 
 const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
-    aspects: f::AspectFlags::COLOR,
+    aspects: f::Aspects::COLOR,
     levels: 0 .. 1,
     layers: 0 .. 1,
 };
@@ -469,7 +469,11 @@ fn main() {
                 target: &image_logo,
                 range: COLOR_RANGE.clone(),
             };
-            cmd_buffer.pipeline_barrier(PipelineStage::TOP_OF_PIPE .. PipelineStage::TRANSFER, &[image_barrier]);
+            cmd_buffer.pipeline_barrier(
+                PipelineStage::TOP_OF_PIPE .. PipelineStage::TRANSFER,
+                m::Dependencies::empty(),
+                &[image_barrier],
+            );
 
             cmd_buffer.copy_buffer_to_image(
                 &image_upload_buffer,
@@ -480,11 +484,11 @@ fn main() {
                     buffer_width: row_pitch / (image_stride as u32),
                     buffer_height: height as u32,
                     image_layers: i::SubresourceLayers {
-                        aspects: f::AspectFlags::COLOR,
+                        aspects: f::Aspects::COLOR,
                         level: 0,
                         layers: 0 .. 1,
                     },
-                    image_offset: command::Offset { x: 0, y: 0, z: 0 },
+                    image_offset: i::Offset { x: 0, y: 0, z: 0 },
                     image_extent: d::Extent { width, height, depth: 1 },
                 }]);
 
@@ -494,7 +498,11 @@ fn main() {
                 target: &image_logo,
                 range: COLOR_RANGE.clone(),
             };
-            cmd_buffer.pipeline_barrier(PipelineStage::TRANSFER .. PipelineStage::FRAGMENT_SHADER, &[image_barrier]);
+            cmd_buffer.pipeline_barrier(
+                PipelineStage::TRANSFER .. PipelineStage::FRAGMENT_SHADER,
+                m::Dependencies::empty(),
+                &[image_barrier],
+            );
 
             cmd_buffer.finish()
         };

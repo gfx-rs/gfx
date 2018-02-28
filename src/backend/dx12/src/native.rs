@@ -169,7 +169,7 @@ unsafe impl Sync for Image { }
 
 impl Image {
     /// Get `SubresourceRange` of the whole image.
-    pub fn to_subresource_range(&self, aspects: format::AspectFlags) -> image::SubresourceRange {
+    pub fn to_subresource_range(&self, aspects: format::Aspects) -> image::SubresourceRange {
         image::SubresourceRange {
             aspects,
             levels: 0 .. self.num_levels,

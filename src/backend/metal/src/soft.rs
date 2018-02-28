@@ -13,7 +13,7 @@ pub enum RenderCommand {
         stage: hal::pso::Stage,
         index: usize,
         buffer: Option<metal::Buffer>,
-        offset: hal::pso::BufferOffset,
+        offset: hal::buffer::Offset,
     },
     BindTexture {
         stage: hal::pso::Stage,
@@ -56,7 +56,7 @@ pub enum BlitCommand {
         src: metal::Texture,
         src_desc: hal::format::FormatDesc,
         dst: metal::Buffer,
-        region: hal::command::BufferImageCopy,  
+        region: hal::command::BufferImageCopy,
     },
 }
 
@@ -64,7 +64,7 @@ pub enum ComputeCommand {
     BindBuffer {
         index: usize,
         buffer: Option<metal::Buffer>,
-        offset: hal::pso::BufferOffset,
+        offset: hal::buffer::Offset,
     },
     BindTexture {
         index: usize,
@@ -82,7 +82,7 @@ pub enum ComputeCommand {
     DispatchIndirect {
         wg_size: metal::MTLSize,
         buffer: metal::Buffer,
-        offset: hal::pso::BufferOffset,
+        offset: hal::buffer::Offset,
     },
 }
 
