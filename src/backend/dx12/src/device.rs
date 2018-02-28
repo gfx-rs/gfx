@@ -12,7 +12,7 @@ use winapi::shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, winerror};
 use wio::com::ComPtr;
 
 use hal::{self, buffer, device as d, error, format, image, mapping, memory, pass, pso, query};
-use hal::format::AspectFlags;
+use hal::format::Aspects;
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
 use hal::queue::{RawCommandQueue, QueueFamilyId};
@@ -93,7 +93,8 @@ pub struct UnboundImage {
     requirements: memory::Requirements,
     kind: image::Kind,
     usage: image::Usage,
-    aspects: AspectFlags,
+    aspects: Aspects,
+    //TODO: use hal::format::FormatDesc
     bytes_per_block: u8,
     // Dimension of a texel block (compressed formats).
     block_dim: (u8, u8),
@@ -1635,9 +1636,9 @@ impl d::Device<B> for Device {
             block_dim: image.block_dim,
             num_levels: image.num_levels,
             num_layers: image.num_layers,
-            clear_cv: if image.aspects.contains(AspectFlags::COLOR) && image.usage.contains(Usage::COLOR_ATTACHMENT) {
+            clear_cv: if image.aspects.contains(Aspects::COLOR) && image.usage.contains(Usage::COLOR_ATTACHMENT) {
                 let range = image::SubresourceRange {
-                    aspects: AspectFlags::COLOR,
+                    aspects: Aspects::COLOR,
                     levels: 0 .. 1, //TODO?
                     layers: 0 .. image.num_layers,
                 };
@@ -1645,9 +1646,9 @@ impl d::Device<B> for Device {
             } else {
                 None
             },
-            clear_dv: if image.aspects.contains(AspectFlags::DEPTH) && image.usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
+            clear_dv: if image.aspects.contains(Aspects::DEPTH) && image.usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
                 let range = image::SubresourceRange {
-                    aspects: AspectFlags::DEPTH,
+                    aspects: Aspects::DEPTH,
                     levels: 0 .. 1, //TODO?
                     layers: 0 .. image.num_layers,
                 };
@@ -1655,9 +1656,9 @@ impl d::Device<B> for Device {
             } else {
                 None
             },
-            clear_sv: if image.aspects.contains(AspectFlags::STENCIL) && image.usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
+            clear_sv: if image.aspects.contains(Aspects::STENCIL) && image.usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
                 let range = image::SubresourceRange {
-                    aspects: AspectFlags::STENCIL,
+                    aspects: Aspects::STENCIL,
                     levels: 0 .. 1, //TODO?
                     layers: 0 .. image.num_layers,
                 };

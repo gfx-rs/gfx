@@ -66,12 +66,10 @@ bitflags!(
     /// Barrier dependency flags.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct Dependencies: u32 {
-        ///
+        /// Specifies the memory dependency to be framebuffer-local.
         const BY_REGION    = 0x1;
-        ///
-        const VIEW_LOCAL   = 0x2;
-        ///
-        const DEVICE_GROUP = 0x4;
+        //const VIEW_LOCAL   = 0x2;
+        //const DEVICE_GROUP = 0x4;
     }
 );
 

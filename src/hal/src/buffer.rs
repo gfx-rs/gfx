@@ -6,7 +6,7 @@ use std::fmt;
 use {IndexType, Backend};
 
 
-/// An offset inside a vertex buffer, in bytes.
+/// An offset inside a buffer, in bytes.
 pub type Offset = u64;
 
 /// Error creating a buffer.
