@@ -41,11 +41,11 @@ macro_rules! gfx_descriptors {
                 fn layout_bindings() -> Vec<hal::pso::DescriptorSetLayoutBinding> {
                     let mut bindings = Vec::new();
                     $({
-                        let binding = bindings.len();
+                        let offset = bindings.len();
+                        let count = <$bind as pso::BindDesc>::COUNT;
                         bindings.push(hal::pso::DescriptorSetLayoutBinding {
-                            binding,
+                            bindings: offset .. count,
                             ty: <$bind as pso::BindDesc>::TYPE,
-                            count: <$bind as pso::BindDesc>::COUNT,
                             // TODO: specify stage
                             stage_flags: hal::pso::ShaderStageFlags::all(),
                         });

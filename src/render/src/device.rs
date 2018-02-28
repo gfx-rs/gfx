@@ -272,7 +272,7 @@ impl<B: Backend> Device<B> {
         let ranges = bindings.iter().map(|binding| {
             hal::pso::DescriptorRangeDesc {
                 ty: binding.ty,
-                count: binding.count * count,
+                count: (binding.bindings.end - binding.bindings.start) * count,
             }
         }).collect::<Vec<_>>();
 
