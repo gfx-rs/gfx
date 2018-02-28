@@ -1,6 +1,6 @@
 use ash::vk;
 use ash::version::DeviceV1_0;
-use hal;
+use hal::pso;
 use hal::image::SubresourceRange;
 use std::borrow::Borrow;
 use std::sync::Arc;
@@ -88,7 +88,7 @@ pub struct DescriptorPool {
     pub(crate) device: Arc<RawDevice>,
 }
 
-impl hal::DescriptorPool<Backend> for DescriptorPool {
+impl pso::DescriptorPool<Backend> for DescriptorPool {
     fn allocate_sets<I>(&mut self, layouts: I) -> Vec<DescriptorSet>
     where
         I: IntoIterator,

@@ -6,10 +6,9 @@ use smallvec::SmallVec;
 use ash::vk;
 use ash::version::DeviceV1_0;
 
-use hal::{command as com, memory, pso, query};
-use hal::{IndexCount, InstanceCount, VertexCount, VertexOffset};
-use hal::buffer::IndexBufferView;
-use hal::format::AspectFlags;
+use hal::{buffer, command as com, memory, pso, query};
+use hal::{IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
+use hal::format::Aspects;
 use hal::image::{ImageLayout, SubresourceRange};
 use {conv, native as n};
 use {Backend, RawDevice};
@@ -178,16 +177,34 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn pipeline_barrier<'a, T>(
         &mut self,
         stages: Range<pso::PipelineStage>,
+        dependencies: memory::Dependencies,
         barriers: T,
     ) where
         T: IntoIterator,
         T::Item: Borrow<memory::Barrier<'a, Backend>>,
     {
+        let mut global_bars: SmallVec<[vk::MemoryBarrier; 4]> = SmallVec::new();
         let mut buffer_bars: SmallVec<[vk::BufferMemoryBarrier; 4]> = SmallVec::new();
         let mut image_bars: SmallVec<[vk::ImageMemoryBarrier; 4]> = SmallVec::new();
 
         for barrier in barriers {
             match *barrier.borrow() {
+                memory::Barrier::AllBuffers(ref access) => {
+                    global_bars.push(vk::MemoryBarrier {
+                        s_type: vk::StructureType::MemoryBarrier,
+                        p_next: ptr::null(),
+                        src_access_mask: conv::map_buffer_access(access.start),
+                        dst_access_mask: conv::map_buffer_access(access.end),
+                    });
+                }
+                memory::Barrier::AllImages(ref access) => {
+                    global_bars.push(vk::MemoryBarrier {
+                        s_type: vk::StructureType::MemoryBarrier,
+                        p_next: ptr::null(),
+                        src_access_mask: conv::map_image_access(access.start),
+                        dst_access_mask: conv::map_image_access(access.end),
+                    });
+                }
                 memory::Barrier::Buffer { ref states, target} => {
                     buffer_bars.push(vk::BufferMemoryBarrier {
                         s_type: vk::StructureType::BufferMemoryBarrier,
@@ -224,8 +241,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 self.raw, // commandBuffer
                 conv::map_pipeline_stage(stages.start),
                 conv::map_pipeline_stage(stages.end),
-                vk::DependencyFlags::empty(), // dependencyFlags // TODO
-                &[],
+                mem::transmute(dependencies),
+                &global_bars,
                 &buffer_bars,
                 &image_bars,
             );
@@ -235,7 +252,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn fill_buffer(
         &mut self,
         buffer: &n::Buffer,
-        range: Range<pso::BufferOffset>,
+        range: Range<buffer::Offset>,
         data: u32,
     ) {
         unsafe {
@@ -252,7 +269,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn update_buffer(
         &mut self,
         buffer: &n::Buffer,
-        offset: pso::BufferOffset,
+        offset: buffer::Offset,
         data: &[u8],
     ) {
         unsafe {
@@ -272,7 +289,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         range: SubresourceRange,
         value: com::ClearColorRaw,
     ) {
-        assert!(AspectFlags::COLOR.contains(range.aspects));
+        assert!(Aspects::COLOR.contains(range.aspects));
         let range = conv::map_subresource_range(&range);
         // Vulkan and HAL share same memory layout
         let clear_value = unsafe { mem::transmute(value) };
@@ -295,7 +312,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         range: SubresourceRange,
         value: com::ClearDepthStencilRaw,
     ) {
-        assert!((AspectFlags::DEPTH | AspectFlags::STENCIL).contains(range.aspects));
+        assert!((Aspects::DEPTH | Aspects::STENCIL).contains(range.aspects));
         let range = conv::map_subresource_range(&range);
         let clear_value = vk::ClearDepthStencilValue {
             depth: value.depth,
@@ -457,7 +474,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_index_buffer(&mut self, ibv: IndexBufferView<Backend>) {
+    fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
         unsafe {
             self.device.0.cmd_bind_index_buffer(
                 self.raw,
@@ -623,18 +640,18 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         );
     }
 
-    fn dispatch(&mut self, x: u32, y: u32, z: u32) {
+    fn dispatch(&mut self, count: WorkGroupCount) {
         unsafe {
             self.device.0.cmd_dispatch(
                 self.raw,
-                x,
-                y,
-                z,
+                count[0],
+                count[1],
+                count[2],
             )
         }
     }
 
-    fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: pso::BufferOffset) {
+    fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: buffer::Offset) {
         unsafe {
             self.device.0.cmd_dispatch_indirect(
                 self.raw,
@@ -687,9 +704,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .map(|region| {
                 let r = region.borrow();
                 vk::ImageCopy {
-                    src_subresource: conv::map_subresource_with_layers(r.aspect_mask, r.src_subresource, r.num_layers),
+                    src_subresource: conv::map_subresource_with_layers(r.aspects, r.src_subresource, r.num_layers),
                     src_offset: conv::map_offset(r.src_offset),
-                    dst_subresource: conv::map_subresource_with_layers(r.aspect_mask, r.dst_subresource, r.num_layers),
+                    dst_subresource: conv::map_subresource_with_layers(r.aspects, r.dst_subresource, r.num_layers),
                     dst_offset: conv::map_offset(r.dst_offset),
                     extent: conv::map_extent(r.extent),
                 }
@@ -787,7 +804,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn draw_indirect(
         &mut self,
         buffer: &n::Buffer,
-        offset: pso::BufferOffset,
+        offset: buffer::Offset,
         draw_count: u32,
         stride: u32,
     ) {
@@ -805,7 +822,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn draw_indexed_indirect(
         &mut self,
         buffer: &n::Buffer,
-        offset: pso::BufferOffset,
+        offset: buffer::Offset,
         draw_count: u32,
         stride: u32,
     ) {
