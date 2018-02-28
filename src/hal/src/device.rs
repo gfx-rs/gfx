@@ -367,11 +367,11 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     fn destroy_descriptor_set_layout(&self, B::DescriptorSetLayout);
 
     ///
-    fn write_descriptor_sets<'a, I, R>(&self, I)
+    fn write_descriptor_sets<'a, I, J>(&self, I)
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetWrite<'a, B, R>>,
-        R: 'a + RangeArg<u64>;
+        I: IntoIterator<Item = pso::DescriptorSetWrite<'a, B, J>>,
+        J: IntoIterator,
+        J::Item: Borrow<(usize, pso::Descriptor<'a, B>)>;
 
     ///
     fn copy_descriptor_sets<'a, I>(&self, I)

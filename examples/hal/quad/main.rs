@@ -29,7 +29,6 @@ use hal::pso::{PipelineStage, ShaderStageFlags, Specialization};
 use hal::queue::Submission;
 
 use std::io::Cursor;
-use std::ops::Range;
 
 const ENTRY_NAME: &str = "main";
 
@@ -146,15 +145,13 @@ fn main() {
     // Setup renderpass and pipeline
     let set_layout = device.create_descriptor_set_layout(&[
             pso::DescriptorSetLayoutBinding {
-                binding: 0,
+                bindings: 0 .. 1,
                 ty: pso::DescriptorType::SampledImage,
-                count: 1,
                 stage_flags: ShaderStageFlags::FRAGMENT,
             },
             pso::DescriptorSetLayoutBinding {
-                binding: 1,
+                bindings: 1 .. 2,
                 ty: pso::DescriptorType::Sampler,
-                count: 1,
                 stage_flags: ShaderStageFlags::FRAGMENT,
             },
         ],
@@ -431,18 +428,20 @@ fn main() {
         )
     );
 
-    device.write_descriptor_sets::<_, Range<_>>(vec![
+    device.write_descriptor_sets(vec![
         pso::DescriptorSetWrite {
             set: &desc_set,
             binding: 0,
-            array_offset: 0,
-            write: pso::DescriptorWrite::SampledImage(&[(&image_srv, i::ImageLayout::Undefined)]),
+            writes: Some(
+                (0, pso::Descriptor::Image(&image_srv, i::ImageLayout::Undefined))
+            ),
         },
         pso::DescriptorSetWrite {
             set: &desc_set,
             binding: 1,
-            array_offset: 0,
-            write: pso::DescriptorWrite::Sampler(&[&sampler]),
+            writes: Some(
+                (0, pso::Descriptor::Sampler(&sampler))
+            ),
         },
     ]);
 

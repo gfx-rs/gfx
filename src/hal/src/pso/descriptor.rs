@@ -7,11 +7,12 @@
 
 use std::borrow::Borrow;
 use std::fmt;
+use std::ops::Range;
 
 use {Backend};
+use buffer::Offset;
 use image::ImageLayout;
 use pso::ShaderStageFlags;
-use range::RangeArg;
 
 
 /// DOC TODO: Grasping and remembering the differences between these
@@ -51,18 +52,15 @@ pub enum DescriptorType {
 /// The binding point is only valid for the pipelines stages specified.
 ///
 /// The binding _must_ match with the corresponding shader interface.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DescriptorSetLayoutBinding {
-    /// Integer identifier of the binding.
-    pub binding: usize,
+    /// Descriptor bindings range.
+    pub bindings: Range<usize>,
     /// Type of the bound descriptors.
     pub ty: DescriptorType,
-    /// Number of descriptors bound.
-    pub count: usize,
     /// Valid shader stages.
     pub stage_flags: ShaderStageFlags,
-
     // TODO: immutable samplers?
 }
 
@@ -100,7 +98,10 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
         I: IntoIterator,
         I::Item: Borrow<B::DescriptorSetLayout>,
     {
-        layouts.into_iter().map(|layout| self.allocate_set(layout.borrow())).collect()
+        layouts
+            .into_iter()
+            .map(|layout| self.allocate_set(layout.borrow()))
+            .collect()
     }
 
     /// Resets a descriptor pool, releasing all resources from all the descriptor sets
@@ -112,26 +113,21 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
 
 /// DOC TODO
 #[allow(missing_docs)]
-pub struct DescriptorSetWrite<'a, B: Backend, R: 'a + RangeArg<u64>> {
+pub struct DescriptorSetWrite<'a, B: Backend, W> {
     pub set: &'a B::DescriptorSet,
     pub binding: usize,
-    pub array_offset: usize,
-    pub write: DescriptorWrite<'a, B, R>,
+    pub writes: W,
 }
 
 /// DOC TODO
 #[allow(missing_docs)]
-#[derive(Clone, Copy)]
-pub enum DescriptorWrite<'a, B: Backend, R: 'a + RangeArg<u64>> {
-    Sampler(&'a [&'a B::Sampler]),
-    SampledImage(&'a [(&'a B::ImageView, ImageLayout)]),
-    StorageImage(&'a [(&'a B::ImageView, ImageLayout)]),
-    InputAttachment(&'a [(&'a B::ImageView, ImageLayout)]),
-    UniformBuffer(&'a [(&'a B::Buffer, R)]),
-    StorageBuffer(&'a [(&'a B::Buffer, R)]),
-    UniformTexelBuffer(&'a [&'a B::BufferView]),
-    StorageTexelBuffer(&'a [&'a B::BufferView]),
-    CombinedImageSampler(&'a [(&'a B::Sampler, &'a B::ImageView, ImageLayout)]),
+#[derive(Clone)]
+pub enum Descriptor<'a, B: Backend> {
+    Sampler(&'a B::Sampler),
+    Image(&'a B::ImageView, ImageLayout),
+    CombinedImageSampler(&'a B::ImageView, ImageLayout, &'a B::Sampler),
+    Buffer(&'a B::Buffer, Range<Offset>),
+    TexelBuffer(&'a B::BufferView),
 }
 
 
