@@ -7,6 +7,7 @@ use winit;
 use winapi::shared::dxgi1_4;
 use winapi::shared::windef::{HWND, RECT};
 use winapi::um::winuser::GetClientRect;
+use winapi::um::d3d12;
 use wio::com::ComPtr;
 
 use hal::{self, format as f, image as i};

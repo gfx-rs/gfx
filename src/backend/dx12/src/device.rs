@@ -2224,7 +2224,7 @@ impl d::Device<B> for Device {
         // empty
     }
 
-    fn destroy_image(&self, _image: n::Image) {
+    fn destroy_image(&self, image: n::Image) {
         // Note that the same raw pointer can be released in #destroy_swapchain
         // so make sure these two methods aren't called together
         unsafe { (*image.resource).Release(); }
