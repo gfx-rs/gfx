@@ -25,6 +25,7 @@ mod window;
 
 use hal::{error, format as f, memory, Features, Limits, QueueType};
 use hal::queue::{QueueFamily as HalQueueFamily, QueueFamilyId, Queues};
+use hal::device::DeviceId;
 
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, winerror};
 use winapi::shared::minwindef::{FALSE, TRUE};
@@ -437,6 +438,8 @@ pub struct Device {
     queues: Vec<CommandQueue>,
     // Indicates that there is currently an active device.
     open: Arc<Mutex<bool>>,
+    // Locally unique id
+    id: hal::device::DeviceId,
 }
 unsafe impl Send for Device {} //blocked by ComPtr
 unsafe impl Sync for Device {} //blocked by ComPtr
@@ -542,6 +545,15 @@ impl Device {
             device::CommandSignature::Dispatch,
         );
 
+        let id = unsafe {
+            // LUID is a 64 bit number
+            let luid = device.GetAdapterLuid();
+            let higher_half = (luid.HighPart as u64) << 32;
+            let lower_half = luid.LowPart as u64;
+            
+            (higher_half + lower_half) as usize
+        };
+
         Device {
             raw: device,
             private_caps: physical_device.private_caps,
@@ -562,6 +574,7 @@ impl Device {
             present_queue,
             queues: Vec::new(),
             open: physical_device.is_open.clone(),
+            id: DeviceId(id),
         }
     }
 

@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::{cmp, mem, ptr, slice};
 
 use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query};
-use hal::device::{BindError, OutOfMemory, FramebufferError, ShaderError, Extent};
+use hal::device::{BindError, DeviceId, OutOfMemory, FramebufferError, ShaderError, Extent};
 use hal::memory::Properties;
 use hal::pool::CommandPoolCreateFlags;
 use hal::pso::{DescriptorType, DescriptorSetLayoutBinding, AttributeDesc, DepthTest, StencilTest};
@@ -113,6 +113,7 @@ pub struct Device {
     private_caps: PrivateCapabilities,
     queue: Arc<command::QueueInner>,
     memory_types: [hal::MemoryType; 3],
+    id: DeviceId,
 }
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
@@ -177,11 +178,14 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             max_samplers_per_stage: 31,
         };
 
+        let device_id = DeviceId(self.raw.registry_id() as usize);
+
         let device = Device {
             device: self.raw.clone(),
             private_caps,
             queue,
             memory_types: self.memory_types,
+            id: device_id,
         };
 
         let mut queues = HashMap::new();
@@ -1409,6 +1413,10 @@ impl hal::Device<Backend> for Device {
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
         unimplemented!()
+    }
+
+    fn id(&self) -> DeviceId {
+        self.id
     }
 }
 

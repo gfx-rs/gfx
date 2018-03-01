@@ -2381,4 +2381,8 @@ impl d::Device<B> for Device {
         }
         Ok(())
     }
+
+    fn id(&self) -> d::DeviceId {
+        self.id
+    }
 }

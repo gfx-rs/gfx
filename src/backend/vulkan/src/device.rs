@@ -1546,6 +1546,10 @@ impl d::Device<B> for Device {
             .map_err(From::from)
             .map_err(From::<result::Error>::from)
     }
+
+    fn id(&self) -> d::DeviceId {
+        self._id
+    }
 }
 
 #[test]

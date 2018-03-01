@@ -6,6 +6,8 @@ use std::ops::Range;
 use std::{ptr, mem, slice};
 use std::sync::{Arc, Mutex};
 
+use rand::{Rng, thread_rng};
+
 use gl;
 use gl::types::{GLint, GLenum, GLfloat, GLuint};
 
@@ -103,6 +105,7 @@ pub struct UnboundImage {
 #[derive(Debug)]
 pub struct Device {
     share: Starc<Share>,
+    id: d::DeviceId,
 }
 
 impl Drop for Device {
@@ -116,6 +119,7 @@ impl Device {
     pub(crate) fn new(share: Starc<Share>) -> Self {
         Device {
             share: share,
+            id: d::DeviceId(thread_rng().gen::<usize>()),
         }
     }
 
@@ -1067,6 +1071,10 @@ impl d::Device<B> for Device {
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
         unsafe { self.share.context.Finish(); }
         Ok(())
+    }
+
+    fn id(&self) -> d::DeviceId {
+        self.id
     }
 }
 
