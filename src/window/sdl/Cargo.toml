@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx_window_sdl"
-version = "0.8.0"
+version = "0.9.0"
 description = "SDL2 window for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -30,7 +30,7 @@ name = "gfx_window_sdl"
 log = "0.4"
 sdl2 = "0.31"
 gfx_core = { path = "../../core", version = "0.8" }
-gfx_device_gl = { path = "../../backend/gl", version = "0.15" }
+gfx_device_gl = { path = "../../backend/gl", version = "0.16" }
 # Currently there is an issue with cargo and dev-dependencies:
 # https://github.com/rust-lang/cargo/issues/860
 # TODO: move gfx to [dev-dependencies] once it gets resolved.
