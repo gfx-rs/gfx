@@ -7,11 +7,11 @@
 //!
 //! ## Window
 //!
-//! // TODO
+//! // DOC TODO
 //!
 //! ## Surface
 //!
-//! // TODO
+//! // DOC TODO
 //!
 //! ## Swapchain
 //!
@@ -47,7 +47,7 @@
 //!
 //! ### Recreation
 //!
-//! //TODO
+//! DOC TODO
 
 use Backend;
 use image;
@@ -58,17 +58,20 @@ use std::any::Any;
 use std::borrow::{Borrow, BorrowMut};
 use std::ops::Range;
 
-///
+/// An extent describes the size of a rectangle, such as
+/// a window or texture. It is not used for referring to a
+/// sub-rectangle; for that see `command::Rect`.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Extent2D {
-    ///
+    /// Width
     pub width: u32,
-    ///
+    /// Height
     pub height: u32,
 }
 
-///
+/// Describes information about what a `Surface`'s properties are.
+/// Fetch this with `surface.capabilities_and_formats(device)`.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SurfaceCapabilities {
@@ -96,11 +99,12 @@ pub struct SurfaceCapabilities {
 }
 
 /// A `Surface` abstracts the surface of a native window, which will be presented
+/// on the display.
 pub trait Surface<B: Backend>: Any + Send + Sync {
     /// Retrieve the surface image kind.
     fn kind(&self) -> image::Kind;
 
-    /// Check if the queue family supports presentation for this surface.
+    /// Check if the queue family supports presentation to this surface.
     ///
     /// # Examples
     ///
@@ -111,7 +115,7 @@ pub trait Surface<B: Backend>: Any + Send + Sync {
 
     /// Query surface capabilities and formats for this physical device.
     ///
-    /// Use this function for configuring your swapchain creation.
+    /// Use this function for configuring swapchain creation.
     ///
     /// Returns a tuple of surface capabilities and formats.
     /// If formats is `None` than the surface has no preferred format and the
@@ -120,6 +124,11 @@ pub trait Surface<B: Backend>: Any + Send + Sync {
 }
 
 /// Handle to a backbuffer of the swapchain.
+///
+/// The swapchain is a series of one or more images, usually
+/// with one being drawn on while the other is displayed by
+/// the GPU (aka double-buffering). A `Frame` refers to a
+/// particular image in the swapchain.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Frame(pub(crate) usize);
@@ -155,7 +164,25 @@ pub enum FrameSync<'a, B: Backend> {
     Fence(&'a B::Fence),
 }
 
-/// Allows you to configure a `Swapchain` for creation.
+/// Contains all the data necessary to create a new `Swapchain`:
+/// color, depth, and number of images.
+///
+/// # Examples
+///
+/// This type implements the builder pattern, method calls can be
+/// easily chained.
+///
+/// ```no_run
+/// # extern crate gfx_hal;
+/// # fn main() {
+/// # use gfx_hal::{SwapchainConfig};
+/// # use gfx_hal::format::Format;
+/// let config = SwapchainConfig::new()
+///     .with_color(Format::Bgra8Unorm)
+///     .with_depth_stencil(Format::D16Unorm)
+///     .with_image_count(2);
+/// # }
+/// ```
 #[derive(Debug, Clone)]
 pub struct SwapchainConfig {
     /// Color format of the backbuffer images.

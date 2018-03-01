@@ -1,6 +1,5 @@
-//! Queue submission.
-//!
-//! // TODO
+//! A `Submission` is simply a collection of data bundled up and ready
+//! to be submitted to a command queue.
 
 use {pso, Backend};
 use command::{Submittable, Primary};
@@ -24,7 +23,8 @@ where
     pub signal_semaphores: &'a [&'a B::Semaphore],
 }
 
-/// Submission information for a command queue.
+/// Submission information for a command queue, generic over a particular
+/// backend and a particular queue type.
 pub struct Submission<'a, B: Backend, C> {
     cmd_buffers: SmallVec<[Cow<'a, B::CommandBuffer>; 16]>,
     wait_semaphores: SmallVec<[(&'a B::Semaphore, pso::PipelineStage); 16]>,
@@ -101,9 +101,10 @@ where
         }
     }
 
-    /// Promote a submission to a higher capability type.
+    /// Promote a submission to a higher (more general) capability type. For example,
+    /// this can turn a `Compute` submission into a `GraphicsOrCompute` submission.
     ///
-    /// Submission promotion is only necessary for shoving multiple submissions
+    /// Submission promotion is only necessary for combining multiple submissions
     /// of different capabilities into one submit call.
     pub fn promote<P>(self) -> Submission<'a, B, P>
     where

@@ -1,8 +1,20 @@
 //! Universal format specification.
 //! Applicable to textures, views, and vertex buffers.
+//!
+//! For a more detailed description of all the specific format specifiers,
+//! please see [the official Vulkan documentation](https://www.khronos.org/registry/vulkan/specs/1.0/man/html/VkFormat.html)
+//!
+//! `gfx-rs` splits a `Format` into two sub-components, a `SurfaceType` and
+//! a `ChannelType`.  The `SurfaceType` specifies how the large the channels are, 
+//! for instance `R32_G32_B32_A32`.  The `ChannelType` specifies how the 
+//! components are interpreted, for instance `Float` or `Int`.
 
 bitflags!(
-    ///
+    /// Bitflags which describe what properties of an image
+    /// a format specifies or does not specify.  For example,
+    /// the `Rgba8Unorm` format only specifies a `COLOR` aspect,
+    /// while `D32FloatS8Uint` specifies both a depth and stencil
+    /// aspect but no color.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct Aspects: u8 {
         /// Color aspect.
@@ -61,20 +73,30 @@ pub const BITS_ZERO: FormatBits = FormatBits {
 
 /// Source channel in a swizzle configuration. Some may redirect onto
 /// different physical channels, some may be hardcoded to 0 or 1.
-#[allow(missing_docs)]
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Component {
+    /// Hardcoded zero
     Zero,
+    /// Hardcoded one
     One,
+    /// Red channel
     R,
+    /// Green channel
     G,
+    /// Blue channel
     B,
+    /// Alpha channel.
     A,
 }
 
 /// Channel swizzle configuration for the resource views.
+/// This specifies a "swizzle" operation which remaps the various
+/// channels of a format into a different order.  For example,
+/// `Swizzle(Component::B, Component::G, Component::R, Component::A)`
+/// will swap `RGBA` formats into `BGRA` formats and back.
+///
 /// Note: It's not currently mirrored at compile-time,
 /// thus providing less safety and convenience.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -82,7 +104,7 @@ pub enum Component {
 pub struct Swizzle(pub Component, pub Component, pub Component, pub Component);
 
 impl Swizzle {
-    /// A trivially non-swizzling configuration.
+    /// A trivially non-swizzling configuration; performs no changes.
     pub const NO: Swizzle = Swizzle(Component::R, Component::G, Component::B, Component::A);
 }
 
@@ -96,11 +118,14 @@ impl Default for Swizzle {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Properties {
-    ///
+    /// A bitmask of the features supported when an image with linear tiling is requested.
+    /// Linear tiling has a known layout in-memory so data can be copied to and from host
+    /// memory.
     pub linear_tiling: ImageFeature,
-    ///
+    /// A bitmask of the features supported when an image with optimal tiling is requested.
+    /// Optimal tiling is arranged however the GPU wants; its exact layout is undefined.
     pub optimal_tiling: ImageFeature,
-    ///
+    /// The features supported by buffers.
     pub buffer_features: BufferFeature,
 }
 
@@ -148,7 +173,6 @@ bitflags!(
 
 /// Type of a surface channel. This is how we interpret the
 /// storage allocated with `SurfaceType`.
-#[allow(missing_docs)]
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -281,7 +305,7 @@ surface_types! {
     ASTC_12x12          { 128, COLOR, (12, 12) },
 }
 
-/// Gneric run-time base format.
+/// Generic run-time base format.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BaseFormat(pub SurfaceType, pub ChannelType);
@@ -297,7 +321,10 @@ macro_rules! formats {
         $name:ident = ($surface:ident, $channel:ident),
         $($name_tail:ident = ($surface_tail:ident, $channel_tail:ident),)*
     } => {
-        ///
+        /// A format descriptor that describes the channels present in a
+        /// texture or view, how they are laid out, what size they are,
+        /// and how the elements of the channels are interpreted (integer,
+        /// float, etc.)
         #[allow(missing_docs)]
         #[repr(u32)]
         #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -323,8 +350,8 @@ macro_rules! formats {
             $(BaseFormat(SurfaceType::$surface_tail, ChannelType::$channel_tail), )*
         ];
 
-        // Struct format types, for strong-typed APIs.
-            #[allow(missing_docs)]
+            /// A struct equivalent to the matching `Format` enum member, which allows
+            /// an API to be strongly typed on particular formats.
             #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
             #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
             pub struct $name;
@@ -334,6 +361,8 @@ macro_rules! formats {
             }
 
         $(
+            /// A struct equivalent to the matching `Format` enum member, which allows
+            /// an API to be strongly typed on particular formats.
             #[allow(missing_docs)]
             #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
             #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

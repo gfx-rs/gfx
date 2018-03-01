@@ -1,7 +1,13 @@
 //! # Device
 //!
-//! This module exposes the `Device` trait, used for creating and managing graphics resources, and
-//! includes several items to facilitate this.
+//! This module exposes the `Device` trait, which provides methods for creating 
+//! and managing graphics resources such as buffers, images and memory.
+//!
+//! The `Adapter` and `Device` types are very similar to the Vulkan concept of 
+//! "physical devices" vs. "logical devices"; an `Adapter` is single GPU 
+//! (or CPU) that implements a backend, a `Device` is a 
+//! handle to that physical device that has the requested capabilities
+//! and is used to actually do things.
 
 use std::{fmt, mem, slice};
 use std::any::Any;
@@ -39,9 +45,9 @@ impl Error for OutOfMemory {
 /// Error binding a resource to memory allocation.
 #[derive(Clone, PartialEq, Debug)]
 pub enum BindError {
-    ///
+    /// Requested binding to memory that doesn't support the required operations.
     WrongMemory,
-    ///
+    /// Requested binding to an invalid memory.
     OutOfBounds,
 }
 
@@ -72,15 +78,15 @@ pub enum WaitFor {
     All,
 }
 
-///
+/// Describes the size of an Image, which may be up to three dimensional.
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Extent {
-    ///
+    /// Image width
     pub width: u32,
-    ///
+    /// Image height
     pub height: u32,
-    ///
+    /// Image depth.
     pub depth: u32,
 }
 
@@ -154,7 +160,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     /// Destroys a command pool.
     fn destroy_command_pool(&self, B::CommandPool);
 
-    ///
+    /// Creates a render pass with the given attachments and subpasses.
     fn create_render_pass<'a, IA, IS, ID>(
         &self,
         attachments: IA,
@@ -169,7 +175,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         ID: IntoIterator,
         ID::Item: Borrow<pass::SubpassDependency>;
 
-    ///
+    /// Destroys a `RenderPass`.
     fn destroy_render_pass(&self, B::RenderPass);
 
     /// Create a new pipeline layout.

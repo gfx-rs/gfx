@@ -1,3 +1,4 @@
+//! `CommandBuffer` methods for transfer operations.
 use std::borrow::Borrow;
 use std::ops::Range;
 
@@ -10,7 +11,9 @@ use queue::capability::{Supports, Transfer};
 use super::{CommandBuffer, RawCommandBuffer, Shot, Level};
 
 
-/// Region of two buffers for copying.
+/// Specifies a source region and a destination
+/// region in a buffer for copying.  All values
+/// are in units of bytes.
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BufferCopy {
@@ -22,27 +25,29 @@ pub struct BufferCopy {
     pub size: buffer::Offset,
 }
 
-///
+/// Bundles together all the parameters needed to copy data from one `Image`
+/// to another.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ImageCopy {
-    ///
+    /// The aspect mask of what to copy: color, depth and/or stencil information.
     pub aspects: format::Aspects,
-    ///
+    /// The image subresource to copy from.
     pub src_subresource: image::Subresource,
-    ///
+    /// The source offset.
     pub src_offset: image::Offset,
-    ///
+    /// he image subresource to copy to.
     pub dst_subresource: image::Subresource,
-    ///
+    /// The destination offset.
     pub dst_offset: image::Offset,
-    ///
+    /// The extent of the region to copy.
     pub extent: Extent,
-    ///
+    /// The number of layers to copy.
     pub num_layers: image::Layer,
 }
 
-///
+/// Bundles together all the parameters needed to copy a buffer
+/// to an image or vice-versa.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BufferImageCopy {
@@ -52,17 +57,17 @@ pub struct BufferImageCopy {
     pub buffer_width: u32,
     /// Height of a buffer 'image slice' in texels.
     pub buffer_height: u32,
-    ///
+    /// The number of layers to copy.
     pub image_layers: image::SubresourceLayers,
-    ///
+    /// The offset of the portion of the image to copy.
     pub image_offset: image::Offset,
-    ///
+    /// Size of the portion of the image to copy.
     pub image_extent: Extent,
 }
 
 
 impl<'a, B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<'a, B, C, S, L> {
-    ///
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn pipeline_barrier<'i, T>(
         &mut self,
         stages: Range<PipelineStage>,
@@ -76,7 +81,7 @@ impl<'a, B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<'a,
     }
 
 
-    ///
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn fill_buffer(
         &mut self,
         buffer: &B::Buffer,
@@ -86,7 +91,7 @@ impl<'a, B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<'a,
         self.raw.fill_buffer(buffer, range, data)
     }
 
-    ///
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn copy_buffer<T>(
         &mut self,
         src: &B::Buffer,
@@ -99,7 +104,7 @@ impl<'a, B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<'a,
         self.raw.copy_buffer(src, dst, regions)
     }
 
-    ///
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn update_buffer(
         &mut self,
         buffer: &B::Buffer,
@@ -109,7 +114,7 @@ impl<'a, B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<'a,
         self.raw.update_buffer(buffer, offset, data)
     }
 
-    ///
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn copy_image<T>(
         &mut self,
         src: &B::Image,
@@ -124,7 +129,7 @@ impl<'a, B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<'a,
         self.raw.copy_image(src, src_layout, dst, dst_layout, regions)
     }
 
-    ///
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn copy_buffer_to_image<T>(
         &mut self,
         src: &B::Buffer,
@@ -138,7 +143,7 @@ impl<'a, B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<'a,
         self.raw.copy_buffer_to_image(src, dst, dst_layout, regions)
     }
 
-    ///
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn copy_image_to_buffer<T>(
         &mut self,
         src: &B::Image,

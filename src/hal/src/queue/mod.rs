@@ -1,11 +1,10 @@
-/*! Command queues.
-
-    Queues are the execution paths of the graphical processing units. These process
-    submitted commands buffers.
-
-    There are different types of queues, which can only handle associated command buffers.
-    `CommandQueue<B, C>` has the capability defined by `C`: graphics, compute and transfer.
-!*/
+//! Command queues.
+//!
+//! Queues are the execution paths of the graphical processing units. These process
+//! submitted commands buffers.
+//!
+//! There are different types of queues, which can only handle associated command buffers.
+//! `CommandQueue<B, C>` has the capability defined by `C`: graphics, compute and transfer.
 
 pub mod capability;
 pub mod family;
@@ -28,17 +27,17 @@ pub use self::family::{
 pub use self::submission::{RawSubmission, Submission};
 
 
-///
+/// The type of the queue, an enum encompassing `queue::Capability`
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum QueueType {
-    ///
+    /// Supports all operations.
     General,
-    ///
+    /// Only supports graphics and transfer operations.
     Graphics,
-    ///
+    /// Only supports compute and transfer operations.
     Compute,
-    ///
+    /// Only supports transfer operations.
     Transfer,
 }
 
@@ -57,7 +56,11 @@ pub trait RawCommandQueue<B: Backend>: Any + Send + Sync {
         IC: IntoIterator,
         IC::Item: Borrow<B::CommandBuffer>;
 
+    /// Presents the result of the queue to the given swapchains, after waiting on all the
+    /// semaphores given in `wait_semaphores`. A given swapchain must not appear in this
+    /// list more than once.
     ///
+    /// Unsafe for the same reasons as `submit_raw()`.
     fn present<IS, IW>(&mut self, swapchains: IS, wait_semaphores: IW)
     where
         Self: Sized,
@@ -84,7 +87,8 @@ impl<B: Backend, C> CommandQueue<B, C> {
         &mut self.0
     }
 
-    ///
+    /// Submits the submission command buffers to the queue for execution.
+    /// `fence` will be signalled after submission and _must_ be unsignalled.
     pub fn submit<D>(&mut self,
         submission: Submission<B, D>,
         fence: Option<&B::Fence>,
@@ -96,7 +100,9 @@ impl<B: Backend, C> CommandQueue<B, C> {
         }
     }
 
-    ///
+    /// Presents the result of the queue to the given swapchains, after waiting on all the
+    /// semaphores given in `wait_semaphores`. A given swapchain must not appear in this
+    /// list more than once.
     pub fn present<IS, IW>(&mut self, swapchains: IS, wait_semaphores: IW)
     where
         IS: IntoIterator,

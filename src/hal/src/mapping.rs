@@ -14,7 +14,7 @@ pub enum Error {
     InvalidAccess,
     /// The requested mapping range is outside of the resource.
     OutOfBounds,
-    ///
+    /// There is not enough memory to provide the requested mapping.
     OutOfMemory,
 }
 

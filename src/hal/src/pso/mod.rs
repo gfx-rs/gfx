@@ -56,7 +56,7 @@ impl Error for CreationError {
 bitflags!(
     /// Stages of the logical pipeline.
     ///
-    /// The pipeline is structured as given the by the ordering of the flags.
+    /// The pipeline is structured by the ordering of the flags.
     /// Some stages are queue type dependent.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct PipelineStage: u32 {
@@ -176,14 +176,17 @@ bitflags!(
         ///
         /// May speedup pipeline creation.
         const DISABLE_OPTIMIZATION = 0x1;
-        /// Allow derivatives of the pipeline.
+        /// Allow derivatives (children) of the pipeline.
         ///
         /// Must be set when pipelines set the pipeline as base.
         const ALLOW_DERIVATIVES = 0x2;
     }
 );
 
-///
+/// A reference to a parent pipeline.  The assumption is that
+/// a parent and derivative/child pipeline have most settings
+/// in common, and one may be switched for another more quickly 
+/// than entirely unrelated pipelines would be.
 #[derive(Debug)]
 pub enum BasePipeline<'a, P: 'a> {
     /// Referencing an existing pipeline as parent.
@@ -192,11 +195,20 @@ pub enum BasePipeline<'a, P: 'a> {
     ///
     /// The index of the parent must be lower than the index of the child.
     Index(usize),
-    ///
+    /// No parent pipeline exists.
     None,
 }
 
 /// Specialization information for pipelines.
+/// 
+/// Specialization constants allow for easy configuration of 
+/// multiple similar pipelines. For example, there may be a 
+/// boolean exposed to the shader that switches the specularity on/off
+/// provided via a specialization constant.
+/// That would produce separate PSO's for the "on" and "off" states 
+/// but they share most of the internal stuff and are fast to produce. 
+/// More importantly, they are fast to execute, since the driver 
+/// can optimize out the branch on that other PSO creation.
 #[derive(Debug, Clone)]
 pub struct Specialization {
     /// Constant identifier in shader source.
@@ -206,20 +218,14 @@ pub struct Specialization {
 }
 
 /// Scalar specialization constant with value for overriding.
+#[allow(missing_docs)]
 #[derive(Debug, Clone)]
 pub enum Constant {
-    ///
     Bool(bool),
-    ///
     U32(u32),
-    ///
     U64(u64),
-    ///
     I32(i32),
-    ///
     I64(i64),
-    ///
     F32(f32),
-    ///
     F64(f64),
 }

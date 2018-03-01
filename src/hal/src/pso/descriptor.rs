@@ -1,4 +1,9 @@
 //! Descriptor sets and layouts.
+//! A descriptor is an object that describes the connection between a resource, such as
+//! an `Image` or `Buffer`, and a variable in a shader. Descriptors are organized into
+//! sets, each of which contains multiple descriptors that are bound and unbound to
+//! shaders as a single unit. Each descriptor set may contain descriptors to multiple 
+//! different sorts of resources, and a shader may use multiple descriptor sets at a time.
 
 use std::borrow::Borrow;
 use std::fmt;
@@ -9,10 +14,9 @@ use pso::ShaderStageFlags;
 use range::RangeArg;
 
 
-///
-// TODO: Grasping and remembering the differences between these
-//       types is a tough task. We might be able to come up with better names?
-//       Or even use tuples to describe functionality instead of coming up with fancy names.
+/// DOC TODO: Grasping and remembering the differences between these
+///       types is a tough task. We might be able to come up with better names?
+///       Or even use tuples to describe functionality instead of coming up with fancy names.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DescriptorType {
@@ -40,7 +44,7 @@ pub enum DescriptorType {
     // TODO: Dynamic descriptors
 }
 
-/// Binding descriptiong of a descriptor set
+/// Binding description of a descriptor set
 ///
 /// A descriptor set consists of multiple binding points.
 /// Each binding point contains one or multiple descriptors of a certain type.
@@ -72,7 +76,8 @@ pub struct DescriptorRangeDesc {
     pub count: usize,
 }
 
-///
+
+/// A descriptor pool is a collection of memory from which descriptor sets are allocated.
 pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
     /// Allocate a descriptor set from the pool.
     ///
@@ -98,11 +103,15 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
         layouts.into_iter().map(|layout| self.allocate_set(layout.borrow())).collect()
     }
 
-    ///
+    /// Resets a descriptor pool, releasing all resources from all the descriptor sets
+    /// allocated from it and freeing the descriptor sets. Invalidates all descriptor
+    /// sets allocated from the pool; trying to use one after the pool has been reset
+    /// is undefined behavior.
     fn reset(&mut self);
 }
 
-#[allow(missing_docs)] //TODO
+/// DOC TODO
+#[allow(missing_docs)]
 pub struct DescriptorSetWrite<'a, B: Backend, R: 'a + RangeArg<u64>> {
     pub set: &'a B::DescriptorSet,
     pub binding: usize,
@@ -110,7 +119,8 @@ pub struct DescriptorSetWrite<'a, B: Backend, R: 'a + RangeArg<u64>> {
     pub write: DescriptorWrite<'a, B, R>,
 }
 
-#[allow(missing_docs)] //TODO
+/// DOC TODO
+#[allow(missing_docs)]
 #[derive(Clone, Copy)]
 pub enum DescriptorWrite<'a, B: Backend, R: 'a + RangeArg<u64>> {
     Sampler(&'a [&'a B::Sampler]),
@@ -124,7 +134,9 @@ pub enum DescriptorWrite<'a, B: Backend, R: 'a + RangeArg<u64>> {
     CombinedImageSampler(&'a [(&'a B::Sampler, &'a B::ImageView, ImageLayout)]),
 }
 
-#[allow(missing_docs)] //TODO
+
+/// DOC TODO
+#[allow(missing_docs)]
 #[derive(Clone, Copy)]
 pub struct DescriptorSetCopy<'a, B: Backend> {
     pub src_set: &'a B::DescriptorSet,

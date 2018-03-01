@@ -1,6 +1,10 @@
-//! Physical devices and adapter.
+//! Physical devices and adapters.
 //!
-//! Physical devices are the main entry point for opening a [Device](../struct.Device).
+//! The `PhysicalDevice` trait specifies the API a backend must provide for dealing with
+//! and querying a physical device, such as a particular GPU.  An `Adapter` is a struct
+//! containing a `PhysicalDevice` and metadata for a particular GPU, generally created
+//! from an `Instance` of that backend.  `adapter.open_with(...)` will return a `Device`
+//! that has the properties specified.
 
 use std::any::Any;
 
@@ -12,7 +16,7 @@ use queue::{Capability, QueueGroup};
 /// `1.0` (high).
 pub type QueuePriority = f32;
 
-///
+/// A strongly-typed index to a particular `MemoryType`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct MemoryTypeId(pub usize);
@@ -23,11 +27,12 @@ impl From<usize> for MemoryTypeId {
     }
 }
 
-///
+/// A description for a single chunk of memory in a heap.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct MemoryType {
-    /// Properties of the associated memory.
+    /// Properties of the associated memory, such as synchronization
+    /// properties or whether it's on the CPU or GPU.
     pub properties: memory::Properties,
     /// Index to the underlying memory heap in `Gpu::memory_heaps`
     pub heap_index: usize,
@@ -44,7 +49,7 @@ pub struct MemoryProperties {
     pub memory_heaps: Vec<u64>,
 }
 
-/// Represents a physical or virtual device, which is capable of running the backend.
+/// Represents a physical device (such as a GPU) capable of supporting the given backend.
 pub trait PhysicalDevice<B: Backend>: Any + Send + Sync {
     /// Create a new logical device.
     ///
@@ -67,21 +72,21 @@ pub trait PhysicalDevice<B: Backend>: Any + Send + Sync {
     /// ```
     fn open(&self, Vec<(&B::QueueFamily, Vec<QueuePriority>)>) -> Result<Gpu<B>, DeviceCreationError>;
 
-    ///
+    /// Fetch details for a particular image format.
     fn format_properties(&self, Option<format::Format>) -> format::Properties;
 
-    ///
+    /// Fetch details for the memory regions provided by the device.
     fn memory_properties(&self) -> MemoryProperties;
 
     /// Returns the features of this `Device`. This usually depends on the graphics API being
     /// used.
     fn features(&self) -> Features;
 
-    /// Returns the limits of this `Device`.
+    /// Returns the resource limits of this `Device`.
     fn limits(&self) -> Limits;
 }
 
-/// Information about a backend adapter.
+/// Metadata about a backend adapter.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AdapterInfo {
@@ -91,7 +96,7 @@ pub struct AdapterInfo {
     pub vendor: usize,
     /// PCI id of the adapter
     pub device: usize,
-    /// The device is based on a software rasterizer
+    /// Whether or not the device is based on a software rasterizer
     pub software_rendering: bool,
 }
 
@@ -105,7 +110,7 @@ pub struct Adapter<B: Backend> {
     pub info: AdapterInfo,
     /// Actual physical device.
     pub physical_device: B::PhysicalDevice,
-    /// Supported queue families information for this adapter.
+    /// Queue families supported by this adapter.
     pub queue_families: Vec<B::QueueFamily>,
 }
 
@@ -123,7 +128,7 @@ impl<B: Backend> Adapter<B> {
     /// # fn main() {
     ///
     /// # let adapter: hal::Adapter<empty::Backend> = return;
-    /// let gpu = adapter.open_with::<_, General>(1, |_| true);
+    /// let (device, queues) = adapter.open_with::<_, General>(1, |_| true).unwrap();
     /// # }
     /// ```
     ///

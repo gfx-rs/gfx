@@ -1,3 +1,4 @@
+//! `CommandBuffer` methods for graphics operations.
 use std::borrow::Borrow;
 use std::ops::Range;
 
@@ -14,21 +15,27 @@ use super::{
 };
 
 
-#[allow(missing_docs)]
+/// A simple struct describing a rect with integer coordinates.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Rect {
+    /// X position.
     pub x: u16,
+    /// Y position.
     pub y: u16,
+    /// Width.
     pub w: u16,
+    /// Height.
     pub h: u16,
 }
 
-#[allow(missing_docs)]
+/// A viewport, generally equating to a window on a display.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Viewport {
+    /// The viewport boundaries.
     pub rect: Rect,
+    /// The viewport depth limits.
     pub depth: Range<f32>,
 }
 
@@ -144,38 +151,42 @@ pub enum BlitFilter {
     Linear = 1,
 }
 
-///
+
+/// Parameters for an image resolve operation,
+/// where a multi-sampled image is copied into a single-sampled
+/// image.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ImageResolve {
-    ///
+    /// Source image and layers.
     pub src_subresource: image::SubresourceLayers,
-    ///
+    /// Source image offset.
     pub src_offset: image::Offset,
-    ///
+    /// Destination image and layers.
     pub dst_subresource: image::SubresourceLayers,
-    ///
+    /// Destination image offset.
     pub dst_offset: image::Offset,
-    ///
+    /// Image extent.
     pub extent: Extent,
 }
 
-///
+/// Parameters for an image blit operation, where a portion of one image
+/// is copied into another, possibly with scaling and filtering.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ImageBlit {
-    ///
+    /// Source image and layers.
     pub src_subresource: image::SubresourceLayers,
-    ///
+    /// Source image bounds.
     pub src_bounds: Range<image::Offset>,
-    ///
+    /// Destination image and layers.
     pub dst_subresource: image::SubresourceLayers,
-    ///
+    /// Destination image bounds.
     pub dst_bounds: Range<image::Offset>,
 }
 
 impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a, B, C, S, L> {
-    ///
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn begin_render_pass_inline<T>(
         &mut self,
         render_pass: &B::RenderPass,
@@ -190,7 +201,7 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
         RenderPassInlineEncoder::new(self, render_pass, frame_buffer, render_area, clear_values)
     }
 
-    /// Clear color image
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn clear_color_image(
         &mut self,
         image: &B::Image,
@@ -201,7 +212,7 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
         self.raw.clear_color_image(image, layout, range, value)
     }
 
-    /// Clear depth-stencil image
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn clear_depth_stencil_image(
         &mut self,
         image: &B::Image,
@@ -212,22 +223,22 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
         self.raw.clear_depth_stencil_image(image, layout, range, value)
     }
 
-    /// Bind index buffer view.
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn bind_index_buffer(&mut self, ibv: IndexBufferView<B>) {
         self.raw.bind_index_buffer(ibv)
     }
 
-    /// Bind vertex buffers.
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<B>) {
         self.raw.bind_vertex_buffers(vbs)
     }
 
-    /// Bind a graphics pipeline.
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn bind_graphics_pipeline(&mut self, pipeline: &B::GraphicsPipeline) {
         self.raw.bind_graphics_pipeline(pipeline)
     }
 
-    ///
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn bind_graphics_descriptor_sets<T>(
         &mut self,
         layout: &B::PipelineLayout,
@@ -240,7 +251,7 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
         self.raw.bind_graphics_descriptor_sets(layout, first_set, sets)
     }
 
-    ///
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn set_viewports<T>(&mut self, viewports: T)
     where
         T: IntoIterator,
@@ -249,7 +260,7 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
         self.raw.set_viewports(viewports)
     }
 
-    ///
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn set_scissors<T>(&mut self, scissors: T)
     where
         T: IntoIterator,
@@ -258,22 +269,22 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
         self.raw.set_scissors(scissors)
     }
 
-    ///
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn set_stencil_reference(&mut self, front: StencilValue, back: StencilValue) {
         self.raw.set_stencil_reference(front, back)
     }
 
-    ///
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn set_blend_constants(&mut self, cv: ColorValue) {
         self.raw.set_blend_constants(cv)
     }
 
-    ///
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn push_graphics_constants(&mut self, layout: &B::PipelineLayout, stages: pso::ShaderStageFlags, offset: u32, constants: &[u32]) {
         self.raw.push_graphics_constants(layout, stages, offset, constants)
     }
 
-    ///
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn resolve_image<T>(
         &mut self,
         src: &B::Image,
@@ -288,7 +299,7 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
         self.raw.resolve_image(src, src_layout, dst, dst_layout, regions)
     }
 
-    ///
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn blit_image<T>(
         &mut self,
         src: &B::Image,
@@ -306,7 +317,7 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
 }
 
 impl<'a, B: Backend, C: Supports<Graphics>, S: Shot> CommandBuffer<'a, B, C, S, Primary> {
-    ///
+    /// Creates a new secondary render pass.
     pub fn begin_render_pass_secondary<T>(
         &mut self,
         render_pass: &B::RenderPass,
@@ -323,22 +334,22 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot> CommandBuffer<'a, B, C, S, 
 }
 
 impl<'a, B: Backend, C: Supports<GraphicsOrCompute>, S: Shot, L: Level> CommandBuffer<'a, B, C, S, L> {
-    ///
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn begin_query(&mut self, query: Query<B>, flags: QueryControl) {
         self.raw.begin_query(query, flags)
     }
 
-    ///
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn end_query(&mut self, query: Query<B>) {
         self.raw.end_query(query)
     }
 
-    ///
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn reset_query_pool(&mut self, pool: &B::QueryPool, queries: Range<QueryId>) {
         self.raw.reset_query_pool(pool, queries)
     }
 
-    ///
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn write_timestamp(&mut self, stage: pso::PipelineStage, query: Query<B>) {
         self.raw.write_timestamp(stage, query)
     }

@@ -1,4 +1,6 @@
-//! Output Merger(OM) stage description.
+//! Output Merger (OM) stage description.
+//! The final stage in a pipeline that creates pixel colors from
+//! the input shader results, depth/stencil information, etc.
 
 use command::StencilValue;
 
@@ -29,19 +31,19 @@ bitflags!(
     /// Target output color mask.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct ColorMask: u8 {
-        ///
+        /// Red mask
         const RED     = 0x1;
-        ///
+        /// Green mask
         const GREEN   = 0x2;
-        ///
+        /// Blue mask
         const BLUE    = 0x4;
-        ///
+        /// Alpha channel mask
         const ALPHA   = 0x8;
-        ///
+        /// Mask for RGB channels
         const COLOR   = 0x7;
-        ///
+        /// Mask all channels
         const ALL     = 0xF;
-        ///
+        /// Mask no channels.
         const NONE    = 0x0;
     }
 );
@@ -52,6 +54,9 @@ impl Default for ColorMask {
     }
 }
 
+/// Defines the possible blending factors.
+/// During blending, the source or destination fragment may be
+/// multiplied by a factor to produce the final result.
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -77,7 +82,7 @@ pub enum Factor {
     OneMinusSrc1Alpha,
 }
 
-/// Blending operation.
+/// Blending operations.
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -98,36 +103,41 @@ pub enum BlendOp {
 }
 
 impl BlendOp {
-    ///
+    /// Replace the destination value with the source.
     pub const REPLACE: Self = BlendOp::Add {
         src: Factor::One,
         dst: Factor::Zero,
     };
-    ///
+    /// Add the source and destination together.
     pub const ADD: Self = BlendOp::Add {
         src: Factor::One,
         dst: Factor::One,
     };
-    ///
+    /// Alpha blend the source and destination together.
     pub const ALPHA: Self = BlendOp::Add {
         src: Factor::SrcAlpha,
         dst: Factor::OneMinusSrcAlpha,
     };
-    ///
+    /// Alpha blend a premultiplied-alpha source with the destination.
     pub const PREMULTIPLIED_ALPHA: Self = BlendOp::Add {
         src: Factor::One,
         dst: Factor::OneMinusSrcAlpha,
     };
 }
 
-#[allow(missing_docs)]
+/// Specifies whether to use blending, and if so,
+/// which operatiosn to use for color and alpha channels.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BlendState {
+    /// Enabled blending
     On {
+        /// The blend operation to use for the color channels.
         color: BlendOp,
+        /// The blend operation to use for the alpha channel.
         alpha: BlendOp,
     },
+    /// Disabled blending
     Off,
 }
 
@@ -199,25 +209,27 @@ impl Default for DepthTest {
 }
 
 impl DepthTest {
-    ///
+    /// A depth test that always fails.
     pub const FAIL: Self = DepthTest::On {
         fun: Comparison::Never,
         write: false,
     };
-    ///
+    /// A depth test that always succeeds but doesn't
+    /// write to the depth buffer
+    // DOC TODO: Not a terribly helpful description there...
     pub const PASS_TEST: Self = DepthTest::On {
         fun: Comparison::Always,
         write: false,
     };
-    ///
+    /// A depth test that always succeeds and writes its result
+    /// to the depth buffer.
     pub const PASS_WRITE: Self = DepthTest::On {
         fun: Comparison::Always,
         write: true,
     };
 }
 
-/// Stencil mask operation.
-#[allow(missing_docs)]
+/// The operation to use for stencil masking.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum StencilOp {
@@ -258,6 +270,11 @@ pub struct StencilFace {
     pub op_pass: StencilOp,
 }
 
+/// Defines a stencil test. Stencil testing is an operation
+/// performed to cull fragments;
+/// the new fragment is tested against the value held in the
+/// stencil buffer, and if the test fails the fragment is
+/// discarded.
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

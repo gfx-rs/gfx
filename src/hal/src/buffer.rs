@@ -135,12 +135,13 @@ bitflags!(
 /// Buffer state
 pub type State = Access;
 
-/// Index buffer view for `bind_index_buffer`.
+/// Index buffer view for `bind_index_buffer`, slightly
+/// analogous to an index table into an array.
 pub struct IndexBufferView<'a, B: Backend> {
-    ///
+    /// The buffer to bind.
     pub buffer: &'a B::Buffer,
-    ///
+    /// The offset into the buffer to start at.
     pub offset: u64,
-    ///
+    /// The type of the table elements (`u16` or `u32`).
     pub index_type: IndexType,
 }

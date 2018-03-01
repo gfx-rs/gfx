@@ -13,18 +13,24 @@ use super::{
 
 /// Specifies how commands for the following renderpasses will be recorded.
 pub enum SubpassContents {
-    ///
+    /// Contents of the subpass will be inline in the command buffer,
+    /// NOT in secondary command buffers.
     Inline,
-    ///
+    /// Contents of the subpass will be in secondary command buffers, and
+    /// the primary command buffer will only contain `execute_command()` calls
+    /// until the subpass or render pass is complete.
     SecondaryBuffers,
 }
 
 /// This struct contains all methods for all commands submittable during a subpass.
 /// It is used to implement the identical portions of RenderPassInlineEncoder and SubpassCommandBuffer.
+///
+/// Where methods are undocumented, they are identical to the methods on the `RawCommandBuffer`
+/// trait with the same names.
 pub struct RenderSubpassCommon<'a, B: Backend>(pub(crate) &'a mut B::CommandBuffer);
 
 impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
-    ///
+    /// 
     pub fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
     where
         T: IntoIterator,
@@ -39,6 +45,7 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
     pub fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {
         self.0.draw(vertices, instances)
     }
+    
     ///
     pub fn draw_indexed(&mut self, indices: Range<IndexCount>, base_vertex: VertexOffset, instances: Range<InstanceCount>) {
         self.0.draw_indexed(indices, base_vertex, instances)
@@ -52,22 +59,22 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
         self.0.draw_indexed_indirect(buffer, offset, draw_count, stride)
     }
 
-    /// Bind index buffer view.
+    /// 
     pub fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<B>) {
         self.0.bind_index_buffer(ibv)
     }
 
-    /// Bind vertex buffers.
+    /// 
     pub fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<B>) {
         self.0.bind_vertex_buffers(vbs);
     }
 
-    /// Bind a graphics pipeline.
+    /// 
     pub fn bind_graphics_pipeline(&mut self, pipeline: &B::GraphicsPipeline) {
         self.0.bind_graphics_pipeline(pipeline)
     }
 
-    ///
+    /// 
     pub fn bind_graphics_descriptor_sets<T>(
         &mut self,
         layout: &B::PipelineLayout,
@@ -80,7 +87,7 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
         self.0.bind_graphics_descriptor_sets(layout, first_set, sets)
     }
 
-    ///
+    /// 
     pub fn set_viewports<T>(&mut self, viewports: T)
     where
         T: IntoIterator,
@@ -89,7 +96,7 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
         self.0.set_viewports(viewports)
     }
 
-    ///
+    /// 
     pub fn set_scissors<T>(&mut self, scissors: T)
     where
         T: IntoIterator,
@@ -98,17 +105,17 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
         self.0.set_scissors(scissors)
     }
 
-    ///
+    /// 
     pub fn set_stencil_reference(&mut self, front: StencilValue, back: StencilValue) {
         self.0.set_stencil_reference(front, back)
     }
 
-    ///
+    /// 
     pub fn set_blend_constants(&mut self, cv: ColorValue) {
         self.0.set_blend_constants(cv)
     }
 
-    ///
+    /// 
     pub fn push_graphics_constants(&mut self, layout: &B::PipelineLayout, stages: pso::ShaderStageFlags, offset: u32, constants: &[u32]) {
         self.0.push_graphics_constants(layout, stages, offset, constants);
     }
@@ -122,12 +129,14 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
     // TODO: begin/end query
 }
 
-///
+/// An object that records commands into a command buffer inline, that is,
+/// without secondary command buffers.
 pub struct RenderPassInlineEncoder<'a, B: Backend, L: Level>(pub(crate) Option<RenderSubpassCommon<'a, B>>, PhantomData<L>)
 where B::CommandBuffer: 'a;
 
 impl<'a, B: Backend, L: Level> RenderPassInlineEncoder<'a, B, L> {
-    ///
+    /// Creates a new `RenderPassInlineEncoder`, starting a new render
+    /// pass in the given `CommandBuffer`.
     pub fn new<C, T, S: Shot>(
         cmd_buffer: &'a mut CommandBuffer<B, C, S, L>,
         render_pass: &B::RenderPass,
@@ -149,7 +158,7 @@ impl<'a, B: Backend, L: Level> RenderPassInlineEncoder<'a, B, L> {
         RenderPassInlineEncoder(Some(RenderSubpassCommon(cmd_buffer.raw)), PhantomData)
     }
 
-    ///
+    /// Start the next subpass.
     pub fn next_subpass_inline(mut self) -> Self {
         self.0.as_mut().unwrap().0.next_subpass(SubpassContents::Inline);
         self
@@ -158,7 +167,7 @@ impl<'a, B: Backend, L: Level> RenderPassInlineEncoder<'a, B, L> {
 
 impl<'a, B: Backend> RenderPassInlineEncoder<'a, B, Primary> {
 
-    ///
+    /// Begins recording a new subpass with secondary buffers.
     pub fn next_subpass_secondary(mut self) -> RenderPassSecondaryEncoder<'a, B> {
         let buffer = self.0.take().unwrap();
         buffer.0.next_subpass(SubpassContents::SecondaryBuffers);
@@ -187,12 +196,15 @@ impl<'a, B: Backend, L: Level> Drop for RenderPassInlineEncoder<'a, B, L> {
     }
 }
 
-///
+/// An object that records commands into a command buffer where each command must
+/// be a call to execute a secondary command buffer.
 pub struct RenderPassSecondaryEncoder<'a, B: Backend>(pub(crate) Option<&'a mut B::CommandBuffer>)
 where B::CommandBuffer: 'a;
 
 impl<'a, B: Backend> RenderPassSecondaryEncoder<'a, B> {
-    ///
+    /// Wraps the given `CommandBuffer` in a `RenderPassSecondaryEncoder`,
+    /// starting a new render pass where the actual commands are contained in
+    /// secondary command buffers.
     pub fn new<C, T, S: Shot>(
         cmd_buffer: &'a mut CommandBuffer<B, C, S, Primary>,
         render_pass: &B::RenderPass,
@@ -215,7 +227,7 @@ impl<'a, B: Backend> RenderPassSecondaryEncoder<'a, B> {
         RenderPassSecondaryEncoder(Some(cmd_buffer.raw))
     }
 
-    ///
+    /// Executes the given commands as a secondary command buffer.
     pub fn execute_commands<I>(&mut self, submits: I)
     where
         I: IntoIterator,
@@ -225,14 +237,14 @@ impl<'a, B: Backend> RenderPassSecondaryEncoder<'a, B> {
         self.0.as_mut().unwrap().execute_commands(submits.into_iter().map(|submit| unsafe { submit.into_buffer() }));
     }
 
-    ///
+    /// Starts a new subpass with inline commands.
     pub fn next_subpass_inline(mut self) -> RenderPassInlineEncoder<'a, B, Primary> {
         let buffer = self.0.take().unwrap();
         buffer.next_subpass(SubpassContents::Inline);
         RenderPassInlineEncoder(Some(RenderSubpassCommon(buffer)), PhantomData)
     }
 
-    ///
+    /// Starts a new subpass with secondary command buffers.
     pub fn next_subpass_secondary(mut self) -> Self {
         self.0.as_mut().unwrap().next_subpass(SubpassContents::SecondaryBuffers);
         self
@@ -254,7 +266,8 @@ pub enum Subpass { }
 pub struct SubpassCommandBuffer<'a, B: Backend, S: Shot>(pub(crate) RenderSubpassCommon<'a, B>, pub(crate) PhantomData<S>);
 impl<'a, B: Backend, S: Shot> SubpassCommandBuffer<'a, B, S> {
 
-    ///
+    /// Wraps the given `CommandBuffer` in a `SubpassCommandBuffer`, starting
+    /// to record a new subpass.
     pub unsafe fn new(raw: &mut B::CommandBuffer) -> SubpassCommandBuffer<B, S> {
         SubpassCommandBuffer(RenderSubpassCommon(raw), PhantomData)
     }
