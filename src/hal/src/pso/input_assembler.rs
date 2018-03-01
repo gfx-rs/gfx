@@ -50,7 +50,7 @@ pub struct AttributeDesc {
 }
 
 /// Describes whether or not primitive restart is supported for
-/// an input assembler.  Primitive restart is a feature that
+/// an input assembler. Primitive restart is a feature that
 /// allows a mark to be placed in an index buffer where it is
 /// is "broken" into multiple pieces of geometry.
 ///
@@ -61,9 +61,9 @@ pub struct AttributeDesc {
 pub enum PrimitiveRestart {
     /// No primitive restart.
     Disabled,
-    /// Primitive restart using a 16-bit index value.
+    /// Primitive restart using a 16-bit index value (`std::u16::MAX`).
     U16,
-    /// Primitive restart using a 32-bit index value.
+    /// Primitive restart using a 32-bit index value (`std::u32::MAX`)
     U32,
 }
 

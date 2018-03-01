@@ -31,7 +31,7 @@ impl From<usize> for MemoryTypeId {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct MemoryType {
-    /// Properties of the associated memory, such as  synchronization
+    /// Properties of the associated memory, such as synchronization
     /// properties or whether it's on the CPU or GPU.
     pub properties: memory::Properties,
     /// Index to the underlying memory heap in `Gpu::memory_heaps`

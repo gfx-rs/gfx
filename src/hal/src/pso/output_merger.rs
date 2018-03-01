@@ -270,8 +270,8 @@ pub struct StencilFace {
     pub op_pass: StencilOp,
 }
 
-/// Defines a stencil test.  Stencil testing is an operation
-/// performed after a fragment is created by a fragment shader;
+/// Defines a stencil test. Stencil testing is an operation
+/// performed to cull fragments;
 /// the new fragment is tested against the value held in the
 /// stencil buffer, and if the test fails the fragment is
 /// discarded.

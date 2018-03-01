@@ -101,7 +101,7 @@ where
         }
     }
 
-    /// Promote a submission to a higher (more general) capability type.  For example,
+    /// Promote a submission to a higher (more general) capability type. For example,
     /// this can turn a `Compute` submission into a `GraphicsOrCompute` submission.
     ///
     /// Submission promotion is only necessary for combining multiple submissions

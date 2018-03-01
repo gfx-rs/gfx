@@ -49,7 +49,7 @@ pub struct GraphicsPipelineDesc<'a, B: Backend> {
     /// Vertex attributes (IA)
     pub attributes: Vec<AttributeDesc>,
     /// Input assembler attributes, describes how
-    /// vertices are assembled into triangles.
+    /// vertices are assembled into primitives (such as triangles).
     pub input_assembler: InputAssemblerDesc,
     /// Description of how blend operations should be performed.
     pub blender: BlendDesc,
@@ -104,7 +104,7 @@ pub enum PolygonMode {
     Fill,
 }
 
-/// Which faces of the polygon, if any, to cull.  Face culling
+/// Which faces of the polygon, if any, to cull. Face culling
 /// is often used to reduce the amount of geometry that has to get
 /// drawn, so the renderer, for instance, doesn't have to worry about
 /// drawing the insides of closed objects.
@@ -117,7 +117,7 @@ pub enum CullFace {
     Back,
 }
 
-/// The front face winding order of a set of vertices.  This is
+/// The front face winding order of a set of vertices. This is
 /// the order of vertexes that define which side of a face is
 /// the "front".
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -130,7 +130,7 @@ pub enum FrontFace {
 }
 
 /// A depth bias allows changing the produced depth values 
-/// for fragments slightly but consistently.  This permits 
+/// for fragments slightly but consistently. This permits 
 /// drawing of multiple polygons in the same plane without 
 /// Z-fighting, such as when trying to draw shadows on a wall.
 ///
@@ -163,7 +163,7 @@ pub struct Rasterizer {
     pub depth_clamping: bool,
     /// What depth bias, if any, to use for the drawn primitives.
     pub depth_bias: Option<DepthBias>,
-    /// DOC TODO: Not sure what this is intended for, seems unused.
+    /// Controls how triangles will be rasterized depending on their overlap with pixels.
     pub conservative: bool,
     //TODO: multisampling
 }
@@ -184,10 +184,11 @@ impl Rasterizer {
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BlendDesc {
-    /// DOC TODO: ???
-    /// Is this for this feature: https://msdn.microsoft.com/en-us/library/windows/desktop/bb205072(v=vs.85).aspx#Alpha_To_Coverage ?
+    /// Toggles alpha-to-coverage multisampling, which can produce nicer edges
+    /// when many partially-transparent polygons are overlapping.
+    /// See [here]( https://msdn.microsoft.com/en-us/library/windows/desktop/bb205072(v=vs.85).aspx#Alpha_To_Coverage) for a full description.
     pub alpha_coverage: bool,
-    /// The logi operation to apply to the blending equation, if any.
+    /// The logic operation to apply to the blending equation, if any.
     pub logic_op: Option<LogicOp>,
     /// Which color targets to apply the blending operation to.
     pub targets: Vec<ColorBlendDesc>,

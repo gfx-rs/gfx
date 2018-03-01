@@ -158,13 +158,13 @@ pub enum BlitFilter {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ImageResolve {
-    /// Source image  and layers.
+    /// Source image and layers.
     pub src_subresource: image::SubresourceLayers,
     /// Source image offset.
     pub src_offset: image::Offset,
-    ///Destination image and layers.
+    /// Destination image and layers.
     pub dst_subresource: image::SubresourceLayers,
-    ///Destination image offset.
+    /// Destination image offset.
     pub dst_offset: image::Offset,
     /// Image extent.
     pub extent: Extent,
@@ -175,7 +175,7 @@ pub struct ImageResolve {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ImageBlit {
-    /// Source image  and layers.
+    /// Source image and layers.
     pub src_subresource: image::SubresourceLayers,
     /// Source image bounds.
     pub src_bounds: Range<image::Offset>,

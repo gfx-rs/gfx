@@ -47,7 +47,7 @@ impl Shot for MultiShot { const FLAGS: CommandBufferFlags = CommandBufferFlags::
 pub trait Level { }
 
 /// Indicates a primary command buffer.
-///
+
 /// Vulkan describes a primary command buffer as one which can be directly submitted
 /// to a queue, and can execute `Secondary` command buffers.
 pub enum Primary { }
@@ -56,7 +56,7 @@ impl Level for Primary { }
 /// Indicates a secondary command buffer.
 ///
 /// Vulkan describes a secondary command buffer as one which cannot be directly submitted
-/// to a queue, but can be executed by a primary command buffer.  This allows
+/// to a queue, but can be executed by a primary command buffer. This allows
 /// multiple secondary command buffers to be constructed which do specific 
 /// things and can then be composed together into primary command buffers.
 pub enum Secondary { }

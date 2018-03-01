@@ -35,7 +35,8 @@ pub type AttachmentLayout = image::ImageLayout;
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AttachmentOps {
-    /// Whether or not data from the load operation will be preserved after the subpass.
+    /// Indicates how the data of the attachment will be loaded at first usage at 
+    /// the beginning of the subpass.
     pub load: AttachmentLoadOp,
     /// Whether or not data from the store operation will be preserved after the subpass.
     pub store: AttachmentStoreOp,
@@ -89,18 +90,21 @@ pub type AttachmentId = usize;
 /// Reference to an attachment by index and expected image layout.
 pub type AttachmentRef = (AttachmentId, AttachmentLayout);
 
-/// What other subpasses a particular subpass depends on.
+/// Which other subpasses a particular subpass depends on.
 #[derive(Copy, Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SubpassRef {
     /// The subpass depends on something that was submitted to the
-    /// queue before the render pass began.
+    /// queue before or after the render pass began.
     External,
-    /// The subpass depends on another subpass with the given index.
+    /// The subpass depends on another subpass with the given index,
+    /// which must be less than or equal to the index of the current
+    /// subpass. The index here refers to the corresponding 
+    /// `SubpassId` of a `Subpass`.
     Pass(usize),
 }
 
-/// Expresses a dependency between multiple subpasses.  This is used
+/// Expresses a dependency between multiple subpasses. This is used
 /// both to describe a source or destination subpass; data either 
 /// explicitly passes from this subpass to the next or from another 
 /// subpass into this one.
@@ -121,7 +125,7 @@ pub struct SubpassDesc<'a> {
     pub colors: &'a [AttachmentRef],
     /// Which attachments will be used as depth/stencil buffers.
     pub depth_stencil: Option<&'a AttachmentRef>,
-    /// Which attachments MAY be used by this subpass.
+    /// Which attachments will be used by this subpass.
     pub inputs: &'a [AttachmentRef],
     /// Attachments that are not used by the subpass but must be preserved to be
     /// passed on to subsequent passes.

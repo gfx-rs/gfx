@@ -118,9 +118,12 @@ impl Default for Swizzle {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Properties {
-    /// A bitmask of the features supported when a device with linear tiling is requested.
+    /// A bitmask of the features supported when an image with linear tiling is requested.
+    /// Linear tiling has a known layout in-memory so data can be copied to and from host
+    /// memory.
     pub linear_tiling: ImageFeature,
-    /// A bitmask of the features supported when a device with optimal tiling is requested.
+    /// A bitmask of the features supported when an image with optimal tiling is requested.
+    /// Optimal tiling is arranged however the GPU wants; its exact layout is undefined.
     pub optimal_tiling: ImageFeature,
     /// The features supported by buffers.
     pub buffer_features: BufferFeature,

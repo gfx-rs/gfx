@@ -1,8 +1,8 @@
 //! Descriptor sets and layouts.
 //! A descriptor is an object that describes the connection between a resource, such as
-//! an `Image` or `Buffer`, and a variable in a shader.  Descriptors are organized into
+//! an `Image` or `Buffer`, and a variable in a shader. Descriptors are organized into
 //! sets, each of which contains multiple descriptors that are bound and unbound to
-//! shaders as a single unit.  Each descriptor set may contain descriptors to multiple 
+//! shaders as a single unit. Each descriptor set may contain descriptors to multiple 
 //! different sorts of resources, and a shader may use multiple descriptor sets at a time.
 
 use std::borrow::Borrow;
@@ -104,7 +104,7 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
     }
 
     /// Resets a descriptor pool, releasing all resources from all the descriptor sets
-    /// allocated from it and freeing the descriptor sets.  Invalidates all descriptor
+    /// allocated from it and freeing the descriptor sets. Invalidates all descriptor
     /// sets allocated from the pool; trying to use one after the pool has been reset
     /// is undefined behavior.
     fn reset(&mut self);

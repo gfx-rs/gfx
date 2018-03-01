@@ -62,7 +62,7 @@ bitflags! {
         const ONE_TIME_SUBMIT = 0x1;
 
         /// If set on a secondary command buffer, it says the command buffer takes place entirely inside
-        /// a render pass.  Ignored on primary command buffer.
+        /// a render pass. Ignored on primary command buffer.
         const RENDER_PASS_CONTINUE = 0x2;
 
         // TODO: I feel like this could be better.
@@ -125,7 +125,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     );
 
     /// Clears an image to the given color.
-    // Just calls `clear_color_raw` with some minor type conversion.
+    /// Just calls `clear_color_raw` with some minor type conversion.
     fn clear_color_image(
         &mut self,
         image: &B::Image,
@@ -184,8 +184,8 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
         U: IntoIterator,
         U::Item: Borrow<Rect>;
 
-    /// "Resolves" a multi-sampled image, converting it into a non-multi-sampled
-    /// image.  Takes an iterator of regions to apply the resolution to.
+    /// "Resolves" a multisampled image, converting it into a non-multisampled
+    /// image. Takes an iterator of regions to apply the resolution to.
     fn resolve_image<T>(
         &mut self,
         src: &B::Image,
@@ -263,7 +263,9 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
         T: IntoIterator,
         T::Item: Borrow<Rect>;
 
-    /// DOC TODO: I don't know how to explain this.
+    /// Sets the stencil reference value for comparison operations and store operations.
+    /// Will be used on the LHS of stencil compare ops and as store value when the 
+    /// store op is Reference.
     fn set_stencil_reference(&mut self, front: StencilValue, back: StencilValue);
 
     /// Set the blend constant values dynamically.
@@ -309,8 +311,9 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     /// `render_area` is the section of the framebuffer to render,
     /// `clear_values` is an iterator of `ClearValue`'s to use to use for
     /// `clear_*` commands, one for each attachment of the render pass.
-    /// `first_subpass` specifies whether the rendering commands are provided
-    /// inline, or whether the render pass is composed of subpasses.
+    /// `first_subpass` specifies, for the first subpass, whether the 
+    /// rendering commands are provided inline or whether the render 
+    /// pass is composed of subpasses.
     fn begin_render_pass_raw<T>(
         &mut self,
         render_pass: &B::RenderPass,
@@ -372,7 +375,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
         T: IntoIterator,
         T::Item: Borrow<B::DescriptorSet>;
 
-    /// Execute a workgroup in the compute pipeline.  `x`, `y` and `z` are the
+    /// Execute a workgroup in the compute pipeline. `x`, `y` and `z` are the
     /// number of local workgroups to dispatch along each "axis"; a total of `x`*`y`*`z`
     /// local workgroups will be created.
     ///
@@ -406,8 +409,8 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
 
     /// Copies regions from the source to the destination images, which
     /// have the given layouts.  No format conversion is done; the source and destination
-    /// `ImageLayout`'s **must** have the same sized texels (such as `Rgba8Unorm` and `R32`,
-    /// both of which are 32 bits).
+    /// `ImageLayout`'s **must** have the same sized image formats (such as `Rgba8Unorm` and 
+    /// `R32`, both of which are 32 bits).
     fn copy_image<T>(
         &mut self,
         src: &B::Image,
@@ -442,8 +445,8 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
         T::Item: Borrow<BufferImageCopy>;
 
     // TODO: This explanation needs improvement.
-    /// Performs a non-indexed drawing operation, drawing the given range
-    /// of vertices from the current vertex buffer.  It performs instanced 
+    /// Performs a non-indexed drawing operation, fetching vertex attributes
+    /// from the currently bound vertex buffers.  It performs instanced 
     /// drawing, drawing `instances.len()`
     /// times with an `instanceIndex` starting with the start of the range.
     fn draw(
@@ -452,9 +455,10 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
         instances: Range<InstanceCount>,
     );
 
-    /// Performs indexed drawing, drawing the given range of indices 
-    /// from the current vertex and index buffers.  `base_vertex` specifies
-    /// the vertex corresponding to index 0.
+    /// Performs indexed drawing, drawing the range of indices 
+    /// given by the current index buffer and any bound vertex buffers. 
+    /// `base_vertex` specifies the vertex offset corresponding to index 0.
+    /// That is, the offset into the vertex buffer is `(current_index + base_vertex)`
     ///
     /// It also performs instanced drawing, identical to `draw()`.
     fn draw_indexed(
@@ -512,7 +516,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
 
     /// Modify constant data in a graphics pipeline.
     /// Push constants are intended to modify data in a pipeline more
-    /// quickly than a memory copy.
+    /// quickly than a updating the values inside a descriptor set.
     fn push_graphics_constants(
         &mut self,
         layout: &B::PipelineLayout,
@@ -523,7 +527,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
 
     /// Modify constant data in a compute pipeline.
     /// Push constants are intended to modify data in a pipeline more
-    /// quickly than a memory copy.
+    /// quickly than a updating the values inside a descriptor set.
     fn push_compute_constants(
         &mut self,
         layout: &B::PipelineLayout,

@@ -1,5 +1,5 @@
 //! Queries are commands that can be submitted to a command buffer to record statistics or
-//! other useful values as the command buffer is running.  They are often intended for profiling
+//! other useful values as the command buffer is running. They are often intended for profiling
 //! or other introspection, providing a mechanism for the command buffer to record data about its
 //! operation as it is running.
 
@@ -32,14 +32,14 @@ bitflags!(
 
 /// Type of queries in a query pool.
 pub enum QueryType {
-    /// Occlusion query.  Count the number of drawn samples between
+    /// Occlusion query. Count the number of drawn samples between
     /// the start and end of the query command.
     Occlusion,
-    /// Pipeline statistic query.  Counts the number of pipeline stage
+    /// Pipeline statistic query. Counts the number of pipeline stage
     /// invocations of the given types between the start and end of
     /// the query command.
     PipelineStatistics(PipelineStatistic),
-    /// Timestamp query.  Timestamps can be recorded to the
+    /// Timestamp query. Timestamps can be recorded to the
     /// query pool by calling `write_timestamp()`.
     Timestamp,
 }

@@ -59,7 +59,7 @@ use std::borrow::{Borrow, BorrowMut};
 use std::ops::Range;
 
 /// An extent describes the size of a rectangle, such as
-/// a window or texture.  It's not used for referring to a
+/// a window or texture. It is not used for referring to a
 /// sub-rectangle; for that see `command::Rect`.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -106,9 +106,6 @@ pub trait Surface<B: Backend>: Any + Send + Sync {
 
     /// Check if the queue family supports presentation to this surface.
     ///
-    /// For example, a queue family with only the `queue::QueueType::Compute` 
-    /// capability will not allow drawing commands to be issued.
-    ///
     /// # Examples
     ///
     /// ```no_run
@@ -130,7 +127,7 @@ pub trait Surface<B: Backend>: Any + Send + Sync {
 ///
 /// The swapchain is a series of one or more images, usually
 /// with one being drawn on while the other is displayed by
-/// the GPU (aka double-buffering).  A `Frame` refers to a
+/// the GPU (aka double-buffering). A `Frame` refers to a
 /// particular image in the swapchain.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

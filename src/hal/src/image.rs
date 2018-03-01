@@ -538,7 +538,7 @@ impl From<RenderDesc> for DepthStencilDesc {
 /// Specifies options for how memory for an image is arranged.
 /// These are hints to the GPU driver and may or may not have actual
 /// performance effects, but describe constraints on how the data
-/// may be used that a program *must* obey.  They do not specify
+/// may be used that a program *must* obey. They do not specify
 /// how channel values or such are laid out in memory; the actual
 /// image data is considered opaque.
 ///
@@ -585,7 +585,7 @@ bitflags!(
         const TRANSFER_READ = 0x4;
         /// Write access to the buffer in a copy operation.
         const TRANSFER_WRITE = 0x8;
-        /// Read-only state for shader access, or combine with `SHADER_WRITE` to have r/w access to UAV.
+        /// Read-only state for SRV access, or combine with `SHADER_WRITE` to have r/w access to UAV.
         const SHADER_READ = 0x10;
         /// Writeable state for UAV access.
         /// Combine with `SHADER_READ` to have r/w access to UAV.

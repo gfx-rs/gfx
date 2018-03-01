@@ -202,7 +202,7 @@ pub enum BasePipeline<'a, P: 'a> {
 /// Specialization information for pipelines.
 /// 
 /// Specialization constants allow for easy configuration of 
-/// multiple similar pipelines.  For example, there may be a 
+/// multiple similar pipelines. For example, there may be a 
 /// boolean exposed to the shader that switches the specularity on/off
 /// provided via a specialization constant.
 /// That would produce separate PSO's for the "on" and "off" states 

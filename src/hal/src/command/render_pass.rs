@@ -197,7 +197,7 @@ impl<'a, B: Backend, L: Level> Drop for RenderPassInlineEncoder<'a, B, L> {
 }
 
 /// An object that records commands into a command buffer where each command must
-/// be
+/// be a call to execute a secondary command buffer.
 pub struct RenderPassSecondaryEncoder<'a, B: Backend>(pub(crate) Option<&'a mut B::CommandBuffer>)
 where B::CommandBuffer: 'a;
 
