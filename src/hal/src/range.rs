@@ -1,4 +1,5 @@
-//! Generic range type abstraction
+//! Generic range type abstraction that allows
+//! ranges to be handled a little more generically.
 
 use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
 

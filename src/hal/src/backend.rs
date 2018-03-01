@@ -29,7 +29,7 @@ impl<B: Backend> RawQueueGroup<B> {
     ///
     /// # Panics
     ///
-    /// Panics if more command queues are added the exposed by the queue family.
+    /// Panics if more command queues are added than exposed by the queue family.
     pub fn add_queue(&mut self, queue: B::CommandQueue) {
         assert!(self.queues.len() < self.family.max_queues());
         self.queues.push(queue);

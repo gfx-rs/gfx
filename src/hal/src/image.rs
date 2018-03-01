@@ -1,7 +1,7 @@
 //! Texture creation and modification.
 //!
 //! "Texture" is an overloaded term. In gfx-rs, a texture consists of two
-//! separate pieces of information: image storage description (which is
+//! separate pieces of information: an image storage description (which is
 //! immutable for a single texture object), and image data. To actually use a
 //! texture, a "sampler" is needed, which provides a way of accessing the
 //! image data.  Image data consists of an array of "texture elements", or
@@ -258,10 +258,11 @@ pub const CUBE_FACES: [CubeFace; 6] = [
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Kind {
-    /// A single row of texels.
+    /// A single one-dimensional row of texels.
     D1(Size),
     /// An array of rows of texels. Equivalent to Texture2D except that texels
-    /// in a different row are not sampled.
+    /// in different rows are not sampled, so filtering will be constrained
+    /// to a single row of texels at a time.
     D1Array(Size, Layer),
     /// A traditional 2D texture, with rows arranged contiguously.
     D2(Size, Size, AaMode),
@@ -314,8 +315,9 @@ impl Kind {
             1 // anti-aliased textures can't have mipmaps
         }
     }
-    /// Return the number of slices for an array, or None for non-arrays.
-    pub fn num_slices(&self) -> Option<Layer> {
+    /// Return the number of slices in a texture array type, 
+    /// or None for non-arrays.
+    pub fn get_num_slices(&self) -> Option<Layer> {
         match *self {
             Kind::D1(..) | Kind::D2(..) | Kind::D3(..) | Kind::Cube(..) => None,
             Kind::D1Array(_, a) => Some(a),
@@ -323,7 +325,7 @@ impl Kind {
             Kind::CubeArray(_, a) => Some(a),
         }
     }
-    /// Return the number of layers.
+    /// Return the number of layers in an array type.
     ///
     /// Each cube face counts as separate layer.
     pub fn num_layers(&self) -> Layer {
@@ -335,7 +337,7 @@ impl Kind {
             Kind::CubeArray(_, a) => 6*a,
         }
     }
-    /// Check if it's one of the cube kinds.
+    /// Checks whether the `Kind` is `Cube` or `CubeArray`.
     pub fn is_cube(&self) -> bool {
         match *self {
             Kind::Cube(_) | Kind::CubeArray(_, _) => true,
@@ -350,17 +352,17 @@ bitflags!(
     /// Image usage flags
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct Usage: u8 {
-        ///
+        /// The image is used as a transfer source.
         const TRANSFER_SRC = 0x1;
-        ///
+        /// The image is used as a transfer destination.
         const TRANSFER_DST = 0x2;
-        ///
+        /// The image is used as a color attachment -- that is, color input to a rendering pass.
         const COLOR_ATTACHMENT = 0x4;
-        ///
+        /// The image is used as a depth attachment.
         const DEPTH_STENCIL_ATTACHMENT = 0x8;
-        ///
+        /// The image is a [storage image](https://www.khronos.org/registry/vulkan/specs/1.0/html/vkspec.html#descriptorsets-storageimage)
         const STORAGE = 0x10;
-        ///
+        /// The image is a [sampled image](https://www.khronos.org/registry/vulkan/specs/1.0/html/vkspec.html#descriptorsets-sampledimage)
         const SAMPLED = 0x20;
         ///
         const TRANSIENT_ATTACHMENT = 0x40;
@@ -371,12 +373,12 @@ bitflags!(
 );
 
 impl Usage {
-    /// Can this image be used in transfer operations ?
+    /// Returns true if this image can be used in transfer operations.
     pub fn can_transfer(&self) -> bool {
         self.intersects(Usage::TRANSFER_SRC | Usage::TRANSFER_DST)
     }
 
-    /// Can this image be used as a target ?
+    /// Returns true if this image can be used as a target.
     pub fn can_target(&self) -> bool {
         self.intersects(Usage::COLOR_ATTACHMENT | Usage::DEPTH_STENCIL_ATTACHMENT)
     }
@@ -386,8 +388,9 @@ impl Usage {
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum WrapMode {
-    /// Tile the texture. That is, sample the coordinate modulo `1.0`. This is
-    /// the default.
+    /// Tile the texture, that is, sample the coordinate modulo `1.0`, so 
+    /// addressing the texture beyond an edge will "wrap" back from the
+    /// other edge.
     Tile,
     /// Mirror the texture. Like tile, but uses abs(coord) before the modulo.
     Mirror,
@@ -414,7 +417,7 @@ impl Into<f32> for Lod {
     }
 }
 
-/// A wrapper for the 8bpp RGBA color, encoded as u32.
+/// A wrapper for an RGBA color with 8 bits per texel, encoded as a u32.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PackedColor(pub u32);
@@ -476,9 +479,10 @@ impl SamplerInfo {
 }
 
 /// Texture resource view descriptor.
-#[allow(missing_docs)]
+/// Legacy code to be removed, per msiglreith.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[allow(missing_docs)]
 pub struct ResourceDesc {
     pub channel: format::ChannelType,
     pub layer: Option<Layer>,
@@ -487,9 +491,10 @@ pub struct ResourceDesc {
 }
 
 /// Texture render view descriptor.
-#[allow(missing_docs)]
+/// Legacy code to be removed, per msiglreith.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[allow(missing_docs)]
 pub struct RenderDesc {
     pub channel: format::ChannelType,
     pub level: Level,
@@ -510,6 +515,7 @@ bitflags!(
 );
 
 /// Texture depth-stencil view descriptor.
+/// Legacy code to be removed, per msiglreith.
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -529,67 +535,81 @@ impl From<RenderDesc> for DepthStencilDesc {
     }
 }
 
+/// Specifies options for how memory for an image is arranged.
+/// These are hints to the GPU driver and may or may not have actual
+/// performance effects, but describe constraints on how the data
+/// may be used that a program *must* obey.  They do not specify
+/// how channel values or such are laid out in memory; the actual
+/// image data is considered opaque.
 ///
+/// Details may be found in [the Vulkan spec](https://www.khronos.org/registry/vulkan/specs/1.0/html/vkspec.html#resources-image-layouts)
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ImageLayout {
-    ///
+    /// General purpose, no restrictions on usage.
     General,
-    ///
+    /// Must only be used as a color attachment in a framebuffer.
     ColorAttachmentOptimal,
-    ///
+    /// Must only be used as a depth attachment in a framebuffer.
     DepthStencilAttachmentOptimal,
-    ///
+    /// Must only be used as a depth attachment in a framebuffer,
+    /// or as a read-only depth or stencil buffer in a shader.
     DepthStencilReadOnlyOptimal,
-    ///
+    /// Must only be used as a read-only image in a shader.
     ShaderReadOnlyOptimal,
-    ///
+    /// Must only be used as the source for a transfer command.
     TransferSrcOptimal,
-    ///
+    /// Must only be used as the destination for a transfer command.
     TransferDstOptimal,
-    ///
+    /// No layout, does not support device access.  Only valid as a
+    /// source layout when transforming data to a specific destination
+    /// layout or initializing data.  Does NOT guarentee that the contents 
+    /// of the source buffer are preserved.
     Undefined, //TODO: consider Option<> instead?
-    ///
+    /// Like `Undefined`, but does guarentee that the contents of the source
+    /// buffer are preserved.
     Preinitialized,
-    ///
+    /// The layout that an image must be in to be presented to the display.
     Present,
 }
 
 bitflags!(
-    ///
+    /// Bitflags to describe how memory in an image or buffer can be accessed.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct Access: u16 {
         /// Read state but can only be combined with `COLOR_ATTACHMENT_WRITE`.
         const COLOR_ATTACHMENT_READ = 0x1;
         /// Write-only state but can be combined with `COLOR_ATTACHMENT_READ`.
         const COLOR_ATTACHMENT_WRITE = 0x2;
-        ///
+        /// Read access to the buffer in a copy operation.
         const TRANSFER_READ = 0x4;
-        /// Write-only state of copy commands.
+        /// Write access to the buffer in a copy operation.
         const TRANSFER_WRITE = 0x8;
-        /// Read-only state for SRV access, or combine with `SHADER_WRITE` to have r/w access to UAV.
+        /// Read-only state for shader access, or combine with `SHADER_WRITE` to have r/w access to UAV.
         const SHADER_READ = 0x10;
-        /// Write state for UAV access.
+        /// Writeable state for UAV access.
         /// Combine with `SHADER_READ` to have r/w access to UAV.
         const SHADER_WRITE = 0x20;
-        ///
+        /// Read access to a depth/stencil attachment in a depth or stencil operation.
         const DEPTH_STENCIL_ATTACHMENT_READ = 0x40;
-        /// Write-only state for depth stencil writes.
+        /// Write access to a depth/stencil attachment in a depth or stencil operation.
         const DEPTH_STENCIL_ATTACHMENT_WRITE = 0x80;
-        ///
+        /// Read access for raw memory to be accessed by the host system (ie, CPU).
         const HOST_READ = 0x100;
-        ///
+        /// Write access for raw memory to be accessed by the host system.
         const HOST_WRITE = 0x200;
-        ///
+        /// Read access for memory to be accessed by a non-specific entity.  This may
+        /// be the host system, or it may be something undefined or specified by an
+        /// extension.
         const MEMORY_READ = 0x400;
-        ///
+        /// Write access for memory to be accessed by a non-specific entity.
         const MEMORY_WRITE = 0x800;
-        ///
+        /// Read access to an input attachment from within a fragment shader.
         const INPUT_ATTACHMENT_READ = 0x1000;
     }
 );
 
-/// Image state
+/// Image state, combining access methods and the image's layout.
 pub type State = (Access, ImageLayout);
 
 /// Selector of a concrete subresource in an image.
