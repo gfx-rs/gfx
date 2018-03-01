@@ -145,13 +145,15 @@ fn main() {
     // Setup renderpass and pipeline
     let set_layout = device.create_descriptor_set_layout(&[
             pso::DescriptorSetLayoutBinding {
-                bindings: 0 .. 1,
+                binding: 0,
                 ty: pso::DescriptorType::SampledImage,
+                count: 1,
                 stage_flags: ShaderStageFlags::FRAGMENT,
             },
             pso::DescriptorSetLayoutBinding {
-                bindings: 1 .. 2,
+                binding: 1,
                 ty: pso::DescriptorType::Sampler,
+                count: 1,
                 stage_flags: ShaderStageFlags::FRAGMENT,
             },
         ],
@@ -432,15 +434,17 @@ fn main() {
         pso::DescriptorSetWrite {
             set: &desc_set,
             binding: 0,
-            writes: Some(
-                (0, pso::Descriptor::Image(&image_srv, i::ImageLayout::Undefined))
+            array_offset: 0,
+            descriptors: Some(
+                pso::Descriptor::Image(&image_srv, i::ImageLayout::Undefined)
             ),
         },
         pso::DescriptorSetWrite {
             set: &desc_set,
             binding: 1,
-            writes: Some(
-                (0, pso::Descriptor::Sampler(&sampler))
+            array_offset: 0,
+            descriptors: Some(
+                pso::Descriptor::Sampler(&sampler)
             ),
         },
     ]);

@@ -15,11 +15,11 @@ use image::ImageLayout;
 use pso::ShaderStageFlags;
 
 ///
-pub type DescriptorSetIndex = u32;
+pub type DescriptorSetIndex = u16;
 ///
 pub type DescriptorBinding = u32;
 ///
-pub type DescriptorArrayIndex = u32;
+pub type DescriptorArrayIndex = usize;
 
 /// DOC TODO: Grasping and remembering the differences between these
 ///       types is a tough task. We might be able to come up with better names?

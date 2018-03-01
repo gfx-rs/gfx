@@ -51,8 +51,9 @@ fn main() {
     let (pipeline_layout, pipeline, set_layout, mut desc_pool) = {
         let set_layout = device.create_descriptor_set_layout(&[
                 pso::DescriptorSetLayoutBinding {
-                    bindings: 0 .. 1,
+                    binding: 0,
                     ty: pso::DescriptorType::StorageBuffer,
+                    count: 1,
                     stage_flags: pso::ShaderStageFlags::COMPUTE,
                 }
             ],
@@ -105,8 +106,9 @@ fn main() {
         pso::DescriptorSetWrite {
             set: &desc_set,
             binding: 0,
-            writes: Some(
-                (0, pso::Descriptor::Buffer(&device_buffer, 0 .. stride * numbers.len() as u64))
+            array_offset: 0,
+            descriptors: Some(
+                pso::Descriptor::Buffer(&device_buffer, None .. None)
             ),
         }
     ));

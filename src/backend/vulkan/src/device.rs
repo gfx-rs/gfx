@@ -1075,7 +1075,7 @@ impl d::Device<B> for Device {
             vk::DescriptorSetLayoutBinding {
                 binding: b.binding,
                 descriptor_type: conv::map_descriptor_type(b.ty),
-                descriptor_count: b.count,
+                descriptor_count: b.count as _,
                 stage_flags: conv::map_stage_flags(b.stage_flags),
                 p_immutable_samplers: ptr::null(), // TODO
             }
@@ -1122,7 +1122,7 @@ impl d::Device<B> for Device {
                 p_next: ptr::null(),
                 dst_set: sw.set.raw,
                 dst_binding: sw.binding,
-                dst_array_element: sw.array_offset,
+                dst_array_element: sw.array_offset as _,
                 descriptor_count: 0,
                 descriptor_type: conv::map_descriptor_type(layout.ty),
                 p_image_info: ptr::null(),

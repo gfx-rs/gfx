@@ -7,8 +7,9 @@
 		"desc-layout": DescriptorSetLayout(
 			bindings: [
 				(
-					bindings: (start:0, end:1),
+					binding: 0,
 					ty: StorageBuffer,
+					count: 1,
 					stage_flags: (bits: 0x20), //COMPUTE
 				),
 			],

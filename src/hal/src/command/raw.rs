@@ -76,7 +76,7 @@ bitflags! {
 /// is primary or secondary, similar to what `command::Primary`
 /// and `command::Secondary` do at compile-time.
 #[allow(missing_docs)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Level {
     Primary,
     Secondary,

@@ -218,7 +218,7 @@ impl hal::Device<Backend> for Device {
     where
         I: IntoIterator<Item = pso::DescriptorSetWrite<'a, Backend, J>>,
         J: IntoIterator,
-        J::Item: Borrow<pso::Descriptor<'a, B>>,
+        J::Item: Borrow<pso::Descriptor<'a, Backend>>,
     {
         unimplemented!()
     }
