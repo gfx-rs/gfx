@@ -2388,7 +2388,7 @@ impl d::Device<B> for Device {
         // so make sure these two methods aren't called together
         unsafe {
             for resource in swapchain.resources {
-                resource.Release();
+                (*resource).Release();
             }
         }
     }
