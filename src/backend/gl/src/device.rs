@@ -913,7 +913,7 @@ impl d::Device<B> for Device {
     where
         I: IntoIterator<Item = pso::DescriptorSetWrite<'a, B, J>>,
         J: IntoIterator,
-        J::Item: Borrow<(usize, pso::Descriptor<'a, B>)>,
+        J::Item: Borrow<pso::Descriptor<'a, B>>,
     {
         for _write in writes {
             //unimplemented!() // not panicing because of Warden

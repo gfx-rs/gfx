@@ -371,7 +371,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     where
         I: IntoIterator<Item = pso::DescriptorSetWrite<'a, B, J>>,
         J: IntoIterator,
-        J::Item: Borrow<(usize, pso::Descriptor<'a, B>)>;
+        J::Item: Borrow<pso::Descriptor<'a, B>>;
 
     ///
     fn copy_descriptor_sets<'a, I>(&self, I)

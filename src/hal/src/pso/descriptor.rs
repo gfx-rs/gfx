@@ -14,35 +14,43 @@ use buffer::Offset;
 use image::ImageLayout;
 use pso::ShaderStageFlags;
 
+///
+pub type DescriptorSetIndex = u32;
+///
+pub type DescriptorBinding = u32;
+///
+pub type DescriptorArrayIndex = u32;
 
 /// DOC TODO: Grasping and remembering the differences between these
 ///       types is a tough task. We might be able to come up with better names?
 ///       Or even use tuples to describe functionality instead of coming up with fancy names.
+#[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DescriptorType {
     /// Controls filtering parameters for sampling from images.
-    Sampler,
+    Sampler = 0,
+    ///
+    CombinedImageSampler = 1,
     /// Allows sampling (filtered loading) from associated image memory.
     /// Usually combined with a `Sampler`.
-    SampledImage,
+    SampledImage = 2,
     /// Allows atomic operations, (non-filtered) loads and stores on image memory.
-    StorageImage,
+    StorageImage = 3,
     /// Read-only, formatted buffer.
-    UniformTexelBuffer,
+    UniformTexelBuffer = 4,
     /// Read-Write, formatted buffer.
-    StorageTexelBuffer,
+    StorageTexelBuffer = 5,
     /// Read-only, structured buffer.
-    UniformBuffer,
+    UniformBuffer = 6,
     /// Read-Write, structured buffer.
-    StorageBuffer,
-    /// Allows unfiltered loads of pixel local data in the fragment shader.
-    InputAttachment,
-
+    StorageBuffer = 7,
     ///
-    CombinedImageSampler,
-
-    // TODO: Dynamic descriptors
+    UniformBufferDynamic = 8,
+    ///
+    UniformImageDynamic = 9,
+    /// Allows unfiltered loads of pixel local data in the fragment shader.
+    InputAttachment = 10,
 }
 
 /// Binding description of a descriptor set
@@ -56,9 +64,14 @@ pub enum DescriptorType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DescriptorSetLayoutBinding {
     /// Descriptor bindings range.
-    pub bindings: Range<usize>,
+    pub binding: DescriptorBinding,
     /// Type of the bound descriptors.
     pub ty: DescriptorType,
+    /// Number of descriptors in the array.
+    ///
+    /// *Note*: If count is zero, the binding point is reserved
+    /// and can't be accessed from any shader stages.
+    pub count: DescriptorArrayIndex,
     /// Valid shader stages.
     pub stage_flags: ShaderStageFlags,
     // TODO: immutable samplers?
@@ -115,8 +128,13 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
 #[allow(missing_docs)]
 pub struct DescriptorSetWrite<'a, B: Backend, W> {
     pub set: &'a B::DescriptorSet,
-    pub binding: usize,
-    pub writes: W,
+    /// *Note*: when there is more descriptors provided than
+    /// array elements left in the specified binding starting
+    /// at specified, offset, the updates are spilled onto
+    /// the next binding (starting with offset 0), and so on.
+    pub binding: DescriptorBinding,
+    pub array_offset: DescriptorArrayIndex,
+    pub descriptors: W,
 }
 
 /// DOC TODO
@@ -126,7 +144,7 @@ pub enum Descriptor<'a, B: Backend> {
     Sampler(&'a B::Sampler),
     Image(&'a B::ImageView, ImageLayout),
     CombinedImageSampler(&'a B::ImageView, ImageLayout, &'a B::Sampler),
-    Buffer(&'a B::Buffer, Range<Offset>),
+    Buffer(&'a B::Buffer, Range<Option<Offset>>),
     TexelBuffer(&'a B::BufferView),
 }
 
@@ -136,10 +154,10 @@ pub enum Descriptor<'a, B: Backend> {
 #[derive(Clone, Copy)]
 pub struct DescriptorSetCopy<'a, B: Backend> {
     pub src_set: &'a B::DescriptorSet,
-    pub src_binding: usize,
-    pub src_array_offset: usize,
+    pub src_binding: DescriptorBinding,
+    pub src_array_offset: DescriptorArrayIndex,
     pub dst_set: &'a B::DescriptorSet,
-    pub dst_binding: usize,
-    pub dst_array_offset: usize,
+    pub dst_binding: DescriptorBinding,
+    pub dst_array_offset: DescriptorArrayIndex,
     pub count: usize,
 }

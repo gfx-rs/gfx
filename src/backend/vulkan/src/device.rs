@@ -1073,9 +1073,9 @@ impl d::Device<B> for Device {
 
         let raw_bindings = bindings.iter().map(|b| {
             vk::DescriptorSetLayoutBinding {
-                binding: b.bindings.start as _,
+                binding: b.binding,
                 descriptor_type: conv::map_descriptor_type(b.ty),
-                descriptor_count: (b.bindings.end - b.bindings.start) as _,
+                descriptor_count: b.count,
                 stage_flags: conv::map_stage_flags(b.stage_flags),
                 p_immutable_samplers: ptr::null(), // TODO
             }
@@ -1105,7 +1105,7 @@ impl d::Device<B> for Device {
     where
         I: IntoIterator<Item = pso::DescriptorSetWrite<'a, B, J>>,
         J: IntoIterator,
-        J::Item: Borrow<(usize, pso::Descriptor<'a, B>)>,
+        J::Item: Borrow<pso::Descriptor<'a, B>>,
     {
         let mut raw_writes = Vec::new();
         let mut image_infos = Vec::new();
@@ -1113,41 +1113,26 @@ impl d::Device<B> for Device {
         let mut texel_buffer_views = Vec::new();
 
         for sw in write_iter {
-            let mut prev_type = pso::DescriptorType::Sampler;
+            let layout = sw.set.bindings
+                .iter()
+                .find(|lb| lb.binding == sw.binding)
+                .expect("Descriptor set writes don't match the set layout!");
             let mut raw = vk::WriteDescriptorSet {
                 s_type: vk::StructureType::WriteDescriptorSet,
                 p_next: ptr::null(),
                 dst_set: sw.set.raw,
-                dst_binding: sw.binding as _,
-                dst_array_element: 0,
+                dst_binding: sw.binding,
+                dst_array_element: sw.array_offset,
                 descriptor_count: 0,
-                descriptor_type: vk::DescriptorType::Sampler,
+                descriptor_type: conv::map_descriptor_type(layout.ty),
                 p_image_info: ptr::null(),
                 p_buffer_info: ptr::null(),
                 p_texel_buffer_view: ptr::null(),
             };
-            for write in sw.writes {
-                let (binding, ref descriptor) = *write.borrow();
-                let cur_type = sw.set
-                    .find_binding(binding)
-                    .expect("Descriptor set writes don't match the set layout!");
-                let next_binding = (raw.dst_array_element + raw.descriptor_count) as usize;
-                if binding != next_binding || prev_type != cur_type {
-                    if raw.descriptor_count != 0 {
-                        raw_writes.push(vk::WriteDescriptorSet {
-                            descriptor_type: conv::map_descriptor_type(prev_type),
-                            p_image_info: image_infos.len() as _,
-                            p_buffer_info: buffer_infos.len() as _,
-                            p_texel_buffer_view: texel_buffer_views.len() as _,
-                            .. raw.clone()
-                        });
-                    }
-                    prev_type = cur_type;
-                    raw.dst_array_element = binding as _;
-                    raw.descriptor_count = 0;
-                }
+
+            for descriptor in sw.descriptors {
                 raw.descriptor_count += 1;
-                match *descriptor {
+                match *descriptor.borrow() {
                     pso::Descriptor::Sampler(sampler) => {
                         image_infos.push(vk::DescriptorImageInfo {
                             sampler: sampler.0,
@@ -1170,11 +1155,14 @@ impl d::Device<B> for Device {
                         });
                     }
                     pso::Descriptor::Buffer(buffer, ref range) => {
-                        let (offset, size) = conv::map_range_arg(range);
+                        let offset = range.start.unwrap_or(0);
                         buffer_infos.push(vk::DescriptorBufferInfo {
                             buffer: buffer.raw,
                             offset,
-                            range: size,
+                            range: match range.end {
+                                Some(end) => end - offset,
+                                None => vk::VK_WHOLE_SIZE,
+                            },
                         });
                     }
                     pso::Descriptor::TexelBuffer(view) => {
@@ -1182,13 +1170,11 @@ impl d::Device<B> for Device {
                     }
                 }
             }
-            if raw.descriptor_count != 0 {
-                raw.descriptor_type = conv::map_descriptor_type(prev_type);
-                raw.p_image_info = image_infos.len() as _;
-                raw.p_buffer_info = buffer_infos.len() as _;
-                raw.p_texel_buffer_view = texel_buffer_views.len() as _;
-                raw_writes.push(raw);
-            }
+
+            raw.p_image_info = image_infos.len() as _;
+            raw.p_buffer_info = buffer_infos.len() as _;
+            raw.p_texel_buffer_view = texel_buffer_views.len() as _;
+            raw_writes.push(raw);
         }
 
         // Patch the pointers now that we have all the storage allocated

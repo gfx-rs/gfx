@@ -74,15 +74,6 @@ pub struct DescriptorSet {
     pub(crate) bindings: Arc<Vec<pso::DescriptorSetLayoutBinding>>,
 }
 
-impl DescriptorSet {
-    pub(crate) fn find_binding(&self, index: usize) -> Option<pso::DescriptorType> {
-        self.bindings
-            .iter()
-            .find(|lb| lb.bindings.start <= index && index < lb.bindings.end)
-            .map(|lb| lb.ty)
-    }
-}
-
 #[derive(Debug, Hash)]
 pub struct PipelineLayout {
     pub(crate) raw: vk::PipelineLayout,
