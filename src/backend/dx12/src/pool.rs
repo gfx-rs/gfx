@@ -55,7 +55,10 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         unsafe { self.inner.Reset(); }
     }
 
-    fn allocate(&mut self, num: usize, level: command::RawLevel) -> Vec<CommandBuffer> { // TODO: Implement secondary buffers
+    fn allocate(
+        &mut self, num: usize, level: command::RawLevel
+    ) -> Vec<CommandBuffer> { // TODO: Implement secondary buffers
+        assert_eq!(level, command::RawLevel::Primary);
         (0..num)
             .map(|_| CommandBuffer::new(
                 self.create_command_list(),

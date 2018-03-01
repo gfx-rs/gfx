@@ -444,58 +444,6 @@ impl Device {
         }
     }
 
-    fn update_descriptor_sets_impl<'a, F, I, R>(
-        &self,
-        writes: I,
-        heap_type: d3d12::D3D12_DESCRIPTOR_HEAP_TYPE,
-        mut fun: F,
-    ) where
-        F: FnMut(&pso::DescriptorWrite<B, R>, &mut Vec<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>),
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetWrite<'a, B, R>>,
-        R: 'a + RangeArg<u64>,
-    {
-        let mut dst_starts = Vec::new();
-        let mut dst_sizes = Vec::new();
-        let mut src_starts = Vec::new();
-        let mut src_sizes = Vec::new();
-
-        for sw in writes {
-            let sw = sw.borrow();
-            let old_count = src_starts.len();
-            fun(&sw.write, &mut src_starts);
-            if old_count != src_starts.len() {
-                for _ in old_count .. src_starts.len() {
-                    src_sizes.push(1);
-                }
-                let range_binding = &sw.set.ranges[sw.binding as usize];
-                let range = match (heap_type, range_binding) {
-                    (d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, &n::DescriptorRangeBinding::Sampler(ref range)) => range,
-                    (d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, &n::DescriptorRangeBinding::SamplerView(ref range, _)) => range,
-                    (d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, &n::DescriptorRangeBinding::View(ref range)) => range,
-                    (d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, &n::DescriptorRangeBinding::SamplerView(_, ref range)) => range,
-                    _ => unreachable!(),
-                };
-                dst_starts.push(range.at(sw.array_offset as _));
-                dst_sizes.push((src_starts.len() - old_count) as u32);
-            }
-        }
-
-        if !dst_starts.is_empty() {
-            unsafe {
-                self.raw.clone().CopyDescriptors(
-                    dst_starts.len() as u32,
-                    dst_starts.as_ptr(),
-                    dst_sizes.as_ptr(),
-                    src_starts.len() as u32,
-                    src_starts.as_ptr(),
-                    src_sizes.as_ptr(),
-                    heap_type,
-                );
-            }
-        }
-    }
-
     fn view_image_as_render_target(
         &self,
         resource: *mut d3d12::ID3D12Resource,
@@ -1821,54 +1769,82 @@ impl d::Device<B> for Device {
         I::Item: Borrow<pso::DescriptorSetLayoutBinding>
     {
         n::DescriptorSetLayout {
-            bindings: bindings.into_iter().map(|bind| *bind.borrow()).collect()
+            bindings: bindings.into_iter().map(|bind| bind.borrow().clone()).collect()
         }
     }
 
-    fn write_descriptor_sets<'a, I, R>(&self, writes: I)
+    fn write_descriptor_sets<'a, I, J>(&self, write_iter: I)
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetWrite<'a, B, R>>,
-        R: 'a + RangeArg<u64>,
+        I: IntoIterator<Item = pso::DescriptorSetWrite<'a, B, J>>,
+        J: IntoIterator,
+        J::Item: Borrow<pso::Descriptor<'a, B>>,
     {
-        let writes = writes.into_iter().collect::<Vec<_>>();
-        // Create temporary non-shader visible views for uniform and storage buffers.
-        let mut num_views = 0;
-        for write in &writes {
-            let sw = write.borrow();
-            match sw.write {
-                pso::DescriptorWrite::UniformBuffer(ref views) |
-                pso::DescriptorWrite::StorageBuffer(ref views) => {
-                    num_views += views.len();
-                },
-                _ => (),
-            }
-        }
+        let mut descriptor_update_pools = self.descriptor_update_pools.lock().unwrap();
+        let mut update_pool_index = 0;
 
-        let mut raw = self.raw.clone();
-        let mut handles = Vec::with_capacity(num_views);
-        let _buffer_heap = if num_views != 0 {
-            let mut heap = n::DescriptorCpuPool {
-                heap: Self::create_descriptor_heap_impl(
-                    &mut raw,
-                    d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-                    false,
-                    num_views,
-                ),
-                offset: 0,
-                size: 0,
-                max_size: num_views as _,
-            };
-            // Create views
-            for write in &writes {
-                let sw = write.borrow();
-                match sw.write {
-                    pso::DescriptorWrite::UniformBuffer(ref views) => {
-                        handles.extend(views.iter().map(|&(buffer, ref range)| {
-                            let handle = heap.alloc_handles(1).cpu;
-                            let start = *range.start().unwrap_or(&0);
-                            let end = *range.end().unwrap_or(&(buffer.size_in_bytes as _));
+        //TODO: optimize this
+        let mut dst_samplers = Vec::new();
+        let mut dst_views = Vec::new();
+        let mut src_samplers = Vec::new();
+        let mut src_views = Vec::new();
+        let mut num_samplers = Vec::new();
+        let mut num_views = Vec::new();
 
+        for write in write_iter {
+            let mut offset = write.array_offset as u64;
+            let mut target_binding = write.binding as usize;
+            let mut bind_info = &write.set.binding_infos[target_binding];
+            for descriptor in write.descriptors {
+                // spill over the writes onto the next binding
+                while offset >= bind_info.count {
+                    assert_eq!(offset, bind_info.count);
+                    target_binding += 1;
+                    bind_info = &write.set.binding_infos[target_binding];
+                    offset = 0;
+                }
+                match *descriptor.borrow() {
+                    pso::Descriptor::Buffer(buffer, ref range) => {
+                        if update_pool_index == descriptor_update_pools.len() {
+                            let max_size = 1u64<<12; //arbitrary
+                            descriptor_update_pools.push(n::DescriptorCpuPool {
+                                heap: Self::create_descriptor_heap_impl(
+                                    &mut self.raw.clone(),
+                                    d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                                    false,
+                                    max_size as _,
+                                ),
+                                offset: 0,
+                                size: 0,
+                                max_size,
+                            });
+                        }
+                        let heap = descriptor_update_pools.last_mut().unwrap();
+                        let handle = heap.alloc_handles(1).cpu;
+                        if heap.size == heap.max_size {
+                            // pool is full, move to the next one
+                            update_pool_index += 1;
+                        }
+                        let start = range.start.unwrap_or(0);
+                        let end = range.end.unwrap_or(buffer.size_in_bytes as _);
+
+                        if bind_info.is_uav {
+                            assert_eq!((end - start) % 4, 0);
+                            let mut desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
+                                Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
+                                ViewDimension: d3d12::D3D12_UAV_DIMENSION_BUFFER,
+                                u: unsafe { mem::zeroed() },
+                            };
+                           *unsafe { desc.u.Buffer_mut() } = d3d12::D3D12_BUFFER_UAV {
+                                FirstElement: start as _,
+                                NumElements: ((end - start) / 4) as _,
+                                StructureByteStride: 0,
+                                CounterOffsetInBytes: 0,
+                                Flags: d3d12::D3D12_BUFFER_UAV_FLAG_RAW,
+                            };
+                            unsafe {
+                                self.raw.CreateUnorderedAccessView(buffer.resource, ptr::null_mut(), &desc, handle);
+                            }
+                        } else {
                             // Making the size field of buffer requirements for uniform
                             // buffers a multiple of 256 and setting the required offset
                             // alignment to 256 allows us to patch the size here.
@@ -1879,80 +1855,68 @@ impl d::Device<B> for Device {
                                 BufferLocation: unsafe { (*buffer.resource).GetGPUVirtualAddress() } + start,
                                 SizeInBytes: size as _,
                             };
-                            unsafe { raw.CreateConstantBufferView(&desc, handle); }
-                            handle
-                        }));
+                            unsafe { self.raw.CreateConstantBufferView(&desc, handle); }
+                        }
+
+                        src_views.push(handle);
+                        dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
+                        num_views.push(1);
                     }
-                    pso::DescriptorWrite::StorageBuffer(ref views) => {
-                        // StorageBuffer gets translated into a byte address buffer.
-                        // We don't have to stride information to make it structured.
-                        handles.extend(views.iter().map(|&(buffer, ref range)| {
-                            let handle = heap.alloc_handles(1).cpu;
-                            let mut desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
-                                Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
-                                ViewDimension: d3d12::D3D12_UAV_DIMENSION_BUFFER,
-                                u: unsafe { mem::zeroed() },
-                            };
-
-                            let start = *range.start().unwrap_or(&0);
-                            let size = *range.end().unwrap_or(&(buffer.size_in_bytes as _)) - start;
-
-                           *unsafe { desc.u.Buffer_mut() } = d3d12::D3D12_BUFFER_UAV {
-                                FirstElement: start as _,
-                                NumElements: (size / 4) as _,
-                                StructureByteStride: 0,
-                                CounterOffsetInBytes: 0,
-                                Flags: d3d12::D3D12_BUFFER_UAV_FLAG_RAW,
-                            };
-
-                            unsafe {
-                                raw.CreateUnorderedAccessView(buffer.resource, ptr::null_mut(), &desc, handle);
-                            }
-                            handle
-                        }));
+                    pso::Descriptor::Image(image, _layout) => {
+                        let handle = if bind_info.is_uav {
+                            image.handle_uav.unwrap()
+                        } else {
+                            image.handle_srv.unwrap()
+                        };
+                        src_views.push(handle);
+                        dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
+                        num_views.push(1);
                     }
-                    _ => {}
+                    pso::Descriptor::CombinedImageSampler(image, _layout, sampler) => {
+                        src_views.push(image.handle_srv.unwrap());
+                        dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
+                        num_views.push(1);
+                        src_samplers.push(sampler.handle);
+                        dst_samplers.push(bind_info.sampler_range.as_ref().unwrap().at(offset));
+                        num_samplers.push(1);
+                    }
+                    pso::Descriptor::Sampler(sampler) => {
+                        src_samplers.push(sampler.handle);
+                        dst_samplers.push(bind_info.sampler_range.as_ref().unwrap().at(offset));
+                        num_samplers.push(1);
+                    }
+                    pso::Descriptor::TexelBuffer(_) => unimplemented!()
                 }
+                offset += 1;
             }
+        }
 
-            Some(heap)
-        } else {
-            None
-        };
-
-        let mut cur_view = 0;
-        self.update_descriptor_sets_impl(writes.iter().map(Borrow::borrow),
-            d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-            |dw, starts| match *dw {
-                pso::DescriptorWrite::SampledImage(ref images) => {
-                    starts.extend(images.iter().map(|&(ref srv, _layout)| srv.handle_srv.unwrap()));
-                }
-                pso::DescriptorWrite::UniformBuffer(ref views) |
-                pso::DescriptorWrite::StorageBuffer(ref views) => {
-                    starts.extend(&handles[cur_view .. cur_view + views.len()]);
-                    cur_view += views.len();
-                }
-                pso::DescriptorWrite::StorageImage(ref images) => {
-                    starts.extend(images.iter().map(|&(ref uav, _layout)| uav.handle_uav.unwrap()));
-                }
-                pso::DescriptorWrite::CombinedImageSampler(ref images) => {
-                    starts.extend(images.iter().map(|&(_, ref srv, _layout)| srv.handle_srv.unwrap()));
-                }
-                pso::DescriptorWrite::Sampler(_) => (), // done separately
-                _ => unimplemented!()
-            });
-
-        self.update_descriptor_sets_impl(writes.iter().map(Borrow::borrow),
-            d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
-            |dw, starts| match *dw {
-                pso::DescriptorWrite::Sampler(ref samplers) => {
-                    starts.extend(samplers.iter().map(|sm| sm.handle))
-                }
-                pso::DescriptorWrite::CombinedImageSampler(ref samplers) => {
-                    starts.extend(samplers.iter().map(|&(ref sm, _, _)| sm.handle));
-                }
-                _ => ()
-            });
+        if !num_views.is_empty() {
+            unsafe {
+                self.raw.clone().CopyDescriptors(
+                    dst_views.len() as u32,
+                    dst_views.as_ptr(),
+                    num_views.as_ptr(),
+                    src_views.len() as u32,
+                    src_views.as_ptr(),
+                    num_views.as_ptr(),
+                    d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                );
+            }
+        }
+        if !num_samplers.is_empty() {
+            unsafe {
+                self.raw.clone().CopyDescriptors(
+                    dst_samplers.len() as u32,
+                    dst_samplers.as_ptr(),
+                    num_samplers.as_ptr(),
+                    src_samplers.len() as u32,
+                    src_samplers.as_ptr(),
+                    num_samplers.as_ptr(),
+                    d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
+                );
+            }
+        }
     }
 
     fn copy_descriptor_sets<'a, I>(&self, copies: I)
