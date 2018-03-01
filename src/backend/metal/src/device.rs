@@ -178,14 +178,14 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             max_samplers_per_stage: 31,
         };
 
-        let id = DeviceId(self.raw.registry_id());
+        let device_id = DeviceId(self.raw.registry_id() as usize);
 
         let device = Device {
             device: self.raw.clone(),
             private_caps,
             queue,
             memory_types: self.memory_types,
-            id,
+            id: device_id,
         };
 
         let mut queues = HashMap::new();
