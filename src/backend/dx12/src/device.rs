@@ -2225,7 +2225,9 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_image(&self, _image: n::Image) {
-       //  should be freed alongside swapchain in #destroy_swapchain
+        // Note that the same raw pointer can be released in #destroy_swapchain
+        // so make sure these two methods aren't called together
+        unsafe { (*image.resource).Release(); }
     }
 
     fn destroy_image_view(&self, _view: n::ImageView) {
@@ -2326,6 +2328,7 @@ impl d::Device<B> for Device {
         let swap_chain = unsafe { ComPtr::<dxgi1_4::IDXGISwapChain3>::from_raw(swap_chain as _) };
 
         // Get backbuffer images
+        let mut resources: Vec<*mut d3d12::ID3D12Resource> = Vec::new();
         let images = (0 .. config.image_count).map(|i| {
             let mut resource: *mut d3d12::ID3D12Resource = ptr::null_mut();
             unsafe {
@@ -2339,6 +2342,8 @@ impl d::Device<B> for Device {
             unsafe {
                 self.raw.clone().CreateRenderTargetView(resource, &rtv_desc, rtv_handle);
             }
+
+            resources.push(resource);
 
             let format_desc = config
                 .color_format
@@ -2370,18 +2375,20 @@ impl d::Device<B> for Device {
             next_frame: 0,
             frame_queue: VecDeque::new(),
             rtv_heap,
-            backbuffer_images: &images,
+            resources,
         };
 
         (swapchain, hal::Backbuffer::Images(images))
     }
 
     fn destroy_swapchain(&self, swapchain: w::Swapchain) {
-        // need to also free presentable images that are associated with this swapchain here
-        // (instead of doing it in #destroy_image)
+        // Need to free raw image pointers that are associated with this swapchain here
+        //
+        // Also note that the same raw pointers can be released in #destroy_image
+        // so make sure these two methods aren't called together
         unsafe {
-            for image in swapchain.backbuffer_images {
-                (*image.resource).Release();
+            for resource in swapchain.resources {
+                resource.Release();
             }
         }
     }
