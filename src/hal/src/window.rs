@@ -173,10 +173,15 @@ pub enum FrameSync<'a, B: Backend> {
 /// easily chained.
 ///
 /// ```no_run
+/// # extern crate gfx_hal;
+/// # fn main() {
+/// # use gfx_hal::{SwapchainConfig};
+/// # use gfx_hal::format::Format;
 /// let config = SwapchainConfig::new()
 ///     .with_color(Format::Bgra8Unorm)
-///     .with_depth_stencil(Some(Format::D16Unorm))
-///     .with_imamge_count(2);
+///     .with_depth_stencil(Format::D16Unorm)
+///     .with_image_count(2);
+/// # }
 /// ```
 #[derive(Debug, Clone)]
 pub struct SwapchainConfig {
