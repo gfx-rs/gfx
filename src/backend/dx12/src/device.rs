@@ -1782,7 +1782,7 @@ impl d::Device<B> for Device {
         let mut descriptor_update_pools = self.descriptor_update_pools.lock().unwrap();
         let mut update_pool_index = 0;
 
-        //TODO: optimize this
+        //TODO: combine destination ranges
         let mut dst_samplers = Vec::new();
         let mut dst_views = Vec::new();
         let mut src_samplers = Vec::new();
@@ -1917,15 +1917,70 @@ impl d::Device<B> for Device {
                 );
             }
         }
+
+        // reset the temporary CPU-size descriptor pools
+        for buffer_desc_pool in descriptor_update_pools.iter_mut() {
+            buffer_desc_pool.size = 0;
+        }
     }
 
-    fn copy_descriptor_sets<'a, I>(&self, copies: I)
+    fn copy_descriptor_sets<'a, I>(&self, copy_iter: I)
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>,
     {
-        for _copy in copies {
-            unimplemented!()
+        let mut dst_samplers = Vec::new();
+        let mut dst_views = Vec::new();
+        let mut src_samplers = Vec::new();
+        let mut src_views = Vec::new();
+        let mut num_samplers = Vec::new();
+        let mut num_views = Vec::new();
+
+        for copy_wrap in copy_iter {
+            let copy = copy_wrap.borrow();
+            let src_info = &copy.src_set.binding_infos[copy.src_binding as usize];
+            let dst_info = &copy.dst_set.binding_infos[copy.dst_binding as usize];
+            if let (Some(src_range), Some(dst_range)) = (src_info.view_range.as_ref(), dst_info.view_range.as_ref()) {
+                assert!(copy.src_array_offset + copy.count <= src_range.count as usize);
+                assert!(copy.dst_array_offset + copy.count <= dst_range.count as usize);
+                src_views.push(src_range.at(copy.src_array_offset as _));
+                dst_views.push(dst_range.at(copy.dst_array_offset as _));
+                num_views.push(copy.count as u32);
+            }
+            if let (Some(src_range), Some(dst_range)) = (src_info.sampler_range.as_ref(), dst_info.sampler_range.as_ref()) {
+                assert!(copy.src_array_offset + copy.count <= src_range.count as usize);
+                assert!(copy.dst_array_offset + copy.count <= dst_range.count as usize);
+                src_samplers.push(src_range.at(copy.src_array_offset as _));
+                dst_samplers.push(dst_range.at(copy.dst_array_offset as _));
+                num_samplers.push(copy.count as u32);
+            }
+        }
+
+        if !num_views.is_empty() {
+            unsafe {
+                self.raw.clone().CopyDescriptors(
+                    dst_views.len() as u32,
+                    dst_views.as_ptr(),
+                    num_views.as_ptr(),
+                    src_views.len() as u32,
+                    src_views.as_ptr(),
+                    num_views.as_ptr(),
+                    d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                );
+            }
+        }
+        if !num_samplers.is_empty() {
+            unsafe {
+                self.raw.clone().CopyDescriptors(
+                    dst_samplers.len() as u32,
+                    dst_samplers.as_ptr(),
+                    num_samplers.as_ptr(),
+                    src_samplers.len() as u32,
+                    src_samplers.as_ptr(),
+                    num_samplers.as_ptr(),
+                    d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
+                );
+            }
         }
     }
 
