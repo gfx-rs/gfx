@@ -25,18 +25,6 @@ pub struct BufferCopy {
     pub size: buffer::Offset,
 }
 
-///
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct ImageResolve {
-    /// 
-    pub src_subresource: image::Subresource,
-    /// 
-    pub dst_subresource: image::Subresource,
-    /// 
-    pub num_layers: image::Layer,
-}
-
 /// Bundles together all the parameters needed to copy data from one `Image`
 /// to another.
 #[derive(Clone, Debug)]

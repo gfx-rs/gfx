@@ -269,8 +269,8 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     /// Set the blend constant values dynamically.
     fn set_blend_constants(&mut self, ColorValue);
 
-    /// Just does some type conversions and calls `begin_renderpass_raw`.
-    fn begin_renderpass<T>(
+    /// Just does some type conversions and calls `begin_render_pass_raw`.
+    fn begin_render_pass<T>(
         &mut self,
         render_pass: &B::RenderPass,
         framebuffer: &B::Framebuffer,
@@ -311,7 +311,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     /// `clear_*` commands, one for each attachment of the render pass.
     /// `first_subpass` specifies whether the rendering commands are provided
     /// inline, or whether the render pass is composed of subpasses.
-    fn begin_renderpass_raw<T>(
+    fn begin_render_pass_raw<T>(
         &mut self,
         render_pass: &B::RenderPass,
         framebuffer: &B::Framebuffer,
@@ -326,7 +326,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn next_subpass(&mut self, contents: SubpassContents);
 
     /// Finishes recording commands for the current a render pass.
-    fn end_renderpass(&mut self);
+    fn end_render_pass(&mut self);
 
     /// Bind a graphics pipeline.
     ///

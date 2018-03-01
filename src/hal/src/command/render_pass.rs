@@ -30,6 +30,7 @@ pub enum SubpassContents {
 pub struct RenderSubpassCommon<'a, B: Backend>(pub(crate) &'a mut B::CommandBuffer);
 
 impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
+    /// 
     pub fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
     where
         T: IntoIterator,

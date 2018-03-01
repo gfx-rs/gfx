@@ -14,9 +14,9 @@ use pso::ShaderStageFlags;
 use range::RangeArg;
 
 
-// DOC TODO: Grasping and remembering the differences between these
-//       types is a tough task. We might be able to come up with better names?
-//       Or even use tuples to describe functionality instead of coming up with fancy names.
+/// DOC TODO: Grasping and remembering the differences between these
+///       types is a tough task. We might be able to come up with better names?
+///       Or even use tuples to describe functionality instead of coming up with fancy names.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DescriptorType {
@@ -112,7 +112,7 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
 
 /// DOC TODO
 #[allow(missing_docs)]
-pub struct DescriptorSetWrite<'a, 'b, B: Backend, R: RangeArg<u64>> {
+pub struct DescriptorSetWrite<'a, B: Backend, R: 'a + RangeArg<u64>> {
     pub set: &'a B::DescriptorSet,
     pub binding: usize,
     pub array_offset: usize,
@@ -132,4 +132,18 @@ pub enum DescriptorWrite<'a, B: Backend, R: 'a + RangeArg<u64>> {
     UniformTexelBuffer(&'a [&'a B::BufferView]),
     StorageTexelBuffer(&'a [&'a B::BufferView]),
     CombinedImageSampler(&'a [(&'a B::Sampler, &'a B::ImageView, ImageLayout)]),
+}
+
+
+/// DOC TODO
+#[allow(missing_docs)]
+#[derive(Clone, Copy)]
+pub struct DescriptorSetCopy<'a, B: Backend> {
+    pub src_set: &'a B::DescriptorSet,
+    pub src_binding: usize,
+    pub src_array_offset: usize,
+    pub dst_set: &'a B::DescriptorSet,
+    pub dst_binding: usize,
+    pub dst_array_offset: usize,
+    pub count: usize,
 }

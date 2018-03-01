@@ -176,7 +176,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         ID::Item: Borrow<pass::SubpassDependency>;
 
     /// Destroys a `RenderPass`.
-    fn destroy_renderpass(&self, B::RenderPass);
+    fn destroy_render_pass(&self, B::RenderPass);
 
     /// Create a new pipeline layout.
     ///

@@ -63,7 +63,7 @@ use std::ops::Range;
 /// sub-rectangle; for that see `command::Rect`.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Extent2d {
+pub struct Extent2D {
     /// Width
     pub width: u32,
     /// Height

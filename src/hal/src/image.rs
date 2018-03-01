@@ -317,7 +317,7 @@ impl Kind {
     }
     /// Return the number of slices in a texture array type, 
     /// or None for non-arrays.
-    pub fn get_num_slices(&self) -> Option<Layer> {
+    pub fn num_slices(&self) -> Option<Layer> {
         match *self {
             Kind::D1(..) | Kind::D2(..) | Kind::D3(..) | Kind::Cube(..) => None,
             Kind::D1Array(_, a) => Some(a),
