@@ -529,62 +529,101 @@ impl From<RenderDesc> for DepthStencilDesc {
     }
 }
 
-///
+/// ImageLayouts specify how image subresource data is laid out in memory. Optimal performance
+/// may be obtained by choosing the most appropriate memory layout for any given image subresource.
+/// Images may have image subresources with differing layouts as long as depth and stencil aspects
+/// of a given image resource are in the same layout.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ImageLayout {
-    ///
+    /// Supports all types of device access.
     General,
-    ///
+    /// Only valid for image subresources with COLOR_ATTACHMENT usage flag.
     ColorAttachmentOptimal,
-    ///
+    /// Only valid for image subresources with DEPTH_STENCIL_ATTACHMENT usage flag.
     DepthStencilAttachmentOptimal,
-    ///
+    /// Only valid for image subresources with DEPTH_STENCIL_ATTACHMENT usage flag.
     DepthStencilReadOnlyOptimal,
-    ///
+    /// Only valid for image subresources with SAMPLED or INPUT_ATTACHMENT usage flags.
     ShaderReadOnlyOptimal,
-    ///
+    /// Only valid for image subresources with TRANSFER usage flag.
     TransferSrcOptimal,
-    ///
+    /// Only valid for image subresources with TRANSFER usage flag.
     TransferDstOptimal,
-    ///
+    /// Does not support device access. May be used as an initial layout and then changed later.
+    /// Contents of memory are not guaranteed to be preserved when transitioning.
     Undefined, //TODO: consider Option<> instead?
-    ///
+    /// Does not support device access. Similar to Undefined. Currently only useful for images
+    /// with linear_tiling Properties since there is no standard format for optimal_tiling images.
     Preinitialized,
     ///
     Present,
 }
 
 bitflags!(
-    ///
+    /// Access types describe how memory is accessed in fixed-function stages of the pipeline.
+    /// Sets of access types are used in some synchronization commands to define the access
+    /// scopes of memory dependency. Access types are only applicable to a subset of pipeline stages.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct Access: u16 {
         /// Read state but can only be combined with `COLOR_ATTACHMENT_WRITE`.
+        /// Applicable PipelineStages:
+        /// - COLOR_ATTACHMENT_OUTPUT
         const COLOR_ATTACHMENT_READ = 0x1;
         /// Write-only state but can be combined with `COLOR_ATTACHMENT_READ`.
+        /// Applicable PipelineStages:
+        /// - COLOR_ATTACHMENT_OUTPUT
         const COLOR_ATTACHMENT_WRITE = 0x2;
-        ///
+        /// Read access to an image or buffer in a copy operation.
+        /// Applicable PipelineStages:
+        /// - TRANSFER
         const TRANSFER_READ = 0x4;
         /// Write-only state of copy commands.
+        /// Applicable PipelineStages:
+        /// - TRANSFER
         const TRANSFER_WRITE = 0x8;
         /// Read-only state for SRV access, or combine with `SHADER_WRITE` to have r/w access to UAV.
+        /// Applicable PipelineStages:
+        /// - VERTEX_SHADER
+        /// - GEOMETRY_SHADER
+        /// - FRAGMENT_SHADER
+        /// - COMPUTE_SHADER
         const SHADER_READ = 0x10;
         /// Write state for UAV access.
         /// Combine with `SHADER_READ` to have r/w access to UAV.
+        /// Applicable PipelineStages:
+        /// - VERTEX_SHADER
+        /// - GEOMETRY_SHADER
+        /// - FRAGMENT_SHADER
+        /// - COMPUTE_SHADER
         const SHADER_WRITE = 0x20;
-        ///
+        /// Read access to a depth/stencil attachment, via depth or stencil operations or via
+        /// certain subpass load operations.
+        /// Applicable PipelineStages:
+        /// - EARLY_FRAGMENT_TESTS
+        /// - LATE_FRAGMENT_TESTS
         const DEPTH_STENCIL_ATTACHMENT_READ = 0x40;
         /// Write-only state for depth stencil writes.
+        /// Applicable PipelineStages:
+        /// - EARLY_FRAGMENT_TESTS
+        /// - LATE_FRAGMENT_TESTS
         const DEPTH_STENCIL_ATTACHMENT_WRITE = 0x80;
-        ///
+        /// Read access by a host operation. Accesses of this type are not performed through a
+        /// resource, but directly on memory.
+        /// Applicable PipelineStages:
+        /// - HOST
         const HOST_READ = 0x100;
-        ///
+        /// Applicable PipelineStages:
+        /// - HOST
         const HOST_WRITE = 0x200;
-        ///
+        /// Applicable PipelineStages:
+        /// - N/A
         const MEMORY_READ = 0x400;
-        ///
+        /// Applicable PipelineStages:
+        /// - N/A
         const MEMORY_WRITE = 0x800;
-        ///
+        /// Applicable PipelineStages:
+        /// - FRAGMENT_SHADER
         const INPUT_ATTACHMENT_READ = 0x1000;
     }
 );
@@ -607,7 +646,16 @@ pub struct SubresourceLayers {
     pub layers: Range<Layer>,
 }
 
-/// A subset of resources contained within an image.
+/// Used for describing the aspect(s) and part of an image an image view should include.
+/// A valid range of mipmap levels and layers may be specified.
+///
+/// Aspect may only be color, depth, or stencil if the image format is color, depth-only, or
+/// stencil-only respectively. If the image format is depth + stencil, the aspect may be
+/// depth, stencil or both.
+///
+/// For cube image views, the layers correspond to faces: +X, -X, +Y, -Y, +Z, -Z.
+/// For cube arrays, each six layers correspond to faces: +X, -X, +Y, -Y, +Z, -Z for each
+/// subsequent cube.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SubresourceRange {
