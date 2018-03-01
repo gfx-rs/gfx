@@ -384,30 +384,32 @@ impl Device {
         Ok((lib, mtl_function, wg_size))
     }
 
-    fn describe_argument(ty: DescriptorType, index: usize, count: usize) -> metal::ArgumentDescriptor {
+    fn describe_argument(
+        ty: DescriptorType, index: pso::DescriptorBinding, count: usize
+    ) -> metal::ArgumentDescriptor {
         let arg = metal::ArgumentDescriptor::new().to_owned();
-        arg.set_array_length(count as NSUInteger);
+        arg.set_array_length(count as _);
 
         match ty {
             DescriptorType::Sampler => {
                 arg.set_access(MTLArgumentAccess::ReadOnly);
                 arg.set_data_type(MTLDataType::Sampler);
-                arg.set_index(index as NSUInteger);
+                arg.set_index(index as _);
             }
             DescriptorType::SampledImage => {
                 arg.set_access(MTLArgumentAccess::ReadOnly);
                 arg.set_data_type(MTLDataType::Texture);
-                arg.set_index(index as NSUInteger);
+                arg.set_index(index as _);
             }
             DescriptorType::UniformBuffer => {
                 arg.set_access(MTLArgumentAccess::ReadOnly);
                 arg.set_data_type(MTLDataType::Struct);
-                arg.set_index(index as NSUInteger);
+                arg.set_index(index as _);
             }
             DescriptorType::StorageBuffer => {
                 arg.set_access(MTLArgumentAccess::ReadWrite);
                 arg.set_data_type(MTLDataType::Struct);
-                arg.set_index(index as NSUInteger);
+                arg.set_index(index as _);
             }
             _ => unimplemented!()
         }
@@ -514,7 +516,7 @@ impl hal::Device<Backend> for Device {
                             if !set_binding.stage_flags.contains(stage_bit) {
                                 continue
                             }
-                            let count = match set_binding.ty {
+                            let offset = match set_binding.ty {
                                 DescriptorType::UniformBuffer |
                                 DescriptorType::StorageBuffer => &mut counters.buffers,
                                 DescriptorType::SampledImage => &mut counters.textures,
@@ -522,19 +524,18 @@ impl hal::Device<Backend> for Device {
                                 DescriptorType::Sampler => &mut counters.samplers,
                                 _ => unimplemented!()
                             };
-                            for i in 0 .. set_binding.count {
-                                let location = msl::ResourceBindingLocation {
-                                    stage,
-                                    desc_set: set_index as _,
-                                    binding: (set_binding.binding + i) as _,
-                                };
-                                let res_binding = msl::ResourceBinding {
-                                    resource_id: *count as _,
-                                    force_used: false,
-                                };
-                                *count += 1;
-                                res_overrides.insert(location, res_binding);
-                            }
+                            assert_eq!(set_binding.count, 1); //TODO
+                            let location = msl::ResourceBindingLocation {
+                                stage,
+                                desc_set: set_index as _,
+                                binding: set_binding.binding as _,
+                            };
+                            let res_binding = msl::ResourceBinding {
+                                resource_id: *offset as _,
+                                force_used: false,
+                            };
+                            *offset += 1;
+                            res_overrides.insert(location, res_binding);
                         }
                     }
                 }
@@ -942,7 +943,7 @@ impl hal::Device<Backend> for Device {
             };
             let index = *offset_ref;
             *offset_ref += desc.count;
-            Self::describe_argument(desc.ty, index, desc.count)
+            Self::describe_argument(desc.ty, index as _, desc.count)
         }).collect::<Vec<_>>();
 
         let arg_array = metal::Array::from_owned_slice(&arguments);
@@ -965,7 +966,7 @@ impl hal::Device<Backend> for Device {
     {
         if !self.private_caps.argument_buffers {
             return n::DescriptorSetLayout::Emulated(
-                bindings.into_iter().map(|desc| *desc.borrow()).collect()
+                bindings.into_iter().map(|desc| desc.borrow().clone()).collect()
             )
         }
 
@@ -981,77 +982,49 @@ impl hal::Device<Backend> for Device {
         n::DescriptorSetLayout::ArgumentBuffer(encoder, stage_flags)
     }
 
-    fn write_descriptor_sets<'a, I, R>(&self, writes: I)
+    fn write_descriptor_sets<'a, I, J>(&self, write_iter: I)
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetWrite<'a, Backend, R>>,
-        R: 'a + RangeArg<u64>,
+        I: IntoIterator<Item = pso::DescriptorSetWrite<'a, Backend, J>>,
+        J: IntoIterator,
+        J::Item: Borrow<pso::Descriptor<'a, Backend>>,
     {
-        use hal::pso::DescriptorWrite::*;
-
-        let mut mtl_samplers = Vec::new();
-        let mut mtl_textures = Vec::new();
-        let mut mtl_buffers = Vec::new();
-        let mut mtl_offsets = Vec::new();
-
-        for write in writes {
-            let w = write.borrow();
-            match *w.set {
+        for write in write_iter {
+            match *write.set {
                 n::DescriptorSet::Emulated(ref inner) => {
                     let mut set = inner.lock().unwrap();
+                    let mut array_offset = write.array_offset;
+                    let mut binding = write.binding;
 
-                    // Find layout entry
-                    let layout = set.layout.iter()
-                        .find(|layout| layout.binding == w.binding)
-                        .expect("invalid descriptor set binding index")
-                        .clone();
-
-                    match (&w.write, set.bindings.get_mut(&w.binding)) {
-                        (&Sampler(ref samplers), Some(&mut n::DescriptorSetBinding::Sampler(ref mut vec))) => {
-                            if w.array_offset + samplers.len() > layout.count {
-                                panic!("out of range descriptor write");
-                            }
-
-                            let target_iter = vec[w.array_offset..(w.array_offset + samplers.len())].iter_mut();
-
-                            for (new, old) in samplers.iter().zip(target_iter) {
-                                *old = Some(new.0.clone());
-                            }
+                    for descriptor in write.descriptors {
+                        while array_offset >= set.layout.iter()
+                                .find(|layout| layout.binding == binding)
+                                .expect("invalid descriptor set binding index")
+                                .count
+                        {
+                            array_offset = 0;
+                            binding += 1;
                         }
-                        (&SampledImage(ref images), Some(&mut n::DescriptorSetBinding::Image(ref mut vec))) |
-                        (&StorageImage(ref images), Some(&mut n::DescriptorSetBinding::Image(ref mut vec))) => {
-                            if w.array_offset + images.len() > layout.count {
-                                panic!("out of range descriptor write");
+                        match (descriptor.borrow(), set.bindings.get_mut(&binding).unwrap()) {
+                            (&pso::Descriptor::Sampler(sampler), &mut n::DescriptorSetBinding::Sampler(ref mut vec)) => {
+                                vec[array_offset] = Some(sampler.0.clone());
                             }
-
-                            let target_iter = vec[w.array_offset..(w.array_offset + images.len())].iter_mut();
-
-                            for (&(image, offset), old) in images.iter().zip(target_iter) {
-                                *old = Some((image.0.clone(), offset));
+                            (&pso::Descriptor::Image(image, layout), &mut n::DescriptorSetBinding::Image(ref mut vec)) => {
+                                vec[array_offset] = Some((image.0.clone(), layout));
                             }
-                        }
-                        (&UniformBuffer(ref buffers), Some(&mut n::DescriptorSetBinding::Buffer(ref mut vec))) |
-                        (&StorageBuffer(ref buffers), Some(&mut n::DescriptorSetBinding::Buffer(ref mut vec))) => {
-                            if w.array_offset + buffers.len() > layout.count {
-                                panic!("out of range descriptor write");
-                            }
-
-                            let target_iter = vec[w.array_offset..(w.array_offset + buffers.len())].iter_mut();
-
-                            for (new, old) in buffers.iter().zip(target_iter) {
-                                let (buffer, ref range) = *new;
+                            (&pso::Descriptor::Buffer(buffer, ref range), &mut n::DescriptorSetBinding::Buffer(ref mut vec)) => {
                                 let buf_length = buffer.raw.length();
-                                let start = *range.start().unwrap_or(&0);
-                                let end = *range.end().unwrap_or(&buf_length);
+                                let start = range.start.unwrap_or(0);
+                                let end = range.end.unwrap_or(buf_length);
                                 assert!(end <= buf_length);
-                                *old = Some((buffer.raw.clone(), start));
+                                vec[array_offset] = Some((buffer.raw.clone(), start));
                             }
+                            (&pso::Descriptor::Sampler(..), _) |
+                            (&pso::Descriptor::Image(..), _) |
+                            (&pso::Descriptor::Buffer(..), _) => {
+                                panic!("mismatched descriptor set type")
+                            }
+                            _ => unimplemented!(),
                         }
-
-                        (&Sampler(_), _) | (&SampledImage(_), _) | (&UniformBuffer(_), _) | (&StorageBuffer(_), _) => {
-                            panic!("mismatched descriptor set type")
-                        }
-                        _ => unimplemented!(),
                     }
                 }
                 n::DescriptorSet::ArgumentBuffer { ref buffer, offset, ref encoder, .. } => {
@@ -1059,40 +1032,22 @@ impl hal::Device<Backend> for Device {
 
                     encoder.set_argument_buffer(buffer, offset);
                     //TODO: range checks, need to keep some layout metadata around
-                    assert_eq!(w.array_offset, 0); //TODO
+                    assert_eq!(write.array_offset, 0); //TODO
 
-                    match w.write {
-                        Sampler(ref samplers) => {
-                            mtl_samplers.clear();
-                            mtl_samplers.extend(samplers.iter().map(|sampler| &*sampler.0));
-                            encoder.set_sampler_states(&mtl_samplers, w.binding as _);
-                        },
-                        SampledImage(ref images) => {
-                            mtl_textures.clear();
-                            mtl_textures.extend(images.iter().map(|image| &*((image.0).0)));
-                            encoder.set_textures(&mtl_textures, w.binding as _);
-                        },
-                        UniformBuffer(ref buffers) | StorageBuffer(ref buffers) => {
-                            mtl_buffers.clear();
-                            mtl_buffers.extend(buffers.iter().map(|buf| &*((buf.0).raw)));
-                            mtl_offsets.clear();
-                            mtl_offsets.extend(buffers.iter().map(|buf| *buf.1.start().unwrap_or(&0)));
-
-                            let encoder: &metal::ArgumentEncoderRef = &encoder;
-
-                            let range = NSRange {
-                                location: offset,
-                                length: mtl_buffers.len() as NSUInteger,
-                            };
-                            unsafe {
-                                msg_send![encoder,
-                                          setBuffers: mtl_buffers.as_ptr()
-                                          offsets: mtl_offsets.as_ptr()
-                                          withRange:range
-                                ]
+                    for descriptor in write.descriptors {
+                        match *descriptor.borrow() {
+                            pso::Descriptor::Sampler(sampler) => {
+                                encoder.set_sampler_states(&[&sampler.0], write.binding as _);
                             }
+                            pso::Descriptor::Image(image, _layout) => {
+                                encoder.set_textures(&[&image.0], write.binding as _);
+                            }
+                            pso::Descriptor::Buffer(buffer, ref range) => {
+                                encoder.set_buffer(&buffer.raw, range.start.unwrap_or(0), write.binding as _);
+                            }
+                            pso::Descriptor::CombinedImageSampler(..) |
+                            pso::Descriptor::TexelBuffer(..) => unimplemented!(),
                         }
-                        _ => unimplemented!(),
                     }
                 }
             }
