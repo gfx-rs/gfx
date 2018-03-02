@@ -117,7 +117,7 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
     use gfx::traits::Device;
     use glutin::GlContext;
 
-    env_logger::init().unwrap();
+    env_logger::init();
     #[cfg(target_os = "emscripten")]
     let gl_version = glutin::GlRequest::Specific(
         glutin::Api::WebGl, (2, 0),
@@ -207,7 +207,7 @@ A: Sized + ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>
 {
     use gfx::traits::{Device, Factory};
 
-    env_logger::init().unwrap();
+    env_logger::init();
     let mut events_loop = winit::EventsLoop::new();
     let (mut window, device, mut factory, main_color) =
         gfx_window_dxgi::init::<ColorFormat>(wb, &events_loop).unwrap();
@@ -287,7 +287,7 @@ A: Sized + ApplicationBase<gfx_device_metal::Resources, gfx_device_metal::Comman
     use gfx::traits::{Device, Factory};
     use gfx::texture::Size;
 
-    env_logger::init().unwrap();
+    env_logger::init();
     let mut events_loop = winit::EventsLoop::new();
     let (window, mut device, mut factory, main_color) = gfx_window_metal::init::<ColorFormat>(wb, &events_loop)
                                                                                 .unwrap();
@@ -346,7 +346,7 @@ A: Sized + ApplicationBase<gfx_device_vulkan::Resources, gfx_device_vulkan::Comm
     use gfx::traits::{Device, Factory};
     use gfx::texture::Size;
 
-    env_logger::init().unwrap();
+    env_logger::init();
     let mut events_loop = winit::EventsLoop::new();
     let (mut win, mut factory) = gfx_window_vulkan::init::<ColorFormat>(wb, &events_loop);
     let (width, height) = win.get_size();
