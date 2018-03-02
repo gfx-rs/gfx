@@ -398,18 +398,8 @@ pub fn map_image_usage(usage: image::Usage) -> vk::ImageUsageFlags {
 }
 
 pub fn map_descriptor_type(ty: pso::DescriptorType) -> vk::DescriptorType {
-    use hal::pso::DescriptorType as Dt;
-    match ty {
-        Dt::Sampler            => vk::DescriptorType::Sampler,
-        Dt::SampledImage       => vk::DescriptorType::SampledImage,
-        Dt::StorageImage       => vk::DescriptorType::StorageImage,
-        Dt::UniformTexelBuffer => vk::DescriptorType::UniformTexelBuffer,
-        Dt::StorageTexelBuffer => vk::DescriptorType::StorageTexelBuffer,
-        Dt::UniformBuffer      => vk::DescriptorType::UniformBuffer,
-        Dt::StorageBuffer      => vk::DescriptorType::StorageBuffer,
-        Dt::InputAttachment    => vk::DescriptorType::InputAttachment,
-        Dt::CombinedImageSampler => vk::DescriptorType::CombinedImageSampler,
-    }
+    // enums have to match exactly
+    unsafe { mem::transmute(ty) }
 }
 
 pub fn map_stage_flags(stages: pso::ShaderStageFlags) -> vk::ShaderStageFlags {

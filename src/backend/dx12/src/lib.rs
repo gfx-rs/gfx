@@ -216,7 +216,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         };
 
         // Always create the presentation queue in case we want to build a swapchain.
-        let mut present_queue = {
+        let present_queue = {
             let queue_desc = d3d12::D3D12_COMMAND_QUEUE_DESC {
                 Type: QueueFamily::Present.native_type(),
                 Priority: 0,
@@ -424,6 +424,7 @@ pub struct Device {
     srv_pool: Mutex<native::DescriptorCpuPool>,
     uav_pool: Mutex<native::DescriptorCpuPool>,
     sampler_pool: Mutex<native::DescriptorCpuPool>,
+    descriptor_update_pools: Mutex<Vec<native::DescriptorCpuPool>>,
     // CPU/GPU descriptor heaps
     heap_srv_cbv_uav: Mutex<native::DescriptorHeap>,
     heap_sampler: Mutex<native::DescriptorHeap>,
@@ -551,6 +552,7 @@ impl Device {
             srv_pool: Mutex::new(srv_pool),
             uav_pool: Mutex::new(uav_pool),
             sampler_pool: Mutex::new(sampler_pool),
+            descriptor_update_pools: Mutex::new(Vec::new()),
             heap_srv_cbv_uav: Mutex::new(heap_srv_cbv_uav),
             heap_sampler: Mutex::new(heap_sampler),
             events: Mutex::new(Vec::new()),

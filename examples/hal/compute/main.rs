@@ -107,7 +107,9 @@ fn main() {
             set: &desc_set,
             binding: 0,
             array_offset: 0,
-            write: pso::DescriptorWrite::StorageBuffer(&[(&device_buffer, 0..stride * numbers.len() as u64)])
+            descriptors: Some(
+                pso::Descriptor::Buffer(&device_buffer, None .. None)
+            ),
         }
     ));
 

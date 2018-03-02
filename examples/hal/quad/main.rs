@@ -29,7 +29,6 @@ use hal::pso::{PipelineStage, ShaderStageFlags, Specialization};
 use hal::queue::Submission;
 
 use std::io::Cursor;
-use std::ops::Range;
 
 const ENTRY_NAME: &str = "main";
 
@@ -431,18 +430,22 @@ fn main() {
         )
     );
 
-    device.write_descriptor_sets::<_, Range<_>>(vec![
+    device.write_descriptor_sets(vec![
         pso::DescriptorSetWrite {
             set: &desc_set,
             binding: 0,
             array_offset: 0,
-            write: pso::DescriptorWrite::SampledImage(&[(&image_srv, i::ImageLayout::Undefined)]),
+            descriptors: Some(
+                pso::Descriptor::Image(&image_srv, i::ImageLayout::Undefined)
+            ),
         },
         pso::DescriptorSetWrite {
             set: &desc_set,
             binding: 1,
             array_offset: 0,
-            write: pso::DescriptorWrite::Sampler(&[&sampler]),
+            descriptors: Some(
+                pso::Descriptor::Sampler(&sampler)
+            ),
         },
     ]);
 

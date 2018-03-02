@@ -605,7 +605,7 @@ impl CommandBuffer {
 }
 
 impl com::RawCommandBuffer<Backend> for CommandBuffer {
-    fn begin(&mut self, flags: com::CommandBufferFlags) {
+    fn begin(&mut self, _flags: com::CommandBufferFlags) {
         // TODO: Implement flags somehow.
         self.reset();
     }
@@ -1614,6 +1614,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         I: IntoIterator,
         I::Item: Borrow<CommandBuffer>,
     {
-        unimplemented!()
+        for _cmd_buf in buffers {
+            error!("TODO: execute_commands");
+        }
     }
 }

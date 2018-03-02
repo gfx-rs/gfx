@@ -91,7 +91,7 @@ pub struct Resources<B: hal::Backend> {
     pub render_passes: HashMap<String, RenderPass<B>>,
     pub framebuffers: HashMap<String, (B::Framebuffer, hal::device::Extent)>,
     pub shaders: HashMap<String, B::ShaderModule>,
-    pub desc_set_layouts: HashMap<String, (Vec<usize>, B::DescriptorSetLayout)>,
+    pub desc_set_layouts: HashMap<String, (Vec<hal::pso::DescriptorBinding>, B::DescriptorSetLayout)>,
     pub desc_pools: HashMap<String, B::DescriptorPool>,
     pub desc_sets: HashMap<String, B::DescriptorSet>,
     pub pipeline_layouts: HashMap<String, B::PipelineLayout>,
@@ -517,8 +517,8 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                     }
                     raw::Resource::DescriptorSetLayout { ref bindings } => {
                         let layout = device.create_descriptor_set_layout(bindings);
-                        let binding_starts = bindings.iter().map(|dsb| dsb.binding).collect();
-                        resources.desc_set_layouts.insert(name.clone(), (binding_starts, layout));
+                        let binding_indices = bindings.iter().map(|dsb| dsb.binding).collect();
+                        resources.desc_set_layouts.insert(name.clone(), (binding_indices, layout));
                     }
                     raw::Resource::DescriptorPool { capacity, ref ranges } => {
                         let pool = device.create_descriptor_pool(capacity, ranges);
@@ -539,7 +539,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                     }
                     raw::Resource::DescriptorSet { ref pool, ref layout, ref data } => {
                         // create a descriptor set
-                        let (ref binding_starts, ref set_layout) = resources.desc_set_layouts[layout];
+                        let (ref binding_indices, ref set_layout) = resources.desc_set_layouts[layout];
                         let desc_set = resources.desc_pools
                             .get_mut(pool)
                             .expect(&format!("Missing descriptor pool: {}", pool))
@@ -547,26 +547,26 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         resources.desc_sets.insert(name.clone(), desc_set);
                         // fill it up
                         let set = &resources.desc_sets[name];
-                        let res_buffers = &resources.buffers;
-                        // pre-allocate the buffers
-                        let desc_buffers = data.iter().flat_map(|range| match *range {
-                            raw::DescriptorRange::StorageBuffers(ref names) => {
-                                names.iter().map(|s| (&res_buffers[s].handle, ..))
-                            }
-                        }).collect::<Vec<_>>();
-                        let mut count_buffers = 0;
-                        let writes = binding_starts
+                        let writes = binding_indices
                             .iter()
                             .zip(data)
                             .map(|(&binding, range)| hal::pso::DescriptorSetWrite {
                                 set,
                                 binding,
                                 array_offset: 0,
-                                write: match *range {
-                                    raw::DescriptorRange::StorageBuffers(ref names) => {
-                                        let r = count_buffers .. count_buffers + names.len();
-                                        count_buffers += names.len();
-                                        hal::pso::DescriptorWrite::StorageBuffer(&desc_buffers[r])
+                                descriptors: match *range {
+                                    raw::DescriptorRange::Buffers(ref names) => {
+                                        names
+                                            .iter()
+                                            .map(|s| {
+                                                let buf = resources.buffers
+                                                    .get(s)
+                                                    .expect(&format!("Missing buffer: {}", s));
+                                                hal::pso::Descriptor::Buffer(&buf.handle, None .. None)
+                                            })
+                                    }
+                                    raw::DescriptorRange::Images(_) => {
+                                        unimplemented!()
                                     }
                                 },
                             });

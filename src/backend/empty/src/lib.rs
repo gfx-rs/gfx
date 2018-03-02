@@ -214,11 +214,11 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn write_descriptor_sets<'a, I, R>(&self, _: I)
+    fn write_descriptor_sets<'a, I, J>(&self, _: I)
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetWrite<'a, Backend, R>>,
-        R: 'a + RangeArg<u64>,
+        I: IntoIterator<Item = pso::DescriptorSetWrite<'a, Backend, J>>,
+        J: IntoIterator,
+        J::Item: Borrow<pso::Descriptor<'a, Backend>>,
     {
         unimplemented!()
     }

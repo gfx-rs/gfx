@@ -154,10 +154,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                         pso::DescriptorType::StorageBuffer => {
                             DescriptorSetBinding::Buffer(vec![None; layout.count])
                         }
-                        pso::DescriptorType::UniformTexelBuffer |
-                        pso::DescriptorType::StorageTexelBuffer |
-                        pso::DescriptorType::CombinedImageSampler |
-                        pso::DescriptorType::InputAttachment => unimplemented!()
+                        _ => unimplemented!()
                     };
                     (layout.binding, binding)
                 }).collect();
@@ -217,7 +214,7 @@ unsafe impl Sync for DescriptorSet {}
 #[derive(Debug)]
 pub struct DescriptorSetInner {
     pub(crate) layout: Vec<pso::DescriptorSetLayoutBinding>, // TODO: maybe don't clone?
-    pub(crate) bindings: HashMap<usize, DescriptorSetBinding>,
+    pub(crate) bindings: HashMap<pso::DescriptorBinding, DescriptorSetBinding>,
 }
 unsafe impl Send for DescriptorSetInner {}
 

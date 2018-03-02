@@ -10,7 +10,7 @@ use hal::pass::{AttachmentOps, AttachmentLoadOp, AttachmentStoreOp};
 
 use {Backend, Device, Primitive, Supports, Transfer, Graphics, Encoder};
 
-pub use hal::pso::{Rasterizer, CreationError, InstanceRate};
+pub use hal::pso::{DescriptorBinding, DescriptorArrayIndex, Rasterizer, CreationError, InstanceRate};
 
 #[derive(Debug)]
 pub struct RawDescriptorSet<B: Backend> {
@@ -39,7 +39,7 @@ pub trait BindDesc {
 pub trait Bind<B: Backend>: BindDesc {
     type Handle: 'static + Clone;
 
-    fn write<'a, I>(views: I) -> hal::pso::DescriptorWrite<'a, B, (Option<u64>, Option<u64>)>
+    fn write<'a, I>(views: I) -> Vec<hal::pso::Descriptor<'a, B>>
     where
         I: IntoIterator,
         I::Item: Borrow<&'a Self::Handle>;
@@ -65,7 +65,7 @@ macro_rules! define_descriptors {
             {
                 type Handle = T::Handle;
 
-                fn write<'a, I>(handles: I) -> hal::pso::DescriptorWrite<'a, B, (Option<u64>, Option<u64>)>
+                fn write<'a, I>(handles: I) -> Vec<hal::pso::Descriptor<'a, B>>
                 where
                     I: IntoIterator,
                     I::Item: Borrow<&'a Self::Handle>
@@ -104,12 +104,12 @@ define_descriptors! {
 impl<B: Backend> Bind<B> for SampledImage {
     type Handle = handle::raw::ImageView<B>;
 
-    fn write<'a, I>(_views: I) -> hal::pso::DescriptorWrite<'a, B, (Option<u64>, Option<u64>)>
+    fn write<'a, I>(_views: I) -> Vec<hal::pso::Descriptor<'a, B>>
     where
         I: IntoIterator,
         I::Item: Borrow<&'a Self::Handle>,
     {
-        hal::pso::DescriptorWrite::SampledImage(&[])
+        Vec::new()
         /* views
             .into_iter()
             .map(|view| {
@@ -139,12 +139,12 @@ impl<B: Backend> Bind<B> for SampledImage {
 impl<B: Backend> Bind<B> for Sampler {
     type Handle = handle::raw::Sampler<B>;
 
-    fn write<'a, I>(_samplers: I) -> hal::pso::DescriptorWrite<'a, B, (Option<u64>, Option<u64>)>
+    fn write<'a, I>(_samplers: I) -> Vec<hal::pso::Descriptor<'a, B>>
     where
         I: IntoIterator,
         I::Item: Borrow<&'a Self::Handle>,
     {
-        hal::pso::DescriptorWrite::Sampler(&[])
+        Vec::new()
         /*
         samplers
             .into_iter()
@@ -164,13 +164,13 @@ impl<B: Backend> Bind<B> for Sampler {
 
 pub struct DescriptorSetBindRef<'a, 'b, B: Backend, T: Bind<B>> {
     pub set: &'a B::DescriptorSet,
-    pub binding: usize,
+    pub binding: DescriptorBinding,
     pub handles: &'b mut [Option<T::Handle>],
 }
 
 pub struct DescriptorSetsUpdate<'a, B: Backend> {
     device: &'a mut Device<B>,
-    writes: Vec<hal::pso::DescriptorSetWrite<'a, B, (Option<u64>, Option<u64>)>>,
+    writes: Vec<hal::pso::DescriptorSetWrite<'a, B, Vec<hal::pso::Descriptor<'a, B>>>>,
 }
 
 impl<'a, B: Backend> DescriptorSetsUpdate<'a, B> {
@@ -196,8 +196,8 @@ impl<'a, B: Backend> DescriptorSetsUpdate<'a, B> {
         self.writes.push(hal::pso::DescriptorSetWrite {
             set: bind_ref.set,
             binding: bind_ref.binding,
-            array_offset,
-            write: T::write(handles)
+            array_offset: 0,
+            descriptors: T::write(handles),
         });
         self
     }

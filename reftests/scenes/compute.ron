@@ -27,7 +27,7 @@
 			layout: "desc-layout",
 			pool: "desc-pool",
 			data: [
-				StorageBuffers(["buffer.output"]),
+				Buffers(["buffer.output"]),
 			],
 		),
 		"pipe-layout": PipelineLayout(

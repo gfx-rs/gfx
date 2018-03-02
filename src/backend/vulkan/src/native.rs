@@ -59,27 +59,29 @@ pub struct RenderPass {
 
 #[derive(Debug, Hash)]
 pub struct Framebuffer {
-    pub(crate)  raw: vk::Framebuffer,
+    pub(crate) raw: vk::Framebuffer,
 }
 
 #[derive(Debug)]
 pub struct DescriptorSetLayout {
-    pub(crate)  raw: vk::DescriptorSetLayout,
+    pub(crate) raw: vk::DescriptorSetLayout,
+    pub(crate) bindings: Arc<Vec<pso::DescriptorSetLayoutBinding>>,
 }
 
 #[derive(Debug)]
 pub struct DescriptorSet {
-    pub(crate)  raw: vk::DescriptorSet,
+    pub(crate) raw: vk::DescriptorSet,
+    pub(crate) bindings: Arc<Vec<pso::DescriptorSetLayoutBinding>>,
 }
 
 #[derive(Debug, Hash)]
 pub struct PipelineLayout {
-    pub(crate)  raw: vk::PipelineLayout,
+    pub(crate) raw: vk::PipelineLayout,
 }
 
 #[derive(Debug, Eq, Hash, PartialEq)]
 pub struct ShaderModule {
-    pub(crate)  raw: vk::ShaderModule,
+    pub(crate) raw: vk::ShaderModule,
 }
 
 #[derive(Debug)]
@@ -89,33 +91,39 @@ pub struct DescriptorPool {
 }
 
 impl pso::DescriptorPool<Backend> for DescriptorPool {
-    fn allocate_sets<I>(&mut self, layouts: I) -> Vec<DescriptorSet>
+    fn allocate_sets<I>(&mut self, layout_iter: I) -> Vec<DescriptorSet>
     where
         I: IntoIterator,
         I::Item: Borrow<DescriptorSetLayout>,
     {
         use std::ptr;
 
-        let layouts = layouts.into_iter().map(|layout| {
-            layout.borrow().raw
-        }).collect::<Vec<_>>();
+        let mut raw_layouts = Vec::new();
+        let mut layout_bindinds = Vec::new();
+        for layout in layout_iter {
+            raw_layouts.push(layout.borrow().raw);
+            layout_bindinds.push(layout.borrow().bindings.clone());
+        }
 
         let info = vk::DescriptorSetAllocateInfo {
             s_type: vk::StructureType::DescriptorSetAllocateInfo,
             p_next: ptr::null(),
             descriptor_pool: self.raw,
-            descriptor_set_count: layouts.len() as u32,
-            p_set_layouts: layouts.as_ptr(),
+            descriptor_set_count: raw_layouts.len() as u32,
+            p_set_layouts: raw_layouts.as_ptr(),
         };
 
         let descriptor_sets = unsafe {
             self.device.0.allocate_descriptor_sets(&info)
-                         .expect("Error on descriptor sets creation") // TODO
-        };
+        }.expect("Error on descriptor sets creation"); // TODO
 
-        descriptor_sets.into_iter().map(|set| {
-            DescriptorSet { raw: set }
-        }).collect::<Vec<_>>()
+        descriptor_sets
+            .into_iter()
+            .zip(layout_bindinds.into_iter())
+            .map(|(raw, bindings)| {
+                DescriptorSet { raw, bindings }
+            })
+            .collect()
     }
 
     fn reset(&mut self) {
