@@ -487,6 +487,17 @@ pub fn map_execution_model(model: spirv::ExecutionModel) -> pso::Stage {
         spirv::ExecutionModel::GlCompute => pso::Stage::Compute,
         spirv::ExecutionModel::TessellationControl => pso::Stage::Hull,
         spirv::ExecutionModel::TessellationEvaluation => pso::Stage::Domain,
-        spirv::ExecutionModel::Kernel => panic!("Kernel is not a valid exeuction model."),
+        spirv::ExecutionModel::Kernel => panic!("Kernel is not a valid execution model."),
+    }
+}
+
+pub fn map_stage(stage: pso::Stage) -> spirv::ExecutionModel {
+    match stage {
+        pso::Stage::Vertex => spirv::ExecutionModel::Vertex,
+        pso::Stage::Fragment => spirv::ExecutionModel::Fragment,
+        pso::Stage::Geometry => spirv::ExecutionModel::Geometry,
+        pso::Stage::Compute => spirv::ExecutionModel::GlCompute,
+        pso::Stage::Hull => spirv::ExecutionModel::TessellationControl,
+        pso::Stage::Domain => spirv::ExecutionModel::TessellationEvaluation,
     }
 }
