@@ -13,6 +13,7 @@ use hal::format::FormatDesc;
 use hal::image::{Filter, Layout, SubresourceRange};
 use hal::query::{Query, QueryControl, QueryId};
 use hal::queue::{RawCommandQueue, RawSubmission};
+use hal::format::AspectFlags;
 
 use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLClearColor, MTLIndexType, MTLSize, MTLOrigin};
 use cocoa::foundation::NSUInteger;
@@ -1083,7 +1084,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             };
 
             debug_assert_eq!(region.src_subresource.layers.len(), region.dst_subresource.layers.len());
-            //TODO aspect flags?
+
+            // aspect flags
+            // enforce equal formats of both textures
+            debug_assert_eq!(src.raw.pixel_format(), dst.raw.pixel_format());
+            // enforce aspect flag restrictions
+            debug_assert_ne!((region.src_subresource.aspects & AspectFlags::COLOR).is_empty(), (region.src_subresource.aspects & (AspectFlags::DEPTH | AspectFlags::STENCIL).is_empty()));
+            debug_assert_ne!((region.dst_subresource.aspects & AspectFlags::COLOR).is_empty(), (region.dst_subresource.aspects & (AspectFlags::DEPTH | AspectFlags::STENCIL).is_empty()));
+            debug_assert_eq!(region.src_subresource.aspects, region.dst_subresource.aspects);
+
+
             for (src_layer, dst_layer) in region.src_subresource.layers.clone().zip(region.dst_subresource.layers.clone()) {
                 unsafe {
                     msg_send![encoder,
