@@ -24,4 +24,4 @@ gfx_gl = "0.3.1"
 gfx-hal = { path = "../../hal", version = "0.1" }
 smallvec = "0.6"
 glutin = { version = "0.12", optional = true }
-spirv_cross = "0.6"
+spirv_cross = "0.7"

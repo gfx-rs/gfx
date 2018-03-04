@@ -313,7 +313,7 @@ impl Device {
                 debug!("SPIRV-Cross generated shader:\n{}", shader_code);
 
                 let real_name = ast
-                    .get_cleansed_entry_point_name(source.entry)
+                    .get_cleansed_entry_point_name(source.entry, conv::map_stage(stage))
                     .map_err(gen_query_error)?;
                 // TODO: opt: don't query *all* entry points.
                 let entry_points = ast.get_entry_points().map_err(gen_query_error)?;
