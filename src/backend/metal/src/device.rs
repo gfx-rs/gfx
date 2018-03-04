@@ -324,7 +324,7 @@ impl Device {
         let mut entry_point_map = HashMap::new();
         for entry_point in entry_points {
             info!("Entry point {:?}", entry_point);
-            let cleansed = ast.get_cleansed_entry_point_name(&entry_point.name)
+            let cleansed = ast.get_cleansed_entry_point_name(&entry_point.name, entry_point.execution_model)
                 .map_err(|err| {
                     let msg = match err {
                         SpirvErrorCode::CompilationError(msg) => msg,
