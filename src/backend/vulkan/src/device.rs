@@ -900,45 +900,52 @@ impl d::Device<B> for Device {
             _ => vk::ImageCreateFlags::empty(),
         };
 
-        let (image_type, extent, array_layers, aa_mode) = match kind {
+        let (image_type, view_type, extent, array_layers, aa_mode) = match kind {
             D1(width) => (
                 vk::ImageType::Type1d,
+                vk::ImageViewType::Type1d,
                 vk::Extent3D { width: width as u32, height: 1, depth: 1 },
                 1,
                 image::AaMode::Single,
             ),
             D1Array(width, layers) => (
                 vk::ImageType::Type1d,
+                vk::ImageViewType::Type1dArray,
                 vk::Extent3D { width: width as u32, height: 1, depth: 1 },
                 layers,
                 image::AaMode::Single,
             ),
             D2(width, height, aa_mode) => (
                 vk::ImageType::Type2d,
+                vk::ImageViewType::Type2d,
                 vk::Extent3D { width: width as u32, height: height as u32, depth: 1 },
                 1,
                 aa_mode,
             ),
             D2Array(width, height, layers, aa_mode) => (
                 vk::ImageType::Type2d,
+                vk::ImageViewType::Type2dArray,
                 vk::Extent3D { width: width as u32, height: height as u32, depth: 1 },
                 layers,
                 aa_mode,
             ),
             D3(width, height, depth) => (
                 vk::ImageType::Type3d,
+                vk::ImageViewType::Type3d,
                 vk::Extent3D { width: width as u32, height: height as u32, depth: depth as u32 },
                 1,
                 image::AaMode::Single,
             ),
             Cube(size) => (
                 vk::ImageType::Type2d,
+                vk::ImageViewType::Cube,
                 vk::Extent3D { width: size as u32, height: size as u32, depth: 1 },
                 6,
                 image::AaMode::Single,
             ),
             CubeArray(size, layers) => (
                 vk::ImageType::Type2d,
+                vk::ImageViewType::CubeArray,
                 vk::Extent3D { width: size as u32, height: size as u32, depth: 1 },
                 6 * layers,
                 image::AaMode::Single,
@@ -973,7 +980,7 @@ impl d::Device<B> for Device {
                 .expect("Error on image creation") // TODO: error handling
         };
 
-        Ok(UnboundImage(n::Image{ raw, extent }))
+        Ok(UnboundImage(n::Image{ raw, view_type, extent }))
     }
 
     fn get_image_requirements(&self, image: &UnboundImage) -> Requirements {
@@ -1006,9 +1013,9 @@ impl d::Device<B> for Device {
         let info = vk::ImageViewCreateInfo {
             s_type: vk::StructureType::ImageViewCreateInfo,
             p_next: ptr::null(),
-            flags: vk::ImageViewCreateFlags::empty(), // TODO
+            flags: vk::ImageViewCreateFlags::empty(),
             image: image.raw,
-            view_type: vk::ImageViewType::Type2d, // TODO
+            view_type: image.view_type,
             format: conv::map_format(format),
             components: conv::map_swizzle(swizzle),
             subresource_range: conv::map_subresource_range(&range),
@@ -1451,6 +1458,7 @@ impl d::Device<B> for Device {
             .map(|image| {
                 n::Image {
                     raw: image,
+                    view_type: vk::ImageViewType::Type2d,
                     extent: vk::Extent3D {
                         width: surface.width,
                         height: surface.height,
