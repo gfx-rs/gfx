@@ -208,29 +208,29 @@ impl AaMode {
 
 /// How to [filter](https://en.wikipedia.org/wiki/Texture_filtering) the
 /// texture when sampling. They correspond to increasing levels of quality,
-/// but also cost. They "layer" on top of each other: it is not possible to
-/// have bilinear filtering without mipmapping, for example.
-///
-/// These names are somewhat poor, in that "bilinear" is really just doing
-/// linear filtering on each axis, and it is only bilinear in the case of 2D
-/// textures. Similarly for trilinear, it is really Quadralinear(?) for 3D
-/// textures. Alas, these names are simple, and match certain intuitions
-/// ingrained by many years of public use of inaccurate terminology.
+/// but also cost.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum FilterMethod {
-    /// The dumbest filtering possible, nearest-neighbor interpolation.
-    Scale,
-    /// Add simple mipmapping.
-    Mipmap,
-    /// Sample multiple texels within a single mipmap level to increase
-    /// quality.
-    Bilinear,
-    /// Sample multiple texels across two mipmap levels to increase quality.
-    Trilinear,
-    /// Anisotropic filtering with a given "max", must be between 1 and 16,
-    /// inclusive.
-    Anisotropic(u8)
+    /// Selects a single texel from the current mip level and uses its value.
+    ///
+    /// Mip filtering selects the filtered value from one level.
+    Nearest,
+    /// Selects multiple texels and calculates the value via multivariate interpolation.
+    ///     * 1D: Linear interpolation
+    ///     * 2D/Cube: Bilinear interpolation
+    ///     * 3D: Trilinear interpolation
+    Linear,
+}
+
+/// Anistropic filtering description for the sampler.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum Anisotropic {
+    /// Disable anisotropic filtering.
+    Off,
+    /// Enable anisotropic filtering with the anisotropy clamp value.
+    On(u8),
 }
 
 /// The face of a cube texture to do an operation on.
@@ -315,7 +315,7 @@ impl Kind {
             1 // anti-aliased textures can't have mipmaps
         }
     }
-    /// Return the number of slices in a texture array type, 
+    /// Return the number of slices in a texture array type,
     /// or None for non-arrays.
     pub fn num_slices(&self) -> Option<Layer> {
         match *self {
@@ -388,7 +388,7 @@ impl Usage {
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum WrapMode {
-    /// Tile the texture, that is, sample the coordinate modulo `1.0`, so 
+    /// Tile the texture, that is, sample the coordinate modulo `1.0`, so
     /// addressing the texture beyond an edge will "wrap" back from the
     /// other edge.
     Tile,
@@ -446,8 +446,12 @@ impl Into<[f32; 4]> for PackedColor {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SamplerInfo {
-    /// Filter method to use.
-    pub filter: FilterMethod,
+    /// Minification filter method to use.
+    pub min_filter: FilterMethod,
+    /// Magnification filter method to use.
+    pub mag_filter: FilterMethod,
+    /// Mip filter method to use.
+    pub mip_filter: FilterMethod,
     /// Wrapping mode for each of the U, V, and W axis (S, T, and R in OpenGL
     /// speak).
     pub wrap_mode: (WrapMode, WrapMode, WrapMode),
@@ -461,19 +465,24 @@ pub struct SamplerInfo {
     pub comparison: Option<Comparison>,
     /// Border color is used when one of the wrap modes is set to border.
     pub border: PackedColor,
+    /// Anisotropic filtering.
+    pub anistropic: Anisotropic,
 }
 
 impl SamplerInfo {
-    /// Create a new sampler description with a given filter method and wrapping mode, using no LOD
-    /// modifications.
+    /// Create a new sampler description with a given filter method for all filtering operations
+    /// and a wrapping mode, using no LOD modifications.
     pub fn new(filter: FilterMethod, wrap: WrapMode) -> SamplerInfo {
         SamplerInfo {
-            filter: filter,
+            min_filter: filter,
+            mag_filter: filter,
+            mip_filter: filter,
             wrap_mode: (wrap, wrap, wrap),
             lod_bias: Lod(0),
             lod_range: Lod(-8000)..Lod(8000),
             comparison: None,
             border: PackedColor(0),
+            anistropic: Anisotropic::Off,
         }
     }
 }
@@ -563,7 +572,7 @@ pub enum ImageLayout {
     TransferDstOptimal,
     /// No layout, does not support device access.  Only valid as a
     /// source layout when transforming data to a specific destination
-    /// layout or initializing data.  Does NOT guarentee that the contents 
+    /// layout or initializing data.  Does NOT guarentee that the contents
     /// of the source buffer are preserved.
     Undefined, //TODO: consider Option<> instead?
     /// Like `Undefined`, but does guarentee that the contents of the source
