@@ -20,7 +20,6 @@ mod free_list;
 mod native;
 mod pool;
 mod root_constants;
-mod shade;
 mod window;
 
 use hal::{error, format as f, memory, Features, Limits, QueueType};
