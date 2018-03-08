@@ -19,7 +19,7 @@ use hal::queue::{RawCommandQueue, QueueFamilyId};
 use hal::range::RangeArg;
 
 use {
-    conv, free_list, native as n, root_constants, shade, window as w,
+    conv, free_list, native as n, root_constants, window as w,
     Backend as B, Device, MemoryGroup, QUEUE_FAMILIES, MAX_VERTEX_BUFFERS, NUM_HEAP_PROPERTIES,
 };
 use pool::RawCommandPool;
@@ -1112,51 +1112,39 @@ impl d::Device<B> for Device {
         let (hs, hs_destroy) = build_shader(pso::Stage::Hull, desc.shaders.hull.as_ref())?;
 
         // Define input element descriptions
-        let mut vs_reflect = shade::reflect_shader(&shader_bytecode(vs));
-        let input_element_descs = {
-            let input_descs = shade::reflect_input_elements(&mut vs_reflect);
-            desc.attributes
-                .iter()
-                .filter_map(|attrib| {
-                    let buffer_desc = if let Some(buffer_desc) = desc.vertex_buffers.get(attrib.binding as usize) {
-                        buffer_desc
-                    } else {
-                        error!("Couldn't find associated vertex buffer description {:?}", attrib.binding);
-                        return Some(Err(pso::CreationError::Other));
-                    };
+        let input_element_descs = desc.attributes
+            .iter()
+            .filter_map(|attrib| {
+                let buffer_desc = if let Some(buffer_desc) = desc.vertex_buffers.get(attrib.binding as usize) {
+                    buffer_desc
+                } else {
+                    error!("Couldn't find associated vertex buffer description {:?}", attrib.binding);
+                    return Some(Err(pso::CreationError::Other));
+                };
 
-                    let input_elem =
-                        if let Some(input_elem) = input_descs.iter().find(|elem| elem.semantic_index == attrib.location) {
-                            input_elem
-                        } else {
-                            // Attribute not used in the shader, just skip it
-                            return None;
-                        };
+                let slot_class = match buffer_desc.rate {
+                    0 => d3d12::D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+                    _ => d3d12::D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA,
+                };
+                let format = attrib.element.format;
 
-                    let slot_class = match buffer_desc.rate {
-                        0 => d3d12::D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-                        _ => d3d12::D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA,
-                    };
-                    let format = attrib.element.format;
-
-                    Some(Ok(d3d12::D3D12_INPUT_ELEMENT_DESC {
-                        SemanticName: input_elem.semantic_name,
-                        SemanticIndex: input_elem.semantic_index,
-                        Format: match conv::map_format(format) {
-                            Some(fm) => fm,
-                            None => {
-                                error!("Unable to find DXGI format for {:?}", format);
-                                return Some(Err(pso::CreationError::Other));
-                            }
-                        },
-                        InputSlot: attrib.binding as _,
-                        AlignedByteOffset: attrib.element.offset,
-                        InputSlotClass: slot_class,
-                        InstanceDataStepRate: buffer_desc.rate as _,
-                    }))
-                })
-                .collect::<Result<Vec<_>, _>>()?
-        };
+                Some(Ok(d3d12::D3D12_INPUT_ELEMENT_DESC {
+                    SemanticName: "TEXCOORD\0".as_ptr() as *const _, // Semantic name used by SPIRV-Cross
+                    SemanticIndex: attrib.location,
+                    Format: match conv::map_format(format) {
+                        Some(fm) => fm,
+                        None => {
+                            error!("Unable to find DXGI format for {:?}", format);
+                            return Some(Err(pso::CreationError::Other));
+                        }
+                    },
+                    InputSlot: attrib.binding as _,
+                    AlignedByteOffset: attrib.element.offset,
+                    InputSlotClass: slot_class,
+                    InstanceDataStepRate: buffer_desc.rate as _,
+                }))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
         // Input slots
         let mut vertex_strides = [0; MAX_VERTEX_BUFFERS];
