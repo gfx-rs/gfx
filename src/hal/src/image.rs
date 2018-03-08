@@ -211,7 +211,7 @@ impl AaMode {
 /// but also cost.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum FilterMethod {
+pub enum Filter {
     /// Selects a single texel from the current mip level and uses its value.
     ///
     /// Mip filtering selects the filtered value from one level.
@@ -223,7 +223,7 @@ pub enum FilterMethod {
     Linear,
 }
 
-/// Anistropic filtering description for the sampler.
+/// Anisotropic filtering description for the sampler.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Anisotropic {
@@ -447,11 +447,11 @@ impl Into<[f32; 4]> for PackedColor {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SamplerInfo {
     /// Minification filter method to use.
-    pub min_filter: FilterMethod,
+    pub min_filter: Filter,
     /// Magnification filter method to use.
-    pub mag_filter: FilterMethod,
+    pub mag_filter: Filter,
     /// Mip filter method to use.
-    pub mip_filter: FilterMethod,
+    pub mip_filter: Filter,
     /// Wrapping mode for each of the U, V, and W axis (S, T, and R in OpenGL
     /// speak).
     pub wrap_mode: (WrapMode, WrapMode, WrapMode),
@@ -466,13 +466,13 @@ pub struct SamplerInfo {
     /// Border color is used when one of the wrap modes is set to border.
     pub border: PackedColor,
     /// Anisotropic filtering.
-    pub anistropic: Anisotropic,
+    pub anisotropic: Anisotropic,
 }
 
 impl SamplerInfo {
     /// Create a new sampler description with a given filter method for all filtering operations
     /// and a wrapping mode, using no LOD modifications.
-    pub fn new(filter: FilterMethod, wrap: WrapMode) -> SamplerInfo {
+    pub fn new(filter: Filter, wrap: WrapMode) -> SamplerInfo {
         SamplerInfo {
             min_filter: filter,
             mag_filter: filter,
@@ -482,7 +482,7 @@ impl SamplerInfo {
             lod_range: Lod(-8000)..Lod(8000),
             comparison: None,
             border: PackedColor(0),
-            anistropic: Anisotropic::Off,
+            anisotropic: Anisotropic::Off,
         }
     }
 }

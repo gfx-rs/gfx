@@ -425,7 +425,7 @@ fn main() {
 
     let sampler = device.create_sampler(
         i::SamplerInfo::new(
-            i::FilterMethod::Bilinear,
+            i::Filter::Linear,
             i::WrapMode::Clamp,
         )
     );

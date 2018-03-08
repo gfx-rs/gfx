@@ -140,18 +140,6 @@ pub enum AttachmentClear {
     DepthStencil(ClearDepthStencil),
 }
 
-/// Filtering mode for image blit operations.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum BlitFilter {
-    /// Pick nearest texel.
-    Nearest = 0,
-    /// Take a weighted average of 2x2 texel group.
-    Linear = 1,
-}
-
-
 /// Parameters for an image resolve operation,
 /// where a multi-sampled image is copied into a single-sampled
 /// image.
@@ -306,7 +294,7 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
         src_layout: image::ImageLayout,
         dst: &B::Image,
         dst_layout: image::ImageLayout,
-        filter: BlitFilter,
+        filter: image::Filter,
         regions: T,
     ) where
         T: IntoIterator,

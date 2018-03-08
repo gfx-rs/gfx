@@ -434,15 +434,14 @@ pub fn map_stage_flags(stages: pso::ShaderStageFlags) -> vk::ShaderStageFlags {
 }
 
 
-pub fn map_filter(filter: image::FilterMethod) -> (vk::Filter, vk::Filter, vk::SamplerMipmapMode) {
-    use hal::image::FilterMethod as Fm;
-    match filter {
-        Fm::Scale          => (vk::Filter::Nearest, vk::Filter::Nearest, vk::SamplerMipmapMode::Nearest),
-        Fm::Mipmap         => (vk::Filter::Nearest, vk::Filter::Nearest, vk::SamplerMipmapMode::Linear),
-        Fm::Bilinear       => (vk::Filter::Linear,  vk::Filter::Linear,  vk::SamplerMipmapMode::Nearest),
-        Fm::Trilinear      => (vk::Filter::Linear,  vk::Filter::Linear,  vk::SamplerMipmapMode::Linear),
-        Fm::Anisotropic(_) => (vk::Filter::Linear,  vk::Filter::Linear,  vk::SamplerMipmapMode::Linear),
-    }
+pub fn map_filter(filter: image::Filter) -> vk::Filter {
+    // enums have to match exactly
+    unsafe { mem::transmute(filter as u32) }
+}
+
+pub fn map_mip_filter(filter: image::Filter) -> vk::SamplerMipmapMode {
+    // enums have to match exactly
+    unsafe { mem::transmute(filter as u32) }
 }
 
 pub fn map_wrap(wrap: image::WrapMode) -> vk::SamplerAddressMode {

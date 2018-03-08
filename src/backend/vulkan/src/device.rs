@@ -778,25 +778,24 @@ impl d::Device<B> for Device {
     fn create_sampler(&self, sampler_info: image::SamplerInfo) -> n::Sampler {
         use hal::pso::Comparison;
 
-        let (min_filter, mag_filter, mipmap_mode) = conv::map_filter(sampler_info.filter);
-        let (anisotropy_enable, max_anisotropy) = match sampler_info.filter {
-            image::FilterMethod::Anisotropic(aniso) => {
+        let (anisotropy_enable, max_anisotropy) = match sampler_info.anisotropic {
+            image::Anisotropic::Off => (vk::VK_FALSE, 1.0),
+            image::Anisotropic::On(aniso) => {
                 if self.raw.1.contains(Features::SAMPLER_ANISOTROPY) {
                     (vk::VK_TRUE, aniso as f32)
                 } else {
                     warn!("Anisotropy({}) was requested on a device with disabled feature", aniso);
-                    (vk::VK_FALSE, 0.0)
+                    (vk::VK_FALSE, 1.0)
                 }
-            }
-            _ => (vk::VK_FALSE, 0.0)
+            },
         };
         let info = vk::SamplerCreateInfo {
             s_type: vk::StructureType::SamplerCreateInfo,
             p_next: ptr::null(),
             flags: vk::SamplerCreateFlags::empty(),
-            mag_filter,
-            min_filter,
-            mipmap_mode,
+            mag_filter: conv::map_filter(sampler_info.mag_filter),
+            min_filter: conv::map_filter(sampler_info.min_filter),
+            mipmap_mode: conv::map_mip_filter(sampler_info.mip_filter),
             address_mode_u: conv::map_wrap(sampler_info.wrap_mode.0),
             address_mode_v: conv::map_wrap(sampler_info.wrap_mode.1),
             address_mode_w: conv::map_wrap(sampler_info.wrap_mode.2),
