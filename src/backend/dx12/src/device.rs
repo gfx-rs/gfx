@@ -489,29 +489,78 @@ impl Device {
         format: dxgiformat::DXGI_FORMAT,
         range: &image::SubresourceRange,
     ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
-        //TODO: use subresource range
-        let handle = self.dsv_pool.lock().unwrap().alloc_handles(1).cpu;
-
-        if kind.dimensions().3 != image::AaMode::Single {
-            error!("No MSAA supported yet!");
-        }
+        #![allow(non_snake_case)]
+        assert_eq!(range.levels.start + 1, range.levels.end);
 
         let mut desc = d3d12::D3D12_DEPTH_STENCIL_VIEW_DESC {
             Format: format,
-            .. unsafe { mem::zeroed() }
+            ViewDimension: 0,
+            Flags: 0,
+            u: unsafe { mem::zeroed() }
         };
+
+        let MipSlice = range.levels.start as _;
+        let FirstArraySlice = range.layers.start as _;
+        let ArraySize = (range.layers.end - range.layers.start) as _;
 
         match kind {
-            image::Kind::D2(..) => {
-                assert_eq!(range.levels.start + 1, range.levels.end);
+            image::Kind::D1(_) => {
+                desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE1D;
+                *unsafe{ desc.u.Texture1D_mut() } = d3d12::D3D12_TEX1D_DSV {
+                    MipSlice,
+                }
+            }
+            image::Kind::D1Array(_, num_layers) => {
+                assert!(range.layers.end <= num_layers);
+                desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE1DARRAY;
+                *unsafe{ desc.u.Texture1DArray_mut() } = d3d12::D3D12_TEX1D_ARRAY_DSV {
+                    MipSlice,
+                    FirstArraySlice,
+                    ArraySize,
+                }
+            }
+            image::Kind::D2(_, _, image::AaMode::Single) => {
                 desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE2D;
-                *unsafe { desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_DSV {
-                    MipSlice: range.levels.start as _,
-                };
-            },
-            _ => unimplemented!()
+                *unsafe{ desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_DSV {
+                    MipSlice,
+                }
+            }
+            image::Kind::D2(..) => {
+                desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE2DMS;
+                *unsafe{ desc.u.Texture2DMS_mut() } = d3d12::D3D12_TEX2DMS_DSV {
+                    UnusedField_NothingToDefine: 0,
+                }
+            }
+            image::Kind::D2Array(_, _, num_layers, image::AaMode::Single) => {
+                assert!(range.layers.end <= num_layers);
+                desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+                *unsafe{ desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_DSV {
+                    MipSlice,
+                    FirstArraySlice,
+                    ArraySize,
+                }
+            }
+            image::Kind::D2Array(..) => {
+                desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY;
+                *unsafe{ desc.u.Texture2DMSArray_mut() } = d3d12::D3D12_TEX2DMS_ARRAY_DSV {
+                    FirstArraySlice,
+                    ArraySize,
+                }
+            }
+            image::Kind::D3(..) |
+            image::Kind::Cube(..) |
+            image::Kind::CubeArray(..) => {
+                assert!(range.layers.end <= kind.dimensions().2);
+                desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+                *unsafe{ desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_DSV {
+                    MipSlice,
+                    FirstArraySlice,
+                    ArraySize,
+                }
+            }
         };
 
+        let handle = self.dsv_pool.lock().unwrap().alloc_handles(1).cpu;
         unsafe {
             self.raw.clone().CreateDepthStencilView(resource, &desc, handle);
         }
@@ -526,38 +575,110 @@ impl Device {
         format: dxgiformat::DXGI_FORMAT,
         range: &image::SubresourceRange,
     ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
-        let handle = self.srv_pool.lock().unwrap().alloc_handles(1).cpu;
-
-        let dimension = match kind {
-            image::Kind::D1(..) |
-            image::Kind::D1Array(..) => d3d12::D3D12_SRV_DIMENSION_TEXTURE1D,
-            image::Kind::D2(..) |
-            image::Kind::D2Array(..) => d3d12::D3D12_SRV_DIMENSION_TEXTURE2D,
-            image::Kind::D3(..) |
-            image::Kind::Cube(..) |
-            image::Kind::CubeArray(..) => d3d12::D3D12_SRV_DIMENSION_TEXTURE3D,
-        };
+        #![allow(non_snake_case)]
 
         let mut desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
             Format: format,
-            ViewDimension: dimension,
+            ViewDimension: 0,
             Shader4ComponentMapping: 0x1688, // TODO: map swizzle
             u: unsafe { mem::zeroed() },
         };
 
+        let MostDetailedMip = range.levels.start as _;
+        let MipLevels = (range.levels.end - range.levels.start) as _;
+        let FirstArraySlice = range.layers.start as _;
+        let ArraySize = (range.layers.end - range.layers.start) as _;
+
         match kind {
+            image::Kind::D1(_) => {
+                assert_eq!(range.layers, 0..1);
+                desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE1D;
+                *unsafe{ desc.u.Texture1D_mut() } = d3d12::D3D12_TEX1D_SRV {
+                    MostDetailedMip,
+                    MipLevels,
+                    ResourceMinLODClamp: 0.0,
+                }
+            }
+            image::Kind::D1Array(_, num_layers) => {
+                assert!(range.layers.end <= num_layers);
+                desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE1DARRAY;
+                *unsafe{ desc.u.Texture1DArray_mut() } = d3d12::D3D12_TEX1D_ARRAY_SRV {
+                    MostDetailedMip,
+                    MipLevels,
+                    FirstArraySlice,
+                    ArraySize,
+                    ResourceMinLODClamp: 0.0,
+                }
+            }
             image::Kind::D2(_, _, image::AaMode::Single) => {
-                assert_eq!(range.levels.start, 0);
+                assert_eq!(range.layers, 0..1);
+                desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE2D;
                 *unsafe{ desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_SRV {
-                    MostDetailedMip: 0,
-                    MipLevels: range.levels.end as _,
+                    MostDetailedMip,
+                    MipLevels,
                     PlaneSlice: 0, //TODO
                     ResourceMinLODClamp: 0.0,
                 }
             }
-            _ => unimplemented!()
+            image::Kind::D2(..) => {
+                assert_eq!(range.layers, 0..1);
+                desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE2DMS;
+                *unsafe{ desc.u.Texture2DMS_mut() } = d3d12::D3D12_TEX2DMS_SRV {
+                    UnusedField_NothingToDefine: 0,
+                }
+            }
+            image::Kind::D2Array(_, _, num_layers, image::AaMode::Single) => {
+                assert!(range.layers.end <= num_layers);
+                desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+                *unsafe{ desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_SRV {
+                    MostDetailedMip,
+                    MipLevels,
+                    FirstArraySlice,
+                    ArraySize,
+                    PlaneSlice: 0, //TODO
+                    ResourceMinLODClamp: 0.0,
+                }
+            }
+            image::Kind::D2Array(..) => {
+                desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY;
+                *unsafe{ desc.u.Texture2DMSArray_mut() } = d3d12::D3D12_TEX2DMS_ARRAY_SRV {
+                    FirstArraySlice,
+                    ArraySize,
+                }
+            }
+            image::Kind::D3(_, _, _) => {
+                assert_eq!(range.layers, 0..1);
+                desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE3D;
+                *unsafe{ desc.u.Texture3D_mut() } = d3d12::D3D12_TEX3D_SRV {
+                    MostDetailedMip,
+                    MipLevels,
+                    ResourceMinLODClamp: 0.0,
+                }
+            }
+            image::Kind::Cube(_) => {
+                assert_eq!(range.layers, 0..1);
+                desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURECUBE;
+                *unsafe{ desc.u.TextureCube_mut() } = d3d12::D3D12_TEXCUBE_SRV {
+                    MostDetailedMip,
+                    MipLevels,
+                    ResourceMinLODClamp: 0.0,
+                }
+            }
+            image::Kind::CubeArray(_, num_layers) => {
+                assert!(range.layers.end <= num_layers);
+                assert_eq!(0, ArraySize % 6);
+                desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
+                *unsafe{ desc.u.TextureCubeArray_mut() } = d3d12::D3D12_TEXCUBE_ARRAY_SRV {
+                    MostDetailedMip,
+                    MipLevels,
+                    First2DArrayFace: FirstArraySlice,
+                    NumCubes: ArraySize / 6,
+                    ResourceMinLODClamp: 0.0,
+                }
+            }
         }
 
+        let handle = self.srv_pool.lock().unwrap().alloc_handles(1).cpu;
         unsafe {
             self.raw.clone().CreateShaderResourceView(resource, &desc, handle);
         }
@@ -572,34 +693,76 @@ impl Device {
         format: dxgiformat::DXGI_FORMAT,
         range: &image::SubresourceRange,
     ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
-        let handle = self.uav_pool.lock().unwrap().alloc_handles(1).cpu;
-
-        let dimension = match kind {
-            image::Kind::D1(..) |
-            image::Kind::D1Array(..) => d3d12::D3D12_UAV_DIMENSION_TEXTURE1D,
-            image::Kind::D2(..) |
-            image::Kind::D2Array(..) => d3d12::D3D12_UAV_DIMENSION_TEXTURE2D,
-            image::Kind::D3(..) |
-            image::Kind::Cube(..) |
-            image::Kind::CubeArray(..) => d3d12::D3D12_UAV_DIMENSION_TEXTURE3D,
-        };
+        #![allow(non_snake_case)]
+        assert_eq!(range.levels.start + 1, range.levels.end);
 
         let mut desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
             Format: format,
-            ViewDimension: dimension,
+            ViewDimension: 0,
             u: unsafe { mem::zeroed() },
         };
 
+        let MipSlice = range.levels.start as _;
+        let FirstArraySlice = range.layers.start as _;
+        let ArraySize = (range.layers.end - range.layers.start) as _;
+
         match kind {
-            image::Kind::D2(_, _, _) => {
-                *unsafe{ desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_UAV {
-                    MipSlice: range.levels.start as _,
-                    PlaneSlice: 0,
+            image::Kind::D1(_) => {
+                assert_eq!(range.layers, 0..1);
+                desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE1D;
+                *unsafe{ desc.u.Texture1D_mut() } = d3d12::D3D12_TEX1D_UAV {
+                    MipSlice,
                 }
             }
-            _ => unimplemented!()
+            image::Kind::D1Array(_, num_layers) => {
+                assert!(range.layers.end <= num_layers);
+                desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE1DARRAY;
+                *unsafe{ desc.u.Texture1DArray_mut() } = d3d12::D3D12_TEX1D_ARRAY_UAV {
+                    MipSlice,
+                    FirstArraySlice,
+                    ArraySize,
+                }
+            }
+            image::Kind::D2(_, _, image::AaMode::Single) => {
+                assert_eq!(range.layers, 0..1);
+                desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE2D;
+                *unsafe{ desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_UAV {
+                    MipSlice,
+                    PlaneSlice: 0, //TODO
+                }
+            }
+            image::Kind::D2Array(_, _, num_layers, image::AaMode::Single) => {
+                assert!(range.layers.end <= num_layers);
+                desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
+                *unsafe{ desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_UAV {
+                    MipSlice,
+                    FirstArraySlice,
+                    ArraySize,
+                    PlaneSlice: 0, //TODO
+                }
+            }
+            image::Kind::D2(..) |
+            image::Kind::D2Array(..) => {
+                error!("MSAA images can't be viewed as UAV");
+                return Err(image::ViewError::Unsupported);
+            }
+            image::Kind::D3(_, _, depth) => {
+                assert_eq!(range.layers, 0..1);
+                desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE3D;
+                *unsafe{ desc.u.Texture3D_mut() } = d3d12::D3D12_TEX3D_UAV {
+                    MipSlice,
+                    FirstWSlice: 0,
+                    WSize: depth as _,
+                }
+            }
+            image::Kind::Cube(..) |
+            image::Kind::CubeArray(..) => {
+                error!("Cubic images can't be viewed as UAV");
+                return Err(image::ViewError::Unsupported);
+            }
         }
 
+        let handle = self.uav_pool.lock().unwrap().alloc_handles(1).cpu;
         unsafe {
             self.raw.clone().CreateUnorderedAccessView(resource, ptr::null_mut(), &desc, handle);
         }
