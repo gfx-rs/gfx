@@ -1057,6 +1057,23 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             o.x >= 0 && o.y >= 0 && o.z >= 0
         }
 
+        #[inline]
+        fn has_depth_stencil_format(i: &native::Image) -> bool {
+            // Checks whether this format is a packed format with both depth and stencil components
+            match i.pixel_format() {
+                MTLPixelFormat::Depth24Unorm_Stencil8 | MTLPixelFormat::Depth32Float_Stencil8 => true,
+                _ => false,
+            }
+        }
+
+        // Check whether an aspects flag only has one of Depth or Stencil set
+        #[inline]
+        fn only_one_depth_stencil(a: AspectFlags) -> bool {
+            let has_depth = !(a & AspectFlags::DEPTH).is_empty();
+            let has_stencil = !(a & AspectFlags::STENCIL).is_empty();
+            has_depth ^ has_stencil
+        }
+
         //TODO we're always switching into blit encoder mode, even when we have no commands to execute on it
         let encoder = self.encode_blit();
 
@@ -1083,16 +1100,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 depth: sz
             };
 
-            debug_assert_eq!(region.src_subresource.layers.len(), region.dst_subresource.layers.len());
-
-            // aspect flags
-            // enforce equal formats of both textures
-            debug_assert_eq!(src.raw.pixel_format(), dst.raw.pixel_format());
-            // enforce aspect flag restrictions
-            debug_assert_ne!((region.src_subresource.aspects & AspectFlags::COLOR).is_empty(), (region.src_subresource.aspects & (AspectFlags::DEPTH | AspectFlags::STENCIL).is_empty()));
-            debug_assert_ne!((region.dst_subresource.aspects & AspectFlags::COLOR).is_empty(), (region.dst_subresource.aspects & (AspectFlags::DEPTH | AspectFlags::STENCIL).is_empty()));
-            debug_assert_eq!(region.src_subresource.aspects, region.dst_subresource.aspects);
-
 
             for (src_layer, dst_layer) in region.src_subresource.layers.clone().zip(region.dst_subresource.layers.clone()) {
                 unsafe {
@@ -1111,10 +1118,29 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
         };
 
+        // We check if either of the two images has a combined depth/stencil format
+        let has_ds = has_depth_stencil_format(&src) || has_depth_stencil_format(&dst);
+
         for region in regions {
             let r = region.borrow();
-            if range_size(&r.src_bounds) == range_size(&r.dst_bounds) {
-                // bounds for src and dst are the same, use command
+
+            // layer count must be equal in both subresources
+            debug_assert_eq!(r.src_subresource.layers.len(), r.dst_subresource.layers.len());
+            // aspect flags
+            // enforce equal formats of both textures
+            // TODO this should probably be "compatible" pixel formats instead of equal formats
+            debug_assert_eq!(src.raw.pixel_format(), dst.raw.pixel_format());
+            // enforce aspect flag restrictions
+            debug_assert_ne!((r.src_subresource.aspects & AspectFlags::COLOR).is_empty(), (r.src_subresource.aspects & (AspectFlags::DEPTH | AspectFlags::STENCIL).is_empty()));
+            debug_assert_ne!((r.dst_subresource.aspects & AspectFlags::COLOR).is_empty(), (r.dst_subresource.aspects & (AspectFlags::DEPTH | AspectFlags::STENCIL).is_empty()));
+            debug_assert_eq!(r.src_subresource.aspects, r.dst_subresource.aspects);
+            // check that we're only copying aspects actually in the image
+            debug_assert!(src.format_desc.aspects.contains(r.src_subresource.aspects));
+
+            // In the case that the image format is a combined Depth / Stencil format,
+            // and we are only copying one of the aspects, we use the shader even if the regions
+            // are the same size
+            if range_size(&r.src_bounds) == range_size(&r.dst_bounds) && !(has_ds && only_one_depth_stencil(r.src_subresource.aspects)) {
                 blit_cmd(&r);
             } else {
                 // we need to use a shader to do the scaling
