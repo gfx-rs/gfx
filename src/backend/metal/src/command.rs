@@ -1084,14 +1084,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             debug_assert!(is_offset_positive(&dst_start));
 
             let src_origin = MTLOrigin {
-                x: src_start.x as u64,
-                y: src_start.y as u64,
-                z: src_start.z as u64
+                x: src_start.x as _,
+                y: src_start.y as _,
+                z: src_start.z as _
             };
             let dst_origin = MTLOrigin {
-                x: dst_start.x as u64,
-                y: dst_start.y as u64,
-                z: dst_start.z as u64
+                x: dst_start.x as _,
+                y: dst_start.y as _,
+                z: dst_start.z as _
             };
             let (sx, sy, sz) = range_size(&region.dst_bounds);
             let src_size = MTLSize {
