@@ -18,8 +18,10 @@ use hal::queue::{QueueFamily as HalQueueFamily, QueueFamilyId, Queues};
 use hal::range::RangeArg;
 
 use cocoa::foundation::{NSRange, NSUInteger};
-use metal::{self, MTLFeatureSet, MTLLanguageVersion, MTLArgumentAccess, MTLDataType, MTLPrimitiveType, MTLPrimitiveTopologyClass};
-use metal::{MTLVertexStepFunction, MTLSamplerMinMagFilter, MTLSamplerMipFilter, MTLStorageMode, MTLResourceOptions, MTLTextureType};
+use metal::{self,
+    MTLFeatureSet, MTLLanguageVersion, MTLArgumentAccess, MTLDataType, MTLPrimitiveType, MTLPrimitiveTopologyClass,
+    MTLVertexStepFunction, MTLSamplerBorderColor, MTLSamplerMipFilter, MTLStorageMode, MTLResourceOptions, MTLTextureType,
+};
 use foreign_types::ForeignType;
 use objc::runtime::Object as ObjcObject;
 use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
@@ -819,25 +821,40 @@ impl hal::Device<Backend> for Device {
     fn create_sampler(&self, info: image::SamplerInfo) -> n::Sampler {
         let descriptor = metal::SamplerDescriptor::new();
 
-        use self::image::FilterMethod::*;
-        let (min_mag, mipmap) = match info.filter {
-            Scale => (MTLSamplerMinMagFilter::Nearest, MTLSamplerMipFilter::NotMipmapped),
-            Mipmap => (MTLSamplerMinMagFilter::Nearest, MTLSamplerMipFilter::Nearest),
-            Bilinear => {
-                (MTLSamplerMinMagFilter::Linear, MTLSamplerMipFilter::NotMipmapped)
-            }
-            Trilinear => (MTLSamplerMinMagFilter::Linear, MTLSamplerMipFilter::Linear),
-            Anisotropic(max) => {
-                descriptor.set_max_anisotropy(max as u64);
-                (MTLSamplerMinMagFilter::Linear, MTLSamplerMipFilter::NotMipmapped)
-            }
-        };
+        descriptor.set_min_filter(map_filter(info.min_filter));
+        descriptor.set_mag_filter(map_filter(info.min_filter));
+        descriptor.set_mip_filter(match info.mip_filter {
+            image::Filter::Nearest => MTLSamplerMipFilter::Nearest,
+            image::Filter::Linear => MTLSamplerMipFilter::Linear,
+        });
 
-        descriptor.set_min_filter(min_mag);
-        descriptor.set_mag_filter(min_mag);
-        descriptor.set_mip_filter(mipmap);
+        if let image::Anisotropic::On(aniso) = info.anisotropic {
+            descriptor.set_max_anisotropy(aniso as _);
+        }
 
-        // FIXME: more state
+        let (r, s, t) = info.wrap_mode;
+        descriptor.set_address_mode_r(map_wrap_mode(r));
+        descriptor.set_address_mode_s(map_wrap_mode(s));
+        descriptor.set_address_mode_t(map_wrap_mode(t));
+
+        descriptor.set_lod_bias(info.lod_bias.into());
+        descriptor.set_lod_min_clamp(info.lod_range.start.into());
+        descriptor.set_lod_max_clamp(info.lod_range.end.into());
+
+        if let Some(fun) = info.comparison {
+            descriptor.set_compare_function(map_compare_function(fun));
+        }
+        if [r, s, t].iter().any(|&am| am == image::WrapMode::Border) {
+            descriptor.set_border_color(match info.border.0 {
+                0x00000000 => MTLSamplerBorderColor::TransparentBlack,
+                0x000000FF => MTLSamplerBorderColor::OpaqueBlack,
+                0xFFFFFFFF => MTLSamplerBorderColor::OpaqueWhite,
+                other => {
+                    error!("Border color 0x{:X} is not supported", other);
+                    MTLSamplerBorderColor::TransparentBlack
+                }
+            });
+        }
 
         n::Sampler(self.device.new_sampler(&descriptor))
     }

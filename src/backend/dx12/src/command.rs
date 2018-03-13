@@ -948,7 +948,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         _src_layout: image::ImageLayout,
         _dst: &n::Image,
         _dst_layout: image::ImageLayout,
-        _filter: com::BlitFilter,
+        _filter: image::Filter,
         _regions: T,
     ) where
         T: IntoIterator,

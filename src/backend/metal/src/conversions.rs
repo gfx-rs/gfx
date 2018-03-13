@@ -194,3 +194,19 @@ pub fn map_compare_function(fun: Comparison) -> MTLCompareFunction {
         Comparison::Always => MTLCompareFunction::Always,
     }
 }
+
+pub fn map_filter(filter: image::Filter) -> MTLSamplerMinMagFilter {
+    match filter {
+        image::Filter::Nearest => MTLSamplerMinMagFilter::Nearest,
+        image::Filter::Linear => MTLSamplerMinMagFilter::Linear,
+    }
+}
+
+pub fn map_wrap_mode(wrap: image::WrapMode) -> MTLSamplerAddressMode {
+    match wrap {
+        image::WrapMode::Tile => MTLSamplerAddressMode::Repeat,
+        image::WrapMode::Mirror => MTLSamplerAddressMode::MirrorRepeat,
+        image::WrapMode::Clamp => MTLSamplerAddressMode::ClampToEdge,
+        image::WrapMode::Border => MTLSamplerAddressMode::ClampToBorderColor,
+    }
+}

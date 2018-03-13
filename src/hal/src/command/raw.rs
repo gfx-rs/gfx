@@ -4,11 +4,11 @@ use std::ops::Range;
 
 use {buffer, pso};
 use {Backend, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
-use image::{ImageLayout, SubresourceRange};
+use image::{Filter, ImageLayout, SubresourceRange};
 use memory::{Barrier, Dependencies};
 use query::{Query, QueryControl, QueryId};
 use super::{
-    BlitFilter, ColorValue, StencilValue, Rect, Viewport,
+    ColorValue, StencilValue, Rect, Viewport,
     AttachmentClear, BufferCopy, BufferImageCopy,
     ClearColor, ClearDepthStencil, ClearValue,
     ImageBlit, ImageCopy, ImageResolve, SubpassContents,
@@ -57,7 +57,7 @@ bitflags! {
         /// No flags.
         const EMPTY = 0x0;
 
-        /// Says that the command buffer will be recorded, submitted only once, and then reset and re-filled 
+        /// Says that the command buffer will be recorded, submitted only once, and then reset and re-filled
         /// for another submission.
         const ONE_TIME_SUBMIT = 0x1;
 
@@ -205,7 +205,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
         src_layout: ImageLayout,
         dst: &B::Image,
         dst_layout: ImageLayout,
-        filter: BlitFilter,
+        filter: Filter,
         regions: T,
     ) where
         T: IntoIterator,
@@ -264,7 +264,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
         T::Item: Borrow<Rect>;
 
     /// Sets the stencil reference value for comparison operations and store operations.
-    /// Will be used on the LHS of stencil compare ops and as store value when the 
+    /// Will be used on the LHS of stencil compare ops and as store value when the
     /// store op is Reference.
     fn set_stencil_reference(&mut self, front: StencilValue, back: StencilValue);
 
@@ -311,8 +311,8 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     /// `render_area` is the section of the framebuffer to render,
     /// `clear_values` is an iterator of `ClearValue`'s to use to use for
     /// `clear_*` commands, one for each attachment of the render pass.
-    /// `first_subpass` specifies, for the first subpass, whether the 
-    /// rendering commands are provided inline or whether the render 
+    /// `first_subpass` specifies, for the first subpass, whether the
+    /// rendering commands are provided inline or whether the render
     /// pass is composed of subpasses.
     fn begin_render_pass_raw<T>(
         &mut self,
@@ -409,7 +409,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
 
     /// Copies regions from the source to the destination images, which
     /// have the given layouts.  No format conversion is done; the source and destination
-    /// `ImageLayout`'s **must** have the same sized image formats (such as `Rgba8Unorm` and 
+    /// `ImageLayout`'s **must** have the same sized image formats (such as `Rgba8Unorm` and
     /// `R32`, both of which are 32 bits).
     fn copy_image<T>(
         &mut self,
@@ -446,7 +446,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
 
     // TODO: This explanation needs improvement.
     /// Performs a non-indexed drawing operation, fetching vertex attributes
-    /// from the currently bound vertex buffers.  It performs instanced 
+    /// from the currently bound vertex buffers.  It performs instanced
     /// drawing, drawing `instances.len()`
     /// times with an `instanceIndex` starting with the start of the range.
     fn draw(
@@ -455,8 +455,8 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
         instances: Range<InstanceCount>,
     );
 
-    /// Performs indexed drawing, drawing the range of indices 
-    /// given by the current index buffer and any bound vertex buffers. 
+    /// Performs indexed drawing, drawing the range of indices
+    /// given by the current index buffer and any bound vertex buffers.
     /// `base_vertex` specifies the vertex offset corresponding to index 0.
     /// That is, the offset into the vertex buffer is `(current_index + base_vertex)`
     ///
@@ -490,7 +490,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     ///
     /// Each draw command in the buffer is a series of 5 values specifying,
     /// in order, the number of indices, the number of instances, the first index,
-    /// the vertex offset, and the first instance.  All are `u32`'s except 
+    /// the vertex offset, and the first instance.  All are `u32`'s except
     /// the vertex offset, which is an `i32`.
     fn draw_indexed_indirect(
         &mut self,

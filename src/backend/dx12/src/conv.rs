@@ -316,31 +316,27 @@ pub fn map_wrap(wrap: image::WrapMode) -> D3D12_TEXTURE_ADDRESS_MODE {
     }
 }
 
-pub enum FilterOp {
-    Product,
-    Comparison,
-    //Maximum, TODO
-    //Minimum, TODO
+fn map_filter_type(filter: image::Filter) -> D3D12_FILTER_TYPE {
+    match filter {
+        image::Filter::Nearest => D3D12_FILTER_TYPE_POINT,
+        image::Filter::Linear => D3D12_FILTER_TYPE_LINEAR,
+    }
 }
 
-pub fn map_filter(filter: image::FilterMethod, op: FilterOp) -> D3D12_FILTER {
-    use hal::image::FilterMethod::*;
-    match op {
-        FilterOp::Product => match filter {
-            Scale          => D3D12_FILTER_MIN_MAG_MIP_POINT,
-            Mipmap         => D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR,
-            Bilinear       => D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT,
-            Trilinear      => D3D12_FILTER_MIN_MAG_MIP_LINEAR,
-            Anisotropic(_) => D3D12_FILTER_ANISOTROPIC,
-        },
-        FilterOp::Comparison => match filter {
-            Scale          => D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT,
-            Mipmap         => D3D12_FILTER_COMPARISON_MIN_MAG_POINT_MIP_LINEAR,
-            Bilinear       => D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT,
-            Trilinear      => D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR,
-            Anisotropic(_) => D3D12_FILTER_COMPARISON_ANISOTROPIC,
-        },
-    }
+pub fn map_filter(
+    mag_filter: image::Filter,
+    min_filter: image::Filter,
+    mip_filter: image::Filter,
+    reduction: D3D12_FILTER_REDUCTION_TYPE,
+) -> D3D12_FILTER {
+    let mag = map_filter_type(mag_filter);
+    let min = map_filter_type(min_filter);
+    let mip = map_filter_type(mip_filter);
+
+    (min & D3D12_FILTER_TYPE_MASK) << D3D12_MIN_FILTER_SHIFT |
+    (mag & D3D12_FILTER_TYPE_MASK) << D3D12_MAG_FILTER_SHIFT |
+    (mip & D3D12_FILTER_TYPE_MASK) << D3D12_MIP_FILTER_SHIFT |
+    (reduction & D3D12_FILTER_REDUCTION_TYPE_MASK) << D3D12_FILTER_REDUCTION_TYPE_SHIFT
 }
 
 pub fn map_buffer_resource_state(access: buffer::Access) -> D3D12_RESOURCE_STATES {

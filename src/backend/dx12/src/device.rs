@@ -1809,18 +1809,18 @@ impl d::Device<B> for Device {
         let handle = self.sampler_pool.lock().unwrap().alloc_handles(1).cpu;
 
         let op = match info.comparison {
-            Some(_) => conv::FilterOp::Comparison,
-            None => conv::FilterOp::Product,
+            Some(_) => d3d12::D3D12_FILTER_REDUCTION_TYPE_COMPARISON,
+            None => d3d12::D3D12_FILTER_REDUCTION_TYPE_STANDARD,
         };
         let desc = d3d12::D3D12_SAMPLER_DESC {
-            Filter: conv::map_filter(info.filter, op),
+            Filter: conv::map_filter(info.mag_filter, info.min_filter, info.mip_filter, op),
             AddressU: conv::map_wrap(info.wrap_mode.0),
             AddressV: conv::map_wrap(info.wrap_mode.1),
             AddressW: conv::map_wrap(info.wrap_mode.2),
             MipLODBias: info.lod_bias.into(),
-            MaxAnisotropy: match info.filter {
-                image::FilterMethod::Anisotropic(max) => max as _, // TODO: check support here?
-                _ => 0,
+            MaxAnisotropy: match info.anisotropic {
+                image::Anisotropic::On(max) => max as _, // TODO: check support here?
+                image::Anisotropic::Off => 0,
             },
             ComparisonFunc: conv::map_comparison(info.comparison.unwrap_or(pso::Comparison::Always)),
             BorderColor: info.border.into(),

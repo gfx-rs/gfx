@@ -10,7 +10,7 @@ use std::{iter, mem};
 use hal::{buffer, command as com, error, memory, pool, pso};
 use hal::{VertexCount, VertexOffset, InstanceCount, IndexCount, WorkGroupCount};
 use hal::format::FormatDesc;
-use hal::image::{ImageLayout, SubresourceRange};
+use hal::image::{Filter, ImageLayout, SubresourceRange};
 use hal::query::{Query, QueryControl, QueryId};
 use hal::queue::{RawCommandQueue, RawSubmission};
 
@@ -974,7 +974,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         _src_layout: ImageLayout,
         _dst: &native::Image,
         _dst_layout: ImageLayout,
-        _filter: com::BlitFilter,
+        _filter: Filter,
         _regions: T,
     ) where
         T: IntoIterator,

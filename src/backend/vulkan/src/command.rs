@@ -9,7 +9,7 @@ use ash::version::DeviceV1_0;
 use hal::{buffer, command as com, memory, pso, query};
 use hal::{IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 use hal::format::Aspects;
-use hal::image::{ImageLayout, SubresourceRange};
+use hal::image::{Filter, ImageLayout, SubresourceRange};
 use {conv, native as n};
 use {Backend, RawDevice};
 
@@ -441,7 +441,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         src_layout: ImageLayout,
         dst: &n::Image,
         dst_layout: ImageLayout,
-        filter: com::BlitFilter,
+        filter: Filter,
         regions: T,
     ) where
         T: IntoIterator,
@@ -468,8 +468,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 dst.raw,
                 conv::map_image_layout(dst_layout),
                 &regions,
-                // Vulkan and HAL share same filter
-                mem::transmute(filter),
+                conv::map_filter(filter),
             );
         }
     }
