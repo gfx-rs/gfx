@@ -573,13 +573,13 @@ impl d::Device<B> for Device {
         let gl = &self.share.context;
         let mut name = 0 as n::Sampler;
 
-        let (min, mag) = conv::filter_to_gl(info.filter);
+        let (min, mag) = conv::filter_to_gl(info.mag_filter, info.min_filter, info.mip_filter);
 
         unsafe {
             gl.GenSamplers(1, &mut name);
 
-            match info.filter{
-                i::FilterMethod::Anisotropic(fac) if fac > 1 => {
+            match info.anisotropic {
+                i::Anisotropic::On(fac) if fac > 1 => {
                     if self.share.private_caps.sampler_anisotropy_ext {
                         gl.SamplerParameterf(name, gl::TEXTURE_MAX_ANISOTROPY_EXT, fac as GLfloat);
                     } else if self.share.features.contains(c::Features::SAMPLER_ANISOTROPY) {

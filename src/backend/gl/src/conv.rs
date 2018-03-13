@@ -17,14 +17,22 @@ pub fn _image_kind_to_gl(kind: i::Kind) -> t::GLenum {
     }
 }
 
-pub fn filter_to_gl(f: i::FilterMethod) -> (t::GLenum, t::GLenum) {
-    match f {
-        i::FilterMethod::Scale => (gl::NEAREST, gl::NEAREST),
-        i::FilterMethod::Mipmap => (gl::NEAREST_MIPMAP_NEAREST, gl::NEAREST),
-        i::FilterMethod::Bilinear => (gl::LINEAR, gl::LINEAR),
-        i::FilterMethod::Trilinear => (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR),
-        i::FilterMethod::Anisotropic(..) => (gl::LINEAR_MIPMAP_LINEAR, gl::LINEAR),
-    }
+pub fn filter_to_gl(mag: i::Filter, min: i::Filter, mip: i::Filter) -> (t::GLenum, t::GLenum) {
+    use hal::image::Filter::*;
+
+    let mag_filter = match mag {
+        Nearest => gl::NEAREST,
+        Linear => gl::LINEAR,
+    };
+
+    let min_filter = match (min, mip) {
+        (Nearest, Nearest) => gl::NEAREST_MIPMAP_NEAREST,
+        (Nearest, Linear) => gl::NEAREST_MIPMAP_LINEAR,
+        (Linear, Nearest) => gl::LINEAR_MIPMAP_NEAREST,
+        (Linear, Linear) => gl::LINEAR_MIPMAP_LINEAR,
+    };
+
+    (min_filter, mag_filter)
 }
 
 pub fn wrap_to_gl(w: i::WrapMode) -> t::GLenum {
@@ -95,7 +103,7 @@ pub fn format_to_gl_format(format: Format) -> Option<(gl::types::GLint, gl::type
         Rgba32Uint => (4, UNSIGNED_INT, Integer),
         Rgba32Int => (4, INT, Integer),
         Rgba32Float => (4, FLOAT, Float),
-        
+
         _ => return None,
     };
 

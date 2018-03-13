@@ -463,7 +463,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         _: image::ImageLayout,
         _: &(),
         _: image::ImageLayout,
-        _: command::BlitFilter,
+        _: image::Filter,
         _: T,
     ) where
         T: IntoIterator,
