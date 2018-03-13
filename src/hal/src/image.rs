@@ -472,7 +472,7 @@ pub struct SamplerInfo {
 impl SamplerInfo {
     /// Create a new sampler description with a given filter method for all filtering operations
     /// and a wrapping mode, using no LOD modifications.
-    pub fn new(filter: Filter, wrap: WrapMode) -> SamplerInfo {
+    pub fn new(filter: Filter, wrap: WrapMode) -> Self {
         SamplerInfo {
             min_filter: filter,
             mag_filter: filter,
