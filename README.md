@@ -18,7 +18,7 @@
     <img src="https://img.shields.io/badge/gitter-join%20chat-green.svg?style=flat-square" alt="Gitter Chat">
   </a>
   <br>
-  <strong><a href="info/getting_started.md">Getting Started</a> | <a href="http://docs.rs/gfx-hal">Documentation</a> | <a href="http://gfx-rs.github.io/">Blog</a> </strong>
+  <strong><a href="info/getting_started.md">Getting Started</a> | <a href="http://docs.rs/gfx">Documentation</a> | <a href="http://gfx-rs.github.io/">Blog</a> </strong>
 </p>
 
 # gfx-rs
