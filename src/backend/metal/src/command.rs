@@ -1066,14 +1066,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
         }
 
-        // Check whether an aspects flag only has one of Depth or Stencil set
-        #[inline]
-        fn only_one_depth_stencil(a: AspectFlags) -> bool {
-            let has_depth = !(a & AspectFlags::DEPTH).is_empty();
-            let has_stencil = !(a & AspectFlags::STENCIL).is_empty();
-            has_depth ^ has_stencil
-        }
-
         //TODO we're always switching into blit encoder mode, even when we have no commands to execute on it
         let encoder = self.encode_blit();
 
@@ -1137,10 +1129,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             // check that we're only copying aspects actually in the image
             debug_assert!(src.format_desc.aspects.contains(r.src_subresource.aspects));
 
+            let only_one_depth_stencil = {
+                let a = r.src_subresource.aspects;
+                let has_depth = !(a & AspectFlags::DEPTH).is_empty();
+                let has_stencil = !(a & AspectFlags::STENCIL).is_empty();
+                has_depth ^ has_stencil
+            };
+
             // In the case that the image format is a combined Depth / Stencil format,
             // and we are only copying one of the aspects, we use the shader even if the regions
             // are the same size
-            if range_size(&r.src_bounds) == range_size(&r.dst_bounds) && !(has_ds && only_one_depth_stencil(r.src_subresource.aspects)) {
+            if range_size(&r.src_bounds) == range_size(&r.dst_bounds) && !(has_ds && only_one_depth_stencil) {
                 blit_cmd(&r);
             } else {
                 // we need to use a shader to do the scaling
