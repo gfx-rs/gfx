@@ -220,6 +220,17 @@ pub fn format_to_glfull(format: NewFormat) -> Result<GLenum, ()> {
     })
 }
 
+fn channel_can_clamp(channel: ChannelType) -> bool {
+    match channel {
+        ChannelType::Unorm |
+        ChannelType::Srgb => true,
+        ChannelType::Inorm |
+        ChannelType::Uint |
+        ChannelType::Int |
+        ChannelType::Float => false,
+    }
+}
+
 fn set_mipmap_range(gl: &gl::Gl, target: GLenum, (base, max): (u8, u8)) { unsafe {
     gl.TexParameteri(target, gl::TEXTURE_BASE_LEVEL, base as GLint);
     gl.TexParameteri(target, gl::TEXTURE_MAX_LEVEL, max as GLint);
@@ -698,65 +709,69 @@ pub fn copy_from_buffer(gl: &gl::Gl,
     tex_sub_image(gl, dst.kind, target, pixel_format, data_type, &dst.info, data)
 }
 
-pub fn copy_to_buffer(gl: &gl::Gl,
-                      src: &t::TextureCopyRegion<NewTexture>,
-                      dst: Buffer, dst_offset: gl::types::GLintptr,
-                      fbo: FrameBuffer)
-                      -> Result<(), t::CreationError>
-{
+pub fn copy_to_buffer(
+    gl: &gl::Gl,
+    src: &t::TextureCopyRegion<NewTexture>,
+    dst: Buffer, dst_offset: gl::types::GLintptr,
+    fbo: FrameBuffer,
+) -> Result<(), t::CreationError> {
     let data = dst_offset as *mut GLvoid;
     unsafe { gl.BindBuffer(gl::PIXEL_PACK_BUFFER, dst); }
 
     let format = src.info.format;
     let pixel_format = format_to_glpixel(format);
+    let src_dim = src.kind.get_dimensions();
     let data_type = match format_to_gltype(format) {
         Ok(t) => t,
         Err(_) => return Err(t::CreationError::Format(format.0, Some(format.1))),
     };
 
-    // FIXME: can't specify image offsets
-    let src_dim = src.kind.get_dimensions();
-    debug_assert!(src.info.xoffset == 0 &&
-                  src.info.yoffset == 0 &&
-                  src.info.zoffset == 0 &&
-                  src.info.width == src_dim.0 &&
-                  src.info.height == src_dim.1 &&
-                  src.info.depth == src_dim.2);
+    let can_get_tex_image =
+        src.info.xoffset == 0 &&
+        src.info.yoffset == 0 &&
+        src.info.zoffset == 0 &&
+        src.info.width == src_dim.0 &&
+        src.info.height == src_dim.1 &&
+        src.info.depth == src_dim.2;
 
-    match src.texture {
-        NewTexture::Texture(t) => {
+    Ok(match src.texture {
+        NewTexture::Texture(t) if can_get_tex_image => {
             let target = kind_to_gl(src.kind);
             unsafe { gl.BindTexture(target, t); }
 
             let target = kind_face_to_gl(src.kind, src.cube_face);
             unsafe {
-                gl.GetTexImage(target,
-                               src.info.mipmap as GLint,
-                               pixel_format,
-                               data_type,
-                               data);
+                gl.GetTexImage(
+                    target,
+                    src.info.mipmap as _,
+                    pixel_format,
+                    data_type,
+                    data,
+                );
             }
         }
-        NewTexture::Surface(_) => {
+        _ => {
+            assert!(src.info.depth <= 1);
             bind_read_fbo(gl, src.texture, src.info.mipmap, fbo);
             unsafe {
-                gl.ReadPixels(src.info.xoffset as GLint,
-                              src.info.yoffset as GLint,
-                              src.info.width as GLint,
-                              src.info.height as GLint,
-                              pixel_format,
-                              data_type,
-                              data);
+                gl.ReadPixels(
+                    src.info.xoffset as _,
+                    src.info.yoffset as _,
+                    src.info.width as _,
+                    src.info.height as _,
+                    pixel_format,
+                    data_type,
+                    data,
+                );
             }
         }
-    }
-
-    Ok(())
+    })
 }
 
-pub fn copy_textures(gl: &gl::Gl, src: &t::TextureCopyRegion<NewTexture>,
-                     dst: &t::TextureCopyRegion<Texture>, fbo: FrameBuffer)
-                     -> Result<(), t::CreationError> {
+pub fn copy_textures(
+    gl: &gl::Gl, src: &t::TextureCopyRegion<NewTexture>,
+    dst: &t::TextureCopyRegion<Texture>, fbo: FrameBuffer,
+) -> Result<(), t::CreationError> {
     bind_read_fbo(gl, src.texture, src.info.mipmap, fbo);
     let bind_target = kind_to_gl(dst.kind);
     unsafe { gl.BindTexture(bind_target, dst.texture); }
@@ -765,11 +780,18 @@ pub fn copy_textures(gl: &gl::Gl, src: &t::TextureCopyRegion<NewTexture>,
         None => bind_target,
     };
 
-    debug_assert!(src.info.zoffset == 0 &&
-                  src.info.depth <= 1 &&
-                  dst.info.depth <= 1 &&
-                  src.info.width == dst.info.width &&
-                  src.info.height == dst.info.height);
+    if !channel_can_clamp(src.info.format.1) {
+        //TODO: https://github.com/gfx-rs/gfx/issues/1881
+        error!("Format {:?} can't be losslessly copied between textures", src.info.format);
+    }
+
+    debug_assert!(
+        src.info.zoffset == 0 &&
+        src.info.depth <= 1 &&
+        dst.info.depth <= 1 &&
+        src.info.width == dst.info.width &&
+        src.info.height == dst.info.height
+    );
 
     Ok(match dst.kind {
         t::Kind::D2(_, _, t::AaMode::Single) |
