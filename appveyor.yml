@@ -2,15 +2,21 @@ skip_branch_with_pr: true
 branches:
   except:
     - staging.tmp
+
 environment:
   RUST_BACKTRACE: full
   matrix:
-  - channel: stable
-    target: x86_64-pc-windows-msvc
-  - channel: stable
-    target: x86_64-pc-windows-gnu
-  - channel: nightly
-    target: x86_64-pc-windows-msvc
+    - channel: stable
+      target: x86_64-pc-windows-msvc
+    - channel: stable
+      target: x86_64-pc-windows-gnu
+    - channel: nightly
+      target: x86_64-pc-windows-msvc
+matrix:
+  fast_finish: true
+  allow_failures:
+    - channel: nightly
+
 install:
 - appveyor DownloadFile https://win.rustup.rs/ -FileName rustup-init.exe
 - rustup-init -yv --default-toolchain %channel% --default-host %target%
