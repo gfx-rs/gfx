@@ -162,8 +162,9 @@ impl Instance {
                 instance_extensions
                     .iter()
                     .find(|inst_ext| unsafe {
-                        CStr::from_ptr(inst_ext.extension_name.as_ptr()) ==
-                            CStr::from_ptr(ext.as_ptr() as *const _)
+                        let inst_ext_name = std::slice::from_raw_parts(inst_ext.extension_name.as_ptr(), ext.len());
+                        let surf_ext_name = std::slice::from_raw_parts(ext.as_ptr() as *const i8, ext.len());
+                        (surf_ext_name == inst_ext_name)
                     })
                     .map(|_| ext)
                     .or_else(|| {
