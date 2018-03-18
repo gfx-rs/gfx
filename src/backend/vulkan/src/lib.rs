@@ -162,8 +162,8 @@ impl Instance {
                 instance_extensions
                     .iter()
                     .find(|inst_ext| unsafe {
-                        CStr::from_ptr(inst_ext.extension_name.as_ptr()) ==
-                            CStr::from_ptr(ext.as_ptr() as *const _)
+                        CStr::from_ptr(inst_ext.extension_name.as_ptr()) == 
+                        CStr::from_bytes_with_nul_unchecked(std::slice::from_raw_parts(ext.as_ptr(), ext.len()+1))
                     })
                     .map(|_| ext)
                     .or_else(|| {
