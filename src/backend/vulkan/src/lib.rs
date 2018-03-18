@@ -1,5 +1,3 @@
-#![feature(libc)]
-
 #[macro_use]
 extern crate log;
 extern crate ash;
@@ -8,7 +6,6 @@ extern crate gfx_hal as hal;
 #[macro_use]
 extern crate lazy_static;
 extern crate smallvec;
-extern crate libc;
 
 #[cfg(windows)]
 extern crate winapi;
@@ -165,8 +162,8 @@ impl Instance {
                 instance_extensions
                     .iter()
                     .find(|inst_ext| unsafe {
-                        let _inst_ext = inst_ext.extension_name.as_ptr();
-                        std::slice::from_raw_parts(_inst_ext, libc::strlen(_inst_ext)) == std::slice::from_raw_parts(ext.as_ptr() as *const i8, ext.len())
+                        CStr::from_ptr(inst_ext.extension_name.as_ptr()) == 
+                        CStr::from_bytes_with_nul_unchecked(std::slice::from_raw_parts(ext.as_ptr(), ext.len()+1))
                     })
                     .map(|_| ext)
                     .or_else(|| {
