@@ -162,8 +162,7 @@ impl Instance {
                 instance_extensions
                     .iter()
                     .find(|inst_ext| unsafe {
-                        CStr::from_ptr(inst_ext.extension_name.as_ptr()) ==
-                            CStr::from_ptr(ext.as_ptr() as *const _)
+                        CStr::from_ptr(inst_ext.extension_name.as_ptr()).to_bytes() == ext.as_bytes()
                     })
                     .map(|_| ext)
                     .or_else(|| {
@@ -180,8 +179,7 @@ impl Instance {
                 instance_layers
                     .iter()
                     .find(|inst_layer| unsafe {
-                        CStr::from_ptr(inst_layer.layer_name.as_ptr()) ==
-                            CStr::from_ptr(layer.as_ptr() as *const _)
+                        CStr::from_ptr(inst_layer.layer_name.as_ptr()).to_bytes() == layer.as_bytes()
                     })
                     .map(|_| layer)
                     .or_else(|| {
