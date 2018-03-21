@@ -82,6 +82,10 @@ impl Surface {
             window: Starc::new(window)
         }
     }
+    
+    pub fn window(&self) -> &glutin::GlWindow {
+        &self.window
+    }
 
     fn swapchain_formats(&self) -> Vec<f::Format> {
         let pixel_format = self.window.get_pixel_format();
