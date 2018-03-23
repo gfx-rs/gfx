@@ -46,7 +46,7 @@ help:
 	@echo "Supported backends: gl $(FEATURES_HAL) $(FEATURES_HAL2)"
 
 check:
-	#Note: excluding `warden` here, since it depends on serialization
+	@echo "Note: excluding `warden` here, since it depends on serialization"
 	cargo check --all $(EXCLUDES) --exclude gfx-warden
 	cd examples/hal && cargo check --features "gl"
 	cd examples/hal && cargo check --features "$(FEATURES_HAL)"
