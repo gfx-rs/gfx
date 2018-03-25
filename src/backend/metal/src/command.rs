@@ -261,7 +261,7 @@ struct CommandBufferInner {
     // hopefully, this is temporary
     // currently needed for `update_buffer` only
     device: metal::Device,
-    //TODO: would be cleaner to move the cache into `CommandBuffer` iself
+    //TODO: would be cleaner to move the cache into `CommandBuffer` itself
     // it doesn't have to be in `Inner`
     viewport: Option<MTLViewport>,
     scissors: Option<MTLScissorRect>,
@@ -1586,16 +1586,23 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn copy_image<T>(
         &mut self,
-        _src: &native::Image,
+        src: &native::Image,
         _src_layout: Layout,
-        _dst: &native::Image,
+        dst: &native::Image,
         _dst_layout: Layout,
-        _regions: T,
+        regions: T,
     ) where
         T: IntoIterator,
         T::Item: Borrow<com::ImageCopy>,
     {
-        unimplemented!()
+        let commands = regions.into_iter().map(|region| {
+            soft::BlitCommand::CopyImage {
+                src: src.raw.clone(),
+                dst: src.raw.clone(),
+                region: region.borrow().clone(),
+            }
+        });
+        self.inner().sink.blit_commands(commands);
     }
 
     fn copy_buffer_to_image<T>(
