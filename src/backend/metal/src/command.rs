@@ -13,9 +13,9 @@ use hal::format::FormatDesc;
 use hal::image::{Filter, Layout, SubresourceRange};
 use hal::query::{Query, QueryControl, QueryId};
 use hal::queue::{RawCommandQueue, RawSubmission};
-use hal::format::AspectFlags;
+use hal::format::Aspects;
 
-use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLClearColor, MTLIndexType, MTLSize, MTLOrigin, CaptureManager};
+use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLClearColor, MTLIndexType, MTLSize, CaptureManager};
 use cocoa::foundation::{NSUInteger, NSInteger};
 use block::{ConcreteBlock};
 use {conversions as conv, soft};
@@ -645,49 +645,72 @@ pub(crate) fn exec_blit(encoder: &metal::BlitCommandEncoderRef, command: &soft::
     match *command {
         Cmd::CopyBuffer { ref src, ref dst, ref region } => {
             encoder.copy_from_buffer(
-                &src,
+                src,
                 region.src as NSUInteger,
-                &dst,
+                dst,
                 region.dst as NSUInteger,
                 region.size as NSUInteger
             );
-        },
+        }
+        Cmd::CopyImage { ref src, ref dst, ref region } => {
+            let size = conv::map_extent(region.extent);
+            let src_offset = conv::map_offset(region.src_offset);
+            let dst_offset = conv::map_offset(region.dst_offset);
+            for lid in 0 .. {
+                let src_layer = region.src_subresource.layers.start + lid;
+                let dst_layer = region.dst_subresource.layers.start + lid;
+                if src_layer >= region.src_subresource.layers.end || dst_layer >= region.dst_subresource.layers.end {
+                    break
+                }
+                encoder.copy_from_texture(
+                    src,
+                    src_layer as _,
+                    region.src_subresource.level as _,
+                    src_offset,
+                    size,
+                    dst,
+                    dst_layer as _,
+                    region.dst_subresource.level as _,
+                    dst_offset,
+                );
+            }
+        }
         Cmd::CopyBufferToImage { ref src, ref dst, dst_desc, ref region } => {
             let extent = conv::map_extent(region.image_extent);
+            let origin = conv::map_offset(region.image_offset);
             let (row_pitch, slice_pitch) = compute_pitches(&region, &dst_desc, &extent);
-            let image_offset = &region.image_offset;
             let r = &region.image_layers;
 
             for layer in r.layers.clone() {
                 let offset = region.buffer_offset + slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
                 encoder.copy_from_buffer_to_texture(
-                    &src,
+                    src,
                     offset as NSUInteger,
                     row_pitch as NSUInteger,
                     slice_pitch as NSUInteger,
                     extent,
-                    &dst,
+                    dst,
                     layer as NSUInteger,
                     r.level as NSUInteger,
-                    MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ }
+                    origin,
                 );
             }
-        },
+        }
         Cmd::CopyImageToBuffer { ref src, src_desc, ref dst, ref region } => {
             let extent = conv::map_extent(region.image_extent);
+            let origin = conv::map_offset(region.image_offset);
             let (row_pitch, slice_pitch) = compute_pitches(&region, &src_desc, &extent);
-            let image_offset = &region.image_offset;
             let r = &region.image_layers;
 
             for layer in r.layers.clone() {
                 let offset = region.buffer_offset + slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
                 encoder.copy_from_texture_to_buffer(
-                    &src,
+                    src,
                     layer as NSUInteger,
                     r.level as NSUInteger,
-                    MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ },
+                    origin,
                     extent,
-                    &dst,
+                    dst,
                     offset as NSUInteger,
                     row_pitch as NSUInteger,
                     slice_pitch as NSUInteger
@@ -1101,87 +1124,39 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::ImageBlit>
     {
+        use hal::image::{Extent, Offset};
+
         #[inline]
-        fn offset_diff(a: &com::Offset, b: &com::Offset) -> (u64, u64, u64) {
+        fn offset_diff(a: &Offset, b: &Offset) -> Extent {
             let dx = b.x - a.x;
             let dy = b.y - a.y;
             let dz = b.z - a.z;
-            debug_assert!(dx >= 0);
-            debug_assert!(dy >= 0);
-            debug_assert!(dz >= 0);
-
-            (
-                dx as u64,
-                dy as u64,
-                dz as u64
-            )
+            debug_assert!(dx >= 0 && dy >= 0 && dz >= 0);
+            Extent {
+                width: dx as _,
+                height: dy as _,
+                depth: dz as _,
+            }
         }
 
         #[inline]
-        fn range_size(r: &Range<com::Offset>) -> (u64, u64, u64) {
+        fn range_size(r: &Range<Offset>) -> Extent {
             offset_diff(&r.start, &r.end)
         }
 
         #[inline]
-        fn is_offset_positive(o: &com::Offset) -> bool {
+        fn is_offset_positive(o: &Offset) -> bool {
             o.x >= 0 && o.y >= 0 && o.z >= 0
         }
 
         #[inline]
         fn has_depth_stencil_format(i: &native::Image) -> bool {
-            // Checks whether this format is a packed format with both depth and stencil components
-            match i.pixel_format() {
-                MTLPixelFormat::Depth24Unorm_Stencil8 | MTLPixelFormat::Depth32Float_Stencil8 => true,
-                _ => false,
-            }
+            i.format_desc.aspects.contains(Aspects::DEPTH | Aspects::STENCIL)
         }
-
-        //TODO we're always switching into blit encoder mode, even when we have no commands to execute on it
-        let encoder = self.encode_blit();
-
-        let blit_cmd = |region: &com::ImageBlit| {
-            let src_start = region.src_bounds.start;
-            let dst_start = region.dst_bounds.start;
-            debug_assert!(is_offset_positive(&src_start));
-            debug_assert!(is_offset_positive(&dst_start));
-
-            let src_origin = MTLOrigin {
-                x: src_start.x as _,
-                y: src_start.y as _,
-                z: src_start.z as _
-            };
-            let dst_origin = MTLOrigin {
-                x: dst_start.x as _,
-                y: dst_start.y as _,
-                z: dst_start.z as _
-            };
-            let (sx, sy, sz) = range_size(&region.dst_bounds);
-            let src_size = MTLSize {
-                width: sx,
-                height: sy,
-                depth: sz
-            };
-
-
-            for (src_layer, dst_layer) in region.src_subresource.layers.clone().zip(region.dst_subresource.layers.clone()) {
-                unsafe {
-                    msg_send![encoder,
-                        copyFromTexture: &*src.raw
-                        sourceSlice: src_layer as NSUInteger
-                        sourceLevel: region.src_subresource.level as NSUInteger
-                        sourceOrigin: src_origin
-                        sourceSize: src_size
-                        toTexture: &*dst.raw
-                        destinationSlice: dst_layer as NSUInteger
-                        destinationLevel: region.dst_subresource.level as NSUInteger
-                        destinationOrigin: dst_origin
-                    ]
-                }
-            }
-        };
 
         // We check if either of the two images has a combined depth/stencil format
         let has_ds = has_depth_stencil_format(&src) || has_depth_stencil_format(&dst);
+        let mut blits = Vec::new();
 
         for region in regions {
             let r = region.borrow();
@@ -1193,30 +1168,46 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             // TODO this should probably be "compatible" pixel formats instead of equal formats
             debug_assert_eq!(src.raw.pixel_format(), dst.raw.pixel_format());
             // enforce aspect flag restrictions
-            debug_assert_ne!((r.src_subresource.aspects & AspectFlags::COLOR).is_empty(), (r.src_subresource.aspects & (AspectFlags::DEPTH | AspectFlags::STENCIL).is_empty()));
-            debug_assert_ne!((r.dst_subresource.aspects & AspectFlags::COLOR).is_empty(), (r.dst_subresource.aspects & (AspectFlags::DEPTH | AspectFlags::STENCIL).is_empty()));
+            debug_assert_ne!(r.src_subresource.aspects.contains(Aspects::COLOR), r.src_subresource.aspects.contains(Aspects::DEPTH | Aspects::STENCIL));
+            debug_assert_ne!(r.dst_subresource.aspects.contains(Aspects::COLOR), r.dst_subresource.aspects.contains(Aspects::DEPTH | Aspects::STENCIL));
             debug_assert_eq!(r.src_subresource.aspects, r.dst_subresource.aspects);
             // check that we're only copying aspects actually in the image
             debug_assert!(src.format_desc.aspects.contains(r.src_subresource.aspects));
 
             let only_one_depth_stencil = {
-                let a = r.src_subresource.aspects;
-                let has_depth = !(a & AspectFlags::DEPTH).is_empty();
-                let has_stencil = !(a & AspectFlags::STENCIL).is_empty();
+                let has_depth = r.src_subresource.aspects.contains(Aspects::DEPTH);
+                let has_stencil = r.src_subresource.aspects.contains(Aspects::STENCIL);
                 has_depth ^ has_stencil
             };
 
+            let src_size = range_size(&r.src_bounds);
+            let dst_size = range_size(&r.dst_bounds);
             // In the case that the image format is a combined Depth / Stencil format,
             // and we are only copying one of the aspects, we use the shader even if the regions
             // are the same size
-            if range_size(&r.src_bounds) == range_size(&r.dst_bounds) && !(has_ds && only_one_depth_stencil) {
-                blit_cmd(&r);
+            if src_size == dst_size && !(has_ds && only_one_depth_stencil) {
+                debug_assert!(is_offset_positive(&r.src_bounds.start));
+                debug_assert!(is_offset_positive(&r.dst_bounds.start));
+
+                blits.push(soft::BlitCommand::CopyImage {
+                    src: src.raw.clone(),
+                    dst: src.raw.clone(),
+                    region: com::ImageCopy {
+                        src_subresource: r.src_subresource.clone(),
+                        src_offset: r.src_bounds.start,
+                        dst_subresource: r.dst_subresource.clone(),
+                        dst_offset: r.dst_bounds.start,
+                        extent: src_size,
+                    },
+                });
             } else {
                 // we need to use a shader to do the scaling
-                panic!("blitting with differing sizes currently not implemented for Metal");
-                //TODO
+                error!("Blitting with differing sizes currently not implemented for Metal");
+                // not panicing in order to ease on the CTS
             }
         }
+
+        self.sink().blit_commands(blits.into_iter());
     }
 
     fn bind_index_buffer(&mut self, view: buffer::IndexBufferView<Backend>) {
@@ -1755,16 +1746,23 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn copy_image<T>(
         &mut self,
-        _src: &native::Image,
+        src: &native::Image,
         _src_layout: Layout,
-        _dst: &native::Image,
+        dst: &native::Image,
         _dst_layout: Layout,
-        _regions: T,
+        regions: T,
     ) where
         T: IntoIterator,
         T::Item: Borrow<com::ImageCopy>,
     {
-        unimplemented!()
+        let commands = regions.into_iter().map(|region| {
+            soft::BlitCommand::CopyImage {
+                src: src.raw.clone(),
+                dst: dst.raw.clone(),
+                region: region.borrow().clone(),
+            }
+        });
+        self.sink().blit_commands(commands);
     }
 
     fn copy_buffer_to_image<T>(

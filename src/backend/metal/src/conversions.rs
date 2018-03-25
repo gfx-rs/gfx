@@ -348,3 +348,11 @@ pub fn map_extent(extent: image::Extent) -> MTLSize {
         depth: extent.depth as _,
     }
 }
+
+pub fn map_offset(offset: image::Offset) -> MTLOrigin {
+    MTLOrigin {
+        x: offset.x as _,
+        y: offset.y as _,
+        z: offset.z as _,
+    }
+}
