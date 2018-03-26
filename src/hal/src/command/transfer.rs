@@ -4,7 +4,6 @@ use std::ops::Range;
 
 use Backend;
 use {buffer, format, image};
-use device::Extent;
 use memory::{Barrier, Dependencies};
 use pso::PipelineStage;
 use queue::capability::{Supports, Transfer};
@@ -41,7 +40,7 @@ pub struct ImageCopy {
     /// The destination offset.
     pub dst_offset: image::Offset,
     /// The extent of the region to copy.
-    pub extent: Extent,
+    pub extent: image::Extent,
     /// The number of layers to copy.
     pub num_layers: image::Layer,
 }
@@ -62,7 +61,7 @@ pub struct BufferImageCopy {
     /// The offset of the portion of the image to copy.
     pub image_offset: image::Offset,
     /// Size of the portion of the image to copy.
-    pub image_extent: Extent,
+    pub image_extent: image::Extent,
 }
 
 

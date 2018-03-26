@@ -1,11 +1,11 @@
 //! # Device
 //!
-//! This module exposes the `Device` trait, which provides methods for creating 
+//! This module exposes the `Device` trait, which provides methods for creating
 //! and managing graphics resources such as buffers, images and memory.
 //!
-//! The `Adapter` and `Device` types are very similar to the Vulkan concept of 
-//! "physical devices" vs. "logical devices"; an `Adapter` is single GPU 
-//! (or CPU) that implements a backend, a `Device` is a 
+//! The `Adapter` and `Device` types are very similar to the Vulkan concept of
+//! "physical devices" vs. "logical devices"; an `Adapter` is single GPU
+//! (or CPU) that implements a backend, a `Device` is a
 //! handle to that physical device that has the requested capabilities
 //! and is used to actually do things.
 
@@ -76,18 +76,6 @@ pub enum WaitFor {
     Any,
     /// Wait for all targets at once.
     All,
-}
-
-/// Describes the size of an Image, which may be up to three dimensional.
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Extent {
-    /// Image width
-    pub width: u32,
-    /// Image height
-    pub height: u32,
-    /// Image depth.
-    pub depth: u32,
 }
 
 /// An error from creating a shader module.
@@ -255,7 +243,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         &self,
         pass: &B::RenderPass,
         attachments: I,
-        extent: Extent,
+        extent: image::Extent,
     ) -> Result<B::Framebuffer, FramebufferError>
     where
         I: IntoIterator,
@@ -310,7 +298,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
 
     ///
     fn create_image(
-        &self, image::Kind, image::Level, format::Format, image::Usage,
+        &self, image::Kind, image::Level, format::Format, image::Usage, image::StorageFlags,
     ) -> Result<B::UnboundImage, image::CreationError>;
 
     ///
@@ -331,6 +319,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     fn create_image_view(
         &self,
         &B::Image,
+        image::ViewKind,
         format::Format,
         format::Swizzle,
         image::SubresourceRange,

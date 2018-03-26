@@ -7,6 +7,7 @@ use ash::vk;
 use ash::extensions as ext;
 
 use hal;
+use hal::image::{NumSamples, Size};
 use hal::format::Format;
 
 #[cfg(feature = "winit")]
@@ -20,8 +21,9 @@ pub struct Surface {
     // Vk (EXT) specs [29.2.7 Platform-Independent Information]
     // For vkDestroySurfaceKHR: Host access to surface must be externally synchronized
     pub(crate) raw: Arc<RawSurface>,
-    pub(crate) width: u32,
-    pub(crate) height: u32,
+    pub(crate) width: Size,
+    pub(crate) height: Size,
+    pub(crate) samples: NumSamples,
 }
 
 pub struct RawSurface {
@@ -75,10 +77,10 @@ impl Instance {
             if result == 0 {
                 panic!("XGetGeometry failed");
             }
-            (attribs.width as u32, attribs.height as u32)
+            (attribs.width as Size, attribs.height as Size)
         };
 
-        self.create_surface_from_vk_surface_khr(surface, width, height)
+        self.create_surface_from_vk_surface_khr(surface, width, height, 1)
     }
 
     #[cfg(all(unix, not(target_os = "android")))]
@@ -123,12 +125,12 @@ impl Instance {
             (geometry.width as _, geometry.height as _)
         };
 
-        self.create_surface_from_vk_surface_khr(surface, width, height)
+        self.create_surface_from_vk_surface_khr(surface, width, height, 1)
     }
 
     #[cfg(all(unix, not(target_os = "android")))]
     pub fn create_surface_from_wayland(
-        &self, display: *mut c_void, surface: *mut c_void, width: u32, height: u32
+        &self, display: *mut c_void, surface: *mut c_void, width: Size, height: Size
     ) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
@@ -140,7 +142,7 @@ impl Instance {
 
         let surface = {
             let w_loader = ext::WaylandSurface::new(entry, &self.raw.0)
-                                .expect("WaylandSurface failed");
+                .expect("WaylandSurface failed");
 
             let info = vk::WaylandSurfaceCreateInfoKHR {
                 s_type: vk::StructureType::WaylandSurfaceCreateInfoKhr,
@@ -154,12 +156,12 @@ impl Instance {
                 .expect("WaylandSurface failed")
         };
 
-        self.create_surface_from_vk_surface_khr(surface, width, height)
+        self.create_surface_from_vk_surface_khr(surface, width, height, 1)
     }
 
     #[cfg(target_os = "android")]
     pub fn create_surface_android(
-        &self, window: *const c_void, width: u32, height: u32
+        &self, window: *const c_void, width: Size, height: Size
     ) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
@@ -167,7 +169,7 @@ impl Instance {
 
         let surface = {
             let loader = ext::AndroidSurface::new(entry, &self.raw.0)
-                                .expect("AndroidSurface failed");
+                .expect("AndroidSurface failed");
 
             let info = vk::AndroidSurfaceCreateInfoKHR {
                 s_type: vk::StructureType::AndroidSurfaceCreateInfoKhr,
@@ -180,7 +182,7 @@ impl Instance {
                 .expect("AndroidSurface failed")
         };
 
-        self.create_surface_from_vk_surface_khr(surface, width, height)
+        self.create_surface_from_vk_surface_khr(surface, width, height, 1)
     }
 
     #[cfg(windows)]
@@ -222,10 +224,10 @@ impl Instance {
             if GetClientRect(hwnd as *mut _, &mut rect as *mut RECT) == 0 {
                 panic!("GetClientRect failed");
             }
-            ((rect.right - rect.left) as u32, (rect.bottom - rect.top) as u32)
+            ((rect.right - rect.left) as Size, (rect.bottom - rect.top) as Size)
         };
 
-        self.create_surface_from_vk_surface_khr(surface, width, height)
+        self.create_surface_from_vk_surface_khr(surface, width, height, 1)
     }
 
     #[cfg(feature = "winit")]
@@ -268,7 +270,9 @@ impl Instance {
         }
     }
 
-    fn create_surface_from_vk_surface_khr(&self, surface: vk::SurfaceKHR, width: u32, height: u32) -> Surface {
+    fn create_surface_from_vk_surface_khr(
+        &self, surface: vk::SurfaceKHR, width: Size, height: Size, samples: NumSamples
+    ) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
             .expect("Unable to load Vulkan entry points");
@@ -282,16 +286,13 @@ impl Instance {
             instance: self.raw.clone(),
         });
 
-        Surface { raw, width, height }
+        Surface { raw, width, height, samples }
     }
 }
 
 impl hal::Surface<Backend> for Surface {
     fn kind(&self) -> hal::image::Kind {
-        use hal::image::Size;
-
-        let aa = hal::image::AaMode::Single;
-        hal::image::Kind::D2(self.width as Size, self.height as Size, aa)
+        hal::image::Kind::D2(self.width, self.height, 1, self.samples)
     }
 
     fn capabilities_and_formats(&self, physical_device: &PhysicalDevice) -> (hal::SurfaceCapabilities, Option<Vec<Format>>) {
