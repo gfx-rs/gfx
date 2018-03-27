@@ -142,7 +142,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn create_framebuffer<I>(
-        &self, _: &(), _: I, _: device::Extent
+        &self, _: &(), _: I, _: image::Extent
     ) -> Result<(), device::FramebufferError>
     where
         I: IntoIterator,
@@ -174,9 +174,14 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_image(&self, _: image::Kind, _: image::Level, _: format::Format, _: image::Usage)
-         -> Result<(), image::CreationError>
-    {
+    fn create_image(
+        &self,
+        _: image::Kind,
+        _: image::Level,
+        _: format::Format,
+        _: image::Usage,
+        _: image::StorageFlags,
+    ) -> Result<(), image::CreationError> {
         unimplemented!()
     }
 
@@ -191,6 +196,7 @@ impl hal::Device<Backend> for Device {
     fn create_image_view(
         &self,
         _: &(),
+        _: image::ViewKind,
         _: format::Format,
         _: format::Swizzle,
         _: image::SubresourceRange,

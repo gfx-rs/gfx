@@ -51,7 +51,7 @@
 
 use Backend;
 use image;
-use format::{self, Format};
+use format::Format;
 use queue::CommandQueue;
 
 use std::any::Any;
@@ -65,9 +65,18 @@ use std::ops::Range;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Extent2D {
     /// Width
-    pub width: u32,
+    pub width: image::Size,
     /// Height
-    pub height: u32,
+    pub height: image::Size,
+}
+
+impl From<image::Extent> for Extent2D {
+    fn from(ex: image::Extent) -> Self {
+        Extent2D {
+            width: ex.width,
+            height: ex.height,
+        }
+    }
 }
 
 /// Describes information about what a `Surface`'s properties are.
@@ -230,7 +239,7 @@ impl SwapchainConfig {
     /// ```no_run
     ///
     /// ```
-    pub fn with_depth_stencil(mut self, dsf: format::Format) -> Self {
+    pub fn with_depth_stencil(mut self, dsf: Format) -> Self {
         self.depth_stencil_format = Some(dsf);
         self
     }

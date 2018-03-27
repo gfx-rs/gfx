@@ -254,7 +254,7 @@ pub use self::raw::Sampler;
 #[derive(Debug, Clone)]
 pub struct FramebufferInfo<B: Backend> {
     pub attachments: Vec<raw::ImageView<B>>,
-    pub extent: ::Extent,
+    pub extent: ::image::Extent,
 }
 
 

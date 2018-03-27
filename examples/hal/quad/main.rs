@@ -17,7 +17,7 @@ extern crate gfx_backend_gl as back;
 extern crate winit;
 extern crate image;
 
-use hal::{buffer, command, device as d, format as f, image as i, memory as m, pass, pso, pool};
+use hal::{buffer, command, format as f, image as i, memory as m, pass, pso, pool};
 use hal::{Device, Instance, PhysicalDevice, Surface, Swapchain};
 use hal::{
     DescriptorPool, FrameSync, Primitive,
@@ -325,11 +325,13 @@ fn main() {
     // Framebuffer and render target creation
     let (frame_images, framebuffers) = match backbuffer {
         Backbuffer::Images(images) => {
-            let extent = d::Extent { width: pixel_width as _, height: pixel_height as _, depth: 1 };
+            let extent = i::Extent { width: pixel_width as _, height: pixel_height as _, depth: 1 };
             let pairs = images
                 .into_iter()
                 .map(|image| {
-                    let rtv = device.create_image_view(&image, surface_format, Swizzle::NO, COLOR_RANGE.clone()).unwrap();
+                    let rtv = device.create_image_view(
+                        &image, i::ViewKind::D2, surface_format, Swizzle::NO, COLOR_RANGE.clone()
+                        ).unwrap();
                     (image, rtv)
                 })
                 .collect::<Vec<_>>();
@@ -382,7 +384,7 @@ fn main() {
 
     let img = image::load(Cursor::new(&img_data[..]), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
-    let kind = i::Kind::D2(width as i::Size, height as i::Size, i::AaMode::Single);
+    let kind = i::Kind::D2(width as i::Size, height as i::Size, 1, 1);
     let row_alignment_mask = limits.min_buffer_copy_pitch_alignment as u32 - 1;
     let image_stride = 4usize;
     let row_pitch = (width * image_stride as u32 + row_alignment_mask) & !row_alignment_mask;
@@ -406,7 +408,9 @@ fn main() {
         device.release_mapping_writer(data);
     }
 
-    let image_unbound = device.create_image(kind, 1, ColorFormat::SELF, i::Usage::TRANSFER_DST | i::Usage::SAMPLED).unwrap(); // TODO: usage
+    let image_unbound = device.create_image(
+        kind, 1, ColorFormat::SELF, i::Usage::TRANSFER_DST | i::Usage::SAMPLED, i::StorageFlags::empty()
+        ).unwrap(); // TODO: usage
     let image_req = device.get_image_requirements(&image_unbound);
 
     let device_type = memory_types
@@ -421,7 +425,9 @@ fn main() {
     let image_memory = device.allocate_memory(device_type, image_req.size).unwrap();
 
     let image_logo = device.bind_image_memory(&image_memory, 0, image_unbound).unwrap();
-    let image_srv = device.create_image_view(&image_logo, ColorFormat::SELF, Swizzle::NO, COLOR_RANGE.clone()).unwrap();
+    let image_srv = device.create_image_view(
+        &image_logo, i::ViewKind::D2, ColorFormat::SELF, Swizzle::NO, COLOR_RANGE.clone()
+        ).unwrap();
 
     let sampler = device.create_sampler(
         i::SamplerInfo::new(
@@ -492,7 +498,7 @@ fn main() {
                         layers: 0 .. 1,
                     },
                     image_offset: i::Offset { x: 0, y: 0, z: 0 },
-                    image_extent: d::Extent { width, height, depth: 1 },
+                    image_extent: i::Extent { width, height, depth: 1 },
                 }]);
 
             let image_barrier = m::Barrier::Image {

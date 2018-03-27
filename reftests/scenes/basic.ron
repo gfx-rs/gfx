@@ -1,10 +1,10 @@
 (
 	resources: {
 		"image.color": Image(
-			kind: D2(1, 1, Single),
+			kind: D2(1, 1, 1, 1),
 			num_levels: 1,
 			format: Rgba8Unorm,
-			usage: (bits: 0x4), //COLOR_ATTACHMENT
+			usage: (bits: 0x24), //COLOR_ATTACHMENT | SAMPLED (temporary for GL)
 		),
 		"pass": RenderPass(
 			attachments: {
@@ -24,6 +24,7 @@
 		),
 		"image.color.view": ImageView(
 			image: "image.color",
+			kind: D2,
 			format: Rgba8Unorm,
 			range: (
 				aspects: (bits: 1),

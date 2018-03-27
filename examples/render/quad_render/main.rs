@@ -12,7 +12,7 @@ extern crate image;
 
 use std::io::Cursor;
 
-use hal::{command, device as d, format as f, image as i, pso};
+use hal::{command, format as f, image as i, pso};
 use hal::{Device, Instance, PhysicalDevice, Primitive};
 use gfx::format::{Rgba8Srgb as ColorFormat};
 use gfx::allocators::StackAllocator as Allocator;
@@ -111,12 +111,14 @@ fn main() {
 
     // Framebuffer creation
     let frame_rtvs = backbuffers.iter().map(|backbuffer| {
-        device.create_image_view(&backbuffer.color, image_range.clone())
+        device
+            .create_image_view(&backbuffer.color, i::ViewKind::D2, image_range.clone())
             .unwrap()
     }).collect::<Vec<_>>();
     let framebuffers = frame_rtvs.iter().map(|rtv| {
-        let extent = d::Extent { width: pixel_width as _, height: pixel_height as _, depth: 1 };
-        device.create_framebuffer(&pipeline, &[rtv.as_ref()], extent)
+        let extent = i::Extent { width: pixel_width as _, height: pixel_height as _, depth: 1 };
+        device
+            .create_framebuffer(&pipeline, &[rtv.as_ref()], extent)
             .unwrap()
     }).collect::<Vec<_>>();
 
@@ -151,7 +153,7 @@ fn main() {
     let img_data = include_bytes!("../../hal/quad/data/logo.png");
     let img = image::load(Cursor::new(&img_data[..]), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
-    let kind = i::Kind::D2(width as i::Size, height as i::Size, i::AaMode::Single);
+    let kind = i::Kind::D2(width as _, height as _, 1, 1);
     let row_alignment_mask = limits.min_buffer_copy_pitch_alignment as u32 - 1;
     let image_stride = 4usize;
     let row_pitch = (width * image_stride as u32 + row_alignment_mask) & !row_alignment_mask;
@@ -186,7 +188,7 @@ fn main() {
         1,
     ).unwrap();
 
-    let image_srv = device.create_image_view(&image, image_range)
+    let image_srv = device.create_image_view(&image, i::ViewKind::D2, image_range)
         .unwrap();
 
     let sampler = device.create_sampler(
@@ -231,7 +233,7 @@ fn main() {
                 layers: 0 .. 1,
             },
             image_offset: i::Offset { x: 0, y: 0, z: 0 },
-            image_extent: d::Extent { width, height, depth: 1 },
+            image_extent: i::Extent { width, height, depth: 1 },
         }]);
 
     let init_submit = init_encoder.finish();

@@ -5,7 +5,6 @@ use std::ops::Range;
 use Backend;
 use {image, pso};
 use buffer::IndexBufferView;
-use device::Extent;
 use query::{Query, QueryControl, QueryId};
 use queue::capability::{Graphics, GraphicsOrCompute, Supports};
 use super::{
@@ -155,7 +154,7 @@ pub struct ImageResolve {
     /// Destination image offset.
     pub dst_offset: image::Offset,
     /// Image extent.
-    pub extent: Extent,
+    pub extent: image::Extent,
 }
 
 /// Parameters for an image blit operation, where a portion of one image

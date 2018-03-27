@@ -7,7 +7,7 @@ use std::{ptr, mem, slice};
 use std::sync::{Arc, Mutex};
 
 use gl;
-use gl::types::{GLint, GLenum, GLfloat, GLuint};
+use gl::types::{GLint, GLenum, GLfloat};
 
 use hal::{self as c, device as d, error, image as i, memory, pass, pso, buffer, mapping, query};
 use hal::format::{ChannelType, Format, Swizzle};
@@ -94,7 +94,7 @@ pub struct UnboundBuffer {
 
 #[derive(Debug)]
 pub struct UnboundImage {
-    raw: GLuint,
+    image: n::ImageKind,
     channel: ChannelType,
     requirements: memory::Requirements,
 }
@@ -504,7 +504,7 @@ impl d::Device<B> for Device {
         &self,
         pass: &n::RenderPass,
         attachments: I,
-        _extent: d::Extent,
+        _extent: i::Extent,
     ) -> Result<n::FrameBuffer, d::FramebufferError>
     where
         I: IntoIterator,
@@ -801,15 +801,14 @@ impl d::Device<B> for Device {
     }
 
     fn create_image(
-        &self, kind: i::Kind, num_levels: i::Level, format: Format, _: i::Usage
+        &self,
+        kind: i::Kind,
+        num_levels: i::Level,
+        format: Format,
+        usage: i::Usage,
+        _flags: i::StorageFlags,
     ) -> Result<UnboundImage, i::CreationError> {
         let gl = &self.share.context;
-
-        let name = unsafe {
-            let mut raw = 0;
-            gl.GenTextures(1, &mut raw);
-            raw
-        };
 
         let int_format = match format {
             Format::Rgba8Unorm => gl::RGBA8,
@@ -819,20 +818,37 @@ impl d::Device<B> for Device {
 
         let channel = format.base_format().1;
 
-        let (width, height) = match kind {
-            i::Kind::D2(w, h, aa) => unsafe {
-                assert_eq!(aa, i::AaMode::Single);
-                gl.BindTexture(gl::TEXTURE_2D, name);
-                gl.TexStorage2D(gl::TEXTURE_2D, num_levels as _, int_format, w as _, h as _);
-                (w, h)
-            }
-            _ => {
-                unimplemented!();
-            }
+        let image = if num_levels > 1 ||
+            usage.contains(i::Usage::STORAGE) ||
+            usage.contains(i::Usage::SAMPLED)
+        {
+            let mut name = 0;
+            unsafe { gl.GenTextures(1, &mut name) };
+            match kind {
+                i::Kind::D2(w, h, 1, 1) => unsafe {
+                    gl.BindTexture(gl::TEXTURE_2D, name);
+                    gl.TexStorage2D(gl::TEXTURE_2D, num_levels as _, int_format, w as _, h as _);
+                }
+                _ => unimplemented!(),
+            };
+            n::ImageKind::Texture(name)
+        } else {
+            let mut name = 0;
+            unsafe { gl.GenRenderbuffers(1, &mut name) };
+            match kind {
+                i::Kind::D2(w, h, 1, 1) => unsafe {
+                    gl.BindRenderbuffer(gl::RENDERBUFFER, name);
+                    gl.RenderbufferStorage(gl::RENDERBUFFER, int_format, w as _, h as _);
+                }
+                _ => unimplemented!(),
+            };
+            n::ImageKind::Surface(name)
         };
 
         let surface_desc = format.base_format().0.desc();
         let bytes_per_texel  = surface_desc.bits / 8;
+        let ext = kind.extent();
+        let size = (ext.width * ext.height * ext.depth) as u64 * bytes_per_texel as u64;
 
         if let Err(err) = self.share.check() {
             panic!("Error creating image: {:?} for kind {:?} of {:?}",
@@ -840,10 +856,10 @@ impl d::Device<B> for Device {
         }
 
         Ok(UnboundImage {
-            raw: name,
+            image,
             channel,
             requirements: memory::Requirements {
-                size: width as u64 * height as u64 * bytes_per_texel as u64,
+                size,
                 alignment: 1,
                 type_mask: 0x7,
             }
@@ -854,15 +870,22 @@ impl d::Device<B> for Device {
         unbound.requirements
     }
 
-    fn bind_image_memory(&self, _memory: &n::Memory, _offset: u64, image: UnboundImage) -> Result<n::Image, d::BindError> {
+    fn bind_image_memory(
+        &self, _memory: &n::Memory, _offset: u64, unbound: UnboundImage
+    ) -> Result<n::Image, d::BindError> {
         Ok(n::Image {
-            kind: n::ImageKind::Texture(image.raw),
-            channel: image.channel,
+            kind: unbound.image,
+            channel: unbound.channel,
         })
     }
 
-    fn create_image_view(&self,
-        image: &n::Image, _format: Format, swizzle: Swizzle, range: i::SubresourceRange,
+    fn create_image_view(
+        &self,
+        image: &n::Image,
+        _kind: i::ViewKind,
+        _format: Format,
+        swizzle: Swizzle,
+        range: i::SubresourceRange,
     ) -> Result<n::ImageView, i::ViewError> {
         //TODO: check if `layers.end` covers all the layers
         let level = range.levels.start;

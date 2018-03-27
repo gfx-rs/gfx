@@ -45,16 +45,18 @@
 
 use hal::{self, format as f, image};
 
-use {Backend as B, Device, PhysicalDevice, QueueFamily};
+use {Backend as B, Device, PhysicalDevice, QueueFamily, Starc};
 
 use glutin::{self, GlContext};
-use Starc;
 
-fn get_window_dimensions(window: &glutin::GlWindow) -> image::Dimensions {
+
+fn get_window_extent(window: &glutin::GlWindow) -> image::Extent {
     let (width, height) = window.get_inner_size().unwrap();
-    let aa = window.get_pixel_format().multisampling
-                   .unwrap_or(0) as image::NumSamples;
-    ((width as f32 * window.hidpi_factor()) as image::Size, (height as f32 * window.hidpi_factor()) as image::Size, 1, aa.into())
+    image::Extent {
+        width: (width as f32 * window.hidpi_factor()) as image::Size,
+        height: (height as f32 * window.hidpi_factor()) as image::Size,
+        depth: 1,
+    }
 }
 
 pub struct Swapchain {
@@ -82,7 +84,7 @@ impl Surface {
             window: Starc::new(window)
         }
     }
-    
+
     pub fn window(&self) -> &glutin::GlWindow {
         &self.window
     }
@@ -110,23 +112,24 @@ impl Surface {
 
 impl hal::Surface<B> for Surface {
     fn kind(&self) -> hal::image::Kind {
-        let (w, h, _, a) = get_window_dimensions(&self.window);
-        hal::image::Kind::D2(w, h, a)
+        let ex = get_window_extent(&self.window);
+        let samples = self.window
+            .get_pixel_format()
+            .multisampling
+            .unwrap_or(1);
+        hal::image::Kind::D2(ex.width, ex.height, 1, samples as _)
     }
 
     fn capabilities_and_formats(&self, _: &PhysicalDevice) -> (hal::SurfaceCapabilities, Option<Vec<f::Format>>) {
-        let dim = get_window_dimensions(&self.window);
-        let extent = hal::window::Extent2D {
-            width: dim.0 as u32,
-            height: dim.1 as u32,
-        };
+        let ex = get_window_extent(&self.window);
+        let extent = hal::window::Extent2D::from(ex);
 
         (hal::SurfaceCapabilities {
             image_count: if self.window.get_pixel_format().double_buffer { 2..3 } else { 1..2 },
             current_extent: Some(extent),
-            extents: extent..hal::window::Extent2D {
-                width: dim.0 as u32 + 1,
-                height: dim.1 as u32 + 1
+            extents: extent .. hal::window::Extent2D {
+                width: ex.width + 1,
+                height: ex.height + 1,
             },
             max_image_layers: 1,
         }, Some(self.swapchain_formats()))

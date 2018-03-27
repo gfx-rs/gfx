@@ -4,7 +4,6 @@ use smallvec::SmallVec;
 
 use hal::{buffer, command, format, image, pass, pso, query};
 use hal::{IndexType, Primitive};
-use hal::device::Extent;
 use hal::range::RangeArg;
 
 use native as n;
@@ -126,7 +125,7 @@ pub fn map_offset(offset: image::Offset) -> vk::Offset3D {
     }
 }
 
-pub fn map_extent(offset: Extent) -> vk::Extent3D {
+pub fn map_extent(offset: image::Extent) -> vk::Extent3D {
     vk::Extent3D {
         width: offset.width,
         height: offset.height,
@@ -772,4 +771,24 @@ pub fn map_command_buffer_level(level: command::RawLevel) -> vk::CommandBufferLe
         command::RawLevel::Primary => vk::CommandBufferLevel::Primary,
         command::RawLevel::Secondary => vk::CommandBufferLevel::Secondary,
     }
+}
+
+pub fn map_view_kind(
+    kind: image::ViewKind, ty: vk::ImageType, is_cube: bool
+) -> Option<vk::ImageViewType> {
+    use vk::ImageType::*;
+    use hal::image::ViewKind::*;
+
+    Some(match (ty, kind) {
+        (Type1d, D1) => vk::ImageViewType::Type1d,
+        (Type1d, D1Array) => vk::ImageViewType::Type1dArray,
+        (Type2d, D2) => vk::ImageViewType::Type2d,
+        (Type2d, D2Array) => vk::ImageViewType::Type2dArray,
+        (Type3d, D3) => vk::ImageViewType::Type3d,
+        (Type2d, Cube) if is_cube => vk::ImageViewType::Cube,
+        (Type2d, CubeArray) if is_cube => vk::ImageViewType::CubeArray,
+        (Type3d, Cube) if is_cube => vk::ImageViewType::Cube,
+        (Type3d, CubeArray) if is_cube => vk::ImageViewType::CubeArray,
+        _ => return None
+    })
 }

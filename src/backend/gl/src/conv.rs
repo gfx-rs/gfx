@@ -3,6 +3,7 @@ use hal::{buffer, image as i, Primitive};
 use hal::format::Format;
 use native::VertexAttribFunction;
 
+/*
 pub fn _image_kind_to_gl(kind: i::Kind) -> t::GLenum {
     match kind {
         i::Kind::D1(_) => gl::TEXTURE_1D,
@@ -15,7 +16,7 @@ pub fn _image_kind_to_gl(kind: i::Kind) -> t::GLenum {
         i::Kind::Cube(_) => gl::TEXTURE_CUBE_MAP,
         i::Kind::CubeArray(_, _) => gl::TEXTURE_CUBE_MAP_ARRAY,
     }
-}
+}*/
 
 pub fn filter_to_gl(mag: i::Filter, min: i::Filter, mip: i::Filter) -> (t::GLenum, t::GLenum) {
     use hal::image::Filter::*;
@@ -74,6 +75,7 @@ pub fn format_to_gl_format(format: Format) -> Option<(gl::types::GLint, gl::type
     use hal::format::Format::*;
     use gl::*;
     use native::VertexAttribFunction::*;
+    let _ = Double; //mark as used
     // TODO: Add more formats and error handling for `None`
     let format = match format {
         R8Uint => (1, UNSIGNED_BYTE, Integer),

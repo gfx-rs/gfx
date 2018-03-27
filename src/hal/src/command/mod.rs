@@ -6,7 +6,7 @@
 //! always start from a primary command buffer, but a primary command buffer can contain calls
 //! to secondary command buffers that contain snippets of commands that do specific things, similar
 //! to function calls.
-//! 
+//!
 //! All the possible commands are implemented in the `RawCommandBuffer` trait, and then the `CommandBuffer`
 //! and related types make a generic, strongly-typed wrapper around it that only expose the methods that
 //! are valid for the capabilities it provides.
@@ -32,7 +32,7 @@ use std::borrow::{Cow};
 
 /// Trait indicating how many times a Submit object can be submitted to a command buffer.
 pub trait Shot {
-    /// 
+    ///
     const FLAGS: CommandBufferFlags;
 }
 /// Indicates a Submit that can only be submitted once.
@@ -57,7 +57,7 @@ impl Level for Primary { }
 ///
 /// Vulkan describes a secondary command buffer as one which cannot be directly submitted
 /// to a queue, but can be executed by a primary command buffer. This allows
-/// multiple secondary command buffers to be constructed which do specific 
+/// multiple secondary command buffers to be constructed which do specific
 /// things and can then be composed together into primary command buffers.
 pub enum Secondary { }
 impl Level for Secondary { }
@@ -87,7 +87,7 @@ unsafe impl<'a, B: Backend, C, L: Level> Submittable<'a, B, C, L> for &'a Submit
 }
 
 /// A convenience alias for not typing out the full signature of a secondary command buffer.
-pub type SecondaryCommandBuffer<'a, B: Backend, C, S: Shot = OneShot> = CommandBuffer<'a, B, C, S, Secondary>;
+pub type SecondaryCommandBuffer<'a, B, C, S = OneShot> = CommandBuffer<'a, B, C, S, Secondary>;
 
 /// A strongly-typed command buffer that will only implement methods that are valid for the operations
 /// it supports.
