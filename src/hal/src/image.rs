@@ -628,7 +628,16 @@ bitflags!(
 pub type State = (Access, ImageLayout);
 
 /// Selector of a concrete subresource in an image.
-pub type Subresource = (Level, Layer);
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Subresource {
+    /// Included aspects: color/depth/stencil
+    pub aspects: format::Aspects,
+    /// Selected mipmap level
+    pub level: Level,
+    /// Selected array level
+    pub layer: Layer,
+}
 
 /// A subset of resource layers contained within an image's level.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
