@@ -451,17 +451,17 @@ impl Device {
         format: dxgiformat::DXGI_FORMAT,
         range: &image::SubresourceRange,
     ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
-        //TODO: use subresource range
-        let handle = self.rtv_pool.lock().unwrap().alloc_handles(1).cpu;
-
-        if kind.dimensions().3 != image::AaMode::Single {
-            error!("No MSAA supported yet!");
-        }
+        #![allow(non_snake_case)]
 
         let mut desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
             Format: format,
-            .. unsafe { mem::zeroed() }
+            ViewDimension: 0,
+            u: unsafe { mem::zeroed() },
         };
+
+        let MipSlice = range.levels.start as _;
+        let FirstArraySlice = range.layers.start as _;
+        let ArraySize = (range.layers.end - range.layers.start) as _;
 
         match kind {
             image::Kind::D2(..) => {
@@ -474,7 +474,68 @@ impl Device {
             },
             _ => unimplemented!()
         };
+        match kind {
+            image::Kind::D1(_) => {
+                desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE1D;
+                *unsafe{ desc.u.Texture1D_mut() } = d3d12::D3D12_TEX1D_RTV {
+                    MipSlice,
+                }
+            }
+            image::Kind::D1Array(_, num_layers) => {
+                assert!(range.layers.end <= num_layers);
+                desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE1DARRAY;
+                *unsafe{ desc.u.Texture1DArray_mut() } = d3d12::D3D12_TEX1D_ARRAY_RTV {
+                    MipSlice,
+                    FirstArraySlice,
+                    ArraySize,
+                }
+            }
+            image::Kind::D2(_, _, image::AaMode::Single) => {
+                desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE2D;
+                *unsafe{ desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_RTV {
+                    MipSlice,
+                    PlaneSlice: 0, //TODO
+                }
+            }
+            image::Kind::D2(..) => {
+                desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE2DMS;
+                *unsafe{ desc.u.Texture2DMS_mut() } = d3d12::D3D12_TEX2DMS_RTV {
+                    UnusedField_NothingToDefine: 0,
+                }
+            }
+            image::Kind::D2Array(_, _, num_layers, image::AaMode::Single) => {
+                assert!(range.layers.end <= num_layers);
+                desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
+                *unsafe{ desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_RTV {
+                    MipSlice,
+                    FirstArraySlice,
+                    ArraySize,
+                    PlaneSlice: 0, //TODO
+                }
+            }
+            image::Kind::D2Array(..) => {
+                desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY;
+                *unsafe{ desc.u.Texture2DMSArray_mut() } = d3d12::D3D12_TEX2DMS_ARRAY_RTV {
+                    FirstArraySlice,
+                    ArraySize,
+                }
+            }
+            image::Kind::D3(_, _, depth) => {
+                assert!(range.layers.end <= kind.dimensions().2);
+                desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE3D;
+                *unsafe{ desc.u.Texture3D_mut() } = d3d12::D3D12_TEX3D_RTV {
+                    MipSlice,
+                    FirstWSlice: 0,
+                    WSize: depth as _,
+                }
+            }
+            image::Kind::Cube(..) |
+            image::Kind::CubeArray(..) => {
+                unimplemented!()
+            }
+        };
 
+        let handle = self.rtv_pool.lock().unwrap().alloc_handles(1).cpu;
         unsafe {
             self.raw.clone().CreateRenderTargetView(resource, &desc, handle);
         }
@@ -496,7 +557,7 @@ impl Device {
             Format: format,
             ViewDimension: 0,
             Flags: 0,
-            u: unsafe { mem::zeroed() }
+            u: unsafe { mem::zeroed() },
         };
 
         let MipSlice = range.levels.start as _;
