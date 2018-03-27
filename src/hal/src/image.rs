@@ -45,6 +45,11 @@ pub struct Offset {
     pub z: i32,
 }
 
+impl Offset {
+    /// Zero offset shortcut
+    pub const ZERO: Self = Offset { x: 0, y: 0, z: 0 };
+}
+
 /// Pure image object creation error.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CreationError {

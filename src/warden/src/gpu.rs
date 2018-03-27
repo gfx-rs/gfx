@@ -89,7 +89,7 @@ pub struct Resources<B: hal::Backend> {
     pub images: HashMap<String, Image<B>>,
     pub image_views: HashMap<String, B::ImageView>,
     pub render_passes: HashMap<String, RenderPass<B>>,
-    pub framebuffers: HashMap<String, (B::Framebuffer, hal::device::Extent)>,
+    pub framebuffers: HashMap<String, (B::Framebuffer, i::Extent)>,
     pub shaders: HashMap<String, B::ShaderModule>,
     pub desc_set_layouts: HashMap<String, (Vec<hal::pso::DescriptorBinding>, B::DescriptorSetLayout)>,
     pub desc_pools: HashMap<String, B::DescriptorPool>,
@@ -285,7 +285,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                     }
                     raw::Resource::Image { kind, num_levels, format, usage, ref data } => {
                         // allocate memory
-                        let unbound = device.create_image(kind, num_levels, format, usage)
+                        let unbound = device.create_image(kind, num_levels, format, usage, i::StorageFlags::empty())
                             .unwrap();
                         let requirements = device.get_image_requirements(&unbound);
                         let memory_type = memory_types
@@ -327,16 +327,17 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             (access, layout)
                         } else {
                             // calculate required sizes
-                            let (w, h, d, aa) = kind.dimensions();
-                            assert_eq!(aa, i::AaMode::Single);
+                            let extent = kind.extent();
+                            assert_eq!(kind.num_samples(), 1);
 
                             let base_format = format.base_format();
                             let format_desc = base_format.0.desc();
                             let (block_width, block_height) = format_desc.dim;
 
                             // Width and height need to be multiple of the block dimensions.
-                            let w = align(w as _, block_width as _);
-                            let h = align(h as _, block_height as _);
+                            let w = align(extent.width as _, block_width as _);
+                            let h = align(extent.height as _, block_height as _);
+                            let d = extent.depth;
 
                             let width_bytes = (format_desc.bits as u64 * w) / (8 * block_width as u64);
                             let row_pitch = align(width_bytes, limits.min_buffer_copy_pitch_alignment);
@@ -387,12 +388,8 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                     level: 0,
                                     layers: 0 .. 1,
                                 },
-                                image_offset: i::Offset { x: 0, y: 0, z: 0 },
-                                image_extent: hal::device::Extent {
-                                    width: w as _,
-                                    height: h as _,
-                                    depth: d as _,
-                                },
+                                image_offset: i::Offset::ZERO,
+                                image_extent: extent,
                             };
                             init_cmd.copy_buffer_to_image(
                                 &upload_buffer,
@@ -531,9 +528,9 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             // Pass[2]: image & buffer views, descriptor sets, pipeline layouts
             for (name, resource) in &raw.resources {
                 match *resource {
-                    raw::Resource::ImageView { ref image, format, swizzle, ref range } => {
+                    raw::Resource::ImageView { ref image, kind, format, swizzle, ref range } => {
                         let image = &resources.images[image].handle;
-                        let view = device.create_image_view(image, format, swizzle, range.clone())
+                        let view = device.create_image_view(image, kind, format, swizzle, range.clone())
                             .unwrap();
                         resources.image_views.insert(name.clone(), view);
                     }
@@ -950,8 +947,8 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             .expect(&format!("Unable to find image to fetch: {}", name));
         let limits = &self.limits;
 
-        let (width, height, depth, aa) = image.kind.dimensions();
-        assert_eq!(aa, i::AaMode::Single);
+        let i::Extent { width, height, depth } = image.kind.extent();
+        assert_eq!(image.kind.num_samples(), 1);
 
         // TODO:
         let base_format = image.format.base_format();
@@ -1003,7 +1000,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                     layers: 0 .. 1,
                 },
                 image_offset: i::Offset { x: 0, y: 0, z: 0 },
-                image_extent: hal::device::Extent {
+                image_extent: i::Extent {
                     width: width as _,
                     height: height as _,
                     depth: depth as _,

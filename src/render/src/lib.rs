@@ -106,7 +106,6 @@ pub use hal::format;
 pub use hal::{Backend, Frame, Primitive};
 pub use hal::queue::{Supports, Transfer, General, Graphics};
 pub use hal::{VertexCount, InstanceCount};
-pub use hal::device::Extent;
 // pub use hal::{ShaderSet, VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
 pub use encoder::Encoder;
 pub use device::Device;

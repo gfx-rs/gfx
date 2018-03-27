@@ -3,8 +3,8 @@ use memory::Memory;
 
 pub use hal::format::Aspects;
 pub use hal::image::{
-    CreationError, Kind, AaMode, Size, Level, Layer, Dimensions,
-    SamplerInfo, ViewError, Usage,
+    CreationError, Kind, ViewKind, Extent, Size, Level, Layer,
+    SamplerInfo, ViewError, Usage, StorageFlags,
     Subresource, SubresourceLayers, SubresourceRange,
 };
 
