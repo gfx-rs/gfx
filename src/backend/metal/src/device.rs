@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::{cmp, mem, ptr, slice};
 
 use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query};
-use hal::device::{BindError, OutOfMemory, FramebufferError, ShaderError, Extent};
+use hal::device::{BindError, OutOfMemory, FramebufferError, ShaderError};
 use hal::memory::Properties;
 use hal::pool::CommandPoolCreateFlags;
 use hal::pso::{DescriptorType, DescriptorSetLayoutBinding, AttributeDesc, DepthTest, StencilTest};
@@ -769,7 +769,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn create_framebuffer<I>(
-        &self, renderpass: &n::RenderPass, attachments: I, extent: Extent
+        &self, renderpass: &n::RenderPass, attachments: I, extent: image::Extent
     ) -> Result<n::FrameBuffer, FramebufferError>
     where
         I: IntoIterator,
@@ -1220,9 +1220,14 @@ impl hal::Device<Backend> for Device {
     }
 
     fn create_image(
-        &self, kind: image::Kind, mip_levels: image::Level, format: format::Format, usage: image::Usage)
-         -> Result<n::UnboundImage, image::CreationError>
-    {
+        &self,
+        kind: image::Kind,
+        mip_levels: image::Level,
+        format: format::Format,
+        usage: image::Usage,
+        flags: image::StorageFlags,
+    ) -> Result<n::UnboundImage, image::CreationError> {
+        let is_cube = flags.contains(image::StorageFlags::CUBE_VIEW);
         let base_format = format.base_format();
         let format_desc = base_format.0.desc();
         let (mtl_format, _) = map_format(format).ok_or(image::CreationError::Format(format))?;
@@ -1230,12 +1235,56 @@ impl hal::Device<Backend> for Device {
         let descriptor = metal::TextureDescriptor::new();
 
         match kind {
-            image::Kind::D2(width, height, _aa) => {
+            image::Kind::D1(width, 1) => {
+                assert!(!is_cube);
+                descriptor.set_texture_type(MTLTextureType::D1);
+                descriptor.set_width(width as u64);
+            }
+            image::Kind::D1(width, layers) => {
+                assert!(!is_cube);
+                descriptor.set_texture_type(MTLTextureType::D1Array);
+                descriptor.set_width(width as u64);
+                descriptor.set_array_length(layers as u64);
+            }
+            image::Kind::D2(width, height, 1, 1) => {
                 descriptor.set_texture_type(MTLTextureType::D2);
                 descriptor.set_width(width as u64);
                 descriptor.set_height(height as u64);
-            },
-            _ => unimplemented!(),
+            }
+            image::Kind::D2(width, height, layers, 1) => {
+                if is_cube && layers > 6 {
+                    assert_eq!(layers % 6, 0);
+                    descriptor.set_texture_type(MTLTextureType::CubeArray);
+                    descriptor.set_array_length(layers as u64 / 6);
+                } else if is_cube {
+                    assert_eq!(layers, 6);
+                    descriptor.set_texture_type(MTLTextureType::Cube);
+                } else if layers > 1 {
+                    descriptor.set_texture_type(MTLTextureType::D2Array);
+                    descriptor.set_array_length(layers as u64);
+                } else {
+                    descriptor.set_texture_type(MTLTextureType::D2);
+                }
+                descriptor.set_width(width as u64);
+                descriptor.set_height(height as u64);
+            }
+            image::Kind::D2(width, height, 1, samples) if !is_cube => {
+                descriptor.set_texture_type(MTLTextureType::D2Multisample);
+                descriptor.set_width(width as u64);
+                descriptor.set_height(height as u64);
+                descriptor.set_sample_count(samples as u64);
+            }
+            image::Kind::D2(..) => {
+                error!("Multi-sampled array textures or cubes are not supported: {:?}", kind);
+                return Err(image::CreationError::Kind)
+            }
+            image::Kind::D3(width, height, depth) => {
+                assert!(!is_cube);
+                descriptor.set_texture_type(MTLTextureType::D3);
+                descriptor.set_width(width as u64);
+                descriptor.set_height(height as u64);
+                descriptor.set_depth(depth as u64);
+            }
         }
 
         descriptor.set_mipmap_level_count(mip_levels as u64);
@@ -1314,6 +1363,7 @@ impl hal::Device<Backend> for Device {
     fn create_image_view(
         &self,
         image: &n::Image,
+        _kind: image::ViewKind,
         format: format::Format,
         _swizzle: format::Swizzle,
         _range: image::SubresourceRange,

@@ -62,7 +62,7 @@ impl hal::Surface<Backend> for Surface {
     fn kind(&self) -> image::Kind {
         let (width, height) = self.pixel_dimensions();
 
-        image::Kind::D2(width, height, image::AaMode::Single)
+        image::Kind::D2(width, height, 1, 1)
     }
 
     fn capabilities_and_formats(
@@ -84,11 +84,11 @@ impl hal::Surface<Backend> for Surface {
 }
 
 impl Surface {
-    fn pixel_dimensions(&self) -> (u16, u16) {
+    fn pixel_dimensions(&self) -> (image::Size, image::Size) {
         unsafe {
             // NSView bounds are measured in DIPs
             let bounds: NSRect = msg_send![self.0.nsview, bounds];
-            (bounds.size.width as u16, bounds.size.height as u16)
+            (bounds.size.width as _, bounds.size.height as _)
         }
     }
 }
