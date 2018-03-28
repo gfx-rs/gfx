@@ -15,10 +15,10 @@ metal = ["gfx-backend-metal"]
 
 [dependencies]
 env_logger = "0.5"
-glutin = { version = "0.12", optional = true }
-image = "0.15"
+glutin = { version = "0.13", optional = true }
+image = "0.18"
 log = "0.4"
-winit = "0.10"
+winit = "0.11"
 gfx-hal = { path = "../../../src/hal", version = "0.1" }
 gfx-render = { path = "../../../src/render", version = "0.1" }
 
