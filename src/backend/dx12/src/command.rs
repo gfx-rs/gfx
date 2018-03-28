@@ -9,7 +9,6 @@ use std::ops::Range;
 
 use winapi::um::d3d12;
 use winapi::shared::minwindef::{FALSE, UINT};
-use winapi::shared::basetsd::UINT64;
 use winapi::shared::dxgiformat;
 
 use wio::com::ComPtr;
@@ -240,6 +239,17 @@ enum BindPoint {
 }
 
 #[derive(Clone)]
+struct Copy {
+    footprint_offset: u64,
+    footprint: image::Extent,
+    row_pitch: u32,
+    img_subresource: u32,
+    img_offset: image::Offset,
+    buf_offset: image::Offset,
+    copy_extent: image::Extent,
+}
+
+#[derive(Clone)]
 pub struct CommandBuffer {
     raw: ComPtr<d3d12::ID3D12GraphicsCommandList>,
     allocator: ComPtr<d3d12::ID3D12CommandAllocator>,
@@ -270,6 +280,9 @@ pub struct CommandBuffer {
     // `Stride` values are not known at `bind_vertex_buffers` time because they are only stored
     // inside the pipeline state.
     vertex_buffer_views: [d3d12::D3D12_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS],
+
+    // Re-using allocation for the image-buffer copies.
+    copies: Vec<Copy>,
 }
 
 unsafe impl Send for CommandBuffer { }
@@ -293,6 +306,7 @@ impl CommandBuffer {
             occlusion_query: None,
             pipeline_stats_query: None,
             vertex_buffer_views: [NULL_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS],
+            copies: Vec::new(),
         }
     }
 
@@ -601,6 +615,148 @@ impl CommandBuffer {
 
         *unsafe { barrier.u.Transition_mut() } = transition;
         barrier
+    }
+
+    fn split_buffer_copy(
+        copies: &mut Vec<Copy>, r: &com::BufferImageCopy, image: &n::Image
+    ) {
+        let buffer_width = if r.buffer_width == 0 {
+            r.image_extent.width
+        } else {
+            r.buffer_width
+        };
+        let buffer_height = if r.buffer_height == 0 {
+            r.image_extent.height
+        } else {
+            r.buffer_height
+        };
+        let row_pitch = div(buffer_width, image.block_dim.0 as _) * image.bytes_per_block as u32;
+        let slice_pitch = div(buffer_height, image.block_dim.1 as _) * row_pitch;
+        let is_pitch_aligned = row_pitch % d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32 == 0;
+
+        for layer in r.image_layers.layers.clone() {
+            let img_subresource = image
+                .calc_subresource(r.image_layers.level as _, layer as _, 0);
+            let layer_offset = r.buffer_offset as u64 + (layer as u32 * slice_pitch * r.image_extent.depth) as u64;
+            let aligned_offset = layer_offset & !(d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64 - 1);
+            if layer_offset == aligned_offset && is_pitch_aligned {
+                // trivial case: everything is aligned, ready for copying
+                copies.push(Copy {
+                    footprint_offset: aligned_offset,
+                    footprint: r.image_extent,
+                    row_pitch,
+                    img_subresource,
+                    img_offset: r.image_offset,
+                    buf_offset: image::Offset::ZERO,
+                    copy_extent: r.image_extent,
+                });
+            } else if is_pitch_aligned {
+                // buffer offset is not aligned
+                assert_eq!(image.block_dim, (1, 1)); // TODO
+                let row_pitch_texels = row_pitch / image.bytes_per_block as u32;
+                let gap = (layer_offset - aligned_offset) as i32;
+                let buf_offset = image::Offset {
+                    x: gap % row_pitch as i32,
+                    y: (gap % slice_pitch as i32) / row_pitch as i32,
+                    z: gap / slice_pitch as i32,
+                };
+                let footprint = image::Extent {
+                    width: buf_offset.x as u32 + r.image_extent.width,
+                    height: buf_offset.y as u32 + r.image_extent.height,
+                    depth: buf_offset.z as u32 + r.image_extent.depth,
+                };
+                if r.image_extent.width + buf_offset.x as u32 <= row_pitch_texels {
+                    // we can map it to the aligned one and adjust the offsets accordingly
+                    copies.push(Copy {
+                        footprint_offset: aligned_offset,
+                        footprint,
+                        row_pitch,
+                        img_subresource,
+                        img_offset: r.image_offset,
+                        buf_offset,
+                        copy_extent: r.image_extent,
+                    });
+                } else {
+                    // split the copy region into 2 that suffice the previous condition
+                    assert!(buf_offset.x as u32 <= row_pitch_texels);
+                    let half = row_pitch_texels - buf_offset.x as u32;
+                    assert!(half <= r.image_extent.width);
+
+                    copies.push(Copy {
+                        footprint_offset: aligned_offset,
+                        footprint: image::Extent {
+                            width: row_pitch_texels,
+                            .. footprint
+                        },
+                        row_pitch,
+                        img_subresource,
+                        img_offset: r.image_offset,
+                        buf_offset,
+                        copy_extent: image::Extent {
+                            width: half,
+                            .. r.image_extent
+                        },
+                    });
+                    copies.push(Copy {
+                        footprint_offset: aligned_offset,
+                        footprint: image::Extent {
+                            width: r.image_extent.width - half,
+                            height: footprint.height + 1,
+                            depth: footprint.depth,
+                        },
+                        row_pitch,
+                        img_subresource,
+                        img_offset: image::Offset {
+                            x: r.image_offset.x + half as i32,
+                            .. r.image_offset
+                        },
+                        buf_offset: image::Offset {
+                            x: 0,
+                            .. buf_offset
+                        },
+                        copy_extent: image::Extent {
+                            width: r.image_extent.width - half,
+                            .. r.image_extent
+                        },
+                    });
+                }
+            } else {
+                // worst case: row by row copy
+                let adjusted_row_pitch = (row_pitch | (d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32 - 1)) + 1;
+                for z in 0 .. r.image_extent.depth {
+                    for y in 0 .. r.image_extent.height {
+                        let row_offset = layer_offset + z as u64 * slice_pitch as u64 + y as u64 * row_pitch as u64;
+                        let footprint_offset = row_offset & !(d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64 - 1);
+                        let gap = (row_offset - footprint_offset) as u32;
+                        copies.push(Copy {
+                            footprint_offset,
+                            footprint: image::Extent {
+                                width: r.image_extent.width + gap,
+                                height: 1,
+                                depth: 1,
+                            },
+                            row_pitch: adjusted_row_pitch,
+                            img_subresource,
+                            img_offset: image::Offset {
+                                x: r.image_offset.x,
+                                y: r.image_offset.y + y as i32,
+                                z: r.image_offset.z + z as i32,
+                            },
+                            buf_offset: image::Offset {
+                                x: gap as i32,
+                                y: 0,
+                                z: 0,
+                            },
+                            copy_extent: image::Extent {
+                                width: r.image_extent.width,
+                                height: 1,
+                                depth: 1,
+                            },
+                        });
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1287,162 +1443,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::BufferImageCopy>,
     {
-        struct Copy {
-            buf_offset: u64,
-            footprint: image::Extent,
-            row_pitch: u32,
-            dst_subresource: u32,
-            dst_offset: image::Offset,
-            src_offset: image::Offset,
-            copy_extent: image::Extent,
-        }
+        assert!(self.copies.is_empty());
 
-        let mut copies = Vec::new();
         for region in regions {
             let r = region.borrow();
-            let level_extent = image.kind.level_extent(r.image_layers.level);
-
-            let buffer_width = if r.buffer_width == 0 {
-                r.image_extent.width
-            } else {
-                r.buffer_width
-            };
-            let buffer_height = if r.buffer_height == 0 {
-                r.image_extent.height
-            } else {
-                r.buffer_height
-            };
-            let row_pitch = div(buffer_width, image.block_dim.0 as _) * image.bytes_per_block as u32;
-            let slice_pitch = div(buffer_height, image.block_dim.1 as _) * row_pitch;
-            let is_pitch_aligned = row_pitch % d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32 == 0;
-
-            // Copy each layer in the region
-            for layer in r.image_layers.layers.clone() {
-                let layer_offset = r.buffer_offset as u64 + (layer as u32 * slice_pitch * level_extent.depth) as u64;
-                let aligned_offset = layer_offset & !(d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64 - 1);
-                let dst_subresource = image
-                    .calc_subresource(r.image_layers.level as _, layer as _, 0);
-                if layer_offset == aligned_offset && is_pitch_aligned {
-                    // trivial case: everything is aligned, ready for copying
-                    copies.push(Copy {
-                        buf_offset: layer_offset,
-                        footprint: r.image_extent,
-                        row_pitch,
-                        dst_subresource,
-                        dst_offset: r.image_offset,
-                        src_offset: image::Offset::ZERO,
-                        copy_extent: r.image_extent,
-                    });
-                } else if is_pitch_aligned {
-                    // buffer offset is not aligned
-                    assert_eq!(image.block_dim, (1, 1)); // TODO
-                    let row_pitch_texels = row_pitch / image.bytes_per_block as u32;
-                    let gap = (layer_offset - aligned_offset) as i32;
-                    let src_offset = image::Offset {
-                        x: gap % row_pitch as i32,
-                        y: (gap % slice_pitch as i32) / row_pitch as i32,
-                        z: gap / slice_pitch as i32,
-                    };
-                    let footprint = image::Extent {
-                        width: src_offset.x as u32 + r.image_extent.width,
-                        height: src_offset.y as u32 + r.image_extent.height,
-                        depth: src_offset.z as u32 + r.image_extent.depth,
-                    };
-                    if r.image_extent.width + src_offset.x as u32 <= row_pitch_texels {
-                        // we can map it to the aligned one and adjust the offsets accordingly
-                        copies.push(Copy {
-                            buf_offset: aligned_offset,
-                            footprint,
-                            row_pitch,
-                            dst_subresource,
-                            dst_offset: r.image_offset,
-                            src_offset,
-                            copy_extent: r.image_extent,
-                        });
-                    } else {
-                        // split the copy region into 2 that suffice the previous condition
-                        assert!(src_offset.x as u32 <= row_pitch_texels);
-                        let half = row_pitch_texels - src_offset.x as u32;
-                        assert!(half <= r.image_extent.width);
-
-                        copies.push(Copy {
-                            buf_offset: aligned_offset,
-                            footprint: image::Extent {
-                                width: row_pitch_texels,
-                                .. footprint
-                            },
-                            row_pitch,
-                            dst_subresource,
-                            dst_offset: r.image_offset,
-                            src_offset,
-                            copy_extent: image::Extent {
-                                width: half,
-                                .. r.image_extent
-                            },
-                        });
-                        copies.push(Copy {
-                            buf_offset: aligned_offset,
-                            footprint: image::Extent {
-                                width: r.image_extent.width - half,
-                                height: footprint.height + 1,
-                                depth: footprint.depth,
-                            },
-                            row_pitch,
-                            dst_subresource,
-                            dst_offset: image::Offset {
-                                x: r.image_offset.x + half as i32,
-                                .. r.image_offset
-                            },
-                            src_offset: image::Offset {
-                                x: 0,
-                                .. src_offset
-                            },
-                            copy_extent: image::Extent {
-                                width: r.image_extent.width - half,
-                                .. r.image_extent
-                            },
-                        });
-                    }
-                } else {
-                    // worst case: row by row copy
-                    let adjusted_row_pitch = (row_pitch | (d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32 - 1)) + 1;
-                    for z in 0 .. r.image_extent.depth {
-                        for y in 0 .. r.image_extent.height {
-                            let row_offset = layer_offset + z as u64 * slice_pitch as u64 + y as u64 * row_pitch as u64;
-                            let buf_offset = row_offset & !(d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64 - 1);
-                            let gap = (row_offset - buf_offset) as u32;
-                            copies.push(Copy {
-                                buf_offset,
-                                footprint: image::Extent {
-                                    width: r.image_extent.width + gap,
-                                    height: 1,
-                                    depth: 1,
-                                },
-                                row_pitch: adjusted_row_pitch,
-                                dst_subresource,
-                                dst_offset: image::Offset {
-                                    x: r.image_offset.x,
-                                    y: r.image_offset.y + y as i32,
-                                    z: r.image_offset.z + z as i32,
-                                },
-                                src_offset: image::Offset {
-                                    x: gap as i32,
-                                    y: 0,
-                                    z: 0,
-                                },
-                                copy_extent: image::Extent {
-                                    width: r.image_extent.width,
-                                    height: 1,
-                                    depth: 1,
-                                },
-                            });
-                        }
-                    }
-                }
-            }
+            Self::split_buffer_copy(&mut self.copies, r, image);
         }
 
-        if copies.is_empty() {
+        if self.copies.is_empty() {
             return;
         }
 
@@ -1457,17 +1465,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             u: unsafe { mem::zeroed() },
         };
 
-        for c in copies {
+        for c in self.copies.drain(..) {
             let src_box = d3d12::D3D12_BOX {
-                left: c.src_offset.x as u32,
-                top: c.src_offset.y as u32,
-                right: c.src_offset.x as u32 + c.copy_extent.width,
-                bottom: c.src_offset.y as u32 + c.copy_extent.height,
-                front: c.src_offset.z as u32,
-                back: c.src_offset.z as u32 + c.copy_extent.depth,
+                left: c.buf_offset.x as u32,
+                top: c.buf_offset.y as u32,
+                right: c.buf_offset.x as u32 + c.copy_extent.width,
+                bottom: c.buf_offset.y as u32 + c.copy_extent.height,
+                front: c.buf_offset.z as u32,
+                back: c.buf_offset.z as u32 + c.copy_extent.depth,
             };
             let footprint = d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
-                Offset: c.buf_offset,
+                Offset: c.footprint_offset,
                 Footprint: d3d12::D3D12_SUBRESOURCE_FOOTPRINT {
                     Format: image.dxgi_format,
                     Width: c.footprint.width,
@@ -1478,12 +1486,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             };
             unsafe {
                 *src.u.PlacedFootprint_mut() = footprint;
-                *dst.u.SubresourceIndex_mut() = c.dst_subresource;
+                *dst.u.SubresourceIndex_mut() = c.img_subresource;
                 self.raw.CopyTextureRegion(
                     &dst,
-                    c.dst_offset.x as _,
-                    c.dst_offset.y as _,
-                    c.dst_offset.z as _,
+                    c.img_offset.x as _,
+                    c.img_offset.y as _,
+                    c.img_offset.z as _,
                     &src,
                     &src_box,
                 );
@@ -1501,6 +1509,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::BufferImageCopy>,
     {
+        assert!(self.copies.is_empty());
+
+        for region in regions {
+            let r = region.borrow();
+            Self::split_buffer_copy(&mut self.copies, r, image);
+        }
+
+        if self.copies.is_empty() {
+            return;
+        }
+
         let mut src = d3d12::D3D12_TEXTURE_COPY_LOCATION {
             pResource: image.resource,
             Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
@@ -1511,53 +1530,37 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             Type: d3d12::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
             u: unsafe { mem::zeroed() },
         };
-        let image::Extent { width, height, depth } = image.kind.extent();
-        for region in regions {
-            let r = region.borrow();
-            // Copy each layer in the region
-            let layers = r.image_layers.layers.clone();
-            for layer in layers {
-                assert!(r.buffer_width >= width as u32);
-                assert_eq!(r.buffer_offset % d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64, 0);
 
-                let row_pitch = div(r.buffer_width, image.block_dim.0 as _) * image.bytes_per_block as u32;
-                let slice_pitch = div(r.buffer_height, image.block_dim.1 as _) * row_pitch;
-                assert_eq!(row_pitch % d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32, 0);
-
-                let height = height as _;
-                let depth = depth as _;
-
-                // Advance buffer offset with each layer
-                *unsafe { src.u.SubresourceIndex_mut() } =
-                    image.calc_subresource(r.image_layers.level as _, layer as _, 0);
-                *unsafe { dst.u.PlacedFootprint_mut() } = d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
-                    Offset: r.buffer_offset as UINT64 + (layer as u32 * slice_pitch * depth) as UINT64,
-                    Footprint: d3d12::D3D12_SUBRESOURCE_FOOTPRINT {
-                        Format: image.dxgi_format,
-                        Width: width as _,
-                        Height: height,
-                        Depth: depth,
-                        RowPitch: row_pitch,
-                    },
-                };
-                let src_box = d3d12::D3D12_BOX {
-                    left: 0,
-                    top: 0,
-                    right: r.image_extent.width as _,
-                    bottom: r.image_extent.height as _,
-                    front: 0,
-                    back: r.image_extent.depth as _,
-                };
-                unsafe {
-                    self.raw.CopyTextureRegion(
-                        &dst,
-                        r.image_offset.x as _,
-                        r.image_offset.y as _,
-                        r.image_offset.z as _,
-                        &src,
-                        &src_box,
-                    );
-                }
+        for c in self.copies.drain(..) {
+            let src_box = d3d12::D3D12_BOX {
+                left: c.img_offset.x as u32,
+                top: c.img_offset.y as u32,
+                right: c.img_offset.x as u32 + c.copy_extent.width,
+                bottom: c.img_offset.y as u32 + c.copy_extent.height,
+                front: c.img_offset.z as u32,
+                back: c.img_offset.z as u32 + c.copy_extent.depth,
+            };
+            let footprint = d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
+                Offset: c.footprint_offset,
+                Footprint: d3d12::D3D12_SUBRESOURCE_FOOTPRINT {
+                    Format: image.dxgi_format,
+                    Width: c.footprint.width,
+                    Height: c.footprint.height,
+                    Depth: c.footprint.depth,
+                    RowPitch: c.row_pitch,
+                },
+            };
+            unsafe {
+                *dst.u.PlacedFootprint_mut() = footprint;
+                *src.u.SubresourceIndex_mut() = c.img_subresource;
+                self.raw.CopyTextureRegion(
+                    &dst,
+                    c.buf_offset.x as _,
+                    c.buf_offset.y as _,
+                    c.buf_offset.z as _,
+                    &src,
+                    &src_box,
+                );
             }
         }
     }
