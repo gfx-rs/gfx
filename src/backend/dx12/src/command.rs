@@ -1404,8 +1404,40 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         });
                     }
                 } else {
-                    //TODO: row by row copy
-                    unimplemented!()
+                    // worst case: row by row copy
+                    let adjusted_row_pitch = (row_pitch | (d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32 - 1)) + 1;
+                    for z in 0 .. r.image_extent.depth {
+                        for y in 0 .. r.image_extent.height {
+                            let row_offset = layer_offset + z as u64 * slice_pitch as u64 + y as u64 * row_pitch as u64;
+                            let buf_offset = row_offset & !(d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64 - 1);
+                            let gap = (row_offset - buf_offset) as u32;
+                            copies.push(Copy {
+                                buf_offset,
+                                footprint: image::Extent {
+                                    width: r.image_extent.width + gap,
+                                    height: 1,
+                                    depth: 1,
+                                },
+                                row_pitch: adjusted_row_pitch,
+                                dst_subresource,
+                                dst_offset: image::Offset {
+                                    x: r.image_offset.x,
+                                    y: r.image_offset.y + y as i32,
+                                    z: r.image_offset.z + z as i32,
+                                },
+                                src_offset: image::Offset {
+                                    x: gap as i32,
+                                    y: 0,
+                                    z: 0,
+                                },
+                                copy_extent: image::Extent {
+                                    width: r.image_extent.width,
+                                    height: 1,
+                                    depth: 1,
+                                },
+                            });
+                        }
+                    }
                 }
             }
         }
