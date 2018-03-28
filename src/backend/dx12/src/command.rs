@@ -1236,7 +1236,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         for region in regions {
             let region = region.borrow();
             debug_assert_eq!(region.src_subresource.layers.len(), region.dst_subresource.layers.len());
-            let num_layers = region.src_subresource.layers.len();
+            let num_layers = region.src_subresource.layers.len() as image::Layer;
             let src_layer_start = region.src_subresource.layers.start;
             let dst_layer_start = region.dst_subresource.layers.start;
             for layer in 0..num_layers {
