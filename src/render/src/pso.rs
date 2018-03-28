@@ -130,7 +130,12 @@ impl<B: Backend> Bind<B> for SampledImage {
         let state = (hal::image::Access::SHADER_READ, ImageLayout::ShaderReadOnlyOptimal);
         for level in 0..levels {
             for layer in 0..layers {
-                images.push((img, (level, layer), state));
+                let subresource = hal::image::Subresource {
+                    aspects: img.info().aspects,
+                    level,
+                    layer
+                };
+                images.push((img, subresource, state));
             }
         }
     }
@@ -323,7 +328,12 @@ where
             ImageLayout::ColorAttachmentOptimal);
         for level in 0..levels {
             for layer in 0..layers {
-                images.push((img, (level, layer), state));
+                let subresource = hal::image::Subresource {
+                    aspects: img.info().aspects,
+                    level,
+                    layer
+                };
+                images.push((img, subresource, state));
             }
         }
     }

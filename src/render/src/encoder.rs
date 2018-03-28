@@ -319,8 +319,8 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         for &(buffer, state) in buffer_states {
             barriers.extend(self.require_buffer_state(buffer, state));
         }
-        for &(image, (level, layer), state) in image_states {
-            barriers.extend(self.require_image_state(image, level, layer, state));
+        for &(image, subresource, state) in image_states {
+            barriers.extend(self.require_image_state(image, subresource.level, subresource.layer, state));
         }
         let current_stage = mem::replace(&mut self.pipeline_stage, stage);
         if (current_stage != stage) || !barriers.is_empty() {
@@ -470,6 +470,15 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             cast_slice(data));
     }
 
+    /// Totally ad-hoc helper method, which simulates what would have happened when `ImageCopy`'s subresources didn't specify their number of layers
+    fn subresource_layers_to_subresource(src: &image::SubresourceLayers) -> image::Subresource {
+        image::Subresource {
+            aspects: src.aspects,
+            level: src.level,
+            layer: src.layers.start
+        }
+    }
+
     pub fn copy_image<IA, IB>(
         &mut self,
         src: IA,
@@ -492,9 +501,10 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         let src_state = (i::Access::TRANSFER_READ, i::ImageLayout::TransferSrcOptimal);
         let dst_state = (i::Access::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal);
         let mut image_states = Vec::new();
+        // TODO: this should probably be a loop over all the layers
         for region in regions {
-            image_states.push((src, region.src_subresource, src_state));
-            image_states.push((dst, region.dst_subresource, dst_state));
+            image_states.push((src, Self::subresource_layers_to_subresource(&region.src_subresource), src_state));
+            image_states.push((dst, Self::subresource_layers_to_subresource(&region.dst_subresource), dst_state));
         }
         self.require_state(
             PipelineStage::TRANSFER,
@@ -532,7 +542,12 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         for region in regions {
             let r = &region.image_layers;
             for layer in r.layers.clone() {
-                image_states.push((dst, (r.level, layer), dst_state));
+                let subresource = hal::image::Subresource {
+                    aspects: dst.info().aspects,
+                    level: r.level,
+                    layer
+                };
+                image_states.push((dst, subresource, dst_state));
             }
         }
         self.require_state(
@@ -571,7 +586,12 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         for region in regions {
             let r = &region.image_layers;
             for layer in r.layers.clone() {
-                image_states.push((src, (r.level, layer), src_state));
+                let subresource = hal::image::Subresource {
+                    aspects: src.info().aspects,
+                    level: r.level,
+                    layer
+                };
+                image_states.push((src, subresource, src_state));
             }
         }
         self.require_state(
@@ -596,7 +616,12 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         let mut image_states = Vec::new();
         for level in 0..levels {
             for layer in 0..layers {
-                image_states.push((image, (level, layer), state));
+                let subresource = hal::image::Subresource {
+                    aspects: image.info().aspects,
+                    level,
+                    layer
+                };
+                image_states.push((image, subresource, state));
             }
         }
         self.require_state(

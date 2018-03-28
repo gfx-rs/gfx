@@ -703,9 +703,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .map(|region| {
                 let r = region.borrow();
                 vk::ImageCopy {
-                    src_subresource: conv::map_subresource_with_layers(r.aspects, r.src_subresource, r.num_layers),
+                    src_subresource: conv::map_subresource_layers(&r.src_subresource),
                     src_offset: conv::map_offset(r.src_offset),
-                    dst_subresource: conv::map_subresource_with_layers(r.aspects, r.dst_subresource, r.num_layers),
+                    dst_subresource: conv::map_subresource_layers(&r.dst_subresource),
                     dst_offset: conv::map_offset(r.dst_offset),
                     extent: conv::map_extent(r.extent),
                 }

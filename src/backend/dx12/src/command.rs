@@ -1235,11 +1235,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         for region in regions {
             let region = region.borrow();
-            for layer in 0..region.num_layers {
+            debug_assert_eq!(region.src_subresource.layers.len(), region.dst_subresource.layers.len());
+            let num_layers = region.src_subresource.layers.len() as image::Layer;
+            let src_layer_start = region.src_subresource.layers.start;
+            let dst_layer_start = region.dst_subresource.layers.start;
+            for layer in 0..num_layers {
                 *unsafe { src_image.u.SubresourceIndex_mut() } =
-                    src.calc_subresource(region.src_subresource.0 as _, (region.src_subresource.1 + layer) as _, 0);
+                    src.calc_subresource(region.src_subresource.level as _, (src_layer_start + layer) as _, 0);
                 *unsafe { dst_image.u.SubresourceIndex_mut() } =
-                    dst.calc_subresource(region.dst_subresource.0 as _, (region.dst_subresource.1 + layer) as _, 0);
+                    dst.calc_subresource(region.dst_subresource.level as _, (dst_layer_start + layer) as _, 0);
 
                 let src_box = d3d12::D3D12_BOX {
                     left: region.src_offset.x as _,

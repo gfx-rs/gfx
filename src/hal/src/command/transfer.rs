@@ -29,20 +29,16 @@ pub struct BufferCopy {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ImageCopy {
-    /// The aspect mask of what to copy: color, depth and/or stencil information.
-    pub aspects: format::Aspects,
     /// The image subresource to copy from.
-    pub src_subresource: image::Subresource,
+    pub src_subresource: image::SubresourceLayers,
     /// The source offset.
     pub src_offset: image::Offset,
-    /// he image subresource to copy to.
-    pub dst_subresource: image::Subresource,
+    /// The image subresource to copy to.
+    pub dst_subresource: image::SubresourceLayers,
     /// The destination offset.
     pub dst_offset: image::Offset,
     /// The extent of the region to copy.
     pub extent: image::Extent,
-    /// The number of layers to copy.
-    pub num_layers: image::Layer,
 }
 
 /// Bundles together all the parameters needed to copy a buffer
@@ -56,7 +52,7 @@ pub struct BufferImageCopy {
     pub buffer_width: u32,
     /// Height of a buffer 'image slice' in texels.
     pub buffer_height: u32,
-    /// The number of layers to copy.
+    /// The image subresource.
     pub image_layers: image::SubresourceLayers,
     /// The offset of the portion of the image to copy.
     pub image_offset: image::Offset,
