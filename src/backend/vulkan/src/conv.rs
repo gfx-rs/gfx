@@ -145,14 +145,13 @@ pub fn map_subresource_layers(
 }
 
 pub fn map_subresource_with_layers(
-    aspects: format::Aspects,
-    (mip_level, base_layer): image::Subresource,
+    sub: image::Subresource,
     layers: image::Layer,
 ) -> vk::ImageSubresourceLayers {
     map_subresource_layers(&image::SubresourceLayers {
-        aspects,
-        level: mip_level,
-        layers: base_layer..base_layer+layers,
+        aspects: sub.aspects,
+        level: sub.level,
+        layers: sub.layer..sub.layer+layers,
     })
 }
 
