@@ -3,7 +3,7 @@ use hal::{buffer, command as com, image, memory, pass, pso, query};
 use hal::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 use hal::format::Aspects;
 
-use std::{mem, ptr};
+use std::{iter, mem, ptr};
 use std::borrow::Borrow;
 use std::ops::Range;
 
@@ -29,7 +29,7 @@ const NULL_VERTEX_BUFFER_VIEW: d3d12::D3D12_VERTEX_BUFFER_VIEW =
         StrideInBytes: 0,
     };
 
-fn get_rect(rect: &com::Rect) -> d3d12::D3D12_RECT {
+fn get_rect(rect: &pso::Rect) -> d3d12::D3D12_RECT {
     d3d12::D3D12_RECT {
         left: rect.x as i32,
         top: rect.y as i32,
@@ -622,7 +622,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         &mut self,
         render_pass: &n::RenderPass,
         framebuffer: &n::Framebuffer,
-        target_rect: com::Rect,
+        target_rect: pso::Rect,
         clear_values: T,
         _first_subpass: com::SubpassContents,
     ) where
@@ -854,7 +854,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::AttachmentClear>,
         U: IntoIterator,
-        U::Item: Borrow<com::Rect>,
+        U::Item: Borrow<pso::Rect>,
     {
         assert!(self.pass_cache.is_some(), "`clear_attachments` can only be called inside a renderpass");
         let rects: SmallVec<[d3d12::D3D12_RECT; 16]> = rects.into_iter().map(|rect| get_rect(rect.borrow())).collect();
@@ -986,7 +986,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn set_viewports<T>(&mut self, viewports: T)
     where
         T: IntoIterator,
-        T::Item: Borrow<com::Viewport>,
+        T::Item: Borrow<pso::Viewport>,
     {
         let viewports: SmallVec<[d3d12::D3D12_VIEWPORT; 16]> = viewports
             .into_iter()
@@ -1014,7 +1014,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn set_scissors<T>(&mut self, scissors: T)
     where
         T: IntoIterator,
-        T::Item: Borrow<com::Rect>,
+        T::Item: Borrow<pso::Rect>,
     {
         let rects: SmallVec<[d3d12::D3D12_RECT; 16]> = scissors.into_iter().map(|rect| get_rect(rect.borrow())).collect();
         unsafe {
@@ -1023,11 +1023,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         };
     }
 
-    fn set_blend_constants(&mut self, color: com::ColorValue) {
+    fn set_blend_constants(&mut self, color: pso::ColorValue) {
         unsafe { self.raw.OMSetBlendFactor(&color); }
     }
 
-    fn set_stencil_reference(&mut self, front: com::StencilValue, back: com::StencilValue) {
+    fn set_stencil_reference(&mut self, front: pso::StencilValue, back: pso::StencilValue) {
         if front != back {
             error!(
                 "Unable to set different stencil ref values for front ({}) and back ({})",
@@ -1066,6 +1066,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                   .zip(pipeline.vertex_strides.iter())
         {
             view.StrideInBytes = *stride;
+        }
+
+        if let Some(ref vp) = pipeline.baked_states.viewport {
+            self.set_viewports(iter::once(vp));
+        }
+        if let Some(ref rect) = pipeline.baked_states.scissor {
+            self.set_scissors(iter::once(rect));
+        }
+        if let Some(color) = pipeline.baked_states.blend_color {
+            self.set_blend_constants(color);
         }
     }
 
