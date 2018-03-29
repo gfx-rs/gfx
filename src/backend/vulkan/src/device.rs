@@ -294,8 +294,10 @@ impl d::Device<B> for Device {
         let mut color_attachments          = Vec::with_capacity(descs.len());
         let mut info_specializations       = Vec::with_capacity(descs.len() * NUM_STAGES);
         let mut specialization_data        = Vec::with_capacity(descs.len() * NUM_STAGES);
+        let mut dynamic_states             = Vec::with_capacity(descs.len() * 10); //max states per PSO
+        let mut viewports                  = Vec::with_capacity(descs.len());
+        let mut scissors                   = Vec::with_capacity(descs.len());
 
-        let dynamic_states = [vk::DynamicState::Viewport, vk::DynamicState::Scissor, vk::DynamicState::BlendConstants];
         let mut c_strings = Vec::new(); // hold the C strings temporarily
         let mut make_stage = |stage, source: &pso::EntryPoint<'a, B>| {
             let string = CString::new(source.entry).unwrap();
@@ -425,7 +427,7 @@ impl d::Device<B> for Device {
                 depth_bias_constant_factor: desc.rasterizer.depth_bias.map_or(0.0, |off| off.const_factor),
                 depth_bias_clamp: desc.rasterizer.depth_bias.map_or(0.0, |off| off.clamp),
                 depth_bias_slope_factor: desc.rasterizer.depth_bias.map_or(0.0, |off| off.slope_factor),
-                line_width: line_width,
+                line_width,
             });
 
             let is_tessellated = desc.shaders.hull.is_some() && desc.shaders.domain.is_some();
@@ -438,14 +440,34 @@ impl d::Device<B> for Device {
                 });
             }
 
+            let dynamic_state_base = dynamic_states.len();
+
             info_viewport_states.push(vk::PipelineViewportStateCreateInfo {
                 s_type: vk::StructureType::PipelineViewportStateCreateInfo,
                 p_next: ptr::null(),
                 flags: vk::PipelineViewportStateCreateFlags::empty(),
-                scissor_count: 1, // TODO:
-                p_scissors: ptr::null(), // dynamic
-                viewport_count: 1, // TODO:
-                p_viewports: ptr::null(), // dynamic
+                scissor_count: 1, // TODO
+                p_scissors: match desc.baked_states.scissor {
+                    Some(ref rect) => {
+                        scissors.push(conv::map_rect(rect));
+                        scissors.last().unwrap()
+                    },
+                    None => {
+                        dynamic_states.push(vk::DynamicState::Scissor);
+                        ptr::null()
+                    },
+                },
+                viewport_count: 1, // TODO
+                p_viewports:  match desc.baked_states.viewport {
+                    Some(ref vp) => {
+                        viewports.push(conv::map_viewport(vp));
+                        viewports.last().unwrap()
+                    },
+                    None => {
+                        dynamic_states.push(vk::DynamicState::Viewport);
+                        ptr::null()
+                    },
+                },
             });
 
             info_multisample_states.push(vk::PipelineMultisampleStateCreateInfo {
@@ -526,15 +548,23 @@ impl d::Device<B> for Device {
                 logic_op: vk::LogicOp::Clear,
                 attachment_count: color_attachments.last().unwrap().len() as _,
                 p_attachments: color_attachments.last().unwrap().as_ptr(), // TODO:
-                blend_constants: [0.0; 4], // TODO:
+                blend_constants: match desc.baked_states.blend_constants {
+                    Some(value) => value,
+                    None => {
+                        dynamic_states.push(vk::DynamicState::BlendConstants);
+                        [0.0; 4]
+                    },
+                },
             });
 
             info_dynamic_states.push(vk::PipelineDynamicStateCreateInfo {
                 s_type: vk::StructureType::PipelineDynamicStateCreateInfo,
                 p_next: ptr::null(),
                 flags: vk::PipelineDynamicStateCreateFlags::empty(),
-                dynamic_state_count: dynamic_states.len() as _,
-                p_dynamic_states: dynamic_states.as_ptr(),
+                dynamic_state_count: (dynamic_states.len() - dynamic_state_base) as _,
+                p_dynamic_states: unsafe {
+                    dynamic_states.as_ptr().offset(dynamic_state_base as _)
+                },
             });
 
             let (base_handle, base_index) = match desc.parent {

@@ -103,14 +103,14 @@ pub fn map_clear_depth_stencil(value: command::ClearDepthStencil) -> vk::ClearDe
     }
 }
 
-pub fn map_clear_depth(depth: command::DepthValue) -> vk::ClearDepthStencilValue {
+pub fn map_clear_depth(depth: pso::DepthValue) -> vk::ClearDepthStencilValue {
     vk::ClearDepthStencilValue {
         depth,
         stencil: 0,
     }
 }
 
-pub fn map_clear_stencil(stencil: command::StencilValue) -> vk::ClearDepthStencilValue {
+pub fn map_clear_stencil(stencil: pso::StencilValue) -> vk::ClearDepthStencilValue {
     vk::ClearDepthStencilValue {
         depth: 0.0,
         stencil,
@@ -142,17 +142,6 @@ pub fn map_subresource_layers(
         base_array_layer: sub.layers.start as _,
         layer_count: (sub.layers.end - sub.layers.start) as _,
     }
-}
-
-pub fn map_subresource_with_layers(
-    sub: image::Subresource,
-    layers: image::Layer,
-) -> vk::ImageSubresourceLayers {
-    map_subresource_layers(&image::SubresourceLayers {
-        aspects: sub.aspects,
-        level: sub.level,
-        layers: sub.layer..sub.layer+layers,
-    })
 }
 
 pub fn map_subresource_range(
@@ -790,4 +779,28 @@ pub fn map_view_kind(
         (Type3d, CubeArray) if is_cube => vk::ImageViewType::CubeArray,
         _ => return None
     })
+}
+
+pub fn map_rect(rect: &pso::Rect) -> vk::Rect2D {
+    vk::Rect2D {
+        offset: vk::Offset2D {
+            x: rect.x as _,
+            y: rect.y as _,
+        },
+        extent: vk::Extent2D {
+            width: rect.w as _,
+            height: rect.h as _,
+        },
+    }
+}
+
+pub fn map_viewport(vp: &pso::Viewport) -> vk::Viewport {
+    vk::Viewport {
+        x: vp.rect.x as _,
+        y: vp.rect.y as _,
+        width: vp.rect.w as _,
+        height: vp.rect.h as _,
+        min_depth: vp.depth.start,
+        max_depth: vp.depth.end,
+    }
 }
