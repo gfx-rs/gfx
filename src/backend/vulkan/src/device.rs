@@ -295,7 +295,7 @@ impl d::Device<B> for Device {
         let mut info_specializations       = Vec::with_capacity(descs.len() * NUM_STAGES);
         let mut specialization_data        = Vec::with_capacity(descs.len() * NUM_STAGES);
 
-        let dynamic_states = [vk::DynamicState::Viewport, vk::DynamicState::Scissor];
+        let dynamic_states = [vk::DynamicState::Viewport, vk::DynamicState::Scissor, vk::DynamicState::BlendConstants];
         let mut c_strings = Vec::new(); // hold the C strings temporarily
         let mut make_stage = |stage, source: &pso::EntryPoint<'a, B>| {
             let string = CString::new(source.entry).unwrap();
