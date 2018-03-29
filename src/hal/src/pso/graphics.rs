@@ -72,7 +72,8 @@ pub struct GraphicsShaderSet<'a, B: Backend> {
 }
 
 /// Baked-in pipeline states.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BakedStates {
     /// Static viewport
     pub viewport: Option<Viewport>,

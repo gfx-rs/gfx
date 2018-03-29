@@ -76,7 +76,7 @@ pub enum Command {
         depth_range_ptr: BufferSlice,
     },
     SetScissors(BufferSlice),
-    SetBlendColor(command::ColorValue),
+    SetBlendColor(pso::ColorValue),
 
     /// Clear floating-point color drawbuffer of bound framebuffer.
     ClearBufferColorF(DrawBuffer, [f32; 4]),
@@ -85,7 +85,7 @@ pub enum Command {
     /// Clear signed integer color drawbuffer of bound framebuffer.
     ClearBufferColorI(DrawBuffer, [i32; 4]),
     /// Clear depth-stencil drawbuffer of bound framebuffer.
-    ClearBufferDepthStencil(Option<command::DepthValue>, Option<command::StencilValue>),
+    ClearBufferDepthStencil(Option<pso::DepthValue>, Option<pso::StencilValue>),
 
     /// Set list of color attachments for drawing.
     /// The buffer slice contains a list of `GLenum`.
@@ -114,7 +114,7 @@ pub type DrawBuffer = gl::types::GLint;
 struct AttachmentClear {
     subpass_id: Option<pass::SubpassId>,
     value: Option<command::ClearValueRaw>,
-    stencil_value: Option<command::StencilValue>,
+    stencil_value: Option<pso::StencilValue>,
 }
 
 #[derive(Clone)]
@@ -132,9 +132,9 @@ struct Cache {
     // Active index type, set by the current index buffer.
     index_type: Option<hal::IndexType>,
     // Stencil reference values (front, back).
-    stencil_ref: Option<(command::StencilValue, command::StencilValue)>,
+    stencil_ref: Option<(pso::StencilValue, pso::StencilValue)>,
     // Blend color.
-    blend_color: Option<command::ColorValue>,
+    blend_color: Option<pso::ColorValue>,
     ///
     framebuffer: Option<(FrameBufferTarget, n::FrameBuffer)>,
     ///
@@ -537,7 +537,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         &mut self,
         render_pass: &n::RenderPass,
         framebuffer: &n::FrameBuffer,
-        _render_area: command::Rect,
+        _render_area: pso::Rect,
         clear_values: T,
         _first_subpass: command::SubpassContents,
     ) where
@@ -552,7 +552,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         // Clearing when entering a subpass:
         //    * Acquire channel information from renderpass description to
         //      select correct ClearBuffer variant.
-        //    * Check for attachment loading clearing strategy
+        //    * Check for attachment loading clearing sttrategy
 
         // TODO: store ops:
         //   < GL 4.5: Ignore
@@ -647,7 +647,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::AttachmentClear>,
         U: IntoIterator,
-        U::Item: Borrow<command::Rect>,
+        U::Item: Borrow<pso::Rect>,
     {
         unimplemented!()
     }
@@ -708,7 +708,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn set_viewports<T>(&mut self, viewports: T)
     where
         T: IntoIterator,
-        T::Item: Borrow<command::Viewport>,
+        T::Item: Borrow<pso::Viewport>,
     {
         // OpenGL has two functions for setting the viewports.
         // Configuring the rectangle area and setting the depth bounds are separated.
@@ -746,7 +746,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn set_scissors<T>(&mut self, scissors: T)
     where
         T: IntoIterator,
-        T::Item: Borrow<command::Rect>,
+        T::Item: Borrow<pso::Rect>,
     {
         let mut scissors_ptr = BufferSlice { offset: 0, size: 0 };
         let mut len = 0;
@@ -772,14 +772,14 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn set_stencil_reference(&mut self, front: command::StencilValue, back: command::StencilValue) {
+    fn set_stencil_reference(&mut self, front: pso::StencilValue, back: pso::StencilValue) {
         // Only cache the stencil references values until
         // we assembled all the pieces to set the stencil state
         // from the pipeline.
         self.cache.stencil_ref = Some((front, back));
     }
 
-    fn set_blend_constants(&mut self, cv: command::ColorValue) {
+    fn set_blend_constants(&mut self, cv: pso::ColorValue) {
         if self.cache.blend_color != Some(cv) {
             self.cache.blend_color = Some(cv);
             self.push_cmd(Command::SetBlendColor(cv));
