@@ -17,7 +17,7 @@ use hal::queue::{RawCommandQueue, RawSubmission};
 use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLClearColor, MTLIndexType, MTLSize, MTLOrigin};
 use cocoa::foundation::NSUInteger;
 use block::{ConcreteBlock};
-use conversions::map_index_type;
+use conversions::{map_index_type};
 use soft;
 
 
@@ -263,6 +263,7 @@ struct CommandBufferInner {
     // it doesn't have to be in `Inner`
     viewport: Option<MTLViewport>,
     scissors: Option<MTLScissorRect>,
+    blend_color: Option<pso::ColorValue>,
     render_pso: Option<metal::RenderPipelineState>,
     compute_pso: Option<metal::ComputePipelineState>,
     work_group_size: MTLSize,
@@ -329,6 +330,7 @@ impl CommandBufferInner {
         // Apply previously bound values for this command buffer
         commands.extend(self.viewport.map(soft::RenderCommand::SetViewport));
         commands.extend(self.scissors.map(soft::RenderCommand::SetScissor));
+        commands.extend(self.blend_color.map(soft::RenderCommand::SetBlendColor));
         let depth_stencil = self.depth_stencil_state.clone();
         commands.extend(self.render_pso.clone().map(|pipeline| {
             soft::RenderCommand::BindPipeline(pipeline, depth_stencil)
@@ -440,6 +442,38 @@ impl CommandBufferInner {
 
         self.work_group_size
     }
+
+    fn set_viewport(&mut self, vp: &pso::Viewport) {
+        let viewport = MTLViewport {
+            originX: vp.rect.x as _,
+            originY: vp.rect.y as _,
+            width: vp.rect.w as _,
+            height: vp.rect.h as _,
+            znear: vp.depth.start as _,
+            zfar: vp.depth.end as _,
+        };
+        self.viewport = Some(viewport);
+        let command = soft::RenderCommand::SetViewport(viewport);
+        self.sink.pre_render_commands(iter::once(command));
+    }
+
+    fn set_scissor(&mut self, rect: &pso::Rect) {
+        let scissor = MTLScissorRect {
+            x: rect.x as _,
+            y: rect.y as _,
+            width: rect.w as _,
+            height: rect.h as _,
+        };
+        self.scissors = Some(scissor);
+        let command = soft::RenderCommand::SetScissor(scissor);
+        self.sink.pre_render_commands(iter::once(command));
+    }
+
+    fn set_blend_color(&mut self, color: &pso::ColorValue) {
+        self.blend_color = Some(*color);
+        let command = soft::RenderCommand::SetBlendColor(*color);
+        self.sink.pre_render_commands(iter::once(command));
+    }
 }
 
 
@@ -469,6 +503,9 @@ fn exec_render(encoder: &metal::RenderCommandEncoderRef, command: &soft::RenderC
         }
         Cmd::SetScissor(scissor) => {
             encoder.set_scissor_rect(scissor);
+        }
+        Cmd::SetBlendColor(color) => {
+            encoder.set_blend_color(color[0], color[1], color[2], color[3]);
         }
         Cmd::BindBuffer { stage, index, ref buffer, offset } => {
             let buffer = buffer.as_ref().map(|x| x.as_ref());
@@ -767,6 +804,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                     },
                     viewport: None,
                     scissors: None,
+                    blend_color: None,
                     render_pso: None,
                     compute_pso: None,
                     work_group_size: MTLSize { width: 0, height: 0, depth: 0 },
@@ -949,7 +987,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::AttachmentClear>,
         U: IntoIterator,
-        U::Item: Borrow<com::Rect>,
+        U::Item: Borrow<pso::Rect>,
     {
         unimplemented!()
     }
@@ -1019,7 +1057,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn set_viewports<T>(&mut self, vps: T)
     where
         T: IntoIterator,
-        T::Item: Borrow<com::Viewport>,
+        T::Item: Borrow<pso::Viewport>,
     {
         let mut vps = vps.into_iter();
         let vp_borrowable = vps.next().expect("No viewport provided, Metal supports exactly one");
@@ -1027,24 +1065,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         if vps.next().is_some() {
             panic!("Metal supports only one viewport");
         }
-        let inner = self.inner();
-        let viewport = MTLViewport {
-            originX: vp.rect.x as f64,
-            originY: vp.rect.y as f64,
-            width: vp.rect.w as f64,
-            height: vp.rect.h as f64,
-            znear: vp.depth.start as f64,
-            zfar: vp.depth.end as f64,
-        };
-        inner.viewport = Some(viewport);
-        let command = soft::RenderCommand::SetViewport(viewport);
-        inner.sink.pre_render_commands(iter::once(command));
+        self.inner().set_viewport(vp);
     }
 
     fn set_scissors<T>(&mut self, rects: T)
     where
         T: IntoIterator,
-        T::Item: Borrow<com::Rect>,
+        T::Item: Borrow<pso::Rect>,
     {
         let mut rects = rects.into_iter();
         let rect_borrowable = rects.next().expect("No scissor provided, Metal supports exactly one");
@@ -1052,31 +1079,22 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         if rects.next().is_some() {
             panic!("Metal supports only one scissor");
         }
-        let inner = self.inner();
-        let scissor = MTLScissorRect {
-            x: rect.x as _,
-            y: rect.y as _,
-            width: rect.w as _,
-            height: rect.h as _,
-        };
-        inner.scissors = Some(scissor);
-        let command = soft::RenderCommand::SetScissor(scissor);
-        inner.sink.pre_render_commands(iter::once(command));
+        self.inner().set_scissor(rect);
     }
 
-    fn set_stencil_reference(&mut self, _front: com::StencilValue, _back: com::StencilValue) {
+    fn set_stencil_reference(&mut self, _front: pso::StencilValue, _back: pso::StencilValue) {
         unimplemented!()
     }
 
-    fn set_blend_constants(&mut self, _color: com::ColorValue) {
-        unimplemented!()
+    fn set_blend_constants(&mut self, color: pso::ColorValue) {
+        self.inner().set_blend_color(&color);
     }
 
     fn begin_render_pass_raw<T>(
         &mut self,
         render_pass: &native::RenderPass,
         frame_buffer: &native::FrameBuffer,
-        _render_area: com::Rect,
+        _render_area: pso::Rect,
         clear_values: T,
         _first_subpass: com::SubpassContents,
     ) where
@@ -1128,6 +1146,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         inner.depth_stencil_state = pipeline.depth_stencil_state.as_ref().map(ToOwned::to_owned);
         inner.primitive_type = pipeline.primitive_type;
         inner.attribute_buffer_index = pipeline.attribute_buffer_index as usize;
+
+        if let Some(ref vp) = pipeline.baked_states.viewport {
+            inner.set_viewport(vp);
+        }
+        if let Some(ref rect) = pipeline.baked_states.scissor {
+            inner.set_scissor(rect);
+        }
+        if let Some(ref color) = pipeline.baked_states.blend_color {
+            inner.set_blend_color(color);
+        }
     }
 
     fn bind_graphics_descriptor_sets<'a, T>(

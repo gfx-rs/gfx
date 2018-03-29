@@ -548,7 +548,7 @@ impl d::Device<B> for Device {
                 logic_op: vk::LogicOp::Clear,
                 attachment_count: color_attachments.last().unwrap().len() as _,
                 p_attachments: color_attachments.last().unwrap().as_ptr(), // TODO:
-                blend_constants: match desc.baked_states.blend_constants {
+                blend_constants: match desc.baked_states.blend_color {
                     Some(value) => value,
                     None => {
                         dynamic_states.push(vk::DynamicState::BlendConstants);

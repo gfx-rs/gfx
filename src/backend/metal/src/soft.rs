@@ -9,6 +9,7 @@ use std::ops::Range;
 pub enum RenderCommand {
     SetViewport(metal::MTLViewport),
     SetScissor(metal::MTLScissorRect),
+    SetBlendColor(hal::pso::ColorValue),
     BindBuffer {
         stage: hal::pso::Stage,
         index: usize,

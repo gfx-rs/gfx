@@ -80,7 +80,7 @@ pub struct BakedStates {
     /// Static scissor
     pub scissor: Option<Rect>,
     /// Static blend constant color
-    pub blend_constants: Option<ColorValue>,
+    pub blend_color: Option<ColorValue>,
     //pub stencil_read: Option<Stencil>,
     //pub stencil_write: Option<Stencil>,
     //pub stencil_ref: Option<Stencil>,
