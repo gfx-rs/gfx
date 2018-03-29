@@ -3,7 +3,7 @@ use hal::{buffer, command as com, image, memory, pass, pso, query};
 use hal::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 use hal::format::Aspects;
 
-use std::{iter, mem, ptr};
+use std::{cmp, iter, mem, ptr};
 use std::borrow::Borrow;
 use std::ops::Range;
 
@@ -632,7 +632,7 @@ impl CommandBuffer {
         };
         let row_pitch = div(buffer_width, image.block_dim.0 as _) * image.bytes_per_block as u32;
         let slice_pitch = div(buffer_height, image.block_dim.1 as _) * row_pitch;
-        let is_pitch_aligned = row_pitch % d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32 == 0;
+        let is_pitch_aligned = row_pitch % d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT == 0;
 
         for layer in r.image_layers.layers.clone() {
             let img_subresource = image
@@ -722,20 +722,26 @@ impl CommandBuffer {
                 }
             } else {
                 // worst case: row by row copy
-                let adjusted_row_pitch = (row_pitch | (d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as u32 - 1)) + 1;
+                assert_eq!(image.block_dim, (1, 1)); // TODO
                 for z in 0 .. r.image_extent.depth {
                     for y in 0 .. r.image_extent.height {
-                        let row_offset = layer_offset + z as u64 * slice_pitch as u64 + y as u64 * row_pitch as u64;
-                        let footprint_offset = row_offset & !(d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64 - 1);
-                        let gap = (row_offset - footprint_offset) as u32;
+                        // an image row starts non-aligned
+                        let row_offset = layer_offset +
+                            z as u64 * slice_pitch as u64 +
+                            y as u64 * row_pitch as u64;
+                        let aligned_offset = row_offset & !(d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64 - 1);
+                        let next_aligned_offset = aligned_offset + d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64;
+                        let cut_width = cmp::min(r.image_extent.width, (next_aligned_offset - row_offset) as _);
+                        let gap = (row_offset - aligned_offset) as u32;
+
                         copies.push(Copy {
-                            footprint_offset,
+                            footprint_offset: aligned_offset,
                             footprint: image::Extent {
-                                width: r.image_extent.width + gap,
+                                width: cut_width + gap,
                                 height: 1,
                                 depth: 1,
                             },
-                            row_pitch: adjusted_row_pitch,
+                            row_pitch: d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT,
                             img_subresource,
                             img_offset: image::Offset {
                                 x: r.image_offset.x,
@@ -748,7 +754,35 @@ impl CommandBuffer {
                                 z: 0,
                             },
                             copy_extent: image::Extent {
-                                width: r.image_extent.width,
+                                width: cut_width,
+                                height: 1,
+                                depth: 1,
+                            },
+                        });
+
+                        // and if it crosses a pitch alignment - we copy the rest separately
+                        if cut_width == r.image_extent.width {
+                            continue;
+                        }
+                        let leftover = r.image_extent.width - cut_width;
+
+                        copies.push(Copy {
+                            footprint_offset: next_aligned_offset,
+                            footprint: image::Extent {
+                                width: leftover,
+                                height: 1,
+                                depth: 1,
+                            },
+                            row_pitch: (leftover | (d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1)) + 1,
+                            img_subresource,
+                            img_offset: image::Offset {
+                                x: r.image_offset.x + cut_width as i32,
+                                y: r.image_offset.y + y as i32,
+                                z: r.image_offset.z + z as i32,
+                            },
+                            buf_offset: image::Offset::ZERO,
+                            copy_extent: image::Extent {
+                                width: leftover,
                                 height: 1,
                                 depth: 1,
                             },
