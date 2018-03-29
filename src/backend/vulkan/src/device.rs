@@ -278,6 +278,7 @@ impl d::Device<B> for Device {
         let descs = descs.into_iter().collect::<Vec<_>>();
         debug!("create_graphics_pipelines {:?}", descs.iter().map(Borrow::borrow).collect::<Vec<_>>());
         const NUM_STAGES: usize = 5;
+        const MAX_DYNAMIC_STATES: usize = 10;
 
         // Store pipeline parameters to avoid stack usage
         let mut info_stages                = Vec::with_capacity(descs.len());
@@ -294,7 +295,7 @@ impl d::Device<B> for Device {
         let mut color_attachments          = Vec::with_capacity(descs.len());
         let mut info_specializations       = Vec::with_capacity(descs.len() * NUM_STAGES);
         let mut specialization_data        = Vec::with_capacity(descs.len() * NUM_STAGES);
-        let mut dynamic_states             = Vec::with_capacity(descs.len() * 10); //max states per PSO
+        let mut dynamic_states             = Vec::with_capacity(descs.len() * MAX_DYNAMIC_STATES);
         let mut viewports                  = Vec::with_capacity(descs.len());
         let mut scissors                   = Vec::with_capacity(descs.len());
 

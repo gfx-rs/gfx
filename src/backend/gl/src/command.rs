@@ -552,7 +552,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         // Clearing when entering a subpass:
         //    * Acquire channel information from renderpass description to
         //      select correct ClearBuffer variant.
-        //    * Check for attachment loading clearing sttrategy
+        //    * Check for attachment loading clearing strategy
 
         // TODO: store ops:
         //   < GL 4.5: Ignore

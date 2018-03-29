@@ -75,11 +75,11 @@ pub struct GraphicsShaderSet<'a, B: Backend> {
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BakedStates {
-    /// Static viewport
+    /// Static viewport. TODO: multiple viewports
     pub viewport: Option<Viewport>,
-    /// Static scissor
+    /// Static scissor. TODO: multiple scissors
     pub scissor: Option<Rect>,
-    /// Static blend constant color
+    /// Static blend constant color.
     pub blend_color: Option<ColorValue>,
     //pub stencil_read: Option<Stencil>,
     //pub stencil_write: Option<Stencil>,
