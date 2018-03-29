@@ -3,7 +3,7 @@ use std::borrow::Borrow;
 use std::ops::Range;
 
 use Backend;
-use {buffer, format, image};
+use {buffer, image};
 use memory::{Barrier, Dependencies};
 use pso::PipelineStage;
 use queue::capability::{Supports, Transfer};

@@ -444,7 +444,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::AttachmentClear>,
         U: IntoIterator,
-        U::Item: Borrow<command::Rect>,
+        U::Item: Borrow<pso::Rect>,
     {
         unimplemented!()
     }
@@ -489,7 +489,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn set_viewports<T>(&mut self, _: T)
     where
         T: IntoIterator,
-        T::Item: Borrow<command::Viewport>,
+        T::Item: Borrow<pso::Viewport>,
     {
         unimplemented!()
     }
@@ -497,18 +497,18 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn set_scissors<T>(&mut self, _: T)
     where
         T: IntoIterator,
-        T::Item: Borrow<command::Rect>,
+        T::Item: Borrow<pso::Rect>,
     {
         unimplemented!()
     }
 
 
-    fn set_stencil_reference(&mut self, _: command::StencilValue, _: command::StencilValue) {
+    fn set_stencil_reference(&mut self, _: pso::StencilValue, _: pso::StencilValue) {
         unimplemented!()
     }
 
 
-    fn set_blend_constants(&mut self, _: command::ColorValue) {
+    fn set_blend_constants(&mut self, _: pso::ColorValue) {
         unimplemented!()
     }
 
@@ -517,7 +517,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         &mut self,
         _: &(),
         _: &(),
-        _: command::Rect,
+        _: pso::Rect,
         _: T,
         _: command::SubpassContents,
     ) where
