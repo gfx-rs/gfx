@@ -204,11 +204,11 @@ fn main() {
         .finish();
 
     // Rendering setup
-    let scissor = command::Rect {
+    let scissor = pso::Rect {
         x: 0, y: 0,
         w: pixel_width, h: pixel_height,
     };
-    let viewport = command::Viewport {
+    let viewport = pso::Viewport {
         rect: scissor,
         depth: 0.0 .. 1.0,
     };

@@ -456,8 +456,8 @@ fn main() {
     ]);
 
     // Rendering setup
-    let viewport = command::Viewport {
-        rect: command::Rect {
+    let viewport = pso::Viewport {
+        rect: pso::Rect {
             x: 0, y: 0,
             w: pixel_width, h: pixel_height,
         },

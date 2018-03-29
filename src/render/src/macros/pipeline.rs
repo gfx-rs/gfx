@@ -13,7 +13,7 @@ macro_rules! gfx_graphics_pipeline {
                 Device, Primitive
             };
             use $crate::hal::{pass as cpass, pso as cpso};
-            use $crate::hal::command::{RenderPassInlineEncoder, Rect, Viewport, Primary};
+            use $crate::hal::command::{RenderPassInlineEncoder, Primary};
 
             pub struct Meta<B: Backend> {
                 layout: handle::raw::PipelineLayout<B>,
@@ -27,8 +27,8 @@ macro_rules! gfx_graphics_pipeline {
 
             pub struct Data<'a, B: Backend> {
                 // TODO:
-                pub viewports: &'a [Viewport],
-                pub scissors: &'a [Rect],
+                pub viewports: &'a [pso::Viewport],
+                pub scissors: &'a [pso::Rect],
                 pub framebuffer: &'a handle::raw::Framebuffer<B>,
                 $( pub $cmp_name: <$cmp as pso::Component<'a, B>>::Data, )*
             }
@@ -142,7 +142,7 @@ macro_rules! gfx_graphics_pipeline {
                     cmd_buffer.bind_graphics_descriptor_sets(meta.layout.resource(), 0, descs);
                     // TODO: difference with viewport ?
                     let extent = self.framebuffer.info().extent;
-                    let render_rect = Rect {
+                    let render_rect = pso::Rect {
                         x: 0,
                         y: 0,
                         w: extent.width as u16,

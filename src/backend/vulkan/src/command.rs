@@ -114,23 +114,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         &mut self,
         render_pass: &n::RenderPass,
         frame_buffer: &n::Framebuffer,
-        render_area: com::Rect,
+        render_area: pso::Rect,
         clear_values: T,
         first_subpass: com::SubpassContents,
     ) where
         T: IntoIterator,
         T::Item: Borrow<com::ClearValueRaw>,
     {
-        let render_area = vk::Rect2D {
-            offset: vk::Offset2D {
-                x: render_area.x as i32,
-                y: render_area.y as i32,
-            },
-            extent: vk::Extent2D {
-                width: render_area.w as u32,
-                height: render_area.h as u32,
-            },
-        };
+        let render_area = conv::map_rect(&render_area);
 
         let clear_values: SmallVec<[vk::ClearValue; 16]> =
             clear_values
@@ -335,7 +326,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::AttachmentClear>,
         U: IntoIterator,
-        U::Item: Borrow<com::Rect>,
+        U::Item: Borrow<pso::Rect>,
     {
         let clears: SmallVec<[vk::ClearAttachment; 16]> = clears
             .into_iter()
@@ -377,20 +368,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let rects: SmallVec<[vk::ClearRect; 16]> = rects
             .into_iter()
             .map(|rect| {
-                let rect = rect.borrow();
                 vk::ClearRect {
                     base_array_layer: 0,
                     layer_count: vk::VK_REMAINING_ARRAY_LAYERS,
-                    rect: vk::Rect2D {
-                        offset: vk::Offset2D {
-                            x: rect.x as _,
-                            y: rect.y as _,
-                        },
-                        extent: vk::Extent2D {
-                            width: rect.w as _,
-                            height: rect.h as _,
-                        },
-                    },
+                    rect: conv::map_rect(rect.borrow()),
                 }
             })
             .collect();
@@ -503,20 +484,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn set_viewports<T>(&mut self, viewports: T)
     where
         T: IntoIterator,
-        T::Item: Borrow<com::Viewport>,
+        T::Item: Borrow<pso::Viewport>,
     {
         let viewports: SmallVec<[vk::Viewport; 16]> = viewports
             .into_iter()
             .map(|viewport| {
-                let viewport = viewport.borrow();
-                vk::Viewport {
-                    x: viewport.rect.x as f32,
-                    y: viewport.rect.y as f32,
-                    width: viewport.rect.w as f32,
-                    height: viewport.rect.h as f32,
-                    min_depth: viewport.depth.start,
-                    max_depth: viewport.depth.end,
-                }
+                conv::map_viewport(viewport.borrow())
             })
             .collect();
 
@@ -528,22 +501,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn set_scissors<T>(&mut self, scissors: T)
     where
         T: IntoIterator,
-        T::Item: Borrow<com::Rect>,
+        T::Item: Borrow<pso::Rect>,
     {
         let scissors: SmallVec<[vk::Rect2D; 16]> = scissors
             .into_iter()
             .map(|scissor| {
-                let scissor = scissor.borrow();
-                vk::Rect2D {
-                    offset: vk::Offset2D {
-                        x: scissor.x as i32,
-                        y: scissor.y as i32,
-                    },
-                    extent: vk::Extent2D {
-                        width: scissor.w as u32,
-                        height: scissor.h as u32,
-                    },
-                }
+                conv::map_rect(scissor.borrow())
             })
             .collect();
 
@@ -553,7 +516,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn set_stencil_reference(
-        &mut self, front: com::StencilValue, back: com::StencilValue
+        &mut self, front: pso::StencilValue, back: pso::StencilValue
     ) {
         unsafe {
             if front == back {
@@ -579,7 +542,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_blend_constants(&mut self, color: com::ColorValue) {
+    fn set_blend_constants(&mut self, color: pso::ColorValue) {
         unsafe {
             self.device.0.cmd_set_blend_constants(self.raw, color);
         }

@@ -10,7 +10,10 @@ use hal::pass::{AttachmentOps, AttachmentLoadOp, AttachmentStoreOp};
 
 use {Backend, Device, Primitive, Supports, Transfer, Graphics, Encoder};
 
-pub use hal::pso::{DescriptorBinding, DescriptorArrayIndex, Rasterizer, CreationError, InstanceRate};
+pub use hal::pso::{
+    ColorValue, DepthValue, StencilValue, Rect, Viewport,
+    DescriptorBinding, DescriptorArrayIndex, Rasterizer, CreationError, InstanceRate,
+};
 
 #[derive(Debug)]
 pub struct RawDescriptorSet<B: Backend> {

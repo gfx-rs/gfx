@@ -63,6 +63,7 @@ pub struct GraphicsPipeline {
     pub(crate) primitive_type: MTLPrimitiveType,
     pub(crate) attribute_buffer_index: u32,
     pub(crate) depth_stencil_state: Option<metal::DepthStencilState>,
+    pub(crate) baked_states: pso::BakedStates,
 }
 
 unsafe impl Send for GraphicsPipeline {}

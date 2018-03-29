@@ -5,15 +5,50 @@ use super::{BasePipeline, EntryPoint, PipelineCreationFlags};
 use super::input_assembler::{AttributeDesc, InputAssemblerDesc, VertexBufferDesc};
 use super::output_merger::{ColorBlendDesc, DepthStencilDesc};
 
+use std::ops::Range;
+
+
+/// A simple struct describing a rect with integer coordinates.
+#[derive(Clone, Copy, Debug, Hash, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Rect {
+    /// X position.
+    pub x: u16,
+    /// Y position.
+    pub y: u16,
+    /// Width.
+    pub w: u16,
+    /// Height.
+    pub h: u16,
+}
+
+/// A viewport, generally equating to a window on a display.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Viewport {
+    /// The viewport boundaries.
+    pub rect: Rect,
+    /// The viewport depth limits.
+    pub depth: Range<f32>,
+}
+
+/// A single RGBA float color.
+pub type ColorValue = [f32; 4];
+/// A single depth value from a depth buffer.
+pub type DepthValue = f32;
+/// A single value from a stencil buffer.
+pub type StencilValue = u32;
+
+
 /// A complete set of shaders to build a graphics pipeline.
 ///
 /// All except the vertex shader are optional; omitting them
 /// passes through the inputs without change.
-/// 
-/// If a fragment shader is omitted, the results of fragment 
-/// processing are undefined. Specifically, any fragment color 
-/// outputs are considered to have undefined values, and the 
-/// fragment depth is considered to be unmodified. This can 
+///
+/// If a fragment shader is omitted, the results of fragment
+/// processing are undefined. Specifically, any fragment color
+/// outputs are considered to have undefined values, and the
+/// fragment depth is considered to be unmodified. This can
 /// be useful for depth-only rendering.
 #[derive(Clone, Debug)]
 pub struct GraphicsShaderSet<'a, B: Backend> {
@@ -36,6 +71,21 @@ pub struct GraphicsShaderSet<'a, B: Backend> {
     pub fragment: Option<EntryPoint<'a, B>>,
 }
 
+/// Baked-in pipeline states.
+#[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct BakedStates {
+    /// Static viewport. TODO: multiple viewports
+    pub viewport: Option<Viewport>,
+    /// Static scissor. TODO: multiple scissors
+    pub scissor: Option<Rect>,
+    /// Static blend constant color.
+    pub blend_color: Option<ColorValue>,
+    //pub stencil_read: Option<Stencil>,
+    //pub stencil_write: Option<Stencil>,
+    //pub stencil_ref: Option<Stencil>,
+}
+
 /// A description of all the settings that can be altered
 /// when creating a graphics pipeline.
 #[derive(Debug)]
@@ -55,6 +105,8 @@ pub struct GraphicsPipelineDesc<'a, B: Backend> {
     pub blender: BlendDesc,
     /// Depth stencil (DSV)
     pub depth_stencil: Option<DepthStencilDesc>,
+    /// Static pipeline states.
+    pub baked_states: BakedStates,
     /// Pipeline layout.
     pub layout: &'a B::PipelineLayout,
     /// Subpass in which the pipeline can be executed.
@@ -83,6 +135,7 @@ impl<'a, B: Backend> GraphicsPipelineDesc<'a, B> {
             input_assembler: InputAssemblerDesc::new(primitive),
             blender: BlendDesc::default(),
             depth_stencil: None,
+            baked_states: BakedStates::default(),
             layout,
             subpass,
             flags: PipelineCreationFlags::empty(),
@@ -129,9 +182,9 @@ pub enum FrontFace {
     CounterClockwise,
 }
 
-/// A depth bias allows changing the produced depth values 
-/// for fragments slightly but consistently. This permits 
-/// drawing of multiple polygons in the same plane without 
+/// A depth bias allows changing the produced depth values
+/// for fragments slightly but consistently. This permits
+/// drawing of multiple polygons in the same plane without
 /// Z-fighting, such as when trying to draw shadows on a wall.
 ///
 /// For details of the algorithm and equations, see

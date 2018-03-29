@@ -79,7 +79,7 @@ pub struct RenderPass {
     pub(crate) post_barriers: Vec<BarrierDesc>,
 }
 
-#[derive(Debug, Hash)]
+#[derive(Debug)]
 pub struct GraphicsPipeline {
     pub(crate) raw: *mut d3d12::ID3D12PipelineState,
     pub(crate) signature: *mut d3d12::ID3D12RootSignature, // weak-ptr, owned by `PipelineLayout`
@@ -87,11 +87,12 @@ pub struct GraphicsPipeline {
     pub(crate) topology: d3d12::D3D12_PRIMITIVE_TOPOLOGY,
     pub(crate) constants: Vec<RootConstant>,
     pub(crate) vertex_strides: [UINT; MAX_VERTEX_BUFFERS],
+    pub(crate) baked_states: pso::BakedStates,
 }
 unsafe impl Send for GraphicsPipeline { }
 unsafe impl Sync for GraphicsPipeline { }
 
-#[derive(Debug, Hash)]
+#[derive(Debug)]
 pub struct ComputePipeline {
     pub(crate) raw: *mut d3d12::ID3D12PipelineState,
     pub(crate) signature: *mut d3d12::ID3D12RootSignature, // weak-ptr, owned by `PipelineLayout`

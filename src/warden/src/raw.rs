@@ -159,8 +159,8 @@ pub enum DrawCommand {
         base_vertex: hal::VertexOffset,
         instances: Range<hal::InstanceCount>,
     },
-    SetViewports(Vec<hal::command::Viewport>),
-    SetScissors(Vec<hal::command::Rect>),
+    SetViewports(Vec<hal::pso::Viewport>),
+    SetScissors(Vec<hal::pso::Rect>),
 }
 
 #[derive(Debug, Deserialize)]

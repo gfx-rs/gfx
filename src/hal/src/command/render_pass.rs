@@ -6,7 +6,6 @@ use {buffer, pso};
 use {Backend, IndexCount, InstanceCount, VertexCount, VertexOffset};
 use queue::{Supports, Graphics};
 use super::{
-    ColorValue, StencilValue, Rect, Viewport,
     AttachmentClear, ClearValue, CommandBuffer, RawCommandBuffer,
     Shot, Level, Primary, Secondary, Submittable, Submit
 };
@@ -30,13 +29,13 @@ pub enum SubpassContents {
 pub struct RenderSubpassCommon<'a, B: Backend>(pub(crate) &'a mut B::CommandBuffer);
 
 impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
-    /// 
+    ///
     pub fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
     where
         T: IntoIterator,
         T::Item: Borrow<AttachmentClear>,
         U: IntoIterator,
-        U::Item: Borrow<Rect>,
+        U::Item: Borrow<pso::Rect>,
     {
         self.0.clear_attachments(clears, rects)
     }
@@ -45,7 +44,7 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
     pub fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {
         self.0.draw(vertices, instances)
     }
-    
+
     ///
     pub fn draw_indexed(&mut self, indices: Range<IndexCount>, base_vertex: VertexOffset, instances: Range<InstanceCount>) {
         self.0.draw_indexed(indices, base_vertex, instances)
@@ -59,22 +58,22 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
         self.0.draw_indexed_indirect(buffer, offset, draw_count, stride)
     }
 
-    /// 
+    ///
     pub fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<B>) {
         self.0.bind_index_buffer(ibv)
     }
 
-    /// 
+    ///
     pub fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<B>) {
         self.0.bind_vertex_buffers(vbs);
     }
 
-    /// 
+    ///
     pub fn bind_graphics_pipeline(&mut self, pipeline: &B::GraphicsPipeline) {
         self.0.bind_graphics_pipeline(pipeline)
     }
 
-    /// 
+    ///
     pub fn bind_graphics_descriptor_sets<T>(
         &mut self,
         layout: &B::PipelineLayout,
@@ -87,35 +86,35 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
         self.0.bind_graphics_descriptor_sets(layout, first_set, sets)
     }
 
-    /// 
+    ///
     pub fn set_viewports<T>(&mut self, viewports: T)
     where
         T: IntoIterator,
-        T::Item: Borrow<Viewport>,
+        T::Item: Borrow<pso::Viewport>,
     {
         self.0.set_viewports(viewports)
     }
 
-    /// 
+    ///
     pub fn set_scissors<T>(&mut self, scissors: T)
     where
         T: IntoIterator,
-        T::Item: Borrow<Rect>,
+        T::Item: Borrow<pso::Rect>,
     {
         self.0.set_scissors(scissors)
     }
 
-    /// 
-    pub fn set_stencil_reference(&mut self, front: StencilValue, back: StencilValue) {
+    ///
+    pub fn set_stencil_reference(&mut self, front: pso::StencilValue, back: pso::StencilValue) {
         self.0.set_stencil_reference(front, back)
     }
 
-    /// 
-    pub fn set_blend_constants(&mut self, cv: ColorValue) {
+    ///
+    pub fn set_blend_constants(&mut self, cv: pso::ColorValue) {
         self.0.set_blend_constants(cv)
     }
 
-    /// 
+    ///
     pub fn push_graphics_constants(&mut self, layout: &B::PipelineLayout, stages: pso::ShaderStageFlags, offset: u32, constants: &[u32]) {
         self.0.push_graphics_constants(layout, stages, offset, constants);
     }
@@ -141,7 +140,7 @@ impl<'a, B: Backend, L: Level> RenderPassInlineEncoder<'a, B, L> {
         cmd_buffer: &'a mut CommandBuffer<B, C, S, L>,
         render_pass: &B::RenderPass,
         frame_buffer: &B::Framebuffer,
-        render_area: Rect,
+        render_area: pso::Rect,
         clear_values: T,
     ) -> Self
     where
@@ -209,7 +208,7 @@ impl<'a, B: Backend> RenderPassSecondaryEncoder<'a, B> {
         cmd_buffer: &'a mut CommandBuffer<B, C, S, Primary>,
         render_pass: &B::RenderPass,
         frame_buffer: &B::Framebuffer,
-        render_area: Rect,
+        render_area: pso::Rect,
         clear_values: T,
     ) -> Self
     where

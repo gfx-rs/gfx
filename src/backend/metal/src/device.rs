@@ -737,6 +737,7 @@ impl hal::Device<Backend> for Device {
                 primitive_type,
                 attribute_buffer_index: pipeline_layout.attribute_buffer_index,
                 depth_stencil_state,
+                baked_states: pipeline_desc.baked_states.clone(),
             })
         }
     }

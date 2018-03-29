@@ -2,7 +2,6 @@
 
 use hal::{ColorSlot};
 use hal::pso;
-use hal::command::{ColorValue, StencilValue};
 use gl;
 use smallvec::SmallVec;
 
@@ -111,8 +110,13 @@ fn map_operation(op: pso::StencilOp) -> gl::types::GLenum {
     }
 }
 
-pub fn bind_stencil(gl: &gl::Gl, stencil: &pso::StencilTest, refs: (StencilValue, StencilValue), cull: Option<pso::CullFace>) {
-    fn bind_side(gl: &gl::Gl, face: gl::types::GLenum, side: &pso::StencilFace, ref_value: StencilValue) { unsafe {
+pub fn bind_stencil(
+    gl: &gl::Gl,
+    stencil: &pso::StencilTest,
+    refs: (pso::StencilValue, pso::StencilValue),
+    cull: Option<pso::CullFace>,
+) {
+    fn bind_side(gl: &gl::Gl, face: gl::types::GLenum, side: &pso::StencilFace, ref_value: pso::StencilValue) { unsafe {
         gl.StencilFuncSeparate(face, map_comparison(side.fun), ref_value as _, side.mask_read as _);
         gl.StencilMaskSeparate(face, side.mask_write as _);
         gl.StencilOpSeparate(face, map_operation(side.op_fail), map_operation(side.op_depth_fail), map_operation(side.op_pass));
@@ -221,7 +225,7 @@ pub fn unlock_color_mask(gl: &gl::Gl) {
     unsafe { gl.ColorMask(gl::TRUE, gl::TRUE, gl::TRUE, gl::TRUE) };
 }
 
-pub fn set_blend_color(gl: &gl::Gl, color: ColorValue) {
+pub fn set_blend_color(gl: &gl::Gl, color: pso::ColorValue) {
     unsafe {
         gl.BlendColor(color[0], color[1], color[2], color[3])
     };

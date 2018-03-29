@@ -640,6 +640,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             input_assembler: input_assembler.clone(),
                             blender: blender.clone(),
                             depth_stencil: depth_stencil.clone(),
+                            baked_states: pso::BakedStates::default(), //TODO
                             layout: &resources.pipeline_layouts[layout],
                             subpass: hal::pass::Subpass {
                                 main_pass: &resources.render_passes[&subpass.parent].handle,
@@ -722,7 +723,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                 raw::Job::Graphics { ref framebuffer, ref pass, ref clear_values } => {
                     let (ref fb, extent) = resources.framebuffers[framebuffer];
                     let rp = &resources.render_passes[&pass.0];
-                    let rect = c::Rect {
+                    let rect = pso::Rect {
                         x: 0,
                         y: 0,
                         w: extent.width as _,
@@ -730,7 +731,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                     };
                     let mut encoder = command_buf.begin_render_pass_inline(&rp.handle, fb, rect, clear_values);
                     encoder.set_scissors(Some(rect));
-                    encoder.set_viewports(Some(c::Viewport {
+                    encoder.set_viewports(Some(pso::Viewport {
                         rect,
                         depth: 0.0 .. 1.0,
                     }));

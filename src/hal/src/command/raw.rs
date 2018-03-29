@@ -8,7 +8,6 @@ use image::{Filter, ImageLayout, SubresourceRange};
 use memory::{Barrier, Dependencies};
 use query::{Query, QueryControl, QueryId};
 use super::{
-    ColorValue, StencilValue, Rect, Viewport,
     AttachmentClear, BufferCopy, BufferImageCopy,
     ClearColor, ClearDepthStencil, ClearValue,
     ImageBlit, ImageCopy, ImageResolve, SubpassContents,
@@ -182,7 +181,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
         T: IntoIterator,
         T::Item: Borrow<AttachmentClear>,
         U: IntoIterator,
-        U::Item: Borrow<Rect>;
+        U::Item: Borrow<pso::Rect>;
 
     /// "Resolves" a multisampled image, converting it into a non-multisampled
     /// image. Takes an iterator of regions to apply the resolution to.
@@ -238,7 +237,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn set_viewports<T>(&mut self, viewports: T)
     where
         T: IntoIterator,
-        T::Item: Borrow<Viewport>;
+        T::Item: Borrow<pso::Viewport>;
 
     /// Set the scissor rectangles for the rasterizer.
     ///
@@ -261,22 +260,22 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn set_scissors<T>(&mut self, rects: T)
     where
         T: IntoIterator,
-        T::Item: Borrow<Rect>;
+        T::Item: Borrow<pso::Rect>;
 
     /// Sets the stencil reference value for comparison operations and store operations.
     /// Will be used on the LHS of stencil compare ops and as store value when the
     /// store op is Reference.
-    fn set_stencil_reference(&mut self, front: StencilValue, back: StencilValue);
+    fn set_stencil_reference(&mut self, front: pso::StencilValue, back: pso::StencilValue);
 
     /// Set the blend constant values dynamically.
-    fn set_blend_constants(&mut self, ColorValue);
+    fn set_blend_constants(&mut self, pso::ColorValue);
 
     /// Just does some type conversions and calls `begin_render_pass_raw`.
     fn begin_render_pass<T>(
         &mut self,
         render_pass: &B::RenderPass,
         framebuffer: &B::Framebuffer,
-        render_area: Rect,
+        render_area: pso::Rect,
         clear_values: T,
         first_subpass: SubpassContents,
     ) where
@@ -318,7 +317,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
         &mut self,
         render_pass: &B::RenderPass,
         framebuffer: &B::Framebuffer,
-        render_area: Rect,
+        render_area: pso::Rect,
         clear_values: T,
         first_subpass: SubpassContents,
     ) where

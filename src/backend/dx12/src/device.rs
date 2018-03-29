@@ -1454,6 +1454,7 @@ impl d::Device<B> for Device {
                 topology,
                 constants: desc.layout.root_constants.clone(),
                 vertex_strides,
+                baked_states: desc.baked_states.clone(),
             })
         } else {
             Err(pso::CreationError::Other)
