@@ -95,6 +95,19 @@ pub enum ShaderError {
 #[derive(Clone, Debug, PartialEq)]
 pub struct FramebufferError;
 
+impl fmt::Display for FramebufferError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.description())
+    }
+}
+
+impl Error for FramebufferError {
+    fn description(&self) -> &str {
+        "Error creating framebuffer"
+    }
+}
+
+
 /// # Overview
 ///
 /// A `Device` is responsible for creating and managing resources for the physical device
