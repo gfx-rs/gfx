@@ -336,28 +336,28 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         vk::ClearAttachment {
                             aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
                             color_attachment: index as _,
-                            clear_value: vk::ClearValue::new_color(conv::map_clear_color(cv)),
+                            clear_value: vk::ClearValue { color: conv::map_clear_color(cv) },
                         }
                     }
                     com::AttachmentClear::Depth(v) => {
                         vk::ClearAttachment {
                             aspect_mask: vk::IMAGE_ASPECT_DEPTH_BIT,
                             color_attachment: 0,
-                            clear_value: vk::ClearValue::new_depth_stencil(conv::map_clear_depth(v)),
+                            clear_value: vk::ClearValue { depth: conv::map_clear_depth(v) },
                         }
                     }
                     com::AttachmentClear::Stencil(v) => {
                         vk::ClearAttachment {
                             aspect_mask: vk::IMAGE_ASPECT_STENCIL_BIT,
                             color_attachment: 0,
-                            clear_value: vk::ClearValue::new_depth_stencil(conv::map_clear_stencil(v)),
+                            clear_value: vk::ClearValue { depth: conv::map_clear_stencil(v) },
                         }
                     }
                     com::AttachmentClear::DepthStencil(cv) => {
                         vk::ClearAttachment {
                             aspect_mask: vk::IMAGE_ASPECT_DEPTH_BIT | vk::IMAGE_ASPECT_STENCIL_BIT,
                             color_attachment: 0,
-                            clear_value: vk::ClearValue::new_depth_stencil(conv::map_clear_depth_stencil(cv)),
+                            clear_value: vk::ClearValue { depth: conv::map_clear_depth_stencil(cv) },
                         }
                     }
                 }
