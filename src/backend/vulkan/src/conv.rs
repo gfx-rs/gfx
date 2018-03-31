@@ -164,47 +164,8 @@ pub fn map_attachment_store_op(op: pass::AttachmentStoreOp) -> vk::AttachmentSto
 }
 
 pub fn map_buffer_access(access: buffer::Access) -> vk::AccessFlags {
-    use self::buffer::Access;
-    let mut flags = vk::AccessFlags::empty();
-
-    if access.contains(Access::TRANSFER_READ) {
-        flags |= vk::ACCESS_TRANSFER_READ_BIT;
-    }
-    if access.contains(Access::TRANSFER_WRITE) {
-        flags |= vk::ACCESS_TRANSFER_WRITE_BIT;
-    }
-    if access.contains(Access::INDEX_BUFFER_READ) {
-        flags |= vk::ACCESS_INDEX_READ_BIT;
-    }
-    if access.contains(Access::VERTEX_BUFFER_READ) {
-        flags |= vk::ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
-    }
-    if access.contains(Access::CONSTANT_BUFFER_READ) {
-        flags |= vk::ACCESS_UNIFORM_READ_BIT;
-    }
-    if access.contains(Access::INDIRECT_COMMAND_READ) {
-        flags |= vk::ACCESS_INDIRECT_COMMAND_READ_BIT;
-    }
-    if access.contains(Access::SHADER_READ) {
-        flags |= vk::ACCESS_SHADER_READ_BIT;
-    }
-    if access.contains(Access::SHADER_WRITE) {
-        flags |= vk::ACCESS_SHADER_WRITE_BIT;
-    }
-    if access.contains(Access::HOST_READ) {
-        flags |= vk::ACCESS_HOST_READ_BIT;
-    }
-    if access.contains(Access::HOST_WRITE) {
-        flags |= vk::ACCESS_HOST_WRITE_BIT;
-    }
-    if access.contains(Access::MEMORY_READ) {
-        flags |= vk::ACCESS_MEMORY_READ_BIT;
-    }
-    if access.contains(Access::MEMORY_WRITE) {
-        flags |= vk::ACCESS_MEMORY_WRITE_BIT;
-    }
-
-    flags
+    // Safe due to equivalence of HAL values and Vulkan values
+    unsafe { mem::transmute(access) }
 }
 
 pub fn map_image_access(access: image::Access) -> vk::AccessFlags {

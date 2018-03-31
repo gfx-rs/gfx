@@ -104,31 +104,31 @@ impl Usage {
 bitflags!(
     /// Buffer state flags.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct Access: u16 {
+    pub struct Access: u32 {
         ///
-        const TRANSFER_READ          = 0x01;
+        const TRANSFER_READ          = 0x800;
         ///
-        const TRANSFER_WRITE         = 0x02;
+        const TRANSFER_WRITE         = 0x1000;
         ///
-        const INDEX_BUFFER_READ      = 0x10;
+        const INDEX_BUFFER_READ      = 0x02;
         ///
-        const VERTEX_BUFFER_READ     = 0x20;
+        const VERTEX_BUFFER_READ     = 0x04;
         ///
-        const CONSTANT_BUFFER_READ   = 0x40;
+        const CONSTANT_BUFFER_READ   = 0x08;
         ///
-        const INDIRECT_COMMAND_READ  = 0x80;
+        const INDIRECT_COMMAND_READ  = 0x01;
         ///
-        const SHADER_READ = 0x100;
+        const SHADER_READ = 0x20;
         ///
-        const SHADER_WRITE = 0x200;
+        const SHADER_WRITE = 0x40;
         ///
-        const HOST_READ = 0x400;
+        const HOST_READ = 0x2000;
         ///
-        const HOST_WRITE = 0x800;
+        const HOST_WRITE = 0x4000;
         ///
-        const MEMORY_READ = 0x1000;
+        const MEMORY_READ = 0x8000;
         ///
-        const MEMORY_WRITE = 0x2000;
+        const MEMORY_WRITE = 0x10000;
     }
 );
 
