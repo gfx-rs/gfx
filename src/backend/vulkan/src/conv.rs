@@ -74,18 +74,8 @@ pub fn map_image_layout(layout: image::ImageLayout) -> vk::ImageLayout {
 }
 
 pub fn map_image_aspects(aspects: format::Aspects) -> vk::ImageAspectFlags {
-    use self::format::Aspects;
-    let mut flags = vk::ImageAspectFlags::empty();
-    if aspects.contains(Aspects::COLOR) {
-        flags |= vk::IMAGE_ASPECT_COLOR_BIT;
-    }
-    if aspects.contains(Aspects::DEPTH) {
-        flags |= vk::IMAGE_ASPECT_DEPTH_BIT;
-    }
-    if aspects.contains(Aspects::STENCIL) {
-        flags |= vk::IMAGE_ASPECT_STENCIL_BIT;
-    }
-    flags
+    // Safe due to equivalence of HAL format values and Vulkan format values
+    unsafe { mem::transmute(aspects.bits() as u32) }
 }
 
 pub fn map_clear_color(value: command::ClearColor) -> vk::ClearColorValue {
