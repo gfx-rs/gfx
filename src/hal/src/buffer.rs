@@ -106,21 +106,21 @@ bitflags!(
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct Access: u32 {
         ///
-        const TRANSFER_READ          = 0x800;
+        const INDIRECT_COMMAND_READ = 0x1;
         ///
-        const TRANSFER_WRITE         = 0x1000;
+        const INDEX_BUFFER_READ = 0x2;
         ///
-        const INDEX_BUFFER_READ      = 0x02;
+        const VERTEX_BUFFER_READ = 0x4;
         ///
-        const VERTEX_BUFFER_READ     = 0x04;
-        ///
-        const CONSTANT_BUFFER_READ   = 0x08;
-        ///
-        const INDIRECT_COMMAND_READ  = 0x01;
+        const CONSTANT_BUFFER_READ = 0x8;
         ///
         const SHADER_READ = 0x20;
         ///
         const SHADER_WRITE = 0x40;
+        ///
+        const TRANSFER_READ = 0x800;
+        ///
+        const TRANSFER_WRITE = 0x1000;
         ///
         const HOST_READ = 0x2000;
         ///
