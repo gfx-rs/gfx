@@ -47,7 +47,7 @@ pub enum QueryType {
 bitflags!(
     /// Pipeline statistic flags
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct PipelineStatistic: u16 {
+    pub struct PipelineStatistic: u32 {
         ///
         const INPUT_ASSEMBLY_VERTICES = 0x1;
         ///
