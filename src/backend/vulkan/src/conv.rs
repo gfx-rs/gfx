@@ -179,38 +179,8 @@ pub fn map_pipeline_stage(stage: pso::PipelineStage) -> vk::PipelineStageFlags {
 }
 
 pub fn map_buffer_usage(usage: buffer::Usage) -> vk::BufferUsageFlags {
-    use self::buffer::Usage;
-    let mut flags = vk::BufferUsageFlags::empty();
-
-    if usage.contains(Usage::TRANSFER_SRC) {
-        flags |= vk::BUFFER_USAGE_TRANSFER_SRC_BIT;
-    }
-    if usage.contains(Usage::TRANSFER_DST) {
-        flags |= vk::BUFFER_USAGE_TRANSFER_DST_BIT;
-    }
-    if usage.contains(Usage::UNIFORM) {
-        flags |= vk::BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-    }
-    if usage.contains(Usage::STORAGE) {
-        flags |= vk::BUFFER_USAGE_STORAGE_BUFFER_BIT;
-    }
-    if usage.contains(Usage::UNIFORM_TEXEL) {
-        flags |= vk::BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
-    }
-    if usage.contains(Usage::STORAGE_TEXEL) {
-        flags |= vk::BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
-    }
-    if usage.contains(Usage::INDEX) {
-        flags |= vk::BUFFER_USAGE_INDEX_BUFFER_BIT;
-    }
-    if usage.contains(Usage::INDIRECT) {
-        flags |= vk::BUFFER_USAGE_INDIRECT_BUFFER_BIT;
-    }
-    if usage.contains(Usage::VERTEX) {
-        flags |= vk::BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    }
-
-    flags
+    // Safe due to equivalence of HAL values and Vulkan values
+    unsafe { mem::transmute(usage) }
 }
 
 pub fn map_image_usage(usage: image::Usage) -> vk::ImageUsageFlags {
