@@ -184,35 +184,8 @@ pub fn map_buffer_usage(usage: buffer::Usage) -> vk::BufferUsageFlags {
 }
 
 pub fn map_image_usage(usage: image::Usage) -> vk::ImageUsageFlags {
-    use self::image::Usage;
-    let mut flags = vk::ImageUsageFlags::empty();
-
-    if usage.contains(Usage::TRANSFER_SRC) {
-        flags |= vk::IMAGE_USAGE_TRANSFER_SRC_BIT;
-    }
-    if usage.contains(Usage::TRANSFER_DST) {
-        flags |= vk::IMAGE_USAGE_TRANSFER_DST_BIT;
-    }
-    if usage.contains(Usage::COLOR_ATTACHMENT) {
-        flags |= vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    }
-    if usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
-        flags |= vk::IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-    }
-    if usage.contains(Usage::STORAGE) {
-        flags |= vk::IMAGE_USAGE_STORAGE_BIT;
-    }
-    if usage.contains(Usage::SAMPLED) {
-        flags |= vk::IMAGE_USAGE_SAMPLED_BIT;
-    }
-    if usage.contains(Usage::TRANSIENT_ATTACHMENT) {
-        flags |= vk::IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
-    }
-    if usage.contains(Usage::INPUT_ATTACHMENT) {
-        flags |= vk::IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
-    }
-
-    flags
+    // Safe due to equivalence of HAL values and Vulkan values
+    unsafe { mem::transmute(usage) }
 }
 
 pub fn map_descriptor_type(ty: pso::DescriptorType) -> vk::DescriptorType {
