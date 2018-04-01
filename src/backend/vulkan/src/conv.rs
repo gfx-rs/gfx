@@ -194,34 +194,8 @@ pub fn map_descriptor_type(ty: pso::DescriptorType) -> vk::DescriptorType {
 }
 
 pub fn map_stage_flags(stages: pso::ShaderStageFlags) -> vk::ShaderStageFlags {
-    use self::pso::ShaderStageFlags;
-    let mut flags = vk::ShaderStageFlags::empty();
-
-    if stages.contains(ShaderStageFlags::VERTEX) {
-        flags |= vk::SHADER_STAGE_VERTEX_BIT;
-    }
-
-    if stages.contains(ShaderStageFlags::HULL) {
-        flags |= vk::SHADER_STAGE_TESSELLATION_CONTROL_BIT;
-    }
-
-    if stages.contains(ShaderStageFlags::DOMAIN) {
-        flags |= vk::SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
-    }
-
-    if stages.contains(ShaderStageFlags::GEOMETRY) {
-        flags |= vk::SHADER_STAGE_GEOMETRY_BIT;
-    }
-
-    if stages.contains(ShaderStageFlags::FRAGMENT) {
-        flags |= vk::SHADER_STAGE_FRAGMENT_BIT;
-    }
-
-    if stages.contains(ShaderStageFlags::COMPUTE) {
-        flags |= vk::SHADER_STAGE_COMPUTE_BIT;
-    }
-
-    flags
+    // Safe due to equivalence of HAL values and Vulkan values
+    unsafe { mem::transmute(stages) }
 }
 
 
