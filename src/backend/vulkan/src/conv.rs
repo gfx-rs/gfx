@@ -174,56 +174,8 @@ pub fn map_image_access(access: image::Access) -> vk::AccessFlags {
 }
 
 pub fn map_pipeline_stage(stage: pso::PipelineStage) -> vk::PipelineStageFlags {
-    use self::pso::PipelineStage;
-    let mut flags = vk::PipelineStageFlags::empty();
-
-    if stage.contains(PipelineStage::TOP_OF_PIPE) {
-        flags |= vk::PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-    }
-    if stage.contains(PipelineStage::DRAW_INDIRECT) {
-        flags |= vk::PIPELINE_STAGE_DRAW_INDIRECT_BIT;
-    }
-    if stage.contains(PipelineStage::VERTEX_INPUT) {
-        flags |= vk::PIPELINE_STAGE_VERTEX_INPUT_BIT;
-    }
-    if stage.contains(PipelineStage::VERTEX_SHADER) {
-        flags |= vk::PIPELINE_STAGE_VERTEX_SHADER_BIT;
-    }
-    if stage.contains(PipelineStage::HULL_SHADER) {
-        flags |= vk::PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT;
-    }
-    if stage.contains(PipelineStage::DOMAIN_SHADER) {
-        flags |= vk::PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT;
-    }
-    if stage.contains(PipelineStage::GEOMETRY_SHADER) {
-        flags |= vk::PIPELINE_STAGE_GEOMETRY_SHADER_BIT;
-    }
-    if stage.contains(PipelineStage::FRAGMENT_SHADER) {
-        flags |= vk::PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    }
-    if stage.contains(PipelineStage::EARLY_FRAGMENT_TESTS) {
-        flags |= vk::PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    }
-    if stage.contains(PipelineStage::LATE_FRAGMENT_TESTS) {
-        flags |= vk::PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-    }
-    if stage.contains(PipelineStage::COLOR_ATTACHMENT_OUTPUT) {
-        flags |= vk::PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    }
-    if stage.contains(PipelineStage::COMPUTE_SHADER) {
-        flags |= vk::PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-    }
-    if stage.contains(PipelineStage::TRANSFER) {
-        flags |= vk::PIPELINE_STAGE_TRANSFER_BIT;
-    }
-    if stage.contains(PipelineStage::BOTTOM_OF_PIPE) {
-        flags |= vk::PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    }
-    if stage.contains(PipelineStage::HOST) {
-        flags |= vk::PIPELINE_STAGE_HOST_BIT;
-    }
-
-    flags
+    // Safe due to equivalence of HAL values and Vulkan values
+    unsafe { mem::transmute(stage) }
 }
 
 pub fn map_buffer_usage(usage: buffer::Usage) -> vk::BufferUsageFlags {
