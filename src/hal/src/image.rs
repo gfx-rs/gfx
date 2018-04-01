@@ -591,36 +591,36 @@ pub enum ImageLayout {
 bitflags!(
     /// Bitflags to describe how memory in an image or buffer can be accessed.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct Access: u16 {
-        /// Read state but can only be combined with `COLOR_ATTACHMENT_WRITE`.
-        const COLOR_ATTACHMENT_READ = 0x1;
-        /// Write-only state but can be combined with `COLOR_ATTACHMENT_READ`.
-        const COLOR_ATTACHMENT_WRITE = 0x2;
-        /// Read access to the buffer in a copy operation.
-        const TRANSFER_READ = 0x4;
-        /// Write access to the buffer in a copy operation.
-        const TRANSFER_WRITE = 0x8;
+    pub struct Access: u32 {
+        /// Read access to an input attachment from within a fragment shader.
+        const INPUT_ATTACHMENT_READ = 0x10;
         /// Read-only state for SRV access, or combine with `SHADER_WRITE` to have r/w access to UAV.
-        const SHADER_READ = 0x10;
+        const SHADER_READ = 0x20;
         /// Writeable state for UAV access.
         /// Combine with `SHADER_READ` to have r/w access to UAV.
-        const SHADER_WRITE = 0x20;
+        const SHADER_WRITE = 0x40;
+        /// Read state but can only be combined with `COLOR_ATTACHMENT_WRITE`.
+        const COLOR_ATTACHMENT_READ = 0x80;
+        /// Write-only state but can be combined with `COLOR_ATTACHMENT_READ`.
+        const COLOR_ATTACHMENT_WRITE = 0x100;
         /// Read access to a depth/stencil attachment in a depth or stencil operation.
-        const DEPTH_STENCIL_ATTACHMENT_READ = 0x40;
+        const DEPTH_STENCIL_ATTACHMENT_READ = 0x200;
         /// Write access to a depth/stencil attachment in a depth or stencil operation.
-        const DEPTH_STENCIL_ATTACHMENT_WRITE = 0x80;
+        const DEPTH_STENCIL_ATTACHMENT_WRITE = 0x400;
+        /// Read access to the buffer in a copy operation.
+        const TRANSFER_READ = 0x800;
+        /// Write access to the buffer in a copy operation.
+        const TRANSFER_WRITE = 0x1000;
         /// Read access for raw memory to be accessed by the host system (ie, CPU).
-        const HOST_READ = 0x100;
+        const HOST_READ = 0x2000;
         /// Write access for raw memory to be accessed by the host system.
-        const HOST_WRITE = 0x200;
+        const HOST_WRITE = 0x4000;
         /// Read access for memory to be accessed by a non-specific entity.  This may
         /// be the host system, or it may be something undefined or specified by an
         /// extension.
-        const MEMORY_READ = 0x400;
+        const MEMORY_READ = 0x8000;
         /// Write access for memory to be accessed by a non-specific entity.
-        const MEMORY_WRITE = 0x800;
-        /// Read access to an input attachment from within a fragment shader.
-        const INPUT_ATTACHMENT_READ = 0x1000;
+        const MEMORY_WRITE = 0x10000;
     }
 );
 

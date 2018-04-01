@@ -169,50 +169,8 @@ pub fn map_buffer_access(access: buffer::Access) -> vk::AccessFlags {
 }
 
 pub fn map_image_access(access: image::Access) -> vk::AccessFlags {
-    use self::image::Access;
-    let mut flags = vk::AccessFlags::empty();
-
-    if access.contains(Access::COLOR_ATTACHMENT_READ) {
-        flags |= vk::ACCESS_COLOR_ATTACHMENT_READ_BIT;
-    }
-    if access.contains(Access::COLOR_ATTACHMENT_WRITE) {
-        flags |= vk::ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    }
-    if access.contains(Access::TRANSFER_READ) {
-        flags |= vk::ACCESS_TRANSFER_READ_BIT;
-    }
-    if access.contains(Access::TRANSFER_WRITE) {
-        flags |= vk::ACCESS_TRANSFER_WRITE_BIT;
-    }
-    if access.contains(Access::SHADER_READ) {
-        flags |= vk::ACCESS_SHADER_READ_BIT;
-    }
-    if access.contains(Access::SHADER_WRITE) {
-        flags |= vk::ACCESS_SHADER_WRITE_BIT;
-    }
-    if access.contains(Access::DEPTH_STENCIL_ATTACHMENT_READ) {
-        flags |= vk::ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
-    }
-    if access.contains(Access::DEPTH_STENCIL_ATTACHMENT_WRITE) {
-        flags |= vk::ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-    }
-    if access.contains(Access::HOST_READ) {
-        flags |= vk::ACCESS_HOST_READ_BIT;
-    }
-    if access.contains(Access::HOST_WRITE) {
-        flags |= vk::ACCESS_HOST_WRITE_BIT;
-    }
-    if access.contains(Access::MEMORY_READ) {
-        flags |= vk::ACCESS_MEMORY_READ_BIT;
-    }
-    if access.contains(Access::MEMORY_WRITE) {
-        flags |= vk::ACCESS_MEMORY_WRITE_BIT;
-    }
-    if access.contains(Access::INPUT_ATTACHMENT_READ) {
-        flags |= vk::ACCESS_INPUT_ATTACHMENT_READ_BIT;
-    }
-
-    flags
+    // Safe due to equivalence of HAL values and Vulkan values
+    unsafe { mem::transmute(access) }
 }
 
 pub fn map_pipeline_stage(stage: pso::PipelineStage) -> vk::PipelineStageFlags {
