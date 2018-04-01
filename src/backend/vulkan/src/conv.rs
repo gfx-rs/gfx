@@ -395,22 +395,8 @@ pub fn map_image_features(features: vk::FormatFeatureFlags) -> format::ImageFeat
 }
 
 pub fn map_buffer_features(features: vk::FormatFeatureFlags) -> format::BufferFeature {
-    let mut flags = format::BufferFeature::empty();
-
-    if features.intersects(vk::FORMAT_FEATURE_UNIFORM_TEXEL_BUFFER_BIT) {
-        flags |= format::BufferFeature::UNIFORM_TEXEL;
-    }
-    if features.intersects(vk::FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_BIT) {
-        flags |= format::BufferFeature::STORAGE_TEXEL;
-    }
-    if features.intersects(vk::FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_ATOMIC_BIT) {
-        flags |= format::BufferFeature::STORAGE_TEXEL_ATOMIC;
-    }
-    if features.intersects(vk::FORMAT_FEATURE_VERTEX_BUFFER_BIT) {
-        flags |= format::BufferFeature::VERTEX;
-    }
-
-    flags
+    // Safe due to equivalence of HAL values and Vulkan values
+    unsafe { mem::transmute(features) }
 }
 
 pub fn map_memory_ranges<'a, I, R>(ranges: I) -> Vec<vk::MappedMemoryRange>

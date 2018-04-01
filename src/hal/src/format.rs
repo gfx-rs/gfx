@@ -159,15 +159,15 @@ bitflags!(
 bitflags!(
     /// Buffer feature flags.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct BufferFeature: u16 {
+    pub struct BufferFeature: u32 {
         /// Buffer view can be used as uniform texel buffer.
-        const UNIFORM_TEXEL = 0x1;
+        const UNIFORM_TEXEL = 0x8;
         /// Buffer view can be used as storage texel buffer.
-        const STORAGE_TEXEL = 0x2;
+        const STORAGE_TEXEL = 0x10;
         /// Buffer view can be used as storage texel buffer (with atomics).
-        const STORAGE_TEXEL_ATOMIC = 0x4;
+        const STORAGE_TEXEL_ATOMIC = 0x20;
         /// Image view can be used as vertex buffer.
-        const VERTEX = 0x8;
+        const VERTEX = 0x40;
     }
 );
 
