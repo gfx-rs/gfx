@@ -1492,8 +1492,8 @@ impl d::Device<B> for Device {
         unsafe { self.raw.0.destroy_buffer(buffer.raw, None); }
     }
 
-    fn destroy_buffer_view(&self, _view: n::BufferView) {
-        unimplemented!()
+    fn destroy_buffer_view(&self, view: n::BufferView) {
+        unsafe { self.raw.0.destroy_buffer_view(view.raw, None); }
     }
 
     fn destroy_image(&self, image: n::Image) {
