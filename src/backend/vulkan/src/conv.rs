@@ -390,37 +390,8 @@ pub fn map_pipeline_statistics(
 }
 
 pub fn map_image_features(features: vk::FormatFeatureFlags) -> format::ImageFeature {
-    let mut flags = format::ImageFeature::empty();
-
-    if features.intersects(vk::FORMAT_FEATURE_SAMPLED_IMAGE_BIT) {
-        flags |= format::ImageFeature::SAMPLED;
-    }
-    if features.intersects(vk::FORMAT_FEATURE_STORAGE_IMAGE_BIT) {
-        flags |= format::ImageFeature::STORAGE;
-    }
-    if features.intersects(vk::FORMAT_FEATURE_STORAGE_IMAGE_ATOMIC_BIT) {
-        flags |= format::ImageFeature::STORAGE_ATOMIC;
-    }
-    if features.intersects(vk::FORMAT_FEATURE_COLOR_ATTACHMENT_BIT) {
-        flags |= format::ImageFeature::COLOR_ATTACHMENT;
-    }
-    if features.intersects(vk::FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT) {
-        flags |= format::ImageFeature::COLOR_ATTACHMENT_BLEND;
-    }
-    if features.intersects(vk::FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
-        flags |= format::ImageFeature::DEPTH_STENCIL_ATTACHMENT;
-    }
-    if features.intersects(vk::FORMAT_FEATURE_BLIT_SRC_BIT) {
-        flags |= format::ImageFeature::BLIT_SRC;
-    }
-    if features.intersects(vk::FORMAT_FEATURE_BLIT_DST_BIT) {
-        flags |= format::ImageFeature::BLIT_DST;
-    }
-    if features.intersects(vk::FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) {
-        flags |= format::ImageFeature::SAMPLED_LINEAR;
-    }
-
-    flags
+    // Safe due to equivalence of HAL values and Vulkan values
+    unsafe { mem::transmute(features) }
 }
 
 pub fn map_buffer_features(features: vk::FormatFeatureFlags) -> format::BufferFeature {
