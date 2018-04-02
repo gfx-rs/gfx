@@ -50,7 +50,7 @@ pub trait RawCommandQueue<B: Backend>: Any + Send + Sync {
     /// Unsafe because it's not checked that the queue can process the submitted command buffers.
     /// Trying to submit compute commands to a graphics queue will result in undefined behavior.
     /// Each queue implements safe wrappers according to their supported functionalities!
-    unsafe fn submit_raw<IC>(&mut self, RawSubmission<B, IC>, Option<&B::Fence>)
+    unsafe fn submit_raw<IC>(&mut self, submission: RawSubmission<B, IC>, fence: Option<&B::Fence>)
     where
         Self: Sized,
         IC: IntoIterator,

@@ -70,10 +70,10 @@ pub trait PhysicalDevice<B: Backend>: Any + Send + Sync {
     /// let gpu = physical_device.open(vec![(&family, vec![1.0; 1])]);
     /// # }
     /// ```
-    fn open(&self, Vec<(&B::QueueFamily, Vec<QueuePriority>)>) -> Result<Gpu<B>, DeviceCreationError>;
+    fn open(&self, families: Vec<(&B::QueueFamily, Vec<QueuePriority>)>) -> Result<Gpu<B>, DeviceCreationError>;
 
     /// Fetch details for a particular image format.
-    fn format_properties(&self, Option<format::Format>) -> format::Properties;
+    fn format_properties(&self, fmt: Option<format::Format>) -> format::Properties;
 
     /// Fetch details for the memory regions provided by the device.
     fn memory_properties(&self) -> MemoryProperties;

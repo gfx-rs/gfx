@@ -120,7 +120,7 @@ pub trait Surface<B: Backend>: Any + Send + Sync {
     /// ```no_run
     ///
     /// ```
-    fn supports_queue_family(&self, &B::QueueFamily) -> bool;
+    fn supports_queue_family(&self, family: &B::QueueFamily) -> bool;
 
     /// Query surface capabilities and formats for this physical device.
     ///
@@ -129,7 +129,7 @@ pub trait Surface<B: Backend>: Any + Send + Sync {
     /// Returns a tuple of surface capabilities and formats.
     /// If formats is `None` than the surface has no preferred format and the
     /// application may use any desired format.
-    fn capabilities_and_formats(&self, &B::PhysicalDevice) -> (SurfaceCapabilities, Option<Vec<Format>>);
+    fn capabilities_and_formats(&self, physical_device: &B::PhysicalDevice) -> (SurfaceCapabilities, Option<Vec<Format>>);
 }
 
 /// Handle to a backbuffer of the swapchain.

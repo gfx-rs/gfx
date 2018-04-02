@@ -140,12 +140,12 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     fn allocate_memory(&self, memory_type: MemoryTypeId, size: u64) -> Result<B::Memory, OutOfMemory>;
 
     ///
-    fn free_memory(&self, B::Memory);
+    fn free_memory(&self, memory: B::Memory);
 
     /// Creates a new command pool for a given queue family.
     ///
     /// *Note*: the family has to be associated by one as the `Gpu::queue_groups`.
-    fn create_command_pool(&self, QueueFamilyId, CommandPoolCreateFlags) -> B::CommandPool;
+    fn create_command_pool(&self, family: QueueFamilyId, create_flags: CommandPoolCreateFlags) -> B::CommandPool;
 
     /// Creates a strongly typed command pool wrapper.
     fn create_command_pool_typed<C>(
@@ -159,7 +159,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     }
 
     /// Destroys a command pool.
-    fn destroy_command_pool(&self, B::CommandPool);
+    fn destroy_command_pool(&self, pool: B::CommandPool);
 
     /// Creates a render pass with the given attachments and subpasses.
     fn create_render_pass<'a, IA, IS, ID>(
@@ -177,7 +177,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         ID::Item: Borrow<pass::SubpassDependency>;
 
     /// Destroys a `RenderPass`.
-    fn destroy_render_pass(&self, B::RenderPass);
+    fn destroy_render_pass(&self, rp: B::RenderPass);
 
     /// Create a new pipeline layout.
     ///
@@ -199,7 +199,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>;
 
     ///
-    fn destroy_pipeline_layout(&self, B::PipelineLayout);
+    fn destroy_pipeline_layout(&self, layout: B::PipelineLayout);
 
     /// Create a graphics pipeline.
     fn create_graphics_pipeline<'a>(
@@ -224,7 +224,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     ///
     /// The graphics pipeline shouldn't be destroyed before any submitted command buffer,
     /// which references the graphics pipeline, has finished execution.
-    fn destroy_graphics_pipeline(&self, B::GraphicsPipeline);
+    fn destroy_graphics_pipeline(&self, pipeline: B::GraphicsPipeline);
 
     /// Create a compute pipeline.
     fn create_compute_pipeline<'a>(
@@ -249,7 +249,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     ///
     /// The compute pipeline shouldn't be destroyed before any submitted command buffer,
     /// which references the compute pipeline, has finished execution.
-    fn destroy_compute_pipeline(&self, B::ComputePipeline);
+    fn destroy_compute_pipeline(&self, pipeline: B::ComputePipeline);
 
     ///
     fn create_framebuffer<I>(
@@ -266,7 +266,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     ///
     /// The framebuffer shouldn't be destroy before any submitted command buffer,
     /// which references the framebuffer, has finished execution.
-    fn destroy_framebuffer(&self, B::Framebuffer);
+    fn destroy_framebuffer(&self, buf: B::Framebuffer);
 
     ///
     fn create_shader_module(
@@ -274,17 +274,17 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     ) -> Result<B::ShaderModule, ShaderError>;
 
     ///
-    fn destroy_shader_module(&self, B::ShaderModule);
+    fn destroy_shader_module(&self, shader: B::ShaderModule);
 
     /// Create a new buffer (unbound).
     ///
     /// The created buffer won't have associated memory until `bind_buffer_memory` is called.
     fn create_buffer(
-        &self, size: u64, buffer::Usage,
+        &self, size: u64, usage: buffer::Usage,
     ) -> Result<B::UnboundBuffer, buffer::CreationError>;
 
     ///
-    fn get_buffer_requirements(&self, &B::UnboundBuffer) -> Requirements;
+    fn get_buffer_requirements(&self, buf: &B::UnboundBuffer) -> Requirements;
 
     /// Bind memory to a buffer.
     ///
@@ -292,7 +292,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     /// Be sure to check that there is enough memory available for the buffer.
     /// Use `get_buffer_requirements` to acquire the memory requirements.
     fn bind_buffer_memory(
-        &self, &B::Memory, offset: u64, B::UnboundBuffer
+        &self, memory: &B::Memory, offset: u64, buf: B::UnboundBuffer
     ) -> Result<B::Buffer, BindError>;
 
     /// Destroys a buffer.
@@ -303,19 +303,19 @@ pub trait Device<B: Backend>: Any + Send + Sync {
 
     ///
     fn create_buffer_view<R: RangeArg<u64>>(
-        &self, &B::Buffer, Option<format::Format>, R
+        &self, buf: &B::Buffer, fmt: Option<format::Format>, range: R
     ) -> Result<B::BufferView, buffer::ViewError>;
 
     ///
-    fn destroy_buffer_view(&self, B::BufferView);
+    fn destroy_buffer_view(&self, view: B::BufferView);
 
     ///
     fn create_image(
-        &self, image::Kind, image::Level, format::Format, image::Usage, image::StorageFlags,
+        &self, kind: image::Kind, level: image::Level, fmt: format::Format, usage: image::Usage, flags: image::StorageFlags,
     ) -> Result<B::UnboundImage, image::CreationError>;
 
     ///
-    fn get_image_requirements(&self, &B::UnboundImage) -> Requirements;
+    fn get_image_requirements(&self, image: &B::UnboundImage) -> Requirements;
 
     ///
     fn bind_image_memory(
@@ -326,26 +326,26 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     ///
     /// The image shouldn't be destroyed before any submitted command buffer,
     /// which references the images, has finished execution.
-    fn destroy_image(&self, B::Image);
+    fn destroy_image(&self, image: B::Image);
 
     ///
     fn create_image_view(
         &self,
-        &B::Image,
-        image::ViewKind,
-        format::Format,
-        format::Swizzle,
-        image::SubresourceRange,
+        image: &B::Image,
+        view_kind: image::ViewKind,
+        format: format::Format,
+        swizzle: format::Swizzle,
+        range: image::SubresourceRange,
     ) -> Result<B::ImageView, image::ViewError>;
 
     ///
-    fn destroy_image_view(&self, B::ImageView);
+    fn destroy_image_view(&self, view: B::ImageView);
 
     ///
-    fn create_sampler(&self, image::SamplerInfo) -> B::Sampler;
+    fn create_sampler(&self, info: image::SamplerInfo) -> B::Sampler;
 
     ///
-    fn destroy_sampler(&self, B::Sampler);
+    fn destroy_sampler(&self, sampler: B::Sampler);
 
     /// Create a descriptor pool.
     ///
@@ -357,7 +357,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         I::Item: Borrow<pso::DescriptorRangeDesc>;
 
     ///
-    fn destroy_descriptor_pool(&self, B::DescriptorPool);
+    fn destroy_descriptor_pool(&self, pool: B::DescriptorPool);
 
     /// Create a descriptor set layout.
     fn create_descriptor_set_layout<I>(&self, bindings: I) -> B::DescriptorSetLayout
@@ -366,42 +366,42 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         I::Item: Borrow<pso::DescriptorSetLayoutBinding>;
 
     ///
-    fn destroy_descriptor_set_layout(&self, B::DescriptorSetLayout);
+    fn destroy_descriptor_set_layout(&self, layout: B::DescriptorSetLayout);
 
     ///
-    fn write_descriptor_sets<'a, I, J>(&self, I)
+    fn write_descriptor_sets<'a, I, J>(&self, write_iter: I)
     where
         I: IntoIterator<Item = pso::DescriptorSetWrite<'a, B, J>>,
         J: IntoIterator,
         J::Item: Borrow<pso::Descriptor<'a, B>>;
 
     ///
-    fn copy_descriptor_sets<'a, I>(&self, I)
+    fn copy_descriptor_sets<'a, I>(&self, copy_iter: I)
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>;
 
     ///
-    fn map_memory<R>(&self, &B::Memory, R) -> Result<*mut u8, mapping::Error>
+    fn map_memory<R>(&self, memory: &B::Memory, range: R) -> Result<*mut u8, mapping::Error>
     where
         R: RangeArg<u64>;
 
     ///
-    fn flush_mapped_memory_ranges<'a, I, R>(&self, I)
-    where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a B::Memory, R)>,
-        R: RangeArg<u64>;
-
-    ///
-    fn invalidate_mapped_memory_ranges<'a, I, R>(&self, I)
+    fn flush_mapped_memory_ranges<'a, I, R>(&self, ranges: I)
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a B::Memory, R)>,
         R: RangeArg<u64>;
 
     ///
-    fn unmap_memory(&self, &B::Memory);
+    fn invalidate_mapped_memory_ranges<'a, I, R>(&self, ranges: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<(&'a B::Memory, R)>,
+        R: RangeArg<u64>;
+
+    ///
+    fn unmap_memory(&self, memory: &B::Memory);
 
     /// Acquire a mapping Reader.
     ///
@@ -464,7 +464,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     fn create_semaphore(&self) -> B::Semaphore;
 
     ///
-    fn destroy_semaphore(&self, B::Semaphore);
+    fn destroy_semaphore(&self, semaphore: B::Semaphore);
 
     ///
     fn create_fence(&self, signaled: bool) -> B::Fence;
@@ -536,16 +536,16 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     }
 
     /// true for signaled, false for not ready
-    fn get_fence_status(&self, &B::Fence) -> bool;
+    fn get_fence_status(&self, fence: &B::Fence) -> bool;
 
     ///
-    fn destroy_fence(&self, B::Fence);
+    fn destroy_fence(&self, fence: B::Fence);
 
     ///
     fn create_query_pool(&self, ty: query::QueryType, count: u32) -> B::QueryPool;
 
     ///
-    fn destroy_query_pool(&self, B::QueryPool);
+    fn destroy_query_pool(&self, pool: B::QueryPool);
 
     /// Create a new swapchain from a surface and a queue family.
     ///
