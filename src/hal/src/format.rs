@@ -132,7 +132,7 @@ pub struct Properties {
 bitflags!(
     /// Image feature flags.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct ImageFeature: u16 {
+    pub struct ImageFeature: u32 {
         /// Image view can be sampled.
         const SAMPLED = 0x1;
         /// Image view can be used as storage image.
@@ -140,34 +140,34 @@ bitflags!(
         /// Image view can be used as storage image (with atomics).
         const STORAGE_ATOMIC = 0x4;
         /// Image view can be used as color and input attachment.
-        const COLOR_ATTACHMENT = 0x8;
+        const COLOR_ATTACHMENT = 0x80;
         /// Image view can be used as color (with blending) and input attachment.
-        const COLOR_ATTACHMENT_BLEND = 0x10;
+        const COLOR_ATTACHMENT_BLEND = 0x100;
         /// Image view can be used as depth-stencil and input attachment.
-        const DEPTH_STENCIL_ATTACHMENT = 0x20;
+        const DEPTH_STENCIL_ATTACHMENT = 0x200;
         /// Image can be used as source for blit commands.
-        const BLIT_SRC = 0x40;
+        const BLIT_SRC = 0x400;
         /// Image can be used as destination for blit commands.
-        const BLIT_DST = 0x80;
+        const BLIT_DST = 0x800;
         /// Image can be sampled with a (mipmap) linear sampler or as blit source
         /// with linear sampling.
         /// Requires `SAMPLED` or `BLIT_SRC` flag.
-        const SAMPLED_LINEAR = 0x100;
+        const SAMPLED_LINEAR = 0x1000;
     }
 );
 
 bitflags!(
     /// Buffer feature flags.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct BufferFeature: u16 {
+    pub struct BufferFeature: u32 {
         /// Buffer view can be used as uniform texel buffer.
-        const UNIFORM_TEXEL = 0x1;
+        const UNIFORM_TEXEL = 0x8;
         /// Buffer view can be used as storage texel buffer.
-        const STORAGE_TEXEL = 0x2;
+        const STORAGE_TEXEL = 0x10;
         /// Buffer view can be used as storage texel buffer (with atomics).
-        const STORAGE_TEXEL_ATOMIC = 0x4;
+        const STORAGE_TEXEL_ATOMIC = 0x20;
         /// Image view can be used as vertex buffer.
-        const VERTEX = 0x8;
+        const VERTEX = 0x40;
     }
 );
 

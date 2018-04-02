@@ -72,25 +72,25 @@ impl Error for ViewError {
 bitflags!(
     /// Buffer usage flags.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct Usage: u16 {
+    pub struct Usage: u32 {
         ///
         const TRANSFER_SRC  = 0x1;
         ///
         const TRANSFER_DST = 0x2;
         ///
-        const UNIFORM = 0x4;
+        const UNIFORM_TEXEL = 0x4;
         ///
-        const STORAGE = 0x8;
+        const STORAGE_TEXEL = 0x8;
         ///
-        const UNIFORM_TEXEL = 0x10;
+        const UNIFORM = 0x10;
         ///
-        const STORAGE_TEXEL = 0x20;
+        const STORAGE = 0x20;
         ///
         const INDEX = 0x40;
         ///
-        const INDIRECT = 0x80;
+        const VERTEX = 0x80;
         ///
-        const VERTEX = 0x100;
+        const INDIRECT = 0x100;
     }
 );
 
@@ -104,31 +104,31 @@ impl Usage {
 bitflags!(
     /// Buffer state flags.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct Access: u16 {
+    pub struct Access: u32 {
         ///
-        const TRANSFER_READ          = 0x01;
+        const INDIRECT_COMMAND_READ = 0x1;
         ///
-        const TRANSFER_WRITE         = 0x02;
+        const INDEX_BUFFER_READ = 0x2;
         ///
-        const INDEX_BUFFER_READ      = 0x10;
+        const VERTEX_BUFFER_READ = 0x4;
         ///
-        const VERTEX_BUFFER_READ     = 0x20;
+        const CONSTANT_BUFFER_READ = 0x8;
         ///
-        const CONSTANT_BUFFER_READ   = 0x40;
+        const SHADER_READ = 0x20;
         ///
-        const INDIRECT_COMMAND_READ  = 0x80;
+        const SHADER_WRITE = 0x40;
         ///
-        const SHADER_READ = 0x100;
+        const TRANSFER_READ = 0x800;
         ///
-        const SHADER_WRITE = 0x200;
+        const TRANSFER_WRITE = 0x1000;
         ///
-        const HOST_READ = 0x400;
+        const HOST_READ = 0x2000;
         ///
-        const HOST_WRITE = 0x800;
+        const HOST_WRITE = 0x4000;
         ///
-        const MEMORY_READ = 0x1000;
+        const MEMORY_READ = 0x8000;
         ///
-        const MEMORY_WRITE = 0x2000;
+        const MEMORY_WRITE = 0x10000;
     }
 );
 

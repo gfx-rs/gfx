@@ -74,18 +74,8 @@ pub fn map_image_layout(layout: image::ImageLayout) -> vk::ImageLayout {
 }
 
 pub fn map_image_aspects(aspects: format::Aspects) -> vk::ImageAspectFlags {
-    use self::format::Aspects;
-    let mut flags = vk::ImageAspectFlags::empty();
-    if aspects.contains(Aspects::COLOR) {
-        flags |= vk::IMAGE_ASPECT_COLOR_BIT;
-    }
-    if aspects.contains(Aspects::DEPTH) {
-        flags |= vk::IMAGE_ASPECT_DEPTH_BIT;
-    }
-    if aspects.contains(Aspects::STENCIL) {
-        flags |= vk::IMAGE_ASPECT_STENCIL_BIT;
-    }
-    flags
+    // Safe due to equivalence of HAL format values and Vulkan format values
+    unsafe { mem::transmute(aspects.bits() as u32) }
 }
 
 pub fn map_clear_color(value: command::ClearColor) -> vk::ClearColorValue {
@@ -174,214 +164,28 @@ pub fn map_attachment_store_op(op: pass::AttachmentStoreOp) -> vk::AttachmentSto
 }
 
 pub fn map_buffer_access(access: buffer::Access) -> vk::AccessFlags {
-    use self::buffer::Access;
-    let mut flags = vk::AccessFlags::empty();
-
-    if access.contains(Access::TRANSFER_READ) {
-        flags |= vk::ACCESS_TRANSFER_READ_BIT;
-    }
-    if access.contains(Access::TRANSFER_WRITE) {
-        flags |= vk::ACCESS_TRANSFER_WRITE_BIT;
-    }
-    if access.contains(Access::INDEX_BUFFER_READ) {
-        flags |= vk::ACCESS_INDEX_READ_BIT;
-    }
-    if access.contains(Access::VERTEX_BUFFER_READ) {
-        flags |= vk::ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
-    }
-    if access.contains(Access::CONSTANT_BUFFER_READ) {
-        flags |= vk::ACCESS_UNIFORM_READ_BIT;
-    }
-    if access.contains(Access::INDIRECT_COMMAND_READ) {
-        flags |= vk::ACCESS_INDIRECT_COMMAND_READ_BIT;
-    }
-    if access.contains(Access::SHADER_READ) {
-        flags |= vk::ACCESS_SHADER_READ_BIT;
-    }
-    if access.contains(Access::SHADER_WRITE) {
-        flags |= vk::ACCESS_SHADER_WRITE_BIT;
-    }
-    if access.contains(Access::HOST_READ) {
-        flags |= vk::ACCESS_HOST_READ_BIT;
-    }
-    if access.contains(Access::HOST_WRITE) {
-        flags |= vk::ACCESS_HOST_WRITE_BIT;
-    }
-    if access.contains(Access::MEMORY_READ) {
-        flags |= vk::ACCESS_MEMORY_READ_BIT;
-    }
-    if access.contains(Access::MEMORY_WRITE) {
-        flags |= vk::ACCESS_MEMORY_WRITE_BIT;
-    }
-
-    flags
+    // Safe due to equivalence of HAL values and Vulkan values
+    unsafe { mem::transmute(access) }
 }
 
 pub fn map_image_access(access: image::Access) -> vk::AccessFlags {
-    use self::image::Access;
-    let mut flags = vk::AccessFlags::empty();
-
-    if access.contains(Access::COLOR_ATTACHMENT_READ) {
-        flags |= vk::ACCESS_COLOR_ATTACHMENT_READ_BIT;
-    }
-    if access.contains(Access::COLOR_ATTACHMENT_WRITE) {
-        flags |= vk::ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    }
-    if access.contains(Access::TRANSFER_READ) {
-        flags |= vk::ACCESS_TRANSFER_READ_BIT;
-    }
-    if access.contains(Access::TRANSFER_WRITE) {
-        flags |= vk::ACCESS_TRANSFER_WRITE_BIT;
-    }
-    if access.contains(Access::SHADER_READ) {
-        flags |= vk::ACCESS_SHADER_READ_BIT;
-    }
-    if access.contains(Access::SHADER_WRITE) {
-        flags |= vk::ACCESS_SHADER_WRITE_BIT;
-    }
-    if access.contains(Access::DEPTH_STENCIL_ATTACHMENT_READ) {
-        flags |= vk::ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
-    }
-    if access.contains(Access::DEPTH_STENCIL_ATTACHMENT_WRITE) {
-        flags |= vk::ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-    }
-    if access.contains(Access::HOST_READ) {
-        flags |= vk::ACCESS_HOST_READ_BIT;
-    }
-    if access.contains(Access::HOST_WRITE) {
-        flags |= vk::ACCESS_HOST_WRITE_BIT;
-    }
-    if access.contains(Access::MEMORY_READ) {
-        flags |= vk::ACCESS_MEMORY_READ_BIT;
-    }
-    if access.contains(Access::MEMORY_WRITE) {
-        flags |= vk::ACCESS_MEMORY_WRITE_BIT;
-    }
-    if access.contains(Access::INPUT_ATTACHMENT_READ) {
-        flags |= vk::ACCESS_INPUT_ATTACHMENT_READ_BIT;
-    }
-
-    flags
+    // Safe due to equivalence of HAL values and Vulkan values
+    unsafe { mem::transmute(access) }
 }
 
 pub fn map_pipeline_stage(stage: pso::PipelineStage) -> vk::PipelineStageFlags {
-    use self::pso::PipelineStage;
-    let mut flags = vk::PipelineStageFlags::empty();
-
-    if stage.contains(PipelineStage::TOP_OF_PIPE) {
-        flags |= vk::PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-    }
-    if stage.contains(PipelineStage::DRAW_INDIRECT) {
-        flags |= vk::PIPELINE_STAGE_DRAW_INDIRECT_BIT;
-    }
-    if stage.contains(PipelineStage::VERTEX_INPUT) {
-        flags |= vk::PIPELINE_STAGE_VERTEX_INPUT_BIT;
-    }
-    if stage.contains(PipelineStage::VERTEX_SHADER) {
-        flags |= vk::PIPELINE_STAGE_VERTEX_SHADER_BIT;
-    }
-    if stage.contains(PipelineStage::HULL_SHADER) {
-        flags |= vk::PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT;
-    }
-    if stage.contains(PipelineStage::DOMAIN_SHADER) {
-        flags |= vk::PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT;
-    }
-    if stage.contains(PipelineStage::GEOMETRY_SHADER) {
-        flags |= vk::PIPELINE_STAGE_GEOMETRY_SHADER_BIT;
-    }
-    if stage.contains(PipelineStage::FRAGMENT_SHADER) {
-        flags |= vk::PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    }
-    if stage.contains(PipelineStage::EARLY_FRAGMENT_TESTS) {
-        flags |= vk::PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    }
-    if stage.contains(PipelineStage::LATE_FRAGMENT_TESTS) {
-        flags |= vk::PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-    }
-    if stage.contains(PipelineStage::COLOR_ATTACHMENT_OUTPUT) {
-        flags |= vk::PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    }
-    if stage.contains(PipelineStage::COMPUTE_SHADER) {
-        flags |= vk::PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-    }
-    if stage.contains(PipelineStage::TRANSFER) {
-        flags |= vk::PIPELINE_STAGE_TRANSFER_BIT;
-    }
-    if stage.contains(PipelineStage::BOTTOM_OF_PIPE) {
-        flags |= vk::PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    }
-    if stage.contains(PipelineStage::HOST) {
-        flags |= vk::PIPELINE_STAGE_HOST_BIT;
-    }
-
-    flags
+    // Safe due to equivalence of HAL values and Vulkan values
+    unsafe { mem::transmute(stage) }
 }
 
 pub fn map_buffer_usage(usage: buffer::Usage) -> vk::BufferUsageFlags {
-    use self::buffer::Usage;
-    let mut flags = vk::BufferUsageFlags::empty();
-
-    if usage.contains(Usage::TRANSFER_SRC) {
-        flags |= vk::BUFFER_USAGE_TRANSFER_SRC_BIT;
-    }
-    if usage.contains(Usage::TRANSFER_DST) {
-        flags |= vk::BUFFER_USAGE_TRANSFER_DST_BIT;
-    }
-    if usage.contains(Usage::UNIFORM) {
-        flags |= vk::BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-    }
-    if usage.contains(Usage::STORAGE) {
-        flags |= vk::BUFFER_USAGE_STORAGE_BUFFER_BIT;
-    }
-    if usage.contains(Usage::UNIFORM_TEXEL) {
-        flags |= vk::BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
-    }
-    if usage.contains(Usage::STORAGE_TEXEL) {
-        flags |= vk::BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
-    }
-    if usage.contains(Usage::INDEX) {
-        flags |= vk::BUFFER_USAGE_INDEX_BUFFER_BIT;
-    }
-    if usage.contains(Usage::INDIRECT) {
-        flags |= vk::BUFFER_USAGE_INDIRECT_BUFFER_BIT;
-    }
-    if usage.contains(Usage::VERTEX) {
-        flags |= vk::BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    }
-
-    flags
+    // Safe due to equivalence of HAL values and Vulkan values
+    unsafe { mem::transmute(usage) }
 }
 
 pub fn map_image_usage(usage: image::Usage) -> vk::ImageUsageFlags {
-    use self::image::Usage;
-    let mut flags = vk::ImageUsageFlags::empty();
-
-    if usage.contains(Usage::TRANSFER_SRC) {
-        flags |= vk::IMAGE_USAGE_TRANSFER_SRC_BIT;
-    }
-    if usage.contains(Usage::TRANSFER_DST) {
-        flags |= vk::IMAGE_USAGE_TRANSFER_DST_BIT;
-    }
-    if usage.contains(Usage::COLOR_ATTACHMENT) {
-        flags |= vk::IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    }
-    if usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
-        flags |= vk::IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-    }
-    if usage.contains(Usage::STORAGE) {
-        flags |= vk::IMAGE_USAGE_STORAGE_BIT;
-    }
-    if usage.contains(Usage::SAMPLED) {
-        flags |= vk::IMAGE_USAGE_SAMPLED_BIT;
-    }
-    if usage.contains(Usage::TRANSIENT_ATTACHMENT) {
-        flags |= vk::IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
-    }
-    if usage.contains(Usage::INPUT_ATTACHMENT) {
-        flags |= vk::IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
-    }
-
-    flags
+    // Safe due to equivalence of HAL values and Vulkan values
+    unsafe { mem::transmute(usage) }
 }
 
 pub fn map_descriptor_type(ty: pso::DescriptorType) -> vk::DescriptorType {
@@ -390,34 +194,8 @@ pub fn map_descriptor_type(ty: pso::DescriptorType) -> vk::DescriptorType {
 }
 
 pub fn map_stage_flags(stages: pso::ShaderStageFlags) -> vk::ShaderStageFlags {
-    use self::pso::ShaderStageFlags;
-    let mut flags = vk::ShaderStageFlags::empty();
-
-    if stages.contains(ShaderStageFlags::VERTEX) {
-        flags |= vk::SHADER_STAGE_VERTEX_BIT;
-    }
-
-    if stages.contains(ShaderStageFlags::HULL) {
-        flags |= vk::SHADER_STAGE_TESSELLATION_CONTROL_BIT;
-    }
-
-    if stages.contains(ShaderStageFlags::DOMAIN) {
-        flags |= vk::SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
-    }
-
-    if stages.contains(ShaderStageFlags::GEOMETRY) {
-        flags |= vk::SHADER_STAGE_GEOMETRY_BIT;
-    }
-
-    if stages.contains(ShaderStageFlags::FRAGMENT) {
-        flags |= vk::SHADER_STAGE_FRAGMENT_BIT;
-    }
-
-    if stages.contains(ShaderStageFlags::COMPUTE) {
-        flags |= vk::SHADER_STAGE_COMPUTE_BIT;
-    }
-
-    flags
+    // Safe due to equivalence of HAL values and Vulkan values
+    unsafe { mem::transmute(stages) }
 }
 
 
@@ -607,98 +385,18 @@ pub fn map_specialization_constants(
 pub fn map_pipeline_statistics(
     statistics: query::PipelineStatistic,
 ) -> vk::QueryPipelineStatisticFlags {
-    use hal::query::PipelineStatistic as stat;
-
-    let mut flags = vk::QueryPipelineStatisticFlags::empty();
-
-    if statistics.contains(stat::INPUT_ASSEMBLY_VERTICES) {
-        flags |= vk::QUERY_PIPELINE_STATISTIC_INPUT_ASSEMBLY_VERTICES_BIT;
-    }
-    if statistics.contains(stat::INPUT_ASSEMBLY_PRIMITIVES) {
-        flags |= vk::QUERY_PIPELINE_STATISTIC_INPUT_ASSEMBLY_PRIMITIVES_BIT;
-    }
-    if statistics.contains(stat::VERTEX_SHADER_INVOCATIONS) {
-        flags |= vk::QUERY_PIPELINE_STATISTIC_VERTEX_SHADER_INVOCATIONS_BIT;
-    }
-    if statistics.contains(stat::GEOMETRY_SHADER_INVOCATIONS) {
-        flags |= vk::QUERY_PIPELINE_STATISTIC_GEOMETRY_SHADER_INVOCATIONS_BIT;
-    }
-    if statistics.contains(stat::GEOMETRY_SHADER_PRIMITIVES) {
-        flags |= vk::QUERY_PIPELINE_STATISTIC_GEOMETRY_SHADER_PRIMITIVES_BIT;
-    }
-    if statistics.contains(stat::CLIPPING_INVOCATIONS) {
-        flags |= vk::QUERY_PIPELINE_STATISTIC_CLIPPING_INVOCATIONS_BIT;
-    }
-    if statistics.contains(stat::CLIPPING_PRIMITIVES) {
-        flags |= vk::QUERY_PIPELINE_STATISTIC_CLIPPING_PRIMITIVES_BIT;
-    }
-    if statistics.contains(stat::FRAGMENT_SHADER_INVOCATIONS) {
-        flags |= vk::QUERY_PIPELINE_STATISTIC_FRAGMENT_SHADER_INVOCATIONS_BIT;
-    }
-    if statistics.contains(stat::HULL_SHADER_PATCHES) {
-        flags |= vk::QUERY_PIPELINE_STATISTIC_TESSELLATION_CONTROL_SHADER_PATCHES_BIT;
-    }
-    if statistics.contains(stat::DOMAIN_SHADER_INVOCATIONS) {
-        flags |= vk::QUERY_PIPELINE_STATISTIC_TESSELLATION_EVALUATION_SHADER_INVOCATIONS_BIT;
-    }
-    if statistics.contains(stat::COMPUTE_SHADER_INVOCATIONS) {
-        flags |= vk::QUERY_PIPELINE_STATISTIC_COMPUTE_SHADER_INVOCATIONS_BIT;
-    }
-
-    flags
+    // Safe due to equivalence of HAL values and Vulkan values
+    unsafe { mem::transmute(statistics) }
 }
 
 pub fn map_image_features(features: vk::FormatFeatureFlags) -> format::ImageFeature {
-    let mut flags = format::ImageFeature::empty();
-
-    if features.intersects(vk::FORMAT_FEATURE_SAMPLED_IMAGE_BIT) {
-        flags |= format::ImageFeature::SAMPLED;
-    }
-    if features.intersects(vk::FORMAT_FEATURE_STORAGE_IMAGE_BIT) {
-        flags |= format::ImageFeature::STORAGE;
-    }
-    if features.intersects(vk::FORMAT_FEATURE_STORAGE_IMAGE_ATOMIC_BIT) {
-        flags |= format::ImageFeature::STORAGE_ATOMIC;
-    }
-    if features.intersects(vk::FORMAT_FEATURE_COLOR_ATTACHMENT_BIT) {
-        flags |= format::ImageFeature::COLOR_ATTACHMENT;
-    }
-    if features.intersects(vk::FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT) {
-        flags |= format::ImageFeature::COLOR_ATTACHMENT_BLEND;
-    }
-    if features.intersects(vk::FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
-        flags |= format::ImageFeature::DEPTH_STENCIL_ATTACHMENT;
-    }
-    if features.intersects(vk::FORMAT_FEATURE_BLIT_SRC_BIT) {
-        flags |= format::ImageFeature::BLIT_SRC;
-    }
-    if features.intersects(vk::FORMAT_FEATURE_BLIT_DST_BIT) {
-        flags |= format::ImageFeature::BLIT_DST;
-    }
-    if features.intersects(vk::FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) {
-        flags |= format::ImageFeature::SAMPLED_LINEAR;
-    }
-
-    flags
+    // Safe due to equivalence of HAL values and Vulkan values
+    unsafe { mem::transmute(features) }
 }
 
 pub fn map_buffer_features(features: vk::FormatFeatureFlags) -> format::BufferFeature {
-    let mut flags = format::BufferFeature::empty();
-
-    if features.intersects(vk::FORMAT_FEATURE_UNIFORM_TEXEL_BUFFER_BIT) {
-        flags |= format::BufferFeature::UNIFORM_TEXEL;
-    }
-    if features.intersects(vk::FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_BIT) {
-        flags |= format::BufferFeature::STORAGE_TEXEL;
-    }
-    if features.intersects(vk::FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_ATOMIC_BIT) {
-        flags |= format::BufferFeature::STORAGE_TEXEL_ATOMIC;
-    }
-    if features.intersects(vk::FORMAT_FEATURE_VERTEX_BUFFER_BIT) {
-        flags |= format::BufferFeature::VERTEX;
-    }
-
-    flags
+    // Safe due to equivalence of HAL values and Vulkan values
+    unsafe { mem::transmute(features) }
 }
 
 pub fn map_memory_ranges<'a, I, R>(ranges: I) -> Vec<vk::MappedMemoryRange>
@@ -741,17 +439,8 @@ where
 }
 
 pub fn map_command_buffer_flags(flags: command::CommandBufferFlags) -> vk::CommandBufferUsageFlags {
-    let mut usage = vk::CommandBufferUsageFlags::empty();
-    if flags.contains(command::CommandBufferFlags::ONE_TIME_SUBMIT) {
-        usage |= vk::COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    }
-    if flags.contains(command::CommandBufferFlags::RENDER_PASS_CONTINUE) {
-        usage |= vk::COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
-    }
-    if flags.contains(command::CommandBufferFlags::SIMULTANEOUS_USE) {
-        usage |= vk::COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
-    }
-    usage
+    // Safe due to equivalence of HAL values and Vulkan values
+    unsafe { mem::transmute(flags) }
 }
 
 pub fn map_command_buffer_level(level: command::RawLevel) -> vk::CommandBufferLevel {
