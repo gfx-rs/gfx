@@ -120,9 +120,9 @@ impl command::CommandBuffer<Backend> for RawCommandBuffer<CommandList> {
 }
 pub trait Parser: Sized + Send {
     fn reset(&mut self);
-    fn parse(&mut self, Command);
-    fn update_buffer(&mut self, Buffer, &[u8], usize);
-    fn update_texture(&mut self, Texture, tex::Kind, Option<tex::CubeFace>, &[u8], tex::RawImageInfo);
+    fn parse(&mut self, cmd: Command);
+    fn update_buffer(&mut self, buf: Buffer, data: &[u8], offset: usize);
+    fn update_texture(&mut self, tex: Texture, kind: tex::Kind, face: Option<tex::CubeFace>, data: &[u8], image: tex::RawImageInfo);
 }
 
 impl<P: Parser> From<P> for RawCommandBuffer<P> {

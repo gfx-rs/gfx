@@ -19,7 +19,7 @@ pub enum GraphicsOrCompute {}
 pub trait Capability {
     /// Return true if this type level capability is supported by
     /// a run-time queue type.
-    fn supported_by(QueueType) -> bool;
+    fn supported_by(qt: QueueType) -> bool;
 }
 impl Capability for General {
     fn supported_by(qt: QueueType) -> bool {
