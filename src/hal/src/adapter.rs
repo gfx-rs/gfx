@@ -8,7 +8,7 @@
 
 use std::any::Any;
 
-use {format, memory, Backend, Gpu, Features, Limits};
+use {format, image, memory, Backend, Gpu, Features, Limits};
 use error::DeviceCreationError;
 use queue::{Capability, QueueGroup};
 
@@ -73,7 +73,15 @@ pub trait PhysicalDevice<B: Backend>: Any + Send + Sync {
     fn open(&self, families: Vec<(&B::QueueFamily, Vec<QueuePriority>)>) -> Result<Gpu<B>, DeviceCreationError>;
 
     /// Fetch details for a particular image format.
-    fn format_properties(&self, fmt: Option<format::Format>) -> format::Properties;
+    fn format_properties(
+        &self, format: Option<format::Format>
+    ) -> format::Properties;
+
+    /// Fetch details for a particular image format.
+    fn image_format_properties(
+        &self, format: format::Format, dimensions: u8, tiling: image:: Tiling,
+        usage: image::Usage, storage_flags: image::StorageFlags,
+    ) -> Option<image::FormatProperties>;
 
     /// Fetch details for the memory regions provided by the device.
     fn memory_properties(&self) -> MemoryProperties;

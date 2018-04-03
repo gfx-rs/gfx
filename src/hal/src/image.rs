@@ -22,7 +22,7 @@ pub type Level = u8;
 pub const MAX_LEVEL: Level = 15;
 
 /// Describes the size of an image, which may be up to three dimensional.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Extent {
     /// Image width
@@ -34,7 +34,7 @@ pub struct Extent {
 }
 
 ///
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Offset {
     ///
@@ -48,6 +48,17 @@ pub struct Offset {
 impl Offset {
     /// Zero offset shortcut
     pub const ZERO: Self = Offset { x: 0, y: 0, z: 0 };
+}
+
+/// Image tiling modes.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum Tiling {
+    /// Optimal tiling for GPU memory access. Implementation-dependent.
+    Optimal,
+    /// Optimal for CPU read/write. Texels are laid out in row-major order,
+    // possibly with some padding on each row.
+    Linear,
 }
 
 /// Pure image object creation error.
@@ -661,4 +672,20 @@ pub struct SubresourceRange {
     pub levels: Range<Level>,
     /// Included array levels
     pub layers: Range<Layer>,
+}
+
+/// Image format properties.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct FormatProperties {
+    /// Maximum extent.
+    pub max_extent: Extent,
+    /// Max number of mipmap levels.
+    pub max_levels: Level,
+    /// Max number of array layers.
+    pub max_layers: Layer,
+    /// Bit mask of supported sample counts.
+    pub sample_count_mask: u64,
+    /// Maximum size of the resource in bytes.
+    pub max_resource_size: usize,
 }

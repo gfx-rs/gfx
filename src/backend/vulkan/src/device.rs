@@ -924,11 +924,11 @@ impl d::Device<B> for Device {
         kind: image::Kind,
         mip_levels: image::Level,
         format: format::Format,
+        tiling: image::Tiling,
         usage: image::Usage,
         storage_flags: image::StorageFlags,
     ) -> Result<UnboundImage, image::CreationError> {
-        // the flag values have to match Vulkan
-        let flags = unsafe { mem::transmute(storage_flags) };
+        let flags = conv::map_image_flags(storage_flags);
         let extent = conv::map_extent(kind.extent());
         let array_layers = kind.num_layers();
         let samples = match kind.num_samples() {
@@ -951,7 +951,7 @@ impl d::Device<B> for Device {
             mip_levels: mip_levels as u32,
             array_layers: array_layers as u32,
             samples,
-            tiling: vk::ImageTiling::Optimal, // TODO: read back?
+            tiling: conv::map_tiling(tiling),
             usage: conv::map_image_usage(usage),
             sharing_mode: vk::SharingMode::Exclusive, // TODO:
             queue_family_index_count: 0,

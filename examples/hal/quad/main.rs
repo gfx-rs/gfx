@@ -409,7 +409,9 @@ fn main() {
     }
 
     let image_unbound = device.create_image(
-        kind, 1, ColorFormat::SELF, i::Usage::TRANSFER_DST | i::Usage::SAMPLED, i::StorageFlags::empty()
+        kind, 1, ColorFormat::SELF, i::Tiling::Optimal,
+        i::Usage::TRANSFER_DST | i::Usage::SAMPLED,
+        i::StorageFlags::empty(),
         ).unwrap(); // TODO: usage
     let image_req = device.get_image_requirements(&image_unbound);
 

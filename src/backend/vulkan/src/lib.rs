@@ -24,7 +24,7 @@ use ash::extensions as ext;
 use ash::version::{EntryV1_0, DeviceV1_0, InstanceV1_0, V1_0};
 use ash::vk;
 
-use hal::{format, memory, queue};
+use hal::{format, image, memory, queue};
 use hal::{Features, Limits, PatchSize, QueueType};
 use hal::error::{DeviceCreationError, HostExecutionError};
 
@@ -417,9 +417,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn format_properties(&self, format: Option<format::Format>) -> format::Properties {
-        let properties = self
-            .instance
-            .0
+        let properties = self.instance.0
             .get_physical_device_format_properties(
                 self.handle,
                 format.map_or(vk::Format::Undefined, conv::map_format),
@@ -430,6 +428,27 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             optimal_tiling: conv::map_image_features(properties.optimal_tiling_features),
             buffer_features: conv::map_buffer_features(properties.buffer_features),
         }
+    }
+
+    fn image_format_properties(
+        &self, format: format::Format, dimensions: u8, tiling: image:: Tiling,
+        usage: image::Usage, storage_flags: image::StorageFlags,
+    ) -> Option<image::FormatProperties> {
+        let properties = self.instance.0
+            .get_physical_device_image_format_properties(
+                self.handle,
+                conv::map_format(format),
+                match dimensions {
+                    1 => vk::imageType::D1,
+                    2 => vk::imageType::D2,
+                    3 => vk::imageType::D3,
+                    _ => panic!("Unexpected image dimensionality: {}", dimensions)
+                },
+                conv::map_tiling(tiling),
+                conv::map_image_usage(usage),
+                conv::map_image_flags(storage_flags),
+            );
+        None
     }
 
     fn memory_properties(&self) -> hal::MemoryProperties {
