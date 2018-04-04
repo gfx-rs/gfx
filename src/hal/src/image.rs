@@ -22,7 +22,7 @@ pub type Level = u8;
 pub const MAX_LEVEL: Level = 15;
 
 /// Describes the size of an image, which may be up to three dimensional.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Extent {
     /// Image width
@@ -34,7 +34,7 @@ pub struct Extent {
 }
 
 ///
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Offset {
     ///
@@ -48,6 +48,18 @@ pub struct Offset {
 impl Offset {
     /// Zero offset shortcut
     pub const ZERO: Self = Offset { x: 0, y: 0, z: 0 };
+}
+
+/// Image tiling modes.
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum Tiling {
+    /// Optimal tiling for GPU memory access. Implementation-dependent.
+    Optimal,
+    /// Optimal for CPU read/write. Texels are laid out in row-major order,
+    /// possibly with some padding on each row.
+    Linear,
 }
 
 /// Pure image object creation error.
@@ -560,7 +572,7 @@ impl From<RenderDesc> for DepthStencilDesc {
 /// Details may be found in [the Vulkan spec](https://www.khronos.org/registry/vulkan/specs/1.0/html/vkspec.html#resources-image-layouts)
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum ImageLayout {
+pub enum Layout {
     /// General purpose, no restrictions on usage.
     General,
     /// Must only be used as a color attachment in a framebuffer.
@@ -625,7 +637,7 @@ bitflags!(
 );
 
 /// Image state, combining access methods and the image's layout.
-pub type State = (Access, ImageLayout);
+pub type State = (Access, Layout);
 
 /// Selector of a concrete subresource in an image.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -661,4 +673,20 @@ pub struct SubresourceRange {
     pub levels: Range<Level>,
     /// Included array levels
     pub layers: Range<Layer>,
+}
+
+/// Image format properties.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct FormatProperties {
+    /// Maximum extent.
+    pub max_extent: Extent,
+    /// Max number of mipmap levels.
+    pub max_levels: Level,
+    /// Max number of array layers.
+    pub max_layers: Layer,
+    /// Bit mask of supported sample counts.
+    pub sample_count_mask: NumSamples,
+    /// Maximum size of the resource in bytes.
+    pub max_resource_size: usize,
 }

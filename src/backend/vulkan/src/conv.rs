@@ -29,6 +29,10 @@ pub fn map_vk_format(format: vk::Format) -> Option<format::Format> {
     }
 }
 
+pub fn map_tiling(tiling: image::Tiling) -> vk::ImageTiling {
+    unsafe { mem::transmute(tiling) }
+}
+
 pub fn map_component(component: format::Component) -> vk::ComponentSwizzle {
     use hal::format::Component::*;
     match component {
@@ -57,8 +61,8 @@ pub fn map_index_type(index_type: IndexType) -> vk::IndexType {
     }
 }
 
-pub fn map_image_layout(layout: image::ImageLayout) -> vk::ImageLayout {
-    use hal::image::ImageLayout as Il;
+pub fn map_image_layout(layout: image::Layout) -> vk::ImageLayout {
+    use hal::image::Layout as Il;
     match layout {
         Il::General => vk::ImageLayout::General,
         Il::ColorAttachmentOptimal => vk::ImageLayout::ColorAttachmentOptimal,
@@ -492,4 +496,9 @@ pub fn map_viewport(vp: &pso::Viewport) -> vk::Viewport {
         min_depth: vp.depth.start,
         max_depth: vp.depth.end,
     }
+}
+
+pub fn map_image_flags(flags: image::StorageFlags) -> vk::ImageCreateFlags {
+    // the flag values have to match Vulkan
+    unsafe { mem::transmute(flags) }
 }

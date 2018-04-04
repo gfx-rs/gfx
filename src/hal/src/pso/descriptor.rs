@@ -2,7 +2,7 @@
 //! A descriptor is an object that describes the connection between a resource, such as
 //! an `Image` or `Buffer`, and a variable in a shader. Descriptors are organized into
 //! sets, each of which contains multiple descriptors that are bound and unbound to
-//! shaders as a single unit. Each descriptor set may contain descriptors to multiple 
+//! shaders as a single unit. Each descriptor set may contain descriptors to multiple
 //! different sorts of resources, and a shader may use multiple descriptor sets at a time.
 
 use std::borrow::Borrow;
@@ -11,7 +11,7 @@ use std::ops::Range;
 
 use {Backend};
 use buffer::Offset;
-use image::ImageLayout;
+use image::Layout;
 use pso::ShaderStageFlags;
 
 ///
@@ -142,8 +142,8 @@ pub struct DescriptorSetWrite<'a, B: Backend, W> {
 #[derive(Clone)]
 pub enum Descriptor<'a, B: Backend> {
     Sampler(&'a B::Sampler),
-    Image(&'a B::ImageView, ImageLayout),
-    CombinedImageSampler(&'a B::ImageView, ImageLayout, &'a B::Sampler),
+    Image(&'a B::ImageView, Layout),
+    CombinedImageSampler(&'a B::ImageView, Layout, &'a B::Sampler),
     Buffer(&'a B::Buffer, Range<Option<Offset>>),
     TexelBuffer(&'a B::BufferView),
 }

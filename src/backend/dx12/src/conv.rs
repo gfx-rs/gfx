@@ -373,10 +373,10 @@ pub fn map_buffer_resource_state(access: buffer::Access) -> D3D12_RESOURCE_STATE
     state
 }
 
-pub fn map_image_resource_state(access: image::Access, layout: image::ImageLayout) -> D3D12_RESOURCE_STATES {
+pub fn map_image_resource_state(access: image::Access, layout: image::Layout) -> D3D12_RESOURCE_STATES {
     use self::image::Access;
     // `D3D12_RESOURCE_STATE_PRESENT` is the same as COMMON (general state)
-    if layout == image::ImageLayout::Present {
+    if layout == image::Layout::Present {
         return D3D12_RESOURCE_STATE_PRESENT;
     }
 

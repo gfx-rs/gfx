@@ -22,7 +22,7 @@ mod pool;
 mod root_constants;
 mod window;
 
-use hal::{error, format as f, memory, Features, Limits, QueueType};
+use hal::{error, format as f, image, memory, Features, Limits, QueueType};
 use hal::queue::{QueueFamily as HalQueueFamily, QueueFamilyId, Queues};
 
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, winerror};
@@ -320,6 +320,52 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn format_properties(&self, fmt: Option<f::Format>) -> f::Properties {
         let idx = fmt.map(|fmt| fmt as usize).unwrap_or(0);
         format::query_properties()[idx]
+    }
+
+    fn image_format_properties(
+        &self, _format: f::Format, dimensions: u8, tiling: image::Tiling,
+        usage: image::Usage, storage_flags: image::StorageFlags,
+    ) -> Option<image::FormatProperties> {
+        let is_optimal = tiling == image::Tiling::Optimal;
+        Some(image::FormatProperties {
+            max_extent: match dimensions {
+                1 if is_optimal => image::Extent {
+                    width: d3d12::D3D12_REQ_TEXTURE1D_U_DIMENSION,
+                    height: 1,
+                    depth: 1,
+                },
+                2 => image::Extent {
+                    width: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION,
+                    height: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION,
+                    depth: 1,
+                },
+                3 if is_optimal => image::Extent {
+                    width: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
+                    height: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
+                    depth: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
+                },
+                _ => return None,
+            },
+            max_levels: if is_optimal { d3d12::D3D12_REQ_MIP_LEVELS as _ } else { 1 },
+            max_layers: if is_optimal {
+                match dimensions {
+                    1 => d3d12::D3D12_REQ_TEXTURE1D_ARRAY_AXIS_DIMENSION as _,
+                    2 => d3d12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION as _,
+                    _ => return None,
+                }
+            } else {
+                1
+            },
+            sample_count_mask: if dimensions == 2 && is_optimal &&
+                !storage_flags.contains(image::StorageFlags::CUBE_VIEW) &&
+                (usage.contains(image::Usage::COLOR_ATTACHMENT) | usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT))
+            {
+                0x3F //TODO: use D3D12_FEATURE_DATA_FORMAT_SUPPORT
+            } else {
+                0x1
+            },
+            max_resource_size: (d3d12::D3D12_REQ_RESOURCE_SIZE_IN_MEGABYTES_EXPRESSION_A_TERM as usize) << 20,
+        })
     }
 
     fn memory_properties(&self) -> hal::MemoryProperties {

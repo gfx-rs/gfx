@@ -24,7 +24,7 @@ use ash::extensions as ext;
 use ash::version::{EntryV1_0, DeviceV1_0, InstanceV1_0, V1_0};
 use ash::vk;
 
-use hal::{format, memory, queue};
+use hal::{format, image, memory, queue};
 use hal::{Features, Limits, PatchSize, QueueType};
 use hal::error::{DeviceCreationError, HostExecutionError};
 
@@ -417,9 +417,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn format_properties(&self, format: Option<format::Format>) -> format::Properties {
-        let properties = self
-            .instance
-            .0
+        let properties = self.instance.0
             .get_physical_device_format_properties(
                 self.handle,
                 format.map_or(vk::Format::Undefined, conv::map_format),
@@ -429,6 +427,44 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             linear_tiling: conv::map_image_features(properties.linear_tiling_features),
             optimal_tiling: conv::map_image_features(properties.optimal_tiling_features),
             buffer_features: conv::map_buffer_features(properties.buffer_features),
+        }
+    }
+
+    fn image_format_properties(
+        &self, format: format::Format, dimensions: u8, tiling: image::Tiling,
+        usage: image::Usage, storage_flags: image::StorageFlags,
+    ) -> Option<image::FormatProperties> {
+        match self.instance.0
+            .get_physical_device_image_format_properties(
+                self.handle,
+                conv::map_format(format),
+                match dimensions {
+                    1 => vk::ImageType::Type1d,
+                    2 => vk::ImageType::Type2d,
+                    3 => vk::ImageType::Type3d,
+                    _ => panic!("Unexpected image dimensionality: {}", dimensions)
+                },
+                conv::map_tiling(tiling),
+                conv::map_image_usage(usage),
+                conv::map_image_flags(storage_flags),
+            )
+        {
+            Ok(props) => Some(image::FormatProperties {
+                max_extent: image::Extent {
+                    width: props.max_extent.width,
+                    height: props.max_extent.height,
+                    depth: props.max_extent.depth,
+                },
+                max_levels: props.max_mip_levels as _,
+                max_layers: props.max_array_layers as _,
+                sample_count_mask: props.sample_counts.flags() as _,
+                max_resource_size: props.max_resource_size as _,
+            }),
+            Err(vk::Result::ErrorFormatNotSupported) => None,
+            Err(other) => {
+                error!("Unexpected error in `image_format_properties`: {:?}", other);
+                None
+            }
         }
     }
 

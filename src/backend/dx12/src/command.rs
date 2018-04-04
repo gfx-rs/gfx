@@ -829,7 +829,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 .iter()
                 .chain(sp.depth_stencil_attachment.iter())
                 .chain(sp.input_attachments.iter()).
-                any(|aref| aref.1 == image::ImageLayout::Present)
+                any(|aref| aref.1 == image::Layout::Present)
         }));
 
         let mut clear_iter = clear_values.into_iter();
@@ -1011,7 +1011,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn clear_color_image_raw(
         &mut self,
         image: &n::Image,
-        _: image::ImageLayout,
+        _: image::Layout,
         range: image::SubresourceRange,
         value: com::ClearColorRaw,
     ) {
@@ -1023,7 +1023,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn clear_depth_stencil_image_raw(
         &mut self,
         image: &n::Image,
-        _layout: image::ImageLayout,
+        _layout: image::Layout,
         range: image::SubresourceRange,
         value: com::ClearDepthStencilRaw,
     ) {
@@ -1081,9 +1081,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn resolve_image<T>(
         &mut self,
         src: &n::Image,
-        _src_layout: image::ImageLayout,
+        _src_layout: image::Layout,
         dst: &n::Image,
-        _dst_layout: image::ImageLayout,
+        _dst_layout: image::Layout,
         regions: T,
     ) where
         T: IntoIterator,
@@ -1135,9 +1135,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn blit_image<T>(
         &mut self,
         _src: &n::Image,
-        _src_layout: image::ImageLayout,
+        _src_layout: image::Layout,
         _dst: &n::Image,
-        _dst_layout: image::ImageLayout,
+        _dst_layout: image::Layout,
         _filter: image::Filter,
         _regions: T,
     ) where
@@ -1413,9 +1413,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn copy_image<T>(
         &mut self,
         src: &n::Image,
-        _: image::ImageLayout,
+        _: image::Layout,
         dst: &n::Image,
-        _: image::ImageLayout,
+        _: image::Layout,
         regions: T,
     ) where
         T: IntoIterator,
@@ -1471,7 +1471,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         &mut self,
         buffer: &n::Buffer,
         image: &n::Image,
-        _: image::ImageLayout,
+        _: image::Layout,
         regions: T,
     ) where
         T: IntoIterator,
@@ -1536,7 +1536,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn copy_image_to_buffer<T>(
         &mut self,
         image: &n::Image,
-        _: image::ImageLayout,
+        _: image::Layout,
         buffer: &n::Buffer,
         regions: T,
     ) where

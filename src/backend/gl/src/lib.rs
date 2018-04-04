@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::ops::Deref;
 use std::thread::{self, ThreadId};
 
-use hal::error;
+use hal::{error, image};
 use hal::queue::{Queues, QueueFamilyId};
 
 pub use self::device::Device;
@@ -283,6 +283,13 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn format_properties(&self, _: Option<hal::format::Format>) -> hal::format::Properties {
         unimplemented!()
+    }
+
+    fn image_format_properties(
+        &self, _format: hal::format::Format, _dimensions: u8, _tiling: image::Tiling,
+        _usage: image::Usage, _storage_flags: image::StorageFlags,
+    ) -> Option<image::FormatProperties> {
+        None //TODO
     }
 
     fn memory_properties(&self) -> hal::MemoryProperties {

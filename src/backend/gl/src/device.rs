@@ -805,6 +805,7 @@ impl d::Device<B> for Device {
         kind: i::Kind,
         num_levels: i::Level,
         format: Format,
+        _tiling: i::Tiling,
         usage: i::Usage,
         _flags: i::StorageFlags,
     ) -> Result<UnboundImage, i::CreationError> {

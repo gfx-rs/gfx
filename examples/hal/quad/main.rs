@@ -171,11 +171,11 @@ fn main() {
             format: Some(surface_format),
             ops: pass::AttachmentOps::new(pass::AttachmentLoadOp::Clear, pass::AttachmentStoreOp::Store),
             stencil_ops: pass::AttachmentOps::DONT_CARE,
-            layouts: i::ImageLayout::Undefined .. i::ImageLayout::Present,
+            layouts: i::Layout::Undefined .. i::Layout::Present,
         };
 
         let subpass = pass::SubpassDesc {
-            colors: &[(0, i::ImageLayout::ColorAttachmentOptimal)],
+            colors: &[(0, i::Layout::ColorAttachmentOptimal)],
             depth_stencil: None,
             inputs: &[],
             preserves: &[],
@@ -409,7 +409,9 @@ fn main() {
     }
 
     let image_unbound = device.create_image(
-        kind, 1, ColorFormat::SELF, i::Usage::TRANSFER_DST | i::Usage::SAMPLED, i::StorageFlags::empty()
+        kind, 1, ColorFormat::SELF, i::Tiling::Optimal,
+        i::Usage::TRANSFER_DST | i::Usage::SAMPLED,
+        i::StorageFlags::empty(),
         ).unwrap(); // TODO: usage
     let image_req = device.get_image_requirements(&image_unbound);
 
@@ -442,7 +444,7 @@ fn main() {
             binding: 0,
             array_offset: 0,
             descriptors: Some(
-                pso::Descriptor::Image(&image_srv, i::ImageLayout::Undefined)
+                pso::Descriptor::Image(&image_srv, i::Layout::Undefined)
             ),
         },
         pso::DescriptorSetWrite {
@@ -473,8 +475,8 @@ fn main() {
             let mut cmd_buffer = command_pool.acquire_command_buffer(false);
 
             let image_barrier = m::Barrier::Image {
-                states: (i::Access::empty(), i::ImageLayout::Undefined) ..
-                        (i::Access::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal),
+                states: (i::Access::empty(), i::Layout::Undefined) ..
+                        (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
                 target: &image_logo,
                 range: COLOR_RANGE.clone(),
             };
@@ -487,7 +489,7 @@ fn main() {
             cmd_buffer.copy_buffer_to_image(
                 &image_upload_buffer,
                 &image_logo,
-                i::ImageLayout::TransferDstOptimal,
+                i::Layout::TransferDstOptimal,
                 &[command::BufferImageCopy {
                     buffer_offset: 0,
                     buffer_width: row_pitch / (image_stride as u32),
@@ -502,8 +504,8 @@ fn main() {
                 }]);
 
             let image_barrier = m::Barrier::Image {
-                states: (i::Access::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal) ..
-                        (i::Access::SHADER_READ, i::ImageLayout::ShaderReadOnlyOptimal),
+                states: (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal) ..
+                        (i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal),
                 target: &image_logo,
                 range: COLOR_RANGE.clone(),
             };

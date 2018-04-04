@@ -161,7 +161,7 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
     pub fn clear_color_image(
         &mut self,
         image: &B::Image,
-        layout: image::ImageLayout,
+        layout: image::Layout,
         range: image::SubresourceRange,
         value: ClearColor,
     ) {
@@ -172,7 +172,7 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
     pub fn clear_depth_stencil_image(
         &mut self,
         image: &B::Image,
-        layout: image::ImageLayout,
+        layout: image::Layout,
         range: image::SubresourceRange,
         value: ClearDepthStencil,
     ) {
@@ -244,9 +244,9 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
     pub fn resolve_image<T>(
         &mut self,
         src: &B::Image,
-        src_layout: image::ImageLayout,
+        src_layout: image::Layout,
         dst: &B::Image,
-        dst_layout: image::ImageLayout,
+        dst_layout: image::Layout,
         regions: T,
     ) where
         T: IntoIterator,
@@ -259,9 +259,9 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
     pub fn blit_image<T>(
         &mut self,
         src: &B::Image,
-        src_layout: image::ImageLayout,
+        src_layout: image::Layout,
         dst: &B::Image,
-        dst_layout: image::ImageLayout,
+        dst_layout: image::Layout,
         filter: image::Filter,
         regions: T,
     ) where
