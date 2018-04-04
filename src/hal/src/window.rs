@@ -261,6 +261,18 @@ impl SwapchainConfig {
         self
     }
 
+    /// Specify the usage of backbuffer images.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    ///
+    /// ```
+    pub fn with_image_usage(mut self, usage: image::Usage) -> Self {
+        self.image_usage = usage;
+        self
+    }
+
     // TODO: depth-only, stencil-only, swapchain size, present modes, etc.
 }
 
