@@ -212,7 +212,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             },
             max_levels: 16,
             max_layers: 2048,
-            sample_count_mask: 0x2,
+            sample_count_mask: 0x1,
             max_resource_size: 256 << 20,
         })
     }

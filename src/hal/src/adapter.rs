@@ -72,7 +72,7 @@ pub trait PhysicalDevice<B: Backend>: Any + Send + Sync {
     /// ```
     fn open(&self, families: Vec<(&B::QueueFamily, Vec<QueuePriority>)>) -> Result<Gpu<B>, DeviceCreationError>;
 
-    /// Fetch details for a particular image format.
+    /// Fetch details for a particular format.
     fn format_properties(
         &self, format: Option<format::Format>
     ) -> format::Properties;

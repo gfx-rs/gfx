@@ -58,7 +58,7 @@ pub enum Tiling {
     /// Optimal tiling for GPU memory access. Implementation-dependent.
     Optimal,
     /// Optimal for CPU read/write. Texels are laid out in row-major order,
-    // possibly with some padding on each row.
+    /// possibly with some padding on each row.
     Linear,
 }
 
@@ -686,7 +686,7 @@ pub struct FormatProperties {
     /// Max number of array layers.
     pub max_layers: Layer,
     /// Bit mask of supported sample counts.
-    pub sample_count_mask: u64,
+    pub sample_count_mask: NumSamples,
     /// Maximum size of the resource in bytes.
     pub max_resource_size: usize,
 }
