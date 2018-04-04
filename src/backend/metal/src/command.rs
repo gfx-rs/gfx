@@ -20,6 +20,7 @@ use block::{ConcreteBlock};
 use conversions::{map_index_type};
 use soft;
 
+use objc::runtime::{Class, Object};
 
 pub struct CommandQueue(pub(crate) Arc<QueueInner>);
 
@@ -773,6 +774,17 @@ impl RawCommandQueue<Backend> for CommandQueue {
                 let render_layer_borrow = surface.render_layer.lock().unwrap();
                 let render_layer = *render_layer_borrow;
                 msg_send![render_layer, setContents: io_surface.obj];
+            }
+        }
+
+        if cfg!(debug_assertions) || cfg!(feature = "metal_default_capture_scope") {
+            unsafe {
+                if let Some(mtl_capture_manager) = Class::get("MTLCaptureManager") {
+                    let shared_capture_manager: *mut Object = msg_send![mtl_capture_manager, sharedCaptureManager];
+                    let default_capture_scope: *mut Object = msg_send![shared_capture_manager, defaultCaptureScope];
+                    msg_send![default_capture_scope, endScope];
+                    msg_send![default_capture_scope, beginScope];
+                }
             }
         }
     }
