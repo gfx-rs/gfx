@@ -2592,15 +2592,11 @@ impl d::Device<B> for Device {
             let bytes_per_block = (format_desc.bits / 8) as _;
             let block_dim = format_desc.dim;
 
-            let image_usage = config
-                .image_usage
-                .unwrap_or(image::Usage::COLOR_ATTACHMENT);
-
             let kind = image::Kind::D2(surface.width, surface.height, 1, 1);
             n::Image {
                 resource,
                 kind,
-                usage: image_usage,
+                usage: config.image_usage,
                 storage_flags: image::StorageFlags::empty(),
                 dxgi_format: format,
                 bytes_per_block,

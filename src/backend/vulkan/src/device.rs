@@ -1405,10 +1405,6 @@ impl d::Device<B> for Device {
         // TODO: handle depth stencil
         let format = config.color_format;
 
-        let image_usage = config
-            .image_usage
-            .unwrap_or(image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC | image::Usage::TRANSFER_DST);
-
         let info = vk::SwapchainCreateInfoKHR {
             s_type: vk::StructureType::SwapchainCreateInfoKhr,
             p_next: ptr::null(),
@@ -1422,7 +1418,7 @@ impl d::Device<B> for Device {
                 height: surface.height,
             },
             image_array_layers: 1,
-            image_usage: conv::map_image_usage(image_usage),
+            image_usage: conv::map_image_usage(config.image_usage),
             image_sharing_mode: vk::SharingMode::Exclusive,
             queue_family_index_count: 0,
             p_queue_family_indices: ptr::null(),
