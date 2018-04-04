@@ -1656,6 +1656,7 @@ impl d::Device<B> for Device {
         kind: image::Kind,
         mip_levels: image::Level,
         format: format::Format,
+        tiling: image::Tiling,
         usage: image::Usage,
         flags: image::StorageFlags,
     ) -> Result<UnboundImage, image::CreationError> {
@@ -1692,7 +1693,10 @@ impl d::Device<B> for Device {
                 Count: kind.num_samples() as _,
                 Quality: 0,
             },
-            Layout: d3d12::D3D12_TEXTURE_LAYOUT_UNKNOWN,
+            Layout: match tiling {
+                image::Tiling::Optimal => d3d12::D3D12_TEXTURE_LAYOUT_UNKNOWN,
+                image::Tiling::Linear => d3d12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+            },
             Flags: conv::map_image_flags(usage),
         };
 

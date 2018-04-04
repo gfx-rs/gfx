@@ -199,6 +199,24 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         unimplemented!()
     }
 
+    fn image_format_properties(
+        &self, _format: format::Format, dimensions: u8, _tiling: image::Tiling,
+        _usage: image::Usage, _storage_flags: image::StorageFlags,
+    ) -> Option<image::FormatProperties> {
+        //TODO: actually query this data
+        Some(image::FormatProperties {
+            max_extent: image::Extent {
+                width: 4096,
+                height: if dimensions >= 2 { 4096 } else { 1 },
+                depth: if dimensions >= 3 { 4096 } else { 1 },
+            },
+            max_levels: 16,
+            max_layers: 2048,
+            sample_count_mask: 0x2,
+            max_resource_size: 256 << 20,
+        })
+    }
+
     fn memory_properties(&self) -> hal::MemoryProperties {
         hal::MemoryProperties {
             memory_heaps: vec![!0, !0], //TODO
@@ -1225,6 +1243,7 @@ impl hal::Device<Backend> for Device {
         kind: image::Kind,
         mip_levels: image::Level,
         format: format::Format,
+        _tiling: image::Tiling,
         usage: image::Usage,
         flags: image::StorageFlags,
     ) -> Result<n::UnboundImage, image::CreationError> {

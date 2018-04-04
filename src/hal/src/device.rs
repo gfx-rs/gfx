@@ -311,7 +311,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
 
     ///
     fn create_image(
-        &self, kind: image::Kind, num_levels: image::Level, format: format::Format,
+        &self, kind: image::Kind, mip_levels: image::Level, format: format::Format,
         tiling: image::Tiling, usage: image::Usage, storage_flags: image::StorageFlags,
     ) -> Result<B::UnboundImage, image::CreationError>;
 
