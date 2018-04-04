@@ -4,7 +4,7 @@ use std::ops::Range;
 
 use {buffer, pso};
 use {Backend, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
-use image::{Filter, ImageLayout, SubresourceRange};
+use image::{Filter, Layout, SubresourceRange};
 use memory::{Barrier, Dependencies};
 use query::{Query, QueryControl, QueryId};
 use super::{
@@ -128,7 +128,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn clear_color_image(
         &mut self,
         image: &B::Image,
-        layout: ImageLayout,
+        layout: Layout,
         range: SubresourceRange,
         cv: ClearColor,
     ) {
@@ -144,7 +144,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn clear_color_image_raw(
         &mut self,
         &B::Image,
-        ImageLayout,
+        Layout,
         SubresourceRange,
         ClearColorRaw,
     );
@@ -154,7 +154,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn clear_depth_stencil_image(
         &mut self,
         image: &B::Image,
-        layout: ImageLayout,
+        layout: Layout,
         range: SubresourceRange,
         cv: ClearDepthStencil,
     ) {
@@ -169,7 +169,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn clear_depth_stencil_image_raw(
         &mut self,
         &B::Image,
-        ImageLayout,
+        Layout,
         SubresourceRange,
         ClearDepthStencilRaw,
     );
@@ -188,9 +188,9 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn resolve_image<T>(
         &mut self,
         src: &B::Image,
-        src_layout: ImageLayout,
+        src_layout: Layout,
         dst: &B::Image,
-        dst_layout: ImageLayout,
+        dst_layout: Layout,
         regions: T,
     ) where
         T: IntoIterator,
@@ -201,9 +201,9 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn blit_image<T>(
         &mut self,
         src: &B::Image,
-        src_layout: ImageLayout,
+        src_layout: Layout,
         dst: &B::Image,
-        dst_layout: ImageLayout,
+        dst_layout: Layout,
         filter: Filter,
         regions: T,
     ) where
@@ -408,14 +408,14 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
 
     /// Copies regions from the source to the destination images, which
     /// have the given layouts.  No format conversion is done; the source and destination
-    /// `ImageLayout`'s **must** have the same sized image formats (such as `Rgba8Unorm` and
+    /// `Layout`'s **must** have the same sized image formats (such as `Rgba8Unorm` and
     /// `R32`, both of which are 32 bits).
     fn copy_image<T>(
         &mut self,
         src: &B::Image,
-        src_layout: ImageLayout,
+        src_layout: Layout,
         dst: &B::Image,
-        dst_layout: ImageLayout,
+        dst_layout: Layout,
         regions: T,
     ) where
         T: IntoIterator,
@@ -426,7 +426,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
         &mut self,
         src: &B::Buffer,
         dst: &B::Image,
-        dst_layout: ImageLayout,
+        dst_layout: Layout,
         regions: T,
     ) where
         T: IntoIterator,
@@ -436,7 +436,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn copy_image_to_buffer<T>(
         &mut self,
         src: &B::Image,
-        src_layout: ImageLayout,
+        src_layout: Layout,
         dst: &B::Buffer,
         regions: T,
     ) where

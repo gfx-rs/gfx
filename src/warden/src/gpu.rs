@@ -285,8 +285,9 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                     }
                     raw::Resource::Image { kind, num_levels, format, usage, ref data } => {
                         // allocate memory
-                        let unbound = device.create_image(kind, num_levels, format, usage, i::StorageFlags::empty())
-                            .unwrap();
+                        let unbound = device.create_image(
+                            kind, num_levels, format, i::Tiling::Optimal, usage, i::StorageFlags::empty()
+                            ).unwrap();
                         let requirements = device.get_image_requirements(&unbound);
                         let memory_type = memory_types
                             .iter()
@@ -305,13 +306,13 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         // process initial data for the image
                         let stable_state = if data.is_empty() {
                             let (aspects, access, layout) = if format.is_color() {
-                                (f::Aspects::COLOR, i::Access::COLOR_ATTACHMENT_WRITE, i::ImageLayout::ColorAttachmentOptimal)
+                                (f::Aspects::COLOR, i::Access::COLOR_ATTACHMENT_WRITE, i::Layout::ColorAttachmentOptimal)
                             } else {
-                                (f::Aspects::DEPTH | f::Aspects::STENCIL, i::Access::DEPTH_STENCIL_ATTACHMENT_WRITE, i::ImageLayout::DepthStencilAttachmentOptimal)
+                                (f::Aspects::DEPTH | f::Aspects::STENCIL, i::Access::DEPTH_STENCIL_ATTACHMENT_WRITE, i::Layout::DepthStencilAttachmentOptimal)
                             };
                             if false { //TODO
                                 let image_barrier = memory::Barrier::Image {
-                                    states: (i::Access::empty(), i::ImageLayout::Undefined) .. (access, layout),
+                                    states: (i::Access::empty(), i::Layout::Undefined) .. (access, layout),
                                     target: &image,
                                     range: i::SubresourceRange {
                                         aspects,
@@ -365,10 +366,10 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                 device.release_mapping_writer(mapping);
                             }
                             // add init commands
-                            let final_state = (i::Access::SHADER_READ, i::ImageLayout::ShaderReadOnlyOptimal);
+                            let final_state = (i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal);
                             let pre_barrier = memory::Barrier::Image {
-                                states: (i::Access::empty(), i::ImageLayout::Undefined) ..
-                                        (i::Access::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal),
+                                states: (i::Access::empty(), i::Layout::Undefined) ..
+                                        (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
                                 target: &image,
                                 range: COLOR_RANGE.clone(), //TODO
                             };
@@ -394,11 +395,11 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             init_cmd.copy_buffer_to_image(
                                 &upload_buffer,
                                 &image,
-                                i::ImageLayout::TransferDstOptimal,
+                                i::Layout::TransferDstOptimal,
                                 &[copy],
                             );
                             let post_barrier = memory::Barrier::Image {
-                                states: (i::Access::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal) .. final_state,
+                                states: (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal) .. final_state,
                                 target: &image,
                                 range: COLOR_RANGE.clone(), //TODO
                             };
@@ -981,7 +982,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         let copy_submit = {
             let mut cmd_buffer = command_pool.acquire_command_buffer(false);
             let pre_barrier = memory::Barrier::Image {
-                states: image.stable_state .. (i::Access::TRANSFER_READ, i::ImageLayout::TransferSrcOptimal),
+                states: image.stable_state .. (i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal),
                 target: &image.handle,
                 range: COLOR_RANGE.clone(), //TODO
             };
@@ -1009,13 +1010,13 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             };
             cmd_buffer.copy_image_to_buffer(
                 &image.handle,
-                i::ImageLayout::TransferSrcOptimal,
+                i::Layout::TransferSrcOptimal,
                 &down_buffer,
                 &[copy],
             );
 
             let post_barrier = memory::Barrier::Image {
-                states: (i::Access::TRANSFER_READ, i::ImageLayout::TransferSrcOptimal) .. image.stable_state,
+                states: (i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal) .. image.stable_state,
                 target: &image.handle,
                 range: COLOR_RANGE.clone(), //TODO
             };

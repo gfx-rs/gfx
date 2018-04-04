@@ -431,24 +431,41 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn image_format_properties(
-        &self, format: format::Format, dimensions: u8, tiling: image:: Tiling,
+        &self, format: format::Format, dimensions: u8, tiling: image::Tiling,
         usage: image::Usage, storage_flags: image::StorageFlags,
     ) -> Option<image::FormatProperties> {
-        let properties = self.instance.0
+        match self.instance.0
             .get_physical_device_image_format_properties(
                 self.handle,
                 conv::map_format(format),
                 match dimensions {
-                    1 => vk::imageType::D1,
-                    2 => vk::imageType::D2,
-                    3 => vk::imageType::D3,
+                    1 => vk::ImageType::Type1d,
+                    2 => vk::ImageType::Type2d,
+                    3 => vk::ImageType::Type3d,
                     _ => panic!("Unexpected image dimensionality: {}", dimensions)
                 },
                 conv::map_tiling(tiling),
                 conv::map_image_usage(usage),
                 conv::map_image_flags(storage_flags),
-            );
-        None
+            )
+        {
+            Ok(props) => Some(image::FormatProperties {
+                max_extent: image::Extent {
+                    width: props.max_extent.width,
+                    height: props.max_extent.height,
+                    depth: props.max_extent.depth,
+                },
+                max_levels: props.max_mip_levels as _,
+                max_layers: props.max_array_layers as _,
+                sample_count_mask: props.sample_counts.flags() as _,
+                max_resource_size: props.max_resource_size as _,
+            }),
+            Err(vk::Result::ErrorFormatNotSupported) => None,
+            Err(other) => {
+                error!("Unexpected error in `image_format_properties`: {:?}", other);
+                None
+            }
+        }
     }
 
     fn memory_properties(&self) -> hal::MemoryProperties {

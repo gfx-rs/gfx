@@ -181,26 +181,26 @@ impl<B: Backend> Device<B> {
         where A: Allocator<B>
     {
         use image::Usage;
-        use hal::image::ImageLayout;
+        use hal::image::{Layout, Tiling};
 
         let aspects = format.aspects();
         let flags = image::StorageFlags::empty();
-        let image = self.raw.create_image(kind, mip_levels, format, usage, flags)?;
+        let image = self.raw.create_image(kind, mip_levels, format, Tiling::Optimal, usage, flags)?;
         let (image, memory) = allocator.allocate_image(self, usage, image);
         let origin = image::Origin::User(memory);
         let stable_access = hal::image::Access::empty();
         let stable_layout = match usage {
             _ if usage.contains(Usage::COLOR_ATTACHMENT) =>
-                ImageLayout::ColorAttachmentOptimal,
+                Layout::ColorAttachmentOptimal,
             _ if usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) =>
-                ImageLayout::DepthStencilAttachmentOptimal,
+                Layout::DepthStencilAttachmentOptimal,
             _ if usage.contains(Usage::SAMPLED) =>
-                ImageLayout::ShaderReadOnlyOptimal,
+                Layout::ShaderReadOnlyOptimal,
             _ if usage.contains(Usage::TRANSFER_SRC) =>
-                ImageLayout::TransferSrcOptimal,
+                Layout::TransferSrcOptimal,
             _ if usage.contains(Usage::TRANSFER_DST) =>
-                ImageLayout::TransferDstOptimal,
-            _ => ImageLayout::General,
+                Layout::TransferDstOptimal,
+            _ => Layout::General,
         };
         let stable_state = (stable_access, stable_layout);
         let info = image::Info { aspects, usage, kind, mip_levels, format, origin, stable_state };

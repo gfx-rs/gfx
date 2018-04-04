@@ -222,11 +222,11 @@ unsafe impl Send for DescriptorSetInner {}
 #[derive(Debug)]
 pub enum DescriptorSetBinding {
     Sampler(Vec<Option<metal::SamplerState>>),
-    Image(Vec<Option<(metal::Texture, image::ImageLayout)>>),
+    Image(Vec<Option<(metal::Texture, image::Layout)>>),
     //UniformTexelBuffer,
     //StorageTexelBuffer,
     Buffer(Vec<Option<(metal::Buffer, u64)>>),
-    //InputAttachment(Vec<(metal::Texture, image::ImageLayout)>),
+    //InputAttachment(Vec<(metal::Texture, image::Layout)>),
 }
 
 #[derive(Debug)]

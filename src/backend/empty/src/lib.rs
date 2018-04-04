@@ -430,7 +430,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn clear_color_image_raw(
         &mut self,
         _: &(),
-        _: image::ImageLayout,
+        _: image::Layout,
         _: image::SubresourceRange,
         _: command::ClearColorRaw,
     ) {
@@ -440,7 +440,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn clear_depth_stencil_image_raw(
         &mut self,
         _: &(),
-        _: image::ImageLayout,
+        _: image::Layout,
         _: image::SubresourceRange,
         _: command::ClearDepthStencilRaw,
     ) {
@@ -460,9 +460,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn resolve_image<T>(
         &mut self,
         _: &(),
-        _: image::ImageLayout,
+        _: image::Layout,
         _: &(),
-        _: image::ImageLayout,
+        _: image::Layout,
         _: T,
     ) where
         T: IntoIterator,
@@ -474,9 +474,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn blit_image<T>(
         &mut self,
         _: &(),
-        _: image::ImageLayout,
+        _: image::Layout,
         _: &(),
-        _: image::ImageLayout,
+        _: image::Layout,
         _: image::Filter,
         _: T,
     ) where
@@ -586,9 +586,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn copy_image<T>(
         &mut self,
         _: &(),
-        _: image::ImageLayout,
+        _: image::Layout,
         _: &(),
-        _: image::ImageLayout,
+        _: image::Layout,
         _: T,
     ) where
         T: IntoIterator,
@@ -601,7 +601,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         &mut self,
         _: &(),
         _: &(),
-        _: image::ImageLayout,
+        _: image::Layout,
         _: T,
     ) where
         T: IntoIterator,
@@ -613,7 +613,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn copy_image_to_buffer<T>(
         &mut self,
         _: &(),
-        _: image::ImageLayout,
+        _: image::Layout,
         _: &(),
         _: T,
     ) where

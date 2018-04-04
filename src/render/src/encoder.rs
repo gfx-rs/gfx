@@ -217,7 +217,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
     fn init_image<'b>(
         &mut self, image: &'b handle::raw::Image<B>
     ) -> Barrier<'b, B> {
-        let creation_state = (hal::image::Access::empty(), i::ImageLayout::Undefined);
+        let creation_state = (hal::image::Access::empty(), i::Layout::Undefined);
         let num_levels = image.info().mip_levels;
         let num_layers = image.info().kind.num_layers();
         let stable_state = image.info().stable_state;
@@ -498,8 +498,8 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             "missing TRANSFER_DST usage flag");
 
         // TODO: error handling
-        let src_state = (i::Access::TRANSFER_READ, i::ImageLayout::TransferSrcOptimal);
-        let dst_state = (i::Access::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal);
+        let src_state = (i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal);
+        let dst_state = (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal);
         let mut image_states = Vec::new();
         // TODO: this should probably be a loop over all the layers
         for region in regions {
@@ -537,7 +537,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             "missing TRANSFER_DST usage flag");
 
         // TODO: error handling
-        let dst_state = (i::Access::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal);
+        let dst_state = (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal);
         let mut image_states = Vec::new();
         for region in regions {
             let r = &region.image_layers;
@@ -581,7 +581,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             "missing TRANSFER_DST usage flag");
 
         // TODO: error handling
-        let src_state = (i::Access::TRANSFER_READ, i::ImageLayout::TransferSrcOptimal);
+        let src_state = (i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal);
         let mut image_states = Vec::new();
         for region in regions {
             let r = &region.image_layers;
@@ -609,10 +609,10 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
 impl<'a, B: Backend, C> Encoder<'a, B, C>
     where C: Supports<Transfer> + Supports<Graphics>
 {
-    fn require_clear_state(&mut self, image: &handle::raw::Image<B>) -> i::ImageLayout {
+    fn require_clear_state(&mut self, image: &handle::raw::Image<B>) -> i::Layout {
         let levels = image.info().mip_levels;
         let layers = image.info().kind.num_layers();
-        let state = (i::Access::TRANSFER_WRITE, i::ImageLayout::TransferDstOptimal);
+        let state = (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal);
         let mut image_states = Vec::new();
         for level in 0..levels {
             for layer in 0..layers {

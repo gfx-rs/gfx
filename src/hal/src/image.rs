@@ -51,6 +51,7 @@ impl Offset {
 }
 
 /// Image tiling modes.
+#[repr(u32)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Tiling {
@@ -571,7 +572,7 @@ impl From<RenderDesc> for DepthStencilDesc {
 /// Details may be found in [the Vulkan spec](https://www.khronos.org/registry/vulkan/specs/1.0/html/vkspec.html#resources-image-layouts)
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum ImageLayout {
+pub enum Layout {
     /// General purpose, no restrictions on usage.
     General,
     /// Must only be used as a color attachment in a framebuffer.
@@ -636,7 +637,7 @@ bitflags!(
 );
 
 /// Image state, combining access methods and the image's layout.
-pub type State = (Access, ImageLayout);
+pub type State = (Access, Layout);
 
 /// Selector of a concrete subresource in an image.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]

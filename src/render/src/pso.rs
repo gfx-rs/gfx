@@ -5,7 +5,7 @@ use std::mem;
 use std::marker::PhantomData;
 
 use {hal, format, handle};
-use hal::image::ImageLayout;
+use hal::image::Layout;
 use hal::pass::{AttachmentOps, AttachmentLoadOp, AttachmentStoreOp};
 
 use {Backend, Device, Primitive, Supports, Transfer, Graphics, Encoder};
@@ -116,7 +116,7 @@ impl<B: Backend> Bind<B> for SampledImage {
         /* views
             .into_iter()
             .map(|view| {
-                let layout = ImageLayout::ShaderReadOnlyOptimal;
+                let layout = Layout::ShaderReadOnlyOptimal;
                 (view.borrow().resource(), layout)
             }).collect())*/
     }
@@ -130,7 +130,7 @@ impl<B: Backend> Bind<B> for SampledImage {
         let img = view.info();
         let levels = img.info().mip_levels;
         let layers = img.info().kind.num_layers();
-        let state = (hal::image::Access::SHADER_READ, ImageLayout::ShaderReadOnlyOptimal);
+        let state = (hal::image::Access::SHADER_READ, Layout::ShaderReadOnlyOptimal);
         for level in 0..levels {
             for layer in 0..layers {
                 let subresource = hal::image::Subresource {
@@ -287,7 +287,7 @@ pub struct Attachment {
     pub format: format::Format,
     pub ops: AttachmentOps,
     pub stencil_ops: AttachmentOps,
-    pub required_layout: ImageLayout,
+    pub required_layout: Layout,
 }
 
 pub struct RenderTarget<F: format::AsFormat>(PhantomData<F>);
@@ -306,7 +306,7 @@ where
             // TODO: AttachmentLoadOp::Clear
             ops: AttachmentOps::new(AttachmentLoadOp::Load, AttachmentStoreOp::Store),
             stencil_ops: AttachmentOps::DONT_CARE,
-            required_layout: ImageLayout::ColorAttachmentOptimal,
+            required_layout: Layout::ColorAttachmentOptimal,
         })
     }
 
@@ -328,7 +328,7 @@ where
         let layers = img.info().kind.num_layers();
         // TODO: READ not always necessary
         let state = (hal::image::Access::COLOR_ATTACHMENT_READ | hal::image::Access::COLOR_ATTACHMENT_WRITE,
-            ImageLayout::ColorAttachmentOptimal);
+            Layout::ColorAttachmentOptimal);
         for level in 0..levels {
             for layer in 0..layers {
                 let subresource = hal::image::Subresource {

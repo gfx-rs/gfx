@@ -29,13 +29,13 @@ pub enum AttachmentStoreOp {
 }
 
 /// Image layout of an attachment.
-pub type AttachmentLayout = image::ImageLayout;
+pub type AttachmentLayout = image::Layout;
 
 /// Attachment operations.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AttachmentOps {
-    /// Indicates how the data of the attachment will be loaded at first usage at 
+    /// Indicates how the data of the attachment will be loaded at first usage at
     /// the beginning of the subpass.
     pub load: AttachmentLoadOp,
     /// Whether or not data from the store operation will be preserved after the subpass.
@@ -99,14 +99,14 @@ pub enum SubpassRef {
     External,
     /// The subpass depends on another subpass with the given index,
     /// which must be less than or equal to the index of the current
-    /// subpass. The index here refers to the corresponding 
+    /// subpass. The index here refers to the corresponding
     /// `SubpassId` of a `Subpass`.
     Pass(usize),
 }
 
 /// Expresses a dependency between multiple subpasses. This is used
-/// both to describe a source or destination subpass; data either 
-/// explicitly passes from this subpass to the next or from another 
+/// both to describe a source or destination subpass; data either
+/// explicitly passes from this subpass to the next or from another
 /// subpass into this one.
 #[derive(Clone, Debug, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
