@@ -200,6 +200,8 @@ pub struct SwapchainConfig {
     pub depth_stencil_format: Option<Format>,
     /// Number of images in the swapchain.
     pub image_count: u32,
+    /// Image usage of the backbuffer images.
+    pub image_usage: Option<image::Usage>,
 }
 
 impl SwapchainConfig {
@@ -215,6 +217,7 @@ impl SwapchainConfig {
             color_format: Format::Bgra8Unorm, // TODO: try to find best default format
             depth_stencil_format: None,
             image_count: 2,
+            image_usage: None,
         }
     }
 
