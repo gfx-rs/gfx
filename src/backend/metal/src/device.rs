@@ -1445,8 +1445,12 @@ impl hal::Device<Backend> for Device {
         &self,
         surface: &mut Surface,
         config: hal::SwapchainConfig,
+        _old_swapchain: Option<Swapchain>,
     ) -> (Swapchain, hal::Backbuffer<Backend>) {
         self.build_swapchain(surface, config)
+    }
+
+    fn destroy_swapchain(&self, _swapchain: Swapchain) {
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {

@@ -352,9 +352,12 @@ impl hal::Device<Backend> for Device {
         &self,
         _: &mut Surface,
         _: hal::SwapchainConfig,
+        _: Option<Swapchain>,
     ) -> (Swapchain, hal::Backbuffer<Backend>) {
         unimplemented!()
     }
+
+    fn destroy_swapchain(&self, _: Swapchain) { unimplemented!() }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
         unimplemented!()

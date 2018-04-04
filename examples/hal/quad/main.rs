@@ -140,7 +140,7 @@ fn main() {
     println!("Surface format: {:?}", surface_format);
     let swap_config = SwapchainConfig::new()
         .with_color(surface_format);
-    let (mut swap_chain, backbuffer) = device.create_swapchain(&mut surface, swap_config);
+    let (mut swap_chain, backbuffer) = device.create_swapchain(&mut surface, swap_config, None);
 
     // Setup renderpass and pipeline
     let set_layout = device.create_descriptor_set_layout(&[

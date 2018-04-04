@@ -1084,9 +1084,12 @@ impl d::Device<B> for Device {
         &self,
         surface: &mut Surface,
         config: c::SwapchainConfig,
+        _old_swapchain: Option<Swapchain>,
     ) -> (Swapchain, c::Backbuffer<B>) {
         self.create_swapchain_impl(surface, config)
     }
+
+    fn destroy_swapchain(&self, _: Swapchain) { unimplemented!() }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
         unsafe { self.share.context.Finish(); }
