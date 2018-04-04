@@ -2596,7 +2596,7 @@ impl d::Device<B> for Device {
             n::Image {
                 resource,
                 kind,
-                usage: image::Usage::COLOR_ATTACHMENT,
+                usage: config.image_usage,
                 storage_flags: image::StorageFlags::empty(),
                 dxgi_format: format,
                 bytes_per_block,
