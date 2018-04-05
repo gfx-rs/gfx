@@ -731,17 +731,21 @@ impl CommandBuffer {
                             y as u64 * row_pitch as u64;
                         let aligned_offset = row_offset & !(d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64 - 1);
                         let next_aligned_offset = aligned_offset + d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64;
-                        let cut_width = cmp::min(r.image_extent.width, (next_aligned_offset - row_offset) as _);
-                        let gap = (row_offset - aligned_offset) as u32;
+                        let cut_row_texels = (next_aligned_offset - row_offset) / image.bytes_per_block as u64;
+                        let cut_width = cmp::min(r.image_extent.width, cut_row_texels as image::Size);
+                        let gap_texels = (row_offset - aligned_offset) as image::Size / image.bytes_per_block as image::Size;
+                        // this is a conservative row pitch that should be compatible with both copies
+                        let max_unaligned_pitch = r.image_extent.width * image.bytes_per_block as u32;
+                        let row_pitch = (max_unaligned_pitch | d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT) + 1;
 
                         copies.push(Copy {
                             footprint_offset: aligned_offset,
                             footprint: image::Extent {
-                                width: cut_width + gap,
+                                width: cut_width + gap_texels,
                                 height: 1,
                                 depth: 1,
                             },
-                            row_pitch: d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT,
+                            row_pitch,
                             img_subresource,
                             img_offset: image::Offset {
                                 x: r.image_offset.x,
@@ -749,7 +753,7 @@ impl CommandBuffer {
                                 z: r.image_offset.z + z as i32,
                             },
                             buf_offset: image::Offset {
-                                x: gap as i32,
+                                x: gap_texels as i32,
                                 y: 0,
                                 z: 0,
                             },
@@ -773,7 +777,7 @@ impl CommandBuffer {
                                 height: 1,
                                 depth: 1,
                             },
-                            row_pitch: (leftover | (d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1)) + 1,
+                            row_pitch,
                             img_subresource,
                             img_offset: image::Offset {
                                 x: r.image_offset.x + cut_width as i32,
