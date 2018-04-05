@@ -50,7 +50,13 @@ unsafe impl Send for Surface { }
 unsafe impl Sync for Surface { }
 
 impl hal::Surface<Backend> for Surface {
-    fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool { true }
+    fn supports_queue_family(&self, queue_family: &QueueFamily) -> bool {
+        match queue_family {
+            &QueueFamily::Present => true,
+            _ => false
+        }
+    }
+
     fn kind(&self) -> i::Kind {
         i::Kind::D2(self.width, self.height, 1, 1)
     }
