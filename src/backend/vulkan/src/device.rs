@@ -1460,6 +1460,10 @@ impl d::Device<B> for Device {
         (swapchain, Backbuffer::Images(images))
     }
 
+    fn destroy_swapchain(&self, swapchain: w::Swapchain) {
+        unsafe { swapchain.functor.destroy_swapchain_khr(swapchain.raw, None); }
+    }
+
     fn destroy_query_pool(&self, pool: n::QueryPool) {
         unsafe { self.raw.0.destroy_query_pool(pool.0, None); }
     }

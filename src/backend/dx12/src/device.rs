@@ -2618,6 +2618,10 @@ impl d::Device<B> for Device {
         (swapchain, hal::Backbuffer::Images(images))
     }
 
+    fn destroy_swapchain(&self, _swapchain: w::Swapchain) {
+        // automatic
+    }
+
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
         for queue in &self.queues {
             queue.wait_idle()?;

@@ -1461,6 +1461,9 @@ impl hal::Device<Backend> for Device {
         self.build_swapchain(surface, config)
     }
 
+    fn destroy_swapchain(&self, _swapchain: Swapchain) {
+    }
+
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
         unimplemented!()
     }

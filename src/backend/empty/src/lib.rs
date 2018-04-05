@@ -356,6 +356,10 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
+    fn destroy_swapchain(&self, _: Swapchain) {
+        unimplemented!()
+    }
+
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
         unimplemented!()
     }
