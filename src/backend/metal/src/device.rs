@@ -23,6 +23,7 @@ use metal::{self,
     MTLVertexStepFunction, MTLSamplerBorderColor, MTLSamplerMipFilter, MTLStorageMode, MTLResourceOptions, MTLTextureType,
 };
 use foreign_types::ForeignType;
+use objc::runtime::Class as ObjcClass;
 use objc::runtime::Object as ObjcObject;
 use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
 
@@ -185,6 +186,17 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             queue,
             memory_types: self.memory_types,
         };
+
+        if cfg!(debug_assertions) || cfg!(feature = "metal_default_capture_scope") {
+            unsafe {
+                if let Some(mtl_capture_manager) = ObjcClass::get("MTLCaptureManager") {
+                    let shared_capture_manager: *mut ObjcObject = msg_send![mtl_capture_manager, sharedCaptureManager];
+                    let default_capture_scope: *mut ObjcObject = msg_send![shared_capture_manager, newCaptureScopeWithDevice:device.device.as_ptr()];
+                    msg_send![shared_capture_manager, setDefaultCaptureScope:default_capture_scope];
+                    msg_send![default_capture_scope, beginScope];
+                }
+            }
+        }
 
         let mut queues = HashMap::new();
         queues.insert(id, queue_group);
