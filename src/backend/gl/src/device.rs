@@ -1088,6 +1088,10 @@ impl d::Device<B> for Device {
         self.create_swapchain_impl(surface, config)
     }
 
+    fn destroy_swapchain(&self, _swapchain: Swapchain) {
+        unimplemented!()
+    }
+
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
         unsafe { self.share.context.Finish(); }
         Ok(())

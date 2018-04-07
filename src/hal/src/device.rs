@@ -581,6 +581,11 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         config: SwapchainConfig,
     ) -> (B::Swapchain, Backbuffer<B>);
 
+    /// 
+    fn destroy_swapchain(
+        &self,
+        swapchain: B::Swapchain);
+
     /// Wait for all queues associated with this device to idle.
     ///
     /// Host access to all queues needs to be **externally** sycnhronized!

@@ -610,10 +610,11 @@ fn main() {
     for framebuffer in framebuffers {
         device.destroy_framebuffer(framebuffer);
     }
-    for (image, rtv) in frame_images {
+    for (_, rtv) in frame_images {
         device.destroy_image_view(rtv);
-        device.destroy_image(image);
     }
+
+    device.destroy_swapchain(swap_chain);
 }
 
 #[cfg(not(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl")))]
