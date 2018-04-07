@@ -1,5 +1,5 @@
 use {Backend, QueueFamily, Surface, Swapchain};
-use {native as n, command};
+use {native as n, command, soft};
 use conversions::*;
 
 use std::borrow::Borrow;
@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::{cmp, mem, ptr, slice};
 
 use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query};
+use hal::command::BufferCopy;
 use hal::device::{BindError, OutOfMemory, FramebufferError, ShaderError};
 use hal::memory::Properties;
 use hal::pool::CommandPoolCreateFlags;
@@ -268,9 +269,9 @@ impl LanguageVersion {
 }
 
 impl Device {
-    fn is_heap_coherent(&self, heap: &n::MemoryHeap) -> bool {
+    fn _is_heap_coherent(&self, heap: &n::MemoryHeap) -> bool {
         match *heap {
-            n::MemoryHeap::Emulated { memory_type } => self.memory_types[memory_type].properties.contains(Properties::COHERENT),
+            n::MemoryHeap::Emulated(memory_type) => self.memory_types[memory_type.0].properties.contains(Properties::COHERENT),
             n::MemoryHeap::Native(ref heap) => heap.storage_mode() == MTLStorageMode::Shared,
         }
     }
@@ -894,40 +895,24 @@ impl hal::Device<Backend> for Device {
     }
 
     fn map_memory<R: RangeArg<u64>>(
-        &self, memory: &n::Memory, range: R
+        &self, memory: &n::Memory, generic_range: R
     ) -> Result<*mut u8, mapping::Error> {
-        let allocations = memory.allocations.lock().unwrap();
+        let range = memory.resolve(&generic_range);
+        self.invalidate_mapped_memory_ranges(&[(memory, generic_range)]);
+
+        let base_ptr = memory.cpu_buffer.as_ref().unwrap().contents() as *mut u8;
+        let ptr = unsafe { base_ptr.offset(range.start as _) };
+
         let mut mapping = memory.mapping.lock().unwrap();
-
         assert!(mapping.is_none(), "Only one mapping per `Memory` at a time is allowed");
-        let range_start = *range.start().unwrap_or(&0);
-        let range_end = *range.end().unwrap_or(&memory.size);
-        let buffers = allocations.find(range_start .. range_end);
+        *mapping = Some(range);
 
-        assert_eq!(buffers.len(), 1, "Only mapping range within single buffer is alowed for now");
-        let (buffer_range, buffer) = buffers.into_iter().next().unwrap();
-
-        debug_assert!(range_start >= buffer_range.start);
-        debug_assert!(range_end <= buffer_range.end);
-        debug_assert_eq!(buffer.length(), buffer_range.end - buffer_range.start);
-
-        let offset = range_start - buffer_range.start;
-        let length = range_end - range_start;
-        let ptr = unsafe {
-            (buffer.contents() as *mut u8).offset(offset as isize)
-        };
-
-        *mapping = Some(n::MemoryMapping {
-            range: range_start .. range_end,
-            buffer,
-            location: offset as _,
-            length: length as _,
-        });
         Ok(ptr)
     }
 
     fn unmap_memory(&self, memory: &n::Memory) {
-        memory.mapping.lock().unwrap().take();
+        let range = memory.mapping.lock().unwrap().take().expect("Unmapping non-mapped memory?");
+        self.flush_mapped_memory_ranges(&[(memory, range)]);
     }
 
     fn flush_mapped_memory_ranges<'a, I, R>(&self, iter: I)
@@ -936,32 +921,81 @@ impl hal::Device<Backend> for Device {
         I::Item: Borrow<(&'a n::Memory, R)>,
         R: RangeArg<u64>,
     {
-        for item in iter.into_iter() {
-            let (memory, ref range) = *item.borrow();
-            if self.is_heap_coherent(&memory.heap) {
-                continue
-            }
-            let range_start = *range.start().unwrap_or(&0);
-            let range_end = *range.end().unwrap_or(&memory.size);
-            let mapping = memory.mapping.lock().unwrap();
-            assert!(mapping.is_some());
-            let mapping = mapping.as_ref().unwrap();
-            assert!(mapping.range.start <= range_start);
-            assert!(mapping.range.end >= range_end);
-            mapping.buffer.did_modify_range(NSRange {
-                location: (mapping.location + range_start - mapping.range.start) as _,
-                length: (range_end - range_start) as _,
+        // temporary command buffer to copy the contents from
+        // allocated CPU-visible buffers to the target buffers
+        let cmd_buffer = self.queue.new_command_buffer_ref();
+        let encoder = cmd_buffer.new_blit_command_encoder();
+
+        for item in iter {
+            let (memory, ref generic_range) = *item.borrow();
+            let range = memory.resolve(generic_range);
+
+            let cpu_buffer = memory.cpu_buffer.as_ref().unwrap();
+            cpu_buffer.did_modify_range(NSRange {
+                location: range.start as _,
+                length: (range.end - range.start) as _,
             });
+
+            let allocations = memory.allocations.lock().unwrap();
+            for (alloc_range, dst) in allocations.find(&range) {
+                let start = alloc_range.start.max(range.start);
+                let end = alloc_range.end.min(range.end);
+                command::exec_blit(encoder, &soft::BlitCommand::CopyBuffer {
+                    src: cpu_buffer.clone(),
+                    dst,
+                    region: BufferCopy {
+                        src: start,
+                        dst: start - alloc_range.start,
+                        size: end - start,
+                    },
+                });
+            }
         }
+
+        encoder.end_encoding();
+        cmd_buffer.commit();
     }
 
-    fn invalidate_mapped_memory_ranges<'a, I, R>(&self, _ranges: I)
+    fn invalidate_mapped_memory_ranges<'a, I, R>(&self, iter: I)
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a n::Memory, R)>,
         R: RangeArg<u64>,
     {
-        // Do nothing.
+        // temporary command buffer to copy the contents from
+        // the given buffers into the allocated CPU-visible buffers
+        let cmd_buffer = self.queue.new_command_buffer_ref();
+        let encoder = cmd_buffer.new_blit_command_encoder();
+
+        for item in iter {
+            let (memory, ref generic_range) = *item.borrow();
+            let range = memory.resolve(generic_range);
+            let cpu_buffer = memory.cpu_buffer.as_ref().unwrap();
+
+            let allocations = memory.allocations.lock().unwrap();
+            for (alloc_range, src) in allocations.find(&range) {
+                let start = alloc_range.start.max(range.start);
+                let end = alloc_range.end.min(range.end);
+                command::exec_blit(encoder, &soft::BlitCommand::CopyBuffer {
+                    src,
+                    dst: cpu_buffer.clone(),
+                    region: BufferCopy {
+                        src: start - alloc_range.start,
+                        dst: start,
+                        size: end - start,
+                    },
+                });
+            }
+
+            unsafe {
+                msg_send![*encoder,
+                    synchronizeResource: cpu_buffer.as_ref()
+                ];
+            }
+        }
+
+        encoder.end_encoding();
+        cmd_buffer.commit();
     }
 
     fn create_semaphore(&self) -> n::Semaphore {
@@ -1141,9 +1175,18 @@ impl hal::Device<Backend> for Device {
     }
 
     fn allocate_memory(&self, memory_type: hal::MemoryTypeId, size: u64) -> Result<n::Memory, OutOfMemory> {
-        let memory_type = memory_type.0;
-        let memory_properties = self.memory_types[memory_type].properties;
+        let memory_properties = self.memory_types[memory_type.0].properties;
         let (storage, cache) = map_memory_properties_to_storage_and_cache(memory_properties);
+
+        //TODO: use aliasing when `resource_heaps` are supported
+        let cpu_buffer = match storage {
+            MTLStorageMode::Shared |
+            MTLStorageMode::Managed => {
+                let buffer = self.device.new_buffer(size, MTLResourceOptions::StorageModeManaged);
+                Some(buffer)
+            },
+            MTLStorageMode::Private => None,
+        };
 
         // Heaps cannot be used for CPU coherent resources
         //TEMP: MacOS supports Private only, iOS and tvOS can do private/shared
@@ -1155,10 +1198,10 @@ impl hal::Device<Backend> for Device {
             let heap_raw = self.device.new_heap(&descriptor);
             n::MemoryHeap::Native(heap_raw)
         } else {
-            n::MemoryHeap::Emulated { memory_type }
+            n::MemoryHeap::Emulated(memory_type)
         };
 
-        Ok(n::Memory::new(heap, size))
+        Ok(n::Memory::new(heap, size, cpu_buffer))
     }
 
     fn free_memory(&self, _memory: n::Memory) {
@@ -1213,11 +1256,12 @@ impl hal::Device<Backend> for Device {
                     });
                 (raw, heap.storage_mode() != MTLStorageMode::Private)
             }
-            n::MemoryHeap::Emulated { memory_type } => {
+            n::MemoryHeap::Emulated(memory_type) => {
                 // TODO: disable hazard tracking?
-                let memory_properties = self.memory_types[memory_type].properties;
-                let resource_options = map_memory_properties_to_options(memory_properties);
-                let raw = self.device.new_buffer(buffer.size, resource_options);
+                let memory_properties = self.memory_types[memory_type.0].properties;
+                // Note: buffer backing is always `Private`. CPU access is routed through
+                // a CPU-visible buffer associated with `Memory` object.
+                let raw = self.device.new_buffer(buffer.size, MTLResourceOptions::StorageModePrivate);
                 (raw, memory_properties.contains(memory::Properties::CPU_VISIBLE))
             }
         };
@@ -1374,9 +1418,9 @@ impl hal::Device<Backend> for Device {
                         self.device.new_texture(&image.texture_desc)
                     })
             },
-            n::MemoryHeap::Emulated { memory_type } => {
+            n::MemoryHeap::Emulated(memory_type) => {
                 // TODO: disable hazard tracking?
-                let memory_properties = self.memory_types[memory_type].properties;
+                let memory_properties = self.memory_types[memory_type.0].properties;
                 let resource_options = map_memory_properties_to_options(memory_properties);
                 image.texture_desc.set_resource_options(resource_options);
                 self.device.new_texture(&image.texture_desc)
