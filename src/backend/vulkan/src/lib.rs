@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate log;
+#[macro_use]
 extern crate ash;
 extern crate byteorder;
 extern crate gfx_hal as hal;
@@ -143,7 +144,7 @@ impl Instance {
             application_version: version,
             p_engine_name: b"gfx-rs\0".as_ptr() as *const _,
             engine_version: 1,
-            api_version: 0, //TODO: VK_API_VERSION_1_1
+            api_version: vk_make_version!(1, 0, 0),
         };
 
         let instance_extensions = entry
