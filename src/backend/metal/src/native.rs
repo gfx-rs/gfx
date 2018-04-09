@@ -1,5 +1,6 @@
 use {Backend};
 
+use std::cell::Cell;
 use std::collections::{Bound, BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 use std::ops::Range;
@@ -234,11 +235,15 @@ pub struct Memory {
     pub(crate) heap: MemoryHeap,
     pub(crate) size: u64,
     pub(crate) allocations: Arc<Mutex<MemoryAllocations>>,
-    pub(crate) mapping: Mutex<Option<MemoryMapping>>,
+    pub(crate) mapping: Mutex<Option<Range<u64>>>,
+    pub(crate) cpu_buffer: Option<metal::Buffer>,
+    pub(crate) initialized: Cell<bool>,
 }
 
 impl Memory {
-    pub(crate) fn new(heap: MemoryHeap, size: u64) -> Self {
+    pub(crate) fn new(
+        heap: MemoryHeap, size: u64, cpu_buffer: Option<metal::Buffer>
+    ) -> Self {
         Memory {
             heap,
             size,
@@ -247,20 +252,18 @@ impl Memory {
                 ends: BTreeMap::new(),
             })),
             mapping: Mutex::new(None),
+            cpu_buffer,
+            initialized: Cell::new(false),
         }
+    }
+
+    pub(crate) fn resolve<R: hal::range::RangeArg<u64>>(&self, range: &R) -> Range<u64> {
+        *range.start().unwrap_or(&0) .. *range.end().unwrap_or(&self.size)
     }
 }
 
 unsafe impl Send for Memory {}
 unsafe impl Sync for Memory {}
-
-#[derive(Debug)]
-pub(crate) struct MemoryMapping {
-    pub(crate) range: Range<u64>,
-    pub(crate) buffer: metal::Buffer,
-    pub(crate) location: NSUInteger,
-    pub(crate) length: NSUInteger,
-}
 
 #[derive(Debug)]
 pub(crate) struct MemoryAllocations {
@@ -269,23 +272,23 @@ pub(crate) struct MemoryAllocations {
 }
 
 impl MemoryAllocations {
-    pub(crate) fn find(&self, range: Range<u64>) -> Vec<(Range<u64>, metal::Buffer)> {
+    pub fn find(&self, range: &Range<u64>) -> Vec<(Range<u64>, metal::Buffer)> {
         // Get all unique buffers that intersects specified range
         let mut buffers = Vec::new();
         buffers.extend(self.starts.range(range.clone()).map(|(&start, &(end, ref b))| (start .. end, b.clone())));
-        let range = (Bound::Excluded(range.start), Bound::Included(range.end));
-        buffers.extend(self.ends.range(range).map(|(&end, &(start, ref b))| (start .. end, b.clone())));
+        let bounds = (Bound::Excluded(range.start), Bound::Included(range.end));
+        buffers.extend(self.ends.range(bounds).map(|(&end, &(start, ref b))| (start .. end, b.clone())));
         buffers.sort_unstable_by_key(|&(_, ref b)| b.as_ptr());
         buffers.dedup_by_key(|&mut (_, ref b)| b.as_ptr());
         buffers
     }
 
-    pub(crate) fn insert(&mut self, range: Range<u64>, buffer: metal::Buffer) {
+    pub fn insert(&mut self, range: Range<u64>, buffer: metal::Buffer) {
         self.starts.insert(range.start, (range.end, buffer.clone()));
         self.ends.insert(range.end, (range.start, buffer));
     }
 
-    pub(crate) fn remove(&mut self, range: Range<u64>) {
+    pub fn remove(&mut self, range: Range<u64>) {
         self.starts.remove(&range.start);
         self.ends.remove(&range.end);
     }
@@ -293,7 +296,7 @@ impl MemoryAllocations {
 
 #[derive(Debug)]
 pub(crate) enum MemoryHeap {
-    Emulated { memory_type: usize },
+    Emulated(hal::MemoryTypeId),
     Native(metal::Heap),
 }
 

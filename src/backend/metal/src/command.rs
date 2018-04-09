@@ -31,6 +31,12 @@ pub(crate) struct QueueInner {
 unsafe impl Send for QueueInner {}
 unsafe impl Sync for QueueInner {}
 
+impl QueueInner {
+    pub fn new_command_buffer_ref(&self) -> &metal::CommandBufferRef {
+        self.queue.new_command_buffer()
+    }
+}
+
 pub struct CommandPool {
     pub(crate) queue: Arc<QueueInner>,
     pub(crate) managed: Option<Vec<CommandBuffer>>,
@@ -288,7 +294,7 @@ impl CommandBufferInner {
         match self.sink {
             CommandSink::Immediate { ref mut cmd_buffer, ref mut encoder_state } => {
                 //TODO: release the old one?
-                *cmd_buffer = queue.queue.new_command_buffer().to_owned();
+                *cmd_buffer = queue.new_command_buffer_ref().to_owned();
                 *encoder_state = EncoderState::None;
             }
             CommandSink::Deferred { ref mut passes, .. } => {
@@ -576,7 +582,7 @@ fn exec_render(encoder: &metal::RenderCommandEncoderRef, command: &soft::RenderC
     }
 }
 
-fn exec_blit(encoder: &metal::BlitCommandEncoderRef, command: &soft::BlitCommand) {
+pub(crate) fn exec_blit(encoder: &metal::BlitCommandEncoderRef, command: &soft::BlitCommand) {
     use soft::BlitCommand as Cmd;
     match *command {
         Cmd::CopyBuffer { ref src, ref dst, ref region } => unsafe {
@@ -737,7 +743,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
             let command_buffer: &metal::CommandBufferRef = match buffer.inner_ref().sink {
                  CommandSink::Immediate { ref cmd_buffer, .. } => cmd_buffer,
                  CommandSink::Deferred { ref passes, .. } => {
-                    let cmd_buffer = self.0.queue.new_command_buffer();
+                    let cmd_buffer = self.0.new_command_buffer_ref();
                     record_commands(cmd_buffer, passes);
                     cmd_buffer
                  }
@@ -790,7 +796,10 @@ impl RawCommandQueue<Backend> for CommandQueue {
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
-        unimplemented!()
+        let cmd_buffer = self.0.new_command_buffer_ref();
+        cmd_buffer.commit();
+        cmd_buffer.wait_until_completed();
+        Ok(())
     }
 }
 
@@ -808,7 +817,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
             inner: Arc::new({
                 UnsafeCell::new(CommandBufferInner {
                     sink: CommandSink::Immediate {
-                        cmd_buffer: self.queue.queue.new_command_buffer().to_owned(),
+                        cmd_buffer: self.queue.new_command_buffer_ref().to_owned(),
                         encoder_state: EncoderState::None,
                     },
                     device: unsafe {
@@ -892,7 +901,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         if flags.contains(com::CommandBufferFlags::ONE_TIME_SUBMIT) {
             if let Some(ref queue) = self.queue {
                 inner.sink = CommandSink::Immediate {
-                    cmd_buffer: queue.queue.new_command_buffer().to_owned(),
+                    cmd_buffer: queue.new_command_buffer_ref().to_owned(),
                     encoder_state: EncoderState::None,
                 };
             }
