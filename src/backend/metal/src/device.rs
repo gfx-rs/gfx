@@ -208,7 +208,12 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn format_properties(&self, _: Option<format::Format>) -> format::Properties {
-        unimplemented!()
+        //TODO
+        format::Properties {
+            linear_tiling: format::ImageFeature::empty(),
+            optimal_tiling: format::ImageFeature::empty(),
+            buffer_features: format::BufferFeature::empty(),
+        }
     }
 
     fn image_format_properties(

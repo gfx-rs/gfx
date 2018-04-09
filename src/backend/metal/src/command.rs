@@ -796,7 +796,10 @@ impl RawCommandQueue<Backend> for CommandQueue {
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
-        unimplemented!()
+        let cmd_buffer = self.0.new_command_buffer_ref();
+        cmd_buffer.commit();
+        cmd_buffer.wait_until_completed();
+        Ok(())
     }
 }
 
