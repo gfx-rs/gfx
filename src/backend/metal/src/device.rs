@@ -163,7 +163,6 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         &self, mut families: Vec<(&QueueFamily, Vec<hal::QueuePriority>)>,
     ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
         // TODO: Handle opening a physical device multiple times
-
         assert_eq!(families.len(), 1);
         let family = *families.remove(0).0;
         let id = family.id();
@@ -899,6 +898,7 @@ impl hal::Device<Backend> for Device {
     ) -> Result<*mut u8, mapping::Error> {
         let range = memory.resolve(&generic_range);
         self.invalidate_mapped_memory_ranges(&[(memory, generic_range)]);
+        memory.initialized.set(true);
 
         let base_ptr = memory.cpu_buffer.as_ref().unwrap().contents() as *mut u8;
         let ptr = unsafe { base_ptr.offset(range.start as _) };
@@ -966,9 +966,13 @@ impl hal::Device<Backend> for Device {
         // the given buffers into the allocated CPU-visible buffers
         let cmd_buffer = self.queue.new_command_buffer_ref();
         let encoder = cmd_buffer.new_blit_command_encoder();
+        let mut num_copies = 0;
 
         for item in iter {
             let (memory, ref generic_range) = *item.borrow();
+            if !memory.initialized.get() {
+                continue
+            }
             let range = memory.resolve(generic_range);
             let cpu_buffer = memory.cpu_buffer.as_ref().unwrap();
 
@@ -987,6 +991,7 @@ impl hal::Device<Backend> for Device {
                 });
             }
 
+            num_copies += 1;
             unsafe {
                 msg_send![*encoder,
                     synchronizeResource: cpu_buffer.as_ref()
@@ -995,7 +1000,10 @@ impl hal::Device<Backend> for Device {
         }
 
         encoder.end_encoding();
-        cmd_buffer.commit();
+        if num_copies != 0 {
+            cmd_buffer.commit();
+            cmd_buffer.wait_until_completed();
+        }
     }
 
     fn create_semaphore(&self) -> n::Semaphore {
@@ -1268,6 +1276,7 @@ impl hal::Device<Backend> for Device {
 
         Ok(n::Buffer {
             allocations: if mappable {
+                memory.initialized.set(true); // this is conservative, can be improved
                 memory.allocations.lock().unwrap().insert(offset .. (offset + buffer.size), raw.clone());
                 Some(memory.allocations.clone())
             } else {

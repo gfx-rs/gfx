@@ -1,5 +1,6 @@
 use {Backend};
 
+use std::cell::Cell;
 use std::collections::{Bound, BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 use std::ops::Range;
@@ -236,6 +237,7 @@ pub struct Memory {
     pub(crate) allocations: Arc<Mutex<MemoryAllocations>>,
     pub(crate) mapping: Mutex<Option<Range<u64>>>,
     pub(crate) cpu_buffer: Option<metal::Buffer>,
+    pub(crate) initialized: Cell<bool>,
 }
 
 impl Memory {
@@ -251,6 +253,7 @@ impl Memory {
             })),
             mapping: Mutex::new(None),
             cpu_buffer,
+            initialized: Cell::new(false),
         }
     }
 
