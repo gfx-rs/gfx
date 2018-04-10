@@ -1011,8 +1011,8 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn free_memory(&self, _memory: n::Memory) {
-        // nothing to do
+    fn free_memory(&self, memory: n::Memory) {
+        // Nothing to do
     }
 
     fn create_query_pool(&self, _ty: query::QueryType, _count: u32) -> () {
@@ -1028,20 +1028,28 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_render_pass(&self, _: n::RenderPass) {
-        unimplemented!()
+        // Nothing to do
     }
 
     fn destroy_pipeline_layout(&self, _: n::PipelineLayout) {
-        unimplemented!()
+        // Nothing to do
     }
-    fn destroy_graphics_pipeline(&self, _: n::GraphicsPipeline) {
-        unimplemented!()
+
+    fn destroy_graphics_pipeline(&self, pipeline: n::GraphicsPipeline) {
+        unsafe {
+            self.share.context.DeleteProgram(pipeline.program);
+        }
     }
-    fn destroy_compute_pipeline(&self, _: n::ComputePipeline) {
-        unimplemented!()
+
+    fn destroy_compute_pipeline(&self, pipeline: n::ComputePipeline) {
+        unsafe {
+            self.share.context.DeleteProgram(pipeline.program);
+        }
     }
-    fn destroy_framebuffer(&self, _: n::FrameBuffer) {
-        unimplemented!()
+
+    fn destroy_framebuffer(&self, frame_buffer: n::FrameBuffer) {
+        let gl = &self.share.context;
+        unsafe { gl.DeleteFramebuffers(1, &frame_buffer); }
     }
 
     fn destroy_buffer(&self, buffer: n::Buffer) {
@@ -1050,24 +1058,35 @@ impl d::Device<B> for Device {
         }
     }
     fn destroy_buffer_view(&self, _: n::BufferView) {
-        unimplemented!()
+        // Nothing to do
     }
-    fn destroy_image(&self, _: n::Image) {
-        unimplemented!()
+
+    fn destroy_image(&self, image: n::Image) {
+        let gl = &self.share.context;
+        match image.kind {
+            n::ImageKind::Surface(rb) => unsafe { gl.DeleteRenderbuffers(1, &rb) },
+            n::ImageKind::Texture(t) => unsafe { gl.DeleteTextures(1, &t) },
+        }
     }
-    fn destroy_image_view(&self, _: n::ImageView) {
-        unimplemented!()
+
+    fn destroy_image_view(&self, image_view: n::ImageView) {
+        // Nothing to do
     }
-    fn destroy_sampler(&self, _: n::FatSampler) {
-        unimplemented!()
+
+    fn destroy_sampler(&self, sampler: n::FatSampler) {
+        let gl = &self.share.context;
+        match sampler {
+            n::FatSampler::Sampler(s) => unsafe { gl.DeleteSamplers(1, &s) },
+            _ => (),
+        }
     }
 
     fn destroy_descriptor_pool(&self, _: n::DescriptorPool) {
-        unimplemented!()
+        // Nothing to do
     }
 
     fn destroy_descriptor_set_layout(&self, _: n::DescriptorSetLayout) {
-        unimplemented!()
+        // Nothing to do
     }
 
     fn destroy_fence(&self, fence: n::Fence) {
@@ -1077,7 +1096,7 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_semaphore(&self, _: n::Semaphore) {
-        unimplemented!()
+        // Nothing to do
     }
 
     fn create_swapchain(
@@ -1089,7 +1108,7 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_swapchain(&self, _swapchain: Swapchain) {
-        unimplemented!()
+        // Nothing to do
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
