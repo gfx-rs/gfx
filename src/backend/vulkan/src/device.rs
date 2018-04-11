@@ -59,12 +59,6 @@ impl Device {
     }
 }
 
-impl Drop for Device {
-    fn drop(&mut self) {
-        unsafe { self.raw.0.destroy_device(None) };
-    }
-}
-
 impl d::Device<B> for Device {
     fn allocate_memory(&self, mem_type: MemoryTypeId, size: u64) -> Result<n::Memory, d::OutOfMemory> {
         let info = vk::MemoryAllocateInfo {
