@@ -135,12 +135,12 @@ unsafe impl Send for DescriptorPool {}
 unsafe impl Sync for DescriptorPool {}
 
 impl hal::DescriptorPool<Backend> for DescriptorPool {
-    fn allocate_set(&mut self, layout: &DescriptorSetLayout) -> DescriptorSet {
+    fn allocate_set(&mut self, layout: &DescriptorSetLayout) -> Result<DescriptorSet, pso::AllocationError> {
         match *self {
             DescriptorPool::Emulated => {
                 let layout_bindings = match layout {
                     &DescriptorSetLayout::Emulated(ref bindings) => bindings,
-                    _ => panic!("Incompatible descriptor set layout type"),
+                    _ => return Err(pso::AllocationError::IncompatibleLayout),
                 };
 
                 let bindings = layout_bindings.iter().map(|layout| {
@@ -165,23 +165,25 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                     layout: layout_bindings.to_vec(),
                     bindings,
                 };
-                DescriptorSet::Emulated(Arc::new(Mutex::new(inner)))
+                Ok(DescriptorSet::Emulated(Arc::new(Mutex::new(inner))))
             }
             DescriptorPool::ArgumentBuffer { ref buffer, total_size, ref mut offset } => {
                 let (encoder, stage_flags) = match layout {
                     &DescriptorSetLayout::ArgumentBuffer(ref encoder, stages) => (encoder, stages),
-                    _ => panic!("Incompatible descriptor set layout type"),
+                    _ => return Err(pso::AllocationError::IncompatibleLayout),
                 };
 
                 let cur_offset = *offset;
                 *offset += encoder.encoded_length();
-                assert!(*offset <= total_size);
-
-                DescriptorSet::ArgumentBuffer {
-                    buffer: buffer.clone(),
-                    offset: cur_offset,
-                    encoder: encoder.clone(),
-                    stage_flags,
+                if *offset <= total_size {
+                    Ok(DescriptorSet::ArgumentBuffer {
+                        buffer: buffer.clone(),
+                        offset: cur_offset,
+                        encoder: encoder.clone(),
+                        stage_flags,
+                    })
+                } else {
+                    Err(pso::AllocationError::OutOfPoolMemory)
                 }
             }
         }

@@ -541,7 +541,8 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         let desc_set = resources.desc_pools
                             .get_mut(pool)
                             .expect(&format!("Missing descriptor pool: {}", pool))
-                            .allocate_set(set_layout);
+                            .allocate_set(set_layout)
+                            .expect(&format!("Failed to allocate set with layout: {:?}", set_layout));
                         resources.desc_sets.insert(name.clone(), desc_set);
                         // fill it up
                         let set = &resources.desc_sets[name];

@@ -287,7 +287,7 @@ impl<B: Backend> Device<B> {
 
         let pool = handle::raw::DescriptorPool::from(
             DescriptorPool::new(pool, (), self.garbage.clone()));
-        sets.into_iter().map(|set| {
+        sets.into_iter().filter_map(Result::ok).map(|set| {
             D::from_raw(layout.clone(), pso::RawDescriptorSet {
                 resource: set,
                 pool: pool.clone()
