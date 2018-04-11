@@ -91,12 +91,12 @@ pub struct DescriptorSet;
 pub struct DescriptorPool {}
 
 impl pso::DescriptorPool<Backend> for DescriptorPool {
-    fn allocate_sets<I>(&mut self, layouts: I) -> Vec<DescriptorSet>
+    fn allocate_sets<I>(&mut self, layouts: I) -> Vec<Result<DescriptorSet, pso::AllocationError>>
     where
         I: IntoIterator,
         I::Item: Borrow<DescriptorSetLayout>,
     {
-        layouts.into_iter().map(|_| DescriptorSet).collect()
+        layouts.into_iter().map(|_| Ok(DescriptorSet)).collect()
     }
 
     fn reset(&mut self) {

@@ -87,26 +87,46 @@ pub struct DescriptorRangeDesc {
     pub count: usize,
 }
 
+/// An error allocating descriptor sets from a pool.
+#[derive(Fail, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AllocationError {
+    /// Memory allocation on the host side failed.
+    /// This could be caused by a lack of memory or pool fragmentation.
+    #[fail(display = "Host memory allocation failed.")]
+    OutOfHostMemory,
+    /// Memory allocation on the host side failed.
+    /// This could be caused by a lack of memory or pool fragmentation.
+    #[fail(display = "Device memory allocation failed.")]
+    OutOfDeviceMemory,
+    /// Memory allocation failed as there is not enough in the pool.
+    /// This could be caused by too many descriptor sets being created.
+    #[fail(display = "Descriptor pool memory allocation failed.")]
+    OutOfPoolMemory,
+    /// Memory allocation failed due to pool fragmentation.
+    #[fail(display = "Descriptor pool is fragmented.")]
+    FragmentedPool,
+    /// Descriptor set allocation failed as the layout is incompatible with the pool.
+    #[fail(display = "Descriptor layout incompatible with pool.")]
+    IncompatibleLayout,
+}
 
 /// A descriptor pool is a collection of memory from which descriptor sets are allocated.
 pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
     /// Allocate a descriptor set from the pool.
     ///
     /// The descriptor set will be allocated from the pool according to the corresponding set layout.
-    /// The descriptor pool _must_ have enough space in to allocate the required descriptor.
     /// Descriptors will become invalid once the pool is reset. Usage of invalidated descriptor sets results
     /// in undefined behavior.
-    fn allocate_set(&mut self, layout: &B::DescriptorSetLayout) -> B::DescriptorSet {
+    fn allocate_set(&mut self, layout: &B::DescriptorSetLayout) -> Result<B::DescriptorSet, AllocationError> {
         self.allocate_sets(Some(layout)).remove(0)
     }
 
     /// Allocate one or multiple descriptor sets from the pool.
     ///
     /// Each descriptor set will be allocated from the pool according to the corresponding set layout.
-    /// The descriptor pool _must_ have enough space in to allocate the required descriptors.
     /// Descriptors will become invalid once the pool is reset. Usage of invalidated descriptor sets results
     /// in undefined behavior.
-    fn allocate_sets<I>(&mut self, layouts: I) -> Vec<B::DescriptorSet>
+    fn allocate_sets<I>(&mut self, layouts: I) -> Vec<Result<B::DescriptorSet, AllocationError>>
     where
         I: IntoIterator,
         I::Item: Borrow<B::DescriptorSetLayout>,

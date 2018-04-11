@@ -369,13 +369,16 @@ pub struct DescriptorHeapSlice {
 }
 
 impl DescriptorHeapSlice {
-    pub(crate) fn alloc_handles(&mut self, count: u64) -> DualHandle {
-        assert!(self.next + count <= self.range.end);
-        let index = self.next;
-        self.next += count;
-        DualHandle {
-            cpu: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: self.start.cpu.ptr + (self.handle_size * index) as usize },
-            gpu: d3d12::D3D12_GPU_DESCRIPTOR_HANDLE { ptr: self.start.gpu.ptr + (self.handle_size * index) as u64 },
+    pub(crate) fn alloc_handles(&mut self, count: u64) -> Option<DualHandle> {
+        if self.next + count <= self.range.end {
+            let index = self.next;
+            self.next += count;
+            Some(DualHandle {
+                cpu: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: self.start.cpu.ptr + (self.handle_size * index) as usize },
+                gpu: d3d12::D3D12_GPU_DESCRIPTOR_HANDLE { ptr: self.start.gpu.ptr + (self.handle_size * index) as u64 },
+            })
+        } else {
+            None
         }
     }
 }
@@ -391,7 +394,7 @@ unsafe impl Send for DescriptorPool {}
 unsafe impl Sync for DescriptorPool {}
 
 impl HalDescriptorPool<Backend> for DescriptorPool {
-    fn allocate_set(&mut self, layout: &DescriptorSetLayout) -> DescriptorSet {
+    fn allocate_set(&mut self, layout: &DescriptorSetLayout) -> Result<DescriptorSet, pso::AllocationError> {
         let mut binding_infos = Vec::new();
         let mut first_gpu_sampler = None;
         let mut first_gpu_view = None;
@@ -416,7 +419,8 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
             binding_infos[binding.binding as usize] = DescriptorBindingInfo {
                 count: binding.count as _,
                 view_range: if has_view {
-                    let handle = self.heap_srv_cbv_uav.alloc_handles(binding.count as u64);
+                    let handle = self.heap_srv_cbv_uav.alloc_handles(binding.count as u64)
+                        .ok_or(pso::AllocationError::OutOfPoolMemory)?;
                     if first_gpu_view.is_none() {
                         first_gpu_view = Some(handle.gpu);
                     }
@@ -430,7 +434,8 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                     None
                 },
                 sampler_range: if has_sampler {
-                    let handle = self.heap_sampler.alloc_handles(binding.count as u64);
+                    let handle = self.heap_sampler.alloc_handles(binding.count as u64)
+                        .ok_or(pso::AllocationError::OutOfPoolMemory)?;
                     if first_gpu_sampler.is_none() {
                         first_gpu_sampler = Some(handle.gpu);
                     }
@@ -447,13 +452,13 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
             };
         }
 
-        DescriptorSet {
+        Ok(DescriptorSet {
             heap_srv_cbv_uav: self.heap_srv_cbv_uav.heap.clone(),
             heap_samplers: self.heap_sampler.heap.clone(),
             binding_infos,
             first_gpu_sampler,
             first_gpu_view,
-        }
+        })
     }
 
     fn reset(&mut self) {

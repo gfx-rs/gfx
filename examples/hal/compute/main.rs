@@ -101,7 +101,7 @@ fn main() {
         numbers.len() as u64,
     );
 
-    let desc_set = desc_pool.allocate_set(&set_layout);
+    let desc_set = desc_pool.allocate_set(&set_layout).unwrap();
     device.write_descriptor_sets(Some(
         pso::DescriptorSetWrite {
             set: &desc_set,

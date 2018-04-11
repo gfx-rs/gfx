@@ -321,7 +321,7 @@ fn main() {
             },
         ],
     );
-    let desc_set = desc_pool.allocate_set(&set_layout);
+    let desc_set = desc_pool.allocate_set(&set_layout).unwrap();
 
     // Framebuffer and render target creation
     let (frame_images, framebuffers) = match backbuffer {
