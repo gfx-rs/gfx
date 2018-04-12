@@ -894,7 +894,8 @@ impl CommandBuffer {
 }
 
 impl com::RawCommandBuffer<Backend> for CommandBuffer {
-    fn begin(&mut self, flags: com::CommandBufferFlags) {
+    fn begin(&mut self, flags: com::CommandBufferFlags, _info: com::CommandBufferInheritanceInfo<Backend>) {
+        //TODO: Implement secondary command buffers
         let inner = unsafe { &mut *self.inner.get() };
         inner.reset_resources();
 

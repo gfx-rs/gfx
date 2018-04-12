@@ -472,7 +472,11 @@ impl RawCommandBuffer {
 }
 
 impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
-    fn begin(&mut self, _flags: hal::command::CommandBufferFlags) { // TODO: Implement flags!
+    fn begin(
+        &mut self,
+        _flags: hal::command::CommandBufferFlags,
+        _inheritance_info: hal::command::CommandBufferInheritanceInfo<Backend>
+    ) { // TODO: Implement flags!
         if self.individual_reset {
             // Implicit buffer reset when individual reset is set.
             self.reset(false);

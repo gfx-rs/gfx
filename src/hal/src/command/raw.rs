@@ -2,11 +2,11 @@ use std::any::Any;
 use std::borrow::Borrow;
 use std::ops::Range;
 
-use {buffer, pso};
+use {buffer, pass, pso};
 use {Backend, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 use image::{Filter, Layout, SubresourceRange};
 use memory::{Barrier, Dependencies};
-use query::{Query, QueryControl, QueryId};
+use query::{PipelineStatistic, Query, QueryControl, QueryId};
 use super::{
     AttachmentClear, BufferCopy, BufferImageCopy,
     ClearColor, ClearDepthStencil, ClearValue,
@@ -81,11 +81,33 @@ pub enum Level {
     Secondary,
 }
 
+#[allow(missing_docs)]
+#[derive(Debug)]
+pub struct CommandBufferInheritanceInfo<'a, B: Backend> {
+    pub subpass: Option<pass::Subpass<'a, B>>,
+    pub framebuffer: Option<&'a B::Framebuffer>,
+    pub occlusion_query_enable: bool,
+    pub occlusion_query_flags: QueryControl,
+    pub pipeline_statistics: PipelineStatistic,
+}
+
+impl<'a, B: Backend> Default for CommandBufferInheritanceInfo<'a, B> {
+    fn default() -> Self {
+        CommandBufferInheritanceInfo {
+            subpass: None,
+            framebuffer: None,
+            occlusion_query_enable: false,
+            occlusion_query_flags: QueryControl::empty(),
+            pipeline_statistics: PipelineStatistic::empty(),
+        }
+    }
+}
+
 /// A trait that describes all the operations that must be
 /// provided by a `Backend`'s command buffer.
 pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     /// Begins recording commands to a command buffer.
-    fn begin(&mut self, flags: CommandBufferFlags);
+    fn begin(&mut self, flags: CommandBufferFlags, inheritance_info: CommandBufferInheritanceInfo<B>);
 
     /// Finish recording commands to a command buffer.
     fn finish(&mut self);

@@ -1,9 +1,11 @@
 //! Command pools
 
+use {pass};
 use {Backend};
 use command::{
     CommandBuffer, RawCommandBuffer, SecondaryCommandBuffer, 
-    SubpassCommandBuffer, CommandBufferFlags, Shot, RawLevel
+    SubpassCommandBuffer, CommandBufferFlags, Shot, RawLevel,
+    CommandBufferInheritanceInfo
 };
 use queue::capability::{Supports, Graphics};
 
@@ -105,7 +107,7 @@ impl<B: Backend, C> CommandPool<B, C> {
         if allow_pending_resubmit {
             flags |= CommandBufferFlags::SIMULTANEOUS_USE;
         }
-        buffer.begin(flags);
+        buffer.begin(flags, CommandBufferInheritanceInfo::default());
         self.next_buffer += 1;
         unsafe {
             CommandBuffer::new(buffer)
@@ -117,7 +119,12 @@ impl<B: Backend, C> CommandPool<B, C> {
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
-    pub fn acquire_secondary_command_buffer<S: Shot>(&mut self, allow_pending_resubmit: bool) -> SecondaryCommandBuffer<B, C, S> {
+    pub fn acquire_secondary_command_buffer<'a, S: Shot>(
+        &mut self,
+        allow_pending_resubmit: bool,
+        subpass: Option<pass::Subpass<'a, B>>,
+        framebuffer: Option<&'a B::Framebuffer>,
+    ) -> SecondaryCommandBuffer<B, C, S> {
         self.reserve_secondary(1);
 
         let buffer = &mut self.secondary_buffers[self.next_secondary_buffer];
@@ -125,7 +132,12 @@ impl<B: Backend, C> CommandPool<B, C> {
         if allow_pending_resubmit {
             flags |= CommandBufferFlags::SIMULTANEOUS_USE;
         }
-        buffer.begin(flags);
+        let inheritance_info = CommandBufferInheritanceInfo {
+            subpass,
+            framebuffer,
+            ..CommandBufferInheritanceInfo::default()
+        };
+        buffer.begin(flags, inheritance_info);
         self.next_secondary_buffer += 1;
         unsafe {
             SecondaryCommandBuffer::new(buffer)
@@ -148,7 +160,12 @@ impl<B: Backend, C: Supports<Graphics>> CommandPool<B, C> {
     /// You can only record to one command buffer per pool at the same time.
     /// If more command buffers are requested than allocated, new buffers will be reserved.
     /// The command buffer will be returned in 'recording' state.
-    pub fn acquire_subpass_command_buffer<S: Shot>(&mut self, allow_pending_resubmit: bool) -> SubpassCommandBuffer<B, S> {
+    pub fn acquire_subpass_command_buffer<'a, S: Shot>(
+        &mut self,
+        allow_pending_resubmit: bool,
+        subpass: pass::Subpass<'a, B>,
+        framebuffer: Option<&'a B::Framebuffer>,
+    ) -> SubpassCommandBuffer<B, S> {
         self.reserve_secondary(1);
 
         let buffer = &mut self.secondary_buffers[self.next_secondary_buffer];
@@ -156,7 +173,12 @@ impl<B: Backend, C: Supports<Graphics>> CommandPool<B, C> {
         if allow_pending_resubmit {
             flags |= CommandBufferFlags::SIMULTANEOUS_USE;
         }
-        buffer.begin(flags);
+        let inheritance_info = CommandBufferInheritanceInfo {
+            subpass: Some(subpass),
+            framebuffer,
+            ..CommandBufferInheritanceInfo::default()
+        };
+        buffer.begin(flags, inheritance_info);
         self.next_secondary_buffer += 1;
         unsafe {
             SubpassCommandBuffer::new(buffer)

@@ -393,6 +393,11 @@ pub fn map_pipeline_statistics(
     unsafe { mem::transmute(statistics) }
 }
 
+pub fn map_query_control_flags(flags: query::QueryControl) -> vk::QueryControlFlags {
+    // Safe due to equivalence of HAL values and Vulkan values
+    unsafe { mem::transmute(flags) }
+}
+
 pub fn map_image_features(features: vk::FormatFeatureFlags) -> format::ImageFeature {
     // Safe due to equivalence of HAL values and Vulkan values
     unsafe { mem::transmute(features) }
