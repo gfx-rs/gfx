@@ -732,8 +732,8 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         h: extent.height as _,
                     };
                     let mut encoder = command_buf.begin_render_pass_inline(&rp.handle, fb, rect, clear_values);
-                    encoder.set_scissors(Some(rect));
-                    encoder.set_viewports(Some(pso::Viewport {
+                    encoder.set_scissors(0, Some(rect));
+                    encoder.set_viewports(0, Some(pso::Viewport {
                         rect,
                         depth: 0.0 .. 1.0,
                     }));
@@ -796,10 +796,10 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                     encoder.draw_indexed(indices.clone(), base_vertex, instances.clone());
                                 }
                                 Dc::SetViewports(ref viewports) => {
-                                    encoder.set_viewports(viewports);
+                                    encoder.set_viewports(0, viewports);
                                 }
                                 Dc::SetScissors(ref scissors) => {
-                                    encoder.set_scissors(scissors);
+                                    encoder.set_scissors(0, scissors);
                                 }
                             }
                         }

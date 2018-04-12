@@ -219,45 +219,45 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn bind_vertex_buffers(&mut self, pso::VertexBufferSet<B>);
 
     /// Set the viewport parameters for the rasterizer.
-    ///
-    /// Every other viewport, which is not specified in this call,
-    /// will be disabled.
-    ///
-    /// Ensure that the number of set viewports at draw time is equal
-    /// (or higher) to the number specified in the bound pipeline.
+    /// 
+    /// Each viewport passed corrosponds to the viewport with the same index,
+    /// starting from an offset index `first_viewport`.
     ///
     /// # Errors
     ///
     /// This function does not return an error. Invalid usage of this function
-    /// will result in an error on `finish`.
+    /// will result in undefined behavior.
     ///
     /// - Command buffer must be in recording state.
-    /// - Number of viewports must be between 1 and `max_viewports`.
+    /// - Number of viewports must be between 1 and `max_viewports - first_viewport`.
+    /// - The first viewport must be less than `max_viewports`.
     /// - Only queues with graphics capability support this function.
-    fn set_viewports<T>(&mut self, viewports: T)
+    /// - The bound pipeline must not have baked viewport state.
+    /// - All viewports used by the pipeline must be specified before the first
+    ///   draw call.
+    fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Viewport>;
 
     /// Set the scissor rectangles for the rasterizer.
     ///
-    /// Every other scissor, which is not specified in this call,
-    /// will be disabled.
-    ///
-    /// Each scissor corresponds to the viewport with the same index.
-    ///
-    /// Ensure that the number of set scissors at draw time is equal (or higher)
-    /// to the number of viewports specified in the bound pipeline.
+    /// Each scissor corresponds to the viewport with the same index, starting
+    /// from an offset index `first_scissor`.
     ///
     /// # Errors
     ///
     /// This function does not return an error. Invalid usage of this function
-    /// will result in an error on `finish`.
+    /// will result in undefined behavior.
     ///
     /// - Command buffer must be in recording state.
-    /// - Number of scissors must be between 1 and `max_viewports`.
+    /// - Number of scissors must be between 1 and `max_viewports - first_scissor`.
+    /// - The first scissor must be less than `max_viewports`.
     /// - Only queues with graphics capability support this function.
-    fn set_scissors<T>(&mut self, rects: T)
+    /// - The bound pipeline must not have baked scissor state.
+    /// - All scissors used by the pipeline must be specified before the first draw
+    ///   call.
+    fn set_scissors<T>(&mut self, first_scissor: u32, rects: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Rect>;

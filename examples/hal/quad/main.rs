@@ -551,8 +551,8 @@ fn main() {
         let submit = {
             let mut cmd_buffer = command_pool.acquire_command_buffer(false);
 
-            cmd_buffer.set_viewports(&[viewport.clone()]);
-            cmd_buffer.set_scissors(&[viewport.rect]);
+            cmd_buffer.set_viewports(0, &[viewport.clone()]);
+            cmd_buffer.set_scissors(0, &[viewport.rect]);
             cmd_buffer.bind_graphics_pipeline(&pipeline.as_ref().unwrap());
             cmd_buffer.bind_vertex_buffers(pso::VertexBufferSet(vec![(&vertex_buffer, 0)]));
             cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, Some(&desc_set)); //TODO

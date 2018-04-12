@@ -208,21 +208,21 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn set_viewports<T>(&mut self, viewports: T)
+    pub fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Viewport>,
     {
-        self.raw.set_viewports(viewports)
+        self.raw.set_viewports(first_viewport, viewports)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn set_scissors<T>(&mut self, scissors: T)
+    pub fn set_scissors<T>(&mut self, first_scissor: u32, scissors: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Rect>,
     {
-        self.raw.set_scissors(scissors)
+        self.raw.set_scissors(first_scissor, scissors)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.

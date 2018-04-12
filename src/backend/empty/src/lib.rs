@@ -498,7 +498,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn set_viewports<T>(&mut self, _: T)
+    fn set_viewports<T>(&mut self, _: u32, _: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Viewport>,
@@ -506,7 +506,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn set_scissors<T>(&mut self, _: T)
+    fn set_scissors<T>(&mut self, _: u32, _: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Rect>,

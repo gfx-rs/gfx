@@ -72,10 +72,11 @@ pub enum Command {
     BindIndexBuffer(gl::types::GLuint),
     //BindVertexBuffers(BufferSlice),
     SetViewports {
+        first_viewport: u32,
         viewport_ptr: BufferSlice,
         depth_range_ptr: BufferSlice,
     },
-    SetScissors(BufferSlice),
+    SetScissors(u32, BufferSlice),
     SetBlendColor(pso::ColorValue),
 
     /// Clear floating-point color drawbuffer of bound framebuffer.
@@ -705,7 +706,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn set_viewports<T>(&mut self, viewports: T)
+    fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Viewport>,
@@ -733,17 +734,17 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                 error!("Number of viewports can not be zero.");
                 self.cache.error_state = true;
             }
-            n if n <= self.limits.max_viewports => {
-                self.push_cmd(Command::SetViewports { viewport_ptr, depth_range_ptr });
+            n if n + first_viewport as usize <= self.limits.max_viewports => {
+                self.push_cmd(Command::SetViewports { first_viewport, viewport_ptr, depth_range_ptr });
             }
             _ => {
-                error!("Number of viewports exceeds the number of maximum viewports");
+                error!("Number of viewports and first viewport index exceed the number of maximum viewports");
                 self.cache.error_state = true;
             }
         }
     }
 
-    fn set_scissors<T>(&mut self, scissors: T)
+    fn set_scissors<T>(&mut self, first_scissor: u32, scissors: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Rect>,
@@ -762,11 +763,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                 error!("Number of scissors can not be zero.");
                 self.cache.error_state = true;
             }
-            n if n <= self.limits.max_viewports => {
-                self.push_cmd(Command::SetScissors(scissors_ptr));
+            n if n + first_scissor as usize <= self.limits.max_viewports => {
+                self.push_cmd(Command::SetScissors(first_scissor, scissors_ptr));
             }
             _ => {
-                error!("Number of scissors exceeds the number of maximum viewports");
+                error!("Number of scissors and first scissor index exceed the maximum number of viewports");
                 self.cache.error_state = true;
             }
         }
