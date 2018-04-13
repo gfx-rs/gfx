@@ -33,7 +33,7 @@ unsafe impl Sync for QueueInner {}
 
 impl QueueInner {
     pub fn new_command_buffer_ref(&self) -> &metal::CommandBufferRef {
-        self.queue.new_command_buffer()
+        self.queue.new_command_buffer_with_unretained_references()
     }
 }
 
@@ -266,6 +266,7 @@ struct CommandBufferInner {
     // hopefully, this is temporary
     // currently needed for `update_buffer` only
     device: metal::Device,
+    retained_buffers: Vec<metal::Buffer>,
     //TODO: would be cleaner to move the cache into `CommandBuffer` iself
     // it doesn't have to be in `Inner`
     viewport: Option<MTLViewport>,
@@ -304,7 +305,9 @@ impl CommandBufferInner {
                 }
             }
         };
+
         self.reset_resources();
+        self.retained_buffers.clear();
     }
 
     fn stop_encoding(&mut self) {
@@ -715,7 +718,9 @@ impl CommandQueue {
 }
 
 impl RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw<IC>(&mut self, submit: RawSubmission<Backend, IC>, fence: Option<&native::Fence>)
+    unsafe fn submit_raw<IC>(
+        &mut self, submit: RawSubmission<Backend, IC>, fence: Option<&native::Fence>
+    )
     where
         IC: IntoIterator,
         IC::Item: Borrow<CommandBuffer>,
@@ -727,6 +732,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
             let semaphores_copy: Vec<_> = submit.signal_semaphores.iter().map(|semaphore| {
                 semaphore.0
             }).collect();
+            //Note: careful with those `ConcreteBlock::copy()` calls!
             Some(ConcreteBlock::new(move |_cb: *mut ()| -> () {
                 for semaphore in semaphores_copy.iter() {
                     native::dispatch_semaphore_signal(*semaphore);
@@ -736,13 +742,22 @@ impl RawCommandQueue<Backend> for CommandQueue {
             None
         };
 
-        let buffers = submit.cmd_buffers.into_iter().collect::<Vec<_>>();
-        let num_buffers = buffers.len();
-        for (i, buffer) in buffers.into_iter().enumerate() {
-            let buffer = buffer.borrow();
-            let command_buffer: &metal::CommandBufferRef = match buffer.inner_ref().sink {
-                 CommandSink::Immediate { ref cmd_buffer, .. } => cmd_buffer,
-                 CommandSink::Deferred { ref passes, .. } => {
+        for buffer in submit.cmd_buffers {
+            let inner = buffer.borrow().inner();
+            let command_buffer: &metal::CommandBufferRef = match inner.sink {
+                CommandSink::Immediate { ref cmd_buffer, .. } => {
+                    // schedule the retained buffers to release after the commands are done
+                    if !inner.retained_buffers.is_empty() {
+                        let retained_buffers = mem::replace(&mut inner.retained_buffers, Vec::new());
+                        let release_block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
+                            let _ = retained_buffers; // move and auto-release
+                        }).copy();
+                        let cb_ref: &metal::CommandBufferRef = cmd_buffer;
+                        msg_send![cb_ref, addCompletedHandler: release_block.deref() as *const _];
+                    }
+                    cmd_buffer
+                }
+                CommandSink::Deferred { ref passes, .. } => {
                     let cmd_buffer = self.0.new_command_buffer_ref();
                     record_commands(cmd_buffer, passes);
                     cmd_buffer
@@ -751,16 +766,16 @@ impl RawCommandQueue<Backend> for CommandQueue {
             if let Some(ref signal_block) = signal_block {
                 msg_send![command_buffer, addCompletedHandler: signal_block.deref() as *const _];
             }
-            // only append the fence handler to the last buffer
-            if i + 1 == num_buffers {
-                if let Some(ref fence) = fence {
-                    let value_ptr = fence.0.clone();
-                    let fence_block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
-                        *value_ptr.lock().unwrap() = true;
-                    }).copy();
-                    msg_send![command_buffer, addCompletedHandler: fence_block.deref() as *const _];
-                }
-            }
+            command_buffer.commit();
+        }
+
+        if let Some(ref fence) = fence {
+            let command_buffer = self.0.new_command_buffer_ref();
+            let value_ptr = fence.0.clone();
+            let fence_block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
+                *value_ptr.lock().unwrap() = true;
+            }).copy();
+            msg_send![command_buffer, addCompletedHandler: fence_block.deref() as *const _];
             command_buffer.commit();
         }
     }
@@ -823,6 +838,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                     device: unsafe {
                         CommandQueue(self.queue.clone()).device().to_owned()
                     },
+                    retained_buffers: Vec::new(),
                     viewport: None,
                     scissors: None,
                     blend_color: None,
@@ -874,7 +890,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
 
 impl CommandBuffer {
     #[inline]
-    fn inner(&mut self) -> &mut CommandBufferInner {
+    fn inner(&self) -> &mut CommandBufferInner {
         unsafe {
             &mut *self.inner.get()
         }
@@ -962,12 +978,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         data: &[u8],
     ) {
         let inner = self.inner();
-        //TODO: allocate from command pool, don't retain automatically
         let src = inner.device.new_buffer_with_data(
             data.as_ptr() as _,
             data.len() as _,
             metal::MTLResourceOptions::StorageModePrivate,
         );
+        inner.retained_buffers.push(src.clone());
+
         let command = soft::BlitCommand::CopyBuffer {
             src,
             dst: dst.raw.clone(),
