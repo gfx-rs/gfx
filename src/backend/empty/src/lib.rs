@@ -399,7 +399,7 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
 #[derive(Clone)]
 pub struct RawCommandBuffer;
 impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
-    fn begin(&mut self, _: command::CommandBufferFlags) {
+    fn begin(&mut self, _: command::CommandBufferFlags, _: command::CommandBufferInheritanceInfo<Backend>) {
         unimplemented!()
     }
 

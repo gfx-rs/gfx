@@ -22,7 +22,7 @@ pub struct Query<'a, B: Backend> {
 bitflags!(
     /// Query control flags.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct QueryControl: u8 {
+    pub struct QueryControl: u32 {
         /// Occlusion queries **must** return the exact sampler number.
         ///
         /// Requires `precise_occlusion_query` device feature.

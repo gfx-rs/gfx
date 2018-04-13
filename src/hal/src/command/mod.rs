@@ -24,7 +24,7 @@ mod render_pass;
 mod transfer;
 
 pub use self::graphics::*;
-pub use self::raw::{ClearValueRaw, ClearColorRaw, ClearDepthStencilRaw, RawCommandBuffer, CommandBufferFlags, Level as RawLevel};
+pub use self::raw::{ClearValueRaw, ClearColorRaw, ClearDepthStencilRaw, RawCommandBuffer, CommandBufferFlags, Level as RawLevel, CommandBufferInheritanceInfo};
 pub use self::render_pass::*;
 pub use self::transfer::*;
 

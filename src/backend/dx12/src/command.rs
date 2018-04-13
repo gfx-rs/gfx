@@ -806,8 +806,8 @@ impl CommandBuffer {
 }
 
 impl com::RawCommandBuffer<Backend> for CommandBuffer {
-    fn begin(&mut self, _flags: com::CommandBufferFlags) {
-        // TODO: Implement flags somehow.
+    fn begin(&mut self, _flags: com::CommandBufferFlags, _info: com::CommandBufferInheritanceInfo<Backend>) {
+        // TODO: Implement flags and secondary command buffers (bundles).
         self.reset();
     }
 

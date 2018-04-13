@@ -79,12 +79,23 @@ impl CommandBuffer {
 }
 
 impl com::RawCommandBuffer<Backend> for CommandBuffer {
-    fn begin(&mut self, flags: com::CommandBufferFlags) {
+    fn begin(&mut self, flags: com::CommandBufferFlags, info: com::CommandBufferInheritanceInfo<Backend>) {
+        let inheritance_info = vk::CommandBufferInheritanceInfo {
+            s_type: vk::StructureType::CommandBufferInheritanceInfo,
+            p_next: ptr::null(),
+            render_pass: info.subpass.map_or(vk::types::RenderPass::null(), |subpass| subpass.main_pass.raw),
+            subpass: info.subpass.map_or(0, |subpass| subpass.index as u32),
+            framebuffer: info.framebuffer.map_or(vk::types::Framebuffer::null(), |buffer| buffer.raw),
+            occlusion_query_enable: if info.occlusion_query_enable { vk::VK_TRUE } else { vk::VK_FALSE },
+            query_flags: conv::map_query_control_flags(info.occlusion_query_flags),
+            pipeline_statistics: conv::map_pipeline_statistics(info.pipeline_statistics),
+        };
+
         let info = vk::CommandBufferBeginInfo {
             s_type: vk::StructureType::CommandBufferBeginInfo,
             p_next: ptr::null(),
             flags: conv::map_command_buffer_flags(flags),
-            p_inheritance_info: ptr::null(),
+            p_inheritance_info: &inheritance_info,
         };
 
         assert_eq!(Ok(()),
