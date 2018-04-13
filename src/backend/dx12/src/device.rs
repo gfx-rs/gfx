@@ -2228,7 +2228,7 @@ impl d::Device<B> for Device {
                     &mut ptr,
                 )
             });
-            unsafe { ptr.offset(*start as _); }
+            unsafe { ptr = ptr.offset(*start as _); }
             Ok(ptr as *mut _)
         } else {
             panic!("Memory not created with a memory type exposing `CPU_VISIBLE`.")
