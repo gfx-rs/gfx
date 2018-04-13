@@ -283,6 +283,11 @@ pub struct CommandBuffer {
 
     // Re-using allocation for the image-buffer copies.
     copies: Vec<Copy>,
+
+    // D3D12 only allows setting all viewports or all scissors at once, not partial updates.
+    // So we must cache the implied state for these partial updates.
+    viewport_cache: SmallVec<[d3d12::D3D12_VIEWPORT; d3d12::D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as usize]>,
+    scissor_cache: SmallVec<[d3d12::D3D12_RECT; d3d12::D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as usize]>
 }
 
 unsafe impl Send for CommandBuffer { }
@@ -307,6 +312,8 @@ impl CommandBuffer {
             pipeline_stats_query: None,
             vertex_buffer_views: [NULL_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS],
             copies: Vec::new(),
+            viewport_cache: SmallVec::new(),
+            scissor_cache: SmallVec::new(),
         }
     }
 
@@ -1177,12 +1184,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_viewports<T>(&mut self, viewports: T)
+    fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Viewport>,
     {
-        let viewports: SmallVec<[d3d12::D3D12_VIEWPORT; 16]> = viewports
+        let viewports = viewports
             .into_iter()
             .map(|viewport| {
                 let viewport = viewport.borrow();
@@ -1195,25 +1202,45 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     MaxDepth: viewport.depth.end,
                 }
             })
-            .collect();
+            .enumerate();
+        
+        for (i, viewport) in viewports {
+            if i + first_viewport as usize >= self.viewport_cache.len() {
+                self.viewport_cache.push(viewport);
+            } else {
+                self.viewport_cache[i + first_viewport as usize] = viewport;
+            }
+        }
 
         unsafe {
             self.raw.RSSetViewports(
-                viewports.len() as _,
-                viewports.as_ptr(),
+                self.viewport_cache.len() as _,
+                self.viewport_cache.as_ptr(),
             );
         }
     }
 
-    fn set_scissors<T>(&mut self, scissors: T)
+    fn set_scissors<T>(&mut self, first_scissor: u32, scissors: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Rect>,
     {
-        let rects: SmallVec<[d3d12::D3D12_RECT; 16]> = scissors.into_iter().map(|rect| get_rect(rect.borrow())).collect();
+        let rects = scissors
+            .into_iter()
+            .map(|rect| get_rect(rect.borrow()))
+            .enumerate();
+
+        for (i, rect) in rects {
+            if i + first_scissor as usize >= self.scissor_cache.len() {
+                self.scissor_cache.push(rect);
+            } else {
+                self.scissor_cache[i + first_scissor as usize] = rect;
+            }
+        }
+
         unsafe {
             self.raw
-                .RSSetScissorRects(rects.len() as _, rects.as_ptr())
+                .RSSetScissorRects(self.scissor_cache.len() as _, self.scissor_cache.as_ptr())
         };
     }
 
@@ -1263,10 +1290,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
 
         if let Some(ref vp) = pipeline.baked_states.viewport {
-            self.set_viewports(iter::once(vp));
+            self.set_viewports(0, iter::once(vp));
         }
         if let Some(ref rect) = pipeline.baked_states.scissor {
-            self.set_scissors(iter::once(rect));
+            self.set_scissors(0, iter::once(rect));
         }
         if let Some(color) = pipeline.baked_states.blend_color {
             self.set_blend_constants(color);

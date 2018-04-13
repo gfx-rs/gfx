@@ -481,7 +481,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_viewports<T>(&mut self, viewports: T)
+    fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Viewport>,
@@ -494,11 +494,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .collect();
 
         unsafe {
-            self.device.0.cmd_set_viewport(self.raw, 0, &viewports);
+            self.device.0.cmd_set_viewport(self.raw, first_viewport, &viewports);
         }
     }
 
-    fn set_scissors<T>(&mut self, scissors: T)
+    fn set_scissors<T>(&mut self, first_scissor: u32, scissors: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Rect>,
@@ -511,7 +511,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .collect();
 
         unsafe {
-            self.device.0.cmd_set_scissor(self.raw, &scissors);
+            self.device.0.cmd_set_scissor(self.raw, first_scissor, &scissors);
         }
     }
 

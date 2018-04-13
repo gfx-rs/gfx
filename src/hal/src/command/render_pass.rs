@@ -87,21 +87,21 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
     }
 
     ///
-    pub fn set_viewports<T>(&mut self, viewports: T)
+    pub fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Viewport>,
     {
-        self.0.set_viewports(viewports)
+        self.0.set_viewports(first_viewport, viewports)
     }
 
     ///
-    pub fn set_scissors<T>(&mut self, scissors: T)
+    pub fn set_scissors<T>(&mut self, first_scissor: u32, scissors: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Rect>,
     {
-        self.0.set_scissors(scissors)
+        self.0.set_scissors(first_scissor, scissors)
     }
 
     ///

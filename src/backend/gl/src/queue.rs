@@ -387,7 +387,7 @@ impl CommandQueue {
                     gl.DispatchComputeIndirect(offset as _);
                 }
             }
-            com::Command::SetViewports { viewport_ptr, depth_range_ptr } => {
+            com::Command::SetViewports { first_viewport, viewport_ptr, depth_range_ptr } => {
                 let gl = &self.share.context;
                 let viewports = Self::get::<[f32; 4]>(data_buf, viewport_ptr);
                 let depth_ranges = Self::get::<[f64; 2]>(data_buf, depth_range_ptr);
@@ -404,11 +404,11 @@ impl CommandQueue {
                 } else if num_viewports > 1 {
                     // Support for these functions is coupled with the support
                     // of multiple viewports.
-                    unsafe { gl.ViewportArrayv(0, num_viewports as i32, viewports.as_ptr() as *const _) };
-                    unsafe { gl.DepthRangeArrayv(0, num_viewports as i32, depth_ranges.as_ptr() as *const _) };
+                    unsafe { gl.ViewportArrayv(first_viewport, num_viewports as i32, viewports.as_ptr() as *const _) };
+                    unsafe { gl.DepthRangeArrayv(first_viewport, num_viewports as i32, depth_ranges.as_ptr() as *const _) };
                 }
             }
-            com::Command::SetScissors(data_ptr) => {
+            com::Command::SetScissors(first_scissor, data_ptr) => {
                 let gl = &self.share.context;
                 let scissors = Self::get::<[i32; 4]>(data_buf, data_ptr);
                 let num_scissors = scissors.len();
@@ -420,7 +420,7 @@ impl CommandQueue {
                 } else {
                     // Support for this function is coupled with the support
                     // of multiple viewports.
-                    unsafe { gl.ScissorArrayv(0, num_scissors as i32, scissors.as_ptr() as *const _) };
+                    unsafe { gl.ScissorArrayv(first_scissor, num_scissors as i32, scissors.as_ptr() as *const _) };
                 }
             }
             com::Command::SetBlendColor(color) => {

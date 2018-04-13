@@ -127,8 +127,8 @@ macro_rules! gfx_graphics_pipeline {
                     );
 
                     let cmd_buffer = encoder.mut_buffer();
-                    cmd_buffer.set_viewports(self.viewports);
-                    cmd_buffer.set_scissors(self.scissors);
+                    cmd_buffer.set_viewports(0, self.viewports);
+                    cmd_buffer.set_scissors(0, self.scissors);
                     cmd_buffer.bind_graphics_pipeline(meta.pipeline.resource());
                     let mut vbs = Vec::new();
                     $(

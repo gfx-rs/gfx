@@ -1075,30 +1075,39 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         inner.sink.pre_render_commands(commands);
     }
 
-    fn set_viewports<T>(&mut self, vps: T)
+    fn set_viewports<T>(&mut self, first_viewport: u32, vps: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Viewport>,
     {
+        // macOS_GPUFamily1_v3 supports >1 viewport, todo
+        if first_viewport != 0 {
+            panic!("First viewport != 0; Metal supports only one viewport");
+        }
         let mut vps = vps.into_iter();
         let vp_borrowable = vps.next().expect("No viewport provided, Metal supports exactly one");
         let vp = vp_borrowable.borrow();
         if vps.next().is_some() {
-            panic!("Metal supports only one viewport");
+            // TODO should we panic here or set buffer in an erronous state?
+            panic!("More than one viewport set; Metal supports only one viewport");
         }
         self.inner().set_viewport(vp);
     }
 
-    fn set_scissors<T>(&mut self, rects: T)
+    fn set_scissors<T>(&mut self, first_scissor: u32, rects: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Rect>,
     {
+        // macOS_GPUFamily1_v3 supports >1 scissor/viewport, todo
+        if first_scissor != 0 {
+            panic!("First scissor != 0; Metal supports only one viewport");
+        }
         let mut rects = rects.into_iter();
         let rect_borrowable = rects.next().expect("No scissor provided, Metal supports exactly one");
         let rect = rect_borrowable.borrow();
         if rects.next().is_some() {
-            panic!("Metal supports only one scissor");
+            panic!("More than one scissor set; Metal supports only one viewport");
         }
         self.inner().set_scissor(rect);
     }
