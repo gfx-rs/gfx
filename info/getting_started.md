@@ -13,7 +13,8 @@ sudo dnf install -y libX11-devel vulkan
 For Ubuntu
 
 ```bash
-sudo apt install -y libx11-dev libvulkan-dev
+sudo apt install -y libx11-dev libvulkan-dev libxcb1-dev xorg-dev
+
 ```
 
 For Linux, a Vulkan compatible driver must also be installed. For example, the open source ``` mesa-vulkan-drivers ``` for Intel or Radeon gpu's. The proprietary Nvidia drivers support Vulkan out of the box but, as of time of writing, Nouveau users are currenty limited to OpenGL.
