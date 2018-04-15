@@ -47,6 +47,11 @@ pub enum BlitCommand {
         dst: metal::Buffer,
         region: hal::command::BufferCopy,
     },
+    CopyImage {
+        src: metal::Texture,
+        dst: metal::Texture,
+        region: hal::command::ImageCopy,
+    },
     CopyBufferToImage {
         src: metal::Buffer,
         dst: metal::Texture,
