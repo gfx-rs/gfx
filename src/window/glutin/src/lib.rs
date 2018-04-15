@@ -111,8 +111,7 @@ fn get_window_dimensions(window: &glutin::GlWindow) -> texture::Dimensions {
     #[cfg(not(target_os = "emscripten"))]
     let (width, height) = {
         let (w, h) = window.get_inner_size().unwrap();
-        let factor = window.hidpi_factor();
-        ((w as f32 * factor) as _, (h as f32 * factor) as _)
+        (w as _, h as _)
     };
     let aa = window
         .get_pixel_format().multisampling
