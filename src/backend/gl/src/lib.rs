@@ -229,7 +229,7 @@ impl PhysicalDevice {
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(
-        &self, families: Vec<(&QueueFamily, Vec<hal::QueuePriority>)>,
+        &self, families: &[(&QueueFamily, &[hal::QueuePriority])],
     ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
         // Can't have multiple logical devices at the same time
         // as they would share the same context.
@@ -270,9 +270,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             device: Device::new(self.0.clone()),
             queues: Queues::new(families
                 .into_iter()
-                .map(|(proto_family, priorities)| {
+                .map(|&(proto_family, priorities)| {
                     assert_eq!(priorities.len(), 1);
-                    let mut family = hal::backend::RawQueueGroup::new(*proto_family);
+                    let mut family = hal::backend::RawQueueGroup::new(proto_family.clone());
                     let queue = queue::CommandQueue::new(&self.0, vao);
                     family.add_queue(queue);
                     (QueueFamilyId(0), family)

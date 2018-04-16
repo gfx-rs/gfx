@@ -320,11 +320,11 @@ pub struct PhysicalDevice {
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(
-        &self, families: Vec<(&QueueFamily, Vec<hal::QueuePriority>)>
+        &self, families: &[(&QueueFamily, &[hal::QueuePriority])]
     ) -> Result<hal::Gpu<Backend>, DeviceCreationError> {
         let family_infos = families
             .iter()
-            .map(|&(ref family, ref priorities)| vk::DeviceQueueCreateInfo {
+            .map(|&(family, priorities)| vk::DeviceQueueCreateInfo {
                 s_type: vk::StructureType::DeviceQueueCreateInfo,
                 p_next: ptr::null(),
                 flags: vk::DeviceQueueCreateFlags::empty(),
@@ -395,7 +395,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let device_arc = device.raw.clone();
         let queues = families
             .into_iter()
-            .map(|(family, priorities)| {
+            .map(|&(family, ref priorities)| {
                 let family_index = family.index;
                 let mut family_raw = hal::backend::RawQueueGroup::new(family.clone());
                 for id in 0 .. priorities.len() {

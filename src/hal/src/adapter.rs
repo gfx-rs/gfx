@@ -67,10 +67,12 @@ pub trait PhysicalDevice<B: Backend>: Any + Send + Sync {
     ///
     /// # let physical_device: empty::PhysicalDevice = return;
     /// # let family: empty::QueueFamily = return;
-    /// let gpu = physical_device.open(vec![(&family, vec![1.0; 1])]);
+    /// let gpu = physical_device.open(&[(&family, &[1.0; 1])]);
     /// # }
     /// ```
-    fn open(&self, families: Vec<(&B::QueueFamily, Vec<QueuePriority>)>) -> Result<Gpu<B>, DeviceCreationError>;
+    fn open(
+        &self, families: &[(&B::QueueFamily, &[QueuePriority])]
+    ) -> Result<Gpu<B>, DeviceCreationError>;
 
     /// Fetch details for a particular format.
     fn format_properties(
@@ -144,7 +146,9 @@ impl<B: Backend> Adapter<B> {
     ///
     /// Returns the same errors as `open` and `InitializationFailed` if no suitable
     /// queue family could be found.
-    pub fn open_with<F, C>(mut self, count: usize, selector: F) -> Result<(B::Device, QueueGroup<B, C>), DeviceCreationError>
+    pub fn open_with<F, C>(
+        mut self, count: usize, selector: F
+    ) -> Result<(B::Device, QueueGroup<B, C>), DeviceCreationError>
     where
         F: Fn(&B::QueueFamily) -> bool,
         C: Capability,
@@ -160,12 +164,13 @@ impl<B: Backend> Adapter<B> {
             })
             .next();
 
-        let (id, family) = match requested_family {
-            Some(ref family) => (family.id(), vec![(family, vec![1.0; count])]),
+        let priorities = vec![1.0; count];
+        let (id, families) = match requested_family {
+            Some(ref family) => (family.id(), [(family, priorities.as_slice())]),
             _ => return Err(DeviceCreationError::InitializationFailed),
         };
 
-        let Gpu { device, mut queues } = self.physical_device.open(family)?;
+        let Gpu { device, mut queues } = self.physical_device.open(&families)?;
         Ok((device, queues.take(id).unwrap()))
     }
 }

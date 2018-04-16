@@ -56,7 +56,7 @@ impl hal::Backend for Backend {
 pub struct PhysicalDevice;
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(
-        &self, _: Vec<(&QueueFamily, Vec<hal::QueuePriority>)>
+        &self, _: &[(&QueueFamily, &[hal::QueuePriority])]
     ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
         unimplemented!()
     }
