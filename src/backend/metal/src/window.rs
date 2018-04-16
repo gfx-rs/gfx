@@ -1,5 +1,5 @@
 use {Backend, QueueFamily};
-use {native, conversions};
+use native;
 use device::{Device, PhysicalDevice};
 
 use std::sync::{Arc, Mutex};
@@ -108,6 +108,7 @@ impl Device {
         let render_layer_borrow = surface.0.render_layer.lock().unwrap();
         let render_layer = *render_layer_borrow;
         let nsview = surface.0.nsview;
+        let pixel_size = config.color_format.base_format().0.desc().bits as i32 / 8;
 
         unsafe {
             // Update render layer size
@@ -123,7 +124,6 @@ impl Device {
             info!("view points size {:?} scale factor {:?}", view_points_size, scale_factor);
             let pixel_width = (view_points_size.size.width * scale_factor) as u64;
             let pixel_height = (view_points_size.size.height * scale_factor) as u64;
-            let pixel_size = conversions::get_format_bytes_per_pixel(mtl_format) as i32;
 
             info!("allocating {} IOSurface backbuffers of size {}x{} with pixel format 0x{:x}", config.image_count, pixel_width, pixel_height, cv_format);
             // Create swap chain surfaces
