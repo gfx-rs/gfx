@@ -160,11 +160,12 @@ impl PhysicalDevice {
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(
-        &self, mut families: Vec<(&QueueFamily, Vec<hal::QueuePriority>)>,
+        &self, families: &[(&QueueFamily, &[hal::QueuePriority])],
     ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
         // TODO: Handle opening a physical device multiple times
         assert_eq!(families.len(), 1);
-        let family = *families.remove(0).0;
+        assert_eq!(families[0].1.len(), 1);
+        let family = *families[0].0;
         let id = family.id();
 
         let mut queue_group = hal::backend::RawQueueGroup::new(family);
