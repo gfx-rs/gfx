@@ -3,29 +3,34 @@ use hal::format::Format;
 use hal::pso::Comparison;
 use metal::*;
 
-// The boolean indicates whether this is a depth format
-pub fn map_format(format: Format) -> Option<(MTLPixelFormat, bool)> {
+pub fn map_format(format: Format) -> Option<MTLPixelFormat> {
     Some(match format {
-        Format::Rgba8Unorm => (MTLPixelFormat::RGBA8Unorm, false),
-        Format::Rgba8Srgb => (MTLPixelFormat::RGBA8Unorm_sRGB, false),
-        Format::Bgra8Unorm => (MTLPixelFormat::BGRA8Unorm, false),
-        Format::Bgra8Srgb => (MTLPixelFormat::BGRA8Unorm_sRGB, false),
-        Format::Rgba32Float => (MTLPixelFormat::RGBA32Float, false),
-        Format::D32Float => (MTLPixelFormat::Depth32Float, true),
-        Format::D24UnormS8Uint => (MTLPixelFormat::Depth24Unorm_Stencil8, true),
-        Format::D32FloatS8Uint => (MTLPixelFormat::Depth32Float_Stencil8, true),
+        Format::R8Unorm        => MTLPixelFormat::R8Unorm,
+        Format::R8Inorm        => MTLPixelFormat::R8Snorm,
+        Format::R8Srgb         => MTLPixelFormat::R8Unorm_sRGB,
+        Format::R8Uint         => MTLPixelFormat::R8Uint,
+        Format::R8Int          => MTLPixelFormat::R8Sint,
+        Format::Rg8Unorm       => MTLPixelFormat::RG8Unorm,
+        Format::Rg8Inorm       => MTLPixelFormat::RG8Snorm,
+        Format::Rg8Srgb        => MTLPixelFormat::RG8Unorm_sRGB,
+        Format::Rg8Uint        => MTLPixelFormat::RG8Uint,
+        Format::Rg8Int         => MTLPixelFormat::RG8Sint,
+        Format::Rgba8Unorm     => MTLPixelFormat::RGBA8Unorm,
+        Format::Rgba8Inorm     => MTLPixelFormat::RGBA8Snorm,
+        Format::Rgba8Srgb      => MTLPixelFormat::RGBA8Unorm_sRGB,
+        Format::Rgba8Uint      => MTLPixelFormat::RGBA8Uint,
+        Format::Rgba8Int       => MTLPixelFormat::RGBA8Sint,
+        Format::Bgra8Unorm     => MTLPixelFormat::BGRA8Unorm,
+        Format::Bgra8Srgb      => MTLPixelFormat::BGRA8Unorm_sRGB,
+        Format::Rgba32Float    => MTLPixelFormat::RGBA32Float,
+        Format::D32Float       => MTLPixelFormat::Depth32Float,
+        Format::D24UnormS8Uint => MTLPixelFormat::Depth24Unorm_Stencil8,
+        Format::D32FloatS8Uint => MTLPixelFormat::Depth32Float_Stencil8,
+        //Format::Bgra4Unorm =>
+        //Format::R5g6b5Unorm =>
+        //Format::A1r5g5b5Unorm =>
         _ => return None,
     })
-}
-
-pub fn get_format_bytes_per_pixel(format: MTLPixelFormat) -> usize {
-    // TODO: more formats
-    match format {
-        MTLPixelFormat::RGBA8Unorm => 4,
-        MTLPixelFormat::RGBA8Unorm_sRGB => 4,
-        MTLPixelFormat::BGRA8Unorm => 4,
-        _ => unimplemented!(),
-    }
 }
 
 pub fn map_load_operation(operation: pass::AttachmentLoadOp) -> MTLLoadAction {

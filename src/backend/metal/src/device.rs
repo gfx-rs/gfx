@@ -208,12 +208,18 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         })
     }
 
-    fn format_properties(&self, _: Option<format::Format>) -> format::Properties {
-        //TODO
-        format::Properties {
-            linear_tiling: format::ImageFeature::empty(),
-            optimal_tiling: format::ImageFeature::empty(),
-            buffer_features: format::BufferFeature::empty(),
+    fn format_properties(&self, format: Option<format::Format>) -> format::Properties {
+        match format.and_then(map_format) {
+            Some(_) => format::Properties {
+                linear_tiling: format::ImageFeature::empty(),
+                optimal_tiling: format::ImageFeature::all(),
+                buffer_features: format::BufferFeature::all(),
+            },
+            None => format::Properties {
+                linear_tiling: format::ImageFeature::empty(),
+                optimal_tiling: format::ImageFeature::empty(),
+                buffer_features: format::BufferFeature::empty(),
+            },
         }
     }
 
@@ -243,7 +249,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn features(&self) -> hal::Features {
-        hal::Features::empty() //TODO
+        hal::Features::ROBUST_BUFFER_ACCESS
     }
 
     fn limits(&self) -> hal::Limits {
@@ -496,22 +502,25 @@ impl hal::Device<Backend> for Device {
             .collect::<Vec<_>>();
         let mut color_attachment_index = 0;
         for attachment in &attachments {
-            if let Some((_format, is_depth)) = attachment.format.and_then(map_format) {
-                let mtl_attachment: &metal::RenderPassAttachmentDescriptorRef;
-                if !is_depth {
-                    let color_attachment = pass.color_attachments().object_at(color_attachment_index).expect("too many color attachments");
-                    color_attachment_index += 1;
+            let is_depth = match attachment.format {
+                Some(f) => f.is_depth(),
+                None => continue,
+            };
+            
+            let mtl_attachment: &metal::RenderPassAttachmentDescriptorRef = if is_depth {
+                pass
+                    .depth_attachment()
+                    .expect("no depth attachement")
+            } else {
+                color_attachment_index += 1;
+                pass
+                    .color_attachments()
+                    .object_at(color_attachment_index - 1)
+                    .expect("too many color attachments")
+            };
 
-                    mtl_attachment = color_attachment;
-                } else {
-                    let depth_attachment = pass.depth_attachment().expect("no depth attachement");
-
-                    mtl_attachment = depth_attachment;
-                }
-
-                mtl_attachment.set_load_action(map_load_operation(attachment.ops.load));
-                mtl_attachment.set_store_action(map_store_operation(attachment.ops.store));
-            }
+            mtl_attachment.set_load_action(map_load_operation(attachment.ops.load));
+            mtl_attachment.set_store_action(map_store_operation(attachment.ops.store));
         }
 
         n::RenderPass {
@@ -663,17 +672,22 @@ impl hal::Device<Backend> for Device {
 
         // Copy color target info from Subpass
         for (i, attachment) in pass_descriptor.main_pass.attachments.iter().enumerate() {
-            let (mtl_format, is_depth) = attachment.format
-                .and_then(map_format)
-                .expect("unsupported color format");
-            if !is_depth {
+            let format = attachment.format.expect("expected color format");
+            let mtl_format = match map_format(format) {
+                Some(f) => f,
+                None => {
+                    error!("Unable to convert {:?} format", format);
+                    return Err(pso::CreationError::Other);
+                }
+            };
+            if format.is_depth() {
+                pipeline.set_depth_attachment_pixel_format(mtl_format);
+            } else {
                 let descriptor = pipeline
                     .color_attachments()
                     .object_at(i)
                     .expect("too many color attachments");
                 descriptor.set_pixel_format(mtl_format);
-            } else {
-                pipeline.set_depth_attachment_pixel_format(mtl_format);
             }
         }
 
@@ -1321,7 +1335,7 @@ impl hal::Device<Backend> for Device {
         let is_cube = flags.contains(image::StorageFlags::CUBE_VIEW);
         let base_format = format.base_format();
         let format_desc = base_format.0.desc();
-        let (mtl_format, _) = map_format(format).ok_or(image::CreationError::Format(format))?;
+        let mtl_format = map_format(format).ok_or(image::CreationError::Format(format))?;
 
         let descriptor = metal::TextureDescriptor::new();
 
@@ -1461,7 +1475,7 @@ impl hal::Device<Backend> for Device {
     ) -> Result<n::ImageView, image::ViewError> {
         // TODO: subresource range
 
-        let (mtl_format, _) = match map_format(format) {
+        let mtl_format = match map_format(format) {
             Some(f) => f,
             None => {
                 error!("failed to find corresponding Metal format for {:?}", format);
