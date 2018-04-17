@@ -742,8 +742,8 @@ impl CommandBuffer {
                         let cut_width = cmp::min(r.image_extent.width, cut_row_texels as image::Size);
                         let gap_texels = (row_offset - aligned_offset) as image::Size / image.bytes_per_block as image::Size;
                         // this is a conservative row pitch that should be compatible with both copies
-                        let max_unaligned_pitch = r.image_extent.width * image.bytes_per_block as u32;
-                        let row_pitch = (max_unaligned_pitch | d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT) + 1;
+                        let max_unaligned_pitch = (r.image_extent.width + gap_texels) * image.bytes_per_block as u32;
+                        let row_pitch = (max_unaligned_pitch | (d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1)) + 1;
 
                         copies.push(Copy {
                             footprint_offset: aligned_offset,
@@ -1203,7 +1203,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 }
             })
             .enumerate();
-        
+
         for (i, viewport) in viewports {
             if i + first_viewport as usize >= self.viewport_cache.len() {
                 self.viewport_cache.push(viewport);
