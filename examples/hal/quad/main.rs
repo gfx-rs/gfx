@@ -305,7 +305,7 @@ fn main() {
         pipeline
     };
 
-    println!("Pipeline: {:?}", pipeline);
+    //println!("Pipeline: {:?}", pipeline);
 
     // Descriptors
     let mut desc_pool = device.create_descriptor_pool(

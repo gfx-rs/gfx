@@ -11,9 +11,9 @@ use hal::window::Extent2D;
 use metal::{self, MTLPixelFormat, MTLTextureUsage};
 use objc::runtime::{Object};
 use core_foundation::base::TCFType;
-use core_foundation::string::{CFString, CFStringRef};
+use core_foundation::string::CFString;
 use core_foundation::dictionary::CFDictionary;
-use core_foundation::number::{CFNumber, CFNumberRef};
+use core_foundation::number::CFNumber;
 use core_graphics::base::CGFloat;
 use core_graphics::geometry::CGRect;
 use cocoa::foundation::{NSRect};
@@ -119,14 +119,16 @@ impl Device {
             }
             let scale_factor: CGFloat = msg_send![view_window, backingScaleFactor];
             msg_send![render_layer, setContentsScale: scale_factor];
-            let pixel_width = view_points_size.size.width as u64;
-            let pixel_height = view_points_size.size.height as u64;
+
+            info!("view points size {:?} scale factor {:?}", view_points_size, scale_factor);
+            let pixel_width = (view_points_size.size.width * scale_factor) as u64;
+            let pixel_height = (view_points_size.size.height * scale_factor) as u64;
             let pixel_size = conversions::get_format_bytes_per_pixel(mtl_format) as i32;
 
             info!("allocating {} IOSurface backbuffers of size {}x{} with pixel format 0x{:x}", config.image_count, pixel_width, pixel_height, cv_format);
             // Create swap chain surfaces
             let io_surfaces: Vec<_> = (0..config.image_count).map(|_| {
-                io_surface::new(&CFDictionary::from_CFType_pairs::<CFStringRef, CFNumberRef, CFString, CFNumber>(&[
+                io_surface::new(&CFDictionary::from_CFType_pairs::<CFString, CFNumber>(&[
                     (TCFType::wrap_under_get_rule(io_surface::kIOSurfaceWidth), CFNumber::from(pixel_width as i32)),
                     (TCFType::wrap_under_get_rule(io_surface::kIOSurfaceHeight), CFNumber::from(pixel_height as i32)),
                     (TCFType::wrap_under_get_rule(io_surface::kIOSurfaceBytesPerRow), CFNumber::from(pixel_width as i32 * pixel_size)),
