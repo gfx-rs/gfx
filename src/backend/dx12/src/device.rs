@@ -206,25 +206,25 @@ impl Device {
         let shader_resources = ast.get_shader_resources().map_err(gen_query_error)?;
         for image in &shader_resources.separate_images {
             let set = ast.get_decoration(image.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
-            ast.set_decoration(image.id, spirv::Decoration::DescriptorSet, space_offset + 2*set)
+            ast.set_decoration(image.id, spirv::Decoration::DescriptorSet, space_offset + set)
                .map_err(gen_unexpected_error)?;
         }
 
         for uniform_buffer in &shader_resources.uniform_buffers {
             let set = ast.get_decoration(uniform_buffer.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
-            ast.set_decoration(uniform_buffer.id, spirv::Decoration::DescriptorSet, space_offset + 2*set)
+            ast.set_decoration(uniform_buffer.id, spirv::Decoration::DescriptorSet, space_offset + set)
                .map_err(gen_unexpected_error)?;
         }
 
         for sampler in &shader_resources.separate_samplers {
             let set = ast.get_decoration(sampler.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
-            ast.set_decoration(sampler.id, spirv::Decoration::DescriptorSet, space_offset + 2*set+1)
+            ast.set_decoration(sampler.id, spirv::Decoration::DescriptorSet, space_offset + set)
                .map_err(gen_unexpected_error)?;
         }
 
         for image in &shader_resources.sampled_images {
             let set = ast.get_decoration(image.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
-            ast.set_decoration(image.id, spirv::Decoration::DescriptorSet, space_offset + 2*set)
+            ast.set_decoration(image.id, spirv::Decoration::DescriptorSet, space_offset + set)
                .map_err(gen_unexpected_error)?;
         }
 
@@ -1197,7 +1197,7 @@ impl d::Device<B> for Device {
                 .bindings
                 .iter()
                 .filter(|bind| bind.ty != pso::DescriptorType::Sampler)
-                .map(|bind| conv::map_descriptor_range(bind, (table_space_offset + 2*i) as u32, false)));
+                .map(|bind| conv::map_descriptor_range(bind, (table_space_offset + i) as u32, false)));
 
             if ranges.len() > range_base {
                 *unsafe{ param.u.DescriptorTable_mut() } = d3d12::D3D12_ROOT_DESCRIPTOR_TABLE {
@@ -1217,7 +1217,7 @@ impl d::Device<B> for Device {
                 .map(|bind| {
                     conv::map_descriptor_range(
                         bind,
-                        (table_space_offset + 2*i+1) as u32,
+                        (table_space_offset + i) as u32,
                         true,
                     )
                 }));
