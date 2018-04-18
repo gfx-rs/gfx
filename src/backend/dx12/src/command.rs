@@ -644,7 +644,8 @@ impl CommandBuffer {
         for layer in r.image_layers.layers.clone() {
             let img_subresource = image
                 .calc_subresource(r.image_layers.level as _, layer as _, 0);
-            let layer_offset = r.buffer_offset as u64 + (layer as u32 * slice_pitch * r.image_extent.depth) as u64;
+            let layer_relative = (layer - r.image_layers.layers.start) as u32;
+            let layer_offset = r.buffer_offset as u64 + (layer_relative * slice_pitch * r.image_extent.depth) as u64;
             let aligned_offset = layer_offset & !(d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64 - 1);
             if layer_offset == aligned_offset && is_pitch_aligned {
                 // trivial case: everything is aligned, ready for copying
