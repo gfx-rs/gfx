@@ -306,7 +306,7 @@ impl Kind {
             _ => {
                 let extent = self.extent();
                 let dominant = max(max(extent.width, extent.height), extent.depth);
-                (1..).find(|level| dominant>>level <= 1).unwrap()
+                (1..).find(|level| dominant>>level == 0).unwrap()
             }
         }
     }
