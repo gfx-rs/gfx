@@ -323,11 +323,19 @@ fn map_filter_type(filter: image::Filter) -> D3D12_FILTER_TYPE {
     }
 }
 
+fn map_anisotropic(anisotropic: image::Anisotropic) -> D3D12_FILTER {
+    match anisotropic {
+        image::Anisotropic::On(_) => D3D12_FILTER_ANISOTROPIC,
+        image::Anisotropic::Off => 0,
+    }
+}
+
 pub fn map_filter(
     mag_filter: image::Filter,
     min_filter: image::Filter,
     mip_filter: image::Filter,
     reduction: D3D12_FILTER_REDUCTION_TYPE,
+    anisotropic: image::Anisotropic,
 ) -> D3D12_FILTER {
     let mag = map_filter_type(mag_filter);
     let min = map_filter_type(min_filter);
@@ -336,7 +344,8 @@ pub fn map_filter(
     (min & D3D12_FILTER_TYPE_MASK) << D3D12_MIN_FILTER_SHIFT |
     (mag & D3D12_FILTER_TYPE_MASK) << D3D12_MAG_FILTER_SHIFT |
     (mip & D3D12_FILTER_TYPE_MASK) << D3D12_MIP_FILTER_SHIFT |
-    (reduction & D3D12_FILTER_REDUCTION_TYPE_MASK) << D3D12_FILTER_REDUCTION_TYPE_SHIFT
+    (reduction & D3D12_FILTER_REDUCTION_TYPE_MASK) << D3D12_FILTER_REDUCTION_TYPE_SHIFT |
+    map_anisotropic(anisotropic)
 }
 
 pub fn map_buffer_resource_state(access: buffer::Access) -> D3D12_RESOURCE_STATES {

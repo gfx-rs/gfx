@@ -1908,7 +1908,7 @@ impl d::Device<B> for Device {
             None => d3d12::D3D12_FILTER_REDUCTION_TYPE_STANDARD,
         };
         let desc = d3d12::D3D12_SAMPLER_DESC {
-            Filter: conv::map_filter(info.mag_filter, info.min_filter, info.mip_filter, op),
+            Filter: conv::map_filter(info.mag_filter, info.min_filter, info.mip_filter, op, info.anisotropic),
             AddressU: conv::map_wrap(info.wrap_mode.0),
             AddressV: conv::map_wrap(info.wrap_mode.1),
             AddressW: conv::map_wrap(info.wrap_mode.2),
