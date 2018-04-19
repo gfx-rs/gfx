@@ -159,11 +159,11 @@ pub struct Image {
     pub(crate) block_dim: (u8, u8),
     pub(crate) num_levels: image::Level,
     #[derivative(Debug="ignore")]
-    pub(crate) clear_cv: Option<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>,
+    pub(crate) clear_cv: Vec<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>,
     #[derivative(Debug="ignore")]
-    pub(crate) clear_dv: Option<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>,
+    pub(crate) clear_dv: Vec<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>,
     #[derivative(Debug="ignore")]
-    pub(crate) clear_sv: Option<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>,
+    pub(crate) clear_sv: Vec<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>,
 }
 unsafe impl Send for Image { }
 unsafe impl Sync for Image { }

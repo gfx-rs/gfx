@@ -1778,9 +1778,9 @@ impl d::Device<B> for Device {
             },
             format: image.desc.Format,
             range: image::SubresourceRange {
-                aspects: Aspects::COLOR,
-                levels: 0 .. 1, //TODO?
-                layers: 0 .. num_layers,
+                aspects: Aspects::empty(),
+                levels: 0 .. 0,
+                layers: 0 .. 0,
             },
         };
 
@@ -1798,35 +1798,57 @@ impl d::Device<B> for Device {
             block_dim: image.block_dim,
             num_levels: image.num_levels,
             clear_cv: if image.aspects.contains(Aspects::COLOR) && image.usage.contains(Usage::COLOR_ATTACHMENT) {
-                Some(self.view_image_as_render_target(info.clone()).unwrap())
+                (0 .. num_layers)
+                    .map(|layer| {
+                        self.view_image_as_render_target(
+                            ViewInfo {
+                                range: image::SubresourceRange {
+                                    aspects: Aspects::COLOR,
+                                    levels: 0 .. 1, //TODO?
+                                    layers: layer .. layer + 1,
+                                },
+                                .. info.clone()
+                            }).unwrap()
+                    })
+                    .collect()
             } else {
-                None
+                Vec::new()
             },
             clear_dv: if image.aspects.contains(Aspects::DEPTH) && image.usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
-                Some(self.view_image_as_depth_stencil(ViewInfo {
-                    format: image.dsv_format,
-                    range: image::SubresourceRange {
-                        aspects: Aspects::DEPTH,
-                        levels: 0 .. 1, //TODO?
-                        layers: 0 .. num_layers,
-                    },
-                    .. info.clone()
-                }).unwrap())
+                (0 .. num_layers)
+                    .map(|layer| {
+                        self.view_image_as_depth_stencil(
+                            ViewInfo {
+                                format: image.dsv_format,
+                                range: image::SubresourceRange {
+                                    aspects: Aspects::DEPTH,
+                                    levels: 0 .. 1, //TODO?
+                                    layers: layer .. layer + 1,
+                                },
+                                .. info.clone()
+                            }).unwrap()
+                    })
+                    .collect()
             } else {
-                None
+                Vec::new()
             },
             clear_sv: if image.aspects.contains(Aspects::STENCIL) && image.usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
-                Some(self.view_image_as_depth_stencil(ViewInfo {
-                    format: image.dsv_format,
-                    range: image::SubresourceRange {
-                        aspects: Aspects::STENCIL,
-                        levels: 0 .. 1, //TODO?
-                        layers: 0 .. num_layers,
-                    },
-                    .. info.clone()
-                }).unwrap())
+                (0 .. num_layers)
+                    .map(|layer| {
+                        self.view_image_as_depth_stencil(
+                            ViewInfo {
+                                format: image.dsv_format,
+                                range: image::SubresourceRange {
+                                    aspects: Aspects::STENCIL,
+                                    levels: 0 .. 1, //TODO?
+                                    layers: layer .. layer + 1,
+                                },
+                                .. info.clone()
+                            }).unwrap()
+                    })
+                    .collect()
             } else {
-                None
+                Vec::new()
             },
         })
     }
@@ -2602,9 +2624,9 @@ impl d::Device<B> for Device {
                 bytes_per_block,
                 block_dim,
                 num_levels: 1,
-                clear_cv: Some(rtv_handle),
-                clear_dv: None,
-                clear_sv: None,
+                clear_cv: vec![rtv_handle],
+                clear_dv: Vec::new(),
+                clear_sv: Vec::new(),
             }
         }).collect();
 
