@@ -1027,9 +1027,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         range: image::SubresourceRange,
         value: com::ClearColorRaw,
     ) {
-        assert_eq!(range, image.to_subresource_range(Aspects::COLOR));
-        let rtv = image.clear_cv.unwrap();
-        self.clear_render_target_view(rtv, value, &[]);
+        assert_eq!(range.aspects, Aspects::COLOR);
+        assert_eq!(range.levels, 0 .. 1); //TODO
+        for layer in range.layers {
+            let rtv = image.clear_cv[layer as usize];
+            self.clear_render_target_view(rtv, value, &[]);
+        }
     }
 
     fn clear_depth_stencil_image_raw(
@@ -1040,14 +1043,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         value: com::ClearDepthStencilRaw,
     ) {
         assert!((Aspects::DEPTH | Aspects::STENCIL).contains(range.aspects));
-        assert_eq!(range, image.to_subresource_range(range.aspects));
-        if range.aspects.contains(Aspects::DEPTH) {
-            let dsv = image.clear_dv.unwrap();
-            self.clear_depth_stencil_view(dsv, Some(value.depth), None, &[]);
-        }
-        if range.aspects.contains(Aspects::STENCIL) {
-            let dsv = image.clear_sv.unwrap();
-            self.clear_depth_stencil_view(dsv, None, Some(value.stencil as _), &[]);
+        assert_eq!(range.levels, 0 .. 1); //TODO
+        for layer in range.layers {
+            if range.aspects.contains(Aspects::DEPTH) {
+                let dsv = image.clear_dv[layer as usize];
+                self.clear_depth_stencil_view(dsv, Some(value.depth), None, &[]);
+            }
+            if range.aspects.contains(Aspects::STENCIL) {
+                let dsv = image.clear_sv[layer as usize];
+                self.clear_depth_stencil_view(dsv, None, Some(value.stencil as _), &[]);
+            }
         }
     }
 

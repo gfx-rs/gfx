@@ -2,7 +2,7 @@
 	resources: {
 		"buffer.output": Buffer(
 			size: 4,
-			usage: (bits: 0x8), //STORAGE
+			usage: (bits: 0x20), //STORAGE
 		),
 		"desc-layout": DescriptorSetLayout(
 			bindings: [
