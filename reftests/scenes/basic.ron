@@ -4,7 +4,7 @@
 			kind: D2(1, 1, 1, 1),
 			num_levels: 1,
 			format: Rgba8Unorm,
-			usage: (bits: 0x24), //COLOR_ATTACHMENT | SAMPLED (temporary for GL)
+			usage: (bits: 0x14), //COLOR_ATTACHMENT | SAMPLED (temporary for GL)
 		),
 		"pass": RenderPass(
 			attachments: {
