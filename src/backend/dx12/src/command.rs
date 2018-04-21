@@ -664,7 +664,7 @@ impl CommandBuffer {
                 let row_pitch_texels = row_pitch / image.bytes_per_block as u32;
                 let gap = (layer_offset - aligned_offset) as i32;
                 let buf_offset = image::Offset {
-                    x: gap % row_pitch as i32,
+                    x: (gap % row_pitch as i32) / image.bytes_per_block as i32,
                     y: (gap % slice_pitch as i32) / row_pitch as i32,
                     z: gap / slice_pitch as i32,
                 };
