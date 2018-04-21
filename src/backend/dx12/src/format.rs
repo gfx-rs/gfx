@@ -28,7 +28,7 @@ pub fn query_properties() -> [Properties; NUM_FORMATS] {
         // TODO: check optional supports
         Properties {
             linear_tiling: ImageFeature::empty(),
-            optimal_tiling: ImageFeature::SAMPLED | ImageFeature::BLIT_SRC | ImageFeature::SAMPLED_LINEAR ,
+            optimal_tiling: ImageFeature::SAMPLED | ImageFeature::BLIT_SRC | ImageFeature::SAMPLED_LINEAR,
             buffer_features: BufferFeature::empty(),
         },
         // R5g6b5Unorm
@@ -796,97 +796,97 @@ pub fn query_properties() -> [Properties; NUM_FORMATS] {
         // Bc1RgbUnorm
         Properties {
             linear_tiling: ImageFeature::empty(),
-            optimal_tiling: ImageFeature::empty(),
+            optimal_tiling: ImageFeature::SAMPLED | ImageFeature::BLIT_SRC | ImageFeature::SAMPLED_LINEAR,
             buffer_features: BufferFeature::empty(),
         },
         // Bc1RgbSrgb
         Properties {
             linear_tiling: ImageFeature::empty(),
-            optimal_tiling: ImageFeature::empty(),
+            optimal_tiling: ImageFeature::SAMPLED | ImageFeature::BLIT_SRC | ImageFeature::SAMPLED_LINEAR,
             buffer_features: BufferFeature::empty(),
         },
         // Bc1RgbaUnorm
         Properties {
             linear_tiling: ImageFeature::empty(),
-            optimal_tiling: ImageFeature::empty(),
+            optimal_tiling: ImageFeature::SAMPLED | ImageFeature::BLIT_SRC | ImageFeature::SAMPLED_LINEAR,
             buffer_features: BufferFeature::empty(),
         },
         // Bc1RgbaSrgb
         Properties {
             linear_tiling: ImageFeature::empty(),
-            optimal_tiling: ImageFeature::empty(),
+            optimal_tiling: ImageFeature::SAMPLED | ImageFeature::BLIT_SRC | ImageFeature::SAMPLED_LINEAR,
             buffer_features: BufferFeature::empty(),
         },
         // Bc2Unorm
         Properties {
             linear_tiling: ImageFeature::empty(),
-            optimal_tiling: ImageFeature::empty(),
+            optimal_tiling: ImageFeature::SAMPLED | ImageFeature::BLIT_SRC | ImageFeature::SAMPLED_LINEAR,
             buffer_features: BufferFeature::empty(),
         },
         // Bc2Srgb
         Properties {
             linear_tiling: ImageFeature::empty(),
-            optimal_tiling: ImageFeature::empty(),
+            optimal_tiling: ImageFeature::SAMPLED | ImageFeature::BLIT_SRC | ImageFeature::SAMPLED_LINEAR,
             buffer_features: BufferFeature::empty(),
         },
         // Bc3Unorm
         Properties {
             linear_tiling: ImageFeature::empty(),
-            optimal_tiling: ImageFeature::empty(),
+            optimal_tiling: ImageFeature::SAMPLED | ImageFeature::BLIT_SRC | ImageFeature::SAMPLED_LINEAR,
             buffer_features: BufferFeature::empty(),
         },
         // Bc3Srgb
         Properties {
             linear_tiling: ImageFeature::empty(),
-            optimal_tiling: ImageFeature::empty(),
+            optimal_tiling: ImageFeature::SAMPLED | ImageFeature::BLIT_SRC | ImageFeature::SAMPLED_LINEAR,
             buffer_features: BufferFeature::empty(),
         },
         // Bc4Unorm
         Properties {
             linear_tiling: ImageFeature::empty(),
-            optimal_tiling: ImageFeature::empty(),
+            optimal_tiling: ImageFeature::SAMPLED | ImageFeature::BLIT_SRC | ImageFeature::SAMPLED_LINEAR,
             buffer_features: BufferFeature::empty(),
         },
         // Bc4Inorm
         Properties {
             linear_tiling: ImageFeature::empty(),
-            optimal_tiling: ImageFeature::empty(),
+            optimal_tiling: ImageFeature::SAMPLED | ImageFeature::BLIT_SRC | ImageFeature::SAMPLED_LINEAR,
             buffer_features: BufferFeature::empty(),
         },
         // Bc5Unorm
         Properties {
             linear_tiling: ImageFeature::empty(),
-            optimal_tiling: ImageFeature::empty(),
+            optimal_tiling: ImageFeature::SAMPLED | ImageFeature::BLIT_SRC | ImageFeature::SAMPLED_LINEAR,
             buffer_features: BufferFeature::empty(),
         },
         // Bc5Inorm
         Properties {
             linear_tiling: ImageFeature::empty(),
-            optimal_tiling: ImageFeature::empty(),
+            optimal_tiling: ImageFeature::SAMPLED | ImageFeature::BLIT_SRC | ImageFeature::SAMPLED_LINEAR,
             buffer_features: BufferFeature::empty(),
         },
         // Bc6hUfloat
         Properties {
             linear_tiling: ImageFeature::empty(),
-            optimal_tiling: ImageFeature::empty(),
+            optimal_tiling: ImageFeature::SAMPLED | ImageFeature::BLIT_SRC | ImageFeature::SAMPLED_LINEAR,
             buffer_features: BufferFeature::empty(),
         },
         // Bc6hFloat
         Properties {
             linear_tiling: ImageFeature::empty(),
-            optimal_tiling: ImageFeature::empty(),
+            optimal_tiling: ImageFeature::SAMPLED | ImageFeature::BLIT_SRC | ImageFeature::SAMPLED_LINEAR,
             buffer_features: BufferFeature::empty(),
         },
         // Bc7Unorm
         Properties {
             linear_tiling: ImageFeature::empty(),
-            optimal_tiling: ImageFeature::empty(),
+            optimal_tiling: ImageFeature::SAMPLED | ImageFeature::BLIT_SRC | ImageFeature::SAMPLED_LINEAR,
             buffer_features: BufferFeature::empty(),
         },
         // Bc7Srgb
         Properties {
             linear_tiling: ImageFeature::empty(),
-            optimal_tiling: ImageFeature::empty(),
+            optimal_tiling: ImageFeature::SAMPLED | ImageFeature::BLIT_SRC | ImageFeature::SAMPLED_LINEAR,
             buffer_features: BufferFeature::empty(),
         },
         // Etc2R8g8b8Unorm
