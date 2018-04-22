@@ -5,8 +5,8 @@
 //! please see [the official Vulkan documentation](https://www.khronos.org/registry/vulkan/specs/1.0/man/html/VkFormat.html)
 //!
 //! `gfx-rs` splits a `Format` into two sub-components, a `SurfaceType` and
-//! a `ChannelType`.  The `SurfaceType` specifies how the large the channels are, 
-//! for instance `R32_G32_B32_A32`.  The `ChannelType` specifies how the 
+//! a `ChannelType`.  The `SurfaceType` specifies how the large the channels are,
+//! for instance `R32_G32_B32_A32`.  The `ChannelType` specifies how the
 //! components are interpreted, for instance `Float` or `Int`.
 
 bitflags!(
@@ -258,7 +258,7 @@ surface_types! {
     R16                 {  16, COLOR, (1, 1), color: 16 },
     R16_G16             {  32, COLOR, (1, 1), color: 32 },
     R16_G16_B16         {  48, COLOR, (1, 1), color: 48 },
-    R16_G16_B16_A16     {  48, COLOR, (1, 1), color: 48, alpha: 16 },
+    R16_G16_B16_A16     {  64, COLOR, (1, 1), color: 48, alpha: 16 },
     R32                 {  32, COLOR, (1, 1), color: 32 },
     R32_G32             {  64, COLOR, (1, 1), color: 64 },
     R32_G32_B32         {  96, COLOR, (1, 1), color: 96 },

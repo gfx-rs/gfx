@@ -620,8 +620,15 @@ impl Device {
     ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
         #![allow(non_snake_case)]
 
+        // Depth-stencil formats can't be used for SRVs.
+        let format = match info.format {
+            dxgiformat::DXGI_FORMAT_D16_UNORM => dxgiformat::DXGI_FORMAT_R16_UNORM,
+            dxgiformat::DXGI_FORMAT_D32_FLOAT => dxgiformat::DXGI_FORMAT_R32_FLOAT,
+            format => format,
+        };
+
         let mut desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
-            Format: info.format,
+            Format: format,
             ViewDimension: 0,
             Shader4ComponentMapping: 0x1688, // TODO: map swizzle
             u: unsafe { mem::zeroed() },
