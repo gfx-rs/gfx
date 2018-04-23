@@ -895,6 +895,7 @@ impl hal::Instance for Instance {
                     Features::IMAGE_CUBE_ARRAY |
                     Features::GEOMETRY_SHADER |
                     Features::TESSELLATION_SHADER |
+                    Features::NON_FILL_POLYGON_MODE |
                     //logic_op: false, // Optional on feature level 11_0
                     Features::MULTI_DRAW_INDIRECT |
                     Features::FORMAT_BC |
