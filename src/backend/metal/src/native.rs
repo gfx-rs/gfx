@@ -90,7 +90,12 @@ unsafe impl Send for Image {}
 unsafe impl Sync for Image {}
 
 #[derive(Debug)]
-pub struct BufferView {}
+pub struct BufferView {
+    pub(crate) raw: metal::Texture,
+}
+
+unsafe impl Send for BufferView {}
+unsafe impl Sync for BufferView {}
 
 #[derive(Debug)]
 pub struct ImageView(pub(crate) metal::Texture);
@@ -115,6 +120,7 @@ pub struct Buffer {
     pub(crate) raw: metal::Buffer,
     pub(crate) allocations: Option<Arc<Mutex<MemoryAllocations>>>,
     pub(crate) offset: u64,
+    pub(crate) res_options: metal::MTLResourceOptions,
 }
 
 unsafe impl Send for Buffer {}
@@ -149,7 +155,9 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                             DescriptorSetBinding::Sampler(vec![None; layout.count])
                         }
                         pso::DescriptorType::SampledImage |
-                        pso::DescriptorType::StorageImage => {
+                        pso::DescriptorType::StorageImage |
+                        pso::DescriptorType::UniformTexelBuffer |
+                        pso::DescriptorType::StorageTexelBuffer => {
                             DescriptorSetBinding::Image(vec![None; layout.count])
                         }
                         pso::DescriptorType::UniformBuffer |
@@ -226,8 +234,6 @@ unsafe impl Send for DescriptorSetInner {}
 pub enum DescriptorSetBinding {
     Sampler(Vec<Option<metal::SamplerState>>),
     Image(Vec<Option<(metal::Texture, image::Layout)>>),
-    //UniformTexelBuffer,
-    //StorageTexelBuffer,
     Buffer(Vec<Option<(metal::Buffer, u64)>>),
     //InputAttachment(Vec<(metal::Texture, image::Layout)>),
 }
