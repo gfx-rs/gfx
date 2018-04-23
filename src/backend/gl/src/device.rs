@@ -1011,7 +1011,7 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn free_memory(&self, memory: n::Memory) {
+    fn free_memory(&self, _memory: n::Memory) {
         // Nothing to do
     }
 
@@ -1069,7 +1069,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn destroy_image_view(&self, image_view: n::ImageView) {
+    fn destroy_image_view(&self, _image_view: n::ImageView) {
         // Nothing to do
     }
 

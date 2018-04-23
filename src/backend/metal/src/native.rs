@@ -154,17 +154,22 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                         pso::DescriptorType::Sampler => {
                             DescriptorSetBinding::Sampler(vec![None; layout.count])
                         }
+                        pso::DescriptorType::CombinedImageSampler => {
+                            DescriptorSetBinding::Combined(vec![None; layout.count])
+                        }
                         pso::DescriptorType::SampledImage |
                         pso::DescriptorType::StorageImage |
                         pso::DescriptorType::UniformTexelBuffer |
-                        pso::DescriptorType::StorageTexelBuffer => {
+                        pso::DescriptorType::StorageTexelBuffer |
+                        pso::DescriptorType::InputAttachment => {
                             DescriptorSetBinding::Image(vec![None; layout.count])
                         }
                         pso::DescriptorType::UniformBuffer |
                         pso::DescriptorType::StorageBuffer => {
                             DescriptorSetBinding::Buffer(vec![None; layout.count])
                         }
-                        _ => unimplemented!()
+                        pso::DescriptorType::UniformBufferDynamic |
+                        pso::DescriptorType::UniformImageDynamic => unimplemented!()
                     };
                     (layout.binding, binding)
                 }).collect();
@@ -234,6 +239,7 @@ unsafe impl Send for DescriptorSetInner {}
 pub enum DescriptorSetBinding {
     Sampler(Vec<Option<metal::SamplerState>>),
     Image(Vec<Option<(metal::Texture, image::Layout)>>),
+    Combined(Vec<Option<(metal::Texture, image::Layout, metal::SamplerState)>>),
     Buffer(Vec<Option<(metal::Buffer, u64)>>),
     //InputAttachment(Vec<(metal::Texture, image::Layout)>),
 }

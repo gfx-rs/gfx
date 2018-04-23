@@ -23,6 +23,7 @@ pub fn map_format(format: Format) -> Option<MTLPixelFormat> {
         Format::Bgra8Unorm     => MTLPixelFormat::BGRA8Unorm,
         Format::Bgra8Srgb      => MTLPixelFormat::BGRA8Unorm_sRGB,
         Format::Rgba32Float    => MTLPixelFormat::RGBA32Float,
+        Format::D16Unorm       => MTLPixelFormat::Depth16Unorm,
         Format::D32Float       => MTLPixelFormat::Depth32Float,
         Format::D24UnormS8Uint => MTLPixelFormat::Depth24Unorm_Stencil8,
         Format::D32FloatS8Uint => MTLPixelFormat::Depth32Float_Stencil8,

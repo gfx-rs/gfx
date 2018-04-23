@@ -565,15 +565,38 @@ impl hal::Device<Backend> for Device {
                             if !set_binding.stage_flags.contains(stage_bit) {
                                 continue
                             }
-                            let offset = match set_binding.ty {
+                            let mut res = msl::ResourceBinding {
+                                buffer_id: !0,
+                                texture_id: !0,
+                                sampler_id: !0,
+                                force_used: false,
+                            };
+                            match set_binding.ty {
                                 DescriptorType::UniformBuffer |
-                                DescriptorType::StorageBuffer => &mut counters.buffers,
+                                DescriptorType::StorageBuffer => {
+                                    res.buffer_id = counters.buffers as _;
+                                    counters.buffers += 1;
+                                }
                                 DescriptorType::SampledImage |
                                 DescriptorType::StorageImage |
                                 DescriptorType::UniformTexelBuffer |
-                                DescriptorType::StorageTexelBuffer => &mut counters.textures,
-                                DescriptorType::Sampler => &mut counters.samplers,
-                                _ => unimplemented!()
+                                DescriptorType::StorageTexelBuffer |
+                                DescriptorType::InputAttachment => {
+                                    res.texture_id = counters.textures as _;
+                                    counters.textures += 1;
+                                }
+                                DescriptorType::Sampler => {
+                                    res.sampler_id = counters.samplers as _;
+                                    counters.samplers += 1;
+                                }
+                                DescriptorType::CombinedImageSampler => {
+                                    res.texture_id = counters.textures as _;
+                                    res.sampler_id = counters.samplers as _;
+                                    counters.textures += 1;
+                                    counters.samplers += 1;
+                                }
+                                DescriptorType::UniformBufferDynamic |
+                                DescriptorType::UniformImageDynamic => unimplemented!(),
                             };
                             assert_eq!(set_binding.count, 1); //TODO
                             let location = msl::ResourceBindingLocation {
@@ -581,12 +604,7 @@ impl hal::Device<Backend> for Device {
                                 desc_set: set_index as _,
                                 binding: set_binding.binding as _,
                             };
-                            let res_binding = msl::ResourceBinding {
-                                resource_id: *offset as _,
-                                force_used: false,
-                            };
-                            *offset += 1;
-                            res_overrides.insert(location, res_binding);
+                            res_overrides.insert(location, res);
                         }
                     }
                 }
@@ -601,7 +619,9 @@ impl hal::Device<Backend> for Device {
                             binding: 0,
                         };
                         let res_binding = msl::ResourceBinding {
-                            resource_id: counters.buffers as _,
+                            buffer_id: counters.buffers as _,
+                            texture_id: !0,
+                            sampler_id: !0,
                             force_used: false,
                         };
                         res_overrides.insert(location, res_binding);
@@ -1125,6 +1145,9 @@ impl hal::Device<Backend> for Device {
                             (&pso::Descriptor::Image(image, layout), &mut n::DescriptorSetBinding::Image(ref mut vec)) => {
                                 vec[array_offset] = Some((image.0.clone(), layout));
                             }
+                            (&pso::Descriptor::CombinedImageSampler(image, layout, sampler), &mut n::DescriptorSetBinding::Combined(ref mut vec)) => {
+                                vec[array_offset] = Some((image.0.clone(), layout, sampler.0.clone()));
+                            }
                             (&pso::Descriptor::TexelBuffer(view), &mut n::DescriptorSetBinding::Image(ref mut vec)) => {
                                 vec[array_offset] = Some((view.raw.clone(), image::Layout::General));
                             }
@@ -1137,11 +1160,11 @@ impl hal::Device<Backend> for Device {
                             }
                             (&pso::Descriptor::Sampler(..), _) |
                             (&pso::Descriptor::Image(..), _) |
+                            (&pso::Descriptor::CombinedImageSampler(..), _) |
                             (&pso::Descriptor::Buffer(..), _) |
                             (&pso::Descriptor::TexelBuffer(..), _) => {
                                 panic!("mismatched descriptor set type")
                             }
-                            _ => unimplemented!(),
                         }
                     }
                 }
