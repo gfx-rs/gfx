@@ -982,7 +982,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let src = inner.device.new_buffer_with_data(
             data.as_ptr() as _,
             data.len() as _,
-            metal::MTLResourceOptions::StorageModePrivate,
+            metal::MTLResourceOptions::CPUCacheModeWriteCombined,
         );
         inner.retained_buffers.push(src.clone());
 
