@@ -159,7 +159,7 @@ pub fn map_rasterizer(rasterizer: &pso::Rasterizer) -> D3D12_RASTERIZER_DESC {
         DepthBias: rasterizer.depth_bias.map_or(0, |bias| bias.const_factor as INT),
         DepthBiasClamp: rasterizer.depth_bias.map_or(0.0, |bias| bias.clamp),
         SlopeScaledDepthBias: rasterizer.depth_bias.map_or(0.0, |bias| bias.slope_factor),
-        DepthClipEnable: rasterizer.depth_clamping as _,
+        DepthClipEnable: !rasterizer.depth_clamping as _,
         MultisampleEnable: FALSE, // TODO: currently not supported
         ForcedSampleCount: 0, // TODO: currently not supported
         AntialiasedLineEnable: FALSE, // TODO: currently not supported

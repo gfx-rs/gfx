@@ -1406,7 +1406,7 @@ impl d::Device<B> for Device {
             RasterizerState: conv::map_rasterizer(&desc.rasterizer),
             DepthStencilState: desc.depth_stencil.as_ref().map_or(unsafe { mem::zeroed() }, conv::map_depth_stencil),
             InputLayout: d3d12::D3D12_INPUT_LAYOUT_DESC {
-                pInputElementDescs: input_element_descs.as_ptr(),
+                pInputElementDescs: if input_element_descs.is_empty() { ptr::null() } else { input_element_descs.as_ptr() },
                 NumElements: input_element_descs.len() as u32,
             },
             IBStripCutValue: d3d12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED, // TODO
