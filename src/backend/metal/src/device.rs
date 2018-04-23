@@ -260,7 +260,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
             min_buffer_copy_offset_alignment: if self.is_mac() {256} else {64},
             min_buffer_copy_pitch_alignment: 4, // TODO: made this up
-            min_uniform_buffer_offset_alignment: 1, // TODO
+            min_texel_buffer_offset_alignment: 1, //TODO
+            min_uniform_buffer_offset_alignment: 1, //TODO
+            min_storage_buffer_offset_alignment: 1, //TODO
 
             max_compute_group_count: [16; 3], // TODO
             max_compute_group_size: [64; 3], // TODO
@@ -566,8 +568,10 @@ impl hal::Device<Backend> for Device {
                             let offset = match set_binding.ty {
                                 DescriptorType::UniformBuffer |
                                 DescriptorType::StorageBuffer => &mut counters.buffers,
-                                DescriptorType::SampledImage => &mut counters.textures,
-                                DescriptorType::StorageImage => &mut counters.textures,
+                                DescriptorType::SampledImage |
+                                DescriptorType::StorageImage |
+                                DescriptorType::UniformTexelBuffer |
+                                DescriptorType::StorageTexelBuffer => &mut counters.textures,
                                 DescriptorType::Sampler => &mut counters.samplers,
                                 _ => unimplemented!()
                             };
@@ -1121,6 +1125,9 @@ impl hal::Device<Backend> for Device {
                             (&pso::Descriptor::Image(image, layout), &mut n::DescriptorSetBinding::Image(ref mut vec)) => {
                                 vec[array_offset] = Some((image.0.clone(), layout));
                             }
+                            (&pso::Descriptor::TexelBuffer(view), &mut n::DescriptorSetBinding::Image(ref mut vec)) => {
+                                vec[array_offset] = Some((view.raw.clone(), image::Layout::General));
+                            }
                             (&pso::Descriptor::Buffer(buffer, ref range), &mut n::DescriptorSetBinding::Buffer(ref mut vec)) => {
                                 let buf_length = buffer.raw.length();
                                 let start = range.start.unwrap_or(0);
@@ -1130,7 +1137,8 @@ impl hal::Device<Backend> for Device {
                             }
                             (&pso::Descriptor::Sampler(..), _) |
                             (&pso::Descriptor::Image(..), _) |
-                            (&pso::Descriptor::Buffer(..), _) => {
+                            (&pso::Descriptor::Buffer(..), _) |
+                            (&pso::Descriptor::TexelBuffer(..), _) => {
                                 panic!("mismatched descriptor set type")
                             }
                             _ => unimplemented!(),
@@ -1271,7 +1279,7 @@ impl hal::Device<Backend> for Device {
     fn bind_buffer_memory(
         &self, memory: &n::Memory, offset: u64, buffer: n::UnboundBuffer
     ) -> Result<n::Buffer, BindError> {
-        let (raw, mappable) = match memory.heap {
+        let (raw, mappable, res_options) = match memory.heap {
             n::MemoryHeap::Native(ref heap) => {
                 let resource_options = resource_options_from_storage_and_cache(
                     heap.storage_mode(),
@@ -1282,15 +1290,16 @@ impl hal::Device<Backend> for Device {
                         // TODO: disable hazard tracking?
                         self.device.new_buffer(buffer.size, resource_options)
                     });
-                (raw, heap.storage_mode() != MTLStorageMode::Private)
+                (raw, heap.storage_mode() != MTLStorageMode::Private, resource_options)
             }
             n::MemoryHeap::Emulated(memory_type) => {
                 // TODO: disable hazard tracking?
                 let memory_properties = self.memory_types[memory_type.0].properties;
                 // Note: buffer backing is always `Private`. CPU access is routed through
                 // a CPU-visible buffer associated with `Memory` object.
-                let raw = self.device.new_buffer(buffer.size, MTLResourceOptions::StorageModePrivate);
-                (raw, memory_properties.contains(memory::Properties::CPU_VISIBLE))
+                let res_options = MTLResourceOptions::StorageModePrivate;
+                let raw = self.device.new_buffer(buffer.size, res_options);
+                (raw, memory_properties.contains(memory::Properties::CPU_VISIBLE), res_options)
             }
         };
 
@@ -1304,6 +1313,7 @@ impl hal::Device<Backend> for Device {
             },
             raw,
             offset,
+            res_options
         })
     }
 
@@ -1314,13 +1324,34 @@ impl hal::Device<Backend> for Device {
     }
 
     fn create_buffer_view<R: RangeArg<u64>>(
-        &self, _buffer: &n::Buffer, _format: Option<format::Format>, _range: R
+        &self, buffer: &n::Buffer, format_maybe: Option<format::Format>, range: R
     ) -> Result<n::BufferView, buffer::ViewError> {
-        unimplemented!()
+        let start = buffer.offset + *range.start().unwrap_or(&0);
+        let end_rough = *range.end().unwrap_or(&buffer.raw.length());
+        let format = match format_maybe {
+            Some(fmt) => fmt,
+            None => return Err(buffer::ViewError::Unsupported),
+        };
+        let format_desc = format.surface_desc();
+        let block_count = (end_rough - start) * 8 / format_desc.bits as u64;
+        let size = block_count * (format_desc.bits as u64 / 8);
+        let mtl_format = map_format(format).ok_or(buffer::ViewError::Unsupported)?;
+
+        let descriptor = metal::TextureDescriptor::new();
+        descriptor.set_texture_type(MTLTextureType::D2);
+        descriptor.set_width(format_desc.dim.0 as u64 * block_count);
+        descriptor.set_height(format_desc.dim.1 as u64);
+        descriptor.set_mipmap_level_count(1);
+        descriptor.set_pixel_format(mtl_format);
+        descriptor.set_resource_options(buffer.res_options);
+
+        Ok(n::BufferView {
+            raw: buffer.raw.new_texture_from_contents(&descriptor, start, size),
+        })
     }
 
     fn destroy_buffer_view(&self, _view: n::BufferView) {
-        unimplemented!()
+        //nothing to do
     }
 
     fn create_image(
