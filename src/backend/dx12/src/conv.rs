@@ -99,6 +99,20 @@ pub fn map_format_dsv(surface: SurfaceType) -> Option<DXGI_FORMAT> {
     })
 }
 
+pub fn map_format_typeless(format: Format, usage: image::Usage) -> Option<DXGI_FORMAT> { 
+    use hal::format::Format::*; 
+ 
+    if usage.contains(image::Usage::SAMPLED) && usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) { 
+        return Some(match format { 
+            D16Unorm => DXGI_FORMAT_R16_TYPELESS,
+            D32Float => DXGI_FORMAT_R32_TYPELESS, 
+            _ => return map_format(format), 
+        }) 
+    } 
+ 
+    map_format(format) 
+} 
+
 pub fn map_topology_type(primitive: Primitive) -> D3D12_PRIMITIVE_TOPOLOGY_TYPE {
     use hal::Primitive::*;
     match primitive {
