@@ -241,8 +241,12 @@ pub struct Limits {
     /// The alignment of the row pitch of the texture data stored in a buffer that is
     /// used in a GPU copy operation, in bytes, non-zero.
     pub min_buffer_copy_pitch_alignment: buffer::Offset,
+    /// The alignment of the start of buffer used as a texel buffer, in bytes, non-zero.
+    pub min_texel_buffer_offset_alignment: buffer::Offset,
     /// The alignment of the start of buffer used for uniform buffer updates, in bytes, non-zero.
     pub min_uniform_buffer_offset_alignment: buffer::Offset,
+    /// The alignment of the start of buffer used as a storage buffer, in bytes, non-zero.
+    pub min_storage_buffer_offset_alignment: buffer::Offset,
 }
 
 /// Describes the type of geometric primitives,
