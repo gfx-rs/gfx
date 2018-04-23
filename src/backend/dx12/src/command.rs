@@ -720,7 +720,8 @@ impl CommandBuffer {
                         },
                         buf_offset: image::Offset {
                             x: 0,
-                            .. buf_offset
+                            y: buf_offset.y + 1,
+                            z: buf_offset.z,
                         },
                         copy_extent: image::Extent {
                             width: r.image_extent.width - half,
