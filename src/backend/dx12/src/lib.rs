@@ -735,7 +735,7 @@ impl hal::Instance for Instance {
                 name: device_name,
                 vendor: desc.VendorId as usize,
                 device: desc.DeviceId as usize,
-                software_rendering: false, // TODO: check for WARP adapter (software rasterizer)?
+                software_rendering: (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0,
             };
 
             let mut features: d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS = unsafe { mem::zeroed() };
