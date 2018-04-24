@@ -42,10 +42,8 @@ pub struct CommandPool {
     pub(crate) managed: Option<Vec<CommandBuffer>>,
 }
 
-unsafe impl Send for CommandPool {
-}
-unsafe impl Sync for CommandPool {
-}
+unsafe impl Send for CommandPool {}
+unsafe impl Sync for CommandPool {}
 
 #[derive(Clone)]
 pub struct CommandBuffer {

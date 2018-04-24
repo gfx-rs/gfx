@@ -1277,15 +1277,18 @@ impl hal::Device<Backend> for Device {
     fn get_buffer_requirements(&self, buffer: &n::UnboundBuffer) -> memory::Requirements {
         let mut max_size = buffer.size;
         let mut max_alignment = 1;
+        let mut type_mask = (1 << self.memory_types.len()) - 1;
 
         if self.private_caps.resource_heaps {
             // We don't know what memory type the user will try to allocate the buffer with, so we test them
-            // all get the most stringent ones. Note we don't check Shared because heaps can't use it
-            for &options in [
-                MTLResourceOptions::StorageModeManaged,
-                MTLResourceOptions::StorageModeManaged | MTLResourceOptions::CPUCacheModeWriteCombined,
-                MTLResourceOptions::StorageModePrivate,
-            ].iter() {
+            // all get the most stringent ones.
+            for (i, mt) in self.memory_types.iter().enumerate() {
+                // Note: we ignore COHERENT because heaps can't use the associated Shared memory type
+                if mt.properties.contains(memory::Properties::COHERENT) {
+                    type_mask ^= 1 << i;
+                    continue
+                }
+                let options = map_memory_properties_to_options(mt.properties);
                 let requirements = self.device.heap_buffer_size_and_align(buffer.size, options);
                 max_size = cmp::max(max_size, requirements.size);
                 max_alignment = cmp::max(max_alignment, requirements.align);
@@ -1295,14 +1298,14 @@ impl hal::Device<Backend> for Device {
         memory::Requirements {
             size: max_size,
             alignment: max_alignment,
-            type_mask: 0x1F, //TODO
+            type_mask,
         }
     }
 
     fn bind_buffer_memory(
         &self, memory: &n::Memory, offset: u64, buffer: n::UnboundBuffer
     ) -> Result<n::Buffer, BindError> {
-        let (raw, mappable, res_options) = match memory.heap {
+        let (raw, res_options, is_mappable) = match memory.heap {
             n::MemoryHeap::Native(ref heap) => {
                 let resource_options = resource_options_from_storage_and_cache(
                     heap.storage_mode(),
@@ -1313,21 +1316,21 @@ impl hal::Device<Backend> for Device {
                         // TODO: disable hazard tracking?
                         self.device.new_buffer(buffer.size, resource_options)
                     });
-                (raw, heap.storage_mode() != MTLStorageMode::Private, resource_options)
+                let is_mappable = heap.storage_mode() != MTLStorageMode::Private;
+                (raw, resource_options, is_mappable)
             }
-            n::MemoryHeap::Emulated(memory_type) => {
-                // TODO: disable hazard tracking?
-                let memory_properties = self.memory_types[memory_type.0].properties;
+            n::MemoryHeap::Emulated(mt) => {
                 // Note: buffer backing is always `Private`. CPU access is routed through
                 // a CPU-visible buffer associated with `Memory` object.
                 let res_options = MTLResourceOptions::StorageModePrivate;
                 let raw = self.device.new_buffer(buffer.size, res_options);
-                (raw, memory_properties.contains(memory::Properties::CPU_VISIBLE), res_options)
+                let is_mappable = self.memory_types[mt.0].properties.contains(memory::Properties::CPU_VISIBLE);
+                (raw, res_options, is_mappable)
             }
         };
 
         Ok(n::Buffer {
-            allocations: if mappable {
+            allocations: if is_mappable {
                 memory.initialized.set(true); // this is conservative, can be improved
                 memory.allocations.lock().unwrap().insert(offset .. (offset + buffer.size), raw.clone());
                 Some(memory.allocations.clone())
@@ -1336,7 +1339,7 @@ impl hal::Device<Backend> for Device {
             },
             raw,
             offset,
-            res_options
+            res_options,
         })
     }
 
@@ -1367,6 +1370,7 @@ impl hal::Device<Backend> for Device {
         descriptor.set_mipmap_level_count(1);
         descriptor.set_pixel_format(mtl_format);
         descriptor.set_resource_options(buffer.res_options);
+        descriptor.set_storage_mode(buffer.raw.storage_mode());
 
         Ok(n::BufferView {
             raw: buffer.raw.new_texture_from_contents(&descriptor, start, size),
@@ -1387,8 +1391,7 @@ impl hal::Device<Backend> for Device {
         flags: image::StorageFlags,
     ) -> Result<n::UnboundImage, image::CreationError> {
         let is_cube = flags.contains(image::StorageFlags::CUBE_VIEW);
-        let base_format = format.base_format();
-        let format_desc = base_format.0.desc();
+        let format_desc = format.surface_desc();
         let mtl_format = map_format(format).ok_or(image::CreationError::Format(format))?;
 
         let descriptor = metal::TextureDescriptor::new();
@@ -1457,16 +1460,26 @@ impl hal::Device<Backend> for Device {
     }
 
     fn get_image_requirements(&self, image: &n::UnboundImage) -> memory::Requirements {
+        let mut type_mask = if !image.format_desc.aspects.contains(format::Aspects::COLOR) {
+            0x4 // DEVICE_LOCAL only
+        } else {
+            0x7 // any type
+        };
         if self.private_caps.resource_heaps {
             // We don't know what memory type the user will try to allocate the image with, so we test them
             // all get the most stringent ones. Note we don't check Shared because heaps can't use it
             let mut max_size = 0;
             let mut max_alignment = 0;
-            for &options in [
-                MTLResourceOptions::StorageModeManaged,
-                MTLResourceOptions::StorageModeManaged | MTLResourceOptions::CPUCacheModeWriteCombined,
-                MTLResourceOptions::StorageModePrivate,
-            ].iter() {
+            for (i, mt) in self.memory_types.iter().enumerate() {
+                if type_mask & (1 << i) == 0 {
+                    continue
+                }
+                // Note: we ignore COHERENT because heaps can't use the associated Shared memory type
+                if mt.properties.contains(memory::Properties::COHERENT) {
+                    type_mask ^= 1 << i;
+                    continue
+                }
+                let options = map_memory_properties_to_options(mt.properties);
                 image.texture_desc.set_resource_options(options);
                 let requirements = self.device.heap_texture_size_and_align(&image.texture_desc);
                 max_size = cmp::max(max_size, requirements.size);
@@ -1475,13 +1488,13 @@ impl hal::Device<Backend> for Device {
             memory::Requirements {
                 size: max_size,
                 alignment: max_alignment,
-                type_mask: 0x1F, //TODO
+                type_mask,
             }
         } else {
             memory::Requirements {
                 size: 1, // TODO: something sensible
                 alignment: 4,
-                type_mask: 0x1F, //TODO
+                type_mask,
             }
         }
     }
