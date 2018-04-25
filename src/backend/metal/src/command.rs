@@ -404,6 +404,7 @@ impl CommandBufferInner {
 
         match self.sink {
             CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state } => {
+                let _ap = AutoreleasePool::new();
                 let encoder = cmd_buffer.new_render_command_encoder(&descriptor);
                 for command in commands {
                     exec_render(encoder, &command);
@@ -696,6 +697,7 @@ fn exec_compute(encoder: &metal::ComputeCommandEncoderRef, command: &soft::Compu
 }
 
 fn record_commands(command_buf: &metal::CommandBufferRef, passes: &[soft::Pass]) {
+    let _ap = AutoreleasePool::new(); // for encoder creation
     for pass in passes {
         match *pass {
             soft::Pass::Render(ref desc, ref list) => {

@@ -1,4 +1,4 @@
-use {Backend, QueueFamily, Surface, Swapchain};
+use {AutoreleasePool, Backend, QueueFamily, Surface, Swapchain};
 use {native as n, command, soft};
 use conversions::*;
 
@@ -496,6 +496,7 @@ impl hal::Device<Backend> for Device {
         ID: IntoIterator,
         ID::Item: Borrow<pass::SubpassDependency>,
     {
+        let _ap = AutoreleasePool::new(); // for RP descriptor and attachments
         //TODO: subpasses, dependencies
         let pass = metal::RenderPassDescriptor::new().to_owned();
 
@@ -850,31 +851,30 @@ impl hal::Device<Backend> for Device {
         I: IntoIterator,
         I::Item: Borrow<n::ImageView>
     {
+        let _ap = AutoreleasePool::new(); // for attachments
         let descriptor = unsafe {
             let desc: metal::RenderPassDescriptor = msg_send![renderpass.desc, copy];
-
             msg_send![&*desc, setRenderTargetArrayLength: extent.depth as usize];
-
-            let mut attachments = attachments.into_iter();
-            for i in 0..renderpass.num_colors {
-                let mtl_attachment = desc.color_attachments().object_at(i).expect("too many color attachments");
-                let attachment = attachments.next().expect("Not enough colour attachments provided");
-                mtl_attachment.set_texture(Some(&attachment.borrow().0));
-            }
-
-            let depth_attachment = attachments.next();
-            if let Some(_) = attachments.next() {
-                panic!("Metal does not support multiple depth attachments")
-            }
-
-            if let Some(attachment) = depth_attachment {
-                let mtl_attachment = desc.depth_attachment().unwrap();
-                mtl_attachment.set_texture(Some(&attachment.borrow().0));
-                // TODO: stencil
-            }
-
             desc
         };
+
+        let mut attachments = attachments.into_iter();
+        for i in 0..renderpass.num_colors {
+            let mtl_attachment = descriptor.color_attachments().object_at(i).expect("too many color attachments");
+            let attachment = attachments.next().expect("Not enough colour attachments provided");
+            mtl_attachment.set_texture(Some(&attachment.borrow().0));
+        }
+
+        let depth_attachment = attachments.next();
+        if let Some(_) = attachments.next() {
+            panic!("Metal does not support multiple depth attachments")
+        }
+
+        if let Some(attachment) = depth_attachment {
+            let mtl_attachment = descriptor.depth_attachment().unwrap();
+            mtl_attachment.set_texture(Some(&attachment.borrow().0));
+            // TODO: stencil
+        }
 
         Ok(n::FrameBuffer(descriptor))
     }
