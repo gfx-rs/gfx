@@ -1,4 +1,4 @@
-use {Backend};
+use {AutoreleasePool, Backend};
 use {native, window};
 
 use std::borrow::{Borrow, BorrowMut};
@@ -31,9 +31,32 @@ pub(crate) struct QueueInner {
 unsafe impl Send for QueueInner {}
 unsafe impl Sync for QueueInner {}
 
+pub struct CommandBufferScope<'a> {
+    inner: &'a metal::CommandBufferRef,
+    _pool: AutoreleasePool,
+}
+
+impl<'a> Deref for CommandBufferScope<'a> {
+    type Target = metal::CommandBufferRef;
+    fn deref(&self) -> &Self::Target {
+        self.inner
+    }
+}
+
+impl<'a> CommandBufferScope<'a> {
+    pub fn own(self) -> metal::CommandBuffer {
+        self.inner.to_owned()
+    }
+}
+
 impl QueueInner {
-    pub fn new_command_buffer_ref(&self) -> &metal::CommandBufferRef {
-        self.queue.new_command_buffer_with_unretained_references()
+    pub fn new_command_buffer_ref(&self) -> CommandBufferScope {
+        let pool = AutoreleasePool::new();
+        let inner = self.queue.new_command_buffer_with_unretained_references();
+        CommandBufferScope {
+            inner,
+            _pool: pool,
+        }
     }
 }
 
@@ -293,7 +316,7 @@ impl CommandBufferInner {
         match self.sink {
             CommandSink::Immediate { ref mut cmd_buffer, ref mut encoder_state } => {
                 //TODO: release the old one?
-                *cmd_buffer = queue.new_command_buffer_ref().to_owned();
+                *cmd_buffer = queue.new_command_buffer_ref().own();
                 *encoder_state = EncoderState::None;
             }
             CommandSink::Deferred { ref mut passes, .. } => {
@@ -742,6 +765,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
 
         for buffer in submit.cmd_buffers {
             let inner = buffer.borrow().inner();
+            let temp_cmd_buffer;
             let command_buffer: &metal::CommandBufferRef = match inner.sink {
                 CommandSink::Immediate { ref cmd_buffer, .. } => {
                     // schedule the retained buffers to release after the commands are done
@@ -756,9 +780,9 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     cmd_buffer
                 }
                 CommandSink::Deferred { ref passes, .. } => {
-                    let cmd_buffer = self.0.new_command_buffer_ref();
-                    record_commands(cmd_buffer, passes);
-                    cmd_buffer
+                    temp_cmd_buffer = self.0.new_command_buffer_ref();
+                    record_commands(&*temp_cmd_buffer, passes);
+                    &*temp_cmd_buffer
                  }
             };
             if let Some(ref signal_block) = signal_block {
@@ -830,7 +854,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
             inner: Arc::new({
                 UnsafeCell::new(CommandBufferInner {
                     sink: CommandSink::Immediate {
-                        cmd_buffer: self.queue.new_command_buffer_ref().to_owned(),
+                        cmd_buffer: self.queue.new_command_buffer_ref().own(),
                         encoder_state: EncoderState::None,
                     },
                     device: unsafe {
@@ -916,7 +940,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         if flags.contains(com::CommandBufferFlags::ONE_TIME_SUBMIT) {
             if let Some(ref queue) = self.queue {
                 inner.sink = CommandSink::Immediate {
-                    cmd_buffer: queue.new_command_buffer_ref().to_owned(),
+                    cmd_buffer: queue.new_command_buffer_ref().own(),
                     encoder_state: EncoderState::None,
                 };
             }

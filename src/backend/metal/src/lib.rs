@@ -158,9 +158,11 @@ impl Drop for AutoreleasePool {
 }
 
 impl AutoreleasePool {
-    pub unsafe fn new() -> Self {
+    pub fn new() -> Self {
         AutoreleasePool {
-            pool: NSAutoreleasePool::new(cocoa::base::nil),
+            pool: unsafe {
+                NSAutoreleasePool::new(cocoa::base::nil)
+            },
         }
     }
 

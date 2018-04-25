@@ -59,9 +59,6 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
 fn main() {
     env_logger::init();
 
-    #[cfg(feature = "metal")]
-    let mut autorelease_pool = unsafe { back::AutoreleasePool::new() };
-
     let mut events_loop = winit::EventsLoop::new();
 
     let wb = winit::WindowBuilder::new()
@@ -580,11 +577,6 @@ fn main() {
 
         // present frame
         swap_chain.present(&mut queue, &[]);
-
-        #[cfg(feature = "metal")]
-        unsafe {
-            autorelease_pool.reset();
-        }
     }
 
     // cleanup!
