@@ -42,10 +42,8 @@ pub struct CommandPool {
     pub(crate) managed: Option<Vec<CommandBuffer>>,
 }
 
-unsafe impl Send for CommandPool {
-}
-unsafe impl Sync for CommandPool {
-}
+unsafe impl Send for CommandPool {}
+unsafe impl Sync for CommandPool {}
 
 #[derive(Clone)]
 pub struct CommandBuffer {
@@ -1239,13 +1237,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         let desc_layout = set.layout.iter().find(|x| x.binding == binding).unwrap();
 
                         if desc_layout.stage_flags.contains(pso::ShaderStageFlags::VERTEX) {
-                            let location = msl::ResourceBindingLocation {
+                            let res = &layout.res_overrides[&msl::ResourceBindingLocation {
                                 binding: binding as _,
                                 .. location_vs
-                            };
-                            let start = layout.res_overrides[&location].resource_id as usize;
+                            }];
                             match *values {
                                 Sampler(ref samplers) => {
+                                    let start = res.sampler_id as usize;
                                     inner.resources_vs.add_samplers(start, samplers.as_slice());
                                     commands.extend(samplers.iter().cloned().enumerate().map(|(i, sampler)| {
                                         soft::RenderCommand::BindSampler {
@@ -1256,6 +1254,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                     }));
                                 }
                                 Image(ref images) => {
+                                    let start = res.texture_id as usize;
                                     inner.resources_vs.add_textures(start, images.as_slice());
                                     commands.extend(images.iter().enumerate().map(|(i, texture)| {
                                         soft::RenderCommand::BindTexture {
@@ -1265,7 +1264,33 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                         }
                                     }));
                                 }
+                                Combined(ref combos) => {
+                                    for (i, combo) in combos.iter().cloned().enumerate() {
+                                        let id_tx = res.texture_id as usize + i;
+                                        let id_sm = res.sampler_id as usize + i;
+                                        let (texture, sampler) = match combo {
+                                            Some((ref t, _, ref s)) => (Some(t.clone()), Some(s.clone())),
+                                            None => (None, None)
+                                        };
+                                        inner.resources_vs.add_textures(
+                                            id_tx,
+                                            &[combo.as_ref().map(|&(ref texture, layout, _)| (texture.clone(), layout))],
+                                        );
+                                        inner.resources_vs.add_samplers(id_sm, &[sampler.clone()]);
+                                        commands.push(soft::RenderCommand::BindTexture {
+                                            stage: pso::Stage::Vertex,
+                                            index: id_tx,
+                                            texture,
+                                        });
+                                        commands.push(soft::RenderCommand::BindSampler {
+                                            stage: pso::Stage::Vertex,
+                                            index: id_sm,
+                                            sampler,
+                                        });
+                                    }
+                                }
                                 Buffer(ref buffers) => {
+                                    let start = res.buffer_id as usize;
                                     for (i, bref) in buffers.iter().enumerate() {
                                         let (buffer, offset) = match *bref {
                                             Some((ref buffer, offset)) => (Some(buffer.clone()), offset),
@@ -1285,13 +1310,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             }
                         }
                         if desc_layout.stage_flags.contains(pso::ShaderStageFlags::FRAGMENT) {
-                            let location = msl::ResourceBindingLocation {
+                            let res = &layout.res_overrides[&msl::ResourceBindingLocation {
                                 binding: binding as _,
                                 .. location_fs
-                            };
-                            let start = layout.res_overrides[&location].resource_id as usize;
+                            }];
                             match *values {
                                 Sampler(ref samplers) => {
+                                    let start = res.sampler_id as usize;
                                     inner.resources_fs.add_samplers(start, samplers.as_slice());
                                     commands.extend(samplers.iter().cloned().enumerate().map(|(i, sampler)| {
                                         soft::RenderCommand::BindSampler {
@@ -1302,6 +1327,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                     }));
                                 }
                                 Image(ref images) => {
+                                    let start = res.texture_id as usize;
                                     inner.resources_fs.add_textures(start, images.as_slice());
                                     commands.extend(images.iter().enumerate().map(|(i, texture)| {
                                         soft::RenderCommand::BindTexture {
@@ -1311,7 +1337,33 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                         }
                                     }));
                                 }
+                                Combined(ref combos) => {
+                                    for (i, combo) in combos.iter().cloned().enumerate() {
+                                        let id_tx = res.texture_id as usize + i;
+                                        let id_sm = res.sampler_id as usize + i;
+                                        let (texture, sampler) = match combo {
+                                            Some((ref t, _, ref s)) => (Some(t.clone()), Some(s.clone())),
+                                            None => (None, None)
+                                        };
+                                        inner.resources_fs.add_textures(
+                                            id_tx,
+                                            &[combo.as_ref().map(|&(ref texture, layout, _)| (texture.clone(), layout))],
+                                        );
+                                        inner.resources_fs.add_samplers(id_sm, &[sampler.clone()]);
+                                        commands.push(soft::RenderCommand::BindTexture {
+                                            stage: pso::Stage::Fragment,
+                                            index: id_tx,
+                                            texture,
+                                        });
+                                        commands.push(soft::RenderCommand::BindSampler {
+                                            stage: pso::Stage::Fragment,
+                                            index: id_sm,
+                                            sampler,
+                                        });
+                                    }
+                                }
                                 Buffer(ref buffers) => {
+                                    let start = res.buffer_id as usize;
                                     for (i, bref) in buffers.iter().enumerate() {
                                         let (buffer, offset) = match *bref {
                                             Some((ref buffer, offset)) => {
@@ -1334,7 +1386,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 }
                 native::DescriptorSet::ArgumentBuffer { ref buffer, offset, stage_flags, .. } => {
                     if stage_flags.contains(pso::ShaderStageFlags::VERTEX) {
-                        let slot = layout.res_overrides[&location_vs].resource_id;
+                        let slot = layout.res_overrides[&location_vs].buffer_id;
                         inner.resources_vs.add_buffer(slot as _, buffer, offset as _);
                         commands.push(soft::RenderCommand::BindBuffer {
                             stage: pso::Stage::Vertex,
@@ -1344,7 +1396,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         });
                     }
                     if stage_flags.contains(pso::ShaderStageFlags::FRAGMENT) {
-                        let slot = layout.res_overrides[&location_fs].resource_id;
+                        let slot = layout.res_overrides[&location_fs].buffer_id;
                         inner.resources_fs.add_buffer(slot as _, &buffer, offset as _);
                         commands.push(soft::RenderCommand::BindBuffer {
                             stage: pso::Stage::Fragment,
@@ -1398,13 +1450,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         let desc_layout = set.layout.iter().find(|x| x.binding == binding).unwrap();
 
                         if desc_layout.stage_flags.contains(pso::ShaderStageFlags::COMPUTE) {
-                            let location = msl::ResourceBindingLocation {
+                            let res = &layout.res_overrides[&msl::ResourceBindingLocation {
                                 binding: binding as _,
                                 .. location_cs
-                            };
-                            let start = layout.res_overrides[&location].resource_id as usize;
+                            }];
                             match *values {
                                 Sampler(ref samplers) => {
+                                    let start = res.sampler_id as usize;
                                     resources.add_samplers(start, samplers.as_slice());
                                     commands.extend(samplers.iter().cloned().enumerate().map(|(i, sampler)| {
                                         soft::ComputeCommand::BindSampler {
@@ -1414,6 +1466,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                     }));
                                 }
                                 Image(ref images) => {
+                                    let start = res.texture_id as usize;
                                     resources.add_textures(start, images.as_slice());
                                     commands.extend(images.iter().enumerate().map(|(i, texture)| {
                                         soft::ComputeCommand::BindTexture {
@@ -1422,7 +1475,31 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                         }
                                     }));
                                 }
+                                Combined(ref combos) => {
+                                    for (i, combo) in combos.iter().cloned().enumerate() {
+                                        let id_tx = res.texture_id as usize + i;
+                                        let id_sm = res.sampler_id as usize + i;
+                                        let (texture, sampler) = match combo {
+                                            Some((ref t, _, ref s)) => (Some(t.clone()), Some(s.clone())),
+                                            None => (None, None)
+                                        };
+                                        resources.add_textures(
+                                            id_tx,
+                                            &[combo.as_ref().map(|&(ref texture, layout, _)| (texture.clone(), layout))],
+                                        );
+                                        resources.add_samplers(id_sm, &[sampler.clone()]);
+                                        commands.push(soft::ComputeCommand::BindTexture {
+                                            index: id_tx,
+                                            texture,
+                                        });
+                                        commands.push(soft::ComputeCommand::BindSampler {
+                                            index: id_sm,
+                                            sampler,
+                                        });
+                                    }
+                                }
                                 Buffer(ref buffers) => {
+                                    let start = res.buffer_id as usize;
                                     for (i, bref) in buffers.iter().enumerate() {
                                         let (buffer, offset) = match *bref {
                                             Some((ref buffer, offset)) => {
@@ -1444,7 +1521,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 }
                 native::DescriptorSet::ArgumentBuffer { ref buffer, offset, stage_flags, .. } => {
                     if stage_flags.contains(pso::ShaderStageFlags::COMPUTE) {
-                        let slot = layout.res_overrides[&location_cs].resource_id;
+                        let slot = layout.res_overrides[&location_cs].buffer_id;
                         resources.add_buffer(slot as _, buffer, offset as _);
                     }
                 }

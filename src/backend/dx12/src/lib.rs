@@ -916,7 +916,9 @@ impl hal::Instance for Instance {
                     ],
                     min_buffer_copy_offset_alignment: d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as _,
                     min_buffer_copy_pitch_alignment: d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as _,
+                    min_texel_buffer_offset_alignment: 1, // TODO
                     min_uniform_buffer_offset_alignment: 256, // Required alignment for CBVs
+                    min_storage_buffer_offset_alignment: 1, // TODO
                 },
                 private_caps: Capabilities {
                     heterogeneous_resource_heaps,

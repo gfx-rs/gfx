@@ -260,7 +260,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
             min_buffer_copy_offset_alignment: if self.is_mac() {256} else {64},
             min_buffer_copy_pitch_alignment: 4, // TODO: made this up
-            min_uniform_buffer_offset_alignment: 1, // TODO
+            min_texel_buffer_offset_alignment: 1, //TODO
+            min_uniform_buffer_offset_alignment: 1, //TODO
+            min_storage_buffer_offset_alignment: 1, //TODO
 
             max_compute_group_count: [16; 3], // TODO
             max_compute_group_size: [64; 3], // TODO
@@ -563,13 +565,38 @@ impl hal::Device<Backend> for Device {
                             if !set_binding.stage_flags.contains(stage_bit) {
                                 continue
                             }
-                            let offset = match set_binding.ty {
+                            let mut res = msl::ResourceBinding {
+                                buffer_id: !0,
+                                texture_id: !0,
+                                sampler_id: !0,
+                                force_used: false,
+                            };
+                            match set_binding.ty {
                                 DescriptorType::UniformBuffer |
-                                DescriptorType::StorageBuffer => &mut counters.buffers,
-                                DescriptorType::SampledImage => &mut counters.textures,
-                                DescriptorType::StorageImage => &mut counters.textures,
-                                DescriptorType::Sampler => &mut counters.samplers,
-                                _ => unimplemented!()
+                                DescriptorType::StorageBuffer => {
+                                    res.buffer_id = counters.buffers as _;
+                                    counters.buffers += 1;
+                                }
+                                DescriptorType::SampledImage |
+                                DescriptorType::StorageImage |
+                                DescriptorType::UniformTexelBuffer |
+                                DescriptorType::StorageTexelBuffer |
+                                DescriptorType::InputAttachment => {
+                                    res.texture_id = counters.textures as _;
+                                    counters.textures += 1;
+                                }
+                                DescriptorType::Sampler => {
+                                    res.sampler_id = counters.samplers as _;
+                                    counters.samplers += 1;
+                                }
+                                DescriptorType::CombinedImageSampler => {
+                                    res.texture_id = counters.textures as _;
+                                    res.sampler_id = counters.samplers as _;
+                                    counters.textures += 1;
+                                    counters.samplers += 1;
+                                }
+                                DescriptorType::UniformBufferDynamic |
+                                DescriptorType::UniformImageDynamic => unimplemented!(),
                             };
                             assert_eq!(set_binding.count, 1); //TODO
                             let location = msl::ResourceBindingLocation {
@@ -577,12 +604,7 @@ impl hal::Device<Backend> for Device {
                                 desc_set: set_index as _,
                                 binding: set_binding.binding as _,
                             };
-                            let res_binding = msl::ResourceBinding {
-                                resource_id: *offset as _,
-                                force_used: false,
-                            };
-                            *offset += 1;
-                            res_overrides.insert(location, res_binding);
+                            res_overrides.insert(location, res);
                         }
                     }
                 }
@@ -597,7 +619,9 @@ impl hal::Device<Backend> for Device {
                             binding: 0,
                         };
                         let res_binding = msl::ResourceBinding {
-                            resource_id: counters.buffers as _,
+                            buffer_id: counters.buffers as _,
+                            texture_id: !0,
+                            sampler_id: !0,
                             force_used: false,
                         };
                         res_overrides.insert(location, res_binding);
@@ -1121,6 +1145,12 @@ impl hal::Device<Backend> for Device {
                             (&pso::Descriptor::Image(image, layout), &mut n::DescriptorSetBinding::Image(ref mut vec)) => {
                                 vec[array_offset] = Some((image.0.clone(), layout));
                             }
+                            (&pso::Descriptor::CombinedImageSampler(image, layout, sampler), &mut n::DescriptorSetBinding::Combined(ref mut vec)) => {
+                                vec[array_offset] = Some((image.0.clone(), layout, sampler.0.clone()));
+                            }
+                            (&pso::Descriptor::TexelBuffer(view), &mut n::DescriptorSetBinding::Image(ref mut vec)) => {
+                                vec[array_offset] = Some((view.raw.clone(), image::Layout::General));
+                            }
                             (&pso::Descriptor::Buffer(buffer, ref range), &mut n::DescriptorSetBinding::Buffer(ref mut vec)) => {
                                 let buf_length = buffer.raw.length();
                                 let start = range.start.unwrap_or(0);
@@ -1130,10 +1160,11 @@ impl hal::Device<Backend> for Device {
                             }
                             (&pso::Descriptor::Sampler(..), _) |
                             (&pso::Descriptor::Image(..), _) |
-                            (&pso::Descriptor::Buffer(..), _) => {
+                            (&pso::Descriptor::CombinedImageSampler(..), _) |
+                            (&pso::Descriptor::Buffer(..), _) |
+                            (&pso::Descriptor::TexelBuffer(..), _) => {
                                 panic!("mismatched descriptor set type")
                             }
-                            _ => unimplemented!(),
                         }
                     }
                 }
@@ -1246,15 +1277,18 @@ impl hal::Device<Backend> for Device {
     fn get_buffer_requirements(&self, buffer: &n::UnboundBuffer) -> memory::Requirements {
         let mut max_size = buffer.size;
         let mut max_alignment = 1;
+        let mut type_mask = (1 << self.memory_types.len()) - 1;
 
         if self.private_caps.resource_heaps {
             // We don't know what memory type the user will try to allocate the buffer with, so we test them
-            // all get the most stringent ones. Note we don't check Shared because heaps can't use it
-            for &options in [
-                MTLResourceOptions::StorageModeManaged,
-                MTLResourceOptions::StorageModeManaged | MTLResourceOptions::CPUCacheModeWriteCombined,
-                MTLResourceOptions::StorageModePrivate,
-            ].iter() {
+            // all get the most stringent ones.
+            for (i, mt) in self.memory_types.iter().enumerate() {
+                // Note: we ignore COHERENT because heaps can't use the associated Shared memory type
+                if mt.properties.contains(memory::Properties::COHERENT) {
+                    type_mask ^= 1 << i;
+                    continue
+                }
+                let options = map_memory_properties_to_options(mt.properties);
                 let requirements = self.device.heap_buffer_size_and_align(buffer.size, options);
                 max_size = cmp::max(max_size, requirements.size);
                 max_alignment = cmp::max(max_alignment, requirements.align);
@@ -1264,14 +1298,14 @@ impl hal::Device<Backend> for Device {
         memory::Requirements {
             size: max_size,
             alignment: max_alignment,
-            type_mask: 0x1F, //TODO
+            type_mask,
         }
     }
 
     fn bind_buffer_memory(
         &self, memory: &n::Memory, offset: u64, buffer: n::UnboundBuffer
     ) -> Result<n::Buffer, BindError> {
-        let (raw, mappable) = match memory.heap {
+        let (raw, res_options, is_mappable) = match memory.heap {
             n::MemoryHeap::Native(ref heap) => {
                 let resource_options = resource_options_from_storage_and_cache(
                     heap.storage_mode(),
@@ -1282,20 +1316,21 @@ impl hal::Device<Backend> for Device {
                         // TODO: disable hazard tracking?
                         self.device.new_buffer(buffer.size, resource_options)
                     });
-                (raw, heap.storage_mode() != MTLStorageMode::Private)
+                let is_mappable = heap.storage_mode() != MTLStorageMode::Private;
+                (raw, resource_options, is_mappable)
             }
-            n::MemoryHeap::Emulated(memory_type) => {
-                // TODO: disable hazard tracking?
-                let memory_properties = self.memory_types[memory_type.0].properties;
+            n::MemoryHeap::Emulated(mt) => {
                 // Note: buffer backing is always `Private`. CPU access is routed through
                 // a CPU-visible buffer associated with `Memory` object.
-                let raw = self.device.new_buffer(buffer.size, MTLResourceOptions::StorageModePrivate);
-                (raw, memory_properties.contains(memory::Properties::CPU_VISIBLE))
+                let res_options = MTLResourceOptions::StorageModePrivate;
+                let raw = self.device.new_buffer(buffer.size, res_options);
+                let is_mappable = self.memory_types[mt.0].properties.contains(memory::Properties::CPU_VISIBLE);
+                (raw, res_options, is_mappable)
             }
         };
 
         Ok(n::Buffer {
-            allocations: if mappable {
+            allocations: if is_mappable {
                 memory.initialized.set(true); // this is conservative, can be improved
                 memory.allocations.lock().unwrap().insert(offset .. (offset + buffer.size), raw.clone());
                 Some(memory.allocations.clone())
@@ -1304,6 +1339,7 @@ impl hal::Device<Backend> for Device {
             },
             raw,
             offset,
+            res_options,
         })
     }
 
@@ -1314,13 +1350,35 @@ impl hal::Device<Backend> for Device {
     }
 
     fn create_buffer_view<R: RangeArg<u64>>(
-        &self, _buffer: &n::Buffer, _format: Option<format::Format>, _range: R
+        &self, buffer: &n::Buffer, format_maybe: Option<format::Format>, range: R
     ) -> Result<n::BufferView, buffer::ViewError> {
-        unimplemented!()
+        let start = buffer.offset + *range.start().unwrap_or(&0);
+        let end_rough = *range.end().unwrap_or(&buffer.raw.length());
+        let format = match format_maybe {
+            Some(fmt) => fmt,
+            None => return Err(buffer::ViewError::Unsupported),
+        };
+        let format_desc = format.surface_desc();
+        let block_count = (end_rough - start) * 8 / format_desc.bits as u64;
+        let size = block_count * (format_desc.bits as u64 / 8);
+        let mtl_format = map_format(format).ok_or(buffer::ViewError::Unsupported)?;
+
+        let descriptor = metal::TextureDescriptor::new();
+        descriptor.set_texture_type(MTLTextureType::D2);
+        descriptor.set_width(format_desc.dim.0 as u64 * block_count);
+        descriptor.set_height(format_desc.dim.1 as u64);
+        descriptor.set_mipmap_level_count(1);
+        descriptor.set_pixel_format(mtl_format);
+        descriptor.set_resource_options(buffer.res_options);
+        descriptor.set_storage_mode(buffer.raw.storage_mode());
+
+        Ok(n::BufferView {
+            raw: buffer.raw.new_texture_from_contents(&descriptor, start, size),
+        })
     }
 
     fn destroy_buffer_view(&self, _view: n::BufferView) {
-        unimplemented!()
+        //nothing to do
     }
 
     fn create_image(
@@ -1333,8 +1391,7 @@ impl hal::Device<Backend> for Device {
         flags: image::StorageFlags,
     ) -> Result<n::UnboundImage, image::CreationError> {
         let is_cube = flags.contains(image::StorageFlags::CUBE_VIEW);
-        let base_format = format.base_format();
-        let format_desc = base_format.0.desc();
+        let format_desc = format.surface_desc();
         let mtl_format = map_format(format).ok_or(image::CreationError::Format(format))?;
 
         let descriptor = metal::TextureDescriptor::new();
@@ -1403,16 +1460,26 @@ impl hal::Device<Backend> for Device {
     }
 
     fn get_image_requirements(&self, image: &n::UnboundImage) -> memory::Requirements {
+        let mut type_mask = if !image.format_desc.aspects.contains(format::Aspects::COLOR) {
+            0x4 // DEVICE_LOCAL only
+        } else {
+            0x7 // any type
+        };
         if self.private_caps.resource_heaps {
             // We don't know what memory type the user will try to allocate the image with, so we test them
             // all get the most stringent ones. Note we don't check Shared because heaps can't use it
             let mut max_size = 0;
             let mut max_alignment = 0;
-            for &options in [
-                MTLResourceOptions::StorageModeManaged,
-                MTLResourceOptions::StorageModeManaged | MTLResourceOptions::CPUCacheModeWriteCombined,
-                MTLResourceOptions::StorageModePrivate,
-            ].iter() {
+            for (i, mt) in self.memory_types.iter().enumerate() {
+                if type_mask & (1 << i) == 0 {
+                    continue
+                }
+                // Note: we ignore COHERENT because heaps can't use the associated Shared memory type
+                if mt.properties.contains(memory::Properties::COHERENT) {
+                    type_mask ^= 1 << i;
+                    continue
+                }
+                let options = map_memory_properties_to_options(mt.properties);
                 image.texture_desc.set_resource_options(options);
                 let requirements = self.device.heap_texture_size_and_align(&image.texture_desc);
                 max_size = cmp::max(max_size, requirements.size);
@@ -1421,13 +1488,13 @@ impl hal::Device<Backend> for Device {
             memory::Requirements {
                 size: max_size,
                 alignment: max_alignment,
-                type_mask: 0x1F, //TODO
+                type_mask,
             }
         } else {
             memory::Requirements {
                 size: 1, // TODO: something sensible
                 alignment: 4,
-                type_mask: 0x1F, //TODO
+                type_mask,
             }
         }
     }

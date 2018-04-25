@@ -302,7 +302,9 @@ pub fn query_all(gl: &gl::Gl) -> (Info, Features, LegacyFeatures, Limits, Privat
         max_viewports: 1,
         min_buffer_copy_offset_alignment: 1,
         min_buffer_copy_pitch_alignment: 1,
+        min_texel_buffer_offset_alignment: 1, // TODO
         min_uniform_buffer_offset_alignment: 1, // TODO
+        min_storage_buffer_offset_alignment: 1, // TODO
         .. Limits::default()
     };
 

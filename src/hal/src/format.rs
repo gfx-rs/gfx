@@ -569,8 +569,13 @@ impl Format {
     ///
     /// Returns `None` if format is `Undefined`.
     pub fn base_format(self) -> BaseFormat {
-        assert!(NUM_FORMATS > self as usize);
+        assert!(self as usize != 0 && NUM_FORMATS > self as usize);
         BASE_FORMATS[self as usize - 1]
+    }
+
+    /// A shortcut to obtain surface format description.
+    pub fn surface_desc(&self) -> FormatDesc {
+        self.base_format().0.desc()
     }
 
     /// Retuns aspect flags of the format.
