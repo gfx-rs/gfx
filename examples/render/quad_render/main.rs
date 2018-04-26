@@ -52,9 +52,6 @@ gfx_graphics_pipeline! {
 fn main() {
     env_logger::init();
 
-    #[cfg(feature = "metal")]
-    let mut autorelease_pool = unsafe { back::AutoreleasePool::new() };
-
     let mut events_loop = winit::EventsLoop::new();
     let window = winit::WindowBuilder::new()
         .with_dimensions(1024, 768)
@@ -273,11 +270,6 @@ fn main() {
 
         submits.push(encoder.finish());
         context.present(submits.drain(..).collect::<Vec<_>>());
-
-        #[cfg(feature = "metal")]
-        unsafe {
-            autorelease_pool.reset();
-        }
     }
 
     println!("cleanup!");
