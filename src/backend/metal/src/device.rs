@@ -115,7 +115,7 @@ struct PrivateCapabilities {
 pub struct Device {
     pub(crate) device: metal::Device,
     private_caps: PrivateCapabilities,
-    queue: Arc<command::QueueInner>,
+    queue_pool: command::QueuePoolPtr,
     memory_types: [hal::MemoryType; 3],
 }
 unsafe impl Send for Device {}
@@ -168,10 +168,11 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let family = *families[0].0;
         let id = family.id();
 
+        let queue_pool = Arc::new(Mutex::new(
+            command::QueuePoolInner::new(self.raw.clone())
+        ));
         let mut queue_group = hal::backend::RawQueueGroup::new(family);
-        let queue_raw = command::CommandQueue::new(&self.raw);
-        let queue = queue_raw.0.clone();
-        queue_group.add_queue(queue_raw);
+        queue_group.add_queue(queue_pool.clone());
 
         let private_caps = PrivateCapabilities {
             resource_heaps: self.supports_any(RESOURCE_HEAP_SUPPORT),
@@ -184,7 +185,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let device = Device {
             device: self.raw.clone(),
             private_caps,
-            queue,
+            queue_pool,
             memory_types: self.memory_types,
         };
 
@@ -469,7 +470,7 @@ impl hal::Device<Backend> for Device {
         &self, _family: QueueFamilyId, flags: CommandPoolCreateFlags
     ) -> command::CommandPool {
         command::CommandPool {
-            queue: self.queue.clone(),
+            queue_pool: self.queue_pool.clone(),
             managed: if flags.contains(CommandPoolCreateFlags::RESET_INDIVIDUAL) {
                 None
             } else {
@@ -478,8 +479,13 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn destroy_command_pool(&self, _pool: command::CommandPool) {
-        //TODO?
+    fn destroy_command_pool(&self, pool: command::CommandPool) {
+        if let Some(vec) = pool.managed {
+            for cmd_buf in vec {
+                unsafe { &mut *cmd_buf.get() }
+                    .reset(&self.queue_pool);
+            }
+        }
     }
 
     fn create_render_pass<'a, IA, IS, ID>(
@@ -967,7 +973,8 @@ impl hal::Device<Backend> for Device {
     {
         // temporary command buffer to copy the contents from
         // allocated CPU-visible buffers to the target buffers
-        let cmd_buffer = self.queue.new_command_buffer_ref();
+        let mut pool = self.queue_pool.lock().unwrap();
+        let cmd_buffer = pool.borrow_command_buffer();
         let encoder = cmd_buffer.new_blit_command_encoder();
 
         for item in iter {
@@ -1008,7 +1015,8 @@ impl hal::Device<Backend> for Device {
     {
         // temporary command buffer to copy the contents from
         // the given buffers into the allocated CPU-visible buffers
-        let cmd_buffer = self.queue.new_command_buffer_ref();
+        let mut pool = self.queue_pool.lock().unwrap();
+        let cmd_buffer = pool.borrow_command_buffer();
         let encoder = cmd_buffer.new_blit_command_encoder();
         let mut num_copies = 0;
 

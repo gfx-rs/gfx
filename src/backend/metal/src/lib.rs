@@ -7,6 +7,7 @@ extern crate core_foundation;
 extern crate core_graphics;
 #[macro_use] extern crate log;
 extern crate block;
+extern crate smallvec;
 extern crate spirv_cross;
 
 extern crate metal_rs as metal;
@@ -21,7 +22,7 @@ mod native;
 mod conversions;
 mod soft;
 
-pub use command::{CommandQueue, CommandPool};
+pub use command::{CommandPool, QueuePoolPtr};
 pub use device::{Device, LanguageVersion, PhysicalDevice};
 pub use window::{Surface, Swapchain};
 
@@ -117,7 +118,7 @@ impl hal::Backend for Backend {
     type Swapchain = window::Swapchain;
 
     type QueueFamily = QueueFamily;
-    type CommandQueue = CommandQueue;
+    type CommandQueue = QueuePoolPtr;
     type CommandBuffer = command::CommandBuffer;
 
     type Memory = native::Memory;
@@ -153,7 +154,10 @@ pub struct AutoreleasePool {
 
 impl Drop for AutoreleasePool {
     fn drop(&mut self) {
-        unsafe { self.pool.drain() }
+        //unsafe { self.pool.drain() }
+        unsafe {
+            msg_send![self.pool, release]
+        }
     }
 }
 
