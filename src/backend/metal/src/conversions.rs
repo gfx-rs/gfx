@@ -7,12 +7,12 @@ pub fn map_format(format: Format) -> Option<MTLPixelFormat> {
     Some(match format {
         Format::R8Unorm        => MTLPixelFormat::R8Unorm,
         Format::R8Inorm        => MTLPixelFormat::R8Snorm,
-        Format::R8Srgb         => MTLPixelFormat::R8Unorm_sRGB,
+        //Format::R8Srgb         => MTLPixelFormat::R8Unorm_sRGB, // !macOS
         Format::R8Uint         => MTLPixelFormat::R8Uint,
         Format::R8Int          => MTLPixelFormat::R8Sint,
         Format::Rg8Unorm       => MTLPixelFormat::RG8Unorm,
         Format::Rg8Inorm       => MTLPixelFormat::RG8Snorm,
-        Format::Rg8Srgb        => MTLPixelFormat::RG8Unorm_sRGB,
+        //Format::Rg8Srgb        => MTLPixelFormat::RG8Unorm_sRGB, // !macOS
         Format::Rg8Uint        => MTLPixelFormat::RG8Uint,
         Format::Rg8Int         => MTLPixelFormat::RG8Sint,
         Format::Rgba8Unorm     => MTLPixelFormat::RGBA8Unorm,

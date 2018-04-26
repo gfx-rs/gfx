@@ -681,10 +681,12 @@ impl hal::Device<Backend> for Device {
         pipeline.set_vertex_function(Some(&vs_function));
 
         // Fragment shader
+        let fs_function;
         let fs_lib = match pipeline_desc.shaders.fragment {
             Some(ref ep) => {
                 let (lib, fun, _) = self.load_shader(ep, pipeline_layout)?;
-                pipeline.set_fragment_function(Some(&fun));
+                fs_function = fun;
+                pipeline.set_fragment_function(Some(&fs_function));
                 Some(lib)
             }
             None => None,
@@ -1303,8 +1305,12 @@ impl hal::Device<Backend> for Device {
             }
         }
 
+        // based on Metal validation error for view creation:
+        // failed assertion `BytesPerRow of a buffer-backed texture with pixelFormat(XXX) must be aligned to 256 bytes
+        const SIZE_MASK: u64 = 0xFF;
+
         memory::Requirements {
-            size: max_size,
+            size: (max_size + SIZE_MASK) & !SIZE_MASK,
             alignment: max_alignment,
             type_mask,
         }
@@ -1367,8 +1373,11 @@ impl hal::Device<Backend> for Device {
             None => return Err(buffer::ViewError::Unsupported),
         };
         let format_desc = format.surface_desc();
+        if format_desc.aspects != format::Aspects::COLOR {
+            // no depth/stencil support for buffer views here
+            return Err(buffer::ViewError::Unsupported)
+        }
         let block_count = (end_rough - start) * 8 / format_desc.bits as u64;
-        let size = block_count * (format_desc.bits as u64 / 8);
         let mtl_format = map_format(format).ok_or(buffer::ViewError::Unsupported)?;
 
         let descriptor = metal::TextureDescriptor::new();
@@ -1380,8 +1389,12 @@ impl hal::Device<Backend> for Device {
         descriptor.set_resource_options(buffer.res_options);
         descriptor.set_storage_mode(buffer.raw.storage_mode());
 
+        const STRIDE_MASK: u64 = 0xFF;
+        let size = block_count * (format_desc.bits as u64 / 8);
+        let stride = (size + STRIDE_MASK) & !STRIDE_MASK;
+
         Ok(n::BufferView {
-            raw: buffer.raw.new_texture_from_contents(&descriptor, start, size),
+            raw: buffer.raw.new_texture_from_contents(&descriptor, start, stride),
         })
     }
 
