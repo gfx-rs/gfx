@@ -225,17 +225,18 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn image_format_properties(
-        &self, _format: format::Format, dimensions: u8, _tiling: image::Tiling,
+        &self, format: format::Format, dimensions: u8, _tiling: image::Tiling,
         _usage: image::Usage, _storage_flags: image::StorageFlags,
     ) -> Option<image::FormatProperties> {
+        let desc = format.surface_desc();
         //TODO: actually query this data
-        Some(image::FormatProperties {
+        map_format(format).map(|_| image::FormatProperties {
             max_extent: image::Extent {
                 width: 4096,
                 height: if dimensions >= 2 { 4096 } else { 1 },
                 depth: if dimensions >= 3 { 4096 } else { 1 },
             },
-            max_levels: 16,
+            max_levels: if format::Aspects::COLOR.contains(desc.aspects) { 16 } else { 1 },
             max_layers: 2048,
             sample_count_mask: 0x1,
             max_resource_size: 256 << 20,
@@ -1388,6 +1389,11 @@ impl hal::Device<Backend> for Device {
         descriptor.set_pixel_format(mtl_format);
         descriptor.set_resource_options(buffer.res_options);
         descriptor.set_storage_mode(buffer.raw.storage_mode());
+
+        //TODO:
+        //The offset and bytesPerRow parameters must be byte aligned to the size returned by the
+        // minimumLinearTextureAlignmentForPixelFormat: method. The bytesPerRow parameter must also be
+        // greater than or equal to the size of one pixel, in bytes, multiplied by the pixel width of one row.
 
         const STRIDE_MASK: u64 = 0xFF;
         let size = block_count * (format_desc.bits as u64 / 8);

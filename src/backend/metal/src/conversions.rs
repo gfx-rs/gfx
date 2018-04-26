@@ -216,3 +216,11 @@ pub fn map_wrap_mode(wrap: image::WrapMode) -> MTLSamplerAddressMode {
         image::WrapMode::Border => MTLSamplerAddressMode::ClampToBorderColor,
     }
 }
+
+pub fn map_extent(extent: image::Extent) -> MTLSize {
+    MTLSize {
+        width: extent.width as _,
+        height: extent.height as _,
+        depth: extent.depth as _,
+    }
+}

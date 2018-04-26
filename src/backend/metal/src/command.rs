@@ -17,8 +17,7 @@ use hal::queue::{RawCommandQueue, RawSubmission};
 use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLClearColor, MTLIndexType, MTLSize, MTLOrigin};
 use cocoa::foundation::NSUInteger;
 use block::{ConcreteBlock};
-use conversions::{map_index_type};
-use soft;
+use {conversions as conv, soft};
 
 use objc::runtime::{Class, Object};
 use smallvec::SmallVec;
@@ -74,6 +73,7 @@ impl QueuePoolInner {
                 self.queues.len() - 1
             })
     }
+
     pub fn borrow_command_buffer(&mut self) -> CommandBufferScope {
         let pool = AutoreleasePool::new();
         let id = self.find_queue();
@@ -544,9 +544,21 @@ fn div(a: u32, b: u32) -> u32 {
     a / b
 }
 
-fn compute_pitches(region: &com::BufferImageCopy, fd: &FormatDesc) -> (u32, u32) {
-    let row_pitch = div(region.buffer_width, fd.dim.0 as _) * (fd.bits / 8) as u32;
-    let slice_pitch = div(region.buffer_height, fd.dim.1 as _) * row_pitch;
+fn compute_pitches(
+    region: &com::BufferImageCopy, fd: &FormatDesc, extent: &MTLSize
+) -> (u32, u32) {
+    let buffer_width = if region.buffer_width == 0 {
+        extent.width as u32
+    } else {
+        region.buffer_width
+    };
+    let buffer_height = if region.buffer_height == 0 {
+        extent.height as u32
+    } else {
+        region.buffer_height
+    };
+    let row_pitch = div(buffer_width, fd.dim.0 as _) * (fd.bits / 8) as u32;
+    let slice_pitch = div(buffer_height, fd.dim.1 as _) * row_pitch;
     (row_pitch, slice_pitch)
 }
 
@@ -643,14 +655,10 @@ pub(crate) fn exec_blit(encoder: &metal::BlitCommandEncoderRef, command: &soft::
             ];
         },
         Cmd::CopyBufferToImage { ref src, ref dst, dst_desc, ref region } => unsafe {
-            let (row_pitch, slice_pitch) = compute_pitches(&region, &dst_desc);
+            let extent = conv::map_extent(region.image_extent);
+            let (row_pitch, slice_pitch) = compute_pitches(&region, &dst_desc, &extent);
             let image_offset = &region.image_offset;
             let r = &region.image_layers;
-            let extent = MTLSize {
-                width: dst.width(),
-                height: dst.height(),
-                depth: dst.depth(),
-            };
 
             for layer in r.layers.clone() {
                 let offset = region.buffer_offset + slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
@@ -668,14 +676,10 @@ pub(crate) fn exec_blit(encoder: &metal::BlitCommandEncoderRef, command: &soft::
             }
         },
         Cmd::CopyImageToBuffer { ref src, src_desc, ref dst, ref region } => unsafe {
-            let (row_pitch, slice_pitch) = compute_pitches(&region, &src_desc);
+            let extent = conv::map_extent(region.image_extent);
+            let (row_pitch, slice_pitch) = compute_pitches(&region, &src_desc, &extent);
             let image_offset = &region.image_offset;
             let r = &region.image_layers;
-            let extent = MTLSize {
-                width: src.width(),
-                height: src.height(),
-                depth: src.depth(),
-            };
 
             for layer in r.layers.clone() {
                 let offset = region.buffer_offset + slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
@@ -1108,7 +1112,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn bind_index_buffer(&mut self, view: buffer::IndexBufferView<Backend>) {
         let buffer = view.buffer.raw.clone();
         let offset = view.offset;
-        let index_type = map_index_type(view.index_type);
+        let index_type = conv::map_index_type(view.index_type);
         self.state.index_buffer = Some(IndexBuffer {
             buffer,
             offset,

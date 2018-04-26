@@ -154,7 +154,6 @@ pub struct AutoreleasePool {
 
 impl Drop for AutoreleasePool {
     fn drop(&mut self) {
-        //unsafe { self.pool.drain() }
         unsafe {
             msg_send![self.pool, release]
         }
