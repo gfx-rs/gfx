@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::ops::Range;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::{cmp, mem, ptr, slice};
+use std::{cmp, mem, slice};
 
 use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query};
 use hal::command::BufferCopy;
@@ -22,10 +22,8 @@ use cocoa::foundation::{NSRange, NSUInteger};
 use metal::{self,
     MTLFeatureSet, MTLLanguageVersion, MTLArgumentAccess, MTLDataType, MTLPrimitiveType, MTLPrimitiveTopologyClass,
     MTLVertexStepFunction, MTLSamplerBorderColor, MTLSamplerMipFilter, MTLStorageMode, MTLResourceOptions, MTLTextureType,
+    CaptureManager
 };
-use foreign_types::ForeignType;
-use objc::runtime::Class as ObjcClass;
-use objc::runtime::Object as ObjcObject;
 use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
 
 const RESOURCE_HEAP_SUPPORT: &[MTLFeatureSet] = &[
@@ -81,7 +79,7 @@ fn get_final_function(library: &metal::LibraryRef, entry: &str, specialization: 
             ()
         })?;
     let has_more_function_constants = unsafe {
-        let dictionary: *mut ::objc::runtime::Object = msg_send![mtl_function, functionConstantsDictionary];
+        let dictionary = mtl_function.function_constants_dictionary();
         let count: NSUInteger = msg_send![dictionary, count];
         count > 0
     };
@@ -190,14 +188,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         };
 
         if cfg!(debug_assertions) || cfg!(feature = "metal_default_capture_scope") {
-            unsafe {
-                if let Some(mtl_capture_manager) = ObjcClass::get("MTLCaptureManager") {
-                    let shared_capture_manager: *mut ObjcObject = msg_send![mtl_capture_manager, sharedCaptureManager];
-                    let default_capture_scope: *mut ObjcObject = msg_send![shared_capture_manager, newCaptureScopeWithDevice:device.device.as_ptr()];
-                    msg_send![shared_capture_manager, setDefaultCaptureScope:default_capture_scope];
-                    msg_send![default_capture_scope, beginScope];
-                }
-            }
+            let shared_capture_manager = CaptureManager::shared();
+            let default_capture_scope = shared_capture_manager.new_capture_scope_with_device(&device.device);
+            shared_capture_manager.set_default_capture_scope(default_capture_scope);
+            default_capture_scope.begin_scope();
         }
 
         let mut queues = HashMap::new();
@@ -804,26 +798,21 @@ impl hal::Device<Backend> for Device {
 
         pipeline.set_vertex_descriptor(Some(&vertex_descriptor));
 
-        let mut err_ptr: *mut ObjcObject = ptr::null_mut();
-        let pso: *mut metal::MTLRenderPipelineState = unsafe {
-            msg_send![&*self.device, newRenderPipelineStateWithDescriptor:&*pipeline error: &mut err_ptr]
-        };
-
-        if pso.is_null() {
-            error!("PSO creation failed: {}", unsafe { n::objc_err_description(err_ptr) });
-            unsafe { msg_send![err_ptr, release] };
-            Err(pso::CreationError::Other)
-        } else {
-            Ok(n::GraphicsPipeline {
-                vs_lib,
-                fs_lib,
-                raw: unsafe { metal::RenderPipelineState::from_ptr(pso) },
-                primitive_type,
-                attribute_buffer_index: pipeline_layout.attribute_buffer_index,
-                depth_stencil_state,
-                baked_states: pipeline_desc.baked_states.clone(),
+        self.device.new_render_pipeline_state(&pipeline)
+            .map(|raw|
+                n::GraphicsPipeline {
+                    vs_lib,
+                    fs_lib,
+                    raw,
+                    primitive_type,
+                    attribute_buffer_index: pipeline_layout.attribute_buffer_index,
+                    depth_stencil_state,
+                    baked_states: pipeline_desc.baked_states.clone(),
+                })
+            .map_err(|err| {
+                error!("PSO creation failed: {}", err);
+                pso::CreationError::Other
             })
-        }
     }
 
     fn create_compute_pipeline<'a>(
@@ -835,22 +824,18 @@ impl hal::Device<Backend> for Device {
         let (cs_lib, cs_function, work_group_size) = self.load_shader(&pipeline_desc.shader, &pipeline_desc.layout)?;
         pipeline.set_compute_function(Some(&cs_function));
 
-        let mut err_ptr: *mut ObjcObject = ptr::null_mut();
-        let pso: *mut metal::MTLComputePipelineState = unsafe {
-            msg_send![&*self.device, newComputePipelineStateWithDescriptor:&*pipeline error: &mut err_ptr]
-        };
-
-        if pso.is_null() {
-            error!("PSO creation failed: {}", unsafe { n::objc_err_description(err_ptr) });
-            unsafe { msg_send![err_ptr, release] };
-            Err(pso::CreationError::Other)
-        } else {
-            Ok(n::ComputePipeline {
-                cs_lib,
-                raw: unsafe { metal::ComputePipelineState::from_ptr(pso) },
-                work_group_size,
+        self.device.new_compute_pipeline_state(&pipeline)
+            .map(|raw| {
+                n::ComputePipeline {
+                    cs_lib,
+                    raw,
+                    work_group_size,
+                }
             })
-        }
+            .map_err(|err| {
+                error!("PSO creation failed: {}", err);
+                pso::CreationError::Other
+            })
     }
 
     fn create_framebuffer<I>(
@@ -863,7 +848,7 @@ impl hal::Device<Backend> for Device {
         let _ap = AutoreleasePool::new(); // for attachments
         let descriptor = unsafe {
             let desc: metal::RenderPassDescriptor = msg_send![renderpass.desc, copy];
-            msg_send![&*desc, setRenderTargetArrayLength: extent.depth as usize];
+            desc.set_render_target_array_length(extent.depth as NSUInteger);
             desc
         };
 
@@ -1047,11 +1032,7 @@ impl hal::Device<Backend> for Device {
             }
 
             num_copies += 1;
-            unsafe {
-                msg_send![*encoder,
-                    synchronizeResource: cpu_buffer.as_ref()
-                ];
-            }
+            encoder.synchronize_resource(cpu_buffer.as_ref());
         }
 
         encoder.end_encoding();

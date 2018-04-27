@@ -4,15 +4,13 @@ use std::cell::Cell;
 use std::collections::{Bound, BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 use std::ops::Range;
-use std::os::raw::{c_void, c_long, c_int};
-use std::ptr;
+use std::os::raw::{c_void, c_long};
 
 use hal::{self, image, pass, pso};
 
-use cocoa::foundation::{NSRange, NSUInteger};
+use cocoa::foundation::{NSUInteger};
 use foreign_types::ForeignType;
 use metal::{self, MTLPrimitiveType};
-use objc;
 use spirv_cross::{msl, spirv};
 
 
@@ -332,29 +330,6 @@ unsafe impl Sync for UnboundImage {}
 
 #[derive(Debug)]
 pub struct Fence(pub Arc<Mutex<bool>>);
-
-
-pub unsafe fn objc_err_description(object: *mut objc::runtime::Object) -> String {
-    let description: *mut objc::runtime::Object = msg_send![object, localizedDescription];
-    let utf16_len: NSUInteger = msg_send![description, length];
-    let utf8_bytes: NSUInteger = msg_send![description, lengthOfBytesUsingEncoding: 4 as NSUInteger];
-    let mut bytes = Vec::with_capacity(utf8_bytes as usize);
-    bytes.set_len(utf8_bytes as usize);
-    let success: objc::runtime::BOOL = msg_send![description,
-        getBytes: bytes.as_mut_ptr()
-        maxLength: utf8_bytes
-        usedLength: ptr::null_mut::<NSUInteger>()
-        encoding: 4 as NSUInteger
-        options: 0 as c_int
-        range: NSRange  { location: 0, length: utf16_len }
-        remainingRange: ptr::null_mut::<NSRange>()
-    ];
-    if success == objc::runtime::YES {
-        String::from_utf8_unchecked(bytes)
-    } else {
-        panic!("failed to get object description")
-    }
-}
 
 extern "C" {
     #[allow(dead_code)]
