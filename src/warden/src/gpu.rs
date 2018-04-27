@@ -109,7 +109,7 @@ pub struct Scene<B: hal::Backend, C> {
     init_submit: c::Submit<B, C, c::MultiShot, c::Primary>,
     device: B::Device,
     queue_group: hal::QueueGroup<B, C>,
-    command_pool: hal::CommandPool<B, C>,
+    command_pool: Option<hal::CommandPool<B, C>>,
     upload_buffers: HashMap<String, (B::Buffer, B::Memory)>,
     download_type: hal::MemoryTypeId,
     limits: hal::Limits,
@@ -835,7 +835,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             init_submit,
             device,
             queue_group,
-            command_pool,
+            command_pool: Some(command_pool),
             upload_buffers,
             download_type,
             limits,
@@ -925,9 +925,9 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         let submission = hal::queue::Submission::new()
             .submit(Some(copy_submit));
         self.queue_group.queues[0].submit(submission, Some(&copy_fence));
-        //queue.destroy_command_pool(command_pool);
         self.device.wait_for_fence(&copy_fence, !0);
         self.device.destroy_fence(copy_fence);
+        self.device.destroy_command_pool(command_pool.downgrade());
 
         let mapping = self
             .device
@@ -1033,9 +1033,9 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         let submission = hal::queue::Submission::new()
             .submit(Some(copy_submit));
         self.queue_group.queues[0].submit(submission, Some(&copy_fence));
-        //queue.destroy_command_pool(command_pool);
         self.device.wait_for_fence(&copy_fence, !0);
         self.device.destroy_fence(copy_fence);
+        self.device.destroy_command_pool(command_pool.downgrade());
 
         let mapping = self
             .device
@@ -1061,7 +1061,6 @@ impl<B: hal::Backend, C> Drop for Scene<B, C> {
         }
         //TODO: free those properly
         let _ = &self.queue_group;
-        let _ = &self.command_pool;
-        //self.device.destroy_command_pool(self.command_pool.downgrade())
+        self.device.destroy_command_pool(self.command_pool.take().unwrap().downgrade());
     }
 }

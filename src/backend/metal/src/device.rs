@@ -115,7 +115,7 @@ struct PrivateCapabilities {
 pub struct Device {
     pub(crate) device: metal::Device,
     private_caps: PrivateCapabilities,
-    queue: Arc<command::QueueInner>,
+    queue_pool: command::QueuePoolPtr,
     memory_types: [hal::MemoryType; 3],
 }
 unsafe impl Send for Device {}
@@ -168,10 +168,11 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let family = *families[0].0;
         let id = family.id();
 
+        let queue_pool = Arc::new(Mutex::new(
+            command::QueuePoolInner::new(self.raw.clone())
+        ));
         let mut queue_group = hal::backend::RawQueueGroup::new(family);
-        let queue_raw = command::CommandQueue::new(&self.raw);
-        let queue = queue_raw.0.clone();
-        queue_group.add_queue(queue_raw);
+        queue_group.add_queue(queue_pool.clone());
 
         let private_caps = PrivateCapabilities {
             resource_heaps: self.supports_any(RESOURCE_HEAP_SUPPORT),
@@ -184,7 +185,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let device = Device {
             device: self.raw.clone(),
             private_caps,
-            queue,
+            queue_pool,
             memory_types: self.memory_types,
         };
 
@@ -224,17 +225,18 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn image_format_properties(
-        &self, _format: format::Format, dimensions: u8, _tiling: image::Tiling,
+        &self, format: format::Format, dimensions: u8, _tiling: image::Tiling,
         _usage: image::Usage, _storage_flags: image::StorageFlags,
     ) -> Option<image::FormatProperties> {
+        let desc = format.surface_desc();
         //TODO: actually query this data
-        Some(image::FormatProperties {
+        map_format(format).map(|_| image::FormatProperties {
             max_extent: image::Extent {
                 width: 4096,
                 height: if dimensions >= 2 { 4096 } else { 1 },
                 depth: if dimensions >= 3 { 4096 } else { 1 },
             },
-            max_levels: 16,
+            max_levels: if format::Aspects::COLOR.contains(desc.aspects) { 16 } else { 1 },
             max_layers: 2048,
             sample_count_mask: 0x1,
             max_resource_size: 256 << 20,
@@ -469,7 +471,7 @@ impl hal::Device<Backend> for Device {
         &self, _family: QueueFamilyId, flags: CommandPoolCreateFlags
     ) -> command::CommandPool {
         command::CommandPool {
-            queue: self.queue.clone(),
+            queue_pool: self.queue_pool.clone(),
             managed: if flags.contains(CommandPoolCreateFlags::RESET_INDIVIDUAL) {
                 None
             } else {
@@ -478,8 +480,13 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn destroy_command_pool(&self, _pool: command::CommandPool) {
-        //TODO?
+    fn destroy_command_pool(&self, pool: command::CommandPool) {
+        if let Some(vec) = pool.managed {
+            for cmd_buf in vec {
+                unsafe { &mut *cmd_buf.get() }
+                    .reset(&self.queue_pool);
+            }
+        }
     }
 
     fn create_render_pass<'a, IA, IS, ID>(
@@ -675,10 +682,12 @@ impl hal::Device<Backend> for Device {
         pipeline.set_vertex_function(Some(&vs_function));
 
         // Fragment shader
+        let fs_function;
         let fs_lib = match pipeline_desc.shaders.fragment {
             Some(ref ep) => {
                 let (lib, fun, _) = self.load_shader(ep, pipeline_layout)?;
-                pipeline.set_fragment_function(Some(&fun));
+                fs_function = fun;
+                pipeline.set_fragment_function(Some(&fs_function));
                 Some(lib)
             }
             None => None,
@@ -967,7 +976,8 @@ impl hal::Device<Backend> for Device {
     {
         // temporary command buffer to copy the contents from
         // allocated CPU-visible buffers to the target buffers
-        let cmd_buffer = self.queue.new_command_buffer_ref();
+        let mut pool = self.queue_pool.lock().unwrap();
+        let cmd_buffer = pool.borrow_command_buffer();
         let encoder = cmd_buffer.new_blit_command_encoder();
 
         for item in iter {
@@ -1008,7 +1018,8 @@ impl hal::Device<Backend> for Device {
     {
         // temporary command buffer to copy the contents from
         // the given buffers into the allocated CPU-visible buffers
-        let cmd_buffer = self.queue.new_command_buffer_ref();
+        let mut pool = self.queue_pool.lock().unwrap();
+        let cmd_buffer = pool.borrow_command_buffer();
         let encoder = cmd_buffer.new_blit_command_encoder();
         let mut num_copies = 0;
 
@@ -1295,8 +1306,12 @@ impl hal::Device<Backend> for Device {
             }
         }
 
+        // based on Metal validation error for view creation:
+        // failed assertion `BytesPerRow of a buffer-backed texture with pixelFormat(XXX) must be aligned to 256 bytes
+        const SIZE_MASK: u64 = 0xFF;
+
         memory::Requirements {
-            size: max_size,
+            size: (max_size + SIZE_MASK) & !SIZE_MASK,
             alignment: max_alignment,
             type_mask,
         }
@@ -1359,8 +1374,11 @@ impl hal::Device<Backend> for Device {
             None => return Err(buffer::ViewError::Unsupported),
         };
         let format_desc = format.surface_desc();
+        if format_desc.aspects != format::Aspects::COLOR {
+            // no depth/stencil support for buffer views here
+            return Err(buffer::ViewError::Unsupported)
+        }
         let block_count = (end_rough - start) * 8 / format_desc.bits as u64;
-        let size = block_count * (format_desc.bits as u64 / 8);
         let mtl_format = map_format(format).ok_or(buffer::ViewError::Unsupported)?;
 
         let descriptor = metal::TextureDescriptor::new();
@@ -1372,8 +1390,17 @@ impl hal::Device<Backend> for Device {
         descriptor.set_resource_options(buffer.res_options);
         descriptor.set_storage_mode(buffer.raw.storage_mode());
 
+        //TODO:
+        //The offset and bytesPerRow parameters must be byte aligned to the size returned by the
+        // minimumLinearTextureAlignmentForPixelFormat: method. The bytesPerRow parameter must also be
+        // greater than or equal to the size of one pixel, in bytes, multiplied by the pixel width of one row.
+
+        const STRIDE_MASK: u64 = 0xFF;
+        let size = block_count * (format_desc.bits as u64 / 8);
+        let stride = (size + STRIDE_MASK) & !STRIDE_MASK;
+
         Ok(n::BufferView {
-            raw: buffer.raw.new_texture_from_contents(&descriptor, start, size),
+            raw: buffer.raw.new_texture_from_contents(&descriptor, start, stride),
         })
     }
 
