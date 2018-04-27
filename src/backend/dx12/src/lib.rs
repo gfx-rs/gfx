@@ -494,7 +494,7 @@ impl Device {
         present_queue: ComPtr<d3d12::ID3D12CommandQueue>,
     ) -> Self {
         // Allocate descriptor heaps
-        let max_rtvs = 512; // TODO
+        let max_rtvs = 2048; // TODO
         let rtv_pool = native::DescriptorCpuPool {
             heap: Self::create_descriptor_heap_impl(
                 &mut device,
@@ -507,7 +507,7 @@ impl Device {
             max_size: max_rtvs as _,
         };
 
-        let max_dsvs = 64; // TODO
+        let max_dsvs = 128; // TODO
         let dsv_pool = native::DescriptorCpuPool {
             heap: Self::create_descriptor_heap_impl(
                 &mut device,
