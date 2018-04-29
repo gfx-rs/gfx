@@ -237,7 +237,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         map_format(format).map(|_| image::FormatProperties {
             max_extent: image::Extent { width, height, depth },
             max_levels: max_dimension.log2().ceil() as u8 + 1,
-            max_layers: 2048,
+            // 3D images enforce a single layer
+            max_layers: if dimensions == 3 { 1 } else { 2048 },
             sample_count_mask: 0x1,
             //TODO: buffers and textures have separate limits
             // Max buffer size is determined by feature set
