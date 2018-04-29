@@ -14,12 +14,11 @@ use hal::image::{Filter, Layout, SubresourceRange};
 use hal::query::{Query, QueryControl, QueryId};
 use hal::queue::{RawCommandQueue, RawSubmission};
 
-use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLClearColor, MTLIndexType, MTLSize, MTLOrigin};
-use cocoa::foundation::NSUInteger;
+use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLClearColor, MTLIndexType, MTLSize, MTLOrigin, CaptureManager};
+use cocoa::foundation::{NSUInteger, NSInteger};
 use block::{ConcreteBlock};
 use {conversions as conv, soft};
 
-use objc::runtime::{Class, Object};
 use smallvec::SmallVec;
 
 
@@ -610,14 +609,14 @@ fn exec_render(encoder: &metal::RenderCommandEncoderRef, command: &soft::RenderC
                 encoder.set_depth_stencil_state(depth_stencil_state);
             }
         }
-        Cmd::Draw { primitive_type, ref vertices, ref instances } => unsafe {
-            msg_send![*encoder,
-                drawPrimitives: primitive_type
-                vertexStart: vertices.start as NSUInteger
-                vertexCount: (vertices.end - vertices.start) as NSUInteger
-                instanceCount: (instances.end - instances.start) as NSUInteger
-                baseInstance: instances.start as NSUInteger
-            ];
+        Cmd::Draw { primitive_type, ref vertices, ref instances } =>  {
+            encoder.draw_primitives_instanced_base_instance(
+                primitive_type,
+                vertices.start as NSUInteger,
+                (vertices.end - vertices.start) as NSUInteger,
+                (instances.end - instances.start) as NSUInteger,
+                instances.start as NSUInteger
+            );
         }
         Cmd::DrawIndexed { ref index, primitive_type, ref indices, base_vertex, ref instances } => {
             let index_offset = indices.start as buffer::Offset * match index.index_type {
@@ -626,18 +625,16 @@ fn exec_render(encoder: &metal::RenderCommandEncoderRef, command: &soft::RenderC
             };
             // Metal requires `indexBufferOffset` alignment of 4
             assert_eq!((index_offset + index.offset) & 3, 0);
-            unsafe {
-                msg_send![*encoder,
-                    drawIndexedPrimitives: primitive_type
-                    indexCount: (indices.end - indices.start) as NSUInteger
-                    indexType: index.index_type
-                    indexBuffer: index.buffer.as_ref()
-                    indexBufferOffset: (index_offset + index.offset) as NSUInteger
-                    instanceCount: (instances.end - instances.start) as NSUInteger
-                    baseVertex: base_vertex as NSUInteger
-                    baseInstance: instances.start as NSUInteger
-                ];
-            }
+            encoder.draw_indexed_primitives_instanced(
+                primitive_type,
+                (indices.end - indices.start) as NSUInteger,
+                index.index_type,
+                &index.buffer,
+                (index_offset + index.offset) as NSUInteger,
+                (instances.end - instances.start) as NSUInteger,
+                base_vertex as NSInteger,
+                instances.start as NSUInteger,
+            );
         }
     }
 }
@@ -645,16 +642,16 @@ fn exec_render(encoder: &metal::RenderCommandEncoderRef, command: &soft::RenderC
 pub(crate) fn exec_blit(encoder: &metal::BlitCommandEncoderRef, command: &soft::BlitCommand) {
     use soft::BlitCommand as Cmd;
     match *command {
-        Cmd::CopyBuffer { ref src, ref dst, ref region } => unsafe {
-            msg_send![*encoder,
-                copyFromBuffer: src.as_ref()
-                sourceOffset: region.src as NSUInteger
-                toBuffer: dst.as_ref()
-                destinationOffset: region.dst as NSUInteger
-                size: region.size as NSUInteger
-            ];
+        Cmd::CopyBuffer { ref src, ref dst, ref region } => {
+            encoder.copy_from_buffer(
+                &src,
+                region.src as NSUInteger,
+                &dst,
+                region.dst as NSUInteger,
+                region.size as NSUInteger
+            );
         },
-        Cmd::CopyBufferToImage { ref src, ref dst, dst_desc, ref region } => unsafe {
+        Cmd::CopyBufferToImage { ref src, ref dst, dst_desc, ref region } => {
             let extent = conv::map_extent(region.image_extent);
             let (row_pitch, slice_pitch) = compute_pitches(&region, &dst_desc, &extent);
             let image_offset = &region.image_offset;
@@ -662,20 +659,20 @@ pub(crate) fn exec_blit(encoder: &metal::BlitCommandEncoderRef, command: &soft::
 
             for layer in r.layers.clone() {
                 let offset = region.buffer_offset + slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
-                msg_send![*encoder,
-                    copyFromBuffer: src.as_ref()
-                    sourceOffset: offset as NSUInteger
-                    sourceBytesPerRow: row_pitch as NSUInteger
-                    sourceBytesPerImage: slice_pitch as NSUInteger
-                    sourceSize: extent
-                    toTexture: dst.as_ref()
-                    destinationSlice: layer as NSUInteger
-                    destinationLevel: r.level as NSUInteger
-                    destinationOrigin: MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ }
-                ]
+                encoder.copy_from_buffer_to_texture(
+                    &src,
+                    offset as NSUInteger,
+                    row_pitch as NSUInteger,
+                    slice_pitch as NSUInteger,
+                    extent,
+                    &dst,
+                    layer as NSUInteger,
+                    r.level as NSUInteger,
+                    MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ }
+                );
             }
         },
-        Cmd::CopyImageToBuffer { ref src, src_desc, ref dst, ref region } => unsafe {
+        Cmd::CopyImageToBuffer { ref src, src_desc, ref dst, ref region } => {
             let extent = conv::map_extent(region.image_extent);
             let (row_pitch, slice_pitch) = compute_pitches(&region, &src_desc, &extent);
             let image_offset = &region.image_offset;
@@ -683,17 +680,17 @@ pub(crate) fn exec_blit(encoder: &metal::BlitCommandEncoderRef, command: &soft::
 
             for layer in r.layers.clone() {
                 let offset = region.buffer_offset + slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
-                msg_send![*encoder,
-                    copyFromTexture: src.as_ref()
-                    sourceSlice: layer as NSUInteger
-                    sourceLevel: r.level as NSUInteger
-                    sourceOrigin: MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ }
-                    sourceSize: extent
-                    toBuffer: dst.as_ref()
-                    destinationOffset: offset as NSUInteger
-                    destinationBytesPerRow: row_pitch as NSUInteger
-                    destinationBytesPerImage: slice_pitch as NSUInteger
-                ]
+                encoder.copy_from_texture_to_buffer(
+                    &src,
+                    layer as NSUInteger,
+                    r.level as NSUInteger,
+                    MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ },
+                    extent,
+                    &dst,
+                    offset as NSUInteger,
+                    row_pitch as NSUInteger,
+                    slice_pitch as NSUInteger
+                );
             }
         }
     }
@@ -841,13 +838,10 @@ impl RawCommandQueue<Backend> for QueuePoolPtr {
         }
 
         if cfg!(debug_assertions) || cfg!(feature = "metal_default_capture_scope") {
-            unsafe {
-                if let Some(mtl_capture_manager) = Class::get("MTLCaptureManager") {
-                    let shared_capture_manager: *mut Object = msg_send![mtl_capture_manager, sharedCaptureManager];
-                    let default_capture_scope: *mut Object = msg_send![shared_capture_manager, defaultCaptureScope];
-                    msg_send![default_capture_scope, endScope];
-                    msg_send![default_capture_scope, beginScope];
-                }
+            let shared_capture_manager = CaptureManager::shared();
+            if let Some(default_capture_scope) = shared_capture_manager.default_capture_scope() {
+                default_capture_scope.end_scope();
+                default_capture_scope.begin_scope();
             }
         }
     }
