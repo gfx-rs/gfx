@@ -222,18 +222,22 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         &self, format: format::Format, dimensions: u8, _tiling: image::Tiling,
         _usage: image::Usage, _storage_flags: image::StorageFlags,
     ) -> Option<image::FormatProperties> {
-        let desc = format.surface_desc();
         //TODO: actually query this data
+        let width = 4096;
+        let height = if dimensions >= 2 { 4096 } else { 1 };
+        let depth = if dimensions >= 3 { 4096 } else { 1 };
+        let max_dimension = 4096f32; // Max of {width, height, depth}
+        
         map_format(format).map(|_| image::FormatProperties {
-            max_extent: image::Extent {
-                width: 4096,
-                height: if dimensions >= 2 { 4096 } else { 1 },
-                depth: if dimensions >= 3 { 4096 } else { 1 },
-            },
-            max_levels: if format::Aspects::COLOR.contains(desc.aspects) { 16 } else { 1 },
-            max_layers: 2048,
+            max_extent: image::Extent { width, height, depth },
+            max_levels: max_dimension.log2().ceil() as u8 + 1,
+            // 3D images enforce a single layer
+            max_layers: if dimensions == 3 { 1 } else { 2048 },
             sample_count_mask: 0x1,
-            max_resource_size: 256 << 20,
+            //TODO: buffers and textures have separate limits
+            // Max buffer size is determined by feature set
+            // Max texture size does not appear to be documented publicly
+            max_resource_size: 1 << 31,
         })
     }
 
