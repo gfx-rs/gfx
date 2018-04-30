@@ -919,6 +919,9 @@ impl hal::Instance for Instance {
                     min_texel_buffer_offset_alignment: 1, // TODO
                     min_uniform_buffer_offset_alignment: 256, // Required alignment for CBVs
                     min_storage_buffer_offset_alignment: 1, // TODO
+                    framebuffer_color_samples_count: 0b111,
+                    framebuffer_depth_samples_count: 0b111,
+                    framebuffer_stencil_samples_count: 0b111,
                 },
                 private_caps: Capabilities {
                     heterogeneous_resource_heaps,

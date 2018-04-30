@@ -293,6 +293,14 @@ pub struct CommandBuffer {
 unsafe impl Send for CommandBuffer { }
 unsafe impl Sync for CommandBuffer { }
 
+// Insetion point for subpasses.
+enum BarrierPoint {
+    // Pre barriers are inserted of the beginning when switching into a new subpass.
+    Pre,
+    // Post barriers are applied after exectuing the user defined commands.
+    Post,
+}
+
 impl CommandBuffer {
     pub(crate) fn new(
         raw: ComPtr<d3d12::ID3D12GraphicsCommandList>,
@@ -333,10 +341,13 @@ impl CommandBuffer {
         self.vertex_buffer_views = [NULL_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS];
     }
 
-    fn insert_subpass_barriers(&self) {
+    fn insert_subpass_barriers(&self, insertion: BarrierPoint) {
         let state = self.pass_cache.as_ref().unwrap();
-        let proto_barriers = match state.render_pass.subpasses.get(self.cur_subpass) {
-            Some(subpass) => &subpass.pre_barriers,
+        let proto_barriers =  match state.render_pass.subpasses.get(self.cur_subpass) {
+            Some(subpass) => match insertion {
+                BarrierPoint::Pre => &subpass.pre_barriers,
+                BarrierPoint::Post => &subpass.post_barriers,
+            },
             None => &state.render_pass.post_barriers,
         };
 
@@ -411,6 +422,29 @@ impl CommandBuffer {
                     self.clear_depth_stencil_view(handle, depth, stencil, &[state.target_rect]);
                 }
             }
+        }
+    }
+
+    fn resolve_attachments(&self) {
+        let state = self.pass_cache.as_ref().unwrap();
+        let subpass = &state.render_pass.subpasses[self.cur_subpass];
+
+        for (i, resolve_attachment) in subpass.resolve_attachments.iter().enumerate() {
+            let (dst_attachment, _) = *resolve_attachment;
+            let (src_attachment, _) = subpass.color_attachments[i];
+
+            let resolve_src = state.framebuffer.attachments[src_attachment];
+            let resolve_dst = state.framebuffer.attachments[dst_attachment];
+
+            unsafe {
+            self.raw.ResolveSubresource(
+                resolve_dst.resource,
+                0, // TODO
+                resolve_src.resource,
+                0, // TODO
+                resolve_dst.dxgi_format,
+            );
+        }
         }
     }
 
@@ -879,19 +913,25 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             attachment_clears,
         });
         self.cur_subpass = 0;
-        self.insert_subpass_barriers();
+        self.insert_subpass_barriers(BarrierPoint::Pre);
         self.bind_targets();
     }
 
     fn next_subpass(&mut self, _contents: com::SubpassContents) {
+        self.insert_subpass_barriers(BarrierPoint::Post);
+        self.resolve_attachments();
+
         self.cur_subpass += 1;
-        self.insert_subpass_barriers();
+        self.insert_subpass_barriers(BarrierPoint::Pre);
         self.bind_targets();
     }
 
     fn end_render_pass(&mut self) {
+        self.insert_subpass_barriers(BarrierPoint::Post);
+        self.resolve_attachments();
+
         self.cur_subpass = !0;
-        self.insert_subpass_barriers();
+        self.insert_subpass_barriers(BarrierPoint::Pre);
         self.pass_cache = None;
     }
 

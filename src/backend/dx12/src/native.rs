@@ -58,7 +58,9 @@ pub struct SubpassDesc {
     pub(crate) color_attachments: Vec<pass::AttachmentRef>,
     pub(crate) depth_stencil_attachment: Option<pass::AttachmentRef>,
     pub(crate) input_attachments: Vec<pass::AttachmentRef>,
+    pub(crate) resolve_attachments: Vec<pass::AttachmentRef>,
     pub(crate) pre_barriers: Vec<BarrierDesc>,
+    pub(crate) post_barriers: Vec<BarrierDesc>,
 }
 
 impl SubpassDesc {
@@ -68,6 +70,7 @@ impl SubpassDesc {
         self.color_attachments.iter()
             .chain(self.depth_stencil_attachment.iter())
             .chain(self.input_attachments.iter())
+            .chain(self.resolve_attachments.iter())
             .any(|&(id, _)| id == at_id)
     }
 }
@@ -196,6 +199,8 @@ pub struct ImageView {
     pub(crate) handle_dsv: Option<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>,
     #[derivative(Debug="ignore")]
     pub(crate) handle_uav: Option<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>,
+    // Required for attachment resolves.
+    pub(crate) dxgi_format: DXGI_FORMAT,
 }
 unsafe impl Send for ImageView { }
 unsafe impl Sync for ImageView { }
