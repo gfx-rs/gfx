@@ -35,7 +35,7 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
         T: IntoIterator,
         T::Item: Borrow<AttachmentClear>,
         U: IntoIterator,
-        U::Item: Borrow<pso::Rect>,
+        U::Item: Borrow<pso::ClearRect>,
     {
         self.0.clear_attachments(clears, rects)
     }

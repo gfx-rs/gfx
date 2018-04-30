@@ -22,6 +22,16 @@ pub struct Rect {
     pub h: u16,
 }
 
+/// A simple struct describing a rect with integer coordinates.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ClearRect {
+    /// 2D region.
+    pub rect: Rect,
+    /// Layer range.
+    pub layers: Range<image::Layer>,
+}
+
 /// A viewport, generally equating to a window on a display.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

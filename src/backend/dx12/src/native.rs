@@ -215,6 +215,7 @@ pub struct ImageView {
     pub(crate) num_levels: image::Level,
     pub(crate) mip_levels: (image::Level, image::Level),
     pub(crate) layers: (image::Layer, image::Layer),
+    pub(crate) kind: image::Kind,
 }
 unsafe impl Send for ImageView { }
 unsafe impl Sync for ImageView { }

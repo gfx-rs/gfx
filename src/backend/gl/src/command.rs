@@ -650,7 +650,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::AttachmentClear>,
         U: IntoIterator,
-        U::Item: Borrow<pso::Rect>,
+        U::Item: Borrow<pso::ClearRect>,
     {
         unimplemented!()
     }

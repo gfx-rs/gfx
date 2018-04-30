@@ -550,8 +550,8 @@ impl Device {
         }
     }
 
-    fn view_image_as_render_target(
-        &self, info: ViewInfo
+    pub(crate) fn view_image_as_render_target_impl(
+        device: &mut ComPtr<d3d12::ID3D12Device>, pool: &mut n::DescriptorCpuPool, info: ViewInfo
     ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
         #![allow(non_snake_case)]
 
@@ -626,12 +626,21 @@ impl Device {
             }
         };
 
-        let handle = self.rtv_pool.lock().unwrap().alloc_handles(1).cpu;
+        let handle = pool.alloc_handles(1).cpu;
+
         unsafe {
-            self.raw.clone().CreateRenderTargetView(info.resource, &desc, handle);
+            device.CreateRenderTargetView(info.resource, &desc, handle);
         }
 
         Ok(handle)
+    }
+
+    fn view_image_as_render_target(
+        &self, info: ViewInfo
+    ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
+        let mut pool = self.rtv_pool.lock().unwrap();
+
+        Self::view_image_as_render_target_impl(&mut self.raw.clone(), &mut *pool, info)
     }
 
     fn view_image_as_depth_stencil(
@@ -2163,6 +2172,7 @@ impl d::Device<B> for Device {
             num_levels,
             mip_levels,
             layers,
+            kind: info.kind,
         })
     }
 

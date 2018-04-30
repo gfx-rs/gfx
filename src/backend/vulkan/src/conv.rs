@@ -492,6 +492,14 @@ pub fn map_rect(rect: &pso::Rect) -> vk::Rect2D {
     }
 }
 
+pub fn map_clear_rect(rect: &pso::ClearRect) -> vk::ClearRect {
+    vk::ClearRect {
+        base_array_layer: rect.layers.start as _,
+        layer_count: (rect.layers.end - rect.layers.start) as _,
+        rect: map_rect(&rect.rect),
+    }
+}
+
 pub fn map_viewport(vp: &pso::Viewport) -> vk::Viewport {
     vk::Viewport {
         x: vp.rect.x as _,
