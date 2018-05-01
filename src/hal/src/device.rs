@@ -155,7 +155,9 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         max_buffers: usize,
     ) -> CommandPool<B, C> {
         let raw = self.create_command_pool(group.family(), flags);
-        CommandPool::new(raw, max_buffers)
+        let mut pool = unsafe { CommandPool::new(raw) };
+        pool.reserve(max_buffers);
+        pool
     }
 
     /// Destroys a command pool.
