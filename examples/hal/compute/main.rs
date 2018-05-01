@@ -149,7 +149,7 @@ fn main() {
         device.release_mapping_reader(reader);
     }
 
-    device.destroy_command_pool(command_pool.downgrade());
+    device.destroy_command_pool(command_pool.into_raw());
     device.destroy_descriptor_pool(desc_pool);
     device.destroy_descriptor_set_layout(set_layout);
     device.destroy_shader_module(shader);

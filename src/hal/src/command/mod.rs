@@ -106,6 +106,16 @@ impl<'a, B: Backend, C, S: Shot, L: Level> CommandBuffer<'a, B, C, S, L> {
         }
     }
 
+    /// Get a reference to the raw command buffer
+    pub fn as_raw(&self) -> &B::CommandBuffer {
+        &*self.raw
+    }
+
+    /// Get a mutable reference to the raw command buffer
+    pub fn as_raw_mut(&mut self) -> &mut B::CommandBuffer {
+        self.raw
+    }
+
     /// Finish recording commands to the command buffers.
     ///
     /// The command buffer will be consumed and can't be modified further.

@@ -927,7 +927,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         self.queue_group.queues[0].submit(submission, Some(&copy_fence));
         self.device.wait_for_fence(&copy_fence, !0);
         self.device.destroy_fence(copy_fence);
-        self.device.destroy_command_pool(command_pool.downgrade());
+        self.device.destroy_command_pool(command_pool.into_raw());
 
         let mapping = self
             .device
@@ -1035,7 +1035,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         self.queue_group.queues[0].submit(submission, Some(&copy_fence));
         self.device.wait_for_fence(&copy_fence, !0);
         self.device.destroy_fence(copy_fence);
-        self.device.destroy_command_pool(command_pool.downgrade());
+        self.device.destroy_command_pool(command_pool.into_raw());
 
         let mapping = self
             .device
@@ -1061,6 +1061,6 @@ impl<B: hal::Backend, C> Drop for Scene<B, C> {
         }
         //TODO: free those properly
         let _ = &self.queue_group;
-        self.device.destroy_command_pool(self.command_pool.take().unwrap().downgrade());
+        self.device.destroy_command_pool(self.command_pool.take().unwrap().into_raw());
     }
 }

@@ -77,14 +77,29 @@ pub trait RawCommandQueue<B: Backend>: Any + Send + Sync {
 pub struct CommandQueue<B: Backend, C>(B::CommandQueue, PhantomData<C>);
 
 impl<B: Backend, C> CommandQueue<B, C> {
+    /// Create typed command queue from raw.
+    /// 
+    /// # Safety
+    /// 
+    /// `<C as Capability>::supported_by(queue_type)` must return true
+    /// for `queue_type` being the type this `raw` queue.
+    pub unsafe fn new(raw: B::CommandQueue) -> Self {
+        CommandQueue(raw, PhantomData)
+    }
+
     /// Get a reference to the raw command queue
     pub fn as_raw(&self) -> &B::CommandQueue {
         &self.0
     }
 
     /// Get a mutable reference to the raw command queue
-    pub fn as_mut(&mut self) -> &mut B::CommandQueue {
+    pub fn as_raw_mut(&mut self) -> &mut B::CommandQueue {
         &mut self.0
+    }
+
+    /// Downgrade a typed command queue to untyped one.
+    pub fn into_raw(self) -> B::CommandQueue {
+        self.0
     }
 
     /// Submits the submission command buffers to the queue for execution.
@@ -116,5 +131,15 @@ impl<B: Backend, C> CommandQueue<B, C> {
     /// Wait for the queue to idle.
     pub fn wait_idle(&self) -> Result<(), HostExecutionError> {
         self.0.wait_idle()
+    }
+
+    /// Downgrade a command queue to a lesser capability type.
+    pub fn downgrade<D>(&mut self) -> &mut CommandQueue<B, D>
+    where
+        C: Supports<D>,
+    {
+        unsafe {
+            ::std::mem::transmute(self)
+        }
     }
 }

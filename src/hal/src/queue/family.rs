@@ -8,7 +8,6 @@ use queue::capability::{Capability, Graphics, Compute};
 use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::marker::PhantomData;
 
 /// General information about a queue family, available upon adapter discovery.
 ///
@@ -60,7 +59,7 @@ impl<B: Backend, C: Capability> QueueGroup<B, C> {
             family: id,
             queues: raw.queues
                 .into_iter()
-                .map(|q| CommandQueue(q, PhantomData))
+                .map(|q| unsafe { CommandQueue::new(q) })
                 .collect(),
         }
     }
