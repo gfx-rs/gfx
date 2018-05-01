@@ -619,7 +619,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             min_texel_buffer_offset_alignment: limits.min_texel_buffer_offset_alignment as _,
             min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as _,
             min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment as _,
-        }
+            framebuffer_color_samples_count: limits.framebuffer_color_sample_counts.flags() as _,
+            framebuffer_depth_samples_count: limits.framebuffer_depth_sample_counts.flags() as _,
+            framebuffer_stencil_samples_count: limits.framebuffer_stencil_sample_counts.flags() as _,        }
     }
 }
 

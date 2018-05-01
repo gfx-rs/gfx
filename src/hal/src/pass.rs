@@ -76,6 +76,8 @@ pub struct Attachment {
     /// creating dummy renderpasses, which are used as placeholder for compatible
     /// renderpasses.
     pub format: Option<Format>,
+    /// Number of samples.
+    pub samples: image::NumSamples,
     /// Load and store operations of the attachment
     pub ops: AttachmentOps,
     /// Load and store operations of the stencil aspect, if any
