@@ -1006,8 +1006,8 @@ impl d::Device<B> for Device {
             for (i, &(id, _layout)) in sub.colors.iter().enumerate() {
                 let dst_state = att_infos[id].target_state;
                 let state = match sub.resolves.get(i) {
-                    Some(_) => SubState::New(dst_state),
-                    None => SubState::Resolve(dst_state),
+                    Some(_) => SubState::Resolve(dst_state),
+                    None => SubState::New(dst_state),
                 };
                 let old = mem::replace(&mut att_infos[id].sub_states[sid], state);
                 debug_assert_eq!(SubState::Undefined, old);
