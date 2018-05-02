@@ -54,6 +54,7 @@ macro_rules! gfx_graphics_pipeline {
                                 let attach_id = attachments.len();
                                 attachments.push(cpass::Attachment {
                                     format: Some(attach.format),
+                                    samples: 1,
                                     ops: attach.ops,
                                     stencil_ops: attach.stencil_ops,
                                     layouts: attach.required_layout .. attach.required_layout,
@@ -66,6 +67,7 @@ macro_rules! gfx_graphics_pipeline {
                             depth_stencil: None, //TODO
                             inputs: &[],
                             preserves: &[],
+                            resolves: &[],
                         };
 
                         device.create_render_pass_raw(&attachments[..], &[subpass], &[])

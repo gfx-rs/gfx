@@ -852,7 +852,7 @@ impl d::Device<B> for Device {
         let desc = d3d12::D3D12_HEAP_DESC {
             SizeInBytes: size,
             Properties: properties,
-            Alignment: 0, //Warning: has to be 4K for MSAA targets
+            Alignment: d3d12::D3D12_DEFAULT_MSAA_RESOURCE_PLACEMENT_ALIGNMENT as _, // TODO: not always..?
             Flags: match mem_group {
                 0 => d3d12::D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES,
                 1 => d3d12::D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS,
@@ -969,6 +969,8 @@ impl d::Device<B> for Device {
         #[derive(Copy, Clone, Debug, PartialEq)]
         pub enum SubState {
             New(d3d12::D3D12_RESOURCE_STATES),
+            // Color attachment which will be resolved at the end of the subpass
+            Resolve(d3d12::D3D12_RESOURCE_STATES),
             Preserve,
             Undefined,
         }
@@ -1001,8 +1003,12 @@ impl d::Device<B> for Device {
         // Fill out subpass known layouts
         for (sid, sub) in subpasses.iter().enumerate() {
             let sub = sub.borrow();
-            for &(id, _layout) in sub.colors {
-                let state = SubState::New(att_infos[id].target_state);
+            for (i, &(id, _layout)) in sub.colors.iter().enumerate() {
+                let dst_state = att_infos[id].target_state;
+                let state = match sub.resolves.get(i) {
+                    Some(_) => SubState::Resolve(dst_state),
+                    None => SubState::New(dst_state),
+                };
                 let old = mem::replace(&mut att_infos[id].sub_states[sid], state);
                 debug_assert_eq!(SubState::Undefined, old);
             }
@@ -1013,6 +1019,11 @@ impl d::Device<B> for Device {
             }
             for &(id, _layout) in sub.inputs {
                 let state = SubState::New(d3d12::D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+                let old = mem::replace(&mut att_infos[id].sub_states[sid], state);
+                debug_assert_eq!(SubState::Undefined, old);
+            }
+            for &(id, _layout) in sub.resolves {
+                let state = SubState::New(d3d12::D3D12_RESOURCE_STATE_RESOLVE_DEST);
                 let old = mem::replace(&mut att_infos[id].sub_states[sid], state);
                 debug_assert_eq!(SubState::Undefined, old);
             }
@@ -1050,41 +1061,68 @@ impl d::Device<B> for Device {
                 }
             }
 
+            // Subpass barriers
             let mut pre_barriers = Vec::new();
+            let mut post_barriers = Vec::new();
             for (att_id, ai) in att_infos.iter_mut().enumerate() {
-                let state_dst = match ai.sub_states[sid] {
+                // Barrier from previous subpass to current or following subpasses.
+                match ai.sub_states[sid] {
                     SubState::Preserve => {
                         ai.barrier_start_index = rp.subpasses.len() + 1;
-                        continue;
                     },
-                    SubState::New(state) if state != ai.last_state => state,
-                    _ => continue,
+                    SubState::New(state) if state != ai.last_state => {
+                        let barrier = n::BarrierDesc::new(att_id, ai.last_state .. state);
+                        match rp.subpasses.get_mut(ai.barrier_start_index) {
+                            Some(past_subpass) => {
+                                let split = barrier.split();
+                                past_subpass.pre_barriers.push(split.start);
+                                pre_barriers.push(split.end);
+                            },
+                            None => pre_barriers.push(barrier),
+                        }
+                        ai.last_state = state;
+                        ai.barrier_start_index = rp.subpasses.len() + 1;
+                    },
+                    SubState::Resolve(state) => {
+                        // 1. Standard pre barrier to update state from previous pass into desired substate.
+                        if state != ai.last_state {
+                            let barrier = n::BarrierDesc::new(att_id, ai.last_state .. state);
+                            match rp.subpasses.get_mut(ai.barrier_start_index) {
+                                Some(past_subpass) => {
+                                    let split = barrier.split();
+                                    past_subpass.pre_barriers.push(split.start);
+                                    pre_barriers.push(split.end);
+                                },
+                                None => pre_barriers.push(barrier),
+                            }
+                        }
+
+                        // 2. Post Barrier at the end of the subpass into RESOLVE_SOURCE.
+                        let resolve_state = d3d12::D3D12_RESOURCE_STATE_RESOLVE_SOURCE;
+                        let barrier = n::BarrierDesc::new(att_id, state .. resolve_state);
+                        post_barriers.push(barrier);
+
+                        ai.last_state = resolve_state;
+                        ai.barrier_start_index = rp.subpasses.len() + 1;
+                    },
+                    _ => { }
                 };
-                let barrier = n::BarrierDesc::new(att_id, ai.last_state .. state_dst);
-                match rp.subpasses.get_mut(ai.barrier_start_index) {
-                    Some(past_subpass) => {
-                        let split = barrier.split();
-                        past_subpass.pre_barriers.push(split.start);
-                        pre_barriers.push(split.end);
-                    },
-                    None => pre_barriers.push(barrier),
-                }
-                ai.last_state = state_dst;
-                ai.barrier_start_index = rp.subpasses.len() + 1;
             }
 
             rp.subpasses.push(n::SubpassDesc {
                 color_attachments: subpasses[sid].borrow().colors.iter().cloned().collect(),
                 depth_stencil_attachment: subpasses[sid].borrow().depth_stencil.cloned(),
                 input_attachments: subpasses[sid].borrow().inputs.iter().cloned().collect(),
+                resolve_attachments: subpasses[sid].borrow().resolves.iter().cloned().collect(),
                 pre_barriers,
+                post_barriers,
             });
         }
         // if this fails, our graph has cycles
         assert_eq!(rp.subpasses.len(), subpasses.len());
         assert!(deps_left.into_iter().all(|count| count == !0));
 
-        // take care of the post-pass transitions
+        // take care of the post-pass transitions at the end of the renderpass.
         for (att_id, (ai, att)) in att_infos.iter().zip(attachments.iter()).enumerate() {
             let state_dst = conv::map_image_resource_state(image::Access::empty(), att.layouts.end);
             if state_dst == ai.last_state {
@@ -1382,6 +1420,14 @@ impl d::Device<B> for Device {
             (rtvs, num_rtvs)
         };
 
+        let sample_desc = dxgitype::DXGI_SAMPLE_DESC {
+            Count: match desc.multisampling {
+                Some(ref ms) => ms.rasterization_samples as _,
+                None => 1,
+            },
+            Quality: 0,
+        };
+
         // Setup pipeline description
         let pso_desc = d3d12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
             pRootSignature: desc.layout.raw,
@@ -1398,7 +1444,10 @@ impl d::Device<B> for Device {
                 RasterizedStream: 0,
             },
             BlendState: d3d12::D3D12_BLEND_DESC {
-                AlphaToCoverageEnable: if desc.blender.alpha_coverage { TRUE } else { FALSE },
+                AlphaToCoverageEnable: desc
+                    .multisampling
+                    .as_ref()
+                    .map_or(FALSE, |ms| if ms.alpha_coverage { TRUE } else { FALSE }),
                 IndependentBlendEnable: TRUE,
                 RenderTarget: conv::map_render_targets(&desc.blender.targets),
             },
@@ -1422,10 +1471,7 @@ impl d::Device<B> for Device {
                         .and_then(|f| conv::map_format_dsv(f.base_format().0))
                 )
                 .unwrap_or(dxgiformat::DXGI_FORMAT_UNKNOWN),
-            SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
-                Count: 1, // TODO
-                Quality: 0, // TODO
-            },
+            SampleDesc: sample_desc,
             NodeMask: 0,
             CachedPSO: d3d12::D3D12_CACHED_PIPELINE_STATE {
                 pCachedBlob: ptr::null(),
@@ -1520,7 +1566,7 @@ impl d::Device<B> for Device {
         &self,
         _renderpass: &n::RenderPass,
         attachments: I,
-        _extent: image::Extent,
+        extent: image::Extent,
     ) -> Result<n::Framebuffer, d::FramebufferError>
     where
         I: IntoIterator,
@@ -1528,6 +1574,7 @@ impl d::Device<B> for Device {
     {
         Ok(n::Framebuffer {
             attachments: attachments.into_iter().map(|att| *att.borrow()).collect(),
+            layers: extent.depth as _,
         })
     }
 
@@ -1868,6 +1915,10 @@ impl d::Device<B> for Device {
         _swizzle: format::Swizzle,
         range: image::SubresourceRange,
     ) -> Result<n::ImageView, image::ViewError> {
+        let num_levels = image.num_levels;
+        let mip_levels = (range.levels.start, range.levels.end);
+        let layers = (range.layers.start, range.layers.end);
+
         let info = ViewInfo {
             resource: image.resource,
             kind: image.kind,
@@ -1904,6 +1955,10 @@ impl d::Device<B> for Device {
             } else {
                 None
             },
+            dxgi_format: image.dxgi_format,
+            num_levels,
+            mip_levels,
+            layers,
         })
     }
 

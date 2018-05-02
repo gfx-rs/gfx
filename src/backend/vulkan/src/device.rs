@@ -298,6 +298,7 @@ impl d::Device<B> for Device {
         let mut dynamic_states             = Vec::with_capacity(descs.len() * MAX_DYNAMIC_STATES);
         let mut viewports                  = Vec::with_capacity(descs.len());
         let mut scissors                   = Vec::with_capacity(descs.len());
+        let mut sample_masks               = Vec::with_capacity(descs.len());
 
         let mut c_strings = Vec::new(); // hold the C strings temporarily
         let mut make_stage = |stage, source: &pso::EntryPoint<'a, B>| {
@@ -471,17 +472,39 @@ impl d::Device<B> for Device {
                 },
             });
 
-            info_multisample_states.push(vk::PipelineMultisampleStateCreateInfo {
-                s_type: vk::StructureType::PipelineMultisampleStateCreateInfo,
-                p_next: ptr::null(),
-                flags: vk::PipelineMultisampleStateCreateFlags::empty(),
-                rasterization_samples: vk::SAMPLE_COUNT_1_BIT, // TODO
-                sample_shading_enable: vk::VK_FALSE, // TODO
-                min_sample_shading: 0.0,  // TODO
-                p_sample_mask: ptr::null(), // TODO
-                alpha_to_coverage_enable: vk::VK_FALSE, // TODO
-                alpha_to_one_enable: vk::VK_FALSE, // TODO
-            });
+            let multisampling_state = match desc.multisampling {
+                Some(ref ms) => {
+                    let sample_mask = [
+                        (ms.sample_mask & 0xFFFFFFFF) as u32,
+                        ((ms.sample_mask >> 32) & 0xFFFFFFFF) as u32,
+                    ];
+                    sample_masks.push(sample_mask);
+
+                    vk::PipelineMultisampleStateCreateInfo {
+                        s_type: vk::StructureType::PipelineMultisampleStateCreateInfo,
+                        p_next: ptr::null(),
+                        flags: vk::PipelineMultisampleStateCreateFlags::empty(),
+                        rasterization_samples: vk::SampleCountFlags::from_flags_truncate(ms.rasterization_samples as _),
+                        sample_shading_enable: ms.sample_shading.is_some() as _,
+                        min_sample_shading: ms.sample_shading.unwrap_or(0.0),
+                        p_sample_mask: sample_masks.last().unwrap().as_ptr(),
+                        alpha_to_coverage_enable: ms.alpha_coverage as _,
+                        alpha_to_one_enable: ms.alpha_to_one as _,
+                    }
+                },
+                None => vk::PipelineMultisampleStateCreateInfo {
+                    s_type: vk::StructureType::PipelineMultisampleStateCreateInfo,
+                    p_next: ptr::null(),
+                    flags: vk::PipelineMultisampleStateCreateFlags::empty(),
+                    rasterization_samples: vk::SAMPLE_COUNT_1_BIT,
+                    sample_shading_enable: vk::VK_FALSE,
+                    min_sample_shading: 0.0,
+                    p_sample_mask: ptr::null(),
+                    alpha_to_coverage_enable: vk::VK_FALSE,
+                    alpha_to_one_enable: vk::VK_FALSE,
+                },
+            };
+            info_multisample_states.push(multisampling_state);
 
             let depth_stencil = desc.depth_stencil.unwrap_or_default();
             let (depth_test_enable, depth_write_enable, depth_compare_op) = match depth_stencil.depth {
@@ -931,10 +954,7 @@ impl d::Device<B> for Device {
         let flags = conv::map_image_flags(storage_flags);
         let extent = conv::map_extent(kind.extent());
         let array_layers = kind.num_layers();
-        let samples = match kind.num_samples() {
-            1 => vk::SAMPLE_COUNT_1_BIT,
-            _ => unimplemented!()
-        };
+        let samples = kind.num_samples() as u32;
         let image_type = match kind {
             image::Kind::D1(..) => vk::ImageType::Type1d,
             image::Kind::D2(..) => vk::ImageType::Type2d,
@@ -950,7 +970,7 @@ impl d::Device<B> for Device {
             extent: extent.clone(),
             mip_levels: mip_levels as u32,
             array_layers: array_layers as u32,
-            samples,
+            samples: vk::SampleCountFlags::from_flags_truncate(samples),
             tiling: conv::map_tiling(tiling),
             usage: conv::map_image_usage(usage),
             sharing_mode: vk::SharingMode::Exclusive, // TODO:

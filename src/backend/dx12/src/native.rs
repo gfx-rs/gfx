@@ -58,7 +58,9 @@ pub struct SubpassDesc {
     pub(crate) color_attachments: Vec<pass::AttachmentRef>,
     pub(crate) depth_stencil_attachment: Option<pass::AttachmentRef>,
     pub(crate) input_attachments: Vec<pass::AttachmentRef>,
+    pub(crate) resolve_attachments: Vec<pass::AttachmentRef>,
     pub(crate) pre_barriers: Vec<BarrierDesc>,
+    pub(crate) post_barriers: Vec<BarrierDesc>,
 }
 
 impl SubpassDesc {
@@ -68,6 +70,7 @@ impl SubpassDesc {
         self.color_attachments.iter()
             .chain(self.depth_stencil_attachment.iter())
             .chain(self.input_attachments.iter())
+            .chain(self.resolve_attachments.iter())
             .any(|&(id, _)| id == at_id)
     }
 }
@@ -131,6 +134,8 @@ unsafe impl Sync for PipelineLayout { }
 #[derive(Debug, Clone)]
 pub struct Framebuffer {
     pub(crate) attachments: Vec<ImageView>,
+    // Number of layers in the render area. Required for subpass resolves.
+    pub(crate) layers: image::Layer,
 }
 
 #[derive(Debug)]
@@ -196,9 +201,20 @@ pub struct ImageView {
     pub(crate) handle_dsv: Option<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>,
     #[derivative(Debug="ignore")]
     pub(crate) handle_uav: Option<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>,
+    // Required for attachment resolves.
+    pub(crate) dxgi_format: DXGI_FORMAT,
+    pub(crate) num_levels: image::Level,
+    pub(crate) mip_levels: (image::Level, image::Level),
+    pub(crate) layers: (image::Layer, image::Layer),
 }
 unsafe impl Send for ImageView { }
 unsafe impl Sync for ImageView { }
+
+impl ImageView {
+    pub fn calc_subresource(&self, mip_level: UINT, layer: UINT) -> UINT {
+        mip_level + (layer * self.num_levels as UINT)
+    }
+}
 
 #[derive(Derivative)]
 #[derivative(Debug)]

@@ -15,6 +15,8 @@ pub struct Subpass {
     pub inputs: Vec<AttachmentRef>,
     #[serde(default)]
     pub preserves: Vec<String>,
+    #[serde(default)]
+    pub resolves: Vec<AttachmentRef>,
 }
 
 #[derive(Debug, Deserialize)]

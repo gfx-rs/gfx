@@ -227,7 +227,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let height = if dimensions >= 2 { 4096 } else { 1 };
         let depth = if dimensions >= 3 { 4096 } else { 1 };
         let max_dimension = 4096f32; // Max of {width, height, depth}
-        
+
         map_format(format).map(|_| image::FormatProperties {
             max_extent: image::Extent { width, height, depth },
             max_levels: max_dimension.log2().ceil() as u8 + 1,
@@ -266,6 +266,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
             max_compute_group_count: [16; 3], // TODO
             max_compute_group_size: [64; 3], // TODO
+
+            framebuffer_color_samples_count: 0b101, // TODO
+            framebuffer_depth_samples_count: 0b101, // TODO
+            framebuffer_stencil_samples_count: 0b101, // TODO
         }
     }
 }
@@ -514,7 +518,7 @@ impl hal::Device<Backend> for Device {
                 Some(f) => f.is_depth(),
                 None => continue,
             };
-            
+
             let mtl_attachment: &metal::RenderPassAttachmentDescriptorRef = if is_depth {
                 pass
                     .depth_attachment()

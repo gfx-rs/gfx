@@ -76,6 +76,8 @@ pub struct Attachment {
     /// creating dummy renderpasses, which are used as placeholder for compatible
     /// renderpasses.
     pub format: Option<Format>,
+    /// Number of samples.
+    pub samples: image::NumSamples,
     /// Load and store operations of the attachment
     pub ops: AttachmentOps,
     /// Load and store operations of the stencil aspect, if any
@@ -125,8 +127,14 @@ pub struct SubpassDesc<'a> {
     pub colors: &'a [AttachmentRef],
     /// Which attachments will be used as depth/stencil buffers.
     pub depth_stencil: Option<&'a AttachmentRef>,
-    /// Which attachments will be used by this subpass.
+    /// Which attachments will be used as input attachments.
     pub inputs: &'a [AttachmentRef],
+    /// Which attachments will be used as resolve destinations.
+    ///
+    /// The number of resolve attachments may be zero or equal to the number of color attachments.
+    /// At the end of a subpass the color attachment will be resolved to the corresponding
+    /// resolve attachment. The resolve attachment must not be multisampled.
+    pub resolves: &'a [AttachmentRef],
     /// Attachments that are not used by the subpass but must be preserved to be
     /// passed on to subsequent passes.
     pub preserves: &'a [AttachmentId],

@@ -1,6 +1,6 @@
 //! Graphics pipeline descriptor.
 
-use {pass, Backend, Primitive};
+use {image, pass, Backend, Primitive};
 use super::{BasePipeline, EntryPoint, PipelineCreationFlags};
 use super::input_assembler::{AttributeDesc, InputAssemblerDesc, VertexBufferDesc};
 use super::output_merger::{ColorBlendDesc, DepthStencilDesc};
@@ -105,6 +105,8 @@ pub struct GraphicsPipelineDesc<'a, B: Backend> {
     pub blender: BlendDesc,
     /// Depth stencil (DSV)
     pub depth_stencil: Option<DepthStencilDesc>,
+    /// Multisampling.
+    pub multisampling: Option<Multisampling>,
     /// Static pipeline states.
     pub baked_states: BakedStates,
     /// Pipeline layout.
@@ -135,6 +137,7 @@ impl<'a, B: Backend> GraphicsPipelineDesc<'a, B> {
             input_assembler: InputAssemblerDesc::new(primitive),
             blender: BlendDesc::default(),
             depth_stencil: None,
+            multisampling: None,
             baked_states: BakedStates::default(),
             layout,
             subpass,
@@ -218,7 +221,6 @@ pub struct Rasterizer {
     pub depth_bias: Option<DepthBias>,
     /// Controls how triangles will be rasterized depending on their overlap with pixels.
     pub conservative: bool,
-    //TODO: multisampling
 }
 
 impl Rasterizer {
@@ -237,10 +239,6 @@ impl Rasterizer {
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BlendDesc {
-    /// Toggles alpha-to-coverage multisampling, which can produce nicer edges
-    /// when many partially-transparent polygons are overlapping.
-    /// See [here]( https://msdn.microsoft.com/en-us/library/windows/desktop/bb205072(v=vs.85).aspx#Alpha_To_Coverage) for a full description.
-    pub alpha_coverage: bool,
     /// The logic operation to apply to the blending equation, if any.
     pub logic_op: Option<LogicOp>,
     /// Which color targets to apply the blending operation to.
@@ -268,4 +266,24 @@ pub enum LogicOp {
     Invert,
     Nand,
     Set,
+}
+
+///
+pub type SampleMask = u64;
+
+///
+#[derive(Clone, Debug, PartialEq)]
+pub struct Multisampling {
+    ///
+    pub rasterization_samples: image::NumSamples,
+    ///
+    pub sample_shading: Option<f32>,
+    ///
+    pub sample_mask: SampleMask,
+    /// Toggles alpha-to-coverage multisampling, which can produce nicer edges
+    /// when many partially-transparent polygons are overlapping.
+    /// See [here]( https://msdn.microsoft.com/en-us/library/windows/desktop/bb205072(v=vs.85).aspx#Alpha_To_Coverage) for a full description.
+    pub alpha_coverage: bool,
+    ///
+    pub alpha_to_one: bool,
 }

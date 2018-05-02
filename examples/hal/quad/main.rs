@@ -167,6 +167,7 @@ fn main() {
     let render_pass = {
         let attachment = pass::Attachment {
             format: Some(surface_format),
+            samples: 1,
             ops: pass::AttachmentOps::new(pass::AttachmentLoadOp::Clear, pass::AttachmentStoreOp::Store),
             stencil_ops: pass::AttachmentOps::DONT_CARE,
             layouts: i::Layout::Undefined .. i::Layout::Present,
@@ -176,6 +177,7 @@ fn main() {
             colors: &[(0, i::Layout::ColorAttachmentOptimal)],
             depth_stencil: None,
             inputs: &[],
+            resolves: &[],
             preserves: &[],
         };
 
