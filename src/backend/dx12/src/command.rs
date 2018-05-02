@@ -427,6 +427,7 @@ impl CommandBuffer {
 
     fn resolve_attachments(&self) {
         let state = self.pass_cache.as_ref().unwrap();
+        let framebuffer = &state.framebuffer;
         let subpass = &state.render_pass.subpasses[self.cur_subpass];
 
         for (i, resolve_attachment) in subpass.resolve_attachments.iter().enumerate() {
@@ -436,15 +437,29 @@ impl CommandBuffer {
             let resolve_src = state.framebuffer.attachments[src_attachment];
             let resolve_dst = state.framebuffer.attachments[dst_attachment];
 
-            unsafe {
-            self.raw.ResolveSubresource(
-                resolve_dst.resource,
-                0, // TODO
-                resolve_src.resource,
-                0, // TODO
-                resolve_dst.dxgi_format,
-            );
-        }
+            // The number of layers of the render area are given on framebuffer creation.
+            for l in 0..framebuffer.layers {
+                // Attachtments only have a single mip level by specification.
+                let subresource_src = resolve_src.calc_subresource(
+                    resolve_src.mip_levels.0 as _,
+                    (resolve_src.layers.0 + l) as _,
+                );
+                let subresource_dst = resolve_dst.calc_subresource(
+                    resolve_dst.mip_levels.0 as _,
+                    (resolve_dst.layers.0 + l) as _,
+                );
+
+                // TODO: take widht and height of render area into account.
+                unsafe {
+                    self.raw.ResolveSubresource(
+                        resolve_dst.resource,
+                        subresource_dst,
+                        resolve_src.resource,
+                        subresource_src,
+                        resolve_dst.dxgi_format,
+                    );
+                }
+            }
         }
     }
 

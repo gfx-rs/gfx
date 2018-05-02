@@ -134,6 +134,8 @@ unsafe impl Sync for PipelineLayout { }
 #[derive(Debug, Clone)]
 pub struct Framebuffer {
     pub(crate) attachments: Vec<ImageView>,
+    // Number of layers in the render area. Required for subpass resolves.
+    pub(crate) layers: image::Layer,
 }
 
 #[derive(Debug)]
@@ -207,6 +209,12 @@ pub struct ImageView {
 }
 unsafe impl Send for ImageView { }
 unsafe impl Sync for ImageView { }
+
+impl ImageView {
+    pub fn calc_subresource(&self, mip_level: UINT, layer: UINT) -> UINT {
+        mip_level + (layer * self.num_levels as UINT)
+    }
+}
 
 #[derive(Derivative)]
 #[derivative(Debug)]

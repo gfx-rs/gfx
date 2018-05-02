@@ -1563,7 +1563,7 @@ impl d::Device<B> for Device {
         &self,
         _renderpass: &n::RenderPass,
         attachments: I,
-        _extent: image::Extent,
+        extent: image::Extent,
     ) -> Result<n::Framebuffer, d::FramebufferError>
     where
         I: IntoIterator,
@@ -1571,6 +1571,7 @@ impl d::Device<B> for Device {
     {
         Ok(n::Framebuffer {
             attachments: attachments.into_iter().map(|att| *att.borrow()).collect(),
+            layers: extent.depth as _,
         })
     }
 
