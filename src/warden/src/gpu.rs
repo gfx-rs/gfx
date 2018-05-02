@@ -456,7 +456,11 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                         attachments.keys().position(|s| s == sp).unwrap()
                                     })
                                     .collect::<Vec<_>>();
-                                (colors, ds, inputs, preserves)
+                                let resolves = sp.resolves
+                                    .iter()
+                                    .map(&att_ref)
+                                    .collect::<Vec<_>>();
+                                (colors, ds, inputs, preserves, resolves)
                             })
                             .collect::<Vec<_>>();
                         let raw_subs = temp
@@ -466,6 +470,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                 depth_stencil: t.1.as_ref(),
                                 inputs: &t.2,
                                 preserves: &t.3,
+                                resolves: &t.4,
                             })
                             .collect::<Vec<_>>();
                         let raw_deps = dependencies
@@ -643,6 +648,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             blender: blender.clone(),
                             depth_stencil: depth_stencil.clone(),
                             baked_states: pso::BakedStates::default(), //TODO
+                            multisampling: None, // TODO
                             layout: &resources.pipeline_layouts[layout],
                             subpass: hal::pass::Subpass {
                                 main_pass: &resources.render_passes[&subpass.parent].handle,

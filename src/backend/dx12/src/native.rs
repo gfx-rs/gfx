@@ -201,6 +201,9 @@ pub struct ImageView {
     pub(crate) handle_uav: Option<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>,
     // Required for attachment resolves.
     pub(crate) dxgi_format: DXGI_FORMAT,
+    pub(crate) num_levels: image::Level,
+    pub(crate) mip_levels: (image::Level, image::Level),
+    pub(crate) layers: (image::Layer, image::Layer),
 }
 unsafe impl Send for ImageView { }
 unsafe impl Sync for ImageView { }

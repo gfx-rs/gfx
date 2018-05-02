@@ -1911,6 +1911,10 @@ impl d::Device<B> for Device {
         _swizzle: format::Swizzle,
         range: image::SubresourceRange,
     ) -> Result<n::ImageView, image::ViewError> {
+        let num_levels = image.num_levels;
+        let mip_levels = (range.levels.start, range.levels.end);
+        let layers = (range.layers.start, range.layers.end);
+
         let info = ViewInfo {
             resource: image.resource,
             kind: image.kind,
@@ -1948,6 +1952,9 @@ impl d::Device<B> for Device {
                 None
             },
             dxgi_format: image.dxgi_format,
+            num_levels,
+            mip_levels,
+            layers,
         })
     }
 
