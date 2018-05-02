@@ -472,24 +472,38 @@ impl d::Device<B> for Device {
                 },
             });
 
+            // Multisampling
+            //
+            // Default multi sampling state, required even if we only have a single sample attachment.
+            let mut multisampling_state = vk::PipelineMultisampleStateCreateInfo {
+                s_type: vk::StructureType::PipelineMultisampleStateCreateInfo,
+                p_next: ptr::null(),
+                flags: vk::PipelineMultisampleStateCreateFlags::empty(),
+                rasterization_samples: vk::SAMPLE_COUNT_1_BIT,
+                sample_shading_enable: vk::VK_FALSE,
+                min_sample_shading: 0.0,
+                p_sample_mask: ptr::null(),
+                alpha_to_coverage_enable: vk::VK_FALSE,
+                alpha_to_one_enable: vk::VK_FALSE,
+            };
+
             if let Some(ref multisample) = desc.multisampling {
                 let sample_mask = [
                     (multisample.sample_mask & 0xFFFFFFFF) as u32,
                     ((multisample.sample_mask >> 32) & 0xFFFFFFFF) as u32,
                 ];
                 sample_masks.push(sample_mask);
-                info_multisample_states.push(vk::PipelineMultisampleStateCreateInfo {
-                    s_type: vk::StructureType::PipelineMultisampleStateCreateInfo,
-                    p_next: ptr::null(),
-                    flags: vk::PipelineMultisampleStateCreateFlags::empty(),
-                    rasterization_samples: vk::SampleCountFlags::from_flags_truncate(multisample.rasterization_samples as _),
-                    sample_shading_enable: multisample.sample_shading.is_some() as _,
-                    min_sample_shading: multisample.sample_shading.unwrap_or(0.0),
-                    p_sample_mask: sample_masks.last().unwrap().as_ptr(),
-                    alpha_to_coverage_enable: multisample.alpha_coverage as _,
-                    alpha_to_one_enable: multisample.alpha_to_one as _,
-                });
-            }
+
+                multisampling_state.rasterization_samples =
+                    vk::SampleCountFlags::from_flags_truncate(multisample.rasterization_samples as _);
+                multisampling_state.sample_shading_enable = multisample.sample_shading.is_some() as _;
+                multisampling_state.min_sample_shading = multisample.sample_shading.unwrap_or(0.0);
+                multisampling_state.p_sample_mask = sample_masks.last().unwrap().as_ptr();
+                multisampling_state.alpha_to_coverage_enable = multisample.alpha_coverage as _;
+                multisampling_state.alpha_to_one_enable = multisample.alpha_to_one as _;
+            };
+
+            info_multisample_states.push(multisampling_state);
 
             let depth_stencil = desc.depth_stencil.unwrap_or_default();
             let (depth_test_enable, depth_write_enable, depth_compare_op) = match depth_stencil.depth {
@@ -605,7 +619,7 @@ impl d::Device<B> for Device {
                 p_rasterization_state: info_rasterization_states.last().unwrap(),
                 p_tessellation_state: if is_tessellated { info_tessellation_states.last().unwrap() } else { ptr::null() },
                 p_viewport_state: info_viewport_states.last().unwrap(),
-                p_multisample_state: if desc.multisampling.is_some() { info_multisample_states.last().unwrap() } else { ptr::null() },
+                p_multisample_state: info_multisample_states.last().unwrap(),
                 p_depth_stencil_state: info_depth_stencil_states.last().unwrap(),
                 p_color_blend_state: info_color_blend_states.last().unwrap(),
                 p_dynamic_state: info_dynamic_states.last().unwrap(),

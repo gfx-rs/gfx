@@ -273,7 +273,7 @@ pub enum LogicOp {
 pub type SampleMask = u64;
 
 ///
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Multisampling {
     ///
     pub rasterization_samples: image::NumSamples,
