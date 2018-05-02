@@ -252,7 +252,8 @@ pub struct Limits {
     /// Number of samples supported for depth attachments of framebuffers.
     pub framebuffer_depth_samples_count: image::NumSamples,
     /// Number of samples supported for stencil attachments of framebuffers.
-    pub framebuffer_stencil_samples_count: image::NumSamples,}
+    pub framebuffer_stencil_samples_count: image::NumSamples,
+}
 
 /// Describes the type of geometric primitives,
 /// created from vertex data.

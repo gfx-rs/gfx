@@ -269,7 +269,6 @@ pub enum LogicOp {
 }
 
 ///
-// TODO: Max 64 samples supported atm
 pub type SampleMask = u64;
 
 ///

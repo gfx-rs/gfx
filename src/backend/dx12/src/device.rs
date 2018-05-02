@@ -1421,7 +1421,10 @@ impl d::Device<B> for Device {
         };
 
         let sample_desc = dxgitype::DXGI_SAMPLE_DESC {
-            Count: desc.multisampling.as_ref().map_or(1, |ms| ms.rasterization_samples as _),
+            Count: match desc.multisampling {
+                Some(ref ms) => ms.rasterization_samples as _,
+                None => 1,
+            },
             Quality: 0,
         };
 

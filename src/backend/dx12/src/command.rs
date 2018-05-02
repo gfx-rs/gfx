@@ -449,7 +449,7 @@ impl CommandBuffer {
                     (resolve_dst.layers.0 + l) as _,
                 );
 
-                // TODO: take widht and height of render area into account.
+                // TODO: take width and height of render area into account.
                 unsafe {
                     self.raw.ResolveSubresource(
                         resolve_dst.resource,
