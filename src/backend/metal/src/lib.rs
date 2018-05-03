@@ -18,11 +18,12 @@ extern crate winit;
 mod device;
 mod window;
 mod command;
+mod internal;
 mod native;
 mod conversions;
 mod soft;
 
-pub use command::{CommandPool, QueuePoolPtr};
+pub use command::{CommandPool, Shared};
 pub use device::{Device, LanguageVersion, PhysicalDevice};
 pub use window::{Surface, Swapchain};
 
@@ -118,7 +119,7 @@ impl hal::Backend for Backend {
     type Swapchain = window::Swapchain;
 
     type QueueFamily = QueueFamily;
-    type CommandQueue = QueuePoolPtr;
+    type CommandQueue = Arc<Shared>;
     type CommandBuffer = command::CommandBuffer;
 
     type Memory = native::Memory;
