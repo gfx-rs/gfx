@@ -4,6 +4,7 @@ use internal::{BlitVertex, ServicePipes};
 
 use std::borrow::{Borrow, BorrowMut};
 use std::cell::UnsafeCell;
+use std::collections::HashMap;
 use std::ops::{Deref, Range};
 use std::sync::{Arc, Mutex};
 use std::{iter, mem};
@@ -507,7 +508,7 @@ impl CommandSink {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct IndexBuffer {
     buffer: metal::Buffer,
     offset: buffer::Offset,
@@ -667,12 +668,8 @@ pub(crate) fn exec_blit(encoder: &metal::BlitCommandEncoderRef, command: &soft::
             let size = conv::map_extent(region.extent);
             let src_offset = conv::map_offset(region.src_offset);
             let dst_offset = conv::map_offset(region.dst_offset);
-            for lid in 0 .. {
-                let src_layer = region.src_subresource.layers.start + lid;
-                let dst_layer = region.dst_subresource.layers.start + lid;
-                if src_layer >= region.src_subresource.layers.end || dst_layer >= region.dst_subresource.layers.end {
-                    break
-                }
+            let layers = region.src_subresource.layers.clone().zip(region.dst_subresource.layers.clone());
+            for (src_layer, dst_layer) in layers {
                 encoder.copy_from_texture(
                     src,
                     src_layer as _,
@@ -1173,7 +1170,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         // We check if either of the two images has a combined depth/stencil format
         let has_ds = has_depth_stencil_format(&src) || has_depth_stencil_format(&dst);
         let mut blit_commands = Vec::new();
-        let mut blit_vertices = Vec::new();
+        let mut blit_vertices = HashMap::new(); // a list of vertices per mipmap
 
         for region in regions {
             let r = region.borrow();
@@ -1218,7 +1215,69 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     },
                 });
             } else {
-                //TODO: fill up vertices
+                // Fall back to shader-based blitting
+                let se = &src.extent;
+                let de = &dst.extent;
+                //TODO: support 3D textures
+                debug_assert_eq!(se.depth, 1);
+                debug_assert_eq!(de.depth, 1);
+
+                let layers = r.src_subresource.layers.clone().zip(r.dst_subresource.layers.clone());
+                let list = blit_vertices
+                    .entry(r.dst_subresource.level)
+                    .or_insert(Vec::new());
+
+                for (src_layer, dst_layer) in layers {
+                    // this helper array defines unique data for quad vertices
+                    let data = [
+                        [
+                            r.src_bounds.start.x,
+                            r.src_bounds.start.y,
+                            r.dst_bounds.start.x,
+                            r.dst_bounds.start.y,
+                        ],
+                        [
+                            r.src_bounds.start.x,
+                            r.src_bounds.end.y,
+                            r.dst_bounds.start.x,
+                            r.dst_bounds.end.y,
+                        ],
+                        [
+                            r.src_bounds.end.x,
+                            r.src_bounds.end.y,
+                            r.dst_bounds.end.x,
+                            r.dst_bounds.end.y,
+                        ],
+                        [
+                            r.src_bounds.end.x,
+                            r.src_bounds.start.y,
+                            r.dst_bounds.end.x,
+                            r.dst_bounds.start.y,
+                        ],
+                    ];
+                    // now use the hard-coded index array to add 6 vertices to the list
+                    //TODO: could use instancing here
+                    // - with triangle strips
+                    // - with half of the data supplied per instance
+
+                    for &index in &[0usize, 1, 2, 2, 3, 0] {
+                        let d = data[index];
+                        list.push(BlitVertex {
+                            uv: [
+                                d[0] as f32 / se.width as f32,
+                                d[1] as f32 / se.height as f32,
+                                src_layer as f32,
+                                r.src_subresource.level as f32,
+                            ],
+                            pos: [
+                                d[2] as f32 / de.width as f32,
+                                d[3] as f32 / de.height as f32,
+                                dst_layer as f32,
+                                1.0,
+                            ],
+                        });
+                    }
+                }
             }
         }
 
@@ -1226,6 +1285,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         if !blit_vertices.is_empty() {
             let inner = unsafe { &mut *self.inner.get() };
+            let sink = inner.sink.as_mut().unwrap();
 
             // Note: we don't bother to restore any render states here, since we are currently
             // outside of a render pass, and the state will be reset automatically once
@@ -1237,20 +1297,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 .get_blit(dst.format, &self.shared.device)
                 .to_owned();
             let sampler = pipes.get_sampler(filter);
-
-            //Note: we might want to re-use the buffer allocation, but that
-            // requires proper re-cycling based on the command buffer fences.
-            let vertex_buffer = self.shared.device.new_buffer_with_data(
-                blit_vertices.as_ptr() as *const _,
-                (blit_vertices.len() * mem::size_of::<BlitVertex>()) as _,
-                metal::MTLResourceOptions::StorageModePrivate,
-            );
-            inner.retained_buffers.push(vertex_buffer.clone());
-
             let ext = &dst.extent;
-            //TODO: start a pass
 
-            let commands = vec![
+            let prelude = vec![
                 soft::RenderCommand::BindPipeline(pso, None),
                 soft::RenderCommand::SetViewport(MTLViewport {
                     originX: 0.0,
@@ -1266,12 +1315,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     width: ext.width as _,
                     height: ext.height as _,
                 }),
-                soft::RenderCommand::BindBuffer {
-                    stage: pso::Stage::Vertex,
-                    index: 0,
-                    buffer: Some(vertex_buffer),
-                    offset: 0,
-                },
                 soft::RenderCommand::BindSampler {
                     stage: pso::Stage::Fragment,
                     index: 0,
@@ -1280,7 +1323,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 soft::RenderCommand::BindTexture {
                     stage: pso::Stage::Fragment,
                     index: 0,
-                    texture: Some(dst.raw.clone())
+                    texture: Some(src.raw.clone())
                 },
                 soft::RenderCommand::Draw {
                     primitive_type: MTLPrimitiveType::Triangle,
@@ -1289,10 +1332,45 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 },
             ];
 
-            inner.sink
-                .as_mut()
-                .unwrap()
-                .render_commands(commands.into_iter());
+            for (level, list) in blit_vertices {
+                //Note: we might want to re-use the buffer allocation, but that
+                // requires proper re-cycling based on the command buffer fences.
+                let vertex_buffer = self.shared.device.new_buffer_with_data(
+                    list.as_ptr() as *const _,
+                    (list.len() * mem::size_of::<BlitVertex>()) as _,
+                    metal::MTLResourceOptions::StorageModePrivate,
+                );
+                inner.retained_buffers.push(vertex_buffer.clone());
+
+                let mut commands = prelude.clone();
+                commands.push(soft::RenderCommand::BindBuffer {
+                    stage: pso::Stage::Vertex,
+                    index: 0,
+                    buffer: Some(vertex_buffer),
+                    offset: 0,
+                });
+                commands.push(soft::RenderCommand::Draw {
+                    primitive_type: MTLPrimitiveType::Triangle,
+                    vertices: 0 .. list.len() as _,
+                    instances: 0 .. 1,
+                });
+
+                let descriptor = metal::RenderPassDescriptor::new().to_owned();
+                descriptor.set_render_target_array_length(ext.depth as _);
+                {
+                    let attachment = descriptor
+                        .color_attachments()
+                        .object_at(0)
+                        .unwrap();
+                    attachment.set_texture(Some(&dst.raw));
+                    attachment.set_level(level as _);
+                }
+
+                sink.begin_render_pass(commands, descriptor);
+                // no actual pass body - everything is in the init commands
+            }
+
+            sink.stop_encoding();
         }
     }
 

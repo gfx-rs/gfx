@@ -6,6 +6,7 @@ use metal;
 use std::ops::Range;
 
 
+#[derive(Clone, Debug)]
 pub enum RenderCommand {
     SetViewport(metal::MTLViewport),
     SetScissor(metal::MTLScissorRect),

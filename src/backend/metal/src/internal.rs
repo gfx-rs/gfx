@@ -10,8 +10,8 @@ use std::path::Path;
 
 
 pub struct BlitVertex {
-    pub uv: [f32; 2],
-    pub pos: [f32; 2],
+    pub uv: [f32; 4],
+    pub pos: [f32; 4],
 }
 
 //#[derive(Clone)]
