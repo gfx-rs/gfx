@@ -147,9 +147,18 @@ pub struct Buffer {
 unsafe impl Send for Buffer { }
 unsafe impl Sync for Buffer { }
 
-#[derive(Debug, Hash, PartialEq, Eq)]
-pub struct BufferView;
-
+#[derive(Copy, Clone, Derivative)]
+#[derivative(Debug)]
+pub struct BufferView {
+    // Descriptor handle for uniform texel buffers.
+    #[derivative(Debug="ignore")]
+    pub(crate) handle_srv: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
+    // Descriptor handle for storage texel buffers.
+    #[derivative(Debug="ignore")]
+    pub(crate) handle_uav: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
+}
+unsafe impl Send for BufferView { }
+unsafe impl Sync for BufferView { }
 
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]

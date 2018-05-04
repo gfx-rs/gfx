@@ -435,8 +435,10 @@ pub fn map_descriptor_range(bind: &DescriptorSetLayoutBinding, register_space: u
     D3D12_DESCRIPTOR_RANGE {
         RangeType: match bind.ty {
             pso::DescriptorType::Sampler => D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
-            pso::DescriptorType::SampledImage => D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+            pso::DescriptorType::SampledImage |
+            pso::DescriptorType::UniformTexelBuffer => D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
             pso::DescriptorType::StorageBuffer |
+            pso::DescriptorType::StorageTexelBuffer |
             pso::DescriptorType::StorageImage => D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
             pso::DescriptorType::UniformBuffer => D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
             pso::DescriptorType::CombinedImageSampler => if sampler {

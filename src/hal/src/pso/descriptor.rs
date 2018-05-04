@@ -165,7 +165,8 @@ pub enum Descriptor<'a, B: Backend> {
     Image(&'a B::ImageView, Layout),
     CombinedImageSampler(&'a B::ImageView, Layout, &'a B::Sampler),
     Buffer(&'a B::Buffer, Range<Option<Offset>>),
-    TexelBuffer(&'a B::BufferView),
+    UniformTexelBuffer(&'a B::BufferView),
+    StorageTexelBuffer(&'a B::BufferView),
 }
 
 

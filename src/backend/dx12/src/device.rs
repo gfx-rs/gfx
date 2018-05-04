@@ -19,7 +19,7 @@ use hal::queue::{RawCommandQueue, QueueFamilyId};
 use hal::range::RangeArg;
 
 use {
-    conv, free_list, native as n, root_constants, window as w,
+    conv, format as fmt, free_list, native as n, root_constants, window as w,
     Backend as B, Device, MemoryGroup, QUEUE_FAMILIES, MAX_VERTEX_BUFFERS, NUM_HEAP_PROPERTIES,
 };
 use pool::RawCommandPool;
@@ -213,6 +213,18 @@ impl Device {
         for uniform_buffer in &shader_resources.uniform_buffers {
             let set = ast.get_decoration(uniform_buffer.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
             ast.set_decoration(uniform_buffer.id, spirv::Decoration::DescriptorSet, space_offset + set)
+               .map_err(gen_unexpected_error)?;
+        }
+
+        for storage_buffer in &shader_resources.storage_buffers {
+            let set = ast.get_decoration(storage_buffer.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
+            ast.set_decoration(storage_buffer.id, spirv::Decoration::DescriptorSet, space_offset + set)
+               .map_err(gen_unexpected_error)?;
+        }
+
+        for image in &shader_resources.storage_images {
+            let set = ast.get_decoration(image.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
+            ast.set_decoration(image.id, spirv::Decoration::DescriptorSet, space_offset + set)
                .map_err(gen_unexpected_error)?;
         }
 
@@ -1698,11 +1710,80 @@ impl d::Device<B> for Device {
 
     fn create_buffer_view<R: RangeArg<u64>>(
         &self,
-        _buffer: &n::Buffer,
-        _format: Option<format::Format>,
-        _range: R,
+        buffer: &n::Buffer,
+        format: Option<format::Format>,
+        range: R,
     ) -> Result<n::BufferView, buffer::ViewError> {
-        unimplemented!()
+        let buffer_features = {
+            let idx = format.map(|fmt| fmt as usize).unwrap_or(0);
+            fmt::query_properties()[idx].buffer_features
+        };
+        let (format, format_desc) = match format.and_then(conv::map_format) {
+            Some(fmt) => (fmt, format.unwrap().surface_desc()),
+            None => return Err(buffer::ViewError::Unsupported),
+        };
+
+        let start = *range.start().unwrap_or(&0);
+        let end = *range.end().unwrap_or(&(buffer.size_in_bytes as _));
+
+        let bytes_per_texel = (format_desc.bits / 8) as u64;
+        // Check if it adheres to the texel buffer offset limit
+        assert_eq!(start % bytes_per_texel, 0);
+        let first_element = start / bytes_per_texel;
+        let num_elements = (end - start) / bytes_per_texel; // rounds down to next smaller size
+
+        let handle_srv = if buffer_features.contains(format::BufferFeature::UNIFORM_TEXEL) {
+            let mut desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
+                Format: format,
+                ViewDimension: d3d12::D3D12_SRV_DIMENSION_BUFFER,
+                Shader4ComponentMapping: 0x1688, // TODO: verify
+                u: unsafe { mem::zeroed() },
+            };
+
+            *unsafe{ desc.u.Buffer_mut() } = d3d12::D3D12_BUFFER_SRV {
+                FirstElement: first_element,
+                NumElements: num_elements as _,
+                StructureByteStride: bytes_per_texel as _,
+                Flags: d3d12::D3D12_BUFFER_SRV_FLAG_NONE,
+            };
+
+            let handle = self.srv_pool.lock().unwrap().alloc_handles(1).cpu;
+            unsafe {
+                self.raw.clone().CreateShaderResourceView(buffer.resource, &desc, handle);
+            }
+            handle
+        } else {
+            d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: 0 }
+        };
+
+        let handle_uav = if buffer_features.intersects(format::BufferFeature::STORAGE_TEXEL | format::BufferFeature::STORAGE_TEXEL_ATOMIC) {
+            let mut desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
+                Format: format,
+                ViewDimension: d3d12::D3D12_UAV_DIMENSION_BUFFER,
+                u: unsafe { mem::zeroed() },
+            };
+
+            *unsafe{ desc.u.Buffer_mut() } = d3d12::D3D12_BUFFER_UAV {
+                FirstElement: first_element,
+                NumElements: num_elements as _,
+                StructureByteStride: bytes_per_texel as _,
+                Flags: d3d12::D3D12_BUFFER_UAV_FLAG_NONE,
+                CounterOffsetInBytes: 0,
+            };
+
+            let handle = self.uav_pool.lock().unwrap().alloc_handles(1).cpu;
+            unsafe {
+                self.raw.clone().CreateUnorderedAccessView(buffer.resource, ptr::null_mut(), &desc, handle);
+            }
+            handle
+        } else {
+            d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: 0 }
+        };
+
+        return Ok(n::BufferView {
+            handle_srv,
+            handle_uav,
+        });
     }
 
     fn create_image(
@@ -2193,7 +2274,26 @@ impl d::Device<B> for Device {
                         dst_samplers.push(bind_info.sampler_range.as_ref().unwrap().at(offset));
                         num_samplers.push(1);
                     }
-                    pso::Descriptor::TexelBuffer(_) => unimplemented!()
+                    pso::Descriptor::UniformTexelBuffer(buffer_view) => {
+                        let handle = buffer_view.handle_srv;
+                        if handle.ptr != 0 {
+                            src_views.push(handle);
+                            dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
+                            num_views.push(1);
+                        } else {
+                            error!("SRV handle of the uniform texel buffer is zero (not supported by specified format).");
+                        }
+                    }
+                    pso::Descriptor::StorageTexelBuffer(buffer_view) => {
+                        let handle = buffer_view.handle_uav;
+                        if handle.ptr != 0 {
+                            src_views.push(handle);
+                            dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
+                            num_views.push(1);
+                        } else {
+                            error!("UAV handle of the storage texel buffer is zero (not supported by specified format).");
+                        }
+                    }
                 }
                 offset += 1;
             }
