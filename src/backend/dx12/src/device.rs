@@ -2275,14 +2275,24 @@ impl d::Device<B> for Device {
                         num_samplers.push(1);
                     }
                     pso::Descriptor::UniformTexelBuffer(buffer_view) => {
-                        src_views.push(buffer_view.handle_srv);
-                        dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
-                        num_views.push(1);
+                        let handle = buffer_view.handle_srv;
+                        if handle.ptr != 0 {
+                            src_views.push(handle);
+                            dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
+                            num_views.push(1);
+                        } else {
+                            error!("SRV handle of the uniform texel buffer is zero (not supported by specified format).");
+                        }
                     }
                     pso::Descriptor::StorageTexelBuffer(buffer_view) => {
-                        src_views.push(buffer_view.handle_uav);
-                        dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
-                        num_views.push(1);
+                        let handle = buffer_view.handle_uav;
+                        if handle.ptr != 0 {
+                            src_views.push(handle);
+                            dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
+                            num_views.push(1);
+                        } else {
+                            error!("UAV handle of the storage texel buffer is zero (not supported by specified format).");
+                        }
                     }
                 }
                 offset += 1;

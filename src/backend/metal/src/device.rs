@@ -1163,7 +1163,8 @@ impl hal::Device<Backend> for Device {
                             (&pso::Descriptor::Image(..), _) |
                             (&pso::Descriptor::CombinedImageSampler(..), _) |
                             (&pso::Descriptor::Buffer(..), _) |
-                            (&pso::Descriptor::TexelBuffer(..), _) => {
+                            (&pso::Descriptor::UniformTexelBuffer(..), _) |
+                            (&pso::Descriptor::StorageTexelBuffer(..), _) => {
                                 panic!("mismatched descriptor set type")
                             }
                         }
@@ -1188,7 +1189,8 @@ impl hal::Device<Backend> for Device {
                                 encoder.set_buffer(&buffer.raw, range.start.unwrap_or(0), write.binding as _);
                             }
                             pso::Descriptor::CombinedImageSampler(..) |
-                            pso::Descriptor::TexelBuffer(..) => unimplemented!(),
+                            pso::Descriptor::UniformTexelBuffer(..) |
+                            pso::Descriptor::StorageTexelBuffer(..) => unimplemented!(),
                         }
                     }
                 }
