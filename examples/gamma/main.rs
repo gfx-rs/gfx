@@ -95,7 +95,7 @@ pub fn main() {
 
         if let Event::WindowEvent { event, .. } = event {
             match event {
-                WindowEvent::Closed |
+                WindowEvent::CloseRequested |
                 WindowEvent::KeyboardInput {
                     input: KeyboardInput {
                         virtual_keycode: Some(VirtualKeyCode::Escape),

@@ -25,13 +25,13 @@ name = "gfx_app"
 [dependencies]
 log = "0.4"
 env_logger = "0.5"
-glutin = "0.14"
-winit = "0.12"
+glutin = "0.15"
+winit = "0.13"
 gfx_core = { path = "src/core", version = "0.8" }
 gfx = { path = "src/render", version = "0.17" }
 gfx_macros = { path = "src/macros", version = "0.2" }
 gfx_device_gl = { path = "src/backend/gl", version = "0.15" }
-gfx_window_glutin = { path = "src/window/glutin", version = "0.22" }
+gfx_window_glutin = { path = "src/window/glutin", version = "0.23" }
 gfx_window_glfw = { path = "src/window/glfw", version = "0.16", optional = true }
 gfx_window_sdl = { path = "src/window/sdl", version = "0.8", optional = true }
 
@@ -42,7 +42,7 @@ optional = true
 
 [dependencies.gfx_window_vulkan]
 path = "src/window/vulkan"
-version = "0.6"
+version = "0.7"
 optional = true
 
 [dependencies.gfx_device_metal]
@@ -52,12 +52,12 @@ optional = true
 
 [dependencies.gfx_window_metal]
 path = "src/window/metal"
-version = "0.6"
+version = "0.7"
 optional = true
 
 [target.'cfg(windows)'.dependencies]
 gfx_device_dx11 = { path = "src/backend/dx11", version = "0.7" }
-gfx_window_dxgi = { path = "src/window/dxgi", version = "0.13" }
+gfx_window_dxgi = { path = "src/window/dxgi", version = "0.14" }
 
 [[example]]
 name = "blend"
@@ -129,4 +129,4 @@ gfx_gl = "0.5"
 rand = "0.4"
 genmesh = "0.5"
 noise = "0.2" #TODO: update
-image = "0.18"
+image = "0.19"
