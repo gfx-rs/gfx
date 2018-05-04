@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx_window_dxgi"
-version = "0.12.0"
+version = "0.14.0"
 description = "DXGI window for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -29,6 +29,6 @@ name = "gfx_window_dxgi"
 [dependencies]
 log = "0.4"
 winapi = { version = "0.3" , features = ["d3d11", "dxgi"] }
-winit = "0.12"
+winit = "0.13"
 gfx_core = { path = "../../core", version = "0.8" }
 gfx_device_dx11 = { path = "../../backend/dx11", version = "0.7" }
