@@ -123,8 +123,21 @@ pub enum TransferCommand {
         dst: String,
         regions: Vec<hal::command::BufferCopy>,
     },
-    CopyBufferToImage,
-    CopyImageToBuffer,
+    CopyImage {
+        src: String,
+        dst: String,
+        regions: Vec<hal::command::ImageCopy>,
+    },
+    CopyBufferToImage {
+        src: String,
+        dst: String,
+        regions: Vec<hal::command::BufferImageCopy>,
+    },
+    CopyImageToBuffer {
+        src: String,
+        dst: String,
+        regions: Vec<hal::command::BufferImageCopy>,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize)]

@@ -105,6 +105,8 @@ pub enum Command {
     CopyBufferToSurface(n::RawBuffer, n::Surface, command::BufferImageCopy),
     CopyTextureToBuffer(n::Texture, n::RawBuffer, command::BufferImageCopy),
     CopySurfaceToBuffer(n::Surface, n::RawBuffer, command::BufferImageCopy),
+    CopyImageToTexture(n::ImageKind, n::Texture, command::ImageCopy),
+    CopyImageToSurface(n::ImageKind, n::Surface, command::ImageCopy),
 }
 
 pub type FrameBufferTarget = gl::types::GLenum;
@@ -887,16 +889,29 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     fn copy_image<T>(
         &mut self,
-        _src: &n::Image,
+        src: &n::Image,
         _src_layout: image::Layout,
-        _dst: &n::Image,
+        dst: &n::Image,
         _dst_layout: image::Layout,
-        _regions: T,
+        regions: T,
     ) where
         T: IntoIterator,
         T::Item: Borrow<command::ImageCopy>,
     {
-        unimplemented!()
+        let old_offset = self.buf.offset;
+
+        for region in regions {
+            let r = region.borrow().clone();
+            let cmd = match dst.kind {
+                n::ImageKind::Surface(s) => Command::CopyImageToSurface(src.kind, s, r),
+                n::ImageKind::Texture(t) => Command::CopyImageToTexture(src.kind, t, r),
+            };
+            self.push_cmd(cmd);
+        }
+
+        if self.buf.offset == old_offset {
+            error!("At least one region must be specified");
+        }
     }
 
      fn copy_buffer_to_image<T>(
