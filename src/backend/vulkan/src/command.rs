@@ -476,7 +476,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<Backend>) {
+    fn bind_vertex_buffers(&mut self, first_binding: u32, vbs: pso::VertexBufferSet<Backend>) {
         let buffers: SmallVec<[vk::Buffer; 16]> =
             vbs.0.iter().map(|&(ref buffer, _)| buffer.raw).collect();
         let offsets: SmallVec<[vk::DeviceSize; 16]> =
@@ -485,7 +485,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         unsafe {
             self.device.0.cmd_bind_vertex_buffers(
                 self.raw,
-                0,
+                first_binding,
                 &buffers,
                 &offsets,
             );

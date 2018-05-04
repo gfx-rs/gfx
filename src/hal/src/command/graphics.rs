@@ -185,8 +185,8 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<B>) {
-        self.raw.bind_vertex_buffers(vbs)
+    pub fn bind_vertex_buffers(&mut self, first_binding: u32, vbs: pso::VertexBufferSet<B>) {
+        self.raw.bind_vertex_buffers(first_binding, vbs)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.

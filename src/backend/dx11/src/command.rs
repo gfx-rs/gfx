@@ -169,13 +169,13 @@ impl<P: 'static + Parser> command::Buffer<Resources> for RawCommandBuffer<P> {
         self.parser.parse(Command::BindProgram(pso.program));
     }
 
-    fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<Resources>) {
+    fn bind_vertex_buffers(&mut self, first_binding: u32, vbs: pso::VertexBufferSet<Resources>) {
         //Note: assumes `bind_pipeline_state` is called prior
         let mut buffers = [native::Buffer(ptr::null_mut()); MAX_VERTEX_ATTRIBUTES];
         let mut strides = [0; MAX_VERTEX_ATTRIBUTES];
         let mut offsets = [0; MAX_VERTEX_ATTRIBUTES];
-        for i in 0 .. MAX_VERTEX_ATTRIBUTES {
-            match (vbs.0[i], self.cache.attrib_strides[i]) {
+        for i in first_binding as usize .. MAX_VERTEX_ATTRIBUTES {
+            match (vbs.0[i - first_binding as usize], self.cache.attrib_strides[i]) {
                 (None, Some(stride)) => {
                     error!("No vertex input provided for slot {} with stride {}", i, stride)
                 },

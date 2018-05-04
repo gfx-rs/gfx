@@ -136,7 +136,7 @@ macro_rules! gfx_graphics_pipeline {
                     $(
                         vbs.extend(<$cmp as pso::Component<'a, B>>::vertex_buffer(&self.$cmp_name));
                     )*
-                    cmd_buffer.bind_vertex_buffers(cpso::VertexBufferSet(vbs));
+                    cmd_buffer.bind_vertex_buffers(0, cpso::VertexBufferSet(vbs));
                     let mut descs = Vec::new();
                     $(
                         descs.extend(<$cmp as pso::Component<'a, B>>::descriptor_set(&self.$cmp_name));

@@ -282,6 +282,8 @@ pub struct CommandBuffer {
     // Cached vertex buffer views to bind.
     // `Stride` values are not known at `bind_vertex_buffers` time because they are only stored
     // inside the pipeline state.
+    vertex_buffers_start_slot: UINT,
+    vertex_buffers_num_views: UINT,
     vertex_buffer_views: [d3d12::D3D12_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS],
 
     // Re-using allocation for the image-buffer copies.
@@ -321,6 +323,8 @@ impl CommandBuffer {
             active_bindpoint: BindPoint::Graphics,
             occlusion_query: None,
             pipeline_stats_query: None,
+            vertex_buffers_start_slot: 0,
+            vertex_buffers_num_views: 0,
             vertex_buffer_views: [NULL_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS],
             copies: Vec::new(),
             viewport_cache: SmallVec::new(),
@@ -341,6 +345,8 @@ impl CommandBuffer {
         self.active_bindpoint = BindPoint::Graphics;
         self.occlusion_query = None;
         self.pipeline_stats_query = None;
+        self.vertex_buffers_start_slot = 0;
+        self.vertex_buffers_num_views = 0;
         self.vertex_buffer_views = [NULL_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS];
     }
 
@@ -531,16 +537,11 @@ impl CommandBuffer {
         // Bind vertex buffers
         // We currently don't support offsets for vertex buffer binding, therefore,
         // we only need to find out how many vertex buffer we need to bind.
-        let num_vbs = self.vertex_buffer_views
-            .iter()
-            .position(|view| view.SizeInBytes == 0)
-            .unwrap_or(MAX_VERTEX_BUFFERS);
-
         unsafe {
             cmd_buffer.IASetVertexBuffers(
-                0,
-                num_vbs as _,
-                self.vertex_buffer_views.as_ptr(),
+                self.vertex_buffers_start_slot,
+                self.vertex_buffers_num_views,
+                self.vertex_buffer_views[self.vertex_buffers_start_slot as _..].as_ptr(),
             );
         }
         // Flush root signature data
@@ -1243,9 +1244,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<Backend>) {
+    fn bind_vertex_buffers(&mut self, first_binding: u32, vbs: pso::VertexBufferSet<Backend>) {
         // Only cache the vertex buffer views as we don't know the stride (PSO).
-        for (&(buffer, offset), view) in vbs.0.iter().zip(self.vertex_buffer_views.iter_mut()) {
+        self.vertex_buffers_start_slot = first_binding;
+        let clamped_start_slot = cmp::min(first_binding as _, MAX_VERTEX_BUFFERS);
+        self.vertex_buffers_num_views = cmp::min(vbs.0.len(), MAX_VERTEX_BUFFERS - clamped_start_slot) as _;
+        for (&(buffer, offset), view) in vbs.0.iter().zip(self.vertex_buffer_views[clamped_start_slot..].iter_mut()) {
             let base = unsafe { (*buffer.resource).GetGPUVirtualAddress() };
             view.BufferLocation = base + offset as u64;
             view.SizeInBytes = buffer.size_in_bytes - offset as u32;

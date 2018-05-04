@@ -238,7 +238,10 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
 
     /// Bind the vertex buffer set, making it the "current" one that draw commands
     /// will operate on.
-    fn bind_vertex_buffers(&mut self, pso::VertexBufferSet<B>);
+    ///
+    /// Each buffer passed corresponds to the vertex input binding with the same index,
+    /// starting from an offset index `first_binding`.
+    fn bind_vertex_buffers(&mut self, first_binding: u32, pso::VertexBufferSet<B>);
 
     /// Set the viewport parameters for the rasterizer.
     /// 
