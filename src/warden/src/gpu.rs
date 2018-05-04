@@ -711,125 +711,151 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         // fill up command buffers
         let mut jobs = HashMap::new();
         for (name, job) in &raw.jobs {
+            use raw::TransferCommand as Tc;
             let mut command_buf = command_pool.acquire_command_buffer(false);
             match *job {
-                raw::Job::Transfer { ref commands } => {
-                    use raw::TransferCommand as Tc;
-                    for command in commands {
-                        match *command {
-                            Tc::CopyBuffer { ref src, ref dst, ref regions } => {
-                                let sb = resources.buffers
-                                    .get(src)
-                                    .expect(&format!("Missing source buffer: {}", src));
-                                let db = resources.buffers
-                                    .get(dst)
-                                    .expect(&format!("Missing destination buffer: {}", dst));
-                                command_buf.pipeline_barrier(
-                                    pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
-                                    memory::Dependencies::empty(),
-                                    vec![
-                                        sb.barrier_to(b::State::TRANSFER_READ),
-                                        db.barrier_to(b::State::TRANSFER_WRITE),
-                                    ],
-                                );
-                                command_buf.copy_buffer(&sb.handle, &db.handle, regions);
-                                command_buf.pipeline_barrier(
-                                    pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
-                                    memory::Dependencies::empty(),
-                                    vec![
-                                        sb.barrier_from(b::State::TRANSFER_READ),
-                                        db.barrier_from(b::State::TRANSFER_WRITE),
-                                    ],
-                                );
-                            }
-                            Tc::CopyImage { ref src, ref dst, ref regions } => {
-                                let st = resources.images
-                                    .get(src)
-                                    .expect(&format!("Missing source image: {}", src));
-                                let dt = resources.images
-                                    .get(dst)
-                                    .expect(&format!("Missing destination image: {}", dst));
-                                command_buf.pipeline_barrier(
-                                    pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
-                                    memory::Dependencies::empty(),
-                                    vec![
-                                        st.barrier_to(i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal),
-                                        dt.barrier_to(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
-                                    ],
-                                );
-                                command_buf.copy_image(
-                                    &st.handle, i::Layout::TransferSrcOptimal,
-                                    &dt.handle, i::Layout::TransferDstOptimal,
-                                    regions,
-                                );
-                                command_buf.pipeline_barrier(
-                                    pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
-                                    memory::Dependencies::empty(),
-                                    vec![
-                                        st.barrier_from(i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal),
-                                        dt.barrier_from(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
-                                    ],
-                                );
-                            }
-                            Tc::CopyBufferToImage { ref src, ref dst, ref regions } => {
-                                let sb = resources.buffers
-                                    .get(src)
-                                    .expect(&format!("Missing source buffer: {}", src));
-                                let dt = resources.images
-                                    .get(dst)
-                                    .expect(&format!("Missing destination image: {}", dst));
-                                command_buf.pipeline_barrier(
-                                    pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
-                                    memory::Dependencies::empty(),
-                                    vec![
-                                        sb.barrier_to(b::State::TRANSFER_READ),
-                                        dt.barrier_to(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
-                                    ],
-                                );
-                                command_buf.copy_buffer_to_image(
-                                    &sb.handle,
-                                    &dt.handle, i::Layout::TransferDstOptimal,
-                                    regions,
-                                );
-                                command_buf.pipeline_barrier(
-                                    pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
-                                    memory::Dependencies::empty(),
-                                    vec![
-                                        sb.barrier_from(b::State::TRANSFER_READ),
-                                        dt.barrier_from(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
-                                    ],
-                                );
-                            }
-                            Tc::CopyImageToBuffer { ref src, ref dst, ref regions } => {
-                                let st = resources.images
-                                    .get(src)
-                                    .expect(&format!("Missing source image: {}", src));
-                                let db = resources.buffers
-                                    .get(dst)
-                                    .expect(&format!("Missing destination buffer: {}", dst));
-                                command_buf.pipeline_barrier(
-                                    pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
-                                    memory::Dependencies::empty(),
-                                    vec![
-                                        st.barrier_to(i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal),
-                                        db.barrier_to(b::State::TRANSFER_WRITE),
-                                    ],
-                                );
-                                command_buf.copy_image_to_buffer(
-                                    &st.handle, i::Layout::TransferSrcOptimal,
-                                    &db.handle,
-                                    regions,
-                                );
-                                command_buf.pipeline_barrier(
-                                    pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
-                                    memory::Dependencies::empty(),
-                                    vec![
-                                        st.barrier_from(i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal),
-                                        db.barrier_from(b::State::TRANSFER_WRITE),
-                                    ],
-                                );
-                            }
-                        }
+                raw::Job::Transfer(ref command) => match *command {
+                    Tc::CopyBuffer { ref src, ref dst, ref regions } => {
+                        let sb = resources.buffers
+                            .get(src)
+                            .expect(&format!("Missing source buffer: {}", src));
+                        let db = resources.buffers
+                            .get(dst)
+                            .expect(&format!("Missing destination buffer: {}", dst));
+                        command_buf.pipeline_barrier(
+                            pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
+                            memory::Dependencies::empty(),
+                            vec![
+                                sb.barrier_to(b::State::TRANSFER_READ),
+                                db.barrier_to(b::State::TRANSFER_WRITE),
+                            ],
+                        );
+                        command_buf.copy_buffer(&sb.handle, &db.handle, regions);
+                        command_buf.pipeline_barrier(
+                            pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
+                            memory::Dependencies::empty(),
+                            vec![
+                                sb.barrier_from(b::State::TRANSFER_READ),
+                                db.barrier_from(b::State::TRANSFER_WRITE),
+                            ],
+                        );
+                    }
+                    Tc::CopyImage { ref src, ref dst, ref regions } => {
+                        let st = resources.images
+                            .get(src)
+                            .expect(&format!("Missing source image: {}", src));
+                        let dt = resources.images
+                            .get(dst)
+                            .expect(&format!("Missing destination image: {}", dst));
+                        command_buf.pipeline_barrier(
+                            pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
+                            memory::Dependencies::empty(),
+                            vec![
+                                st.barrier_to(i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal),
+                                dt.barrier_to(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
+                            ],
+                        );
+                        command_buf.copy_image(
+                            &st.handle, i::Layout::TransferSrcOptimal,
+                            &dt.handle, i::Layout::TransferDstOptimal,
+                            regions,
+                        );
+                        command_buf.pipeline_barrier(
+                            pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
+                            memory::Dependencies::empty(),
+                            vec![
+                                st.barrier_from(i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal),
+                                dt.barrier_from(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
+                            ],
+                        );
+                    }
+                    Tc::CopyBufferToImage { ref src, ref dst, ref regions } => {
+                        let sb = resources.buffers
+                            .get(src)
+                            .expect(&format!("Missing source buffer: {}", src));
+                        let dt = resources.images
+                            .get(dst)
+                            .expect(&format!("Missing destination image: {}", dst));
+                        command_buf.pipeline_barrier(
+                            pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
+                            memory::Dependencies::empty(),
+                            vec![
+                                sb.barrier_to(b::State::TRANSFER_READ),
+                                dt.barrier_to(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
+                            ],
+                        );
+                        command_buf.copy_buffer_to_image(
+                            &sb.handle,
+                            &dt.handle, i::Layout::TransferDstOptimal,
+                            regions,
+                        );
+                        command_buf.pipeline_barrier(
+                            pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
+                            memory::Dependencies::empty(),
+                            vec![
+                                sb.barrier_from(b::State::TRANSFER_READ),
+                                dt.barrier_from(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
+                            ],
+                        );
+                    }
+                    Tc::CopyImageToBuffer { ref src, ref dst, ref regions } => {
+                        let st = resources.images
+                            .get(src)
+                            .expect(&format!("Missing source image: {}", src));
+                        let db = resources.buffers
+                            .get(dst)
+                            .expect(&format!("Missing destination buffer: {}", dst));
+                        command_buf.pipeline_barrier(
+                            pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
+                            memory::Dependencies::empty(),
+                            vec![
+                                st.barrier_to(i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal),
+                                db.barrier_to(b::State::TRANSFER_WRITE),
+                            ],
+                        );
+                        command_buf.copy_image_to_buffer(
+                            &st.handle, i::Layout::TransferSrcOptimal,
+                            &db.handle,
+                            regions,
+                        );
+                        command_buf.pipeline_barrier(
+                            pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
+                            memory::Dependencies::empty(),
+                            vec![
+                                st.barrier_from(i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal),
+                                db.barrier_from(b::State::TRANSFER_WRITE),
+                            ],
+                        );
+                    }
+                    Tc::BlitImage { ref src, ref dst, filter, ref regions } => {
+                        let st = resources.images
+                            .get(src)
+                            .expect(&format!("Missing source image: {}", src));
+                        let dt = resources.images
+                            .get(dst)
+                            .expect(&format!("Missing destination image: {}", dst));
+                        command_buf.pipeline_barrier(
+                            pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
+                            memory::Dependencies::empty(),
+                            vec![
+                                st.barrier_to(i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal),
+                                dt.barrier_to(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
+                            ],
+                        );
+                        command_buf.blit_image(
+                            &st.handle, i::Layout::TransferSrcOptimal,
+                            &dt.handle, i::Layout::TransferDstOptimal,
+                            filter,
+                            regions,
+                        );
+                        command_buf.pipeline_barrier(
+                            pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
+                            memory::Dependencies::empty(),
+                            vec![
+                                st.barrier_from(i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal),
+                                dt.barrier_from(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
+                            ],
+                        );
                     }
                 }
                 raw::Job::Graphics { ref framebuffer, ref pass, ref clear_values } => {

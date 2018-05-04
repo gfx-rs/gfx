@@ -138,6 +138,12 @@ pub enum TransferCommand {
         dst: String,
         regions: Vec<hal::command::BufferImageCopy>,
     },
+    BlitImage {
+        src: String,
+        dst: String,
+        filter: hal::image::Filter,
+        regions: Vec<hal::command::ImageBlit>,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -185,9 +191,7 @@ pub struct DrawPass {
 
 #[derive(Debug, Deserialize)]
 pub enum Job {
-    Transfer {
-        commands: Vec<TransferCommand>,
-    },
+    Transfer(TransferCommand),
     Graphics {
         framebuffer: String,
         clear_values: Vec<hal::command::ClearValue>,
