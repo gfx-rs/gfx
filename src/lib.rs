@@ -153,7 +153,7 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
 
         if let winit::Event::WindowEvent { event, .. } = event {
             match event {
-                winit::WindowEvent::Closed => return ControlFlow::Break,
+                winit::WindowEvent::CloseRequested => return ControlFlow::Break,
                 winit::WindowEvent::KeyboardInput {
                     input: winit::KeyboardInput {
                         state: winit::ElementState::Pressed,
@@ -229,7 +229,7 @@ A: Sized + ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>
         events_loop.poll_events(|event| {
             if let winit::Event::WindowEvent { event, .. } = event {
                 match event {
-                    winit::WindowEvent::Closed => running = false,
+                    winit::WindowEvent::CloseRequested => running = false,
                     winit::WindowEvent::KeyboardInput {
                         input: winit::KeyboardInput {
                             state: winit::ElementState::Pressed,
@@ -307,7 +307,7 @@ A: Sized + ApplicationBase<gfx_device_metal::Resources, gfx_device_metal::Comman
         events_loop.poll_events(|event| {
             if let winit::Event::WindowEvent { event, .. } = event {
                 match event {
-                    winit::WindowEvent::Closed => running = false,
+                    winit::WindowEvent::CloseRequested => running = false,
                     winit::WindowEvent::KeyboardInput {
                         input: winit::KeyboardInput {
                             state: winit::ElementState::Pressed,
@@ -365,7 +365,7 @@ A: Sized + ApplicationBase<gfx_device_vulkan::Resources, gfx_device_vulkan::Comm
         events_loop.poll_events(|event| {
             if let winit::Event::WindowEvent { event, .. } = event {
                 match event {
-                    winit::WindowEvent::Closed => running = false,
+                    winit::WindowEvent::CloseRequested => running = false,
                     winit::WindowEvent::KeyboardInput {
                         input: winit::KeyboardInput {
                             state: winit::ElementState::Pressed,
