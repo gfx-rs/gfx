@@ -1299,7 +1299,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let sampler = pipes.get_sampler(filter);
             let ext = &dst.extent;
 
-            let prelude = vec![
+            let prelude = [
                 soft::RenderCommand::BindPipeline(pso, None),
                 soft::RenderCommand::SetViewport(MTLViewport {
                     originX: 0.0,
@@ -1325,11 +1325,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     index: 0,
                     texture: Some(src.raw.clone())
                 },
-                soft::RenderCommand::Draw {
-                    primitive_type: MTLPrimitiveType::Triangle,
-                    vertices: 0 .. blit_vertices.len() as _,
-                    instances: 0 .. 1,
-                },
             ];
 
             for (level, list) in blit_vertices {
@@ -1338,11 +1333,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 let vertex_buffer = self.shared.device.new_buffer_with_data(
                     list.as_ptr() as *const _,
                     (list.len() * mem::size_of::<BlitVertex>()) as _,
-                    metal::MTLResourceOptions::StorageModePrivate,
+                    metal::MTLResourceOptions::StorageModeShared,
                 );
                 inner.retained_buffers.push(vertex_buffer.clone());
 
-                let mut commands = prelude.clone();
+                let mut commands = prelude.to_vec();
                 commands.push(soft::RenderCommand::BindBuffer {
                     stage: pso::Stage::Vertex,
                     index: 0,

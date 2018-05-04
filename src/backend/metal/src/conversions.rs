@@ -291,16 +291,20 @@ pub fn resource_options_from_storage_and_cache(storage: MTLStorageMode, cache: M
 }
 
 pub fn map_texture_usage(usage: image::Usage) -> MTLTextureUsage {
+    use hal::image::Usage as U;
+
     let mut texture_usage = MTLTextureUsage::MTLTextureUsagePixelFormatView;
-    if usage.contains(image::Usage::COLOR_ATTACHMENT) || usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
+    // Note: for blitting, we do actual rendering, so we add more flags for TRANSFER_* usage
+    if usage.intersects(U::COLOR_ATTACHMENT | U::DEPTH_STENCIL_ATTACHMENT | U::TRANSFER_DST) {
         texture_usage |= MTLTextureUsage::MTLTextureUsageRenderTarget;
     }
-    if usage.contains(image::Usage::SAMPLED) {
+    if usage.intersects(U::SAMPLED | U::TRANSFER_SRC) {
         texture_usage |= MTLTextureUsage::MTLTextureUsageShaderRead;
     }
-    if usage.contains(image::Usage::STORAGE) {
+    if usage.intersects(U::STORAGE) {
         texture_usage |= MTLTextureUsage::MTLTextureUsageShaderRead | MTLTextureUsage::MTLTextureUsageShaderWrite;
     }
+
     // TODO shader write
     texture_usage
 }

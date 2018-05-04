@@ -48,6 +48,7 @@ optional = true
 [target.'cfg(target_os = "macos")'.dependencies.gfx-backend-metal]
 path = "../../src/backend/metal"
 version = "0.1"
+features = ["metal_default_capture_scope"]
 optional = true
 
 [dependencies.gfx-backend-gl]

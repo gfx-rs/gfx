@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 
+#[derive(Debug)]
 pub struct BlitVertex {
     pub uv: [f32; 4],
     pub pos: [f32; 4],
@@ -91,8 +92,8 @@ impl ServicePipes {
                 .object_at(i)
                 .expect("too many vertex attributes");
             mtl_attribute_desc.set_buffer_index(0);
-            mtl_attribute_desc.set_offset((i * mem::size_of::<[f32; 2]>()) as _);
-            mtl_attribute_desc.set_format(metal::MTLVertexFormat::Float2);
+            mtl_attribute_desc.set_offset((i * mem::size_of::<[f32; 4]>()) as _);
+            mtl_attribute_desc.set_format(metal::MTLVertexFormat::Float4);
         }
         pipeline.set_vertex_descriptor(Some(&vertex_descriptor));
 

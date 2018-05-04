@@ -20,8 +20,16 @@ vertex VertexData vs_blit(TextureBlitAttributes in [[stage_in]]) {
 
 fragment float4 ps_blit(
     VertexData in [[stage_in]],
-    texture2d_array<float> tex [[ texture(0) ]],
+    texture2d<float> tex2D [[ texture(0) ]],
     sampler sampler2D [[ sampler(0) ]]
 ) {
-  return tex.sample(sampler2D, in.uv.xy, uint(in.uv.z), level(in.uv.w));
+  return tex2D.sample(sampler2D, in.uv.xy, level(in.uv.w));
+}
+
+fragment float4 ps_blit_array(
+    VertexData in [[stage_in]],
+    texture2d_array<float> tex2DArray [[ texture(0) ]],
+    sampler sampler2D [[ sampler(0) ]]
+) {
+  return tex2DArray.sample(sampler2D, in.uv.xy, uint(in.uv.z), level(in.uv.w));
 }

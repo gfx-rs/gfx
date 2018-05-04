@@ -119,6 +119,18 @@ pub struct Device {
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
 
+impl Drop for Device {
+    fn drop(&mut self) {
+        if cfg!(debug_assertions) || cfg!(feature = "metal_default_capture_scope") {
+            let shared_capture_manager = CaptureManager::shared();
+            if let Some(default_capture_scope) = shared_capture_manager.default_capture_scope() {
+                default_capture_scope.end_scope();
+            }
+            shared_capture_manager.stop_capture();
+        }
+    }
+}
+
 pub struct PhysicalDevice {
     raw: metal::Device,
     memory_types: [hal::MemoryType; 3],
@@ -189,6 +201,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             let shared_capture_manager = CaptureManager::shared();
             let default_capture_scope = shared_capture_manager.new_capture_scope_with_device(&device.device);
             shared_capture_manager.set_default_capture_scope(default_capture_scope);
+            shared_capture_manager.start_capture_with_device(&device.device);
             default_capture_scope.begin_scope();
         }
 
