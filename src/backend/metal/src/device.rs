@@ -1148,7 +1148,8 @@ impl hal::Device<Backend> for Device {
                             (&pso::Descriptor::CombinedImageSampler(image, layout, sampler), &mut n::DescriptorSetBinding::Combined(ref mut vec)) => {
                                 vec[array_offset] = Some((image.0.clone(), layout, sampler.0.clone()));
                             }
-                            (&pso::Descriptor::TexelBuffer(view), &mut n::DescriptorSetBinding::Image(ref mut vec)) => {
+                            (&pso::Descriptor::UniformTexelBuffer(view), &mut n::DescriptorSetBinding::Image(ref mut vec)) |
+                            (&pso::Descriptor::StorageTexelBuffer(view), &mut n::DescriptorSetBinding::Image(ref mut vec)) => {
                                 vec[array_offset] = Some((view.raw.clone(), image::Layout::General));
                             }
                             (&pso::Descriptor::Buffer(buffer, ref range), &mut n::DescriptorSetBinding::Buffer(ref mut vec)) => {

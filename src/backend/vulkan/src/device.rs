@@ -1180,7 +1180,8 @@ impl d::Device<B> for Device {
                             },
                         });
                     }
-                    pso::Descriptor::TexelBuffer(view) => {
+                    pso::Descriptor::UniformTexelBuffer(view) |
+                    pso::Descriptor::StorageTexelBuffer(view) => {
                         texel_buffer_views.push(view.raw);
                     }
                 }
