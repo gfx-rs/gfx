@@ -545,6 +545,12 @@ impl CommandQueue {
             com::Command::CopySurfaceToBuffer(..) => {
                 unimplemented!() //TODO: use FBO
             }
+            com::Command::CopyImageToTexture(..) => {
+                unimplemented!() //TODO: use FBO
+            }
+            com::Command::CopyImageToSurface(..) => {
+                unimplemented!() //TODO: use FBO
+            }
             /*
             com::Command::BindConstantBuffer(pso::ConstantBufferParam(buffer, _, slot)) => unsafe {
                 self.share.context.BindBufferBase(gl::UNIFORM_BUFFER, slot as gl::types::GLuint, buffer);

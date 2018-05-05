@@ -30,7 +30,7 @@ gl-headless = ["gfx-backend-gl"] # "glsl-to-spirv"
 failure = "0.1"
 gfx-hal = { path = "../hal", version = "0.1", features = ["serde"] }
 log = "0.4"
-ron = "0.1.7"
+ron = "0.2.1"
 serde = { version = "1", features = ["serde_derive"] }
 env_logger = { version = "0.5", optional = true }
 glsl-to-spirv = { version = "0.1", optional = true }
@@ -48,6 +48,7 @@ optional = true
 [target.'cfg(target_os = "macos")'.dependencies.gfx-backend-metal]
 path = "../../src/backend/metal"
 version = "0.1"
+features = ["metal_default_capture_scope"]
 optional = true
 
 [dependencies.gfx-backend-gl]

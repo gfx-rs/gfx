@@ -81,7 +81,8 @@ unsafe impl Sync for ComputePipeline {}
 #[derive(Debug)]
 pub struct Image {
     pub(crate) raw: metal::Texture,
-    pub(crate) format_desc: hal::format::FormatDesc,
+    pub(crate) format: hal::format::Format,
+    pub(crate) extent: hal::image::Extent,
 }
 
 unsafe impl Send for Image {}
@@ -323,7 +324,8 @@ unsafe impl Sync for UnboundBuffer {}
 #[derive(Debug)]
 pub struct UnboundImage {
     pub(crate) texture_desc: metal::TextureDescriptor,
-    pub(crate) format_desc: hal::format::FormatDesc,
+    pub(crate) format: hal::format::Format,
+    pub(crate) extent: hal::image::Extent,
 }
 unsafe impl Send for UnboundImage {}
 unsafe impl Sync for UnboundImage {}

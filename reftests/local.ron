@@ -1,9 +1,29 @@
 {
 	"transfer": {
-		"copy": (
+		"copy-buf": (
 			features: (bits: 0),
-			jobs: ["copy"],
+			jobs: ["copy-buf"],
 			expect: Buffer("buffer.output", [72, 65, 76, 80]),
+		),
+		"copy-image": (
+			features: (bits: 0),
+			jobs: ["copy-image"],
+			expect: ImageRow("image.output", 0, [48, 49, 50, 51]),
+		),
+		"copy-buf-image": (
+			features: (bits: 0),
+			jobs: ["copy-buf-image"],
+			expect: ImageRow("image.output", 0, [72, 65, 76, 80]),
+		),
+		"copy-image-buf": (
+			features: (bits: 0),
+			jobs: ["copy-image-buf"],
+			expect: Buffer("buffer.output", [52, 53, 54, 55]),
+		),
+		"blit-image": (
+			features: (bits: 0),
+			jobs: ["blit-image"],
+			expect: ImageRow("image.output", 0, [50, 51, 52, 53]),
 		),
 	},
 	"basic": {

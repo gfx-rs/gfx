@@ -99,7 +99,6 @@ impl Device {
         surface: &mut Surface,
         config: SwapchainConfig,
     ) -> (Swapchain, Backbuffer<Backend>) {
-        let format_desc = config.color_format.base_format().0.desc();
         let (mtl_format, cv_format) = match config.color_format {
             format::Format::Rgba8Srgb => (MTLPixelFormat::RGBA8Unorm_sRGB, kCVPixelFormatType_32RGBA),
             _ => panic!("unsupported backbuffer format"), // TODO: more formats
@@ -151,7 +150,12 @@ impl Device {
                 ];
                 native::Image {
                     raw: mapped_texture,
-                    format_desc,
+                    format: config.color_format,
+                    extent: image::Extent {
+                        width: pixel_width as _,
+                        height: pixel_height as _,
+                        depth: 1,
+                    },
                 }
             }).collect();
 

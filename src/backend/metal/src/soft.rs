@@ -6,6 +6,7 @@ use metal;
 use std::ops::Range;
 
 
+#[derive(Clone, Debug)]
 pub enum RenderCommand {
     SetViewport(metal::MTLViewport),
     SetScissor(metal::MTLScissorRect),
@@ -46,6 +47,11 @@ pub enum BlitCommand {
         src: metal::Buffer,
         dst: metal::Buffer,
         region: hal::command::BufferCopy,
+    },
+    CopyImage {
+        src: metal::Texture,
+        dst: metal::Texture,
+        region: hal::command::ImageCopy,
     },
     CopyBufferToImage {
         src: metal::Buffer,

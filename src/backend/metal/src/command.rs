@@ -1,8 +1,10 @@
 use {AutoreleasePool, Backend};
 use {native, window};
+use internal::{BlitVertex, ServicePipes};
 
 use std::borrow::{Borrow, BorrowMut};
 use std::cell::UnsafeCell;
+use std::collections::HashMap;
 use std::ops::{Deref, Range};
 use std::sync::{Arc, Mutex};
 use std::{iter, mem};
@@ -13,8 +15,9 @@ use hal::format::FormatDesc;
 use hal::image::{Filter, Layout, SubresourceRange};
 use hal::query::{Query, QueryControl, QueryId};
 use hal::queue::{RawCommandQueue, RawSubmission};
+use hal::format::Aspects;
 
-use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLClearColor, MTLIndexType, MTLSize, MTLOrigin, CaptureManager};
+use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLClearColor, MTLIndexType, MTLSize, CaptureManager};
 use cocoa::foundation::{NSUInteger, NSInteger};
 use block::{ConcreteBlock};
 use {conversions as conv, soft};
@@ -27,24 +30,10 @@ pub(crate) struct QueueInner {
     reserve: Range<usize>,
 }
 
-pub struct QueuePoolInner {
-    device: metal::Device,
+#[derive(Default)]
+pub struct QueuePool {
     queues: Vec<QueueInner>,
 }
-
-impl QueuePoolInner {
-    pub(crate) fn new(device: metal::Device) -> Self {
-        QueuePoolInner {
-            device,
-            queues: Vec::new(),
-        }
-    }
-}
-
-unsafe impl Send for QueuePoolInner {}
-unsafe impl Sync for QueuePoolInner {}
-
-pub type QueuePoolPtr = Arc<Mutex<QueuePoolInner>>;
 
 pub struct CommandBufferScope<'a> {
     inner: &'a metal::CommandBufferRef,
@@ -58,14 +47,14 @@ impl<'a> Deref for CommandBufferScope<'a> {
     }
 }
 
-impl QueuePoolInner {
-    fn find_queue(&mut self) -> usize {
+impl QueuePool {
+    fn find_queue(&mut self, device: &metal::DeviceRef) -> usize {
         self.queues
             .iter()
             .position(|q| q.reserve.start != q.reserve.end)
             .unwrap_or_else(|| {
                 let queue = QueueInner {
-                    queue: self.device.new_command_queue(),
+                    queue: device.new_command_queue(),
                     reserve: 0 .. 64, //TODO
                 };
                 self.queues.push(queue);
@@ -73,9 +62,11 @@ impl QueuePoolInner {
             })
     }
 
-    pub fn borrow_command_buffer(&mut self) -> CommandBufferScope {
+    pub fn borrow_command_buffer(
+        &mut self, device: &metal::DeviceRef
+    ) -> CommandBufferScope {
         let pool = AutoreleasePool::new();
-        let id = self.find_queue();
+        let id = self.find_queue(device);
         let inner = self.queues[id].queue
             .new_command_buffer_with_unretained_references();
         CommandBufferScope {
@@ -84,9 +75,11 @@ impl QueuePoolInner {
         }
     }
 
-    pub fn make_command_buffer(&mut self) -> (usize, metal::CommandBuffer) {
+    pub fn make_command_buffer(
+        &mut self, device: &metal::DeviceRef
+    ) -> (usize, metal::CommandBuffer) {
         let _pool = AutoreleasePool::new();
-        let id = self.find_queue();
+        let id = self.find_queue(device);
         self.queues[id].reserve.start += 1;
         let cmd_buffer = self.queues[id].queue
             .new_command_buffer_with_unretained_references()
@@ -99,10 +92,30 @@ impl QueuePoolInner {
     }
 }
 
+pub struct Shared {
+    device: metal::Device,
+    pub(crate) queue_pool: Mutex<QueuePool>,
+    service_pipes: Mutex<ServicePipes>,
+}
+
+unsafe impl Send for Shared {}
+unsafe impl Sync for Shared {}
+
+impl Shared {
+    pub fn new(device: metal::Device) -> Self {
+        Shared {
+            queue_pool: Mutex::new(QueuePool::default()),
+            service_pipes: Mutex::new(ServicePipes::new(&device)),
+            device,
+        }
+    }
+}
+
+
 type CommandBufferInnerPtr = Arc<UnsafeCell<CommandBufferInner>>;
 
 pub struct CommandPool {
-    pub(crate) queue_pool: QueuePoolPtr,
+    pub(crate) shared: Arc<Shared>,
     pub(crate) managed: Option<Vec<CommandBufferInnerPtr>>,
 }
 
@@ -112,7 +125,7 @@ unsafe impl Sync for CommandPool {}
 #[derive(Clone)]
 pub struct CommandBuffer {
     inner: CommandBufferInnerPtr,
-    queue_pool: QueuePoolPtr,
+    shared: Arc<Shared>,
     state: State,
 }
 
@@ -495,7 +508,7 @@ impl CommandSink {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct IndexBuffer {
     buffer: metal::Buffer,
     offset: buffer::Offset,
@@ -516,10 +529,10 @@ impl Drop for CommandBufferInner {
 }
 
 impl CommandBufferInner {
-    pub(crate) fn reset(&mut self, queue_pool: &QueuePoolPtr) {
+    pub(crate) fn reset(&mut self, shared: &Shared) {
         match self.sink.take() {
             Some(CommandSink::Immediate { queue_index, .. }) => {
-                queue_pool
+                shared.queue_pool
                     .lock()
                     .unwrap()
                     .release_command_buffer(queue_index);
@@ -644,49 +657,68 @@ pub(crate) fn exec_blit(encoder: &metal::BlitCommandEncoderRef, command: &soft::
     match *command {
         Cmd::CopyBuffer { ref src, ref dst, ref region } => {
             encoder.copy_from_buffer(
-                &src,
+                src,
                 region.src as NSUInteger,
-                &dst,
+                dst,
                 region.dst as NSUInteger,
                 region.size as NSUInteger
             );
-        },
+        }
+        Cmd::CopyImage { ref src, ref dst, ref region } => {
+            let size = conv::map_extent(region.extent);
+            let src_offset = conv::map_offset(region.src_offset);
+            let dst_offset = conv::map_offset(region.dst_offset);
+            let layers = region.src_subresource.layers.clone().zip(region.dst_subresource.layers.clone());
+            for (src_layer, dst_layer) in layers {
+                encoder.copy_from_texture(
+                    src,
+                    src_layer as _,
+                    region.src_subresource.level as _,
+                    src_offset,
+                    size,
+                    dst,
+                    dst_layer as _,
+                    region.dst_subresource.level as _,
+                    dst_offset,
+                );
+            }
+        }
         Cmd::CopyBufferToImage { ref src, ref dst, dst_desc, ref region } => {
             let extent = conv::map_extent(region.image_extent);
+            let origin = conv::map_offset(region.image_offset);
             let (row_pitch, slice_pitch) = compute_pitches(&region, &dst_desc, &extent);
-            let image_offset = &region.image_offset;
             let r = &region.image_layers;
 
             for layer in r.layers.clone() {
                 let offset = region.buffer_offset + slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
                 encoder.copy_from_buffer_to_texture(
-                    &src,
+                    src,
                     offset as NSUInteger,
                     row_pitch as NSUInteger,
                     slice_pitch as NSUInteger,
                     extent,
-                    &dst,
+                    dst,
                     layer as NSUInteger,
                     r.level as NSUInteger,
-                    MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ }
+                    origin,
                 );
             }
-        },
+        }
         Cmd::CopyImageToBuffer { ref src, src_desc, ref dst, ref region } => {
             let extent = conv::map_extent(region.image_extent);
+            let origin = conv::map_offset(region.image_offset);
             let (row_pitch, slice_pitch) = compute_pitches(&region, &src_desc, &extent);
-            let image_offset = &region.image_offset;
             let r = &region.image_layers;
 
             for layer in r.layers.clone() {
                 let offset = region.buffer_offset + slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
                 encoder.copy_from_texture_to_buffer(
-                    &src,
+                    src,
                     layer as NSUInteger,
                     r.level as NSUInteger,
-                    MTLOrigin { x: image_offset.x as _, y: image_offset.y as _, z: image_offset.z as _ },
+                    origin,
                     extent,
-                    &dst,
+                    dst,
                     offset as NSUInteger,
                     row_pitch as NSUInteger,
                     slice_pitch as NSUInteger
@@ -752,7 +784,7 @@ fn record_commands(command_buf: &metal::CommandBufferRef, passes: &[soft::Pass])
 unsafe impl Send for CommandBuffer {}
 unsafe impl Sync for CommandBuffer {}
 
-impl RawCommandQueue<Backend> for QueuePoolPtr {
+impl RawCommandQueue<Backend> for Arc<Shared> {
     unsafe fn submit_raw<IC>(
         &mut self, submit: RawSubmission<Backend, IC>, fence: Option<&native::Fence>
     )
@@ -777,7 +809,7 @@ impl RawCommandQueue<Backend> for QueuePoolPtr {
             None
         };
 
-        let mut pool = self.lock().unwrap();
+        let mut pool = self.queue_pool.lock().unwrap();
 
         for buffer in submit.cmd_buffers {
             let inner = &mut *buffer.borrow().inner.get();
@@ -796,7 +828,7 @@ impl RawCommandQueue<Backend> for QueuePoolPtr {
                     cmd_buffer
                 }
                 Some(CommandSink::Deferred { ref passes, .. }) => {
-                    temp_cmd_buffer = pool.borrow_command_buffer();
+                    temp_cmd_buffer = pool.borrow_command_buffer(&self.device);
                     record_commands(&*temp_cmd_buffer, passes);
                     &*temp_cmd_buffer
                  }
@@ -809,7 +841,7 @@ impl RawCommandQueue<Backend> for QueuePoolPtr {
         }
 
         if let Some(ref fence) = fence {
-            let command_buffer = pool.borrow_command_buffer();
+            let command_buffer = pool.borrow_command_buffer(&self.device);
             let value_ptr = fence.0.clone();
             let fence_block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
                 *value_ptr.lock().unwrap() = true;
@@ -847,8 +879,8 @@ impl RawCommandQueue<Backend> for QueuePoolPtr {
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
-        let mut pool = self.lock().unwrap();
-        let cmd_buffer = pool.borrow_command_buffer();
+        let mut pool = self.queue_pool.lock().unwrap();
+        let cmd_buffer = pool.borrow_command_buffer(&self.device);
         cmd_buffer.commit();
         cmd_buffer.wait_until_completed();
         Ok(())
@@ -860,7 +892,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
         if let Some(ref mut managed) = self.managed {
             for cmd_buffer in managed {
                 unsafe { &mut *cmd_buffer.get() }
-                    .reset(&self.queue_pool);
+                    .reset(&self.shared);
             }
         }
     }
@@ -874,7 +906,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 sink: None,
                 retained_buffers: Vec::new(),
             })),
-            queue_pool: self.queue_pool.clone(),
+            shared: self.shared.clone(),
             state: State {
                 viewport: None,
                 scissors: None,
@@ -963,7 +995,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn begin(&mut self, flags: com::CommandBufferFlags, _info: com::CommandBufferInheritanceInfo<Backend>) {
         //TODO: Implement secondary command buffers
         let sink = if flags.contains(com::CommandBufferFlags::ONE_TIME_SUBMIT) {
-            let (queue_index, cmd_buffer) = self.queue_pool.lock().unwrap().make_command_buffer();
+            let (queue_index, cmd_buffer) = self.shared.queue_pool
+                .lock()
+                .unwrap()
+                .make_command_buffer(&self.shared.device);
             CommandSink::Immediate {
                 cmd_buffer,
                 queue_index,
@@ -986,9 +1021,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn reset(&mut self, _release_resources: bool) {
         self.state.reset_resources();
-        let pool = self.queue_pool.clone();
         unsafe { &mut *self.inner.get() }
-            .reset(&pool);
+            .reset(&self.shared);
     }
 
     fn pipeline_barrier<'a, T>(
@@ -1019,7 +1053,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         data: &[u8],
     ) {
         let inner = unsafe { &mut *self.inner.get() };
-        let src = self.queue_pool.lock().unwrap().device.new_buffer_with_data(
+        let src = self.shared.device.new_buffer_with_data(
             data.as_ptr() as _,
             data.len() as _,
             metal::MTLResourceOptions::CPUCacheModeWriteCombined,
@@ -1090,17 +1124,249 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn blit_image<T>(
         &mut self,
-        _src: &native::Image,
+        src: &native::Image,
         _src_layout: Layout,
-        _dst: &native::Image,
+        dst: &native::Image,
         _dst_layout: Layout,
-        _filter: Filter,
-        _regions: T,
+        filter: Filter,
+        regions: T,
     ) where
         T: IntoIterator,
         T::Item: Borrow<com::ImageBlit>
     {
-        unimplemented!()
+        use hal::image::{Extent, Offset};
+
+        #[inline]
+        fn offset_diff(a: &Offset, b: &Offset) -> Extent {
+            let dx = b.x - a.x;
+            let dy = b.y - a.y;
+            let dz = b.z - a.z;
+            debug_assert!(dx >= 0 && dy >= 0 && dz >= 0);
+            Extent {
+                width: dx as _,
+                height: dy as _,
+                depth: dz as _,
+            }
+        }
+
+        #[inline]
+        fn range_size(r: &Range<Offset>) -> Extent {
+            offset_diff(&r.start, &r.end)
+        }
+
+        #[inline]
+        fn is_offset_positive(o: &Offset) -> bool {
+            o.x >= 0 && o.y >= 0 && o.z >= 0
+        }
+
+        #[inline]
+        fn has_depth_stencil_format(i: &native::Image) -> bool {
+            i.format
+                .surface_desc()
+                .aspects
+                .contains(Aspects::DEPTH | Aspects::STENCIL)
+        }
+
+        // We check if either of the two images has a combined depth/stencil format
+        let has_ds = has_depth_stencil_format(&src) || has_depth_stencil_format(&dst);
+        let mut blit_commands = Vec::new();
+        let mut blit_vertices = HashMap::new(); // a list of vertices per mipmap
+
+        for region in regions {
+            let r = region.borrow();
+
+            // layer count must be equal in both subresources
+            debug_assert_eq!(r.src_subresource.layers.len(), r.dst_subresource.layers.len());
+            // aspect flags
+            // enforce equal formats of both textures
+            // TODO this should probably be "compatible" pixel formats instead of equal formats
+            debug_assert_eq!(src.raw.pixel_format(), dst.raw.pixel_format());
+            // enforce aspect flag restrictions
+            debug_assert_ne!(r.src_subresource.aspects.contains(Aspects::COLOR), r.src_subresource.aspects.contains(Aspects::DEPTH | Aspects::STENCIL));
+            debug_assert_ne!(r.dst_subresource.aspects.contains(Aspects::COLOR), r.dst_subresource.aspects.contains(Aspects::DEPTH | Aspects::STENCIL));
+            debug_assert_eq!(r.src_subresource.aspects, r.dst_subresource.aspects);
+            // check that we're only copying aspects actually in the image
+            debug_assert!(src.format.surface_desc().aspects.contains(r.src_subresource.aspects));
+
+            let only_one_depth_stencil = {
+                let has_depth = r.src_subresource.aspects.contains(Aspects::DEPTH);
+                let has_stencil = r.src_subresource.aspects.contains(Aspects::STENCIL);
+                has_depth ^ has_stencil
+            };
+
+            let src_size = range_size(&r.src_bounds);
+            let dst_size = range_size(&r.dst_bounds);
+            // In the case that the image format is a combined Depth / Stencil format,
+            // and we are only copying one of the aspects, we use the shader even if the regions
+            // are the same size
+            if src_size == dst_size && !(has_ds && only_one_depth_stencil) {
+                debug_assert!(is_offset_positive(&r.src_bounds.start));
+                debug_assert!(is_offset_positive(&r.dst_bounds.start));
+
+                blit_commands.push(soft::BlitCommand::CopyImage {
+                    src: src.raw.clone(),
+                    dst: src.raw.clone(),
+                    region: com::ImageCopy {
+                        src_subresource: r.src_subresource.clone(),
+                        src_offset: r.src_bounds.start,
+                        dst_subresource: r.dst_subresource.clone(),
+                        dst_offset: r.dst_bounds.start,
+                        extent: src_size,
+                    },
+                });
+            } else {
+                // Fall back to shader-based blitting
+                let se = &src.extent;
+                let de = &dst.extent;
+                //TODO: support 3D textures
+                debug_assert_eq!(se.depth, 1);
+                debug_assert_eq!(de.depth, 1);
+
+                let layers = r.src_subresource.layers.clone().zip(r.dst_subresource.layers.clone());
+                let list = blit_vertices
+                    .entry(r.dst_subresource.level)
+                    .or_insert(Vec::new());
+
+                for (src_layer, dst_layer) in layers {
+                    // this helper array defines unique data for quad vertices
+                    let data = [
+                        [
+                            r.src_bounds.start.x,
+                            r.src_bounds.start.y,
+                            r.dst_bounds.start.x,
+                            r.dst_bounds.start.y,
+                        ],
+                        [
+                            r.src_bounds.start.x,
+                            r.src_bounds.end.y,
+                            r.dst_bounds.start.x,
+                            r.dst_bounds.end.y,
+                        ],
+                        [
+                            r.src_bounds.end.x,
+                            r.src_bounds.end.y,
+                            r.dst_bounds.end.x,
+                            r.dst_bounds.end.y,
+                        ],
+                        [
+                            r.src_bounds.end.x,
+                            r.src_bounds.start.y,
+                            r.dst_bounds.end.x,
+                            r.dst_bounds.start.y,
+                        ],
+                    ];
+                    // now use the hard-coded index array to add 6 vertices to the list
+                    //TODO: could use instancing here
+                    // - with triangle strips
+                    // - with half of the data supplied per instance
+
+                    for &index in &[0usize, 1, 2, 2, 3, 0] {
+                        let d = data[index];
+                        list.push(BlitVertex {
+                            uv: [
+                                d[0] as f32 / se.width as f32,
+                                d[1] as f32 / se.height as f32,
+                                src_layer as f32,
+                                r.src_subresource.level as f32,
+                            ],
+                            pos: [
+                                d[2] as f32 / de.width as f32,
+                                d[3] as f32 / de.height as f32,
+                                dst_layer as f32,
+                                1.0,
+                            ],
+                        });
+                    }
+                }
+            }
+        }
+
+        self.sink().blit_commands(blit_commands.into_iter());
+
+        if !blit_vertices.is_empty() {
+            let inner = unsafe { &mut *self.inner.get() };
+            let sink = inner.sink.as_mut().unwrap();
+
+            // Note: we don't bother to restore any render states here, since we are currently
+            // outside of a render pass, and the state will be reset automatically once
+            // we enter the next pass.
+            let mut pipes = self.shared.service_pipes
+                .lock()
+                .unwrap();
+            let pso = pipes
+                .get_blit(dst.format, &self.shared.device)
+                .to_owned();
+            let sampler = pipes.get_sampler(filter);
+            let ext = &dst.extent;
+
+            let prelude = [
+                soft::RenderCommand::BindPipeline(pso, None),
+                soft::RenderCommand::SetViewport(MTLViewport {
+                    originX: 0.0,
+                    originY: 0.0,
+                    width: ext.width as _,
+                    height: ext.height as _,
+                    znear: 0.0,
+                    zfar: 1.0,
+                }),
+                soft::RenderCommand::SetScissor(MTLScissorRect {
+                    x: 0,
+                    y: 0,
+                    width: ext.width as _,
+                    height: ext.height as _,
+                }),
+                soft::RenderCommand::BindSampler {
+                    stage: pso::Stage::Fragment,
+                    index: 0,
+                    sampler: Some(sampler),
+                },
+                soft::RenderCommand::BindTexture {
+                    stage: pso::Stage::Fragment,
+                    index: 0,
+                    texture: Some(src.raw.clone())
+                },
+            ];
+
+            for (level, list) in blit_vertices {
+                //Note: we might want to re-use the buffer allocation, but that
+                // requires proper re-cycling based on the command buffer fences.
+                let vertex_buffer = self.shared.device.new_buffer_with_data(
+                    list.as_ptr() as *const _,
+                    (list.len() * mem::size_of::<BlitVertex>()) as _,
+                    metal::MTLResourceOptions::StorageModeShared,
+                );
+                inner.retained_buffers.push(vertex_buffer.clone());
+
+                let mut commands = prelude.to_vec();
+                commands.push(soft::RenderCommand::BindBuffer {
+                    stage: pso::Stage::Vertex,
+                    index: 0,
+                    buffer: Some(vertex_buffer),
+                    offset: 0,
+                });
+                commands.push(soft::RenderCommand::Draw {
+                    primitive_type: MTLPrimitiveType::Triangle,
+                    vertices: 0 .. list.len() as _,
+                    instances: 0 .. 1,
+                });
+
+                let descriptor = metal::RenderPassDescriptor::new().to_owned();
+                descriptor.set_render_target_array_length(ext.depth as _);
+                {
+                    let attachment = descriptor
+                        .color_attachments()
+                        .object_at(0)
+                        .unwrap();
+                    attachment.set_texture(Some(&dst.raw));
+                    attachment.set_level(level as _);
+                }
+
+                sink.begin_render_pass(commands, descriptor);
+                // no actual pass body - everything is in the init commands
+            }
+
+            sink.stop_encoding();
+        }
     }
 
     fn bind_index_buffer(&mut self, view: buffer::IndexBufferView<Backend>) {
@@ -1639,16 +1905,23 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn copy_image<T>(
         &mut self,
-        _src: &native::Image,
+        src: &native::Image,
         _src_layout: Layout,
-        _dst: &native::Image,
+        dst: &native::Image,
         _dst_layout: Layout,
-        _regions: T,
+        regions: T,
     ) where
         T: IntoIterator,
         T::Item: Borrow<com::ImageCopy>,
     {
-        unimplemented!()
+        let commands = regions.into_iter().map(|region| {
+            soft::BlitCommand::CopyImage {
+                src: src.raw.clone(),
+                dst: dst.raw.clone(),
+                region: region.borrow().clone(),
+            }
+        });
+        self.sink().blit_commands(commands);
     }
 
     fn copy_buffer_to_image<T>(
@@ -1666,7 +1939,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             soft::BlitCommand::CopyBufferToImage {
                 src: src.raw.clone(),
                 dst: dst.raw.clone(),
-                dst_desc: dst.format_desc.clone(),
+                dst_desc: dst.format.surface_desc(),
                 region: region.borrow().clone(),
             }
         });
@@ -1687,7 +1960,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let commands = regions.into_iter().map(|region| {
             soft::BlitCommand::CopyImageToBuffer {
                 src: src.raw.clone(),
-                src_desc: src.format_desc.clone(),
+                src_desc: src.format.surface_desc(),
                 dst: dst.raw.clone(),
                 region: region.borrow().clone(),
             }

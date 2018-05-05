@@ -109,15 +109,27 @@ struct PrivateCapabilities {
     max_samplers_per_stage: usize,
 }
 
-#[derive(Clone)]
+//#[derive(Clone)]
 pub struct Device {
     pub(crate) device: metal::Device,
     private_caps: PrivateCapabilities,
-    queue_pool: command::QueuePoolPtr,
+    command_shared: Arc<command::Shared>,
     memory_types: [hal::MemoryType; 3],
 }
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
+
+impl Drop for Device {
+    fn drop(&mut self) {
+        if cfg!(debug_assertions) || cfg!(feature = "metal_default_capture_scope") {
+            let shared_capture_manager = CaptureManager::shared();
+            if let Some(default_capture_scope) = shared_capture_manager.default_capture_scope() {
+                default_capture_scope.end_scope();
+            }
+            shared_capture_manager.stop_capture();
+        }
+    }
+}
 
 pub struct PhysicalDevice {
     raw: metal::Device,
@@ -166,11 +178,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let family = *families[0].0;
         let id = family.id();
 
-        let queue_pool = Arc::new(Mutex::new(
-            command::QueuePoolInner::new(self.raw.clone())
-        ));
+        let command_shared = Arc::new(command::Shared::new(self.raw.clone()));
         let mut queue_group = hal::backend::RawQueueGroup::new(family);
-        queue_group.add_queue(queue_pool.clone());
+        queue_group.add_queue(command_shared.clone());
 
         let private_caps = PrivateCapabilities {
             resource_heaps: self.supports_any(RESOURCE_HEAP_SUPPORT),
@@ -183,7 +193,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let device = Device {
             device: self.raw.clone(),
             private_caps,
-            queue_pool,
+            command_shared,
             memory_types: self.memory_types,
         };
 
@@ -191,6 +201,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             let shared_capture_manager = CaptureManager::shared();
             let default_capture_scope = shared_capture_manager.new_capture_scope_with_device(&device.device);
             shared_capture_manager.set_default_capture_scope(default_capture_scope);
+            shared_capture_manager.start_capture_with_device(&device.device);
             default_capture_scope.begin_scope();
         }
 
@@ -473,7 +484,7 @@ impl hal::Device<Backend> for Device {
         &self, _family: QueueFamilyId, flags: CommandPoolCreateFlags
     ) -> command::CommandPool {
         command::CommandPool {
-            queue_pool: self.queue_pool.clone(),
+            shared: self.command_shared.clone(),
             managed: if flags.contains(CommandPoolCreateFlags::RESET_INDIVIDUAL) {
                 None
             } else {
@@ -486,7 +497,7 @@ impl hal::Device<Backend> for Device {
         if let Some(vec) = pool.managed {
             for cmd_buf in vec {
                 unsafe { &mut *cmd_buf.get() }
-                    .reset(&self.queue_pool);
+                    .reset(&self.command_shared);
             }
         }
     }
@@ -969,8 +980,8 @@ impl hal::Device<Backend> for Device {
     {
         // temporary command buffer to copy the contents from
         // allocated CPU-visible buffers to the target buffers
-        let mut pool = self.queue_pool.lock().unwrap();
-        let cmd_buffer = pool.borrow_command_buffer();
+        let mut pool = self.command_shared.queue_pool.lock().unwrap();
+        let cmd_buffer = pool.borrow_command_buffer(&self.device);
         let encoder = cmd_buffer.new_blit_command_encoder();
 
         for item in iter {
@@ -1011,8 +1022,8 @@ impl hal::Device<Backend> for Device {
     {
         // temporary command buffer to copy the contents from
         // the given buffers into the allocated CPU-visible buffers
-        let mut pool = self.queue_pool.lock().unwrap();
-        let cmd_buffer = pool.borrow_command_buffer();
+        let mut pool = self.command_shared.queue_pool.lock().unwrap();
+        let cmd_buffer = pool.borrow_command_buffer(&self.device);
         let encoder = cmd_buffer.new_blit_command_encoder();
         let mut num_copies = 0;
 
@@ -1410,7 +1421,6 @@ impl hal::Device<Backend> for Device {
         flags: image::StorageFlags,
     ) -> Result<n::UnboundImage, image::CreationError> {
         let is_cube = flags.contains(image::StorageFlags::CUBE_VIEW);
-        let format_desc = format.surface_desc();
         let mtl_format = map_format(format).ok_or(image::CreationError::Format(format))?;
 
         let descriptor = metal::TextureDescriptor::new();
@@ -1474,12 +1484,13 @@ impl hal::Device<Backend> for Device {
 
         Ok(n::UnboundImage {
             texture_desc: descriptor,
-            format_desc,
+            format,
+            extent: kind.extent(),
         })
     }
 
     fn get_image_requirements(&self, image: &n::UnboundImage) -> memory::Requirements {
-        let mut type_mask = if !image.format_desc.aspects.contains(format::Aspects::COLOR) {
+        let mut type_mask = if !image.format.surface_desc().aspects.contains(format::Aspects::COLOR) {
             0x4 // DEVICE_LOCAL only
         } else {
             0x7 // any type
@@ -1544,7 +1555,8 @@ impl hal::Device<Backend> for Device {
 
         Ok(n::Image {
             raw,
-            format_desc: image.format_desc,
+            format: image.format,
+            extent: image.extent,
         })
     }
 
