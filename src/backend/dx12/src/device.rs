@@ -1820,7 +1820,7 @@ impl d::Device<B> for Device {
                 kind.num_layers() as _
             },
             MipLevels: mip_levels as _,
-            Format: match conv::map_format(format) {
+            Format: match conv::map_format_typeless(format, usage) {
                 Some(format) => format,
                 None => return Err(image::CreationError::Format(format)),
             },
