@@ -1328,6 +1328,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         unsafe { self.raw.OMSetStencilRef(front as _); }
     }
 
+    fn set_depth_bounds(&mut self, min: f32, max: f32) {
+        warn!("Depth bounds test is not supported");
+    }
+
     fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
         unsafe {
             match self.gr_pipeline.pipeline {

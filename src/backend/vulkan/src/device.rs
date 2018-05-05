@@ -519,6 +519,13 @@ impl d::Device<B> for Device {
                 ),
                 pso::StencilTest::Off => unsafe { mem::zeroed() },
             };
+            let (min_depth_bounds, max_depth_bounds) = match desc.baked_states.depth_bounds {
+                Some(ref range) => (range.start, range.end),
+                None => {
+                    dynamic_states.push(vk::DynamicState::DepthBounds);
+                    (0.0, 1.0)
+                }
+            };
 
             info_depth_stencil_states.push(vk::PipelineDepthStencilStateCreateInfo {
                 s_type: vk::StructureType::PipelineDepthStencilStateCreateInfo,
@@ -531,8 +538,8 @@ impl d::Device<B> for Device {
                 stencil_test_enable,
                 front,
                 back,
-                min_depth_bounds: 0.0,
-                max_depth_bounds: 1.0,
+                min_depth_bounds,
+                max_depth_bounds,
             });
 
             // Build blend states for color attachments

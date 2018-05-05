@@ -793,6 +793,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
+    fn set_depth_bounds(&mut self, min: f32, max: f32) {
+        warn!("Depth bounds test is not supported");
+    }
+
     fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
         let n::GraphicsPipeline {
             primitive,

@@ -525,6 +525,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
 
+    fn set_depth_bounds(&mut self, min: f32, max: f32) {
+        unimplemented!()
+    }
+
+
     fn begin_render_pass_raw<T>(
         &mut self,
         _: &(),

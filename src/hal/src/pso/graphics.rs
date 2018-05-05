@@ -81,6 +81,8 @@ pub struct BakedStates {
     pub scissor: Option<Rect>,
     /// Static blend constant color.
     pub blend_color: Option<ColorValue>,
+    /// Static depth bounds.
+    pub depth_bounds: Option<Range<f32>>,
     //pub stencil_read: Option<Stencil>,
     //pub stencil_write: Option<Stencil>,
     //pub stencil_ref: Option<Stencil>,

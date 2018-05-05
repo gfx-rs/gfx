@@ -292,6 +292,9 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     /// Set the blend constant values dynamically.
     fn set_blend_constants(&mut self, pso::ColorValue);
 
+    /// Set the depth bounds test values dynamically.
+    fn set_depth_bounds(&mut self, min: f32, max: f32);
+
     /// Just does some type conversions and calls `begin_render_pass_raw`.
     fn begin_render_pass<T>(
         &mut self,
