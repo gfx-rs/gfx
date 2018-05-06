@@ -205,6 +205,11 @@ impl UserData {
     fn clear_dirty(&mut self, i: usize) {
         self.dirty_mask &= !(1 << i);
     }
+
+    /// Mark all entries as dirty.
+    fn dirty_all(&mut self) {
+        self.dirty_mask = !0;
+    }
 }
 
 #[derive(Clone)]
@@ -241,6 +246,8 @@ impl PipelineCache {
 enum BindPoint {
     Compute,
     Graphics,
+     // Internal pipelines used for blitting, copying, etc.
+    InternalGraphics,
 }
 
 #[derive(Clone)]
@@ -347,6 +354,14 @@ impl CommandBuffer {
         self.pipeline_stats_query = None;
         self.vertex_buffer_views_needs_bind = [false; MAX_VERTEX_BUFFERS];
         self.vertex_buffer_views = [NULL_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS];
+    }
+
+    // Indicates that the pipeline slot has been overriden with an internal pipeline.
+    //
+    // This only invalidates the slot and the user data!
+    fn set_internal_graphics_pipeline(&mut self) {
+        self.active_bindpoint = BindPoint::InternalGraphics;
+        self.gr_pipeline.user_data.dirty_all();
     }
 
     fn insert_subpass_barriers(&self, insertion: BarrierPoint) {
@@ -524,11 +539,21 @@ impl CommandBuffer {
     }
 
     fn set_graphics_bind_point(&mut self) {
-        if self.active_bindpoint != BindPoint::Graphics {
-            // Switch to graphics bind point
-            let (pipeline, _) = self.gr_pipeline.pipeline.expect("No graphics pipeline bound");
-            unsafe { self.raw.SetPipelineState(pipeline); }
-            self.active_bindpoint = BindPoint::Graphics;
+        match self.active_bindpoint {
+            BindPoint::Graphics => { }, // Nothing to do
+            BindPoint::Compute => {
+                // Switch to graphics bind point
+                let (pipeline, _) = self.gr_pipeline.pipeline.expect("No graphics pipeline bound");
+                unsafe { self.raw.SetPipelineState(pipeline); }
+                self.active_bindpoint = BindPoint::Graphics;
+            },
+            BindPoint::InternalGraphics => {
+                // Switch to graphics bind point
+                let (pipeline, signature) = self.gr_pipeline.pipeline.expect("No graphics pipeline bound");
+                unsafe { self.raw.SetPipelineState(pipeline); }
+                unsafe { self.raw.SetGraphicsRootSignature(signature); }
+                self.active_bindpoint = BindPoint::Graphics;
+            },
         }
 
         let cmd_buffer = &mut self.raw;
@@ -585,12 +610,15 @@ impl CommandBuffer {
     }
 
     fn set_compute_bind_point(&mut self) {
-        if self.active_bindpoint != BindPoint::Compute {
-            // Switch to compute bind point
-            assert!(self.comp_pipeline.pipeline.is_some(), "No compute pipeline bound");
-            let (pipeline, _) = self.comp_pipeline.pipeline.unwrap();
-            unsafe { self.raw.SetPipelineState(pipeline); }
-            self.active_bindpoint = BindPoint::Compute;
+        match self.active_bindpoint {
+            BindPoint::Graphics => {
+                // Switch to compute bind point
+                assert!(self.comp_pipeline.pipeline.is_some(), "No compute pipeline bound");
+                let (pipeline, _) = self.comp_pipeline.pipeline.unwrap();
+                unsafe { self.raw.SetPipelineState(pipeline); }
+                self.active_bindpoint = BindPoint::Compute;
+            },
+            BindPoint::Compute | BindPoint::InternalGraphics => { }, // Nothing to do
         }
 
         let cmd_buffer = &mut self.raw;
@@ -1256,6 +1284,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 _ => unimplemented!(),
             };
 
+            self.set_internal_graphics_pipeline();
+
             unimplemented!()
         }
     }
@@ -1385,7 +1415,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     self.gr_pipeline.num_parameter_slots = pipeline.num_parameter_slots;
                     self.gr_pipeline.root_constants = pipeline.constants.clone();
                     // All slots need to be rebound internally on signature change.
-                    self.gr_pipeline.user_data.dirty_mask = !0;
+                    self.gr_pipeline.user_data.dirty_all();
                 }
             }
             self.raw.SetPipelineState(pipeline.raw);
@@ -1440,7 +1470,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     self.comp_pipeline.num_parameter_slots = pipeline.num_parameter_slots;
                     self.comp_pipeline.root_constants = pipeline.constants.clone();
                     // All slots need to be rebound internally on signature change.
-                    self.comp_pipeline.user_data.dirty_mask = !0;
+                    self.comp_pipeline.user_data.dirty_all();
                 }
             }
             self.raw.SetPipelineState(pipeline.raw);
