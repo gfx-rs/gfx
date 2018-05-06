@@ -752,6 +752,20 @@ impl hal::Instance for Instance {
                     mem::size_of::<d3d12::D3D12_FEATURE_DATA_ARCHITECTURE>() as _)
             });
 
+            let depth_bounds_test_supported = {
+                let mut features2: d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS2 = unsafe { mem::zeroed() };
+                let hr = unsafe {
+                    device.CheckFeatureSupport(d3d12::D3D12_FEATURE_D3D12_OPTIONS2,
+                        &mut features2 as *mut _ as *mut _,
+                        mem::size_of::<d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS2>() as _)
+                };
+                if hr == winerror::S_OK  {
+                    features2.DepthBoundsTestSupported != 0
+                } else {
+                    false
+                }
+            };
+
             let heterogeneous_resource_heaps = features.ResourceHeapTier != d3d12::D3D12_RESOURCE_HEAP_TIER_1;
 
             let uma = features_architecture.UMA == TRUE;
@@ -899,7 +913,8 @@ impl hal::Instance for Instance {
                     //logic_op: false, // Optional on feature level 11_0
                     Features::MULTI_DRAW_INDIRECT |
                     Features::FORMAT_BC |
-                    Features::INSTANCE_RATE,
+                    Features::INSTANCE_RATE |
+                    if depth_bounds_test_supported { Features::DEPTH_BOUNDS } else { Features::empty() },
                 limits: Limits { // TODO
                     max_texture_size: 0,
                     max_patch_size: 0,

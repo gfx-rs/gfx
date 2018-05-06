@@ -1329,7 +1329,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn set_depth_bounds(&mut self, min: f32, max: f32) {
-        warn!("Depth bounds test is not supported");
+        match self.raw.cast::<d3d12::ID3D12GraphicsCommandList1>() {
+            Ok(cmd_list1) => unsafe { cmd_list1.OMSetDepthBounds(min, max) },
+            Err(_) => warn!("Depth bounds test is not supported"),
+        }
     }
 
     fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
@@ -1369,6 +1372,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
         if let Some(color) = pipeline.baked_states.blend_color {
             self.set_blend_constants(color);
+        }
+        if let Some(ref bounds) = pipeline.baked_states.depth_bounds {
+            self.set_depth_bounds(bounds.start, bounds.end);
         }
     }
 

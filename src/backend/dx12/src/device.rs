@@ -112,6 +112,90 @@ pub struct UnboundImage {
     num_levels: image::Level,
 }
 
+#[repr(C)]
+struct PipelineStateSubobject<T> {
+    subobject_align: [usize; 0], // Subobjects must have the same alignment as pointers.
+    subobject_type: d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE,
+    subobject: T,
+}
+
+impl<T> PipelineStateSubobject<T> {
+    fn new(subobject_type: d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE, subobject: T) -> Self {
+        PipelineStateSubobject {
+            subobject_align: [],
+            subobject_type,
+            subobject,
+        }
+    }
+}
+
+#[repr(C)]
+struct GraphicsPipelineStateSubobjectStream {
+    root_signature: PipelineStateSubobject<*mut d3d12::ID3D12RootSignature>,
+    vs: PipelineStateSubobject<d3d12::D3D12_SHADER_BYTECODE>,
+    ps: PipelineStateSubobject<d3d12::D3D12_SHADER_BYTECODE>,
+    ds: PipelineStateSubobject<d3d12::D3D12_SHADER_BYTECODE>,
+    hs: PipelineStateSubobject<d3d12::D3D12_SHADER_BYTECODE>,
+    gs: PipelineStateSubobject<d3d12::D3D12_SHADER_BYTECODE>,
+    stream_output: PipelineStateSubobject<d3d12::D3D12_STREAM_OUTPUT_DESC>,
+    blend: PipelineStateSubobject<d3d12::D3D12_BLEND_DESC>,
+    sample_mask: PipelineStateSubobject<UINT>,
+    rasterizer: PipelineStateSubobject<d3d12::D3D12_RASTERIZER_DESC>,
+    depth_stencil: PipelineStateSubobject<d3d12::D3D12_DEPTH_STENCIL_DESC1>,
+    input_layout: PipelineStateSubobject<d3d12::D3D12_INPUT_LAYOUT_DESC>,
+    ib_strip_cut_value: PipelineStateSubobject<d3d12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE>,
+    primitive_topology: PipelineStateSubobject<d3d12::D3D12_PRIMITIVE_TOPOLOGY_TYPE>,
+    render_target_formats: PipelineStateSubobject<d3d12::D3D12_RT_FORMAT_ARRAY>,
+    depth_stencil_format: PipelineStateSubobject<dxgiformat::DXGI_FORMAT>,
+    sample_desc: PipelineStateSubobject<dxgitype::DXGI_SAMPLE_DESC>,
+    node_mask: PipelineStateSubobject<UINT>,
+    cached_pso: PipelineStateSubobject<d3d12::D3D12_CACHED_PIPELINE_STATE>,
+    flags: PipelineStateSubobject<d3d12::D3D12_PIPELINE_STATE_FLAGS>,
+}
+
+impl GraphicsPipelineStateSubobjectStream {
+    fn new(
+        pso_desc: &d3d12::D3D12_GRAPHICS_PIPELINE_STATE_DESC,
+        depth_bounds_test_enable: bool,
+    ) -> Self {
+        GraphicsPipelineStateSubobjectStream {
+            root_signature: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE, pso_desc.pRootSignature),
+            vs: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS, pso_desc.VS),
+            ps: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS, pso_desc.PS),
+            ds: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS, pso_desc.DS),
+            hs: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS, pso_desc.HS),
+            gs: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS, pso_desc.GS),
+            stream_output: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_STREAM_OUTPUT, pso_desc.StreamOutput),
+            blend: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND, pso_desc.BlendState),
+            sample_mask: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_MASK, pso_desc.SampleMask),
+            rasterizer: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER, pso_desc.RasterizerState),
+            depth_stencil: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1, d3d12::D3D12_DEPTH_STENCIL_DESC1 {
+                DepthEnable: pso_desc.DepthStencilState.DepthEnable,
+                DepthWriteMask: pso_desc.DepthStencilState.DepthWriteMask,
+                DepthFunc: pso_desc.DepthStencilState.DepthFunc,
+                StencilEnable: pso_desc.DepthStencilState.StencilEnable,
+                StencilReadMask: pso_desc.DepthStencilState.StencilReadMask,
+                StencilWriteMask: pso_desc.DepthStencilState.StencilWriteMask,
+                FrontFace: pso_desc.DepthStencilState.FrontFace,
+                BackFace: pso_desc.DepthStencilState.BackFace,
+                DepthBoundsTestEnable: depth_bounds_test_enable as _,
+            }),
+            input_layout: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT, pso_desc.InputLayout),
+            ib_strip_cut_value: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_IB_STRIP_CUT_VALUE, pso_desc.IBStripCutValue),
+            primitive_topology: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY, pso_desc.PrimitiveTopologyType),
+            render_target_formats: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS, d3d12::D3D12_RT_FORMAT_ARRAY {
+                RTFormats: pso_desc.RTVFormats,
+                NumRenderTargets: pso_desc.NumRenderTargets,
+            }),
+            depth_stencil_format: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT, pso_desc.DSVFormat),
+            sample_desc: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC, pso_desc.SampleDesc),
+            node_mask: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_NODE_MASK, pso_desc.NodeMask),
+            cached_pso: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CACHED_PSO, pso_desc.CachedPSO),
+            flags: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_FLAGS, pso_desc.Flags),
+        }
+    }
+}
+
 impl Device {
     /// Compile a single shader entry point from a HLSL text shader
     fn compile_shader(
@@ -1496,11 +1580,33 @@ impl d::Device<B> for Device {
 
         // Create PSO
         let mut pipeline = ptr::null_mut();
-        let hr = unsafe {
-            self.raw.clone().CreateGraphicsPipelineState(
-                &pso_desc,
-                &d3d12::IID_ID3D12PipelineState,
-                &mut pipeline as *mut *mut _ as *mut *mut _)
+        let hr = match desc.depth_stencil {
+            Some(ds) if ds.depth_bounds => {
+                // The DepthBoundsTestEnable option isn't available in the original D3D12_GRAPHICS_PIPELINE_STATE_DESC struct.
+                // Instead, we must use the newer subobject stream method.
+                match self.raw.cast::<d3d12::ID3D12Device2>() {
+                    Err(hr) => hr,
+                    Ok(device2) => {
+                        let mut pss_stream = GraphicsPipelineStateSubobjectStream::new(&pso_desc, true);
+                        let pss_desc = d3d12::D3D12_PIPELINE_STATE_STREAM_DESC {
+                            SizeInBytes: mem::size_of_val(&pss_stream),
+                            pPipelineStateSubobjectStream: &mut pss_stream as *mut _ as _,
+                        };
+                        unsafe {
+                            device2.CreatePipelineState(
+                                &pss_desc,
+                                &d3d12::IID_ID3D12PipelineState,
+                                &mut pipeline as *mut *mut _ as *mut *mut _)
+                        }
+                    }
+                }
+            }
+            _ => unsafe {
+                self.raw.clone().CreateGraphicsPipelineState(
+                    &pso_desc,
+                    &d3d12::IID_ID3D12PipelineState,
+                    &mut pipeline as *mut *mut _ as *mut *mut _)
+            }
         };
 
         let destroy_shader = |shader: *mut d3dcommon::ID3DBlob| unsafe { (*shader).Release() };
@@ -1512,6 +1618,11 @@ impl d::Device<B> for Device {
         if ds_destroy { destroy_shader(ds); }
 
         if winerror::SUCCEEDED(hr) {
+            let mut baked_states = desc.baked_states.clone();
+            if !desc.depth_stencil.map(|ds| ds.depth_bounds).unwrap_or(false) {
+                baked_states.depth_bounds = None;
+            }
+
             Ok(n::GraphicsPipeline {
                 raw: pipeline,
                 signature: desc.layout.raw,
@@ -1519,7 +1630,7 @@ impl d::Device<B> for Device {
                 topology,
                 constants: desc.layout.root_constants.clone(),
                 vertex_strides,
-                baked_states: desc.baked_states.clone(),
+                baked_states,
             })
         } else {
             Err(pso::CreationError::Other)
