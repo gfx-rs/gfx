@@ -1,5 +1,5 @@
 
-use hal::{buffer, command as com, image, memory, pass, pso, query};
+use hal::{buffer, command as com, format, image, memory, pass, pso, query};
 use hal::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 use hal::format::Aspects;
 use hal::range::RangeArg;
@@ -7,6 +7,7 @@ use hal::range::RangeArg;
 use std::{cmp, iter, mem, ptr};
 use std::borrow::Borrow;
 use std::ops::Range;
+use std::sync::Arc;
 
 use winapi::um::d3d12;
 use winapi::shared::minwindef::{FALSE, UINT};
@@ -14,7 +15,7 @@ use winapi::shared::dxgiformat;
 
 use wio::com::ComPtr;
 
-use {conv, native as n, Backend, CmdSignatures, MAX_VERTEX_BUFFERS};
+use {conv, native as n, Backend, Shared, MAX_VERTEX_BUFFERS};
 use root_constants::RootConstant;
 use smallvec::SmallVec;
 
@@ -257,7 +258,7 @@ struct Copy {
 pub struct CommandBuffer {
     raw: ComPtr<d3d12::ID3D12GraphicsCommandList>,
     allocator: ComPtr<d3d12::ID3D12CommandAllocator>,
-    signatures: CmdSignatures,
+    shared: Arc<Shared>,
 
     // Cache renderpasses for graphics operations
     pass_cache: Option<RenderPassCache>,
@@ -310,12 +311,12 @@ impl CommandBuffer {
     pub(crate) fn new(
         raw: ComPtr<d3d12::ID3D12GraphicsCommandList>,
         allocator: ComPtr<d3d12::ID3D12CommandAllocator>,
-        signatures: CmdSignatures,
+        shared: Arc<Shared>,
     ) -> Self {
         CommandBuffer {
             raw,
             allocator,
-            signatures,
+            shared,
             pass_cache: None,
             cur_subpass: !0,
             gr_pipeline: PipelineCache::new(),
@@ -1231,17 +1232,32 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn blit_image<T>(
         &mut self,
-        _src: &n::Image,
+        src: &n::Image,
         _src_layout: image::Layout,
-        _dst: &n::Image,
+        dst: &n::Image,
         _dst_layout: image::Layout,
-        _filter: image::Filter,
-        _regions: T,
+        filter: image::Filter,
+        regions: T,
     ) where
         T: IntoIterator,
         T::Item: Borrow<com::ImageBlit>
     {
-        unimplemented!()
+        // TODO: only supporting 2D images
+
+        let filter = match filter {
+            image::Filter::Nearest => d3d12::D3D12_FILTER_MIN_MAG_MIP_POINT,
+            image::Filter::Linear => d3d12::D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT,
+        };
+
+        for region in regions {
+            let r = region.borrow();
+            let blit = match r.dst_subresource.aspects {
+                format::Aspects::COLOR => self.shared.service_pipes.get_blit_2d_color(dst.dxgi_format, filter),
+                _ => unimplemented!(),
+            };
+
+            unimplemented!()
+        }
     }
 
     fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
@@ -1457,7 +1473,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.set_compute_bind_point();
         unsafe {
             self.raw.ExecuteIndirect(
-                self.signatures.dispatch.as_raw(),
+                self.shared.signatures.dispatch.as_raw(),
                 1,
                 buffer.resource,
                 offset,
@@ -1776,7 +1792,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.set_graphics_bind_point();
         unsafe {
             self.raw.ExecuteIndirect(
-                self.signatures.draw.as_raw(),
+                self.shared.signatures.draw.as_raw(),
                 draw_count,
                 buffer.resource,
                 offset,
@@ -1797,7 +1813,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.set_graphics_bind_point();
         unsafe {
             self.raw.ExecuteIndirect(
-                self.signatures.draw_indexed.as_raw(),
+                self.shared.signatures.draw_indexed.as_raw(),
                 draw_count,
                 buffer.resource,
                 offset,

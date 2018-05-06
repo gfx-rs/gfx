@@ -55,7 +55,7 @@ fn gen_query_error(err: SpirvErrorCode) -> d::ShaderError {
     d::ShaderError::CompilationFailed(msg)
 }
 
-fn shader_bytecode(shader: *mut d3dcommon::ID3DBlob) -> d3d12::D3D12_SHADER_BYTECODE {
+pub(crate) fn shader_bytecode(shader: *mut d3dcommon::ID3DBlob) -> d3d12::D3D12_SHADER_BYTECODE {
     unsafe {
         d3d12::D3D12_SHADER_BYTECODE {
             pShaderBytecode: if !shader.is_null() {
@@ -110,6 +110,63 @@ pub struct UnboundImage {
     // Dimension of a texel block (compressed formats).
     block_dim: (u8, u8),
     num_levels: image::Level,
+}
+
+/// Compile a single shader entry point from a HLSL text shader
+pub(crate) fn compile_shader(
+    stage: pso::Stage,
+    shader_model: hlsl::ShaderModel,
+    entry: &str,
+    code: &[u8],
+) -> Result<*mut d3dcommon::ID3DBlob, d::ShaderError> {
+    let stage_to_str = |stage, shader_model| {
+        let stage = match stage {
+            pso::Stage::Vertex => "vs",
+            pso::Stage::Fragment => "ps",
+            pso::Stage::Compute => "cs",
+            _ => unimplemented!(),
+        };
+
+        let model = match shader_model {
+            hlsl::ShaderModel::V5_0 => "5_0",
+            hlsl::ShaderModel::V5_1 => "5_1",
+            hlsl::ShaderModel::V6_0 => "6_0",
+            _ => unimplemented!(),
+        };
+
+        format!("{}_{}\0", stage, model)
+    };
+
+    let mut blob = ptr::null_mut();
+    let mut error = ptr::null_mut();
+    let entry = ffi::CString::new(entry).unwrap();
+    let hr = unsafe {
+        d3dcompiler::D3DCompile(
+            code.as_ptr() as *const _,
+            code.len(),
+            ptr::null(),
+            ptr::null(),
+            ptr::null_mut(),
+            entry.as_ptr() as *const _,
+            stage_to_str(stage, shader_model).as_ptr() as *const i8,
+            1,
+            0,
+            &mut blob as *mut *mut _,
+            &mut error as *mut *mut _)
+    };
+    if !winerror::SUCCEEDED(hr) {
+        error!("D3DCompile error {:x}", hr);
+        let error = unsafe { ComPtr::<d3dcommon::ID3DBlob>::from_raw(error) };
+        let message = unsafe {
+            let pointer = error.GetBufferPointer();
+            let size = error.GetBufferSize();
+            let slice = slice::from_raw_parts(pointer as *const u8, size as usize);
+            String::from_utf8_lossy(slice).into_owned()
+        };
+        Err(d::ShaderError::CompilationFailed(message))
+    } else {
+        Ok(blob)
+    }
 }
 
 #[repr(C)]
@@ -197,63 +254,6 @@ impl GraphicsPipelineStateSubobjectStream {
 }
 
 impl Device {
-    /// Compile a single shader entry point from a HLSL text shader
-    fn compile_shader(
-        stage: pso::Stage,
-        shader_model: hlsl::ShaderModel,
-        entry: &str,
-        code: &[u8],
-    ) -> Result<*mut d3dcommon::ID3DBlob, d::ShaderError> {
-        let stage_to_str = |stage, shader_model| {
-            let stage = match stage {
-                pso::Stage::Vertex => "vs",
-                pso::Stage::Fragment => "ps",
-                pso::Stage::Compute => "cs",
-                _ => unimplemented!(),
-            };
-
-            let model = match shader_model {
-                hlsl::ShaderModel::V5_0 => "5_0",
-                hlsl::ShaderModel::V5_1 => "5_1",
-                hlsl::ShaderModel::V6_0 => "6_0",
-                _ => unimplemented!(),
-            };
-
-            format!("{}_{}\0", stage, model)
-        };
-
-        let mut blob = ptr::null_mut();
-        let mut error = ptr::null_mut();
-        let entry = ffi::CString::new(entry).unwrap();
-        let hr = unsafe {
-            d3dcompiler::D3DCompile(
-                code.as_ptr() as *const _,
-                code.len(),
-                ptr::null(),
-                ptr::null(),
-                ptr::null_mut(),
-                entry.as_ptr() as *const _,
-                stage_to_str(stage, shader_model).as_ptr() as *const i8,
-                1,
-                0,
-                &mut blob as *mut *mut _,
-                &mut error as *mut *mut _)
-        };
-        if !winerror::SUCCEEDED(hr) {
-            error!("D3DCompile error {:x}", hr);
-            let error = unsafe { ComPtr::<d3dcommon::ID3DBlob>::from_raw(error) };
-            let message = unsafe {
-                let pointer = error.GetBufferPointer();
-                let size = error.GetBufferSize();
-                let slice = slice::from_raw_parts(pointer as *const u8, size as usize);
-                String::from_utf8_lossy(slice).into_owned()
-            };
-            Err(d::ShaderError::CompilationFailed(message))
-        } else {
-            Ok(blob)
-        }
-    }
-
     fn parse_spirv(raw_data: &[u8]) -> Result<spirv::Ast<hlsl::Target>, d::ShaderError> {
         // spec requires "codeSize must be a multiple of 4"
         assert_eq!(raw_data.len() & 3, 0);
@@ -429,7 +429,7 @@ impl Device {
                     .ok_or(d::ShaderError::MissingEntryPoint(source.entry.into()))
                     .and_then(|entry_point| {
                         let stage = conv::map_execution_model(entry_point.execution_model);
-                        let shader = Self::compile_shader(
+                        let shader = compile_shader(
                             stage,
                             shader_model,
                             &entry_point.name,
@@ -450,7 +450,7 @@ impl Device {
         code: &[u8],
     ) -> Result<n::ShaderModule, d::ShaderError> {
         let mut shader_map = BTreeMap::new();
-        let blob = Self::compile_shader(stage, hlsl::ShaderModel::V5_1, hlsl_entry, code)?;
+        let blob = compile_shader(stage, hlsl::ShaderModel::V5_1, hlsl_entry, code)?;
         shader_map.insert(entry_point.into(), blob);
         Ok(n::ShaderModule::Compiled(shader_map))
     }
@@ -1040,7 +1040,7 @@ impl d::Device<B> for Device {
             inner: unsafe { ComPtr::from_raw(command_allocator) },
             device: self.raw.clone(),
             list_type,
-            signatures: self.signatures.clone(),
+            shared: self.shared.clone(),
         }
     }
 
