@@ -1380,18 +1380,18 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         });
     }
 
-    fn bind_vertex_buffers(&mut self, buffer_set: pso::VertexBufferSet<Backend>) {
+    fn bind_vertex_buffers(&mut self, first_binding: u32, buffer_set: pso::VertexBufferSet<Backend>) {
+        let attribute_buffer_index = self.state.attribute_buffer_index + first_binding as usize;
         {
             let buffers = &mut self.state.resources_vs.buffers;
-            while buffers.len() < self.state.attribute_buffer_index + buffer_set.0.len()    {
+            while buffers.len() < attribute_buffer_index + buffer_set.0.len()    {
                 buffers.push(None)
             }
-            for (ref mut out, &(ref buffer, offset)) in buffers[self.state.attribute_buffer_index..].iter_mut().zip(buffer_set.0.iter()) {
+            for (ref mut out, &(ref buffer, offset)) in buffers[attribute_buffer_index..].iter_mut().zip(buffer_set.0.iter()) {
                 **out = Some((buffer.raw.clone(), offset));
             }
         }
 
-        let attribute_buffer_index = self.state.attribute_buffer_index;
         let commands = buffer_set.0.iter().enumerate().map(|(i, &(buffer, offset))| {
             soft::RenderCommand::BindBuffer {
                 stage: pso::Stage::Vertex,

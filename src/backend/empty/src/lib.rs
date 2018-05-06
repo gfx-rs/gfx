@@ -494,7 +494,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn bind_vertex_buffers(&mut self, _: pso::VertexBufferSet<Backend>) {
+    fn bind_vertex_buffers(&mut self, _: u32, _: pso::VertexBufferSet<Backend>) {
         unimplemented!()
     }
 

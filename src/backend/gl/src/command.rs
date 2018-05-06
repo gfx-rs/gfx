@@ -698,7 +698,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         self.push_cmd(Command::BindIndexBuffer(ibv.buffer.raw));
     }
 
-    fn bind_vertex_buffers(&mut self, vbs: hal::pso::VertexBufferSet<Backend>) {
+    fn bind_vertex_buffers(&mut self, _first_binding: u32, vbs: hal::pso::VertexBufferSet<Backend>) {
         if vbs.0.len() == 0 {
             return
         }

@@ -904,7 +904,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                         })
                                         .collect::<Vec<_>>();
                                     let set = pso::VertexBufferSet(buffers_raw);
-                                    encoder.bind_vertex_buffers(set);
+                                    encoder.bind_vertex_buffers(0, set);
                                 }
                                 Dc::BindPipeline(ref name) => {
                                     let pso = resources.graphics_pipelines

@@ -64,8 +64,8 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
     }
 
     ///
-    pub fn bind_vertex_buffers(&mut self, vbs: pso::VertexBufferSet<B>) {
-        self.0.bind_vertex_buffers(vbs);
+    pub fn bind_vertex_buffers(&mut self, first_binding: u32, vbs: pso::VertexBufferSet<B>) {
+        self.0.bind_vertex_buffers(first_binding, vbs);
     }
 
     ///
