@@ -17,6 +17,7 @@ mod conv;
 mod device;
 mod format;
 mod free_list;
+mod internal;
 mod native;
 mod pool;
 mod root_constants;
@@ -459,6 +460,12 @@ struct CmdSignatures {
     dispatch: ComPtr<d3d12::ID3D12CommandSignature>,
 }
 
+// Shared objects between command buffers, owned by the device.
+struct Shared {
+    signatures: CmdSignatures,
+    service_pipes: internal::ServicePipes
+}
+
 pub struct Device {
     raw: ComPtr<d3d12::ID3D12Device>,
     private_caps: Capabilities,
@@ -474,7 +481,7 @@ pub struct Device {
     heap_srv_cbv_uav: Mutex<native::DescriptorHeap>,
     heap_sampler: Mutex<native::DescriptorHeap>,
     events: Mutex<Vec<winnt::HANDLE>>,
-    signatures: CmdSignatures,
+    shared: Arc<Shared>,
     // Present queue exposed by the `Present` queue family.
     // Required for swapchain creation. Only a single queue supports presentation.
     present_queue: ComPtr<d3d12::ID3D12CommandQueue>,
@@ -588,6 +595,13 @@ impl Device {
             device::CommandSignature::Dispatch,
         );
 
+        let signatures = CmdSignatures {
+            draw: draw_signature,
+            draw_indexed: draw_indexed_signature,
+            dispatch: dispatch_signature,
+        };
+        let service_pipes = internal::ServicePipes::new(device.clone());
+
         Device {
             raw: device,
             private_caps: physical_device.private_caps,
@@ -601,11 +615,7 @@ impl Device {
             heap_srv_cbv_uav: Mutex::new(heap_srv_cbv_uav),
             heap_sampler: Mutex::new(heap_sampler),
             events: Mutex::new(Vec::new()),
-            signatures: CmdSignatures {
-                draw: draw_signature,
-                draw_indexed: draw_indexed_signature,
-                dispatch: dispatch_signature,
-            },
+            shared: Arc::new(Shared { signatures, service_pipes }),
             present_queue,
             queues: Vec::new(),
             open: physical_device.is_open.clone(),
