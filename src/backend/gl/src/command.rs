@@ -4,6 +4,7 @@ use gl;
 
 use hal::{self, buffer, command, image, memory, pass, pso, query, ColorSlot};
 use hal::format::ChannelType;
+use hal::range::RangeArg;
 
 use {native as n, Backend};
 use pool::{self, BufferMemory};
@@ -532,7 +533,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         // TODO
     }
 
-    fn fill_buffer(&mut self, _buffer: &n::Buffer, _range: Range<buffer::Offset>, _data: u32) {
+    fn fill_buffer<R>(&mut self, _buffer: &n::Buffer, _range: R, _data: u32)
+    where
+        R: RangeArg<buffer::Offset>,
+    {
         unimplemented!()
     }
 

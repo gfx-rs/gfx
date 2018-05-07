@@ -8,8 +8,7 @@ use memory::{Barrier, Dependencies};
 use pso::PipelineStage;
 use queue::capability::{Supports, Transfer};
 use super::{CommandBuffer, RawCommandBuffer, Shot, Level};
-
-
+use range::RangeArg;
 /// Specifies a source region and a destination
 /// region in a buffer for copying.  All values
 /// are in units of bytes.
@@ -77,12 +76,14 @@ impl<'a, B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<'a,
 
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn fill_buffer(
+    pub fn fill_buffer<R>(
         &mut self,
         buffer: &B::Buffer,
-        range: Range<buffer::Offset>,
+        range: R,
         data: u32,
-    ) {
+    ) where
+        R: RangeArg<buffer::Offset>,
+    {
         self.raw.fill_buffer(buffer, range, data)
     }
 

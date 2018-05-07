@@ -21,6 +21,7 @@ pub struct ServicePipes {
     sampler_linear: metal::SamplerState,
     blits: HashMap<BlitKey, metal::RenderPipelineState>,
     copy_buffer: metal::ComputePipelineState,
+    fill_buffer: metal::ComputePipelineState,
 }
 
 impl ServicePipes {
@@ -39,13 +40,15 @@ impl ServicePipes {
         let sampler_linear = device.new_sampler(&sampler_desc);
 
         let copy_buffer = Self::create_copy_buffer(&library, device);
+        let fill_buffer = Self::create_fill_buffer(&library, device);
 
         ServicePipes {
             blits: HashMap::new(),
             sampler_nearest,
             sampler_linear,
             library,
-            copy_buffer
+            copy_buffer,
+            fill_buffer,
         }
     }
 
@@ -129,14 +132,35 @@ impl ServicePipes {
     ) -> metal::ComputePipelineState {
         let pipeline = metal::ComputePipelineDescriptor::new();
 
-        let cs_fill_buffer = library.get_function("cs_copy_buffer", None).unwrap();
-        pipeline.set_compute_function(Some(&cs_fill_buffer));
+        let cs_copy_buffer = library.get_function("cs_copy_buffer", None).unwrap();
+        pipeline.set_compute_function(Some(&cs_copy_buffer));
         pipeline.set_thread_group_size_is_multiple_of_thread_execution_width(true);
 
         if let Some(buffers) = pipeline.buffers() {
             buffers.object_at(0).unwrap().set_mutability(metal::MTLMutability::Mutable);
             buffers.object_at(1).unwrap().set_mutability(metal::MTLMutability::Immutable);
             buffers.object_at(2).unwrap().set_mutability(metal::MTLMutability::Immutable);
+        }
+
+        device.new_compute_pipeline_state(&pipeline).unwrap()
+    }
+
+    pub fn get_fill_buffer(&self) -> &metal::ComputePipelineStateRef {
+        &self.fill_buffer
+    }
+
+    fn create_fill_buffer(
+        library: &metal::LibraryRef, device: &metal::DeviceRef
+    ) -> metal::ComputePipelineState {
+        let pipeline = metal::ComputePipelineDescriptor::new();
+
+        let cs_fill_buffer = library.get_function("cs_fill_buffer", None).unwrap();
+        pipeline.set_compute_function(Some(&cs_fill_buffer));
+        pipeline.set_thread_group_size_is_multiple_of_thread_execution_width(true);
+
+        if let Some(buffers) = pipeline.buffers() {
+            buffers.object_at(0).unwrap().set_mutability(metal::MTLMutability::Mutable);
+            buffers.object_at(1).unwrap().set_mutability(metal::MTLMutability::Immutable);
         }
 
         device.new_compute_pipeline_state(&pipeline).unwrap()

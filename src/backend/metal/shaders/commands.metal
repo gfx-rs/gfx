@@ -51,6 +51,7 @@ fragment float4 ps_blit_2d_array(
 ) {
   return tex2DArray.sample(sampler2D, in.uv.xy, uint(in.uv.z), level(in.uv.w));
 }
+
 fragment float4 ps_blit_3d(
     BlitVertexData in [[stage_in]],
     texture3d<float> tex3D [[ texture(0) ]],
@@ -58,7 +59,23 @@ fragment float4 ps_blit_3d(
 ) {
   return tex3D.sample(sampler2D, in.uv.xyz, level(in.uv.w));
 }
+
 // -------------- Buffer Fill/Copy -------------- //
+
+typedef struct {
+    uint value;
+    uint length;
+} FillBufferValue;
+
+kernel void cs_fill_buffer(
+    device uint *buffer [[ buffer(0) ]],
+    constant FillBufferValue &fill [[ buffer(1) ]],
+    uint index [[ thread_position_in_grid ]]
+) {
+    if (index < fill.length) {
+        buffer[index] = fill.value;
+    }
+}
 
 kernel void cs_copy_buffer(
     device uchar *dest [[ buffer(0) ]],

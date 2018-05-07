@@ -7,6 +7,7 @@ use {Backend, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCou
 use image::{Filter, Layout, SubresourceRange};
 use memory::{Barrier, Dependencies};
 use query::{PipelineStatistic, Query, QueryControl, QueryId};
+use range::RangeArg;
 use super::{
     AttachmentClear, BufferCopy, BufferImageCopy,
     ClearColor, ClearDepthStencil, ClearValue,
@@ -130,12 +131,13 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
         T::Item: Borrow<Barrier<'a, B>>;
 
     /// Fill a buffer with the given `u32` value.
-    fn fill_buffer(
+    fn fill_buffer<R>(
         &mut self,
         buffer: &B::Buffer,
-        range: Range<buffer::Offset>,
+        range: R,
         data: u32,
-    );
+    ) where
+        R: RangeArg<buffer::Offset>;
 
     /// Copy data from the given slice into a buffer.
     fn update_buffer(

@@ -15,6 +15,7 @@ use hal::format::{Aspects, FormatDesc};
 use hal::image::{Filter, Layout, SubresourceRange};
 use hal::query::{Query, QueryControl, QueryId};
 use hal::queue::{RawCommandQueue, RawSubmission};
+use hal::range::RangeArg;
 
 use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLClearColor, MTLIndexType, MTLSize, CaptureManager};
 use cocoa::foundation::{NSUInteger, NSInteger};
@@ -493,6 +494,7 @@ impl CommandSink {
 
         match *self {
             CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, .. } => {
+                let _ap = AutoreleasePool::new();
                 let encoder = cmd_buffer.new_compute_command_encoder();
                 for command in init_commands {
                     exec_compute(encoder, &command);
@@ -1036,13 +1038,82 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         // TODO: MTLRenderCommandEncoder.textureBarrier on macOS?
     }
 
-    fn fill_buffer(
+    fn fill_buffer<R>(
         &mut self,
-        _buffer: &native::Buffer,
-        _range: Range<buffer::Offset>,
-        _data: u32,
-    ) {
-        unimplemented!()
+        buffer: &native::Buffer,
+        range: R,
+        data: u32,
+    ) where
+        R: RangeArg<u64>,
+    {
+        let inner = unsafe { &mut *self.inner.get() };
+        let sink = inner.sink.as_mut().unwrap();
+
+        let pipes = self.shared.service_pipes
+            .lock()
+            .unwrap();
+
+        let pso = pipes
+            .get_fill_buffer()
+            .to_owned();
+
+        // TODO: Reuse buffer allocation
+        let fill = self.shared.device.new_buffer_with_data(
+            &data as *const u32 as *const _,
+            mem::size_of::<u32>() as _,
+            metal::MTLResourceOptions::StorageModeShared,
+        );
+
+        inner.retained_buffers.push(fill.clone());
+
+        let start = *range.start().unwrap();
+        assert_eq!(start & 3, 0);
+
+        let end = match range.end() {
+            Some(e) => {
+                assert_eq!(e & 3, 0);
+                *e
+            },
+            None =>  (buffer.raw.length() - buffer.offset) & !3,
+        };
+
+        const WORD_ALIGNMENT: u64 = 4;
+
+        // TODO: Choose appropriate value and possibly fill multiple elements per thread in shader
+        // For now we simply write one element per thread, one thread per threadgroup
+        let threadgroups = (end - start) / WORD_ALIGNMENT;
+        let threads = 1;
+        let wg_count = MTLSize {
+            width: threadgroups,
+            height: 1,
+            depth: 1,
+        };
+        let wg_size = MTLSize {
+            width: threads,
+            height: 1,
+            depth: 1,
+        };
+
+        let commands = vec![
+            soft::ComputeCommand::BindPipeline(pso),
+            soft::ComputeCommand::BindBuffer {
+                index: 0,
+                buffer: Some(buffer.raw.clone()),
+                offset: buffer.offset + start,
+            },
+            soft::ComputeCommand::BindBuffer {
+                index: 1,
+                buffer: Some(fill),
+                offset: 0,
+            },
+            soft::ComputeCommand::Dispatch {
+                wg_count,
+                wg_size,
+            },
+        ];
+
+        sink.begin_compute_pass(commands);
+        sink.stop_encoding();
     }
 
     fn update_buffer(
