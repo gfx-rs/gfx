@@ -246,7 +246,7 @@ fn main() {
                             virtual_keycode: Some(winit::VirtualKeyCode::Escape),
                             .. },
                         ..
-                    } | winit::WindowEvent::Closed => running = false,
+                    } | winit::WindowEvent::CloseRequested => running = false,
                     _ => (),
                 }
             }
