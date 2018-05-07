@@ -793,6 +793,7 @@ impl RawCommandQueue<Backend> for Arc<Shared> {
         IC: IntoIterator,
         IC::Item: Borrow<CommandBuffer>,
     {
+        debug!("submitting with fence {:?}", fence);
         // FIXME: wait for semaphores!
 
         // FIXME: multiple buffers signaling!
@@ -880,6 +881,7 @@ impl RawCommandQueue<Backend> for Arc<Shared> {
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+        debug!("waiting for idle");
         let mut pool = self.queue_pool.lock().unwrap();
         let cmd_buffer = pool.borrow_command_buffer(&self.device);
         cmd_buffer.commit();
@@ -1074,7 +1076,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 assert_eq!(e & 3, 0);
                 *e
             },
-            None =>  (buffer.raw.length() - buffer.offset) & !3,
+            None => (buffer.raw.length() - buffer.offset) & !3,
         };
 
         const WORD_ALIGNMENT: u64 = 4;
@@ -1107,8 +1109,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 offset: 0,
             },
             soft::ComputeCommand::Dispatch {
-                wg_count,
                 wg_size,
+                wg_count,
             },
         ];
 

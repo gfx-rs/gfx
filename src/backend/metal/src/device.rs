@@ -201,7 +201,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             let shared_capture_manager = CaptureManager::shared();
             let default_capture_scope = shared_capture_manager.new_capture_scope_with_device(&device.device);
             shared_capture_manager.set_default_capture_scope(default_capture_scope);
-            shared_capture_manager.start_capture_with_device(&device.device);
+            shared_capture_manager.start_capture_with_scope(&default_capture_scope);
             default_capture_scope.begin_scope();
         }
 
@@ -954,6 +954,7 @@ impl hal::Device<Backend> for Device {
         &self, memory: &n::Memory, generic_range: R
     ) -> Result<*mut u8, mapping::Error> {
         let range = memory.resolve(&generic_range);
+        debug!("mapping memory {:?} at {:?}", memory, range);
         self.invalidate_mapped_memory_ranges(&[(memory, generic_range)]);
         memory.initialized.set(true);
 
@@ -968,6 +969,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn unmap_memory(&self, memory: &n::Memory) {
+        debug!("unmapping memory {:?}", memory);
         let range = memory.mapping.lock().unwrap().take().expect("Unmapping non-mapped memory?");
         self.flush_mapped_memory_ranges(&[(memory, range)]);
     }
@@ -978,6 +980,9 @@ impl hal::Device<Backend> for Device {
         I::Item: Borrow<(&'a n::Memory, R)>,
         R: RangeArg<u64>,
     {
+        let _ap = AutoreleasePool::new(); // for the encoder
+        debug!("flushing mapped ranges");
+
         // temporary command buffer to copy the contents from
         // allocated CPU-visible buffers to the target buffers
         let mut pool = self.command_shared.queue_pool.lock().unwrap();
@@ -987,6 +992,7 @@ impl hal::Device<Backend> for Device {
         for item in iter {
             let (memory, ref generic_range) = *item.borrow();
             let range = memory.resolve(generic_range);
+            debug!("\trange {:?}", range);
 
             let cpu_buffer = memory.cpu_buffer.as_ref().unwrap();
             cpu_buffer.did_modify_range(NSRange {
@@ -1020,6 +1026,9 @@ impl hal::Device<Backend> for Device {
         I::Item: Borrow<(&'a n::Memory, R)>,
         R: RangeArg<u64>,
     {
+        let _ap = AutoreleasePool::new(); // for the encoder
+        debug!("invalidating mapped ranges");
+
         // temporary command buffer to copy the contents from
         // the given buffers into the allocated CPU-visible buffers
         let mut pool = self.command_shared.queue_pool.lock().unwrap();
@@ -1033,6 +1042,7 @@ impl hal::Device<Backend> for Device {
                 continue
             }
             let range = memory.resolve(generic_range);
+            debug!("\trange {:?}", range);
             let cpu_buffer = memory.cpu_buffer.as_ref().unwrap();
 
             let allocations = memory.allocations.lock().unwrap();
@@ -1056,6 +1066,7 @@ impl hal::Device<Backend> for Device {
 
         encoder.end_encoding();
         if num_copies != 0 {
+            debug!("\twaiting...");
             cmd_buffer.commit();
             cmd_buffer.wait_until_completed();
         }
@@ -1342,7 +1353,11 @@ impl hal::Device<Backend> for Device {
                 // a CPU-visible buffer associated with `Memory` object.
                 let res_options = MTLResourceOptions::StorageModePrivate;
                 let raw = self.device.new_buffer(buffer.size, res_options);
-                let is_mappable = self.memory_types[mt.0].properties.contains(memory::Properties::CPU_VISIBLE);
+                let props = self.memory_types[mt.0].properties;
+                let is_mappable = props.contains(memory::Properties::CPU_VISIBLE);
+                if is_mappable && props.contains(memory::Properties::COHERENT) {
+                    warn!("COHERENT buffer memory is not yet supported properly");
+                }
                 (raw, res_options, is_mappable)
             }
         };
@@ -1602,6 +1617,7 @@ impl hal::Device<Backend> for Device {
     fn wait_for_fence(&self, fence: &n::Fence, mut timeout_ms: u32) -> bool {
         use std::{thread, time};
         let tick = 1;
+        debug!("waiting for fence {:?} for {} ms", fence, timeout_ms);
         loop {
             if *fence.0.lock().unwrap() {
                 return true
