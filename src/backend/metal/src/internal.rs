@@ -20,6 +20,7 @@ pub struct ServicePipes {
     sampler_nearest: metal::SamplerState,
     sampler_linear: metal::SamplerState,
     blits: HashMap<BlitKey, metal::RenderPipelineState>,
+    copy_buffer: metal::ComputePipelineState,
 }
 
 impl ServicePipes {
@@ -37,11 +38,14 @@ impl ServicePipes {
         sampler_desc.set_mag_filter(metal::MTLSamplerMinMagFilter::Linear);
         let sampler_linear = device.new_sampler(&sampler_desc);
 
+        let copy_buffer = Self::create_copy_buffer(&library, device);
+
         ServicePipes {
             blits: HashMap::new(),
             sampler_nearest,
             sampler_linear,
             library,
+            copy_buffer
         }
     }
 
@@ -52,7 +56,7 @@ impl ServicePipes {
         }
     }
 
-    pub fn get_blit(
+    pub fn get_blit_image(
         &mut self,
         ty: metal::MTLTextureType,
         format: metal::MTLPixelFormat,
@@ -61,10 +65,10 @@ impl ServicePipes {
         let lib = &self.library;
         self.blits
             .entry((ty, format))
-            .or_insert_with(|| Self::create_blit(ty, format, lib, device))
+            .or_insert_with(|| Self::create_blit_image(ty, format, lib, device))
     }
 
-    fn create_blit(
+    fn create_blit_image(
         ty: metal::MTLTextureType, format: metal::MTLPixelFormat,
         library: &metal::LibraryRef, device: &metal::DeviceRef,
     ) -> metal::RenderPipelineState {
@@ -114,5 +118,26 @@ impl ServicePipes {
         pipeline.set_vertex_descriptor(Some(&vertex_descriptor));
 
         device.new_render_pipeline_state(&pipeline).unwrap()
+    }
+
+    pub fn get_copy_buffer(&self) -> &metal::ComputePipelineStateRef {
+        &self.copy_buffer
+    }
+
+    fn create_copy_buffer(
+        library: &metal::LibraryRef, device: &metal::DeviceRef
+    ) -> metal::ComputePipelineState {
+        let pipeline = metal::ComputePipelineDescriptor::new();
+
+        let cs_fill_buffer = library.get_function("cs_copy_buffer", None).unwrap();
+        pipeline.set_compute_function(Some(&cs_fill_buffer));
+
+        if let Some(buffers) = pipeline.buffers() {
+            buffers.object_at(0).unwrap().set_mutability(metal::MTLMutability::Mutable);
+            buffers.object_at(1).unwrap().set_mutability(metal::MTLMutability::Immutable);
+            buffers.object_at(2).unwrap().set_mutability(metal::MTLMutability::Immutable);
+        }
+
+        device.new_compute_pipeline_state(&pipeline).unwrap()
     }
 }

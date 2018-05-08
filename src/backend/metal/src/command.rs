@@ -1291,7 +1291,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 .lock()
                 .unwrap();
             let pso = pipes
-                .get_blit(dst.mtl_type, dst.mtl_format, &self.shared.device)
+                .get_blit_image(dst.mtl_type, dst.mtl_format, &self.shared.device)
                 .to_owned();
             let sampler = pipes.get_sampler(filter);
             let ext = &dst.extent;
@@ -1890,14 +1890,78 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::BufferCopy>,
     {
-        let commands = regions.into_iter().map(|region| {
-            soft::BlitCommand::CopyBuffer {
-                src: src.raw.clone(),
-                dst: dst.raw.clone(),
-                region: region.borrow().clone(),
+        let inner = unsafe { &mut *self.inner.get() };
+        let compute_pipe = self.shared.service_pipes
+            .lock()
+            .unwrap()
+            .get_copy_buffer()
+            .to_owned();
+
+        let mut blit_commands = Vec::new();
+        let mut compute_commands = vec![
+            soft::ComputeCommand::BindPipeline(compute_pipe),
+        ];
+        let wg_size = MTLSize {
+            width: 64,
+            height: 1,
+            depth: 1,
+        };
+
+        for region in  regions {
+            let r = region.borrow();
+            if r.size % 4 == 0 {
+                blit_commands.push(soft::BlitCommand::CopyBuffer {
+                    src: src.raw.clone(),
+                    dst: dst.raw.clone(),
+                    region: r.clone(),
+                });
+            } else {
+                // not natively supported, going through compute shader
+                assert_eq!(0, r.size >> 32);
+                let word_count = (r.size + 3) / 4;
+                let copy_data = self.shared.device.new_buffer_with_data(
+                    &r.size as *const u64 as *const _,
+                    mem::size_of::<u32>() as _,
+                    metal::MTLResourceOptions::StorageModeShared,
+                );
+
+                inner.retained_buffers.push(copy_data.clone());
+
+                let wg_count = MTLSize {
+                    width: (word_count + wg_size.width - 1) / wg_size.width,
+                    height: 1,
+                    depth: 1,
+                };
+
+                compute_commands.push(soft::ComputeCommand::BindBuffer {
+                    index: 0,
+                    buffer: Some(dst.raw.clone()),
+                    offset: r.dst,
+                });
+                compute_commands.push(soft::ComputeCommand::BindBuffer {
+                    index: 1,
+                    buffer: Some(src.raw.clone()),
+                    offset: r.src,
+                });
+                compute_commands.push(soft::ComputeCommand::BindBuffer {
+                    index: 2,
+                    buffer: Some(copy_data),
+                    offset: 0,
+                });
+                compute_commands.push(soft::ComputeCommand::Dispatch {
+                    wg_size,
+                    wg_count,
+                });
             }
-        });
-        self.sink().blit_commands(commands);
+        }
+
+        let sink = inner.sink.as_mut().unwrap();
+        sink.blit_commands(blit_commands.into_iter());
+
+        if compute_commands.len() > 1 { // first is bind PSO
+            sink.begin_compute_pass(compute_commands);
+            sink.stop_encoding();
+        }
     }
 
     fn copy_image<T>(

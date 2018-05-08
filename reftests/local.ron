@@ -5,6 +5,11 @@
 			jobs: ["copy-buf"],
 			expect: Buffer("buffer.output", [72, 65, 76, 80]),
 		),
+		"copy-buf-cut": (
+			features: (bits: 0),
+			jobs: ["copy-buf-cut"],
+			expect: Buffer("buffer.large", [48, 49, 50, 51, 72, 65, 54, 55]),
+		),
 		"copy-image": (
 			features: (bits: 0),
 			jobs: ["copy-image"],
