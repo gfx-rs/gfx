@@ -14,8 +14,8 @@ use {device};
 
 #[derive(Clone)]
 pub struct Blit {
-    pipeline: ComPtr<d3d12::ID3D12PipelineState>,
-    signature: ComPtr<d3d12::ID3D12RootSignature>,
+    pub pipeline: ComPtr<d3d12::ID3D12PipelineState>,
+    pub signature: ComPtr<d3d12::ID3D12RootSignature>,
 }
 
 pub struct ServicePipes {

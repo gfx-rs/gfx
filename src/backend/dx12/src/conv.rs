@@ -470,7 +470,8 @@ pub fn map_image_flags(usage: image::Usage) -> D3D12_RESOURCE_FLAGS {
     use self::image::Usage;
     let mut flags = D3D12_RESOURCE_FLAG_NONE;
 
-    if usage.contains(Usage::COLOR_ATTACHMENT) {
+    // Blit operations implemented via a graphics pipeline
+    if usage.intersects(Usage::COLOR_ATTACHMENT | Usage::TRANSFER_DST) {
         flags = flags | D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
     }
     if usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
