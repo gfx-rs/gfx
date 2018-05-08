@@ -546,8 +546,10 @@ impl CommandBuffer {
             BindPoint::InternalGraphics => {
                 // Switch to graphics bind point
                 let (pipeline, signature) = self.gr_pipeline.pipeline.expect("No graphics pipeline bound");
-                unsafe { self.raw.SetPipelineState(pipeline); }
-                unsafe { self.raw.SetGraphicsRootSignature(signature); }
+                unsafe {
+                    self.raw.SetPipelineState(pipeline);
+                    self.raw.SetGraphicsRootSignature(signature);
+                }
                 self.active_bindpoint = BindPoint::Graphics;
             },
         }
@@ -588,14 +590,14 @@ impl CommandBuffer {
 
     fn set_compute_bind_point(&mut self) {
         match self.active_bindpoint {
-            BindPoint::Graphics => {
+            BindPoint::Graphics | BindPoint::InternalGraphics => {
                 // Switch to compute bind point
                 assert!(self.comp_pipeline.pipeline.is_some(), "No compute pipeline bound");
                 let (pipeline, _) = self.comp_pipeline.pipeline.unwrap();
                 unsafe { self.raw.SetPipelineState(pipeline); }
                 self.active_bindpoint = BindPoint::Compute;
             },
-            BindPoint::Compute | BindPoint::InternalGraphics => { }, // Nothing to do
+            BindPoint::Compute => { }, // Nothing to do
         }
 
         let cmd_buffer = &mut self.raw;
@@ -1254,6 +1256,26 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     {
         // TODO: only supporting 2D images
 
+        let rtv_pool = {
+            let desc = d3d12::D3D12_DESCRIPTOR_HEAP_DESC {
+                Type: d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+                NumDescriptors: 1,
+                Flags: d3d12::D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+                NodeMask: 0,
+            };
+
+            let mut heap: *mut d3d12::ID3D12DescriptorHeap = ptr::null_mut();
+            unsafe {
+                (*self.shared.device).CreateDescriptorHeap(
+                    &desc,
+                    &d3d12::IID_ID3D12DescriptorHeap,
+                    &mut heap as *mut *mut _ as *mut *mut _,
+                );
+            };
+            unsafe { ComPtr::from_raw(heap) }
+        };
+        let rtv = unsafe { rtv_pool.GetCPUDescriptorHandleForHeapStart() };
+
         let filter = match filter {
             image::Filter::Nearest => d3d12::D3D12_FILTER_MIN_MAG_MIP_POINT,
             image::Filter::Linear => d3d12::D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT,
@@ -1261,14 +1283,88 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         for region in regions {
             let r = region.borrow();
+
+            let first_layer = r.dst_subresource.layers.start;
+            let num_layers = r.dst_subresource.layers.end - first_layer;
+
             let blit = match r.dst_subresource.aspects {
-                format::Aspects::COLOR => self.shared.service_pipes.get_blit_2d_color(dst.dxgi_format, filter),
+                format::Aspects::COLOR => {
+                    // Create RTV of the dst image for the miplevel of the current region
+                    let mut desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
+                        Format: dst.dxgi_format,
+                        ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2DARRAY,
+                        u: unsafe { mem::zeroed() },
+                    };
+
+                    *unsafe{ desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_RTV {
+                        MipSlice: r.dst_subresource.level as _,
+                        FirstArraySlice: first_layer as _,
+                        ArraySize: num_layers as _,
+                        PlaneSlice: 0, //TODO
+                    };
+
+                    unsafe {
+                        (*self.shared.device).CreateRenderTargetView(dst.resource, &desc, rtv);
+                        self.raw.OMSetRenderTargets(
+                            1,
+                            &rtv,
+                            FALSE,
+                            ptr::null(),
+                        );
+                    }
+
+                    self.shared.service_pipes.get_blit_2d_color(dst.dxgi_format, filter)
+                },
                 _ => unimplemented!(),
             };
 
             self.set_internal_graphics_pipeline();
 
-            unimplemented!()
+            // TODO: support flipping?
+            let viewport = d3d12::D3D12_VIEWPORT {
+                TopLeftX: r.dst_bounds.start.x as _,
+                TopLeftY: r.dst_bounds.start.y as _,
+                Width: (r.dst_bounds.end.x - r.dst_bounds.start.x) as _,
+                Height: (r.dst_bounds.end.y - r.dst_bounds.start.y) as _,
+                MinDepth: 0.0,
+                MaxDepth: 1.0,
+            };
+            let scissor = d3d12::D3D12_RECT {
+                left: r.dst_bounds.start.x,
+                top: r.dst_bounds.start.y,
+                right: r.dst_bounds.end.x,
+                bottom: r.dst_bounds.end.y,
+            };
+
+            // TODO: update push constants
+
+            // Instanced full screen triangle
+            //
+            // Each instance corresponds to one blitting operation on one layer
+            unsafe {
+                self.raw.SetPipelineState(blit.pipeline.as_raw());
+                self.raw.SetGraphicsRootSignature(blit.signature.as_raw());
+                self.raw.RSSetViewports(1, &viewport);
+                self.raw.RSSetScissorRects(1, &scissor);
+                self.raw.DrawInstanced(
+                    3,
+                    num_layers as _,
+                    0,
+                    first_layer as _,
+                );
+            }
+        }
+
+        // Reset viewports and scissors
+        unsafe {
+            self.raw.RSSetViewports(
+                self.viewport_cache.len() as _,
+                self.viewport_cache.as_ptr(),
+            );
+            self.raw.RSSetScissorRects(
+                self.scissor_cache.len() as _,
+                self.scissor_cache.as_ptr(),
+            );
         }
     }
 

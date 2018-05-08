@@ -462,8 +462,9 @@ struct CmdSignatures {
 
 // Shared objects between command buffers, owned by the device.
 struct Shared {
-    signatures: CmdSignatures,
-    service_pipes: internal::ServicePipes
+    pub signatures: CmdSignatures,
+    pub service_pipes: internal::ServicePipes,
+    pub device: *mut d3d12::ID3D12Device,
 }
 
 pub struct Device {
@@ -601,6 +602,11 @@ impl Device {
             dispatch: dispatch_signature,
         };
         let service_pipes = internal::ServicePipes::new(device.clone());
+        let shared = Shared {
+            signatures,
+            service_pipes,
+            device: device.as_raw(),
+        };
 
         Device {
             raw: device,
@@ -615,7 +621,7 @@ impl Device {
             heap_srv_cbv_uav: Mutex::new(heap_srv_cbv_uav),
             heap_sampler: Mutex::new(heap_sampler),
             events: Mutex::new(Vec::new()),
-            shared: Arc::new(Shared { signatures, service_pipes }),
+            shared: Arc::new(shared),
             present_queue,
             queues: Vec::new(),
             open: physical_device.is_open.clone(),
