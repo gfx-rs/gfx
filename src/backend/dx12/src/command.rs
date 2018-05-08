@@ -1328,9 +1328,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         unsafe { self.raw.OMSetStencilRef(front as _); }
     }
 
-    fn set_depth_bounds(&mut self, min: f32, max: f32) {
+    fn set_depth_bounds(&mut self, bounds: Range<f32>) {
         match self.raw.cast::<d3d12::ID3D12GraphicsCommandList1>() {
-            Ok(cmd_list1) => unsafe { cmd_list1.OMSetDepthBounds(min, max) },
+            Ok(cmd_list1) => unsafe { cmd_list1.OMSetDepthBounds(bounds.start, bounds.end) },
             Err(_) => warn!("Depth bounds test is not supported"),
         }
     }
@@ -1374,7 +1374,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             self.set_blend_constants(color);
         }
         if let Some(ref bounds) = pipeline.baked_states.depth_bounds {
-            self.set_depth_bounds(bounds.start, bounds.end);
+            self.set_depth_bounds(bounds.clone());
         }
     }
 

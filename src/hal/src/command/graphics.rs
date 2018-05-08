@@ -236,8 +236,8 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn set_depth_bounds(&mut self, min: f32, max: f32) {
-        self.raw.set_depth_bounds(min, max)
+    pub fn set_depth_bounds(&mut self, bounds: Range<f32>) {
+        self.raw.set_depth_bounds(bounds)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.

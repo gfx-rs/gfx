@@ -115,8 +115,8 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
     }
 
     ///
-    pub fn set_depth_bounds(&mut self, min: f32, max: f32) {
-        self.0.set_depth_bounds(min, max)
+    pub fn set_depth_bounds(&mut self, bounds: Range<f32>) {
+        self.0.set_depth_bounds(bounds)
     }
 
     ///

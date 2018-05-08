@@ -525,7 +525,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
 
-    fn set_depth_bounds(&mut self, min: f32, max: f32) {
+    fn set_depth_bounds(&mut self, _: Range<f32>) {
         unimplemented!()
     }
 

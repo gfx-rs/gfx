@@ -559,9 +559,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_depth_bounds(&mut self, min: f32, max: f32) {
+    fn set_depth_bounds(&mut self, bounds: Range<f32>) {
         unsafe {
-            self.device.0.cmd_set_depth_bounds(self.raw, min, max);
+            self.device.0.cmd_set_depth_bounds(self.raw, bounds.start, bounds.end);
         }
     }
 
