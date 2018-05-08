@@ -1,0 +1,29 @@
+[package]
+name = "gfx-backend-dx11"
+version = "0.1.0"
+description = "DirectX-11 API backend for gfx-rs"
+homepage = "https://github.com/gfx-rs/gfx"
+repository = "https://github.com/gfx-rs/gfx"
+keywords = ["graphics", "gamedev"]
+license = "Apache-2.0"
+authors = ["The Gfx-rs Developers"]
+readme = "README.md"
+documentation = "https://docs.rs/gfx-backend-dx11"
+workspace = "../../.."
+
+[features]
+default = ["winit"]
+
+[lib]
+name = "gfx_backend_dx11"
+
+[dependencies]
+bitflags = "1"
+derivative = "1"
+gfx-hal = { path = "../../hal", version = "0.1" }
+log = "0.4"
+smallvec = "0.6"
+spirv_cross = "0.8"
+winapi = { version = "0.3", features = ["basetsd","d3d11", "d3dcommon","d3dcompiler","dxgi1_2","dxgi1_3","dxgi1_4","dxgiformat","dxgitype","handleapi","minwindef","synchapi","unknwnbase","winbase","windef","winerror","winnt","winuser"] }
+winit = { version = "0.12", optional = true }
+wio = "0.2"

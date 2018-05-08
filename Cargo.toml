@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "src/backend/dx11",
     "src/backend/dx12",
     "src/backend/empty",
     "src/backend/gl",
