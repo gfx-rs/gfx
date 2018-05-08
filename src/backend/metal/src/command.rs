@@ -1161,10 +1161,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         #[inline]
         fn has_depth_stencil_format(i: &native::Image) -> bool {
-            i.format
-                .surface_desc()
-                .aspects
-                .contains(Aspects::DEPTH | Aspects::STENCIL)
+            i.format_desc.aspects.contains(Aspects::DEPTH | Aspects::STENCIL)
         }
 
         // We check if either of the two images has a combined depth/stencil format
@@ -1186,7 +1183,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             debug_assert_ne!(r.dst_subresource.aspects.contains(Aspects::COLOR), r.dst_subresource.aspects.contains(Aspects::DEPTH | Aspects::STENCIL));
             debug_assert_eq!(r.src_subresource.aspects, r.dst_subresource.aspects);
             // check that we're only copying aspects actually in the image
-            debug_assert!(src.format.surface_desc().aspects.contains(r.src_subresource.aspects));
+            debug_assert!(src.format_desc.aspects.contains(r.src_subresource.aspects));
 
             let only_one_depth_stencil = {
                 let has_depth = r.src_subresource.aspects.contains(Aspects::DEPTH);
@@ -1294,7 +1291,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 .lock()
                 .unwrap();
             let pso = pipes
-                .get_blit(dst.format, &self.shared.device)
+                .get_blit(dst.mtl_type, dst.mtl_format, &self.shared.device)
                 .to_owned();
             let sampler = pipes.get_sampler(filter);
             let ext = &dst.extent;
@@ -1939,7 +1936,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             soft::BlitCommand::CopyBufferToImage {
                 src: src.raw.clone(),
                 dst: dst.raw.clone(),
-                dst_desc: dst.format.surface_desc(),
+                dst_desc: dst.format_desc,
                 region: region.borrow().clone(),
             }
         });
@@ -1960,7 +1957,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let commands = regions.into_iter().map(|region| {
             soft::BlitCommand::CopyImageToBuffer {
                 src: src.raw.clone(),
-                src_desc: src.format.surface_desc(),
+                src_desc: src.format_desc,
                 dst: dst.raw.clone(),
                 region: region.borrow().clone(),
             }

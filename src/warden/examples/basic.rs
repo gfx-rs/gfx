@@ -25,7 +25,8 @@ fn main() {
             .unwrap()
             .read_to_end(&mut raw_data)
             .unwrap();
-        let mut deserializer = Deserializer::from_bytes(&raw_data);
+        let mut deserializer = Deserializer::from_bytes(&raw_data)
+            .unwrap();
         warden::raw::Scene::deserialize(&mut deserializer)
             .unwrap()
     };

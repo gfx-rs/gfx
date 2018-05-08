@@ -18,7 +18,23 @@ vertex VertexData vs_blit(TextureBlitAttributes in [[stage_in]]) {
     return VertexData { pos, in.src_coords, uint(in.dst_coords.z) };
 }
 
-fragment float4 ps_blit(
+fragment float4 ps_blit_1d(
+    VertexData in [[stage_in]],
+    texture1d<float> tex1D [[ texture(0) ]],
+    sampler sampler2D [[ sampler(0) ]]
+) {
+  return tex1D.sample(sampler2D, in.uv.x);
+}
+
+fragment float4 ps_blit_1d_array(
+    VertexData in [[stage_in]],
+    texture1d_array<float> tex1DArray [[ texture(0) ]],
+    sampler sampler2D [[ sampler(0) ]]
+) {
+  return tex1DArray.sample(sampler2D, in.uv.x, uint(in.uv.z));
+}
+
+fragment float4 ps_blit_2d(
     VertexData in [[stage_in]],
     texture2d<float> tex2D [[ texture(0) ]],
     sampler sampler2D [[ sampler(0) ]]
@@ -26,10 +42,17 @@ fragment float4 ps_blit(
   return tex2D.sample(sampler2D, in.uv.xy, level(in.uv.w));
 }
 
-fragment float4 ps_blit_array(
+fragment float4 ps_blit_2d_array(
     VertexData in [[stage_in]],
     texture2d_array<float> tex2DArray [[ texture(0) ]],
     sampler sampler2D [[ sampler(0) ]]
 ) {
   return tex2DArray.sample(sampler2D, in.uv.xy, uint(in.uv.z), level(in.uv.w));
+}
+fragment float4 ps_blit_3d(
+    VertexData in [[stage_in]],
+    texture3d<float> tex3D [[ texture(0) ]],
+    sampler sampler2D [[ sampler(0) ]]
+) {
+  return tex3D.sample(sampler2D, in.uv.xyz, level(in.uv.w));
 }
