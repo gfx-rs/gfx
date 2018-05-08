@@ -1421,62 +1421,58 @@ impl hal::Device<Backend> for Device {
         flags: image::StorageFlags,
     ) -> Result<n::UnboundImage, image::CreationError> {
         let is_cube = flags.contains(image::StorageFlags::CUBE_VIEW);
-        let mtl_format = map_format(format).ok_or(image::CreationError::Format(format))?;
+        let mtl_format = map_format(format)
+            .ok_or(image::CreationError::Format(format))?;
 
         let descriptor = metal::TextureDescriptor::new();
 
-        match kind {
-            image::Kind::D1(width, 1) => {
+        let mtl_type = match kind {
+            image::Kind::D1(_, 1) => {
                 assert!(!is_cube);
-                descriptor.set_texture_type(MTLTextureType::D1);
-                descriptor.set_width(width as u64);
+                MTLTextureType::D1
             }
-            image::Kind::D1(width, layers) => {
+            image::Kind::D1(_, layers) => {
                 assert!(!is_cube);
-                descriptor.set_texture_type(MTLTextureType::D1Array);
-                descriptor.set_width(width as u64);
                 descriptor.set_array_length(layers as u64);
+                MTLTextureType::D1Array
             }
-            image::Kind::D2(width, height, 1, 1) => {
-                descriptor.set_texture_type(MTLTextureType::D2);
-                descriptor.set_width(width as u64);
-                descriptor.set_height(height as u64);
+            image::Kind::D2(_, _, 1, 1) => {
+                MTLTextureType::D2
             }
-            image::Kind::D2(width, height, layers, 1) => {
+            image::Kind::D2(_, _, layers, 1) => {
                 if is_cube && layers > 6 {
                     assert_eq!(layers % 6, 0);
-                    descriptor.set_texture_type(MTLTextureType::CubeArray);
                     descriptor.set_array_length(layers as u64 / 6);
+                    MTLTextureType::CubeArray
                 } else if is_cube {
                     assert_eq!(layers, 6);
-                    descriptor.set_texture_type(MTLTextureType::Cube);
+                    MTLTextureType::Cube
                 } else if layers > 1 {
-                    descriptor.set_texture_type(MTLTextureType::D2Array);
                     descriptor.set_array_length(layers as u64);
+                    MTLTextureType::D2Array
                 } else {
-                    descriptor.set_texture_type(MTLTextureType::D2);
+                    MTLTextureType::D2
                 }
-                descriptor.set_width(width as u64);
-                descriptor.set_height(height as u64);
             }
-            image::Kind::D2(width, height, 1, samples) if !is_cube => {
-                descriptor.set_texture_type(MTLTextureType::D2Multisample);
-                descriptor.set_width(width as u64);
-                descriptor.set_height(height as u64);
+            image::Kind::D2(_, _, 1, samples) if !is_cube => {
                 descriptor.set_sample_count(samples as u64);
+                MTLTextureType::D2Multisample
             }
             image::Kind::D2(..) => {
                 error!("Multi-sampled array textures or cubes are not supported: {:?}", kind);
                 return Err(image::CreationError::Kind)
             }
-            image::Kind::D3(width, height, depth) => {
+            image::Kind::D3(..) => {
                 assert!(!is_cube);
-                descriptor.set_texture_type(MTLTextureType::D3);
-                descriptor.set_width(width as u64);
-                descriptor.set_height(height as u64);
-                descriptor.set_depth(depth as u64);
+                MTLTextureType::D3
             }
-        }
+        };
+
+        descriptor.set_texture_type(mtl_type);
+        let extent = kind.extent();
+        descriptor.set_width(extent.width as u64);
+        descriptor.set_height(extent.height as u64);
+        descriptor.set_depth(extent.depth as u64);
 
         descriptor.set_mipmap_level_count(mip_levels as u64);
         descriptor.set_pixel_format(mtl_format);
@@ -1485,7 +1481,7 @@ impl hal::Device<Backend> for Device {
         Ok(n::UnboundImage {
             texture_desc: descriptor,
             format,
-            extent: kind.extent(),
+            extent,
         })
     }
 
@@ -1555,8 +1551,16 @@ impl hal::Device<Backend> for Device {
 
         Ok(n::Image {
             raw,
-            format: image.format,
             extent: image.extent,
+            format_desc: image.format.surface_desc(),
+            mtl_format: match map_format(image.format) {
+                Some(format) => format,
+                None => {
+                    error!("failed to find corresponding Metal format for {:?}", image.format);
+                    return Err(BindError::OutOfBounds);
+                },
+            },
+            mtl_type: image.texture_desc.texture_type(),
         })
     }
 

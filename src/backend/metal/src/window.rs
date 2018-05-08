@@ -2,6 +2,7 @@ use {Backend, QueueFamily};
 use native;
 use device::{Device, PhysicalDevice};
 
+use std::mem;
 use std::sync::{Arc, Mutex};
 
 use hal::{self, format, image};
@@ -127,13 +128,15 @@ impl Device {
             info!("allocating {} IOSurface backbuffers of size {}x{} with pixel format 0x{:x}", config.image_count, pixel_width, pixel_height, cv_format);
             // Create swap chain surfaces
             let io_surfaces: Vec<_> = (0..config.image_count).map(|_| {
-                io_surface::new(&CFDictionary::from_CFType_pairs::<CFString, CFNumber>(&[
-                    (TCFType::wrap_under_get_rule(io_surface::kIOSurfaceWidth), CFNumber::from(pixel_width as i32)),
-                    (TCFType::wrap_under_get_rule(io_surface::kIOSurfaceHeight), CFNumber::from(pixel_height as i32)),
-                    (TCFType::wrap_under_get_rule(io_surface::kIOSurfaceBytesPerRow), CFNumber::from(pixel_width as i32 * pixel_size)),
-                    (TCFType::wrap_under_get_rule(io_surface::kIOSurfaceBytesPerElement), CFNumber::from(pixel_size)),
-                    (TCFType::wrap_under_get_rule(io_surface::kIOSurfacePixelFormat), CFNumber::from(cv_format as i32)),
-                ]))
+                let dict = CFDictionary::from_CFType_pairs(&[
+                    (CFString::wrap_under_get_rule(io_surface::kIOSurfaceWidth), CFNumber::from(pixel_width as i32)),
+                    (CFString::wrap_under_get_rule(io_surface::kIOSurfaceHeight), CFNumber::from(pixel_height as i32)),
+                    (CFString::wrap_under_get_rule(io_surface::kIOSurfaceBytesPerRow), CFNumber::from(pixel_width as i32 * pixel_size)),
+                    (CFString::wrap_under_get_rule(io_surface::kIOSurfaceBytesPerElement), CFNumber::from(pixel_size)),
+                    (CFString::wrap_under_get_rule(io_surface::kIOSurfacePixelFormat), CFNumber::from(cv_format as i32)),
+                ]);
+                //Note: the transmute is totally bonkers here
+                io_surface::new(mem::transmute(&dict))
             }).collect();
 
             let backbuffer_descriptor = metal::TextureDescriptor::new();
@@ -150,12 +153,14 @@ impl Device {
                 ];
                 native::Image {
                     raw: mapped_texture,
-                    format: config.color_format,
                     extent: image::Extent {
                         width: pixel_width as _,
                         height: pixel_height as _,
                         depth: 1,
                     },
+                    format_desc: config.color_format.surface_desc(),
+                    mtl_format,
+                    mtl_type: metal::MTLTextureType::D2,
                 }
             }).collect();
 
