@@ -11,11 +11,10 @@ use std::{iter, mem};
 
 use hal::{buffer, command as com, error, memory, pool, pso};
 use hal::{VertexCount, VertexOffset, InstanceCount, IndexCount, WorkGroupCount};
-use hal::format::FormatDesc;
+use hal::format::{Aspects, FormatDesc};
 use hal::image::{Filter, Layout, SubresourceRange};
 use hal::query::{Query, QueryControl, QueryId};
 use hal::queue::{RawCommandQueue, RawSubmission};
-use hal::format::Aspects;
 
 use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLClearColor, MTLIndexType, MTLSize, CaptureManager};
 use cocoa::foundation::{NSUInteger, NSInteger};
@@ -1136,22 +1135,19 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     {
         use hal::image::{Extent, Offset};
 
-        #[inline]
-        fn offset_diff(a: &Offset, b: &Offset) -> Extent {
-            let dx = b.x - a.x;
-            let dy = b.y - a.y;
-            let dz = b.z - a.z;
-            debug_assert!(dx >= 0 && dy >= 0 && dz >= 0);
-            Extent {
-                width: dx as _,
-                height: dy as _,
-                depth: dz as _,
+        fn range_size(r: &Range<Offset>) -> Option<Extent> {
+            let dx = r.end.x - r.start.x;
+            let dy = r.end.y - r.start.y;
+            let dz = r.end.z - r.start.z;
+            if dx >= 0 && dy >= 0 && dz >= 0 {
+                Some(Extent {
+                    width: dx as _,
+                    height: dy as _,
+                    depth: dz as _,
+                })
+            } else {
+                None
             }
-        }
-
-        #[inline]
-        fn range_size(r: &Range<Offset>) -> Extent {
-            offset_diff(&r.start, &r.end)
         }
 
         #[inline]
@@ -1175,9 +1171,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             // layer count must be equal in both subresources
             debug_assert_eq!(r.src_subresource.layers.len(), r.dst_subresource.layers.len());
             // aspect flags
-            // enforce equal formats of both textures
-            // TODO this should probably be "compatible" pixel formats instead of equal formats
-            debug_assert_eq!(src.raw.pixel_format(), dst.raw.pixel_format());
+            // check formats compatibility
+            if src.format_desc.bits != dst.format_desc.bits {
+                error!("Formats {:?} and {:?} are not compatible, ignoring blit_image", src.mtl_format, dst.mtl_format);
+                continue;
+            }
             // enforce aspect flag restrictions
             debug_assert_ne!(r.src_subresource.aspects.contains(Aspects::COLOR), r.src_subresource.aspects.contains(Aspects::DEPTH | Aspects::STENCIL));
             debug_assert_ne!(r.dst_subresource.aspects.contains(Aspects::COLOR), r.dst_subresource.aspects.contains(Aspects::DEPTH | Aspects::STENCIL));
@@ -1196,7 +1194,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             // In the case that the image format is a combined Depth / Stencil format,
             // and we are only copying one of the aspects, we use the shader even if the regions
             // are the same size
-            if src_size == dst_size && !(has_ds && only_one_depth_stencil) {
+            if src_size == dst_size && src_size.is_some() && !(has_ds && only_one_depth_stencil) {
                 debug_assert!(is_offset_positive(&r.src_bounds.start));
                 debug_assert!(is_offset_positive(&r.dst_bounds.start));
 
@@ -1208,7 +1206,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         src_offset: r.src_bounds.start,
                         dst_subresource: r.dst_subresource.clone(),
                         dst_offset: r.dst_bounds.start,
-                        extent: src_size,
+                        extent: src_size.unwrap(),
                     },
                 });
             } else {
@@ -1919,7 +1917,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 // not natively supported, going through compute shader
                 assert_eq!(0, r.size >> 32);
                 let copy_data = self.shared.device.new_buffer_with_data(
-                    &r.size as *const u64 as *const _,
+                    &(r.size as u32) as *const u32 as *const _,
                     mem::size_of::<u32>() as _,
                     metal::MTLResourceOptions::StorageModeShared,
                 );
