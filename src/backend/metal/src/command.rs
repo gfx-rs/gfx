@@ -24,7 +24,6 @@ use {conversions as conv, soft};
 
 use smallvec::SmallVec;
 
-
 pub(crate) struct QueueInner {
     queue: metal::CommandQueue,
     reserve: Range<usize>,
@@ -1046,7 +1045,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         range: R,
         data: u32,
     ) where
-        R: RangeArg<u64>,
+        R: RangeArg<buffer::Offset>,
     {
         let inner = unsafe { &mut *self.inner.get() };
         let sink = inner.sink.as_mut().unwrap();
@@ -1059,16 +1058,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .get_fill_buffer()
             .to_owned();
 
-        // TODO: Reuse buffer allocation
-        let fill = self.shared.device.new_buffer_with_data(
-            &data as *const u32 as *const _,
-            mem::size_of::<u32>() as _,
-            metal::MTLResourceOptions::StorageModeShared,
-        );
-
-        inner.retained_buffers.push(fill.clone());
-
-        let start = *range.start().unwrap();
+        let start = *range.start().unwrap_or(&0);
         assert_eq!(start & 3, 0);
 
         let end = match range.end() {
@@ -1076,22 +1066,40 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 assert_eq!(e & 3, 0);
                 *e
             },
-            None => (buffer.raw.length() - buffer.offset) & !3,
+            None => buffer.raw.length() & !3,
         };
 
         const WORD_ALIGNMENT: u64 = 4;
+        let length = (end - start) / WORD_ALIGNMENT;
 
-        // TODO: Choose appropriate value and possibly fill multiple elements per thread in shader
-        // For now we simply write one element per thread, one thread per threadgroup
-        let threadgroups = (end - start) / WORD_ALIGNMENT;
-        let threads = 1;
+        // TODO: Reuse buffer allocation
+        let fill_value = self.shared.device.new_buffer_with_data(
+            &data as *const u32 as *const _,
+            mem::size_of::<u32>() as _,
+            metal::MTLResourceOptions::StorageModeShared,
+        );
+
+        inner.retained_buffers.push(fill_value.clone());
+
+        let fill_length = self.shared.device.new_buffer_with_data(
+            &(length as u32) as *const u32 as *const _,
+            mem::size_of::<u32>() as _,
+            metal::MTLResourceOptions::StorageModeShared,
+        );
+
+        inner.retained_buffers.push(fill_length.clone());
+
+        // TODO: Consider writing multiple values per thread in shader
+        let threads_per_threadgroup = pso.thread_execution_width();
+        let threadgroups = (length + threads_per_threadgroup - 1) / threads_per_threadgroup;
+
         let wg_count = MTLSize {
             width: threadgroups,
             height: 1,
             depth: 1,
         };
         let wg_size = MTLSize {
-            width: threads,
+            width: threads_per_threadgroup,
             height: 1,
             depth: 1,
         };
@@ -1101,11 +1109,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             soft::ComputeCommand::BindBuffer {
                 index: 0,
                 buffer: Some(buffer.raw.clone()),
-                offset: buffer.offset + start,
+                offset: start,
             },
             soft::ComputeCommand::BindBuffer {
                 index: 1,
-                buffer: Some(fill),
+                buffer: Some(fill_value),
+                offset: 0,
+            },
+            soft::ComputeCommand::BindBuffer {
+                index: 2,
+                buffer: Some(fill_length),
                 offset: 0,
             },
             soft::ComputeCommand::Dispatch {
