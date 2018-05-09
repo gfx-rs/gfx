@@ -131,6 +131,7 @@ impl ServicePipes {
 
         let cs_fill_buffer = library.get_function("cs_copy_buffer", None).unwrap();
         pipeline.set_compute_function(Some(&cs_fill_buffer));
+        pipeline.set_thread_group_size_is_multiple_of_thread_execution_width(true);
 
         if let Some(buffers) = pipeline.buffers() {
             buffers.object_at(0).unwrap().set_mutability(metal::MTLMutability::Mutable);

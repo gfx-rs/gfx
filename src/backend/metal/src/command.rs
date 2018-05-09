@@ -1896,16 +1896,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .unwrap()
             .get_copy_buffer()
             .to_owned();
+        let wg_size = MTLSize {
+            width: compute_pipe.thread_execution_width(),
+            height: 1,
+            depth: 1,
+        };
 
         let mut blit_commands = Vec::new();
         let mut compute_commands = vec![
             soft::ComputeCommand::BindPipeline(compute_pipe),
         ];
-        let wg_size = MTLSize {
-            width: 64,
-            height: 1,
-            depth: 1,
-        };
 
         for region in  regions {
             let r = region.borrow();
