@@ -85,4 +85,5 @@ kernel void cs_copy_buffer(
 ) {
     if (index < size) {
         dest[index] = source[index];
+    }
 }

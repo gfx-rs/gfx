@@ -1072,22 +1072,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         const WORD_ALIGNMENT: u64 = 4;
         let length = (end - start) / WORD_ALIGNMENT;
 
+        let value_and_length = [data, length as _];
+
         // TODO: Reuse buffer allocation
-        let fill_value = self.shared.device.new_buffer_with_data(
-            &data as *const u32 as *const _,
-            mem::size_of::<u32>() as _,
+        let buf_value_and_length = self.shared.device.new_buffer_with_data(
+            &value_and_length as *const u32 as *const _,
+            (mem::size_of::<u32>() * value_and_length.len()) as _,
             metal::MTLResourceOptions::StorageModeShared,
         );
 
-        inner.retained_buffers.push(fill_value.clone());
-
-        let fill_length = self.shared.device.new_buffer_with_data(
-            &(length as u32) as *const u32 as *const _,
-            mem::size_of::<u32>() as _,
-            metal::MTLResourceOptions::StorageModeShared,
-        );
-
-        inner.retained_buffers.push(fill_length.clone());
+        inner.retained_buffers.push(buf_value_and_length.clone());
 
         // TODO: Consider writing multiple values per thread in shader
         let threads_per_threadgroup = pso.thread_execution_width();
@@ -1113,12 +1107,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             },
             soft::ComputeCommand::BindBuffer {
                 index: 1,
-                buffer: Some(fill_value),
-                offset: 0,
-            },
-            soft::ComputeCommand::BindBuffer {
-                index: 2,
-                buffer: Some(fill_length),
+                buffer: Some(buf_value_and_length),
                 offset: 0,
             },
             soft::ComputeCommand::Dispatch {
