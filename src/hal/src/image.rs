@@ -46,8 +46,18 @@ pub struct Offset {
 }
 
 impl Offset {
-    /// Zero offset shortcut
+    /// Zero offset shortcut.
     pub const ZERO: Self = Offset { x: 0, y: 0, z: 0 };
+
+    /// Convert the offset into 2-sided bounds given the extent.
+    pub fn into_bounds(self, extent: &Extent) -> Range<Offset> {
+        let end = Offset {
+            x: self.x + extent.width as i32,
+            y: self.y + extent.height as i32,
+            z: self.z + extent.depth as i32,
+        };
+        self .. end
+    }
 }
 
 /// Image tiling modes.

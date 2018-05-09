@@ -1233,13 +1233,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             o.x >= 0 && o.y >= 0 && o.z >= 0
         }
 
-        #[inline]
-        fn has_depth_stencil_format(i: &native::Image) -> bool {
-            i.format_desc.aspects.contains(Aspects::DEPTH | Aspects::STENCIL)
-        }
-
-        // We check if either of the two images has a combined depth/stencil format
-        let has_ds = has_depth_stencil_format(&src) || has_depth_stencil_format(&dst);
         let mut blit_commands = Vec::new();
         let mut blit_vertices = HashMap::new(); // a list of vertices per mipmap
 
@@ -1254,31 +1247,22 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 error!("Formats {:?} and {:?} are not compatible, ignoring blit_image", src.mtl_format, dst.mtl_format);
                 continue;
             }
-            // enforce aspect flag restrictions
-            debug_assert_ne!(r.src_subresource.aspects.contains(Aspects::COLOR), r.src_subresource.aspects.contains(Aspects::DEPTH | Aspects::STENCIL));
-            debug_assert_ne!(r.dst_subresource.aspects.contains(Aspects::COLOR), r.dst_subresource.aspects.contains(Aspects::DEPTH | Aspects::STENCIL));
             debug_assert_eq!(r.src_subresource.aspects, r.dst_subresource.aspects);
             // check that we're only copying aspects actually in the image
             debug_assert!(src.format_desc.aspects.contains(r.src_subresource.aspects));
-
-            let only_one_depth_stencil = {
-                let has_depth = r.src_subresource.aspects.contains(Aspects::DEPTH);
-                let has_stencil = r.src_subresource.aspects.contains(Aspects::STENCIL);
-                has_depth ^ has_stencil
-            };
 
             let src_size = range_size(&r.src_bounds);
             let dst_size = range_size(&r.dst_bounds);
             // In the case that the image format is a combined Depth / Stencil format,
             // and we are only copying one of the aspects, we use the shader even if the regions
             // are the same size
-            if src_size == dst_size && src_size.is_some() && !(has_ds && only_one_depth_stencil) {
+            if src_size == dst_size && src_size.is_some() && src.mtl_format == dst.mtl_format {
                 debug_assert!(is_offset_positive(&r.src_bounds.start));
                 debug_assert!(is_offset_positive(&r.dst_bounds.start));
 
                 blit_commands.push(soft::BlitCommand::CopyImage {
                     src: src.raw.clone(),
-                    dst: src.raw.clone(),
+                    dst: dst.raw.clone(),
                     region: com::ImageCopy {
                         src_subresource: r.src_subresource.clone(),
                         src_offset: r.src_bounds.start,
@@ -1289,11 +1273,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 });
             } else {
                 // Fall back to shader-based blitting
+                // enforce aspect flag restrictions
+                if r.src_subresource.aspects.intersects(Aspects::DEPTH | Aspects::STENCIL) {
+                    error!("Aspects {:?} are not supported yet, ignoring blit_image", r.src_subresource.aspects);
+                    continue
+                }
                 let se = &src.extent;
                 let de = &dst.extent;
                 //TODO: support 3D textures
-                debug_assert_eq!(se.depth, 1);
-                debug_assert_eq!(de.depth, 1);
+                if se.depth != 1 || de.depth != 1 {
+                    warn!("3D image blits are not supported properly yet: {:?} -> {:?}", se, de);
+                }
 
                 let layers = r.src_subresource.layers.clone().zip(r.dst_subresource.layers.clone());
                 let list = blit_vertices
@@ -1374,11 +1364,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
             let prelude = [
                 soft::RenderCommand::BindPipeline(pso, None),
+                //Note: flipping Y coordinate of the destination here
                 soft::RenderCommand::SetViewport(MTLViewport {
                     originX: 0.0,
-                    originY: 0.0,
+                    originY: ext.height as _,
                     width: ext.width as _,
-                    height: ext.height as _,
+                    height: -(ext.height as f64),
                     znear: 0.0,
                     zfar: 1.0,
                 }),
@@ -2054,6 +2045,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::ImageCopy>,
     {
+        if src.mtl_format != dst.mtl_format {
+            error!("Unable to copy images of different formats");
+            return
+        }
+
         let commands = regions.into_iter().map(|region| {
             soft::BlitCommand::CopyImage {
                 src: src.raw.clone(),
