@@ -1,11 +1,12 @@
 
-use hal::{buffer, command as com, image, memory, pass, pso, query};
+use hal::{buffer, command as com, format, image, memory, pass, pso, query};
 use hal::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 use hal::format::Aspects;
 
 use std::{cmp, iter, mem, ptr};
 use std::borrow::Borrow;
 use std::ops::Range;
+use std::sync::Arc;
 
 use winapi::um::d3d12;
 use winapi::shared::minwindef::{FALSE, UINT};
@@ -13,7 +14,7 @@ use winapi::shared::dxgiformat;
 
 use wio::com::ComPtr;
 
-use {conv, native as n, Backend, CmdSignatures, MAX_VERTEX_BUFFERS};
+use {conv, native as n, Backend, Shared, MAX_VERTEX_BUFFERS};
 use root_constants::RootConstant;
 use smallvec::SmallVec;
 
@@ -203,6 +204,11 @@ impl UserData {
     fn clear_dirty(&mut self, i: usize) {
         self.dirty_mask &= !(1 << i);
     }
+
+    /// Mark all entries as dirty.
+    fn dirty_all(&mut self) {
+        self.dirty_mask = !0;
+    }
 }
 
 #[derive(Clone)]
@@ -239,6 +245,8 @@ impl PipelineCache {
 enum BindPoint {
     Compute,
     Graphics,
+     // Internal pipelines used for blitting, copying, etc.
+    InternalGraphics,
 }
 
 #[derive(Clone)]
@@ -256,7 +264,7 @@ struct Copy {
 pub struct CommandBuffer {
     raw: ComPtr<d3d12::ID3D12GraphicsCommandList>,
     allocator: ComPtr<d3d12::ID3D12CommandAllocator>,
-    signatures: CmdSignatures,
+    shared: Arc<Shared>,
 
     // Cache renderpasses for graphics operations
     pass_cache: Option<RenderPassCache>,
@@ -309,12 +317,12 @@ impl CommandBuffer {
     pub(crate) fn new(
         raw: ComPtr<d3d12::ID3D12GraphicsCommandList>,
         allocator: ComPtr<d3d12::ID3D12CommandAllocator>,
-        signatures: CmdSignatures,
+        shared: Arc<Shared>,
     ) -> Self {
         CommandBuffer {
             raw,
             allocator,
-            signatures,
+            shared,
             pass_cache: None,
             cur_subpass: !0,
             gr_pipeline: PipelineCache::new(),
@@ -345,6 +353,14 @@ impl CommandBuffer {
         self.pipeline_stats_query = None;
         self.vertex_buffer_views_needs_bind = [false; MAX_VERTEX_BUFFERS];
         self.vertex_buffer_views = [NULL_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS];
+    }
+
+    // Indicates that the pipeline slot has been overriden with an internal pipeline.
+    //
+    // This only invalidates the slot and the user data!
+    fn set_internal_graphics_pipeline(&mut self) {
+        self.active_bindpoint = BindPoint::InternalGraphics;
+        self.gr_pipeline.user_data.dirty_all();
     }
 
     fn insert_subpass_barriers(&self, insertion: BarrierPoint) {
@@ -522,11 +538,23 @@ impl CommandBuffer {
     }
 
     fn set_graphics_bind_point(&mut self) {
-        if self.active_bindpoint != BindPoint::Graphics {
-            // Switch to graphics bind point
-            let (pipeline, _) = self.gr_pipeline.pipeline.expect("No graphics pipeline bound");
-            unsafe { self.raw.SetPipelineState(pipeline); }
-            self.active_bindpoint = BindPoint::Graphics;
+        match self.active_bindpoint {
+            BindPoint::Graphics => { }, // Nothing to do
+            BindPoint::Compute => {
+                // Switch to graphics bind point
+                let (pipeline, _) = self.gr_pipeline.pipeline.expect("No graphics pipeline bound");
+                unsafe { self.raw.SetPipelineState(pipeline); }
+                self.active_bindpoint = BindPoint::Graphics;
+            },
+            BindPoint::InternalGraphics => {
+                // Switch to graphics bind point
+                let (pipeline, signature) = self.gr_pipeline.pipeline.expect("No graphics pipeline bound");
+                unsafe {
+                    self.raw.SetPipelineState(pipeline);
+                    self.raw.SetGraphicsRootSignature(signature);
+                }
+                self.active_bindpoint = BindPoint::Graphics;
+            },
         }
 
         let cmd_buffer = &mut self.raw;
@@ -585,12 +613,15 @@ impl CommandBuffer {
     }
 
     fn set_compute_bind_point(&mut self) {
-        if self.active_bindpoint != BindPoint::Compute {
-            // Switch to compute bind point
-            assert!(self.comp_pipeline.pipeline.is_some(), "No compute pipeline bound");
-            let (pipeline, _) = self.comp_pipeline.pipeline.unwrap();
-            unsafe { self.raw.SetPipelineState(pipeline); }
-            self.active_bindpoint = BindPoint::Compute;
+        match self.active_bindpoint {
+            BindPoint::Graphics | BindPoint::InternalGraphics => {
+                // Switch to compute bind point
+                assert!(self.comp_pipeline.pipeline.is_some(), "No compute pipeline bound");
+                let (pipeline, _) = self.comp_pipeline.pipeline.unwrap();
+                unsafe { self.raw.SetPipelineState(pipeline); }
+                self.active_bindpoint = BindPoint::Compute;
+            },
+            BindPoint::Compute => { }, // Nothing to do
         }
 
         let cmd_buffer = &mut self.raw;
@@ -1237,17 +1268,128 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn blit_image<T>(
         &mut self,
-        _src: &n::Image,
+        src: &n::Image,
         _src_layout: image::Layout,
-        _dst: &n::Image,
+        dst: &n::Image,
         _dst_layout: image::Layout,
-        _filter: image::Filter,
-        _regions: T,
+        filter: image::Filter,
+        regions: T,
     ) where
         T: IntoIterator,
         T::Item: Borrow<com::ImageBlit>
     {
-        unimplemented!()
+        // TODO: only supporting 2D images
+
+        let rtv_pool = {
+            let desc = d3d12::D3D12_DESCRIPTOR_HEAP_DESC {
+                Type: d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+                NumDescriptors: 1,
+                Flags: d3d12::D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+                NodeMask: 0,
+            };
+
+            let mut heap: *mut d3d12::ID3D12DescriptorHeap = ptr::null_mut();
+            unsafe {
+                (*self.shared.device).CreateDescriptorHeap(
+                    &desc,
+                    &d3d12::IID_ID3D12DescriptorHeap,
+                    &mut heap as *mut *mut _ as *mut *mut _,
+                );
+            };
+            unsafe { ComPtr::from_raw(heap) }
+        };
+        let rtv = unsafe { rtv_pool.GetCPUDescriptorHandleForHeapStart() };
+
+        let filter = match filter {
+            image::Filter::Nearest => d3d12::D3D12_FILTER_MIN_MAG_MIP_POINT,
+            image::Filter::Linear => d3d12::D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT,
+        };
+
+        for region in regions {
+            let r = region.borrow();
+
+            let first_layer = r.dst_subresource.layers.start;
+            let num_layers = r.dst_subresource.layers.end - first_layer;
+
+            let blit = match r.dst_subresource.aspects {
+                format::Aspects::COLOR => {
+                    // Create RTV of the dst image for the miplevel of the current region
+                    let mut desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
+                        Format: dst.dxgi_format,
+                        ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2DARRAY,
+                        u: unsafe { mem::zeroed() },
+                    };
+
+                    *unsafe{ desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_RTV {
+                        MipSlice: r.dst_subresource.level as _,
+                        FirstArraySlice: first_layer as _,
+                        ArraySize: num_layers as _,
+                        PlaneSlice: 0, //TODO
+                    };
+
+                    unsafe {
+                        (*self.shared.device).CreateRenderTargetView(dst.resource, &desc, rtv);
+                        self.raw.OMSetRenderTargets(
+                            1,
+                            &rtv,
+                            FALSE,
+                            ptr::null(),
+                        );
+                    }
+
+                    self.shared.service_pipes.get_blit_2d_color(dst.dxgi_format, filter)
+                },
+                _ => unimplemented!(),
+            };
+
+            self.set_internal_graphics_pipeline();
+
+            // TODO: support flipping?
+            let viewport = d3d12::D3D12_VIEWPORT {
+                TopLeftX: r.dst_bounds.start.x as _,
+                TopLeftY: r.dst_bounds.start.y as _,
+                Width: (r.dst_bounds.end.x - r.dst_bounds.start.x) as _,
+                Height: (r.dst_bounds.end.y - r.dst_bounds.start.y) as _,
+                MinDepth: 0.0,
+                MaxDepth: 1.0,
+            };
+            let scissor = d3d12::D3D12_RECT {
+                left: r.dst_bounds.start.x,
+                top: r.dst_bounds.start.y,
+                right: r.dst_bounds.end.x,
+                bottom: r.dst_bounds.end.y,
+            };
+
+            // TODO: update push constants
+
+            // Instanced full screen triangle
+            //
+            // Each instance corresponds to one blitting operation on one layer
+            unsafe {
+                self.raw.SetPipelineState(blit.pipeline.as_raw());
+                self.raw.SetGraphicsRootSignature(blit.signature.as_raw());
+                self.raw.RSSetViewports(1, &viewport);
+                self.raw.RSSetScissorRects(1, &scissor);
+                self.raw.DrawInstanced(
+                    3,
+                    num_layers as _,
+                    0,
+                    first_layer as _,
+                );
+            }
+        }
+
+        // Reset viewports and scissors
+        unsafe {
+            self.raw.RSSetViewports(
+                self.viewport_cache.len() as _,
+                self.viewport_cache.as_ptr(),
+            );
+            self.raw.RSSetScissorRects(
+                self.scissor_cache.len() as _,
+                self.scissor_cache.as_ptr(),
+            );
+        }
     }
 
     fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
@@ -1368,7 +1510,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     self.gr_pipeline.num_parameter_slots = pipeline.num_parameter_slots;
                     self.gr_pipeline.root_constants = pipeline.constants.clone();
                     // All slots need to be rebound internally on signature change.
-                    self.gr_pipeline.user_data.dirty_mask = !0;
+                    self.gr_pipeline.user_data.dirty_all();
                 }
             }
             self.raw.SetPipelineState(pipeline.raw);
@@ -1420,7 +1562,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     self.comp_pipeline.num_parameter_slots = pipeline.num_parameter_slots;
                     self.comp_pipeline.root_constants = pipeline.constants.clone();
                     // All slots need to be rebound internally on signature change.
-                    self.comp_pipeline.user_data.dirty_mask = !0;
+                    self.comp_pipeline.user_data.dirty_all();
                 }
             }
             self.raw.SetPipelineState(pipeline.raw);
@@ -1453,7 +1595,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.set_compute_bind_point();
         unsafe {
             self.raw.ExecuteIndirect(
-                self.signatures.dispatch.as_raw(),
+                self.shared.signatures.dispatch.as_raw(),
                 1,
                 buffer.resource,
                 offset,
@@ -1768,7 +1910,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.set_graphics_bind_point();
         unsafe {
             self.raw.ExecuteIndirect(
-                self.signatures.draw.as_raw(),
+                self.shared.signatures.draw.as_raw(),
                 draw_count,
                 buffer.resource,
                 offset,
@@ -1789,7 +1931,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.set_graphics_bind_point();
         unsafe {
             self.raw.ExecuteIndirect(
-                self.signatures.draw_indexed.as_raw(),
+                self.shared.signatures.draw_indexed.as_raw(),
                 draw_count,
                 buffer.resource,
                 offset,
