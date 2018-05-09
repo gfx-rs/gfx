@@ -61,14 +61,12 @@ fragment float4 ps_blit_3d(
 // -------------- Buffer Fill/Copy -------------- //
 
 kernel void cs_copy_buffer(
-    device uint *dest [[ buffer(0) ]],
-    device uint *source [[ buffer(1) ]],
+    device uchar *dest [[ buffer(0) ]],
+    device uchar *source [[ buffer(1) ]],
     constant uint &size [[ buffer(2) ]],
     uint index [[ thread_position_in_grid ]]
 ) {
     if (index < size) {
-        uint mask = index + 4 <= size ? ~0 : ((1 << (size - index) * 8) - 1);
-        uint wi = index / 4; // word index
-        dest[wi] = (source[wi] & mask) + (dest[wi] & ~mask);
+        dest[index] = source[index];
     }
 }

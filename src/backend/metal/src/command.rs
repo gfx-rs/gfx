@@ -1918,7 +1918,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             } else {
                 // not natively supported, going through compute shader
                 assert_eq!(0, r.size >> 32);
-                let word_count = (r.size + 3) / 4;
                 let copy_data = self.shared.device.new_buffer_with_data(
                     &r.size as *const u64 as *const _,
                     mem::size_of::<u32>() as _,
@@ -1928,7 +1927,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 inner.retained_buffers.push(copy_data.clone());
 
                 let wg_count = MTLSize {
-                    width: (word_count + wg_size.width - 1) / wg_size.width,
+                    width: (r.size + wg_size.width - 1) / wg_size.width,
                     height: 1,
                     depth: 1,
                 };
