@@ -1448,6 +1448,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.sink().pre_render_commands(iter::once(com));
     }
 
+    fn set_depth_bounds(&mut self, _: Range<f32>) {
+        warn!("Depth bounds test is not supported");
+    }
+
     fn begin_render_pass_raw<T>(
         &mut self,
         render_pass: &native::RenderPass,

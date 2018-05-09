@@ -115,12 +115,16 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
     }
 
     ///
+    pub fn set_depth_bounds(&mut self, bounds: Range<f32>) {
+        self.0.set_depth_bounds(bounds)
+    }
+
+    ///
     pub fn push_graphics_constants(&mut self, layout: &B::PipelineLayout, stages: pso::ShaderStageFlags, offset: u32, constants: &[u32]) {
         self.0.push_graphics_constants(layout, stages, offset, constants);
     }
 
     // TODO: set_line_width
-    // TODO: set_depth_bounds
     // TODO: set_depth_bias
     // TODO: set_stencil_compare_mask
     // TODO: set_stencil_write_mask

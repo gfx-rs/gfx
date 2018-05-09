@@ -559,6 +559,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
+    fn set_depth_bounds(&mut self, bounds: Range<f32>) {
+        unsafe {
+            self.device.0.cmd_set_depth_bounds(self.raw, bounds.start, bounds.end);
+        }
+    }
+
     fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
         unsafe {
             self.device.0.cmd_bind_pipeline(
