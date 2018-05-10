@@ -149,6 +149,19 @@ impl hal::Backend for Backend {
     type QueryPool = ();
 }
 
+#[derive(Clone, Copy)]
+struct PrivateCapabilities {
+    resource_heaps: bool,
+    argument_buffers: bool,
+    format_depth24_stencil8: bool,
+    format_depth32_stencil8: bool,
+    format_min_srgb_channels: u8,
+    format_b5: bool,
+    max_buffers_per_stage: usize,
+    max_textures_per_stage: usize,
+    max_samplers_per_stage: usize,
+}
+
 pub struct AutoreleasePool {
     pool: cocoa::base::id,
 }

@@ -24,6 +24,7 @@ use {conversions as conv, soft};
 
 use smallvec::SmallVec;
 
+
 pub(crate) struct QueueInner {
     queue: metal::CommandQueue,
     reserve: Range<usize>,

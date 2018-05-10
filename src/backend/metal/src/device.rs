@@ -1,4 +1,4 @@
-use {AutoreleasePool, Backend, QueueFamily, Surface, Swapchain};
+use {AutoreleasePool, Backend, PrivateCapabilities, QueueFamily, Surface, Swapchain};
 use {native as n, command, soft};
 use conversions::*;
 use internal::BlitChannel;
@@ -26,6 +26,7 @@ use metal::{self,
     CaptureManager
 };
 use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
+
 
 const RESOURCE_HEAP_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily1_v3,
@@ -101,15 +102,6 @@ fn get_final_function(library: &metal::LibraryRef, entry: &str, specialization: 
     Ok(mtl_function)
 }
 
-#[derive(Clone, Copy)]
-struct PrivateCapabilities {
-    resource_heaps: bool,
-    argument_buffers: bool,
-    max_buffers_per_stage: usize,
-    max_textures_per_stage: usize,
-    max_samplers_per_stage: usize,
-}
-
 //#[derive(Clone)]
 pub struct Device {
     pub(crate) device: metal::Device,
@@ -135,12 +127,31 @@ impl Drop for Device {
 pub struct PhysicalDevice {
     raw: metal::Device,
     memory_types: [hal::MemoryType; 3],
+    private_caps: PrivateCapabilities,
 }
 unsafe impl Send for PhysicalDevice {}
 unsafe impl Sync for PhysicalDevice {}
 
 impl PhysicalDevice {
+    fn is_mac(raw: &metal::DeviceRef) -> bool {
+        raw.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1)
+    }
+    fn supports_any(raw: &metal::DeviceRef, features_sets: &[MTLFeatureSet]) -> bool {
+        features_sets.iter().cloned().any(|x| raw.supports_feature_set(x))
+    }
+
     pub(crate) fn new(raw: metal::Device) -> Self {
+        let private_caps = PrivateCapabilities {
+            resource_heaps: Self::supports_any(&raw, RESOURCE_HEAP_SUPPORT),
+            argument_buffers: Self::supports_any(&raw, ARGUMENT_BUFFER_SUPPORT) && false, //TODO
+            format_depth24_stencil8: raw.d24_s8_supported(),
+            format_depth32_stencil8: false, //TODO: crashing the Metal validation layer upon copying from buffer
+            format_min_srgb_channels: if Self::is_mac(&raw) {4} else {1},
+            format_b5: !Self::is_mac(&raw),
+            max_buffers_per_stage: 31,
+            max_textures_per_stage: if Self::is_mac(&raw) {128} else {31},
+            max_samplers_per_stage: 16,
+        };
         PhysicalDevice {
             raw,
             memory_types: [
@@ -157,15 +168,8 @@ impl PhysicalDevice {
                     heap_index: 1,
                 },
             ],
+            private_caps,
         }
-    }
-
-    fn supports_any(&self, features_sets: &[MTLFeatureSet]) -> bool {
-        features_sets.iter().cloned().any(|x| self.raw.supports_feature_set(x))
-    }
-
-    fn is_mac(&self) -> bool {
-        self.raw.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1)
     }
 }
 
@@ -183,17 +187,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let mut queue_group = hal::backend::RawQueueGroup::new(family);
         queue_group.add_queue(command_shared.clone());
 
-        let private_caps = PrivateCapabilities {
-            resource_heaps: self.supports_any(RESOURCE_HEAP_SUPPORT),
-            argument_buffers: self.supports_any(ARGUMENT_BUFFER_SUPPORT) && false, //TODO
-            max_buffers_per_stage: 31,
-            max_textures_per_stage: if self.is_mac() {128} else {31},
-            max_samplers_per_stage: 31,
-        };
-
         let device = Device {
             device: self.raw.clone(),
-            private_caps,
+            private_caps: self.private_caps.clone(),
             command_shared,
             memory_types: self.memory_types,
         };
@@ -216,7 +212,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn format_properties(&self, format: Option<format::Format>) -> format::Properties {
-        match format.and_then(map_format) {
+        match format.and_then(|f| self.private_caps.map_format(f)) {
             Some(_) => format::Properties {
                 linear_tiling: format::ImageFeature::empty(),
                 optimal_tiling: format::ImageFeature::all(),
@@ -240,7 +236,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let depth = if dimensions >= 3 { 4096 } else { 1 };
         let max_dimension = 4096f32; // Max of {width, height, depth}
 
-        map_format(format).map(|_| image::FormatProperties {
+        self.private_caps.map_format(format).map(|_| image::FormatProperties {
             max_extent: image::Extent { width, height, depth },
             max_levels: max_dimension.log2().ceil() as u8 + 1,
             // 3D images enforce a single layer
@@ -270,7 +266,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             max_patch_size: 0, // No tessellation
             max_viewports: 1,
 
-            min_buffer_copy_offset_alignment: if self.is_mac() {256} else {64},
+            min_buffer_copy_offset_alignment: if Self::is_mac(&self.raw) {256} else {64},
             min_buffer_copy_pitch_alignment: 4, // TODO: made this up
             min_texel_buffer_offset_alignment: 1, //TODO
             min_uniform_buffer_offset_alignment: 1, //TODO
@@ -721,7 +717,7 @@ impl hal::Device<Backend> for Device {
         // Copy color target info from Subpass
         for (i, attachment) in pass_descriptor.main_pass.attachments.iter().enumerate() {
             let format = attachment.format.expect("expected color format");
-            let mtl_format = match map_format(format) {
+            let mtl_format = match self.private_caps.map_format(format) {
                 Some(f) => f,
                 None => {
                     error!("Unable to convert {:?} format", format);
@@ -1398,7 +1394,9 @@ impl hal::Device<Backend> for Device {
             return Err(buffer::ViewError::Unsupported)
         }
         let block_count = (end_rough - start) * 8 / format_desc.bits as u64;
-        let mtl_format = map_format(format).ok_or(buffer::ViewError::Unsupported)?;
+        let mtl_format = self.private_caps
+            .map_format(format)
+            .ok_or(buffer::ViewError::Unsupported)?;
 
         let descriptor = metal::TextureDescriptor::new();
         descriptor.set_texture_type(MTLTextureType::D2);
@@ -1437,7 +1435,8 @@ impl hal::Device<Backend> for Device {
         flags: image::StorageFlags,
     ) -> Result<n::UnboundImage, image::CreationError> {
         let is_cube = flags.contains(image::StorageFlags::CUBE_VIEW);
-        let mtl_format = map_format(format)
+        let mtl_format = self.private_caps
+            .map_format(format)
             .ok_or(image::CreationError::Format(format))?;
 
         let descriptor = metal::TextureDescriptor::new();
@@ -1582,7 +1581,7 @@ impl hal::Device<Backend> for Device {
                 format::ChannelType::Uint => BlitChannel::Uint,
                 format::ChannelType::Int => BlitChannel::Int,
             },
-            mtl_format: match map_format(image.format) {
+            mtl_format: match self.private_caps.map_format(image.format) {
                 Some(format) => format,
                 None => {
                     error!("failed to find corresponding Metal format for {:?}", image.format);
@@ -1606,7 +1605,7 @@ impl hal::Device<Backend> for Device {
     ) -> Result<n::ImageView, image::ViewError> {
         // TODO: subresource range
 
-        let mtl_format = match map_format(format) {
+        let mtl_format = match self.private_caps.map_format(format) {
             Some(f) => f,
             None => {
                 error!("failed to find corresponding Metal format for {:?}", format);
