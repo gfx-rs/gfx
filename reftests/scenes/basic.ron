@@ -29,8 +29,8 @@
 			format: Rgba8Unorm,
 			range: (
 				aspects: (bits: 1),
-				levels: (start: 0, end: 1),
-				layers: (start: 0, end: 1),
+				levels: (0, Some(1)),
+				layers: (0, Some(1)),
 			),
 		),
 		"fbo": Framebuffer(

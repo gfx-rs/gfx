@@ -51,8 +51,8 @@ const QUAD: [Vertex; 6] = [
 
 const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
     aspects: f::Aspects::COLOR,
-    levels: 0 .. 1,
-    layers: 0 .. 1,
+    levels: (0, Some(1)),
+    layers: (0, Some(1)),
 };
 
 #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]
@@ -494,11 +494,7 @@ fn main() {
                     buffer_offset: 0,
                     buffer_width: row_pitch / (image_stride as u32),
                     buffer_height: height as u32,
-                    image_layers: i::SubresourceLayers {
-                        aspects: f::Aspects::COLOR,
-                        level: 0,
-                        layers: 0 .. 1,
-                    },
+                    image_layers: i::SubresourceLayers::new(f::Aspects::COLOR, 0, 0 .. 1),
                     image_offset: i::Offset { x: 0, y: 0, z: 0 },
                     image_extent: i::Extent { width, height, depth: 1 },
                 }]);

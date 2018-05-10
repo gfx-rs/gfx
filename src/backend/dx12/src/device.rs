@@ -477,11 +477,12 @@ impl Device {
             u: unsafe { mem::zeroed() },
         };
 
+        let layer_end = info.range.layers.1.unwrap_or(info.kind.num_layers());
         let MipSlice = info.range.levels.start as _;
-        let FirstArraySlice = info.range.layers.start as _;
-        let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
+        let FirstArraySlice = info.range.layers.0 as _;
+        let ArraySize = (layer_end - info.range.layers.0) as _;
 
-        assert!(info.range.layers.end <= info.kind.num_layers());
+        assert!(layer_end <= info.kind.num_layers());
         let is_msaa = info.kind.num_samples() > 1;
 
         match info.view_kind {
@@ -562,12 +563,13 @@ impl Device {
             u: unsafe { mem::zeroed() },
         };
 
-        let MipSlice = info.range.levels.start as _;
-        let FirstArraySlice = info.range.layers.start as _;
-        let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
+        let layer_end = info.range.layers.1.unwrap_or(info.kind.num_layers());
+        let MipSlice = info.range.levels.0 as _;
+        let FirstArraySlice = info.range.layers.0 as _;
+        let ArraySize = (layer_end - info.range.layers.0) as _;
 
-        assert_eq!(info.range.levels.start + 1, info.range.levels.end);
-        assert!(info.range.layers.end <= info.kind.num_layers());
+        assert_eq!(info.range.levels.0 + 1, info.range.levels.1.unwrap_or(info.kind.num_levels()));
+        assert!(layer_end <= info.kind.num_layers());
         let is_msaa = info.kind.num_samples() > 1;
 
         match info.view_kind {
@@ -646,12 +648,14 @@ impl Device {
             u: unsafe { mem::zeroed() },
         };
 
-        let MostDetailedMip = info.range.levels.start as _;
-        let MipLevels = (info.range.levels.end - info.range.levels.start) as _;
-        let FirstArraySlice = info.range.layers.start as _;
-        let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
+        let level_end = info.range.levels.1.unwrap_or(info.kind.num_levels());
+        let layer_end = info.range.layers.1.unwrap_or(info.kind.num_layers());
+        let MostDetailedMip = info.range.levels.0 as _;
+        let MipLevels = (level_end - info.range.levels.0) as _;
+        let FirstArraySlice = info.range.layers.0 as _;
+        let ArraySize = (layer_end - info.range.layers.0) as _;
 
-        assert!(info.range.layers.end <= info.kind.num_layers());
+        assert!(layer_end <= info.kind.num_layers());
         let is_msaa = info.kind.num_samples() > 1;
         let is_cube = info.flags.contains(image::StorageFlags::CUBE_VIEW);
 
@@ -761,11 +765,12 @@ impl Device {
             u: unsafe { mem::zeroed() },
         };
 
-        let MipSlice = info.range.levels.start as _;
-        let FirstArraySlice = info.range.layers.start as _;
-        let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
+        let layer_end = info.range.layers.1.unwrap_or(info.kind.num_layers());
+        let MipSlice = info.range.levels.0 as _;
+        let FirstArraySlice = info.range.layers.0 as _;
+        let ArraySize = (layer_end - info.range.layers.0) as _;
 
-        assert!(info.range.layers.end <= info.kind.num_layers());
+        assert!(layer_end <= info.kind.num_layers());
         if info.kind.num_samples() > 1 {
             error!("MSAA images can't be viewed as UAV");
             return Err(image::ViewError::Unsupported)
@@ -1912,11 +1917,7 @@ impl d::Device<B> for Device {
                 image::Kind::D3(..) => image::ViewKind::D3,
             },
             format: image.desc.Format,
-            range: image::SubresourceRange {
-                aspects: Aspects::empty(),
-                levels: 0 .. 0,
-                layers: 0 .. 0,
-            },
+            range: image::SubresourceRange::new(Aspects::empty(), 0 .. 0, 0 .. 0),
         };
 
         //TODO: the clear_Xv is incomplete. We should support clearing images created without XXX_ATTACHMENT usage.
@@ -1937,11 +1938,8 @@ impl d::Device<B> for Device {
                     .map(|layer| {
                         self.view_image_as_render_target(
                             ViewInfo {
-                                range: image::SubresourceRange {
-                                    aspects: Aspects::COLOR,
-                                    levels: 0 .. 1, //TODO?
-                                    layers: layer .. layer + 1,
-                                },
+                                // TODO?
+                                range: image::SubresourceRange::new(Aspects::COLOR, 0 .. 1, layer .. layer+1),
                                 .. info.clone()
                             }).unwrap()
                     })
@@ -1955,11 +1953,8 @@ impl d::Device<B> for Device {
                         self.view_image_as_depth_stencil(
                             ViewInfo {
                                 format: image.dsv_format,
-                                range: image::SubresourceRange {
-                                    aspects: Aspects::DEPTH,
-                                    levels: 0 .. 1, //TODO?
-                                    layers: layer .. layer + 1,
-                                },
+                                // TODO?
+                                range: image::SubresourceRange::new(Aspects::DEPTH, 0 .. 1, layer .. layer + 1),
                                 .. info.clone()
                             }).unwrap()
                     })
@@ -1973,11 +1968,8 @@ impl d::Device<B> for Device {
                         self.view_image_as_depth_stencil(
                             ViewInfo {
                                 format: image.dsv_format,
-                                range: image::SubresourceRange {
-                                    aspects: Aspects::STENCIL,
-                                    levels: 0 .. 1, //TODO?
-                                    layers: layer .. layer + 1,
-                                },
+                                // TODO?
+                                range: image::SubresourceRange::new(Aspects::STENCIL, 0 .. 1, layer .. layer + 1 ),
                                 .. info.clone()
                             }).unwrap()
                     })
@@ -1997,8 +1989,8 @@ impl d::Device<B> for Device {
         range: image::SubresourceRange,
     ) -> Result<n::ImageView, image::ViewError> {
         let num_levels = image.num_levels;
-        let mip_levels = (range.levels.start, range.levels.end);
-        let layers = (range.layers.start, range.layers.end);
+        let mip_levels = (range.levels.0, range.levels.1.unwrap_or(image.kind.num_levels()));
+        let layers = (range.layers.0, range.layers.1.unwrap_or(image.kind.num_layers()));
 
         let info = ViewInfo {
             resource: image.resource,
