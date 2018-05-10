@@ -18,6 +18,15 @@ pub struct Blit {
     pub signature: ComPtr<d3d12::ID3D12RootSignature>,
 }
 
+// Information to pass to the shader
+#[repr(C)]
+pub struct BlitData {
+    pub src_offset: [f32; 2],
+    pub src_extent: [f32; 2],
+    pub layer: f32,
+    pub level: f32,
+}
+
 pub struct ServicePipes {
     device: ComPtr<d3d12::ID3D12Device>,
     blits_2d_color: Mutex<HashMap<(dxgiformat::DXGI_FORMAT, d3d12::D3D12_FILTER), Blit>>,
@@ -69,7 +78,7 @@ impl ServicePipes {
         *unsafe { root_parameters[1].u.Constants_mut() } = d3d12::D3D12_ROOT_CONSTANTS {
             ShaderRegister: 0,
             RegisterSpace: 0,
-            Num32BitValues: 5,
+            Num32BitValues: (mem::size_of::<BlitData>() / 4) as _,
         };
 
         let static_samplers = d3d12::D3D12_STATIC_SAMPLER_DESC {
@@ -144,7 +153,7 @@ impl ServicePipes {
             DestBlendAlpha: D3D12_BLEND_ZERO,
             BlendOpAlpha: D3D12_BLEND_OP_ADD,
             LogicOp: D3D12_LOGIC_OP_CLEAR,
-            RenderTargetWriteMask: 0,
+            RenderTargetWriteMask: D3D12_COLOR_WRITE_ENABLE_ALL as _,
         };
         let render_targets = [dummy_target; 8];
 

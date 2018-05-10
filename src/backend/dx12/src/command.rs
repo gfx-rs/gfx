@@ -9,13 +9,14 @@ use std::borrow::Borrow;
 use std::ops::Range;
 use std::sync::Arc;
 
-use winapi::um::d3d12;
-use winapi::shared::minwindef::{FALSE, UINT};
+use winapi::um::{d3d12, d3dcommon};
+use winapi::shared::minwindef::{FALSE, UINT, TRUE};
 use winapi::shared::dxgiformat;
 
 use wio::com::ComPtr;
 
-use {conv, native as n, Backend, Shared, MAX_VERTEX_BUFFERS};
+use {conv, internal, native as n, Backend, Device, Shared, MAX_VERTEX_BUFFERS};
+use device::ViewInfo;
 use root_constants::RootConstant;
 use smallvec::SmallVec;
 
@@ -274,6 +275,9 @@ pub struct CommandBuffer {
     // Cache current graphics root signature and pipeline to minimize rebinding and support two
     // bindpoints.
     gr_pipeline: PipelineCache,
+    // Primitive topology of the currently bound graphics pipeline.
+    // Caching required for internal graphics pipelines.
+    primitive_topology: d3d12::D3D12_PRIMITIVE_TOPOLOGY,
     // Cache current compute root signature and pipeline.
     comp_pipeline: PipelineCache,
     // D3D12 only has one slot for both bindpoints. Need to rebind everything if we want to switch
@@ -300,7 +304,12 @@ pub struct CommandBuffer {
     // D3D12 only allows setting all viewports or all scissors at once, not partial updates.
     // So we must cache the implied state for these partial updates.
     viewport_cache: SmallVec<[d3d12::D3D12_VIEWPORT; d3d12::D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as usize]>,
-    scissor_cache: SmallVec<[d3d12::D3D12_RECT; d3d12::D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as usize]>
+    scissor_cache: SmallVec<[d3d12::D3D12_RECT; d3d12::D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as usize]>,
+
+    // HACK: renderdoc workaround for temporary RTVs
+    rtv_pools: Vec<ComPtr<d3d12::ID3D12DescriptorHeap>>,
+    // Temporary gpu descriptor heaps (internal).
+    temporary_gpu_heaps: Vec<ComPtr<d3d12::ID3D12DescriptorHeap>>,
 }
 
 unsafe impl Send for CommandBuffer { }
@@ -327,6 +336,7 @@ impl CommandBuffer {
             pass_cache: None,
             cur_subpass: !0,
             gr_pipeline: PipelineCache::new(),
+            primitive_topology: d3dcommon::D3D_PRIMITIVE_TOPOLOGY_UNDEFINED,
             comp_pipeline: PipelineCache::new(),
             active_bindpoint: BindPoint::Graphics,
             occlusion_query: None,
@@ -336,6 +346,8 @@ impl CommandBuffer {
             copies: Vec::new(),
             viewport_cache: SmallVec::new(),
             scissor_cache: SmallVec::new(),
+            rtv_pools: Vec::new(),
+            temporary_gpu_heaps: Vec::new(),
         }
     }
 
@@ -348,12 +360,15 @@ impl CommandBuffer {
         self.pass_cache = None;
         self.cur_subpass = !0;
         self.gr_pipeline = PipelineCache::new();
+        self.primitive_topology = d3dcommon::D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
         self.comp_pipeline = PipelineCache::new();
         self.active_bindpoint = BindPoint::Graphics;
         self.occlusion_query = None;
         self.pipeline_stats_query = None;
         self.vertex_buffer_views_needs_bind = [false; MAX_VERTEX_BUFFERS];
         self.vertex_buffer_views = [NULL_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS];
+        self.rtv_pools.clear();
+        self.temporary_gpu_heaps.clear();
     }
 
     // Indicates that the pipeline slot has been overriden with an internal pipeline.
@@ -1272,13 +1287,23 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::ImageBlit>
     {
-        // TODO: only supporting 2D images
+        // TODO: Resource barriers for src and dst.
+        // TODO: depth or stencil images not supported so far
 
-        let rtv_pool = {
+        // TODO: only supporting 2D images
+        match (src.kind, dst.kind) {
+            (image::Kind::D2(..), image::Kind::D2(..)) => {},
+            _ => unimplemented!(),
+        }
+
+        let rtv_handle_size = unsafe { (*self.shared.device).GetDescriptorHandleIncrementSize(d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV) as usize };
+
+        // Descriptor heap for the current blit, only storing the src image
+        let srv_heap = {
             let desc = d3d12::D3D12_DESCRIPTOR_HEAP_DESC {
-                Type: d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+                Type: d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
                 NumDescriptors: 1,
-                Flags: d3d12::D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+                Flags: d3d12::D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
                 NodeMask: 0,
             };
 
@@ -1292,7 +1317,29 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             };
             unsafe { ComPtr::from_raw(heap) }
         };
-        let rtv = unsafe { rtv_pool.GetCPUDescriptorHandleForHeapStart() };
+        self.temporary_gpu_heaps.push(srv_heap.clone());
+
+        let srv_heap_cpu = unsafe { srv_heap.GetCPUDescriptorHandleForHeapStart() };
+        let srv_heap_gpu = unsafe { srv_heap.GetGPUDescriptorHandleForHeapStart() };
+
+        let srv_desc = Device::build_image_as_shader_resource_desc(
+            &ViewInfo {
+                resource: src.resource,
+                kind: src.kind,
+                flags: src.storage_flags,
+                view_kind: image::ViewKind::D2Array, // TODO
+                format: src.dxgi_format,
+                range: image::SubresourceRange {
+                    aspects: format::Aspects::COLOR, // TODO
+                    levels: 0..src.num_levels,
+                    layers: 0..src.kind.num_layers(),
+                },
+            }
+        ).unwrap();
+        unsafe {
+            (*self.shared.device).CreateShaderResourceView(src.resource, &srv_desc, srv_heap_cpu);
+            self.raw.SetDescriptorHeaps(1, &mut srv_heap.as_raw());
+        }
 
         let filter = match filter {
             image::Filter::Nearest => d3d12::D3D12_FILTER_MIN_MAG_MIP_POINT,
@@ -1305,30 +1352,49 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let first_layer = r.dst_subresource.layers.start;
             let num_layers = r.dst_subresource.layers.end - first_layer;
 
+            // WORKAROUND: renderdoc crashes if we destroy the pool too early
+            let rtv_pool = {
+                let desc = d3d12::D3D12_DESCRIPTOR_HEAP_DESC {
+                    Type: d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+                    NumDescriptors: num_layers as _,
+                    Flags: d3d12::D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+                    NodeMask: 0,
+                };
+
+                let mut heap: *mut d3d12::ID3D12DescriptorHeap = ptr::null_mut();
+                unsafe {
+                    (*self.shared.device).CreateDescriptorHeap(
+                        &desc,
+                        &d3d12::IID_ID3D12DescriptorHeap,
+                        &mut heap as *mut *mut _ as *mut *mut _,
+                    );
+                };
+                unsafe { ComPtr::from_raw(heap) }
+            };
+            self.rtv_pools.push(rtv_pool.clone());
+            let rtv = unsafe { rtv_pool.GetCPUDescriptorHandleForHeapStart() };
+
             let blit = match r.dst_subresource.aspects {
                 format::Aspects::COLOR => {
-                    // Create RTV of the dst image for the miplevel of the current region
-                    let mut desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
-                        Format: dst.dxgi_format,
-                        ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2DARRAY,
-                        u: unsafe { mem::zeroed() },
-                    };
+                    // Create RTVs of the dst image for the miplevel of the current region
+                    for i in 0 .. num_layers {
+                        let mut desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
+                            Format: dst.dxgi_format,
+                            ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2DARRAY,
+                            u: unsafe { mem::zeroed() },
+                        };
 
-                    *unsafe{ desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_RTV {
-                        MipSlice: r.dst_subresource.level as _,
-                        FirstArraySlice: first_layer as _,
-                        ArraySize: num_layers as _,
-                        PlaneSlice: 0, //TODO
-                    };
+                        *unsafe { desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_RTV {
+                            MipSlice: r.dst_subresource.level as _,
+                            FirstArraySlice: (i + first_layer) as u32,
+                            ArraySize: 1,
+                            PlaneSlice: 0, // TODO
+                        };
 
-                    unsafe {
-                        (*self.shared.device).CreateRenderTargetView(dst.resource, &desc, rtv);
-                        self.raw.OMSetRenderTargets(
-                            1,
-                            &rtv,
-                            FALSE,
-                            ptr::null(),
-                        );
+                        let view = d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: rtv.ptr + rtv_handle_size * i as usize };
+                        unsafe {
+                            (*self.shared.device).CreateRenderTargetView(dst.resource, &desc, view);
+                        }
                     }
 
                     self.shared.service_pipes.get_blit_2d_color(dst.dxgi_format, filter)
@@ -1337,43 +1403,105 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             };
 
             self.set_internal_graphics_pipeline();
+            // TODO: reset descriptor heaps
 
-            // TODO: support flipping?
+            // Take flipping into account
             let viewport = d3d12::D3D12_VIEWPORT {
-                TopLeftX: r.dst_bounds.start.x as _,
-                TopLeftY: r.dst_bounds.start.y as _,
-                Width: (r.dst_bounds.end.x - r.dst_bounds.start.x) as _,
-                Height: (r.dst_bounds.end.y - r.dst_bounds.start.y) as _,
+                TopLeftX: cmp::min(r.dst_bounds.start.x, r.dst_bounds.end.x) as _,
+                TopLeftY: cmp::min(r.dst_bounds.start.y, r.dst_bounds.end.y) as _,
+                Width: (r.dst_bounds.end.x - r.dst_bounds.start.x).abs() as _,
+                Height: (r.dst_bounds.end.y - r.dst_bounds.start.y).abs() as _,
                 MinDepth: 0.0,
                 MaxDepth: 1.0,
             };
             let scissor = d3d12::D3D12_RECT {
-                left: r.dst_bounds.start.x,
-                top: r.dst_bounds.start.y,
-                right: r.dst_bounds.end.x,
-                bottom: r.dst_bounds.end.y,
+                left: viewport.TopLeftX as _,
+                top: viewport.TopLeftY as _,
+                right: (viewport.TopLeftX + viewport.Width) as _,
+                bottom: (viewport.TopLeftY + viewport.Height) as _,
             };
 
-            // TODO: update push constants
+            let flip_x = (r.dst_bounds.end.x - r.dst_bounds.start.x) < 0;
+            let flip_y = (r.dst_bounds.end.y - r.dst_bounds.start.y) < 0;
 
-            // Instanced full screen triangle
-            //
-            // Each instance corresponds to one blitting operation on one layer
             unsafe {
-                self.raw.SetPipelineState(blit.pipeline.as_raw());
-                self.raw.SetGraphicsRootSignature(blit.signature.as_raw());
                 self.raw.RSSetViewports(1, &viewport);
                 self.raw.RSSetScissorRects(1, &scissor);
-                self.raw.DrawInstanced(
-                    3,
-                    num_layers as _,
-                    0,
-                    first_layer as _,
+                self.raw.IASetPrimitiveTopology(d3dcommon::D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+                self.raw.SetPipelineState(blit.pipeline.as_raw());
+                self.raw.SetGraphicsRootSignature(blit.signature.as_raw());
+                self.raw.SetGraphicsRootDescriptorTable(0, srv_heap_gpu);
+            }
+
+            for i in 0..num_layers {
+                let src_layer = r.src_subresource.layers.start + i;
+                let dst_layer = first_layer + i;
+
+                // Screen space triangle blitting
+                let pre_dst_barrier = Self::transition_barrier(
+                    d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
+                        pResource: dst.resource,
+                        Subresource: dst.calc_subresource(r.dst_subresource.level as _, dst_layer as _, 0),
+                        StateBefore: d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
+                        StateAfter: d3d12::D3D12_RESOURCE_STATE_RENDER_TARGET,
+                    }
                 );
+                let post_dst_barrier = Self::transition_barrier(
+                    d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
+                        pResource: dst.resource,
+                        Subresource: dst.calc_subresource(r.dst_subresource.level as _, dst_layer as _, 0),
+                        StateBefore: d3d12::D3D12_RESOURCE_STATE_RENDER_TARGET,
+                        StateAfter: d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
+                    }
+                );
+
+                let current_rtv = d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: rtv.ptr + rtv_handle_size * i as usize };
+
+                // Image extents, layers are treated as depth
+                let (width, height, _) = src.kind.level_extent(r.src_subresource.level);
+                let blit_data = {
+                    let (sx, dx) = if flip_x {
+                        (r.src_bounds.end.x, r.src_bounds.start.x - r.src_bounds.end.x)
+                    } else {
+                        (r.src_bounds.start.x, r.src_bounds.end.x - r.src_bounds.start.x)
+                    };
+                    let (sy, dy) = if flip_y {
+                        (r.src_bounds.end.y, r.src_bounds.start.y - r.src_bounds.end.y)
+                    } else {
+                        (r.src_bounds.start.y, r.src_bounds.end.y - r.src_bounds.start.y)
+                    };
+
+                    internal::BlitData {
+                        src_offset: [
+                            sx as f32 / width,
+                            sy as f32 / height,
+                        ],
+                        src_extent: [
+                            dx as f32 / width,
+                            dy as f32 / height,
+                        ],
+                        layer: src_layer as f32,
+                        level: r.src_subresource.level as _,
+                    }
+                };
+
+                // OPT: batch resource barriers
+                unsafe {
+                    self.raw.SetGraphicsRoot32BitConstants(
+                        1,
+                        (mem::size_of::<internal::BlitData>() / 4) as _,
+                        &blit_data as *const _ as *const _,
+                        0,
+                    );
+                    self.raw.OMSetRenderTargets(1, &current_rtv, TRUE, ptr::null());
+                    self.raw.ResourceBarrier(1, &pre_dst_barrier);
+                    self.raw.DrawInstanced(3, 1, 0, 0);
+                    self.raw.ResourceBarrier(1, &post_dst_barrier)
+                }
             }
         }
 
-        // Reset viewports and scissors
+        // Reset states
         unsafe {
             self.raw.RSSetViewports(
                 self.viewport_cache.len() as _,
@@ -1383,6 +1511,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 self.scissor_cache.len() as _,
                 self.scissor_cache.as_ptr(),
             );
+            if self.primitive_topology != d3dcommon::D3D_PRIMITIVE_TOPOLOGY_UNDEFINED {
+                self.raw.IASetPrimitiveTopology(self.primitive_topology);
+            }
         }
     }
 
@@ -1516,6 +1647,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
             self.raw.SetPipelineState(pipeline.raw);
             self.raw.IASetPrimitiveTopology(pipeline.topology);
+            self.primitive_topology = pipeline.topology;
         };
 
         self.active_bindpoint = BindPoint::Graphics;

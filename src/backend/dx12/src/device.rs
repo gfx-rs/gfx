@@ -73,13 +73,13 @@ pub(crate) fn shader_bytecode(shader: *mut d3dcommon::ID3DBlob) -> d3d12::D3D12_
 }
 
 #[derive(Clone)]
-struct ViewInfo {
-    resource: *mut d3d12::ID3D12Resource,
-    kind: image::Kind,
-    flags: image::StorageFlags,
-    view_kind: image::ViewKind,
-    format: dxgiformat::DXGI_FORMAT,
-    range: image::SubresourceRange,
+pub(crate) struct ViewInfo {
+    pub(crate) resource: *mut d3d12::ID3D12Resource,
+    pub(crate) kind: image::Kind,
+    pub(crate) flags: image::StorageFlags,
+    pub(crate) view_kind: image::ViewKind,
+    pub(crate) format: dxgiformat::DXGI_FORMAT,
+    pub(crate) range: image::SubresourceRange,
 }
 
 pub(crate) enum CommandSignature {
@@ -711,20 +711,9 @@ impl Device {
         Ok(handle)
     }
 
-    fn view_image_as_shader_resource(
-        &self, info: ViewInfo
-    ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
-        #![allow(non_snake_case)]
-
-        // Depth-stencil formats can't be used for SRVs.
-        let format = match info.format {
-            dxgiformat::DXGI_FORMAT_D16_UNORM => dxgiformat::DXGI_FORMAT_R16_UNORM,
-            dxgiformat::DXGI_FORMAT_D32_FLOAT => dxgiformat::DXGI_FORMAT_R32_FLOAT,
-            format => format,
-        };
-
+    pub(crate) fn build_image_as_shader_resource_desc(info: &ViewInfo) -> Result<d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC, image::ViewError> {
         let mut desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
-            Format: format,
+            Format: info.format,
             ViewDimension: 0,
             Shader4ComponentMapping: 0x1688, // TODO: map swizzle
             u: unsafe { mem::zeroed() },
@@ -825,6 +814,22 @@ impl Device {
             }
         }
 
+        Ok(desc)
+    }
+
+    fn view_image_as_shader_resource(
+        &self, mut info: ViewInfo
+    ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
+        #![allow(non_snake_case)]
+
+        // Depth-stencil formats can't be used for SRVs.
+        info.format = match info.format {
+            dxgiformat::DXGI_FORMAT_D16_UNORM => dxgiformat::DXGI_FORMAT_R16_UNORM,
+            dxgiformat::DXGI_FORMAT_D32_FLOAT => dxgiformat::DXGI_FORMAT_R32_FLOAT,
+            format => format,
+        };
+
+        let desc = Self::build_image_as_shader_resource_desc(&info)?;
         let handle = self.srv_pool.lock().unwrap().alloc_handles(1).cpu;
         unsafe {
             self.raw.clone().CreateShaderResourceView(info.resource, &desc, handle);
