@@ -24,6 +24,7 @@ use {conversions as conv, soft};
 
 use smallvec::SmallVec;
 
+
 pub(crate) struct QueueInner {
     queue: metal::CommandQueue,
     reserve: Range<usize>,
@@ -518,6 +519,7 @@ pub struct IndexBuffer {
 pub struct CommandBufferInner {
     sink: Option<CommandSink>,
     retained_buffers: Vec<metal::Buffer>,
+    retained_textures: Vec<metal::Texture>,
 }
 
 impl Drop for CommandBufferInner {
@@ -540,6 +542,7 @@ impl CommandBufferInner {
             _ => {}
         }
         self.retained_buffers.clear();
+        self.retained_textures.clear();
     }
 }
 
@@ -818,10 +821,13 @@ impl RawCommandQueue<Backend> for Arc<Shared> {
             let command_buffer: &metal::CommandBufferRef = match inner.sink {
                 Some(CommandSink::Immediate { ref cmd_buffer, .. }) => {
                     // schedule the retained buffers to release after the commands are done
-                    if !inner.retained_buffers.is_empty() {
+                    if !inner.retained_buffers.is_empty() || !inner.retained_textures.is_empty() {
                         let retained_buffers = mem::replace(&mut inner.retained_buffers, Vec::new());
+                        let retained_textures = mem::replace(&mut inner.retained_textures, Vec::new());
                         let release_block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
-                            let _ = retained_buffers; // move and auto-release
+                            // move and auto-release
+                            let _ = retained_buffers;
+                            let _ = retained_textures;
                         }).copy();
                         let cb_ref: &metal::CommandBufferRef = cmd_buffer;
                         msg_send![cb_ref, addCompletedHandler: release_block.deref() as *const _];
@@ -907,6 +913,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
             inner: Arc::new(UnsafeCell::new(CommandBufferInner {
                 sink: None,
                 retained_buffers: Vec::new(),
+                retained_textures: Vec::new(),
             })),
             shared: self.shared.clone(),
             state: State {
@@ -1233,13 +1240,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             o.x >= 0 && o.y >= 0 && o.z >= 0
         }
 
-        #[inline]
-        fn has_depth_stencil_format(i: &native::Image) -> bool {
-            i.format_desc.aspects.contains(Aspects::DEPTH | Aspects::STENCIL)
-        }
-
-        // We check if either of the two images has a combined depth/stencil format
-        let has_ds = has_depth_stencil_format(&src) || has_depth_stencil_format(&dst);
         let mut blit_commands = Vec::new();
         let mut blit_vertices = HashMap::new(); // a list of vertices per mipmap
 
@@ -1249,36 +1249,22 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             // layer count must be equal in both subresources
             debug_assert_eq!(r.src_subresource.layers.len(), r.dst_subresource.layers.len());
             // aspect flags
-            // check formats compatibility
-            if src.format_desc.bits != dst.format_desc.bits {
-                error!("Formats {:?} and {:?} are not compatible, ignoring blit_image", src.mtl_format, dst.mtl_format);
-                continue;
-            }
-            // enforce aspect flag restrictions
-            debug_assert_ne!(r.src_subresource.aspects.contains(Aspects::COLOR), r.src_subresource.aspects.contains(Aspects::DEPTH | Aspects::STENCIL));
-            debug_assert_ne!(r.dst_subresource.aspects.contains(Aspects::COLOR), r.dst_subresource.aspects.contains(Aspects::DEPTH | Aspects::STENCIL));
             debug_assert_eq!(r.src_subresource.aspects, r.dst_subresource.aspects);
             // check that we're only copying aspects actually in the image
             debug_assert!(src.format_desc.aspects.contains(r.src_subresource.aspects));
-
-            let only_one_depth_stencil = {
-                let has_depth = r.src_subresource.aspects.contains(Aspects::DEPTH);
-                let has_stencil = r.src_subresource.aspects.contains(Aspects::STENCIL);
-                has_depth ^ has_stencil
-            };
 
             let src_size = range_size(&r.src_bounds);
             let dst_size = range_size(&r.dst_bounds);
             // In the case that the image format is a combined Depth / Stencil format,
             // and we are only copying one of the aspects, we use the shader even if the regions
             // are the same size
-            if src_size == dst_size && src_size.is_some() && !(has_ds && only_one_depth_stencil) {
+            if src_size == dst_size && src_size.is_some() && src.mtl_format == dst.mtl_format {
                 debug_assert!(is_offset_positive(&r.src_bounds.start));
                 debug_assert!(is_offset_positive(&r.dst_bounds.start));
 
                 blit_commands.push(soft::BlitCommand::CopyImage {
                     src: src.raw.clone(),
-                    dst: src.raw.clone(),
+                    dst: dst.raw.clone(),
                     region: com::ImageCopy {
                         src_subresource: r.src_subresource.clone(),
                         src_offset: r.src_bounds.start,
@@ -1289,11 +1275,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 });
             } else {
                 // Fall back to shader-based blitting
+                // enforce aspect flag restrictions
+                if r.src_subresource.aspects.intersects(Aspects::DEPTH | Aspects::STENCIL) {
+                    error!("Aspects {:?} are not supported yet, ignoring blit_image", r.src_subresource.aspects);
+                    continue
+                }
                 let se = &src.extent;
                 let de = &dst.extent;
                 //TODO: support 3D textures
-                debug_assert_eq!(se.depth, 1);
-                debug_assert_eq!(de.depth, 1);
+                if se.depth != 1 || de.depth != 1 {
+                    warn!("3D image blits are not supported properly yet: {:?} -> {:?}", se, de);
+                }
 
                 let layers = r.src_subresource.layers.clone().zip(r.dst_subresource.layers.clone());
                 let list = blit_vertices
@@ -1366,28 +1358,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let mut pipes = self.shared.service_pipes
                 .lock()
                 .unwrap();
+            let key = (dst.mtl_type, dst.mtl_format, dst.blit_channel);
             let pso = pipes
-                .get_blit_image(dst.mtl_type, dst.mtl_format, &self.shared.device)
+                .get_blit_image(key, &self.shared.device)
                 .to_owned();
             let sampler = pipes.get_sampler(filter);
-            let ext = &dst.extent;
 
             let prelude = [
                 soft::RenderCommand::BindPipeline(pso, None),
-                soft::RenderCommand::SetViewport(MTLViewport {
-                    originX: 0.0,
-                    originY: 0.0,
-                    width: ext.width as _,
-                    height: ext.height as _,
-                    znear: 0.0,
-                    zfar: 1.0,
-                }),
-                soft::RenderCommand::SetScissor(MTLScissorRect {
-                    x: 0,
-                    y: 0,
-                    width: ext.width as _,
-                    height: ext.height as _,
-                }),
                 soft::RenderCommand::BindSampler {
                     stage: pso::Stage::Fragment,
                     index: 0,
@@ -1401,6 +1379,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             ];
 
             for (level, list) in blit_vertices {
+                let ext = &dst.extent;
+
                 //Note: we might want to re-use the buffer allocation, but that
                 // requires proper re-cycling based on the command buffer fences.
                 let vertex_buffer = self.shared.device.new_buffer_with_data(
@@ -1410,18 +1390,34 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 );
                 inner.retained_buffers.push(vertex_buffer.clone());
 
-                let mut commands = prelude.to_vec();
-                commands.push(soft::RenderCommand::BindBuffer {
-                    stage: pso::Stage::Vertex,
-                    index: 0,
-                    buffer: Some(vertex_buffer),
-                    offset: 0,
-                });
-                commands.push(soft::RenderCommand::Draw {
-                    primitive_type: MTLPrimitiveType::Triangle,
-                    vertices: 0 .. list.len() as _,
-                    instances: 0 .. 1,
-                });
+                let extra = [
+                    //Note: flipping Y coordinate of the destination here
+                    soft::RenderCommand::SetViewport(MTLViewport {
+                        originX: 0.0,
+                        originY: (ext.height >> level) as _,
+                        width: (ext.width >> level) as _,
+                        height: -((ext.height >> level) as f64),
+                        znear: 0.0,
+                        zfar: 1.0,
+                    }),
+                    soft::RenderCommand::SetScissor(MTLScissorRect {
+                        x: 0,
+                        y: 0,
+                        width: (ext.width >> level) as _,
+                        height: (ext.height >> level) as _,
+                    }),
+                    soft::RenderCommand::BindBuffer {
+                        stage: pso::Stage::Vertex,
+                        index: 0,
+                        buffer: Some(vertex_buffer),
+                        offset: 0,
+                    },
+                    soft::RenderCommand::Draw {
+                        primitive_type: MTLPrimitiveType::Triangle,
+                        vertices: 0 .. list.len() as _,
+                        instances: 0 .. 1,
+                    },
+                ];
 
                 let descriptor = metal::RenderPassDescriptor::new().to_owned();
                 descriptor.set_render_target_array_length(ext.depth as _);
@@ -1433,6 +1429,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     attachment.set_texture(Some(&dst.raw));
                     attachment.set_level(level as _);
                 }
+
+                let commands = prelude
+                    .iter()
+                    .chain(&extra)
+                    .cloned()
+                    .collect();
 
                 sink.begin_render_pass(commands, descriptor);
                 // no actual pass body - everything is in the init commands
@@ -2054,14 +2056,27 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::ImageCopy>,
     {
+        let inner = unsafe { &mut *self.inner.get() };
+        let new_src = if src.mtl_format == dst.mtl_format {
+            src.raw.clone()
+        } else {
+            assert_eq!(src.format_desc.bits, dst.format_desc.bits);
+            let tex = src.raw.new_texture_view(dst.mtl_format);
+            inner.retained_textures.push(tex.clone());
+            tex
+        };
+
         let commands = regions.into_iter().map(|region| {
             soft::BlitCommand::CopyImage {
-                src: src.raw.clone(),
+                src: new_src.clone(),
                 dst: dst.raw.clone(),
                 region: region.borrow().clone(),
             }
         });
-        self.sink().blit_commands(commands);
+        inner.sink
+            .as_mut()
+            .unwrap()
+            .blit_commands(commands);
     }
 
     fn copy_buffer_to_image<T>(

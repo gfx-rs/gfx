@@ -60,10 +60,10 @@ test:
 	cd src/render && cargo test --features "$(FEATURES_RENDER) $(FEATURES_EXTRA)"
 
 reftests:
-	cd src/warden && cargo test --features "gl"
 	cd src/warden && cargo run --features "$(FEATURES_HAL) $(FEATURES_HAL2)" -- local #TODO: gl
 
 reftests-ci:
+	cd src/warden && cargo test --features "gl"
 	cd src/warden && cargo run --features "gl" -- ci #TODO: "gl-headless"
 
 travis-sdl2:
