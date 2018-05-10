@@ -1362,25 +1362,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 .get_blit_image(key, &self.shared.device)
                 .to_owned();
             let sampler = pipes.get_sampler(filter);
-            let ext = &dst.extent;
 
             let prelude = [
                 soft::RenderCommand::BindPipeline(pso, None),
-                //Note: flipping Y coordinate of the destination here
-                soft::RenderCommand::SetViewport(MTLViewport {
-                    originX: 0.0,
-                    originY: ext.height as _,
-                    width: ext.width as _,
-                    height: -(ext.height as f64),
-                    znear: 0.0,
-                    zfar: 1.0,
-                }),
-                soft::RenderCommand::SetScissor(MTLScissorRect {
-                    x: 0,
-                    y: 0,
-                    width: ext.width as _,
-                    height: ext.height as _,
-                }),
                 soft::RenderCommand::BindSampler {
                     stage: pso::Stage::Fragment,
                     index: 0,
@@ -1394,6 +1378,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             ];
 
             for (level, list) in blit_vertices {
+                let ext = &dst.extent;
+
                 //Note: we might want to re-use the buffer allocation, but that
                 // requires proper re-cycling based on the command buffer fences.
                 let vertex_buffer = self.shared.device.new_buffer_with_data(
@@ -1403,18 +1389,34 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 );
                 inner.retained_buffers.push(vertex_buffer.clone());
 
-                let mut commands = prelude.to_vec();
-                commands.push(soft::RenderCommand::BindBuffer {
-                    stage: pso::Stage::Vertex,
-                    index: 0,
-                    buffer: Some(vertex_buffer),
-                    offset: 0,
-                });
-                commands.push(soft::RenderCommand::Draw {
-                    primitive_type: MTLPrimitiveType::Triangle,
-                    vertices: 0 .. list.len() as _,
-                    instances: 0 .. 1,
-                });
+                let extra = [
+                    //Note: flipping Y coordinate of the destination here
+                    soft::RenderCommand::SetViewport(MTLViewport {
+                        originX: 0.0,
+                        originY: (ext.height >> level) as _,
+                        width: (ext.width >> level) as _,
+                        height: -((ext.height >> level) as f64),
+                        znear: 0.0,
+                        zfar: 1.0,
+                    }),
+                    soft::RenderCommand::SetScissor(MTLScissorRect {
+                        x: 0,
+                        y: 0,
+                        width: (ext.width >> level) as _,
+                        height: (ext.height >> level) as _,
+                    }),
+                    soft::RenderCommand::BindBuffer {
+                        stage: pso::Stage::Vertex,
+                        index: 0,
+                        buffer: Some(vertex_buffer),
+                        offset: 0,
+                    },
+                    soft::RenderCommand::Draw {
+                        primitive_type: MTLPrimitiveType::Triangle,
+                        vertices: 0 .. list.len() as _,
+                        instances: 0 .. 1,
+                    },
+                ];
 
                 let descriptor = metal::RenderPassDescriptor::new().to_owned();
                 descriptor.set_render_target_array_length(ext.depth as _);
@@ -1426,6 +1428,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     attachment.set_texture(Some(&dst.raw));
                     attachment.set_level(level as _);
                 }
+
+                let commands = prelude
+                    .iter()
+                    .chain(&extra)
+                    .cloned()
+                    .collect();
 
                 sink.begin_render_pass(commands, descriptor);
                 // no actual pass body - everything is in the init commands
@@ -2051,7 +2059,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let new_src = if src.mtl_format == dst.mtl_format {
             src.raw.clone()
         } else {
-            println!("Copy of different formats detected: {:?} -> {:?}", src, dst);
             assert_eq!(src.format_desc.bits, dst.format_desc.bits);
             let tex = src.raw.new_texture_view(dst.mtl_format);
             inner.retained_textures.push(tex.clone());

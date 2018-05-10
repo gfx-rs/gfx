@@ -52,7 +52,7 @@ pub fn map_format(format: Format) -> Option<MTLPixelFormat> {
         f::Rgba32Float       => RGBA32Float,
         f::D16Unorm          => Depth16Unorm,
         f::D32Float          => Depth32Float,
-        f::D24UnormS8Uint    => Depth24Unorm_Stencil8,
+        //f::D24UnormS8Uint    => Depth24Unorm_Stencil8, // !macOS
         f::D32FloatS8Uint    => Depth32Float_Stencil8,
         //f::Bc1RgbUnorm       => BC1_RGBA,
         //f::Bc1RgbSrgb        => BC1_RGBA_sRGB,
