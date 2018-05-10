@@ -130,8 +130,8 @@ pub fn map_extent(offset: image::Extent) -> vk::Extent3D {
 pub fn map_subresource_layers(
     sub: &image::SubresourceLayers,
 ) -> vk::ImageSubresourceLayers {
-    let layer_start = sub.layers.0;
-    let layer_count = sub.layers.1.map_or(vk::VK_REMAINING_ARRAY_LAYERS, |end| (end - layer_start) as u32);
+    let layer_start = sub.layers.start.unwrap_or(0);
+    let layer_count = sub.layers.end.map_or(vk::VK_REMAINING_ARRAY_LAYERS, |end| (end - layer_start) as u32);
     vk::ImageSubresourceLayers {
         aspect_mask: map_image_aspects(sub.aspects),
         mip_level: sub.level as _,
@@ -143,10 +143,10 @@ pub fn map_subresource_layers(
 pub fn map_subresource_range(
     range: &image::SubresourceRange,
 ) -> vk::ImageSubresourceRange {
-    let level_start = range.levels.0;
-    let level_count = range.levels.1.map_or(vk::VK_REMAINING_MIP_LEVELS, |end| (end - level_start) as u32);
-    let layer_start = range.layers.0;
-    let layer_count = range.layers.1.map_or(vk::VK_REMAINING_ARRAY_LAYERS, |end| (end - layer_start) as u32);
+    let level_start = range.levels.start.unwrap_or(0);
+    let level_count = range.levels.end.map_or(vk::VK_REMAINING_MIP_LEVELS, |end| (end - level_start) as u32);
+    let layer_start = range.layers.start.unwrap_or(0);
+    let layer_count = range.layers.end.map_or(vk::VK_REMAINING_ARRAY_LAYERS, |end| (end - layer_start) as u32);
     vk::ImageSubresourceRange {
         aspect_mask: map_image_aspects(range.aspects),
         base_mip_level: level_start as _,

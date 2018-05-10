@@ -185,7 +185,11 @@ unsafe impl Sync for Image { }
 impl Image {
     /// Get `SubresourceRange` of the whole image.
     pub fn to_subresource_range(&self, aspects: format::Aspects) -> image::SubresourceRange {
-        image::SubresourceRange::new(aspects, 0 .. self.num_levels, 0 .. self.kind.num_layers())
+        image::SubresourceRange {
+            aspects,
+            levels: 0 .. self.num_levels,
+            layers: 0 .. self.kind.num_layers(),
+        }
     }
 
     pub fn calc_subresource(&self, mip_level: UINT, layer: UINT, plane: UINT) -> UINT {

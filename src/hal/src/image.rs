@@ -8,7 +8,7 @@ use std::ops::Range;
 
 use format;
 use pso::Comparison;
-use range::RangeArg;
+use range::{RangeArg, RangeOption};
 
 
 /// Dimension size.
@@ -168,7 +168,7 @@ pub enum LayerError {
     /// The source image kind doesn't support array slices.
     NotExpected(Kind),
     /// Selected layer is outside of the provided range.
-    OutOfBounds((Layer, Option<Layer>)),
+    OutOfBounds(RangeOption<Layer>),
 }
 
 impl fmt::Display for LayerError {
@@ -661,7 +661,7 @@ pub struct SubresourceLayers {
     /// Selected mipmap level
     pub level: Level,
     /// Included array levels
-    pub layers: (Layer, Option<Layer>),
+    pub layers: RangeOption<Layer>,
 }
 
 impl SubresourceLayers {
@@ -670,7 +670,7 @@ impl SubresourceLayers {
         SubresourceLayers {
             aspects,
             level,
-            layers: (layers.start().cloned().unwrap_or(0), layers.end().cloned()),
+            layers: RangeOption { start: layers.start().cloned(), end: layers.end().cloned() },
         }
     }
 }
@@ -682,9 +682,9 @@ pub struct SubresourceRange {
     /// Included aspects: color/depth/stencil
     pub aspects: format::Aspects,
     /// Included mipmap levels
-    pub levels: (Level, Option<Level>),
+    pub levels: RangeOption<Level>,
     /// Included array levels
-    pub layers: (Layer, Option<Layer>),
+    pub layers: RangeOption<Layer>,
 }
 
 impl SubresourceRange {
@@ -696,8 +696,8 @@ impl SubresourceRange {
     {
         SubresourceRange {
             aspects,
-            levels: (levels.start().cloned().unwrap_or(0), levels.end().cloned()),
-            layers: (layers.start().cloned().unwrap_or(0), layers.end().cloned()),
+            levels: RangeOption { start: levels.start().cloned(), end: levels.end().cloned() },
+            layers: RangeOption { start: layers.start().cloned(), end: layers.end().cloned() },
         }
     }
 }

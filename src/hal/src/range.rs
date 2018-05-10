@@ -57,3 +57,32 @@ impl<T> RangeArg<T> for (Option<T>, Option<T>) {
         self.1.as_ref()
     }
 }
+
+///
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct RangeOption<T> {
+    /// The optional lower bound of the range (inclusive)
+    pub start: Option<T>,
+    /// The optional upper bound of the range (exclusive)
+    pub end: Option<T>,
+}
+
+impl<T> RangeOption<T> {
+    ///
+    pub fn into_range(self, def_start: T, def_end: T) -> Range<T> {
+        Range {
+            start: self.start.unwrap_or(def_start),
+            end: self.end.unwrap_or(def_end),
+        }
+    }
+}
+
+impl<T> RangeArg<T> for RangeOption<T> {
+    fn start(&self) -> Option<&T> {
+        self.start.as_ref()
+    }
+    fn end(&self) -> Option<&T> {
+        self.end.as_ref()
+    }
+}

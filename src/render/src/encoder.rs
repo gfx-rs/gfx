@@ -467,7 +467,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         image::Subresource {
             aspects: src.aspects,
             level: src.level,
-            layer: src.layers.0
+            layer: src.layers.start.unwrap_or(0)
         }
     }
 
@@ -533,7 +533,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         let mut image_states = Vec::new();
         for region in regions {
             let r = &region.image_layers;
-            for layer in r.layers.0 .. r.layers.1.unwrap_or(dst.info().kind.num_layers()) {
+            for layer in r.layers.clone().into_range(0, dst.info().kind.num_layers()) {
                 let subresource = hal::image::Subresource {
                     aspects: dst.info().aspects,
                     level: r.level,
@@ -577,7 +577,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         let mut image_states = Vec::new();
         for region in regions {
             let r = &region.image_layers;
-            for layer in r.layers.0 .. r.layers.1.unwrap_or(src.info().kind.num_layers()) {
+            for layer in r.layers.clone().into_range(0, src.info().kind.num_layers()) {
                 let subresource = hal::image::Subresource {
                     aspects: src.info().aspects,
                     level: r.level,

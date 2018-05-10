@@ -10,14 +10,15 @@ use std::{slice};
 
 use hal::{self, buffer as b, command as c, format as f, image as i, memory, pso};
 use hal::{Device, DescriptorPool, PhysicalDevice};
+use hal::range::RangeOption;
 
 use raw;
 
 
 const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
     aspects: f::Aspects::COLOR,
-    levels: (0, Some(1)),
-    layers: (0, Some(1)),
+    levels: RangeOption { start: Some(0), end: Some(1) },
+    layers: RangeOption { start: Some(0), end: Some(1) },
 };
 
 pub struct FetchGuard<'a, B: hal::Backend> {

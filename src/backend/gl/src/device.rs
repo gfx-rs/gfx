@@ -889,15 +889,15 @@ impl d::Device<B> for Device {
         range: i::SubresourceRange,
     ) -> Result<n::ImageView, i::ViewError> {
         //TODO: check if `layers.end` covers all the layers
-        let level = range.levels.0;
-        let level_end = range.levels.1.unwrap_or(level + 1); //TODO: check number of levels
-        assert_eq!(level + 1, level_end);
+        let layers = range.layers.into_range(0, 1);
+        let level = range.levels.start.unwrap_or(0);
+        assert_eq!(level + 1, range.levels.end.unwrap_or(level + 1));
         //assert_eq!(format, image.format);
         assert_eq!(swizzle, Swizzle::NO);
         //TODO: check format
         match image.kind {
             n::ImageKind::Surface(surface) => {
-                if range.levels.0 == 0 && range.layers.0 == 0 {
+                if level == 0 && layers.start == 0 {
                     Ok(n::ImageView::Surface(surface))
                 } else if level != 0 {
                     Err(i::ViewError::Level(level)) //TODO
@@ -907,11 +907,10 @@ impl d::Device<B> for Device {
             }
             n::ImageKind::Texture(texture) => {
                 //TODO: check that `level` exists
-                let layer = range.layers.0;
-                if layer == 0 {
+                if layers.start == 0 {
                     Ok(n::ImageView::Texture(texture, level))
-                } else if layer + 1 == range.layers.1.unwrap_or(layer + 1) { //TODO: layer end check
-                    Ok(n::ImageView::TextureLayer(texture, level, layer))
+                } else if layers.start + 1 == layers.end {
+                    Ok(n::ImageView::TextureLayer(texture, level, layers.start))
                 } else {
                     Err(i::ViewError::Layer(i::LayerError::OutOfBounds(range.layers)))
                 }

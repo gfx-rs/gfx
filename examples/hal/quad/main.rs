@@ -27,6 +27,7 @@ use hal::format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle};
 use hal::pass::Subpass;
 use hal::pso::{PipelineStage, ShaderStageFlags, Specialization};
 use hal::queue::Submission;
+use hal::range::RangeOption;
 
 use std::io::Cursor;
 
@@ -51,8 +52,8 @@ const QUAD: [Vertex; 6] = [
 
 const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
     aspects: f::Aspects::COLOR,
-    levels: (0, Some(1)),
-    layers: (0, Some(1)),
+    levels: RangeOption { start: Some(0), end: Some(1) },
+    layers: RangeOption { start: Some(0), end: Some(1) },
 };
 
 #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]

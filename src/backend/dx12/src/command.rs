@@ -722,10 +722,11 @@ impl CommandBuffer {
         let slice_pitch = div(buffer_height, image.block_dim.1 as _) * row_pitch;
         let is_pitch_aligned = row_pitch % d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT == 0;
 
-        for layer in r.image_layers.layers.0 .. r.image_layers.layers.1.unwrap_or(image.kind.num_layers()) {
+        let layers = r.image_layers.layers.into_range(0, image.kind.num_layers());
+        for layer in layers.clone() {
             let img_subresource = image
                 .calc_subresource(r.image_layers.level as _, layer as _, 0);
-            let layer_relative = (layer - r.image_layers.layers.start) as u32;
+            let layer_relative = (layer - layers.start) as u32;
             let layer_offset = r.buffer_offset as u64 + (layer_relative * slice_pitch * r.image_extent.depth) as u64;
             let aligned_offset = layer_offset & !(d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64 - 1);
             if layer_offset == aligned_offset && is_pitch_aligned {
@@ -1051,8 +1052,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         raw_barriers.push(bar);
                     } else {
                         // Generate barrier for each layer/level combination.
-                        let levels = range.levels.0 .. range.levels.1.unwrap_or(target.num_levels);
-                        let layers = range.layers.0 .. range.layers.1.unwrap_or(target.kind.num_layers());
+                        let levels = range.levels.clone().into_range(0, target.kind.num_levels());
+                        let layers = range.layers.clone().into_range(0, target.kind.num_layers());
                         for level in levels {
                             for layer in layers.clone() {
                                 {
@@ -1116,9 +1117,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         value: com::ClearColorRaw,
     ) {
         assert_eq!(range.aspects, Aspects::COLOR);
-        assert_eq!(range.levels.0, 0);
-        assert_eq!(range.levels.1.unwrap_or(1), 1); //TODO
-        for layer in range.layers.0 .. range.layers.1.unwrap_or(image.kind.num_layers()) {
+        assert_eq!(range.levels.into_range(0, image.kind.num_levels()), 0 .. 1); //TODO
+        for layer in range.layers.into_range(0, image.kind.num_layers()) {
             let rtv = image.clear_cv[layer as usize];
             self.clear_render_target_view(rtv, value, &[]);
         }
@@ -1132,9 +1132,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         value: com::ClearDepthStencilRaw,
     ) {
         assert!((Aspects::DEPTH | Aspects::STENCIL).contains(range.aspects));
-        assert_eq!(range.levels.0, 0);
-        assert_eq!(range.levels.1.unwrap_or(image.kind.num_levels()), 1); // TODO
-        for layer in range.layers.0 .. range.layers.1.unwrap_or(image.kind.num_layers()) {
+        assert_eq!(range.levels.into_range(0, image.kind.num_levels()), 0 .. 1); //TODO
+        for layer in range.layers.into_range(0, image.kind.num_layers()) {
             if range.aspects.contains(Aspects::DEPTH) {
                 let dsv = image.clear_dv[layer as usize];
                 self.clear_depth_stencil_view(dsv, Some(value.depth), None, &[]);
@@ -1216,9 +1215,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 unsafe {
                     self.raw.ResolveSubresource(
                         src.resource,
-                        src.calc_subresource(r.src_subresource.level as UINT, r.src_subresource.layers.0 as UINT + layer, 0),
+                        src.calc_subresource(r.src_subresource.level as UINT, r.src_subresource.layers.start.unwrap_or(0) as UINT + layer, 0),
                         dst.resource,
-                        dst.calc_subresource(r.dst_subresource.level as UINT, r.dst_subresource.layers.0 as UINT + layer, 0),
+                        dst.calc_subresource(r.dst_subresource.level as UINT, r.dst_subresource.layers.start.unwrap_or(0) as UINT + layer, 0),
                         src.dxgi_format,
                     );
                 }
@@ -1567,12 +1566,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         for region in regions {
             let r = region.borrow();
-            let src_layer_start = r.src_subresource.layers.0;
-            let dst_layer_start = r.dst_subresource.layers.0;
-            let src_layer_end = r.src_subresource.layers.1.unwrap_or(src.kind.num_layers());
-            let dst_layer_end = r.dst_subresource.layers.1.unwrap_or(dst.kind.num_layers());
-            debug_assert_eq!(src_layer_end - src_layer_start, dst_layer_end - dst_layer_start);
-            let num_layers = (src_layer_end - src_layer_start) as image::Layer;
+            let src_layers = r.src_subresource.layers.into_range(0, src.kind.num_layers());
+            let dst_layers = r.dst_subresource.layers.into_range(0, dst.kind.num_layers());
+            debug_assert_eq!(src_layers.len(), dst_layers.len());
+            let num_layers = src_layers.len() as image::Layer;
             let src_box = d3d12::D3D12_BOX {
                 left: r.src_offset.x as _,
                 top: r.src_offset.y as _,
@@ -1584,9 +1581,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
             for layer in 0..num_layers {
                 *unsafe { src_image.u.SubresourceIndex_mut() } =
-                    src.calc_subresource(r.src_subresource.level as _, (src_layer_start + layer) as _, 0);
+                    src.calc_subresource(r.src_subresource.level as _, (src_layers.start + layer) as _, 0);
                 *unsafe { dst_image.u.SubresourceIndex_mut() } =
-                    dst.calc_subresource(r.dst_subresource.level as _, (dst_layer_start + layer) as _, 0);
+                    dst.calc_subresource(r.dst_subresource.level as _, (dst_layers.start + layer) as _, 0);
                 unsafe {
                     self.raw.CopyTextureRegion(
                         &dst_image,
