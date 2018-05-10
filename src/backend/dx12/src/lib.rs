@@ -464,7 +464,6 @@ struct CmdSignatures {
 struct Shared {
     pub signatures: CmdSignatures,
     pub service_pipes: internal::ServicePipes,
-    pub device: *mut d3d12::ID3D12Device,
 }
 
 pub struct Device {
@@ -605,7 +604,6 @@ impl Device {
         let shared = Shared {
             signatures,
             service_pipes,
-            device: device.as_raw(),
         };
 
         Device {

@@ -1287,6 +1287,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::ImageBlit>
     {
+        let device = self.shared.service_pipes.device.clone();
+
         // TODO: Resource barriers for src and dst.
         // TODO: depth or stencil images not supported so far
 
@@ -1296,7 +1298,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             _ => unimplemented!(),
         }
 
-        let rtv_handle_size = unsafe { (*self.shared.device).GetDescriptorHandleIncrementSize(d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV) as usize };
+        let rtv_handle_size = unsafe { device.GetDescriptorHandleIncrementSize(d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV) as usize };
 
         // Descriptor heap for the current blit, only storing the src image
         let srv_heap = {
@@ -1309,7 +1311,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
             let mut heap: *mut d3d12::ID3D12DescriptorHeap = ptr::null_mut();
             unsafe {
-                (*self.shared.device).CreateDescriptorHeap(
+                device.CreateDescriptorHeap(
                     &desc,
                     &d3d12::IID_ID3D12DescriptorHeap,
                     &mut heap as *mut *mut _ as *mut *mut _,
@@ -1337,7 +1339,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
         ).unwrap();
         unsafe {
-            (*self.shared.device).CreateShaderResourceView(src.resource, &srv_desc, srv_heap_cpu);
+            device.CreateShaderResourceView(src.resource, &srv_desc, srv_heap_cpu);
             self.raw.SetDescriptorHeaps(1, &mut srv_heap.as_raw());
         }
 
@@ -1363,7 +1365,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                 let mut heap: *mut d3d12::ID3D12DescriptorHeap = ptr::null_mut();
                 unsafe {
-                    (*self.shared.device).CreateDescriptorHeap(
+                    device.CreateDescriptorHeap(
                         &desc,
                         &d3d12::IID_ID3D12DescriptorHeap,
                         &mut heap as *mut *mut _ as *mut *mut _,
@@ -1393,7 +1395,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                         let view = d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: rtv.ptr + rtv_handle_size * i as usize };
                         unsafe {
-                            (*self.shared.device).CreateRenderTargetView(dst.resource, &desc, view);
+                            device.CreateRenderTargetView(dst.resource, &desc, view);
                         }
                     }
 
@@ -1458,7 +1460,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 let current_rtv = d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: rtv.ptr + rtv_handle_size * i as usize };
 
                 // Image extents, layers are treated as depth
-                let (width, height, _) = src.kind.level_extent(r.src_subresource.level);
                 let blit_data = {
                     let (sx, dx) = if flip_x {
                         (r.src_bounds.end.x, r.src_bounds.start.x - r.src_bounds.end.x)
@@ -1470,15 +1471,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     } else {
                         (r.src_bounds.start.y, r.src_bounds.end.y - r.src_bounds.start.y)
                     };
+                    let image::Extent { width, height, .. } = src.kind.level_extent(r.src_subresource.level);
 
                     internal::BlitData {
                         src_offset: [
-                            sx as f32 / width,
-                            sy as f32 / height,
+                            sx as f32 / width as f32,
+                            sy as f32 / height as f32,
                         ],
                         src_extent: [
-                            dx as f32 / width,
-                            dy as f32 / height,
+                            dx as f32 / width as f32,
+                            dy as f32 / height as f32,
                         ],
                         layer: src_layer as f32,
                         level: r.src_subresource.level as _,
