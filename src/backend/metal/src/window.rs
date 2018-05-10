@@ -89,7 +89,8 @@ impl Surface {
         unsafe {
             // NSView bounds are measured in DIPs
             let bounds: NSRect = msg_send![self.0.nsview, bounds];
-            (bounds.size.width as _, bounds.size.height as _)
+            let bounds_pixel: NSRect = msg_send![self.0.nsview, convertRectToBacking:bounds];
+            (bounds_pixel.size.width as _, bounds_pixel.size.height as _)
         }
     }
 }
