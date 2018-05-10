@@ -423,7 +423,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn fill_buffer(&mut self, _: &(), _: Range<buffer::Offset>, _: u32) {
+    fn fill_buffer<R>(&mut self, _: &(), _: R, _: u32)
+    where
+        R: RangeArg<buffer::Offset>,
+    {
         unimplemented!()
     }
 

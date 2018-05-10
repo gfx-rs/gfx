@@ -30,6 +30,28 @@
 			jobs: ["blit-image"],
 			expect: ImageRow("image.output", 0, [50, 51, 52, 53]),
 		),
+		"fill-whole": (
+			features: (bits: 0),
+			jobs: ["fill-whole"],
+			expect: Buffer("buffer.fill-8-bytes", [0, 0, 255, 0, 0, 0, 255, 0]),
+		),
+		"fill-first": (
+			features: (bits: 0),
+			jobs: ["fill-first"],
+			expect: Buffer("buffer.fill-8-bytes", [0, 255, 0, 0, 84, 69, 83, 33]),
+		),
+		"fill-last": (
+			features: (bits: 0),
+			jobs: ["fill-last"],
+			expect: Buffer("buffer.fill-8-bytes", [56, 32, 66, 89, 255, 0, 0, 0]),
+		),
+		/*
+		Diabled temporarily because of Vulkan driver support
+		"fill-whole-nearest-multiple": (
+			features: (bits: 0),
+			jobs: ["fill-whole-nearest-multiple"],
+			expect: Buffer("buffer.fill-10-bytes", [255, 0, 0, 0, 255, 0, 0, 0, 63, 33]),
+		),*/
 	},
 	"basic": {
 		"render-pass-clear": (

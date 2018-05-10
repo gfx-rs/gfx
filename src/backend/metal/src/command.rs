@@ -15,6 +15,7 @@ use hal::format::{Aspects, FormatDesc};
 use hal::image::{Filter, Layout, SubresourceRange};
 use hal::query::{Query, QueryControl, QueryId};
 use hal::queue::{RawCommandQueue, RawSubmission};
+use hal::range::RangeArg;
 
 use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLClearColor, MTLIndexType, MTLSize, CaptureManager};
 use cocoa::foundation::{NSUInteger, NSInteger};
@@ -22,7 +23,6 @@ use block::{ConcreteBlock};
 use {conversions as conv, soft};
 
 use smallvec::SmallVec;
-
 
 pub(crate) struct QueueInner {
     queue: metal::CommandQueue,
@@ -493,6 +493,7 @@ impl CommandSink {
 
         match *self {
             CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, .. } => {
+                let _ap = AutoreleasePool::new();
                 let encoder = cmd_buffer.new_compute_command_encoder();
                 for command in init_commands {
                     exec_compute(encoder, &command);
@@ -791,6 +792,7 @@ impl RawCommandQueue<Backend> for Arc<Shared> {
         IC: IntoIterator,
         IC::Item: Borrow<CommandBuffer>,
     {
+        debug!("submitting with fence {:?}", fence);
         // FIXME: wait for semaphores!
 
         // FIXME: multiple buffers signaling!
@@ -878,6 +880,7 @@ impl RawCommandQueue<Backend> for Arc<Shared> {
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+        debug!("waiting for idle");
         let mut pool = self.queue_pool.lock().unwrap();
         let cmd_buffer = pool.borrow_command_buffer(&self.device);
         cmd_buffer.commit();
@@ -1036,13 +1039,88 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         // TODO: MTLRenderCommandEncoder.textureBarrier on macOS?
     }
 
-    fn fill_buffer(
+    fn fill_buffer<R>(
         &mut self,
-        _buffer: &native::Buffer,
-        _range: Range<buffer::Offset>,
-        _data: u32,
-    ) {
-        unimplemented!()
+        buffer: &native::Buffer,
+        range: R,
+        data: u32,
+    ) where
+        R: RangeArg<buffer::Offset>,
+    {
+        let inner = unsafe { &mut *self.inner.get() };
+        let sink = inner.sink.as_mut().unwrap();
+
+        let pipes = self.shared.service_pipes
+            .lock()
+            .unwrap();
+
+        let pso = pipes
+            .get_fill_buffer()
+            .to_owned();
+
+        const WORD_ALIGNMENT: u64 = 4;
+
+        let start = *range.start().unwrap_or(&0);
+        assert_eq!(start % WORD_ALIGNMENT, 0);
+
+        let end = match range.end() {
+            Some(e) => {
+                assert_eq!(e % WORD_ALIGNMENT, 0);
+                *e
+            },
+            None => {
+                let len = buffer.raw.length();
+                len - len % WORD_ALIGNMENT
+            },
+        };
+
+        let length = (end - start) / WORD_ALIGNMENT;
+        let value_and_length = [data, length as _];
+
+        // TODO: Reuse buffer allocation
+        let buf_value_and_length = self.shared.device.new_buffer_with_data(
+            &value_and_length as *const u32 as *const _,
+            (mem::size_of::<u32>() * value_and_length.len()) as _,
+            metal::MTLResourceOptions::StorageModeShared,
+        );
+
+        inner.retained_buffers.push(buf_value_and_length.clone());
+
+        // TODO: Consider writing multiple values per thread in shader
+        let threads_per_threadgroup = pso.thread_execution_width();
+        let threadgroups = (length + threads_per_threadgroup - 1) / threads_per_threadgroup;
+
+        let wg_count = MTLSize {
+            width: threadgroups,
+            height: 1,
+            depth: 1,
+        };
+        let wg_size = MTLSize {
+            width: threads_per_threadgroup,
+            height: 1,
+            depth: 1,
+        };
+
+        let commands = vec![
+            soft::ComputeCommand::BindPipeline(pso),
+            soft::ComputeCommand::BindBuffer {
+                index: 0,
+                buffer: Some(buffer.raw.clone()),
+                offset: start,
+            },
+            soft::ComputeCommand::BindBuffer {
+                index: 1,
+                buffer: Some(buf_value_and_length),
+                offset: 0,
+            },
+            soft::ComputeCommand::Dispatch {
+                wg_size,
+                wg_count,
+            },
+        ];
+
+        sink.begin_compute_pass(commands);
+        sink.stop_encoding();
     }
 
     fn update_buffer(

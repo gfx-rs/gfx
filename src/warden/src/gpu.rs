@@ -857,6 +857,22 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             ],
                         );
                     }
+                    Tc::FillBuffer { ref buffer, start, end, data } => {
+                        let buf = resources.buffers
+                            .get(buffer)
+                            .expect(&format!("Missing buffer: {}", buffer));
+                        command_buf.pipeline_barrier(
+                            pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
+                            memory::Dependencies::empty(),
+                            vec![buf.barrier_to(b::State::TRANSFER_WRITE)],
+                        );
+                        command_buf.fill_buffer(&buf.handle, (start, end), data);
+                        command_buf.pipeline_barrier(
+                            pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
+                            memory::Dependencies::empty(),
+                            vec![buf.barrier_from(b::State::TRANSFER_WRITE)],
+                        );
+                    }
                 }
                 raw::Job::Graphics { ref framebuffer, ref pass, ref clear_values } => {
                     let (ref fb, extent) = resources.framebuffers[framebuffer];

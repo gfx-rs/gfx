@@ -27,6 +27,16 @@
 			format: Rgba8Unorm,
 			usage: (bits: 0x3), //TRANSFER_DST | TRANSFER_SRC
 		),
+		"buffer.fill-8-bytes": Buffer(
+			size: 8,
+			usage: (bits: 0x3), //TRANSFER_SRC | TRANSFER_DST
+			data: "fill-8-bytes.raw",
+		),
+		"buffer.fill-10-bytes": Buffer(
+			size: 10,
+			usage: (bits: 0x3), //TRANSFER_SRC | TRANSFER_DST
+			data: "fill-10-bytes.raw",
+		),
 	},
 	jobs: {
 		"copy-buf": Transfer(
@@ -157,6 +167,38 @@
 						),
 					),
 				],
+			),
+		),
+		"fill-whole": Transfer(
+			FillBuffer(
+				buffer: "buffer.fill-8-bytes",
+				start: Some(0),
+				end: None,
+				data: 0xFF0000,
+			),
+		),
+		"fill-first": Transfer(
+			FillBuffer(
+				buffer: "buffer.fill-8-bytes",
+				start: Some(0),
+				end: Some(4),
+				data: 0xFF00,
+			),
+		),
+		"fill-last": Transfer(
+			FillBuffer(
+				buffer: "buffer.fill-8-bytes",
+				start: Some(4),
+				end: Some(8),
+				data: 0xFF,
+			),
+		),
+		"fill-whole-nearest-multiple": Transfer(
+			FillBuffer(
+				buffer: "buffer.fill-10-bytes",
+				start: Some(0),
+				end: None,
+				data: 0xFF,
 			),
 		),
 	}

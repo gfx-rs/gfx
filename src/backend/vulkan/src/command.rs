@@ -10,6 +10,7 @@ use hal::{buffer, command as com, memory, pso, query};
 use hal::{IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 use hal::format::Aspects;
 use hal::image::{Filter, Layout, SubresourceRange};
+use hal::range::RangeArg;
 use {conv, native as n};
 use {Backend, RawDevice};
 
@@ -251,18 +252,21 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn fill_buffer(
+    fn fill_buffer<R>(
         &mut self,
         buffer: &n::Buffer,
-        range: Range<buffer::Offset>,
+        range: R,
         data: u32,
-    ) {
+    ) where
+        R: RangeArg<buffer::Offset>,
+    {
+        let (offset, size) = conv::map_range_arg(&range);
         unsafe {
             self.device.0.cmd_fill_buffer(
                 self.raw,
                 buffer.raw,
-                range.start,
-                range.end - range.start,
+                offset,
+                size,
                 data,
             );
         }

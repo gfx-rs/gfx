@@ -42,6 +42,7 @@ pub enum RenderCommand {
     }
 }
 
+#[derive(Debug)]
 pub enum BlitCommand {
     CopyBuffer {
         src: metal::Buffer,
@@ -67,6 +68,7 @@ pub enum BlitCommand {
     },
 }
 
+#[derive(Debug)]
 pub enum ComputeCommand {
     BindBuffer {
         index: usize,

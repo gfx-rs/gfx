@@ -2,6 +2,7 @@
 use hal::{buffer, command as com, image, memory, pass, pso, query};
 use hal::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 use hal::format::Aspects;
+use hal::range::RangeArg;
 
 use std::{cmp, iter, mem, ptr};
 use std::borrow::Borrow;
@@ -1473,14 +1474,18 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn fill_buffer(
+    fn fill_buffer<R>(
         &mut self,
         buffer: &n::Buffer,
-        range: Range<buffer::Offset>,
+        range: R,
         data: u32,
-    ) {
+    ) where
+        R: RangeArg<buffer::Offset>,
+    {
         assert!(buffer.clear_uav.is_some(), "Buffer needs to be created with usage `TRANSFER_DST`");
-        assert_eq!(range, 0..buffer.size_in_bytes as u64); // TODO: Need to dynamically create UAVs
+        // TODO: Need to dynamically create UAVs
+        assert_eq!(*range.start().unwrap(), 0);
+        assert_eq!(*range.end().unwrap(), buffer.size_in_bytes as u64);
 
         // Insert barrier for `COPY_DEST` to `UNORDERED_ACCESS` as we use
         // `TRANSFER_WRITE` for all clear commands.

@@ -144,6 +144,12 @@ pub enum TransferCommand {
         filter: hal::image::Filter,
         regions: Vec<hal::command::ImageBlit>,
     },
+    FillBuffer {
+        buffer: String,
+        start: Option<hal::buffer::Offset>,
+        end: Option<hal::buffer::Offset>,
+        data: u32,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize)]

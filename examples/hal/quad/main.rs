@@ -480,6 +480,7 @@ fn main() {
                 target: &image_logo,
                 range: COLOR_RANGE.clone(),
             };
+
             cmd_buffer.pipeline_barrier(
                 PipelineStage::TOP_OF_PIPE .. PipelineStage::TRANSFER,
                 m::Dependencies::empty(),
