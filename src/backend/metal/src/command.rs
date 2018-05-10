@@ -518,6 +518,7 @@ pub struct IndexBuffer {
 pub struct CommandBufferInner {
     sink: Option<CommandSink>,
     retained_buffers: Vec<metal::Buffer>,
+    retained_textures: Vec<metal::Texture>,
 }
 
 impl Drop for CommandBufferInner {
@@ -540,6 +541,7 @@ impl CommandBufferInner {
             _ => {}
         }
         self.retained_buffers.clear();
+        self.retained_textures.clear();
     }
 }
 
@@ -818,10 +820,13 @@ impl RawCommandQueue<Backend> for Arc<Shared> {
             let command_buffer: &metal::CommandBufferRef = match inner.sink {
                 Some(CommandSink::Immediate { ref cmd_buffer, .. }) => {
                     // schedule the retained buffers to release after the commands are done
-                    if !inner.retained_buffers.is_empty() {
+                    if !inner.retained_buffers.is_empty() || !inner.retained_textures.is_empty() {
                         let retained_buffers = mem::replace(&mut inner.retained_buffers, Vec::new());
+                        let retained_textures = mem::replace(&mut inner.retained_textures, Vec::new());
                         let release_block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
-                            let _ = retained_buffers; // move and auto-release
+                            // move and auto-release
+                            let _ = retained_buffers;
+                            let _ = retained_textures;
                         }).copy();
                         let cb_ref: &metal::CommandBufferRef = cmd_buffer;
                         msg_send![cb_ref, addCompletedHandler: release_block.deref() as *const _];
@@ -907,6 +912,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
             inner: Arc::new(UnsafeCell::new(CommandBufferInner {
                 sink: None,
                 retained_buffers: Vec::new(),
+                retained_textures: Vec::new(),
             })),
             shared: self.shared.clone(),
             state: State {
@@ -1242,11 +1248,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             // layer count must be equal in both subresources
             debug_assert_eq!(r.src_subresource.layers.len(), r.dst_subresource.layers.len());
             // aspect flags
-            // check formats compatibility
-            if src.format_desc.bits != dst.format_desc.bits {
-                error!("Formats {:?} and {:?} are not compatible, ignoring blit_image", src.mtl_format, dst.mtl_format);
-                continue;
-            }
             debug_assert_eq!(r.src_subresource.aspects, r.dst_subresource.aspects);
             // check that we're only copying aspects actually in the image
             debug_assert!(src.format_desc.aspects.contains(r.src_subresource.aspects));
@@ -2046,19 +2047,28 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::ImageCopy>,
     {
-        if src.mtl_format != dst.mtl_format {
-            error!("Unable to copy images of different formats");
-            return
-        }
+        let inner = unsafe { &mut *self.inner.get() };
+        let new_src = if src.mtl_format == dst.mtl_format {
+            src.raw.clone()
+        } else {
+            println!("Copy of different formats detected: {:?} -> {:?}", src, dst);
+            assert_eq!(src.format_desc.bits, dst.format_desc.bits);
+            let tex = src.raw.new_texture_view(dst.mtl_format);
+            inner.retained_textures.push(tex.clone());
+            tex
+        };
 
         let commands = regions.into_iter().map(|region| {
             soft::BlitCommand::CopyImage {
-                src: src.raw.clone(),
+                src: new_src.clone(),
                 dst: dst.raw.clone(),
                 region: region.borrow().clone(),
             }
         });
-        self.sink().blit_commands(commands);
+        inner.sink
+            .as_mut()
+            .unwrap()
+            .blit_commands(commands);
     }
 
     fn copy_buffer_to_image<T>(
