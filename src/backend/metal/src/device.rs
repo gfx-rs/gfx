@@ -1,6 +1,7 @@
 use {AutoreleasePool, Backend, QueueFamily, Surface, Swapchain};
 use {native as n, command, soft};
 use conversions::*;
+use internal::BlitChannel;
 
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -1564,10 +1565,23 @@ impl hal::Device<Backend> for Device {
             }
         };
 
+        let base = image.format.base_format();
+
         Ok(n::Image {
             raw,
             extent: image.extent,
-            format_desc: image.format.surface_desc(),
+            format_desc: base.0.desc(),
+            blit_channel: match base.1 {
+                format::ChannelType::Unorm |
+                format::ChannelType::Inorm |
+                format::ChannelType::Ufloat |
+                format::ChannelType::Float |
+                format::ChannelType::Uscaled |
+                format::ChannelType::Iscaled |
+                format::ChannelType::Srgb => BlitChannel::Float,
+                format::ChannelType::Uint => BlitChannel::Uint,
+                format::ChannelType::Int => BlitChannel::Int,
+            },
             mtl_format: match map_format(image.format) {
                 Some(format) => format,
                 None => {

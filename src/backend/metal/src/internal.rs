@@ -12,7 +12,14 @@ pub struct BlitVertex {
     pub pos: [f32; 4],
 }
 
-pub type BlitKey = (metal::MTLTextureType, metal::MTLPixelFormat);
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub enum BlitChannel {
+    Float,
+    Int,
+    Uint,
+}
+
+pub type BlitKey = (metal::MTLTextureType, metal::MTLPixelFormat, BlitChannel);
 
 //#[derive(Clone)]
 pub struct ServicePipes {
@@ -61,38 +68,42 @@ impl ServicePipes {
 
     pub fn get_blit_image(
         &mut self,
-        ty: metal::MTLTextureType,
-        format: metal::MTLPixelFormat,
+        key: BlitKey,
         device: &metal::DeviceRef,
     ) -> &metal::RenderPipelineStateRef {
         let lib = &self.library;
         self.blits
-            .entry((ty, format))
-            .or_insert_with(|| Self::create_blit_image(ty, format, lib, device))
+            .entry(key)
+            .or_insert_with(|| Self::create_blit_image(key, lib, device))
     }
 
     fn create_blit_image(
-        ty: metal::MTLTextureType, format: metal::MTLPixelFormat,
-        library: &metal::LibraryRef, device: &metal::DeviceRef,
+        key: BlitKey, library: &metal::LibraryRef, device: &metal::DeviceRef,
     ) -> metal::RenderPipelineState {
         use metal::MTLTextureType as Tt;
 
         let pipeline = metal::RenderPipelineDescriptor::new();
         pipeline.set_input_primitive_topology(metal::MTLPrimitiveTopologyClass::Triangle);
 
-        let ps_name = match ty {
-            Tt::D1 => "ps_blit_1d",
-            Tt::D1Array => "ps_blit_1d_array",
-            Tt::D2 => "ps_blit_2d",
-            Tt::D2Array => "ps_blit_2d_array",
-            Tt::D3 => "ps_blit_3d",
+        let s_type = match key.0 {
+            Tt::D1 => "1d",
+            Tt::D1Array => "1d_array",
+            Tt::D2 => "2d",
+            Tt::D2Array => "2d_array",
+            Tt::D3 => "3d",
             Tt::D2Multisample => panic!("Can't blit MSAA surfaces"),
             Tt::Cube |
             Tt::CubeArray => unimplemented!()
         };
+        let s_channel = match key.2 {
+            BlitChannel::Float => "float",
+            BlitChannel::Int => "int",
+            BlitChannel::Uint => "uint",
+        };
+        let ps_name = format!("ps_blit_{}_{}", s_type, s_channel);
 
         let vs_blit = library.get_function("vs_blit", None).unwrap();
-        let ps_blit = library.get_function(ps_name, None).unwrap();
+        let ps_blit = library.get_function(&ps_name, None).unwrap();
         pipeline.set_vertex_function(Some(&vs_blit));
         pipeline.set_fragment_function(Some(&ps_blit));
 
@@ -100,7 +111,7 @@ impl ServicePipes {
             .color_attachments()
             .object_at(0)
             .unwrap()
-            .set_pixel_format(format);
+            .set_pixel_format(key.1);
 
         // Vertex buffers
         let vertex_descriptor = metal::VertexDescriptor::new();

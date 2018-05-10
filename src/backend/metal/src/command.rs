@@ -1356,8 +1356,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let mut pipes = self.shared.service_pipes
                 .lock()
                 .unwrap();
+            let key = (dst.mtl_type, dst.mtl_format, dst.blit_channel);
             let pso = pipes
-                .get_blit_image(dst.mtl_type, dst.mtl_format, &self.shared.device)
+                .get_blit_image(key, &self.shared.device)
                 .to_owned();
             let sampler = pipes.get_sampler(filter);
             let ext = &dst.extent;
