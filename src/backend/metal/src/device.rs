@@ -493,7 +493,8 @@ impl hal::Device<Backend> for Device {
     fn destroy_command_pool(&self, pool: command::CommandPool) {
         if let Some(vec) = pool.managed {
             for cmd_buf in vec {
-                unsafe { &mut *cmd_buf.get() }
+                cmd_buf
+                    .borrow_mut()
                     .reset(&self.command_shared);
             }
         }

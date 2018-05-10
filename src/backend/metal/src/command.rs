@@ -2,8 +2,8 @@ use {AutoreleasePool, Backend};
 use {native, window};
 use internal::{BlitVertex, ServicePipes};
 
-use std::borrow::{Borrow, BorrowMut};
-use std::cell::UnsafeCell;
+use std::borrow::{self, Borrow};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::{Deref, Range};
 use std::sync::{Arc, Mutex};
@@ -111,8 +111,7 @@ impl Shared {
     }
 }
 
-
-type CommandBufferInnerPtr = Arc<UnsafeCell<CommandBufferInner>>;
+type CommandBufferInnerPtr = Arc<RefCell<CommandBufferInner>>;
 
 pub struct CommandPool {
     pub(crate) shared: Arc<Shared>,
@@ -544,6 +543,10 @@ impl CommandBufferInner {
         self.retained_buffers.clear();
         self.retained_textures.clear();
     }
+
+    fn sink(&mut self) -> &mut CommandSink {
+        self.sink.as_mut().unwrap()
+    }
 }
 
 
@@ -816,21 +819,25 @@ impl RawCommandQueue<Backend> for Arc<Shared> {
         let mut pool = self.queue_pool.lock().unwrap();
 
         for buffer in submit.cmd_buffers {
-            let inner = &mut *buffer.borrow().inner.get();
+            let mut inner = buffer.borrow().inner.borrow_mut();
+            let CommandBufferInner {
+                ref sink,
+                ref mut retained_buffers,
+                ref mut retained_textures,
+            } = *inner;
             let temp_cmd_buffer;
-            let command_buffer: &metal::CommandBufferRef = match inner.sink {
+            let command_buffer: &metal::CommandBufferRef = match *sink {
                 Some(CommandSink::Immediate { ref cmd_buffer, .. }) => {
                     // schedule the retained buffers to release after the commands are done
-                    if !inner.retained_buffers.is_empty() || !inner.retained_textures.is_empty() {
-                        let retained_buffers = mem::replace(&mut inner.retained_buffers, Vec::new());
-                        let retained_textures = mem::replace(&mut inner.retained_textures, Vec::new());
+                    if !retained_buffers.is_empty() || !retained_textures.is_empty() {
+                        let free_buffers = mem::replace(retained_buffers, Vec::new());
+                        let free_textures = mem::replace(retained_textures, Vec::new());
                         let release_block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
                             // move and auto-release
-                            let _ = retained_buffers;
-                            let _ = retained_textures;
+                            let _ = free_buffers;
+                            let _ = free_textures;
                         }).copy();
-                        let cb_ref: &metal::CommandBufferRef = cmd_buffer;
-                        msg_send![cb_ref, addCompletedHandler: release_block.deref() as *const _];
+                        msg_send![*cmd_buffer, addCompletedHandler: release_block.deref() as *const _];
                     }
                     cmd_buffer
                 }
@@ -839,7 +846,7 @@ impl RawCommandQueue<Backend> for Arc<Shared> {
                     record_commands(&*temp_cmd_buffer, passes);
                     &*temp_cmd_buffer
                  }
-                 None => panic!("Command buffer not recorded for submission")
+                 _ => panic!("Command buffer not recorded for submission")
             };
             if let Some(ref signal_block) = signal_block {
                 msg_send![command_buffer, addCompletedHandler: signal_block.deref() as *const _];
@@ -861,10 +868,11 @@ impl RawCommandQueue<Backend> for Arc<Shared> {
     fn present<IS, IW>(&mut self, swapchains: IS, _wait_semaphores: IW)
     where
         IS: IntoIterator,
-        IS::Item: BorrowMut<window::Swapchain>,
+        IS::Item: borrow::BorrowMut<window::Swapchain>,
         IW: IntoIterator,
         IW::Item: Borrow<native::Semaphore>,
     {
+        use std::borrow::BorrowMut;
         for mut swapchain in swapchains {
             // TODO: wait for semaphores
             let swapchain = swapchain.borrow_mut();
@@ -899,7 +907,8 @@ impl pool::RawCommandPool<Backend> for CommandPool {
     fn reset(&mut self) {
         if let Some(ref mut managed) = self.managed {
             for cmd_buffer in managed {
-                unsafe { &mut *cmd_buffer.get() }
+                cmd_buffer
+                    .borrow_mut()
                     .reset(&self.shared);
             }
         }
@@ -910,7 +919,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
     ) -> Vec<CommandBuffer> {
         //TODO: Implement secondary buffers
         let buffers: Vec<_> = (0..num).map(|_| CommandBuffer {
-            inner: Arc::new(UnsafeCell::new(CommandBufferInner {
+            inner: Arc::new(RefCell::new(CommandBufferInner {
                 sink: None,
                 retained_buffers: Vec::new(),
                 retained_textures: Vec::new(),
@@ -950,9 +959,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
             None => return,
         };
         for cmd_buf in buffers {
-            //TODO: what else here?
-            let inner_ptr = cmd_buf.inner.get();
-            match managed.iter_mut().position(|b| inner_ptr == b.get()) {
+            match managed.iter_mut().position(|b| Arc::ptr_eq(b, &cmd_buf.inner)) {
                 Some(index) => {
                     managed.swap_remove(index);
                 }
@@ -965,11 +972,6 @@ impl pool::RawCommandPool<Backend> for CommandPool {
 }
 
 impl CommandBuffer {
-    fn sink(&mut self) -> &mut CommandSink {
-        let inner = unsafe { &mut *self.inner.get() };
-        inner.sink.as_mut().unwrap()
-    }
-
     fn set_viewport(&mut self, vp: &pso::Viewport) -> soft::RenderCommand {
         let viewport = MTLViewport {
             originX: vp.rect.x as _,
@@ -1020,17 +1022,21 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
         };
 
-        unsafe { &mut *self.inner.get() }.sink = Some(sink);
+        self.inner.borrow_mut().sink = Some(sink);
         self.state.reset_resources();
     }
 
     fn finish(&mut self) {
-        self.sink().stop_encoding();
+        self.inner
+            .borrow_mut()
+            .sink()
+            .stop_encoding();
     }
 
     fn reset(&mut self, _release_resources: bool) {
         self.state.reset_resources();
-        unsafe { &mut *self.inner.get() }
+        self.inner
+            .borrow_mut()
             .reset(&self.shared);
     }
 
@@ -1054,19 +1060,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     ) where
         R: RangeArg<buffer::Offset>,
     {
-        let inner = unsafe { &mut *self.inner.get() };
-        let sink = inner.sink.as_mut().unwrap();
-
+        let mut inner = self.inner.borrow_mut();
         let pipes = self.shared.service_pipes
             .lock()
             .unwrap();
-
         let pso = pipes
             .get_fill_buffer()
             .to_owned();
 
         const WORD_ALIGNMENT: u64 = 4;
-
         let start = *range.start().unwrap_or(&0);
         assert_eq!(start % WORD_ALIGNMENT, 0);
 
@@ -1126,8 +1128,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             },
         ];
 
-        sink.begin_compute_pass(commands);
-        sink.stop_encoding();
+        inner.sink().begin_compute_pass(commands);
+        inner.sink().stop_encoding();
     }
 
     fn update_buffer(
@@ -1136,7 +1138,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         offset: buffer::Offset,
         data: &[u8],
     ) {
-        let inner = unsafe { &mut *self.inner.get() };
+        let mut inner = self.inner.borrow_mut();
         let src = self.shared.device.new_buffer_with_data(
             data.as_ptr() as _,
             data.len() as _,
@@ -1153,9 +1155,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 size: data.len() as _,
             },
         };
-        inner.sink
-            .as_mut()
-            .unwrap()
+        inner
+            .sink()
             .blit_commands(iter::once(command));
     }
 
@@ -1346,12 +1347,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
         }
 
-        self.sink().blit_commands(blit_commands.into_iter());
+        let mut inner = self.inner.borrow_mut();
+        inner.sink().blit_commands(blit_commands.into_iter());
 
         if !blit_vertices.is_empty() {
-            let inner = unsafe { &mut *self.inner.get() };
-            let sink = inner.sink.as_mut().unwrap();
-
             // Note: we don't bother to restore any render states here, since we are currently
             // outside of a render pass, and the state will be reset automatically once
             // we enter the next pass.
@@ -1436,11 +1435,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     .cloned()
                     .collect();
 
-                sink.begin_render_pass(commands, descriptor);
+                inner.sink().begin_render_pass(commands, descriptor);
                 // no actual pass body - everything is in the init commands
             }
 
-            sink.stop_encoding();
+            inner.sink().stop_encoding();
         }
     }
 
@@ -1475,7 +1474,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 offset,
             }
         });
-        self.sink().pre_render_commands(commands);
+        self.inner
+            .borrow_mut()
+            .sink()
+            .pre_render_commands(commands);
     }
 
     fn set_viewports<T>(&mut self, first_viewport: u32, vps: T)
@@ -1496,7 +1498,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
 
         let com = self.set_viewport(vp);
-        self.sink().pre_render_commands(iter::once(com));
+        self.inner
+            .borrow_mut()
+            .sink()
+            .pre_render_commands(iter::once(com));
     }
 
     fn set_scissors<T>(&mut self, first_scissor: u32, rects: T)
@@ -1516,7 +1521,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
 
         let com = self.set_scissor(rect);
-        self.sink().pre_render_commands(iter::once(com));
+        self.inner
+            .borrow_mut()
+            .sink()
+            .pre_render_commands(iter::once(com));
     }
 
     fn set_stencil_reference(&mut self, _front: pso::StencilValue, _back: pso::StencilValue) {
@@ -1525,7 +1533,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn set_blend_constants(&mut self, color: pso::ColorValue) {
         let com = self.set_blend_color(&color);
-        self.sink().pre_render_commands(iter::once(com));
+        self.inner
+            .borrow_mut()
+            .sink()
+            .pre_render_commands(iter::once(com));
     }
 
     fn set_depth_bounds(&mut self, _: Range<f32>) {
@@ -1568,7 +1579,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         };
 
         let init_commands = self.state.make_render_commands();
-        self.sink()
+        self.inner
+            .borrow_mut()
+            .sink()
             .begin_render_pass(init_commands, descriptor);
     }
 
@@ -1577,7 +1590,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn end_render_pass(&mut self) {
-        self.sink().stop_encoding();
+        self.inner
+            .borrow_mut()
+            .sink()
+            .stop_encoding();
     }
 
     fn bind_graphics_pipeline(&mut self, pipeline: &native::GraphicsPipeline) {
@@ -1600,7 +1616,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         if let Some(ref color) = pipeline.baked_states.blend_color {
             commands.push(self.set_blend_color(color));
         }
-        self.sink().pre_render_commands(commands);
+        self.inner
+            .borrow_mut()
+            .sink()
+            .pre_render_commands(commands);
     }
 
     fn bind_graphics_descriptor_sets<'a, T>(
@@ -1809,7 +1828,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
         }
 
-        self.sink().pre_render_commands(commands);
+        self.inner
+            .borrow_mut()
+            .sink()
+            .pre_render_commands(commands);
     }
 
     fn bind_compute_pipeline(&mut self, pipeline: &native::ComputePipeline) {
@@ -1817,7 +1839,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.state.work_group_size = pipeline.work_group_size;
 
         let command = soft::ComputeCommand::BindPipeline(pipeline.raw.clone());
-        self.sink().pre_compute_commands(iter::once(command));
+        self.inner
+            .borrow_mut()
+            .sink()
+            .pre_compute_commands(iter::once(command));
     }
 
     fn bind_compute_descriptor_sets<'a, T>(
@@ -1925,7 +1950,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
         }
 
-        self.sink().pre_compute_commands(commands);
+        self.inner
+            .borrow_mut()
+            .sink()
+            .pre_compute_commands(commands);
     }
 
     fn dispatch(&mut self, count: WorkGroupCount) {
@@ -1940,7 +1968,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             },
         };
 
-        let sink = self.sink();
+        let mut inner = self.inner.borrow_mut();
+        let sink = inner.sink();
         //TODO: re-use compute encoders
         sink.begin_compute_pass(init_commands);
         sink.compute_commands(iter::once(command));
@@ -1956,7 +1985,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             offset,
         };
 
-        let sink = self.sink();
+        let mut inner = self.inner.borrow_mut();
+        let sink = inner.sink();
         //TODO: re-use compute encoders
         sink.begin_compute_pass(init_commands);
         sink.compute_commands(iter::once(command));
@@ -1972,7 +2002,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::BufferCopy>,
     {
-        let inner = unsafe { &mut *self.inner.get() };
         let compute_pipe = self.shared.service_pipes
             .lock()
             .unwrap()
@@ -1984,6 +2013,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             depth: 1,
         };
 
+        let mut inner = self.inner.borrow_mut();
         let mut blit_commands = Vec::new();
         let mut compute_commands = vec![
             soft::ComputeCommand::BindPipeline(compute_pipe),
@@ -2036,7 +2066,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
         }
 
-        let sink = inner.sink.as_mut().unwrap();
+        let sink = inner.sink();
         sink.blit_commands(blit_commands.into_iter());
 
         if compute_commands.len() > 1 { // first is bind PSO
@@ -2056,7 +2086,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::ImageCopy>,
     {
-        let inner = unsafe { &mut *self.inner.get() };
+        let mut inner = self.inner.borrow_mut();
         let new_src = if src.mtl_format == dst.mtl_format {
             src.raw.clone()
         } else {
@@ -2073,9 +2103,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 region: region.borrow().clone(),
             }
         });
-        inner.sink
-            .as_mut()
-            .unwrap()
+        inner
+            .sink()
             .blit_commands(commands);
     }
 
@@ -2098,7 +2127,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 region: region.borrow().clone(),
             }
         });
-        self.sink().blit_commands(commands);
+        self.inner
+            .borrow_mut()
+            .sink()
+            .blit_commands(commands);
     }
 
     fn copy_image_to_buffer<T>(
@@ -2120,7 +2152,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 region: region.borrow().clone(),
             }
         });
-        self.sink().blit_commands(commands);
+        self.inner
+            .borrow_mut()
+            .sink()
+            .blit_commands(commands);
     }
 
     fn draw(
@@ -2133,7 +2168,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             vertices,
             instances,
         };
-        self.sink().render_commands(iter::once(command));
+        self.inner
+            .borrow_mut()
+            .sink()
+            .render_commands(iter::once(command));
     }
 
     fn draw_indexed(
@@ -2149,7 +2187,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             base_vertex,
             instances,
         };
-        self.sink().render_commands(iter::once(command));
+        self.inner
+            .borrow_mut()
+            .sink()
+            .render_commands(iter::once(command));
     }
 
     fn draw_indirect(
