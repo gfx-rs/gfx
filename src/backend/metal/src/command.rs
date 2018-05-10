@@ -1058,20 +1058,23 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .get_fill_buffer()
             .to_owned();
 
+        const WORD_ALIGNMENT: u64 = 4;
+
         let start = *range.start().unwrap_or(&0);
-        assert_eq!(start & 3, 0);
+        assert_eq!(start % WORD_ALIGNMENT, 0);
 
         let end = match range.end() {
             Some(e) => {
-                assert_eq!(e & 3, 0);
+                assert_eq!(e % WORD_ALIGNMENT, 0);
                 *e
             },
-            None => buffer.raw.length() & !3,
+            None => {
+                let len = buffer.raw.length();
+                len - len % WORD_ALIGNMENT
+            },
         };
 
-        const WORD_ALIGNMENT: u64 = 4;
         let length = (end - start) / WORD_ALIGNMENT;
-
         let value_and_length = [data, length as _];
 
         // TODO: Reuse buffer allocation

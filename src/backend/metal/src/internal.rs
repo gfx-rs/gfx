@@ -163,12 +163,6 @@ impl ServicePipes {
             buffers.object_at(1).unwrap().set_mutability(metal::MTLMutability::Immutable);
         }
 
-        if let Some(buffers) = pipeline.buffers() {
-            buffers.object_at(0).unwrap().set_mutability(metal::MTLMutability::Mutable);
-            buffers.object_at(1).unwrap().set_mutability(metal::MTLMutability::Immutable);
-            buffers.object_at(2).unwrap().set_mutability(metal::MTLMutability::Immutable);
-        }
-
         device.new_compute_pipeline_state(&pipeline).unwrap()
     }
 }
