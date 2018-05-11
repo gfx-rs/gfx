@@ -49,32 +49,51 @@ impl<'a> Deref for CommandBufferScope<'a> {
 
 impl QueuePool {
     fn find_queue(&mut self, device: &metal::DeviceRef) -> usize {
+        const POOL_SIZE: usize = 64;
         self.queues
             .iter()
             .position(|q| q.reserve.start != q.reserve.end)
             .unwrap_or_else(|| {
                 let queue = QueueInner {
-                    queue: device.new_command_queue(),
-                    reserve: 0 .. 64, //TODO
+                    queue: device.new_command_queue_with_max_command_buffer_count(POOL_SIZE as _),
+                    reserve: 0 .. POOL_SIZE,
                 };
                 self.queues.push(queue);
                 self.queues.len() - 1
             })
     }
 
+    /// Get a command buffer reference that we are going to record and submit instantly,
+    /// and the client doesn't want to track it. Used for internal submissions.
     pub fn borrow_command_buffer(
-        &mut self, device: &metal::DeviceRef
+        &mut self, shared: &Arc<Shared>,
     ) -> CommandBufferScope {
         let pool = AutoreleasePool::new();
-        let id = self.find_queue(device);
+        let id = self.find_queue(&shared.device);
+        self.queues[id].reserve.start += 1;
         let inner = self.queues[id].queue
             .new_command_buffer_with_unretained_references();
+
+        // update the reserve count once the GPU is done with it
+        let shared = Arc::clone(shared);
+        let release_block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
+            shared.queue_pool
+                .lock()
+                .unwrap()
+                .release_command_buffer(id);
+        }).copy();
+        unsafe {
+            msg_send![inner,
+                addCompletedHandler: release_block.deref() as *const _
+            ]
+        };
+
         CommandBufferScope {
             inner,
             _pool: pool,
         }
     }
-
+    /// Get a command buffer that needs to be manually tracked/released.
     pub fn make_command_buffer(
         &mut self, device: &metal::DeviceRef
     ) -> (usize, metal::CommandBuffer) {
@@ -86,6 +105,19 @@ impl QueuePool {
             .to_owned();
         (id, cmd_buffer)
     }
+
+    pub fn wait_idle(
+        &mut self, device: &metal::DeviceRef
+    ) {
+        debug!("waiting for idle");
+        let _pool = AutoreleasePool::new();
+        let id = self.find_queue(device);
+        let inner = self.queues[id].queue
+            .new_command_buffer_with_unretained_references();
+        inner.commit();
+        inner.wait_until_completed();
+    }
+
 
     pub fn release_command_buffer(&mut self, index: usize) {
         self.queues[index].reserve.start -= 1;
@@ -842,7 +874,7 @@ impl RawCommandQueue<Backend> for Arc<Shared> {
                     cmd_buffer
                 }
                 Some(CommandSink::Deferred { ref passes, .. }) => {
-                    temp_cmd_buffer = pool.borrow_command_buffer(&self.device);
+                    temp_cmd_buffer = pool.borrow_command_buffer(self);
                     record_commands(&*temp_cmd_buffer, passes);
                     &*temp_cmd_buffer
                  }
@@ -855,7 +887,7 @@ impl RawCommandQueue<Backend> for Arc<Shared> {
         }
 
         if let Some(ref fence) = fence {
-            let command_buffer = pool.borrow_command_buffer(&self.device);
+            let command_buffer = pool.borrow_command_buffer(self);
             let value_ptr = fence.0.clone();
             let fence_block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
                 *value_ptr.lock().unwrap() = true;
@@ -894,11 +926,10 @@ impl RawCommandQueue<Backend> for Arc<Shared> {
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
-        debug!("waiting for idle");
-        let mut pool = self.queue_pool.lock().unwrap();
-        let cmd_buffer = pool.borrow_command_buffer(&self.device);
-        cmd_buffer.commit();
-        cmd_buffer.wait_until_completed();
+        self.queue_pool
+            .lock()
+            .unwrap()
+            .wait_idle(&self.device);
         Ok(())
     }
 }

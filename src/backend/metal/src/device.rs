@@ -984,7 +984,7 @@ impl hal::Device<Backend> for Device {
         // temporary command buffer to copy the contents from
         // allocated CPU-visible buffers to the target buffers
         let mut pool = self.command_shared.queue_pool.lock().unwrap();
-        let cmd_buffer = pool.borrow_command_buffer(&self.device);
+        let cmd_buffer = pool.borrow_command_buffer(&self.command_shared);
         let encoder = cmd_buffer.new_blit_command_encoder();
 
         for item in iter {
@@ -1030,7 +1030,7 @@ impl hal::Device<Backend> for Device {
         // temporary command buffer to copy the contents from
         // the given buffers into the allocated CPU-visible buffers
         let mut pool = self.command_shared.queue_pool.lock().unwrap();
-        let cmd_buffer = pool.borrow_command_buffer(&self.device);
+        let (queue_id, cmd_buffer) = pool.make_command_buffer(&self.device);
         let encoder = cmd_buffer.new_blit_command_encoder();
         let mut num_copies = 0;
 
@@ -1063,6 +1063,7 @@ impl hal::Device<Backend> for Device {
         }
 
         encoder.end_encoding();
+        pool.release_command_buffer(queue_id);
         if num_copies != 0 {
             debug!("\twaiting...");
             cmd_buffer.commit();
@@ -1670,7 +1671,11 @@ impl hal::Device<Backend> for Device {
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
-        unimplemented!()
+        self.command_shared.queue_pool
+            .lock()
+            .unwrap()
+            .wait_idle(&self.device);
+        Ok(())
     }
 }
 
