@@ -183,12 +183,12 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
         layout: image::Layout,
         color: ClearColor,
         depth_stencil: ClearDepthStencil,
-        ranges: T,
+        subresource_ranges: T,
     ) where
         T: IntoIterator,
         T::Item: Borrow<image::SubresourceRange>,
     {
-        self.raw.clear_image(image, layout, color.into(), depth_stencil.into(), ranges)
+        self.raw.clear_image(image, layout, color.into(), depth_stencil.into(), subresource_ranges)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.

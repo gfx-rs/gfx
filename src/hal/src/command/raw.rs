@@ -154,7 +154,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
         layout: Layout,
         color: ClearColorRaw,
         depth_stencil: ClearDepthStencilRaw,
-        ranges: T,
+        subresource_ranges: T,
     ) where
         T: IntoIterator,
         T::Item: Borrow<SubresourceRange>;
