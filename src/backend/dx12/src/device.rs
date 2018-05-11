@@ -1455,11 +1455,14 @@ impl d::Device<B> for Device {
         let input_element_descs = desc.attributes
             .iter()
             .filter_map(|attrib| {
-                let buffer_desc = if let Some(buffer_desc) = desc.vertex_buffers.get(attrib.binding as usize) {
-                    buffer_desc
-                } else {
-                    error!("Couldn't find associated vertex buffer description {:?}", attrib.binding);
-                    return Some(Err(pso::CreationError::Other));
+                let buffer_desc = match desc.vertex_buffers
+                    .iter().find(|buffer_desc| buffer_desc.binding == attrib.binding)
+                {
+                    Some(buffer_desc) => buffer_desc,
+                    None => {
+                        error!("Couldn't find associated vertex buffer description {:?}", attrib.binding);
+                        return Some(Err(pso::CreationError::Other));
+                    }
                 };
 
                 let slot_class = match buffer_desc.rate {
@@ -1488,8 +1491,8 @@ impl d::Device<B> for Device {
 
         // Input slots
         let mut vertex_strides = [0; MAX_VERTEX_BUFFERS];
-        for (stride, buffer) in vertex_strides.iter_mut().zip(desc.vertex_buffers.iter()) {
-            *stride = buffer.stride;
+        for buffer in &desc.vertex_buffers {
+            vertex_strides[buffer.binding as usize] = buffer.stride;
         }
 
         // TODO: check maximum number of rtvs

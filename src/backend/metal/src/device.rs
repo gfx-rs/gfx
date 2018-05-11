@@ -781,8 +781,8 @@ impl hal::Device<Backend> for Device {
 
         // Vertex buffers
         let vertex_descriptor = metal::VertexDescriptor::new();
-        for (i, vertex_buffer) in pipeline_desc.vertex_buffers.iter().enumerate() {
-            let mtl_buffer_index = pipeline_layout.attribute_buffer_index as usize + i;
+        for vertex_buffer in &pipeline_desc.vertex_buffers {
+            let mtl_buffer_index = pipeline_layout.attribute_buffer_index as usize + vertex_buffer.binding as usize;
             let mtl_buffer_desc = vertex_descriptor
                 .layouts()
                 .object_at(mtl_buffer_index)

@@ -153,7 +153,7 @@ struct Cache {
     // Maps bound vertex buffer offset (index) to handle.
     vertex_buffers: Vec<gl::types::GLuint>,
     // Active vertex buffer descriptions.
-    vertex_buffer_descs: Vec<pso::VertexBufferDesc>,
+    vertex_buffer_descs: Vec<Option<pso::VertexBufferDesc>>,
     // Active attributes.
     attributes: Vec<n::AttributeDesc>,
 }
@@ -367,20 +367,18 @@ impl RawCommandBuffer {
 
             let handle = vertex_buffers[binding];
 
-            if vertex_buffer_descs.len() <= binding {
-                error!("No vertex buffer description bound at {}", binding);
+            match vertex_buffer_descs.get(binding) {
+                Some(Some(desc)) => {
+                    assert_eq!(desc.rate, 0); // TODO: Input rate
+                    push_cmd_internal(
+                        &self.id,
+                        &mut self.memory,
+                        &mut self.buf,
+                        Command::BindAttribute(*attribute, handle, desc.stride as _, attribute.vertex_attrib_fn)
+                    );
+                }
+                _ => error!("No vertex buffer description bound at {}", binding),
             }
-
-            let desc = &vertex_buffer_descs[binding];
-
-            assert_eq!(desc.rate, 0); // TODO: Input rate
-
-            push_cmd_internal(
-                &self.id,
-                &mut self.memory,
-                &mut self.buf,
-                Command::BindAttribute(*attribute, handle, desc.stride as _, attribute.vertex_attrib_fn)
-            );
         }
     }
 
