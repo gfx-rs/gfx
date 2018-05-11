@@ -540,18 +540,16 @@ impl CommandBuffer {
             let vbs = &self.vertex_buffer_views;
             let mut last_end_slot = 0;
             loop {
-                match vbs_needs_bind
+                match vbs_needs_bind[last_end_slot..]
                     .iter()
-                    .skip(last_end_slot)
                     .position(|needs_bind| *needs_bind)
                 {
-                    Some(start_slot) => {
-                        let end_slot = vbs_needs_bind
+                    Some(start_offset) => {
+                        let start_slot = last_end_slot + start_offset;
+                        let num_views = vbs_needs_bind[start_slot..]
                             .iter()
-                            .skip(start_slot)
                             .position(|needs_bind| !*needs_bind)
                             .unwrap_or(vbs_needs_bind.len());
-                        let num_views = end_slot - start_slot;
                         unsafe {
                             cmd_buffer.IASetVertexBuffers(
                                 start_slot as _,
@@ -559,7 +557,7 @@ impl CommandBuffer {
                                 vbs[start_slot..].as_ptr(),
                             );
                         }
-                        last_end_slot = end_slot;
+                        last_end_slot = start_slot + num_views;
                     },
                     None => break,
                 }
