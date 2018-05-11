@@ -30,6 +30,8 @@ pub struct Element<F> {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct VertexBufferDesc {
+    /// Binding number of this vertex buffer descriptor.
+    pub binding: BufferIndex,
     /// Total container size, in bytes.
     /// Specifies the byte distance between two consecutive elements.
     pub stride: ElemStride,
@@ -43,7 +45,7 @@ pub struct VertexBufferDesc {
 pub struct AttributeDesc {
     /// Attribute binding location in the shader.
     pub location: Location,
-    /// Index of the associated vertex buffer descriptor.
+    /// Binding number of the associated vertex buffer descriptor.
     pub binding: BufferIndex,
     /// Attribute element description.
     pub element: Element<format::Format>,

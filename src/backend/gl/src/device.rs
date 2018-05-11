@@ -436,12 +436,20 @@ impl d::Device<B> for Device {
             _ => None
         };
 
+        let mut vertex_buffers = Vec::new();
+        for vb in &desc.vertex_buffers {
+            while vertex_buffers.len() <= vb.binding as usize {
+                vertex_buffers.push(None);
+            }
+            vertex_buffers[vb.binding as usize] = Some(*vb);
+        }
+
         Ok(n::GraphicsPipeline {
             program,
             primitive: conv::primitive_to_gl_primitive(desc.input_assembler.primitive),
             patch_size,
             blend_targets: desc.blender.targets.clone(),
-            vertex_buffers: desc.vertex_buffers.clone(),
+            vertex_buffers,
             attributes: desc.attributes
                 .iter()
                 .map(|&a| {

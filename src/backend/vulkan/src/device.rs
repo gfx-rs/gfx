@@ -363,9 +363,9 @@ impl d::Device<B> for Device {
 
             {
                 let mut vertex_bindings = Vec::new();
-                for (i, vbuf) in desc.vertex_buffers.iter().enumerate() {
+                for vbuf in &desc.vertex_buffers {
                     vertex_bindings.push(vk::VertexInputBindingDescription {
-                        binding: i as u32,
+                        binding: vbuf.binding,
                         stride: vbuf.stride as u32,
                         input_rate: if vbuf.rate == 0 {
                             vk::VertexInputRate::Vertex

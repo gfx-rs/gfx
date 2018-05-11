@@ -386,6 +386,7 @@ impl<'a, B, T, I> Component<'a, B> for VertexBuffer<T, I>
     ) {
         let binding = pipeline_desc.vertex_buffers.len() as u32;
         pipeline_desc.vertex_buffers.push(hal::pso::VertexBufferDesc {
+            binding,
             stride: mem::size_of::<T>() as u32,
             rate: I::get_rate(&init),
         });

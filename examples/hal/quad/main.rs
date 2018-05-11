@@ -269,6 +269,7 @@ fn main() {
                 pso::BlendState::ALPHA,
             ));
             pipeline_desc.vertex_buffers.push(pso::VertexBufferDesc {
+                binding: 0,
                 stride: std::mem::size_of::<Vertex>() as u32,
                 rate: 0,
             });
