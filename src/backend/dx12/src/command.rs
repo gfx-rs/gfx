@@ -47,83 +47,6 @@ fn up_align(x: u32, alignment: u32) -> u32 {
     (x + alignment - 1) & !(alignment - 1)
 }
 
-fn bind_descriptor_sets<'a, T>(
-    raw: &ComPtr<d3d12::ID3D12GraphicsCommandList>,
-    pipeline: &mut PipelineCache,
-    layout: &n::PipelineLayout,
-    first_set: usize,
-    sets: T,
-) where
-    T: IntoIterator,
-    T::Item: Borrow<n::DescriptorSet>,
-{
-    let mut sets = sets.into_iter().peekable();
-    let (srv_cbv_uav_start, sampler_start) = if let Some(set_0) = sets.peek().map(Borrow::borrow) {
-        // Bind descriptor heaps
-        unsafe {
-            // TODO: Can we bind them always or only once?
-            //       Resize while recording?
-            let mut heaps = [
-                set_0.heap_srv_cbv_uav.as_raw(),
-                set_0.heap_samplers.as_raw(),
-            ];
-            raw.SetDescriptorHeaps(2, heaps.as_mut_ptr())
-        }
-
-        (set_0.srv_cbv_uav_gpu_start().ptr, set_0.sampler_gpu_start().ptr)
-    } else {
-        return
-    };
-
-    pipeline.srv_cbv_uav_start = srv_cbv_uav_start;
-    pipeline.sampler_start = sampler_start;
-
-    let mut table_id = 0;
-    for table in &layout.tables[..first_set] {
-        if table.contains(n::SRV_CBV_UAV) {
-            table_id += 1;
-        }
-        if table.contains(n::SAMPLERS) {
-            table_id += 1;
-        }
-    }
-
-    let table_base_offset = layout
-        .root_constants
-        .iter()
-        .fold(0, |sum, c| sum + c.range.end - c.range.start);
-
-    for (set, table) in sets.zip(layout.tables[first_set..].iter()) {
-        let set = set.borrow();
-        set.first_gpu_view.map(|gpu| {
-            assert!(table.contains(n::SRV_CBV_UAV));
-
-            let root_offset = table_id + table_base_offset;
-            // Cast is safe as offset **must** be in u32 range. Unable to
-            // create heaps with more descriptors.
-            let table_offset = (gpu.ptr - srv_cbv_uav_start) as u32;
-            pipeline
-                .user_data
-                .set_srv_cbv_uav_table(root_offset as _, table_offset);
-
-            table_id += 1;
-        });
-        set.first_gpu_sampler.map(|gpu| {
-            assert!(table.contains(n::SAMPLERS));
-
-            let root_offset = table_id + table_base_offset;
-            // Cast is safe as offset **must** be in u32 range. Unable to
-            // create heaps with more descriptors.
-            let table_offset = (gpu.ptr - sampler_start) as u32;
-            pipeline
-                .user_data
-                .set_sampler_table(root_offset as _, table_offset);
-
-            table_id += 1;
-        });
-    }
-}
-
 #[derive(Clone)]
 struct AttachmentClear {
     subpass_id: Option<pass::SubpassId>,
@@ -240,6 +163,80 @@ impl PipelineCache {
             sampler_start: 0,
         }
     }
+
+    fn bind_descriptor_sets<'a, T>(
+        &mut self,
+        layout: &n::PipelineLayout,
+        first_set: usize,
+        sets: T,
+    ) -> [*mut d3d12::ID3D12DescriptorHeap; 2]
+    where
+        T: IntoIterator,
+        T::Item: Borrow<n::DescriptorSet>,
+    {
+        let mut sets = sets.into_iter().peekable();
+        let (
+            srv_cbv_uav_start, sampler_start,
+            heap_srv_cbv_uav, heap_sampler,
+        ) = if let Some(set_0) = sets.peek().map(Borrow::borrow) {
+            (
+                set_0.srv_cbv_uav_gpu_start().ptr, set_0.sampler_gpu_start().ptr,
+                set_0.heap_srv_cbv_uav.as_raw(), set_0.heap_samplers.as_raw(),
+            )
+        } else {
+            return [ptr::null_mut(); 2];
+        };
+
+        self.srv_cbv_uav_start = srv_cbv_uav_start;
+        self.sampler_start = sampler_start;
+
+        let mut table_id = 0;
+        for table in &layout.tables[..first_set] {
+            if table.contains(n::SRV_CBV_UAV) {
+                table_id += 1;
+            }
+            if table.contains(n::SAMPLERS) {
+                table_id += 1;
+            }
+        }
+
+        let table_base_offset = layout
+            .root_constants
+            .iter()
+            .fold(0, |sum, c| sum + c.range.end - c.range.start);
+
+        for (set, table) in sets.zip(layout.tables[first_set..].iter()) {
+            let set = set.borrow();
+            set.first_gpu_view.map(|gpu| {
+                assert!(table.contains(n::SRV_CBV_UAV));
+
+                let root_offset = table_id + table_base_offset;
+                // Cast is safe as offset **must** be in u32 range. Unable to
+                // create heaps with more descriptors.
+                let table_offset = (gpu.ptr - srv_cbv_uav_start) as u32;
+                self
+                    .user_data
+                    .set_srv_cbv_uav_table(root_offset as _, table_offset);
+
+                table_id += 1;
+            });
+            set.first_gpu_sampler.map(|gpu| {
+                assert!(table.contains(n::SAMPLERS));
+
+                let root_offset = table_id + table_base_offset;
+                // Cast is safe as offset **must** be in u32 range. Unable to
+                // create heaps with more descriptors.
+                let table_offset = (gpu.ptr - sampler_start) as u32;
+                self
+                    .user_data
+                    .set_sampler_table(root_offset as _, table_offset);
+
+                table_id += 1;
+            });
+        }
+
+        [heap_srv_cbv_uav, heap_sampler]
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -282,6 +279,9 @@ pub struct CommandBuffer {
     // D3D12 only has one slot for both bindpoints. Need to rebind everything if we want to switch
     // between different bind points (ie. calling draw or dispatch).
     active_bindpoint: BindPoint,
+    // Current descriptor heaps heaps (CBV/SRV/UAV and Sampler).
+    // Required for resetting due to internal descriptor heaps.
+    active_descriptor_heaps: [*mut d3d12::ID3D12DescriptorHeap; 2],
 
     // Active queries in the command buffer.
     // Queries must begin and end in the same command buffer, which allows us to track them.
@@ -337,6 +337,7 @@ impl CommandBuffer {
             primitive_topology: d3dcommon::D3D_PRIMITIVE_TOPOLOGY_UNDEFINED,
             comp_pipeline: PipelineCache::new(),
             active_bindpoint: BindPoint::Graphics,
+            active_descriptor_heaps: [ptr::null_mut(); 2],
             occlusion_query: None,
             pipeline_stats_query: None,
             vertex_buffer_views: [NULL_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS],
@@ -360,6 +361,7 @@ impl CommandBuffer {
         self.primitive_topology = d3dcommon::D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
         self.comp_pipeline = PipelineCache::new();
         self.active_bindpoint = BindPoint::Graphics;
+        self.active_descriptor_heaps = [ptr::null_mut(); 2];
         self.occlusion_query = None;
         self.pipeline_stats_query = None;
         self.vertex_buffer_views = [NULL_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS];
@@ -373,6 +375,10 @@ impl CommandBuffer {
     fn set_internal_graphics_pipeline(&mut self) {
         self.active_bindpoint = BindPoint::InternalGraphics;
         self.gr_pipeline.user_data.dirty_all();
+    }
+
+    fn bind_descriptor_heaps(&mut self) {
+        unsafe { self.raw.SetDescriptorHeaps(2, self.active_descriptor_heaps.as_mut_ptr()); }
     }
 
     fn insert_subpass_barriers(&self, insertion: BarrierPoint) {
@@ -566,6 +572,7 @@ impl CommandBuffer {
                     self.raw.SetGraphicsRootSignature(signature);
                 }
                 self.active_bindpoint = BindPoint::Graphics;
+                self.bind_descriptor_heaps();
             },
         }
 
@@ -605,12 +612,25 @@ impl CommandBuffer {
 
     fn set_compute_bind_point(&mut self) {
         match self.active_bindpoint {
-            BindPoint::Graphics | BindPoint::InternalGraphics => {
+            BindPoint::Graphics => {
                 // Switch to compute bind point
-                assert!(self.comp_pipeline.pipeline.is_some(), "No compute pipeline bound");
-                let (pipeline, _) = self.comp_pipeline.pipeline.unwrap();
+                let (pipeline, _) = self.comp_pipeline.pipeline.expect("No compute pipeline bound");
                 unsafe { self.raw.SetPipelineState(pipeline); }
                 self.active_bindpoint = BindPoint::Compute;
+            },
+            BindPoint::InternalGraphics => {
+                // Switch to compute bind point
+                let (pipeline, _) = self.comp_pipeline.pipeline.expect("No compute pipeline bound");
+                unsafe { self.raw.SetPipelineState(pipeline); }
+                self.active_bindpoint = BindPoint::Compute;
+                self.bind_descriptor_heaps();
+
+                // Rebind the graphics root signature as we come from an internal graphics.
+                // Issuing a draw call afterwards would hide the information that we internally
+                // changed the graphics root signature.
+                if let Some((_, signature)) = self.gr_pipeline.pipeline {
+                    unsafe { self.raw.SetGraphicsRootSignature(signature); }
+                }
             },
             BindPoint::Compute => { }, // Nothing to do
         }
@@ -1653,7 +1673,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<n::DescriptorSet>,
     {
-        bind_descriptor_sets(&self.raw, &mut self.gr_pipeline, layout, first_set, sets);
+        self.active_descriptor_heaps = self.gr_pipeline.bind_descriptor_sets(layout, first_set, sets);
+        self.bind_descriptor_heaps();
     }
 
     fn bind_compute_pipeline(&mut self, pipeline: &n::ComputePipeline) {
@@ -1686,7 +1707,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<n::DescriptorSet>,
     {
-        bind_descriptor_sets(&self.raw, &mut self.comp_pipeline, layout, first_set, sets);
+        self.active_descriptor_heaps = self.comp_pipeline.bind_descriptor_sets(layout, first_set, sets);
+        self.bind_descriptor_heaps();
     }
 
     fn dispatch(&mut self, count: WorkGroupCount) {
