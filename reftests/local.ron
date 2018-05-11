@@ -45,13 +45,6 @@
 			jobs: ["fill-last"],
 			expect: Buffer("buffer.fill-8-bytes", [56, 32, 66, 89, 255, 0, 0, 0]),
 		),
-		/*
-		Diabled temporarily because of Vulkan driver support
-		"fill-whole-nearest-multiple": (
-			features: (bits: 0),
-			jobs: ["fill-whole-nearest-multiple"],
-			expect: Buffer("buffer.fill-10-bytes", [255, 0, 0, 0, 255, 0, 0, 0, 63, 33]),
-		),*/
 	},
 	"basic": {
 		"render-pass-clear": (
