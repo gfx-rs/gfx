@@ -160,7 +160,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         let upload_type: hal::MemoryTypeId = memory_types
             .iter()
             .position(|mt| {
-                mt.properties.contains(memory::Properties::CPU_VISIBLE)
+                mt.properties.contains(memory::Properties::CPU_VISIBLE | memory::Properties::COHERENT)
                 //&&!mt.properties.contains(memory::Properties::CPU_CACHED)
             })
             .unwrap()
@@ -168,7 +168,8 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         let download_type = memory_types
             .iter()
             .position(|mt| {
-                mt.properties.contains(memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED)
+                mt.properties.contains(memory::Properties::CPU_VISIBLE | memory::Properties::COHERENT)
+                //&&!mt.properties.contains(memory::Properties::CPU_CACHED)
             })
             .unwrap()
             .into();

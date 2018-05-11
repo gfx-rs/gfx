@@ -253,6 +253,8 @@ pub struct Limits {
     pub framebuffer_depth_samples_count: image::NumSamples,
     /// Number of samples supported for stencil attachments of framebuffers.
     pub framebuffer_stencil_samples_count: image::NumSamples,
+    /// Size and alignment in bytes that bounds concurrent access to host-mapped device memory.
+    pub non_coherent_atom_size: usize,
 }
 
 /// Describes the type of geometric primitives,
