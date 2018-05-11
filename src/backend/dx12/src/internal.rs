@@ -27,9 +27,11 @@ pub struct BlitData {
     pub level: f32,
 }
 
+type BlitMap = HashMap<(dxgiformat::DXGI_FORMAT, d3d12::D3D12_FILTER), Blit>;
+
 pub(crate) struct ServicePipes {
     pub(crate) device: ComPtr<d3d12::ID3D12Device>,
-    blits_2d_color: Mutex<HashMap<(dxgiformat::DXGI_FORMAT, d3d12::D3D12_FILTER), Blit>>,
+    blits_2d_color: Mutex<BlitMap>,
 }
 
 impl ServicePipes {
