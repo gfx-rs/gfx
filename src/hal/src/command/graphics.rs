@@ -10,7 +10,8 @@ use queue::capability::{Graphics, GraphicsOrCompute, Supports};
 use super::{
     CommandBuffer, RawCommandBuffer,
     RenderPassInlineEncoder, RenderPassSecondaryEncoder,
-    Shot, Level, Primary, ClearColorRaw,
+    Shot, Level, Primary,
+    ClearColorRaw, ClearDepthStencilRaw, ClearValueRaw,
 };
 
 
@@ -31,7 +32,7 @@ macro_rules! impl_clear {
     { $( $ty:ty = $sub:ident[$a:expr, $b:expr, $c:expr, $d:expr], )* } => {
         $(
             impl From<$ty> for ClearColor {
-                fn from(v: $ty) -> ClearColor {
+                fn from(v: $ty) -> Self {
                     ClearColor::$sub([v[$a], v[$b], v[$c], v[$d]])
                 }
             }
@@ -52,17 +53,17 @@ impl_clear! {
 }
 
 impl From<f32> for ClearColor {
-    fn from(v: f32) -> ClearColor {
+    fn from(v: f32) -> Self {
         ClearColor::Float([v, 0.0, 0.0, 0.0])
     }
 }
 impl From<i32> for ClearColor {
-    fn from(v: i32) -> ClearColor {
+    fn from(v: i32) -> Self {
         ClearColor::Int([v, 0, 0, 0])
     }
 }
 impl From<u32> for ClearColor {
-    fn from(v: u32) -> ClearColor {
+    fn from(v: u32) -> Self {
         ClearColor::Uint([v, 0, 0, 0])
     }
 }
@@ -82,6 +83,15 @@ impl From<ClearColor> for ClearColorRaw {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ClearDepthStencil(pub pso::DepthValue, pub pso::StencilValue);
 
+impl From<ClearDepthStencil> for ClearDepthStencilRaw {
+    fn from(value: ClearDepthStencil) -> Self {
+        ClearDepthStencilRaw {
+            depth: value.0,
+            stencil: value.1,
+        }
+    }
+}
+
 /// General clear values for attachments (color or depth-stencil).
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -90,6 +100,15 @@ pub enum ClearValue {
     Color(ClearColor),
     ///
     DepthStencil(ClearDepthStencil),
+}
+
+impl From<ClearValue> for ClearValueRaw {
+    fn from(value: ClearValue) -> Self {
+        match value {
+            ClearValue::Color(color) => ClearValueRaw { color: color.into() },
+            ClearValue::DepthStencil(ds) => ClearValueRaw { depth_stencil: ds.into() },
+        }
+    }
 }
 
 /// Attachment clear description for the current subpass.
@@ -158,25 +177,18 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn clear_color_image(
+    pub fn clear_image<T>(
         &mut self,
         image: &B::Image,
         layout: image::Layout,
-        range: image::SubresourceRange,
-        value: ClearColor,
-    ) {
-        self.raw.clear_color_image(image, layout, range, value)
-    }
-
-    /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn clear_depth_stencil_image(
-        &mut self,
-        image: &B::Image,
-        layout: image::Layout,
-        range: image::SubresourceRange,
-        value: ClearDepthStencil,
-    ) {
-        self.raw.clear_depth_stencil_image(image, layout, range, value)
+        color: ClearColor,
+        depth_stencil: ClearDepthStencil,
+        ranges: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<image::SubresourceRange>,
+    {
+        self.raw.clear_image(image, layout, color.into(), depth_stencil.into(), ranges)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.

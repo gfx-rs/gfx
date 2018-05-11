@@ -6,7 +6,7 @@ use {buffer, pso};
 use {Backend, IndexCount, InstanceCount, VertexCount, VertexOffset};
 use queue::{Supports, Graphics};
 use super::{
-    AttachmentClear, ClearValue, CommandBuffer, RawCommandBuffer,
+    AttachmentClear, ClearValue, ClearValueRaw, CommandBuffer, RawCommandBuffer,
     Shot, Level, Primary, Secondary, Submittable, Submit
 };
 
@@ -152,13 +152,22 @@ impl<'a, B: Backend, L: Level> RenderPassInlineEncoder<'a, B, L> {
         T: IntoIterator,
         T::Item: Borrow<ClearValue>,
     {
+        let clear_values = clear_values
+            .into_iter()
+            .map(|cv| ClearValueRaw::from(*cv.borrow()));
+
         cmd_buffer.raw.begin_render_pass(
             render_pass,
             frame_buffer,
             render_area,
             clear_values,
-            SubpassContents::Inline);
-        RenderPassInlineEncoder(Some(RenderSubpassCommon(cmd_buffer.raw)), PhantomData)
+            SubpassContents::Inline,
+        );
+
+        RenderPassInlineEncoder(
+            Some(RenderSubpassCommon(cmd_buffer.raw)),
+            PhantomData,
+        )
     }
 
     /// Start the next subpass.
@@ -220,14 +229,21 @@ impl<'a, B: Backend> RenderPassSecondaryEncoder<'a, B> {
         T: IntoIterator,
         T::Item: Borrow<ClearValue>,
     {
+        let clear_values = clear_values
+            .into_iter()
+            .map(|cv| ClearValueRaw::from(*cv.borrow()));
+
         cmd_buffer.raw.begin_render_pass(
             render_pass,
             frame_buffer,
             render_area,
             clear_values,
-            SubpassContents::SecondaryBuffers
+            SubpassContents::SecondaryBuffers,
         );
-        RenderPassSecondaryEncoder(Some(cmd_buffer.raw))
+
+        RenderPassSecondaryEncoder(
+            Some(cmd_buffer.raw),
+        )
     }
 
     /// Executes the given commands as a secondary command buffer.

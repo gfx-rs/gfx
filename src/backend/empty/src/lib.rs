@@ -434,23 +434,17 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn clear_color_image_raw(
+    fn clear_image<T>(
         &mut self,
         _: &(),
         _: image::Layout,
-        _: image::SubresourceRange,
         _: command::ClearColorRaw,
-    ) {
-        unimplemented!()
-    }
-
-    fn clear_depth_stencil_image_raw(
-        &mut self,
-        _: &(),
-        _: image::Layout,
-        _: image::SubresourceRange,
         _: command::ClearDepthStencilRaw,
-    ) {
+        _: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<image::SubresourceRange>,
+    {
         unimplemented!()
     }
 
@@ -533,7 +527,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
 
-    fn begin_render_pass_raw<T>(
+    fn begin_render_pass<T>(
         &mut self,
         _: &(),
         _: &(),
