@@ -1,5 +1,5 @@
 use {Backend};
-use internal::BlitChannel;
+use internal::Channel;
 
 use std::cell::Cell;
 use std::collections::{Bound, BTreeMap, HashMap};
@@ -84,7 +84,7 @@ pub struct Image {
     pub(crate) raw: metal::Texture,
     pub(crate) extent: hal::image::Extent,
     pub(crate) format_desc: hal::format::FormatDesc,
-    pub(crate) blit_channel: BlitChannel,
+    pub(crate) shader_channel: Channel,
     pub(crate) mtl_format: metal::MTLPixelFormat,
     pub(crate) mtl_type: metal::MTLTextureType,
 }

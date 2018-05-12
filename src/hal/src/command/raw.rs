@@ -10,7 +10,6 @@ use query::{PipelineStatistic, Query, QueryControl, QueryId};
 use range::RangeArg;
 use super::{
     AttachmentClear, BufferCopy, BufferImageCopy,
-    ClearColor, ClearDepthStencil, ClearValue,
     ImageBlit, ImageCopy, ImageResolve, SubpassContents,
 };
 
@@ -48,6 +47,7 @@ pub union ClearValueRaw {
     pub depth_stencil: ClearDepthStencilRaw,
     _align: [u32; 4],
 }
+
 
 bitflags! {
     /// Option flags for various command buffer settings.
@@ -147,56 +147,17 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
         data: &[u8],
     );
 
-    /// Clears an image to the given color.
-    /// Just calls `clear_color_raw` with some minor type conversion.
-    fn clear_color_image(
+    /// Clears an image to the given color/depth/stencil.
+    fn clear_image<T>(
         &mut self,
         image: &B::Image,
         layout: Layout,
-        range: SubresourceRange,
-        cv: ClearColor,
-    ) {
-        self.clear_color_image_raw(
-            image,
-            layout,
-            range,
-            cv.into(),
-        )
-    }
-
-    /// Clears an image to the given color.
-    fn clear_color_image_raw(
-        &mut self,
-        &B::Image,
-        Layout,
-        SubresourceRange,
-        ClearColorRaw,
-    );
-
-    /// Clear a depth-stencil image to the given value.
-    /// Just calls `clear_depth_stencil_image_raw` with some minor type conversion.
-    fn clear_depth_stencil_image(
-        &mut self,
-        image: &B::Image,
-        layout: Layout,
-        range: SubresourceRange,
-        cv: ClearDepthStencil,
-    ) {
-        let cv = ClearDepthStencilRaw {
-            depth: cv.0,
-            stencil: cv.1,
-        };
-        self.clear_depth_stencil_image_raw(image, layout, range, cv)
-    }
-
-    /// Clear a depth-stencil image to the given value.
-    fn clear_depth_stencil_image_raw(
-        &mut self,
-        &B::Image,
-        Layout,
-        SubresourceRange,
-        ClearDepthStencilRaw,
-    );
+        color: ClearColorRaw,
+        depth_stencil: ClearDepthStencilRaw,
+        subresource_ranges: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<SubresourceRange>;
 
     /// Takes an iterator of attachments and an iterator of rect's,
     /// and clears the given rect's for *each* attachment.
@@ -246,7 +207,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn bind_vertex_buffers(&mut self, first_binding: u32, pso::VertexBufferSet<B>);
 
     /// Set the viewport parameters for the rasterizer.
-    /// 
+    ///
     /// Each viewport passed corrosponds to the viewport with the same index,
     /// starting from an offset index `first_viewport`.
     ///
@@ -300,50 +261,14 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     /// Set the depth bounds test values dynamically.
     fn set_depth_bounds(&mut self, bounds: Range<f32>);
 
-    /// Just does some type conversions and calls `begin_render_pass_raw`.
-    fn begin_render_pass<T>(
-        &mut self,
-        render_pass: &B::RenderPass,
-        framebuffer: &B::Framebuffer,
-        render_area: pso::Rect,
-        clear_values: T,
-        first_subpass: SubpassContents,
-    ) where
-        T: IntoIterator,
-        T::Item: Borrow<ClearValue>
-    {
-        let clear_values = clear_values
-            .into_iter()
-            .map(|cv| {
-                match *cv.borrow() {
-                    ClearValue::Color(ClearColor::Float(cv)) =>
-                        ClearValueRaw { color: ClearColorRaw { float32: cv }},
-                    ClearValue::Color(ClearColor::Int(cv)) =>
-                        ClearValueRaw { color: ClearColorRaw { int32: cv }},
-                    ClearValue::Color(ClearColor::Uint(cv)) =>
-                        ClearValueRaw { color: ClearColorRaw { uint32: cv }},
-                    ClearValue::DepthStencil(ClearDepthStencil(depth, stencil)) =>
-                        ClearValueRaw { depth_stencil: ClearDepthStencilRaw { depth, stencil }},
-                }
-            });
-
-        self.begin_render_pass_raw(
-            render_pass,
-            framebuffer,
-            render_area,
-            clear_values,
-            first_subpass,
-        )
-    }
-
     /// Begins recording commands for a render pass on the given framebuffer.
     /// `render_area` is the section of the framebuffer to render,
-    /// `clear_values` is an iterator of `ClearValue`'s to use to use for
+    /// `clear_values` is an iterator of `ClearValueRaw`'s to use to use for
     /// `clear_*` commands, one for each attachment of the render pass.
     /// `first_subpass` specifies, for the first subpass, whether the
     /// rendering commands are provided inline or whether the render
     /// pass is composed of subpasses.
-    fn begin_render_pass_raw<T>(
+    fn begin_render_pass<T>(
         &mut self,
         render_pass: &B::RenderPass,
         framebuffer: &B::Framebuffer,

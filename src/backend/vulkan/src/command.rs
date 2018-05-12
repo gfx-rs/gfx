@@ -122,7 +122,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         );
     }
 
-    fn begin_render_pass_raw<T>(
+    fn begin_render_pass<T>(
         &mut self,
         render_pass: &n::RenderPass,
         frame_buffer: &n::Framebuffer,
@@ -288,51 +288,64 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn clear_color_image_raw(
+    fn clear_image<T>(
         &mut self,
         image: &n::Image,
         layout: Layout,
-        range: SubresourceRange,
-        value: com::ClearColorRaw,
-    ) {
-        assert!(Aspects::COLOR.contains(range.aspects));
-        let range = conv::map_subresource_range(&range);
+        color: com::ClearColorRaw,
+        depth_stencil: com::ClearDepthStencilRaw,
+        subresource_ranges: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<SubresourceRange>,
+    {
+        let mut color_ranges = Vec::new();
+        let mut ds_ranges = Vec::new();
+
+        for subresource_range in subresource_ranges {
+            let sub = subresource_range.borrow();
+            let aspect_ds = sub.aspects & (Aspects::DEPTH | Aspects::STENCIL);
+            let vk_range = conv::map_subresource_range(sub);
+            if sub.aspects.contains(Aspects::COLOR) {
+                color_ranges.push(vk::ImageSubresourceRange {
+                    aspect_mask: conv::map_image_aspects(Aspects::COLOR),
+                    .. vk_range
+                });
+            }
+            if !aspect_ds.is_empty() {
+                ds_ranges.push(vk::ImageSubresourceRange {
+                    aspect_mask: conv::map_image_aspects(aspect_ds),
+                    .. vk_range
+                });
+            }
+        }
+
         // Vulkan and HAL share same memory layout
-        let clear_value = unsafe { mem::transmute(value) };
-
-        unsafe {
-            self.device.0.cmd_clear_color_image(
-                self.raw,
-                image.raw,
-                conv::map_image_layout(layout),
-                &clear_value,
-                &[range],
-            )
-        };
-    }
-
-    fn clear_depth_stencil_image_raw(
-        &mut self,
-        image: &n::Image,
-        layout: Layout,
-        range: SubresourceRange,
-        value: com::ClearDepthStencilRaw,
-    ) {
-        assert!((Aspects::DEPTH | Aspects::STENCIL).contains(range.aspects));
-        let range = conv::map_subresource_range(&range);
-        let clear_value = vk::ClearDepthStencilValue {
-            depth: value.depth,
-            stencil: value.stencil,
+        let color_value = unsafe { mem::transmute(color) };
+        let depth_stencil_value = vk::ClearDepthStencilValue {
+            depth: depth_stencil.depth,
+            stencil: depth_stencil.stencil,
         };
 
         unsafe {
-            self.device.0.cmd_clear_depth_stencil_image(
-                self.raw,
-                image.raw,
-                conv::map_image_layout(layout),
-                &clear_value,
-                &[range],
-            )
+            if !color_ranges.is_empty() {
+                self.device.0.cmd_clear_color_image(
+                    self.raw,
+                    image.raw,
+                    conv::map_image_layout(layout),
+                    &color_value,
+                    &color_ranges,
+                )
+            }
+            if !ds_ranges.is_empty() {
+                self.device.0.cmd_clear_depth_stencil_image(
+                    self.raw,
+                    image.raw,
+                    conv::map_image_layout(layout),
+                    &depth_stencil_value,
+                    &ds_ranges,
+                )
+            }
         };
     }
 

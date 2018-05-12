@@ -138,6 +138,12 @@ pub enum TransferCommand {
         dst: String,
         regions: Vec<hal::command::BufferImageCopy>,
     },
+    ClearImage {
+        image: String,
+        color: hal::command::ClearColor,
+        depth_stencil: hal::command::ClearDepthStencil,
+        ranges: Vec<hal::image::SubresourceRange>,
+    },
     BlitImage {
         src: String,
         dst: String,

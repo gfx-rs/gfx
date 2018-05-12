@@ -828,6 +828,31 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             ],
                         );
                     }
+                    Tc::ClearImage { ref image, color, depth_stencil, ref ranges } => {
+                        let img = resources.images
+                            .get(image)
+                            .expect(&format!("Missing clear image: {}", image));
+                        command_buf.pipeline_barrier(
+                            pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
+                            memory::Dependencies::empty(),
+                            vec![
+                                img.barrier_to(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
+                            ],
+                        );
+                        command_buf.clear_image(
+                            &img.handle, i::Layout::TransferDstOptimal,
+                            color,
+                            depth_stencil,
+                            ranges,
+                        );
+                        command_buf.pipeline_barrier(
+                            pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
+                            memory::Dependencies::empty(),
+                            vec![
+                                img.barrier_from(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
+                            ],
+                        );
+                    }
                     Tc::BlitImage { ref src, ref dst, filter, ref regions } => {
                         let st = resources.images
                             .get(src)

@@ -542,7 +542,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn begin_render_pass_raw<T>(
+    fn begin_render_pass<T>(
         &mut self,
         render_pass: &n::RenderPass,
         framebuffer: &n::FrameBuffer,
@@ -609,13 +609,17 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         // TODO
     }
 
-    fn clear_color_image_raw(
+    fn clear_image<T>(
         &mut self,
         image: &n::Image,
         _: image::Layout,
-        _range: image::SubresourceRange,
-        value: command::ClearColorRaw,
-    ) {
+        color: command::ClearColorRaw,
+        _depth_stencil: command::ClearDepthStencilRaw,
+        _subresource_ranges: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<image::SubresourceRange>,
+    {
         // TODO: clearing strategies
         //  1.  < GL 3.0 / GL ES 3.0: glClear
         //  2.  < GL 4.4: glClearBuffer
@@ -635,20 +639,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         match image.channel {
             ChannelType::Unorm | ChannelType::Inorm | ChannelType::Ufloat |
             ChannelType::Float | ChannelType::Srgb | ChannelType::Uscaled |
-            ChannelType::Iscaled => self.push_cmd(Command::ClearBufferColorF(0, unsafe { value.float32 })),
-            ChannelType::Uint => self.push_cmd(Command::ClearBufferColorU(0, unsafe { value.uint32 })),
-            ChannelType::Int => self.push_cmd(Command::ClearBufferColorI(0, unsafe { value.int32 })),
+            ChannelType::Iscaled => self.push_cmd(Command::ClearBufferColorF(0, unsafe { color.float32 })),
+            ChannelType::Uint => self.push_cmd(Command::ClearBufferColorU(0, unsafe { color.uint32 })),
+            ChannelType::Int => self.push_cmd(Command::ClearBufferColorI(0, unsafe { color.int32 })),
         }
-    }
-
-    fn clear_depth_stencil_image_raw(
-        &mut self,
-        _image: &n::Image,
-        _: image::Layout,
-        _range: image::SubresourceRange,
-        _value: command::ClearDepthStencilRaw,
-    ) {
-        unimplemented!()
     }
 
     fn clear_attachments<T, U>(&mut self, _: T, _: U)

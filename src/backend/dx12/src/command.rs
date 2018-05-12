@@ -899,7 +899,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.reset();
     }
 
-    fn begin_render_pass_raw<T>(
+    fn begin_render_pass<T>(
         &mut self,
         render_pass: &n::RenderPass,
         framebuffer: &n::Framebuffer,
@@ -1105,38 +1105,33 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn clear_color_image_raw(
+    fn clear_image<T>(
         &mut self,
         image: &n::Image,
         _: image::Layout,
-        range: image::SubresourceRange,
-        value: com::ClearColorRaw,
-    ) {
-        assert_eq!(range.aspects, Aspects::COLOR);
-        assert_eq!(range.levels, 0 .. 1); //TODO
-        for layer in range.layers {
-            let rtv = image.clear_cv[layer as usize];
-            self.clear_render_target_view(rtv, value, &[]);
-        }
-    }
-
-    fn clear_depth_stencil_image_raw(
-        &mut self,
-        image: &n::Image,
-        _layout: image::Layout,
-        range: image::SubresourceRange,
-        value: com::ClearDepthStencilRaw,
-    ) {
-        assert!((Aspects::DEPTH | Aspects::STENCIL).contains(range.aspects));
-        assert_eq!(range.levels, 0 .. 1); //TODO
-        for layer in range.layers {
-            if range.aspects.contains(Aspects::DEPTH) {
-                let dsv = image.clear_dv[layer as usize];
-                self.clear_depth_stencil_view(dsv, Some(value.depth), None, &[]);
-            }
-            if range.aspects.contains(Aspects::STENCIL) {
-                let dsv = image.clear_sv[layer as usize];
-                self.clear_depth_stencil_view(dsv, None, Some(value.stencil as _), &[]);
+        color: com::ClearColorRaw,
+        depth_stencil: com::ClearDepthStencilRaw,
+        subresource_ranges: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<image::SubresourceRange>,
+    {
+        for subresource_range in subresource_ranges {
+            let sub = subresource_range.borrow();
+            assert_eq!(sub.levels, 0 .. 1); //TODO
+            for layer in sub.layers.clone() {
+                if sub.aspects.contains(Aspects::COLOR) {
+                    let rtv = image.clear_cv[layer as usize];
+                    self.clear_render_target_view(rtv, color, &[]);
+                }
+                if sub.aspects.contains(Aspects::DEPTH) {
+                    let dsv = image.clear_dv[layer as usize];
+                    self.clear_depth_stencil_view(dsv, Some(depth_stencil.depth), None, &[]);
+                }
+                if sub.aspects.contains(Aspects::STENCIL) {
+                    let dsv = image.clear_sv[layer as usize];
+                    self.clear_depth_stencil_view(dsv, None, Some(depth_stencil.stencil as _), &[]);
+                }
             }
         }
     }

@@ -1,6 +1,6 @@
 use {AutoreleasePool, Backend};
 use {native, window};
-use internal::{BlitVertex, ServicePipes};
+use internal::{BlitVertex, Channel, ServicePipes};
 
 use std::borrow::{self, Borrow};
 use std::cell::RefCell;
@@ -494,10 +494,37 @@ impl CommandSink {
         }
     }
 
+    fn quick_render_pass<I>(
+        &mut self,
+        descriptor: metal::RenderPassDescriptor,
+        commands: I,
+    ) where
+        I: IntoIterator<Item = soft::RenderCommand>,
+    {
+        match *self {
+            CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, .. } => {
+                match *encoder_state {
+                    EncoderState::None => (),
+                    _ => panic!("Must be outside of encoding"),
+                };
+                let _ap = AutoreleasePool::new();
+                let encoder = cmd_buffer.new_render_command_encoder(&descriptor);
+                for command in commands {
+                    exec_render(encoder, &command);
+                }
+                encoder.end_encoding();
+            }
+            CommandSink::Deferred { ref mut passes, ref mut is_encoding } => {
+                assert!(!*is_encoding);
+                passes.push(soft::Pass::Render(descriptor, commands.into_iter().collect()));
+            }
+        }
+    }
+
     fn begin_render_pass(
         &mut self,
-        init_commands: Vec<soft::RenderCommand>,
         descriptor: metal::RenderPassDescriptor,
+        init_commands: Vec<soft::RenderCommand>,
     ) {
         self.stop_encoding();
 
@@ -1191,24 +1218,101 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .blit_commands(iter::once(command));
     }
 
-    fn clear_color_image_raw(
+    fn clear_image<T>(
         &mut self,
-        _image: &native::Image,
+        image: &native::Image,
         _layout: Layout,
-        _range: SubresourceRange,
-        _value: com::ClearColorRaw,
-    ) {
-        unimplemented!()
-    }
+        color: com::ClearColorRaw,
+        depth_stencil: com::ClearDepthStencilRaw,
+        subresource_ranges: T,
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<SubresourceRange>,
+    {
+        let mut inner = self.inner.borrow_mut();
+        inner.sink().stop_encoding();
 
-    fn clear_depth_stencil_image_raw(
-        &mut self,
-        _image: &native::Image,
-        _layout: Layout,
-        _range: SubresourceRange,
-        _value: com::ClearDepthStencilRaw,
-    ) {
-        unimplemented!()
+        let clear_color = unsafe {
+            match image.shader_channel {
+                Channel::Float => metal::MTLClearColor::new(
+                    color.float32[0] as _,
+                    color.float32[1] as _,
+                    color.float32[2] as _,
+                    color.float32[3] as _,
+                ),
+                Channel::Int => metal::MTLClearColor::new(
+                    color.int32[0] as _,
+                    color.int32[1] as _,
+                    color.int32[2] as _,
+                    color.int32[3] as _,
+                ),
+                Channel::Uint => metal::MTLClearColor::new(
+                    color.uint32[0] as _,
+                    color.uint32[1] as _,
+                    color.uint32[2] as _,
+                    color.uint32[3] as _,
+                ),
+            }
+        };
+
+        for subresource_range in subresource_ranges {
+            let sub = subresource_range.borrow();
+            let end_level = if sub.levels.end == !0 {
+                image.raw.mipmap_level_count() as _
+            } else {
+                sub.levels.end
+            };
+            let end_layer = if sub.layers.end == !0 {
+                image.raw.array_length() as _
+            } else {
+                sub.layers.end
+            };
+
+            for level in sub.levels.start .. end_level {
+                for layer in sub.layers.start .. end_layer {
+                    let descriptor = metal::RenderPassDescriptor::new().to_owned();
+                    // descriptor.set_render_target_array_length(sub.layers.end as _); //TODO: fast path
+                    if sub.aspects.contains(Aspects::COLOR) {
+                        let attachment = descriptor
+                            .color_attachments()
+                            .object_at(0)
+                            .unwrap();
+                        attachment.set_texture(Some(&image.raw));
+                        attachment.set_level(level as _);
+                        attachment.set_slice(layer as _);
+                        //attachment.set_depth_plane();
+                        attachment.set_load_action(metal::MTLLoadAction::Clear);
+                        attachment.set_clear_color(clear_color.clone());
+                    }
+
+                    if sub.aspects.intersects(Aspects::DEPTH | Aspects::STENCIL) {
+                        let attachment = descriptor
+                            .depth_attachment()
+                            .unwrap();
+                        attachment.set_texture(Some(&image.raw));
+                        attachment.set_level(level as _);
+                        attachment.set_slice(layer as _);
+                        //attachment.set_depth_plane();
+                        attachment.set_load_action(metal::MTLLoadAction::Clear);
+                        attachment.set_clear_depth(depth_stencil.depth as _);
+                    }
+                    if sub.aspects.contains(Aspects::STENCIL) {
+                        let attachment = descriptor
+                            .stencil_attachment()
+                            .unwrap();
+                        attachment.set_texture(Some(&image.raw));
+                        attachment.set_level(level as _);
+                        attachment.set_slice(layer as _);
+                        //attachment.set_depth_plane(_);
+                        attachment.set_load_action(metal::MTLLoadAction::Clear);
+                        attachment.set_clear_stencil(depth_stencil.stencil);
+                    }
+
+                    inner.sink().quick_render_pass(descriptor, None);
+                    // no actual pass body - everything is in the attachment clear operations
+                }
+            }
+        }
     }
 
     fn clear_attachments<T, U>(
@@ -1385,10 +1489,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             // Note: we don't bother to restore any render states here, since we are currently
             // outside of a render pass, and the state will be reset automatically once
             // we enter the next pass.
+            inner.sink().stop_encoding();
+
             let mut pipes = self.shared.service_pipes
                 .lock()
                 .unwrap();
-            let key = (dst.mtl_type, dst.mtl_format, dst.blit_channel);
+            let key = (dst.mtl_type, dst.mtl_format, dst.shader_channel);
             let pso = pipes
                 .get_blit_image(key, &self.shared.device)
                 .to_owned();
@@ -1463,14 +1569,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 let commands = prelude
                     .iter()
                     .chain(&extra)
-                    .cloned()
-                    .collect();
+                    .cloned();
 
-                inner.sink().begin_render_pass(commands, descriptor);
-                // no actual pass body - everything is in the init commands
+                inner.sink().quick_render_pass(descriptor, commands);
             }
-
-            inner.sink().stop_encoding();
         }
     }
 
@@ -1574,7 +1676,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         warn!("Depth bounds test is not supported");
     }
 
-    fn begin_render_pass_raw<T>(
+    fn begin_render_pass<T>(
         &mut self,
         render_pass: &native::RenderPass,
         frame_buffer: &native::FrameBuffer,
@@ -1613,7 +1715,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.inner
             .borrow_mut()
             .sink()
-            .begin_render_pass(init_commands, descriptor);
+            .begin_render_pass(descriptor, init_commands);
     }
 
     fn next_subpass(&mut self, _contents: com::SubpassContents) {

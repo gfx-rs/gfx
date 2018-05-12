@@ -1,7 +1,7 @@
 use {AutoreleasePool, Backend, PrivateCapabilities, QueueFamily, Surface, Swapchain};
 use {native as n, command, soft};
 use conversions::*;
-use internal::BlitChannel;
+use internal::Channel;
 
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -1471,18 +1471,20 @@ impl hal::Device<Backend> for Device {
         let descriptor = metal::TextureDescriptor::new();
 
         let mtl_type = match kind {
-            image::Kind::D1(_, 1) => {
+            image::Kind::D1(_, 1) if mip_levels == 1=> {
                 assert!(!is_cube);
                 MTLTextureType::D1
             }
-            image::Kind::D1(_, layers) => {
+            image::Kind::D1(_, layers) if mip_levels == 1 => {
                 assert!(!is_cube);
                 descriptor.set_array_length(layers as u64);
                 MTLTextureType::D1Array
             }
+            image::Kind::D1(_, 1) |
             image::Kind::D2(_, _, 1, 1) => {
                 MTLTextureType::D2
             }
+            image::Kind::D1(_, layers) |
             image::Kind::D2(_, _, layers, 1) => {
                 if is_cube && layers > 6 {
                     assert_eq!(layers % 6, 0);
@@ -1517,7 +1519,6 @@ impl hal::Device<Backend> for Device {
         descriptor.set_width(extent.width as u64);
         descriptor.set_height(extent.height as u64);
         descriptor.set_depth(extent.depth as u64);
-
         descriptor.set_mipmap_level_count(mip_levels as u64);
         descriptor.set_pixel_format(mtl_format);
         descriptor.set_usage(map_texture_usage(usage));
@@ -1599,16 +1600,16 @@ impl hal::Device<Backend> for Device {
             raw,
             extent: image.extent,
             format_desc: base.0.desc(),
-            blit_channel: match base.1 {
+            shader_channel: match base.1 {
                 format::ChannelType::Unorm |
                 format::ChannelType::Inorm |
                 format::ChannelType::Ufloat |
                 format::ChannelType::Float |
                 format::ChannelType::Uscaled |
                 format::ChannelType::Iscaled |
-                format::ChannelType::Srgb => BlitChannel::Float,
-                format::ChannelType::Uint => BlitChannel::Uint,
-                format::ChannelType::Int => BlitChannel::Int,
+                format::ChannelType::Srgb => Channel::Float,
+                format::ChannelType::Uint => Channel::Uint,
+                format::ChannelType::Int => Channel::Int,
             },
             mtl_format: match self.private_caps.map_format(image.format) {
                 Some(format) => format,

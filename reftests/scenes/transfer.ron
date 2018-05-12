@@ -140,6 +140,20 @@
 				],
 			),
 		),
+		"clear-image": Transfer(
+			ClearImage(
+				image: "image.output",
+				color: Float((0.5, 0.5, 0.5, 0.5)),
+				depth_stencil: (0.0, 0),
+				ranges: [
+					(
+						aspects: (bits: 0x1), //COLOR
+						levels: (start: 0, end: 1),
+						layers: (start: 0, end: 1),
+					),
+				],
+			),
+		),
 		"blit-image": Transfer(
 			BlitImage(
 				src: "image.input",
