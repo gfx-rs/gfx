@@ -226,11 +226,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         Barrier::Image {
             states: creation_state .. stable_state,
             target: image.resource(),
-            range: i::SubresourceRange {
-                aspects: image.info().aspects,
-                levels: 0 .. num_levels,
-                layers: 0 .. num_layers,
-            },
+            range: i::SubresourceRange::new(image.info().aspects, 0 .. num_levels, 0 .. num_layers),
         }
     }
 
@@ -297,11 +293,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             Some(Barrier::Image {
                 states: state .. next,
                 target: image.resource(),
-                range: i::SubresourceRange {
-                    aspects: image.info().aspects,
-                    levels: level .. (level+1),
-                    layers: layer .. (layer+1),
-                },
+                range: i::SubresourceRange::new(image.info().aspects, level .. level+1, layer .. layer+1),
             })
         } else {
             None
@@ -475,7 +467,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         image::Subresource {
             aspects: src.aspects,
             level: src.level,
-            layer: src.layers.start
+            layer: src.layers.start.unwrap_or(0)
         }
     }
 
@@ -541,7 +533,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         let mut image_states = Vec::new();
         for region in regions {
             let r = &region.image_layers;
-            for layer in r.layers.clone() {
+            for layer in r.layers.clone().into_range(0, dst.info().kind.num_layers()) {
                 let subresource = hal::image::Subresource {
                     aspects: dst.info().aspects,
                     level: r.level,
@@ -585,7 +577,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
         let mut image_states = Vec::new();
         for region in regions {
             let r = &region.image_layers;
-            for layer in r.layers.clone() {
+            for layer in r.layers.clone().into_range(0, src.info().kind.num_layers()) {
                 let subresource = hal::image::Subresource {
                     aspects: src.info().aspects,
                     level: r.level,
@@ -640,11 +632,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
     ) {
         let layout = self.require_clear_state(image);
         //TODO
-        let range = i::SubresourceRange {
-            aspects: Aspects::COLOR,
-            levels: 0 .. 1,
-            layers: 0 .. 1,
-        };
+        let range = i::SubresourceRange::new(Aspects::COLOR, 0 .. 1, 0 .. 1);
         self.handles.add(image.clone());
         self.buffer.clear_color_image(image.resource(), layout, range, value);
     }
@@ -668,11 +656,7 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
     ) {
         let layout = self.require_clear_state(image);
         //TODO
-        let range = i::SubresourceRange {
-            aspects: Aspects::DEPTH | Aspects::STENCIL,
-            levels: 0 .. 1,
-            layers: 0 .. 1,
-        };
+        let range = i::SubresourceRange::new(Aspects::DEPTH | Aspects::STENCIL, 0 .. 1, 0 .. 1);
         self.handles.add(image.clone());
         self.buffer.clear_depth_stencil_image(image.resource(), layout, range, value);
     }

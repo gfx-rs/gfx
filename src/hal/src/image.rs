@@ -8,6 +8,7 @@ use std::ops::Range;
 
 use format;
 use pso::Comparison;
+use range::{RangeArg, RangeOption};
 
 
 /// Dimension size.
@@ -177,7 +178,7 @@ pub enum LayerError {
     /// The source image kind doesn't support array slices.
     NotExpected(Kind),
     /// Selected layer is outside of the provided range.
-    OutOfBounds(Range<Layer>),
+    OutOfBounds(RangeOption<Layer>),
 }
 
 impl fmt::Display for LayerError {
@@ -670,7 +671,18 @@ pub struct SubresourceLayers {
     /// Selected mipmap level
     pub level: Level,
     /// Included array levels
-    pub layers: Range<Layer>,
+    pub layers: RangeOption<Layer>,
+}
+
+impl SubresourceLayers {
+    ///
+    pub fn new<T: RangeArg<Layer>>(aspects: format::Aspects, level: Level, layers: T) -> Self {
+        SubresourceLayers {
+            aspects,
+            level,
+            layers: RangeOption { start: layers.start().cloned(), end: layers.end().cloned() },
+        }
+    }
 }
 
 /// A subset of resources contained within an image.
@@ -680,9 +692,24 @@ pub struct SubresourceRange {
     /// Included aspects: color/depth/stencil
     pub aspects: format::Aspects,
     /// Included mipmap levels
-    pub levels: Range<Level>,
+    pub levels: RangeOption<Level>,
     /// Included array levels
-    pub layers: Range<Layer>,
+    pub layers: RangeOption<Layer>,
+}
+
+impl SubresourceRange {
+    ///
+    pub fn new<T, U>(aspects: format::Aspects, levels: T, layers: U) -> Self
+    where
+        T: RangeArg<Level>,
+        U: RangeArg<Layer>,
+    {
+        SubresourceRange {
+            aspects,
+            levels: RangeOption { start: levels.start().cloned(), end: levels.end().cloned() },
+            layers: RangeOption { start: layers.start().cloned(), end: layers.end().cloned() },
+        }
+    }
 }
 
 /// Image format properties.

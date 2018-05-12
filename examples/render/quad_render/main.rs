@@ -100,11 +100,7 @@ fn main() {
         pipe_init,
     ).unwrap();
 
-    let image_range = gfx::image::SubresourceRange {
-        aspects: f::Aspects::COLOR,
-        levels: 0 .. 1,
-        layers: 0 .. 1,
-    };
+    let image_range = gfx::image::SubresourceRange::new(f::Aspects::COLOR, 0 .. 1, 0 .. 1);
 
     // Framebuffer creation
     let frame_rtvs = backbuffers.iter().map(|backbuffer| {
@@ -224,11 +220,7 @@ fn main() {
             buffer_offset: 0,
             buffer_width: row_pitch / image_stride as u32,
             buffer_height: height as u32,
-            image_layers: gfx::image::SubresourceLayers {
-                aspects: f::Aspects::COLOR,
-                level: 0,
-                layers: 0 .. 1,
-            },
+            image_layers: gfx::image::SubresourceLayers::new(f::Aspects::COLOR, 0, 0 .. 1),
             image_offset: i::Offset { x: 0, y: 0, z: 0 },
             image_extent: i::Extent { width, height, depth: 1 },
         }]);

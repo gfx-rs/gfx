@@ -74,13 +74,13 @@
 						src_subresource:  (
 							aspects: (bits: 0x1), //COLOR
 							level: 0,
-							layers: (start: 0, end: 1),
+							layers: (start: Some(0), end: Some(1)),
 						),
 						src_offset: (x: 0, y: 0, z: 0),
 						dst_subresource:  (
 							aspects: (bits: 0x1), //COLOR
 							level: 0,
-							layers: (start: 0, end: 1),
+							layers: (start: Some(0), end: Some(1)),
 						),
 						dst_offset: (x: 0, y: 0, z: 0),
 						extent: (
@@ -104,7 +104,7 @@
 						image_layers: (
 							aspects: (bits: 0x1), //COLOR
 							level: 0,
-							layers: (start: 0, end: 1),
+							layers: (start: Some(0), end: Some(1)),
 						),
 						image_offset: (x: 0, y: 0, z: 0),
 						image_extent: (
@@ -128,7 +128,7 @@
 						image_layers: (
 							aspects: (bits: 0x1), //COLOR
 							level: 0,
-							layers: (start: 0, end: 1),
+							layers: (start: Some(0), end: Some(1)),
 						),
 						image_offset: (x: 1, y: 0, z: 0),
 						image_extent: (
@@ -150,7 +150,7 @@
 						src_subresource:  (
 							aspects: (bits: 0x1), //COLOR
 							level: 0,
-							layers: (start: 0, end: 1),
+							layers: (start: Some(0), end: Some(1)),
 						),
 						src_bounds: (
 							start: (x: 0, y: 0, z: 0),
@@ -159,7 +159,7 @@
 						dst_subresource:  (
 							aspects: (bits: 0x1), //COLOR
 							level: 0,
-							layers: (start: 0, end: 1),
+							layers: (start: Some(0), end: Some(1)),
 						),
 						dst_bounds: (
 							start: (x: 0, y: 0, z: 0),
