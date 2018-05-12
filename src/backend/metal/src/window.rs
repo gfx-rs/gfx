@@ -1,5 +1,5 @@
 use {Backend, QueueFamily};
-use internal::BlitChannel;
+use internal::Channel;
 use native;
 use device::{Device, PhysicalDevice};
 
@@ -161,7 +161,7 @@ impl Device {
                         depth: 1,
                     },
                     format_desc: config.color_format.surface_desc(),
-                    blit_channel: BlitChannel::Float,
+                    shader_channel: Channel::Float,
                     mtl_format,
                     mtl_type: metal::MTLTextureType::D2,
                 }

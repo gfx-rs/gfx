@@ -1,7 +1,7 @@
 use {AutoreleasePool, Backend, PrivateCapabilities, QueueFamily, Surface, Swapchain};
 use {native as n, command, soft};
 use conversions::*;
-use internal::BlitChannel;
+use internal::Channel;
 
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -1572,16 +1572,16 @@ impl hal::Device<Backend> for Device {
             raw,
             extent: image.extent,
             format_desc: base.0.desc(),
-            blit_channel: match base.1 {
+            shader_channel: match base.1 {
                 format::ChannelType::Unorm |
                 format::ChannelType::Inorm |
                 format::ChannelType::Ufloat |
                 format::ChannelType::Float |
                 format::ChannelType::Uscaled |
                 format::ChannelType::Iscaled |
-                format::ChannelType::Srgb => BlitChannel::Float,
-                format::ChannelType::Uint => BlitChannel::Uint,
-                format::ChannelType::Int => BlitChannel::Int,
+                format::ChannelType::Srgb => Channel::Float,
+                format::ChannelType::Uint => Channel::Uint,
+                format::ChannelType::Int => Channel::Int,
             },
             mtl_format: match self.private_caps.map_format(image.format) {
                 Some(format) => format,
