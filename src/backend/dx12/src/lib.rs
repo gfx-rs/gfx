@@ -939,6 +939,7 @@ impl hal::Instance for Instance {
                     framebuffer_color_samples_count: 0b101,
                     framebuffer_depth_samples_count: 0b101,
                     framebuffer_stencil_samples_count: 0b101,
+                    non_coherent_atom_size: 1, //TODO: confirm
                 },
                 private_caps: Capabilities {
                     heterogeneous_resource_heaps,

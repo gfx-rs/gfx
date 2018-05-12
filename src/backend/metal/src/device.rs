@@ -278,6 +278,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             framebuffer_color_samples_count: 0b101, // TODO
             framebuffer_depth_samples_count: 0b101, // TODO
             framebuffer_stencil_samples_count: 0b101, // TODO
+
+            // Note: we issue Metal buffer-to-buffer copies on memory flush/invalidate,
+            // and those need to operate on sizes being multiples of 4.
+            non_coherent_atom_size: 4,
         }
     }
 }
@@ -294,7 +298,7 @@ impl LanguageVersion {
 }
 
 impl Device {
-    fn _is_heap_coherent(&self, heap: &n::MemoryHeap) -> bool {
+    fn is_heap_coherent(&self, heap: &n::MemoryHeap) -> bool {
         match *heap {
             n::MemoryHeap::Emulated(memory_type) => self.memory_types[memory_type.0].properties.contains(Properties::COHERENT),
             n::MemoryHeap::Native(ref heap) => heap.storage_mode() == MTLStorageMode::Shared,
@@ -953,8 +957,14 @@ impl hal::Device<Backend> for Device {
     ) -> Result<*mut u8, mapping::Error> {
         let range = memory.resolve(&generic_range);
         debug!("mapping memory {:?} at {:?}", memory, range);
-        self.invalidate_mapped_memory_ranges(&[(memory, generic_range)]);
-        memory.initialized.set(true);
+        if self.is_heap_coherent(&memory.heap) {
+            // Note from the Vulkan spec:
+            //> Mapping non-coherent memory does not implicitly invalidate the mapped memory,
+            //> and device writes that have not been invalidated *must* be made visible before
+            //> the host reads or overwrites them.
+            self.invalidate_mapped_memory_ranges(&[(memory, generic_range)]);
+            memory.initialized.set(true);
+        }
 
         let base_ptr = memory.cpu_buffer.as_ref().unwrap().contents() as *mut u8;
         let ptr = unsafe { base_ptr.offset(range.start as _) };
@@ -969,7 +979,10 @@ impl hal::Device<Backend> for Device {
     fn unmap_memory(&self, memory: &n::Memory) {
         debug!("unmapping memory {:?}", memory);
         let range = memory.mapping.lock().unwrap().take().expect("Unmapping non-mapped memory?");
-        self.flush_mapped_memory_ranges(&[(memory, range)]);
+        if self.is_heap_coherent(&memory.heap) {
+            // See note from the Vulkan spec above ^
+            self.flush_mapped_memory_ranges(&[(memory, range)]);
+        }
     }
 
     fn flush_mapped_memory_ranges<'a, I, R>(&self, iter: I)
@@ -978,6 +991,7 @@ impl hal::Device<Backend> for Device {
         I::Item: Borrow<(&'a n::Memory, R)>,
         R: RangeArg<u64>,
     {
+        const ALIGN_MASK: buffer::Offset = 3;
         let _ap = AutoreleasePool::new(); // for the encoder
         debug!("flushing mapped ranges");
 
@@ -1002,13 +1016,19 @@ impl hal::Device<Backend> for Device {
             for (alloc_range, dst) in allocations.find(&range) {
                 let start = alloc_range.start.max(range.start);
                 let end = alloc_range.end.min(range.end);
+                let other = start - alloc_range.start;
+                assert_eq!(other & ALIGN_MASK, 0);
+                if start & ALIGN_MASK != 0 || end & ALIGN_MASK != 0 {
+                    warn!("Invalidation of {:?} doesn't respect `non_coherent_atom_size`",
+                        start .. end);
+                }
                 command::exec_blit(encoder, &soft::BlitCommand::CopyBuffer {
                     src: cpu_buffer.clone(),
                     dst,
                     region: BufferCopy {
-                        src: start,
-                        dst: start - alloc_range.start,
-                        size: end - start,
+                        src: start & !ALIGN_MASK,
+                        dst: other,
+                        size: end & !ALIGN_MASK - start &!ALIGN_MASK,
                     },
                 });
             }
@@ -1024,6 +1044,7 @@ impl hal::Device<Backend> for Device {
         I::Item: Borrow<(&'a n::Memory, R)>,
         R: RangeArg<u64>,
     {
+        const ALIGN_MASK: buffer::Offset = 3;
         let _ap = AutoreleasePool::new(); // for the encoder
         debug!("invalidating mapped ranges");
 
@@ -1047,13 +1068,19 @@ impl hal::Device<Backend> for Device {
             for (alloc_range, src) in allocations.find(&range) {
                 let start = alloc_range.start.max(range.start);
                 let end = alloc_range.end.min(range.end);
+                let other = start - alloc_range.start;
+                assert_eq!(other & ALIGN_MASK, 0);
+                if start & ALIGN_MASK != 0 || end & ALIGN_MASK != 0 {
+                    warn!("Invalidation of {:?} doesn't respect `non_coherent_atom_size`",
+                        start .. end);
+                }
                 command::exec_blit(encoder, &soft::BlitCommand::CopyBuffer {
                     src,
                     dst: cpu_buffer.clone(),
                     region: BufferCopy {
-                        src: start - alloc_range.start,
-                        dst: start,
-                        size: end - start,
+                        src: other,
+                        dst: start & !ALIGN_MASK,
+                        size: end & !ALIGN_MASK - start & !ALIGN_MASK,
                     },
                 });
             }
