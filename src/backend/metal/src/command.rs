@@ -1257,9 +1257,19 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         for subresource_range in subresource_ranges {
             let sub = subresource_range.borrow();
+            let end_level = if sub.levels.end == !0 {
+                image.raw.mipmap_level_count() as _
+            } else {
+                sub.levels.end
+            };
+            let end_layer = if sub.layers.end == !0 {
+                image.raw.array_length() as _
+            } else {
+                sub.layers.end
+            };
 
-            for level in sub.levels.clone() {
-                for layer in sub.layers.clone() {
+            for level in sub.levels.start .. end_level {
+                for layer in sub.layers.start .. end_layer {
                     let descriptor = metal::RenderPassDescriptor::new().to_owned();
                     // descriptor.set_render_target_array_length(sub.layers.end as _); //TODO: fast patg
                     if sub.aspects.contains(Aspects::COLOR) {
@@ -1269,7 +1279,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             .unwrap();
                         attachment.set_texture(Some(&image.raw));
                         attachment.set_level(level as _);
-                        attachment.set_depth_plane(layer as _);
+                        attachment.set_slice(layer as _);
+                        //attachment.set_depth_plane();
                         attachment.set_load_action(metal::MTLLoadAction::Clear);
                         attachment.set_clear_color(clear_color.clone());
                     }
@@ -1280,7 +1291,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             .unwrap();
                         attachment.set_texture(Some(&image.raw));
                         attachment.set_level(level as _);
-                        attachment.set_depth_plane(layer as _);
+                        attachment.set_slice(layer as _);
+                        //attachment.set_depth_plane();
                         attachment.set_load_action(metal::MTLLoadAction::Clear);
                         attachment.set_clear_depth(depth_stencil.depth as _);
                     }
@@ -1290,7 +1302,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             .unwrap();
                         attachment.set_texture(Some(&image.raw));
                         attachment.set_level(level as _);
-                        attachment.set_depth_plane(layer as _);
+                        attachment.set_slice(layer as _);
+                        //attachment.set_depth_plane(_);
                         attachment.set_load_action(metal::MTLLoadAction::Clear);
                         attachment.set_clear_stencil(depth_stencil.stencil);
                     }

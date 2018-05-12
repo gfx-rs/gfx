@@ -633,10 +633,11 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
     }
 
     /// Clears `image` to `value`.
-    pub fn clear_color_raw(
+    pub fn clear_image_raw(
         &mut self,
         image: &handle::raw::Image<B>,
-        value: ClearColor,
+        color: ClearColor,
+        depth_stencil: ClearDepthStencil,
     ) {
         let layout = self.require_clear_state(image);
         //TODO
@@ -646,35 +647,19 @@ impl<'a, B: Backend, C> Encoder<'a, B, C>
             layers: 0 .. 1,
         };
         self.handles.add(image.clone());
-        self.buffer.clear_color_image(image.resource(), layout, range, value);
+        self.buffer.clear_image(image.resource(), layout, color, depth_stencil, Some(range));
     }
 
     /// Clears `image` to `value`.
-    pub fn clear_color<F>(
+    pub fn clear_image<F>(
         &mut self,
         image: &handle::Image<B, F>,
-        value: ClearColor,
+        color: ClearColor,
+        depth_stencil: ClearDepthStencil,
     ) where
         F: format::AsFormat,
     {
-        self.clear_color_raw(image.as_ref(), value);
-    }
-
-    /// Clears `image`'s depth/stencil with `value`
-    pub fn clear_depth_stencil_raw(
-        &mut self,
-        image: &handle::raw::Image<B>,
-        value: ClearDepthStencil,
-    ) {
-        let layout = self.require_clear_state(image);
-        //TODO
-        let range = i::SubresourceRange {
-            aspects: Aspects::DEPTH | Aspects::STENCIL,
-            levels: 0 .. 1,
-            layers: 0 .. 1,
-        };
-        self.handles.add(image.clone());
-        self.buffer.clear_depth_stencil_image(image.resource(), layout, range, value);
+        self.clear_image_raw(image.as_ref(), color, depth_stencil);
     }
 
     pub fn draw<D>(

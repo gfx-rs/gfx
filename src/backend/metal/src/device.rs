@@ -1444,18 +1444,20 @@ impl hal::Device<Backend> for Device {
         let descriptor = metal::TextureDescriptor::new();
 
         let mtl_type = match kind {
-            image::Kind::D1(_, 1) => {
+            image::Kind::D1(_, 1) if mip_levels == 1=> {
                 assert!(!is_cube);
                 MTLTextureType::D1
             }
-            image::Kind::D1(_, layers) => {
+            image::Kind::D1(_, layers) if mip_levels == 1 => {
                 assert!(!is_cube);
                 descriptor.set_array_length(layers as u64);
                 MTLTextureType::D1Array
             }
+            image::Kind::D1(_, 1) |
             image::Kind::D2(_, _, 1, 1) => {
                 MTLTextureType::D2
             }
+            image::Kind::D1(_, layers) |
             image::Kind::D2(_, _, layers, 1) => {
                 if is_cube && layers > 6 {
                     assert_eq!(layers % 6, 0);
@@ -1490,7 +1492,6 @@ impl hal::Device<Backend> for Device {
         descriptor.set_width(extent.width as u64);
         descriptor.set_height(extent.height as u64);
         descriptor.set_depth(extent.depth as u64);
-
         descriptor.set_mipmap_level_count(mip_levels as u64);
         descriptor.set_pixel_format(mtl_format);
         descriptor.set_usage(map_texture_usage(usage));
