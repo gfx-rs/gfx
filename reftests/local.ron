@@ -25,6 +25,11 @@
 			jobs: ["copy-image-buf"],
 			expect: Buffer("buffer.output", [52, 53, 54, 55]),
 		),
+		"clear-image": (
+			features: (bits: 0),
+			jobs: ["clear-image"],
+			expect: ImageRow("image.output", 0, [128, 128, 128, 128]),
+		),
 		"blit-image": (
 			features: (bits: 0),
 			jobs: ["blit-image"],

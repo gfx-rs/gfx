@@ -1234,7 +1234,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         let clear_color = unsafe {
             match image.shader_channel {
-                Channel::Float =>metal::MTLClearColor::new(
+                Channel::Float => metal::MTLClearColor::new(
                     color.float32[0] as _,
                     color.float32[1] as _,
                     color.float32[2] as _,
@@ -1271,7 +1271,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             for level in sub.levels.start .. end_level {
                 for layer in sub.layers.start .. end_layer {
                     let descriptor = metal::RenderPassDescriptor::new().to_owned();
-                    // descriptor.set_render_target_array_length(sub.layers.end as _); //TODO: fast patg
+                    // descriptor.set_render_target_array_length(sub.layers.end as _); //TODO: fast path
                     if sub.aspects.contains(Aspects::COLOR) {
                         let attachment = descriptor
                             .color_attachments()
