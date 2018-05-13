@@ -183,6 +183,14 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let family = *families[0].0;
         let id = family.id();
 
+        if cfg!(debug_assertions) || cfg!(feature = "metal_default_capture_scope") {
+            let shared_capture_manager = CaptureManager::shared();
+            let default_capture_scope = shared_capture_manager.new_capture_scope_with_device(&self.raw);
+            shared_capture_manager.set_default_capture_scope(default_capture_scope);
+            shared_capture_manager.start_capture_with_scope(&default_capture_scope);
+            default_capture_scope.begin_scope();
+        }
+
         let command_shared = Arc::new(command::Shared::new(self.raw.clone()));
         let mut queue_group = hal::backend::RawQueueGroup::new(family);
         queue_group.add_queue(command_shared.clone());
@@ -193,14 +201,6 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             command_shared,
             memory_types: self.memory_types,
         };
-
-        if cfg!(debug_assertions) || cfg!(feature = "metal_default_capture_scope") {
-            let shared_capture_manager = CaptureManager::shared();
-            let default_capture_scope = shared_capture_manager.new_capture_scope_with_device(&device.device);
-            shared_capture_manager.set_default_capture_scope(default_capture_scope);
-            shared_capture_manager.start_capture_with_scope(&default_capture_scope);
-            default_capture_scope.begin_scope();
-        }
 
         let mut queues = HashMap::new();
         queues.insert(id, queue_group);
