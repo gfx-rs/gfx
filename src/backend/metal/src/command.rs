@@ -496,27 +496,27 @@ impl CommandSink {
 
     fn quick_render_pass<I>(
         &mut self,
-        descriptor: metal::RenderPassDescriptor,
+        descriptor: &metal::RenderPassDescriptorRef,
         commands: I,
     ) where
         I: IntoIterator<Item = soft::RenderCommand>,
     {
+        self.stop_encoding();
+
         match *self {
-            CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, .. } => {
-                match *encoder_state {
-                    EncoderState::None => (),
-                    _ => panic!("Must be outside of encoding"),
-                };
+            CommandSink::Immediate { ref cmd_buffer, .. } => {
                 let _ap = AutoreleasePool::new();
-                let encoder = cmd_buffer.new_render_command_encoder(&descriptor);
+                let encoder = cmd_buffer.new_render_command_encoder(descriptor);
                 for command in commands {
                     exec_render(encoder, &command);
                 }
                 encoder.end_encoding();
             }
-            CommandSink::Deferred { ref mut passes, ref mut is_encoding } => {
-                assert!(!*is_encoding);
-                passes.push(soft::Pass::Render(descriptor, commands.into_iter().collect()));
+            CommandSink::Deferred { ref mut passes, .. } => {
+                passes.push(soft::Pass::Render(
+                    descriptor.to_owned(),
+                    commands.into_iter().collect(),
+                ));
             }
         }
     }
@@ -1230,7 +1230,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T::Item: Borrow<SubresourceRange>,
     {
         let mut inner = self.inner.borrow_mut();
-        inner.sink().stop_encoding();
 
         let clear_color = unsafe {
             match image.shader_channel {
@@ -1270,7 +1269,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
             for level in sub.levels.start .. end_level {
                 for layer in sub.layers.start .. end_layer {
-                    let descriptor = metal::RenderPassDescriptor::new().to_owned();
+                    let descriptor = metal::RenderPassDescriptor::new();
                     // descriptor.set_render_target_array_length(sub.layers.end as _); //TODO: fast path
                     if sub.aspects.contains(Aspects::COLOR) {
                         let attachment = descriptor
@@ -1282,10 +1281,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         attachment.set_slice(layer as _);
                         //attachment.set_depth_plane();
                         attachment.set_load_action(metal::MTLLoadAction::Clear);
+                        attachment.set_store_action(metal::MTLStoreAction::Store);
                         attachment.set_clear_color(clear_color.clone());
                     }
 
-                    if sub.aspects.intersects(Aspects::DEPTH | Aspects::STENCIL) {
+                    if sub.aspects.contains(Aspects::DEPTH) {
                         let attachment = descriptor
                             .depth_attachment()
                             .unwrap();
@@ -1294,6 +1294,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         attachment.set_slice(layer as _);
                         //attachment.set_depth_plane();
                         attachment.set_load_action(metal::MTLLoadAction::Clear);
+                        attachment.set_store_action(metal::MTLStoreAction::Store);
                         attachment.set_clear_depth(depth_stencil.depth as _);
                     }
                     if sub.aspects.contains(Aspects::STENCIL) {
@@ -1305,6 +1306,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         attachment.set_slice(layer as _);
                         //attachment.set_depth_plane(_);
                         attachment.set_load_action(metal::MTLLoadAction::Clear);
+                        attachment.set_store_action(metal::MTLStoreAction::Store);
                         attachment.set_clear_stencil(depth_stencil.stencil);
                     }
 
@@ -1489,7 +1491,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             // Note: we don't bother to restore any render states here, since we are currently
             // outside of a render pass, and the state will be reset automatically once
             // we enter the next pass.
-            inner.sink().stop_encoding();
 
             let mut pipes = self.shared.service_pipes
                 .lock()
@@ -1555,7 +1556,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     },
                 ];
 
-                let descriptor = metal::RenderPassDescriptor::new().to_owned();
+                let descriptor = metal::RenderPassDescriptor::new();
                 descriptor.set_render_target_array_length(ext.depth as _);
                 {
                     let attachment = descriptor
