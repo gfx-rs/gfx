@@ -368,7 +368,7 @@ impl RawCommandBuffer {
             let handle = vertex_buffers[binding];
 
             match vertex_buffer_descs.get(binding) {
-                Some(Some(desc)) => {
+                Some(&Some(desc)) => {
                     assert_eq!(desc.rate, 0); // TODO: Input rate
                     push_cmd_internal(
                         &self.id,
