@@ -261,16 +261,17 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn limits(&self) -> hal::Limits {
+        let buffer_alignment = if Self::is_mac(&self.raw) {256} else {64};
         hal::Limits {
             max_texture_size: 4096, // TODO: feature set
             max_patch_size: 0, // No tessellation
             max_viewports: 1,
 
-            min_buffer_copy_offset_alignment: if Self::is_mac(&self.raw) {256} else {64},
-            min_buffer_copy_pitch_alignment: 4, // TODO: made this up
-            min_texel_buffer_offset_alignment: 1, //TODO
-            min_uniform_buffer_offset_alignment: 1, //TODO
-            min_storage_buffer_offset_alignment: 1, //TODO
+            min_buffer_copy_offset_alignment: buffer_alignment,
+            min_buffer_copy_pitch_alignment: 4,
+            min_texel_buffer_offset_alignment: buffer_alignment,
+            min_uniform_buffer_offset_alignment: buffer_alignment,
+            min_storage_buffer_offset_alignment: buffer_alignment,
 
             max_compute_group_count: [16; 3], // TODO
             max_compute_group_size: [64; 3], // TODO
