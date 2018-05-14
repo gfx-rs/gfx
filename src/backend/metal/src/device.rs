@@ -1050,8 +1050,10 @@ impl hal::Device<Backend> for Device {
 
         // temporary command buffer to copy the contents from
         // the given buffers into the allocated CPU-visible buffers
-        let mut pool = self.command_shared.queue_pool.lock().unwrap();
-        let (queue_id, cmd_buffer) = pool.make_command_buffer(&self.device);
+        let (queue_id, cmd_buffer) = self.command_shared.queue_pool
+            .lock()
+            .unwrap()
+            .make_command_buffer(&self.device);
         let encoder = cmd_buffer.new_blit_command_encoder();
         let mut num_copies = 0;
 
@@ -1090,7 +1092,10 @@ impl hal::Device<Backend> for Device {
         }
 
         encoder.end_encoding();
-        pool.release_command_buffer(queue_id);
+        self.command_shared.queue_pool
+            .lock()
+            .unwrap()
+            .release_command_buffer(queue_id);
         if num_copies != 0 {
             debug!("\twaiting...");
             cmd_buffer.commit();
@@ -1628,13 +1633,11 @@ impl hal::Device<Backend> for Device {
     fn create_image_view(
         &self,
         image: &n::Image,
-        _kind: image::ViewKind,
+        kind: image::ViewKind,
         format: format::Format,
-        _swizzle: format::Swizzle,
-        _range: image::SubresourceRange,
+        swizzle: format::Swizzle,
+        range: image::SubresourceRange,
     ) -> Result<n::ImageView, image::ViewError> {
-        // TODO: subresource range
-
         let mtl_format = match self.private_caps.map_format(format) {
             Some(f) => f,
             None => {
@@ -1643,7 +1646,25 @@ impl hal::Device<Backend> for Device {
             },
         };
 
-        Ok(n::ImageView(image.raw.new_texture_view(mtl_format)))
+        if swizzle != format::Swizzle::NO {
+            error!("swizzling not supported");
+            return Err(image::ViewError::Unsupported);
+        }
+
+        let view = image.raw.new_texture_view_from_slice(
+            mtl_format,
+            map_texture_type(kind),
+            NSRange {
+                location: range.levels.start as _,
+                length: (range.levels.end - range.levels.start) as _,
+            },
+            NSRange {
+                location: range.layers.start as _,
+                length: (range.layers.end - range.layers.start) as _,
+            },
+        );
+
+        Ok(n::ImageView(view))
     }
 
     fn destroy_image_view(&self, _view: n::ImageView) {
