@@ -313,6 +313,19 @@ pub fn map_texture_usage(usage: image::Usage) -> MTLTextureUsage {
     texture_usage
 }
 
+pub fn map_texture_type(view_kind: image::ViewKind) -> MTLTextureType {
+    use hal::image::ViewKind as Vk;
+    match view_kind {
+        Vk::D1 => MTLTextureType::D1,
+        Vk::D1Array => MTLTextureType::D1Array,
+        Vk::D2 => MTLTextureType::D2,
+        Vk::D2Array => MTLTextureType::D2Array,
+        Vk::D3 => MTLTextureType::D3,
+        Vk::Cube => MTLTextureType::Cube,
+        Vk::CubeArray => MTLTextureType::CubeArray,
+    }
+}
+
 pub fn map_index_type(index_type: IndexType) -> MTLIndexType {
     match index_type {
         IndexType::U16 => MTLIndexType::UInt16,
