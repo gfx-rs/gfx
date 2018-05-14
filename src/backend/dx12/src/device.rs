@@ -712,6 +712,8 @@ impl Device {
     }
 
     pub(crate) fn build_image_as_shader_resource_desc(info: &ViewInfo) -> Result<d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC, image::ViewError> {
+        #![allow(non_snake_case)]
+
         let mut desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
             Format: info.format,
             ViewDimension: 0,
@@ -2041,6 +2043,8 @@ impl d::Device<B> for Device {
         //TODO: the clear_Xv is incomplete. We should support clearing images created without XXX_ATTACHMENT usage.
         // for this, we need to check the format and force the `RENDER_TARGET` flag behind the user's back
         // if the format supports being rendered into, allowing us to create clear_Xv
+        let can_clear_color = image.usage.intersects(Usage::TRANSFER_DST | Usage::COLOR_ATTACHMENT);
+        let can_clear_depth = image.usage.intersects(Usage::TRANSFER_DST | Usage::DEPTH_STENCIL_ATTACHMENT);
 
         Ok(n::Image {
             resource: resource as *mut _,
@@ -2051,7 +2055,7 @@ impl d::Device<B> for Device {
             bytes_per_block: image.bytes_per_block,
             block_dim: image.block_dim,
             num_levels: image.num_levels,
-            clear_cv: if image.aspects.contains(Aspects::COLOR) && image.usage.contains(Usage::COLOR_ATTACHMENT) {
+            clear_cv: if image.aspects.contains(Aspects::COLOR) && can_clear_color {
                 (0 .. num_layers)
                     .map(|layer| {
                         self.view_image_as_render_target(
@@ -2068,7 +2072,7 @@ impl d::Device<B> for Device {
             } else {
                 Vec::new()
             },
-            clear_dv: if image.aspects.contains(Aspects::DEPTH) && image.usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
+            clear_dv: if image.aspects.contains(Aspects::DEPTH) && can_clear_depth {
                 (0 .. num_layers)
                     .map(|layer| {
                         self.view_image_as_depth_stencil(
@@ -2086,7 +2090,7 @@ impl d::Device<B> for Device {
             } else {
                 Vec::new()
             },
-            clear_sv: if image.aspects.contains(Aspects::STENCIL) && image.usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
+            clear_sv: if image.aspects.contains(Aspects::STENCIL) && can_clear_depth {
                 (0 .. num_layers)
                     .map(|layer| {
                         self.view_image_as_depth_stencil(

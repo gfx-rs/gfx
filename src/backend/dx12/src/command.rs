@@ -1774,13 +1774,22 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         R: RangeArg<buffer::Offset>,
     {
         assert!(buffer.clear_uav.is_some(), "Buffer needs to be created with usage `TRANSFER_DST`");
-        // TODO: Need to dynamically create UAVs
-        assert_eq!(*range.start().unwrap(), 0);
-        assert_eq!(*range.end().unwrap(), buffer.size_in_bytes as u64);
+        let bytes_per_unit = 4;
+        let start = *range.start().unwrap_or(&0) as i32;
+        let end = *range.end().unwrap_or(&(buffer.size_in_bytes as u64)) as i32;
+        if start % 4  != 0 || end % 4 != 0 {
+            warn!("Fill buffer bounds have to be multiples of 4");
+        }
+        let rect = d3d12::D3D12_RECT {
+            left: start / bytes_per_unit,
+            top: 0,
+            right: end / bytes_per_unit,
+            bottom: 1,
+        };
 
         // Insert barrier for `COPY_DEST` to `UNORDERED_ACCESS` as we use
         // `TRANSFER_WRITE` for all clear commands.
-        let transition_barrier = Self::transition_barrier(
+        let pre_barrier = Self::transition_barrier(
             d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
                 pResource: buffer.resource,
                 Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
@@ -1788,21 +1797,21 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 StateAfter: d3d12::D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
             }
         );
-        unsafe { self.raw.ResourceBarrier(1, &transition_barrier) };
+        unsafe { self.raw.ResourceBarrier(1, &pre_barrier) };
 
-        let handles = buffer.clear_uav.unwrap();
+        let handle = buffer.clear_uav.unwrap();
         unsafe {
             self.raw.ClearUnorderedAccessViewUint(
-                handles.gpu,
-                handles.cpu,
+                handle.gpu,
+                handle.cpu,
                 buffer.resource,
                 &[data as UINT; 4],
-                0,
-                ptr::null_mut(), // TODO: lift with the forementioned restriction
+                1,
+                &rect as *const _,
             );
         }
 
-        let transition_barrier = Self::transition_barrier(
+        let post_barrier = Self::transition_barrier(
             d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
                 pResource: buffer.resource,
                 Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
@@ -1810,7 +1819,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 StateAfter: d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
             }
         );
-        unsafe { self.raw.ResourceBarrier(1, &transition_barrier) };
+        unsafe { self.raw.ResourceBarrier(1, &post_barrier) };
     }
 
     fn update_buffer(
