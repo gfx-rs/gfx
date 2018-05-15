@@ -1,20 +1,23 @@
 
-use hal::{buffer, command as com, image, memory, pass, pso, query};
+use hal::{buffer, command as com, format, image, memory, pass, pso, query};
 use hal::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 use hal::format::Aspects;
 use hal::range::RangeArg;
 
 use std::{cmp, iter, mem, ptr};
 use std::borrow::Borrow;
+use std::collections::HashMap;
 use std::ops::Range;
+use std::sync::Arc;
 
-use winapi::um::d3d12;
-use winapi::shared::minwindef::{FALSE, UINT};
+use winapi::um::{d3d12, d3dcommon};
+use winapi::shared::minwindef::{FALSE, UINT, TRUE};
 use winapi::shared::dxgiformat;
 
 use wio::com::ComPtr;
 
-use {conv, native as n, Backend, CmdSignatures, MAX_VERTEX_BUFFERS};
+use {conv, internal, native as n, Backend, Device, Shared, MAX_VERTEX_BUFFERS};
+use device::ViewInfo;
 use root_constants::RootConstant;
 use smallvec::SmallVec;
 
@@ -44,83 +47,6 @@ fn div(a: u32, b: u32) -> u32 {
 
 fn up_align(x: u32, alignment: u32) -> u32 {
     (x + alignment - 1) & !(alignment - 1)
-}
-
-fn bind_descriptor_sets<'a, T>(
-    raw: &ComPtr<d3d12::ID3D12GraphicsCommandList>,
-    pipeline: &mut PipelineCache,
-    layout: &n::PipelineLayout,
-    first_set: usize,
-    sets: T,
-) where
-    T: IntoIterator,
-    T::Item: Borrow<n::DescriptorSet>,
-{
-    let mut sets = sets.into_iter().peekable();
-    let (srv_cbv_uav_start, sampler_start) = if let Some(set_0) = sets.peek().map(Borrow::borrow) {
-        // Bind descriptor heaps
-        unsafe {
-            // TODO: Can we bind them always or only once?
-            //       Resize while recording?
-            let mut heaps = [
-                set_0.heap_srv_cbv_uav.as_raw(),
-                set_0.heap_samplers.as_raw(),
-            ];
-            raw.SetDescriptorHeaps(2, heaps.as_mut_ptr())
-        }
-
-        (set_0.srv_cbv_uav_gpu_start().ptr, set_0.sampler_gpu_start().ptr)
-    } else {
-        return
-    };
-
-    pipeline.srv_cbv_uav_start = srv_cbv_uav_start;
-    pipeline.sampler_start = sampler_start;
-
-    let mut table_id = 0;
-    for table in &layout.tables[..first_set] {
-        if table.contains(n::SRV_CBV_UAV) {
-            table_id += 1;
-        }
-        if table.contains(n::SAMPLERS) {
-            table_id += 1;
-        }
-    }
-
-    let table_base_offset = layout
-        .root_constants
-        .iter()
-        .fold(0, |sum, c| sum + c.range.end - c.range.start);
-
-    for (set, table) in sets.zip(layout.tables[first_set..].iter()) {
-        let set = set.borrow();
-        set.first_gpu_view.map(|gpu| {
-            assert!(table.contains(n::SRV_CBV_UAV));
-
-            let root_offset = table_id + table_base_offset;
-            // Cast is safe as offset **must** be in u32 range. Unable to
-            // create heaps with more descriptors.
-            let table_offset = (gpu.ptr - srv_cbv_uav_start) as u32;
-            pipeline
-                .user_data
-                .set_srv_cbv_uav_table(root_offset as _, table_offset);
-
-            table_id += 1;
-        });
-        set.first_gpu_sampler.map(|gpu| {
-            assert!(table.contains(n::SAMPLERS));
-
-            let root_offset = table_id + table_base_offset;
-            // Cast is safe as offset **must** be in u32 range. Unable to
-            // create heaps with more descriptors.
-            let table_offset = (gpu.ptr - sampler_start) as u32;
-            pipeline
-                .user_data
-                .set_sampler_table(root_offset as _, table_offset);
-
-            table_id += 1;
-        });
-    }
 }
 
 #[derive(Clone)]
@@ -204,6 +130,11 @@ impl UserData {
     fn clear_dirty(&mut self, i: usize) {
         self.dirty_mask &= !(1 << i);
     }
+
+    /// Mark all entries as dirty.
+    fn dirty_all(&mut self) {
+        self.dirty_mask = !0;
+    }
 }
 
 #[derive(Clone)]
@@ -234,12 +165,89 @@ impl PipelineCache {
             sampler_start: 0,
         }
     }
+
+    fn bind_descriptor_sets<'a, T>(
+        &mut self,
+        layout: &n::PipelineLayout,
+        first_set: usize,
+        sets: T,
+    ) -> [*mut d3d12::ID3D12DescriptorHeap; 2]
+    where
+        T: IntoIterator,
+        T::Item: Borrow<n::DescriptorSet>,
+    {
+        let mut sets = sets.into_iter().peekable();
+        let (
+            srv_cbv_uav_start, sampler_start,
+            heap_srv_cbv_uav, heap_sampler,
+        ) = if let Some(set_0) = sets.peek().map(Borrow::borrow) {
+            (
+                set_0.srv_cbv_uav_gpu_start().ptr, set_0.sampler_gpu_start().ptr,
+                set_0.heap_srv_cbv_uav.as_raw(), set_0.heap_samplers.as_raw(),
+            )
+        } else {
+            return [ptr::null_mut(); 2];
+        };
+
+        self.srv_cbv_uav_start = srv_cbv_uav_start;
+        self.sampler_start = sampler_start;
+
+        let mut table_id = 0;
+        for table in &layout.tables[..first_set] {
+            if table.contains(n::SRV_CBV_UAV) {
+                table_id += 1;
+            }
+            if table.contains(n::SAMPLERS) {
+                table_id += 1;
+            }
+        }
+
+        let table_base_offset = layout
+            .root_constants
+            .iter()
+            .fold(0, |sum, c| sum + c.range.end - c.range.start);
+
+        for (set, table) in sets.zip(layout.tables[first_set..].iter()) {
+            let set = set.borrow();
+            set.first_gpu_view.map(|gpu| {
+                assert!(table.contains(n::SRV_CBV_UAV));
+
+                let root_offset = table_id + table_base_offset;
+                // Cast is safe as offset **must** be in u32 range. Unable to
+                // create heaps with more descriptors.
+                let table_offset = (gpu.ptr - srv_cbv_uav_start) as u32;
+                self
+                    .user_data
+                    .set_srv_cbv_uav_table(root_offset as _, table_offset);
+
+                table_id += 1;
+            });
+            set.first_gpu_sampler.map(|gpu| {
+                assert!(table.contains(n::SAMPLERS));
+
+                let root_offset = table_id + table_base_offset;
+                // Cast is safe as offset **must** be in u32 range. Unable to
+                // create heaps with more descriptors.
+                let table_offset = (gpu.ptr - sampler_start) as u32;
+                self
+                    .user_data
+                    .set_sampler_table(root_offset as _, table_offset);
+
+                table_id += 1;
+            });
+        }
+
+        [heap_srv_cbv_uav, heap_sampler]
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum BindPoint {
     Compute,
-    Graphics,
+    Graphics {
+        /// Internal pipelines used for blitting, copying, etc.
+        internal: bool,
+    }
 }
 
 #[derive(Clone)]
@@ -257,7 +265,7 @@ struct Copy {
 pub struct CommandBuffer {
     raw: ComPtr<d3d12::ID3D12GraphicsCommandList>,
     allocator: ComPtr<d3d12::ID3D12CommandAllocator>,
-    signatures: CmdSignatures,
+    shared: Arc<Shared>,
 
     // Cache renderpasses for graphics operations
     pass_cache: Option<RenderPassCache>,
@@ -266,11 +274,17 @@ pub struct CommandBuffer {
     // Cache current graphics root signature and pipeline to minimize rebinding and support two
     // bindpoints.
     gr_pipeline: PipelineCache,
+    // Primitive topology of the currently bound graphics pipeline.
+    // Caching required for internal graphics pipelines.
+    primitive_topology: d3d12::D3D12_PRIMITIVE_TOPOLOGY,
     // Cache current compute root signature and pipeline.
     comp_pipeline: PipelineCache,
     // D3D12 only has one slot for both bindpoints. Need to rebind everything if we want to switch
     // between different bind points (ie. calling draw or dispatch).
     active_bindpoint: BindPoint,
+    // Current descriptor heaps heaps (CBV/SRV/UAV and Sampler).
+    // Required for resetting due to internal descriptor heaps.
+    active_descriptor_heaps: [*mut d3d12::ID3D12DescriptorHeap; 2],
 
     // Active queries in the command buffer.
     // Queries must begin and end in the same command buffer, which allows us to track them.
@@ -292,7 +306,12 @@ pub struct CommandBuffer {
     // D3D12 only allows setting all viewports or all scissors at once, not partial updates.
     // So we must cache the implied state for these partial updates.
     viewport_cache: SmallVec<[d3d12::D3D12_VIEWPORT; d3d12::D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as usize]>,
-    scissor_cache: SmallVec<[d3d12::D3D12_RECT; d3d12::D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as usize]>
+    scissor_cache: SmallVec<[d3d12::D3D12_RECT; d3d12::D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as usize]>,
+
+    // HACK: renderdoc workaround for temporary RTVs
+    rtv_pools: Vec<ComPtr<d3d12::ID3D12DescriptorHeap>>,
+    // Temporary gpu descriptor heaps (internal).
+    temporary_gpu_heaps: Vec<ComPtr<d3d12::ID3D12DescriptorHeap>>,
 }
 
 unsafe impl Send for CommandBuffer { }
@@ -310,17 +329,19 @@ impl CommandBuffer {
     pub(crate) fn new(
         raw: ComPtr<d3d12::ID3D12GraphicsCommandList>,
         allocator: ComPtr<d3d12::ID3D12CommandAllocator>,
-        signatures: CmdSignatures,
+        shared: Arc<Shared>,
     ) -> Self {
         CommandBuffer {
             raw,
             allocator,
-            signatures,
+            shared,
             pass_cache: None,
             cur_subpass: !0,
             gr_pipeline: PipelineCache::new(),
+            primitive_topology: d3dcommon::D3D_PRIMITIVE_TOPOLOGY_UNDEFINED,
             comp_pipeline: PipelineCache::new(),
-            active_bindpoint: BindPoint::Graphics,
+            active_bindpoint: BindPoint::Graphics { internal: false },
+            active_descriptor_heaps: [ptr::null_mut(); 2],
             occlusion_query: None,
             pipeline_stats_query: None,
             vertex_buffer_views_needs_bind: [false; MAX_VERTEX_BUFFERS],
@@ -328,6 +349,8 @@ impl CommandBuffer {
             copies: Vec::new(),
             viewport_cache: SmallVec::new(),
             scissor_cache: SmallVec::new(),
+            rtv_pools: Vec::new(),
+            temporary_gpu_heaps: Vec::new(),
         }
     }
 
@@ -340,12 +363,28 @@ impl CommandBuffer {
         self.pass_cache = None;
         self.cur_subpass = !0;
         self.gr_pipeline = PipelineCache::new();
+        self.primitive_topology = d3dcommon::D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
         self.comp_pipeline = PipelineCache::new();
-        self.active_bindpoint = BindPoint::Graphics;
+        self.active_bindpoint = BindPoint::Graphics { internal: false };
+        self.active_descriptor_heaps = [ptr::null_mut(); 2];
         self.occlusion_query = None;
         self.pipeline_stats_query = None;
         self.vertex_buffer_views_needs_bind = [false; MAX_VERTEX_BUFFERS];
         self.vertex_buffer_views = [NULL_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS];
+        self.rtv_pools.clear();
+        self.temporary_gpu_heaps.clear();
+    }
+
+    // Indicates that the pipeline slot has been overriden with an internal pipeline.
+    //
+    // This only invalidates the slot and the user data!
+    fn set_internal_graphics_pipeline(&mut self) {
+        self.active_bindpoint = BindPoint::Graphics { internal: true };
+        self.gr_pipeline.user_data.dirty_all();
+    }
+
+    fn bind_descriptor_heaps(&mut self) {
+        unsafe { self.raw.SetDescriptorHeaps(2, self.active_descriptor_heaps.as_mut_ptr()); }
     }
 
     fn insert_subpass_barriers(&self, insertion: BarrierPoint) {
@@ -523,13 +562,25 @@ impl CommandBuffer {
     }
 
     fn set_graphics_bind_point(&mut self) {
-        if self.active_bindpoint != BindPoint::Graphics {
-            // Switch to graphics bind point
-            let (pipeline, _) = self.gr_pipeline.pipeline.expect("No graphics pipeline bound");
-            unsafe { self.raw.SetPipelineState(pipeline); }
-            self.active_bindpoint = BindPoint::Graphics;
+        match self.active_bindpoint {
+            BindPoint::Compute => {
+                // Switch to graphics bind point
+                let (pipeline, _) = self.gr_pipeline.pipeline.expect("No graphics pipeline bound");
+                unsafe { self.raw.SetPipelineState(pipeline); }
+            }
+            BindPoint::Graphics { internal: true } => {
+                // Switch to graphics bind point
+                let (pipeline, signature) = self.gr_pipeline.pipeline.expect("No graphics pipeline bound");
+                unsafe {
+                    self.raw.SetPipelineState(pipeline);
+                    self.raw.SetGraphicsRootSignature(signature);
+                }
+                self.bind_descriptor_heaps();
+            }
+            BindPoint::Graphics { internal: false } => {}
         }
 
+        self.active_bindpoint = BindPoint::Graphics { internal: false };
         let cmd_buffer = &mut self.raw;
 
         // Bind vertex buffers
@@ -584,12 +635,24 @@ impl CommandBuffer {
     }
 
     fn set_compute_bind_point(&mut self) {
-        if self.active_bindpoint != BindPoint::Compute {
-            // Switch to compute bind point
-            assert!(self.comp_pipeline.pipeline.is_some(), "No compute pipeline bound");
-            let (pipeline, _) = self.comp_pipeline.pipeline.unwrap();
-            unsafe { self.raw.SetPipelineState(pipeline); }
-            self.active_bindpoint = BindPoint::Compute;
+        match self.active_bindpoint {
+            BindPoint::Graphics { internal } => {
+                // Switch to compute bind point
+                let (pipeline, _) = self.comp_pipeline.pipeline.expect("No compute pipeline bound");
+                unsafe { self.raw.SetPipelineState(pipeline); }
+                self.active_bindpoint = BindPoint::Compute;
+
+                if internal {
+                    self.bind_descriptor_heaps();
+                    // Rebind the graphics root signature as we come from an internal graphics.
+                    // Issuing a draw call afterwards would hide the information that we internally
+                    // changed the graphics root signature.
+                    if let Some((_, signature)) = self.gr_pipeline.pipeline {
+                        unsafe { self.raw.SetGraphicsRootSignature(signature); }
+                    }
+                }
+            }
+            BindPoint::Compute => {} // Nothing to do
         }
 
         let cmd_buffer = &mut self.raw;
@@ -1231,17 +1294,232 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn blit_image<T>(
         &mut self,
-        _src: &n::Image,
+        src: &n::Image,
         _src_layout: image::Layout,
-        _dst: &n::Image,
+        dst: &n::Image,
         _dst_layout: image::Layout,
-        _filter: image::Filter,
-        _regions: T,
+        filter: image::Filter,
+        regions: T,
     ) where
         T: IntoIterator,
         T::Item: Borrow<com::ImageBlit>
     {
-        unimplemented!()
+        let device = self.shared.service_pipes.device.clone();
+
+        // TODO: Resource barriers for src.
+        // TODO: depth or stencil images not supported so far
+
+        // TODO: only supporting 2D images
+        match (src.kind, dst.kind) {
+            (image::Kind::D2(..), image::Kind::D2(..)) => {},
+            _ => unimplemented!(),
+        }
+
+        // Descriptor heap for the current blit, only storing the src image
+        let srv_heap = Device::create_descriptor_heap_impl(
+            &mut device.clone(),
+            d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+            true,
+            1,
+        );
+        let srv_handle = srv_heap.at(0);
+
+        let srv_desc = Device::build_image_as_shader_resource_desc(
+            &ViewInfo {
+                resource: src.resource,
+                kind: src.kind,
+                flags: src.storage_flags,
+                view_kind: image::ViewKind::D2Array, // TODO
+                format: src.dxgi_format,
+                range: image::SubresourceRange {
+                    aspects: format::Aspects::COLOR, // TODO
+                    levels: 0..src.num_levels,
+                    layers: 0..src.kind.num_layers(),
+                },
+            }
+        ).unwrap();
+        unsafe {
+            device.CreateShaderResourceView(src.resource, &srv_desc, srv_handle.cpu);
+            self.raw.SetDescriptorHeaps(1, &mut srv_heap.raw.as_raw());
+        }
+        self.temporary_gpu_heaps.push(srv_heap.raw);
+
+        let filter = match filter {
+            image::Filter::Nearest => d3d12::D3D12_FILTER_MIN_MAG_MIP_POINT,
+            image::Filter::Linear => d3d12::D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT,
+        };
+
+        struct Instance {
+            rtv: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
+            viewport: d3d12::D3D12_VIEWPORT,
+            data: internal::BlitData,
+        };
+        let mut instances = HashMap::<internal::BlitKey, Vec<Instance>>::new();
+        let mut barriers = Vec::new();
+
+        for region in regions {
+            let r = region.borrow();
+
+            let first_layer = r.dst_subresource.layers.start;
+            let num_layers = r.dst_subresource.layers.end - first_layer;
+
+            // WORKAROUND: renderdoc crashes if we destroy the pool too early
+            let rtv_pool = Device::create_descriptor_heap_impl(
+                &mut device.clone(),
+                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+                false,
+                num_layers as _,
+            );
+            self.rtv_pools.push(rtv_pool.raw.clone());
+
+            let key = match r.dst_subresource.aspects {
+                format::Aspects::COLOR => {
+                    // Create RTVs of the dst image for the miplevel of the current region
+                    for i in 0 .. num_layers {
+                        let mut desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
+                            Format: dst.dxgi_format,
+                            ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2DARRAY,
+                            u: unsafe { mem::zeroed() },
+                        };
+
+                        *unsafe { desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_RTV {
+                            MipSlice: r.dst_subresource.level as _,
+                            FirstArraySlice: (i + first_layer) as u32,
+                            ArraySize: 1,
+                            PlaneSlice: 0, // TODO
+                        };
+
+                        let view = rtv_pool.at(i as _).cpu;
+                        unsafe {
+                            device.CreateRenderTargetView(dst.resource, &desc, view);
+                        }
+                    }
+
+                    (dst.dxgi_format, filter)
+                },
+                _ => unimplemented!(),
+            };
+
+            // Take flipping into account
+            let viewport = d3d12::D3D12_VIEWPORT {
+                TopLeftX: cmp::min(r.dst_bounds.start.x, r.dst_bounds.end.x) as _,
+                TopLeftY: cmp::min(r.dst_bounds.start.y, r.dst_bounds.end.y) as _,
+                Width: (r.dst_bounds.end.x - r.dst_bounds.start.x).abs() as _,
+                Height: (r.dst_bounds.end.y - r.dst_bounds.start.y).abs() as _,
+                MinDepth: 0.0,
+                MaxDepth: 1.0,
+            };
+
+            let mut list = instances
+                .entry(key)
+                .or_insert(Vec::new());
+
+            for i in 0..num_layers {
+                let src_layer = r.src_subresource.layers.start + i;
+                // Screen space triangle blitting
+                let data = {
+                    // Image extents, layers are treated as depth
+                    let (sx, dx) = if r.dst_bounds.start.x > r.dst_bounds.end.x {
+                        (r.src_bounds.end.x, r.src_bounds.start.x - r.src_bounds.end.x)
+                    } else {
+                        (r.src_bounds.start.x, r.src_bounds.end.x - r.src_bounds.start.x)
+                    };
+                    let (sy, dy) = if r.dst_bounds.start.y > r.dst_bounds.end.y {
+                        (r.src_bounds.end.y, r.src_bounds.start.y - r.src_bounds.end.y)
+                    } else {
+                        (r.src_bounds.start.y, r.src_bounds.end.y - r.src_bounds.start.y)
+                    };
+                    let image::Extent { width, height, .. } = src.kind.level_extent(r.src_subresource.level);
+
+                    internal::BlitData {
+                        src_offset: [
+                            sx as f32 / width as f32,
+                            sy as f32 / height as f32,
+                        ],
+                        src_extent: [
+                            dx as f32 / width as f32,
+                            dy as f32 / height as f32,
+                        ],
+                        layer: src_layer as f32,
+                        level: r.src_subresource.level as _,
+                    }
+                };
+
+                list.push(Instance {
+                    rtv: rtv_pool.at(i as _).cpu,
+                    viewport,
+                    data,
+                });
+
+                barriers.push(Self::transition_barrier(
+                    d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
+                        pResource: dst.resource,
+                        Subresource: dst.calc_subresource(r.dst_subresource.level as _, (first_layer + i) as _, 0),
+                        StateBefore: d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
+                        StateAfter: d3d12::D3D12_RESOURCE_STATE_RENDER_TARGET,
+                    }
+                ));
+            }
+        }
+
+        // pre barriers
+        unsafe {
+            self.raw.ResourceBarrier(barriers.len() as _, barriers.as_ptr());
+        }
+        // execute blits
+        self.set_internal_graphics_pipeline();
+        for (key, list) in instances {
+            let blit = self.shared.service_pipes.get_blit_2d_color(key);
+            unsafe {
+                self.raw.IASetPrimitiveTopology(d3dcommon::D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+                self.raw.SetPipelineState(blit.pipeline.as_raw());
+                self.raw.SetGraphicsRootSignature(blit.signature.as_raw());
+                self.raw.SetGraphicsRootDescriptorTable(0, srv_handle.gpu);
+            }
+            for inst in list {
+                let scissor = d3d12::D3D12_RECT {
+                    left: inst.viewport.TopLeftX as _,
+                    top: inst.viewport.TopLeftY as _,
+                    right: (inst.viewport.TopLeftX + inst.viewport.Width) as _,
+                    bottom: (inst.viewport.TopLeftY + inst.viewport.Height) as _,
+                };
+                unsafe {
+                    self.raw.RSSetViewports(1, &inst.viewport);
+                    self.raw.RSSetScissorRects(1, &scissor);
+                    self.raw.SetGraphicsRoot32BitConstants(
+                        1,
+                        (mem::size_of::<internal::BlitData>() / 4) as _,
+                        &inst.data as *const _ as *const _,
+                        0,
+                    );
+                    self.raw.OMSetRenderTargets(1, &inst.rtv, TRUE, ptr::null());
+                    self.raw.DrawInstanced(3, 1, 0, 0);
+                }
+            }
+        }
+        // post barriers
+        for bar in &mut barriers {
+            let mut transition = *unsafe { bar.u.Transition_mut() };
+            mem::swap(&mut transition.StateBefore, &mut transition.StateAfter);
+        }
+        unsafe {
+            self.raw.ResourceBarrier(barriers.len() as _, barriers.as_ptr());
+        }
+
+        // Reset states
+        unsafe {
+            self.raw.RSSetViewports(
+                self.viewport_cache.len() as _,
+                self.viewport_cache.as_ptr(),
+            );
+            self.raw.RSSetScissorRects(
+                self.scissor_cache.len() as _,
+                self.scissor_cache.as_ptr(),
+            );
+            if self.primitive_topology != d3dcommon::D3D_PRIMITIVE_TOPOLOGY_UNDEFINED {
+                self.raw.IASetPrimitiveTopology(self.primitive_topology);
+            }
+        }
     }
 
     fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
@@ -1369,14 +1647,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     self.gr_pipeline.num_parameter_slots = pipeline.num_parameter_slots;
                     self.gr_pipeline.root_constants = pipeline.constants.clone();
                     // All slots need to be rebound internally on signature change.
-                    self.gr_pipeline.user_data.dirty_mask = !0;
+                    self.gr_pipeline.user_data.dirty_all();
                 }
             }
             self.raw.SetPipelineState(pipeline.raw);
             self.raw.IASetPrimitiveTopology(pipeline.topology);
+            self.primitive_topology = pipeline.topology;
         };
 
-        self.active_bindpoint = BindPoint::Graphics;
+        self.active_bindpoint = BindPoint::Graphics { internal: false };
         self.gr_pipeline.pipeline = Some((pipeline.raw, pipeline.signature));
 
         // Update strides
@@ -1410,7 +1689,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<n::DescriptorSet>,
     {
-        bind_descriptor_sets(&self.raw, &mut self.gr_pipeline, layout, first_set, sets);
+        self.active_descriptor_heaps = self.gr_pipeline.bind_descriptor_sets(layout, first_set, sets);
+        self.bind_descriptor_heaps();
     }
 
     fn bind_compute_pipeline(&mut self, pipeline: &n::ComputePipeline) {
@@ -1424,7 +1704,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     self.comp_pipeline.num_parameter_slots = pipeline.num_parameter_slots;
                     self.comp_pipeline.root_constants = pipeline.constants.clone();
                     // All slots need to be rebound internally on signature change.
-                    self.comp_pipeline.user_data.dirty_mask = !0;
+                    self.comp_pipeline.user_data.dirty_all();
                 }
             }
             self.raw.SetPipelineState(pipeline.raw);
@@ -1443,7 +1723,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<n::DescriptorSet>,
     {
-        bind_descriptor_sets(&self.raw, &mut self.comp_pipeline, layout, first_set, sets);
+        self.active_descriptor_heaps = self.comp_pipeline.bind_descriptor_sets(layout, first_set, sets);
+        self.bind_descriptor_heaps();
     }
 
     fn dispatch(&mut self, count: WorkGroupCount) {
@@ -1457,7 +1738,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.set_compute_bind_point();
         unsafe {
             self.raw.ExecuteIndirect(
-                self.signatures.dispatch.as_raw(),
+                self.shared.signatures.dispatch.as_raw(),
                 1,
                 buffer.resource,
                 offset,
@@ -1476,13 +1757,22 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         R: RangeArg<buffer::Offset>,
     {
         assert!(buffer.clear_uav.is_some(), "Buffer needs to be created with usage `TRANSFER_DST`");
-        // TODO: Need to dynamically create UAVs
-        assert_eq!(*range.start().unwrap(), 0);
-        assert_eq!(*range.end().unwrap(), buffer.size_in_bytes as u64);
+        let bytes_per_unit = 4;
+        let start = *range.start().unwrap_or(&0) as i32;
+        let end = *range.end().unwrap_or(&(buffer.size_in_bytes as u64)) as i32;
+        if start % 4  != 0 || end % 4 != 0 {
+            warn!("Fill buffer bounds have to be multiples of 4");
+        }
+        let rect = d3d12::D3D12_RECT {
+            left: start / bytes_per_unit,
+            top: 0,
+            right: end / bytes_per_unit,
+            bottom: 1,
+        };
 
         // Insert barrier for `COPY_DEST` to `UNORDERED_ACCESS` as we use
         // `TRANSFER_WRITE` for all clear commands.
-        let transition_barrier = Self::transition_barrier(
+        let pre_barrier = Self::transition_barrier(
             d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
                 pResource: buffer.resource,
                 Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
@@ -1490,21 +1780,21 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 StateAfter: d3d12::D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
             }
         );
-        unsafe { self.raw.ResourceBarrier(1, &transition_barrier) };
+        unsafe { self.raw.ResourceBarrier(1, &pre_barrier) };
 
-        let handles = buffer.clear_uav.unwrap();
+        let handle = buffer.clear_uav.unwrap();
         unsafe {
             self.raw.ClearUnorderedAccessViewUint(
-                handles.gpu,
-                handles.cpu,
+                handle.gpu,
+                handle.cpu,
                 buffer.resource,
                 &[data as UINT; 4],
-                0,
-                ptr::null_mut(), // TODO: lift with the forementioned restriction
+                1,
+                &rect as *const _,
             );
         }
 
-        let transition_barrier = Self::transition_barrier(
+        let post_barrier = Self::transition_barrier(
             d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
                 pResource: buffer.resource,
                 Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
@@ -1512,7 +1802,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 StateAfter: d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
             }
         );
-        unsafe { self.raw.ResourceBarrier(1, &transition_barrier) };
+        unsafe { self.raw.ResourceBarrier(1, &post_barrier) };
     }
 
     fn update_buffer(
@@ -1776,7 +2066,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.set_graphics_bind_point();
         unsafe {
             self.raw.ExecuteIndirect(
-                self.signatures.draw.as_raw(),
+                self.shared.signatures.draw.as_raw(),
                 draw_count,
                 buffer.resource,
                 offset,
@@ -1797,7 +2087,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.set_graphics_bind_point();
         unsafe {
             self.raw.ExecuteIndirect(
-                self.signatures.draw_indexed.as_raw(),
+                self.shared.signatures.draw_indexed.as_raw(),
                 draw_count,
                 buffer.resource,
                 offset,

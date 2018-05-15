@@ -55,7 +55,7 @@ fn gen_query_error(err: SpirvErrorCode) -> d::ShaderError {
     d::ShaderError::CompilationFailed(msg)
 }
 
-fn shader_bytecode(shader: *mut d3dcommon::ID3DBlob) -> d3d12::D3D12_SHADER_BYTECODE {
+pub(crate) fn shader_bytecode(shader: *mut d3dcommon::ID3DBlob) -> d3d12::D3D12_SHADER_BYTECODE {
     unsafe {
         d3d12::D3D12_SHADER_BYTECODE {
             pShaderBytecode: if !shader.is_null() {
@@ -73,13 +73,13 @@ fn shader_bytecode(shader: *mut d3dcommon::ID3DBlob) -> d3d12::D3D12_SHADER_BYTE
 }
 
 #[derive(Clone)]
-struct ViewInfo {
-    resource: *mut d3d12::ID3D12Resource,
-    kind: image::Kind,
-    flags: image::StorageFlags,
-    view_kind: image::ViewKind,
-    format: dxgiformat::DXGI_FORMAT,
-    range: image::SubresourceRange,
+pub(crate) struct ViewInfo {
+    pub(crate) resource: *mut d3d12::ID3D12Resource,
+    pub(crate) kind: image::Kind,
+    pub(crate) flags: image::StorageFlags,
+    pub(crate) view_kind: image::ViewKind,
+    pub(crate) format: dxgiformat::DXGI_FORMAT,
+    pub(crate) range: image::SubresourceRange,
 }
 
 pub(crate) enum CommandSignature {
@@ -110,6 +110,63 @@ pub struct UnboundImage {
     // Dimension of a texel block (compressed formats).
     block_dim: (u8, u8),
     num_levels: image::Level,
+}
+
+/// Compile a single shader entry point from a HLSL text shader
+pub(crate) fn compile_shader(
+    stage: pso::Stage,
+    shader_model: hlsl::ShaderModel,
+    entry: &str,
+    code: &[u8],
+) -> Result<*mut d3dcommon::ID3DBlob, d::ShaderError> {
+    let stage_to_str = |stage, shader_model| {
+        let stage = match stage {
+            pso::Stage::Vertex => "vs",
+            pso::Stage::Fragment => "ps",
+            pso::Stage::Compute => "cs",
+            _ => unimplemented!(),
+        };
+
+        let model = match shader_model {
+            hlsl::ShaderModel::V5_0 => "5_0",
+            hlsl::ShaderModel::V5_1 => "5_1",
+            hlsl::ShaderModel::V6_0 => "6_0",
+            _ => unimplemented!(),
+        };
+
+        format!("{}_{}\0", stage, model)
+    };
+
+    let mut blob = ptr::null_mut();
+    let mut error = ptr::null_mut();
+    let entry = ffi::CString::new(entry).unwrap();
+    let hr = unsafe {
+        d3dcompiler::D3DCompile(
+            code.as_ptr() as *const _,
+            code.len(),
+            ptr::null(),
+            ptr::null(),
+            ptr::null_mut(),
+            entry.as_ptr() as *const _,
+            stage_to_str(stage, shader_model).as_ptr() as *const i8,
+            1,
+            0,
+            &mut blob as *mut *mut _,
+            &mut error as *mut *mut _)
+    };
+    if !winerror::SUCCEEDED(hr) {
+        error!("D3DCompile error {:x}", hr);
+        let error = unsafe { ComPtr::<d3dcommon::ID3DBlob>::from_raw(error) };
+        let message = unsafe {
+            let pointer = error.GetBufferPointer();
+            let size = error.GetBufferSize();
+            let slice = slice::from_raw_parts(pointer as *const u8, size as usize);
+            String::from_utf8_lossy(slice).into_owned()
+        };
+        Err(d::ShaderError::CompilationFailed(message))
+    } else {
+        Ok(blob)
+    }
 }
 
 #[repr(C)]
@@ -197,63 +254,6 @@ impl GraphicsPipelineStateSubobjectStream {
 }
 
 impl Device {
-    /// Compile a single shader entry point from a HLSL text shader
-    fn compile_shader(
-        stage: pso::Stage,
-        shader_model: hlsl::ShaderModel,
-        entry: &str,
-        code: &[u8],
-    ) -> Result<*mut d3dcommon::ID3DBlob, d::ShaderError> {
-        let stage_to_str = |stage, shader_model| {
-            let stage = match stage {
-                pso::Stage::Vertex => "vs",
-                pso::Stage::Fragment => "ps",
-                pso::Stage::Compute => "cs",
-                _ => unimplemented!(),
-            };
-
-            let model = match shader_model {
-                hlsl::ShaderModel::V5_0 => "5_0",
-                hlsl::ShaderModel::V5_1 => "5_1",
-                hlsl::ShaderModel::V6_0 => "6_0",
-                _ => unimplemented!(),
-            };
-
-            format!("{}_{}\0", stage, model)
-        };
-
-        let mut blob = ptr::null_mut();
-        let mut error = ptr::null_mut();
-        let entry = ffi::CString::new(entry).unwrap();
-        let hr = unsafe {
-            d3dcompiler::D3DCompile(
-                code.as_ptr() as *const _,
-                code.len(),
-                ptr::null(),
-                ptr::null(),
-                ptr::null_mut(),
-                entry.as_ptr() as *const _,
-                stage_to_str(stage, shader_model).as_ptr() as *const i8,
-                1,
-                0,
-                &mut blob as *mut *mut _,
-                &mut error as *mut *mut _)
-        };
-        if !winerror::SUCCEEDED(hr) {
-            error!("D3DCompile error {:x}", hr);
-            let error = unsafe { ComPtr::<d3dcommon::ID3DBlob>::from_raw(error) };
-            let message = unsafe {
-                let pointer = error.GetBufferPointer();
-                let size = error.GetBufferSize();
-                let slice = slice::from_raw_parts(pointer as *const u8, size as usize);
-                String::from_utf8_lossy(slice).into_owned()
-            };
-            Err(d::ShaderError::CompilationFailed(message))
-        } else {
-            Ok(blob)
-        }
-    }
-
     fn parse_spirv(raw_data: &[u8]) -> Result<spirv::Ast<hlsl::Target>, d::ShaderError> {
         // spec requires "codeSize must be a multiple of 4"
         assert_eq!(raw_data.len() & 3, 0);
@@ -429,7 +429,7 @@ impl Device {
                     .ok_or(d::ShaderError::MissingEntryPoint(source.entry.into()))
                     .and_then(|entry_point| {
                         let stage = conv::map_execution_model(entry_point.execution_model);
-                        let shader = Self::compile_shader(
+                        let shader = compile_shader(
                             stage,
                             shader_model,
                             &entry_point.name,
@@ -450,7 +450,7 @@ impl Device {
         code: &[u8],
     ) -> Result<n::ShaderModule, d::ShaderError> {
         let mut shader_map = BTreeMap::new();
-        let blob = Self::compile_shader(stage, hlsl::ShaderModel::V5_1, hlsl_entry, code)?;
+        let blob = compile_shader(stage, hlsl::ShaderModel::V5_1, hlsl_entry, code)?;
         shader_map.insert(entry_point.into(), blob);
         Ok(n::ShaderModule::Compiled(shader_map))
     }
@@ -711,20 +711,11 @@ impl Device {
         Ok(handle)
     }
 
-    fn view_image_as_shader_resource(
-        &self, info: ViewInfo
-    ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
+    pub(crate) fn build_image_as_shader_resource_desc(info: &ViewInfo) -> Result<d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC, image::ViewError> {
         #![allow(non_snake_case)]
 
-        // Depth-stencil formats can't be used for SRVs.
-        let format = match info.format {
-            dxgiformat::DXGI_FORMAT_D16_UNORM => dxgiformat::DXGI_FORMAT_R16_UNORM,
-            dxgiformat::DXGI_FORMAT_D32_FLOAT => dxgiformat::DXGI_FORMAT_R32_FLOAT,
-            format => format,
-        };
-
         let mut desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
-            Format: format,
+            Format: info.format,
             ViewDimension: 0,
             Shader4ComponentMapping: 0x1688, // TODO: map swizzle
             u: unsafe { mem::zeroed() },
@@ -825,6 +816,22 @@ impl Device {
             }
         }
 
+        Ok(desc)
+    }
+
+    fn view_image_as_shader_resource(
+        &self, mut info: ViewInfo
+    ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
+        #![allow(non_snake_case)]
+
+        // Depth-stencil formats can't be used for SRVs.
+        info.format = match info.format {
+            dxgiformat::DXGI_FORMAT_D16_UNORM => dxgiformat::DXGI_FORMAT_R16_UNORM,
+            dxgiformat::DXGI_FORMAT_D32_FLOAT => dxgiformat::DXGI_FORMAT_R32_FLOAT,
+            format => format,
+        };
+
+        let desc = Self::build_image_as_shader_resource_desc(&info)?;
         let handle = self.srv_pool.lock().unwrap().alloc_handles(1).cpu;
         unsafe {
             self.raw.clone().CreateShaderResourceView(info.resource, &desc, handle);
@@ -1040,7 +1047,7 @@ impl d::Device<B> for Device {
             inner: unsafe { ComPtr::from_raw(command_allocator) },
             device: self.raw.clone(),
             list_type,
-            signatures: self.signatures.clone(),
+            shared: self.shared.clone(),
         }
     }
 
@@ -2036,6 +2043,8 @@ impl d::Device<B> for Device {
         //TODO: the clear_Xv is incomplete. We should support clearing images created without XXX_ATTACHMENT usage.
         // for this, we need to check the format and force the `RENDER_TARGET` flag behind the user's back
         // if the format supports being rendered into, allowing us to create clear_Xv
+        let can_clear_color = image.usage.intersects(Usage::TRANSFER_DST | Usage::COLOR_ATTACHMENT);
+        let can_clear_depth = image.usage.intersects(Usage::TRANSFER_DST | Usage::DEPTH_STENCIL_ATTACHMENT);
 
         Ok(n::Image {
             resource: resource as *mut _,
@@ -2046,7 +2055,7 @@ impl d::Device<B> for Device {
             bytes_per_block: image.bytes_per_block,
             block_dim: image.block_dim,
             num_levels: image.num_levels,
-            clear_cv: if image.aspects.contains(Aspects::COLOR) && image.usage.contains(Usage::COLOR_ATTACHMENT) {
+            clear_cv: if image.aspects.contains(Aspects::COLOR) && can_clear_color {
                 (0 .. num_layers)
                     .map(|layer| {
                         self.view_image_as_render_target(
@@ -2063,7 +2072,7 @@ impl d::Device<B> for Device {
             } else {
                 Vec::new()
             },
-            clear_dv: if image.aspects.contains(Aspects::DEPTH) && image.usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
+            clear_dv: if image.aspects.contains(Aspects::DEPTH) && can_clear_depth {
                 (0 .. num_layers)
                     .map(|layer| {
                         self.view_image_as_depth_stencil(
@@ -2081,7 +2090,7 @@ impl d::Device<B> for Device {
             } else {
                 Vec::new()
             },
-            clear_sv: if image.aspects.contains(Aspects::STENCIL) && image.usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
+            clear_sv: if image.aspects.contains(Aspects::STENCIL) && can_clear_depth {
                 (0 .. num_layers)
                     .map(|layer| {
                         self.view_image_as_depth_stencil(

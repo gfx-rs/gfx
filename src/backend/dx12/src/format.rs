@@ -232,7 +232,7 @@ pub fn query_properties() -> [Properties; NUM_FORMATS] {
         // Rgba8Unorm
         Properties {
             linear_tiling: ImageFeature::empty(),
-            optimal_tiling: ImageFeature::empty(),
+            optimal_tiling: ImageFeature::BLIT_SRC | ImageFeature::BLIT_DST | ImageFeature::SAMPLED_LINEAR,
             buffer_features: BufferFeature::empty(),
         },
         // Rgba8Inorm
@@ -274,7 +274,7 @@ pub fn query_properties() -> [Properties; NUM_FORMATS] {
         // Bgra8Unorm
         Properties {
             linear_tiling: ImageFeature::empty(),
-            optimal_tiling: ImageFeature::empty(),
+            optimal_tiling: ImageFeature::BLIT_DST | ImageFeature::SAMPLED_LINEAR,
             buffer_features: BufferFeature::empty(),
         },
         // Bgra8Inorm
@@ -610,7 +610,7 @@ pub fn query_properties() -> [Properties; NUM_FORMATS] {
         // R32Float
         Properties {
             linear_tiling: ImageFeature::empty(),
-            optimal_tiling: ImageFeature::empty(),
+            optimal_tiling: ImageFeature::BLIT_DST | ImageFeature::SAMPLED_LINEAR,
             buffer_features: BufferFeature::empty(),
         },
         // Rg32Uint

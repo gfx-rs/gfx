@@ -1,18 +1,19 @@
 use wio::com::ComPtr;
 use std::ptr;
+use std::sync::Arc;
 
 use winapi::um::d3d12;
 use winapi::shared::winerror::SUCCEEDED;
 
 use hal::{pool, command};
 use command::{CommandBuffer};
-use {Backend, CmdSignatures};
+use {Backend, Shared};
 
 pub struct RawCommandPool {
     pub(crate) inner: ComPtr<d3d12::ID3D12CommandAllocator>,
     pub(crate) device: ComPtr<d3d12::ID3D12Device>,
     pub(crate) list_type: d3d12::D3D12_COMMAND_LIST_TYPE,
-    pub(crate) signatures: CmdSignatures,
+    pub(crate) shared: Arc<Shared>,
 }
 
 impl RawCommandPool {
@@ -63,7 +64,7 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
             .map(|_| CommandBuffer::new(
                 self.create_command_list(),
                 self.inner.clone(),
-                self.signatures.clone(),
+                self.shared.clone(),
             ))
             .collect()
     }
