@@ -243,9 +243,10 @@ impl PipelineCache {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum BindPoint {
     Compute,
-    Graphics,
-     // Internal pipelines used for blitting, copying, etc.
-    InternalGraphics,
+    Graphics {
+        /// Internal pipelines used for blitting, copying, etc.
+        internal: bool,
+    }
 }
 
 #[derive(Clone)]
@@ -338,7 +339,7 @@ impl CommandBuffer {
             gr_pipeline: PipelineCache::new(),
             primitive_topology: d3dcommon::D3D_PRIMITIVE_TOPOLOGY_UNDEFINED,
             comp_pipeline: PipelineCache::new(),
-            active_bindpoint: BindPoint::Graphics,
+            active_bindpoint: BindPoint::Graphics { internal: false },
             active_descriptor_heaps: [ptr::null_mut(); 2],
             occlusion_query: None,
             pipeline_stats_query: None,
@@ -363,7 +364,7 @@ impl CommandBuffer {
         self.gr_pipeline = PipelineCache::new();
         self.primitive_topology = d3dcommon::D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
         self.comp_pipeline = PipelineCache::new();
-        self.active_bindpoint = BindPoint::Graphics;
+        self.active_bindpoint = BindPoint::Graphics { internal: false };
         self.active_descriptor_heaps = [ptr::null_mut(); 2];
         self.occlusion_query = None;
         self.pipeline_stats_query = None;
@@ -377,7 +378,7 @@ impl CommandBuffer {
     //
     // This only invalidates the slot and the user data!
     fn set_internal_graphics_pipeline(&mut self) {
-        self.active_bindpoint = BindPoint::InternalGraphics;
+        self.active_bindpoint = BindPoint::Graphics { internal: true };
         self.gr_pipeline.user_data.dirty_all();
     }
 
@@ -561,25 +562,24 @@ impl CommandBuffer {
 
     fn set_graphics_bind_point(&mut self) {
         match self.active_bindpoint {
-            BindPoint::Graphics => { }, // Nothing to do
             BindPoint::Compute => {
                 // Switch to graphics bind point
                 let (pipeline, _) = self.gr_pipeline.pipeline.expect("No graphics pipeline bound");
                 unsafe { self.raw.SetPipelineState(pipeline); }
-                self.active_bindpoint = BindPoint::Graphics;
-            },
-            BindPoint::InternalGraphics => {
+            }
+            BindPoint::Graphics { internal: true } => {
                 // Switch to graphics bind point
                 let (pipeline, signature) = self.gr_pipeline.pipeline.expect("No graphics pipeline bound");
                 unsafe {
                     self.raw.SetPipelineState(pipeline);
                     self.raw.SetGraphicsRootSignature(signature);
                 }
-                self.active_bindpoint = BindPoint::Graphics;
                 self.bind_descriptor_heaps();
-            },
+            }
+            BindPoint::Graphics { internal: false } => {}
         }
 
+        self.active_bindpoint = BindPoint::Graphics { internal: false };
         let cmd_buffer = &mut self.raw;
 
         // Bind vertex buffers
@@ -635,27 +635,23 @@ impl CommandBuffer {
 
     fn set_compute_bind_point(&mut self) {
         match self.active_bindpoint {
-            BindPoint::Graphics => {
+            BindPoint::Graphics { internal } => {
                 // Switch to compute bind point
                 let (pipeline, _) = self.comp_pipeline.pipeline.expect("No compute pipeline bound");
                 unsafe { self.raw.SetPipelineState(pipeline); }
                 self.active_bindpoint = BindPoint::Compute;
-            },
-            BindPoint::InternalGraphics => {
-                // Switch to compute bind point
-                let (pipeline, _) = self.comp_pipeline.pipeline.expect("No compute pipeline bound");
-                unsafe { self.raw.SetPipelineState(pipeline); }
-                self.active_bindpoint = BindPoint::Compute;
-                self.bind_descriptor_heaps();
 
-                // Rebind the graphics root signature as we come from an internal graphics.
-                // Issuing a draw call afterwards would hide the information that we internally
-                // changed the graphics root signature.
-                if let Some((_, signature)) = self.gr_pipeline.pipeline {
-                    unsafe { self.raw.SetGraphicsRootSignature(signature); }
+                if internal {
+                    self.bind_descriptor_heaps();
+                    // Rebind the graphics root signature as we come from an internal graphics.
+                    // Issuing a draw call afterwards would hide the information that we internally
+                    // changed the graphics root signature.
+                    if let Some((_, signature)) = self.gr_pipeline.pipeline {
+                        unsafe { self.raw.SetGraphicsRootSignature(signature); }
+                    }
                 }
-            },
-            BindPoint::Compute => { }, // Nothing to do
+            }
+            BindPoint::Compute => {} // Nothing to do
         }
 
         let cmd_buffer = &mut self.raw;
@@ -1318,31 +1314,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             _ => unimplemented!(),
         }
 
-        let rtv_handle_size = unsafe { device.GetDescriptorHandleIncrementSize(d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV) as usize };
-
         // Descriptor heap for the current blit, only storing the src image
-        let srv_heap = {
-            let desc = d3d12::D3D12_DESCRIPTOR_HEAP_DESC {
-                Type: d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-                NumDescriptors: 1,
-                Flags: d3d12::D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
-                NodeMask: 0,
-            };
-
-            let mut heap: *mut d3d12::ID3D12DescriptorHeap = ptr::null_mut();
-            unsafe {
-                device.CreateDescriptorHeap(
-                    &desc,
-                    &d3d12::IID_ID3D12DescriptorHeap,
-                    &mut heap as *mut *mut _ as *mut *mut _,
-                );
-            };
-            unsafe { ComPtr::from_raw(heap) }
-        };
-        self.temporary_gpu_heaps.push(srv_heap.clone());
-
-        let srv_heap_cpu = unsafe { srv_heap.GetCPUDescriptorHandleForHeapStart() };
-        let srv_heap_gpu = unsafe { srv_heap.GetGPUDescriptorHandleForHeapStart() };
+        let srv_heap = Device::create_descriptor_heap_impl(
+            &mut device.clone(),
+            d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+            false,
+            1,
+        );
+        let srv_handle = srv_heap.at(0);
 
         let srv_desc = Device::build_image_as_shader_resource_desc(
             &ViewInfo {
@@ -1359,9 +1338,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
         ).unwrap();
         unsafe {
-            device.CreateShaderResourceView(src.resource, &srv_desc, srv_heap_cpu);
-            self.raw.SetDescriptorHeaps(1, &mut srv_heap.as_raw());
+            device.CreateShaderResourceView(src.resource, &srv_desc, srv_handle.cpu);
+            self.raw.SetDescriptorHeaps(1, &mut srv_heap.raw.as_raw());
         }
+        self.temporary_gpu_heaps.push(srv_heap.raw);
 
         let filter = match filter {
             image::Filter::Nearest => d3d12::D3D12_FILTER_MIN_MAG_MIP_POINT,
@@ -1375,26 +1355,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let num_layers = r.dst_subresource.layers.end - first_layer;
 
             // WORKAROUND: renderdoc crashes if we destroy the pool too early
-            let rtv_pool = {
-                let desc = d3d12::D3D12_DESCRIPTOR_HEAP_DESC {
-                    Type: d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-                    NumDescriptors: num_layers as _,
-                    Flags: d3d12::D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
-                    NodeMask: 0,
-                };
-
-                let mut heap: *mut d3d12::ID3D12DescriptorHeap = ptr::null_mut();
-                unsafe {
-                    device.CreateDescriptorHeap(
-                        &desc,
-                        &d3d12::IID_ID3D12DescriptorHeap,
-                        &mut heap as *mut *mut _ as *mut *mut _,
-                    );
-                };
-                unsafe { ComPtr::from_raw(heap) }
-            };
-            self.rtv_pools.push(rtv_pool.clone());
-            let rtv = unsafe { rtv_pool.GetCPUDescriptorHandleForHeapStart() };
+            let rtv_pool = Device::create_descriptor_heap_impl(
+                &mut device.clone(),
+                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+                false,
+                num_layers as _,
+            );
+            self.rtv_pools.push(rtv_pool.raw.clone());
 
             let blit = match r.dst_subresource.aspects {
                 format::Aspects::COLOR => {
@@ -1413,7 +1380,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             PlaneSlice: 0, // TODO
                         };
 
-                        let view = d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: rtv.ptr + rtv_handle_size * i as usize };
+                        let view = rtv_pool.at(i as _).cpu;
                         unsafe {
                             device.CreateRenderTargetView(dst.resource, &desc, view);
                         }
@@ -1425,7 +1392,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             };
 
             self.set_internal_graphics_pipeline();
-            // TODO: reset descriptor heaps
 
             // Take flipping into account
             let viewport = d3d12::D3D12_VIEWPORT {
@@ -1452,35 +1418,30 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 self.raw.IASetPrimitiveTopology(d3dcommon::D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
                 self.raw.SetPipelineState(blit.pipeline.as_raw());
                 self.raw.SetGraphicsRootSignature(blit.signature.as_raw());
-                self.raw.SetGraphicsRootDescriptorTable(0, srv_heap_gpu);
+                self.raw.SetGraphicsRootDescriptorTable(0, srv_handle.gpu);
             }
 
-            for i in 0..num_layers {
-                let src_layer = r.src_subresource.layers.start + i;
-                let dst_layer = first_layer + i;
-
-                // Screen space triangle blitting
-                let pre_dst_barrier = Self::transition_barrier(
+            let mut barriers = (0 .. num_layers)
+                .map(|i| Self::transition_barrier(
                     d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
                         pResource: dst.resource,
-                        Subresource: dst.calc_subresource(r.dst_subresource.level as _, dst_layer as _, 0),
+                        Subresource: dst.calc_subresource(r.dst_subresource.level as _, (first_layer + i) as _, 0),
                         StateBefore: d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
                         StateAfter: d3d12::D3D12_RESOURCE_STATE_RENDER_TARGET,
                     }
-                );
-                let post_dst_barrier = Self::transition_barrier(
-                    d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
-                        pResource: dst.resource,
-                        Subresource: dst.calc_subresource(r.dst_subresource.level as _, dst_layer as _, 0),
-                        StateBefore: d3d12::D3D12_RESOURCE_STATE_RENDER_TARGET,
-                        StateAfter: d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
-                    }
-                );
+                ))
+                .collect::<Vec<_>>();
+            unsafe {
+                self.raw.ResourceBarrier(num_layers as _, barriers.as_ptr());
+            }
 
-                let current_rtv = d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: rtv.ptr + rtv_handle_size * i as usize };
+            for i in 0..num_layers {
+                let current_rtv = rtv_pool.at(i as _).cpu;
+                let src_layer = r.src_subresource.layers.start + i;
 
-                // Image extents, layers are treated as depth
+                // Screen space triangle blitting
                 let blit_data = {
+                    // Image extents, layers are treated as depth
                     let (sx, dx) = if flip_x {
                         (r.src_bounds.end.x, r.src_bounds.start.x - r.src_bounds.end.x)
                     } else {
@@ -1507,7 +1468,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     }
                 };
 
-                // OPT: batch resource barriers
                 unsafe {
                     self.raw.SetGraphicsRoot32BitConstants(
                         1,
@@ -1516,10 +1476,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         0,
                     );
                     self.raw.OMSetRenderTargets(1, &current_rtv, TRUE, ptr::null());
-                    self.raw.ResourceBarrier(1, &pre_dst_barrier);
                     self.raw.DrawInstanced(3, 1, 0, 0);
-                    self.raw.ResourceBarrier(1, &post_dst_barrier)
                 }
+
+                // reverse the barrier
+                let mut transition = *unsafe { barriers[i as usize].u.Transition_mut() };
+                mem::swap(&mut transition.StateBefore, &mut transition.StateAfter);
+            }
+
+            unsafe {
+                self.raw.ResourceBarrier(num_layers as _, barriers.as_ptr());
             }
         }
 
@@ -1672,7 +1638,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             self.primitive_topology = pipeline.topology;
         };
 
-        self.active_bindpoint = BindPoint::Graphics;
+        self.active_bindpoint = BindPoint::Graphics { internal: false };
         self.gr_pipeline.pipeline = Some((pipeline.raw, pipeline.signature));
 
         // Update strides

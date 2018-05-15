@@ -1,8 +1,8 @@
 
-Texture2DArray blit_src : register(t0);
-SamplerState blit_sampler : register(s0);
+Texture2DArray BlitSource : register(t0);
+SamplerState BlitSampler : register(s0);
 
-cbuffer region : register(b0) {
+cbuffer Region : register(b0) {
     float2 offset;
     float2 extent;
     float z;
@@ -25,5 +25,5 @@ VsOutput vs_blit_2d(uint id: SV_VertexID) {
 }
 
 float4 ps_blit_2d(VsOutput input) : SV_TARGET {
-    return blit_src.SampleLevel(blit_sampler, input.uv.xyz, input.uv.w);
+    return BlitSource.SampleLevel(BlitSampler, input.uv.xyz, input.uv.w);
 }
