@@ -323,9 +323,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn image_format_properties(
-        &self, _format: f::Format, dimensions: u8, tiling: image::Tiling,
+        &self, format: f::Format, dimensions: u8, tiling: image::Tiling,
         usage: image::Usage, storage_flags: image::StorageFlags,
     ) -> Option<image::FormatProperties> {
+        conv::map_format(format)?; //filter out unknown formats
         let is_optimal = tiling == image::Tiling::Optimal;
         Some(image::FormatProperties {
             max_extent: match dimensions {
