@@ -6,6 +6,7 @@ use hal::range::RangeArg;
 
 use std::{cmp, iter, mem, ptr};
 use std::borrow::Borrow;
+use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -1305,7 +1306,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     {
         let device = self.shared.service_pipes.device.clone();
 
-        // TODO: Resource barriers for src and dst.
+        // TODO: Resource barriers for src.
         // TODO: depth or stencil images not supported so far
 
         // TODO: only supporting 2D images
@@ -1318,7 +1319,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let srv_heap = Device::create_descriptor_heap_impl(
             &mut device.clone(),
             d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-            false,
+            true,
             1,
         );
         let srv_handle = srv_heap.at(0);
@@ -1348,6 +1349,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             image::Filter::Linear => d3d12::D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT,
         };
 
+        struct Instance {
+            rtv: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
+            viewport: d3d12::D3D12_VIEWPORT,
+            data: internal::BlitData,
+        };
+        let mut instances = HashMap::<internal::BlitKey, Vec<Instance>>::new();
+        let mut barriers = Vec::new();
+
         for region in regions {
             let r = region.borrow();
 
@@ -1363,7 +1372,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             );
             self.rtv_pools.push(rtv_pool.raw.clone());
 
-            let blit = match r.dst_subresource.aspects {
+            let key = match r.dst_subresource.aspects {
                 format::Aspects::COLOR => {
                     // Create RTVs of the dst image for the miplevel of the current region
                     for i in 0 .. num_layers {
@@ -1386,12 +1395,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         }
                     }
 
-                    self.shared.service_pipes.get_blit_2d_color(dst.dxgi_format, filter)
+                    (dst.dxgi_format, filter)
                 },
                 _ => unimplemented!(),
             };
-
-            self.set_internal_graphics_pipeline();
 
             // Take flipping into account
             let viewport = d3d12::D3D12_VIEWPORT {
@@ -1402,52 +1409,22 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 MinDepth: 0.0,
                 MaxDepth: 1.0,
             };
-            let scissor = d3d12::D3D12_RECT {
-                left: viewport.TopLeftX as _,
-                top: viewport.TopLeftY as _,
-                right: (viewport.TopLeftX + viewport.Width) as _,
-                bottom: (viewport.TopLeftY + viewport.Height) as _,
-            };
 
-            let flip_x = (r.dst_bounds.end.x - r.dst_bounds.start.x) < 0;
-            let flip_y = (r.dst_bounds.end.y - r.dst_bounds.start.y) < 0;
-
-            unsafe {
-                self.raw.RSSetViewports(1, &viewport);
-                self.raw.RSSetScissorRects(1, &scissor);
-                self.raw.IASetPrimitiveTopology(d3dcommon::D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-                self.raw.SetPipelineState(blit.pipeline.as_raw());
-                self.raw.SetGraphicsRootSignature(blit.signature.as_raw());
-                self.raw.SetGraphicsRootDescriptorTable(0, srv_handle.gpu);
-            }
-
-            let mut barriers = (0 .. num_layers)
-                .map(|i| Self::transition_barrier(
-                    d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
-                        pResource: dst.resource,
-                        Subresource: dst.calc_subresource(r.dst_subresource.level as _, (first_layer + i) as _, 0),
-                        StateBefore: d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
-                        StateAfter: d3d12::D3D12_RESOURCE_STATE_RENDER_TARGET,
-                    }
-                ))
-                .collect::<Vec<_>>();
-            unsafe {
-                self.raw.ResourceBarrier(num_layers as _, barriers.as_ptr());
-            }
+            let mut list = instances
+                .entry(key)
+                .or_insert(Vec::new());
 
             for i in 0..num_layers {
-                let current_rtv = rtv_pool.at(i as _).cpu;
                 let src_layer = r.src_subresource.layers.start + i;
-
                 // Screen space triangle blitting
-                let blit_data = {
+                let data = {
                     // Image extents, layers are treated as depth
-                    let (sx, dx) = if flip_x {
+                    let (sx, dx) = if r.dst_bounds.start.x > r.dst_bounds.end.x {
                         (r.src_bounds.end.x, r.src_bounds.start.x - r.src_bounds.end.x)
                     } else {
                         (r.src_bounds.start.x, r.src_bounds.end.x - r.src_bounds.start.x)
                     };
-                    let (sy, dy) = if flip_y {
+                    let (sy, dy) = if r.dst_bounds.start.y > r.dst_bounds.end.y {
                         (r.src_bounds.end.y, r.src_bounds.start.y - r.src_bounds.end.y)
                     } else {
                         (r.src_bounds.start.y, r.src_bounds.end.y - r.src_bounds.start.y)
@@ -1468,25 +1445,65 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     }
                 };
 
+                list.push(Instance {
+                    rtv: rtv_pool.at(i as _).cpu,
+                    viewport,
+                    data,
+                });
+
+                barriers.push(Self::transition_barrier(
+                    d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
+                        pResource: dst.resource,
+                        Subresource: dst.calc_subresource(r.dst_subresource.level as _, (first_layer + i) as _, 0),
+                        StateBefore: d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
+                        StateAfter: d3d12::D3D12_RESOURCE_STATE_RENDER_TARGET,
+                    }
+                ));
+            }
+        }
+
+        // pre barriers
+        unsafe {
+            self.raw.ResourceBarrier(barriers.len() as _, barriers.as_ptr());
+        }
+        // execute blits
+        self.set_internal_graphics_pipeline();
+        for (key, list) in instances {
+            let blit = self.shared.service_pipes.get_blit_2d_color(key);
+            unsafe {
+                self.raw.IASetPrimitiveTopology(d3dcommon::D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+                self.raw.SetPipelineState(blit.pipeline.as_raw());
+                self.raw.SetGraphicsRootSignature(blit.signature.as_raw());
+                self.raw.SetGraphicsRootDescriptorTable(0, srv_handle.gpu);
+            }
+            for inst in list {
+                let scissor = d3d12::D3D12_RECT {
+                    left: inst.viewport.TopLeftX as _,
+                    top: inst.viewport.TopLeftY as _,
+                    right: (inst.viewport.TopLeftX + inst.viewport.Width) as _,
+                    bottom: (inst.viewport.TopLeftY + inst.viewport.Height) as _,
+                };
                 unsafe {
+                    self.raw.RSSetViewports(1, &inst.viewport);
+                    self.raw.RSSetScissorRects(1, &scissor);
                     self.raw.SetGraphicsRoot32BitConstants(
                         1,
                         (mem::size_of::<internal::BlitData>() / 4) as _,
-                        &blit_data as *const _ as *const _,
+                        &inst.data as *const _ as *const _,
                         0,
                     );
-                    self.raw.OMSetRenderTargets(1, &current_rtv, TRUE, ptr::null());
+                    self.raw.OMSetRenderTargets(1, &inst.rtv, TRUE, ptr::null());
                     self.raw.DrawInstanced(3, 1, 0, 0);
                 }
-
-                // reverse the barrier
-                let mut transition = *unsafe { barriers[i as usize].u.Transition_mut() };
-                mem::swap(&mut transition.StateBefore, &mut transition.StateAfter);
             }
-
-            unsafe {
-                self.raw.ResourceBarrier(num_layers as _, barriers.as_ptr());
-            }
+        }
+        // post barriers
+        for bar in &mut barriers {
+            let mut transition = *unsafe { bar.u.Transition_mut() };
+            mem::swap(&mut transition.StateBefore, &mut transition.StateAfter);
+        }
+        unsafe {
+            self.raw.ResourceBarrier(barriers.len() as _, barriers.as_ptr());
         }
 
         // Reset states

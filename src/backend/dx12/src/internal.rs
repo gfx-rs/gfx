@@ -13,7 +13,7 @@ use wio::com::ComPtr;
 use {device};
 
 #[derive(Clone)]
-pub struct Blit {
+pub struct BlitPipe {
     pub pipeline: ComPtr<d3d12::ID3D12PipelineState>,
     pub signature: ComPtr<d3d12::ID3D12RootSignature>,
 }
@@ -27,7 +27,8 @@ pub struct BlitData {
     pub level: f32,
 }
 
-type BlitMap = HashMap<(dxgiformat::DXGI_FORMAT, d3d12::D3D12_FILTER), Blit>;
+pub type BlitKey = (dxgiformat::DXGI_FORMAT, d3d12::D3D12_FILTER);
+type BlitMap = HashMap<BlitKey, BlitPipe>;
 
 pub(crate) struct ServicePipes {
     pub(crate) device: ComPtr<d3d12::ID3D12Device>,
@@ -42,15 +43,15 @@ impl ServicePipes {
         }
     }
 
-    pub fn get_blit_2d_color(&self, dst_format: dxgiformat::DXGI_FORMAT, filter: d3d12::D3D12_FILTER) -> Blit {
+    pub fn get_blit_2d_color(&self, key: BlitKey) -> BlitPipe {
         let mut blits = self.blits_2d_color.lock().unwrap();
         blits
-            .entry((dst_format, filter))
-            .or_insert_with(|| self.create_blit_2d_color(dst_format, filter))
+            .entry(key)
+            .or_insert_with(|| self.create_blit_2d_color(key))
             .clone()
     }
 
-    fn create_blit_2d_color(&self, dst_format: dxgiformat::DXGI_FORMAT, filter: d3d12::D3D12_FILTER) -> Blit {
+    fn create_blit_2d_color(&self, (dst_format, filter): BlitKey) -> BlitPipe {
         let descriptor_range = d3d12::D3D12_DESCRIPTOR_RANGE {
             RangeType: d3d12::D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
             NumDescriptors: 1,
@@ -223,7 +224,7 @@ impl ServicePipes {
         };
         assert_eq!(hr, winerror::S_OK);
 
-        Blit {
+        BlitPipe {
             pipeline: unsafe { ComPtr::from_raw(pipeline) },
             signature: unsafe { ComPtr::from_raw(signature) },
         }
