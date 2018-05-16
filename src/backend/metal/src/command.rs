@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::ops::{Deref, Range};
 use std::sync::{Arc, Mutex};
 use std::{iter, mem};
+use std::slice;
 
 use hal::{buffer, command as com, error, memory, pool, pso};
 use hal::{VertexCount, VertexOffset, InstanceCount, IndexCount, WorkGroupCount};
@@ -661,6 +662,15 @@ fn exec_render(encoder: &metal::RenderCommandEncoderRef, command: &soft::RenderC
                 _ => unimplemented!()
             }
         }
+        Cmd::BindBufferData { stage, ref bytes, index } => {
+            match stage {
+                pso::Stage::Vertex =>
+                    encoder.set_vertex_bytes(index as _, bytes.len() as _, bytes.as_ptr() as _),
+                pso::Stage::Fragment =>
+                    encoder.set_fragment_bytes(index as _, bytes.len() as _, bytes.as_ptr() as _),
+                _ => unimplemented!()
+            }
+        }
         Cmd::BindTexture { stage, index, ref texture } => {
             let texture = texture.as_ref().map(|x| x.as_ref());
             match stage {
@@ -798,6 +808,9 @@ fn exec_compute(encoder: &metal::ComputeCommandEncoderRef, command: &soft::Compu
     match *command {
         Cmd::BindBuffer { index, ref buffer, offset } => {
             encoder.set_buffer(index as _, offset, buffer.as_ref().map(|x| x.as_ref()));
+        }
+        Cmd::BindBufferData { ref bytes, index } => {
+            encoder.set_bytes(index as _, bytes.len() as _, bytes.as_ptr() as _);
         }
         Cmd::BindTexture { index, ref texture } => {
             encoder.set_texture(index as _, texture.as_ref().map(|x| x.as_ref()));
@@ -1144,15 +1157,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let length = (end - start) / WORD_ALIGNMENT;
         let value_and_length = [data, length as _];
 
-        // TODO: Reuse buffer allocation
-        let buf_value_and_length = self.shared.device.new_buffer_with_data(
-            &value_and_length as *const u32 as *const _,
-            (mem::size_of::<u32>() * value_and_length.len()) as _,
-            metal::MTLResourceOptions::StorageModeShared,
-        );
-
-        inner.retained_buffers.push(buf_value_and_length.clone());
-
         // TODO: Consider writing multiple values per thread in shader
         let threads_per_threadgroup = pso.thread_execution_width();
         let threadgroups = (length + threads_per_threadgroup - 1) / threads_per_threadgroup;
@@ -1175,10 +1179,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 buffer: Some(buffer.raw.clone()),
                 offset: start,
             },
-            soft::ComputeCommand::BindBuffer {
+            soft::ComputeCommand::BindBufferData {
                 index: 1,
-                buffer: Some(buf_value_and_length),
-                offset: 0,
+                bytes: unsafe { 
+                    slice::from_raw_parts(
+                        value_and_length.as_ptr() as _, 
+                        mem::size_of::<u32>() * value_and_length.len()
+                    ).to_owned() 
+                },
             },
             soft::ComputeCommand::Dispatch {
                 wg_size,
@@ -1518,15 +1526,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             for (level, list) in blit_vertices {
                 let ext = &dst.extent;
 
-                //Note: we might want to re-use the buffer allocation, but that
-                // requires proper re-cycling based on the command buffer fences.
-                let vertex_buffer = self.shared.device.new_buffer_with_data(
-                    list.as_ptr() as *const _,
-                    (list.len() * mem::size_of::<BlitVertex>()) as _,
-                    metal::MTLResourceOptions::StorageModeShared,
-                );
-                inner.retained_buffers.push(vertex_buffer.clone());
-
                 let extra = [
                     //Note: flipping Y coordinate of the destination here
                     soft::RenderCommand::SetViewport(MTLViewport {
@@ -1543,11 +1542,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         width: (ext.width >> level) as _,
                         height: (ext.height >> level) as _,
                     }),
-                    soft::RenderCommand::BindBuffer {
+                    soft::RenderCommand::BindBufferData {
                         stage: pso::Stage::Vertex,
                         index: 0,
-                        buffer: Some(vertex_buffer),
-                        offset: 0,
+                        bytes: unsafe { 
+                            slice::from_raw_parts(
+                                list.as_ptr() as *const u8, 
+                                list.len() * mem::size_of::<BlitVertex>()
+                            ).to_owned() 
+                        }
                     },
                     soft::RenderCommand::Draw {
                         primitive_type: MTLPrimitiveType::Triangle,
@@ -2153,7 +2156,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             soft::ComputeCommand::BindPipeline(compute_pipe),
         ];
 
-        for region in  regions {
+        for region in regions {
             let r = region.borrow();
             if r.size % 4 == 0 {
                 blit_commands.push(soft::BlitCommand::CopyBuffer {
@@ -2164,13 +2167,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             } else {
                 // not natively supported, going through compute shader
                 assert_eq!(0, r.size >> 32);
-                let copy_data = self.shared.device.new_buffer_with_data(
-                    &(r.size as u32) as *const u32 as *const _,
-                    mem::size_of::<u32>() as _,
-                    metal::MTLResourceOptions::StorageModeShared,
-                );
-
-                inner.retained_buffers.push(copy_data.clone());
 
                 let wg_count = MTLSize {
                     width: (r.size + wg_size.width - 1) / wg_size.width,
@@ -2188,10 +2184,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     buffer: Some(src.raw.clone()),
                     offset: r.src,
                 });
-                compute_commands.push(soft::ComputeCommand::BindBuffer {
+                compute_commands.push(soft::ComputeCommand::BindBufferData {
                     index: 2,
-                    buffer: Some(copy_data),
-                    offset: 0,
+                    bytes: unsafe { 
+                        slice::from_raw_parts(
+                            &(r.size as u32) as *const u32 as _, 
+                            mem::size_of::<u32>()
+                        ).to_owned() 
+                    }
                 });
                 compute_commands.push(soft::ComputeCommand::Dispatch {
                     wg_size,

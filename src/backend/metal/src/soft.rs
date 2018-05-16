@@ -5,7 +5,6 @@ use metal;
 
 use std::ops::Range;
 
-
 #[derive(Clone, Debug)]
 pub enum RenderCommand {
     SetViewport(metal::MTLViewport),
@@ -16,6 +15,11 @@ pub enum RenderCommand {
         index: usize,
         buffer: Option<metal::Buffer>,
         offset: hal::buffer::Offset,
+    },
+    BindBufferData {
+        stage: hal::pso::Stage,
+        bytes: Vec<u8>,
+        index: usize,
     },
     BindTexture {
         stage: hal::pso::Stage,
@@ -74,6 +78,10 @@ pub enum ComputeCommand {
         index: usize,
         buffer: Option<metal::Buffer>,
         offset: hal::buffer::Offset,
+    },
+    BindBufferData {
+        bytes: Vec<u8>,
+        index: usize,
     },
     BindTexture {
         index: usize,
