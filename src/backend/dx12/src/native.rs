@@ -160,18 +160,27 @@ pub struct BufferView {
 unsafe impl Send for BufferView { }
 unsafe impl Sync for BufferView { }
 
+#[derive(Clone)]
+pub enum Place {
+    SwapChain,
+    Heap { raw: ComPtr<d3d12::ID3D12Heap>, offset: u64 },
+}
+
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
 pub struct Image {
     pub(crate) resource: *mut d3d12::ID3D12Resource,
+    #[derivative(Debug="ignore")]
+    pub(crate) place: Place,
+    pub(crate) surface_type: format::SurfaceType,
     pub(crate) kind: image::Kind,
     pub(crate) usage: image::Usage,
     pub(crate) storage_flags: image::StorageFlags,
-    pub(crate) dxgi_format: DXGI_FORMAT,
+    #[derivative(Debug="ignore")]
+    pub(crate) descriptor: d3d12::D3D12_RESOURCE_DESC,
     pub(crate) bytes_per_block: u8,
     // Dimension of a texel block (compressed formats).
     pub(crate) block_dim: (u8, u8),
-    pub(crate) num_levels: image::Level,
     #[derivative(Debug="ignore")]
     pub(crate) clear_cv: Vec<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>,
     #[derivative(Debug="ignore")]
@@ -187,13 +196,14 @@ impl Image {
     pub fn to_subresource_range(&self, aspects: format::Aspects) -> image::SubresourceRange {
         image::SubresourceRange {
             aspects,
-            levels: 0 .. self.num_levels,
+            levels: 0 .. self.descriptor.MipLevels as _,
             layers: 0 .. self.kind.num_layers(),
         }
     }
 
     pub fn calc_subresource(&self, mip_level: UINT, layer: UINT, plane: UINT) -> UINT {
-        mip_level + (layer * self.num_levels as UINT) + (plane * self.num_levels as UINT * self.kind.num_layers() as UINT)
+        mip_level + (layer * self.descriptor.MipLevels as UINT) +
+        (plane * self.descriptor.MipLevels as UINT * self.kind.num_layers() as UINT)
     }
 }
 

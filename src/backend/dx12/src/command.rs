@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use winapi::um::{d3d12, d3dcommon};
 use winapi::shared::minwindef::{FALSE, UINT, TRUE};
-use winapi::shared::dxgiformat;
+use winapi::shared::{dxgiformat, winerror};
 
 use wio::com::ComPtr;
 
@@ -312,6 +312,8 @@ pub struct CommandBuffer {
     rtv_pools: Vec<ComPtr<d3d12::ID3D12DescriptorHeap>>,
     // Temporary gpu descriptor heaps (internal).
     temporary_gpu_heaps: Vec<ComPtr<d3d12::ID3D12DescriptorHeap>>,
+    // Resources that need to be alive till the end of the GPU execution.
+    retained_resources: Vec<ComPtr<d3d12::ID3D12Resource>>,
 }
 
 unsafe impl Send for CommandBuffer { }
@@ -351,6 +353,7 @@ impl CommandBuffer {
             scissor_cache: SmallVec::new(),
             rtv_pools: Vec::new(),
             temporary_gpu_heaps: Vec::new(),
+            retained_resources: Vec::new(),
         }
     }
 
@@ -373,6 +376,7 @@ impl CommandBuffer {
         self.vertex_buffer_views = [NULL_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS];
         self.rtv_pools.clear();
         self.temporary_gpu_heaps.clear();
+        self.retained_resources.clear();
     }
 
     // Indicates that the pipeline slot has been overriden with an internal pipeline.
@@ -1249,6 +1253,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::ImageResolve>,
     {
+        assert_eq!(src.descriptor.Format, dst.descriptor.Format);
+
         {
             // Insert barrier for `COPY_DEST` to `RESOLVE_DEST` as we only expose
             // `TRANSFER_WRITE` which is used for all copy commands.
@@ -1272,7 +1278,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         src.calc_subresource(r.src_subresource.level as UINT, r.src_subresource.layers.start as UINT + layer, 0),
                         dst.resource,
                         dst.calc_subresource(r.dst_subresource.level as UINT, r.dst_subresource.layers.start as UINT + layer, 0),
-                        src.dxgi_format,
+                        src.descriptor.Format,
                     );
                 }
             }
@@ -1330,10 +1336,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 kind: src.kind,
                 flags: src.storage_flags,
                 view_kind: image::ViewKind::D2Array, // TODO
-                format: src.dxgi_format,
+                format: src.descriptor.Format,
                 range: image::SubresourceRange {
                     aspects: format::Aspects::COLOR, // TODO
-                    levels: 0..src.num_levels,
+                    levels: 0..src.descriptor.MipLevels as _,
                     layers: 0..src.kind.num_layers(),
                 },
             }
@@ -1377,7 +1383,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     // Create RTVs of the dst image for the miplevel of the current region
                     for i in 0 .. num_layers {
                         let mut desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
-                            Format: dst.dxgi_format,
+                            Format: dst.descriptor.Format,
                             ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2DARRAY,
                             u: unsafe { mem::zeroed() },
                         };
@@ -1395,7 +1401,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         }
                     }
 
-                    (dst.dxgi_format, filter)
+                    (dst.descriptor.Format, filter)
                 },
                 _ => unimplemented!(),
             };
@@ -1852,19 +1858,67 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
             u: unsafe { mem::zeroed() },
         };
-
         let mut dst_image = d3d12::D3D12_TEXTURE_COPY_LOCATION {
             pResource: dst.resource,
             Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
             u: unsafe { mem::zeroed() },
         };
 
+        let device = self.shared.service_pipes.device.clone();
+        if src.surface_type != dst.surface_type {
+            assert_eq!(src.surface_type.desc().bits, dst.surface_type.desc().bits);
+            // D3D12 only permits changing the channel type for copies,
+            // similarly to how it allows the views to be created.
+
+            // create an aliased resource to the source
+            let mut alias = ptr::null_mut();
+            let desc = d3d12::D3D12_RESOURCE_DESC {
+                Format: dst.descriptor.Format,
+                .. src.descriptor.clone()
+            };
+            let (heap_ptr, offset) = match src.place {
+                n::Place::SwapChain => {
+                    error!("Unable to copy from a swapchain image with format conversion: {:?} -> {:?}",
+                        src.descriptor.Format, dst.descriptor.Format);
+                    return
+                }
+                n::Place::Heap { ref raw, offset } => (raw.as_raw(), offset),
+            };
+            assert_eq!(winerror::S_OK, unsafe {
+                device.CreatePlacedResource(
+                    heap_ptr,
+                    offset,
+                    &desc,
+                    d3d12::D3D12_RESOURCE_STATE_COMMON,
+                    ptr::null(),
+                    &d3d12::IID_ID3D12Resource,
+                    &mut alias,
+                )
+            });
+            src_image.pResource = alias as _;
+            self.retained_resources.push(unsafe {
+                ComPtr::from_raw(alias as _)
+            });
+
+            // signal the aliasing transition
+            let sub_barrier = d3d12::D3D12_RESOURCE_ALIASING_BARRIER {
+                pResourceBefore: src.resource,
+                pResourceAfter: src_image.pResource,
+            };
+            let mut barrier = d3d12::D3D12_RESOURCE_BARRIER {
+                Type: d3d12::D3D12_RESOURCE_BARRIER_TYPE_ALIASING,
+                Flags: d3d12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                u: unsafe { mem::zeroed() },
+            };
+            unsafe {
+                *barrier.u.Aliasing_mut() = sub_barrier;
+                self.raw.ResourceBarrier(1, &barrier as *const _);
+            }
+        }
+
         for region in regions {
             let r = region.borrow();
             debug_assert_eq!(r.src_subresource.layers.len(), r.dst_subresource.layers.len());
-            let num_layers = r.src_subresource.layers.len() as image::Layer;
-            let src_layer_start = r.src_subresource.layers.start;
-            let dst_layer_start = r.dst_subresource.layers.start;
             let src_box = d3d12::D3D12_BOX {
                 left: r.src_offset.x as _,
                 top: r.src_offset.y as _,
@@ -1874,11 +1928,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 back: (r.src_offset.z + r.extent.depth as i32) as _,
             };
 
-            for layer in 0..num_layers {
+            for (src_layer, dst_layer) in r.src_subresource.layers.clone().zip(r.dst_subresource.layers.clone()) {
                 *unsafe { src_image.u.SubresourceIndex_mut() } =
-                    src.calc_subresource(r.src_subresource.level as _, (src_layer_start + layer) as _, 0);
+                    src.calc_subresource(r.src_subresource.level as _, src_layer as _, 0);
                 *unsafe { dst_image.u.SubresourceIndex_mut() } =
-                    dst.calc_subresource(r.dst_subresource.level as _, (dst_layer_start + layer) as _, 0);
+                    dst.calc_subresource(r.dst_subresource.level as _, dst_layer as _, 0);
                 unsafe {
                     self.raw.CopyTextureRegion(
                         &dst_image,
@@ -1889,6 +1943,23 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         &src_box,
                     );
                 }
+            }
+        }
+
+        if src.surface_type != dst.surface_type {
+            // signal the aliasing transition - back to the original
+            let sub_barrier = d3d12::D3D12_RESOURCE_ALIASING_BARRIER {
+                pResourceBefore: src_image.pResource,
+                pResourceAfter: src.resource,
+            };
+            let mut barrier = d3d12::D3D12_RESOURCE_BARRIER {
+                Type: d3d12::D3D12_RESOURCE_BARRIER_TYPE_ALIASING,
+                Flags: d3d12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                u: unsafe { mem::zeroed() },
+            };
+            unsafe {
+                *barrier.u.Aliasing_mut() = sub_barrier;
+                self.raw.ResourceBarrier(1, &barrier as *const _);
             }
         }
     }
@@ -1937,7 +2008,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let footprint = d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
                 Offset: c.footprint_offset,
                 Footprint: d3d12::D3D12_SUBRESOURCE_FOOTPRINT {
-                    Format: image.dxgi_format,
+                    Format: image.descriptor.Format,
                     Width: c.footprint.width,
                     Height: c.footprint.height,
                     Depth: c.footprint.depth,
@@ -2003,7 +2074,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let footprint = d3d12::D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
                 Offset: c.footprint_offset,
                 Footprint: d3d12::D3D12_SUBRESOURCE_FOOTPRINT {
-                    Format: image.dxgi_format,
+                    Format: image.descriptor.Format,
                     Width: c.footprint.width,
                     Height: c.footprint.height,
                     Depth: c.footprint.depth,

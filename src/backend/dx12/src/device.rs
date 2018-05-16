@@ -12,7 +12,7 @@ use winapi::shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, winerror};
 use wio::com::ComPtr;
 
 use hal::{self, buffer, device as d, error, format, image, mapping, memory, pass, pso, query};
-use hal::format::Aspects;
+use hal::format::{Aspects, Format};
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
 use hal::queue::{RawCommandQueue, QueueFamilyId};
@@ -101,9 +101,9 @@ pub struct UnboundImage {
     desc: d3d12::D3D12_RESOURCE_DESC,
     dsv_format: dxgiformat::DXGI_FORMAT,
     requirements: memory::Requirements,
+    format: Format,
     kind: image::Kind,
     usage: image::Usage,
-    aspects: Aspects,
     storage_flags: image::StorageFlags,
     //TODO: use hal::format::FormatDesc
     bytes_per_block: u8,
@@ -622,7 +622,14 @@ impl Device {
             }
             image::ViewKind::Cube |
             image::ViewKind::CubeArray => {
-                unimplemented!()
+                desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
+                //TODO: double-check if any *6 are needed
+                *unsafe{ desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_RTV {
+                    MipSlice,
+                    FirstArraySlice,
+                    ArraySize,
+                    PlaneSlice: 0, //TODO
+                }
             }
         };
 
@@ -1921,7 +1928,6 @@ impl d::Device<B> for Device {
         let base_format = format.base_format();
         let format_desc = base_format.0.desc();
 
-        let aspects = format_desc.aspects;
         let bytes_per_block = (format_desc.bits / 8) as _;
         let block_dim = format_desc.dim;
 
@@ -1953,7 +1959,7 @@ impl d::Device<B> for Device {
                 image::Tiling::Optimal => d3d12::D3D12_TEXTURE_LAYOUT_UNKNOWN,
                 image::Tiling::Linear => d3d12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
             },
-            Flags: conv::map_image_flags(usage),
+            Flags: conv::map_image_flags(usage, format_desc.aspects),
         };
 
         let alloc_info = unsafe {
@@ -1977,9 +1983,9 @@ impl d::Device<B> for Device {
                 alignment: alloc_info.Alignment,
                 type_mask: MEM_TYPE_MASK << type_mask_shift,
             },
+            format,
             kind,
             usage,
-            aspects,
             storage_flags: flags,
             bytes_per_block,
             block_dim,
@@ -2045,17 +2051,19 @@ impl d::Device<B> for Device {
         // if the format supports being rendered into, allowing us to create clear_Xv
         let can_clear_color = image.usage.intersects(Usage::TRANSFER_DST | Usage::COLOR_ATTACHMENT);
         let can_clear_depth = image.usage.intersects(Usage::TRANSFER_DST | Usage::DEPTH_STENCIL_ATTACHMENT);
+        let aspects = image.format.surface_desc().aspects;
 
         Ok(n::Image {
             resource: resource as *mut _,
+            place: n::Place::Heap { raw: memory.heap.clone(), offset },
+            surface_type: image.format.base_format().0,
             kind: image.kind,
             usage: image.usage,
             storage_flags: image.storage_flags,
-            dxgi_format: image.desc.Format,
+            descriptor: image.desc,
             bytes_per_block: image.bytes_per_block,
             block_dim: image.block_dim,
-            num_levels: image.num_levels,
-            clear_cv: if image.aspects.contains(Aspects::COLOR) && can_clear_color {
+            clear_cv: if aspects.contains(Aspects::COLOR) && can_clear_color {
                 (0 .. num_layers)
                     .map(|layer| {
                         self.view_image_as_render_target(
@@ -2072,7 +2080,7 @@ impl d::Device<B> for Device {
             } else {
                 Vec::new()
             },
-            clear_dv: if image.aspects.contains(Aspects::DEPTH) && can_clear_depth {
+            clear_dv: if aspects.contains(Aspects::DEPTH) && can_clear_depth {
                 (0 .. num_layers)
                     .map(|layer| {
                         self.view_image_as_depth_stencil(
@@ -2090,7 +2098,7 @@ impl d::Device<B> for Device {
             } else {
                 Vec::new()
             },
-            clear_sv: if image.aspects.contains(Aspects::STENCIL) && can_clear_depth {
+            clear_sv: if aspects.contains(Aspects::STENCIL) && can_clear_depth {
                 (0 .. num_layers)
                     .map(|layer| {
                         self.view_image_as_depth_stencil(
@@ -2119,7 +2127,6 @@ impl d::Device<B> for Device {
         _swizzle: format::Swizzle,
         range: image::SubresourceRange,
     ) -> Result<n::ImageView, image::ViewError> {
-        let num_levels = image.num_levels;
         let mip_levels = (range.levels.start, range.levels.end);
         let layers = (range.layers.start, range.layers.end);
 
@@ -2159,8 +2166,8 @@ impl d::Device<B> for Device {
             } else {
                 None
             },
-            dxgi_format: image.dxgi_format,
-            num_levels,
+            dxgi_format: image.descriptor.Format,
+            num_levels: image.descriptor.MipLevels as image::Level,
             mip_levels,
             layers,
         })
@@ -2890,25 +2897,38 @@ impl d::Device<B> for Device {
                 self.raw.clone().CreateRenderTargetView(resource, &rtv_desc, rtv_handle);
             }
 
-            let format_desc = config
+            let surface_type = config
                 .color_format
                 .base_format()
-                .0
+                .0;
+            let format_desc = surface_type
                 .desc();
 
             let bytes_per_block = (format_desc.bits / 8) as _;
             let block_dim = format_desc.dim;
-
             let kind = image::Kind::D2(surface.width, surface.height, 1, 1);
+
             n::Image {
                 resource,
+                place: n::Place::SwapChain,
+                surface_type,
                 kind,
                 usage: config.image_usage,
                 storage_flags: image::StorageFlags::empty(),
-                dxgi_format: format,
+                descriptor: d3d12::D3D12_RESOURCE_DESC {
+                    Dimension: d3d12::D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+                    Alignment: 0,
+                    Width: surface.width as _,
+                    Height: surface.height as _,
+                    DepthOrArraySize: 1,
+                    MipLevels: 1,
+                    Format: format,
+                    SampleDesc: desc.SampleDesc.clone(),
+                    Layout: d3d12::D3D12_TEXTURE_LAYOUT_UNKNOWN,
+                    Flags: 0,
+                },
                 bytes_per_block,
                 block_dim,
-                num_levels: 1,
                 clear_cv: vec![rtv_handle],
                 clear_dv: Vec::new(),
                 clear_sv: Vec::new(),
