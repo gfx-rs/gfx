@@ -40,6 +40,11 @@ pub struct FormatDesc {
     pub bits: u16,
     /// Dimensions (width, height) of the texel blocks.
     pub dim: (u8, u8),
+    /// The format representation depends on the endianness of the platform.
+    ///
+    /// * On little-endian systems, the actual oreder of components is reverse of what
+    ///   a surface type specifies.
+    pub packed: bool,
     /// Format aspects
     pub aspects: Aspects,
 }
@@ -229,13 +234,14 @@ macro_rules! surface_types {
                 }
             }
 
-            ///
+            /// Return the format descriptor.
             pub fn desc(&self) -> FormatDesc {
                 match *self {
                     $( SurfaceType::$name => FormatDesc {
-                        bits: $total,
-                        aspects: $(Aspects::$aspect)|*,
+                        bits: $total.min(!$total),
                         dim: $dim,
+                        packed: $total > 0x1000,
+                        aspects: $(Aspects::$aspect)|*,
                     }, )*
                 }
             }
@@ -244,24 +250,25 @@ macro_rules! surface_types {
 }
 
 // ident { num_bits, aspects, dim, (color, alpha, ..) }
+// if the number of bits is given with exclamation (e.g. `!16`), the format is considered packed
 surface_types! {
-    R4_G4               {   8, COLOR, (1, 1), color: 8 },
-    R4_G4_B4_A4         {  16, COLOR, (1, 1), color: 12, alpha: 4 },
-    B4_G4_R4_A4         {  16, COLOR, (1, 1), color: 12, alpha: 4 },
-    R5_G6_B5            {  16, COLOR, (1, 1), color: 16 },
-    B5_G6_R5            {  16, COLOR, (1, 1), color: 16 },
-    R5_G5_B5_A1         {  16, COLOR, (1, 1), color: 15, alpha: 1 },
-    B5_G5_R5_A1         {  16, COLOR, (1, 1), color: 15, alpha: 1 },
-    A1_R5_G5_B5         {  16, COLOR, (1, 1), color: 15, alpha: 1 },
+    R4_G4               {  !8, COLOR, (1, 1), color: 8 },
+    R4_G4_B4_A4         { !16, COLOR, (1, 1), color: 12, alpha: 4 },
+    B4_G4_R4_A4         { !16, COLOR, (1, 1), color: 12, alpha: 4 },
+    R5_G6_B5            { !16, COLOR, (1, 1), color: 16 },
+    B5_G6_R5            { !16, COLOR, (1, 1), color: 16 },
+    R5_G5_B5_A1         { !16, COLOR, (1, 1), color: 15, alpha: 1 },
+    B5_G5_R5_A1         { !16, COLOR, (1, 1), color: 15, alpha: 1 },
+    A1_R5_G5_B5         { !16, COLOR, (1, 1), color: 15, alpha: 1 },
     R8                  {   8, COLOR, (1, 1), color: 8 },
     R8_G8               {  16, COLOR, (1, 1), color: 16 },
     R8_G8_B8            {  24, COLOR, (1, 1), color: 24 },
     B8_G8_R8            {  24, COLOR, (1, 1), color: 24 },
     R8_G8_B8_A8         {  32, COLOR, (1, 1), color: 24, alpha: 8 },
     B8_G8_R8_A8         {  32, COLOR, (1, 1), color: 24, alpha: 8 },
-    A8_B8_G8_R8         {  32, COLOR, (1, 1), color: 24, alpha: 8 },
-    A2_R10_G10_B10      {  32, COLOR, (1, 1), color: 30, alpha: 2 },
-    A2_B10_G10_R10      {  32, COLOR, (1, 1), color: 30, alpha: 2 },
+    A8_B8_G8_R8         { !32, COLOR, (1, 1), color: 24, alpha: 8 },
+    A2_R10_G10_B10      { !32, COLOR, (1, 1), color: 30, alpha: 2 },
+    A2_B10_G10_R10      { !32, COLOR, (1, 1), color: 30, alpha: 2 },
     R16                 {  16, COLOR, (1, 1), color: 16 },
     R16_G16             {  32, COLOR, (1, 1), color: 32 },
     R16_G16_B16         {  48, COLOR, (1, 1), color: 48 },
@@ -274,10 +281,10 @@ surface_types! {
     R64_G64             { 128, COLOR, (1, 1), color: 128 },
     R64_G64_B64         { 192, COLOR, (1, 1), color: 192 },
     R64_G64_B64_A64     { 256, COLOR, (1, 1), color: 192, alpha: 64 },
-    B10_G11_R11         {  32, COLOR, (1, 1), color: 32 },
-    E5_B9_G9_R9         {  32, COLOR, (1, 1), color: 27 }, // 32-bit packed format
+    B10_G11_R11         { !32, COLOR, (1, 1), color: 32 },
+    E5_B9_G9_R9         { !32, COLOR, (1, 1), color: 27 },
     D16                 {  16, DEPTH, (1, 1), depth: 16 },
-    X8D24               {  32, DEPTH, (1, 1), depth: 24 },
+    X8D24               { !32, DEPTH, (1, 1), depth: 24 },
     D32                 {  32, DEPTH, (1, 1), depth: 32 },
     S8                  {   8, STENCIL, (1, 1), stencil: 8 },
     D16_S8              {  24, DEPTH | STENCIL, (1, 1), depth: 16, stencil: 8 },
