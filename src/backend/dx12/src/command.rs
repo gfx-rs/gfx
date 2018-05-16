@@ -1858,7 +1858,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
             u: unsafe { mem::zeroed() },
         };
-
         let mut dst_image = d3d12::D3D12_TEXTURE_COPY_LOCATION {
             pResource: dst.resource,
             Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,

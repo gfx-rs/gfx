@@ -921,6 +921,7 @@ impl hal::Instance for Instance {
                 features:
                     // TODO: add more features, based on
                     // https://msdn.microsoft.com/de-de/library/windows/desktop/mt186615(v=vs.85).aspx
+                    Features::ROBUST_BUFFER_ACCESS |
                     Features::IMAGE_CUBE_ARRAY |
                     Features::GEOMETRY_SHADER |
                     Features::TESSELLATION_SHADER |

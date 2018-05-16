@@ -7,7 +7,7 @@ use winapi::shared::minwindef::{FALSE, INT, TRUE};
 use winapi::um::d3d12::*;
 use winapi::um::d3dcommon::*;
 
-use hal::format::{Format, SurfaceType};
+use hal::format::{Aspects, Format, SurfaceType};
 use hal::{buffer, image, pso, Primitive};
 use hal::pso::DescriptorSetLayoutBinding;
 
@@ -466,16 +466,25 @@ pub fn map_buffer_flags(usage: buffer::Usage) -> D3D12_RESOURCE_FLAGS {
     flags
 }
 
-pub fn map_image_flags(usage: image::Usage) -> D3D12_RESOURCE_FLAGS {
+pub fn map_image_flags(usage: image::Usage, aspects: Aspects) -> D3D12_RESOURCE_FLAGS {
     use self::image::Usage;
     let mut flags = D3D12_RESOURCE_FLAG_NONE;
 
     // Blit operations implemented via a graphics pipeline
-    if usage.intersects(Usage::COLOR_ATTACHMENT | Usage::TRANSFER_DST) {
+    if usage.contains(Usage::COLOR_ATTACHMENT) {
+        debug_assert!(aspects.intersects(Aspects::COLOR));
         flags = flags | D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
     }
     if usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
+        debug_assert!(aspects.intersects(Aspects::DEPTH | Aspects::STENCIL));
         flags = flags | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+    }
+    if usage.contains(Usage::TRANSFER_DST) {
+        flags = flags | if aspects == Aspects::COLOR {
+            D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
+        } else {
+            D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
+        };
     }
     if usage.contains(Usage::STORAGE) {
         flags = flags | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;

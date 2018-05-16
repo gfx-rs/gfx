@@ -622,7 +622,14 @@ impl Device {
             }
             image::ViewKind::Cube |
             image::ViewKind::CubeArray => {
-                unimplemented!()
+                desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
+                //TODO: double-check if any *6 are needed
+                *unsafe{ desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_RTV {
+                    MipSlice,
+                    FirstArraySlice,
+                    ArraySize,
+                    PlaneSlice: 0, //TODO
+                }
             }
         };
 
@@ -1952,7 +1959,7 @@ impl d::Device<B> for Device {
                 image::Tiling::Optimal => d3d12::D3D12_TEXTURE_LAYOUT_UNKNOWN,
                 image::Tiling::Linear => d3d12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
             },
-            Flags: conv::map_image_flags(usage),
+            Flags: conv::map_image_flags(usage, format_desc.aspects),
         };
 
         let alloc_info = unsafe {
