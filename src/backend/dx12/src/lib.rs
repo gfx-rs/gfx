@@ -328,6 +328,20 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         usage: image::Usage, storage_flags: image::StorageFlags,
     ) -> Option<image::FormatProperties> {
         conv::map_format(format)?; //filter out unknown formats
+        let properties = {
+            let props = &self.format_properties[format as usize];
+            match tiling {
+                image::Tiling::Optimal => props.optimal_tiling,
+                image::Tiling::Linear => props.linear_tiling,
+            }
+        };
+        // Note: these checks would have been nicer if we had explicit BLIT usage
+        if usage.contains(image::Usage::TRANSFER_SRC) && !properties.contains(f::ImageFeature::BLIT_SRC) {
+            return None;
+        }
+        if usage.contains(image::Usage::TRANSFER_DST) && !properties.contains(f::ImageFeature::BLIT_DST) {
+            return None;
+        }
         let is_optimal = tiling == image::Tiling::Optimal;
         Some(image::FormatProperties {
             max_extent: match dimensions {
@@ -791,8 +805,9 @@ impl hal::Instance for Instance {
 
             let mut format_properties = [f::Properties::default(); f::NUM_FORMATS];
             for (i, props) in &mut format_properties.iter_mut().enumerate().skip(1) {
+                let format: f::Format = unsafe { mem::transmute(i as u32) };
                 let mut data = d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT {
-                    Format: match conv::map_format(unsafe { mem::transmute(i as u32) }) {
+                    Format: match conv::map_format(format) {
                         Some(format) => format,
                         None => continue,
                     },
@@ -814,7 +829,7 @@ impl hal::Instance for Instance {
                     d3d12::D3D12_FORMAT_SUPPORT1_TEXTURECUBE
                 );
                 if can_image {
-                    props.optimal_tiling |= f::ImageFeature::SAMPLED | f::ImageFeature::BLIT_SRC | f::ImageFeature::BLIT_DST;
+                    props.optimal_tiling |= f::ImageFeature::SAMPLED | f::ImageFeature::BLIT_SRC;
                 }
                 if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_IA_VERTEX_BUFFER != 0 {
                     props.buffer_features |= f::BufferFeature::VERTEX;
@@ -823,7 +838,7 @@ impl hal::Instance for Instance {
                     props.optimal_tiling |= f::ImageFeature::SAMPLED_LINEAR;
                 }
                 if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_RENDER_TARGET != 0 {
-                    props.optimal_tiling |= f::ImageFeature::COLOR_ATTACHMENT;
+                    props.optimal_tiling |= f::ImageFeature::COLOR_ATTACHMENT | f::ImageFeature::BLIT_DST;
                 }
                 if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_BLENDABLE != 0 {
                     props.optimal_tiling |= f::ImageFeature::COLOR_ATTACHMENT_BLEND;

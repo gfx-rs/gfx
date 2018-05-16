@@ -39,11 +39,16 @@ pub struct FormatDesc {
     /// * For compressed formats, this denotes the number of bits per block.
     pub bits: u16,
     /// Dimensions (width, height) of the texel blocks.
-    ///
-    /// For uncompressed formats these are always (1, 1).
     pub dim: (u8, u8),
     /// Format aspects
     pub aspects: Aspects,
+}
+
+impl FormatDesc {
+    /// Check if the format is compressed.
+    pub fn is_compressed(&self) -> bool {
+        self.dim != (1, 1)
+    }
 }
 
 /// Description of the bits distribution of a format.
