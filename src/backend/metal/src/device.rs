@@ -706,7 +706,14 @@ impl hal::Device<Backend> for Device {
                 pipeline.set_fragment_function(Some(&fs_function));
                 Some(lib)
             }
-            None => None,
+            None => {
+                // TODO: This is a workaround for what appears to be a Metal validation bug
+                // A pixel format is required even though no attachments are provided
+                if pass_descriptor.main_pass.attachments.len() == 0 {
+                    pipeline.set_depth_attachment_pixel_format(metal::MTLPixelFormat::Depth32Float);
+                }
+                None
+            },
         };
 
         // Other shaders
