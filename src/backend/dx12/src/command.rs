@@ -1865,8 +1865,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         };
 
         let device = self.shared.service_pipes.device.clone();
-        if src.surface_type != dst.surface_type {
-            assert_eq!(src.surface_type.desc().bits, dst.surface_type.desc().bits);
+        let src_desc = src.surface_type.desc();
+        let dst_desc = dst.surface_type.desc();
+        assert_eq!(src_desc.bits, dst_desc.bits);
+        //Note: Direct3D 10.1 enables copies between prestructured-typed textures
+        // and block-compressed textures of the same bit widths.
+        let do_alias = src.surface_type != dst.surface_type &&
+            src_desc.is_compressed() == dst_desc.is_compressed();
+
+        if do_alias {
             // D3D12 only permits changing the channel type for copies,
             // similarly to how it allows the views to be created.
 
@@ -1946,7 +1953,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
         }
 
-        if src.surface_type != dst.surface_type {
+        if do_alias {
             // signal the aliasing transition - back to the original
             let sub_barrier = d3d12::D3D12_RESOURCE_ALIASING_BARRIER {
                 pResourceBefore: src_image.pResource,

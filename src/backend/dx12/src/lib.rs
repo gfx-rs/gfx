@@ -328,59 +328,90 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         usage: image::Usage, storage_flags: image::StorageFlags,
     ) -> Option<image::FormatProperties> {
         conv::map_format(format)?; //filter out unknown formats
-        let properties = {
-            let props = &self.format_properties[format as usize];
-            match tiling {
-                image::Tiling::Optimal => props.optimal_tiling,
-                image::Tiling::Linear => props.linear_tiling,
+
+        let supported_usage = {
+            use hal::image::Usage as U;
+            let format_props = &self.format_properties[format as usize];
+            let props = match tiling {
+                image::Tiling::Optimal => format_props.optimal_tiling,
+                image::Tiling::Linear => format_props.linear_tiling,
+            };
+            let mut flags = U::empty();
+            // Note: these checks would have been nicer if we had explicit BLIT usage
+            if props.contains(f::ImageFeature::BLIT_SRC) {
+                flags |= U::TRANSFER_SRC;
             }
+            if props.contains(f::ImageFeature::BLIT_DST) {
+                flags |= U::TRANSFER_DST;
+            }
+            if props.contains(f::ImageFeature::SAMPLED) {
+                flags |= U::SAMPLED;
+            }
+            if props.contains(f::ImageFeature::STORAGE) {
+                flags |= U::STORAGE;
+            }
+            if props.contains(f::ImageFeature::COLOR_ATTACHMENT) {
+                flags |= U::COLOR_ATTACHMENT;
+            }
+            if props.contains(f::ImageFeature::DEPTH_STENCIL_ATTACHMENT) {
+                flags |= U::DEPTH_STENCIL_ATTACHMENT;
+            }
+            flags
         };
-        // Note: these checks would have been nicer if we had explicit BLIT usage
-        if usage.contains(image::Usage::TRANSFER_SRC) && !properties.contains(f::ImageFeature::BLIT_SRC) {
+        if !supported_usage.contains(usage) {
             return None;
         }
-        if usage.contains(image::Usage::TRANSFER_DST) && !properties.contains(f::ImageFeature::BLIT_DST) {
-            return None;
-        }
-        let is_optimal = tiling == image::Tiling::Optimal;
-        Some(image::FormatProperties {
-            max_extent: match dimensions {
-                1 if is_optimal => image::Extent {
-                    width: d3d12::D3D12_REQ_TEXTURE1D_U_DIMENSION,
-                    height: 1,
-                    depth: 1,
+
+        let max_resource_size = (d3d12::D3D12_REQ_RESOURCE_SIZE_IN_MEGABYTES_EXPRESSION_A_TERM as usize) << 20;
+        Some(match tiling {
+            image::Tiling::Optimal => image::FormatProperties {
+                max_extent: match dimensions {
+                    1 => image::Extent {
+                        width: d3d12::D3D12_REQ_TEXTURE1D_U_DIMENSION,
+                        height: 1,
+                        depth: 1,
+                    },
+                    2 => image::Extent {
+                        width: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION,
+                        height: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION,
+                        depth: 1,
+                    },
+                    3 => image::Extent {
+                        width: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
+                        height: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
+                        depth: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
+                    },
+                    _ => return None,
                 },
-                2 => image::Extent {
-                    width: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION,
-                    height: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION,
-                    depth: 1,
-                },
-                3 if is_optimal => image::Extent {
-                    width: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
-                    height: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
-                    depth: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
-                },
-                _ => return None,
-            },
-            max_levels: if is_optimal { d3d12::D3D12_REQ_MIP_LEVELS as _ } else { 1 },
-            max_layers: if is_optimal {
-                match dimensions {
+                max_levels: d3d12::D3D12_REQ_MIP_LEVELS as _,
+                max_layers: match dimensions {
                     1 => d3d12::D3D12_REQ_TEXTURE1D_ARRAY_AXIS_DIMENSION as _,
                     2 => d3d12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION as _,
                     _ => return None,
-                }
-            } else {
-                1
+                },
+                sample_count_mask: if dimensions == 2 && !storage_flags.contains(image::StorageFlags::CUBE_VIEW) &&
+                    (usage.contains(image::Usage::COLOR_ATTACHMENT) | usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT))
+                {
+                    0x3F //TODO: use D3D12_FEATURE_DATA_FORMAT_SUPPORT
+                } else {
+                    0x1
+                },
+                max_resource_size,
             },
-            sample_count_mask: if dimensions == 2 && is_optimal &&
-                !storage_flags.contains(image::StorageFlags::CUBE_VIEW) &&
-                (usage.contains(image::Usage::COLOR_ATTACHMENT) | usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT))
-            {
-                0x3F //TODO: use D3D12_FEATURE_DATA_FORMAT_SUPPORT
-            } else {
-                0x1
+            image::Tiling::Linear => image::FormatProperties {
+                max_extent: match dimensions {
+                    2 => image::Extent {
+                        width: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION,
+                        height: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION,
+                        depth: 1,
+                    },
+                    _ => return None,
+                },
+                max_levels: 1,
+                max_layers: 1,
+                sample_count_mask: 0x1,
+                max_resource_size,
             },
-            max_resource_size: (d3d12::D3D12_REQ_RESOURCE_SIZE_IN_MEGABYTES_EXPRESSION_A_TERM as usize) << 20,
         })
     }
 
@@ -828,8 +859,12 @@ impl hal::Instance for Instance {
                     d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE3D |
                     d3d12::D3D12_FORMAT_SUPPORT1_TEXTURECUBE
                 );
+                let can_linear = can_image && !format.surface_desc().is_compressed();
                 if can_image {
                     props.optimal_tiling |= f::ImageFeature::SAMPLED | f::ImageFeature::BLIT_SRC;
+                }
+                if can_linear {
+                    props.linear_tiling |= f::ImageFeature::SAMPLED | f::ImageFeature::BLIT_SRC;
                 }
                 if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_IA_VERTEX_BUFFER != 0 {
                     props.buffer_features |= f::BufferFeature::VERTEX;
@@ -839,6 +874,9 @@ impl hal::Instance for Instance {
                 }
                 if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_RENDER_TARGET != 0 {
                     props.optimal_tiling |= f::ImageFeature::COLOR_ATTACHMENT | f::ImageFeature::BLIT_DST;
+                    if can_linear {
+                        props.linear_tiling |= f::ImageFeature::COLOR_ATTACHMENT | f::ImageFeature::BLIT_DST;
+                    }
                 }
                 if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_BLENDABLE != 0 {
                     props.optimal_tiling |= f::ImageFeature::COLOR_ATTACHMENT_BLEND;
