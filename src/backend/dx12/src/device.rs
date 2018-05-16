@@ -19,7 +19,7 @@ use hal::queue::{RawCommandQueue, QueueFamilyId};
 use hal::range::RangeArg;
 
 use {
-    conv, format as fmt, free_list, native as n, root_constants, window as w,
+    conv, free_list, native as n, root_constants, window as w,
     Backend as B, Device, MemoryGroup, QUEUE_FAMILIES, MAX_VERTEX_BUFFERS, NUM_HEAP_PROPERTIES,
 };
 use pool::RawCommandPool;
@@ -104,6 +104,7 @@ pub struct UnboundImage {
     format: Format,
     kind: image::Kind,
     usage: image::Usage,
+    tiling: image::Tiling,
     storage_flags: image::StorageFlags,
     //TODO: use hal::format::FormatDesc
     bytes_per_block: u8,
@@ -1844,7 +1845,7 @@ impl d::Device<B> for Device {
     ) -> Result<n::BufferView, buffer::ViewError> {
         let buffer_features = {
             let idx = format.map(|fmt| fmt as usize).unwrap_or(0);
-            fmt::query_properties()[idx].buffer_features
+            self.format_properties[idx].buffer_features
         };
         let (format, format_desc) = match format.and_then(conv::map_format) {
             Some(fmt) => (fmt, format.unwrap().surface_desc()),
@@ -1927,11 +1928,16 @@ impl d::Device<B> for Device {
 
         let base_format = format.base_format();
         let format_desc = base_format.0.desc();
-
         let bytes_per_block = (format_desc.bits / 8) as _;
         let block_dim = format_desc.dim;
-
         let extent = kind.extent();
+
+        let format_properties = &self.format_properties[format as usize];
+        let (layout, features) = match tiling {
+            image::Tiling::Optimal => (d3d12::D3D12_TEXTURE_LAYOUT_UNKNOWN, format_properties.optimal_tiling),
+            image::Tiling::Linear => (d3d12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR, format_properties.linear_tiling),
+        };
+
         let desc = d3d12::D3D12_RESOURCE_DESC {
             Dimension: match kind {
                 image::Kind::D1(..) => d3d12::D3D12_RESOURCE_DIMENSION_TEXTURE1D,
@@ -1955,11 +1961,8 @@ impl d::Device<B> for Device {
                 Count: kind.num_samples() as _,
                 Quality: 0,
             },
-            Layout: match tiling {
-                image::Tiling::Optimal => d3d12::D3D12_TEXTURE_LAYOUT_UNKNOWN,
-                image::Tiling::Linear => d3d12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-            },
-            Flags: conv::map_image_flags(usage, format_desc.aspects),
+            Layout: layout,
+            Flags: conv::map_image_flags(usage, features),
         };
 
         let alloc_info = unsafe {
@@ -1986,6 +1989,7 @@ impl d::Device<B> for Device {
             format,
             kind,
             usage,
+            tiling,
             storage_flags: flags,
             bytes_per_block,
             block_dim,
@@ -2049,8 +2053,15 @@ impl d::Device<B> for Device {
         //TODO: the clear_Xv is incomplete. We should support clearing images created without XXX_ATTACHMENT usage.
         // for this, we need to check the format and force the `RENDER_TARGET` flag behind the user's back
         // if the format supports being rendered into, allowing us to create clear_Xv
-        let can_clear_color = image.usage.intersects(Usage::TRANSFER_DST | Usage::COLOR_ATTACHMENT);
-        let can_clear_depth = image.usage.intersects(Usage::TRANSFER_DST | Usage::DEPTH_STENCIL_ATTACHMENT);
+        let format_properties = &self.format_properties[image.format as usize];
+        let props = match image.tiling {
+            image::Tiling::Optimal => format_properties.optimal_tiling,
+            image::Tiling::Linear => format_properties.linear_tiling,
+        };
+        let can_clear_color = image.usage.intersects(Usage::TRANSFER_DST | Usage::COLOR_ATTACHMENT) &&
+            props.contains(format::ImageFeature::COLOR_ATTACHMENT);
+        let can_clear_depth = image.usage.intersects(Usage::TRANSFER_DST | Usage::DEPTH_STENCIL_ATTACHMENT) &&
+            props.contains(format::ImageFeature::DEPTH_STENCIL_ATTACHMENT);
         let aspects = image.format.surface_desc().aspects;
 
         Ok(n::Image {

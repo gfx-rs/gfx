@@ -39,11 +39,16 @@ pub struct FormatDesc {
     /// * For compressed formats, this denotes the number of bits per block.
     pub bits: u16,
     /// Dimensions (width, height) of the texel blocks.
-    ///
-    /// For uncompressed formats these are always (1, 1).
     pub dim: (u8, u8),
     /// Format aspects
     pub aspects: Aspects,
+}
+
+impl FormatDesc {
+    /// Check if the format is compressed.
+    pub fn is_compressed(&self) -> bool {
+        self.dim != (1, 1)
+    }
 }
 
 /// Description of the bits distribution of a format.
@@ -115,7 +120,7 @@ impl Default for Swizzle {
 }
 
 /// Format properties of the physical device.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Properties {
     /// A bitmask of the features supported when an image with linear tiling is requested.
@@ -131,6 +136,7 @@ pub struct Properties {
 
 bitflags!(
     /// Image feature flags.
+    #[derive(Default)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct ImageFeature: u32 {
         /// Image view can be sampled.
@@ -158,6 +164,7 @@ bitflags!(
 
 bitflags!(
     /// Buffer feature flags.
+    #[derive(Default)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct BufferFeature: u32 {
         /// Buffer view can be used as uniform texel buffer.

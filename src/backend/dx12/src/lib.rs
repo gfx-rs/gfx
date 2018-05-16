@@ -15,7 +15,6 @@ extern crate wio;
 mod command;
 mod conv;
 mod device;
-mod format;
 mod free_list;
 mod internal;
 mod native;
@@ -176,6 +175,7 @@ pub struct PhysicalDevice {
     adapter: ComPtr<dxgi1_2::IDXGIAdapter2>,
     features: hal::Features,
     limits: hal::Limits,
+    format_properties: Arc<[f::Properties; f::NUM_FORMATS]>,
     private_caps: Capabilities,
     heap_properties: &'static [HeapProperties; NUM_HEAP_PROPERTIES],
     memory_properties: hal::MemoryProperties,
@@ -320,7 +320,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn format_properties(&self, fmt: Option<f::Format>) -> f::Properties {
         let idx = fmt.map(|fmt| fmt as usize).unwrap_or(0);
-        format::query_properties()[idx]
+        self.format_properties[idx]
     }
 
     fn image_format_properties(
@@ -328,45 +328,90 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         usage: image::Usage, storage_flags: image::StorageFlags,
     ) -> Option<image::FormatProperties> {
         conv::map_format(format)?; //filter out unknown formats
-        let is_optimal = tiling == image::Tiling::Optimal;
-        Some(image::FormatProperties {
-            max_extent: match dimensions {
-                1 if is_optimal => image::Extent {
-                    width: d3d12::D3D12_REQ_TEXTURE1D_U_DIMENSION,
-                    height: 1,
-                    depth: 1,
+
+        let supported_usage = {
+            use hal::image::Usage as U;
+            let format_props = &self.format_properties[format as usize];
+            let props = match tiling {
+                image::Tiling::Optimal => format_props.optimal_tiling,
+                image::Tiling::Linear => format_props.linear_tiling,
+            };
+            let mut flags = U::empty();
+            // Note: these checks would have been nicer if we had explicit BLIT usage
+            if props.contains(f::ImageFeature::BLIT_SRC) {
+                flags |= U::TRANSFER_SRC;
+            }
+            if props.contains(f::ImageFeature::BLIT_DST) {
+                flags |= U::TRANSFER_DST;
+            }
+            if props.contains(f::ImageFeature::SAMPLED) {
+                flags |= U::SAMPLED;
+            }
+            if props.contains(f::ImageFeature::STORAGE) {
+                flags |= U::STORAGE;
+            }
+            if props.contains(f::ImageFeature::COLOR_ATTACHMENT) {
+                flags |= U::COLOR_ATTACHMENT;
+            }
+            if props.contains(f::ImageFeature::DEPTH_STENCIL_ATTACHMENT) {
+                flags |= U::DEPTH_STENCIL_ATTACHMENT;
+            }
+            flags
+        };
+        if !supported_usage.contains(usage) {
+            return None;
+        }
+
+        let max_resource_size = (d3d12::D3D12_REQ_RESOURCE_SIZE_IN_MEGABYTES_EXPRESSION_A_TERM as usize) << 20;
+        Some(match tiling {
+            image::Tiling::Optimal => image::FormatProperties {
+                max_extent: match dimensions {
+                    1 => image::Extent {
+                        width: d3d12::D3D12_REQ_TEXTURE1D_U_DIMENSION,
+                        height: 1,
+                        depth: 1,
+                    },
+                    2 => image::Extent {
+                        width: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION,
+                        height: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION,
+                        depth: 1,
+                    },
+                    3 => image::Extent {
+                        width: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
+                        height: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
+                        depth: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
+                    },
+                    _ => return None,
                 },
-                2 => image::Extent {
-                    width: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION,
-                    height: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION,
-                    depth: 1,
-                },
-                3 if is_optimal => image::Extent {
-                    width: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
-                    height: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
-                    depth: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
-                },
-                _ => return None,
-            },
-            max_levels: if is_optimal { d3d12::D3D12_REQ_MIP_LEVELS as _ } else { 1 },
-            max_layers: if is_optimal {
-                match dimensions {
+                max_levels: d3d12::D3D12_REQ_MIP_LEVELS as _,
+                max_layers: match dimensions {
                     1 => d3d12::D3D12_REQ_TEXTURE1D_ARRAY_AXIS_DIMENSION as _,
                     2 => d3d12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION as _,
                     _ => return None,
-                }
-            } else {
-                1
+                },
+                sample_count_mask: if dimensions == 2 && !storage_flags.contains(image::StorageFlags::CUBE_VIEW) &&
+                    (usage.contains(image::Usage::COLOR_ATTACHMENT) | usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT))
+                {
+                    0x3F //TODO: use D3D12_FEATURE_DATA_FORMAT_SUPPORT
+                } else {
+                    0x1
+                },
+                max_resource_size,
             },
-            sample_count_mask: if dimensions == 2 && is_optimal &&
-                !storage_flags.contains(image::StorageFlags::CUBE_VIEW) &&
-                (usage.contains(image::Usage::COLOR_ATTACHMENT) | usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT))
-            {
-                0x3F //TODO: use D3D12_FEATURE_DATA_FORMAT_SUPPORT
-            } else {
-                0x1
+            image::Tiling::Linear => image::FormatProperties {
+                max_extent: match dimensions {
+                    2 => image::Extent {
+                        width: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION,
+                        height: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION,
+                        depth: 1,
+                    },
+                    _ => return None,
+                },
+                max_levels: 1,
+                max_layers: 1,
+                sample_count_mask: 0x1,
+                max_resource_size,
             },
-            max_resource_size: (d3d12::D3D12_REQ_RESOURCE_SIZE_IN_MEGABYTES_EXPRESSION_A_TERM as usize) << 20,
         })
     }
 
@@ -470,6 +515,7 @@ struct Shared {
 pub struct Device {
     raw: ComPtr<d3d12::ID3D12Device>,
     private_caps: Capabilities,
+    format_properties: Arc<[f::Properties; f::NUM_FORMATS]>,
     heap_properties: &'static [HeapProperties],
     // CPU only pools
     rtv_pool: Mutex<native::DescriptorCpuPool>,
@@ -610,6 +656,7 @@ impl Device {
         Device {
             raw: device,
             private_caps: physical_device.private_caps,
+            format_properties: physical_device.format_properties.clone(),
             heap_properties: physical_device.heap_properties,
             rtv_pool: Mutex::new(rtv_pool),
             dsv_pool: Mutex::new(dsv_pool),
@@ -755,24 +802,30 @@ impl hal::Instance for Instance {
 
             let mut features: d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS = unsafe { mem::zeroed() };
             assert_eq!(winerror::S_OK, unsafe {
-                device.CheckFeatureSupport(d3d12::D3D12_FEATURE_D3D12_OPTIONS,
+                device.CheckFeatureSupport(
+                    d3d12::D3D12_FEATURE_D3D12_OPTIONS,
                     &mut features as *mut _ as *mut _,
-                    mem::size_of::<d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS>() as _)
+                    mem::size_of::<d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS>() as _,
+                )
             });
 
             let mut features_architecture: d3d12::D3D12_FEATURE_DATA_ARCHITECTURE = unsafe { mem::zeroed() };
             assert_eq!(winerror::S_OK, unsafe {
-                device.CheckFeatureSupport(d3d12::D3D12_FEATURE_ARCHITECTURE,
+                device.CheckFeatureSupport(
+                    d3d12::D3D12_FEATURE_ARCHITECTURE,
                     &mut features_architecture as *mut _ as *mut _,
-                    mem::size_of::<d3d12::D3D12_FEATURE_DATA_ARCHITECTURE>() as _)
+                    mem::size_of::<d3d12::D3D12_FEATURE_DATA_ARCHITECTURE>() as _,
+                )
             });
 
             let depth_bounds_test_supported = {
                 let mut features2: d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS2 = unsafe { mem::zeroed() };
                 let hr = unsafe {
-                    device.CheckFeatureSupport(d3d12::D3D12_FEATURE_D3D12_OPTIONS2,
+                    device.CheckFeatureSupport(
+                        d3d12::D3D12_FEATURE_D3D12_OPTIONS2,
                         &mut features2 as *mut _ as *mut _,
-                        mem::size_of::<d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS2>() as _)
+                        mem::size_of::<d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS2>() as _,
+                    )
                 };
                 if hr == winerror::S_OK  {
                     features2.DepthBoundsTestSupported != 0
@@ -780,6 +833,82 @@ impl hal::Instance for Instance {
                     false
                 }
             };
+
+            let mut format_properties = [f::Properties::default(); f::NUM_FORMATS];
+            for (i, props) in &mut format_properties.iter_mut().enumerate().skip(1) {
+                let format: f::Format = unsafe { mem::transmute(i as u32) };
+                let mut data = d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT {
+                    Format: match conv::map_format(format) {
+                        Some(format) => format,
+                        None => continue,
+                    },
+                    Support1: unsafe { mem::zeroed() },
+                    Support2: unsafe { mem::zeroed() },
+                };
+                assert_eq!(winerror::S_OK, unsafe {
+                    device.CheckFeatureSupport(
+                        d3d12::D3D12_FEATURE_FORMAT_SUPPORT,
+                        &mut data as *mut _ as *mut _,
+                        mem::size_of::<d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT>() as _,
+                    )
+                });
+                let can_buffer = 0 != data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_BUFFER;
+                let can_image = 0 != data.Support1 & (
+                    d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE1D |
+                    d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE2D |
+                    d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE3D |
+                    d3d12::D3D12_FORMAT_SUPPORT1_TEXTURECUBE
+                );
+                let can_linear = can_image && !format.surface_desc().is_compressed();
+                if can_image {
+                    props.optimal_tiling |= f::ImageFeature::SAMPLED | f::ImageFeature::BLIT_SRC;
+                }
+                if can_linear {
+                    props.linear_tiling |= f::ImageFeature::SAMPLED | f::ImageFeature::BLIT_SRC;
+                }
+                if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_IA_VERTEX_BUFFER != 0 {
+                    props.buffer_features |= f::BufferFeature::VERTEX;
+                }
+                if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE != 0 {
+                    props.optimal_tiling |= f::ImageFeature::SAMPLED_LINEAR;
+                }
+                if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_RENDER_TARGET != 0 {
+                    props.optimal_tiling |= f::ImageFeature::COLOR_ATTACHMENT | f::ImageFeature::BLIT_DST;
+                    if can_linear {
+                        props.linear_tiling |= f::ImageFeature::COLOR_ATTACHMENT | f::ImageFeature::BLIT_DST;
+                    }
+                }
+                if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_BLENDABLE != 0 {
+                    props.optimal_tiling |= f::ImageFeature::COLOR_ATTACHMENT_BLEND;
+                }
+                if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL != 0 {
+                    props.optimal_tiling |= f::ImageFeature::DEPTH_STENCIL_ATTACHMENT;
+                }
+                if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_SHADER_LOAD != 0 {
+                    //TODO: check d3d12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD ?
+                    if can_buffer {
+                        props.buffer_features |= f::BufferFeature::UNIFORM_TEXEL;
+                    }
+                }
+                if data.Support2 & d3d12::D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_ADD != 0 {
+                    //TODO: other atomic flags?
+                    if can_buffer {
+                        props.buffer_features |= f::BufferFeature::STORAGE_TEXEL_ATOMIC;
+                    }
+                    if can_image {
+                        props.optimal_tiling |= f::ImageFeature::STORAGE_ATOMIC;
+                    }
+                }
+                if data.Support2 & d3d12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE != 0 {
+                    if can_buffer {
+                        props.buffer_features |= f::BufferFeature::STORAGE_TEXEL;
+                    }
+                    if can_image {
+                        props.optimal_tiling |= f::ImageFeature::STORAGE;
+                    }
+                }
+                //TODO: blits, linear tiling
+            }
 
             let heterogeneous_resource_heaps = features.ResourceHeapTier != d3d12::D3D12_RESOURCE_HEAP_TIER_1;
 
@@ -957,6 +1086,7 @@ impl hal::Instance for Instance {
                     framebuffer_stencil_samples_count: 0b101,
                     non_coherent_atom_size: 1, //TODO: confirm
                 },
+                format_properties: Arc::new(format_properties),
                 private_caps: Capabilities {
                     heterogeneous_resource_heaps,
                     memory_architecture,
