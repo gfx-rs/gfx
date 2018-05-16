@@ -19,7 +19,7 @@ use hal::queue::{RawCommandQueue, QueueFamilyId};
 use hal::range::RangeArg;
 
 use {
-    conv, format as fmt, free_list, native as n, root_constants, window as w,
+    conv, free_list, native as n, root_constants, window as w,
     Backend as B, Device, MemoryGroup, QUEUE_FAMILIES, MAX_VERTEX_BUFFERS, NUM_HEAP_PROPERTIES,
 };
 use pool::RawCommandPool;
@@ -1844,7 +1844,7 @@ impl d::Device<B> for Device {
     ) -> Result<n::BufferView, buffer::ViewError> {
         let buffer_features = {
             let idx = format.map(|fmt| fmt as usize).unwrap_or(0);
-            fmt::query_properties()[idx].buffer_features
+            self.format_properties[idx].buffer_features
         };
         let (format, format_desc) = match format.and_then(conv::map_format) {
             Some(fmt) => (fmt, format.unwrap().surface_desc()),

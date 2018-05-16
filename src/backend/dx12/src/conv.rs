@@ -16,6 +16,7 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
 
     // TODO: list may be incomplete or partially wrong..
     let format = match format {
+        Bgra4Unorm => DXGI_FORMAT_B4G4R4A4_UNORM,
         R5g6b5Unorm => DXGI_FORMAT_B5G6R5_UNORM,
         R5g5b5a1Unorm => DXGI_FORMAT_B5G5R5A1_UNORM,
         R8Unorm => DXGI_FORMAT_R8_UNORM,
@@ -363,20 +364,20 @@ pub fn map_buffer_resource_state(access: buffer::Access) -> D3D12_RESOURCE_STATE
     let mut state = D3D12_RESOURCE_STATE_COMMON;
 
     if access.contains(Access::TRANSFER_READ) {
-        state = state | D3D12_RESOURCE_STATE_COPY_SOURCE;
+        state |= D3D12_RESOURCE_STATE_COPY_SOURCE;
     }
     if access.contains(Access::INDEX_BUFFER_READ) {
-        state = state | D3D12_RESOURCE_STATE_INDEX_BUFFER;
+        state |= D3D12_RESOURCE_STATE_INDEX_BUFFER;
     }
     if access.contains(Access::VERTEX_BUFFER_READ) || access.contains(Access::CONSTANT_BUFFER_READ) {
-        state = state | D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+        state |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
     }
     if access.contains(Access::INDIRECT_COMMAND_READ) {
-        state = state | D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+        state |= D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
     }
     if access.contains(Access::SHADER_READ) {
         // SHADER_READ only allows SRV access
-        state = state | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+        state |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     }
 
     state
@@ -413,19 +414,19 @@ pub fn map_image_resource_state(access: image::Access, layout: image::Layout) ->
     let mut state = D3D12_RESOURCE_STATE_COMMON;
 
     if access.contains(Access::TRANSFER_READ) {
-        state = state | D3D12_RESOURCE_STATE_COPY_SOURCE;
+        state |= D3D12_RESOURCE_STATE_COPY_SOURCE;
     }
     if access.contains(Access::INPUT_ATTACHMENT_READ) {
-        state = state | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        state |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     }
     if access.contains(Access::DEPTH_STENCIL_ATTACHMENT_READ) {
-        state = state | D3D12_RESOURCE_STATE_DEPTH_READ;
+        state |= D3D12_RESOURCE_STATE_DEPTH_READ;
     }
     if access.contains(Access::SHADER_READ) {
         // SHADER_READ only allows SRV access
         // Already handled the `SHADER_WRITE` write case above.
         assert!(!access.contains(Access::SHADER_WRITE));
-        state = state | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+        state |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     }
 
     state
@@ -460,7 +461,7 @@ pub fn map_buffer_flags(usage: buffer::Usage) -> D3D12_RESOURCE_FLAGS {
 
     // TRANSFER_DST also used for clearing buffers, which is implemented via UAV clears.
     if usage.contains(buffer::Usage::STORAGE) || usage.contains(buffer::Usage::TRANSFER_DST) {
-        flags = flags | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+        flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
 
     flags
@@ -473,24 +474,24 @@ pub fn map_image_flags(usage: image::Usage, aspects: Aspects) -> D3D12_RESOURCE_
     // Blit operations implemented via a graphics pipeline
     if usage.contains(Usage::COLOR_ATTACHMENT) {
         debug_assert!(aspects.intersects(Aspects::COLOR));
-        flags = flags | D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
     }
     if usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
         debug_assert!(aspects.intersects(Aspects::DEPTH | Aspects::STENCIL));
-        flags = flags | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+        flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
     }
     if usage.contains(Usage::TRANSFER_DST) {
-        flags = flags | if aspects == Aspects::COLOR {
+        flags |= if aspects == Aspects::COLOR {
             D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
         } else {
             D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
         };
     }
     if usage.contains(Usage::STORAGE) {
-        flags = flags | D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+        flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
     if usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) && !usage.contains(Usage::SAMPLED) {
-        flags = flags | D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+        flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
     }
 
     flags

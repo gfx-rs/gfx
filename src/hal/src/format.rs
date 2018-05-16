@@ -115,7 +115,7 @@ impl Default for Swizzle {
 }
 
 /// Format properties of the physical device.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Properties {
     /// A bitmask of the features supported when an image with linear tiling is requested.
@@ -131,6 +131,7 @@ pub struct Properties {
 
 bitflags!(
     /// Image feature flags.
+    #[derive(Default)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct ImageFeature: u32 {
         /// Image view can be sampled.
@@ -158,6 +159,7 @@ bitflags!(
 
 bitflags!(
     /// Buffer feature flags.
+    #[derive(Default)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct BufferFeature: u32 {
         /// Buffer view can be used as uniform texel buffer.
