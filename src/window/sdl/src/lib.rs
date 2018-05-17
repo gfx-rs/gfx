@@ -30,7 +30,7 @@ use gfx_device_gl::Resources as R;
 use std::error::Error;
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum InitError {
     PixelFormatUnsupportedError,
     WindowBuildError(WindowBuildError),
