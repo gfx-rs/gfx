@@ -11,14 +11,18 @@ use hal::format::{Format, ImageFeature, SurfaceType};
 use hal::{buffer, image, pso, Primitive};
 use hal::pso::DescriptorSetLayoutBinding;
 
+
 pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     use hal::format::Format::*;
 
-    // TODO: list may be incomplete or partially wrong..
+    // Handling packed formats according to the platform endianness.
+    let reverse = unsafe { 1 == *(&1u32 as *const _ as *const u8) };
     let format = match format {
-        Bgra4Unorm => DXGI_FORMAT_B4G4R4A4_UNORM,
-        R5g6b5Unorm => DXGI_FORMAT_B5G6R5_UNORM,
-        R5g5b5a1Unorm => DXGI_FORMAT_B5G5R5A1_UNORM,
+        Bgra4Unorm    if !reverse => DXGI_FORMAT_B4G4R4A4_UNORM,
+        R5g6b5Unorm    if reverse => DXGI_FORMAT_B5G6R5_UNORM,
+        B5g6r5Unorm   if !reverse => DXGI_FORMAT_B5G6R5_UNORM,
+        B5g5r5a1Unorm if !reverse => DXGI_FORMAT_B5G5R5A1_UNORM,
+        A1r5g5b5Unorm if reverse  => DXGI_FORMAT_B5G5R5A1_UNORM,
         R8Unorm => DXGI_FORMAT_R8_UNORM,
         R8Inorm => DXGI_FORMAT_R8_SNORM,
         R8Uint => DXGI_FORMAT_R8_UINT,
@@ -34,8 +38,13 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
         Rgba8Srgb => DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
         Bgra8Unorm => DXGI_FORMAT_B8G8R8A8_UNORM,
         Bgra8Srgb => DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,
-        A2b10g10r10Unorm => DXGI_FORMAT_R10G10B10A2_UNORM,
-        A2b10g10r10Uint => DXGI_FORMAT_R10G10B10A2_UINT,
+        Abgr8Unorm if reverse => DXGI_FORMAT_R8G8B8A8_UNORM,
+        Abgr8Inorm if reverse => DXGI_FORMAT_R8G8B8A8_SNORM,
+        Abgr8Uint  if reverse => DXGI_FORMAT_R8G8B8A8_UINT,
+        Abgr8Int   if reverse => DXGI_FORMAT_R8G8B8A8_SINT,
+        Abgr8Srgb  if reverse => DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+        A2b10g10r10Unorm if reverse => DXGI_FORMAT_R10G10B10A2_UNORM,
+        A2b10g10r10Uint  if reverse => DXGI_FORMAT_R10G10B10A2_UINT,
         R16Unorm => DXGI_FORMAT_R16_UNORM,
         R16Inorm => DXGI_FORMAT_R16_SNORM,
         R16Uint => DXGI_FORMAT_R16_UINT,
@@ -63,9 +72,11 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
         Rgba32Uint => DXGI_FORMAT_R32G32B32A32_UINT,
         Rgba32Int => DXGI_FORMAT_R32G32B32A32_SINT,
         Rgba32Float => DXGI_FORMAT_R32G32B32A32_FLOAT,
-        B10g11r11Ufloat => DXGI_FORMAT_R11G11B10_FLOAT,
-        E5b9g9r9Ufloat => DXGI_FORMAT_R9G9B9E5_SHAREDEXP,
+        B10g11r11Ufloat if reverse => DXGI_FORMAT_R11G11B10_FLOAT,
+        E5b9g9r9Ufloat  if reverse => DXGI_FORMAT_R9G9B9E5_SHAREDEXP,
         D16Unorm => DXGI_FORMAT_D16_UNORM,
+        D24UnormS8Uint => DXGI_FORMAT_D24_UNORM_S8_UINT,
+        X8D24Unorm if reverse => DXGI_FORMAT_D24_UNORM_S8_UINT,
         D32Float => DXGI_FORMAT_D32_FLOAT,
         D32FloatS8Uint => DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
         Bc1RgbUnorm => DXGI_FORMAT_BC1_UNORM,

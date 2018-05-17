@@ -72,7 +72,7 @@ pub(crate) fn shader_bytecode(shader: *mut d3dcommon::ID3DBlob) -> d3d12::D3D12_
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct ViewInfo {
     pub(crate) resource: *mut d3d12::ID3D12Resource,
     pub(crate) kind: image::Kind,
@@ -1734,6 +1734,10 @@ impl d::Device<B> for Device {
             // on descriptor updates.
             size = (size + 255) & !255;
         }
+        if usage.contains(buffer::Usage::TRANSFER_DST) {
+            // minimum of 1 word for the clear UAV
+            size = size.max(4);
+        }
 
         let type_mask_shift = if self.private_caps.heterogeneous_resource_heaps {
             MEM_TYPE_UNIVERSAL_SHIFT
@@ -1803,13 +1807,13 @@ impl d::Device<B> for Device {
 
         let clear_uav = if buffer.usage.contains(buffer::Usage::TRANSFER_DST) {
             let handles = self.uav_pool.lock().unwrap().alloc_handles(1);
-            let mut desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
+            let mut view_desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
                 Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
                 ViewDimension: d3d12::D3D12_UAV_DIMENSION_BUFFER,
                 u: unsafe { mem::zeroed() },
             };
 
-           *unsafe { desc.u.Buffer_mut() } = d3d12::D3D12_BUFFER_UAV {
+           *unsafe { view_desc.u.Buffer_mut() } = d3d12::D3D12_BUFFER_UAV {
                 FirstElement: 0,
                 NumElements: (buffer.requirements.size / 4) as _,
                 StructureByteStride: 0,
@@ -1821,7 +1825,7 @@ impl d::Device<B> for Device {
                 self.raw.clone().CreateUnorderedAccessView(
                     resource as *mut _,
                     ptr::null_mut(),
-                    &desc,
+                    &view_desc,
                     handles.cpu,
                 );
             }
