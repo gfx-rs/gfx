@@ -17,10 +17,11 @@ extern crate wio;
 use hal::{buffer, command, device, error, format, image, memory, mapping, queue, query, pool, pso, pass, Features, Limits, QueueType};
 use hal::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 use hal::queue::{QueueFamily as HalQueueFamily, QueueFamilyId, Queues};
+use hal::backend::RawQueueGroup;
 use hal::format::Aspects;
 use hal::range::RangeArg;
 
-use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, winerror};
+use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgiformat, dxgitype, winerror};
 use winapi::shared::minwindef::{FALSE, TRUE};
 use winapi::shared::windef::{HWND, RECT};
 use winapi::um::winnt::{LARGE_INTEGER};
@@ -37,6 +38,8 @@ use std::borrow::{BorrowMut, Borrow};
 use std::os::windows::ffi::OsStringExt;
 use std::ffi::OsString;
 use std::os::raw::c_void;
+
+mod conv;
 
 pub struct Instance {
     pub(crate) factory: ComPtr<dxgi::IDXGIFactory1>
@@ -287,6 +290,20 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         };
 
         let device = Device::new(device, cxt);
+        
+        // TODO: deferred context => 1 cxt/queue?
+        let queues = Queues::new(
+            families
+                .into_iter()
+                .map(|&(family, prio)| {
+                    assert_eq!(prio.len(), 1);
+                    let mut group = RawQueueGroup::new(family.clone());
+                    let queue = CommandQueue;
+                    group.add_queue(queue);
+                    (QueueFamilyId(0), group)
+                })
+                .collect()
+        );
 
         Ok(hal::Gpu {
             device,
@@ -358,7 +375,8 @@ impl hal::Device<Backend> for Device {
     fn create_command_pool(
         &self, family: QueueFamilyId, _create_flags: pool::CommandPoolCreateFlags
     ) -> CommandPool {
-        unimplemented!()
+        // TODO:
+        CommandPool
     }
 
     fn destroy_command_pool(&self, _pool: CommandPool) {
@@ -667,7 +685,125 @@ impl hal::Device<Backend> for Device {
         surface: &mut Surface,
         config: hal::SwapchainConfig,
     ) -> (Swapchain, hal::Backbuffer<Backend>) {
-        unimplemented!()
+        // TODO: use IDXGIFactory2 for >=11.1
+        // TODO: this function should be able to fail (Result)?
+
+        use conv::map_format;
+
+        println!("{:#?}", config);
+
+        let (non_srgb_format, format) = {
+            // NOTE: DXGI doesn't allow sRGB format on the swapchain, but
+            //       creating RTV of swapchain buffers with sRGB works
+            let format = match config.color_format {
+                format::Format::Bgra8Srgb => format::Format::Bgra8Unorm,
+                format::Format::Rgba8Srgb => format::Format::Rgba8Unorm,
+                format => format,
+            };
+
+            (map_format(format).unwrap(), map_format(config.color_format).unwrap())
+        };
+
+        let mut desc = dxgi::DXGI_SWAP_CHAIN_DESC {
+            BufferDesc: dxgitype::DXGI_MODE_DESC {
+                Width: surface.width,
+                Height: surface.height,
+                // TODO: should this grab max value of all monitor hz? vsync
+                //       will clamp to current monitor anyways?
+                RefreshRate: dxgitype::DXGI_RATIONAL {
+                    Numerator: 1,
+                    Denominator: 60
+                },
+                Format: non_srgb_format,
+                ScanlineOrdering: dxgitype::DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED,
+                Scaling: dxgitype::DXGI_MODE_SCALING_UNSPECIFIED 
+            },
+            // TODO: msaa on backbuffer?
+            SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
+                Count: 1,
+                Quality: 0
+            },
+            BufferUsage: dxgitype::DXGI_USAGE_RENDER_TARGET_OUTPUT,
+            BufferCount: config.image_count,
+            OutputWindow: surface.wnd_handle,
+            // TODO:
+            Windowed: TRUE,
+            // TODO:
+            SwapEffect: dxgi::DXGI_SWAP_EFFECT_DISCARD,
+            Flags: 0
+        };
+        let swapchain = {
+            let mut swapchain: *mut dxgi::IDXGISwapChain = ptr::null_mut();
+            let hr = unsafe {
+                surface.factory.CreateSwapChain(
+                    self.device.as_raw() as *mut _,
+                    &mut desc as *mut _,
+                    &mut swapchain as *mut *mut _ as *mut *mut _
+                )
+            };
+
+            if !winerror::SUCCEEDED(hr) {
+                // TODO: return error
+                
+            }
+
+            unsafe { ComPtr::from_raw(swapchain) }
+        };
+
+        let images = (0..config.image_count).map(|i| {
+            let mut resource: *mut d3d11::ID3D11Resource = ptr::null_mut();
+            
+            unsafe {
+                swapchain.GetBuffer(
+                    i as _,
+                    &d3d11::IID_ID3D11Resource,
+                    &mut resource as *mut *mut _ as *mut *mut _
+                );
+            };
+    
+            let mut desc: d3d11::D3D11_RENDER_TARGET_VIEW_DESC = unsafe { mem::zeroed() };
+            desc.Format = format;
+            desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2D;
+            // NOTE: the rest of the desc should be fine (zeroed)
+
+            let mut rtv = ptr::null_mut();
+            let hr = unsafe {
+                self.device.CreateRenderTargetView(
+                    resource,
+                    &desc,
+                    &mut rtv as *mut *mut _ as *mut *mut _
+                )
+            };
+
+            if !winerror::SUCCEEDED(hr) {
+                // TODO: error
+            }
+
+            let format_desc = config
+                .color_format
+                .base_format()
+                .0
+                .desc();
+
+            let bytes_per_block = (format_desc.bits / 8) as _;
+            let block_dim = format_desc.dim;
+
+            let kind = image::Kind::D2(surface.width, surface.height, 1, 1);
+
+            Image {
+                resource,
+                kind,
+                usage: config.image_usage,
+                storage_flags: image::StorageFlags::empty(),
+                // NOTE: not the actual format of the backbuffer(s)
+                dxgi_format: format,
+                bytes_per_block,
+                block_dim,
+                num_levels: 1
+            }
+        }).collect();
+
+        (Swapchain { dxgi_swapchain: swapchain }, hal::Backbuffer::Images(images))
     }
 
     fn destroy_swapchain(&self, _swapchain: Swapchain) {
@@ -712,8 +848,9 @@ impl hal::Surface<Backend> for Surface {
 
         // TODO: flip swap effects require dx11.1/windows8
         // NOTE: some swap effects affect msaa capabilities..
+        // TODO: _DISCARD swap effects can only have one image?
         let capabilities = hal::SurfaceCapabilities {
-            image_count: 2..16, // TODO:
+            image_count: 1..16, // TODO:
             current_extent: Some(extent),
             extents: extent..extent,
             max_image_layers: 1,
@@ -733,7 +870,10 @@ impl hal::Surface<Backend> for Surface {
 
 }
 
-pub struct Swapchain(());
+pub struct Swapchain {
+    dxgi_swapchain: ComPtr<dxgi::IDXGISwapChain>,
+}
+
 unsafe impl Send for Swapchain { }
 unsafe impl Sync for Swapchain { }
 
@@ -753,8 +893,10 @@ impl hal::QueueFamily for QueueFamily {
     fn id(&self) -> QueueFamilyId { QueueFamilyId(0) }
 }
 
+// TODO: 
 #[derive(Debug)]
-pub struct CommandQueue(());
+pub struct CommandQueue;
+
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     unsafe fn submit_raw<IC>(&mut self, submission: hal::queue::RawSubmission<Backend, IC>, fence: Option<&Fence>)
     where
@@ -771,7 +913,9 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         IW: IntoIterator,
         IW::Item: Borrow<Semaphore>,
     {
-        unimplemented!()
+        for swapchain in swapchains {
+            unsafe { swapchain.borrow().dxgi_swapchain.Present(1, 0); }
+        }
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
@@ -781,7 +925,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
 }
 
 #[derive(Debug, Clone)]
-pub struct CommandBuffer(());
+pub struct CommandBuffer;
 impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn begin(&mut self, _flags: command::CommandBufferFlags, _info: command::CommandBufferInheritanceInfo<Backend>) {
@@ -1017,16 +1161,16 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
 }
 
 #[derive(Debug)]
-pub struct Memory(());
+pub struct Memory;
 
-pub struct CommandPool(());
+pub struct CommandPool;
 impl hal::pool::RawCommandPool<Backend> for CommandPool {
     fn reset(&mut self) {
         unimplemented!()
     }
 
     fn allocate(&mut self, num: usize, level: command::RawLevel) -> Vec<CommandBuffer> {
-        unimplemented!()
+        vec![CommandBuffer]
     }
 
     unsafe fn free(&mut self, _cbufs: Vec<CommandBuffer>) {
@@ -1035,39 +1179,55 @@ impl hal::pool::RawCommandPool<Backend> for CommandPool {
 }
 
 #[derive(Debug)]
-pub struct ShaderModule(());
+pub struct ShaderModule;
 #[derive(Debug)]
-pub struct RenderPass(());
+pub struct RenderPass;
 #[derive(Debug)]
-pub struct Framebuffer(());
+pub struct Framebuffer;
 
 #[derive(Debug)]
-pub struct UnboundBuffer(());
+pub struct UnboundBuffer;
 #[derive(Debug)]
-pub struct Buffer(());
+pub struct Buffer;
 #[derive(Debug)]
-pub struct BufferView(());
+pub struct BufferView;
 #[derive(Debug)]
-pub struct UnboundImage(());
-#[derive(Debug)]
-pub struct Image(());
-#[derive(Debug)]
-pub struct ImageView(());
-#[derive(Debug)]
-pub struct Sampler(());
+pub struct UnboundImage;
+
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub struct Image {
+    #[derivative(Debug="ignore")]
+    resource: *mut d3d11::ID3D11Resource,
+    kind: image::Kind,
+    usage: image::Usage,
+    storage_flags: image::StorageFlags,
+    dxgi_format: dxgiformat::DXGI_FORMAT,
+    bytes_per_block: u8,
+    block_dim: (u8, u8),
+    num_levels: image::Level,
+}
+
+unsafe impl Send for Image { }
+unsafe impl Sync for Image { }
 
 #[derive(Debug)]
-pub struct ComputePipeline(());
+pub struct ImageView;
 #[derive(Debug)]
-pub struct GraphicsPipeline(());
+pub struct Sampler;
+
 #[derive(Debug)]
-pub struct PipelineLayout(());
+pub struct ComputePipeline;
 #[derive(Debug)]
-pub struct DescriptorSetLayout(());
+pub struct GraphicsPipeline;
+#[derive(Debug)]
+pub struct PipelineLayout;
+#[derive(Debug)]
+pub struct DescriptorSetLayout;
 
 // TODO: descriptor pool
 #[derive(Debug)]
-pub struct DescriptorPool(());
+pub struct DescriptorPool;
 impl hal::DescriptorPool<Backend> for DescriptorPool {
     fn allocate_set(&mut self, layout: &DescriptorSetLayout) -> Result<DescriptorSet, pso::AllocationError> {
         unimplemented!()
@@ -1079,14 +1239,14 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
 }
 
 #[derive(Debug)]
-pub struct DescriptorSet(());
+pub struct DescriptorSet;
 
 #[derive(Debug)]
-pub struct Fence(());
+pub struct Fence;
 #[derive(Debug)]
-pub struct Semaphore(());
+pub struct Semaphore;
 #[derive(Debug)]
-pub struct QueryPool(());
+pub struct QueryPool;
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Backend {}
