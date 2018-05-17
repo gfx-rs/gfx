@@ -23,6 +23,8 @@ use std::hash::Hash;
 
 //TODO: reconsider what is publicly exported
 
+pub mod prelude;
+
 pub use self::adapter::{
     Adapter, AdapterInfo, MemoryProperties, MemoryType, MemoryTypeId,
     PhysicalDevice, QueuePriority,
