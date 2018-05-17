@@ -90,7 +90,7 @@ impl Instance {
     pub fn create_surface(&self, window: &winit::Window) -> Surface {
         use winit::os::windows::WindowExt;
         self.create_surface_from_hwnd(window.get_hwnd() as *mut _)
-}
+    }
 }
 
 impl hal::Instance for Instance {
@@ -152,6 +152,11 @@ impl hal::Instance for Instance {
                         1,
                         1
                     ], // TODO
+                    max_vertex_input_attribute_offset: 0, // TODO
+                    max_vertex_input_attributes: 0, // TODO
+                    max_vertex_input_binding_stride: 0, // TODO
+                    max_vertex_input_bindings: 0, // TODO
+                    max_vertex_output_components: 0, // TODO
                     min_buffer_copy_offset_alignment: 0,    // TODO
                     min_buffer_copy_pitch_alignment: 0,     // TODO
                     min_texel_buffer_offset_alignment: 0,   // TODO
@@ -224,26 +229,25 @@ fn get_feature_level(adapter: *mut dxgi::IDXGIAdapter) -> d3dcommon::D3D_FEATURE
         // if there is no 11.1 runtime installed, requesting
         // `D3D_FEATURE_LEVEL_11_1` will return E_INVALIDARG so we just retry
         // without that
-        if hr == winerror::E_INVALIDARG {
-            let hr = unsafe {
-                d3d11::D3D11CreateDevice(
-                    ptr::null_mut(),
-                    d3dcommon::D3D_DRIVER_TYPE_NULL,
-                    ptr::null_mut(),
-                    0,
-                    requested_feature_levels[1..].as_ptr(),
-                    (requested_feature_levels.len() - 1) as _,
-                    d3d11::D3D11_SDK_VERSION,
-                    ptr::null_mut(),
-                    &mut feature_level as *mut _,
-                    ptr::null_mut()
-                )
-            };
+        assert_eq!(hr, winerror::E_INVALIDARG);
+        let hr = unsafe {
+            d3d11::D3D11CreateDevice(
+                ptr::null_mut(),
+                d3dcommon::D3D_DRIVER_TYPE_NULL,
+                ptr::null_mut(),
+                0,
+                requested_feature_levels[1..].as_ptr(),
+                (requested_feature_levels.len() - 1) as _,
+                d3d11::D3D11_SDK_VERSION,
+                ptr::null_mut(),
+                &mut feature_level as *mut _,
+                ptr::null_mut()
+            )
+        };
 
-            if !winerror::SUCCEEDED(hr) {
-                // TODO: device might not support any feature levels?
-                unimplemented!();
-            }
+        if !winerror::SUCCEEDED(hr) {
+            // TODO: device might not support any feature levels?
+            unimplemented!();
         }
     }
 
@@ -781,9 +785,7 @@ impl hal::Device<Backend> for Device {
 
             let format_desc = config
                 .color_format
-                .base_format()
-                .0
-                .desc();
+                .surface_desc();
 
             let bytes_per_block = (format_desc.bits / 8) as _;
             let block_dim = format_desc.dim;
@@ -978,7 +980,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::AttachmentClear>,
         U: IntoIterator,
-        U::Item: Borrow<pso::Rect>,
+        U::Item: Borrow<pso::ClearRect>,
     {
         unimplemented!()
     }
