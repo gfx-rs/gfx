@@ -329,6 +329,7 @@ unsafe impl Sync for UnboundBuffer {}
 pub struct UnboundImage {
     pub(crate) texture_desc: metal::TextureDescriptor,
     pub(crate) format: hal::format::Format,
+    pub(crate) tiling: hal::image::Tiling,
     pub(crate) extent: hal::image::Extent,
 }
 unsafe impl Send for UnboundImage {}

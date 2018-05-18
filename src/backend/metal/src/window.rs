@@ -97,7 +97,7 @@ impl Surface {
 }
 
 impl Device {
-    pub fn build_swapchain(
+    pub(crate) fn build_swapchain(
         &self,
         surface: &mut Surface,
         config: SwapchainConfig,
@@ -147,8 +147,9 @@ impl Device {
             backbuffer_descriptor.set_height(pixel_height);
             backbuffer_descriptor.set_usage(MTLTextureUsage::MTLTextureUsageRenderTarget);
 
+            let device = self.shared.device.lock().unwrap();
             let images = io_surfaces.iter().map(|surface| {
-                let mapped_texture: metal::Texture = msg_send![self.device.as_ref(),
+                let mapped_texture: metal::Texture = msg_send![device.as_ref(),
                     newTextureWithDescriptor: &*backbuffer_descriptor
                     iosurface: surface.obj
                     plane: 0

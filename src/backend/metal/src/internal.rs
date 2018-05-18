@@ -4,6 +4,7 @@ use hal::image::{Filter};
 use std::mem;
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Mutex;
 
 
 #[derive(Debug)]
@@ -89,12 +90,12 @@ impl ServicePipes {
     pub fn _get_clear_image(
         &mut self,
         key: ClearKey,
-        device: &metal::DeviceRef,
+        device: &Mutex<metal::Device>,
     ) -> &metal::RenderPipelineStateRef {
         let lib = &self.library;
         self._clears
             .entry(key)
-            .or_insert_with(|| Self::_create_clear_image(key, lib, device))
+            .or_insert_with(|| Self::_create_clear_image(key, lib, &*device.lock().unwrap()))
     }
 
     fn _create_clear_image(
@@ -159,12 +160,12 @@ impl ServicePipes {
     pub fn get_blit_image(
         &mut self,
         key: BlitKey,
-        device: &metal::DeviceRef,
+        device: &Mutex<metal::Device>,
     ) -> &metal::RenderPipelineStateRef {
         let lib = &self.library;
         self.blits
             .entry(key)
-            .or_insert_with(|| Self::create_blit_image(key, lib, device))
+            .or_insert_with(|| Self::create_blit_image(key, lib, &*device.lock().unwrap()))
     }
 
     fn create_blit_image(
