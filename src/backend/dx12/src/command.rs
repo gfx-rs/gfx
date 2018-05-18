@@ -16,7 +16,7 @@ use winapi::shared::{dxgiformat, winerror};
 
 use wio::com::ComPtr;
 
-use {conv, internal, native as n, Backend, Device, Shared, MAX_VERTEX_BUFFERS};
+use {conv, device, internal, native as n, Backend, Device, Shared, MAX_VERTEX_BUFFERS};
 use device::ViewInfo;
 use root_constants::RootConstant;
 use smallvec::SmallVec;
@@ -1208,15 +1208,25 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::AttachmentClear>,
         U: IntoIterator,
-        U::Item: Borrow<pso::Rect>,
+        U::Item: Borrow<pso::ClearRect>,
     {
-        assert!(self.pass_cache.is_some(), "`clear_attachments` can only be called inside a renderpass");
-        let rects: SmallVec<[d3d12::D3D12_RECT; 16]> = rects.into_iter().map(|rect| get_rect(rect.borrow())).collect();
+        assert!(
+            self.pass_cache.is_some(),
+            "`clear_attachments` can only be called inside a renderpass"
+        );
+
+        let clear_rects: SmallVec<[pso::ClearRect; 16]> = rects
+            .into_iter()
+            .map(|rect| rect.borrow().clone())
+            .collect();
+
+        let mut device = self.shared.service_pipes.device.clone();
+
         for clear in clears {
             let clear = clear.borrow();
             match *clear {
                 com::AttachmentClear::Color(index, cv) => {
-                    let rtv = {
+                    let attachment = {
                         let pass_cache = self.pass_cache.as_ref().unwrap();
                         let rtv_id = pass_cache
                             .render_pass
@@ -1224,18 +1234,50 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             .color_attachments[index]
                             .0;
 
-                        pass_cache
-                            .framebuffer
-                            .attachments[rtv_id]
-                            .handle_rtv
-                            .unwrap()
+                        pass_cache.framebuffer.attachments[rtv_id]
                     };
 
-                    self.clear_render_target_view(
-                        rtv,
-                        cv.into(),
-                        &rects,
-                    );
+                    let mut rtv_pool = n::DescriptorCpuPool {
+                        heap: Device::create_descriptor_heap_impl(
+                            &mut device.clone(),
+                            d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+                            false,
+                            clear_rects.len()
+                        ),
+                        offset: 0,
+                        size: 0,
+                        max_size: clear_rects.len() as _
+                    };
+
+                    self.rtv_pools.push(rtv_pool.heap.raw.clone());
+
+                    for clear_rect in &clear_rects {
+                        let rect = [get_rect(&clear_rect.rect)];
+
+                        let view_info = device::ViewInfo {
+                            resource: attachment.resource,
+                            kind: attachment.kind,
+                            flags: image::StorageFlags::empty(),
+                            view_kind: image::ViewKind::D2Array,
+                            format: attachment.dxgi_format,
+                            range: image::SubresourceRange {
+                                aspects: Aspects::COLOR,
+                                levels: 0 .. 1,
+                                layers: clear_rect.layers.clone()
+                            }
+                        };
+                        let rtv = Device::view_image_as_render_target_impl(
+                            &mut device,
+                            &mut rtv_pool,
+                            view_info
+                        ).unwrap();
+
+                        self.clear_render_target_view(
+                            rtv,
+                            cv.into(),
+                            &rect,
+                        );
+                    }
                 }
                 _ => unimplemented!(),
             }

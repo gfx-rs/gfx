@@ -1333,7 +1333,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::AttachmentClear>,
         U: IntoIterator,
-        U::Item: Borrow<pso::Rect>,
+        U::Item: Borrow<pso::ClearRect>,
     {
         unimplemented!()
     }

@@ -354,7 +354,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::AttachmentClear>,
         U: IntoIterator,
-        U::Item: Borrow<pso::Rect>,
+        U::Item: Borrow<pso::ClearRect>,
     {
         let clears: SmallVec<[vk::ClearAttachment; 16]> = clears
             .into_iter()
@@ -396,11 +396,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let rects: SmallVec<[vk::ClearRect; 16]> = rects
             .into_iter()
             .map(|rect| {
-                vk::ClearRect {
-                    base_array_layer: 0,
-                    layer_count: vk::VK_REMAINING_ARRAY_LAYERS,
-                    rect: conv::map_rect(rect.borrow()),
-                }
+                conv::map_clear_rect(rect.borrow())
             })
             .collect();
 

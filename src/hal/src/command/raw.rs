@@ -166,7 +166,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
         T: IntoIterator,
         T::Item: Borrow<AttachmentClear>,
         U: IntoIterator,
-        U::Item: Borrow<pso::Rect>;
+        U::Item: Borrow<pso::ClearRect>;
 
     /// "Resolves" a multisampled image, converting it into a non-multisampled
     /// image. Takes an iterator of regions to apply the resolution to.
