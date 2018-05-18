@@ -1,6 +1,6 @@
-use {AutoreleasePool, Backend};
+use {AutoreleasePool, Backend, Shared};
 use {native, window};
-use internal::{BlitVertex, Channel, ServicePipes};
+use internal::{BlitVertex, Channel};
 
 use std::borrow::{self, Borrow};
 use std::cell::RefCell;
@@ -49,14 +49,17 @@ impl<'a> Deref for CommandBufferScope<'a> {
 }
 
 impl QueuePool {
-    fn find_queue(&mut self, device: &metal::DeviceRef) -> usize {
+    fn find_queue(&mut self, device: &Mutex<metal::Device>) -> usize {
         const POOL_SIZE: usize = 64;
         self.queues
             .iter()
             .position(|q| q.reserve.start != q.reserve.end)
             .unwrap_or_else(|| {
                 let queue = QueueInner {
-                    queue: device.new_command_queue_with_max_command_buffer_count(POOL_SIZE as _),
+                    queue: device
+                        .lock()
+                        .unwrap()
+                        .new_command_queue_with_max_command_buffer_count(POOL_SIZE as _),
                     reserve: 0 .. POOL_SIZE,
                 };
                 self.queues.push(queue);
@@ -96,7 +99,7 @@ impl QueuePool {
     }
     /// Get a command buffer that needs to be manually tracked/released.
     pub fn make_command_buffer(
-        &mut self, device: &metal::DeviceRef
+        &mut self, device: &Mutex<metal::Device>
     ) -> (usize, metal::CommandBuffer) {
         let _pool = AutoreleasePool::new();
         let id = self.find_queue(device);
@@ -108,7 +111,7 @@ impl QueuePool {
     }
 
     pub fn wait_idle(
-        &mut self, device: &metal::DeviceRef
+        &mut self, device: &Mutex<metal::Device>
     ) {
         debug!("waiting for idle");
         let _pool = AutoreleasePool::new();
@@ -122,25 +125,6 @@ impl QueuePool {
 
     pub fn release_command_buffer(&mut self, index: usize) {
         self.queues[index].reserve.start -= 1;
-    }
-}
-
-pub struct Shared {
-    device: metal::Device,
-    pub(crate) queue_pool: Mutex<QueuePool>,
-    service_pipes: Mutex<ServicePipes>,
-}
-
-unsafe impl Send for Shared {}
-unsafe impl Sync for Shared {}
-
-impl Shared {
-    pub fn new(device: metal::Device) -> Self {
-        Shared {
-            queue_pool: Mutex::new(QueuePool::default()),
-            service_pipes: Mutex::new(ServicePipes::new(&device)),
-            device,
-        }
     }
 }
 
@@ -862,7 +846,19 @@ fn record_commands(command_buf: &metal::CommandBufferRef, passes: &[soft::Pass])
 unsafe impl Send for CommandBuffer {}
 unsafe impl Sync for CommandBuffer {}
 
-impl RawCommandQueue<Backend> for Arc<Shared> {
+pub struct CommandQueue {
+    shared: Arc<Shared>,
+}
+
+impl CommandQueue {
+    pub(crate) fn new(shared: Arc<Shared>) -> Self {
+        CommandQueue {
+            shared,
+        }
+    }
+}
+
+impl RawCommandQueue<Backend> for CommandQueue {
     unsafe fn submit_raw<IC>(
         &mut self, submit: RawSubmission<Backend, IC>, fence: Option<&native::Fence>
     )
@@ -888,7 +884,7 @@ impl RawCommandQueue<Backend> for Arc<Shared> {
             None
         };
 
-        let mut pool = self.queue_pool.lock().unwrap();
+        let mut pool = self.shared.queue_pool.lock().unwrap();
 
         for buffer in submit.cmd_buffers {
             let mut inner = buffer.borrow().inner.borrow_mut();
@@ -914,7 +910,7 @@ impl RawCommandQueue<Backend> for Arc<Shared> {
                     cmd_buffer
                 }
                 Some(CommandSink::Deferred { ref passes, .. }) => {
-                    temp_cmd_buffer = pool.borrow_command_buffer(self);
+                    temp_cmd_buffer = pool.borrow_command_buffer(&self.shared);
                     record_commands(&*temp_cmd_buffer, passes);
                     &*temp_cmd_buffer
                  }
@@ -927,7 +923,7 @@ impl RawCommandQueue<Backend> for Arc<Shared> {
         }
 
         if let Some(ref fence) = fence {
-            let command_buffer = pool.borrow_command_buffer(self);
+            let command_buffer = pool.borrow_command_buffer(&self.shared);
             let value_ptr = fence.0.clone();
             let fence_block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
                 *value_ptr.lock().unwrap() = true;
@@ -966,10 +962,10 @@ impl RawCommandQueue<Backend> for Arc<Shared> {
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
-        self.queue_pool
+        self.shared.queue_pool
             .lock()
             .unwrap()
-            .wait_idle(&self.device);
+            .wait_idle(&self.shared.device);
         Ok(())
     }
 }
@@ -1205,11 +1201,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         data: &[u8],
     ) {
         let mut inner = self.inner.borrow_mut();
-        let src = self.shared.device.new_buffer_with_data(
-            data.as_ptr() as _,
-            data.len() as _,
-            metal::MTLResourceOptions::CPUCacheModeWriteCombined,
-        );
+        let src = self.shared.device
+            .lock()
+            .unwrap()
+            .new_buffer_with_data(
+                data.as_ptr() as _,
+                data.len() as _,
+                metal::MTLResourceOptions::CPUCacheModeWriteCombined,
+            );
         inner.retained_buffers.push(src.clone());
 
         let command = soft::BlitCommand::CopyBuffer {

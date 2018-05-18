@@ -23,7 +23,7 @@ mod native;
 mod conversions;
 mod soft;
 
-pub use command::{CommandPool, Shared};
+pub use command::CommandPool;
 pub use device::{Device, LanguageVersion, PhysicalDevice};
 pub use window::{Surface, Swapchain};
 
@@ -50,25 +50,46 @@ impl hal::QueueFamily for QueueFamily {
     fn id(&self) -> QueueFamilyId { QueueFamilyId(0) }
 }
 
-pub struct Instance {}
+pub struct Shared {
+    pub(crate) device: Mutex<metal::Device>,
+    pub(crate) queue_pool: Mutex<command::QueuePool>,
+    pub(crate) service_pipes: Mutex<internal::ServicePipes>,
+}
+
+unsafe impl Send for Shared {}
+unsafe impl Sync for Shared {}
+
+impl Shared {
+    pub(crate) fn new(device: metal::Device) -> Self {
+        Shared {
+            queue_pool: Mutex::new(command::QueuePool::default()),
+            service_pipes: Mutex::new(internal::ServicePipes::new(&device)),
+            device: Mutex::new(device),
+        }
+    }
+}
+
+
+pub struct Instance {
+    shared: Arc<Shared>,
+}
 
 impl hal::Instance for Instance {
     type Backend = Backend;
 
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
         // TODO: enumerate all devices
-
-        let device = metal::Device::system_default();
+        let name = self.shared.device.lock().unwrap().name().into();
 
         vec![
             hal::Adapter {
                 info: hal::AdapterInfo {
-                    name: device.name().into(),
+                    name,
                     vendor: 0,
                     device: 0,
                     software_rendering: false,
                 },
-                physical_device: device::PhysicalDevice::new(device),
+                physical_device: device::PhysicalDevice::new(self.shared.clone()),
                 queue_families: vec![QueueFamily{}],
             }
         ]
@@ -77,7 +98,10 @@ impl hal::Instance for Instance {
 
 impl Instance {
     pub fn create(_: &str, _: u32) -> Self {
-        Instance {}
+        let device = metal::Device::system_default();
+        Instance {
+            shared: Arc::new(Shared::new(device)),
+        }
     }
 
     pub fn create_surface_from_nsview(&self, nsview: *mut c_void) -> Surface {
@@ -119,7 +143,7 @@ impl hal::Backend for Backend {
     type Swapchain = window::Swapchain;
 
     type QueueFamily = QueueFamily;
-    type CommandQueue = Arc<Shared>;
+    type CommandQueue = command::CommandQueue;
     type CommandBuffer = command::CommandBuffer;
 
     type Memory = native::Memory;
@@ -160,6 +184,7 @@ struct PrivateCapabilities {
     max_buffers_per_stage: usize,
     max_textures_per_stage: usize,
     max_samplers_per_stage: usize,
+    buffer_alignment: u64,
 }
 
 pub struct AutoreleasePool {
