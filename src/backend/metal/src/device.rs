@@ -1038,6 +1038,7 @@ impl hal::Device<Backend> for Device {
 
             let allocations = memory.allocations.lock().unwrap();
             for (alloc_range, dst) in allocations.find(&range) {
+                trace!("\t\talloc range {:?}", alloc_range);
                 let start = alloc_range.start.max(range.start);
                 let end = alloc_range.end.min(range.end);
                 let other = start - alloc_range.start;
@@ -1048,7 +1049,7 @@ impl hal::Device<Backend> for Device {
                 }
                 command::exec_blit(encoder, &soft::BlitCommand::CopyBuffer {
                     src: cpu_buffer.clone(),
-                    dst,
+                    dst: dst.to_owned(),
                     region: BufferCopy {
                         src: start & !ALIGN_MASK,
                         dst: other,
@@ -1092,6 +1093,7 @@ impl hal::Device<Backend> for Device {
 
             let allocations = memory.allocations.lock().unwrap();
             for (alloc_range, src) in allocations.find(&range) {
+                trace!("\t\talloc range {:?}", alloc_range);
                 let start = alloc_range.start.max(range.start);
                 let end = alloc_range.end.min(range.end);
                 let other = start - alloc_range.start;
@@ -1101,7 +1103,7 @@ impl hal::Device<Backend> for Device {
                         start .. end);
                 }
                 command::exec_blit(encoder, &soft::BlitCommand::CopyBuffer {
-                    src,
+                    src: src.to_owned(),
                     dst: cpu_buffer.clone(),
                     region: BufferCopy {
                         src: other,
