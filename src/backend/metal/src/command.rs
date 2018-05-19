@@ -2200,7 +2200,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
 
         let sink = inner.sink();
-        sink.blit_commands(blit_commands.into_iter());
+        if !blit_commands.is_empty() {
+            sink.blit_commands(blit_commands.into_iter());
+        }
 
         if compute_commands.len() > 1 { // first is bind PSO
             sink.begin_compute_pass(compute_commands);

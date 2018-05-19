@@ -2,7 +2,7 @@ use {Backend};
 use internal::Channel;
 
 use std::cell::Cell;
-use std::collections::{Bound, BTreeMap, HashMap};
+use std::collections::{HashMap};
 use std::sync::{Arc, Mutex};
 use std::ops::Range;
 use std::os::raw::{c_void, c_long};
@@ -10,7 +10,6 @@ use std::os::raw::{c_void, c_long};
 use hal::{self, image, pass, pso};
 
 use cocoa::foundation::{NSUInteger};
-use foreign_types::ForeignType;
 use metal::{self, MTLPrimitiveType};
 use spirv_cross::{msl, spirv};
 
@@ -264,10 +263,7 @@ impl Memory {
         Memory {
             heap,
             size,
-            allocations: Arc::new(Mutex::new(MemoryAllocations {
-                starts: BTreeMap::new(),
-                ends: BTreeMap::new(),
-            })),
+            allocations: Arc::new(Mutex::new(MemoryAllocations::new())),
             mapping: Mutex::new(None),
             cpu_buffer,
             initialized: Cell::new(false),
@@ -284,30 +280,30 @@ unsafe impl Sync for Memory {}
 
 #[derive(Debug)]
 pub(crate) struct MemoryAllocations {
-    starts: BTreeMap<u64, (u64, metal::Buffer)>,
-    ends: BTreeMap<u64, (u64, metal::Buffer)>,
+    buffers: HashMap<Range<u64>, metal::Buffer>,
 }
 
 impl MemoryAllocations {
-    pub fn find(&self, range: &Range<u64>) -> Vec<(Range<u64>, metal::Buffer)> {
-        // Get all unique buffers that intersects specified range
-        let mut buffers = Vec::new();
-        buffers.extend(self.starts.range(range.clone()).map(|(&start, &(end, ref b))| (start .. end, b.clone())));
-        let bounds = (Bound::Excluded(range.start), Bound::Included(range.end));
-        buffers.extend(self.ends.range(bounds).map(|(&end, &(start, ref b))| (start .. end, b.clone())));
-        buffers.sort_unstable_by_key(|&(_, ref b)| b.as_ptr());
-        buffers.dedup_by_key(|&mut (_, ref b)| b.as_ptr());
-        buffers
+    fn new() -> Self {
+        MemoryAllocations {
+            buffers: HashMap::new(),
+        }
+    }
+
+    /// Get all unique buffers that intersects specified range
+    pub fn find<'a>(&'a self, range: &'a Range<u64>) -> impl Iterator<Item=(Range<u64>, &'a metal::BufferRef)> {
+        self.buffers
+            .iter()
+            .filter(move |&(ref r, _)| r.start < range.end && r.end > range.start)
+            .map(|(r, buf)| (r.clone(), &**buf))
     }
 
     pub fn insert(&mut self, range: Range<u64>, buffer: metal::Buffer) {
-        self.starts.insert(range.start, (range.end, buffer.clone()));
-        self.ends.insert(range.end, (range.start, buffer));
+        self.buffers.insert(range, buffer);
     }
 
     pub fn remove(&mut self, range: Range<u64>) {
-        self.starts.remove(&range.start);
-        self.ends.remove(&range.end);
+        self.buffers.remove(&range);
     }
 }
 
