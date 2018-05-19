@@ -236,6 +236,17 @@ pub struct Limits {
     ///
     pub max_compute_group_size: [u32; 3],
 
+    /// Maximum number of vertex input attributes that can be specified for a graphics pipeline.
+    pub max_vertex_input_attributes: usize,
+    /// Maximum number of vertex buffers that can be specified for providing vertex attributes to a graphics pipeline.
+    pub max_vertex_input_bindings: usize,
+    /// Maximum vertex input attribute offset that can be added to the vertex input binding stride.
+    pub max_vertex_input_attribute_offset: usize,
+    /// Maximum vertex input binding stride that can be specified in a vertex input binding.
+    pub max_vertex_input_binding_stride: usize,
+    /// Maximum number of components of output variables which can be output by a vertex shader.
+    pub max_vertex_output_components: usize,
+
     /// The alignment of the start of the buffer used as a GPU copy source, in bytes, non-zero.
     pub min_buffer_copy_offset_alignment: buffer::Offset,
     /// The alignment of the row pitch of the texture data stored in a buffer that is

@@ -276,6 +276,12 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             max_compute_group_count: [16; 3], // TODO
             max_compute_group_size: [64; 3], // TODO
 
+            max_vertex_input_attributes: 31,
+            max_vertex_input_bindings: 31,
+            max_vertex_input_attribute_offset: 255, // TODO
+            max_vertex_input_binding_stride: 256, // TODO
+            max_vertex_output_components: 16, // TODO
+
             framebuffer_color_samples_count: 0b101, // TODO
             framebuffer_depth_samples_count: 0b101, // TODO
             framebuffer_stencil_samples_count: 0b101, // TODO

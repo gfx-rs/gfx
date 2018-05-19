@@ -1074,6 +1074,11 @@ impl hal::Instance for Instance {
                         1, //TODO
                         1, //TODO
                     ],
+                    max_vertex_input_attributes: d3d12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _,
+                    max_vertex_input_bindings: 31, //TODO
+                    max_vertex_input_attribute_offset: 255, // TODO
+                    max_vertex_input_binding_stride: d3d12::D3D12_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES as _,
+                    max_vertex_output_components: 16, // TODO
                     min_buffer_copy_offset_alignment: d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as _,
                     min_buffer_copy_pitch_alignment: d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as _,
                     min_texel_buffer_offset_alignment: 1, // TODO
