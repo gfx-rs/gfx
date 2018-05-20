@@ -1,11 +1,11 @@
 //#[deny(missing_docs)]
 
-#[macro_use]
+//#[macro_use]
 extern crate bitflags;
 #[macro_use]
 extern crate derivative;
 extern crate gfx_hal as hal;
-#[macro_use]
+//#[macro_use]
 extern crate log;
 extern crate smallvec;
 extern crate spirv_cross;
@@ -14,19 +14,19 @@ extern crate winapi;
 extern crate winit;
 extern crate wio;
 
-use hal::{buffer, command, device, error, format, image, memory, mapping, queue, query, pool, pso, pass, Features, Limits, QueueType};
-use hal::{DrawCount, IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
-use hal::queue::{QueueFamily as HalQueueFamily, QueueFamilyId, Queues};
+use hal::{buffer, command, device, error, format, image, memory, mapping, query, pool, pso, pass, Features, Limits, QueueType};
+use hal::{IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
+use hal::queue::{QueueFamilyId, Queues};
 use hal::backend::RawQueueGroup;
-use hal::format::Aspects;
 use hal::range::RangeArg;
 
-use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgiformat, dxgitype, winerror};
+use winapi::shared::{dxgiformat, dxgitype, winerror};
+
+use winapi::shared::dxgi::{DXGI_SWAP_CHAIN_DESC, DXGI_SWAP_EFFECT_DISCARD, IDXGIFactory, IDXGIAdapter, IDXGISwapChain};
 use winapi::shared::minwindef::{FALSE, TRUE};
 use winapi::shared::windef::{HWND, RECT};
-use winapi::um::winnt::{LARGE_INTEGER};
 use winapi::um::winuser::{GetClientRect};
-use winapi::um::{d3d11, d3dcommon};
+use winapi::um::{d3d11, d3d11sdklayers, d3dcommon};
 
 use wio::com::ComPtr;
 
@@ -35,14 +35,14 @@ use std::mem;
 use std::ops::Range;
 use std::borrow::{BorrowMut, Borrow};
 
-use std::os::windows::ffi::OsStringExt;
-use std::ffi::OsString;
 use std::os::raw::c_void;
 
 mod conv;
+mod dxgi;
 
 pub struct Instance {
-    pub(crate) factory: ComPtr<dxgi::IDXGIFactory1>
+    pub(crate) factory: ComPtr<IDXGIFactory>,
+    pub(crate) dxgi_version: dxgi::DxgiVersion
 }
 
 unsafe impl Send for Instance { }
@@ -52,20 +52,13 @@ impl Instance {
     pub fn create(_: &str, _: u32) -> Self {
         // TODO: get the latest factory we can find
 
-        let mut factory: *mut dxgi::IDXGIFactory1 = ptr::null_mut();
-        let hr = unsafe {
-            dxgi::CreateDXGIFactory1(
-                &dxgi::IID_IDXGIFactory1,
-                &mut factory as *mut *mut _ as *mut *mut _
-            )
-        };
+        let (factory, dxgi_version) = dxgi::get_dxgi_factory().unwrap();
 
-        if !winerror::SUCCEEDED(hr) {
-            error!("Failed on dxgi factory creation: {:?}", hr);
-        }
+        println!("DXGI version: {:?}", dxgi_version);
 
         Instance {
-            factory: unsafe { ComPtr::from_raw(factory) }
+            factory,
+            dxgi_version
         }
     }
 
@@ -101,83 +94,64 @@ impl hal::Instance for Instance {
         let mut idx = 0;
 
         loop {
-            let adapter = {
-                let mut adapter: *mut dxgi::IDXGIAdapter1 = ptr::null_mut();
-                let hr = unsafe {
-                    self.factory.EnumAdapters1(idx, &mut adapter as *mut *mut _)
-                };
+            match dxgi::get_adapter(idx, self.factory.as_raw(), self.dxgi_version) {
+                Ok((adapter, info)) => {
+                    idx += 1;
 
-                if hr == winerror::DXGI_ERROR_NOT_FOUND {
-                    break;
-                }
+                    let physical_device = PhysicalDevice {
+                        adapter,
+                        // TODO: check for features
+                        features: hal::Features::empty(),
+                        limits: hal::Limits {
+                            max_texture_size: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION as _,
+                            max_patch_size: 0, // TODO
+                            max_viewports: d3d11::D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
+                            max_compute_group_count: [
+                                d3d11::D3D11_CS_THREAD_GROUP_MAX_X,
+                                d3d11::D3D11_CS_THREAD_GROUP_MAX_Y,
+                                d3d11::D3D11_CS_THREAD_GROUP_MAX_Z
+                            ],
+                            max_compute_group_size: [
+                                d3d11::D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP,
+                                1,
+                                1
+                            ], // TODO
+                            max_vertex_input_attribute_offset: 0, // TODO
+                            max_vertex_input_attributes: 0, // TODO
+                            max_vertex_input_binding_stride: 0, // TODO
+                            max_vertex_input_bindings: 0, // TODO
+                            max_vertex_output_components: 0, // TODO
+                            min_buffer_copy_offset_alignment: 0,    // TODO
+                            min_buffer_copy_pitch_alignment: 0,     // TODO
+                            min_texel_buffer_offset_alignment: 0,   // TODO
+                            min_uniform_buffer_offset_alignment: 0, // TODO
+                            min_storage_buffer_offset_alignment: 0, // TODO
+                            framebuffer_color_samples_count: 0,     // TODO
+                            framebuffer_depth_samples_count: 0,     // TODO
+                            framebuffer_stencil_samples_count: 0,   // TODO
+                            non_coherent_atom_size: 0,              // TODO
+                        },
+                        memory_properties: hal::MemoryProperties {
+                            memory_types: vec![], // TODO
+                            memory_heaps: vec![]  // TODO
+                        }
+                    };
 
-                unsafe { ComPtr::from_raw(adapter) }
-            };
+                    println!("{:#?}", info);
 
-            idx += 1;
-            let mut umd: LARGE_INTEGER = unsafe { mem::zeroed() };
-
-            // check if adapter supports creating d3d11 device
-            let mut desc: dxgi::DXGI_ADAPTER_DESC1 = unsafe { mem::zeroed() };
-            unsafe { adapter.GetDesc1(&mut desc); }
-
-            let device_name = {
-                let len = desc.Description.iter().take_while(|&&c| c != 0).count();
-                let name = <OsString as OsStringExt>::from_wide(&desc.Description[..len]);
-                name.to_string_lossy().into_owned()
-            };
-
-            let info = hal::AdapterInfo {
-                name: device_name,
-                vendor: desc.VendorId as usize,
-                device: desc.DeviceId as usize,
-                software_rendering: (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0,
-            };
-
-            let physical_device = PhysicalDevice {
-                adapter,
-                // TODO: check for features
-                features: hal::Features::empty(),
-                limits: hal::Limits {
-                    max_texture_size: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION as _,
-                    max_patch_size: 0, // TODO
-                    max_viewports: d3d11::D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
-                    max_compute_group_count: [
-                        d3d11::D3D11_CS_THREAD_GROUP_MAX_X,
-                        d3d11::D3D11_CS_THREAD_GROUP_MAX_Y,
-                        d3d11::D3D11_CS_THREAD_GROUP_MAX_Z
-                    ],
-                    max_compute_group_size: [
-                        d3d11::D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP,
-                        1,
-                        1
-                    ], // TODO
-                    max_vertex_input_attribute_offset: 0, // TODO
-                    max_vertex_input_attributes: 0, // TODO
-                    max_vertex_input_binding_stride: 0, // TODO
-                    max_vertex_input_bindings: 0, // TODO
-                    max_vertex_output_components: 0, // TODO
-                    min_buffer_copy_offset_alignment: 0,    // TODO
-                    min_buffer_copy_pitch_alignment: 0,     // TODO
-                    min_texel_buffer_offset_alignment: 0,   // TODO
-                    min_uniform_buffer_offset_alignment: 0, // TODO
-                    min_storage_buffer_offset_alignment: 0, // TODO
-                    framebuffer_color_samples_count: 0,     // TODO
-                    framebuffer_depth_samples_count: 0,     // TODO
-                    framebuffer_stencil_samples_count: 0,   // TODO
-                    non_coherent_atom_size: 0,              // TODO
+                    adapters.push(hal::Adapter {
+                        info,
+                        physical_device,
+                        queue_families: vec![QueueFamily]
+                    });
                 },
-                memory_properties: hal::MemoryProperties {
-                    memory_types: vec![], // TODO
-                    memory_heaps: vec![]  // TODO
+                Err(hr) => if hr == winerror::DXGI_ERROR_NOT_FOUND {
+                    break;
+                },
+                Err(hr) => {
+                    unimplemented!()
                 }
-            };
-
-            adapters.push(hal::Adapter {
-                info,
-                physical_device,
-                queue_families: vec![QueueFamily]
-            });
+            }
         }
 
         adapters
@@ -188,7 +162,7 @@ impl hal::Instance for Instance {
 #[derivative(Debug)]
 pub struct PhysicalDevice {
     #[derivative(Debug="ignore")]
-    adapter: ComPtr<dxgi::IDXGIAdapter1>,
+    adapter: ComPtr<IDXGIAdapter>,
     features: hal::Features,
     limits: hal::Limits,
     memory_properties: hal::MemoryProperties,
@@ -198,7 +172,7 @@ unsafe impl Send for PhysicalDevice { }
 unsafe impl Sync for PhysicalDevice { }
 
 // TODO: does the adapter we get earlier matter for feature level?
-fn get_feature_level(adapter: *mut dxgi::IDXGIAdapter) -> d3dcommon::D3D_FEATURE_LEVEL {
+fn get_feature_level(adapter: *mut IDXGIAdapter) -> d3dcommon::D3D_FEATURE_LEVEL {
     let requested_feature_levels = [
         d3dcommon::D3D_FEATURE_LEVEL_11_1,
         d3dcommon::D3D_FEATURE_LEVEL_11_0,
@@ -213,7 +187,7 @@ fn get_feature_level(adapter: *mut dxgi::IDXGIAdapter) -> d3dcommon::D3D_FEATURE
     let hr = unsafe {
         d3d11::D3D11CreateDevice(
             adapter,
-            d3dcommon::D3D_DRIVER_TYPE_NULL,
+            d3dcommon::D3D_DRIVER_TYPE_UNKNOWN,
             ptr::null_mut(),
             0,
             requested_feature_levels[..].as_ptr(),
@@ -229,25 +203,26 @@ fn get_feature_level(adapter: *mut dxgi::IDXGIAdapter) -> d3dcommon::D3D_FEATURE
         // if there is no 11.1 runtime installed, requesting
         // `D3D_FEATURE_LEVEL_11_1` will return E_INVALIDARG so we just retry
         // without that
-        assert_eq!(hr, winerror::E_INVALIDARG);
-        let hr = unsafe {
-            d3d11::D3D11CreateDevice(
-                ptr::null_mut(),
-                d3dcommon::D3D_DRIVER_TYPE_NULL,
-                ptr::null_mut(),
-                0,
-                requested_feature_levels[1..].as_ptr(),
-                (requested_feature_levels.len() - 1) as _,
-                d3d11::D3D11_SDK_VERSION,
-                ptr::null_mut(),
-                &mut feature_level as *mut _,
-                ptr::null_mut()
-            )
-        };
+        if hr == winerror::E_INVALIDARG {
+            let hr = unsafe {
+                d3d11::D3D11CreateDevice(
+                    adapter,
+                    d3dcommon::D3D_DRIVER_TYPE_UNKNOWN,
+                    ptr::null_mut(),
+                    0,
+                    requested_feature_levels[1..].as_ptr(),
+                    (requested_feature_levels.len() - 1) as _,
+                    d3d11::D3D11_SDK_VERSION,
+                    ptr::null_mut(),
+                    &mut feature_level as *mut _,
+                    ptr::null_mut()
+                )
+            };
 
-        if !winerror::SUCCEEDED(hr) {
-            // TODO: device might not support any feature levels?
-            unimplemented!();
+            if !winerror::SUCCEEDED(hr) {
+                // TODO: device might not support any feature levels?
+                unimplemented!();
+            }
         }
     }
 
@@ -260,7 +235,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         -> Result<hal::Gpu<Backend>, error::DeviceCreationError>
     {
         let (device, cxt) = {
-            let feature_level = get_feature_level(self.adapter.as_raw() as *mut _);
+            let feature_level = get_feature_level(self.adapter.as_raw());
             let mut returned_level = d3dcommon::D3D_FEATURE_LEVEL_9_1;
 
             // TODO: request debug device only on debug config?
@@ -714,7 +689,7 @@ impl hal::Device<Backend> for Device {
             (map_format(format).unwrap(), map_format(config.color_format).unwrap())
         };
 
-        let mut desc = dxgi::DXGI_SWAP_CHAIN_DESC {
+        let mut desc = DXGI_SWAP_CHAIN_DESC {
             BufferDesc: dxgitype::DXGI_MODE_DESC {
                 Width: surface.width,
                 Height: surface.height,
@@ -739,11 +714,11 @@ impl hal::Device<Backend> for Device {
             // TODO:
             Windowed: TRUE,
             // TODO:
-            SwapEffect: dxgi::DXGI_SWAP_EFFECT_DISCARD,
+            SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
             Flags: 0
         };
         let swapchain = {
-            let mut swapchain: *mut dxgi::IDXGISwapChain = ptr::null_mut();
+            let mut swapchain: *mut IDXGISwapChain = ptr::null_mut();
             let hr = unsafe {
                 surface.factory.CreateSwapChain(
                     self.device.as_raw() as *mut _,
@@ -807,7 +782,8 @@ impl hal::Device<Backend> for Device {
                 dxgi_format: format,
                 bytes_per_block,
                 block_dim,
-                num_levels: 1
+                num_levels: 1,
+                rtv: unsafe { ComPtr::from_raw(rtv) }
             }
         }).collect();
 
@@ -825,7 +801,7 @@ impl hal::Device<Backend> for Device {
 }
 
 pub struct Surface {
-    pub(crate) factory: ComPtr<dxgi::IDXGIFactory1>,
+    pub(crate) factory: ComPtr<IDXGIFactory>,
     wnd_handle: HWND,
     width: u32,
     height: u32
@@ -879,7 +855,7 @@ impl hal::Surface<Backend> for Surface {
 }
 
 pub struct Swapchain {
-    dxgi_swapchain: ComPtr<dxgi::IDXGISwapChain>,
+    dxgi_swapchain: ComPtr<IDXGISwapChain>,
 }
 
 unsafe impl Send for Swapchain { }
@@ -887,7 +863,11 @@ unsafe impl Sync for Swapchain { }
 
 impl hal::Swapchain<Backend> for Swapchain {
     fn acquire_frame(&mut self, _sync: hal::FrameSync<Backend>) -> hal::Frame {
-        unimplemented!()
+        // TODO: non-`_DISCARD` swap effects have more than one buffer, `FLIP`
+        //       effects are dxgi 1.3 (w10+?) in which case there is
+        //       `GetCurrentBackBufferIndex()` on the swapchain
+
+        hal::Frame::new(0)
     }
 }
 
@@ -1218,6 +1198,8 @@ pub struct Image {
     bytes_per_block: u8,
     block_dim: (u8, u8),
     num_levels: image::Level,
+    #[derivative(Debug="ignore")]
+    rtv: ComPtr<d3d11::ID3D11RenderTargetView>
 }
 
 unsafe impl Send for Image { }

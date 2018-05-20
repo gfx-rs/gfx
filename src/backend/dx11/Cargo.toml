@@ -24,6 +24,6 @@ gfx-hal = { path = "../../hal", version = "0.1" }
 log = "0.4"
 smallvec = "0.6"
 spirv_cross = "0.8"
-winapi = { version = "0.3", features = ["basetsd","d3d11", "d3dcommon","d3dcompiler","dxgi1_2","dxgi1_3","dxgi1_4","dxgiformat","dxgitype","handleapi","minwindef","synchapi","unknwnbase","winbase","windef","winerror","winnt","winuser"] }
+winapi = { version = "0.3", features = ["basetsd","d3d11", "d3d11sdklayers", "d3dcommon","d3dcompiler","dxgi1_2","dxgi1_3","dxgi1_4", "dxgi1_5", "dxgiformat","dxgitype","handleapi","minwindef","synchapi","unknwnbase","winbase","windef","winerror","winnt","winuser"] }
 winit = { version = "0.13", optional = true }
 wio = "0.2"
