@@ -949,7 +949,7 @@ impl d::Device<B> for Device {
     {
         for _write in writes {
             //unimplemented!() // not panicing because of Warden
-            error!("TODO: implement `write_descriptor_sets`");
+            warn!("TODO: implement `write_descriptor_sets`");
         }
     }
 
