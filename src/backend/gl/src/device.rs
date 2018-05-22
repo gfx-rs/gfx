@@ -213,6 +213,39 @@ impl Device {
             })
     }
 
+    fn specialize_ast(
+        &self,
+        ast: &mut spirv::Ast<glsl::Target>,
+        specializations: &[pso::Specialization],
+    ) -> Result<(), d::ShaderError> {
+        let spec_constants = ast
+            .get_specialization_constants()
+            .map_err(gen_unexpected_error)?;
+
+        for spec_constant in spec_constants {
+            if let Some(constant) = specializations
+                .iter()
+                .find(|c| c.id == spec_constant.constant_id)
+            {
+                // Override specialization constant values
+                unsafe {
+                    let value = match constant.value {
+                        pso::Constant::Bool(v) => v as u64,
+                        pso::Constant::U32(v) => v as u64,
+                        pso::Constant::U64(v) => v,
+                        pso::Constant::I32(v) => *(&v as *const _ as *const u64),
+                        pso::Constant::I64(v) => *(&v as *const _ as *const u64),
+                        pso::Constant::F32(v) => *(&v as *const _ as *const u64),
+                        pso::Constant::F64(v) => *(&v as *const _ as *const u64),
+                    };
+                    ast.set_scalar_constant(spec_constant.id, value).map_err(gen_unexpected_error)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     fn translate_spirv(
         &self,
         ast: &mut spirv::Ast<glsl::Target>,
@@ -259,6 +292,7 @@ impl Device {
             n::ShaderModule::Raw(raw) => raw,
             n::ShaderModule::Spirv(ref spirv) => {
                 let mut ast = self.parse_spirv(spirv).unwrap();
+                self.specialize_ast(&mut ast, point.specialization).unwrap();
                 let glsl = self.translate_spirv(&mut ast).unwrap();
                 info!("Generated:\n{:?}", glsl);
                 match self.create_shader_module_from_source(glsl.as_bytes(), stage).unwrap() {
