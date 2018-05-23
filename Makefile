@@ -18,12 +18,14 @@ ifeq ($(OS),Windows_NT)
 		# No d3d12 support on GNU windows ATM
 		# context: https://github.com/gfx-rs/gfx/pull/1417
 		EXCLUDES+= --exclude gfx-backend-dx12
+		EXCLUDES+= --exclude gfx-backend-dx11
 	else
 		FEATURES_HAL2=dx12
 	endif
 else
 	UNAME_S:=$(shell uname -s)
 	EXCLUDES+= --exclude gfx-backend-dx12
+	EXCLUDES+= --exclude gfx-backend-dx11
 	GLUTIN_HEADLESS_FEATURE="--features headless" #TODO?
 	ifeq ($(UNAME_S),Linux)
 		EXCLUDES+= --exclude gfx-backend-metal
