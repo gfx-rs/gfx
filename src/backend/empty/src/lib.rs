@@ -197,6 +197,10 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
+    fn get_image_subresource_footprint(&self, _: &(), _: image::Subresource) -> image::SubresourceFootprint {
+        unimplemented!()
+    }
+
     fn bind_image_memory(&self, _: &(), _: u64, _: ()) -> Result<(), device::BindError> {
         unimplemented!()
     }

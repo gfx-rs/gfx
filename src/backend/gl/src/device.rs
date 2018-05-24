@@ -913,6 +913,12 @@ impl d::Device<B> for Device {
         unbound.requirements
     }
 
+    fn get_image_subresource_footprint(
+        &self, _image: &n::Image, _sub: i::Subresource
+    ) -> i::SubresourceFootprint {
+        unimplemented!()
+    }
+
     fn bind_image_memory(
         &self, _memory: &n::Memory, _offset: u64, unbound: UnboundImage
     ) -> Result<n::Image, d::BindError> {

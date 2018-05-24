@@ -81,11 +81,27 @@ unsafe impl Sync for ComputePipeline {}
 #[derive(Debug)]
 pub struct Image {
     pub(crate) raw: metal::Texture,
-    pub(crate) extent: hal::image::Extent,
+    pub(crate) extent: image::Extent,
+    pub(crate) num_layers: Option<image::Layer>,
     pub(crate) format_desc: hal::format::FormatDesc,
     pub(crate) shader_channel: Channel,
     pub(crate) mtl_format: metal::MTLPixelFormat,
     pub(crate) mtl_type: metal::MTLTextureType,
+}
+
+impl Image {
+    pub(crate) fn pitches_impl(
+        level: image::Level, extent: image::Extent, format_desc: hal::format::FormatDesc
+    ) -> [hal::buffer::Offset; 3] {
+        let bytes_per_texel = format_desc.bits as image::Size >> 3;
+        let row_pitch = 1.max(extent.width >> level) * bytes_per_texel;
+        let depth_pitch = 1.max(extent.height >> level) * row_pitch;
+        let array_pitch = 1.max(extent.depth >> level) * depth_pitch;
+        [row_pitch as _, depth_pitch as _, array_pitch as _]
+    }
+    pub(crate) fn pitches(&self, level: image::Level) -> [hal::buffer::Offset; 3] {
+        Self::pitches_impl(level, self.extent, self.format_desc)
+    }
 }
 
 unsafe impl Send for Image {}
@@ -325,8 +341,10 @@ unsafe impl Sync for UnboundBuffer {}
 pub struct UnboundImage {
     pub(crate) texture_desc: metal::TextureDescriptor,
     pub(crate) format: hal::format::Format,
-    pub(crate) tiling: hal::image::Tiling,
-    pub(crate) extent: hal::image::Extent,
+    pub(crate) tiling: image::Tiling,
+    pub(crate) extent: image::Extent,
+    pub(crate) mip_levels: image::Level,
+    pub(crate) num_layers: Option<image::Layer>,
 }
 unsafe impl Send for UnboundImage {}
 unsafe impl Sync for UnboundImage {}

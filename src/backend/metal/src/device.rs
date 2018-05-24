@@ -1525,39 +1525,36 @@ impl hal::Device<Backend> for Device {
 
         let descriptor = metal::TextureDescriptor::new();
 
-        let mtl_type = match kind {
+        let (mtl_type, num_layers) = match kind {
             image::Kind::D1(_, 1) if mip_levels == 1=> {
                 assert!(!is_cube);
-                MTLTextureType::D1
+                (MTLTextureType::D1, None)
             }
             image::Kind::D1(_, layers) if mip_levels == 1 => {
                 assert!(!is_cube);
-                descriptor.set_array_length(layers as u64);
-                MTLTextureType::D1Array
+                (MTLTextureType::D1Array, Some(layers))
             }
             image::Kind::D1(_, 1) |
             image::Kind::D2(_, _, 1, 1) => {
-                MTLTextureType::D2
+                (MTLTextureType::D2, None)
             }
             image::Kind::D1(_, layers) |
             image::Kind::D2(_, _, layers, 1) => {
                 if is_cube && layers > 6 {
                     assert_eq!(layers % 6, 0);
-                    descriptor.set_array_length(layers as u64 / 6);
-                    MTLTextureType::CubeArray
+                    (MTLTextureType::CubeArray, Some(layers / 6))
                 } else if is_cube {
                     assert_eq!(layers, 6);
-                    MTLTextureType::Cube
+                    (MTLTextureType::Cube, None)
                 } else if layers > 1 {
-                    descriptor.set_array_length(layers as u64);
-                    MTLTextureType::D2Array
+                    (MTLTextureType::D2Array, Some(layers))
                 } else {
-                    MTLTextureType::D2
+                    (MTLTextureType::D2, None)
                 }
             }
             image::Kind::D2(_, _, 1, samples) if !is_cube => {
                 descriptor.set_sample_count(samples as u64);
-                MTLTextureType::D2Multisample
+                (MTLTextureType::D2Multisample, None)
             }
             image::Kind::D2(..) => {
                 error!("Multi-sampled array textures or cubes are not supported: {:?}", kind);
@@ -1565,11 +1562,14 @@ impl hal::Device<Backend> for Device {
             }
             image::Kind::D3(..) => {
                 assert!(!is_cube);
-                MTLTextureType::D3
+                (MTLTextureType::D3, None)
             }
         };
 
         descriptor.set_texture_type(mtl_type);
+        if let Some(count) = num_layers {
+            descriptor.set_array_length(count as u64);
+        }
         let extent = kind.extent();
         descriptor.set_width(extent.width as u64);
         descriptor.set_height(extent.height as u64);
@@ -1583,6 +1583,8 @@ impl hal::Device<Backend> for Device {
             format,
             tiling,
             extent,
+            mip_levels,
+            num_layers,
         })
     }
 
@@ -1591,7 +1593,8 @@ impl hal::Device<Backend> for Device {
             image::Tiling::Optimal => 0x4,
             image::Tiling::Linear => 0x3, //CPU_VISIBLE
         };
-        if !image.format.surface_desc().aspects.contains(format::Aspects::COLOR) {
+        let format_desc = image.format.surface_desc();
+        if !format_desc.aspects.contains(format::Aspects::COLOR) {
             type_mask &= 0x4; // DEVICE_LOCAL only
         }
         if self.private_caps.resource_heaps {
@@ -1626,11 +1629,34 @@ impl hal::Device<Backend> for Device {
                 type_mask,
             }
         } else {
+            let num_layers = image.num_layers.unwrap_or(1) as buffer::Offset;
+            let size = (0 .. image.mip_levels).fold(0, |offset, level| {
+                let pitches = n::Image::pitches_impl(level, image.extent, format_desc);
+                offset + num_layers * pitches[2]
+            });
             memory::Requirements {
-                size: 1, // TODO: something sensible
+                size,
                 alignment: 4,
                 type_mask,
             }
+        }
+    }
+
+    fn get_image_subresource_footprint(
+        &self, image: &n::Image, sub: image::Subresource
+    ) -> image::SubresourceFootprint {
+        let num_layers = image.num_layers.unwrap_or(1) as buffer::Offset;
+        let level_offset = (0 .. sub.level).fold(0, |offset, level| {
+            let pitches = image.pitches(level);
+            offset + num_layers * pitches[2]
+        });
+        let pitches = image.pitches(sub.level);
+        let layer_offset = level_offset + sub.layer as buffer::Offset * pitches[2];
+        image::SubresourceFootprint {
+            slice: layer_offset .. layer_offset + pitches[2],
+            row_pitch: pitches[0] as _,
+            depth_pitch: pitches[1] as _,
+            array_pitch: pitches[2] as _,
         }
     }
 
@@ -1672,6 +1698,7 @@ impl hal::Device<Backend> for Device {
         Ok(n::Image {
             raw,
             extent: image.extent,
+            num_layers: image.num_layers,
             format_desc: base.0.desc(),
             shader_channel: match base.1 {
                 format::ChannelType::Unorm |

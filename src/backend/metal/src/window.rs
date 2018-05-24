@@ -161,6 +161,7 @@ impl Device {
                         height: pixel_height as _,
                         depth: 1,
                     },
+                    num_layers: None,
                     format_desc: config.color_format.surface_desc(),
                     shader_channel: Channel::Float,
                     mtl_format,

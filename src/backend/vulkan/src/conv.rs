@@ -127,6 +127,16 @@ pub fn map_extent(offset: image::Extent) -> vk::Extent3D {
     }
 }
 
+pub fn map_subresource(
+    sub: &image::Subresource,
+) -> vk::ImageSubresource {
+    vk::ImageSubresource {
+        aspect_mask: map_image_aspects(sub.aspects),
+        mip_level: sub.level as _,
+        array_layer: sub.layer as _,
+    }
+}
+
 pub fn map_subresource_layers(
     sub: &image::SubresourceLayers,
 ) -> vk::ImageSubresourceLayers {

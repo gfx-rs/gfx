@@ -2014,6 +2014,36 @@ impl d::Device<B> for Device {
         image.requirements
     }
 
+    fn get_image_subresource_footprint(
+        &self, image: &n::Image, sub: image::Subresource
+    ) -> image::SubresourceFootprint {
+        let mut num_rows = 0;
+        let mut total_bytes = 0;
+        let footprint = unsafe {
+            let mut footprint = mem::zeroed();
+            self.raw.GetCopyableFootprints(
+                image.resource,
+                image.calc_subresource(sub.level as _, sub.layer as _, 0),
+                1,
+                0,
+                &mut footprint,
+                &mut num_rows,
+                ptr::null_mut(), // row size in bytes
+                &mut total_bytes,
+            );
+            footprint
+        };
+
+        let depth_pitch = footprint.Footprint.RowPitch * num_rows as buffer::Offset;
+        let array_pitch = footprint.Footprint.Depth * depth_pitch;
+        image::SubresourceFootprint {
+            slice: footprint.Offset .. footprint.Offset + total_bytes,
+            row_pitch: footprint.Footprint.RowPitch,
+            depth_pitch,
+            array_pitch,
+        }
+    }
+
     fn bind_image_memory(
         &self,
         memory: &n::Memory,
