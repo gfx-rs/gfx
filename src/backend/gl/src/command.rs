@@ -793,6 +793,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         warn!("Depth bounds test is not supported");
     }
 
+    fn set_line_width(&mut self, _width: f32) {
+        unimplemented!();
+    }
+
     fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
         let n::GraphicsPipeline {
             primitive,

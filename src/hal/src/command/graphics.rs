@@ -253,6 +253,11 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
+    pub fn set_line_width(&mut self, width: f32) {
+        self.raw.set_line_width(width);
+    }
+
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn push_graphics_constants(&mut self, layout: &B::PipelineLayout, stages: pso::ShaderStageFlags, offset: u32, constants: &[u32]) {
         self.raw.push_graphics_constants(layout, stages, offset, constants)
     }

@@ -213,3 +213,10 @@ impl AutoreleasePool {
         self.pool = NSAutoreleasePool::new(cocoa::base::nil);
     }
 }
+
+fn validate_line_width(width: f32) {
+    // Note from the Vulkan spec:
+    // > If the wide lines feature is not enabled, lineWidth must be 1.0
+    // Simply assert and no-op because Metal never exposes `Features::LINE_WIDTH` 
+    assert_eq!(width, 1.0);
+}

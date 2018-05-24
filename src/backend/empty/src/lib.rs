@@ -511,21 +511,21 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-
     fn set_stencil_reference(&mut self, _: pso::StencilValue, _: pso::StencilValue) {
         unimplemented!()
     }
-
 
     fn set_blend_constants(&mut self, _: pso::ColorValue) {
         unimplemented!()
     }
 
-
     fn set_depth_bounds(&mut self, _: Range<f32>) {
         unimplemented!()
     }
 
+    fn set_line_width(&mut self, _: f32) {
+        unimplemented!();
+    }
 
     fn begin_render_pass<T>(
         &mut self,

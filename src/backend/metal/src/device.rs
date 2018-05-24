@@ -1,4 +1,4 @@
-use {AutoreleasePool, Backend, PrivateCapabilities, QueueFamily, Shared, Surface, Swapchain};
+use {AutoreleasePool, Backend, PrivateCapabilities, QueueFamily, Shared, Surface, Swapchain, validate_line_width};
 use {conversions as conv, command, native as n, soft};
 use internal::Channel;
 
@@ -840,6 +840,10 @@ impl hal::Device<Backend> for Device {
         }
 
         pipeline.set_vertex_descriptor(Some(&vertex_descriptor));
+
+        if let pso::PolygonMode::Line(width) = pipeline_desc.rasterizer.polygon_mode {
+            validate_line_width(width);
+        }
 
         device.new_render_pipeline_state(&pipeline)
             .map(|raw|

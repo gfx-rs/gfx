@@ -12,7 +12,6 @@ use {CommandList, DeferredContext, ShaderModel};
 use native;
 use wio::com::ComPtr;
 
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MappingGate {
     pointer: *mut c_void,

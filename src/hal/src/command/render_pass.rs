@@ -49,6 +49,7 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
     pub fn draw_indexed(&mut self, indices: Range<IndexCount>, base_vertex: VertexOffset, instances: Range<InstanceCount>) {
         self.0.draw_indexed(indices, base_vertex, instances)
     }
+
     ///
     pub fn draw_indirect(&mut self, buffer: &B::Buffer, offset: buffer::Offset, draw_count: u32, stride: u32) {
         self.0.draw_indirect(buffer, offset, draw_count, stride)
@@ -124,7 +125,11 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
         self.0.push_graphics_constants(layout, stages, offset, constants);
     }
 
-    // TODO: set_line_width
+    ///
+    pub fn set_line_width(&mut self, width: f32) {
+        self.0.set_line_width(width);
+    }
+
     // TODO: set_depth_bias
     // TODO: set_stencil_compare_mask
     // TODO: set_stencil_write_mask
