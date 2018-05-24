@@ -16,7 +16,7 @@ use winapi::shared::{dxgiformat, winerror};
 
 use wio::com::ComPtr;
 
-use {conv, device, internal, native as n, Backend, Device, Shared, MAX_VERTEX_BUFFERS};
+use {conv, device, internal, native as n, Backend, Device, Shared, MAX_VERTEX_BUFFERS, validate_line_width};
 use device::ViewInfo;
 use root_constants::RootConstant;
 use smallvec::SmallVec;
@@ -1682,6 +1682,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             Ok(cmd_list1) => unsafe { cmd_list1.OMSetDepthBounds(bounds.start, bounds.end) },
             Err(_) => warn!("Depth bounds test is not supported"),
         }
+    }
+    
+    fn set_line_width(&mut self, width: f32) {
+        validate_line_width(width);
     }
 
     fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {

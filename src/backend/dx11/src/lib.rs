@@ -1037,6 +1037,10 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
+    fn set_line_width(&mut self, width: f32) {
+        validate_line_width(width);
+    }
+
     fn bind_graphics_pipeline(&mut self, pipeline: &GraphicsPipeline) {
         unimplemented!()
     }
@@ -1288,4 +1292,11 @@ impl hal::Backend for Backend {
     type Fence = Fence;
     type Semaphore = Semaphore;
     type QueryPool = QueryPool;
+}
+
+fn validate_line_width(width: f32) {
+    // Note from the Vulkan spec:
+    // > If the wide lines feature is not enabled, lineWidth must be 1.0
+    // Simply assert and no-op because DX11 never exposes `Features::LINE_WIDTH` 
+    assert_eq!(width, 1.0);
 }

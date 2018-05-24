@@ -1,4 +1,4 @@
-use {AutoreleasePool, Backend, Shared};
+use {AutoreleasePool, Backend, Shared, validate_line_width};
 use {native, window};
 use internal::{BlitVertex, Channel};
 
@@ -1677,6 +1677,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn set_depth_bounds(&mut self, _: Range<f32>) {
         warn!("Depth bounds test is not supported");
+    }
+
+    fn set_line_width(&mut self, width: f32) {
+        validate_line_width(width);
     }
 
     fn begin_render_pass<T>(

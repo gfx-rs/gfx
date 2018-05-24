@@ -578,6 +578,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
+    fn set_line_width(&mut self, width: f32) {
+        unsafe {
+            self.device.0.cmd_set_line_width(self.raw, width);
+        }
+    }
+
     fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
         unsafe {
             self.device.0.cmd_bind_pipeline(

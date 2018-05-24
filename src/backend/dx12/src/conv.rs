@@ -1,3 +1,5 @@
+use { validate_line_width };
+
 use std::mem;
 use spirv_cross::spirv;
 
@@ -10,7 +12,6 @@ use winapi::um::d3dcommon::*;
 use hal::format::{Format, ImageFeature, SurfaceType};
 use hal::{buffer, image, pso, Primitive};
 use hal::pso::DescriptorSetLayoutBinding;
-
 
 pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     use hal::format::Format::*;
@@ -156,7 +157,10 @@ pub fn map_rasterizer(rasterizer: &pso::Rasterizer) -> D3D12_RASTERIZER_DESC {
                 error!("Point rasterization is not supported");
                 D3D12_FILL_MODE_WIREFRAME
             },
-            Line(_) => D3D12_FILL_MODE_WIREFRAME,
+            Line(width) => {
+                validate_line_width(width);
+                D3D12_FILL_MODE_WIREFRAME
+            },
             Fill => D3D12_FILL_MODE_SOLID,
         },
         CullMode: match rasterizer.cull_face {

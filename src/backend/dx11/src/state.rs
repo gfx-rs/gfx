@@ -3,6 +3,7 @@ use winapi::*;
 use core::{pso, state};
 use data::map_function;
 use wio::com::ComPtr;
+use { validate_line_width };
 
 pub fn make_rasterizer(device: &mut ComPtr<ID3D11Device>, rast: &state::Rasterizer, use_scissor: bool)
                        -> *const ID3D11RasterizerState {
@@ -12,7 +13,10 @@ pub fn make_rasterizer(device: &mut ComPtr<ID3D11Device>, rast: &state::Rasteriz
                 error!("Point rasterization is not supported");
                 D3D11_FILL_WIREFRAME
             },
-            state::RasterMethod::Line(_) => D3D11_FILL_WIREFRAME,
+            state::RasterMethod::Line(width) => {
+                validate_line_width(width);
+                D3D11_FILL_WIREFRAME
+            },
             state::RasterMethod::Fill => D3D11_FILL_SOLID,
         },
         CullMode: match rast.cull_face {
