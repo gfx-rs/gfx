@@ -156,6 +156,7 @@ impl Device {
                 ];
                 native::Image {
                     raw: mapped_texture,
+                    allocations: None,
                     extent: image::Extent {
                         width: pixel_width as _,
                         height: pixel_height as _,

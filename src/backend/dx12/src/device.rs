@@ -2021,8 +2021,9 @@ impl d::Device<B> for Device {
         let mut total_bytes = 0;
         let footprint = unsafe {
             let mut footprint = mem::zeroed();
+            let desc = (*image.resource).GetDesc();
             self.raw.GetCopyableFootprints(
-                image.resource,
+                &desc,
                 image.calc_subresource(sub.level as _, sub.layer as _, 0),
                 1,
                 0,
@@ -2034,11 +2035,11 @@ impl d::Device<B> for Device {
             footprint
         };
 
-        let depth_pitch = footprint.Footprint.RowPitch * num_rows as buffer::Offset;
-        let array_pitch = footprint.Footprint.Depth * depth_pitch;
+        let depth_pitch = (footprint.Footprint.RowPitch * num_rows) as buffer::Offset;
+        let array_pitch = footprint.Footprint.Depth as buffer::Offset * depth_pitch;
         image::SubresourceFootprint {
             slice: footprint.Offset .. footprint.Offset + total_bytes,
-            row_pitch: footprint.Footprint.RowPitch,
+            row_pitch: footprint.Footprint.RowPitch as _,
             depth_pitch,
             array_pitch,
         }

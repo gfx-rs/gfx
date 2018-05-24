@@ -34,6 +34,17 @@ pub struct Extent {
     pub depth: Size,
 }
 
+impl Extent {
+    /// Get the extent at a particular mipmap level.
+    pub fn at_level(&self, level: Level) -> Self {
+        Extent {
+            width: 1.max(self.width >> level),
+            height: 1.max(self.height >> level),
+            depth: 1.max(self.depth >> level),
+        }
+    }
+}
+
 ///
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
