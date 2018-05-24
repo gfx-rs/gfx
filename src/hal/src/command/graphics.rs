@@ -162,21 +162,6 @@ pub struct ImageBlit {
 
 impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a, B, C, S, L> {
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn begin_render_pass_inline<T>(
-        &mut self,
-        render_pass: &B::RenderPass,
-        frame_buffer: &B::Framebuffer,
-        render_area: pso::Rect,
-        clear_values: T,
-    ) -> RenderPassInlineEncoder<B, L>
-    where
-        T: IntoIterator,
-        T::Item: Borrow<ClearValue>,
-    {
-        RenderPassInlineEncoder::new(self, render_pass, frame_buffer, render_area, clear_values)
-    }
-
-    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn clear_image<T>(
         &mut self,
         image: &B::Image,
@@ -295,6 +280,21 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
 }
 
 impl<'a, B: Backend, C: Supports<Graphics>, S: Shot> CommandBuffer<'a, B, C, S, Primary> {
+    /// Identical to the `RawCommandBuffer` method of the same name.
+    pub fn begin_render_pass_inline<T>(
+        &mut self,
+        render_pass: &B::RenderPass,
+        frame_buffer: &B::Framebuffer,
+        render_area: pso::Rect,
+        clear_values: T,
+    ) -> RenderPassInlineEncoder<B, Primary>
+    where
+        T: IntoIterator,
+        T::Item: Borrow<ClearValue>,
+    {
+        RenderPassInlineEncoder::new(self, render_pass, frame_buffer, render_area, clear_values)
+    }
+
     /// Creates a new secondary render pass.
     pub fn begin_render_pass_secondary<T>(
         &mut self,
