@@ -68,6 +68,12 @@ pub struct PipelineLayout {
     pub(crate) res_overrides: HashMap<msl::ResourceBindingLocation, msl::ResourceBinding>,
 }
 
+#[derive(Clone, Debug)]
+pub struct RasterizerState {
+    //TODO: more states
+    pub depth_clip: metal::MTLDepthClipMode,
+}
+
 #[derive(Debug)]
 pub struct GraphicsPipeline {
     // we hold the compiled libraries here for now
@@ -79,6 +85,7 @@ pub struct GraphicsPipeline {
     pub(crate) push_constants: PushConstants,
     pub(crate) primitive_type: metal::MTLPrimitiveType,
     pub(crate) attribute_buffer_index: u32,
+    pub(crate) rasterizer_state: Option<RasterizerState>,
     pub(crate) depth_stencil_state: Option<metal::DepthStencilState>,
     pub(crate) baked_states: pso::BakedStates,
 }

@@ -265,7 +265,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn features(&self) -> hal::Features {
         hal::Features::ROBUST_BUFFER_ACCESS |
-        hal::Features::DRAW_INDIRECT_FIRST_INSTANCE
+        hal::Features::DRAW_INDIRECT_FIRST_INSTANCE |
+        hal::Features::DEPTH_CLAMP
     }
 
     fn limits(&self) -> hal::Limits {
@@ -898,6 +899,13 @@ impl hal::Device<Backend> for Device {
         if let pso::PolygonMode::Line(width) = pipeline_desc.rasterizer.polygon_mode {
             validate_line_width(width);
         }
+        let rasterizer_state = Some(n::RasterizerState {
+            depth_clip: if pipeline_desc.rasterizer.depth_clamping {
+                metal::MTLDepthClipMode::Clamp
+            } else {
+                metal::MTLDepthClipMode::Clip
+            },
+        });
 
         device.new_render_pipeline_state(&pipeline)
             .map(|raw|
@@ -909,6 +917,7 @@ impl hal::Device<Backend> for Device {
                     push_constants: pipeline_layout.push_constants.clone(),
                     primitive_type,
                     attribute_buffer_index: pipeline_layout.attribute_buffer_index,
+                    rasterizer_state,
                     depth_stencil_state,
                     baked_states: pipeline_desc.baked_states.clone(),
                 })

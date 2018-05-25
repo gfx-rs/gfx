@@ -159,6 +159,7 @@ struct State {
     resources_cs: StageResources,
     index_buffer: Option<IndexBuffer>,
     attribute_buffer_index: usize,
+    rasterizer_state: Option<native::RasterizerState>,
     depth_stencil_state: Option<metal::DepthStencilState>,
     push_constant_data: HashMap<native::UniquePipelineLayoutId, Vec<u32>>,
     graphics_layout_id: Option<native::UniquePipelineLayoutId>,
@@ -180,9 +181,10 @@ impl State {
         commands.extend(self.viewport.map(soft::RenderCommand::SetViewport));
         commands.extend(self.scissors.map(soft::RenderCommand::SetScissor));
         commands.extend(self.blend_color.map(soft::RenderCommand::SetBlendColor));
+        let rasterizer = self.rasterizer_state.clone();
         let depth_stencil = self.depth_stencil_state.clone();
         commands.extend(self.render_pso.clone().map(|pipeline| {
-            soft::RenderCommand::BindPipeline(pipeline, depth_stencil)
+            soft::RenderCommand::BindPipeline(pipeline, rasterizer, depth_stencil)
         }));
 
         let stages = [pso::Stage::Vertex, pso::Stage::Fragment];
@@ -702,8 +704,11 @@ fn exec_render(encoder: &metal::RenderCommandEncoderRef, command: &soft::RenderC
                 _ => unimplemented!()
             }
         }
-        Cmd::BindPipeline(ref pipeline_state, ref depth_stencil) => {
+        Cmd::BindPipeline(ref pipeline_state, ref rasterizer, ref depth_stencil) => {
             encoder.set_render_pipeline_state(pipeline_state);
+            if let Some(ref rasterizer_state) = *rasterizer {
+                encoder.set_depth_clip_mode(rasterizer_state.depth_clip);
+            }
             if let Some(ref depth_stencil_state) = *depth_stencil {
                 encoder.set_depth_stencil_state(depth_stencil_state);
             }
@@ -1051,6 +1056,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 resources_cs: StageResources::new(),
                 index_buffer: None,
                 attribute_buffer_index: 0,
+                rasterizer_state: None,
                 depth_stencil_state: None,
                 push_constant_data: HashMap::new(),
                 graphics_layout_id: None,
@@ -1602,7 +1608,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let sampler = pipes.get_sampler(filter);
 
             let prelude = [
-                soft::RenderCommand::BindPipeline(pso, None),
+                soft::RenderCommand::BindPipeline(pso, None, None),
                 soft::RenderCommand::BindSampler {
                     stage: pso::Stage::Fragment,
                     index: 0,
@@ -1831,7 +1837,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn bind_graphics_pipeline(&mut self, pipeline: &native::GraphicsPipeline) {
         let pipeline_state = pipeline.raw.to_owned();
+        println!("{:?}", pipeline.rasterizer_state);
         self.state.render_pso = Some(pipeline_state.clone());
+        self.state.rasterizer_state = pipeline.rasterizer_state.clone();
         self.state.depth_stencil_state = pipeline.depth_stencil_state.as_ref().map(ToOwned::to_owned);
         self.state.primitive_type = pipeline.primitive_type;
 
@@ -1839,6 +1847,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         commands.push(
             soft::RenderCommand::BindPipeline(
                 pipeline_state,
+                pipeline.rasterizer_state.clone(),
                 pipeline.depth_stencil_state.clone(),
             )
         );

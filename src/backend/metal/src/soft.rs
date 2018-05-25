@@ -1,4 +1,5 @@
 use command::IndexBuffer;
+use native::RasterizerState;
 
 use hal;
 use metal;
@@ -39,7 +40,11 @@ pub enum RenderCommand {
         index: usize,
         sampler: Option<metal::SamplerState>,
     },
-    BindPipeline(metal::RenderPipelineState, Option<metal::DepthStencilState>),
+    BindPipeline(
+        metal::RenderPipelineState,
+        Option<RasterizerState>,
+        Option<metal::DepthStencilState>,
+    ),
     Draw {
         primitive_type: metal::MTLPrimitiveType,
         vertices: Range<hal::VertexCount>,
