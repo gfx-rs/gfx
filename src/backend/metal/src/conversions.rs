@@ -135,19 +135,19 @@ pub fn map_store_operation(operation: pass::AttachmentStoreOp) -> MTLStoreAction
 }
 
 pub fn map_write_mask(mask: pso::ColorMask) -> MTLColorWriteMask {
-    let mut mtl_mask = MTLColorWriteMask::MTLColorWriteMaskNone;
+    let mut mtl_mask = MTLColorWriteMask::empty();
 
     if mask.contains(pso::ColorMask::RED) {
-        mtl_mask |= MTLColorWriteMask::MTLColorWriteMaskRed;
+        mtl_mask |= MTLColorWriteMask::Red;
     }
     if mask.contains(pso::ColorMask::GREEN) {
-        mtl_mask |= MTLColorWriteMask::MTLColorWriteMaskGreen;
+        mtl_mask |= MTLColorWriteMask::Green;
     }
     if mask.contains(pso::ColorMask::BLUE) {
-        mtl_mask |= MTLColorWriteMask::MTLColorWriteMaskBlue;
+        mtl_mask |= MTLColorWriteMask::Blue;
     }
     if mask.contains(pso::ColorMask::ALPHA) {
-        mtl_mask |= MTLColorWriteMask::MTLColorWriteMaskAlpha;
+        mtl_mask |= MTLColorWriteMask::Alpha;
     }
 
     mtl_mask
@@ -297,16 +297,16 @@ pub fn resource_options_from_storage_and_cache(storage: MTLStorageMode, cache: M
 pub fn map_texture_usage(usage: image::Usage) -> MTLTextureUsage {
     use hal::image::Usage as U;
 
-    let mut texture_usage = MTLTextureUsage::MTLTextureUsagePixelFormatView;
+    let mut texture_usage = MTLTextureUsage::PixelFormatView;
     // Note: for blitting, we do actual rendering, so we add more flags for TRANSFER_* usage
     if usage.intersects(U::COLOR_ATTACHMENT | U::DEPTH_STENCIL_ATTACHMENT | U::TRANSFER_DST) {
-        texture_usage |= MTLTextureUsage::MTLTextureUsageRenderTarget;
+        texture_usage |= MTLTextureUsage::RenderTarget;
     }
     if usage.intersects(U::SAMPLED | U::TRANSFER_SRC) {
-        texture_usage |= MTLTextureUsage::MTLTextureUsageShaderRead;
+        texture_usage |= MTLTextureUsage::ShaderRead;
     }
     if usage.intersects(U::STORAGE) {
-        texture_usage |= MTLTextureUsage::MTLTextureUsageShaderRead | MTLTextureUsage::MTLTextureUsageShaderWrite;
+        texture_usage |= MTLTextureUsage::ShaderRead | MTLTextureUsage::ShaderWrite;
     }
 
     // TODO shader write

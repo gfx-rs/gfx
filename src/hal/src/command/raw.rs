@@ -3,7 +3,7 @@ use std::borrow::Borrow;
 use std::ops::Range;
 
 use {buffer, pass, pso};
-use {Backend, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
+use {Backend, DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 use image::{Filter, Layout, SubresourceRange};
 use memory::{Barrier, Dependencies};
 use query::{PipelineStatistic, Query, QueryControl, QueryId};
@@ -438,7 +438,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
         &mut self,
         buffer: &B::Buffer,
         offset: buffer::Offset,
-        draw_count: u32,
+        draw_count: DrawCount,
         stride: u32,
     );
 
@@ -453,7 +453,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
         &mut self,
         buffer: &B::Buffer,
         offset: buffer::Offset,
-        draw_count: u32,
+        draw_count: DrawCount,
         stride: u32,
     );
 

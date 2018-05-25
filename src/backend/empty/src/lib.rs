@@ -649,7 +649,13 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn draw_indirect(&mut self, _: &(), _: buffer::Offset, _: u32, _: u32) {
+    fn draw_indirect(
+        &mut self,
+        _: &(),
+        _: buffer::Offset,
+        _: hal::DrawCount,
+        _: u32,
+    ) {
         unimplemented!()
     }
 
@@ -657,7 +663,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         &mut self,
         _: &(),
         _: buffer::Offset,
-        _: u32,
+        _: hal::DrawCount,
         _: u32,
     ) {
         unimplemented!()

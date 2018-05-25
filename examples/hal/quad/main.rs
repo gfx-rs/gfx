@@ -160,7 +160,7 @@ fn main() {
     let pipeline_layout = device.create_pipeline_layout(
         Some(&set_layout),
         &[
-            (pso::ShaderStageFlags::VERTEX, 0..8),
+            //(pso::ShaderStageFlags::VERTEX, 0..8), //TODO: use push constants
         ],
     );
 

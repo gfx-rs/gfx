@@ -15,7 +15,7 @@ extern crate winit;
 extern crate wio;
 
 use hal::{buffer, command, device, error, format, image, memory, mapping, queue, query, pool, pso, pass, Features, Limits, QueueType};
-use hal::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
+use hal::{DrawCount, IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 use hal::queue::{QueueFamily as HalQueueFamily, QueueFamilyId, Queues};
 use hal::backend::RawQueueGroup;
 use hal::format::Aspects;
@@ -1131,11 +1131,11 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn draw_indirect(&mut self, buffer: &Buffer, offset: buffer::Offset, draw_count: u32, stride: u32) {
+    fn draw_indirect(&mut self, buffer: &Buffer, offset: buffer::Offset, draw_count: DrawCount, stride: u32) {
         unimplemented!()
     }
 
-    fn draw_indexed_indirect(&mut self, buffer: &Buffer, offset: buffer::Offset, draw_count: u32, stride: u32) {
+    fn draw_indexed_indirect(&mut self, buffer: &Buffer, offset: buffer::Offset, draw_count: DrawCount, stride: u32) {
         unimplemented!()
     }
 

@@ -64,8 +64,10 @@ pub type VertexCount = u32;
 pub type VertexOffset = i32;
 /// Draw number of indices.
 pub type IndexCount = u32;
-/// Draw number of instances
+/// Draw number of instances.
 pub type InstanceCount = u32;
+/// Indirect draw calls count.
+pub type DrawCount = u32;
 /// Number of vertices in a patch
 pub type PatchSize = u8;
 /// Number of work groups.

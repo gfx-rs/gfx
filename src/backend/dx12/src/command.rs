@@ -1,6 +1,6 @@
 
 use hal::{buffer, command as com, format, image, memory, pass, pso, query};
-use hal::{IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
+use hal::{DrawCount, IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 use hal::format::Aspects;
 use hal::range::RangeArg;
 
@@ -2183,7 +2183,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         &mut self,
         buffer: &n::Buffer,
         offset: buffer::Offset,
-        draw_count: u32,
+        draw_count: DrawCount,
         stride: u32,
     ) {
         assert_eq!(stride, 16);
@@ -2204,7 +2204,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         &mut self,
         buffer: &n::Buffer,
         offset: buffer::Offset,
-        draw_count: u32,
+        draw_count: DrawCount,
         stride: u32,
     ) {
         assert_eq!(stride, 20);

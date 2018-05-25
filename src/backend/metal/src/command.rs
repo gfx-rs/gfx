@@ -11,7 +11,7 @@ use std::{iter, mem};
 use std::slice;
 
 use hal::{buffer, command as com, error, memory, pool, pso};
-use hal::{VertexCount, VertexOffset, InstanceCount, IndexCount, WorkGroupCount};
+use hal::{DrawCount, VertexCount, VertexOffset, InstanceCount, IndexCount, WorkGroupCount};
 use hal::format::{Aspects, FormatDesc};
 use hal::image::{Filter, Layout, SubresourceRange};
 use hal::query::{Query, QueryControl, QueryId};
@@ -160,6 +160,9 @@ struct State {
     index_buffer: Option<IndexBuffer>,
     attribute_buffer_index: usize,
     depth_stencil_state: Option<metal::DepthStencilState>,
+    push_constant_data: HashMap<native::UniquePipelineLayoutId, Vec<u32>>,
+    graphics_layout_id: Option<native::UniquePipelineLayoutId>,
+    compute_layout_id: Option<native::UniquePipelineLayoutId>,
 }
 
 impl State {
@@ -167,6 +170,7 @@ impl State {
         self.resources_vs.clear();
         self.resources_fs.clear();
         self.resources_cs.clear();
+        self.push_constant_data.clear();
     }
 
     fn make_render_commands(&self) -> Vec<soft::RenderCommand> {
@@ -180,7 +184,11 @@ impl State {
         commands.extend(self.render_pso.clone().map(|pipeline| {
             soft::RenderCommand::BindPipeline(pipeline, depth_stencil)
         }));
+
         let stages = [pso::Stage::Vertex, pso::Stage::Fragment];
+        let push_data = self.graphics_layout_id.and_then(|ref layout_id| {
+            self.push_constant_data.get(layout_id)
+        });
         for (&stage, resources) in stages.iter().zip(&[&self.resources_vs, &self.resources_fs]) {
             commands.extend(resources.buffers.iter().enumerate().filter_map(|(i, resource)| {
                 resource.clone().map(|(buffer, offset)| {
@@ -214,12 +222,22 @@ impl State {
                     sampler,
                 })
             );
+            commands.extend(resources.push_constants_buffer_id
+                .map(|id| soft::RenderCommand::BindBufferData {
+                    stage,
+                    index: id  as _,
+                    bytes: soft::push_data(push_data.unwrap()),
+                })
+            );
         }
         commands
     }
 
     fn make_compute_commands(&self) -> Vec<soft::ComputeCommand> {
         let mut commands = Vec::new();
+        let push_data = self.compute_layout_id.and_then(|ref layout_id| {
+            self.push_constant_data.get(layout_id)
+        });
 
         commands.extend(self.compute_pso.clone().map(soft::ComputeCommand::BindPipeline));
         commands.extend(self.resources_cs.buffers.iter().enumerate().filter_map(|(i, resource)| {
@@ -251,6 +269,12 @@ impl State {
                 sampler,
             })
         );
+        commands.extend(self.resources_cs.push_constants_buffer_id
+            .map(|id| soft::ComputeCommand::BindBufferData {
+                index: id as _,
+                bytes: soft::push_data(push_data.unwrap()),
+            })
+        );
 
         commands
     }
@@ -261,6 +285,7 @@ struct StageResources {
     buffers: Vec<Option<(metal::Buffer, buffer::Offset)>>,
     textures: Vec<Option<metal::Texture>>,
     samplers: Vec<Option<metal::SamplerState>>,
+    push_constants_buffer_id: Option<u32>,
 }
 
 impl StageResources {
@@ -269,6 +294,7 @@ impl StageResources {
             buffers: Vec::new(),
             textures: Vec::new(),
             samplers: Vec::new(),
+            push_constants_buffer_id: None,
         }
     }
 
@@ -276,6 +302,7 @@ impl StageResources {
         self.buffers.clear();
         self.textures.clear();
         self.samplers.clear();
+        self.push_constants_buffer_id = None;
     }
 
     fn add_buffer(&mut self, slot: usize, buffer: &metal::BufferRef, offset: buffer::Offset) {
@@ -687,17 +714,17 @@ fn exec_render(encoder: &metal::RenderCommandEncoderRef, command: &soft::RenderC
                 vertices.start as NSUInteger,
                 (vertices.end - vertices.start) as NSUInteger,
                 (instances.end - instances.start) as NSUInteger,
-                instances.start as NSUInteger
+                instances.start as NSUInteger,
             );
         }
-        Cmd::DrawIndexed { ref index, primitive_type, ref indices, base_vertex, ref instances } => {
+        Cmd::DrawIndexed { primitive_type, ref index, ref indices, base_vertex, ref instances } => {
             let index_offset = indices.start as buffer::Offset * match index.index_type {
                 MTLIndexType::UInt16 => 2,
                 MTLIndexType::UInt32 => 4,
             };
             // Metal requires `indexBufferOffset` alignment of 4
             assert_eq!((index_offset + index.offset) & 3, 0);
-            encoder.draw_indexed_primitives_instanced(
+            encoder.draw_indexed_primitives_instanced_base_instance(
                 primitive_type,
                 (indices.end - indices.start) as NSUInteger,
                 index.index_type,
@@ -706,6 +733,23 @@ fn exec_render(encoder: &metal::RenderCommandEncoderRef, command: &soft::RenderC
                 (instances.end - instances.start) as NSUInteger,
                 base_vertex as NSInteger,
                 instances.start as NSUInteger,
+            );
+        }
+        Cmd::DrawIndirect { primitive_type, ref buffer, offset } => {
+            encoder.draw_primitives_indirect(
+                primitive_type,
+                buffer,
+                offset,
+            );
+        }
+        Cmd::DrawIndexedIndirect { primitive_type, ref index, ref buffer, offset } => {
+            encoder.draw_indexed_primitives_indirect(
+                primitive_type,
+                index.index_type,
+                &index.buffer,
+                index.offset,
+                buffer,
+                offset,
             );
         }
     }
@@ -760,6 +804,7 @@ pub(crate) fn exec_blit(encoder: &metal::BlitCommandEncoderRef, command: &soft::
                     layer as NSUInteger,
                     r.level as NSUInteger,
                     origin,
+                    metal::MTLBlitOption::empty(),
                 );
             }
         }
@@ -780,7 +825,8 @@ pub(crate) fn exec_blit(encoder: &metal::BlitCommandEncoderRef, command: &soft::
                     dst,
                     offset as NSUInteger,
                     row_pitch as NSUInteger,
-                    slice_pitch as NSUInteger
+                    slice_pitch as NSUInteger,
+                    metal::MTLBlitOption::empty(),
                 );
             }
         }
@@ -1006,6 +1052,9 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 index_buffer: None,
                 attribute_buffer_index: 0,
                 depth_stencil_state: None,
+                push_constant_data: HashMap::new(),
+                graphics_layout_id: None,
+                compute_layout_id: None,
             },
         }).collect();
 
@@ -1066,6 +1115,50 @@ impl CommandBuffer {
     fn set_blend_color(&mut self, color: &pso::ColorValue) -> soft::RenderCommand {
         self.state.blend_color = Some(*color);
         soft::RenderCommand::SetBlendColor(*color)
+    }
+
+    fn push_vs_constants(
+        &mut self, layout_id: native::UniquePipelineLayoutId, buffer_id: Option<u32>
+    ) -> Option<soft::RenderCommand> {
+        self.state.resources_vs.push_constants_buffer_id = buffer_id;
+        buffer_id.map(|id| soft::RenderCommand::BindBufferData {
+            stage: pso::Stage::Vertex,
+            index: id as _,
+            bytes: soft::push_data(
+                self.state.push_constant_data
+                    .get(&layout_id)
+                    .unwrap()
+            ),
+        })
+    }
+
+    fn push_ps_constants(
+        &mut self, layout_id: native::UniquePipelineLayoutId, buffer_id: Option<u32>
+    ) -> Option<soft::RenderCommand> {
+        self.state.resources_fs.push_constants_buffer_id = buffer_id;
+        buffer_id.map(|id| soft::RenderCommand::BindBufferData {
+            stage: pso::Stage::Fragment,
+            index: id as _,
+            bytes: soft::push_data(
+                self.state.push_constant_data
+                    .get(&layout_id)
+                    .unwrap()
+            ),
+        })
+    }
+
+    fn push_cs_constants(
+        &mut self, layout_id: native::UniquePipelineLayoutId, buffer_id: Option<u32>
+    ) -> Option<soft::ComputeCommand> {
+        self.state.resources_cs.push_constants_buffer_id = buffer_id;
+        buffer_id.map(|id| soft::ComputeCommand::BindBufferData {
+            index: id as _,
+            bytes: soft::push_data(
+                self.state.push_constant_data
+                    .get(&layout_id)
+                    .unwrap()
+            ),
+        })
     }
 }
 
@@ -1741,11 +1834,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.state.render_pso = Some(pipeline_state.clone());
         self.state.depth_stencil_state = pipeline.depth_stencil_state.as_ref().map(ToOwned::to_owned);
         self.state.primitive_type = pipeline.primitive_type;
-        self.state.attribute_buffer_index = pipeline.attribute_buffer_index as usize;
 
-        let mut commands = SmallVec::<[_; 4]>::new();
+        let mut commands = Vec::new();
         commands.push(
-            soft::RenderCommand::BindPipeline(pipeline_state, pipeline.depth_stencil_state.clone())
+            soft::RenderCommand::BindPipeline(
+                pipeline_state,
+                pipeline.depth_stencil_state.clone(),
+            )
         );
         if let Some(ref vp) = pipeline.baked_states.viewport {
             commands.push(self.set_viewport(vp));
@@ -1756,6 +1851,59 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         if let Some(ref color) = pipeline.baked_states.blend_color {
             commands.push(self.set_blend_color(color));
         }
+
+        let attribute_buffer_index = pipeline.attribute_buffer_index as usize;
+        if self.state.attribute_buffer_index != attribute_buffer_index {
+            // re-bind vertex buffers
+            // Note: this is quite unfortunate to do, a better solution is welcome
+            let buffers = &mut self.state.resources_vs.buffers;
+            let old_length = buffers.len();
+            if self.state.attribute_buffer_index < attribute_buffer_index {
+                // move right, in reverse
+                for _ in self.state.attribute_buffer_index .. attribute_buffer_index {
+                    buffers.push(None)
+                }
+                for (src, dst) in (self.state.attribute_buffer_index .. old_length).zip(attribute_buffer_index .. buffers.len()).rev() {
+                    buffers[dst] = buffers[src].take();
+                }
+            } else {
+                // move left, straight
+                for (src, dst) in (self.state.attribute_buffer_index .. buffers.len()).zip(attribute_buffer_index ..) {
+                    buffers[dst] = buffers[src].take();
+                }
+            }
+
+            commands.extend(buffers
+                .iter()
+                .enumerate()
+                .skip(attribute_buffer_index)
+                .map(|(index, maybe)| soft::RenderCommand::BindBuffer {
+                    stage: pso::Stage::Vertex,
+                    index,
+                    buffer: maybe.as_ref().map(|(ref buffer, _)| buffer.clone()),
+                    offset: match *maybe {
+                        Some((_, offset)) => offset,
+                        None => 0,
+                    },
+                })
+            );
+
+            self.state.attribute_buffer_index = attribute_buffer_index;
+        }
+
+
+        if self.state.graphics_layout_id != Some(pipeline.layout_id) {
+            self.state.graphics_layout_id = Some(pipeline.layout_id);
+            commands.extend(self.push_vs_constants(
+                pipeline.layout_id,
+                pipeline.push_constants.vs,
+            ));
+            commands.extend(self.push_ps_constants(
+                pipeline.layout_id,
+                pipeline.push_constants.ps,
+            ));
+        }
+
         self.inner
             .borrow_mut()
             .sink()
@@ -1978,11 +2126,23 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.state.compute_pso = Some(pipeline.raw.clone());
         self.state.work_group_size = pipeline.work_group_size;
 
-        let command = soft::ComputeCommand::BindPipeline(pipeline.raw.clone());
+        let mut commands = SmallVec::<[_; 2]>::new();
+        commands.push(
+            soft::ComputeCommand::BindPipeline(pipeline.raw.clone())
+        );
+
+        if self.state.compute_layout_id != Some(pipeline.layout_id) {
+            self.state.compute_layout_id = Some(pipeline.layout_id);
+            commands.extend(self.push_cs_constants(
+                pipeline.layout_id,
+                pipeline.push_constants.cs,
+            ));
+        }
+
         self.inner
             .borrow_mut()
             .sink()
-            .pre_compute_commands(iter::once(command));
+            .pre_compute_commands(commands);
     }
 
     fn bind_compute_descriptor_sets<'a, T>(
@@ -2302,6 +2462,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         vertices: Range<VertexCount>,
         instances: Range<InstanceCount>,
     ) {
+        if instances.start >= instances.end {
+            return
+        }
+
         let command = soft::RenderCommand::Draw {
             primitive_type: self.state.primitive_type,
             vertices,
@@ -2319,9 +2483,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         base_vertex: VertexOffset,
         instances: Range<InstanceCount>,
     ) {
+        if instances.start >= instances.end {
+            return
+        }
+
         let command = soft::RenderCommand::DrawIndexed {
-            index: self.state.index_buffer.clone().expect("must bind index buffer"),
             primitive_type: self.state.primitive_type,
+            index: self.state.index_buffer.clone().expect("must bind index buffer"),
             indices,
             base_vertex,
             instances,
@@ -2334,22 +2502,43 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn draw_indirect(
         &mut self,
-        _buffer: &native::Buffer,
-        _offset: buffer::Offset,
-        _draw_count: u32,
-        _stride: u32,
+        buffer: &native::Buffer,
+        offset: buffer::Offset,
+        count: DrawCount,
+        stride: u32,
     ) {
-        unimplemented!()
+        let commands = (0 .. count)
+            .map(|i| soft::RenderCommand::DrawIndirect {
+                primitive_type: self.state.primitive_type,
+                buffer: buffer.raw.clone(),
+                offset: offset + (i * stride) as buffer::Offset,
+            });
+
+        self.inner
+            .borrow_mut()
+            .sink()
+            .render_commands(commands);
     }
 
     fn draw_indexed_indirect(
         &mut self,
-        _buffer: &native::Buffer,
-        _offset: buffer::Offset,
-        _draw_count: u32,
-        _stride: u32,
+        buffer: &native::Buffer,
+        offset: buffer::Offset,
+        count: DrawCount,
+        stride: u32,
     ) {
-        unimplemented!()
+        let commands = (0 .. count)
+            .map(|i| soft::RenderCommand::DrawIndexedIndirect {
+                primitive_type: self.state.primitive_type,
+                index: self.state.index_buffer.clone().expect("must bind index buffer"),
+                buffer: buffer.raw.clone(),
+                offset: offset + (i * stride) as buffer::Offset,
+            });
+
+        self.inner
+            .borrow_mut()
+            .sink()
+            .render_commands(commands);
     }
 
     fn begin_query(
@@ -2385,21 +2574,69 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn push_graphics_constants(
         &mut self,
-        _layout: &native::PipelineLayout,
-        _stages: pso::ShaderStageFlags,
-        _offset: u32,
-        _constants: &[u32],
+        layout: &native::PipelineLayout,
+        stages: pso::ShaderStageFlags,
+        offset: u32,
+        constants: &[u32],
     ) {
-        unimplemented!()
+        {
+            assert_eq!(offset & 3, 0);
+            let data = self.state.push_constant_data
+                .entry(layout.unique_id)
+                .or_insert(Vec::new());
+            let offset = offset as usize >> 2;
+            while data.len() < offset + constants.len() {
+                data.push(0);
+            }
+            data[offset ..].copy_from_slice(constants);
+        }
+
+        if self.state.graphics_layout_id == Some(layout.unique_id) &&
+            stages.intersects(pso::ShaderStageFlags::GRAPHICS)
+        {
+            // Note: it's a waste to heap allocate the bytes here in case
+            // of no active render pass.
+            // Note: the whole range is re-uploaded, which may be inefficient
+            let com_vs = self.push_vs_constants(layout.unique_id, layout.push_constants.vs);
+            let com_ps = self.push_ps_constants(layout.unique_id, layout.push_constants.ps);
+            let commands = com_vs.into_iter().chain(com_ps);
+
+            self.inner
+                .borrow_mut()
+                .sink()
+                .pre_render_commands(commands);
+        }
     }
 
     fn push_compute_constants(
         &mut self,
-        _layout: &native::PipelineLayout,
-        _offset: u32,
-        _constants: &[u32],
+        layout: &native::PipelineLayout,
+        offset: u32,
+        constants: &[u32],
     ) {
-        unimplemented!()
+        {
+            assert_eq!(offset & 3, 0);
+            let data = self.state.push_constant_data
+                .entry(layout.unique_id)
+                .or_insert(Vec::new());
+            let offset = offset as usize >> 2;
+            while data.len() < offset + constants.len() {
+                data.push(0);
+            }
+            data[offset ..].copy_from_slice(constants);
+        }
+
+        if self.state.compute_layout_id == Some(layout.unique_id) {
+            // Note: it's a waste to heap allocate the bytes here in case
+            // of no active render pass.
+            // Note: the whole range is re-uploaded, which may be inefficient
+            let command = self.push_cs_constants(layout.unique_id, layout.push_constants.cs);
+
+            self.inner
+                .borrow_mut()
+                .sink()
+                .pre_compute_commands(command);
+        }
     }
 
     fn execute_commands<I>(

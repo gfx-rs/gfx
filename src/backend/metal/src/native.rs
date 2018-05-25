@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use hal::{self, image, pass, pso};
 
 use cocoa::foundation::{NSUInteger};
-use metal::{self, MTLPrimitiveType};
+use metal;
 use spirv_cross::{msl, spirv};
 
 
@@ -46,10 +46,25 @@ unsafe impl Send for FrameBuffer {}
 unsafe impl Sync for FrameBuffer {}
 
 
+#[derive(Clone, Debug)]
+pub struct PushConstants {
+    pub vs: Option<u32>,
+    pub ps: Option<u32>,
+    pub cs: Option<u32>,
+}
+
+unsafe impl Send for PushConstants {}
+unsafe impl Sync for PushConstants {}
+
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+pub struct UniquePipelineLayoutId(pub usize);
+
 #[derive(Debug)]
 pub struct PipelineLayout {
+    pub(crate) unique_id: UniquePipelineLayoutId,
     // First vertex buffer index to be used by attributes
     pub(crate) attribute_buffer_index: u32,
+    pub(crate) push_constants: PushConstants,
     pub(crate) res_overrides: HashMap<msl::ResourceBindingLocation, msl::ResourceBinding>,
 }
 
@@ -60,7 +75,9 @@ pub struct GraphicsPipeline {
     pub(crate) vs_lib: metal::Library,
     pub(crate) fs_lib: Option<metal::Library>,
     pub(crate) raw: metal::RenderPipelineState,
-    pub(crate) primitive_type: MTLPrimitiveType,
+    pub(crate) layout_id: UniquePipelineLayoutId,
+    pub(crate) push_constants: PushConstants,
+    pub(crate) primitive_type: metal::MTLPrimitiveType,
     pub(crate) attribute_buffer_index: u32,
     pub(crate) depth_stencil_state: Option<metal::DepthStencilState>,
     pub(crate) baked_states: pso::BakedStates,
@@ -73,6 +90,8 @@ unsafe impl Sync for GraphicsPipeline {}
 pub struct ComputePipeline {
     pub(crate) cs_lib: metal::Library,
     pub(crate) raw: metal::ComputePipelineState,
+    pub(crate) layout_id: UniquePipelineLayoutId,
+    pub(crate) push_constants: PushConstants,
     pub(crate) work_group_size: metal::MTLSize,
 }
 
