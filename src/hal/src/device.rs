@@ -321,6 +321,11 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     fn get_image_requirements(&self, image: &B::UnboundImage) -> Requirements;
 
     ///
+    fn get_image_subresource_footprint(
+        &self, image: &B::Image, subresource: image::Subresource
+    ) -> image::SubresourceFootprint;
+
+    ///
     fn bind_image_memory(
         &self, &B::Memory, offset: u64, B::UnboundImage
     ) -> Result<B::Image, BindError>;
@@ -583,7 +588,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         config: SwapchainConfig,
     ) -> (B::Swapchain, Backbuffer<B>);
 
-    /// 
+    ///
     fn destroy_swapchain(
         &self,
         swapchain: B::Swapchain);

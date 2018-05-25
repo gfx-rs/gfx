@@ -3,9 +3,10 @@ use internal::Channel;
 
 use std::cell::Cell;
 use std::collections::{HashMap};
-use std::sync::{Arc, Mutex};
+use std::marker::PhantomData;
 use std::ops::Range;
 use std::os::raw::{c_void, c_long};
+use std::sync::{Arc, Mutex};
 
 use hal::{self, image, pass, pso};
 
@@ -81,11 +82,28 @@ unsafe impl Sync for ComputePipeline {}
 #[derive(Debug)]
 pub struct Image {
     pub(crate) raw: metal::Texture,
-    pub(crate) extent: hal::image::Extent,
+    pub(crate) allocations: Option<Arc<Mutex<MemoryAllocations>>>,
+    pub(crate) extent: image::Extent,
+    pub(crate) num_layers: Option<image::Layer>,
     pub(crate) format_desc: hal::format::FormatDesc,
     pub(crate) shader_channel: Channel,
     pub(crate) mtl_format: metal::MTLPixelFormat,
     pub(crate) mtl_type: metal::MTLTextureType,
+}
+
+impl Image {
+    pub(crate) fn pitches_impl(
+        extent: image::Extent, format_desc: hal::format::FormatDesc
+    ) -> [hal::buffer::Offset; 3] {
+        let bytes_per_texel = format_desc.bits as image::Size >> 3;
+        let row_pitch = extent.width * bytes_per_texel;
+        let depth_pitch = extent.height * row_pitch;
+        let array_pitch = extent.depth * depth_pitch;
+        [row_pitch as _, depth_pitch as _, array_pitch as _]
+    }
+    pub(crate) fn pitches(&self, level: image::Level) -> [hal::buffer::Offset; 3] {
+        Self::pitches_impl(self.extent.at_level(level), self.format_desc)
+    }
 }
 
 unsafe impl Send for Image {}
@@ -278,32 +296,44 @@ impl Memory {
 unsafe impl Send for Memory {}
 unsafe impl Sync for Memory {}
 
+#[derive(Clone, Debug)]
+pub enum Resource {
+    Buffer(metal::Buffer),
+    Texture {
+        raw: metal::Texture,
+        format_desc: hal::format::FormatDesc,
+        extent: image::Extent,
+        subresource: image::SubresourceLayers,
+    },
+}
+
 #[derive(Debug)]
-pub(crate) struct MemoryAllocations {
-    buffers: HashMap<Range<u64>, metal::Buffer>,
+pub struct MemoryAllocations {
+    resources: HashMap<Range<u64>, Resource>,
 }
 
 impl MemoryAllocations {
     fn new() -> Self {
         MemoryAllocations {
-            buffers: HashMap::new(),
+            resources: HashMap::new(),
         }
     }
 
+    // Don't ask why there is a phantom data at the end of the iterated tuple...
     /// Get all unique buffers that intersects specified range
-    pub fn find<'a>(&'a self, range: &'a Range<u64>) -> impl Iterator<Item=(Range<u64>, &'a metal::BufferRef)> {
-        self.buffers
+    pub fn find<'a>(&'a self, range: &'a Range<u64>) -> impl Iterator<Item=(Range<u64>, Resource, PhantomData<&'a Resource>)> {
+        self.resources
             .iter()
             .filter(move |&(ref r, _)| r.start < range.end && r.end > range.start)
-            .map(|(r, buf)| (r.clone(), &**buf))
+            .map(|(r, res)| (r.clone(), res.clone(), PhantomData))
     }
 
-    pub fn insert(&mut self, range: Range<u64>, buffer: metal::Buffer) {
-        self.buffers.insert(range, buffer);
+    pub fn insert(&mut self, range: Range<u64>, resource: Resource) {
+        self.resources.insert(range, resource);
     }
 
     pub fn remove(&mut self, range: Range<u64>) {
-        self.buffers.remove(&range);
+        self.resources.remove(&range);
     }
 }
 
@@ -325,8 +355,10 @@ unsafe impl Sync for UnboundBuffer {}
 pub struct UnboundImage {
     pub(crate) texture_desc: metal::TextureDescriptor,
     pub(crate) format: hal::format::Format,
-    pub(crate) tiling: hal::image::Tiling,
-    pub(crate) extent: hal::image::Extent,
+    pub(crate) tiling: image::Tiling,
+    pub(crate) extent: image::Extent,
+    pub(crate) num_layers: Option<image::Layer>,
+    pub(crate) mip_sizes: Vec<u64>,
 }
 unsafe impl Send for UnboundImage {}
 unsafe impl Sync for UnboundImage {}

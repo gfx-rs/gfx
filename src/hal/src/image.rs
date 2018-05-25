@@ -7,6 +7,7 @@ use std::fmt;
 use std::ops::Range;
 
 use format;
+use buffer::Offset as RawOffset;
 use pso::Comparison;
 
 
@@ -31,6 +32,17 @@ pub struct Extent {
     pub height: Size,
     /// Image depth.
     pub depth: Size,
+}
+
+impl Extent {
+    /// Get the extent at a particular mipmap level.
+    pub fn at_level(&self, level: Level) -> Self {
+        Extent {
+            width: 1.max(self.width >> level),
+            height: 1.max(self.height >> level),
+            depth: 1.max(self.depth >> level),
+        }
+    }
 }
 
 ///
@@ -699,4 +711,18 @@ pub struct FormatProperties {
     pub sample_count_mask: NumSamples,
     /// Maximum size of the resource in bytes.
     pub max_resource_size: usize,
+}
+
+/// Footprint of a subresource in memory.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct SubresourceFootprint {
+    /// Byte slice occupied by the subresource.
+    pub slice: Range<RawOffset>,
+    /// Byte distance between rows.
+    pub row_pitch: RawOffset,
+    /// Byte distance between array layers.
+    pub array_pitch: RawOffset,
+    /// Byte distance between depth slices.
+    pub depth_pitch: RawOffset,
 }

@@ -294,7 +294,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         };
 
         let device = Device::new(device, cxt);
-        
+
         // TODO: deferred context => 1 cxt/queue?
         let queues = Queues::new(
             families
@@ -491,7 +491,13 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn get_image_requirements(&self, image: &UnboundImage) -> memory::Requirements {
+    fn get_image_requirements(&self, _image: &UnboundImage) -> memory::Requirements {
+        unimplemented!()
+    }
+
+    fn get_image_subresource_footprint(
+        &self, _image: &Image, _sub: image::Subresource
+    ) -> image::SubresourceFootprint {
         unimplemented!()
     }
 
@@ -720,7 +726,7 @@ impl hal::Device<Backend> for Device {
                 },
                 Format: non_srgb_format,
                 ScanlineOrdering: dxgitype::DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED,
-                Scaling: dxgitype::DXGI_MODE_SCALING_UNSPECIFIED 
+                Scaling: dxgitype::DXGI_MODE_SCALING_UNSPECIFIED
             },
             // TODO: msaa on backbuffer?
             SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
@@ -748,7 +754,7 @@ impl hal::Device<Backend> for Device {
 
             if !winerror::SUCCEEDED(hr) {
                 // TODO: return error
-                
+
             }
 
             unsafe { ComPtr::from_raw(swapchain) }
@@ -756,7 +762,7 @@ impl hal::Device<Backend> for Device {
 
         let images = (0..config.image_count).map(|i| {
             let mut resource: *mut d3d11::ID3D11Resource = ptr::null_mut();
-            
+
             unsafe {
                 swapchain.GetBuffer(
                     i as _,
@@ -764,7 +770,7 @@ impl hal::Device<Backend> for Device {
                     &mut resource as *mut *mut _ as *mut *mut _
                 );
             };
-    
+
             let mut desc: d3d11::D3D11_RENDER_TARGET_VIEW_DESC = unsafe { mem::zeroed() };
             desc.Format = format;
             desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2D;
@@ -895,7 +901,7 @@ impl hal::QueueFamily for QueueFamily {
     fn id(&self) -> QueueFamilyId { QueueFamilyId(0) }
 }
 
-// TODO: 
+// TODO:
 #[derive(Debug)]
 pub struct CommandQueue;
 
@@ -1297,6 +1303,6 @@ impl hal::Backend for Backend {
 fn validate_line_width(width: f32) {
     // Note from the Vulkan spec:
     // > If the wide lines feature is not enabled, lineWidth must be 1.0
-    // Simply assert and no-op because DX11 never exposes `Features::LINE_WIDTH` 
+    // Simply assert and no-op because DX11 never exposes `Features::LINE_WIDTH`
     assert_eq!(width, 1.0);
 }

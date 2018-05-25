@@ -156,11 +156,13 @@ impl Device {
                 ];
                 native::Image {
                     raw: mapped_texture,
+                    allocations: None,
                     extent: image::Extent {
                         width: pixel_width as _,
                         height: pixel_height as _,
                         depth: 1,
                     },
+                    num_layers: None,
                     format_desc: config.color_format.surface_desc(),
                     shader_channel: Channel::Float,
                     mtl_format,

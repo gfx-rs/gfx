@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::{cmp, mem, slice};
 
 use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query};
-use hal::command::BufferCopy;
+use hal::command::{BufferCopy, BufferImageCopy};
 use hal::device::{BindError, OutOfMemory, FramebufferError, ShaderError};
 use hal::memory::Properties;
 use hal::pool::CommandPoolCreateFlags;
@@ -1047,7 +1047,7 @@ impl hal::Device<Backend> for Device {
             });
 
             let allocations = memory.allocations.lock().unwrap();
-            for (alloc_range, dst) in allocations.find(&range) {
+            for (alloc_range, resource, _) in allocations.find(&range) {
                 trace!("\t\talloc range {:?}", alloc_range);
                 let start = alloc_range.start.max(range.start);
                 let end = alloc_range.end.min(range.end);
@@ -1057,15 +1057,34 @@ impl hal::Device<Backend> for Device {
                     warn!("Invalidation of {:?} doesn't respect `non_coherent_atom_size`",
                         start .. end);
                 }
-                command::exec_blit(encoder, &soft::BlitCommand::CopyBuffer {
-                    src: cpu_buffer.clone(),
-                    dst: dst.to_owned(),
-                    region: BufferCopy {
-                        src: start & !ALIGN_MASK,
-                        dst: other,
-                        size: end & !ALIGN_MASK - start &!ALIGN_MASK,
+
+                let command = match resource {
+                    n::Resource::Buffer(raw) => soft::BlitCommand::CopyBuffer {
+                        src: cpu_buffer.clone(),
+                        dst: raw,
+                        region: BufferCopy {
+                            src: start & !ALIGN_MASK,
+                            dst: other,
+                            size: end & !ALIGN_MASK - start &!ALIGN_MASK,
+                        },
                     },
-                });
+                    n::Resource::Texture { raw, format_desc, extent, subresource } => soft::BlitCommand::CopyBufferToImage {
+                        src: cpu_buffer.clone(),
+                        dst: raw,
+                        dst_desc: format_desc,
+                        //TODO: we could increase the granularity of copies here
+                        region: BufferImageCopy {
+                            buffer_offset: start & !ALIGN_MASK,
+                            buffer_width: extent.width,
+                            buffer_height: extent.height,
+                            image_layers: subresource,
+                            image_offset: image::Offset::ZERO,
+                            image_extent: extent,
+                        },
+                    },
+                };
+
+                command::exec_blit(encoder, &command);
             }
         }
 
@@ -1102,7 +1121,7 @@ impl hal::Device<Backend> for Device {
             let cpu_buffer = memory.cpu_buffer.as_ref().unwrap();
 
             let allocations = memory.allocations.lock().unwrap();
-            for (alloc_range, src) in allocations.find(&range) {
+            for (alloc_range, resource, _) in allocations.find(&range) {
                 trace!("\t\talloc range {:?}", alloc_range);
                 let start = alloc_range.start.max(range.start);
                 let end = alloc_range.end.min(range.end);
@@ -1112,15 +1131,34 @@ impl hal::Device<Backend> for Device {
                     warn!("Invalidation of {:?} doesn't respect `non_coherent_atom_size`",
                         start .. end);
                 }
-                command::exec_blit(encoder, &soft::BlitCommand::CopyBuffer {
-                    src: src.to_owned(),
-                    dst: cpu_buffer.clone(),
-                    region: BufferCopy {
-                        src: other,
-                        dst: start & !ALIGN_MASK,
-                        size: end & !ALIGN_MASK - start & !ALIGN_MASK,
+
+                let command = match resource {
+                    n::Resource::Buffer(raw) => soft::BlitCommand::CopyBuffer {
+                        src: raw,
+                        dst: cpu_buffer.clone(),
+                        region: BufferCopy {
+                            src: other,
+                            dst: start & !ALIGN_MASK,
+                            size: end & !ALIGN_MASK - start & !ALIGN_MASK,
+                        },
                     },
-                });
+                    n::Resource::Texture { raw, format_desc, extent, subresource } => soft::BlitCommand::CopyImageToBuffer {
+                        src: raw,
+                        src_desc: format_desc,
+                        dst: cpu_buffer.clone(),
+                        //TODO: we could increase the granularity of copies here
+                        region: BufferImageCopy {
+                            buffer_offset: start & !ALIGN_MASK,
+                            buffer_width: extent.width,
+                            buffer_height: extent.height,
+                            image_layers: subresource,
+                            image_offset: image::Offset::ZERO,
+                            image_extent: extent,
+                        },
+                    },
+                };
+
+                command::exec_blit(encoder, &command);
             }
 
             num_copies += 1;
@@ -1446,7 +1484,10 @@ impl hal::Device<Backend> for Device {
         Ok(n::Buffer {
             allocations: if is_mappable {
                 memory.initialized.set(true); // this is conservative, can be improved
-                memory.allocations.lock().unwrap().insert(offset .. (offset + buffer.size), raw.clone());
+                memory.allocations.lock().unwrap().insert(
+                    offset .. (offset + buffer.size),
+                    n::Resource::Buffer(raw.clone()),
+                );
                 Some(memory.allocations.clone())
             } else {
                 None
@@ -1525,39 +1566,36 @@ impl hal::Device<Backend> for Device {
 
         let descriptor = metal::TextureDescriptor::new();
 
-        let mtl_type = match kind {
+        let (mtl_type, num_layers) = match kind {
             image::Kind::D1(_, 1) if mip_levels == 1=> {
                 assert!(!is_cube);
-                MTLTextureType::D1
+                (MTLTextureType::D1, None)
             }
             image::Kind::D1(_, layers) if mip_levels == 1 => {
                 assert!(!is_cube);
-                descriptor.set_array_length(layers as u64);
-                MTLTextureType::D1Array
+                (MTLTextureType::D1Array, Some(layers))
             }
             image::Kind::D1(_, 1) |
             image::Kind::D2(_, _, 1, 1) => {
-                MTLTextureType::D2
+                (MTLTextureType::D2, None)
             }
             image::Kind::D1(_, layers) |
             image::Kind::D2(_, _, layers, 1) => {
                 if is_cube && layers > 6 {
                     assert_eq!(layers % 6, 0);
-                    descriptor.set_array_length(layers as u64 / 6);
-                    MTLTextureType::CubeArray
+                    (MTLTextureType::CubeArray, Some(layers / 6))
                 } else if is_cube {
                     assert_eq!(layers, 6);
-                    MTLTextureType::Cube
+                    (MTLTextureType::Cube, None)
                 } else if layers > 1 {
-                    descriptor.set_array_length(layers as u64);
-                    MTLTextureType::D2Array
+                    (MTLTextureType::D2Array, Some(layers))
                 } else {
-                    MTLTextureType::D2
+                    (MTLTextureType::D2, None)
                 }
             }
             image::Kind::D2(_, _, 1, samples) if !is_cube => {
                 descriptor.set_sample_count(samples as u64);
-                MTLTextureType::D2Multisample
+                (MTLTextureType::D2Multisample, None)
             }
             image::Kind::D2(..) => {
                 error!("Multi-sampled array textures or cubes are not supported: {:?}", kind);
@@ -1565,11 +1603,14 @@ impl hal::Device<Backend> for Device {
             }
             image::Kind::D3(..) => {
                 assert!(!is_cube);
-                MTLTextureType::D3
+                (MTLTextureType::D3, None)
             }
         };
 
         descriptor.set_texture_type(mtl_type);
+        if let Some(count) = num_layers {
+            descriptor.set_array_length(count as u64);
+        }
         let extent = kind.extent();
         descriptor.set_width(extent.width as u64);
         descriptor.set_height(extent.height as u64);
@@ -1578,11 +1619,21 @@ impl hal::Device<Backend> for Device {
         descriptor.set_pixel_format(mtl_format);
         descriptor.set_usage(conv::map_texture_usage(usage));
 
+        let format_desc = format.surface_desc();
+        let mip_sizes = (0 .. mip_levels)
+            .map(|level| {
+                let pitches = n::Image::pitches_impl(extent.at_level(level), format_desc);
+                num_layers.unwrap_or(1) as buffer::Offset * pitches[2]
+            })
+            .collect();
+
         Ok(n::UnboundImage {
             texture_desc: descriptor,
             format,
             tiling,
             extent,
+            num_layers,
+            mip_sizes,
         })
     }
 
@@ -1627,52 +1678,101 @@ impl hal::Device<Backend> for Device {
             }
         } else {
             memory::Requirements {
-                size: 1, // TODO: something sensible
+                size: image.mip_sizes.iter().sum(),
                 alignment: 4,
                 type_mask,
             }
         }
     }
 
+    fn get_image_subresource_footprint(
+        &self, image: &n::Image, sub: image::Subresource
+    ) -> image::SubresourceFootprint {
+        let num_layers = image.num_layers.unwrap_or(1) as buffer::Offset;
+        let level_offset = (0 .. sub.level).fold(0, |offset, level| {
+            let pitches = image.pitches(level);
+            offset + num_layers * pitches[2]
+        });
+        let pitches = image.pitches(sub.level);
+        let layer_offset = level_offset + sub.layer as buffer::Offset * pitches[2];
+        image::SubresourceFootprint {
+            slice: layer_offset .. layer_offset + pitches[2],
+            row_pitch: pitches[0] as _,
+            depth_pitch: pitches[1] as _,
+            array_pitch: pitches[2] as _,
+        }
+    }
+
     fn bind_image_memory(
-        &self, memory: &n::Memory, _offset: u64, image: n::UnboundImage
+        &self, memory: &n::Memory, base_offset: u64, image: n::UnboundImage
     ) -> Result<n::Image, BindError> {
-        let raw = match memory.heap {
+        let (raw, is_mappable) = match memory.heap {
             n::MemoryHeap::Native(ref heap) => {
                 let resource_options = conv::resource_options_from_storage_and_cache(
                     heap.storage_mode(),
                     heap.cpu_cache_mode());
                 image.texture_desc.set_resource_options(resource_options);
-                heap.new_texture(&image.texture_desc)
+                let raw = heap.new_texture(&image.texture_desc)
                     .unwrap_or_else(|| {
                         // TODO: disable hazard tracking?
                         self.shared.device
                             .lock()
                             .unwrap()
                             .new_texture(&image.texture_desc)
-                    })
+                    });
+                let is_mappable = heap.storage_mode() != MTLStorageMode::Private;
+                (raw, is_mappable)
             },
             n::MemoryHeap::Emulated(memory_type) => {
-                // TODO: disable hazard tracking?
-                let memory_properties = self.memory_types[memory_type.0].properties;
-                let resource_options = conv::map_memory_properties_to_options(memory_properties);
-                let (storage, cache_mode) = conv::map_memory_properties_to_storage_and_cache(memory_properties);
-                image.texture_desc.set_storage_mode(storage);
-                image.texture_desc.set_cpu_cache_mode(cache_mode);
-                image.texture_desc.set_resource_options(resource_options);
-                self.shared.device
+                // Note: texture backing is always `Private`. CPU access is routed through
+                // a CPU-visible buffer associated with `Memory` object.
+                image.texture_desc.set_storage_mode(MTLStorageMode::Private);
+                image.texture_desc.set_resource_options(MTLResourceOptions::StorageModePrivate);
+                let raw = self.shared.device
                     .lock()
                     .unwrap()
-                    .new_texture(&image.texture_desc)
+                    .new_texture(&image.texture_desc);
+                let memory_properties = self.memory_types[memory_type.0].properties;
+                let is_mappable = memory_properties.contains(memory::Properties::CPU_VISIBLE);
+                if is_mappable && memory_properties.contains(memory::Properties::COHERENT) {
+                    warn!("COHERENT buffer memory is not yet supported properly");
+                }
+                (raw, is_mappable)
             }
         };
 
         let base = image.format.base_format();
+        let format_desc = base.0.desc();
 
         Ok(n::Image {
+            allocations: if is_mappable {
+                let mut allocations = memory.allocations.lock().unwrap();
+                memory.initialized.set(true); // this is conservative, can be improved
+                let mut offset = base_offset;
+                for (i, mip_size) in image.mip_sizes.into_iter().enumerate() {
+                    allocations.insert(
+                        offset .. (offset + mip_size),
+                        n::Resource::Texture {
+                            raw: raw.clone(),
+                            format_desc,
+                            extent: image.extent,
+                            subresource: image::SubresourceLayers {
+                                aspects: format_desc.aspects,
+                                level: i as _,
+                                layers: 0 .. image.num_layers.unwrap_or(1),
+                            },
+                        },
+                    );
+                    offset += mip_size;
+                }
+                Some(memory.allocations.clone())
+            } else {
+                None
+            },
             raw,
             extent: image.extent,
-            format_desc: base.0.desc(),
+            num_layers: image.num_layers,
+            format_desc,
             shader_channel: match base.1 {
                 format::ChannelType::Unorm |
                 format::ChannelType::Inorm |

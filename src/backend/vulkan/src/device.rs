@@ -1003,6 +1003,20 @@ impl d::Device<B> for Device {
         }
     }
 
+    fn get_image_subresource_footprint(
+        &self, image: &n::Image, subresource: image::Subresource
+    ) -> image::SubresourceFootprint {
+        let sub = conv::map_subresource(&subresource);
+        let layout = self.raw.0.get_image_subresource_layout(image.raw, sub);
+
+        image::SubresourceFootprint {
+            slice: layout.offset .. layout.offset + layout.size,
+            row_pitch: layout.row_pitch,
+            array_pitch: layout.array_pitch,
+            depth_pitch: layout.depth_pitch,
+        }
+    }
+
     fn bind_image_memory(&self, memory: &n::Memory, offset: u64, image: UnboundImage) -> Result<n::Image, d::BindError> {
         // TODO: error handling
         // TODO: check required type
