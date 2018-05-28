@@ -297,7 +297,7 @@ pub(crate) fn map_depth_stencil_desc(desc: &DepthStencilDesc) -> D3D11_DEPTH_STE
     }
 }
 
-pub(crate) fn map_execution_model(model: spirv::ExecutionModel) -> Stage {
+pub fn map_execution_model(model: spirv::ExecutionModel) -> Stage {
     match model {
         spirv::ExecutionModel::Vertex => Stage::Vertex,
         spirv::ExecutionModel::Fragment => Stage::Fragment,
@@ -309,7 +309,7 @@ pub(crate) fn map_execution_model(model: spirv::ExecutionModel) -> Stage {
     }
 }
 
-pub(crate) fn map_stage(stage: Stage) -> spirv::ExecutionModel {
+pub fn map_stage(stage: Stage) -> spirv::ExecutionModel {
     match stage {
         Stage::Vertex => spirv::ExecutionModel::Vertex,
         Stage::Fragment => spirv::ExecutionModel::Fragment,
