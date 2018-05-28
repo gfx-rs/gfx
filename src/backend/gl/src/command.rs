@@ -1035,7 +1035,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         &mut self,
         _buffer: &n::Buffer,
         _offset: buffer::Offset,
-        _draw_count: u32,
+        _draw_count: hal::DrawCount,
         _stride: u32,
     ) {
         unimplemented!()
@@ -1045,7 +1045,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         &mut self,
         _buffer: &n::Buffer,
         _offset: buffer::Offset,
-        _draw_count: u32,
+        _draw_count: hal::DrawCount,
         _stride: u32,
     ) {
         unimplemented!()

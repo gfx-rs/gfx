@@ -40,6 +40,9 @@ const ARGUMENT_BUFFER_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::macOS_GPUFamily1_v3,
 ];
 
+const PUSH_CONSTANTS_DESC_SET: u32 = !0;
+const PUSH_CONSTANTS_DESC_BINDING: u32 = 0;
+
 /// Emit error during shader module parsing.
 fn gen_parse_error(err: SpirvErrorCode) -> ShaderError {
     let msg = match err {
@@ -154,6 +157,7 @@ impl PhysicalDevice {
                 buffer_alignment: if Self::is_mac(device) {256} else {64},
             }
         };
+        assert!((shared.push_constants_buffer_id as usize) < private_caps.max_buffers_per_stage);
         PhysicalDevice {
             shared,
             memory_types: [
@@ -258,7 +262,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn features(&self) -> hal::Features {
-        hal::Features::ROBUST_BUFFER_ACCESS
+        hal::Features::ROBUST_BUFFER_ACCESS |
+        hal::Features::DRAW_INDIRECT_FIRST_INSTANCE |
+        hal::Features::DEPTH_CLAMP
     }
 
     fn limits(&self) -> hal::Limits {
@@ -345,6 +351,7 @@ impl Device {
     fn compile_shader_library(
         &self,
         raw_data: &[u8],
+        primitive_class: MTLPrimitiveTopologyClass,
         overrides: &HashMap<msl::ResourceBindingLocation, msl::ResourceBinding>,
     ) -> Result<(metal::Library, HashMap<String, spirv::EntryPoint>), ShaderError> {
         // spec requires "codeSize must be a multiple of 4"
@@ -363,6 +370,8 @@ impl Device {
 
         // compile with options
         let mut compiler_options = msl::CompilerOptions::default();
+        compiler_options.enable_point_size_builtin = primitive_class == MTLPrimitiveTopologyClass::Point;
+        compiler_options.resolve_specialized_array_lengths = true;
         compiler_options.vertex.invert_y = true;
         // fill the overrides
         compiler_options.resource_binding_overrides = overrides.clone();
@@ -427,7 +436,10 @@ impl Device {
     }
 
     fn load_shader(
-        &self, ep: &pso::EntryPoint<Backend>, layout: &n::PipelineLayout
+        &self,
+        ep: &pso::EntryPoint<Backend>,
+        layout: &n::PipelineLayout,
+        primitive_class: MTLPrimitiveTopologyClass,
     ) -> Result<(metal::Library, metal::Function, metal::MTLSize), pso::CreationError> {
         let entries_owned;
         let (lib, entry_point_map) = match *ep.module {
@@ -435,7 +447,7 @@ impl Device {
                 (library.to_owned(), entry_point_map)
             }
             n::ShaderModule::Raw(ref data) => {
-                let raw = self.compile_shader_library(data, &layout.res_overrides).unwrap();
+                let raw = self.compile_shader_library(data, primitive_class, &layout.res_overrides).unwrap();
                 entries_owned = raw.1;
                 (raw.0, &entries_owned)
             }
@@ -571,7 +583,7 @@ impl hal::Device<Backend> for Device {
     fn create_pipeline_layout<IS, IR>(
         &self,
         set_layouts: IS,
-        _push_constant_ranges: IR,
+        push_constant_ranges: IR,
     ) -> n::PipelineLayout
     where
         IS: IntoIterator,
@@ -667,9 +679,38 @@ impl hal::Device<Backend> for Device {
             }
         }
 
-        // TODO: return an `Err` when HAL signature of the function supports it
-        for &(_, _, ref counters) in &stage_infos {
-            assert!(counters.buffers <= self.private_caps.max_buffers_per_stage);
+        let mut pc_limits = [0u32; 3];
+        for pcr in push_constant_ranges {
+            let (flags, range) = pcr.borrow();
+            for (limit, &(stage_bit, _, _)) in pc_limits.iter_mut().zip(&stage_infos) {
+                if flags.contains(stage_bit) {
+                    *limit = range.end.max(*limit);
+                }
+            }
+        }
+
+        for (limit, &mut (_, stage, ref mut counters)) in pc_limits.iter().zip(&mut stage_infos) {
+            // handle the push constant buffer assignment and shader overrides
+            if *limit != 0 {
+                let buffer_id = self.shared.push_constants_buffer_id;
+                res_overrides.insert(
+                    msl::ResourceBindingLocation {
+                        stage,
+                        desc_set: PUSH_CONSTANTS_DESC_SET,
+                        binding: PUSH_CONSTANTS_DESC_BINDING,
+                    },
+                    msl::ResourceBinding {
+                        buffer_id,
+                        texture_id: !0,
+                        sampler_id: !0,
+                        force_used: false,
+                    },
+                );
+                assert!(counters.buffers < buffer_id as usize);
+            } else {
+                assert!(counters.buffers <= self.private_caps.max_buffers_per_stage);
+            }
+            // make sure we fit the limits
             assert!(counters.textures <= self.private_caps.max_textures_per_stage);
             assert!(counters.samplers <= self.private_caps.max_samplers_per_stage);
         }
@@ -706,14 +747,18 @@ impl hal::Device<Backend> for Device {
         pipeline.set_input_primitive_topology(primitive_class);
 
         // Vertex shader
-        let (vs_lib, vs_function, _) = self.load_shader(&pipeline_desc.shaders.vertex, pipeline_layout)?;
+        let (vs_lib, vs_function, _) = self.load_shader(
+            &pipeline_desc.shaders.vertex,
+            pipeline_layout,
+            primitive_class,
+        )?;
         pipeline.set_vertex_function(Some(&vs_function));
 
         // Fragment shader
         let fs_function;
         let fs_lib = match pipeline_desc.shaders.fragment {
             Some(ref ep) => {
-                let (lib, fun, _) = self.load_shader(ep, pipeline_layout)?;
+                let (lib, fun, _) = self.load_shader(ep, pipeline_layout, primitive_class)?;
                 fs_function = fun;
                 pipeline.set_fragment_function(Some(&fs_function));
                 Some(lib)
@@ -844,6 +889,13 @@ impl hal::Device<Backend> for Device {
         if let pso::PolygonMode::Line(width) = pipeline_desc.rasterizer.polygon_mode {
             validate_line_width(width);
         }
+        let rasterizer_state = Some(n::RasterizerState {
+            depth_clip: if pipeline_desc.rasterizer.depth_clamping {
+                metal::MTLDepthClipMode::Clamp
+            } else {
+                metal::MTLDepthClipMode::Clip
+            },
+        });
 
         device.new_render_pipeline_state(&pipeline)
             .map(|raw|
@@ -853,6 +905,7 @@ impl hal::Device<Backend> for Device {
                     raw,
                     primitive_type,
                     attribute_buffer_index: pipeline_layout.attribute_buffer_index,
+                    rasterizer_state,
                     depth_stencil_state,
                     baked_states: pipeline_desc.baked_states.clone(),
                 })
@@ -868,7 +921,11 @@ impl hal::Device<Backend> for Device {
     ) -> Result<n::ComputePipeline, pso::CreationError> {
         let pipeline = metal::ComputePipelineDescriptor::new();
 
-        let (cs_lib, cs_function, work_group_size) = self.load_shader(&pipeline_desc.shader, &pipeline_desc.layout)?;
+        let (cs_lib, cs_function, work_group_size) = self.load_shader(
+            &pipeline_desc.shader,
+            &pipeline_desc.layout,
+            MTLPrimitiveTopologyClass::Unspecified,
+        )?;
         pipeline.set_compute_function(Some(&cs_function));
 
         self.shared.device
@@ -929,7 +986,11 @@ impl hal::Device<Backend> for Device {
         Ok(if depends_on_pipeline_layout {
             n::ShaderModule::Raw(raw_data.to_vec())
         } else {
-            let (library, entry_point_map) = self.compile_shader_library(raw_data, &HashMap::new())?;
+            let (library, entry_point_map) = self.compile_shader_library(
+                raw_data,
+                MTLPrimitiveTopologyClass::Unspecified,
+                &HashMap::new(),
+            )?;
             n::ShaderModule::Compiled {
                 library,
                 entry_point_map,

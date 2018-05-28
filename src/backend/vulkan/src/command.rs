@@ -7,7 +7,7 @@ use ash::vk;
 use ash::version::DeviceV1_0;
 
 use hal::{buffer, command as com, memory, pso, query};
-use hal::{IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
+use hal::{DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 use hal::format::Aspects;
 use hal::image::{Filter, Layout, SubresourceRange};
 use hal::range::RangeArg;
@@ -803,7 +803,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         &mut self,
         buffer: &n::Buffer,
         offset: buffer::Offset,
-        draw_count: u32,
+        draw_count: DrawCount,
         stride: u32,
     ) {
         unsafe {
@@ -821,7 +821,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         &mut self,
         buffer: &n::Buffer,
         offset: buffer::Offset,
-        draw_count: u32,
+        draw_count: DrawCount,
         stride: u32,
     ) {
         unsafe {

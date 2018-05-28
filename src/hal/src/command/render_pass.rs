@@ -3,7 +3,7 @@ use std::ops::{Range, Deref, DerefMut};
 use std::marker::PhantomData;
 
 use {buffer, pso};
-use {Backend, IndexCount, InstanceCount, VertexCount, VertexOffset};
+use {Backend, DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset};
 use queue::{Supports, Graphics};
 use super::{
     AttachmentClear, ClearValue, ClearValueRaw, CommandBuffer, RawCommandBuffer,
@@ -51,11 +51,11 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
     }
 
     ///
-    pub fn draw_indirect(&mut self, buffer: &B::Buffer, offset: buffer::Offset, draw_count: u32, stride: u32) {
+    pub fn draw_indirect(&mut self, buffer: &B::Buffer, offset: buffer::Offset, draw_count: DrawCount, stride: u32) {
         self.0.draw_indirect(buffer, offset, draw_count, stride)
     }
     ///
-    pub fn draw_indexed_indirect(&mut self, buffer: &B::Buffer, offset: buffer::Offset, draw_count: u32, stride: u32) {
+    pub fn draw_indexed_indirect(&mut self, buffer: &B::Buffer, offset: buffer::Offset, draw_count: DrawCount, stride: u32) {
         self.0.draw_indexed_indirect(buffer, offset, draw_count, stride)
     }
 

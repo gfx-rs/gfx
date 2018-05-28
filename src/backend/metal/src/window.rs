@@ -145,7 +145,7 @@ impl Device {
             backbuffer_descriptor.set_pixel_format(mtl_format);
             backbuffer_descriptor.set_width(pixel_width);
             backbuffer_descriptor.set_height(pixel_height);
-            backbuffer_descriptor.set_usage(MTLTextureUsage::MTLTextureUsageRenderTarget);
+            backbuffer_descriptor.set_usage(MTLTextureUsage::RenderTarget);
 
             let device = self.shared.device.lock().unwrap();
             let images = io_surfaces.iter().map(|surface| {

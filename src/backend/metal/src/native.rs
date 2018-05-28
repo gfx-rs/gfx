@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use hal::{self, image, pass, pso};
 
 use cocoa::foundation::{NSUInteger};
-use metal::{self, MTLPrimitiveType};
+use metal;
 use spirv_cross::{msl, spirv};
 
 
@@ -45,12 +45,17 @@ pub struct FrameBuffer(pub(crate) metal::RenderPassDescriptor);
 unsafe impl Send for FrameBuffer {}
 unsafe impl Sync for FrameBuffer {}
 
-
 #[derive(Debug)]
 pub struct PipelineLayout {
     // First vertex buffer index to be used by attributes
     pub(crate) attribute_buffer_index: u32,
     pub(crate) res_overrides: HashMap<msl::ResourceBindingLocation, msl::ResourceBinding>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RasterizerState {
+    //TODO: more states
+    pub depth_clip: metal::MTLDepthClipMode,
 }
 
 #[derive(Debug)]
@@ -60,8 +65,9 @@ pub struct GraphicsPipeline {
     pub(crate) vs_lib: metal::Library,
     pub(crate) fs_lib: Option<metal::Library>,
     pub(crate) raw: metal::RenderPipelineState,
-    pub(crate) primitive_type: MTLPrimitiveType,
+    pub(crate) primitive_type: metal::MTLPrimitiveType,
     pub(crate) attribute_buffer_index: u32,
+    pub(crate) rasterizer_state: Option<RasterizerState>,
     pub(crate) depth_stencil_state: Option<metal::DepthStencilState>,
     pub(crate) baked_states: pso::BakedStates,
 }

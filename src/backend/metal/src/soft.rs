@@ -1,9 +1,18 @@
 use command::IndexBuffer;
+use native::RasterizerState;
 
 use hal;
 use metal;
 
 use std::ops::Range;
+
+
+pub fn push_data(constants: &[u32]) -> Vec<u8> {
+    constants
+        .iter()
+        .flat_map(|&v| (0 .. 4).map(move |i| (v >> 8*i) as u8))
+        .collect()
+}
 
 #[derive(Clone, Debug)]
 pub enum RenderCommand {
@@ -18,8 +27,8 @@ pub enum RenderCommand {
     },
     BindBufferData {
         stage: hal::pso::Stage,
-        bytes: Vec<u8>,
         index: usize,
+        bytes: Vec<u8>,
     },
     BindTexture {
         stage: hal::pso::Stage,
@@ -31,19 +40,34 @@ pub enum RenderCommand {
         index: usize,
         sampler: Option<metal::SamplerState>,
     },
-    BindPipeline(metal::RenderPipelineState, Option<metal::DepthStencilState>),
+    BindPipeline(
+        metal::RenderPipelineState,
+        Option<RasterizerState>,
+        Option<metal::DepthStencilState>,
+    ),
     Draw {
         primitive_type: metal::MTLPrimitiveType,
         vertices: Range<hal::VertexCount>,
         instances: Range<hal::InstanceCount>
     },
     DrawIndexed {
-        index: IndexBuffer,
         primitive_type: metal::MTLPrimitiveType,
+        index: IndexBuffer,
         indices: Range<hal::IndexCount>,
         base_vertex: hal::VertexOffset,
         instances: Range<hal::InstanceCount>,
-    }
+    },
+    DrawIndirect {
+        primitive_type: metal::MTLPrimitiveType,
+        buffer: metal::Buffer,
+        offset: hal::buffer::Offset,
+    },
+    DrawIndexedIndirect {
+        primitive_type: metal::MTLPrimitiveType,
+        index: IndexBuffer,
+        buffer: metal::Buffer,
+        offset: hal::buffer::Offset,
+    },
 }
 
 #[derive(Debug)]
