@@ -20,6 +20,7 @@ name = "gfx_backend_metal"
 
 [dependencies]
 gfx-hal = { path = "../../hal", version = "0.1" }
+bitflags = "1.0"
 log = "0.4"
 winit = { version = "0.13", optional = true }
 metal-rs = "0.10.1"

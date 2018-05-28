@@ -1,6 +1,6 @@
 use PrivateCapabilities;
 
-use hal::{pass, image, memory, pso, IndexType};
+use hal::{pass, image, pso, IndexType};
 use hal::format::Format;
 use hal::pso::Comparison;
 use metal::*;
@@ -247,45 +247,6 @@ pub fn map_vertex_format(format: Format) -> Option<MTLVertexFormat> {
         f::Rgba32Float => Float4,
         _ => return None,
     })
-}
-
-pub fn map_memory_properties_to_options(properties: memory::Properties) -> MTLResourceOptions {
-    let mut options = MTLResourceOptions::empty();
-    if properties.contains(memory::Properties::CPU_VISIBLE) {
-        if properties.contains(memory::Properties::COHERENT) {
-            options |= MTLResourceOptions::StorageModeShared;
-        } else {
-            options |= MTLResourceOptions::StorageModeManaged;
-        }
-    } else if properties.contains(memory::Properties::DEVICE_LOCAL) {
-        options |= MTLResourceOptions::StorageModePrivate;
-    } else {
-        panic!("invalid heap properties");
-    }
-    if !properties.contains(memory::Properties::CPU_CACHED) {
-        options |= MTLResourceOptions::CPUCacheModeWriteCombined;
-    }
-    options
-}
-
-pub fn map_memory_properties_to_storage_and_cache(properties: memory::Properties) -> (MTLStorageMode, MTLCPUCacheMode) {
-    let storage = if properties.contains(memory::Properties::CPU_VISIBLE) {
-        if properties.contains(memory::Properties::COHERENT) {
-            MTLStorageMode::Shared
-        } else {
-            MTLStorageMode::Managed
-        }
-    } else if properties.contains(memory::Properties::DEVICE_LOCAL) {
-        MTLStorageMode::Private
-    } else {
-        panic!("invalid heap properties");
-    };
-    let cpu = if properties.contains(memory::Properties::CPU_CACHED) {
-        MTLCPUCacheMode::DefaultCache
-    } else {
-        MTLCPUCacheMode::WriteCombined
-    };
-    (storage, cpu)
 }
 
 pub fn resource_options_from_storage_and_cache(storage: MTLStorageMode, cache: MTLCPUCacheMode) -> MTLResourceOptions {

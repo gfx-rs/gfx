@@ -1,4 +1,5 @@
 extern crate gfx_hal as hal;
+#[macro_use] extern crate bitflags;
 extern crate cocoa;
 extern crate foreign_types;
 #[macro_use] extern crate objc;
