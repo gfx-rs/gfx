@@ -36,18 +36,6 @@ pub struct QueuePool {
     queues: Vec<QueueInner>,
 }
 
-pub struct CommandBufferScope<'a> {
-    inner: &'a metal::CommandBufferRef,
-    _pool: AutoreleasePool,
-}
-
-impl<'a> Deref for CommandBufferScope<'a> {
-    type Target = metal::CommandBufferRef;
-    fn deref(&self) -> &Self::Target {
-        self.inner
-    }
-}
-
 impl QueuePool {
     fn find_queue(&mut self, device: &Mutex<metal::Device>) -> usize {
         const POOL_SIZE: usize = 64;
@@ -67,36 +55,6 @@ impl QueuePool {
             })
     }
 
-    /// Get a command buffer reference that we are going to record and submit instantly,
-    /// and the client doesn't want to track it. Used for internal submissions.
-    pub fn borrow_command_buffer(
-        &mut self, shared: &Arc<Shared>,
-    ) -> CommandBufferScope {
-        let pool = AutoreleasePool::new();
-        let id = self.find_queue(&shared.device);
-        self.queues[id].reserve.start += 1;
-        let inner = self.queues[id].queue
-            .new_command_buffer_with_unretained_references();
-
-        // update the reserve count once the GPU is done with it
-        let shared = Arc::clone(shared);
-        let release_block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
-            shared.queue_pool
-                .lock()
-                .unwrap()
-                .release_command_buffer(id);
-        }).copy();
-        unsafe {
-            msg_send![inner,
-                addCompletedHandler: release_block.deref() as *const _
-            ]
-        };
-
-        CommandBufferScope {
-            inner,
-            _pool: pool,
-        }
-    }
     /// Get a command buffer that needs to be manually tracked/released.
     pub fn make_command_buffer(
         &mut self, device: &Mutex<metal::Device>
@@ -109,19 +67,6 @@ impl QueuePool {
             .to_owned();
         (id, cmd_buffer)
     }
-
-    pub fn wait_idle(
-        &mut self, device: &Mutex<metal::Device>
-    ) {
-        debug!("waiting for idle");
-        let _pool = AutoreleasePool::new();
-        let id = self.find_queue(device);
-        let inner = self.queues[id].queue
-            .new_command_buffer_with_unretained_references();
-        inner.commit();
-        inner.wait_until_completed();
-    }
-
 
     pub fn release_command_buffer(&mut self, index: usize) {
         self.queues[index].reserve.start -= 1;
@@ -927,7 +872,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
             None
         };
 
-        let mut pool = self.shared.queue_pool.lock().unwrap();
+        let queue = self.shared.aux_queue.lock().unwrap();
 
         for buffer in submit.cmd_buffers {
             let mut inner = buffer.borrow().inner.borrow_mut();
@@ -953,7 +898,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     cmd_buffer
                 }
                 Some(CommandSink::Deferred { ref passes, .. }) => {
-                    temp_cmd_buffer = pool.borrow_command_buffer(&self.shared);
+                    temp_cmd_buffer = queue.new_command_buffer_with_unretained_references();
                     record_commands(&*temp_cmd_buffer, passes);
                     &*temp_cmd_buffer
                  }
@@ -966,7 +911,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
         }
 
         if let Some(ref fence) = fence {
-            let command_buffer = pool.borrow_command_buffer(&self.shared);
+            let command_buffer = queue.new_command_buffer_with_unretained_references();
             let value_ptr = fence.0.clone();
             let fence_block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
                 *value_ptr.lock().unwrap() = true;
@@ -1005,10 +950,15 @@ impl RawCommandQueue<Backend> for CommandQueue {
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
-        self.shared.queue_pool
-            .lock()
-            .unwrap()
-            .wait_idle(&self.shared.device);
+        debug!("waiting for idle");
+        let _pool = AutoreleasePool::new();
+
+        let queue = self.shared.aux_queue.lock().unwrap();
+        let command_buffer = queue
+            .new_command_buffer_with_unretained_references();
+        command_buffer.commit();
+        command_buffer.wait_until_completed();
+
         Ok(())
     }
 }

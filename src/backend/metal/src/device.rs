@@ -1409,7 +1409,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn create_buffer(
-        &self, size: u64, _usage: buffer::Usage
+        &self, size: u64, usage: buffer::Usage
     ) -> Result<n::UnboundBuffer, buffer::CreationError> {
         Ok(n::UnboundBuffer {
             size
@@ -1857,10 +1857,15 @@ impl hal::Device<Backend> for Device {
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
-        self.shared.queue_pool
-            .lock()
-            .unwrap()
-            .wait_idle(&self.shared.device);
+        debug!("waiting for idle");
+        let _pool = AutoreleasePool::new();
+
+        let queue = self.shared.aux_queue.lock().unwrap();
+        let command_buffer = queue
+            .new_command_buffer_with_unretained_references();
+        command_buffer.commit();
+        command_buffer.wait_until_completed();
+
         Ok(())
     }
 }

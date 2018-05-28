@@ -53,6 +53,7 @@ impl hal::QueueFamily for QueueFamily {
 
 pub struct Shared {
     pub(crate) device: Mutex<metal::Device>,
+    pub(crate) aux_queue: Mutex<metal::CommandQueue>,
     pub(crate) queue_pool: Mutex<command::QueuePool>,
     pub(crate) service_pipes: Mutex<internal::ServicePipes>,
     pub(crate) push_constants_buffer_id: u32,
@@ -65,6 +66,7 @@ impl Shared {
     pub(crate) fn new(device: metal::Device) -> Self {
         Shared {
             queue_pool: Mutex::new(command::QueuePool::default()),
+            aux_queue: Mutex::new(device.new_command_queue()),
             service_pipes: Mutex::new(internal::ServicePipes::new(&device)),
             device: Mutex::new(device),
             push_constants_buffer_id: 30,
