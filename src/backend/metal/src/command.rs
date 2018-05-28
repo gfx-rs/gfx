@@ -23,8 +23,8 @@ use cocoa::foundation::{NSUInteger, NSInteger};
 use block::{ConcreteBlock};
 use {conversions as conv, soft};
 
-use smallvec::SmallVec;
 
+const WORD_ALIGNMENT: u64 = 4;
 
 pub(crate) struct QueueInner {
     queue: metal::CommandQueue,
@@ -161,9 +161,7 @@ struct State {
     attribute_buffer_index: usize,
     rasterizer_state: Option<native::RasterizerState>,
     depth_stencil_state: Option<metal::DepthStencilState>,
-    push_constant_data: HashMap<native::UniquePipelineLayoutId, Vec<u32>>,
-    graphics_layout_id: Option<native::UniquePipelineLayoutId>,
-    compute_layout_id: Option<native::UniquePipelineLayoutId>,
+    push_constants: Vec<u32>,
 }
 
 impl State {
@@ -171,7 +169,7 @@ impl State {
         self.resources_vs.clear();
         self.resources_fs.clear();
         self.resources_cs.clear();
-        self.push_constant_data.clear();
+        self.push_constants.clear();
     }
 
     fn make_render_commands(&self) -> Vec<soft::RenderCommand> {
@@ -188,9 +186,6 @@ impl State {
         }));
 
         let stages = [pso::Stage::Vertex, pso::Stage::Fragment];
-        let push_data = self.graphics_layout_id.and_then(|ref layout_id| {
-            self.push_constant_data.get(layout_id)
-        });
         for (&stage, resources) in stages.iter().zip(&[&self.resources_vs, &self.resources_fs]) {
             commands.extend(resources.buffers.iter().enumerate().filter_map(|(i, resource)| {
                 resource.clone().map(|(buffer, offset)| {
@@ -228,7 +223,7 @@ impl State {
                 .map(|id| soft::RenderCommand::BindBufferData {
                     stage,
                     index: id  as _,
-                    bytes: soft::push_data(push_data.unwrap()),
+                    bytes: soft::push_data(&self.push_constants),
                 })
             );
         }
@@ -237,9 +232,6 @@ impl State {
 
     fn make_compute_commands(&self) -> Vec<soft::ComputeCommand> {
         let mut commands = Vec::new();
-        let push_data = self.compute_layout_id.and_then(|ref layout_id| {
-            self.push_constant_data.get(layout_id)
-        });
 
         commands.extend(self.compute_pso.clone().map(soft::ComputeCommand::BindPipeline));
         commands.extend(self.resources_cs.buffers.iter().enumerate().filter_map(|(i, resource)| {
@@ -274,7 +266,7 @@ impl State {
         commands.extend(self.resources_cs.push_constants_buffer_id
             .map(|id| soft::ComputeCommand::BindBufferData {
                 index: id as _,
-                bytes: soft::push_data(push_data.unwrap()),
+                bytes: soft::push_data(&self.push_constants),
             })
         );
 
@@ -1058,9 +1050,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 attribute_buffer_index: 0,
                 rasterizer_state: None,
                 depth_stencil_state: None,
-                push_constant_data: HashMap::new(),
-                graphics_layout_id: None,
-                compute_layout_id: None,
+                push_constants: Vec::new(),
             },
         }).collect();
 
@@ -1123,48 +1113,47 @@ impl CommandBuffer {
         soft::RenderCommand::SetBlendColor(*color)
     }
 
-    fn push_vs_constants(
-        &mut self, layout_id: native::UniquePipelineLayoutId, buffer_id: Option<u32>
-    ) -> Option<soft::RenderCommand> {
-        self.state.resources_vs.push_constants_buffer_id = buffer_id;
-        buffer_id.map(|id| soft::RenderCommand::BindBufferData {
+    fn push_vs_constants(&mut self) -> soft::RenderCommand {
+        let id = self.shared.push_constants_buffer_id;
+        self.state.resources_vs.push_constants_buffer_id = Some(id);
+        soft::RenderCommand::BindBufferData {
             stage: pso::Stage::Vertex,
             index: id as _,
-            bytes: soft::push_data(
-                self.state.push_constant_data
-                    .get(&layout_id)
-                    .unwrap()
-            ),
-        })
+            bytes: soft::push_data(&self.state.push_constants),
+        }
     }
 
-    fn push_ps_constants(
-        &mut self, layout_id: native::UniquePipelineLayoutId, buffer_id: Option<u32>
-    ) -> Option<soft::RenderCommand> {
-        self.state.resources_fs.push_constants_buffer_id = buffer_id;
-        buffer_id.map(|id| soft::RenderCommand::BindBufferData {
+    fn push_ps_constants(&mut self) -> soft::RenderCommand {
+        let id = self.shared.push_constants_buffer_id;
+        self.state.resources_fs.push_constants_buffer_id = Some(id);
+        soft::RenderCommand::BindBufferData {
             stage: pso::Stage::Fragment,
             index: id as _,
-            bytes: soft::push_data(
-                self.state.push_constant_data
-                    .get(&layout_id)
-                    .unwrap()
-            ),
-        })
+            bytes: soft::push_data(&self.state.push_constants),
+        }
     }
 
-    fn push_cs_constants(
-        &mut self, layout_id: native::UniquePipelineLayoutId, buffer_id: Option<u32>
-    ) -> Option<soft::ComputeCommand> {
-        self.state.resources_cs.push_constants_buffer_id = buffer_id;
-        buffer_id.map(|id| soft::ComputeCommand::BindBufferData {
+    fn push_cs_constants(&mut self) -> soft::ComputeCommand {
+        let id = self.shared.push_constants_buffer_id;
+        self.state.resources_cs.push_constants_buffer_id = Some(id);
+        soft::ComputeCommand::BindBufferData {
             index: id as _,
-            bytes: soft::push_data(
-                self.state.push_constant_data
-                    .get(&layout_id)
-                    .unwrap()
-            ),
-        })
+            bytes: soft::push_data(&self.state.push_constants),
+        }
+    }
+
+    fn update_push_constants(
+        &mut self,
+        offset: u32,
+        constants: &[u32],
+    ) {
+        assert_eq!(offset % WORD_ALIGNMENT as u32, 0);
+        let offset = (offset  / WORD_ALIGNMENT as u32) as usize;
+        let data = &mut self.state.push_constants;
+        while data.len() < offset + constants.len() {
+            data.push(0);
+        }
+        data[offset ..].copy_from_slice(constants);
     }
 }
 
@@ -1234,7 +1223,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .get_fill_buffer()
             .to_owned();
 
-        const WORD_ALIGNMENT: u64 = 4;
         let start = *range.start().unwrap_or(&0);
         assert_eq!(start % WORD_ALIGNMENT, 0);
 
@@ -1837,7 +1825,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn bind_graphics_pipeline(&mut self, pipeline: &native::GraphicsPipeline) {
         let pipeline_state = pipeline.raw.to_owned();
-        println!("{:?}", pipeline.rasterizer_state);
         self.state.render_pso = Some(pipeline_state.clone());
         self.state.rasterizer_state = pipeline.rasterizer_state.clone();
         self.state.depth_stencil_state = pipeline.depth_stencil_state.as_ref().map(ToOwned::to_owned);
@@ -1898,19 +1885,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             );
 
             self.state.attribute_buffer_index = attribute_buffer_index;
-        }
-
-
-        if self.state.graphics_layout_id != Some(pipeline.layout_id) {
-            self.state.graphics_layout_id = Some(pipeline.layout_id);
-            commands.extend(self.push_vs_constants(
-                pipeline.layout_id,
-                pipeline.push_constants.vs,
-            ));
-            commands.extend(self.push_ps_constants(
-                pipeline.layout_id,
-                pipeline.push_constants.ps,
-            ));
         }
 
         self.inner
@@ -2135,23 +2109,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.state.compute_pso = Some(pipeline.raw.clone());
         self.state.work_group_size = pipeline.work_group_size;
 
-        let mut commands = SmallVec::<[_; 2]>::new();
-        commands.push(
-            soft::ComputeCommand::BindPipeline(pipeline.raw.clone())
-        );
-
-        if self.state.compute_layout_id != Some(pipeline.layout_id) {
-            self.state.compute_layout_id = Some(pipeline.layout_id);
-            commands.extend(self.push_cs_constants(
-                pipeline.layout_id,
-                pipeline.push_constants.cs,
-            ));
-        }
+        let command = soft::ComputeCommand::BindPipeline(pipeline.raw.clone());
 
         self.inner
             .borrow_mut()
             .sink()
-            .pre_compute_commands(commands);
+            .pre_compute_commands(iter::once(command));
     }
 
     fn bind_compute_descriptor_sets<'a, T>(
@@ -2471,7 +2434,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         vertices: Range<VertexCount>,
         instances: Range<InstanceCount>,
     ) {
-        if instances.start >= instances.end {
+        if instances.start == instances.end {
             return
         }
 
@@ -2492,7 +2455,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         base_vertex: VertexOffset,
         instances: Range<InstanceCount>,
     ) {
-        if instances.start >= instances.end {
+        if instances.start == instances.end {
             return
         }
 
@@ -2516,6 +2479,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         count: DrawCount,
         stride: u32,
     ) {
+        assert_eq!(offset % WORD_ALIGNMENT, 0);
+        assert_eq!(stride % WORD_ALIGNMENT as u32, 0);
+
         let commands = (0 .. count)
             .map(|i| soft::RenderCommand::DrawIndirect {
                 primitive_type: self.state.primitive_type,
@@ -2536,6 +2502,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         count: DrawCount,
         stride: u32,
     ) {
+        assert_eq!(offset % WORD_ALIGNMENT, 0);
+        assert_eq!(stride % WORD_ALIGNMENT as u32, 0);
+
         let commands = (0 .. count)
             .map(|i| soft::RenderCommand::DrawIndexedIndirect {
                 primitive_type: self.state.primitive_type,
@@ -2583,31 +2552,27 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn push_graphics_constants(
         &mut self,
-        layout: &native::PipelineLayout,
+        _layout: &native::PipelineLayout,
         stages: pso::ShaderStageFlags,
         offset: u32,
         constants: &[u32],
     ) {
-        {
-            assert_eq!(offset & 3, 0);
-            let data = self.state.push_constant_data
-                .entry(layout.unique_id)
-                .or_insert(Vec::new());
-            let offset = offset as usize >> 2;
-            while data.len() < offset + constants.len() {
-                data.push(0);
-            }
-            data[offset ..].copy_from_slice(constants);
-        }
+        self.update_push_constants(offset, constants);
 
-        if self.state.graphics_layout_id == Some(layout.unique_id) &&
-            stages.intersects(pso::ShaderStageFlags::GRAPHICS)
-        {
+        if stages.intersects(pso::ShaderStageFlags::GRAPHICS) {
             // Note: it's a waste to heap allocate the bytes here in case
             // of no active render pass.
             // Note: the whole range is re-uploaded, which may be inefficient
-            let com_vs = self.push_vs_constants(layout.unique_id, layout.push_constants.vs);
-            let com_ps = self.push_ps_constants(layout.unique_id, layout.push_constants.ps);
+            let com_vs = if stages.contains(pso::ShaderStageFlags::VERTEX) {
+                Some(self.push_vs_constants())
+            } else {
+                None
+            };
+            let com_ps = if stages.contains(pso::ShaderStageFlags::FRAGMENT) {
+                Some(self.push_ps_constants())
+            } else {
+                None
+            };
             let commands = com_vs.into_iter().chain(com_ps);
 
             self.inner
@@ -2619,33 +2584,21 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn push_compute_constants(
         &mut self,
-        layout: &native::PipelineLayout,
+        _layout: &native::PipelineLayout,
         offset: u32,
         constants: &[u32],
     ) {
-        {
-            assert_eq!(offset & 3, 0);
-            let data = self.state.push_constant_data
-                .entry(layout.unique_id)
-                .or_insert(Vec::new());
-            let offset = offset as usize >> 2;
-            while data.len() < offset + constants.len() {
-                data.push(0);
-            }
-            data[offset ..].copy_from_slice(constants);
-        }
+        self.update_push_constants(offset, constants);
 
-        if self.state.compute_layout_id == Some(layout.unique_id) {
-            // Note: it's a waste to heap allocate the bytes here in case
-            // of no active render pass.
-            // Note: the whole range is re-uploaded, which may be inefficient
-            let command = self.push_cs_constants(layout.unique_id, layout.push_constants.cs);
+        // Note: it's a waste to heap allocate the bytes here in case
+        // of no active render pass.
+        // Note: the whole range is re-uploaded, which may be inefficient
+        let command = self.push_cs_constants();
 
-            self.inner
-                .borrow_mut()
-                .sink()
-                .pre_compute_commands(command);
-        }
+        self.inner
+            .borrow_mut()
+            .sink()
+            .pre_compute_commands(iter::once(command));
     }
 
     fn execute_commands<I>(

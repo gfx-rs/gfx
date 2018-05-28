@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use std::ops::Range;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{cmp, mem, slice};
 
 use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query};
@@ -110,7 +109,6 @@ pub struct Device {
     pub(crate) shared: Arc<Shared>,
     private_caps: PrivateCapabilities,
     memory_types: [hal::MemoryType; 3],
-    next_pipeline_layout_id: AtomicUsize,
 }
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
@@ -159,6 +157,7 @@ impl PhysicalDevice {
                 buffer_alignment: if Self::is_mac(device) {256} else {64},
             }
         };
+        assert!((shared.push_constants_buffer_id as usize) < private_caps.max_buffers_per_stage);
         PhysicalDevice {
             shared,
             memory_types: [
@@ -206,7 +205,6 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             shared: self.shared.clone(),
             private_caps: self.private_caps.clone(),
             memory_types: self.memory_types,
-            next_pipeline_layout_id: AtomicUsize::new(1),
         };
 
         let mut queues = HashMap::new();
@@ -691,10 +689,10 @@ impl hal::Device<Backend> for Device {
             }
         }
 
-        let mut pc_buffer_ids = [None; 3];
-        for ((ref mut index, limit), &mut (_, stage, ref mut counters)) in pc_buffer_ids.iter_mut().zip(&pc_limits).zip(&mut stage_infos) {
+        for (limit, &mut (_, stage, ref mut counters)) in pc_limits.iter().zip(&mut stage_infos) {
             // handle the push constant buffer assignment and shader overrides
             if *limit != 0 {
+                let buffer_id = self.shared.push_constants_buffer_id;
                 res_overrides.insert(
                     msl::ResourceBindingLocation {
                         stage,
@@ -702,31 +700,23 @@ impl hal::Device<Backend> for Device {
                         binding: PUSH_CONSTANTS_DESC_BINDING,
                     },
                     msl::ResourceBinding {
-                        buffer_id: counters.buffers as _,
+                        buffer_id,
                         texture_id: !0,
                         sampler_id: !0,
                         force_used: false,
                     },
                 );
-                **index = Some(counters.buffers as _);
-                counters.buffers += 1;
+                assert!(counters.buffers < buffer_id as usize);
+            } else {
+                assert!(counters.buffers <= self.private_caps.max_buffers_per_stage);
             }
             // make sure we fit the limits
-            assert!(counters.buffers <= self.private_caps.max_buffers_per_stage);
             assert!(counters.textures <= self.private_caps.max_textures_per_stage);
             assert!(counters.samplers <= self.private_caps.max_samplers_per_stage);
         }
 
         n::PipelineLayout {
-            unique_id: n::UniquePipelineLayoutId(
-                self.next_pipeline_layout_id.fetch_add(1, Ordering::SeqCst)
-            ),
             attribute_buffer_index: stage_infos[0].2.buffers as _,
-            push_constants: n::PushConstants {
-                vs: pc_buffer_ids[0],
-                ps: pc_buffer_ids[1],
-                cs: pc_buffer_ids[2],
-            },
             res_overrides,
         }
     }
@@ -913,8 +903,6 @@ impl hal::Device<Backend> for Device {
                     vs_lib,
                     fs_lib,
                     raw,
-                    layout_id: pipeline_layout.unique_id.clone(),
-                    push_constants: pipeline_layout.push_constants.clone(),
                     primitive_type,
                     attribute_buffer_index: pipeline_layout.attribute_buffer_index,
                     rasterizer_state,
@@ -932,11 +920,10 @@ impl hal::Device<Backend> for Device {
         pipeline_desc: &pso::ComputePipelineDesc<'a, Backend>,
     ) -> Result<n::ComputePipeline, pso::CreationError> {
         let pipeline = metal::ComputePipelineDescriptor::new();
-        let pipeline_layout = &pipeline_desc.layout;
 
         let (cs_lib, cs_function, work_group_size) = self.load_shader(
             &pipeline_desc.shader,
-            pipeline_layout,
+            &pipeline_desc.layout,
             MTLPrimitiveTopologyClass::Unspecified,
         )?;
         pipeline.set_compute_function(Some(&cs_function));
@@ -949,8 +936,6 @@ impl hal::Device<Backend> for Device {
                 n::ComputePipeline {
                     cs_lib,
                     raw,
-                    layout_id: pipeline_layout.unique_id.clone(),
-                    push_constants: pipeline_layout.push_constants.clone(),
                     work_group_size,
                 }
             })

@@ -54,6 +54,7 @@ pub struct Shared {
     pub(crate) device: Mutex<metal::Device>,
     pub(crate) queue_pool: Mutex<command::QueuePool>,
     pub(crate) service_pipes: Mutex<internal::ServicePipes>,
+    pub(crate) push_constants_buffer_id: u32,
 }
 
 unsafe impl Send for Shared {}
@@ -65,6 +66,7 @@ impl Shared {
             queue_pool: Mutex::new(command::QueuePool::default()),
             service_pipes: Mutex::new(internal::ServicePipes::new(&device)),
             device: Mutex::new(device),
+            push_constants_buffer_id: 30,
         }
     }
 }
