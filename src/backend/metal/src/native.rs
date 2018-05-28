@@ -299,7 +299,6 @@ pub(crate) enum MemoryHeap {
 pub struct UnboundBuffer {
     pub(crate) size: u64,
 }
-
 unsafe impl Send for UnboundBuffer {}
 unsafe impl Sync for UnboundBuffer {}
 
@@ -307,10 +306,10 @@ unsafe impl Sync for UnboundBuffer {}
 pub struct UnboundImage {
     pub(crate) texture_desc: metal::TextureDescriptor,
     pub(crate) format: hal::format::Format,
-    pub(crate) tiling: image::Tiling,
     pub(crate) extent: image::Extent,
     pub(crate) num_layers: Option<image::Layer>,
     pub(crate) mip_sizes: Vec<u64>,
+    pub(crate) host_visible: bool,
 }
 unsafe impl Send for UnboundImage {}
 unsafe impl Sync for UnboundImage {}

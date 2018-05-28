@@ -133,7 +133,7 @@ impl Drop for Device {
 bitflags! {
     /// Memory type bits.
     struct MemoryTypes: u64 {
-        const PRIVATE =  1<<0;
+        const PRIVATE = 1<<0;
         const SHARED = 1<<1;
         const MANAGED_UPLOAD = 1<<2;
         const MANAGED_DOWNLOAD = 1<<3;
@@ -174,6 +174,7 @@ impl PhysicalDevice {
             PrivateCapabilities {
                 resource_heaps: Self::supports_any(device, RESOURCE_HEAP_SUPPORT),
                 argument_buffers: Self::supports_any(device, ARGUMENT_BUFFER_SUPPORT) && false, //TODO
+                shared_textures: !Self::is_mac(device),
                 format_depth24_stencil8: device.d24_s8_supported(),
                 format_depth32_stencil8: false, //TODO: crashing the Metal validation layer upon copying from buffer
                 format_min_srgb_channels: if Self::is_mac(&*device) {4} else {1},
@@ -182,6 +183,11 @@ impl PhysicalDevice {
                 max_textures_per_stage: if Self::is_mac(device) {128} else {31},
                 max_samplers_per_stage: 16,
                 buffer_alignment: if Self::is_mac(device) {256} else {64},
+                max_buffer_size: if Self::supports_any(device, &[MTLFeatureSet::macOS_GPUFamily1_v2, MTLFeatureSet::macOS_GPUFamily1_v3]) {
+                    1 << 30 // 1GB on macOS 1.2 and up
+                } else {
+                    1 << 28 // 256MB otherwise
+                },
             }
         };
         assert!((shared.push_constants_buffer_id as usize) < private_caps.max_buffers_per_stage);
@@ -198,11 +204,11 @@ impl PhysicalDevice {
                 },
                 hal::MemoryType { // MANAGED_UPLOAD
                     properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE,
-                    heap_index: 0,
+                    heap_index: 1,
                 },
                 hal::MemoryType { // MANAGED_DOWNLOAD
                     properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::CPU_CACHED,
-                    heap_index: 0,
+                    heap_index: 1,
                 },
             ],
             private_caps,
@@ -263,11 +269,23 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn image_format_properties(
-        &self, format: format::Format, dimensions: u8, _tiling: image::Tiling,
-        _usage: image::Usage, _storage_flags: image::StorageFlags,
+        &self, format: format::Format, dimensions: u8, tiling: image::Tiling,
+        usage: image::Usage, storage_flags: image::StorageFlags,
     ) -> Option<image::FormatProperties> {
         //TODO: actually query this data
         let width = 4096;
+        if let image::Tiling::Linear = tiling {
+            let format_desc = format.surface_desc();
+            let host_usage = image::Usage::TRANSFER_SRC | image::Usage::TRANSFER_DST;
+            if dimensions != 2 ||
+                !storage_flags.is_empty() ||
+                !host_usage.contains(usage) ||
+                format_desc.aspects != format::Aspects::COLOR ||
+                format_desc.is_compressed()
+            {
+                return None
+            }
+        }
         let height = if dimensions >= 2 { 4096 } else { 1 };
         let depth = if dimensions >= 3 { 4096 } else { 1 };
         let max_dimension = 4096f32; // Max of {width, height, depth}
@@ -281,13 +299,16 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             //TODO: buffers and textures have separate limits
             // Max buffer size is determined by feature set
             // Max texture size does not appear to be documented publicly
-            max_resource_size: 1 << 31,
+            max_resource_size: self.private_caps.max_buffer_size as _,
         })
     }
 
     fn memory_properties(&self) -> hal::MemoryProperties {
         hal::MemoryProperties {
-            memory_heaps: vec![!0, !0], //TODO
+            memory_heaps: vec![
+                !0, //TODO: private memory limits
+                self.private_caps.max_buffer_size,
+            ],
             memory_types: self.memory_types.to_vec(),
         }
     }
@@ -1577,7 +1598,7 @@ impl hal::Device<Backend> for Device {
         descriptor.set_depth(extent.depth as u64);
         descriptor.set_mipmap_level_count(mip_levels as u64);
         descriptor.set_pixel_format(mtl_format);
-        descriptor.set_usage(conv::map_texture_usage(usage));
+        descriptor.set_usage(conv::map_texture_usage(usage, tiling));
 
         let format_desc = format.surface_desc();
         let mip_sizes = (0 .. mip_levels)
@@ -1587,31 +1608,34 @@ impl hal::Device<Backend> for Device {
             })
             .collect();
 
+        let host_usage = image::Usage::TRANSFER_SRC | image::Usage::TRANSFER_DST;
+        let host_visible = mtl_type == MTLTextureType::D2 &&
+            mip_levels == 1 && num_layers.is_none() &&
+            format_desc.aspects.contains(format::Aspects::COLOR) &&
+            tiling == image::Tiling::Linear &&
+            host_usage.contains(usage);
+
         Ok(n::UnboundImage {
             texture_desc: descriptor,
             format,
-            tiling,
             extent,
             num_layers,
             mip_sizes,
+            host_visible,
         })
     }
 
     fn get_image_requirements(&self, image: &n::UnboundImage) -> memory::Requirements {
-        let host_access = match image.tiling {
-            image::Tiling::Optimal => false,
-            image::Tiling::Linear => image.format.surface_desc().aspects.contains(format::Aspects::COLOR),
-        };
-        let types = if host_access {
-            MemoryTypes::all()
-        } else {
-            MemoryTypes::PRIVATE
-        };
         if self.private_caps.resource_heaps {
             // We don't know what memory type the user will try to allocate the image with, so we test them
             // all get the most stringent ones. Note we don't check Shared because heaps can't use it
             let mut max_size = 0;
             let mut max_alignment = 0;
+            let types = if image.host_visible {
+                MemoryTypes::all()
+            } else {
+                MemoryTypes::PRIVATE
+            };
             for (i, _) in self.memory_types.iter().enumerate() {
                 if !types.contains(MemoryTypes::from_bits(1 << i).unwrap()) {
                     continue
@@ -1633,11 +1657,23 @@ impl hal::Device<Backend> for Device {
                 alignment: max_alignment,
                 type_mask: types.bits(),
             }
+        } else if image.host_visible {
+            assert_eq!(image.mip_sizes.len(), 1);
+            let mask = self.private_caps.buffer_alignment - 1;
+            memory::Requirements {
+                size: (image.mip_sizes[0] + mask) & !mask,
+                alignment: self.private_caps.buffer_alignment,
+                type_mask: if self.private_caps.shared_textures {
+                    MemoryTypes::all().bits()
+                } else {
+                    (MemoryTypes::all() ^ MemoryTypes::SHARED).bits()
+                },
+            }
         } else {
             memory::Requirements {
                 size: image.mip_sizes.iter().sum(),
                 alignment: 4,
-                type_mask: types.bits()
+                type_mask: MemoryTypes::PRIVATE.bits(),
             }
         }
     }
@@ -1682,8 +1718,8 @@ impl hal::Device<Backend> for Device {
                     })
             },
             n::MemoryHeap::Public(memory_type, ref cpu_buffer) => {
-                let size = image.extent.width as u64 * (format_desc.bits as u64 / 8);
-                let stride = (size + STRIDE_MASK) & !STRIDE_MASK;
+                let row_size = image.extent.width as u64 * (format_desc.bits as u64 / 8);
+                let stride = (row_size + STRIDE_MASK) & !STRIDE_MASK;
 
                 let (storage_mode, cache_mode) = MemoryTypes::describe(memory_type.0);
                 let options = conv::resource_options_from_storage_and_cache(storage_mode, cache_mode);

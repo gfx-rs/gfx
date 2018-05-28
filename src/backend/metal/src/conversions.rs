@@ -255,22 +255,33 @@ pub fn resource_options_from_storage_and_cache(storage: MTLStorageMode, cache: M
     ).unwrap()
 }
 
-pub fn map_texture_usage(usage: image::Usage) -> MTLTextureUsage {
+pub fn map_texture_usage(usage: image::Usage, tiling: image::Tiling) -> MTLTextureUsage {
     use hal::image::Usage as U;
 
     let mut texture_usage = MTLTextureUsage::PixelFormatView;
-    // Note: for blitting, we do actual rendering, so we add more flags for TRANSFER_* usage
-    if usage.intersects(U::COLOR_ATTACHMENT | U::DEPTH_STENCIL_ATTACHMENT | U::TRANSFER_DST) {
+    if usage.intersects(U::COLOR_ATTACHMENT | U::DEPTH_STENCIL_ATTACHMENT) {
         texture_usage |= MTLTextureUsage::RenderTarget;
     }
-    if usage.intersects(U::SAMPLED | U::TRANSFER_SRC) {
+    if usage.intersects(U::SAMPLED) {
         texture_usage |= MTLTextureUsage::ShaderRead;
     }
     if usage.intersects(U::STORAGE) {
         texture_usage |= MTLTextureUsage::ShaderRead | MTLTextureUsage::ShaderWrite;
     }
 
-    // TODO shader write
+    match tiling {
+        image::Tiling::Optimal => {
+            // Note: for blitting, we do actual rendering, so we add more flags for TRANSFER_* usage
+            if usage.contains(U::TRANSFER_DST) {
+                texture_usage |= MTLTextureUsage::RenderTarget;
+            }
+            if usage.contains(U::TRANSFER_SRC) {
+                texture_usage |= MTLTextureUsage::ShaderRead;
+            }
+        }
+        image::Tiling::Linear => {}
+    }
+
     texture_usage
 }
 

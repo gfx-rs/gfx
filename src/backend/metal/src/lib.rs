@@ -180,6 +180,7 @@ impl hal::Backend for Backend {
 struct PrivateCapabilities {
     resource_heaps: bool,
     argument_buffers: bool,
+    shared_textures: bool,
     format_depth24_stencil8: bool,
     format_depth32_stencil8: bool,
     format_min_srgb_channels: u8,
@@ -188,6 +189,7 @@ struct PrivateCapabilities {
     max_textures_per_stage: usize,
     max_samplers_per_stage: usize,
     buffer_alignment: u64,
+    max_buffer_size: u64,
 }
 
 pub struct AutoreleasePool {
