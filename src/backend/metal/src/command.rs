@@ -1103,7 +1103,7 @@ impl CommandBuffer {
         while data.len() < offset + constants.len() {
             data.push(0);
         }
-        data[offset ..].copy_from_slice(constants);
+        data[offset .. offset + constants.len()].copy_from_slice(constants);
     }
 }
 

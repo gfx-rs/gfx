@@ -298,6 +298,7 @@ pub(crate) enum MemoryHeap {
 #[derive(Debug)]
 pub struct UnboundBuffer {
     pub(crate) size: u64,
+    pub(crate) usage: hal::buffer::Usage,
 }
 unsafe impl Send for UnboundBuffer {}
 unsafe impl Sync for UnboundBuffer {}

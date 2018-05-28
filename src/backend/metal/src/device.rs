@@ -905,6 +905,7 @@ impl hal::Device<Backend> for Device {
         });
 
         // Vertex buffers
+        const STRIDE_GRANULARITY: u32 = 4; //TODO: work around?
         let vertex_descriptor = metal::VertexDescriptor::new();
         for vertex_buffer in &pipeline_desc.vertex_buffers {
             let mtl_buffer_index = pipeline_layout.attribute_buffer_index as usize + vertex_buffer.binding as usize;
@@ -912,6 +913,10 @@ impl hal::Device<Backend> for Device {
                 .layouts()
                 .object_at(mtl_buffer_index)
                 .expect("too many vertex descriptor layouts");
+            if vertex_buffer.stride % STRIDE_GRANULARITY != 0 {
+                error!("Stride ({}) must be a multiple of {}", vertex_buffer.stride, STRIDE_GRANULARITY);
+                return Err(pso::CreationError::Other);
+            }
             mtl_buffer_desc.set_stride(vertex_buffer.stride as u64);
             match vertex_buffer.rate {
                 0 => {
@@ -1412,13 +1417,14 @@ impl hal::Device<Backend> for Device {
         &self, size: u64, usage: buffer::Usage
     ) -> Result<n::UnboundBuffer, buffer::CreationError> {
         Ok(n::UnboundBuffer {
-            size
+            size,
+            usage,
         })
     }
 
     fn get_buffer_requirements(&self, buffer: &n::UnboundBuffer) -> memory::Requirements {
         let mut max_size = buffer.size;
-        let mut max_alignment = 1;
+        let mut max_alignment = self.private_caps.buffer_alignment;
 
         if self.private_caps.resource_heaps {
             // We don't know what memory type the user will try to allocate the buffer with, so we test them
@@ -1438,11 +1444,19 @@ impl hal::Device<Backend> for Device {
         // based on Metal validation error for view creation:
         // failed assertion `BytesPerRow of a buffer-backed texture with pixelFormat(XXX) must be aligned to 256 bytes
         const SIZE_MASK: u64 = 0xFF;
+        let supports_texel_view = buffer.usage.intersects(
+            buffer::Usage::UNIFORM_TEXEL |
+            buffer::Usage::STORAGE_TEXEL
+        );
 
         memory::Requirements {
             size: (max_size + SIZE_MASK) & !SIZE_MASK,
             alignment: max_alignment,
-            type_mask: MemoryTypes::all().bits(),
+            type_mask: if supports_texel_view && !self.private_caps.shared_textures {
+                (MemoryTypes::all() ^ MemoryTypes::SHARED).bits()
+            } else {
+                MemoryTypes::all().bits()
+            },
         }
     }
 
@@ -1472,7 +1486,8 @@ impl hal::Device<Backend> for Device {
             }
             n::MemoryHeap::Private => {
                 //TODO: check for aliasing
-                let options = MTLResourceOptions::StorageModePrivate;
+                let options = MTLResourceOptions::StorageModePrivate |
+                    MTLResourceOptions::CPUCacheModeDefaultCache;
                 let raw = self.shared.device
                     .lock()
                     .unwrap()
