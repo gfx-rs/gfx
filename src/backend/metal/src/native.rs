@@ -56,6 +56,8 @@ pub struct RasterizerState {
     pub depth_clip: metal::MTLDepthClipMode,
 }
 
+pub type VertexBufferMap = HashMap<(pso::BufferIndex, pso::ElemOffset), pso::VertexBufferDesc>;
+
 #[derive(Debug)]
 pub struct GraphicsPipeline {
     // we hold the compiled libraries here for now
@@ -68,6 +70,11 @@ pub struct GraphicsPipeline {
     pub(crate) rasterizer_state: Option<RasterizerState>,
     pub(crate) depth_stencil_state: Option<metal::DepthStencilState>,
     pub(crate) baked_states: pso::BakedStates,
+    /// The mapping of additional vertex buffer bindings over the original ones.
+    /// This is needed because Vulkan allows attribute offsets to exceed the strides,
+    /// while Metal does not. Thus, we register extra vertex buffer bindings with
+    /// adjusted offsets to cover this use case.
+    pub(crate) vertex_buffer_map: VertexBufferMap,
 }
 
 unsafe impl Send for GraphicsPipeline {}
