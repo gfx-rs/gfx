@@ -794,7 +794,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
     fn set_line_width(&mut self, _width: f32) {
-        unimplemented!();
+        unimplemented!()
+    }
+
+    fn set_depth_bias(&mut self, _depth_bias: pso::DepthBias) {
+        unimplemented!()
     }
 
     fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {

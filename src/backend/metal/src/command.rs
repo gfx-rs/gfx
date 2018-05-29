@@ -124,6 +124,9 @@ impl State {
         commands.extend(self.viewport.map(soft::RenderCommand::SetViewport));
         commands.extend(self.scissors.map(soft::RenderCommand::SetScissor));
         commands.extend(self.blend_color.map(soft::RenderCommand::SetBlendColor));
+        commands.push(soft::RenderCommand::SetDepthBias(
+            self.rasterizer_state.clone().map(|r| r.depth_bias).unwrap_or_default()
+        ));
         let rasterizer = self.rasterizer_state.clone();
         let depth_stencil = self.depth_stencil_state.clone();
         commands.extend(self.render_pso.clone().map(|pipeline| {
@@ -602,6 +605,9 @@ fn exec_render(encoder: &metal::RenderCommandEncoderRef, command: &soft::RenderC
         Cmd::SetBlendColor(color) => {
             encoder.set_blend_color(color[0], color[1], color[2], color[3]);
         }
+        Cmd::SetDepthBias(depth_bias) => {
+            encoder.set_depth_bias(depth_bias.const_factor, depth_bias.slope_factor, depth_bias.clamp);
+        }
         Cmd::BindBuffer { stage, index, ref buffer, offset } => {
             let buffer = buffer.as_ref().map(|x| x.as_ref());
             match stage {
@@ -645,6 +651,8 @@ fn exec_render(encoder: &metal::RenderCommandEncoderRef, command: &soft::RenderC
             encoder.set_render_pipeline_state(pipeline_state);
             if let Some(ref rasterizer_state) = *rasterizer {
                 encoder.set_depth_clip_mode(rasterizer_state.depth_clip);
+                let db = rasterizer_state.depth_bias;
+                encoder.set_depth_bias(db.const_factor, db.slope_factor, db.clamp);
             }
             if let Some(ref depth_stencil_state) = *depth_stencil {
                 encoder.set_depth_stencil_state(depth_stencil_state);
@@ -1104,6 +1112,18 @@ impl CommandBuffer {
             data.push(0);
         }
         data[offset .. offset + constants.len()].copy_from_slice(constants);
+    }
+
+    fn set_depth_bias(&mut self, depth_bias: &pso::DepthBias) -> soft::RenderCommand {
+        if let Some(ref mut r) = self.state.rasterizer_state {
+            r.depth_bias = *depth_bias;
+        } else {
+            self.state.rasterizer_state = Some(native::RasterizerState {
+                depth_bias: *depth_bias,
+                ..Default::default()
+            });
+        }
+        soft::RenderCommand::SetDepthBias(*depth_bias)
     }
 }
 
@@ -1718,6 +1738,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn set_line_width(&mut self, width: f32) {
         validate_line_width(width);
+    }
+
+    fn set_depth_bias(&mut self, depth_bias: pso::DepthBias) {
+        let com = self.set_depth_bias(&depth_bias);
+        self.inner
+            .borrow_mut()
+            .sink()
+            .pre_render_commands(iter::once(com));
     }
 
     fn begin_render_pass<T>(

@@ -19,6 +19,7 @@ pub enum RenderCommand {
     SetViewport(metal::MTLViewport),
     SetScissor(metal::MTLScissorRect),
     SetBlendColor(hal::pso::ColorValue),
+    SetDepthBias(hal::pso::DepthBias),
     BindBuffer {
         stage: hal::pso::Stage,
         index: usize,

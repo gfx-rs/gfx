@@ -584,6 +584,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
+    fn set_depth_bias(&mut self, depth_bias: pso::DepthBias) {
+        unsafe {
+            self.device.0.cmd_set_depth_bias(
+                self.raw,
+                depth_bias.const_factor,
+                depth_bias.clamp,
+                depth_bias.slope_factor,
+            );
+        }
+    }
+
     fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
         unsafe {
             self.device.0.cmd_bind_pipeline(

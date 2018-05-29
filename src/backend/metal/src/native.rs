@@ -54,6 +54,16 @@ pub struct PipelineLayout {
 pub struct RasterizerState {
     //TODO: more states
     pub depth_clip: metal::MTLDepthClipMode,
+    pub depth_bias: pso::DepthBias,
+}
+
+impl Default for RasterizerState {
+    fn default() -> Self {
+        RasterizerState {
+            depth_clip: metal::MTLDepthClipMode::Clip,
+            depth_bias: Default::default(),
+        }
+    }
 }
 
 #[derive(Debug)]

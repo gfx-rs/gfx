@@ -243,6 +243,11 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
+    pub fn set_depth_bias(&mut self, depth_bias: pso::DepthBias) {
+        self.raw.set_depth_bias(depth_bias);
+    }
+
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn push_graphics_constants(&mut self, layout: &B::PipelineLayout, stages: pso::ShaderStageFlags, offset: u32, constants: &[u32]) {
         self.raw.push_graphics_constants(layout, stages, offset, constants)
     }
