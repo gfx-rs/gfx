@@ -1,9 +1,7 @@
 use {Backend};
 use internal::Channel;
 
-use std::cell::Cell;
 use std::collections::{HashMap};
-use std::marker::PhantomData;
 use std::ops::Range;
 use std::os::raw::{c_void, c_long};
 use std::sync::{Arc, Mutex};
@@ -88,7 +86,6 @@ unsafe impl Sync for ComputePipeline {}
 #[derive(Debug)]
 pub struct Image {
     pub(crate) raw: metal::Texture,
-    pub(crate) allocations: Option<Arc<Mutex<MemoryAllocations>>>,
     pub(crate) extent: image::Extent,
     pub(crate) num_layers: Option<image::Layer>,
     pub(crate) format_desc: hal::format::FormatDesc,
@@ -144,8 +141,7 @@ unsafe impl Sync for Semaphore {}
 #[derive(Debug)]
 pub struct Buffer {
     pub(crate) raw: metal::Buffer,
-    pub(crate) allocations: Option<Arc<Mutex<MemoryAllocations>>>,
-    pub(crate) offset: u64,
+    pub(crate) range: Range<u64>,
     pub(crate) res_options: metal::MTLResourceOptions,
 }
 
@@ -274,23 +270,13 @@ pub enum DescriptorSetBinding {
 pub struct Memory {
     pub(crate) heap: MemoryHeap,
     pub(crate) size: u64,
-    pub(crate) allocations: Arc<Mutex<MemoryAllocations>>,
-    pub(crate) mapping: Mutex<Option<Range<u64>>>,
-    pub(crate) cpu_buffer: Option<metal::Buffer>,
-    pub(crate) initialized: Cell<bool>,
 }
 
 impl Memory {
-    pub(crate) fn new(
-        heap: MemoryHeap, size: u64, cpu_buffer: Option<metal::Buffer>
-    ) -> Self {
+    pub(crate) fn new(heap: MemoryHeap, size: u64) -> Self {
         Memory {
             heap,
             size,
-            allocations: Arc::new(Mutex::new(MemoryAllocations::new())),
-            mapping: Mutex::new(None),
-            cpu_buffer,
-            initialized: Cell::new(false),
         }
     }
 
@@ -302,58 +288,18 @@ impl Memory {
 unsafe impl Send for Memory {}
 unsafe impl Sync for Memory {}
 
-#[derive(Clone, Debug)]
-pub enum Resource {
-    Buffer(metal::Buffer),
-    Texture {
-        raw: metal::Texture,
-        format_desc: hal::format::FormatDesc,
-        extent: image::Extent,
-        subresource: image::SubresourceLayers,
-    },
-}
-
-#[derive(Debug)]
-pub struct MemoryAllocations {
-    resources: HashMap<Range<u64>, Resource>,
-}
-
-impl MemoryAllocations {
-    fn new() -> Self {
-        MemoryAllocations {
-            resources: HashMap::new(),
-        }
-    }
-
-    // Don't ask why there is a phantom data at the end of the iterated tuple...
-    /// Get all unique buffers that intersects specified range
-    pub fn find<'a>(&'a self, range: &'a Range<u64>) -> impl Iterator<Item=(Range<u64>, Resource, PhantomData<&'a Resource>)> {
-        self.resources
-            .iter()
-            .filter(move |&(ref r, _)| r.start < range.end && r.end > range.start)
-            .map(|(r, res)| (r.clone(), res.clone(), PhantomData))
-    }
-
-    pub fn insert(&mut self, range: Range<u64>, resource: Resource) {
-        self.resources.insert(range, resource);
-    }
-
-    pub fn remove(&mut self, range: Range<u64>) {
-        self.resources.remove(&range);
-    }
-}
-
 #[derive(Debug)]
 pub(crate) enum MemoryHeap {
-    Emulated(hal::MemoryTypeId),
+    Private,
+    Public(hal::MemoryTypeId, metal::Buffer),
     Native(metal::Heap),
 }
 
 #[derive(Debug)]
 pub struct UnboundBuffer {
     pub(crate) size: u64,
+    pub(crate) usage: hal::buffer::Usage,
 }
-
 unsafe impl Send for UnboundBuffer {}
 unsafe impl Sync for UnboundBuffer {}
 
@@ -361,10 +307,10 @@ unsafe impl Sync for UnboundBuffer {}
 pub struct UnboundImage {
     pub(crate) texture_desc: metal::TextureDescriptor,
     pub(crate) format: hal::format::Format,
-    pub(crate) tiling: image::Tiling,
     pub(crate) extent: image::Extent,
     pub(crate) num_layers: Option<image::Layer>,
     pub(crate) mip_sizes: Vec<u64>,
+    pub(crate) host_visible: bool,
 }
 unsafe impl Send for UnboundImage {}
 unsafe impl Sync for UnboundImage {}

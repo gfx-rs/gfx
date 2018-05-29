@@ -1,5 +1,5 @@
 use {AutoreleasePool, Backend, PrivateCapabilities, QueueFamily, Shared, Surface, Swapchain, validate_line_width};
-use {conversions as conv, command, native as n, soft};
+use {conversions as conv, command, native as n};
 use internal::Channel;
 
 use std::borrow::Borrow;
@@ -10,7 +10,6 @@ use std::sync::{Arc, Mutex};
 use std::{cmp, mem, slice};
 
 use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query};
-use hal::command::{BufferCopy, BufferImageCopy};
 use hal::device::{BindError, OutOfMemory, FramebufferError, ShaderError};
 use hal::memory::Properties;
 use hal::pool::CommandPoolCreateFlags;
@@ -21,7 +20,8 @@ use hal::range::RangeArg;
 use cocoa::foundation::{NSRange, NSUInteger};
 use metal::{self,
     MTLFeatureSet, MTLLanguageVersion, MTLArgumentAccess, MTLDataType, MTLPrimitiveType, MTLPrimitiveTopologyClass,
-    MTLVertexStepFunction, MTLSamplerBorderColor, MTLSamplerMipFilter, MTLStorageMode, MTLResourceOptions, MTLTextureType,
+    MTLCPUCacheMode, MTLStorageMode, MTLResourceOptions,
+    MTLVertexStepFunction, MTLSamplerBorderColor, MTLSamplerMipFilter, MTLTextureType,
     CaptureManager
 };
 use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
@@ -42,6 +42,11 @@ const ARGUMENT_BUFFER_SUPPORT: &[MTLFeatureSet] = &[
 
 const PUSH_CONSTANTS_DESC_SET: u32 = !0;
 const PUSH_CONSTANTS_DESC_BINDING: u32 = 0;
+
+//The offset and bytesPerRow parameters must be byte aligned to the size returned by the
+// minimumLinearTextureAlignmentForPixelFormat: method. The bytesPerRow parameter must also be
+// greater than or equal to the size of one pixel, in bytes, multiplied by the pixel width of one row.
+const STRIDE_MASK: u64 = 0xFF;
 
 /// Emit error during shader module parsing.
 fn gen_parse_error(err: SpirvErrorCode) -> ShaderError {
@@ -108,7 +113,7 @@ fn get_final_function(library: &metal::LibraryRef, entry: &str, specialization: 
 pub struct Device {
     pub(crate) shared: Arc<Shared>,
     private_caps: PrivateCapabilities,
-    memory_types: [hal::MemoryType; 3],
+    memory_types: [hal::MemoryType; 4],
 }
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
@@ -125,9 +130,31 @@ impl Drop for Device {
     }
 }
 
+bitflags! {
+    /// Memory type bits.
+    struct MemoryTypes: u64 {
+        const PRIVATE = 1<<0;
+        const SHARED = 1<<1;
+        const MANAGED_UPLOAD = 1<<2;
+        const MANAGED_DOWNLOAD = 1<<3;
+    }
+}
+
+impl MemoryTypes {
+    fn describe(index: usize) -> (MTLStorageMode, MTLCPUCacheMode) {
+        match Self::from_bits(1 << index).unwrap() {
+            Self::PRIVATE          => (MTLStorageMode::Private, MTLCPUCacheMode::DefaultCache),
+            Self::SHARED           => (MTLStorageMode::Shared,  MTLCPUCacheMode::DefaultCache),
+            Self::MANAGED_UPLOAD   => (MTLStorageMode::Managed, MTLCPUCacheMode::WriteCombined),
+            Self::MANAGED_DOWNLOAD => (MTLStorageMode::Managed, MTLCPUCacheMode::DefaultCache),
+            _ => unreachable!()
+        }
+    }
+}
+
 pub struct PhysicalDevice {
     shared: Arc<Shared>,
-    memory_types: [hal::MemoryType; 3],
+    memory_types: [hal::MemoryType; 4],
     private_caps: PrivateCapabilities,
 }
 unsafe impl Send for PhysicalDevice {}
@@ -147,6 +174,7 @@ impl PhysicalDevice {
             PrivateCapabilities {
                 resource_heaps: Self::supports_any(device, RESOURCE_HEAP_SUPPORT),
                 argument_buffers: Self::supports_any(device, ARGUMENT_BUFFER_SUPPORT) && false, //TODO
+                shared_textures: !Self::is_mac(device),
                 format_depth24_stencil8: device.d24_s8_supported(),
                 format_depth32_stencil8: false, //TODO: crashing the Metal validation layer upon copying from buffer
                 format_min_srgb_channels: if Self::is_mac(&*device) {4} else {1},
@@ -155,22 +183,31 @@ impl PhysicalDevice {
                 max_textures_per_stage: if Self::is_mac(device) {128} else {31},
                 max_samplers_per_stage: 16,
                 buffer_alignment: if Self::is_mac(device) {256} else {64},
+                max_buffer_size: if Self::supports_any(device, &[MTLFeatureSet::macOS_GPUFamily1_v2, MTLFeatureSet::macOS_GPUFamily1_v3]) {
+                    1 << 30 // 1GB on macOS 1.2 and up
+                } else {
+                    1 << 28 // 256MB otherwise
+                },
             }
         };
         assert!((shared.push_constants_buffer_id as usize) < private_caps.max_buffers_per_stage);
         PhysicalDevice {
             shared,
             memory_types: [
-                hal::MemoryType {
-                    properties: Properties::CPU_VISIBLE | Properties::CPU_CACHED,
-                    heap_index: 0,
-                },
-                hal::MemoryType {
-                    properties: Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
-                    heap_index: 0,
-                },
-                hal::MemoryType {
+                hal::MemoryType { // PRIVATE
                     properties: Properties::DEVICE_LOCAL,
+                    heap_index: 0,
+                },
+                hal::MemoryType { // SHARED
+                    properties: Properties::CPU_VISIBLE | Properties::COHERENT,
+                    heap_index: 1,
+                },
+                hal::MemoryType { // MANAGED_UPLOAD
+                    properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE,
+                    heap_index: 1,
+                },
+                hal::MemoryType { // MANAGED_DOWNLOAD
+                    properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::CPU_CACHED,
                     heap_index: 1,
                 },
             ],
@@ -232,11 +269,23 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn image_format_properties(
-        &self, format: format::Format, dimensions: u8, _tiling: image::Tiling,
-        _usage: image::Usage, _storage_flags: image::StorageFlags,
+        &self, format: format::Format, dimensions: u8, tiling: image::Tiling,
+        usage: image::Usage, storage_flags: image::StorageFlags,
     ) -> Option<image::FormatProperties> {
         //TODO: actually query this data
         let width = 4096;
+        if let image::Tiling::Linear = tiling {
+            let format_desc = format.surface_desc();
+            let host_usage = image::Usage::TRANSFER_SRC | image::Usage::TRANSFER_DST;
+            if dimensions != 2 ||
+                !storage_flags.is_empty() ||
+                !host_usage.contains(usage) ||
+                format_desc.aspects != format::Aspects::COLOR ||
+                format_desc.is_compressed()
+            {
+                return None
+            }
+        }
         let height = if dimensions >= 2 { 4096 } else { 1 };
         let depth = if dimensions >= 3 { 4096 } else { 1 };
         let max_dimension = 4096f32; // Max of {width, height, depth}
@@ -250,13 +299,16 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             //TODO: buffers and textures have separate limits
             // Max buffer size is determined by feature set
             // Max texture size does not appear to be documented publicly
-            max_resource_size: 1 << 31,
+            max_resource_size: self.private_caps.max_buffer_size as _,
         })
     }
 
     fn memory_properties(&self) -> hal::MemoryProperties {
         hal::MemoryProperties {
-            memory_heaps: vec![!0, !0], //TODO
+            memory_heaps: vec![
+                !0, //TODO: private memory limits
+                self.private_caps.max_buffer_size,
+            ],
             memory_types: self.memory_types.to_vec(),
         }
     }
@@ -311,9 +363,10 @@ impl LanguageVersion {
 }
 
 impl Device {
-    fn is_heap_coherent(&self, heap: &n::MemoryHeap) -> bool {
+    fn _is_heap_coherent(&self, heap: &n::MemoryHeap) -> bool {
         match *heap {
-            n::MemoryHeap::Emulated(memory_type) => self.memory_types[memory_type.0].properties.contains(Properties::COHERENT),
+            n::MemoryHeap::Private => false,
+            n::MemoryHeap::Public(memory_type, _) => self.memory_types[memory_type.0].properties.contains(Properties::COHERENT),
             n::MemoryHeap::Native(ref heap) => heap.storage_mode() == MTLStorageMode::Shared,
         }
     }
@@ -852,6 +905,7 @@ impl hal::Device<Backend> for Device {
         });
 
         // Vertex buffers
+        const STRIDE_GRANULARITY: u32 = 4; //TODO: work around?
         let vertex_descriptor = metal::VertexDescriptor::new();
         for vertex_buffer in &pipeline_desc.vertex_buffers {
             let mtl_buffer_index = pipeline_layout.attribute_buffer_index as usize + vertex_buffer.binding as usize;
@@ -859,6 +913,10 @@ impl hal::Device<Backend> for Device {
                 .layouts()
                 .object_at(mtl_buffer_index)
                 .expect("too many vertex descriptor layouts");
+            if vertex_buffer.stride % STRIDE_GRANULARITY != 0 {
+                error!("Stride ({}) must be a multiple of {}", vertex_buffer.stride, STRIDE_GRANULARITY);
+                return Err(pso::CreationError::Other);
+            }
             mtl_buffer_desc.set_stride(vertex_buffer.stride as u64);
             match vertex_buffer.rate {
                 0 => {
@@ -1052,32 +1110,17 @@ impl hal::Device<Backend> for Device {
     ) -> Result<*mut u8, mapping::Error> {
         let range = memory.resolve(&generic_range);
         debug!("mapping memory {:?} at {:?}", memory, range);
-        if self.is_heap_coherent(&memory.heap) {
-            // Note from the Vulkan spec:
-            //> Mapping non-coherent memory does not implicitly invalidate the mapped memory,
-            //> and device writes that have not been invalidated *must* be made visible before
-            //> the host reads or overwrites them.
-            self.invalidate_mapped_memory_ranges(&[(memory, generic_range)]);
-            memory.initialized.set(true);
-        }
 
-        let base_ptr = memory.cpu_buffer.as_ref().unwrap().contents() as *mut u8;
-        let ptr = unsafe { base_ptr.offset(range.start as _) };
-
-        let mut mapping = memory.mapping.lock().unwrap();
-        assert!(mapping.is_none(), "Only one mapping per `Memory` at a time is allowed");
-        *mapping = Some(range);
-
-        Ok(ptr)
+        let base_ptr = match memory.heap {
+            n::MemoryHeap::Public(_, ref cpu_buffer) => cpu_buffer.contents() as *mut u8,
+            n::MemoryHeap::Native(_) |
+            n::MemoryHeap::Private => panic!("Unable to map memory!"),
+        };
+        Ok(unsafe { base_ptr.offset(range.start as _) })
     }
 
     fn unmap_memory(&self, memory: &n::Memory) {
         debug!("unmapping memory {:?}", memory);
-        let range = memory.mapping.lock().unwrap().take().expect("Unmapping non-mapped memory?");
-        if self.is_heap_coherent(&memory.heap) {
-            // See note from the Vulkan spec above ^
-            self.flush_mapped_memory_ranges(&[(memory, range)]);
-        }
     }
 
     fn flush_mapped_memory_ranges<'a, I, R>(&self, iter: I)
@@ -1086,71 +1129,24 @@ impl hal::Device<Backend> for Device {
         I::Item: Borrow<(&'a n::Memory, R)>,
         R: RangeArg<u64>,
     {
-        const ALIGN_MASK: buffer::Offset = 3;
-        let _ap = AutoreleasePool::new(); // for the encoder
         debug!("flushing mapped ranges");
-
-        // temporary command buffer to copy the contents from
-        // allocated CPU-visible buffers to the target buffers
-        let mut pool = self.shared.queue_pool.lock().unwrap();
-        let cmd_buffer = pool.borrow_command_buffer(&self.shared);
-        let encoder = cmd_buffer.new_blit_command_encoder();
-
         for item in iter {
             let (memory, ref generic_range) = *item.borrow();
             let range = memory.resolve(generic_range);
             debug!("\trange {:?}", range);
 
-            let cpu_buffer = memory.cpu_buffer.as_ref().unwrap();
-            cpu_buffer.did_modify_range(NSRange {
-                location: range.start as _,
-                length: (range.end - range.start) as _,
-            });
-
-            let allocations = memory.allocations.lock().unwrap();
-            for (alloc_range, resource, _) in allocations.find(&range) {
-                trace!("\t\talloc range {:?}", alloc_range);
-                let start = alloc_range.start.max(range.start);
-                let end = alloc_range.end.min(range.end);
-                let other = start - alloc_range.start;
-                assert_eq!(other & ALIGN_MASK, 0);
-                if start & ALIGN_MASK != 0 || end & ALIGN_MASK != 0 {
-                    warn!("Invalidation of {:?} doesn't respect `non_coherent_atom_size`",
-                        start .. end);
+            match memory.heap {
+                n::MemoryHeap::Native(_) => unimplemented!(),
+                n::MemoryHeap::Public(mt, ref cpu_buffer) if 1<<mt.0 != MemoryTypes::SHARED.bits() as usize => {
+                    cpu_buffer.did_modify_range(NSRange {
+                        location: range.start as _,
+                        length: (range.end - range.start) as _,
+                    });
                 }
-
-                let command = match resource {
-                    n::Resource::Buffer(raw) => soft::BlitCommand::CopyBuffer {
-                        src: cpu_buffer.clone(),
-                        dst: raw,
-                        region: BufferCopy {
-                            src: start & !ALIGN_MASK,
-                            dst: other,
-                            size: end & !ALIGN_MASK - start &!ALIGN_MASK,
-                        },
-                    },
-                    n::Resource::Texture { raw, format_desc, extent, subresource } => soft::BlitCommand::CopyBufferToImage {
-                        src: cpu_buffer.clone(),
-                        dst: raw,
-                        dst_desc: format_desc,
-                        //TODO: we could increase the granularity of copies here
-                        region: BufferImageCopy {
-                            buffer_offset: start & !ALIGN_MASK,
-                            buffer_width: extent.width,
-                            buffer_height: extent.height,
-                            image_layers: subresource,
-                            image_offset: image::Offset::ZERO,
-                            image_extent: extent,
-                        },
-                    },
-                };
-
-                command::exec_blit(encoder, &command);
-            }
+                n::MemoryHeap::Public(..) => continue,
+                n::MemoryHeap::Private => panic!("Can't map private memory!"),
+            };
         }
-
-        encoder.end_encoding();
-        cmd_buffer.commit();
     }
 
     fn invalidate_mapped_memory_ranges<'a, I, R>(&self, iter: I)
@@ -1159,8 +1155,8 @@ impl hal::Device<Backend> for Device {
         I::Item: Borrow<(&'a n::Memory, R)>,
         R: RangeArg<u64>,
     {
-        const ALIGN_MASK: buffer::Offset = 3;
         let _ap = AutoreleasePool::new(); // for the encoder
+        let mut num_syncs = 0;
         debug!("invalidating mapped ranges");
 
         // temporary command buffer to copy the contents from
@@ -1170,60 +1166,21 @@ impl hal::Device<Backend> for Device {
             .unwrap()
             .make_command_buffer(&self.shared.device);
         let encoder = cmd_buffer.new_blit_command_encoder();
-        let mut num_copies = 0;
 
         for item in iter {
             let (memory, ref generic_range) = *item.borrow();
-            if !memory.initialized.get() {
-                continue
-            }
             let range = memory.resolve(generic_range);
             debug!("\trange {:?}", range);
-            let cpu_buffer = memory.cpu_buffer.as_ref().unwrap();
 
-            let allocations = memory.allocations.lock().unwrap();
-            for (alloc_range, resource, _) in allocations.find(&range) {
-                trace!("\t\talloc range {:?}", alloc_range);
-                let start = alloc_range.start.max(range.start);
-                let end = alloc_range.end.min(range.end);
-                let other = start - alloc_range.start;
-                assert_eq!(other & ALIGN_MASK, 0);
-                if start & ALIGN_MASK != 0 || end & ALIGN_MASK != 0 {
-                    warn!("Invalidation of {:?} doesn't respect `non_coherent_atom_size`",
-                        start .. end);
+            match memory.heap {
+                n::MemoryHeap::Native(_) => unimplemented!(),
+                n::MemoryHeap::Public(mt, ref cpu_buffer) if 1<<mt.0 != MemoryTypes::SHARED.bits() as usize => {
+                    num_syncs += 1;
+                    encoder.synchronize_resource(cpu_buffer.as_ref());
                 }
-
-                let command = match resource {
-                    n::Resource::Buffer(raw) => soft::BlitCommand::CopyBuffer {
-                        src: raw,
-                        dst: cpu_buffer.clone(),
-                        region: BufferCopy {
-                            src: other,
-                            dst: start & !ALIGN_MASK,
-                            size: end & !ALIGN_MASK - start & !ALIGN_MASK,
-                        },
-                    },
-                    n::Resource::Texture { raw, format_desc, extent, subresource } => soft::BlitCommand::CopyImageToBuffer {
-                        src: raw,
-                        src_desc: format_desc,
-                        dst: cpu_buffer.clone(),
-                        //TODO: we could increase the granularity of copies here
-                        region: BufferImageCopy {
-                            buffer_offset: start & !ALIGN_MASK,
-                            buffer_width: extent.width,
-                            buffer_height: extent.height,
-                            image_layers: subresource,
-                            image_offset: image::Offset::ZERO,
-                            image_extent: extent,
-                        },
-                    },
-                };
-
-                command::exec_blit(encoder, &command);
-            }
-
-            num_copies += 1;
-            encoder.synchronize_resource(cpu_buffer.as_ref());
+                n::MemoryHeap::Public(..) => continue,
+                n::MemoryHeap::Private => panic!("Can't map private memory!"),
+            };
         }
 
         encoder.end_encoding();
@@ -1231,7 +1188,8 @@ impl hal::Device<Backend> for Device {
             .lock()
             .unwrap()
             .release_command_buffer(queue_id);
-        if num_copies != 0 {
+
+        if num_syncs != 0 {
             debug!("\twaiting...");
             cmd_buffer.commit();
             cmd_buffer.wait_until_completed();
@@ -1429,19 +1387,8 @@ impl hal::Device<Backend> for Device {
     }
 
     fn allocate_memory(&self, memory_type: hal::MemoryTypeId, size: u64) -> Result<n::Memory, OutOfMemory> {
-        let memory_properties = self.memory_types[memory_type.0].properties;
-        let (storage, cache) = conv::map_memory_properties_to_storage_and_cache(memory_properties);
+        let (storage, cache) = MemoryTypes::describe(memory_type.0);
         let device = self.shared.device.lock().unwrap();
-
-        //TODO: use aliasing when `resource_heaps` are supported
-        let cpu_buffer = match storage {
-            MTLStorageMode::Shared |
-            MTLStorageMode::Managed => {
-                let buffer = device.new_buffer(size, MTLResourceOptions::StorageModeManaged);
-                Some(buffer)
-            },
-            MTLStorageMode::Private => None,
-        };
 
         // Heaps cannot be used for CPU coherent resources
         //TEMP: MacOS supports Private only, iOS and tvOS can do private/shared
@@ -1452,39 +1399,39 @@ impl hal::Device<Backend> for Device {
             descriptor.set_size(size);
             let heap_raw = device.new_heap(&descriptor);
             n::MemoryHeap::Native(heap_raw)
+        } else if storage == MTLStorageMode::Private {
+            n::MemoryHeap::Private
         } else {
-            n::MemoryHeap::Emulated(memory_type)
+            let options = conv::resource_options_from_storage_and_cache(storage, cache);
+            let cpu_buffer = device.new_buffer(size, options);
+            n::MemoryHeap::Public(memory_type, cpu_buffer)
         };
 
-        Ok(n::Memory::new(heap, size, cpu_buffer))
+        Ok(n::Memory::new(heap, size))
     }
 
     fn free_memory(&self, _memory: n::Memory) {
     }
 
     fn create_buffer(
-        &self, size: u64, _usage: buffer::Usage
+        &self, size: u64, usage: buffer::Usage
     ) -> Result<n::UnboundBuffer, buffer::CreationError> {
         Ok(n::UnboundBuffer {
-            size
+            size,
+            usage,
         })
     }
 
     fn get_buffer_requirements(&self, buffer: &n::UnboundBuffer) -> memory::Requirements {
         let mut max_size = buffer.size;
-        let mut max_alignment = 1;
-        let mut type_mask = (1 << self.memory_types.len()) - 1;
+        let mut max_alignment = self.private_caps.buffer_alignment;
 
         if self.private_caps.resource_heaps {
             // We don't know what memory type the user will try to allocate the buffer with, so we test them
             // all get the most stringent ones.
-            for (i, mt) in self.memory_types.iter().enumerate() {
-                // Note: we ignore COHERENT because heaps can't use the associated Shared memory type
-                if mt.properties.contains(memory::Properties::COHERENT) {
-                    type_mask ^= 1 << i;
-                    continue
-                }
-                let options = conv::map_memory_properties_to_options(mt.properties);
+            for (i, _mt) in self.memory_types.iter().enumerate() {
+                let (storage, cache) = MemoryTypes::describe(i);
+                let options = conv::resource_options_from_storage_and_cache(storage, cache);
                 let requirements = self.shared.device
                     .lock()
                     .unwrap()
@@ -1497,18 +1444,26 @@ impl hal::Device<Backend> for Device {
         // based on Metal validation error for view creation:
         // failed assertion `BytesPerRow of a buffer-backed texture with pixelFormat(XXX) must be aligned to 256 bytes
         const SIZE_MASK: u64 = 0xFF;
+        let supports_texel_view = buffer.usage.intersects(
+            buffer::Usage::UNIFORM_TEXEL |
+            buffer::Usage::STORAGE_TEXEL
+        );
 
         memory::Requirements {
             size: (max_size + SIZE_MASK) & !SIZE_MASK,
             alignment: max_alignment,
-            type_mask,
+            type_mask: if supports_texel_view && !self.private_caps.shared_textures {
+                (MemoryTypes::all() ^ MemoryTypes::SHARED).bits()
+            } else {
+                MemoryTypes::all().bits()
+            },
         }
     }
 
     fn bind_buffer_memory(
         &self, memory: &n::Memory, offset: u64, buffer: n::UnboundBuffer
     ) -> Result<n::Buffer, BindError> {
-        let (raw, res_options, is_mappable) = match memory.heap {
+        let (raw, res_options, range) = match memory.heap {
             n::MemoryHeap::Native(ref heap) => {
                 let resource_options = conv::resource_options_from_storage_and_cache(
                     heap.storage_mode(),
@@ -1522,53 +1477,39 @@ impl hal::Device<Backend> for Device {
                             .unwrap()
                             .new_buffer(buffer.size, resource_options)
                     });
-                let is_mappable = heap.storage_mode() != MTLStorageMode::Private;
-                (raw, resource_options, is_mappable)
+                (raw, resource_options, 0 .. buffer.size) //TODO?
             }
-            n::MemoryHeap::Emulated(mt) => {
-                // Note: buffer backing is always `Private`. CPU access is routed through
-                // a CPU-visible buffer associated with `Memory` object.
-                let res_options = MTLResourceOptions::StorageModePrivate;
+            n::MemoryHeap::Public(mt, ref cpu_buffer) => {
+                let (storage, cache) = MemoryTypes::describe(mt.0);
+                let options = conv::resource_options_from_storage_and_cache(storage, cache);
+                (cpu_buffer.clone(), options, offset .. offset + buffer.size)
+            }
+            n::MemoryHeap::Private => {
+                //TODO: check for aliasing
+                let options = MTLResourceOptions::StorageModePrivate |
+                    MTLResourceOptions::CPUCacheModeDefaultCache;
                 let raw = self.shared.device
                     .lock()
                     .unwrap()
-                    .new_buffer(buffer.size, res_options);
-                let props = self.memory_types[mt.0].properties;
-                let is_mappable = props.contains(memory::Properties::CPU_VISIBLE);
-                if is_mappable && props.contains(memory::Properties::COHERENT) {
-                    warn!("COHERENT buffer memory is not yet supported properly");
-                }
-                (raw, res_options, is_mappable)
+                    .new_buffer(buffer.size, options);
+                (raw, options, 0 .. buffer.size)
             }
         };
 
         Ok(n::Buffer {
-            allocations: if is_mappable {
-                memory.initialized.set(true); // this is conservative, can be improved
-                memory.allocations.lock().unwrap().insert(
-                    offset .. (offset + buffer.size),
-                    n::Resource::Buffer(raw.clone()),
-                );
-                Some(memory.allocations.clone())
-            } else {
-                None
-            },
             raw,
-            offset,
+            range,
             res_options,
         })
     }
 
-    fn destroy_buffer(&self, buffer: n::Buffer) {
-        if let Some(alloc) = buffer.allocations {
-            alloc.lock().unwrap().remove(buffer.offset .. (buffer.offset + buffer.raw.length()));
-        }
+    fn destroy_buffer(&self, _buffer: n::Buffer) {
     }
 
     fn create_buffer_view<R: RangeArg<u64>>(
         &self, buffer: &n::Buffer, format_maybe: Option<format::Format>, range: R
     ) -> Result<n::BufferView, buffer::ViewError> {
-        let start = buffer.offset + *range.start().unwrap_or(&0);
+        let start = buffer.range.start + *range.start().unwrap_or(&0);
         let end_rough = *range.end().unwrap_or(&buffer.raw.length());
         let format = match format_maybe {
             Some(fmt) => fmt,
@@ -1593,12 +1534,6 @@ impl hal::Device<Backend> for Device {
         descriptor.set_resource_options(buffer.res_options);
         descriptor.set_storage_mode(buffer.raw.storage_mode());
 
-        //TODO:
-        //The offset and bytesPerRow parameters must be byte aligned to the size returned by the
-        // minimumLinearTextureAlignmentForPixelFormat: method. The bytesPerRow parameter must also be
-        // greater than or equal to the size of one pixel, in bytes, multiplied by the pixel width of one row.
-
-        const STRIDE_MASK: u64 = 0xFF;
         let size = block_count * (format_desc.bits as u64 / 8);
         let stride = (size + STRIDE_MASK) & !STRIDE_MASK;
 
@@ -1678,7 +1613,7 @@ impl hal::Device<Backend> for Device {
         descriptor.set_depth(extent.depth as u64);
         descriptor.set_mipmap_level_count(mip_levels as u64);
         descriptor.set_pixel_format(mtl_format);
-        descriptor.set_usage(conv::map_texture_usage(usage));
+        descriptor.set_usage(conv::map_texture_usage(usage, tiling));
 
         let format_desc = format.surface_desc();
         let mip_sizes = (0 .. mip_levels)
@@ -1688,40 +1623,40 @@ impl hal::Device<Backend> for Device {
             })
             .collect();
 
+        let host_usage = image::Usage::TRANSFER_SRC | image::Usage::TRANSFER_DST;
+        let host_visible = mtl_type == MTLTextureType::D2 &&
+            mip_levels == 1 && num_layers.is_none() &&
+            format_desc.aspects.contains(format::Aspects::COLOR) &&
+            tiling == image::Tiling::Linear &&
+            host_usage.contains(usage);
+
         Ok(n::UnboundImage {
             texture_desc: descriptor,
             format,
-            tiling,
             extent,
             num_layers,
             mip_sizes,
+            host_visible,
         })
     }
 
     fn get_image_requirements(&self, image: &n::UnboundImage) -> memory::Requirements {
-        let mut type_mask = match image.tiling {
-            image::Tiling::Optimal => 0x4,
-            image::Tiling::Linear => 0x3, //CPU_VISIBLE
-        };
-        if !image.format.surface_desc().aspects.contains(format::Aspects::COLOR) {
-            type_mask &= 0x4; // DEVICE_LOCAL only
-        }
         if self.private_caps.resource_heaps {
             // We don't know what memory type the user will try to allocate the image with, so we test them
             // all get the most stringent ones. Note we don't check Shared because heaps can't use it
             let mut max_size = 0;
             let mut max_alignment = 0;
-            for (i, mt) in self.memory_types.iter().enumerate() {
-                if type_mask & (1 << i) == 0 {
+            let types = if image.host_visible {
+                MemoryTypes::all()
+            } else {
+                MemoryTypes::PRIVATE
+            };
+            for (i, _) in self.memory_types.iter().enumerate() {
+                if !types.contains(MemoryTypes::from_bits(1 << i).unwrap()) {
                     continue
                 }
-                // Note: we ignore COHERENT because heaps can't use the associated Shared memory type
-                if mt.properties.contains(memory::Properties::COHERENT) {
-                    type_mask ^= 1 << i;
-                    continue
-                }
-                let options = conv::map_memory_properties_to_options(mt.properties);
-                let (storage, cache_mode) = conv::map_memory_properties_to_storage_and_cache(mt.properties);
+                let (storage, cache_mode) = MemoryTypes::describe(i);
+                let options = conv::resource_options_from_storage_and_cache(storage, cache_mode);
                 image.texture_desc.set_resource_options(options);
                 image.texture_desc.set_storage_mode(storage);
                 image.texture_desc.set_cpu_cache_mode(cache_mode);
@@ -1735,13 +1670,25 @@ impl hal::Device<Backend> for Device {
             memory::Requirements {
                 size: max_size,
                 alignment: max_alignment,
-                type_mask,
+                type_mask: types.bits(),
+            }
+        } else if image.host_visible {
+            assert_eq!(image.mip_sizes.len(), 1);
+            let mask = self.private_caps.buffer_alignment - 1;
+            memory::Requirements {
+                size: (image.mip_sizes[0] + mask) & !mask,
+                alignment: self.private_caps.buffer_alignment,
+                type_mask: if self.private_caps.shared_textures {
+                    MemoryTypes::all().bits()
+                } else {
+                    (MemoryTypes::all() ^ MemoryTypes::SHARED).bits()
+                },
             }
         } else {
             memory::Requirements {
                 size: image.mip_sizes.iter().sum(),
                 alignment: 4,
-                type_mask,
+                type_mask: MemoryTypes::PRIVATE.bits(),
             }
         }
     }
@@ -1765,71 +1712,47 @@ impl hal::Device<Backend> for Device {
     }
 
     fn bind_image_memory(
-        &self, memory: &n::Memory, base_offset: u64, image: n::UnboundImage
+        &self, memory: &n::Memory, offset: u64, image: n::UnboundImage
     ) -> Result<n::Image, BindError> {
-        let (raw, is_mappable) = match memory.heap {
+        let base = image.format.base_format();
+        let format_desc = base.0.desc();
+
+        let raw = match memory.heap {
             n::MemoryHeap::Native(ref heap) => {
                 let resource_options = conv::resource_options_from_storage_and_cache(
                     heap.storage_mode(),
                     heap.cpu_cache_mode());
                 image.texture_desc.set_resource_options(resource_options);
-                let raw = heap.new_texture(&image.texture_desc)
+                heap.new_texture(&image.texture_desc)
                     .unwrap_or_else(|| {
                         // TODO: disable hazard tracking?
                         self.shared.device
                             .lock()
                             .unwrap()
                             .new_texture(&image.texture_desc)
-                    });
-                let is_mappable = heap.storage_mode() != MTLStorageMode::Private;
-                (raw, is_mappable)
+                    })
             },
-            n::MemoryHeap::Emulated(memory_type) => {
-                // Note: texture backing is always `Private`. CPU access is routed through
-                // a CPU-visible buffer associated with `Memory` object.
-                image.texture_desc.set_storage_mode(MTLStorageMode::Private);
-                image.texture_desc.set_resource_options(MTLResourceOptions::StorageModePrivate);
-                let raw = self.shared.device
+            n::MemoryHeap::Public(memory_type, ref cpu_buffer) => {
+                let row_size = image.extent.width as u64 * (format_desc.bits as u64 / 8);
+                let stride = (row_size + STRIDE_MASK) & !STRIDE_MASK;
+
+                let (storage_mode, cache_mode) = MemoryTypes::describe(memory_type.0);
+                let options = conv::resource_options_from_storage_and_cache(storage_mode, cache_mode);
+                image.texture_desc.set_storage_mode(storage_mode);
+                image.texture_desc.set_cpu_cache_mode(cache_mode);
+                image.texture_desc.set_resource_options(options);
+
+                cpu_buffer.new_texture_from_contents(&image.texture_desc, offset, stride)
+            }
+            n::MemoryHeap::Private => {
+                self.shared.device
                     .lock()
                     .unwrap()
-                    .new_texture(&image.texture_desc);
-                let memory_properties = self.memory_types[memory_type.0].properties;
-                let is_mappable = memory_properties.contains(memory::Properties::CPU_VISIBLE);
-                if is_mappable && memory_properties.contains(memory::Properties::COHERENT) {
-                    warn!("COHERENT buffer memory is not yet supported properly");
-                }
-                (raw, is_mappable)
+                    .new_texture(&image.texture_desc)
             }
         };
 
-        let base = image.format.base_format();
-        let format_desc = base.0.desc();
-
         Ok(n::Image {
-            allocations: if is_mappable {
-                let mut allocations = memory.allocations.lock().unwrap();
-                memory.initialized.set(true); // this is conservative, can be improved
-                let mut offset = base_offset;
-                for (i, mip_size) in image.mip_sizes.into_iter().enumerate() {
-                    allocations.insert(
-                        offset .. (offset + mip_size),
-                        n::Resource::Texture {
-                            raw: raw.clone(),
-                            format_desc,
-                            extent: image.extent,
-                            subresource: image::SubresourceLayers {
-                                aspects: format_desc.aspects,
-                                level: i as _,
-                                layers: 0 .. image.num_layers.unwrap_or(1),
-                            },
-                        },
-                    );
-                    offset += mip_size;
-                }
-                Some(memory.allocations.clone())
-            } else {
-                None
-            },
             raw,
             extent: image.extent,
             num_layers: image.num_layers,
@@ -1949,10 +1872,15 @@ impl hal::Device<Backend> for Device {
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
-        self.shared.queue_pool
-            .lock()
-            .unwrap()
-            .wait_idle(&self.shared.device);
+        debug!("waiting for idle");
+        let _pool = AutoreleasePool::new();
+
+        let queue = self.shared.aux_queue.lock().unwrap();
+        let command_buffer = queue
+            .new_command_buffer_with_unretained_references();
+        command_buffer.commit();
+        command_buffer.wait_until_completed();
+
         Ok(())
     }
 }

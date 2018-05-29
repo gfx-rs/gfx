@@ -1,4 +1,5 @@
 extern crate gfx_hal as hal;
+#[macro_use] extern crate bitflags;
 extern crate cocoa;
 extern crate foreign_types;
 #[macro_use] extern crate objc;
@@ -52,6 +53,7 @@ impl hal::QueueFamily for QueueFamily {
 
 pub struct Shared {
     pub(crate) device: Mutex<metal::Device>,
+    pub(crate) aux_queue: Mutex<metal::CommandQueue>,
     pub(crate) queue_pool: Mutex<command::QueuePool>,
     pub(crate) service_pipes: Mutex<internal::ServicePipes>,
     pub(crate) push_constants_buffer_id: u32,
@@ -64,6 +66,7 @@ impl Shared {
     pub(crate) fn new(device: metal::Device) -> Self {
         Shared {
             queue_pool: Mutex::new(command::QueuePool::default()),
+            aux_queue: Mutex::new(device.new_command_queue()),
             service_pipes: Mutex::new(internal::ServicePipes::new(&device)),
             device: Mutex::new(device),
             push_constants_buffer_id: 30,
@@ -179,6 +182,7 @@ impl hal::Backend for Backend {
 struct PrivateCapabilities {
     resource_heaps: bool,
     argument_buffers: bool,
+    shared_textures: bool,
     format_depth24_stencil8: bool,
     format_depth32_stencil8: bool,
     format_min_srgb_channels: u8,
@@ -187,6 +191,7 @@ struct PrivateCapabilities {
     max_textures_per_stage: usize,
     max_samplers_per_stage: usize,
     buffer_alignment: u64,
+    max_buffer_size: u64,
 }
 
 pub struct AutoreleasePool {
