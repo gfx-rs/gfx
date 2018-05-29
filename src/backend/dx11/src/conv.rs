@@ -1,10 +1,13 @@
 use hal::format::{Format};
+use hal::pso::{Rect, Viewport};
 
 use winapi::um::d3dcommon::*;
 use winapi::shared::dxgiformat::*;
 
+use winapi::um::d3d11::{D3D11_RECT, D3D11_VIEWPORT};
+
 // TODO: stolen from d3d12 backend, maybe share function somehow?
-pub(crate) fn map_format(format: Format) -> Option<DXGI_FORMAT> {
+pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     use hal::format::Format::*;
 
     let format = match format {
@@ -78,4 +81,24 @@ pub(crate) fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     };
 
     Some(format)
+}
+
+pub fn map_viewport(viewport: &Viewport) -> D3D11_VIEWPORT {
+    D3D11_VIEWPORT {
+        TopLeftX: viewport.rect.x as _,
+        TopLeftY: viewport.rect.y as _,
+        Width: viewport.rect.w as _,
+        Height: viewport.rect.h as _,
+        MinDepth: viewport.depth.start,
+        MaxDepth: viewport.depth.end,
+    }
+}
+
+pub fn map_rect(rect: &Rect) -> D3D11_RECT {
+    D3D11_RECT {
+        left: rect.x as _,
+        top: rect.y as _,
+        right: rect.w as _,
+        bottom: rect.h as _,
+    }
 }

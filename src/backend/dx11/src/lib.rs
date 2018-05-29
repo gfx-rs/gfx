@@ -1,11 +1,11 @@
 //#[deny(missing_docs)]
 
-#[macro_use]
+//#[macro_use]
 extern crate bitflags;
 #[macro_use]
 extern crate derivative;
 extern crate gfx_hal as hal;
-#[macro_use]
+//#[macro_use]
 extern crate log;
 extern crate smallvec;
 extern crate spirv_cross;
@@ -14,35 +14,36 @@ extern crate winapi;
 extern crate winit;
 extern crate wio;
 
-use hal::{buffer, command, device, error, format, image, memory, mapping, queue, query, pool, pso, pass, Features, Limits, QueueType};
-use hal::{DrawCount, IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
-use hal::queue::{QueueFamily as HalQueueFamily, QueueFamilyId, Queues};
+use hal::{buffer, command, device, error, format, image, memory, mapping, query, pool, pso, pass, Features, Limits, QueueType};
+use hal::{DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
+use hal::queue::{QueueFamilyId, Queues};
 use hal::backend::RawQueueGroup;
-use hal::format::Aspects;
 use hal::range::RangeArg;
 
-use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgiformat, dxgitype, winerror};
+use winapi::shared::{dxgiformat, dxgitype, winerror};
+
+use winapi::shared::dxgi::{DXGI_SWAP_CHAIN_DESC, DXGI_SWAP_EFFECT_DISCARD, IDXGIFactory, IDXGIAdapter, IDXGISwapChain};
 use winapi::shared::minwindef::{FALSE, TRUE};
 use winapi::shared::windef::{HWND, RECT};
-use winapi::um::winnt::{LARGE_INTEGER};
 use winapi::um::winuser::{GetClientRect};
-use winapi::um::{d3d11, d3dcommon};
+use winapi::um::{d3d11, d3d11sdklayers, d3dcommon};
 
 use wio::com::ComPtr;
 
 use std::ptr;
 use std::mem;
 use std::ops::Range;
+use std::cell::RefCell;
 use std::borrow::{BorrowMut, Borrow};
 
-use std::os::windows::ffi::OsStringExt;
-use std::ffi::OsString;
 use std::os::raw::c_void;
 
 mod conv;
+mod dxgi;
 
 pub struct Instance {
-    pub(crate) factory: ComPtr<dxgi::IDXGIFactory1>
+    pub(crate) factory: ComPtr<IDXGIFactory>,
+    pub(crate) dxgi_version: dxgi::DxgiVersion
 }
 
 unsafe impl Send for Instance { }
@@ -52,20 +53,13 @@ impl Instance {
     pub fn create(_: &str, _: u32) -> Self {
         // TODO: get the latest factory we can find
 
-        let mut factory: *mut dxgi::IDXGIFactory1 = ptr::null_mut();
-        let hr = unsafe {
-            dxgi::CreateDXGIFactory1(
-                &dxgi::IID_IDXGIFactory1,
-                &mut factory as *mut *mut _ as *mut *mut _
-            )
-        };
+        let (factory, dxgi_version) = dxgi::get_dxgi_factory().unwrap();
 
-        if !winerror::SUCCEEDED(hr) {
-            error!("Failed on dxgi factory creation: {:?}", hr);
-        }
+        println!("DXGI version: {:?}", dxgi_version);
 
         Instance {
-            factory: unsafe { ComPtr::from_raw(factory) }
+            factory,
+            dxgi_version
         }
     }
 
@@ -100,78 +94,82 @@ impl hal::Instance for Instance {
         let mut adapters = Vec::new();
         let mut idx = 0;
 
-        loop {
-            let adapter = {
-                let mut adapter: *mut dxgi::IDXGIAdapter1 = ptr::null_mut();
-                let hr = unsafe {
-                    self.factory.EnumAdapters1(idx, &mut adapter as *mut *mut _)
-                };
-
-                if hr == winerror::DXGI_ERROR_NOT_FOUND {
-                    break;
-                }
-
-                unsafe { ComPtr::from_raw(adapter) }
-            };
-
+        while let Ok((adapter, info)) = dxgi::get_adapter(idx, self.factory.as_raw(), self.dxgi_version) {
             idx += 1;
-            let mut umd: LARGE_INTEGER = unsafe { mem::zeroed() };
 
-            // check if adapter supports creating d3d11 device
-            let mut desc: dxgi::DXGI_ADAPTER_DESC1 = unsafe { mem::zeroed() };
-            unsafe { adapter.GetDesc1(&mut desc); }
+            use hal::memory::Properties;
 
-            let device_name = {
-                let len = desc.Description.iter().take_while(|&&c| c != 0).count();
-                let name = <OsString as OsStringExt>::from_wide(&desc.Description[..len]);
-                name.to_string_lossy().into_owned()
+            // TODO: we should improve the way memory is managed. we should
+            //       give access to DEFAULT, DYNAMIC and STAGING;
+            //
+            //       roughly this should translate to:
+            //
+            //       DEFAULT => DEVICE_LOCAL
+            //
+            //       NOTE: DYNAMIC only offers cpu write, potentially add
+            //             a HOST_WRITE_ONLY flag..
+            //       DYNAMIC => DEVICE_LOCAL | CPU_VISIBLE
+            //
+            //       STAGING => CPU_VISIBLE | CPU_CACHED
+            let memory_properties = hal::MemoryProperties {
+                memory_types: vec![
+                    hal::MemoryType {
+                        properties: Properties::DEVICE_LOCAL,
+                        heap_index: 0,
+                    },
+                    hal::MemoryType {
+                        properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::CPU_CACHED,
+                        heap_index: 0,
+                    },
+                    hal::MemoryType {
+                        properties: Properties::CPU_VISIBLE | Properties::CPU_CACHED,
+                        heap_index: 1,
+                    },
+                ],
+                // TODO: would using *VideoMemory and *SystemMemory from
+                //       DXGI_ADAPTER_DESC be too optimistic? :)
+                memory_heaps: vec![!0, !0]
             };
 
-            let info = hal::AdapterInfo {
-                name: device_name,
-                vendor: desc.VendorId as usize,
-                device: desc.DeviceId as usize,
-                software_rendering: (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0,
+            let limits = hal::Limits {
+                max_texture_size: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION as _,
+                max_patch_size: 0, // TODO
+                max_viewports: d3d11::D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
+                max_compute_group_count: [
+                    d3d11::D3D11_CS_THREAD_GROUP_MAX_X,
+                    d3d11::D3D11_CS_THREAD_GROUP_MAX_Y,
+                    d3d11::D3D11_CS_THREAD_GROUP_MAX_Z
+                ],
+                max_compute_group_size: [
+                    d3d11::D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP,
+                    1,
+                    1
+                ], // TODO
+                max_vertex_input_attribute_offset: 0, // TODO
+                max_vertex_input_attributes: 0, // TODO
+                max_vertex_input_binding_stride: 0, // TODO
+                max_vertex_input_bindings: 0, // TODO
+                max_vertex_output_components: 0, // TODO
+                min_buffer_copy_offset_alignment: 0,    // TODO
+                min_buffer_copy_pitch_alignment: 0,     // TODO
+                min_texel_buffer_offset_alignment: 0,   // TODO
+                min_uniform_buffer_offset_alignment: 0, // TODO
+                min_storage_buffer_offset_alignment: 0, // TODO
+                framebuffer_color_samples_count: 0,     // TODO
+                framebuffer_depth_samples_count: 0,     // TODO
+                framebuffer_stencil_samples_count: 0,   // TODO
+                non_coherent_atom_size: 0,              // TODO
             };
 
             let physical_device = PhysicalDevice {
                 adapter,
                 // TODO: check for features
                 features: hal::Features::empty(),
-                limits: hal::Limits {
-                    max_texture_size: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION as _,
-                    max_patch_size: 0, // TODO
-                    max_viewports: d3d11::D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
-                    max_compute_group_count: [
-                        d3d11::D3D11_CS_THREAD_GROUP_MAX_X,
-                        d3d11::D3D11_CS_THREAD_GROUP_MAX_Y,
-                        d3d11::D3D11_CS_THREAD_GROUP_MAX_Z
-                    ],
-                    max_compute_group_size: [
-                        d3d11::D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP,
-                        1,
-                        1
-                    ], // TODO
-                    max_vertex_input_attribute_offset: 0, // TODO
-                    max_vertex_input_attributes: 0, // TODO
-                    max_vertex_input_binding_stride: 0, // TODO
-                    max_vertex_input_bindings: 0, // TODO
-                    max_vertex_output_components: 0, // TODO
-                    min_buffer_copy_offset_alignment: 0,    // TODO
-                    min_buffer_copy_pitch_alignment: 0,     // TODO
-                    min_texel_buffer_offset_alignment: 0,   // TODO
-                    min_uniform_buffer_offset_alignment: 0, // TODO
-                    min_storage_buffer_offset_alignment: 0, // TODO
-                    framebuffer_color_samples_count: 0,     // TODO
-                    framebuffer_depth_samples_count: 0,     // TODO
-                    framebuffer_stencil_samples_count: 0,   // TODO
-                    non_coherent_atom_size: 0,              // TODO
-                },
-                memory_properties: hal::MemoryProperties {
-                    memory_types: vec![], // TODO
-                    memory_heaps: vec![]  // TODO
-                }
+                limits,
+                memory_properties
             };
+
+            println!("{:#?}", info);
 
             adapters.push(hal::Adapter {
                 info,
@@ -188,7 +186,7 @@ impl hal::Instance for Instance {
 #[derivative(Debug)]
 pub struct PhysicalDevice {
     #[derivative(Debug="ignore")]
-    adapter: ComPtr<dxgi::IDXGIAdapter1>,
+    adapter: ComPtr<IDXGIAdapter>,
     features: hal::Features,
     limits: hal::Limits,
     memory_properties: hal::MemoryProperties,
@@ -198,7 +196,7 @@ unsafe impl Send for PhysicalDevice { }
 unsafe impl Sync for PhysicalDevice { }
 
 // TODO: does the adapter we get earlier matter for feature level?
-fn get_feature_level(adapter: *mut dxgi::IDXGIAdapter) -> d3dcommon::D3D_FEATURE_LEVEL {
+fn get_feature_level(adapter: *mut IDXGIAdapter) -> d3dcommon::D3D_FEATURE_LEVEL {
     let requested_feature_levels = [
         d3dcommon::D3D_FEATURE_LEVEL_11_1,
         d3dcommon::D3D_FEATURE_LEVEL_11_0,
@@ -213,7 +211,7 @@ fn get_feature_level(adapter: *mut dxgi::IDXGIAdapter) -> d3dcommon::D3D_FEATURE
     let hr = unsafe {
         d3d11::D3D11CreateDevice(
             adapter,
-            d3dcommon::D3D_DRIVER_TYPE_NULL,
+            d3dcommon::D3D_DRIVER_TYPE_UNKNOWN,
             ptr::null_mut(),
             0,
             requested_feature_levels[..].as_ptr(),
@@ -229,25 +227,26 @@ fn get_feature_level(adapter: *mut dxgi::IDXGIAdapter) -> d3dcommon::D3D_FEATURE
         // if there is no 11.1 runtime installed, requesting
         // `D3D_FEATURE_LEVEL_11_1` will return E_INVALIDARG so we just retry
         // without that
-        assert_eq!(hr, winerror::E_INVALIDARG);
-        let hr = unsafe {
-            d3d11::D3D11CreateDevice(
-                ptr::null_mut(),
-                d3dcommon::D3D_DRIVER_TYPE_NULL,
-                ptr::null_mut(),
-                0,
-                requested_feature_levels[1..].as_ptr(),
-                (requested_feature_levels.len() - 1) as _,
-                d3d11::D3D11_SDK_VERSION,
-                ptr::null_mut(),
-                &mut feature_level as *mut _,
-                ptr::null_mut()
-            )
-        };
+        if hr == winerror::E_INVALIDARG {
+            let hr = unsafe {
+                d3d11::D3D11CreateDevice(
+                    adapter,
+                    d3dcommon::D3D_DRIVER_TYPE_UNKNOWN,
+                    ptr::null_mut(),
+                    0,
+                    requested_feature_levels[1..].as_ptr(),
+                    (requested_feature_levels.len() - 1) as _,
+                    d3d11::D3D11_SDK_VERSION,
+                    ptr::null_mut(),
+                    &mut feature_level as *mut _,
+                    ptr::null_mut()
+                )
+            };
 
-        if !winerror::SUCCEEDED(hr) {
-            // TODO: device might not support any feature levels?
-            unimplemented!();
+            if !winerror::SUCCEEDED(hr) {
+                // TODO: device might not support any feature levels?
+                unimplemented!();
+            }
         }
     }
 
@@ -260,7 +259,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         -> Result<hal::Gpu<Backend>, error::DeviceCreationError>
     {
         let (device, cxt) = {
-            let feature_level = get_feature_level(self.adapter.as_raw() as *mut _);
+            let feature_level = get_feature_level(self.adapter.as_raw());
             let mut returned_level = d3dcommon::D3D_FEATURE_LEVEL_9_1;
 
             // TODO: request debug device only on debug config?
@@ -302,7 +301,11 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 .map(|&(family, prio)| {
                     assert_eq!(prio.len(), 1);
                     let mut group = RawQueueGroup::new(family.clone());
-                    let queue = CommandQueue;
+
+                    // TODO: multiple queues?
+                    let queue = CommandQueue {
+                        context: device.context.clone(),
+                    };
                     group.add_queue(queue);
                     (QueueFamilyId(0), group)
                 })
@@ -325,17 +328,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn memory_properties(&self) -> hal::MemoryProperties {
-        use hal::memory::Properties;
-
-        hal::MemoryProperties {
-            memory_types: vec![
-                hal::MemoryType {
-                    properties: Properties::DEVICE_LOCAL,
-                    heap_index: 0
-                }
-            ],
-            memory_heaps: vec![!0]
-        }
+        self.memory_properties.clone()
     }
 
     fn features(&self) -> Features {
@@ -373,14 +366,21 @@ impl hal::Device<Backend> for Device {
         mem_type: hal::MemoryTypeId,
         size: u64,
     ) -> Result<Memory, device::OutOfMemory> {
-        unimplemented!()
+        // TODO:
+        Ok(Memory {
+            properties: memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED,
+            buffer: RefCell::new(None),
+            size,
+        })
     }
 
     fn create_command_pool(
         &self, family: QueueFamilyId, _create_flags: pool::CommandPoolCreateFlags
     ) -> CommandPool {
         // TODO:
-        CommandPool
+        CommandPool {
+            device: self.device.clone()
+        }
     }
 
     fn destroy_command_pool(&self, _pool: CommandPool) {
@@ -454,20 +454,93 @@ impl hal::Device<Backend> for Device {
         mut size: u64,
         usage: buffer::Usage,
     ) -> Result<UnboundBuffer, buffer::CreationError> {
-        unimplemented!()
+        use buffer::Usage;
+
+        let mut bind = 0;
+
+        if usage.contains(Usage::UNIFORM) { bind |= d3d11::D3D11_BIND_CONSTANT_BUFFER; }
+        if usage.contains(Usage::VERTEX) { bind |= d3d11::D3D11_BIND_VERTEX_BUFFER; }
+        if usage.contains(Usage::INDEX) { bind |= d3d11::D3D11_BIND_INDEX_BUFFER; }
+
+        // TODO: >=11.1
+        if usage.contains(Usage::UNIFORM_TEXEL) ||
+           usage.contains(Usage::STORAGE_TEXEL) { bind |= d3d11::D3D11_BIND_SHADER_RESOURCE; }
+
+        // TODO: how to do buffer copies
+        // if usage.contains(Usage::TRANSFER_SRC) ||
+        //    usage.contains(Usage::TRANSFER_DST) { bind |= d3d11::D3D11_BIND_UNORDERED_ACCESS; }
+
+        Ok(UnboundBuffer {
+            usage,
+            bind,
+            size,
+            requirements: memory::Requirements {
+                size,
+                alignment: 1,
+                type_mask: 0x7,
+            }
+        })
     }
 
     fn get_buffer_requirements(&self, buffer: &UnboundBuffer) -> memory::Requirements {
-        unimplemented!()
+        buffer.requirements
     }
 
     fn bind_buffer_memory(
         &self,
         memory: &Memory,
         offset: u64,
-        buffer: UnboundBuffer,
+        unbound_buffer: UnboundBuffer,
     ) -> Result<Buffer, device::BindError> {
-        unimplemented!()
+        // TODO: offset
+        assert_eq!(0, offset);
+        // TODO: structured buffers
+        assert_eq!(0, unbound_buffer.bind & d3d11::D3D11_BIND_SHADER_RESOURCE);
+        // TODO: change memory to be capable of more than one buffer?
+        // assert_eq!(None, memory.buffer);
+
+        use memory::Properties;
+
+        let (usage, cpu) = if memory.properties == Properties::DEVICE_LOCAL {
+            (d3d11::D3D11_USAGE_DEFAULT, 0)
+        } else if memory.properties == (Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::CPU_CACHED) {
+            // TODO: need read access too
+            (d3d11::D3D11_USAGE_DYNAMIC, d3d11::D3D11_CPU_ACCESS_WRITE)
+        } else if memory.properties == (Properties::CPU_VISIBLE | Properties::CPU_CACHED) {
+            (d3d11::D3D11_USAGE_STAGING, d3d11::D3D11_CPU_ACCESS_READ | d3d11::D3D11_CPU_ACCESS_WRITE)
+        } else {
+            unimplemented!()
+        };
+
+        let desc = d3d11::D3D11_BUFFER_DESC {
+            ByteWidth: unbound_buffer.size as _,
+            Usage: usage,
+            BindFlags: unbound_buffer.bind,
+            CPUAccessFlags: cpu,
+            MiscFlags: 0,
+            StructureByteStride: 0,
+        };
+
+        let mut buffer = ptr::null_mut();
+        let hr = unsafe {
+            self.device.CreateBuffer(
+                &desc,
+                ptr::null_mut(),
+                &mut buffer as *mut *mut _ as *mut *mut _
+            )
+        };
+
+        if !winerror::SUCCEEDED(hr) {
+            // TODO: any better error?
+            Err(device::BindError::WrongMemory)
+        } else {
+            let buffer: ComPtr<d3d11::ID3D11Buffer> = unsafe { ComPtr::from_raw(buffer) };
+            memory.buffer.replace(Some(buffer.clone()));
+            Ok(Buffer {
+                buffer: buffer,
+                size: unbound_buffer.size
+            })
+        }
     }
 
     fn create_buffer_view<R: RangeArg<u64>>(
@@ -569,11 +642,35 @@ impl hal::Device<Backend> for Device {
     where
         R: RangeArg<u64>,
     {
-        unimplemented!()
+        let buffer = memory.buffer.borrow().clone().unwrap();
+        let mut mapped = unsafe { mem::zeroed::<d3d11::D3D11_MAPPED_SUBRESOURCE>() };
+        let hr = unsafe {
+            self.context.Map(
+                buffer.as_raw() as _,
+                0,
+                // TODO:
+                d3d11::D3D11_MAP_WRITE_DISCARD,
+                0,
+                &mut mapped
+            )
+        };
+
+        if winerror::SUCCEEDED(hr) {
+            Ok(mapped.pData as _)
+        } else {
+            // TODO: better error
+            Err(mapping::Error::InvalidAccess)
+        }
     }
 
     fn unmap_memory(&self, memory: &Memory) {
-        unimplemented!()
+        let buffer = memory.buffer.borrow().clone().unwrap();
+        unsafe {
+            self.context.Unmap(
+                buffer.as_raw() as _,
+                0,
+            );
+        }
     }
 
     fn flush_mapped_memory_ranges<'a, I, R>(&self, ranges: I)
@@ -582,7 +679,7 @@ impl hal::Device<Backend> for Device {
         I::Item: Borrow<(&'a Memory, R)>,
         R: RangeArg<u64>,
     {
-        unimplemented!()
+        // TODO: flush?
     }
 
     fn invalidate_mapped_memory_ranges<'a, I, R>(&self, ranges: I)
@@ -595,15 +692,17 @@ impl hal::Device<Backend> for Device {
     }
 
     fn create_semaphore(&self) -> Semaphore {
-        unimplemented!()
+        // TODO:
+        Semaphore
     }
 
     fn create_fence(&self, signalled: bool) -> Fence {
-        unimplemented!()
+        // TODO:
+        Fence
     }
 
     fn reset_fence(&self, fence: &Fence) {
-        unimplemented!()
+        // TODO:
     }
 
     fn wait_for_fences<I>(&self, fences: I, wait: device::WaitFor, timeout_ms: u32) -> bool
@@ -611,7 +710,8 @@ impl hal::Device<Backend> for Device {
         I: IntoIterator,
         I::Item: Borrow<Fence>,
     {
-        unimplemented!()
+        // TODO:
+        true
     }
 
     fn get_fence_status(&self, _fence: &Fence) -> bool {
@@ -714,7 +814,7 @@ impl hal::Device<Backend> for Device {
             (map_format(format).unwrap(), map_format(config.color_format).unwrap())
         };
 
-        let mut desc = dxgi::DXGI_SWAP_CHAIN_DESC {
+        let mut desc = DXGI_SWAP_CHAIN_DESC {
             BufferDesc: dxgitype::DXGI_MODE_DESC {
                 Width: surface.width,
                 Height: surface.height,
@@ -739,11 +839,11 @@ impl hal::Device<Backend> for Device {
             // TODO:
             Windowed: TRUE,
             // TODO:
-            SwapEffect: dxgi::DXGI_SWAP_EFFECT_DISCARD,
+            SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
             Flags: 0
         };
         let swapchain = {
-            let mut swapchain: *mut dxgi::IDXGISwapChain = ptr::null_mut();
+            let mut swapchain: *mut IDXGISwapChain = ptr::null_mut();
             let hr = unsafe {
                 surface.factory.CreateSwapChain(
                     self.device.as_raw() as *mut _,
@@ -807,7 +907,8 @@ impl hal::Device<Backend> for Device {
                 dxgi_format: format,
                 bytes_per_block,
                 block_dim,
-                num_levels: 1
+                num_levels: 1,
+                rtv: unsafe { ComPtr::from_raw(rtv) }
             }
         }).collect();
 
@@ -825,7 +926,7 @@ impl hal::Device<Backend> for Device {
 }
 
 pub struct Surface {
-    pub(crate) factory: ComPtr<dxgi::IDXGIFactory1>,
+    pub(crate) factory: ComPtr<IDXGIFactory>,
     wnd_handle: HWND,
     width: u32,
     height: u32
@@ -879,7 +980,7 @@ impl hal::Surface<Backend> for Surface {
 }
 
 pub struct Swapchain {
-    dxgi_swapchain: ComPtr<dxgi::IDXGISwapChain>,
+    dxgi_swapchain: ComPtr<IDXGISwapChain>,
 }
 
 unsafe impl Send for Swapchain { }
@@ -887,7 +988,11 @@ unsafe impl Sync for Swapchain { }
 
 impl hal::Swapchain<Backend> for Swapchain {
     fn acquire_frame(&mut self, _sync: hal::FrameSync<Backend>) -> hal::Frame {
-        unimplemented!()
+        // TODO: non-`_DISCARD` swap effects have more than one buffer, `FLIP`
+        //       effects are dxgi 1.3 (w10+?) in which case there is
+        //       `GetCurrentBackBufferIndex()` on the swapchain
+
+        hal::Frame::new(0)
     }
 }
 
@@ -901,9 +1006,15 @@ impl hal::QueueFamily for QueueFamily {
     fn id(&self) -> QueueFamilyId { QueueFamilyId(0) }
 }
 
-// TODO:
-#[derive(Debug)]
-pub struct CommandQueue;
+#[derive(Derivative, Clone)]
+#[derivative(Debug)]
+pub struct CommandQueue {
+    #[derivative(Debug="ignore")]
+    context: ComPtr<d3d11::ID3D11DeviceContext>
+}
+
+unsafe impl Send for CommandQueue { }
+unsafe impl Sync for CommandQueue { }
 
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     unsafe fn submit_raw<IC>(&mut self, submission: hal::queue::RawSubmission<Backend, IC>, fence: Option<&Fence>)
@@ -911,7 +1022,10 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         IC: IntoIterator,
         IC::Item: Borrow<CommandBuffer>,
     {
-        unimplemented!()
+        for cmd_buf in submission.cmd_buffers.into_iter() {
+            let cmd_buf = cmd_buf.borrow();
+            self.context.ExecuteCommandList(cmd_buf.as_raw_list().as_raw(), FALSE);
+        }
     }
 
     fn present<IS, IW>(&mut self, swapchains: IS, _wait_semaphores: IW)
@@ -932,17 +1046,49 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
 
 }
 
-#[derive(Debug, Clone)]
-pub struct CommandBuffer;
+#[derive(Derivative, Clone)]
+#[derivative(Debug)]
+pub struct CommandBuffer {
+    #[derivative(Debug="ignore")]
+    context: ComPtr<d3d11::ID3D11DeviceContext>,
+    #[derivative(Debug="ignore")]
+    list: Option<ComPtr<d3d11::ID3D11CommandList>>
+}
+
+unsafe impl Send for CommandBuffer {}
+unsafe impl Sync for CommandBuffer {} 
+
+impl CommandBuffer {
+    fn create_deferred(device: ComPtr<d3d11::ID3D11Device>) -> Self {
+        let mut context: *mut d3d11::ID3D11DeviceContext = ptr::null_mut();
+        let hr = unsafe {
+            device.CreateDeferredContext(0, &mut context as *mut *mut _ as *mut *mut _)
+        };
+
+        CommandBuffer {
+            context: unsafe { ComPtr::from_raw(context) },
+            list: None
+        }
+    }
+
+    fn as_raw_list(&self) -> ComPtr<d3d11::ID3D11CommandList> {
+        self.list.clone().unwrap().clone()
+    }
+}
+
 impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn begin(&mut self, _flags: command::CommandBufferFlags, _info: command::CommandBufferInheritanceInfo<Backend>) {
 
-        unimplemented!()
+        // TODO:
     }
 
     fn finish(&mut self) {
-        unimplemented!()
+        // TODO:
+
+        let mut list = ptr::null_mut();
+        let hr = unsafe { self.context.FinishCommandList(FALSE, &mut list as *mut *mut _ as *mut *mut _) };
+        self.list = Some(unsafe { ComPtr::from_raw(list) });
     }
 
     fn reset(&mut self, _release_resources: bool) {
@@ -978,7 +1124,16 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<image::SubresourceRange>,
     {
-        unimplemented!()
+        // TODO: use a internal program to clear for subregions in the image
+        for subresource_range in subresource_ranges {
+            let _sub = subresource_range.borrow();
+            unsafe {
+                self.context.ClearRenderTargetView(
+                    image.rtv.as_raw(),
+                    &color.float32
+                );
+            }
+        }
     }
 
     fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
@@ -1020,7 +1175,12 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<pso::Viewport>,
     {
-        unimplemented!()
+        let viewports = viewports.into_iter().map(|v| {
+            let v = v.borrow();
+            conv::map_viewport(v)
+        }).collect::<Vec<_>>();
+
+        unsafe { self.context.RSSetViewports(viewports.len() as _, viewports.as_ptr()); }
     }
 
     fn set_scissors<T>(&mut self, first_scissor: u32, scissors: T)
@@ -1028,7 +1188,12 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<pso::Rect>,
     {
-        unimplemented!()
+        let scissors = scissors.into_iter().map(|s| {
+            let s = s.borrow();
+            conv::map_rect(s)
+        }).collect::<Vec<_>>();
+
+        unsafe { self.context.RSSetScissorRects(scissors.len() as _, scissors.as_ptr()); }
     }
 
     fn set_blend_constants(&mut self, color: pso::ColorValue) {
@@ -1176,17 +1341,36 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 }
 
-#[derive(Debug)]
-pub struct Memory;
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub struct Memory {
+    properties: memory::Properties,
+    #[derivative(Debug="ignore")]
+    // TODO: :-(
+    buffer: RefCell<Option<ComPtr<d3d11::ID3D11Buffer>>>,
+    size: u64,
+}
 
-pub struct CommandPool;
+unsafe impl Send for Memory {}
+unsafe impl Sync for Memory {} 
+
+pub struct CommandPool {
+    device: ComPtr<d3d11::ID3D11Device>
+}
+
+unsafe impl Send for CommandPool {}
+unsafe impl Sync for CommandPool {} 
+
 impl hal::pool::RawCommandPool<Backend> for CommandPool {
     fn reset(&mut self) {
-        unimplemented!()
+
+        //unimplemented!()
     }
 
     fn allocate(&mut self, num: usize, level: command::RawLevel) -> Vec<CommandBuffer> {
-        vec![CommandBuffer]
+        (0..num)
+            .map(|_| CommandBuffer::create_deferred(self.device.clone()))
+            .collect()
     }
 
     unsafe fn free(&mut self, _cbufs: Vec<CommandBuffer>) {
@@ -1202,9 +1386,24 @@ pub struct RenderPass;
 pub struct Framebuffer;
 
 #[derive(Debug)]
-pub struct UnboundBuffer;
-#[derive(Debug)]
-pub struct Buffer;
+pub struct UnboundBuffer {
+    usage: buffer::Usage,
+    bind: d3d11::D3D11_BIND_FLAG,
+    size: u64,
+    requirements: memory::Requirements,
+}
+
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub struct Buffer {
+    #[derivative(Debug="ignore")]
+    buffer: ComPtr<d3d11::ID3D11Buffer>,
+    size: u64,
+}
+
+unsafe impl Send for Buffer {}
+unsafe impl Sync for Buffer {} 
+
 #[derive(Debug)]
 pub struct BufferView;
 #[derive(Debug)]
@@ -1222,6 +1421,8 @@ pub struct Image {
     bytes_per_block: u8,
     block_dim: (u8, u8),
     num_levels: image::Level,
+    #[derivative(Debug="ignore")]
+    rtv: ComPtr<d3d11::ID3D11RenderTargetView>
 }
 
 unsafe impl Send for Image { }
