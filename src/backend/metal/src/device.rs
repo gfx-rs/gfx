@@ -3,7 +3,7 @@ use {conversions as conv, command, native as n};
 use internal::Channel;
 
 use std::borrow::Borrow;
-use std::collections::HashMap;
+use std::collections::hash_map::{Entry, HashMap};
 use std::ops::Range;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -13,7 +13,6 @@ use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query}
 use hal::device::{BindError, OutOfMemory, FramebufferError, ShaderError};
 use hal::memory::Properties;
 use hal::pool::CommandPoolCreateFlags;
-use hal::pso::{DescriptorType, DescriptorSetLayoutBinding, AttributeDesc, DepthTest, StencilTest};
 use hal::queue::{QueueFamily as HalQueueFamily, QueueFamilyId, Queues};
 use hal::range::RangeArg;
 
@@ -525,28 +524,28 @@ impl Device {
     }
 
     fn describe_argument(
-        ty: DescriptorType, index: pso::DescriptorBinding, count: usize
+        ty: pso::DescriptorType, index: pso::DescriptorBinding, count: usize
     ) -> metal::ArgumentDescriptor {
         let arg = metal::ArgumentDescriptor::new().to_owned();
         arg.set_array_length(count as _);
 
         match ty {
-            DescriptorType::Sampler => {
+            pso::DescriptorType::Sampler => {
                 arg.set_access(MTLArgumentAccess::ReadOnly);
                 arg.set_data_type(MTLDataType::Sampler);
                 arg.set_index(index as _);
             }
-            DescriptorType::SampledImage => {
+            pso::DescriptorType::SampledImage => {
                 arg.set_access(MTLArgumentAccess::ReadOnly);
                 arg.set_data_type(MTLDataType::Texture);
                 arg.set_index(index as _);
             }
-            DescriptorType::UniformBuffer => {
+            pso::DescriptorType::UniformBuffer => {
                 arg.set_access(MTLArgumentAccess::ReadOnly);
                 arg.set_data_type(MTLDataType::Struct);
                 arg.set_index(index as _);
             }
-            DescriptorType::StorageBuffer => {
+            pso::DescriptorType::StorageBuffer => {
                 arg.set_access(MTLArgumentAccess::ReadWrite);
                 arg.set_data_type(MTLDataType::Struct);
                 arg.set_index(index as _);
@@ -673,31 +672,31 @@ impl hal::Device<Backend> for Device {
                                 force_used: false,
                             };
                             match set_binding.ty {
-                                DescriptorType::UniformBuffer |
-                                DescriptorType::StorageBuffer => {
+                                pso::DescriptorType::UniformBuffer |
+                                pso::DescriptorType::StorageBuffer => {
                                     res.buffer_id = counters.buffers as _;
                                     counters.buffers += 1;
                                 }
-                                DescriptorType::SampledImage |
-                                DescriptorType::StorageImage |
-                                DescriptorType::UniformTexelBuffer |
-                                DescriptorType::StorageTexelBuffer |
-                                DescriptorType::InputAttachment => {
+                                pso::DescriptorType::SampledImage |
+                                pso::DescriptorType::StorageImage |
+                                pso::DescriptorType::UniformTexelBuffer |
+                                pso::DescriptorType::StorageTexelBuffer |
+                                pso::DescriptorType::InputAttachment => {
                                     res.texture_id = counters.textures as _;
                                     counters.textures += 1;
                                 }
-                                DescriptorType::Sampler => {
+                                pso::DescriptorType::Sampler => {
                                     res.sampler_id = counters.samplers as _;
                                     counters.samplers += 1;
                                 }
-                                DescriptorType::CombinedImageSampler => {
+                                pso::DescriptorType::CombinedImageSampler => {
                                     res.texture_id = counters.textures as _;
                                     res.sampler_id = counters.samplers as _;
                                     counters.textures += 1;
                                     counters.samplers += 1;
                                 }
-                                DescriptorType::UniformBufferDynamic |
-                                DescriptorType::UniformImageDynamic => unimplemented!(),
+                                pso::DescriptorType::UniformBufferDynamic |
+                                pso::DescriptorType::UniformImageDynamic => unimplemented!(),
                             };
                             assert_eq!(set_binding.count, 1); //TODO
                             let location = msl::ResourceBindingLocation {
@@ -887,61 +886,95 @@ impl hal::Device<Backend> for Device {
             let desc = metal::DepthStencilDescriptor::new();
 
             match depth_stencil.depth {
-                DepthTest::On { fun, write } => {
+                pso::DepthTest::On { fun, write } => {
                     desc.set_depth_compare_function(conv::map_compare_function(fun));
                     desc.set_depth_write_enabled(write);
                 }
-                DepthTest::Off => {}
+                pso::DepthTest::Off => {}
             }
 
             match depth_stencil.stencil {
-                StencilTest::On { .. } => {
+                pso::StencilTest::On { .. } => {
                     unimplemented!()
                 }
-                StencilTest::Off => {}
+                pso::StencilTest::Off => {}
             }
 
             device.new_depth_stencil_state(&desc)
         });
 
         // Vertex buffers
-        const STRIDE_GRANULARITY: u32 = 4; //TODO: work around?
         let vertex_descriptor = metal::VertexDescriptor::new();
-        for vertex_buffer in &pipeline_desc.vertex_buffers {
-            let mtl_buffer_index = pipeline_layout.attribute_buffer_index as usize + vertex_buffer.binding as usize;
-            let mtl_buffer_desc = vertex_descriptor
-                .layouts()
-                .object_at(mtl_buffer_index)
-                .expect("too many vertex descriptor layouts");
-            if vertex_buffer.stride % STRIDE_GRANULARITY != 0 {
-                error!("Stride ({}) must be a multiple of {}", vertex_buffer.stride, STRIDE_GRANULARITY);
-                return Err(pso::CreationError::Other);
-            }
-            mtl_buffer_desc.set_stride(vertex_buffer.stride as u64);
-            match vertex_buffer.rate {
-                0 => {
-                    mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerVertex);
+        let mut vertex_buffer_map = n::VertexBufferMap::new();
+        let mut next_buffer_index = pipeline_layout.attribute_buffer_index;
+        debug!("Vertex attribute remapping started");
+
+        for (i, &pso::AttributeDesc { binding, element, ..}) in pipeline_desc.attributes.iter().enumerate() {
+            let original = pipeline_desc.vertex_buffers
+                .iter()
+                .find(|vb| vb.binding == binding)
+                .expect("no associated vertex buffer found");
+            // handle wrapping offsets
+            let (cut_offset, base_offset) = if element.offset < original.stride {
+                (element.offset, 0)
+            } else {
+                let elem_size = element.format.surface_desc().bits as pso::ElemOffset / 8;
+                let remainder = element.offset % original.stride;
+                if remainder + elem_size <= original.stride {
+                    (remainder, element.offset - remainder)
+                } else {
+                    (0, element.offset)
                 }
-                c => {
-                    mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerInstance);
-                    mtl_buffer_desc.set_step_rate(c as u64);
+            };
+            let mtl_buffer_index = match vertex_buffer_map.entry((binding, base_offset)) {
+                Entry::Vacant(_) if next_buffer_index == self.shared.push_constants_buffer_id => {
+                    error!("Attribute offset {} exceeds the stride {}, and there is no room for replacement.",
+                        element.offset, original.stride);
+                    return Err(pso::CreationError::Other);
                 }
-            }
-        }
-        for (i, &AttributeDesc { binding, element, ..}) in pipeline_desc.attributes.iter().enumerate() {
-            let mtl_vertex_format = conv::map_vertex_format(element.format)
-                .expect("unsupported vertex format");
+                Entry::Vacant(e) => {
+                    e.insert(pso::VertexBufferDesc {
+                        binding: next_buffer_index,
+                        stride: original.stride,
+                        rate: original.rate,
+                    });
+                    next_buffer_index += 1;
+                    next_buffer_index - 1
+                },
+                Entry::Occupied(e) => e.get().binding,
+            };
+            debug!("\tAttribute[{}] is mapped to vertex buffer[{}] with binding {} and offsets {} + {}",
+                i, binding, mtl_buffer_index, base_offset, cut_offset);
+            // pass the refined data to Metal
             let mtl_attribute_desc = vertex_descriptor
                 .attributes()
                 .object_at(i)
                 .expect("too many vertex attributes");
-            let mtl_buffer_index = pipeline_layout.attribute_buffer_index + binding;
-
-            mtl_attribute_desc.set_buffer_index(mtl_buffer_index as _);
-            mtl_attribute_desc.set_offset(element.offset as NSUInteger);
+            let mtl_vertex_format = conv::map_vertex_format(element.format)
+                .expect("unsupported vertex format");
             mtl_attribute_desc.set_format(mtl_vertex_format);
+            mtl_attribute_desc.set_buffer_index(mtl_buffer_index as _);
+            mtl_attribute_desc.set_offset(cut_offset as _);
         }
 
+        const STRIDE_GRANULARITY: pso::ElemStride = 4; //TODO: work around?
+        for vb in vertex_buffer_map.values() {
+            let mtl_buffer_desc = vertex_descriptor
+                .layouts()
+                .object_at(vb.binding as usize)
+                .expect("too many vertex descriptor layouts");
+            if vb.stride % STRIDE_GRANULARITY != 0 {
+                error!("Stride ({}) must be a multiple of {}", vb.stride, STRIDE_GRANULARITY);
+                return Err(pso::CreationError::Other);
+            }
+            mtl_buffer_desc.set_stride(vb.stride as u64);
+            if vb.rate == 0 {
+                mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerVertex);
+            } else {
+                mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerInstance);
+                mtl_buffer_desc.set_step_rate(vb.rate as u64);
+            }
+        }
         pipeline.set_vertex_descriptor(Some(&vertex_descriptor));
 
         if let pso::PolygonMode::Line(width) = pipeline_desc.rasterizer.polygon_mode {
@@ -968,6 +1001,7 @@ impl hal::Device<Backend> for Device {
                     rasterizer_state,
                     depth_stencil_state,
                     baked_states: pipeline_desc.baked_states.clone(),
+                    vertex_buffer_map,
                 })
             .map_err(|err| {
                 error!("PSO creation failed: {}", err);
@@ -1218,9 +1252,9 @@ impl hal::Device<Backend> for Device {
         let arguments = descriptor_ranges.into_iter().map(|desc| {
             let desc = desc.borrow();
             let offset_ref = match desc.ty {
-                DescriptorType::Sampler => &mut num_samplers,
-                DescriptorType::SampledImage => &mut num_textures,
-                DescriptorType::UniformBuffer | DescriptorType::StorageBuffer => &mut num_uniforms,
+                pso::DescriptorType::Sampler => &mut num_samplers,
+                pso::DescriptorType::SampledImage => &mut num_textures,
+                pso::DescriptorType::UniformBuffer | pso::DescriptorType::StorageBuffer => &mut num_uniforms,
                 _ => unimplemented!()
             };
             let index = *offset_ref;
@@ -1245,7 +1279,7 @@ impl hal::Device<Backend> for Device {
     fn create_descriptor_set_layout<I>(&self, bindings: I) -> n::DescriptorSetLayout
     where
         I: IntoIterator,
-        I::Item: Borrow<DescriptorSetLayoutBinding>,
+        I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
     {
         if !self.private_caps.argument_buffers {
             return n::DescriptorSetLayout::Emulated(
