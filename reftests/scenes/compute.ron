@@ -11,6 +11,7 @@
 					ty: StorageBuffer,
 					count: 1,
 					stage_flags: (bits: 0x20), //COMPUTE
+					immutable_samplers: false,
 				),
 			],
 		),

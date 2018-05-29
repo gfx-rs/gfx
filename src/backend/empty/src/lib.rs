@@ -224,10 +224,12 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_descriptor_set_layout<I>(&self, _: I) -> ()
+    fn create_descriptor_set_layout<I, J>(&self, _: I, _: J) -> ()
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
+        J: IntoIterator,
+        J::Item: Borrow<()>
     {
         unimplemented!()
     }

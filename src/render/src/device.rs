@@ -299,7 +299,7 @@ impl<B: Backend> Device<B> {
         &mut self,
         bindings: &[hal::pso::DescriptorSetLayoutBinding],
     ) -> handle::raw::DescriptorSetLayout<B> {
-        let layout = self.raw.create_descriptor_set_layout(bindings);
+        let layout = self.raw.create_descriptor_set_layout(bindings, &[]);
         DescriptorSetLayout::new(layout, (), self.garbage.clone()).into()
     }
 

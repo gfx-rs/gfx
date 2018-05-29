@@ -141,20 +141,24 @@ fn main() {
     let (mut swap_chain, backbuffer) = device.create_swapchain(&mut surface, swap_config);
 
     // Setup renderpass and pipeline
-    let set_layout = device.create_descriptor_set_layout(&[
+    let set_layout = device.create_descriptor_set_layout(
+        &[
             pso::DescriptorSetLayoutBinding {
                 binding: 0,
                 ty: pso::DescriptorType::SampledImage,
                 count: 1,
                 stage_flags: ShaderStageFlags::FRAGMENT,
+                immutable_samplers: false,
             },
             pso::DescriptorSetLayoutBinding {
                 binding: 1,
                 ty: pso::DescriptorType::Sampler,
                 count: 1,
                 stage_flags: ShaderStageFlags::FRAGMENT,
+                immutable_samplers: false,
             },
         ],
+        &[],
     );
 
     let pipeline_layout = device.create_pipeline_layout(

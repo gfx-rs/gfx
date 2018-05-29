@@ -48,6 +48,7 @@ macro_rules! gfx_descriptors {
                             count: <$bind as pso::BindDesc>::COUNT as _,
                             // TODO: specify stage
                             stage_flags: hal::pso::ShaderStageFlags::all(),
+                            immutable_samplers: false,
                         });
                     })*
                     bindings

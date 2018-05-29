@@ -1094,13 +1094,21 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_descriptor_set_layout<T>(
-        &self, binding_iter: T
-    )-> n::DescriptorSetLayout
+    fn create_descriptor_set_layout<I, J>(
+        &self, binding_iter: I, immutable_sampler_iter: J
+    ) -> n::DescriptorSetLayout
     where
-        T: IntoIterator,
-        T::Item: Borrow<pso::DescriptorSetLayoutBinding>,
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
+        J: IntoIterator,
+        J::Item: Borrow<n::Sampler>,
     {
+        let immutable_samplers = immutable_sampler_iter
+            .into_iter()
+            .map(|is| is.borrow().0)
+            .collect::<Vec<_>>();
+        let mut sampler_offset = 0;
+
         let bindings = Arc::new(binding_iter
             .into_iter()
             .map(|b| b.borrow().clone())
@@ -1113,7 +1121,13 @@ impl d::Device<B> for Device {
                 descriptor_type: conv::map_descriptor_type(b.ty),
                 descriptor_count: b.count as _,
                 stage_flags: conv::map_stage_flags(b.stage_flags),
-                p_immutable_samplers: ptr::null(), // TODO
+                p_immutable_samplers: if b.immutable_samplers {
+                    let slice = &immutable_samplers[sampler_offset..];
+                    sampler_offset += b.count;
+                    slice.as_ptr()
+                } else {
+                    ptr::null()
+                },
             }
         }).collect::<Vec<_>>();
 

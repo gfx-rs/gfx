@@ -77,6 +77,8 @@ pub enum Resource {
     Shader(String),
     DescriptorSetLayout {
         bindings: Vec<hal::pso::DescriptorSetLayoutBinding>,
+        #[serde(default)]
+        immutable_samplers: Vec<String>,
     },
     DescriptorPool {
         capacity: usize,
