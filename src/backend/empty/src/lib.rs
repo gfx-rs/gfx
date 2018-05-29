@@ -528,7 +528,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
     fn set_line_width(&mut self, _: f32) {
-        unimplemented!();
+        unimplemented!()
+    }
+
+    fn set_depth_bias(&mut self, _: pso::DepthBias) {
+        unimplemented!()
     }
 
     fn begin_render_pass<T>(

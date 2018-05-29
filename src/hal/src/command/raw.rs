@@ -264,6 +264,9 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     /// Set the line width dynamically.
     fn set_line_width(&mut self, width: f32);
 
+    /// Set the depth bias dynamically.
+    fn set_depth_bias(&mut self, depth_bias: pso::DepthBias);
+
     /// Begins recording commands for a render pass on the given framebuffer.
     /// `render_area` is the section of the framebuffer to render,
     /// `clear_values` is an iterator of `ClearValueRaw`'s to use to use for

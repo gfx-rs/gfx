@@ -130,7 +130,11 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
         self.0.set_line_width(width);
     }
 
-    // TODO: set_depth_bias
+    ///
+    pub fn set_depth_bias(&mut self, depth_bias: pso::DepthBias) {
+        self.0.set_depth_bias(depth_bias);
+    }
+
     // TODO: set_stencil_compare_mask
     // TODO: set_stencil_write_mask
     // TODO: pipeline barrier (postponed)

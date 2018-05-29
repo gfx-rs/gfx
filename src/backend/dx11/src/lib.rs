@@ -1047,6 +1047,10 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         validate_line_width(width);
     }
 
+    fn set_depth_bias(&mut self, _depth_bias: pso::DepthBias) {
+        unimplemented!()
+    }
+
     fn bind_graphics_pipeline(&mut self, pipeline: &GraphicsPipeline) {
         unimplemented!()
     }

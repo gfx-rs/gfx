@@ -204,7 +204,7 @@ pub enum FrontFace {
 ///
 /// For details of the algorithm and equations, see
 /// [the Vulkan spec](https://www.khronos.org/registry/vulkan/specs/1.0/html/vkspec.html#primsrast-depthbias).
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DepthBias {
     /// A constant depth value added to each fragment.

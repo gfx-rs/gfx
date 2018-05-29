@@ -422,7 +422,7 @@ impl d::Device<B> for Device {
                     vk::VK_FALSE
                 },
                 rasterizer_discard_enable: if desc.shaders.fragment.is_none() { vk::VK_TRUE } else { vk::VK_FALSE },
-                polygon_mode: polygon_mode,
+                polygon_mode,
                 cull_mode: desc.rasterizer.cull_face.map(conv::map_cull_face).unwrap_or(vk::CULL_MODE_NONE),
                 front_face: conv::map_front_face(desc.rasterizer.front_face),
                 depth_bias_enable: if desc.rasterizer.depth_bias.is_some() { vk::VK_TRUE } else { vk::VK_FALSE },
