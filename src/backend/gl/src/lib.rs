@@ -663,7 +663,15 @@ impl Device {
             Command::Draw(primitive, start, count, instances) => {
                 let gl = &self.share.context;
                 match instances {
-                    Some((num, base)) if self.share.capabilities.instance_call_supported => unsafe {
+                    Some((num, 0)) if self.share.capabilities.instance_call_supported => unsafe {
+                        gl.DrawArraysInstanced(
+                            primitive,
+                            start as gl::types::GLsizei,
+                            count as gl::types::GLsizei,
+                            num as gl::types::GLsizei,
+                        );
+                    },
+                    Some((num, base)) if self.share.capabilities.instance_base_supported => unsafe {
                         gl.DrawArraysInstancedBaseInstance(
                             primitive,
                             start as gl::types::GLsizei,
