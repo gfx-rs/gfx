@@ -2335,16 +2335,17 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_descriptor_set_layout<I>(
-        &self,
-        bindings: I,
-    )-> n::DescriptorSetLayout
+    fn create_descriptor_set_layout<I, J>(
+        &self, bindings: I, _immutable_samplers: J
+    ) -> n::DescriptorSetLayout
     where
         I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetLayoutBinding>
+        I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
+        J: IntoIterator,
+        J::Item: Borrow<n::Sampler>,
     {
         n::DescriptorSetLayout {
-            bindings: bindings.into_iter().map(|bind| bind.borrow().clone()).collect()
+            bindings: bindings.into_iter().map(|b| b.borrow().clone()).collect()
         }
     }
 

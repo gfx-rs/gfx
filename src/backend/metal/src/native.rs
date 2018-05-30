@@ -183,18 +183,37 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
     fn allocate_set(&mut self, layout: &DescriptorSetLayout) -> Result<DescriptorSet, pso::AllocationError> {
         match *self {
             DescriptorPool::Emulated => {
-                let layout_bindings = match layout {
-                    &DescriptorSetLayout::Emulated(ref bindings) => bindings,
+                let (layout_bindings, immutable_samplers) = match layout {
+                    &DescriptorSetLayout::Emulated(ref bindings, ref samplers) => (bindings, samplers),
                     _ => return Err(pso::AllocationError::IncompatibleLayout),
                 };
+                let mut sampler_offset = 0;
 
                 let bindings = layout_bindings.iter().map(|layout| {
                     let binding = match layout.ty {
                         pso::DescriptorType::Sampler => {
-                            DescriptorSetBinding::Sampler(vec![None; layout.count])
+                            DescriptorSetBinding::Sampler(if layout.immutable_samplers {
+                                let slice = &immutable_samplers[sampler_offset.. sampler_offset + layout.count];
+                                sampler_offset += layout.count;
+                                slice
+                                    .iter()
+                                    .map(|s| Some(s.clone()))
+                                    .collect()
+                            } else {
+                                vec![None; layout.count]
+                            })
                         }
                         pso::DescriptorType::CombinedImageSampler => {
-                            DescriptorSetBinding::Combined(vec![None; layout.count])
+                            DescriptorSetBinding::Combined(if layout.immutable_samplers {
+                                let slice = &immutable_samplers[sampler_offset.. sampler_offset + layout.count];
+                                sampler_offset += layout.count;
+                                slice
+                                    .iter()
+                                    .map(|s| (None, Some(s.clone())))
+                                    .collect()
+                            } else {
+                                vec![(None, None); layout.count]
+                            })
                         }
                         pso::DescriptorType::SampledImage |
                         pso::DescriptorType::StorageImage |
@@ -248,7 +267,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
 
 #[derive(Debug)]
 pub enum DescriptorSetLayout {
-    Emulated(Vec<pso::DescriptorSetLayoutBinding>),
+    Emulated(Vec<pso::DescriptorSetLayoutBinding>, Vec<metal::SamplerState>),
     ArgumentBuffer(metal::ArgumentEncoder, pso::ShaderStageFlags),
 }
 unsafe impl Send for DescriptorSetLayout {}
@@ -278,7 +297,7 @@ unsafe impl Send for DescriptorSetInner {}
 pub enum DescriptorSetBinding {
     Sampler(Vec<Option<metal::SamplerState>>),
     Image(Vec<Option<(metal::Texture, image::Layout)>>),
-    Combined(Vec<Option<(metal::Texture, image::Layout, metal::SamplerState)>>),
+    Combined(Vec<(Option<(metal::Texture, image::Layout)>, Option<metal::SamplerState>)>),
     Buffer(Vec<Option<(metal::Buffer, u64)>>),
     //InputAttachment(Vec<(metal::Texture, image::Layout)>),
 }

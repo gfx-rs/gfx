@@ -49,14 +49,17 @@ fn main() {
     let shader = device.create_shader_module(include_bytes!("shader/collatz.spv")).unwrap();
 
     let (pipeline_layout, pipeline, set_layout, mut desc_pool) = {
-        let set_layout = device.create_descriptor_set_layout(&[
+        let set_layout = device.create_descriptor_set_layout(
+            &[
                 pso::DescriptorSetLayoutBinding {
                     binding: 0,
                     ty: pso::DescriptorType::StorageBuffer,
                     count: 1,
                     stage_flags: pso::ShaderStageFlags::COMPUTE,
+                    immutable_samplers: false,
                 }
             ],
+            &[],
         );
 
         let pipeline_layout = device.create_pipeline_layout(Some(&set_layout), &[]);

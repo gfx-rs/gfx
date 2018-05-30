@@ -368,10 +368,14 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     fn destroy_descriptor_pool(&self, pool: B::DescriptorPool);
 
     /// Create a descriptor set layout.
-    fn create_descriptor_set_layout<I>(&self, bindings: I) -> B::DescriptorSetLayout
+    fn create_descriptor_set_layout<I, J>(
+        &self, bindings: I, immutable_samplers: J
+    ) -> B::DescriptorSetLayout
     where
         I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetLayoutBinding>;
+        I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
+        J: IntoIterator,
+        J::Item: Borrow<B::Sampler>;
 
     ///
     fn destroy_descriptor_set_layout(&self, layout: B::DescriptorSetLayout);

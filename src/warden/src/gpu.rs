@@ -538,8 +538,10 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             .unwrap();
                         resources.shaders.insert(name.clone(), module);
                     }
-                    raw::Resource::DescriptorSetLayout { ref bindings } => {
-                        let layout = device.create_descriptor_set_layout(bindings);
+                    raw::Resource::DescriptorSetLayout { ref bindings, ref immutable_samplers } => {
+                        assert!(immutable_samplers.is_empty()); //TODO! requires changing the order,
+                        // since samples are expect to be all read by this point
+                        let layout = device.create_descriptor_set_layout(bindings, &[]);
                         let binding_indices = bindings.iter().map(|dsb| dsb.binding).collect();
                         resources.desc_set_layouts.insert(name.clone(), (binding_indices, layout));
                     }

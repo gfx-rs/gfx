@@ -973,10 +973,12 @@ impl d::Device<B> for Device {
         n::DescriptorPool { }
     }
 
-    fn create_descriptor_set_layout<I>(&self, _: I) -> n::DescriptorSetLayout
+    fn create_descriptor_set_layout<I, J>(&self, _: I, _: J) -> n::DescriptorSetLayout
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
+        J: IntoIterator,
+        J::Item: Borrow<n::FatSampler>,
     {
         n::DescriptorSetLayout
     }

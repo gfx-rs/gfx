@@ -1939,27 +1939,20 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                     }));
                                 }
                                 Combined(ref combos) => {
-                                    for (i, combo) in combos.iter().cloned().enumerate() {
+                                    for (i, (ref tex, ref sampler)) in combos.iter().cloned().enumerate() {
                                         let id_tx = res.texture_id as usize + i;
                                         let id_sm = res.sampler_id as usize + i;
-                                        let (texture, sampler) = match combo {
-                                            Some((ref t, _, ref s)) => (Some(t.clone()), Some(s.clone())),
-                                            None => (None, None)
-                                        };
-                                        resources.add_textures(
-                                            id_tx,
-                                            &[combo.as_ref().map(|&(ref texture, layout, _)| (texture.clone(), layout))],
-                                        );
+                                        resources.add_textures(id_tx, &[tex.clone()]);
                                         resources.add_samplers(id_sm, &[sampler.clone()]);
                                         commands.push(soft::RenderCommand::BindTexture {
                                             stage: pso::Stage::Vertex,
                                             index: id_tx,
-                                            texture,
+                                            texture: tex.as_ref().map(|(t, _)| t.clone()),
                                         });
                                         commands.push(soft::RenderCommand::BindSampler {
                                             stage: pso::Stage::Vertex,
                                             index: id_sm,
-                                            sampler,
+                                            sampler: sampler.clone(),
                                         });
                                     }
                                 }
@@ -2013,27 +2006,20 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                     }));
                                 }
                                 Combined(ref combos) => {
-                                    for (i, combo) in combos.iter().cloned().enumerate() {
+                                    for (i, (ref tex, ref sampler)) in combos.iter().cloned().enumerate() {
                                         let id_tx = res.texture_id as usize + i;
                                         let id_sm = res.sampler_id as usize + i;
-                                        let (texture, sampler) = match combo {
-                                            Some((ref t, _, ref s)) => (Some(t.clone()), Some(s.clone())),
-                                            None => (None, None)
-                                        };
-                                        resources.add_textures(
-                                            id_tx,
-                                            &[combo.as_ref().map(|&(ref texture, layout, _)| (texture.clone(), layout))],
-                                        );
+                                        resources.add_textures(id_tx, &[tex.clone()]);
                                         resources.add_samplers(id_sm, &[sampler.clone()]);
                                         commands.push(soft::RenderCommand::BindTexture {
                                             stage: pso::Stage::Fragment,
                                             index: id_tx,
-                                            texture,
+                                            texture: tex.as_ref().map(|(t, _)| t.clone()),
                                         });
                                         commands.push(soft::RenderCommand::BindSampler {
                                             stage: pso::Stage::Fragment,
                                             index: id_sm,
-                                            sampler,
+                                            sampler: sampler.clone(),
                                         });
                                     }
                                 }
@@ -2155,25 +2141,18 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                     }));
                                 }
                                 Combined(ref combos) => {
-                                    for (i, combo) in combos.iter().cloned().enumerate() {
+                                    for (i, (ref tex, ref sampler)) in combos.iter().cloned().enumerate() {
                                         let id_tx = res.texture_id as usize + i;
                                         let id_sm = res.sampler_id as usize + i;
-                                        let (texture, sampler) = match combo {
-                                            Some((ref t, _, ref s)) => (Some(t.clone()), Some(s.clone())),
-                                            None => (None, None)
-                                        };
-                                        resources.add_textures(
-                                            id_tx,
-                                            &[combo.as_ref().map(|&(ref texture, layout, _)| (texture.clone(), layout))],
-                                        );
+                                        resources.add_textures(id_tx, &[tex.clone()]);
                                         resources.add_samplers(id_sm, &[sampler.clone()]);
                                         commands.push(soft::ComputeCommand::BindTexture {
                                             index: id_tx,
-                                            texture,
+                                            texture: tex.as_ref().map(|(t, _)| t.clone()),
                                         });
                                         commands.push(soft::ComputeCommand::BindSampler {
                                             index: id_sm,
-                                            sampler,
+                                            sampler: sampler.clone(),
                                         });
                                     }
                                 }

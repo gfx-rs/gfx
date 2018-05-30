@@ -659,7 +659,7 @@ impl hal::Device<Backend> for Device {
 
         for (set_index, set_layout) in set_layouts.into_iter().enumerate() {
             match set_layout.borrow() {
-                &n::DescriptorSetLayout::Emulated(ref set_bindings) => {
+                &n::DescriptorSetLayout::Emulated(ref set_bindings, _) => {
                     for set_binding in set_bindings {
                         for &mut(stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
                             if !set_binding.stage_flags.contains(stage_bit) {
@@ -940,7 +940,7 @@ impl hal::Device<Backend> for Device {
                     });
                     next_buffer_index += 1;
                     next_buffer_index - 1
-                },
+                }
                 Entry::Occupied(e) => e.get().binding,
             };
             debug!("\tAttribute[{}] is mapped to vertex buffer[{}] with binding {} and offsets {} + {}",
@@ -1276,30 +1276,41 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn create_descriptor_set_layout<I>(&self, bindings: I) -> n::DescriptorSetLayout
+    fn create_descriptor_set_layout<I, J>(
+        &self, binding_iter: I, immutable_sampler_iter: J
+    ) -> n::DescriptorSetLayout
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
+        J: IntoIterator,
+        J::Item: Borrow<n::Sampler>,
     {
-        if !self.private_caps.argument_buffers {
-            return n::DescriptorSetLayout::Emulated(
-                bindings.into_iter().map(|desc| desc.borrow().clone()).collect()
+        if self.private_caps.argument_buffers {
+            let mut stage_flags = pso::ShaderStageFlags::empty();
+            let arguments = binding_iter.into_iter().map(|desc| {
+                let desc = desc.borrow();
+                stage_flags |= desc.stage_flags;
+                Self::describe_argument(desc.ty, desc.binding, desc.count)
+            }).collect::<Vec<_>>();
+            let arg_array = metal::Array::from_owned_slice(&arguments);
+            let encoder = self.shared.device
+                .lock()
+                .unwrap()
+                .new_argument_encoder(&arg_array);
+
+            n::DescriptorSetLayout::ArgumentBuffer(encoder, stage_flags)
+        } else {
+            n::DescriptorSetLayout::Emulated(
+                binding_iter
+                    .into_iter()
+                    .map(|b| b.borrow().clone())
+                    .collect(),
+                immutable_sampler_iter
+                    .into_iter()
+                    .map(|is| is.borrow().0.clone())
+                    .collect(),
             )
         }
-
-        let mut stage_flags = pso::ShaderStageFlags::empty();
-        let arguments = bindings.into_iter().map(|desc| {
-            let desc = desc.borrow();
-            stage_flags |= desc.stage_flags;
-            Self::describe_argument(desc.ty, desc.binding, desc.count)
-        }).collect::<Vec<_>>();
-        let arg_array = metal::Array::from_owned_slice(&arguments);
-        let encoder = self.shared.device
-            .lock()
-            .unwrap()
-            .new_argument_encoder(&arg_array);
-
-        n::DescriptorSetLayout::ArgumentBuffer(encoder, stage_flags)
     }
 
     fn write_descriptor_sets<'a, I, J>(&self, write_iter: I)
@@ -1331,8 +1342,11 @@ impl hal::Device<Backend> for Device {
                             (&pso::Descriptor::Image(image, layout), &mut n::DescriptorSetBinding::Image(ref mut vec)) => {
                                 vec[array_offset] = Some((image.0.clone(), layout));
                             }
+                            (&pso::Descriptor::Image(image, layout), &mut n::DescriptorSetBinding::Combined(ref mut vec)) => {
+                                vec[array_offset].0 = Some((image.0.clone(), layout));
+                            }
                             (&pso::Descriptor::CombinedImageSampler(image, layout, sampler), &mut n::DescriptorSetBinding::Combined(ref mut vec)) => {
-                                vec[array_offset] = Some((image.0.clone(), layout, sampler.0.clone()));
+                                vec[array_offset] = (Some((image.0.clone(), layout)), Some(sampler.0.clone()));
                             }
                             (&pso::Descriptor::UniformTexelBuffer(view), &mut n::DescriptorSetBinding::Image(ref mut vec)) |
                             (&pso::Descriptor::StorageTexelBuffer(view), &mut n::DescriptorSetBinding::Image(ref mut vec)) => {

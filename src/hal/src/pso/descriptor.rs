@@ -74,7 +74,8 @@ pub struct DescriptorSetLayoutBinding {
     pub count: DescriptorArrayIndex,
     /// Valid shader stages.
     pub stage_flags: ShaderStageFlags,
-    // TODO: immutable samplers?
+    /// Use the associated list of immutable samplers.
+    pub immutable_samplers: bool,
 }
 
 /// Set of descriptors of a specific type.
