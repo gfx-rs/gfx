@@ -677,6 +677,13 @@ impl Device {
     fn append_queue(&mut self, queue: CommandQueue) {
         self.queues.push(queue);
     }
+
+    /// Get the native d3d12 device.
+    ///
+    /// Required for FFI with libraries like RenderDoc.
+    pub unsafe fn as_raw(&self) -> *mut d3d12::ID3D12Device {
+        self.raw.as_raw()
+    }
 }
 
 impl Drop for Device {
@@ -1159,6 +1166,6 @@ impl hal::Backend for Backend {
 fn validate_line_width(width: f32) {
     // Note from the Vulkan spec:
     // > If the wide lines feature is not enabled, lineWidth must be 1.0
-    // Simply assert and no-op because DX12 never exposes `Features::LINE_WIDTH` 
+    // Simply assert and no-op because DX12 never exposes `Features::LINE_WIDTH`
     assert_eq!(width, 1.0);
 }
