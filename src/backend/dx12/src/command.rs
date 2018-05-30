@@ -1370,7 +1370,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             true,
             1,
         );
-        let srv_handle = srv_heap.at(0);
+        let srv_handle = srv_heap.at(0, 0);
 
         let srv_desc = Device::build_image_as_shader_resource_desc(
             &ViewInfo {
@@ -1437,7 +1437,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             PlaneSlice: 0, // TODO
                         };
 
-                        let view = rtv_pool.at(i as _).cpu;
+                        let view = rtv_pool.at(i as _, 0).cpu;
                         unsafe {
                             device.CreateRenderTargetView(dst.resource, &desc, view);
                         }
@@ -1494,7 +1494,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 };
 
                 list.push(Instance {
-                    rtv: rtv_pool.at(i as _).cpu,
+                    rtv: rtv_pool.at(i as _, 0).cpu,
                     viewport,
                     data,
                 });

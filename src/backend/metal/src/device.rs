@@ -25,6 +25,8 @@ use metal::{self,
 };
 use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
 
+use range_alloc::RangeAllocator;
+
 
 const RESOURCE_HEAP_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily1_v3,
@@ -1271,8 +1273,7 @@ impl hal::Device<Backend> for Device {
 
         n::DescriptorPool::ArgumentBuffer {
             buffer,
-            total_size,
-            offset: 0,
+            range_allocator: RangeAllocator::new(0..total_size),
         }
     }
 

@@ -3,8 +3,9 @@ use winapi::shared::dxgiformat::DXGI_FORMAT;
 use winapi::um::{d3d12, d3dcommon};
 use wio::com::ComPtr;
 
+use range_alloc::RangeAllocator;
 use hal::{format, image, pass, pso, DescriptorPool as HalDescriptorPool};
-use {free_list, Backend, MAX_VERTEX_BUFFERS};
+use {Backend, MAX_VERTEX_BUFFERS};
 use root_constants::RootConstant;
 
 use std::collections::BTreeMap;
@@ -351,6 +352,8 @@ pub struct DualHandle {
     pub(crate) cpu: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
     #[derivative(Debug="ignore")]
     pub(crate) gpu: d3d12::D3D12_GPU_DESCRIPTOR_HANDLE,
+    /// How large the block allocated to this handle is.
+    pub(crate) size: u64,
 }
 
 #[derive(Derivative)]
@@ -361,15 +364,16 @@ pub struct DescriptorHeap {
     pub(crate) handle_size: u64,
     pub(crate) total_handles: u64,
     pub(crate) start: DualHandle,
-    pub(crate) allocator: free_list::Allocator,
+    pub(crate) range_allocator: RangeAllocator<u64>,
 }
 
 impl DescriptorHeap {
-    pub(crate) fn at(&self, index: u64) -> DualHandle {
+    pub(crate) fn at(&self, index: u64, size: u64) -> DualHandle {
         assert!(index < self.total_handles);
         DualHandle {
             cpu: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: self.start.cpu.ptr + (self.handle_size * index) as usize },
             gpu: d3d12::D3D12_GPU_DESCRIPTOR_HANDLE { ptr: self.start.gpu.ptr + self.handle_size * index },
+            size,
         }
     }
 }
@@ -387,7 +391,7 @@ impl DescriptorCpuPool {
         assert!(self.size + count <= self.max_size);
         let index = self.offset + self.size;
         self.size += count;
-        self.heap.at(index)
+        self.heap.at(index, count)
     }
 }
 
@@ -398,24 +402,31 @@ impl DescriptorCpuPool {
 pub struct DescriptorHeapSlice {
     #[derivative(Debug="ignore")]
     pub(crate) heap: ComPtr<d3d12::ID3D12DescriptorHeap>,
-    pub(crate) range: Range<u64>,
     pub(crate) start: DualHandle,
     pub(crate) handle_size: u64,
-    pub(crate) next: u64,
+    pub(crate) range_allocator: RangeAllocator<u64>,
 }
 
 impl DescriptorHeapSlice {
     pub(crate) fn alloc_handles(&mut self, count: u64) -> Option<DualHandle> {
-        if self.next + count <= self.range.end {
-            let index = self.next;
-            self.next += count;
-            Some(DualHandle {
-                cpu: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: self.start.cpu.ptr + (self.handle_size * index) as usize },
-                gpu: d3d12::D3D12_GPU_DESCRIPTOR_HANDLE { ptr: self.start.gpu.ptr + (self.handle_size * index) as u64 },
-            })
-        } else {
-            None
-        }
+        self.range_allocator.allocate_range(count).map(|range| {
+            DualHandle {
+                cpu: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: self.start.cpu.ptr + (self.handle_size * range.start) as usize },
+                gpu: d3d12::D3D12_GPU_DESCRIPTOR_HANDLE { ptr: self.start.gpu.ptr + (self.handle_size * range.start) as u64 },
+                size: count,
+            }
+        })
+    }
+
+    /// Free handles previously given out by this `DescriptorHeapSlice`.  Do not use this with handles not given out by this `DescriptorHeapSlice`.
+    pub(crate) fn free_handles(&mut self, handle: DualHandle) {
+        let start = handle.gpu.ptr - self.start.gpu.ptr / self.handle_size;
+        let handle_range = start..start + handle.size as u64;
+        self.range_allocator.free_range(handle_range).expect("Heap free failed!  Handle passed in was invalid.");
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.range_allocator.reset();
     }
 }
 
@@ -436,19 +447,7 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
         let mut first_gpu_view = None;
 
         for binding in &layout.bindings {
-            let (has_view, has_sampler, is_uav) = match binding.ty {
-                pso::DescriptorType::Sampler => (false, true, false),
-                pso::DescriptorType::CombinedImageSampler => (true, true, false),
-                pso::DescriptorType::InputAttachment |
-                pso::DescriptorType::SampledImage |
-                pso::DescriptorType::UniformTexelBuffer |
-                pso::DescriptorType::UniformBuffer => (true, false, false),
-                pso::DescriptorType::StorageImage |
-                pso::DescriptorType::StorageTexelBuffer |
-                pso::DescriptorType::StorageBuffer => (true, false, true),
-                _ => unimplemented!()
-            };
-
+            let HeapProperties { has_view, has_sampler, is_uav } = HeapProperties::from(binding.ty);
             while binding_infos.len() <= binding.binding as usize {
                 binding_infos.push(DescriptorBindingInfo::default());
             }
@@ -497,8 +496,61 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
         })
     }
 
+    fn free_sets(&mut self, descriptor_sets: &[DescriptorSet]) {
+        for descriptor_set in descriptor_sets {
+            for binding_info in &descriptor_set.binding_infos {
+                if let Some(ref view_range) = binding_info.view_range {
+                    if HeapProperties::from(view_range.ty).has_view {
+                        self.heap_srv_cbv_uav.free_handles(view_range.handle);
+                    }
+                    
+                }
+                if let Some(ref sampler_range) = binding_info.sampler_range {
+                    if HeapProperties::from(sampler_range.ty).has_sampler {
+                        self.heap_sampler.free_handles(sampler_range.handle);
+                    }
+                }
+            }
+        }
+    }
+
     fn reset(&mut self) {
-        unimplemented!()
+        self.heap_srv_cbv_uav.clear();
+        self.heap_sampler.clear();
+    }
+}
+
+struct HeapProperties {
+    has_view: bool,
+    has_sampler: bool,
+    is_uav: bool,
+}
+
+impl HeapProperties {
+    pub fn new(has_view: bool, has_sampler: bool, is_uav: bool) -> Self {
+        HeapProperties {
+            has_view,
+            has_sampler,
+            is_uav,
+        }
+    }
+
+    /// Returns DescriptorType properties for DX12.
+    fn from(ty: pso::DescriptorType) -> HeapProperties {
+        match ty {
+            pso::DescriptorType::Sampler => HeapProperties::new(false, true, false),
+            pso::DescriptorType::CombinedImageSampler => HeapProperties::new(true, true, false),
+            pso::DescriptorType::InputAttachment |
+            pso::DescriptorType::SampledImage |
+            pso::DescriptorType::UniformTexelBuffer |
+            pso::DescriptorType::UniformBuffer => HeapProperties::new(true, false, false),
+            pso::DescriptorType::StorageImage |
+            pso::DescriptorType::StorageTexelBuffer |
+            pso::DescriptorType::StorageBuffer => HeapProperties::new(true, false, true),
+            pso::DescriptorType::UniformBufferDynamic |
+            pso::DescriptorType::UniformImageDynamic => unimplemented!(),
+        }
+        
     }
 }
 

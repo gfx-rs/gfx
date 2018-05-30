@@ -12,6 +12,8 @@ use cocoa::foundation::{NSUInteger};
 use metal;
 use spirv_cross::{msl, spirv};
 
+use range_alloc::RangeAllocator;
+
 
 /// Shader module can be compiled in advance if it's resource bindings do not
 /// depend on pipeline layout, in which case the value would become `Compiled`.
@@ -171,8 +173,7 @@ pub enum DescriptorPool {
     Emulated,
     ArgumentBuffer {
         buffer: metal::Buffer,
-        total_size: NSUInteger,
-        offset: NSUInteger,
+        range_allocator: RangeAllocator<NSUInteger>,
     }
 }
 //TODO: re-evaluate Send/Sync here
@@ -219,30 +220,59 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                 };
                 Ok(DescriptorSet::Emulated(Arc::new(Mutex::new(inner))))
             }
-            DescriptorPool::ArgumentBuffer { ref buffer, total_size, ref mut offset } => {
+            DescriptorPool::ArgumentBuffer { ref buffer, ref mut range_allocator, } => {
                 let (encoder, stage_flags) = match layout {
                     &DescriptorSetLayout::ArgumentBuffer(ref encoder, stages) => (encoder, stages),
                     _ => return Err(pso::AllocationError::IncompatibleLayout),
                 };
-
-                let cur_offset = *offset;
-                *offset += encoder.encoded_length();
-                if *offset <= total_size {
-                    Ok(DescriptorSet::ArgumentBuffer {
+                range_allocator.allocate_range(encoder.encoded_length()).map(|range| {
+                    DescriptorSet::ArgumentBuffer {
                         buffer: buffer.clone(),
-                        offset: cur_offset,
+                        offset: range.start,
                         encoder: encoder.clone(),
                         stage_flags,
-                    })
-                } else {
-                    Err(pso::AllocationError::OutOfPoolMemory)
-                }
+                    }
+                }).ok_or(pso::AllocationError::OutOfPoolMemory)
             }
         }
     }
 
+    fn free_sets(&mut self, descriptor_sets: &[DescriptorSet]) {
+        match self {
+            DescriptorPool::Emulated => {
+                return; // Does nothing!  No metal allocation happened here.
+            },
+            DescriptorPool::ArgumentBuffer {
+                ref mut range_allocator,
+                ..
+            } => {
+                for descriptor_set in descriptor_sets {
+                    match descriptor_set {
+                        DescriptorSet::Emulated(..) => panic!("Tried to free a DescriptorSet not given out by this DescriptorPool!"),
+                        DescriptorSet::ArgumentBuffer {
+                            offset,
+                            encoder,
+                            ..
+                        } => {
+                            let handle_range = (*offset)..offset + encoder.encoded_length();
+                            range_allocator.free_range(handle_range);
+                        },
+                    }
+                }
+            },
+        }
+    }
+
     fn reset(&mut self) {
-        unimplemented!()
+        match self {
+            DescriptorPool::Emulated => {/* No action necessary */}
+            DescriptorPool::ArgumentBuffer {
+                range_allocator,
+                ..
+            } => {
+                range_allocator.reset();
+            }
+        }
     }
 }
 

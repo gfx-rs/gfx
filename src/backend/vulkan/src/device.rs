@@ -1091,6 +1091,7 @@ impl d::Device<B> for Device {
         n::DescriptorPool {
             raw: pool,
             device: self.raw.clone(),
+            set_free_vec: Vec::new(),
         }
     }
 

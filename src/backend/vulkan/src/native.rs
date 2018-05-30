@@ -90,6 +90,8 @@ pub struct ShaderModule {
 pub struct DescriptorPool {
     pub(crate) raw: vk::DescriptorPool,
     pub(crate) device: Arc<RawDevice>,
+    /// This vec only exists to re-use allocations when `DescriptorSet`s are freed.
+    pub(crate) set_free_vec: Vec<vk::DescriptorSet>,
 }
 
 impl pso::DescriptorPool<Backend> for DescriptorPool {
@@ -135,6 +137,14 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
                 // vk::Result::ErrorOutOfPoolMemory => pso::AllocationError::OutOfPoolMemory,
                 _ => pso::AllocationError::FragmentedPool,
             })]
+        }
+    }
+
+    fn free_sets(&mut self, descriptor_sets: &[DescriptorSet]) {
+        self.set_free_vec.clear();
+        self.set_free_vec.extend(descriptor_sets.iter().map(|d| d.raw));
+        unsafe {
+            self.device.0.free_descriptor_sets(self.raw, &self.set_free_vec);
         }
     }
 
