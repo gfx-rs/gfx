@@ -915,10 +915,10 @@ impl hal::Device<Backend> for Device {
                 .find(|vb| vb.binding == binding)
                 .expect("no associated vertex buffer found");
             // handle wrapping offsets
-            let (cut_offset, base_offset) = if element.offset < original.stride {
+            let elem_size = element.format.surface_desc().bits as pso::ElemOffset / 8;
+            let (cut_offset, base_offset) = if element.offset + elem_size <= original.stride {
                 (element.offset, 0)
             } else {
-                let elem_size = element.format.surface_desc().bits as pso::ElemOffset / 8;
                 let remainder = element.offset % original.stride;
                 if remainder + elem_size <= original.stride {
                     (remainder, element.offset - remainder)
