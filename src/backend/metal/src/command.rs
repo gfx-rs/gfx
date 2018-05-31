@@ -18,6 +18,7 @@ use hal::query::{Query, QueryControl, QueryId};
 use hal::queue::{RawCommandQueue, RawSubmission};
 use hal::range::RangeArg;
 
+use foreign_types::ForeignType;
 use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLClearColor, MTLIndexType, MTLSize, CaptureManager};
 use cocoa::foundation::{NSUInteger, NSInteger};
 use block::{ConcreteBlock};
@@ -95,7 +96,7 @@ struct State {
     viewport: Option<MTLViewport>,
     scissors: Option<MTLScissorRect>,
     blend_color: Option<pso::ColorValue>,
-    render_pso: Option<metal::RenderPipelineState>,
+    render_pso: Option<(metal::RenderPipelineState, native::VertexBufferMap)>,
     compute_pso: Option<metal::ComputePipelineState>,
     work_group_size: MTLSize,
     primitive_type: MTLPrimitiveType,
@@ -103,11 +104,10 @@ struct State {
     resources_fs: StageResources,
     resources_cs: StageResources,
     index_buffer: Option<IndexBuffer>,
-    attribute_buffer_index: usize,
     rasterizer_state: Option<native::RasterizerState>,
     depth_stencil_state: Option<metal::DepthStencilState>,
     push_constants: Vec<u32>,
-    vertex_buffer_map: native::VertexBufferMap,
+    vertex_buffers: Vec<Option<(metal::Buffer, u64)>>,
 }
 
 impl State {
@@ -116,7 +116,7 @@ impl State {
         self.resources_fs.clear();
         self.resources_cs.clear();
         self.push_constants.clear();
-        self.vertex_buffer_map.clear();
+        self.vertex_buffers.clear();
     }
 
     fn make_render_commands(&self) -> Vec<soft::RenderCommand> {
@@ -131,8 +131,8 @@ impl State {
         ));
         let rasterizer = self.rasterizer_state.clone();
         let depth_stencil = self.depth_stencil_state.clone();
-        commands.extend(self.render_pso.clone().map(|pipeline| {
-            soft::RenderCommand::BindPipeline(pipeline, rasterizer, depth_stencil)
+        commands.extend(self.render_pso.as_ref().map(|&(ref pipeline, _)| {
+            soft::RenderCommand::BindPipeline(pipeline.clone(), rasterizer, depth_stencil)
         }));
 
         let stages = [pso::Stage::Vertex, pso::Stage::Fragment];
@@ -1007,11 +1007,10 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 resources_fs: StageResources::new(),
                 resources_cs: StageResources::new(),
                 index_buffer: None,
-                attribute_buffer_index: 0,
                 rasterizer_state: None,
                 depth_stencil_state: None,
                 push_constants: Vec::new(),
-                vertex_buffer_map: HashMap::new(),
+                vertex_buffers: Vec::new(),
             },
         }).collect();
 
@@ -1127,6 +1126,41 @@ impl CommandBuffer {
             });
         }
         soft::RenderCommand::SetDepthBias(*depth_bias)
+    }
+
+    fn set_vertex_buffers(&mut self, commands: &mut Vec<soft::RenderCommand>) {
+        let map = match self.state.render_pso {
+            Some((_, ref map)) => map,
+            None => return
+        };
+
+        let vs_buffers = &mut self.state.resources_vs.buffers;
+        for (&(binding, extra_offset), vb) in map {
+            let index = vb.binding as usize;
+            while vs_buffers.len() <= index {
+                vs_buffers.push(None)
+            }
+            let (buffer, offset) = match self.state.vertex_buffers.get(binding as usize) {
+                Some(&Some((ref buffer, base_offset))) => (buffer, extra_offset as u64 + base_offset),
+                // being unable to bind a buffer here is technically fine, since before this moment
+                // and actual rendering there might be more bind calls
+                _ => continue,
+            };
+
+            if let Some((ref old_buffer, old_offset)) = vs_buffers[index] {
+                if old_buffer.as_ptr() == buffer.as_ptr() && old_offset == offset {
+                    continue; // already bound
+                }
+            }
+            vs_buffers[index] = Some((buffer.clone(), offset));
+
+            commands.push(soft::RenderCommand::BindBuffer {
+                stage: pso::Stage::Vertex,
+                index,
+                buffer: Some(buffer.clone()),
+                offset,
+            })
+        }
     }
 }
 
@@ -1651,26 +1685,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn bind_vertex_buffers(&mut self, first_binding: u32, buffer_set: pso::VertexBufferSet<Backend>) {
-        let buffers = &mut self.state.resources_vs.buffers;
-        let end_binding = first_binding + buffer_set.0.len() as u32;
-        let mut commands = Vec::with_capacity(self.state.vertex_buffer_map.len());
-        for (&(binding, extra_offset), vb) in &self.state.vertex_buffer_map {
-            if binding < first_binding || binding >= end_binding {
-                continue
-            }
-            while buffers.len() <= vb.binding as usize {
-                buffers.push(None)
-            }
-            let (buffer, base_offset) = buffer_set.0[(binding - first_binding) as usize];
-            let offset = extra_offset as u64 + base_offset;
-            buffers[vb.binding as usize] = Some((buffer.raw.clone(), offset));
-            commands.push(soft::RenderCommand::BindBuffer {
-                stage: pso::Stage::Vertex,
-                index: vb.binding as usize,
-                buffer: Some(buffer.raw.clone()),
-                offset,
-            });
+        while self.state.vertex_buffers.len() < first_binding as usize + buffer_set.0.len() {
+            self.state.vertex_buffers.push(None);
         }
+        for (i, &(buffer, offset)) in buffer_set.0.iter().enumerate() {
+            self.state.vertex_buffers[first_binding as usize + i] = Some((buffer.raw.clone(), buffer.range.start + offset));
+        }
+
+        let mut commands = Vec::new();
+        self.set_vertex_buffers(&mut commands);
 
         self.inner
             .borrow_mut()
@@ -1808,12 +1831,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn bind_graphics_pipeline(&mut self, pipeline: &native::GraphicsPipeline) {
         let pipeline_state = pipeline.raw.to_owned();
-        self.state.render_pso = Some(pipeline_state.clone());
+        self.state.render_pso = Some((pipeline_state.clone(), pipeline.vertex_buffer_map.clone()));
         self.state.rasterizer_state = pipeline.rasterizer_state.clone();
         self.state.depth_stencil_state = pipeline.depth_stencil_state.as_ref().map(ToOwned::to_owned);
         self.state.primitive_type = pipeline.primitive_type;
-        self.state.vertex_buffer_map.clear();
-        self.state.vertex_buffer_map.extend(&pipeline.vertex_buffer_map);
 
         let mut commands = Vec::new();
         commands.push(
@@ -1833,44 +1854,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             commands.push(self.set_blend_color(color));
         }
 
-        let attribute_buffer_index = pipeline.attribute_buffer_index as usize;
-        if self.state.attribute_buffer_index != attribute_buffer_index {
-            // re-bind vertex buffers
-            // Note: this is quite unfortunate to do, a better solution is welcome
-            let buffers = &mut self.state.resources_vs.buffers;
-            let old_length = buffers.len();
-            if self.state.attribute_buffer_index < attribute_buffer_index {
-                // move right, in reverse
-                for _ in self.state.attribute_buffer_index .. attribute_buffer_index {
-                    buffers.push(None)
-                }
-                for (src, dst) in (self.state.attribute_buffer_index .. old_length).zip(attribute_buffer_index .. buffers.len()).rev() {
-                    buffers[dst] = buffers[src].take();
-                }
-            } else {
-                // move left, straight
-                for (src, dst) in (self.state.attribute_buffer_index .. buffers.len()).zip(attribute_buffer_index ..) {
-                    buffers[dst] = buffers[src].take();
-                }
-            }
-
-            commands.extend(buffers
-                .iter()
-                .enumerate()
-                .skip(attribute_buffer_index)
-                .map(|(index, maybe)| soft::RenderCommand::BindBuffer {
-                    stage: pso::Stage::Vertex,
-                    index,
-                    buffer: maybe.as_ref().map(|(ref buffer, _)| buffer.clone()),
-                    offset: match *maybe {
-                        Some((_, offset)) => offset,
-                        None => 0,
-                    },
-                })
-            );
-
-            self.state.attribute_buffer_index = attribute_buffer_index;
-        }
+        // re-bind vertex buffers
+        self.set_vertex_buffers(&mut commands);
 
         self.inner
             .borrow_mut()
