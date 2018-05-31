@@ -4,6 +4,7 @@ use hal::pso::{
     DepthTest, Factor, PolygonMode, Rasterizer, Rect, StencilFace, StencilOp, StencilTest,
     Viewport, Stage
 };
+use hal::image::{Anisotropic, Filter, WrapMode};
 use hal::Primitive;
 
 use spirv_cross::spirv;
@@ -15,6 +16,92 @@ use winapi::um::d3dcommon::*;
 use winapi::um::d3d11::*;
 
 use std::mem;
+
+pub fn typeless_format(format: DXGI_FORMAT) -> Option<DXGI_FORMAT> {
+    let format = match format {
+        DXGI_FORMAT_R8G8B8A8_UNORM |
+        DXGI_FORMAT_R8G8B8A8_SNORM |
+        DXGI_FORMAT_R8G8B8A8_UINT |
+        DXGI_FORMAT_R8G8B8A8_SINT |
+        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB => DXGI_FORMAT_R8G8B8A8_TYPELESS,
+
+        // ?`
+        DXGI_FORMAT_B8G8R8A8_UNORM |
+        DXGI_FORMAT_B8G8R8A8_UNORM_SRGB => DXGI_FORMAT_B8G8R8A8_TYPELESS,
+
+        DXGI_FORMAT_R8_UNORM |
+        DXGI_FORMAT_R8_SNORM |
+        DXGI_FORMAT_R8_UINT |
+        DXGI_FORMAT_R8_SINT => DXGI_FORMAT_R8_TYPELESS,
+
+        DXGI_FORMAT_R8G8_UNORM |
+        DXGI_FORMAT_R8G8_SNORM |
+        DXGI_FORMAT_R8G8_UINT |
+        DXGI_FORMAT_R8G8_SINT => DXGI_FORMAT_R8G8_TYPELESS,
+
+        DXGI_FORMAT_R16_UNORM |
+        DXGI_FORMAT_R16_SNORM |
+        DXGI_FORMAT_R16_UINT |
+        DXGI_FORMAT_R16_SINT |
+        DXGI_FORMAT_R16_FLOAT => DXGI_FORMAT_R16_TYPELESS,
+
+        DXGI_FORMAT_R16G16_UNORM |
+        DXGI_FORMAT_R16G16_SNORM |
+        DXGI_FORMAT_R16G16_UINT |
+        DXGI_FORMAT_R16G16_SINT |
+        DXGI_FORMAT_R16G16_FLOAT => DXGI_FORMAT_R16G16_TYPELESS,
+
+        DXGI_FORMAT_R16G16B16A16_UNORM |
+        DXGI_FORMAT_R16G16B16A16_SNORM |
+        DXGI_FORMAT_R16G16B16A16_UINT |
+        DXGI_FORMAT_R16G16B16A16_SINT |
+        DXGI_FORMAT_R16G16B16A16_FLOAT => DXGI_FORMAT_R16G16B16A16_TYPELESS,
+
+        DXGI_FORMAT_R32_UINT |
+        DXGI_FORMAT_R32_SINT |
+        DXGI_FORMAT_R32_FLOAT => DXGI_FORMAT_R32_TYPELESS,
+
+        DXGI_FORMAT_R32G32_UINT |
+        DXGI_FORMAT_R32G32_SINT |
+        DXGI_FORMAT_R32G32_FLOAT => DXGI_FORMAT_R32G32_TYPELESS,
+
+        DXGI_FORMAT_R32G32B32_UINT |
+        DXGI_FORMAT_R32G32B32_SINT |
+        DXGI_FORMAT_R32G32B32_FLOAT => DXGI_FORMAT_R32G32B32_TYPELESS,
+
+        DXGI_FORMAT_R32G32B32A32_UINT |
+        DXGI_FORMAT_R32G32B32A32_SINT |
+        DXGI_FORMAT_R32G32B32A32_FLOAT => DXGI_FORMAT_R32G32B32A32_TYPELESS,
+
+        /*R5g6b5Unorm => DXGI_FORMAT_B5G6R5_UNORM,
+        R5g5b5a1Unorm => DXGI_FORMAT_B5G5R5A1_UNORM,
+        A2b10g10r10Unorm => DXGI_FORMAT_R10G10B10A2_UNORM,
+        A2b10g10r10Uint => DXGI_FORMAT_R10G10B10A2_UINT,
+        B10g11r11Ufloat => DXGI_FORMAT_R11G11B10_FLOAT,
+        E5b9g9r9Ufloat => DXGI_FORMAT_R9G9B9E5_SHAREDEXP,
+        D16Unorm => DXGI_FORMAT_D16_UNORM,
+        D32Float => DXGI_FORMAT_D32_FLOAT,
+        D32FloatS8Uint => DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
+        Bc1RgbUnorm => DXGI_FORMAT_BC1_UNORM,
+        Bc1RgbSrgb => DXGI_FORMAT_BC1_UNORM_SRGB,
+        Bc2Unorm => DXGI_FORMAT_BC2_UNORM,
+        Bc2Srgb => DXGI_FORMAT_BC2_UNORM_SRGB,
+        Bc3Unorm => DXGI_FORMAT_BC3_UNORM,
+        Bc3Srgb => DXGI_FORMAT_BC3_UNORM_SRGB,
+        Bc4Unorm => DXGI_FORMAT_BC4_UNORM,
+        Bc4Inorm => DXGI_FORMAT_BC4_SNORM,
+        Bc5Unorm => DXGI_FORMAT_BC5_UNORM,
+        Bc5Inorm => DXGI_FORMAT_BC5_SNORM,
+        Bc6hUfloat => DXGI_FORMAT_BC6H_UF16,
+        Bc6hFloat => DXGI_FORMAT_BC6H_SF16,
+        Bc7Unorm => DXGI_FORMAT_BC7_UNORM,
+        Bc7Srgb => DXGI_FORMAT_BC7_UNORM_SRGB,*/
+
+        _ => return None,
+    };
+
+    Some(format)
+}
 
 // TODO: stolen from d3d12 backend, maybe share function somehow?
 pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
@@ -233,7 +320,7 @@ pub(crate) fn map_blend_desc(desc: &BlendDesc) -> D3D11_BLEND_DESC {
     }
 }
 
-fn map_comparison(func: Comparison) -> D3D11_COMPARISON_FUNC {
+pub fn map_comparison(func: Comparison) -> D3D11_COMPARISON_FUNC {
     match func {
         Comparison::Never => D3D11_COMPARISON_NEVER,
         Comparison::Less => D3D11_COMPARISON_LESS,
@@ -319,3 +406,46 @@ pub fn map_stage(stage: Stage) -> spirv::ExecutionModel {
         Stage::Domain => spirv::ExecutionModel::TessellationEvaluation,
     }
 }
+
+pub fn map_wrapping(wrap: WrapMode) -> D3D11_TEXTURE_ADDRESS_MODE {
+    match wrap {
+        WrapMode::Tile   => D3D11_TEXTURE_ADDRESS_WRAP,
+        WrapMode::Mirror => D3D11_TEXTURE_ADDRESS_MIRROR,
+        WrapMode::Clamp  => D3D11_TEXTURE_ADDRESS_CLAMP,
+        WrapMode::Border => D3D11_TEXTURE_ADDRESS_BORDER,
+    }
+}
+
+pub fn map_anisotropic(anisotropic: Anisotropic) -> D3D11_FILTER {
+    match anisotropic {
+        Anisotropic::On(_) => D3D11_FILTER_ANISOTROPIC,
+        Anisotropic::Off => 0,
+    }
+}
+
+fn map_filter_type(filter: Filter) -> D3D11_FILTER_TYPE {
+    match filter {
+        Filter::Nearest => D3D11_FILTER_TYPE_POINT,
+        Filter::Linear => D3D11_FILTER_TYPE_LINEAR,
+    }
+}
+
+// Hopefully works just as well in d3d11 :)
+pub fn map_filter(
+    mag_filter: Filter,
+    min_filter: Filter,
+    mip_filter: Filter,
+    reduction: D3D11_FILTER_REDUCTION_TYPE,
+    anisotropic: Anisotropic,
+) -> D3D11_FILTER {
+    let mag = map_filter_type(mag_filter);
+    let min = map_filter_type(min_filter);
+    let mip = map_filter_type(mip_filter);
+
+    (min & D3D11_FILTER_TYPE_MASK) << D3D11_MIN_FILTER_SHIFT |
+    (mag & D3D11_FILTER_TYPE_MASK) << D3D11_MAG_FILTER_SHIFT |
+    (mip & D3D11_FILTER_TYPE_MASK) << D3D11_MIP_FILTER_SHIFT |
+    (reduction & D3D11_FILTER_REDUCTION_TYPE_MASK) << D3D11_FILTER_REDUCTION_TYPE_SHIFT |
+    map_anisotropic(anisotropic)
+}
+
