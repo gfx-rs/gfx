@@ -904,8 +904,25 @@ impl hal::Device<Backend> for Device {
             }
 
             match depth_stencil.stencil {
-                pso::StencilTest::On { .. } => {
-                    unimplemented!()
+                pso::StencilTest::On { ref front, ref back } => {
+                    let front_desc = metal::StencilDescriptor::new();
+                    front_desc.set_stencil_compare_function(conv::map_compare_function(front.fun));
+                    front_desc.set_read_mask(front.mask_read);
+                    front_desc.set_write_mask(front.mask_write);
+                    front_desc.set_stencil_failure_operation(conv::map_stencil_op(front.op_fail));
+                    front_desc.set_depth_failure_operation(conv::map_stencil_op(front.op_depth_fail));
+                    front_desc.set_depth_stencil_pass_operation(conv::map_stencil_op(front.op_pass));
+
+                    let back_desc = metal::StencilDescriptor::new();
+                    back_desc.set_stencil_compare_function(conv::map_compare_function(back.fun));
+                    back_desc.set_read_mask(back.mask_read);
+                    back_desc.set_write_mask(back.mask_write);
+                    back_desc.set_stencil_failure_operation(conv::map_stencil_op(back.op_fail));
+                    back_desc.set_depth_failure_operation(conv::map_stencil_op(back.op_depth_fail));
+                    back_desc.set_depth_stencil_pass_operation(conv::map_stencil_op(back.op_pass));
+
+                    desc.set_front_face_stencil(Some(&front_desc));
+                    desc.set_back_face_stencil(Some(&back_desc));
                 }
                 pso::StencilTest::Off => {}
             }
