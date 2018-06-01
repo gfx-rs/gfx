@@ -1519,8 +1519,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     error!("Aspects {:?} are not supported yet, ignoring blit_image", r.src_subresource.aspects);
                     continue
                 }
-                let se = &src.extent;
-                let de = &dst.extent;
+                let se = src.extent.at_level(r.src_subresource.level);
+                let de = dst.extent.at_level(r.dst_subresource.level);
                 //TODO: support 3D textures
                 if se.depth != 1 || de.depth != 1 {
                     warn!("3D image blits are not supported properly yet: {:?} -> {:?}", se, de);

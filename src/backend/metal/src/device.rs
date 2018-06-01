@@ -1712,10 +1712,9 @@ impl hal::Device<Backend> for Device {
                     continue
                 }
                 let (storage, cache_mode) = MemoryTypes::describe(i);
-                let options = conv::resource_options_from_storage_and_cache(storage, cache_mode);
-                image.texture_desc.set_resource_options(options);
                 image.texture_desc.set_storage_mode(storage);
                 image.texture_desc.set_cpu_cache_mode(cache_mode);
+
                 let requirements = self.shared.device
                     .lock()
                     .unwrap()
@@ -1793,14 +1792,13 @@ impl hal::Device<Backend> for Device {
                 let stride = (row_size + STRIDE_MASK) & !STRIDE_MASK;
 
                 let (storage_mode, cache_mode) = MemoryTypes::describe(memory_type.0);
-                let options = conv::resource_options_from_storage_and_cache(storage_mode, cache_mode);
                 image.texture_desc.set_storage_mode(storage_mode);
                 image.texture_desc.set_cpu_cache_mode(cache_mode);
-                image.texture_desc.set_resource_options(options);
 
                 cpu_buffer.new_texture_from_contents(&image.texture_desc, offset, stride)
             }
             n::MemoryHeap::Private => {
+                image.texture_desc.set_storage_mode(MTLStorageMode::Private);
                 self.shared.device
                     .lock()
                     .unwrap()
