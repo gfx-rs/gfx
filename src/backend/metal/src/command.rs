@@ -32,6 +32,8 @@ pub struct QueueInner {
     reserve: Range<usize>,
 }
 
+#[must_use]
+#[derive(Debug)]
 pub struct Token {
     active: bool,
 }
@@ -281,6 +283,7 @@ impl StageResources {
     }
 }
 
+#[derive(Debug)]
 enum CommandSink {
     Immediate {
         cmd_buffer: metal::CommandBuffer,
@@ -568,6 +571,7 @@ impl CommandBufferInner {
 }
 
 
+#[derive(Debug)]
 enum EncoderState {
     None,
     Blit(metal::BlitCommandEncoder),
@@ -1164,6 +1168,7 @@ impl CommandBuffer {
 
 impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn begin(&mut self, flags: com::CommandBufferFlags, _info: com::CommandBufferInheritanceInfo<Backend>) {
+        self.reset(false);
         //TODO: Implement secondary command buffers
         let sink = if flags.contains(com::CommandBufferFlags::ONE_TIME_SUBMIT) {
             let (cmd_buffer, token) = self.shared.queue.lock().unwrap().spawn();
