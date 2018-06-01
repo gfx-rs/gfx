@@ -1475,10 +1475,12 @@ impl d::Device<B> for Device {
         let (ds, ds_destroy) = build_shader(pso::Stage::Domain, desc.shaders.domain.as_ref())?;
         let (hs, hs_destroy) = build_shader(pso::Stage::Hull, desc.shaders.hull.as_ref())?;
 
+        // TODO: low: Currently mapping one attribute to one binding.
         // Define input element descriptions
         let input_element_descs = desc.attributes
             .iter()
-            .filter_map(|attrib| {
+            .enumerate()
+            .filter_map(|(i, attrib)| {
                 let buffer_desc = match desc.vertex_buffers
                     .iter().find(|buffer_desc| buffer_desc.binding == attrib.binding)
                 {
@@ -1505,8 +1507,8 @@ impl d::Device<B> for Device {
                             return Some(Err(pso::CreationError::Other));
                         }
                     },
-                    InputSlot: attrib.binding as _,
-                    AlignedByteOffset: attrib.element.offset,
+                    InputSlot: i as _,
+                    AlignedByteOffset: 0, // Rebased during the vertex binding remapping
                     InputSlotClass: slot_class,
                     InstanceDataStepRate: buffer_desc.rate as _,
                 }))
@@ -1517,6 +1519,16 @@ impl d::Device<B> for Device {
         let mut vertex_strides = [0; MAX_VERTEX_BUFFERS];
         for buffer in &desc.vertex_buffers {
             vertex_strides[buffer.binding as usize] = buffer.stride;
+        }
+
+        // Rebind vertex buffers, see native.rs for more details.
+        let mut vertex_bindings = [None; MAX_VERTEX_BUFFERS];
+        for (binding, attrib) in vertex_bindings.iter_mut().zip(desc.attributes.iter()) {
+            *binding = Some(n::VertexBinding {
+                stride: vertex_strides[attrib.binding as usize],
+                offset: attrib.element.offset,
+                mapped_binding: attrib.binding as _,
+            });
         }
 
         // TODO: check maximum number of rtvs
@@ -1656,7 +1668,7 @@ impl d::Device<B> for Device {
                 num_parameter_slots: desc.layout.num_parameter_slots,
                 topology,
                 constants: desc.layout.root_constants.clone(),
-                vertex_strides,
+                vertex_bindings,
                 baked_states,
             })
         } else {
