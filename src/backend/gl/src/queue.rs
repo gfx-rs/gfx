@@ -551,6 +551,19 @@ impl CommandQueue {
             com::Command::CopyImageToSurface(..) => {
                 unimplemented!() //TODO: use FBO
             }
+            com::Command::BindBufferRange(target, index, buffer, offset, size) => unsafe {
+                let gl = &self.share.context;
+                gl.BindBufferRange(target, index, buffer, offset, size);
+            }
+            com::Command::BindTexture(index, texture) => unsafe {
+                let gl = &self.share.context;
+                gl.ActiveTexture(gl::TEXTURE0 + index);
+                gl.BindTexture(gl::TEXTURE_2D, texture);
+            }
+            com::Command::BindSampler(index, sampler) => unsafe {
+                let gl = &self.share.context;
+                gl.BindSampler(index, sampler);
+            }
             /*
             com::Command::BindConstantBuffer(pso::ConstantBufferParam(buffer, _, slot)) => unsafe {
                 self.share.context.BindBufferBase(gl::UNIFORM_BUFFER, slot as gl::types::GLuint, buffer);
