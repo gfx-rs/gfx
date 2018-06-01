@@ -1098,8 +1098,11 @@ impl hal::Device<Backend> for Device {
         let descriptor = metal::SamplerDescriptor::new();
 
         descriptor.set_min_filter(conv::map_filter(info.min_filter));
-        descriptor.set_mag_filter(conv::map_filter(info.min_filter));
+        descriptor.set_mag_filter(conv::map_filter(info.mag_filter));
         descriptor.set_mip_filter(match info.mip_filter {
+            // Note: this shouldn't be required, but Metal appears to be confused when mipmaps
+            // are provided even with trivial LOD bias.
+            image::Filter::Nearest if info.lod_range.end < image::Lod::from(0.5) => MTLSamplerMipFilter::NotMipmapped,
             image::Filter::Nearest => MTLSamplerMipFilter::Nearest,
             image::Filter::Linear => MTLSamplerMipFilter::Linear,
         });
@@ -1108,14 +1111,15 @@ impl hal::Device<Backend> for Device {
             descriptor.set_max_anisotropy(aniso as _);
         }
 
-        let (r, s, t) = info.wrap_mode;
-        descriptor.set_address_mode_r(conv::map_wrap_mode(r));
+        let (s, t, r) = info.wrap_mode;
         descriptor.set_address_mode_s(conv::map_wrap_mode(s));
         descriptor.set_address_mode_t(conv::map_wrap_mode(t));
+        descriptor.set_address_mode_r(conv::map_wrap_mode(r));
 
         descriptor.set_lod_bias(info.lod_bias.into());
         descriptor.set_lod_min_clamp(info.lod_range.start.into());
         descriptor.set_lod_max_clamp(info.lod_range.end.into());
+        descriptor.set_lod_average(true); // optimization
 
         if let Some(fun) = info.comparison {
             descriptor.set_compare_function(conv::map_compare_function(fun));
