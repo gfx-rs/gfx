@@ -99,8 +99,12 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
         layouts.into_iter().map(|_| Ok(DescriptorSet)).collect()
     }
 
+    fn free_sets(&mut self, _descriptor_sets: &[DescriptorSet]) {
+        // Poof!  Does nothing, because OpenGL doesn't have a meaningful concept of a `DescriptorSet`.
+    }
+
     fn reset(&mut self) {
-        unimplemented!()
+        // Poof!  Does nothing, because OpenGL doesn't have a meaningful concept of a `DescriptorSet`.
     }
 }
 

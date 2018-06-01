@@ -19,10 +19,11 @@ use hal::queue::{RawCommandQueue, QueueFamilyId};
 use hal::range::RangeArg;
 
 use {
-    conv, free_list, native as n, root_constants, window as w,
+    conv, native as n, root_constants, window as w,
     Backend as B, Device, MemoryGroup, QUEUE_FAMILIES, MAX_VERTEX_BUFFERS, NUM_HEAP_PROPERTIES,
 };
 use pool::RawCommandPool;
+use range_alloc::RangeAllocator;
 use root_constants::RootConstant;
 
 // Register space used for root constants.
@@ -537,7 +538,7 @@ impl Device {
         let cpu_handle = unsafe { (*heap).GetCPUDescriptorHandleForHeapStart() };
         let gpu_handle = unsafe { (*heap).GetGPUDescriptorHandleForHeapStart() };
 
-        let allocator = free_list::Allocator::new(capacity as _);
+        let range_allocator = RangeAllocator::new(0..(capacity as u64));
 
         n::DescriptorHeap {
             raw: unsafe { ComPtr::from_raw(heap) },
@@ -546,8 +547,9 @@ impl Device {
             start: n::DualHandle {
                 cpu: cpu_handle,
                 gpu: gpu_handle,
+                size: 0,
             },
-            allocator,
+            range_allocator,
         }
     }
 
@@ -2296,14 +2298,13 @@ impl d::Device<B> for Device {
                 .unwrap();
 
             let range = heap_srv_cbv_uav
-                .allocator
-                .allocate(num_srv_cbv_uav as _)
+                .range_allocator
+                .allocate_range(num_srv_cbv_uav as _)
                 .unwrap(); // TODO: error/resize
             n::DescriptorHeapSlice {
                 heap: heap_srv_cbv_uav.raw.clone(),
                 handle_size: heap_srv_cbv_uav.handle_size as _,
-                next: range.start,
-                range,
+                range_allocator: RangeAllocator::new(range),
                 start: heap_srv_cbv_uav.start,
             }
         };
@@ -2315,14 +2316,13 @@ impl d::Device<B> for Device {
                 .unwrap();
 
             let range = heap_sampler
-                .allocator
-                .allocate(num_samplers as _)
+                .range_allocator
+                .allocate_range(num_samplers as _)
                 .unwrap(); // TODO: error/resize
             n::DescriptorHeapSlice {
                 heap: heap_sampler.raw.clone(),
                 handle_size: heap_sampler.handle_size as _,
-                next: range.start as _,
-                range,
+                range_allocator: RangeAllocator::new(range),
                 start: heap_sampler.start,
             }
         };
@@ -2853,9 +2853,11 @@ impl d::Device<B> for Device {
 
     fn destroy_descriptor_pool(&self, pool: n::DescriptorPool) {
         self.heap_srv_cbv_uav.lock().unwrap()
-            .allocator.deallocate(pool.heap_srv_cbv_uav.range);
+            .range_allocator.free_range(pool.heap_srv_cbv_uav.range_allocator.initial_range())
+            .expect("Heap free failed!  Range passed in was invalid.");
         self.heap_sampler.lock().unwrap()
-            .allocator.deallocate(pool.heap_sampler.range);
+            .range_allocator.free_range(pool.heap_sampler.range_allocator.initial_range())
+            .expect("Heap free failed!  Range passed in was invalid.");
     }
 
     fn destroy_descriptor_set_layout(&self, _layout: n::DescriptorSetLayout) {
@@ -2949,7 +2951,7 @@ impl d::Device<B> for Device {
                     &mut resource as *mut *mut _ as *mut *mut _);
             }
 
-            let rtv_handle = rtv_heap.at(i as _).cpu;
+            let rtv_handle = rtv_heap.at(i as _, 0).cpu;
             unsafe {
                 self.raw.clone().CreateRenderTargetView(resource, &rtv_desc, rtv_handle);
             }

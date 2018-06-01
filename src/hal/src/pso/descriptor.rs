@@ -138,6 +138,10 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
             .collect()
     }
 
+    /// Free the descriptor sets given, after calling this all descriptor sets in `descriptor_sets`
+    /// will be invalid.
+    fn free_sets(&mut self, descriptor_sets: &[B::DescriptorSet]);
+
     /// Resets a descriptor pool, releasing all resources from all the descriptor sets
     /// allocated from it and freeing the descriptor sets. Invalidates all descriptor
     /// sets allocated from the pool; trying to use one after the pool has been reset

@@ -1451,6 +1451,10 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
         unimplemented!()
     }
 
+    fn free_sets(&mut self, descriptor_sets: &[DescriptorSet]) {
+        unimplemented!()
+    }
+
     fn reset(&mut self) {
         unimplemented!()
     }

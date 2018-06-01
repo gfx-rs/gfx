@@ -1,6 +1,8 @@
 extern crate gfx_hal as hal;
 #[macro_use] extern crate bitflags;
 extern crate cocoa;
+#[macro_use]
+extern crate derivative;
 extern crate foreign_types;
 #[macro_use] extern crate objc;
 extern crate io_surface;
@@ -16,6 +18,8 @@ extern crate metal_rs as metal;
 #[cfg(feature = "winit")]
 extern crate winit;
 
+#[path = "../../auxil/range_alloc.rs"]
+mod range_alloc;
 mod device;
 mod window;
 mod command;
