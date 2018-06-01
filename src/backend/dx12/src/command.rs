@@ -601,25 +601,26 @@ impl CommandBuffer {
                 {
                     Some(start_offset) => {
                         let start_slot = last_end_slot + start_offset;
-                        let num_views = vbs_remap[start_slot..]
+                        let buffers = vbs_remap[start_slot..]
                             .iter()
-                            .position(|remap| remap.is_none())
-                            .unwrap_or(vbs_remap.len());
-                        let buffers = (start_slot..start_slot+num_views).map(|i| {
-                            let remapping = vbs_remap[i].unwrap();
-                            let view = vbs[remapping.mapped_binding];
+                            .take_while(|x| x.is_some())
+                            .filter_map(|x| *x)
+                            .map(|mapping| {
+                                let view = vbs[mapping.mapped_binding];
 
-                            d3d12::D3D12_VERTEX_BUFFER_VIEW {
-                                BufferLocation: view.BufferLocation + remapping.offset as u64,
-                                SizeInBytes: view.SizeInBytes - remapping.offset,
-                                StrideInBytes: remapping.stride,
-                            }
-                        }).collect::<Vec<_>>();
+                                d3d12::D3D12_VERTEX_BUFFER_VIEW {
+                                    BufferLocation: view.BufferLocation + mapping.offset as u64,
+                                    SizeInBytes: view.SizeInBytes - mapping.offset,
+                                    StrideInBytes: mapping.stride,
+                                }
+                            })
+                            .collect::<SmallVec<[d3d12::D3D12_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS]>>();
+                        let num_views = buffers.len();
 
                         unsafe {
                             cmd_buffer.IASetVertexBuffers(
                                 start_slot as _,
-                                num_views as _,
+                                buffers.len() as _,
                                 buffers.as_ptr(),
                             );
                         }

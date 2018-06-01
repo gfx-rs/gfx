@@ -1475,12 +1475,30 @@ impl d::Device<B> for Device {
         let (ds, ds_destroy) = build_shader(pso::Stage::Domain, desc.shaders.domain.as_ref())?;
         let (hs, hs_destroy) = build_shader(pso::Stage::Hull, desc.shaders.hull.as_ref())?;
 
-        // TODO: low: Currently mapping one attribute to one binding.
+        // Rebind vertex buffers, see native.rs for more details.
+        let mut vertex_bindings = [None; MAX_VERTEX_BUFFERS];
+        let mut vertex_strides = [0; MAX_VERTEX_BUFFERS];
+
+        for buffer in &desc.vertex_buffers {
+            vertex_strides[buffer.binding as usize] = buffer.stride;
+        }
+        // Fill in identity mapping where we don't need to adjust anything.
+        for attrib in &desc.attributes {
+            let binding = attrib.binding as usize;
+            let stride = vertex_strides[attrib.binding as usize];
+            if attrib.element.offset < stride {
+                vertex_bindings[binding] = Some(n::VertexBinding {
+                    stride: vertex_strides[attrib.binding as usize],
+                    offset: 0,
+                    mapped_binding: binding,
+                });
+            }
+        }
+
         // Define input element descriptions
         let input_element_descs = desc.attributes
             .iter()
-            .enumerate()
-            .filter_map(|(i, attrib)| {
+            .filter_map(|attrib| {
                 let buffer_desc = match desc.vertex_buffers
                     .iter().find(|buffer_desc| buffer_desc.binding == attrib.binding)
                 {
@@ -1497,6 +1515,30 @@ impl d::Device<B> for Device {
                 };
                 let format = attrib.element.format;
 
+                // Check if we need to add a new remapping in-case the offset is
+                // higher than the vertex stride.
+                // In this case we rebase the attribute to zero offset.
+                let binding = attrib.binding as usize;
+                let stride = vertex_strides[binding];
+                let offset = attrib.element.offset;
+                let (input_slot, offset) = if stride <= offset {
+                    // Number of input attributes may not exceed bindings, see limits.
+                    // We will always find at least one free binding.
+                    let mapping = vertex_bindings
+                        .iter()
+                        .position(Option::is_none)
+                        .unwrap();
+                    vertex_bindings[mapping] = Some(n::VertexBinding {
+                        stride: vertex_strides[binding],
+                        offset: offset,
+                        mapped_binding: binding,
+                    });
+
+                    (mapping, 0)
+                } else {
+                    (binding, offset)
+                };
+
                 Some(Ok(d3d12::D3D12_INPUT_ELEMENT_DESC {
                     SemanticName: "TEXCOORD\0".as_ptr() as *const _, // Semantic name used by SPIRV-Cross
                     SemanticIndex: attrib.location,
@@ -1507,29 +1549,15 @@ impl d::Device<B> for Device {
                             return Some(Err(pso::CreationError::Other));
                         }
                     },
-                    InputSlot: i as _,
-                    AlignedByteOffset: 0, // Rebased during the vertex binding remapping
+                    InputSlot: input_slot as _,
+                    AlignedByteOffset: offset,
                     InputSlotClass: slot_class,
                     InstanceDataStepRate: buffer_desc.rate as _,
                 }))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        // Input slots
-        let mut vertex_strides = [0; MAX_VERTEX_BUFFERS];
-        for buffer in &desc.vertex_buffers {
-            vertex_strides[buffer.binding as usize] = buffer.stride;
-        }
 
-        // Rebind vertex buffers, see native.rs for more details.
-        let mut vertex_bindings = [None; MAX_VERTEX_BUFFERS];
-        for (binding, attrib) in vertex_bindings.iter_mut().zip(desc.attributes.iter()) {
-            *binding = Some(n::VertexBinding {
-                stride: vertex_strides[attrib.binding as usize],
-                offset: attrib.element.offset,
-                mapped_binding: attrib.binding as _,
-            });
-        }
 
         // TODO: check maximum number of rtvs
         // Get associated subpass information
