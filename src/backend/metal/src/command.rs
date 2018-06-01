@@ -922,9 +922,10 @@ impl RawCommandQueue<Backend> for CommandQueue {
 
         if let Some(ref fence) = fence {
             let command_buffer = queue.new_command_buffer_with_unretained_references();
-            let value_ptr = fence.0.clone();
+            let fence = Arc::clone(fence);
             let fence_block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
-                *value_ptr.lock().unwrap() = true;
+                *fence.mutex.lock().unwrap() = true;
+                fence.condvar.notify_all();
             }).copy();
             msg_send![command_buffer, addCompletedHandler: fence_block.deref() as *const _];
             command_buffer.commit();
