@@ -46,6 +46,8 @@ use cocoa::foundation::NSAutoreleasePool;
 use core_graphics::geometry::CGRect;
 
 
+const MAX_ACTIVE_COMMAND_BUFFERS: usize = 1 << 14;
+
 #[derive(Debug, Clone, Copy)]
 pub struct QueueFamily {}
 
@@ -57,8 +59,7 @@ impl hal::QueueFamily for QueueFamily {
 
 pub struct Shared {
     pub(crate) device: Mutex<metal::Device>,
-    pub(crate) aux_queue: Mutex<metal::CommandQueue>,
-    pub(crate) queue_pool: Mutex<command::QueuePool>,
+    pub(crate) queue: Mutex<command::QueueInner>,
     pub(crate) service_pipes: Mutex<internal::ServicePipes>,
     pub(crate) push_constants_buffer_id: u32,
 }
@@ -69,8 +70,7 @@ unsafe impl Sync for Shared {}
 impl Shared {
     pub(crate) fn new(device: metal::Device) -> Self {
         Shared {
-            queue_pool: Mutex::new(command::QueuePool::default()),
-            aux_queue: Mutex::new(device.new_command_queue()),
+            queue: Mutex::new(command::QueueInner::new(&device, MAX_ACTIVE_COMMAND_BUFFERS)),
             service_pipes: Mutex::new(internal::ServicePipes::new(&device)),
             device: Mutex::new(device),
             push_constants_buffer_id: 30,

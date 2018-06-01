@@ -27,50 +27,56 @@ use {conversions as conv, soft};
 
 const WORD_ALIGNMENT: u64 = 4;
 
-pub(crate) struct QueueInner {
-    queue: metal::CommandQueue,
+pub struct QueueInner {
+    raw: metal::CommandQueue,
     reserve: Range<usize>,
 }
 
-#[derive(Default)]
-pub struct QueuePool {
-    queues: Vec<QueueInner>,
+pub struct Token {
+    active: bool,
 }
 
-impl QueuePool {
-    fn find_queue(&mut self, device: &Mutex<metal::Device>) -> usize {
-        const POOL_SIZE: usize = 64;
-        self.queues
-            .iter()
-            .position(|q| q.reserve.start != q.reserve.end)
-            .unwrap_or_else(|| {
-                let queue = QueueInner {
-                    queue: device
-                        .lock()
-                        .unwrap()
-                        .new_command_queue_with_max_command_buffer_count(POOL_SIZE as _),
-                    reserve: 0 .. POOL_SIZE,
-                };
-                self.queues.push(queue);
-                self.queues.len() - 1
-            })
+impl Drop for Token {
+    fn drop(&mut self) {
+        // poor man's linear type...
+        debug_assert!(!self.active);
+    }
+}
+
+impl QueueInner {
+    pub(crate) fn new(device: &metal::DeviceRef, pool_size: usize) -> Self {
+        QueueInner {
+            raw: device.new_command_queue_with_max_command_buffer_count(pool_size as u64),
+            reserve: 0 .. pool_size,
+        }
     }
 
-    /// Get a command buffer that needs to be manually tracked/released.
-    pub fn make_command_buffer(
-        &mut self, device: &Mutex<metal::Device>
-    ) -> (usize, metal::CommandBuffer) {
+    /// Spawns a command buffer from a virtual pool.
+    pub(crate) fn spawn(&mut self) -> (metal::CommandBuffer, Token) {
         let _pool = AutoreleasePool::new();
-        let id = self.find_queue(device);
-        self.queues[id].reserve.start += 1;
-        let cmd_buffer = self.queues[id].queue
+        self.reserve.start += 1;
+        let cmd_buf = self.raw
             .new_command_buffer_with_unretained_references()
             .to_owned();
-        (id, cmd_buffer)
+        (cmd_buf, Token { active: true })
     }
 
-    pub fn release_command_buffer(&mut self, index: usize) {
-        self.queues[index].reserve.start -= 1;
+    /// Returns a command buffer to a virtual pool.
+    pub(crate) fn release(&mut self, mut token: Token) {
+        token.active = false;
+        self.reserve.start -= 1;
+    }
+
+    /// Block until GPU is idle.
+    pub(crate) fn wait_idle(queue: &Mutex<Self>) {
+        debug!("waiting for idle");
+        let _pool = AutoreleasePool::new();
+        // note: we deliberately don't hold the Mutex lock while waiting,
+        // since the completition handlers need to access it.
+        let (cmd_buf, token) = queue.lock().unwrap().spawn();
+        cmd_buf.commit();
+        cmd_buf.wait_until_completed();
+        queue.lock().unwrap().release(token);
     }
 }
 
@@ -278,7 +284,7 @@ impl StageResources {
 enum CommandSink {
     Immediate {
         cmd_buffer: metal::CommandBuffer,
-        queue_index: usize,
+        token: Token,
         encoder_state: EncoderState,
     },
     Deferred {
@@ -547,11 +553,8 @@ impl Drop for CommandBufferInner {
 impl CommandBufferInner {
     pub(crate) fn reset(&mut self, shared: &Shared) {
         match self.sink.take() {
-            Some(CommandSink::Immediate { queue_index, .. }) => {
-                shared.queue_pool
-                    .lock()
-                    .unwrap()
-                    .release_command_buffer(queue_index);
+            Some(CommandSink::Immediate { token, .. }) => {
+                shared.queue.lock().unwrap().release(token);
             }
             _ => {}
         }
@@ -882,7 +885,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
             None
         };
 
-        let queue = self.shared.aux_queue.lock().unwrap();
+        let queue = self.shared.queue.lock().unwrap();
 
         for buffer in submit.cmd_buffers {
             let mut inner = buffer.borrow().inner.borrow_mut();
@@ -908,7 +911,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     cmd_buffer
                 }
                 Some(CommandSink::Deferred { ref passes, .. }) => {
-                    temp_cmd_buffer = queue.new_command_buffer_with_unretained_references();
+                    temp_cmd_buffer = queue.raw.new_command_buffer_with_unretained_references();
                     record_commands(&*temp_cmd_buffer, passes);
                     &*temp_cmd_buffer
                  }
@@ -921,7 +924,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
         }
 
         if let Some(ref fence) = fence {
-            let command_buffer = queue.new_command_buffer_with_unretained_references();
+            let command_buffer = queue.raw.new_command_buffer_with_unretained_references();
             let fence = Arc::clone(fence);
             let fence_block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
                 *fence.mutex.lock().unwrap() = true;
@@ -961,15 +964,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
-        debug!("waiting for idle");
-        let _pool = AutoreleasePool::new();
-
-        let queue = self.shared.aux_queue.lock().unwrap();
-        let command_buffer = queue
-            .new_command_buffer_with_unretained_references();
-        command_buffer.commit();
-        command_buffer.wait_until_completed();
-
+        QueueInner::wait_idle(&self.shared.queue);
         Ok(())
     }
 }
@@ -988,6 +983,8 @@ impl pool::RawCommandPool<Backend> for CommandPool {
     fn allocate(
         &mut self, num: usize, _level: com::RawLevel
     ) -> Vec<CommandBuffer> {
+        //TODO: fail with OOM if we allocate more actual command buffers
+        // than our mega-queue supports.
         //TODO: Implement secondary buffers
         let buffers: Vec<_> = (0..num).map(|_| CommandBuffer {
             inner: Arc::new(RefCell::new(CommandBufferInner {
@@ -1169,13 +1166,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn begin(&mut self, flags: com::CommandBufferFlags, _info: com::CommandBufferInheritanceInfo<Backend>) {
         //TODO: Implement secondary command buffers
         let sink = if flags.contains(com::CommandBufferFlags::ONE_TIME_SUBMIT) {
-            let (queue_index, cmd_buffer) = self.shared.queue_pool
-                .lock()
-                .unwrap()
-                .make_command_buffer(&self.shared.device);
+            let (cmd_buffer, token) = self.shared.queue.lock().unwrap().spawn();
             CommandSink::Immediate {
                 cmd_buffer,
-                queue_index,
+                token,
                 encoder_state: EncoderState::None,
             }
         } else {

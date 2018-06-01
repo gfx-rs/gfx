@@ -1205,10 +1205,7 @@ impl hal::Device<Backend> for Device {
 
         // temporary command buffer to copy the contents from
         // the given buffers into the allocated CPU-visible buffers
-        let (queue_id, cmd_buffer) = self.shared.queue_pool
-            .lock()
-            .unwrap()
-            .make_command_buffer(&self.shared.device);
+        let (cmd_buffer, token) = self.shared.queue.lock().unwrap().spawn();
         let encoder = cmd_buffer.new_blit_command_encoder();
 
         for item in iter {
@@ -1228,16 +1225,13 @@ impl hal::Device<Backend> for Device {
         }
 
         encoder.end_encoding();
-        self.shared.queue_pool
-            .lock()
-            .unwrap()
-            .release_command_buffer(queue_id);
-
         if num_syncs != 0 {
             debug!("\twaiting...");
             cmd_buffer.commit();
             cmd_buffer.wait_until_completed();
         }
+
+        self.shared.queue.lock().unwrap().release(token);
     }
 
     fn create_semaphore(&self) -> n::Semaphore {
@@ -1944,15 +1938,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
-        debug!("waiting for idle");
-        let _pool = AutoreleasePool::new();
-
-        let queue = self.shared.aux_queue.lock().unwrap();
-        let command_buffer = queue
-            .new_command_buffer_with_unretained_references();
-        command_buffer.commit();
-        command_buffer.wait_until_completed();
-
+        command::QueueInner::wait_idle(&self.shared.queue);
         Ok(())
     }
 }
