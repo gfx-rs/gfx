@@ -61,7 +61,7 @@ pub trait RawCommandQueue<B: Backend>: Any + Send + Sync {
     /// list more than once.
     ///
     /// Unsafe for the same reasons as `submit_raw()`.
-    fn present<IS, IW>(&mut self, swapchains: IS, wait_semaphores: IW)
+    fn present<IS, IW>(&mut self, swapchains: IS, wait_semaphores: IW) -> Result<(), ()>
     where
         Self: Sized,
         IS: IntoIterator,
@@ -118,7 +118,7 @@ impl<B: Backend, C> CommandQueue<B, C> {
     /// Presents the result of the queue to the given swapchains, after waiting on all the
     /// semaphores given in `wait_semaphores`. A given swapchain must not appear in this
     /// list more than once.
-    pub fn present<IS, IW>(&mut self, swapchains: IS, wait_semaphores: IW)
+    pub fn present<IS, IW>(&mut self, swapchains: IS, wait_semaphores: IW) -> Result<(), ()>
     where
         IS: IntoIterator,
         IS::Item: BorrowMut<B::Swapchain>,

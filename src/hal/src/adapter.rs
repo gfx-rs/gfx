@@ -137,7 +137,7 @@ impl<B: Backend> Adapter<B> {
     /// use hal::General;
     /// # fn main() {
     ///
-    /// # let adapter: hal::Adapter<empty::Backend> = return;
+    /// # let mut adapter: hal::Adapter<empty::Backend> = return;
     /// let (device, queues) = adapter.open_with::<_, General>(1, |_| true).unwrap();
     /// # }
     /// ```
@@ -147,7 +147,7 @@ impl<B: Backend> Adapter<B> {
     /// Returns the same errors as `open` and `InitializationFailed` if no suitable
     /// queue family could be found.
     pub fn open_with<F, C>(
-        mut self, count: usize, selector: F
+        &mut self, count: usize, selector: F
     ) -> Result<(B::Device, QueueGroup<B, C>), DeviceCreationError>
     where
         F: Fn(&B::QueueFamily) -> bool,

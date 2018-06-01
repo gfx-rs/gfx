@@ -465,7 +465,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         }
     }
 
-    fn present<IS, IW>(&mut self, swapchains: IS, _wait_semaphores: IW)
+    fn present<IS, IW>(&mut self, swapchains: IS, _wait_semaphores: IW) -> Result<(), ()>
     where
         IS: IntoIterator,
         IS::Item: BorrowMut<window::Swapchain>,
@@ -476,6 +476,8 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         for swapchain in swapchains {
             unsafe { swapchain.borrow().inner.Present(1, 0); }
         }
+
+        Ok(())
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {

@@ -7,6 +7,7 @@ use winit;
 use winapi::shared::dxgi1_4;
 use winapi::shared::windef::{HWND, RECT};
 use winapi::um::winuser::GetClientRect;
+use winapi::um::d3d12;
 use wio::com::ComPtr;
 
 use hal::{self, format as f, image as i};
@@ -98,10 +99,13 @@ pub struct Swapchain {
     pub(crate) frame_queue: VecDeque<usize>,
     #[allow(dead_code)]
     pub(crate) rtv_heap: n::DescriptorHeap,
+    // need to associate raw image pointers with the swapchain so they can be properly released
+    // when the swapchain is destroyed
+    pub(crate) _resources: Vec<ComPtr<d3d12::ID3D12Resource>>,
 }
 
 impl hal::Swapchain<Backend> for Swapchain {
-    fn acquire_frame(&mut self, _sync: hal::FrameSync<Backend>) -> hal::Frame {
+    fn acquire_frame(&mut self, _sync: hal::FrameSync<Backend>) -> Result<hal::Frame, ()> {
         // TODO: sync
 
         if false {
@@ -115,7 +119,7 @@ impl hal::Swapchain<Backend> for Swapchain {
 
         // TODO:
         let index = unsafe { self.inner.GetCurrentBackBufferIndex() };
-        hal::Frame::new(index as usize)
+        Ok(hal::Frame::new(index as usize))
     }
 }
 

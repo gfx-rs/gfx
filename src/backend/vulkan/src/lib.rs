@@ -701,7 +701,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         assert_eq!(Ok(()), result);
     }
 
-    fn present<IS, IW>(&mut self, swapchains: IS, wait_semaphores: IW)
+    fn present<IS, IW>(&mut self, swapchains: IS, wait_semaphores: IW) -> Result<(), ()>
     where
         IS: IntoIterator,
         IS::Item: BorrowMut<window::Swapchain>,
@@ -737,10 +737,14 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
             p_results: ptr::null_mut(),
         };
 
-        assert_eq!(vk::Result::Success, unsafe {
+        match unsafe {
             self.swapchain_fn
                 .queue_present_khr(*self.raw, &info)
-        });
+        } {
+            vk::Result::Success => Ok(()),
+            vk::Result::SuboptimalKhr | vk::Result::ErrorOutOfDateKhr => Err(()),
+            _ => panic!("Failed to present frame"),
+        }
     }
 
     fn wait_idle(&self) -> Result<(), HostExecutionError> {

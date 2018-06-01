@@ -3,7 +3,7 @@ use ash::extensions as ext;
 use ash::version::DeviceV1_0;
 use smallvec::SmallVec;
 
-use hal::{buffer, device as d, format, image, mapping, pass, pso, query, queue};
+use hal::{buffer, device as d, format, image, mapping, pass, pso, query, queue, window};
 use hal::{Backbuffer, Features, MemoryTypeId, SwapchainConfig};
 use hal::error::HostExecutionError;
 use hal::memory::Requirements;
@@ -1452,6 +1452,8 @@ impl d::Device<B> for Device {
         &self,
         surface: &mut w::Surface,
         config: SwapchainConfig,
+        provided_old_swapchain: Option<w::Swapchain>,
+        extent: &window::Extent2D,
     ) -> (w::Swapchain, Backbuffer<B>) {
         let functor = ext::Swapchain::new(&surface.raw.instance.0, &self.raw.0)
             .expect("Unable to query swapchain function");
@@ -1461,6 +1463,14 @@ impl d::Device<B> for Device {
 
         // TODO: handle depth stencil
         let format = config.color_format;
+
+        let old_swapchain = match provided_old_swapchain {
+            Some(osc) => osc.raw,
+            None => vk::SwapchainKHR::null(),
+        };
+
+        surface.width = extent.width;
+        surface.height = extent.height;
 
         let info = vk::SwapchainCreateInfoKHR {
             s_type: vk::StructureType::SwapchainCreateInfoKhr,
@@ -1483,7 +1493,7 @@ impl d::Device<B> for Device {
             composite_alpha: vk::COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
             present_mode: present_mode,
             clipped: 1,
-            old_swapchain: vk::SwapchainKHR::null(),
+            old_swapchain,
         };
 
         let swapchain_raw = unsafe { functor.create_swapchain_khr(&info, None) }

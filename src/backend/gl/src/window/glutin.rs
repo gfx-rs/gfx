@@ -65,9 +65,9 @@ pub struct Swapchain {
 }
 
 impl hal::Swapchain<B> for Swapchain {
-    fn acquire_frame(&mut self, _sync: hal::FrameSync<B>) -> hal::Frame {
+    fn acquire_frame(&mut self, _sync: hal::FrameSync<B>) -> Result<hal::Frame, ()> {
         // TODO: sync
-        hal::Frame::new(0)
+        Ok(hal::Frame::new(0))
     }
 }
 
@@ -83,6 +83,10 @@ impl Surface {
         Surface {
             window: Starc::new(window)
         }
+    }
+
+    pub fn get_window(&self) -> &glutin::GlWindow {
+        &*self.window
     }
 
     pub fn window(&self) -> &glutin::GlWindow {

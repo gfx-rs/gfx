@@ -183,7 +183,7 @@ impl Device {
 }
 
 impl hal::Swapchain<Backend> for Swapchain {
-    fn acquire_frame(&mut self, sync: hal::FrameSync<Backend>) -> hal::Frame {
+    fn acquire_frame(&mut self, sync: hal::FrameSync<Backend>) -> Result<hal::Frame, ()> {
         unsafe {
             match sync {
                 hal::FrameSync::Semaphore(semaphore) => {
@@ -195,7 +195,7 @@ impl hal::Swapchain<Backend> for Swapchain {
 
             let frame = hal::Frame::new(self.frame_index % self.io_surfaces.len());
             self.frame_index += 1;
-            frame
+            Ok(frame)
         }
     }
 }

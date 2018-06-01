@@ -100,9 +100,9 @@ impl core::Swapchain<Backend> for Swapchain {
         &self.backbuffer
     }
 
-    fn acquire_frame(&mut self, sync: core::FrameSync<R>) -> core::Frame {
+    fn acquire_frame(&mut self, sync: core::FrameSync<R>) -> Result<core::Frame, ()> {
         // TODO: fence sync
-        core::Frame::new(0)
+        Ok(core::Frame::new(0))
     }
 
     fn present<Q>(&mut self, _: &mut Q, _: &[&handle::Semaphore<device_gl::Resources>])

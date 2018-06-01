@@ -78,8 +78,8 @@ fn main() {
     let mut device = (*context.ref_device()).clone();
 
     // Setup renderpass and pipeline
-    let vs_module = device.raw.create_shader_module(include_bytes!("../../hal/quad/data/vert.spv")).unwrap();
-    let fs_module = device.raw.create_shader_module(include_bytes!("../../hal/quad/data/frag.spv")).unwrap();
+    let vs_module = device.raw.create_shader_module(include_bytes!("vert.spv")).unwrap();
+    let fs_module = device.raw.create_shader_module(include_bytes!("frag.spv")).unwrap();
 
     let (desc, mut desc_data) = device.create_descriptors(1).pop().unwrap();
     let pipe_init = pipe::Init {
@@ -147,7 +147,7 @@ fn main() {
         .copy_from_slice(&QUAD);
     */
 
-    let img_data = include_bytes!("../../hal/quad/data/logo.png");
+    let img_data = include_bytes!("logo.png");
     let img = image::load(Cursor::new(&img_data[..]), image::PNG).unwrap().to_rgba();
     let (width, height) = img.dimensions();
     let kind = i::Kind::D2(width as _, height as _, 1, 1);
