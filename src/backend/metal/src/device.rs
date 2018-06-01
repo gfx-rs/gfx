@@ -47,6 +47,8 @@ const PUSH_CONSTANTS_DESC_BINDING: u32 = 0;
 // greater than or equal to the size of one pixel, in bytes, multiplied by the pixel width of one row.
 const STRIDE_MASK: u64 = 0xFF;
 
+const ALLOW_SHARED: bool = false; //TODO: figure out how to make it work
+
 /// Emit error during shader module parsing.
 fn gen_parse_error(err: SpirvErrorCode) -> ShaderError {
     let msg = match err {
@@ -1502,10 +1504,10 @@ impl hal::Device<Backend> for Device {
         memory::Requirements {
             size: (max_size + SIZE_MASK) & !SIZE_MASK,
             alignment: max_alignment,
-            type_mask: if supports_texel_view && !self.private_caps.shared_textures {
-                (MemoryTypes::all() ^ MemoryTypes::SHARED).bits()
-            } else {
+            type_mask: if ALLOW_SHARED && (!supports_texel_view || self.private_caps.shared_textures) {
                 MemoryTypes::all().bits()
+            } else {
+                (MemoryTypes::all() ^ MemoryTypes::SHARED).bits()
             },
         }
     }
@@ -1728,7 +1730,7 @@ impl hal::Device<Backend> for Device {
             memory::Requirements {
                 size: (image.mip_sizes[0] + mask) & !mask,
                 alignment: self.private_caps.buffer_alignment,
-                type_mask: if self.private_caps.shared_textures {
+                type_mask: if ALLOW_SHARED && self.private_caps.shared_textures {
                     MemoryTypes::all().bits()
                 } else {
                     (MemoryTypes::all() ^ MemoryTypes::SHARED).bits()
