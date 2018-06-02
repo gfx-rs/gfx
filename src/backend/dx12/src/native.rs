@@ -83,6 +83,19 @@ pub struct RenderPass {
     pub(crate) post_barriers: Vec<BarrierDesc>,
 }
 
+// Indirection layer attribute -> remap -> binding.
+//
+// Required as vulkan allows attribute offsets larger than the stride.
+// Storing the stride specified in the pipeline required for vertex buffer binding.
+#[derive(Copy, Clone, Debug)]
+pub struct VertexBinding {
+    // Map into the specified bindings on pipeline creation.
+    pub mapped_binding: usize,
+    pub stride: UINT,
+    // Additional offset to rebase the attributes.
+    pub offset: u32,
+}
+
 #[derive(Debug)]
 pub struct GraphicsPipeline {
     pub(crate) raw: *mut d3d12::ID3D12PipelineState,
@@ -90,7 +103,7 @@ pub struct GraphicsPipeline {
     pub(crate) num_parameter_slots: usize, // signature parameter slots, see `PipelineLayout`
     pub(crate) topology: d3d12::D3D12_PRIMITIVE_TOPOLOGY,
     pub(crate) constants: Vec<RootConstant>,
-    pub(crate) vertex_strides: [UINT; MAX_VERTEX_BUFFERS],
+    pub(crate) vertex_bindings: [Option<VertexBinding>; MAX_VERTEX_BUFFERS],
     pub(crate) baked_states: pso::BakedStates,
 }
 unsafe impl Send for GraphicsPipeline { }
