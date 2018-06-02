@@ -614,7 +614,7 @@ impl CommandBuffer {
                                     StrideInBytes: mapping.stride,
                                 }
                             })
-                            .collect::<SmallVec<[d3d12::D3D12_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS]>>();
+                            .collect::<SmallVec<[_; MAX_VERTEX_BUFFERS]>>();
                         let num_views = buffers.len();
 
                         unsafe {
