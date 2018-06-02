@@ -1461,219 +1461,181 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::ImageBlit>
     {
-        use hal::image::{Extent, Offset};
-
-        fn range_size(r: &Range<Offset>) -> Option<Extent> {
-            let dx = r.end.x - r.start.x;
-            let dy = r.end.y - r.start.y;
-            let dz = r.end.z - r.start.z;
-            if dx >= 0 && dy >= 0 && dz >= 0 {
-                Some(Extent {
-                    width: dx as _,
-                    height: dy as _,
-                    depth: dz as _,
-                })
-            } else {
-                None
-            }
-        }
-
-        #[inline]
-        fn is_offset_positive(o: &Offset) -> bool {
-            o.x >= 0 && o.y >= 0 && o.z >= 0
-        }
-
-        let mut blit_commands = Vec::new();
-        let mut blit_vertices = HashMap::new(); // a list of vertices per mipmap
-
+        let mut vertices = HashMap::new(); // a list of vertices per mipmap
         for region in regions {
             let r = region.borrow();
 
             // layer count must be equal in both subresources
             debug_assert_eq!(r.src_subresource.layers.len(), r.dst_subresource.layers.len());
-            // aspect flags
             debug_assert_eq!(r.src_subresource.aspects, r.dst_subresource.aspects);
-            // check that we're only copying aspects actually in the image
             debug_assert!(src.format_desc.aspects.contains(r.src_subresource.aspects));
+            debug_assert!(dst.format_desc.aspects.contains(r.dst_subresource.aspects));
 
-            let src_size = range_size(&r.src_bounds);
-            let dst_size = range_size(&r.dst_bounds);
-            // In the case that the image format is a combined Depth / Stencil format,
-            // and we are only copying one of the aspects, we use the shader even if the regions
-            // are the same size
-            if src_size == dst_size && src_size.is_some() && src.mtl_format == dst.mtl_format {
-                debug_assert!(is_offset_positive(&r.src_bounds.start));
-                debug_assert!(is_offset_positive(&r.dst_bounds.start));
+            let se = src.extent.at_level(r.src_subresource.level);
+            let de = dst.extent.at_level(r.dst_subresource.level);
+            //TODO: support 3D textures
+            if se.depth != 1 || de.depth != 1 {
+                warn!("3D image blits are not supported properly yet: {:?} -> {:?}", se, de);
+            }
 
-                blit_commands.push(soft::BlitCommand::CopyImage {
-                    src: src.raw.clone(),
-                    dst: dst.raw.clone(),
-                    region: com::ImageCopy {
-                        src_subresource: r.src_subresource.clone(),
-                        src_offset: r.src_bounds.start,
-                        dst_subresource: r.dst_subresource.clone(),
-                        dst_offset: r.dst_bounds.start,
-                        extent: src_size.unwrap(),
-                    },
-                });
-            } else {
-                // Fall back to shader-based blitting
-                // enforce aspect flag restrictions
-                if r.src_subresource.aspects.intersects(Aspects::DEPTH | Aspects::STENCIL) {
-                    error!("Aspects {:?} are not supported yet, ignoring blit_image", r.src_subresource.aspects);
-                    continue
-                }
-                let se = src.extent.at_level(r.src_subresource.level);
-                let de = dst.extent.at_level(r.dst_subresource.level);
-                //TODO: support 3D textures
-                if se.depth != 1 || de.depth != 1 {
-                    warn!("3D image blits are not supported properly yet: {:?} -> {:?}", se, de);
-                }
+            let layers = r.src_subresource.layers.clone().zip(r.dst_subresource.layers.clone());
+            let list = vertices
+                .entry((r.dst_subresource.aspects, r.dst_subresource.level))
+                .or_insert(Vec::new());
 
-                let layers = r.src_subresource.layers.clone().zip(r.dst_subresource.layers.clone());
-                let list = blit_vertices
-                    .entry(r.dst_subresource.level)
-                    .or_insert(Vec::new());
+            for (src_layer, dst_layer) in layers {
+                // this helper array defines unique data for quad vertices
+                let data = [
+                    [
+                        r.src_bounds.start.x,
+                        r.src_bounds.start.y,
+                        r.dst_bounds.start.x,
+                        r.dst_bounds.start.y,
+                    ],
+                    [
+                        r.src_bounds.start.x,
+                        r.src_bounds.end.y,
+                        r.dst_bounds.start.x,
+                        r.dst_bounds.end.y,
+                    ],
+                    [
+                        r.src_bounds.end.x,
+                        r.src_bounds.end.y,
+                        r.dst_bounds.end.x,
+                        r.dst_bounds.end.y,
+                    ],
+                    [
+                        r.src_bounds.end.x,
+                        r.src_bounds.start.y,
+                        r.dst_bounds.end.x,
+                        r.dst_bounds.start.y,
+                    ],
+                ];
+                // now use the hard-coded index array to add 6 vertices to the list
+                //TODO: could use instancing here
+                // - with triangle strips
+                // - with half of the data supplied per instance
 
-                for (src_layer, dst_layer) in layers {
-                    // this helper array defines unique data for quad vertices
-                    let data = [
-                        [
-                            r.src_bounds.start.x,
-                            r.src_bounds.start.y,
-                            r.dst_bounds.start.x,
-                            r.dst_bounds.start.y,
+                for &index in &[0usize, 1, 2, 2, 3, 0] {
+                    let d = data[index];
+                    list.push(BlitVertex {
+                        uv: [
+                            d[0] as f32 / se.width as f32,
+                            d[1] as f32 / se.height as f32,
+                            src_layer as f32,
+                            r.src_subresource.level as f32,
                         ],
-                        [
-                            r.src_bounds.start.x,
-                            r.src_bounds.end.y,
-                            r.dst_bounds.start.x,
-                            r.dst_bounds.end.y,
+                        pos: [
+                            d[2] as f32 / de.width as f32,
+                            d[3] as f32 / de.height as f32,
+                            dst_layer as f32,
+                            1.0,
                         ],
-                        [
-                            r.src_bounds.end.x,
-                            r.src_bounds.end.y,
-                            r.dst_bounds.end.x,
-                            r.dst_bounds.end.y,
-                        ],
-                        [
-                            r.src_bounds.end.x,
-                            r.src_bounds.start.y,
-                            r.dst_bounds.end.x,
-                            r.dst_bounds.start.y,
-                        ],
-                    ];
-                    // now use the hard-coded index array to add 6 vertices to the list
-                    //TODO: could use instancing here
-                    // - with triangle strips
-                    // - with half of the data supplied per instance
-
-                    for &index in &[0usize, 1, 2, 2, 3, 0] {
-                        let d = data[index];
-                        list.push(BlitVertex {
-                            uv: [
-                                d[0] as f32 / se.width as f32,
-                                d[1] as f32 / se.height as f32,
-                                src_layer as f32,
-                                r.src_subresource.level as f32,
-                            ],
-                            pos: [
-                                d[2] as f32 / de.width as f32,
-                                d[3] as f32 / de.height as f32,
-                                dst_layer as f32,
-                                1.0,
-                            ],
-                        });
-                    }
+                    });
                 }
             }
         }
 
         let mut inner = self.inner.borrow_mut();
-        inner.sink().blit_commands(blit_commands.into_iter());
+        // Note: we don't bother to restore any render states here, since we are currently
+        // outside of a render pass, and the state will be reset automatically once
+        // we enter the next pass.
+        let mut pipes = self.shared.service_pipes
+            .lock()
+            .unwrap();
+        let key = (dst.mtl_type, dst.mtl_format, dst.shader_channel);
 
-        if !blit_vertices.is_empty() {
-            // Note: we don't bother to restore any render states here, since we are currently
-            // outside of a render pass, and the state will be reset automatically once
-            // we enter the next pass.
-
-            let mut pipes = self.shared.service_pipes
-                .lock()
-                .unwrap();
-            let key = (dst.mtl_type, dst.mtl_format, dst.shader_channel);
-            let pso = pipes
-                .get_blit_image(key, &self.shared.device)
-                .to_owned();
-            let sampler = pipes.get_sampler(filter);
-
-            let prelude = [
-                soft::RenderCommand::BindPipeline(pso, None, None),
-                soft::RenderCommand::BindSampler {
-                    stage: pso::Stage::Fragment,
-                    index: 0,
-                    sampler: Some(sampler),
+        let prelude = [
+            soft::RenderCommand::BindPipeline(
+                pipes
+                    .get_blit_image(key, src.format_desc.aspects, &self.shared.device)
+                    .to_owned(),
+                None,
+                if src.format_desc.aspects.intersects(Aspects::DEPTH | Aspects::STENCIL) {
+                    Some(pipes.ds_write_state.clone())
+                } else {
+                    None
                 },
-                soft::RenderCommand::BindTexture {
-                    stage: pso::Stage::Fragment,
+            ),
+            soft::RenderCommand::BindSampler {
+                stage: pso::Stage::Fragment,
+                index: 0,
+                sampler: Some(pipes.get_sampler(filter)),
+            },
+            soft::RenderCommand::BindTexture {
+                stage: pso::Stage::Fragment,
+                index: 0,
+                texture: Some(src.raw.clone())
+            },
+        ];
+
+        for ((aspects, level), list) in vertices {
+            let ext = &dst.extent;
+
+            let extra = [
+                //Note: flipping Y coordinate of the destination here
+                soft::RenderCommand::SetViewport(MTLViewport {
+                    originX: 0.0,
+                    originY: (ext.height >> level) as _,
+                    width: (ext.width >> level) as _,
+                    height: -((ext.height >> level) as f64),
+                    znear: 0.0,
+                    zfar: 1.0,
+                }),
+                soft::RenderCommand::SetScissor(MTLScissorRect {
+                    x: 0,
+                    y: 0,
+                    width: (ext.width >> level) as _,
+                    height: (ext.height >> level) as _,
+                }),
+                soft::RenderCommand::BindBufferData {
+                    stage: pso::Stage::Vertex,
                     index: 0,
-                    texture: Some(src.raw.clone())
+                    bytes: unsafe {
+                        slice::from_raw_parts(
+                            list.as_ptr() as *const u8,
+                            list.len() * mem::size_of::<BlitVertex>()
+                        ).to_owned()
+                    }
+                },
+                soft::RenderCommand::Draw {
+                    primitive_type: MTLPrimitiveType::Triangle,
+                    vertices: 0 .. list.len() as _,
+                    instances: 0 .. 1,
                 },
             ];
 
-            for (level, list) in blit_vertices {
-                let ext = &dst.extent;
-
-                let extra = [
-                    //Note: flipping Y coordinate of the destination here
-                    soft::RenderCommand::SetViewport(MTLViewport {
-                        originX: 0.0,
-                        originY: (ext.height >> level) as _,
-                        width: (ext.width >> level) as _,
-                        height: -((ext.height >> level) as f64),
-                        znear: 0.0,
-                        zfar: 1.0,
-                    }),
-                    soft::RenderCommand::SetScissor(MTLScissorRect {
-                        x: 0,
-                        y: 0,
-                        width: (ext.width >> level) as _,
-                        height: (ext.height >> level) as _,
-                    }),
-                    soft::RenderCommand::BindBufferData {
-                        stage: pso::Stage::Vertex,
-                        index: 0,
-                        bytes: unsafe { 
-                            slice::from_raw_parts(
-                                list.as_ptr() as *const u8, 
-                                list.len() * mem::size_of::<BlitVertex>()
-                            ).to_owned() 
-                        }
-                    },
-                    soft::RenderCommand::Draw {
-                        primitive_type: MTLPrimitiveType::Triangle,
-                        vertices: 0 .. list.len() as _,
-                        instances: 0 .. 1,
-                    },
-                ];
-
-                let descriptor = metal::RenderPassDescriptor::new();
-                descriptor.set_render_target_array_length(ext.depth as _);
-                {
-                    let attachment = descriptor
-                        .color_attachments()
-                        .object_at(0)
-                        .unwrap();
-                    attachment.set_texture(Some(&dst.raw));
-                    attachment.set_level(level as _);
-                }
-
-                let commands = prelude
-                    .iter()
-                    .chain(&extra)
-                    .cloned();
-
-                inner.sink().quick_render_pass(descriptor, commands);
+            let descriptor = metal::RenderPassDescriptor::new();
+            descriptor.set_render_target_array_length(ext.depth as _);
+            if aspects.contains(Aspects::COLOR) {
+                let attachment = descriptor
+                    .color_attachments()
+                    .object_at(0)
+                    .unwrap();
+                attachment.set_texture(Some(&dst.raw));
+                attachment.set_level(level as _);
             }
+            if aspects.contains(Aspects::DEPTH) {
+                let attachment = descriptor
+                    .depth_attachment()
+                    .unwrap();
+                attachment.set_texture(Some(&dst.raw));
+                attachment.set_level(level as _);
+            }
+            if aspects.contains(Aspects::STENCIL) {
+                let attachment = descriptor
+                    .stencil_attachment()
+                    .unwrap();
+                attachment.set_texture(Some(&dst.raw));
+                attachment.set_level(level as _);
+            }
+
+            let commands = prelude
+                .iter()
+                .chain(&extra)
+                .cloned();
+
+            inner.sink().quick_render_pass(descriptor, commands);
         }
     }
 

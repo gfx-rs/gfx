@@ -12,6 +12,10 @@ typedef struct {
     uint layer [[render_target_array_index]];
 } BlitVertexData;
 
+typedef struct {
+  float depth [[depth(any)]];
+} BlitDepthFragment;
+
 
 vertex BlitVertexData vs_blit(BlitAttributes in [[stage_in]]) {
     float4 pos = { 0.0, 0.0, 0.0f, 1.0f };
@@ -59,6 +63,15 @@ fragment int4 ps_blit_2d_int(
     sampler sampler2D [[ sampler(0) ]]
 ) {
   return tex2D.sample(sampler2D, in.uv.xy, level(in.uv.w));
+}
+
+fragment BlitDepthFragment ps_blit_2d_depth(
+    BlitVertexData in [[stage_in]],
+    depth2d<float> tex2D [[ texture(0) ]],
+    sampler sampler2D [[ sampler(0) ]]
+) {
+  float depth = tex2D.sample(sampler2D, in.uv.xy, level(in.uv.w));
+  return BlitDepthFragment { depth };
 }
 
 
