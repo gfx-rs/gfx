@@ -4,7 +4,7 @@ use internal::Channel;
 use std::collections::{HashMap};
 use std::ops::Range;
 use std::os::raw::{c_void, c_long};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 
 use hal::{self, image, pass, pso};
 
@@ -274,7 +274,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                             ..
                         } => {
                             let handle_range = (*offset)..offset + encoder.encoded_length();
-                            range_allocator.free_range(handle_range);
+                            let _ = range_allocator.free_range(handle_range);
                         },
                     }
                 }
@@ -382,7 +382,12 @@ unsafe impl Send for UnboundImage {}
 unsafe impl Sync for UnboundImage {}
 
 #[derive(Debug)]
-pub struct Fence(pub Arc<Mutex<bool>>);
+pub struct FenceInner {
+    pub(crate) mutex: Mutex<bool>,
+    pub(crate) condvar: Condvar,
+}
+
+pub type Fence = Arc<FenceInner>;
 
 extern "C" {
     #[allow(dead_code)]

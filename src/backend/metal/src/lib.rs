@@ -46,6 +46,8 @@ use cocoa::foundation::NSAutoreleasePool;
 use core_graphics::geometry::CGRect;
 
 
+const MAX_ACTIVE_COMMAND_BUFFERS: usize = 1 << 14;
+
 #[derive(Debug, Clone, Copy)]
 pub struct QueueFamily {}
 
@@ -55,25 +57,29 @@ impl hal::QueueFamily for QueueFamily {
     fn id(&self) -> QueueFamilyId { QueueFamilyId(0) }
 }
 
-pub struct Shared {
-    pub(crate) device: Mutex<metal::Device>,
-    pub(crate) aux_queue: Mutex<metal::CommandQueue>,
-    pub(crate) queue_pool: Mutex<command::QueuePool>,
-    pub(crate) service_pipes: Mutex<internal::ServicePipes>,
-    pub(crate) push_constants_buffer_id: u32,
+struct Shared {
+    device: Mutex<metal::Device>,
+    queue: Mutex<command::QueueInner>,
+    service_pipes: Mutex<internal::ServicePipes>,
+    push_constants_buffer_id: u32,
+    disabilities: PrivateDisabilities,
 }
 
 unsafe impl Send for Shared {}
 unsafe impl Sync for Shared {}
 
 impl Shared {
-    pub(crate) fn new(device: metal::Device) -> Self {
+    fn new(device: metal::Device) -> Self {
+        let feature_macos_10_14: metal::MTLFeatureSet = unsafe { mem::transmute(10004u64) };
         Shared {
-            queue_pool: Mutex::new(command::QueuePool::default()),
-            aux_queue: Mutex::new(device.new_command_queue()),
+            queue: Mutex::new(command::QueueInner::new(&device, MAX_ACTIVE_COMMAND_BUFFERS)),
             service_pipes: Mutex::new(internal::ServicePipes::new(&device)),
-            device: Mutex::new(device),
             push_constants_buffer_id: 30,
+            disabilities: PrivateDisabilities {
+                broken_viewport_near_depth: device.name().starts_with("Intel") &&
+                    !device.supports_feature_set(feature_macos_10_14),
+            },
+            device: Mutex::new(device),
         }
     }
 }
@@ -182,7 +188,7 @@ impl hal::Backend for Backend {
     type QueryPool = ();
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct PrivateCapabilities {
     resource_heaps: bool,
     argument_buffers: bool,
@@ -196,6 +202,11 @@ struct PrivateCapabilities {
     max_samplers_per_stage: usize,
     buffer_alignment: u64,
     max_buffer_size: u64,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct PrivateDisabilities {
+    broken_viewport_near_depth: bool,
 }
 
 pub struct AutoreleasePool {

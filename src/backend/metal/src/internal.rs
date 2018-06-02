@@ -1,5 +1,6 @@
 use metal;
-use hal::image::{Filter};
+use hal::format::Aspects;
+use hal::image::Filter;
 
 use std::mem;
 use std::collections::HashMap;
@@ -45,6 +46,7 @@ pub struct ServicePipes {
     library: metal::Library,
     sampler_nearest: metal::SamplerState,
     sampler_linear: metal::SamplerState,
+    pub(crate) ds_write_state: metal::DepthStencilState,
     _clears: HashMap<ClearKey, metal::RenderPipelineState>,
     blits: HashMap<BlitKey, metal::RenderPipelineState>,
     copy_buffer: metal::ComputePipelineState,
@@ -66,6 +68,12 @@ impl ServicePipes {
         sampler_desc.set_mag_filter(metal::MTLSamplerMinMagFilter::Linear);
         let sampler_linear = device.new_sampler(&sampler_desc);
 
+        let ds_desc = metal::DepthStencilDescriptor::new();
+        ds_desc.set_depth_write_enabled(true);
+        ds_desc.set_depth_compare_function(metal::MTLCompareFunction::Always);
+        //TODO: stencil
+        let ds_write_state = device.new_depth_stencil_state(&ds_desc);
+
         let copy_buffer = Self::create_copy_buffer(&library, device);
         let fill_buffer = Self::create_fill_buffer(&library, device);
 
@@ -74,6 +82,7 @@ impl ServicePipes {
             blits: HashMap::new(),
             sampler_nearest,
             sampler_linear,
+            ds_write_state,
             library,
             copy_buffer,
             fill_buffer,
@@ -160,16 +169,17 @@ impl ServicePipes {
     pub fn get_blit_image(
         &mut self,
         key: BlitKey,
+        aspects: Aspects,
         device: &Mutex<metal::Device>,
     ) -> &metal::RenderPipelineStateRef {
         let lib = &self.library;
         self.blits
             .entry(key)
-            .or_insert_with(|| Self::create_blit_image(key, lib, &*device.lock().unwrap()))
+            .or_insert_with(|| Self::create_blit_image(key, aspects, lib, &*device.lock().unwrap()))
     }
 
     fn create_blit_image(
-        key: BlitKey, library: &metal::LibraryRef, device: &metal::DeviceRef,
+        key: BlitKey, aspects: Aspects, library: &metal::LibraryRef, device: &metal::DeviceRef,
     ) -> metal::RenderPipelineState {
         use metal::MTLTextureType as Tt;
 
@@ -186,10 +196,14 @@ impl ServicePipes {
             Tt::Cube |
             Tt::CubeArray => unimplemented!()
         };
-        let s_channel = match key.2 {
-            Channel::Float => "float",
-            Channel::Int => "int",
-            Channel::Uint => "uint",
+        let s_channel = if aspects.contains(Aspects::COLOR) {
+            match key.2 {
+                Channel::Float => "float",
+                Channel::Int => "int",
+                Channel::Uint => "uint",
+            }
+        } else {
+            "depth" //TODO: stencil
         };
         let ps_name = format!("ps_blit_{}_{}", s_type, s_channel);
 
@@ -198,11 +212,21 @@ impl ServicePipes {
         pipeline.set_vertex_function(Some(&vs_blit));
         pipeline.set_fragment_function(Some(&ps_blit));
 
-        pipeline
-            .color_attachments()
-            .object_at(0)
-            .unwrap()
-            .set_pixel_format(key.1);
+        if aspects.contains(Aspects::COLOR) {
+            pipeline
+                .color_attachments()
+                .object_at(0)
+                .unwrap()
+                .set_pixel_format(key.1);
+        }
+        if aspects.contains(Aspects::DEPTH) {
+            pipeline
+                .set_depth_attachment_pixel_format(key.1);
+        }
+        if aspects.contains(Aspects::STENCIL) {
+            pipeline
+                .set_stencil_attachment_pixel_format(key.1);
+        }
 
         // Vertex buffers
         let vertex_descriptor = metal::VertexDescriptor::new();

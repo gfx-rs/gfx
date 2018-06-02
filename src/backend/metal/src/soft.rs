@@ -128,6 +128,7 @@ pub enum ComputeCommand {
     },
 }
 
+#[derive(Debug)]
 pub enum Pass {
     Render(metal::RenderPassDescriptor, Vec<RenderCommand>),
     Blit(Vec<BlitCommand>),

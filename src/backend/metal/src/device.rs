@@ -1,4 +1,7 @@
-use {AutoreleasePool, Backend, PrivateCapabilities, QueueFamily, Shared, Surface, Swapchain, validate_line_width};
+use {
+    AutoreleasePool, Backend, PrivateCapabilities, QueueFamily,
+    Shared, Surface, Swapchain, validate_line_width
+};
 use {conversions as conv, command, native as n};
 use internal::Channel;
 
@@ -6,8 +9,8 @@ use std::borrow::Borrow;
 use std::collections::hash_map::{Entry, HashMap};
 use std::ops::Range;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
-use std::{cmp, mem, slice};
+use std::sync::{Arc, Condvar, Mutex};
+use std::{cmp, mem, slice, time};
 
 use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query};
 use hal::device::{BindError, OutOfMemory, FramebufferError, ShaderError};
@@ -48,8 +51,6 @@ const PUSH_CONSTANTS_DESC_BINDING: u32 = 0;
 // minimumLinearTextureAlignmentForPixelFormat: method. The bytesPerRow parameter must also be
 // greater than or equal to the size of one pixel, in bytes, multiplied by the pixel width of one row.
 const STRIDE_MASK: u64 = 0xFF;
-
-const ALLOW_SHARED: bool = false; //TODO: figure out how to make it work
 
 /// Emit error during shader module parsing.
 fn gen_parse_error(err: SpirvErrorCode) -> ShaderError {
@@ -1205,10 +1206,7 @@ impl hal::Device<Backend> for Device {
 
         // temporary command buffer to copy the contents from
         // the given buffers into the allocated CPU-visible buffers
-        let (queue_id, cmd_buffer) = self.shared.queue_pool
-            .lock()
-            .unwrap()
-            .make_command_buffer(&self.shared.device);
+        let (cmd_buffer, token) = self.shared.queue.lock().unwrap().spawn();
         let encoder = cmd_buffer.new_blit_command_encoder();
 
         for item in iter {
@@ -1228,16 +1226,13 @@ impl hal::Device<Backend> for Device {
         }
 
         encoder.end_encoding();
-        self.shared.queue_pool
-            .lock()
-            .unwrap()
-            .release_command_buffer(queue_id);
-
         if num_syncs != 0 {
             debug!("\twaiting...");
             cmd_buffer.commit();
             cmd_buffer.wait_until_completed();
         }
+
+        self.shared.queue.lock().unwrap().release(token);
     }
 
     fn create_semaphore(&self) -> n::Semaphore {
@@ -1509,7 +1504,7 @@ impl hal::Device<Backend> for Device {
         memory::Requirements {
             size: (max_size + SIZE_MASK) & !SIZE_MASK,
             alignment: max_alignment,
-            type_mask: if ALLOW_SHARED && (!supports_texel_view || self.private_caps.shared_textures) {
+            type_mask: if !supports_texel_view || self.private_caps.shared_textures {
                 MemoryTypes::all().bits()
             } else {
                 (MemoryTypes::all() ^ MemoryTypes::SHARED).bits()
@@ -1734,7 +1729,7 @@ impl hal::Device<Backend> for Device {
             memory::Requirements {
                 size: (image.mip_sizes[0] + mask) & !mask,
                 alignment: self.private_caps.buffer_alignment,
-                type_mask: if ALLOW_SHARED && self.private_caps.shared_textures {
+                type_mask: if self.private_caps.shared_textures {
                     MemoryTypes::all().bits()
                 } else {
                     (MemoryTypes::all() ^ MemoryTypes::SHARED).bits()
@@ -1880,28 +1875,45 @@ impl hal::Device<Backend> for Device {
     // Emulated fence implementations
     #[cfg(not(feature = "native_fence"))]
     fn create_fence(&self, signaled: bool) -> n::Fence {
-        n::Fence(Arc::new(Mutex::new(signaled)))
+        Arc::new(n::FenceInner {
+            mutex: Mutex::new(signaled),
+            condvar: Condvar::new(),
+        })
     }
     fn reset_fence(&self, fence: &n::Fence) {
-        *fence.0.lock().unwrap() = false;
+        *fence.mutex.lock().unwrap() = false;
     }
-    fn wait_for_fence(&self, fence: &n::Fence, mut timeout_ms: u32) -> bool {
-        use std::{thread, time};
-        let tick = 1;
+    fn wait_for_fence(&self, fence: &n::Fence, timeout_ms: u32) -> bool {
         debug!("waiting for fence {:?} for {} ms", fence, timeout_ms);
-        loop {
-            if *fence.0.lock().unwrap() {
-                return true
+        let mut guard = fence.mutex.lock().unwrap();
+        match timeout_ms {
+            0 => *guard,
+            0xFFFFFFFF => {
+                while !*guard {
+                    guard = fence.condvar.wait(guard).unwrap();
+                }
+                true
             }
-            if timeout_ms < tick {
-                return false
+            _ => {
+                let total = time::Duration::from_millis(timeout_ms as u64);
+                let now = time::Instant::now();
+                while !*guard {
+                    let duration = match total.checked_sub(now.elapsed()) {
+                        Some(dur) => dur,
+                        None => return false,
+                    };
+                    let result = fence.condvar.wait_timeout(guard, duration).unwrap();
+                    if result.1.timed_out() {
+                        return false;
+                    }
+                    guard = result.0;
+                }
+                true
             }
-            timeout_ms -= tick;
-            thread::sleep(time::Duration::from_millis(tick as u64));
         }
     }
     fn get_fence_status(&self, fence: &n::Fence) -> bool {
-        *fence.0.lock().unwrap()
+        *fence.mutex.lock().unwrap()
     }
     #[cfg(not(feature = "native_fence"))]
     fn destroy_fence(&self, _fence: n::Fence) {
@@ -1927,15 +1939,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
-        debug!("waiting for idle");
-        let _pool = AutoreleasePool::new();
-
-        let queue = self.shared.aux_queue.lock().unwrap();
-        let command_buffer = queue
-            .new_command_buffer_with_unretained_references();
-        command_buffer.commit();
-        command_buffer.wait_until_completed();
-
+        command::QueueInner::wait_idle(&self.shared.queue);
         Ok(())
     }
 }
