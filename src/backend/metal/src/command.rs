@@ -74,7 +74,7 @@ impl QueueInner {
         debug!("waiting for idle");
         let _pool = AutoreleasePool::new();
         // note: we deliberately don't hold the Mutex lock while waiting,
-        // since the completition handlers need to access it.
+        // since the completion handlers need to access it.
         let (cmd_buf, token) = queue.lock().unwrap().spawn();
         cmd_buf.commit();
         cmd_buf.wait_until_completed();
@@ -1053,7 +1053,11 @@ impl CommandBuffer {
             width: vp.rect.w as _,
             height: vp.rect.h as _,
             znear: vp.depth.start as _,
-            zfar: vp.depth.end as _,
+            zfar: if self.shared.disabilities.broken_viewport_near_depth {
+                (vp.depth.end - vp.depth.start) as _
+            } else {
+                vp.depth.end as _
+            },
         };
         self.state.viewport = Some(viewport);
         soft::RenderCommand::SetViewport(viewport)

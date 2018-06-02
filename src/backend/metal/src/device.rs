@@ -1,4 +1,7 @@
-use {AutoreleasePool, Backend, PrivateCapabilities, QueueFamily, Shared, Surface, Swapchain, validate_line_width};
+use {
+    AutoreleasePool, Backend, PrivateCapabilities, QueueFamily,
+    Shared, Surface, Swapchain, validate_line_width
+};
 use {conversions as conv, command, native as n};
 use internal::Channel;
 
