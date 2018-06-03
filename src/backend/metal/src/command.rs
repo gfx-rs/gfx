@@ -20,12 +20,16 @@ use hal::range::RangeArg;
 
 use foreign_types::ForeignType;
 use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLIndexType, MTLSize, CaptureManager};
-use cocoa::foundation::{NSUInteger, NSInteger};
+use cocoa::foundation::{NSUInteger, NSInteger, NSRange};
 use block::{ConcreteBlock};
 use {conversions as conv, soft};
 
 
 const WORD_ALIGNMENT: u64 = 4;
+/// Enable an optimization to have multi-layered render passed
+/// with clear operations set up to implement our `clear_image`
+/// Note: currently doesn't work, needs a repro case for Apple
+const CLEAR_IMAGE_ARRAY: bool = false;
 
 pub struct QueueInner {
     raw: metal::CommandQueue,
@@ -1334,28 +1338,60 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<SubresourceRange>,
     {
-        let mut inner = self.inner.borrow_mut();
+        let CommandBufferInner {
+            ref mut retained_textures,
+            ref mut sink,
+            ..
+        } = *self.inner.borrow_mut();
         let clear_color = image.shader_channel.interpret(color);
-
-        //TODO: this is possible to optimize by bulk-cleaning all layers with:
-        // `descriptor.set_render_target_array_length(sub.layers.end as _);`
-        // this only works when `sub.layers.start == 0`, so one could create a temporary
-        // texture view to work around that.
 
         for subresource_range in subresource_ranges {
             let sub = subresource_range.borrow();
-            for level in sub.levels.clone() {
-                for layer in sub.layers.clone() {
+
+            let num_layers = (sub.layers.end - sub.layers.start) as u64;
+            let (layers, texture) = if CLEAR_IMAGE_ARRAY && sub.layers.start > 0 {
+                // aliasing is necessary for bulk-clearing all layers starting with 0
+                let tex = image.raw.new_texture_view_from_slice(
+                    image.mtl_format,
+                    image.mtl_type,
+                    NSRange {
+                        location: 0,
+                        length: image.raw.mipmap_level_count(),
+                    },
+                    NSRange {
+                        location: sub.layers.start as _,
+                        length: num_layers,
+                    },
+                );
+                retained_textures.push(tex);
+                (0 .. 1, retained_textures.last().unwrap())
+            } else if CLEAR_IMAGE_ARRAY {
+                (0 .. 1, &image.raw)
+            } else {
+                (sub.layers.clone(), &image.raw)
+            };
+
+            for layer in layers {
+                for level in sub.levels.clone() {
                     let descriptor = metal::RenderPassDescriptor::new();
+                    if image.extent.depth > 1 {
+                        assert_eq!(sub.layers.end, 1);
+                        let depth = image.extent.at_level(level).depth as u64;
+                        descriptor.set_render_target_array_length(depth);
+                    } else if CLEAR_IMAGE_ARRAY {
+                        descriptor.set_render_target_array_length(num_layers);
+                    };
+
                     if sub.aspects.contains(Aspects::COLOR) {
                         let attachment = descriptor
                             .color_attachments()
                             .object_at(0)
                             .unwrap();
-                        attachment.set_texture(Some(&image.raw));
+                        attachment.set_texture(Some(texture));
                         attachment.set_level(level as _);
-                        attachment.set_slice(layer as _);
-                        //attachment.set_depth_plane();
+                        if !CLEAR_IMAGE_ARRAY {
+                            attachment.set_slice(layer as _);
+                        }
                         attachment.set_load_action(metal::MTLLoadAction::Clear);
                         attachment.set_store_action(metal::MTLStoreAction::Store);
                         attachment.set_clear_color(clear_color.clone());
@@ -1365,10 +1401,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         let attachment = descriptor
                             .depth_attachment()
                             .unwrap();
-                        attachment.set_texture(Some(&image.raw));
+                        attachment.set_texture(Some(texture));
                         attachment.set_level(level as _);
-                        attachment.set_slice(layer as _);
-                        //attachment.set_depth_plane();
+                        if !CLEAR_IMAGE_ARRAY {
+                            attachment.set_slice(layer as _);
+                        }
                         attachment.set_load_action(metal::MTLLoadAction::Clear);
                         attachment.set_store_action(metal::MTLStoreAction::Store);
                         attachment.set_clear_depth(depth_stencil.depth as _);
@@ -1377,16 +1414,19 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         let attachment = descriptor
                             .stencil_attachment()
                             .unwrap();
-                        attachment.set_texture(Some(&image.raw));
+                        attachment.set_texture(Some(texture));
                         attachment.set_level(level as _);
-                        attachment.set_slice(layer as _);
-                        //attachment.set_depth_plane(_);
+                        if !CLEAR_IMAGE_ARRAY {
+                            attachment.set_slice(layer as _);
+                        }
                         attachment.set_load_action(metal::MTLLoadAction::Clear);
                         attachment.set_store_action(metal::MTLStoreAction::Store);
                         attachment.set_clear_stencil(depth_stencil.stencil);
                     }
 
-                    inner.sink().quick_render_pass(descriptor, None);
+                    sink.as_mut()
+                        .unwrap()
+                        .quick_render_pass(descriptor, None);
                     // no actual pass body - everything is in the attachment clear operations
                 }
             }
@@ -2242,14 +2282,19 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::ImageCopy>,
     {
-        let mut inner = self.inner.borrow_mut();
+        let CommandBufferInner {
+            ref mut retained_textures,
+            ref mut sink,
+            ..
+        } = *self.inner.borrow_mut();
+
         let new_src = if src.mtl_format == dst.mtl_format {
-            src.raw.clone()
+            &src.raw
         } else {
             assert_eq!(src.format_desc.bits, dst.format_desc.bits);
             let tex = src.raw.new_texture_view(dst.mtl_format);
-            inner.retained_textures.push(tex.clone());
-            tex
+            retained_textures.push(tex);
+            retained_textures.last().unwrap()
         };
 
         let commands = regions.into_iter().map(|region| {
@@ -2259,8 +2304,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 region: region.borrow().clone(),
             }
         });
-        inner
-            .sink()
+        sink.as_mut()
+            .unwrap()
             .blit_commands(commands);
     }
 
