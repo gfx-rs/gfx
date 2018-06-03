@@ -1,0 +1,185 @@
+(
+    resources: {
+        "buffer.vertex": Buffer(
+            size: 48,
+            usage: (bits: 0x80), // VERTEX
+            data: "vertex-offset.raw",
+        ),
+        "image.color": Image(
+            kind: D2(1, 1, 1, 1),
+            num_levels: 1,
+            format: Rgba32Uint,
+            usage: (bits: 0x14), //COLOR_ATTACHMENT | SAMPLED (temporary for GL)
+        ),
+        "pass": RenderPass(
+            attachments: {
+                "c": (
+                    format: Some(Rgba32Uint),
+                    samples: 1,
+                    ops: (load: Clear, store: Store),
+                    layouts: (start: General, end: General),
+                ),
+            },
+            subpasses: {
+                "main": (
+                    colors: [("c", General)],
+                    depth_stencil: None,
+                )
+            },
+            dependencies: [],
+        ),
+        "image.color.view": ImageView(
+            image: "image.color",
+            kind: D2,
+            format: Rgba32Uint,
+            range: (
+                aspects: (bits: 1),
+                levels: (start: 0, end: 1),
+                layers: (start: 0, end: 1),
+            ),
+        ),
+        "fbo": Framebuffer(
+            pass: "pass",
+            views: {
+                "c": "image.color.view"
+            },
+            extent: (
+                width: 1,
+                height: 1,
+                depth: 1,
+            ),
+        ),
+        "pipe-layout": PipelineLayout(
+            set_layouts: [],
+            push_constant_ranges: [],
+        ),
+        "shader.vertex-offset.vs": Shader("vertex-offset.vert"),
+        "shader.vertex-offset.fs": Shader("vertex-offset.frag"),
+        "pipe.vertex-offset": GraphicsPipeline(
+            shaders: (
+                vertex: "shader.vertex-offset.vs",
+                fragment: "shader.vertex-offset.fs",
+            ),
+            rasterizer: (
+                polygon_mode: Fill,
+                cull_face: None,
+                front_face: Clockwise,
+                depth_clamping: false,
+                depth_bias: None,
+                conservative: false,
+            ),
+            vertex_buffers: [
+                VertexBufferDesc(
+                    binding: 0,
+                    stride: 16,
+                    rate: 0,
+                ),
+            ],
+            attributes: [
+                AttributeDesc(
+                    location: 0,
+                    binding: 0,
+                    element: Element(
+                        offset: 32,
+                        format: Rgba32Float,
+                    ),
+                ),
+            ],
+            input_assembler: (
+                primitive: TriangleList,
+                primitive_restart: Disabled,
+            ),
+            blender: (
+                alpha_coverage: false,
+                logic_op: None,
+                targets: [
+                    ((bits: 15), Off),
+                ],
+            ),
+            layout: "pipe-layout",
+            subpass: (
+                parent: "pass",
+                index: 0,
+            ),
+        ),
+        "pipe.vertex-offset-overlap": GraphicsPipeline(
+            shaders: (
+                vertex: "shader.vertex-offset.vs",
+                fragment: "shader.vertex-offset.fs",
+            ),
+            rasterizer: (
+                polygon_mode: Fill,
+                cull_face: None,
+                front_face: Clockwise,
+                depth_clamping: false,
+                depth_bias: None,
+                conservative: false,
+            ),
+            vertex_buffers: [
+                VertexBufferDesc(
+                    binding: 0,
+                    stride: 16,
+                    rate: 0,
+                ),
+            ],
+            attributes: [
+                AttributeDesc(
+                    location: 0,
+                    binding: 0,
+                    element: Element(
+                        offset: 8,
+                        format: Rgba32Float,
+                    ),
+                ),
+            ],
+            input_assembler: (
+                primitive: TriangleList,
+                primitive_restart: Disabled,
+            ),
+            blender: (
+                alpha_coverage: false,
+                logic_op: None,
+                targets: [
+                    ((bits: 15), Off),
+                ],
+            ),
+            layout: "pipe-layout",
+            subpass: (
+                parent: "pass",
+                index: 0,
+            ),
+        ),
+    },
+    jobs: {
+        "offset-aligned": Graphics(
+            framebuffer: "fbo",
+            clear_values: [
+                Color(Float((0.0, 0.0, 0.0, 0.0))),
+            ],
+            pass: ("pass", {
+                "main": (commands: [
+                    BindPipeline("pipe.vertex-offset"),
+                    BindVertexBuffers([("buffer.vertex", 0)]),
+                    Draw(
+                        vertices: (start: 0, end: 3),
+                    ),
+                ]),
+            }),
+        ),
+        "offset-overlap": Graphics(
+            framebuffer: "fbo",
+            clear_values: [
+                Color(Float((0.0, 0.0, 0.0, 0.0))),
+            ],
+            pass: ("pass", {
+                "main": (commands: [
+                    BindPipeline("pipe.vertex-offset-overlap"),
+                    BindVertexBuffers([("buffer.vertex", 0)]),
+                    Draw(
+                        vertices: (start: 0, end: 3),
+                    ),
+                ]),
+            }),
+        ),
+    },
+)
