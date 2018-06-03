@@ -2891,13 +2891,9 @@ impl d::Device<B> for Device {
         // Just drop
     }
 
-    fn destroy_descriptor_pool(&self, pool: n::DescriptorPool) {
-        self.heap_srv_cbv_uav.lock().unwrap()
-            .range_allocator.free_range(pool.heap_srv_cbv_uav.range_allocator.initial_range())
-            .expect("Heap free failed!  Range passed in was invalid.");
-        self.heap_sampler.lock().unwrap()
-            .range_allocator.free_range(pool.heap_sampler.range_allocator.initial_range())
-            .expect("Heap free failed!  Range passed in was invalid.");
+    fn destroy_descriptor_pool(&self, _pool: n::DescriptorPool) {
+        // Just drop
+        // Allocated descriptor sets don't need to be freed beforehand.
     }
 
     fn destroy_descriptor_set_layout(&self, _layout: n::DescriptorSetLayout) {
