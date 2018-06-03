@@ -1,5 +1,6 @@
 use metal;
-use hal::format::Aspects;
+use hal::command::ClearColorRaw;
+use hal::format::{Aspects, ChannelType};
 use hal::image::Filter;
 
 use std::mem;
@@ -25,6 +26,50 @@ pub enum Channel {
     Int,
     Uint,
 }
+
+impl From<ChannelType> for Channel {
+    fn from(channel_type: ChannelType) -> Self {
+        match channel_type {
+            ChannelType::Unorm |
+            ChannelType::Inorm |
+            ChannelType::Ufloat |
+            ChannelType::Float |
+            ChannelType::Uscaled |
+            ChannelType::Iscaled |
+            ChannelType::Srgb => Channel::Float,
+            ChannelType::Uint => Channel::Uint,
+            ChannelType::Int => Channel::Int,
+        }
+    }
+}
+
+impl Channel {
+    pub fn interpret(&self, raw: ClearColorRaw) -> metal::MTLClearColor {
+        unsafe {
+            match *self {
+                Channel::Float => metal::MTLClearColor::new(
+                    raw.float32[0] as _,
+                    raw.float32[1] as _,
+                    raw.float32[2] as _,
+                    raw.float32[3] as _,
+                ),
+                Channel::Int => metal::MTLClearColor::new(
+                    raw.int32[0] as _,
+                    raw.int32[1] as _,
+                    raw.int32[2] as _,
+                    raw.int32[3] as _,
+                ),
+                Channel::Uint => metal::MTLClearColor::new(
+                    raw.uint32[0] as _,
+                    raw.uint32[1] as _,
+                    raw.uint32[2] as _,
+                    raw.uint32[3] as _,
+                ),
+            }
+        }
+    }
+}
+
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct ClearMask {

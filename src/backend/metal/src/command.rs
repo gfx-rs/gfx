@@ -1,6 +1,6 @@
 use {AutoreleasePool, Backend, Shared, validate_line_width};
 use {native, window};
-use internal::{BlitVertex, Channel};
+use internal::BlitVertex;
 
 use std::borrow::{self, Borrow};
 use std::cell::RefCell;
@@ -19,7 +19,7 @@ use hal::queue::{RawCommandQueue, RawSubmission};
 use hal::range::RangeArg;
 
 use foreign_types::ForeignType;
-use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLClearColor, MTLIndexType, MTLSize, CaptureManager};
+use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLIndexType, MTLSize, CaptureManager};
 use cocoa::foundation::{NSUInteger, NSInteger};
 use block::{ConcreteBlock};
 use {conversions as conv, soft};
@@ -1335,47 +1335,18 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T::Item: Borrow<SubresourceRange>,
     {
         let mut inner = self.inner.borrow_mut();
+        let clear_color = image.shader_channel.interpret(color);
 
-        let clear_color = unsafe {
-            match image.shader_channel {
-                Channel::Float => metal::MTLClearColor::new(
-                    color.float32[0] as _,
-                    color.float32[1] as _,
-                    color.float32[2] as _,
-                    color.float32[3] as _,
-                ),
-                Channel::Int => metal::MTLClearColor::new(
-                    color.int32[0] as _,
-                    color.int32[1] as _,
-                    color.int32[2] as _,
-                    color.int32[3] as _,
-                ),
-                Channel::Uint => metal::MTLClearColor::new(
-                    color.uint32[0] as _,
-                    color.uint32[1] as _,
-                    color.uint32[2] as _,
-                    color.uint32[3] as _,
-                ),
-            }
-        };
+        //TODO: this is possible to optimize by bulk-cleaning all layers with:
+        // `descriptor.set_render_target_array_length(sub.layers.end as _);`
+        // this only works when `sub.layers.start == 0`, so one could create a temporary
+        // texture view to work around that.
 
         for subresource_range in subresource_ranges {
             let sub = subresource_range.borrow();
-            let end_level = if sub.levels.end == !0 {
-                image.raw.mipmap_level_count() as _
-            } else {
-                sub.levels.end
-            };
-            let end_layer = if sub.layers.end == !0 {
-                image.raw.array_length() as _
-            } else {
-                sub.layers.end
-            };
-
-            for level in sub.levels.start .. end_level {
-                for layer in sub.layers.start .. end_layer {
+            for level in sub.levels.clone() {
+                for layer in sub.layers.clone() {
                     let descriptor = metal::RenderPassDescriptor::new();
-                    // descriptor.set_render_target_array_length(sub.layers.end as _); //TODO: fast path
                     if sub.aspects.contains(Aspects::COLOR) {
                         let attachment = descriptor
                             .color_attachments()
@@ -1753,29 +1724,28 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::ClearValueRaw>,
     {
-        let descriptor = unsafe {
-            // FIXME: subpasses
-            let pass_descriptor: metal::RenderPassDescriptor = msg_send![frame_buffer.0, copy];
+        // FIXME: subpasses
+        let descriptor: metal::RenderPassDescriptor = unsafe {
+            msg_send![frame_buffer.0, copy]
+        };
 
-            for (i, value) in clear_values.into_iter().enumerate() {
-                let value = *value.borrow();
-                if i < render_pass.num_colors {
-                    let color_desc = pass_descriptor.color_attachments().object_at(i).expect("too many clear values");
-                    let mtl_color = MTLClearColor::new(
-                        value.color.float32[0] as f64,
-                        value.color.float32[1] as f64,
-                        value.color.float32[2] as f64,
-                        value.color.float32[3] as f64,
-                    );
+        for (i, value) in clear_values.into_iter().enumerate() {
+            let value = *value.borrow();
+            match render_pass.color_channels.get(i) {
+                Some(channel) => {
+                    let color_desc = descriptor.color_attachments().object_at(i).expect("too many clear values");
+                    let mtl_color = channel
+                        .expect("Unable to clear an attachment with unknown format")
+                        .interpret(unsafe { value.color });
                     color_desc.set_clear_color(mtl_color);
-                } else {
-                    let depth_desc = pass_descriptor.depth_attachment().expect("no depth attachment");
-                    depth_desc.set_clear_depth(value.depth_stencil.depth as f64);
+                }
+                None => {
+                    let depth_desc = descriptor.depth_attachment().expect("no depth attachment");
+                    let mtl_depth = unsafe { value.depth_stencil.depth as f64 };
+                    depth_desc.set_clear_depth(mtl_depth);
                 }
             }
-
-            pass_descriptor
-        };
+        }
 
         let init_commands = self.state.make_render_commands();
         self.inner
