@@ -33,7 +33,7 @@ unsafe impl Sync for ShaderModule {}
 pub struct RenderPass {
     pub(crate) desc: metal::RenderPassDescriptor,
     pub(crate) attachments: Vec<pass::Attachment>,
-    pub(crate) num_colors: usize,
+    pub(crate) color_channels: Vec<Option<Channel>>,
 }
 
 unsafe impl Send for RenderPass {}

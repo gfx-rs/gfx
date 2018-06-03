@@ -3,7 +3,6 @@ use {
     Shared, Surface, Swapchain, validate_line_width
 };
 use {conversions as conv, command, native as n};
-use internal::Channel;
 
 use std::borrow::Borrow;
 use std::collections::hash_map::{Entry, HashMap};
@@ -276,8 +275,6 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         &self, format: format::Format, dimensions: u8, tiling: image::Tiling,
         usage: image::Usage, storage_flags: image::StorageFlags,
     ) -> Option<image::FormatProperties> {
-        //TODO: actually query this data
-        let width = 4096;
         if let image::Tiling::Linear = tiling {
             let format_desc = format.surface_desc();
             let host_usage = image::Usage::TRANSFER_SRC | image::Usage::TRANSFER_DST;
@@ -290,13 +287,21 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 return None
             }
         }
-        let height = if dimensions >= 2 { 4096 } else { 1 };
-        let depth = if dimensions >= 3 { 4096 } else { 1 };
-        let max_dimension = 4096f32; // Max of {width, height, depth}
+        if dimensions == 1 && usage.intersects(image::Usage::COLOR_ATTACHMENT | image::Usage::DEPTH_STENCIL_ATTACHMENT) {
+            // MTLRenderPassDescriptor texture must not be MTLTextureType1D
+            return None;
+        }
+        //TODO: actually query this data
+        let max_dimension = 4096u32;
+        let max_extent = image::Extent {
+            width: max_dimension,
+            height: if dimensions >= 2 { max_dimension } else { 1 },
+            depth: if dimensions >= 3 { max_dimension } else { 1 },
+        };
 
         self.private_caps.map_format(format).map(|_| image::FormatProperties {
-            max_extent: image::Extent { width, height, depth },
-            max_levels: max_dimension.log2().ceil() as u8 + 1,
+            max_extent,
+            max_levels: if dimensions == 1 { 1 } else { 12 },
             // 3D images enforce a single layer
             max_layers: if dimensions == 3 { 1 } else { 2048 },
             sample_count_mask: 0x1,
@@ -607,7 +612,7 @@ impl hal::Device<Backend> for Device {
         let attachments = attachments.into_iter()
             .map(|attachment| attachment.borrow().clone())
             .collect::<Vec<_>>();
-        let mut color_attachment_index = 0;
+        let mut color_channels = Vec::new();
         for attachment in &attachments {
             let is_depth = match attachment.format {
                 Some(f) => f.is_depth(),
@@ -619,10 +624,10 @@ impl hal::Device<Backend> for Device {
                     .depth_attachment()
                     .expect("no depth attachement")
             } else {
-                color_attachment_index += 1;
+                color_channels.push(attachment.format.map(|f| f.base_format().1.into()));
                 pass
                     .color_attachments()
-                    .object_at(color_attachment_index - 1)
+                    .object_at(color_channels.len() - 1)
                     .expect("too many color attachments")
             };
 
@@ -633,7 +638,7 @@ impl hal::Device<Backend> for Device {
         n::RenderPass {
             desc: pass,
             attachments,
-            num_colors: color_attachment_index,
+            color_channels,
         }
     }
 
@@ -1052,14 +1057,13 @@ impl hal::Device<Backend> for Device {
         I::Item: Borrow<n::ImageView>
     {
         let _ap = AutoreleasePool::new(); // for attachments
-        let descriptor = unsafe {
-            let desc: metal::RenderPassDescriptor = msg_send![renderpass.desc, copy];
-            desc.set_render_target_array_length(extent.depth as NSUInteger);
-            desc
+        let descriptor: metal::RenderPassDescriptor = unsafe {
+            msg_send![renderpass.desc, copy]
         };
+        descriptor.set_render_target_array_length(extent.depth as NSUInteger);
 
         let mut attachments = attachments.into_iter();
-        for i in 0..renderpass.num_colors {
+        for i in 0 .. renderpass.color_channels.len() {
             let mtl_attachment = descriptor.color_attachments().object_at(i).expect("too many color attachments");
             let attachment = attachments.next().expect("Not enough colour attachments provided");
             mtl_attachment.set_texture(Some(&attachment.borrow().0));
@@ -1615,19 +1619,14 @@ impl hal::Device<Backend> for Device {
         let descriptor = metal::TextureDescriptor::new();
 
         let (mtl_type, num_layers) = match kind {
-            image::Kind::D1(_, 1) if mip_levels == 1=> {
+            image::Kind::D1(_, 1) => {
                 assert!(!is_cube);
                 (MTLTextureType::D1, None)
             }
-            image::Kind::D1(_, layers) if mip_levels == 1 => {
+            image::Kind::D1(_, layers) => {
                 assert!(!is_cube);
                 (MTLTextureType::D1Array, Some(layers))
             }
-            image::Kind::D1(_, 1) |
-            image::Kind::D2(_, _, 1, 1) => {
-                (MTLTextureType::D2, None)
-            }
-            image::Kind::D1(_, layers) |
             image::Kind::D2(_, _, layers, 1) => {
                 if is_cube && layers > 6 {
                     assert_eq!(layers % 6, 0);
@@ -1807,17 +1806,7 @@ impl hal::Device<Backend> for Device {
             extent: image.extent,
             num_layers: image.num_layers,
             format_desc,
-            shader_channel: match base.1 {
-                format::ChannelType::Unorm |
-                format::ChannelType::Inorm |
-                format::ChannelType::Ufloat |
-                format::ChannelType::Float |
-                format::ChannelType::Uscaled |
-                format::ChannelType::Iscaled |
-                format::ChannelType::Srgb => Channel::Float,
-                format::ChannelType::Uint => Channel::Uint,
-                format::ChannelType::Int => Channel::Int,
-            },
+            shader_channel: base.1.into(),
             mtl_format: match self.private_caps.map_format(image.format) {
                 Some(format) => format,
                 None => {
