@@ -1,10 +1,20 @@
 use hal::format::{Format};
-use hal::pso::{Rect, Viewport};
+use hal::pso::{
+    BlendDesc, BlendOp, BlendState, ColorBlendDesc, Comparison, CullFace, DepthStencilDesc,
+    DepthTest, Factor, PolygonMode, Rasterizer, Rect, StencilFace, StencilOp, StencilTest,
+    Viewport, Stage
+};
+use hal::Primitive;
+
+use spirv_cross::spirv;
+
+use winapi::shared::dxgiformat::*;
+use winapi::shared::minwindef::{FALSE, INT, TRUE};
 
 use winapi::um::d3dcommon::*;
-use winapi::shared::dxgiformat::*;
+use winapi::um::d3d11::*;
 
-use winapi::um::d3d11::{D3D11_RECT, D3D11_VIEWPORT};
+use std::mem;
 
 // TODO: stolen from d3d12 backend, maybe share function somehow?
 pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
@@ -100,5 +110,212 @@ pub fn map_rect(rect: &Rect) -> D3D11_RECT {
         top: rect.y as _,
         right: rect.w as _,
         bottom: rect.h as _,
+    }
+}
+
+pub fn map_topology(primitive: Primitive) -> D3D11_PRIMITIVE_TOPOLOGY {
+    match primitive {
+        Primitive::PointList              => D3D_PRIMITIVE_TOPOLOGY_POINTLIST,
+        Primitive::LineList               => D3D_PRIMITIVE_TOPOLOGY_LINELIST,
+        Primitive::LineListAdjacency      => D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ,
+        Primitive::LineStrip              => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP,
+        Primitive::LineStripAdjacency     => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ,
+        Primitive::TriangleList           => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+        Primitive::TriangleListAdjacency  => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+        Primitive::TriangleStrip          => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+        Primitive::TriangleStripAdjacency => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+        Primitive::PatchList(num) => { assert!(num != 0);
+            D3D_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST + (num as u32) - 1
+        },
+    }
+}
+
+fn map_fill_mode(mode: PolygonMode) -> D3D11_FILL_MODE {
+    match mode {
+        PolygonMode::Fill => D3D11_FILL_SOLID,
+        PolygonMode::Line(_) => D3D11_FILL_WIREFRAME,
+        // TODO: return error
+        _ => unimplemented!()
+    }
+}
+
+fn map_cull_mode(mode: Option<CullFace>) -> D3D11_CULL_MODE {
+    match mode {
+        Some(CullFace::Front) => D3D11_CULL_FRONT,
+        Some(CullFace::Back) => D3D11_CULL_BACK,
+        None => D3D11_CULL_NONE,
+    }
+}
+
+pub(crate) fn map_rasterizer_desc(desc: &Rasterizer) -> D3D11_RASTERIZER_DESC {
+    D3D11_RASTERIZER_DESC {
+        FillMode: map_fill_mode(desc.polygon_mode),
+        CullMode: map_cull_mode(desc.cull_face),
+        FrontCounterClockwise: match desc.front_face {
+            Clockwise => FALSE,
+            CounterClockwise => TRUE,
+        },
+        DepthBias: desc.depth_bias.map_or(0, |bias| bias.const_factor as INT),
+        DepthBiasClamp: desc.depth_bias.map_or(0.0, |bias| bias.clamp),
+        SlopeScaledDepthBias: desc.depth_bias.map_or(0.0, |bias| bias.slope_factor),
+        DepthClipEnable: !desc.depth_clamping as _,
+        // TODO:
+        ScissorEnable: TRUE,
+        // TODO: msaa
+        MultisampleEnable: FALSE,
+        // TODO: line aa?
+        AntialiasedLineEnable: FALSE,
+        // TODO: conservative raster in >=11.x
+    }
+}
+
+fn map_blend_factor(factor: Factor) -> D3D11_BLEND {
+    match factor {
+        Factor::Zero => D3D11_BLEND_ZERO,
+        Factor::One => D3D11_BLEND_ONE,
+        Factor::SrcColor => D3D11_BLEND_SRC_COLOR,
+        Factor::OneMinusSrcColor => D3D11_BLEND_INV_SRC_COLOR,
+        Factor::DstColor => D3D11_BLEND_DEST_COLOR,
+        Factor::OneMinusDstColor => D3D11_BLEND_INV_DEST_COLOR,
+        Factor::SrcAlpha => D3D11_BLEND_SRC_ALPHA,
+        Factor::OneMinusSrcAlpha => D3D11_BLEND_INV_SRC_ALPHA,
+        Factor::DstAlpha => D3D11_BLEND_DEST_ALPHA,
+        Factor::OneMinusDstAlpha => D3D11_BLEND_INV_DEST_ALPHA,
+        Factor::ConstColor | Factor::ConstAlpha => D3D11_BLEND_BLEND_FACTOR,
+        Factor::OneMinusConstColor | Factor::OneMinusConstAlpha => D3D11_BLEND_INV_BLEND_FACTOR,
+        Factor::SrcAlphaSaturate => D3D11_BLEND_SRC_ALPHA_SAT,
+        Factor::Src1Color => D3D11_BLEND_SRC1_COLOR,
+        Factor::OneMinusSrc1Color => D3D11_BLEND_INV_SRC1_COLOR,
+        Factor::Src1Alpha => D3D11_BLEND_SRC1_ALPHA,
+        Factor::OneMinusSrc1Alpha => D3D11_BLEND_INV_SRC1_ALPHA,
+    }
+}
+
+fn map_blend_op(operation: BlendOp) -> (D3D11_BLEND_OP, D3D11_BLEND, D3D11_BLEND) {
+    match operation {
+        BlendOp::Add    { src, dst } => (D3D11_BLEND_OP_ADD,          map_blend_factor(src), map_blend_factor(dst)),
+        BlendOp::Sub    { src, dst } => (D3D11_BLEND_OP_SUBTRACT,     map_blend_factor(src), map_blend_factor(dst)),
+        BlendOp::RevSub { src, dst } => (D3D11_BLEND_OP_REV_SUBTRACT, map_blend_factor(src), map_blend_factor(dst)),
+        BlendOp::Min => (D3D11_BLEND_OP_MIN, D3D11_BLEND_ZERO, D3D11_BLEND_ZERO),
+        BlendOp::Max => (D3D11_BLEND_OP_MAX, D3D11_BLEND_ZERO, D3D11_BLEND_ZERO),
+    }
+}
+
+fn map_blend_targets(render_target_blends: &[ColorBlendDesc]) -> [D3D11_RENDER_TARGET_BLEND_DESC; 8] {
+    let mut targets: [D3D11_RENDER_TARGET_BLEND_DESC; 8] = [unsafe { mem::zeroed() }; 8];
+
+    for (mut target, &ColorBlendDesc(mask, blend)) in
+        targets.iter_mut().zip(render_target_blends.iter())
+    {
+        target.RenderTargetWriteMask = mask.bits() as _;
+        if let BlendState::On { color, alpha } = blend {
+            let (color_op, color_src, color_dst) = map_blend_op(color);
+            let (alpha_op, alpha_src, alpha_dst) = map_blend_op(alpha);
+            target.BlendEnable = TRUE;
+            target.BlendOp = color_op;
+            target.SrcBlend = color_src;
+            target.DestBlend = color_dst;
+            target.BlendOpAlpha = alpha_op;
+            target.SrcBlendAlpha = alpha_src;
+            target.DestBlendAlpha = alpha_dst;
+        }
+    }
+
+    targets
+}
+
+pub(crate) fn map_blend_desc(desc: &BlendDesc) -> D3D11_BLEND_DESC {
+    D3D11_BLEND_DESC {
+        // TODO: msaa
+        AlphaToCoverageEnable: FALSE,
+        IndependentBlendEnable: TRUE,
+        RenderTarget: map_blend_targets(&desc.targets)
+    }
+}
+
+fn map_comparison(func: Comparison) -> D3D11_COMPARISON_FUNC {
+    match func {
+        Comparison::Never => D3D11_COMPARISON_NEVER,
+        Comparison::Less => D3D11_COMPARISON_LESS,
+        Comparison::LessEqual => D3D11_COMPARISON_LESS_EQUAL,
+        Comparison::Equal => D3D11_COMPARISON_EQUAL,
+        Comparison::GreaterEqual => D3D11_COMPARISON_GREATER_EQUAL,
+        Comparison::Greater => D3D11_COMPARISON_GREATER,
+        Comparison::NotEqual => D3D11_COMPARISON_NOT_EQUAL,
+        Comparison::Always => D3D11_COMPARISON_ALWAYS,
+    }
+}
+
+fn map_stencil_op(op: StencilOp) -> D3D11_STENCIL_OP {
+    match op {
+        StencilOp::Keep => D3D11_STENCIL_OP_KEEP,
+        StencilOp::Zero => D3D11_STENCIL_OP_ZERO,
+        StencilOp::Replace => D3D11_STENCIL_OP_REPLACE,
+        StencilOp::IncrementClamp => D3D11_STENCIL_OP_INCR_SAT,
+        StencilOp::IncrementWrap => D3D11_STENCIL_OP_INCR,
+        StencilOp::DecrementClamp => D3D11_STENCIL_OP_DECR_SAT,
+        StencilOp::DecrementWrap => D3D11_STENCIL_OP_DECR,
+        StencilOp::Invert => D3D11_STENCIL_OP_INVERT,
+    }
+}
+
+fn map_stencil_side(side: &StencilFace) -> D3D11_DEPTH_STENCILOP_DESC {
+    D3D11_DEPTH_STENCILOP_DESC {
+        StencilFailOp: map_stencil_op(side.op_fail),
+        StencilDepthFailOp: map_stencil_op(side.op_depth_fail),
+        StencilPassOp: map_stencil_op(side.op_pass),
+        StencilFunc: map_comparison(side.fun),
+    }
+}
+
+pub(crate) fn map_depth_stencil_desc(desc: &DepthStencilDesc) -> D3D11_DEPTH_STENCIL_DESC {
+    let (depth_on, depth_write, depth_func) = match desc.depth {
+        DepthTest::On { fun, write } => (TRUE, write, map_comparison(fun)),
+        DepthTest::Off => unsafe { mem::zeroed() },
+    };
+
+    let (stencil_on, front, back, read_mask, write_mask) = match desc.stencil {
+        StencilTest::On { ref front, ref back } => {
+            // TODO: cascade to create_pipeline
+            if front.mask_read != back.mask_read || front.mask_write != back.mask_write {
+                // error!("Different masks on stencil front ({:?}) and back ({:?}) are not supported", front, back);
+            }
+            (TRUE, map_stencil_side(front), map_stencil_side(back), front.mask_read, front.mask_write)
+        },
+        StencilTest::Off => unsafe { mem::zeroed() },
+    };
+
+    D3D11_DEPTH_STENCIL_DESC {
+        DepthEnable: depth_on,
+        DepthWriteMask: if depth_write {D3D11_DEPTH_WRITE_MASK_ALL} else {D3D11_DEPTH_WRITE_MASK_ZERO},
+        DepthFunc: depth_func,
+        StencilEnable: stencil_on,
+        StencilReadMask: read_mask as _,
+        StencilWriteMask: write_mask as _,
+        FrontFace: front,
+        BackFace: back,
+    }
+}
+
+pub fn map_execution_model(model: spirv::ExecutionModel) -> Stage {
+    match model {
+        spirv::ExecutionModel::Vertex => Stage::Vertex,
+        spirv::ExecutionModel::Fragment => Stage::Fragment,
+        spirv::ExecutionModel::Geometry => Stage::Geometry,
+        spirv::ExecutionModel::GlCompute => Stage::Compute,
+        spirv::ExecutionModel::TessellationControl => Stage::Hull,
+        spirv::ExecutionModel::TessellationEvaluation => Stage::Domain,
+        spirv::ExecutionModel::Kernel => panic!("Kernel is not a valid execution model."),
+    }
+}
+
+pub fn map_stage(stage: Stage) -> spirv::ExecutionModel {
+    match stage {
+        Stage::Vertex => spirv::ExecutionModel::Vertex,
+        Stage::Fragment => spirv::ExecutionModel::Fragment,
+        Stage::Geometry => spirv::ExecutionModel::Geometry,
+        Stage::Compute => spirv::ExecutionModel::GlCompute,
+        Stage::Hull => spirv::ExecutionModel::TessellationControl,
+        Stage::Domain => spirv::ExecutionModel::TessellationEvaluation,
     }
 }

@@ -35,11 +35,13 @@ use std::mem;
 use std::ops::Range;
 use std::cell::RefCell;
 use std::borrow::{BorrowMut, Borrow};
+use std::collections::BTreeMap;
 
 use std::os::raw::c_void;
 
 mod conv;
 mod dxgi;
+mod shader;
 
 pub struct Instance {
     pub(crate) factory: ComPtr<IDXGIFactory>,
@@ -358,6 +360,178 @@ impl Device {
             context
         }
     }
+
+    fn create_rasterizer_state(&self, rasterizer_desc: &pso::Rasterizer) -> Result<ComPtr<d3d11::ID3D11RasterizerState>, pso::CreationError> {
+        let mut rasterizer = ptr::null_mut();
+        let desc = conv::map_rasterizer_desc(rasterizer_desc);
+
+        let hr = unsafe {
+            self.device.CreateRasterizerState(
+                &desc,
+                &mut rasterizer as *mut *mut _ as *mut *mut _
+            )
+        };
+
+        if winerror::SUCCEEDED(hr) {
+            Ok(unsafe { ComPtr::from_raw(rasterizer) })
+        } else {
+            Err(pso::CreationError::Other)
+        }
+    }
+
+    fn create_blend_state(&self, blend_desc: &pso::BlendDesc) -> Result<ComPtr<d3d11::ID3D11BlendState>, pso::CreationError> {
+        let mut blend = ptr::null_mut();
+        let desc = conv::map_blend_desc(blend_desc);
+
+        let hr = unsafe {
+            self.device.CreateBlendState(
+                &desc,
+                &mut blend as *mut *mut _ as *mut *mut _
+            )
+        };
+
+        if winerror::SUCCEEDED(hr) {
+            Ok(unsafe { ComPtr::from_raw(blend) })
+        } else {
+            Err(pso::CreationError::Other)
+        }
+    }
+
+    fn create_depth_stencil_state(&self, depth_desc: &pso::DepthStencilDesc) -> Result<ComPtr<d3d11::ID3D11DepthStencilState>, pso::CreationError> {
+        let mut depth = ptr::null_mut();
+        let desc = conv::map_depth_stencil_desc(depth_desc);
+
+        let hr = unsafe {
+            self.device.CreateDepthStencilState(
+                &desc,
+                &mut depth as *mut *mut _ as *mut *mut _
+            )
+        };
+
+        if winerror::SUCCEEDED(hr) {
+            Ok(unsafe { ComPtr::from_raw(depth) })
+        } else {
+            Err(pso::CreationError::Other)
+        }
+    }
+
+    fn create_input_layout(&self, vs: ComPtr<d3dcommon::ID3DBlob>, vertex_buffers: &[pso::VertexBufferDesc], attributes: &[pso::AttributeDesc], input_assembler: &pso::InputAssemblerDesc) -> Result<(d3d11::D3D11_PRIMITIVE_TOPOLOGY, ComPtr<d3d11::ID3D11InputLayout>), pso::CreationError> {
+        let mut layout = ptr::null_mut();
+
+        let input_elements = attributes
+            .iter()
+            .filter_map(|attrib| {
+                let buffer_desc = match vertex_buffers
+                    .iter().find(|buffer_desc| buffer_desc.binding == attrib.binding)
+                {
+                    Some(buffer_desc) => buffer_desc,
+                    None => {
+                        // TODO:
+                        // error!("Couldn't find associated vertex buffer description {:?}", attrib.binding);
+                        return Some(Err(pso::CreationError::Other));
+                    }
+                };
+
+                let slot_class = match buffer_desc.rate {
+                    0 => d3d11::D3D11_INPUT_PER_VERTEX_DATA,
+                    _ => d3d11::D3D11_INPUT_PER_INSTANCE_DATA,
+                };
+                let format = attrib.element.format;
+
+                Some(Ok(d3d11::D3D11_INPUT_ELEMENT_DESC {
+                    SemanticName: "TEXCOORD\0".as_ptr() as *const _, // Semantic name used by SPIRV-Cross
+                    SemanticIndex: attrib.location,
+                    Format: match conv::map_format(format) {
+                        Some(fm) => fm,
+                        None => {
+                            // TODO:
+                            // error!("Unable to find DXGI format for {:?}", format);
+                            return Some(Err(pso::CreationError::Other));
+                        }
+                    },
+                    InputSlot: attrib.binding as _,
+                    AlignedByteOffset: attrib.element.offset,
+                    InputSlotClass: slot_class,
+                    InstanceDataStepRate: buffer_desc.rate as _,
+                }))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let hr = unsafe {
+            self.device.CreateInputLayout(
+                input_elements.as_ptr(),
+                input_elements.len() as _,
+                vs.GetBufferPointer(),
+                vs.GetBufferSize(),
+                &mut layout as *mut *mut _ as *mut *mut _
+            )
+        };
+
+        if winerror::SUCCEEDED(hr) {
+            let topology = conv::map_topology(input_assembler.primitive);
+
+            Ok((topology, unsafe { ComPtr::from_raw(layout) }))
+        } else {
+            Err(pso::CreationError::Other)
+        }
+    }
+
+    fn create_vertex_shader(&self, blob: ComPtr<d3dcommon::ID3DBlob>) -> Result<ComPtr<d3d11::ID3D11VertexShader>, pso::CreationError> {
+        let mut vs = ptr::null_mut();
+
+        let hr = unsafe {
+            self.device.CreateVertexShader(
+                blob.GetBufferPointer(),
+                blob.GetBufferSize(),
+                ptr::null_mut(),
+                &mut vs as *mut *mut _ as *mut *mut _
+            )
+        };
+
+        if !winerror::SUCCEEDED(hr) {
+            Ok(unsafe { ComPtr::from_raw(vs) })
+        } else {
+            Err(pso::CreationError::Other)
+        }
+    }
+
+    fn create_pixel_shader(&self, blob: ComPtr<d3dcommon::ID3DBlob>) -> Result<ComPtr<d3d11::ID3D11PixelShader>, pso::CreationError> {
+        let mut ps = ptr::null_mut();
+
+        let hr = unsafe {
+            self.device.CreatePixelShader(
+                blob.GetBufferPointer(),
+                blob.GetBufferSize(),
+                ptr::null_mut(),
+                &mut ps as *mut *mut _ as *mut *mut _
+            )
+        };
+
+        if winerror::SUCCEEDED(hr) {
+            Ok(unsafe { ComPtr::from_raw(ps) })
+        } else {
+            Err(pso::CreationError::Other)
+        }
+    }
+
+    // TODO: fix return type.. 
+    fn extract_entry_point(
+        stage: pso::Stage,
+        source: &pso::EntryPoint<Backend>,
+        layout: &PipelineLayout,
+    ) -> Result<Option<ComPtr<d3dcommon::ID3DBlob>>, device::ShaderError> {
+        // TODO: entrypoint stuff
+        match *source.module {
+            ShaderModule::Dxbc(ref shader) => {
+                unimplemented!()
+
+                // Ok(Some(shader))
+            }
+            ShaderModule::Spirv(ref raw_data) => {
+                Ok(shader::compile_spirv_entrypoint(raw_data, stage, source, layout)?)
+            }
+        }
+    }
 }
 
 impl hal::Device<Backend> for Device {
@@ -401,7 +575,9 @@ impl hal::Device<Backend> for Device {
         ID: IntoIterator,
         ID::Item: Borrow<pass::SubpassDependency>,
     {
-        unimplemented!()
+        // TODO: renderpass
+
+        RenderPass
     }
 
     fn create_pipeline_layout<IS, IR>(
@@ -415,14 +591,58 @@ impl hal::Device<Backend> for Device {
         IR: IntoIterator,
         IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
     {
-        unimplemented!()
+        // TODO: pipelinelayout
+        
+        PipelineLayout
     }
 
     fn create_graphics_pipeline<'a>(
         &self,
         desc: &pso::GraphicsPipelineDesc<'a, Backend>,
     ) -> Result<GraphicsPipeline, pso::CreationError> {
-        unimplemented!()
+        let build_shader =
+            |stage: pso::Stage, source: Option<&pso::EntryPoint<'a, Backend>>| {
+                let source = match source {
+                    Some(src) => src,
+                    None => return Ok(None),
+                };
+
+                Self::extract_entry_point(stage, source, desc.layout)
+                    .map_err(|err| pso::CreationError::Shader(err))
+            };
+
+        let vs = build_shader(pso::Stage::Vertex, Some(&desc.shaders.vertex))?.unwrap();
+        let ps = build_shader(pso::Stage::Fragment, desc.shaders.fragment.as_ref())?;
+        // TODO:
+        /*let gs = build_shader(pso::Stage::Geometry, desc.shaders.geometry.as_ref())?;
+        let ds = build_shader(pso::Stage::Domain, desc.shaders.domain.as_ref())?;
+        let hs = build_shader(pso::Stage::Hull, desc.shaders.hull.as_ref())?;*/
+
+        let (topology, input_layout) = self.create_input_layout(vs.clone(), &desc.vertex_buffers, &desc.attributes, &desc.input_assembler)?;
+        let rasterizer_state = self.create_rasterizer_state(&desc.rasterizer)?;
+        let blend_state = self.create_blend_state(&desc.blender)?;
+        let depth_stencil_state = if let Some(desc) = desc.depth_stencil {
+            Some(self.create_depth_stencil_state(&desc)?)
+        } else {
+            None
+        };
+
+        let vs = self.create_vertex_shader(vs)?;
+        let ps = if let Some(blob) = ps {
+            Some(self.create_pixel_shader(blob)?)
+        } else {
+            None
+        };
+
+        Ok(GraphicsPipeline {
+            vs,
+            ps,
+            topology,
+            input_layout,
+            rasterizer_state,
+            blend_state,
+            depth_stencil_state
+        })
     }
 
     fn create_compute_pipeline<'a>(
@@ -442,11 +662,14 @@ impl hal::Device<Backend> for Device {
         I: IntoIterator,
         I::Item: Borrow<ImageView>
     {
-        unimplemented!()
+        Ok(Framebuffer {
+            attachments: attachments.into_iter().map(|att| att.borrow().clone()).collect(),
+            layers: extent.depth as _,
+        })
     }
 
     fn create_shader_module(&self, raw_data: &[u8]) -> Result<ShaderModule, device::ShaderError> {
-        unimplemented!()
+        Ok(ShaderModule::Spirv(raw_data.into()))
     }
 
     fn create_buffer(
@@ -530,16 +753,16 @@ impl hal::Device<Backend> for Device {
             )
         };
 
-        if !winerror::SUCCEEDED(hr) {
-            // TODO: any better error?
-            Err(device::BindError::WrongMemory)
-        } else {
+        if winerror::SUCCEEDED(hr) {
             let buffer: ComPtr<d3d11::ID3D11Buffer> = unsafe { ComPtr::from_raw(buffer) };
             memory.buffer.replace(Some(buffer.clone()));
             Ok(Buffer {
                 buffer: buffer,
                 size: unbound_buffer.size
             })
+        } else {
+            // TODO: any better error?
+            Err(device::BindError::WrongMemory)
         }
     }
 
@@ -591,7 +814,36 @@ impl hal::Device<Backend> for Device {
         _swizzle: format::Swizzle,
         range: image::SubresourceRange,
     ) -> Result<ImageView, image::ViewError> {
-        unimplemented!()
+        // TODO: move out into separate functions
+        // TODO: mip level
+        // TODO: handle case where range layers >= 1
+        assert_eq!(range.layers, 0..1);
+        // TODO: SRV, UAV, DSV?
+
+        // TODO: check for rtv/srv/etc format support
+        let format = conv::map_format(format).unwrap();
+
+        let mut desc: d3d11::D3D11_RENDER_TARGET_VIEW_DESC = unsafe { mem::zeroed() };
+        desc.Format = format;
+        desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2D;
+
+        let mut rtv = ptr::null_mut();
+        let hr = unsafe {
+            self.device.CreateRenderTargetView(
+                image.resource,
+                &desc,
+                &mut rtv as *mut *mut _ as *mut *mut _
+            )
+        };
+
+        if winerror::SUCCEEDED(hr) {
+            Ok(ImageView {
+                rtv: unsafe { ComPtr::from_raw(rtv) }
+            })
+        } else {
+            // TODO: better errors
+            Err(image::ViewError::Unsupported)
+        }
     }
 
     fn create_sampler(&self, info: image::SamplerInfo) -> Sampler {
@@ -607,11 +859,13 @@ impl hal::Device<Backend> for Device {
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorRangeDesc>
     {
-        unimplemented!()
+        // TODO: descriptor pool
+
+        DescriptorPool
     }
 
     fn create_descriptor_set_layout<I, J>(
-        &self, _bindings: I, _immutable_samplers: J
+        &self, bindings: I, _immutable_samplers: J
     ) -> DescriptorSetLayout
     where
         I: IntoIterator,
@@ -619,7 +873,11 @@ impl hal::Device<Backend> for Device {
         J: IntoIterator,
         J::Item: Borrow<Sampler>,
     {
-        unimplemented!()
+        // TODO: descriptorsetlayout
+
+        DescriptorSetLayout {
+            bindings: bindings.into_iter().map(|b| b.borrow().clone()).collect()
+        }
     }
 
     fn write_descriptor_sets<'a, I, J>(&self, write_iter: I)
@@ -732,7 +990,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn destroy_shader_module(&self, shader_lib: ShaderModule) {
-        unimplemented!()
+
     }
 
     fn destroy_render_pass(&self, _rp: RenderPass) {
@@ -1101,7 +1359,17 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::ClearValueRaw>,
     {
-        unimplemented!()
+        // TODO: very temp
+        let color_views = framebuffer.attachments.iter().map(|a| a.rtv.as_raw()).collect::<Vec<_>>();
+        unsafe {
+            self.context.OMSetRenderTargets(
+                color_views.len() as _,
+                color_views.as_ptr(),
+                ptr::null_mut(),
+            );
+        }
+        // TODO: begin render pass
+        //unimplemented!()
     }
 
     fn next_subpass(&mut self, _contents: command::SubpassContents) {
@@ -1109,7 +1377,8 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn end_render_pass(&mut self) {
-        unimplemented!()
+        // TODO: end render pass
+        //unimplemented!()
     }
 
     fn pipeline_barrier<'a, T>(&mut self, _stages: Range<pso::PipelineStage>, _dependencies: memory::Dependencies, barriers: T)
@@ -1168,7 +1437,22 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn bind_vertex_buffers(&mut self, first_binding: u32, vbs: pso::VertexBufferSet<Backend>) {
-        unimplemented!()
+        let (buffers, offsets): (Vec<*mut d3d11::ID3D11Buffer>, Vec<u32>) = vbs.0.iter()
+            .map(|(buf, offset)| (buf.buffer.as_raw(), *offset as u32))
+            .unzip();
+
+        // TODO: strides
+        let strides = [16u32; 16];
+
+        unsafe {
+            self.context.IASetVertexBuffers(
+                first_binding,
+                buffers.len() as _,
+                buffers.as_ptr(),
+                strides.as_ptr(),
+                offsets.as_ptr(),
+            );
+        }
     }
 
     fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
@@ -1218,7 +1502,24 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn bind_graphics_pipeline(&mut self, pipeline: &GraphicsPipeline) {
-        unimplemented!()
+        unsafe {
+            self.context.IASetPrimitiveTopology(pipeline.topology);
+            self.context.IASetInputLayout(pipeline.input_layout.as_raw());
+
+            self.context.VSSetShader(pipeline.vs.as_raw(), ptr::null_mut(), 0);
+            if let Some(ref ps) = pipeline.ps {
+                self.context.PSSetShader(ps.as_raw(), ptr::null_mut(), 0);
+            }
+
+            self.context.RSSetState(pipeline.rasterizer_state.as_raw());
+
+            // TODO: blend constants
+            self.context.OMSetBlendState(pipeline.blend_state.as_raw(), &[1f32; 4], !0);
+            if let Some(ref state) = pipeline.depth_stencil_state {
+                // TODO stencil
+                self.context.OMSetDepthStencilState(state.as_raw(), 0);
+            }
+        }
     }
 
     fn bind_graphics_descriptor_sets<'a, T>(&mut self, layout: &PipelineLayout, first_set: usize, sets: T)
@@ -1294,11 +1595,26 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {
-        unimplemented!()
+        unsafe {
+            self.context.DrawInstanced(
+                vertices.end - vertices.start,
+                instances.end - instances.start,
+                vertices.start,
+                instances.start,
+            );
+        }
     }
 
     fn draw_indexed(&mut self, indices: Range<IndexCount>, base_vertex: VertexOffset, instances: Range<InstanceCount>) {
-        unimplemented!()
+        unsafe {
+            self.context.DrawIndexedInstanced(
+                indices.end - indices.start,
+                instances.end - instances.start,
+                indices.start,
+                base_vertex,
+                instances.start,
+            );
+        }
     }
 
     fn draw_indirect(&mut self, buffer: &Buffer, offset: buffer::Offset, draw_count: DrawCount, stride: u32) {
@@ -1379,12 +1695,32 @@ impl hal::pool::RawCommandPool<Backend> for CommandPool {
     }
 }
 
-#[derive(Debug)]
-pub struct ShaderModule;
+/// Similarily to dx12 backend, we can handle either precompiled dxbc or spirv
+// TODO: derivative doesn't work on enum variants?
+//#[derive(Derivative)]
+//#[derivative(Debug)]
+pub enum ShaderModule {
+    Dxbc(Vec<u8>),
+    Spirv(Vec<u8>)
+}
+
+// TODO: temporary
+impl ::std::fmt::Debug for ShaderModule {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        write!(f, "{}", "ShaderModule { ... }")
+    }
+}
+
+unsafe impl Send for ShaderModule { }
+unsafe impl Sync for ShaderModule { }
+
 #[derive(Debug)]
 pub struct RenderPass;
 #[derive(Debug)]
-pub struct Framebuffer;
+pub struct Framebuffer {
+    attachments: Vec<ImageView>,
+    layers: image::Layer,
+}
 
 #[derive(Debug)]
 pub struct UnboundBuffer {
@@ -1429,26 +1765,66 @@ pub struct Image {
 unsafe impl Send for Image { }
 unsafe impl Sync for Image { }
 
-#[derive(Debug)]
-pub struct ImageView;
+#[derive(Derivative, Clone)]
+#[derivative(Debug)]
+pub struct ImageView {
+    #[derivative(Debug="ignore")]
+    rtv: ComPtr<d3d11::ID3D11RenderTargetView>
+}
+
+unsafe impl Send for ImageView { }
+unsafe impl Sync for ImageView { }
+
 #[derive(Debug)]
 pub struct Sampler;
 
 #[derive(Debug)]
 pub struct ComputePipeline;
-#[derive(Debug)]
-pub struct GraphicsPipeline;
+
+/// NOTE: some objects are hashed internally and reused when created with the
+///       same params[0], need to investigate which interfaces this applies
+///       to.
+///
+/// [0]: https://msdn.microsoft.com/en-us/library/windows/desktop/ff476500(v=vs.85).aspx
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub struct GraphicsPipeline {
+    // TODO: gs, hs, ds
+    #[derivative(Debug="ignore")]
+    vs: ComPtr<d3d11::ID3D11VertexShader>,
+    #[derivative(Debug="ignore")]
+    ps: Option<ComPtr<d3d11::ID3D11PixelShader>>,
+    #[derivative(Debug="ignore")]
+    topology: d3d11::D3D11_PRIMITIVE_TOPOLOGY,
+    #[derivative(Debug="ignore")]
+    input_layout: ComPtr<d3d11::ID3D11InputLayout>,
+    #[derivative(Debug="ignore")]
+    rasterizer_state: ComPtr<d3d11::ID3D11RasterizerState>,
+    #[derivative(Debug="ignore")]
+    blend_state: ComPtr<d3d11::ID3D11BlendState>,
+    #[derivative(Debug="ignore")]
+    depth_stencil_state: Option<ComPtr<d3d11::ID3D11DepthStencilState>>,
+}
+
+unsafe impl Send for GraphicsPipeline { }
+unsafe impl Sync for GraphicsPipeline { }
+
 #[derive(Debug)]
 pub struct PipelineLayout;
+
 #[derive(Debug)]
-pub struct DescriptorSetLayout;
+pub struct DescriptorSetLayout {
+    bindings: Vec<pso::DescriptorSetLayoutBinding>,
+}
 
 // TODO: descriptor pool
 #[derive(Debug)]
 pub struct DescriptorPool;
 impl hal::DescriptorPool<Backend> for DescriptorPool {
     fn allocate_set(&mut self, layout: &DescriptorSetLayout) -> Result<DescriptorSet, pso::AllocationError> {
-        unimplemented!()
+        // TODO: descriptor set
+
+        Ok(DescriptorSet)
     }
 
     fn free_sets(&mut self, descriptor_sets: &[DescriptorSet]) {
