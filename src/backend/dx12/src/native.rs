@@ -433,7 +433,7 @@ impl DescriptorHeapSlice {
 
     /// Free handles previously given out by this `DescriptorHeapSlice`.  Do not use this with handles not given out by this `DescriptorHeapSlice`.
     pub(crate) fn free_handles(&mut self, handle: DualHandle) {
-        let start = handle.gpu.ptr - self.start.gpu.ptr / self.handle_size;
+        let start = (handle.gpu.ptr - self.start.gpu.ptr) / self.handle_size;
         let handle_range = start..start + handle.size as u64;
         self.range_allocator.free_range(handle_range).expect("Heap free failed!  Handle passed in was invalid.");
     }
@@ -516,7 +516,7 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                     if HeapProperties::from(view_range.ty).has_view {
                         self.heap_srv_cbv_uav.free_handles(view_range.handle);
                     }
-                    
+
                 }
                 if let Some(ref sampler_range) = binding_info.sampler_range {
                     if HeapProperties::from(sampler_range.ty).has_sampler {
@@ -563,7 +563,7 @@ impl HeapProperties {
             pso::DescriptorType::UniformBufferDynamic |
             pso::DescriptorType::UniformImageDynamic => unimplemented!(),
         }
-        
+
     }
 }
 
