@@ -81,7 +81,7 @@
                     binding: 0,
                     element: Element(
                         offset: 32,
-                        format: Rgba32Float,
+                        format: Rgba32Uint,
                     ),
                 ),
             ],
@@ -128,7 +128,7 @@
                     binding: 0,
                     element: Element(
                         offset: 8,
-                        format: Rgba32Float,
+                        format: Rgba32Uint,
                     ),
                 ),
             ],

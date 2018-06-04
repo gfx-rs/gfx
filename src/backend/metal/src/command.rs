@@ -1,6 +1,6 @@
 use {AutoreleasePool, Backend, Shared, validate_line_width};
 use {native, window};
-use internal::BlitVertex;
+use internal::{BlitVertex, ClearKey, ClearVertex};
 
 use std::borrow::{self, Borrow};
 use std::cell::RefCell;
@@ -120,6 +120,7 @@ struct State {
     depth_stencil_state: Option<metal::DepthStencilState>,
     push_constants: Vec<u32>,
     vertex_buffers: Vec<Option<(metal::Buffer, u64)>>,
+    framebuffer_inner: native::FramebufferInner,
 }
 
 impl State {
@@ -1017,6 +1018,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 depth_stencil_state: None,
                 push_constants: Vec::new(),
                 vertex_buffers: Vec::new(),
+                framebuffer_inner: native::FramebufferInner::default(),
             },
         }).collect();
 
@@ -1435,15 +1437,178 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn clear_attachments<T, U>(
         &mut self,
-        _clears: T,
-        _rects: U,
+        clears: T,
+        rects: U,
     ) where
         T: IntoIterator,
         T::Item: Borrow<com::AttachmentClear>,
         U: IntoIterator,
         U::Item: Borrow<pso::ClearRect>,
     {
-        unimplemented!()
+        // gather vertices/polygons
+        let de = self.state.framebuffer_inner.extent;
+        let mut vertices = Vec::new();
+        for rect in rects {
+            let r = rect.borrow();
+            for layer in r.layers.clone() {
+                let data = [
+                    [
+                        r.rect.x,
+                        r.rect.y,
+                    ],
+                    [
+                        r.rect.x,
+                        r.rect.y + r.rect.h,
+                    ],
+                    [
+                        r.rect.x + r.rect.w,
+                        r.rect.y + r.rect.h,
+                    ],
+                    [
+                        r.rect.x + r.rect.w,
+                        r.rect.y,
+                    ],
+                ];
+                // now use the hard-coded index array to add 6 vertices to the list
+                //TODO: could use instancing here
+                // - with triangle strips
+                // - with half of the data supplied per instance
+
+                for &index in &[0usize, 1, 2, 2, 3, 0] {
+                    let d = data[index];
+                    vertices.push(ClearVertex {
+                        pos: [
+                            d[0] as f32 / de.width as f32,
+                            d[1] as f32 / de.height as f32,
+                            0.0, //TODO: depth Z
+                            layer as f32,
+                        ],
+                    });
+                }
+            }
+        }
+
+        let mut commands = Vec::new();
+        let mut vertex_is_dirty = true;
+
+        //  issue a PSO+color switch and a draw for each requested clear
+        let mut pipes = self.shared.service_pipes
+            .lock()
+            .unwrap();
+
+        for clear in clears {
+            let key = match *clear.borrow() {
+                com::AttachmentClear::Color(index, value) => {
+                    let (format, channel) = self.state.framebuffer_inner.colors[index];
+                    //Note: technically we should be able to derive the Channel from the
+                    // `value` variant, but this is blocked by the portability that is
+                    // always passing the attachment clears as `ClearColor::Float` atm.
+                    let raw_value = com::ClearColorRaw::from(value);
+                    commands.push(soft::RenderCommand::BindBufferData {
+                        stage: pso::Stage::Fragment,
+                        index: 0,
+                        bytes: unsafe {
+                            slice::from_raw_parts(raw_value.float32.as_ptr() as *const u8, 16)
+                        }.to_owned(),
+                    });
+                    ClearKey {
+                        color: Some((format, index as u8, channel.unwrap())),
+                        depth: None,
+                        stencil: None
+                    }
+                }
+                com::AttachmentClear::Depth(value) => {
+                    let format = self.state.framebuffer_inner.depth_stencil.unwrap();
+                    vertex_is_dirty = true;
+                    for v in &mut vertices {
+                        v.pos[2] = value;
+                    }
+                    ClearKey {
+                        color: None,
+                        depth: Some(format),
+                        stencil: None,
+                    }
+                }
+                com::AttachmentClear::Stencil(_value) => {
+                    let format = self.state.framebuffer_inner.depth_stencil.unwrap();
+                    //TODO: soft::RenderCommand::SetStencilReference
+                    ClearKey {
+                        color: None,
+                        depth: None,
+                        stencil: Some(format),
+                    }
+                }
+                com::AttachmentClear::DepthStencil(value) => {
+                    let format = self.state.framebuffer_inner.depth_stencil.unwrap();
+                    vertex_is_dirty = true;
+                    for v in &mut vertices {
+                        v.pos[2] = value.0;
+                    }
+                    //TODO: soft::RenderCommand::SetStencilReference
+                    ClearKey {
+                        color: None,
+                        depth: Some(format),
+                        stencil: Some(format),
+                    }
+                }
+            };
+
+            if vertex_is_dirty {
+                vertex_is_dirty = false;
+                commands.push(soft::RenderCommand::BindBufferData {
+                    stage: pso::Stage::Vertex,
+                    index: 0,
+                    bytes: unsafe {
+                        slice::from_raw_parts(
+                            vertices.as_ptr() as *const u8,
+                            vertices.len() * mem::size_of::<ClearVertex>()
+                        ).to_owned()
+                    }
+                });
+            }
+            let pso = pipes.get_clear_image(key, &self.shared.device).to_owned();
+            let ds = if key.depth.is_some() || key.stencil.is_some() {
+                Some(pipes.get_depth_stencil(key.depth.is_some(), key.stencil.is_some()).to_owned())
+            } else {
+                None
+            };
+            commands.push(soft::RenderCommand::BindPipeline(pso, None, ds));
+            commands.push(soft::RenderCommand::Draw {
+                primitive_type: MTLPrimitiveType::Triangle,
+                vertices: 0 .. vertices.len() as _,
+                instances: 0 .. 1,
+            });
+        }
+
+        // reset all the affected states
+        if let Some((ref pso, _)) = self.state.render_pso {
+            commands.push(soft::RenderCommand::BindPipeline(
+                pso.clone(),
+                None,
+                self.state.depth_stencil_state.clone()
+            ));
+        }
+        if let Some(&Some((ref buffer, offset))) = self.state.resources_vs.buffers.first() {
+            commands.push(soft::RenderCommand::BindBuffer {
+                stage: pso::Stage::Vertex,
+                index: 0,
+                buffer: Some(buffer.clone()),
+                offset,
+            });
+        }
+        if let Some(&Some((ref buffer, offset))) = self.state.resources_fs.buffers.first() {
+            commands.push(soft::RenderCommand::BindBuffer {
+                stage: pso::Stage::Fragment,
+                index: 0,
+                buffer: Some(buffer.clone()),
+                offset,
+            });
+        }
+
+        self.inner
+            .borrow_mut()
+            .sink()
+            .render_commands(commands.into_iter());
     }
 
     fn resolve_image<T>(
@@ -1539,8 +1704,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         pos: [
                             d[2] as f32 / de.width as f32,
                             d[3] as f32 / de.height as f32,
+                            0.0,
                             dst_layer as f32,
-                            1.0,
                         ],
                     });
                 }
@@ -1554,16 +1719,19 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut pipes = self.shared.service_pipes
             .lock()
             .unwrap();
-        let key = (dst.mtl_type, dst.mtl_format, dst.shader_channel);
+        let key = (dst.mtl_type, dst.mtl_format, src.format_desc.aspects, dst.shader_channel);
 
         let prelude = [
             soft::RenderCommand::BindPipeline(
                 pipes
-                    .get_blit_image(key, src.format_desc.aspects, &self.shared.device)
+                    .get_blit_image(key, &self.shared.device)
                     .to_owned(),
                 None,
                 if src.format_desc.aspects.intersects(Aspects::DEPTH | Aspects::STENCIL) {
-                    Some(pipes.ds_write_state.clone())
+                    Some(pipes.get_depth_stencil(
+                        src.format_desc.aspects.contains(Aspects::DEPTH),
+                        src.format_desc.aspects.contains(Aspects::STENCIL),
+                    ).to_owned())
                 } else {
                     None
                 },
@@ -1571,7 +1739,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             soft::RenderCommand::BindSampler {
                 stage: pso::Stage::Fragment,
                 index: 0,
-                sampler: Some(pipes.get_sampler(filter)),
+                sampler: Some(pipes.get_sampler(filter).to_owned()),
             },
             soft::RenderCommand::BindTexture {
                 stage: pso::Stage::Fragment,
@@ -1756,7 +1924,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn begin_render_pass<T>(
         &mut self,
         render_pass: &native::RenderPass,
-        frame_buffer: &native::FrameBuffer,
+        framebuffer: &native::Framebuffer,
         _render_area: pso::Rect,
         clear_values: T,
         _first_subpass: com::SubpassContents,
@@ -1766,7 +1934,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     {
         // FIXME: subpasses
         let descriptor: metal::RenderPassDescriptor = unsafe {
-            msg_send![frame_buffer.0, copy]
+            msg_send![framebuffer.descriptor, copy]
         };
 
         for (i, value) in clear_values.into_iter().enumerate() {
@@ -1787,6 +1955,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
         }
 
+        self.state.framebuffer_inner = framebuffer.inner.clone();
         let init_commands = self.state.make_render_commands();
         self.inner
             .borrow_mut()

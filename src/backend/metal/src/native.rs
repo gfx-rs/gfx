@@ -39,11 +39,21 @@ pub struct RenderPass {
 unsafe impl Send for RenderPass {}
 unsafe impl Sync for RenderPass {}
 
-#[derive(Debug)]
-pub struct FrameBuffer(pub(crate) metal::RenderPassDescriptor);
+#[derive(Clone, Debug, Default)]
+pub struct FramebufferInner {
+    pub extent: image::Extent,
+    pub colors: Vec<(metal::MTLPixelFormat, Option<Channel>)>,
+    pub depth_stencil: Option<metal::MTLPixelFormat>,
+}
 
-unsafe impl Send for FrameBuffer {}
-unsafe impl Sync for FrameBuffer {}
+#[derive(Debug)]
+pub struct Framebuffer {
+    pub(crate) descriptor: metal::RenderPassDescriptor,
+    pub(crate) inner: FramebufferInner,
+}
+
+unsafe impl Send for Framebuffer {}
+unsafe impl Sync for Framebuffer {}
 
 #[derive(Debug)]
 pub struct PipelineLayout {
@@ -140,7 +150,10 @@ unsafe impl Send for BufferView {}
 unsafe impl Sync for BufferView {}
 
 #[derive(Debug)]
-pub struct ImageView(pub(crate) metal::Texture);
+pub struct ImageView {
+    pub(crate) raw: metal::Texture,
+    pub(crate) mtl_format: metal::MTLPixelFormat,
+}
 
 unsafe impl Send for ImageView {}
 unsafe impl Sync for ImageView {}

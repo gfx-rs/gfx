@@ -10,7 +10,7 @@ use std::sync::Mutex;
 
 
 #[derive(Debug)]
-pub struct _ClearVertex {
+pub struct ClearVertex {
     pub pos: [f32; 4],
 }
 
@@ -71,28 +71,23 @@ impl Channel {
 }
 
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub struct ClearMask {
-    color: Option<Channel>,
-    depth: bool,
-    stencil: bool,
-}
-
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Hash, PartialEq, Eq)]
 pub struct ClearKey {
-    color: Option<(metal::MTLPixelFormat, Channel)>,
-    depth: Option<metal::MTLPixelFormat>,
-    stencil: Option<metal::MTLPixelFormat>,
+    pub color: Option<(metal::MTLPixelFormat, u8, Channel)>,
+    pub depth: Option<metal::MTLPixelFormat>,
+    pub stencil: Option<metal::MTLPixelFormat>,
 }
-pub type BlitKey = (metal::MTLTextureType, metal::MTLPixelFormat, Channel);
+pub type BlitKey = (metal::MTLTextureType, metal::MTLPixelFormat, Aspects, Channel);
 
 //#[derive(Clone)]
 pub struct ServicePipes {
     library: metal::Library,
     sampler_nearest: metal::SamplerState,
     sampler_linear: metal::SamplerState,
-    pub(crate) ds_write_state: metal::DepthStencilState,
-    _clears: HashMap<ClearKey, metal::RenderPipelineState>,
+    ds_write_depth_state: metal::DepthStencilState,
+    ds_write_stencil_state: metal::DepthStencilState,
+    ds_write_all_state: metal::DepthStencilState,
+    clears: HashMap<ClearKey, metal::RenderPipelineState>,
     blits: HashMap<BlitKey, metal::RenderPipelineState>,
     copy_buffer: metal::ComputePipelineState,
     fill_buffer: metal::ComputePipelineState,
@@ -116,43 +111,63 @@ impl ServicePipes {
         let ds_desc = metal::DepthStencilDescriptor::new();
         ds_desc.set_depth_write_enabled(true);
         ds_desc.set_depth_compare_function(metal::MTLCompareFunction::Always);
-        //TODO: stencil
-        let ds_write_state = device.new_depth_stencil_state(&ds_desc);
+        let ds_write_depth_state = device.new_depth_stencil_state(&ds_desc);
+        let stencil_desc = metal::StencilDescriptor::new();
+        stencil_desc.set_depth_stencil_pass_operation(metal::MTLStencilOperation::Replace);
+        ds_desc.set_front_face_stencil(Some(&stencil_desc));
+        let ds_write_all_state = device.new_depth_stencil_state(&ds_desc);
+        ds_desc.set_depth_write_enabled(false);
+        let ds_write_stencil_state = device.new_depth_stencil_state(&ds_desc);
 
         let copy_buffer = Self::create_copy_buffer(&library, device);
         let fill_buffer = Self::create_fill_buffer(&library, device);
 
         ServicePipes {
-            _clears: HashMap::new(),
+            clears: HashMap::new(),
             blits: HashMap::new(),
             sampler_nearest,
             sampler_linear,
-            ds_write_state,
+            ds_write_depth_state,
+            ds_write_all_state,
+            ds_write_stencil_state,
             library,
             copy_buffer,
             fill_buffer,
         }
     }
 
-    pub fn get_sampler(&self, filter: Filter) -> metal::SamplerState {
+    pub fn get_sampler(&self, filter: Filter) -> &metal::SamplerStateRef {
         match filter {
-            Filter::Nearest => self.sampler_nearest.clone(),
-            Filter::Linear => self.sampler_linear.clone(),
+            Filter::Nearest => &self.sampler_nearest,
+            Filter::Linear => &self.sampler_linear,
         }
     }
 
-    pub fn _get_clear_image(
+    //TODO: return `Option<metal::DepthStencilState>` instead?
+    pub fn get_depth_stencil(&self, depth: bool, stencil: bool) -> &metal::DepthStencilStateRef {
+        if depth && stencil {
+            &self.ds_write_all_state
+        } else if depth {
+            &self.ds_write_depth_state
+        } else if stencil {
+            &self.ds_write_stencil_state
+        } else {
+            panic!("Can't write nothing!")
+        }
+    }
+
+    pub fn get_clear_image(
         &mut self,
         key: ClearKey,
         device: &Mutex<metal::Device>,
     ) -> &metal::RenderPipelineStateRef {
         let lib = &self.library;
-        self._clears
+        self.clears
             .entry(key)
-            .or_insert_with(|| Self::_create_clear_image(key, lib, &*device.lock().unwrap()))
+            .or_insert_with(|| Self::create_clear_image(key, lib, &*device.lock().unwrap()))
     }
 
-    fn _create_clear_image(
+    fn create_clear_image(
         key: ClearKey, library: &metal::LibraryRef, device: &metal::DeviceRef,
     ) -> metal::RenderPipelineState {
         let pipeline = metal::RenderPipelineDescriptor::new();
@@ -161,34 +176,29 @@ impl ServicePipes {
         let vs_clear = library.get_function("vs_clear", None).unwrap();
         pipeline.set_vertex_function(Some(&vs_clear));
 
-        if let Some((format, channel)) = key.color {
+        if let Some((format, index, channel)) = key.color {
             let s_channel = match channel {
                 Channel::Float => "float",
                 Channel::Int => "int",
                 Channel::Uint => "uint",
             };
-            let ps_name = format!("ps_clear_{}", s_channel);
+            let ps_name = format!("ps_clear{}_{}", index, s_channel);
             let ps_blit = library.get_function(&ps_name, None).unwrap();
             pipeline.set_fragment_function(Some(&ps_blit));
 
             pipeline
                 .color_attachments()
-                .object_at(0)
+                .object_at(index as _)
                 .unwrap()
                 .set_pixel_format(format);
         }
 
-        /*
         if let Some(format) = key.depth {
-            pipeline
-                .depth_attachment()
-                .set_pixel_format(format);
+            pipeline.set_depth_attachment_pixel_format(format);
         }
         if let Some(format) = key.stencil {
-            pipeline
-                .stentil_attachment()
-                .set_pixel_format(format);
-        }*/
+            pipeline.set_stencil_attachment_pixel_format(format);
+        }
 
         // Vertex buffers
         let vertex_descriptor = metal::VertexDescriptor::new();
@@ -196,7 +206,7 @@ impl ServicePipes {
             .layouts()
             .object_at(0)
             .unwrap();
-        mtl_buffer_desc.set_stride(mem::size_of::<_ClearVertex>() as _);
+        mtl_buffer_desc.set_stride(mem::size_of::<ClearVertex>() as _);
         for i in 0 .. 1 {
             let mtl_attribute_desc = vertex_descriptor
                 .attributes()
@@ -214,17 +224,16 @@ impl ServicePipes {
     pub fn get_blit_image(
         &mut self,
         key: BlitKey,
-        aspects: Aspects,
         device: &Mutex<metal::Device>,
     ) -> &metal::RenderPipelineStateRef {
         let lib = &self.library;
         self.blits
             .entry(key)
-            .or_insert_with(|| Self::create_blit_image(key, aspects, lib, &*device.lock().unwrap()))
+            .or_insert_with(|| Self::create_blit_image(key, lib, &*device.lock().unwrap()))
     }
 
     fn create_blit_image(
-        key: BlitKey, aspects: Aspects, library: &metal::LibraryRef, device: &metal::DeviceRef,
+        key: BlitKey, library: &metal::LibraryRef, device: &metal::DeviceRef,
     ) -> metal::RenderPipelineState {
         use metal::MTLTextureType as Tt;
 
@@ -241,8 +250,8 @@ impl ServicePipes {
             Tt::Cube |
             Tt::CubeArray => unimplemented!()
         };
-        let s_channel = if aspects.contains(Aspects::COLOR) {
-            match key.2 {
+        let s_channel = if key.2.contains(Aspects::COLOR) {
+            match key.3 {
                 Channel::Float => "float",
                 Channel::Int => "int",
                 Channel::Uint => "uint",
@@ -257,18 +266,18 @@ impl ServicePipes {
         pipeline.set_vertex_function(Some(&vs_blit));
         pipeline.set_fragment_function(Some(&ps_blit));
 
-        if aspects.contains(Aspects::COLOR) {
+        if key.2.contains(Aspects::COLOR) {
             pipeline
                 .color_attachments()
                 .object_at(0)
                 .unwrap()
                 .set_pixel_format(key.1);
         }
-        if aspects.contains(Aspects::DEPTH) {
+        if key.2.contains(Aspects::DEPTH) {
             pipeline
                 .set_depth_attachment_pixel_format(key.1);
         }
-        if aspects.contains(Aspects::STENCIL) {
+        if key.2.contains(Aspects::STENCIL) {
             pipeline
                 .set_stencil_attachment_pixel_format(key.1);
         }

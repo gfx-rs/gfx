@@ -1051,7 +1051,7 @@ impl hal::Device<Backend> for Device {
 
     fn create_framebuffer<I>(
         &self, renderpass: &n::RenderPass, attachments: I, extent: image::Extent
-    ) -> Result<n::FrameBuffer, FramebufferError>
+    ) -> Result<n::Framebuffer, FramebufferError>
     where
         I: IntoIterator,
         I::Item: Borrow<n::ImageView>
@@ -1062,11 +1062,22 @@ impl hal::Device<Backend> for Device {
         };
         descriptor.set_render_target_array_length(extent.depth as NSUInteger);
 
+        let mut inner = n::FramebufferInner {
+            extent,
+            colors: Vec::with_capacity(renderpass.color_channels.len()),
+            depth_stencil: None,
+        };
+
         let mut attachments = attachments.into_iter();
-        for i in 0 .. renderpass.color_channels.len() {
-            let mtl_attachment = descriptor.color_attachments().object_at(i).expect("too many color attachments");
+        for (i, &channel) in renderpass.color_channels.iter().enumerate() {
             let attachment = attachments.next().expect("Not enough colour attachments provided");
-            mtl_attachment.set_texture(Some(&attachment.borrow().0));
+            let at = attachment.borrow();
+            inner.colors.push((at.mtl_format, channel));
+            descriptor
+                .color_attachments()
+                .object_at(i)
+                .expect("too many color attachments")
+                .set_texture(Some(&at.raw));
         }
 
         let depth_attachment = attachments.next();
@@ -1075,12 +1086,16 @@ impl hal::Device<Backend> for Device {
         }
 
         if let Some(attachment) = depth_attachment {
-            let mtl_attachment = descriptor.depth_attachment().unwrap();
-            mtl_attachment.set_texture(Some(&attachment.borrow().0));
+            let at = attachment.borrow();
+            inner.depth_stencil = Some(at.mtl_format);
+            descriptor
+                .depth_attachment()
+                .unwrap()
+                .set_texture(Some(&at.raw));
             // TODO: stencil
         }
 
-        Ok(n::FrameBuffer(descriptor))
+        Ok(n::Framebuffer { descriptor, inner })
     }
 
     fn create_shader_module(&self, raw_data: &[u8]) -> Result<n::ShaderModule, ShaderError> {
@@ -1346,13 +1361,13 @@ impl hal::Device<Backend> for Device {
                                 vec[array_offset] = Some(sampler.0.clone());
                             }
                             (&pso::Descriptor::Image(image, layout), &mut n::DescriptorSetBinding::Image(ref mut vec)) => {
-                                vec[array_offset] = Some((image.0.clone(), layout));
+                                vec[array_offset] = Some((image.raw.clone(), layout));
                             }
                             (&pso::Descriptor::Image(image, layout), &mut n::DescriptorSetBinding::Combined(ref mut vec)) => {
-                                vec[array_offset].0 = Some((image.0.clone(), layout));
+                                vec[array_offset].0 = Some((image.raw.clone(), layout));
                             }
                             (&pso::Descriptor::CombinedImageSampler(image, layout, sampler), &mut n::DescriptorSetBinding::Combined(ref mut vec)) => {
-                                vec[array_offset] = (Some((image.0.clone(), layout)), Some(sampler.0.clone()));
+                                vec[array_offset] = (Some((image.raw.clone(), layout)), Some(sampler.0.clone()));
                             }
                             (&pso::Descriptor::UniformTexelBuffer(view), &mut n::DescriptorSetBinding::Image(ref mut vec)) |
                             (&pso::Descriptor::StorageTexelBuffer(view), &mut n::DescriptorSetBinding::Image(ref mut vec)) => {
@@ -1389,7 +1404,7 @@ impl hal::Device<Backend> for Device {
                                 encoder.set_sampler_states(&[&sampler.0], write.binding as _);
                             }
                             pso::Descriptor::Image(image, _layout) => {
-                                encoder.set_textures(&[&image.0], write.binding as _);
+                                encoder.set_textures(&[&image.raw], write.binding as _);
                             }
                             pso::Descriptor::Buffer(buffer, ref range) => {
                                 encoder.set_buffer(&buffer.raw, range.start.unwrap_or(0), write.binding as _);
@@ -1435,7 +1450,7 @@ impl hal::Device<Backend> for Device {
     fn destroy_compute_pipeline(&self, _pipeline: n::ComputePipeline) {
     }
 
-    fn destroy_framebuffer(&self, _buffer: n::FrameBuffer) {
+    fn destroy_framebuffer(&self, _buffer: n::Framebuffer) {
     }
 
     fn destroy_semaphore(&self, semaphore: n::Semaphore) {
@@ -1842,7 +1857,7 @@ impl hal::Device<Backend> for Device {
             return Err(image::ViewError::Unsupported);
         }
 
-        let view = image.raw.new_texture_view_from_slice(
+        let raw = image.raw.new_texture_view_from_slice(
             mtl_format,
             conv::map_texture_type(kind),
             NSRange {
@@ -1855,7 +1870,7 @@ impl hal::Device<Backend> for Device {
             },
         );
 
-        Ok(n::ImageView(view))
+        Ok(n::ImageView { raw, mtl_format })
     }
 
     fn destroy_image_view(&self, _view: n::ImageView) {

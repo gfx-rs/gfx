@@ -23,7 +23,7 @@ pub type Level = u8;
 pub const MAX_LEVEL: Level = 15;
 
 /// Describes the size of an image, which may be up to three dimensional.
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Extent {
     /// Image width
