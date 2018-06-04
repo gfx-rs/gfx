@@ -326,6 +326,12 @@ impl Device {
                .map_err(gen_unexpected_error)?;
         }
 
+        for input in &shader_resources.subpass_inputs {
+            let set = ast.get_decoration(input.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
+            ast.set_decoration(input.id, spirv::Decoration::DescriptorSet, space_offset + set)
+               .map_err(gen_unexpected_error)?;
+        }
+
         // TODO: other resources
 
         Ok(())
@@ -2239,7 +2245,7 @@ impl d::Device<B> for Device {
 
         Ok(n::ImageView {
             resource: image.resource,
-            handle_srv: if image.usage.contains(image::Usage::SAMPLED) {
+            handle_srv: if image.usage.intersects(image::Usage::SAMPLED | image::Usage::INPUT_ATTACHMENT) {
                 Some(self.view_image_as_shader_resource(info.clone())?)
             } else {
                 None
