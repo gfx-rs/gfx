@@ -2,10 +2,10 @@ use hal::format::{Format};
 use hal::pso::{
     BlendDesc, BlendOp, BlendState, ColorBlendDesc, Comparison, CullFace, DepthStencilDesc,
     DepthTest, Factor, PolygonMode, Rasterizer, Rect, StencilFace, StencilOp, StencilTest,
-    Viewport, Stage
+    Viewport, Stage,
 };
 use hal::image::{Anisotropic, Filter, WrapMode};
-use hal::Primitive;
+use hal::{IndexType, Primitive};
 
 use spirv_cross::spirv;
 
@@ -17,61 +17,69 @@ use winapi::um::d3d11::*;
 
 use std::mem;
 
+pub fn map_index_type(ty: IndexType) -> DXGI_FORMAT {
+    match ty {
+        IndexType::U16 => DXGI_FORMAT_R16_UINT,
+        IndexType::U32 => DXGI_FORMAT_R32_UINT,
+    }
+}
+
 pub fn typeless_format(format: DXGI_FORMAT) -> Option<DXGI_FORMAT> {
-    let format = match format {
+    match format {
         DXGI_FORMAT_R8G8B8A8_UNORM |
         DXGI_FORMAT_R8G8B8A8_SNORM |
         DXGI_FORMAT_R8G8B8A8_UINT |
         DXGI_FORMAT_R8G8B8A8_SINT |
-        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB => DXGI_FORMAT_R8G8B8A8_TYPELESS,
+        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB => Some(DXGI_FORMAT_R8G8B8A8_TYPELESS),
 
         // ?`
         DXGI_FORMAT_B8G8R8A8_UNORM |
-        DXGI_FORMAT_B8G8R8A8_UNORM_SRGB => DXGI_FORMAT_B8G8R8A8_TYPELESS,
+        DXGI_FORMAT_B8G8R8A8_UNORM_SRGB => Some(DXGI_FORMAT_B8G8R8A8_TYPELESS),
 
         DXGI_FORMAT_R8_UNORM |
         DXGI_FORMAT_R8_SNORM |
         DXGI_FORMAT_R8_UINT |
-        DXGI_FORMAT_R8_SINT => DXGI_FORMAT_R8_TYPELESS,
+        DXGI_FORMAT_R8_SINT => Some(DXGI_FORMAT_R8_TYPELESS),
 
         DXGI_FORMAT_R8G8_UNORM |
         DXGI_FORMAT_R8G8_SNORM |
         DXGI_FORMAT_R8G8_UINT |
-        DXGI_FORMAT_R8G8_SINT => DXGI_FORMAT_R8G8_TYPELESS,
+        DXGI_FORMAT_R8G8_SINT => Some(DXGI_FORMAT_R8G8_TYPELESS),
 
         DXGI_FORMAT_R16_UNORM |
         DXGI_FORMAT_R16_SNORM |
         DXGI_FORMAT_R16_UINT |
         DXGI_FORMAT_R16_SINT |
-        DXGI_FORMAT_R16_FLOAT => DXGI_FORMAT_R16_TYPELESS,
+        DXGI_FORMAT_R16_FLOAT => Some(DXGI_FORMAT_R16_TYPELESS),
 
         DXGI_FORMAT_R16G16_UNORM |
         DXGI_FORMAT_R16G16_SNORM |
         DXGI_FORMAT_R16G16_UINT |
         DXGI_FORMAT_R16G16_SINT |
-        DXGI_FORMAT_R16G16_FLOAT => DXGI_FORMAT_R16G16_TYPELESS,
+        DXGI_FORMAT_R16G16_FLOAT => Some(DXGI_FORMAT_R16G16_TYPELESS),
 
         DXGI_FORMAT_R16G16B16A16_UNORM |
         DXGI_FORMAT_R16G16B16A16_SNORM |
         DXGI_FORMAT_R16G16B16A16_UINT |
         DXGI_FORMAT_R16G16B16A16_SINT |
-        DXGI_FORMAT_R16G16B16A16_FLOAT => DXGI_FORMAT_R16G16B16A16_TYPELESS,
+        DXGI_FORMAT_R16G16B16A16_FLOAT => Some(DXGI_FORMAT_R16G16B16A16_TYPELESS),
 
+        DXGI_FORMAT_D32_FLOAT |
         DXGI_FORMAT_R32_UINT |
         DXGI_FORMAT_R32_SINT |
-        DXGI_FORMAT_R32_FLOAT => DXGI_FORMAT_R32_TYPELESS,
+        DXGI_FORMAT_R32_FLOAT => Some(DXGI_FORMAT_R32_TYPELESS),
 
         DXGI_FORMAT_R32G32_UINT |
         DXGI_FORMAT_R32G32_SINT |
-        DXGI_FORMAT_R32G32_FLOAT => DXGI_FORMAT_R32G32_TYPELESS,
+        DXGI_FORMAT_R32G32_FLOAT => Some(DXGI_FORMAT_R32G32_TYPELESS),
 
         DXGI_FORMAT_R32G32B32_UINT |
         DXGI_FORMAT_R32G32B32_SINT |
-        DXGI_FORMAT_R32G32B32_FLOAT => DXGI_FORMAT_R32G32B32_TYPELESS,
+        DXGI_FORMAT_R32G32B32_FLOAT => Some(DXGI_FORMAT_R32G32B32_TYPELESS),
 
         DXGI_FORMAT_R32G32B32A32_UINT |
         DXGI_FORMAT_R32G32B32A32_SINT |
-        DXGI_FORMAT_R32G32B32A32_FLOAT => DXGI_FORMAT_R32G32B32A32_TYPELESS,
+        DXGI_FORMAT_R32G32B32A32_FLOAT => Some(DXGI_FORMAT_R32G32B32A32_TYPELESS),
 
         /*R5g6b5Unorm => DXGI_FORMAT_B5G6R5_UNORM,
         R5g5b5a1Unorm => DXGI_FORMAT_B5G5R5A1_UNORM,
@@ -97,10 +105,8 @@ pub fn typeless_format(format: DXGI_FORMAT) -> Option<DXGI_FORMAT> {
         Bc7Unorm => DXGI_FORMAT_BC7_UNORM,
         Bc7Srgb => DXGI_FORMAT_BC7_UNORM_SRGB,*/
 
-        _ => return None,
-    };
-
-    Some(format)
+        _ => None,
+    }
 }
 
 // TODO: stolen from d3d12 backend, maybe share function somehow?

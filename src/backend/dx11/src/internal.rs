@@ -15,6 +15,7 @@ struct BufferImageCopyInfo {
     data: [u32; 4],
 }
 
+#[derive(Clone)]
 pub struct BufferImageCopy {
     cs: ComPtr<d3d11::ID3D11ComputeShader>,
     copy_info: ComPtr<d3d11::ID3D11Buffer>,
@@ -110,13 +111,17 @@ impl BufferImageCopy {
             context.CSSetShader(self.cs.as_raw(), ptr::null_mut(), 0);
             context.CSSetConstantBuffers(0, 1, &self.copy_info.as_raw());
             context.CSSetShaderResources(0, 1, &buffer.as_raw());
-            context.CSSetUnorderedAccessViews(0, 1, &image.as_raw());
+            context.CSSetUnorderedAccessViews(0, 1, &image.as_raw(), ptr::null_mut());
 
             context.Dispatch(
                 info.image_extent.width,
                 info.image_extent.height,
                 1
             );
+
+            // unbind external resources
+            context.CSSetShaderResources(0, 1, [ptr::null_mut(); 1].as_ptr());
+            context.CSSetUnorderedAccessViews(0, 1, [ptr::null_mut(); 1].as_ptr(), ptr::null_mut());
         }
     }
 }
