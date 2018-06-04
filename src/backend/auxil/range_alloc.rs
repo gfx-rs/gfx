@@ -71,33 +71,35 @@ where
         // Before: |left|-(range)-|right|
         if i > 0 && range.start == self.free_ranges[i - 1].end {
             // Merge with |left|.
-            self.free_ranges[i - 1].end = range.end;
-            // Check for possibly merge with |right| also.
-            if i < self.free_ranges.len()
-                && self.free_ranges[i - 1].end == self.free_ranges[i].start
-            {
-                let right = self.free_ranges.remove(i);
-                self.free_ranges[i - 1].end = right.end;
-            }
+            self.free_ranges[i - 1].end =
+                if i < self.free_ranges.len() && range.end == self.free_ranges[i].start {
+                    // Check for possible merge with |left| and |right|.
+                    let right = self.free_ranges.remove(i);
+                    right.end
+                } else {
+                    range.end
+                };
+
             return;
         } else if i < self.free_ranges.len() && range.end == self.free_ranges[i].start {
             // Merge with |right|.
-            self.free_ranges[i].start = range.start;
-            // Check for possibly merge with |left| also.
-            if i > 0 && self.free_ranges[i].start == self.free_ranges[i - 1].end {
-                let left = self.free_ranges.remove(i - 1);
-                self.free_ranges[i].start = left.start;
-            }
+            self.free_ranges[i].start =
+                if i > 0 && range.start == self.free_ranges[i - 1].end {
+                    // Check for possible merge with |left| and |right|.
+                    let left = self.free_ranges.remove(i - 1);
+                    left.start
+                } else {
+                    range.start
+                };
+
             return;
         }
 
         // Debug checks
-        if i > 0 {
-            assert!(self.free_ranges[i - 1].end < range.start);
-        }
-        if i < self.free_ranges.len() {
-            assert!(range.end < self.free_ranges[i].start);
-        }
+        assert!(
+            (i == 0 || self.free_ranges[i - 1].end < range.start) &&
+            (i >= self.free_ranges.len() || range.end < self.free_ranges[i].start)
+        );
 
         self.free_ranges.insert(i, range);
     }
