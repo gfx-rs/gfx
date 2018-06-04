@@ -18,9 +18,9 @@ typedef struct {
 
 
 vertex BlitVertexData vs_blit(BlitAttributes in [[stage_in]]) {
-    float4 pos = { 0.0, 0.0, 0.0f, 1.0f };
+    float4 pos = { 0.0, 0.0, in.dst_coords.z, 1.0f };
     pos.xy = in.dst_coords.xy * 2.0 - 1.0;
-    return BlitVertexData { pos, in.src_coords, uint(in.dst_coords.z) };
+    return BlitVertexData { pos, in.src_coords, uint(in.dst_coords.w) };
 }
 
 fragment float4 ps_blit_1d_float(
