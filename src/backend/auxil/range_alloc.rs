@@ -23,10 +23,6 @@ where
         }
     }
 
-    pub fn initial_range(&self) -> Range<T> {
-        self.initial_range.clone()
-    }
-
     pub fn allocate_range(&mut self, length: T) -> Option<Range<T>> {
         let mut best_fit: Option<(usize, Range<T>)> = None;
         for (index, range) in self.free_ranges.iter().cloned().enumerate() {
@@ -48,7 +44,7 @@ where
                     }
                 }
                 None => {
-                    (index, range.clone())
+                    (index, range)
                 }
             });
         }
@@ -62,68 +58,50 @@ where
         })
     }
 
-    pub fn free_range(&mut self, range: Range<T>) -> Result<(), ()> {
+    pub fn free_range(&mut self, range: Range<T>) {
         assert!(self.initial_range.start <= range.start && range.end <= self.initial_range.end);
         assert!(range.start < range.end);
-        if self.free_ranges.len() == 0 {
-            self.free_ranges.push(range);
-            return Ok(());
-        }
-        // Input is within range, but before any empty ranges and not
-        // adjacent to them.
-        if self.free_ranges.len() > 0 {
-            if self.free_ranges[0].start > range.end {
-                self.free_ranges.insert(0, range);
-                return Ok(());
-            }
-        }
-        // Input is within range, but after all empty ranges and not
-        // adjacent to them.
-        if let Some(last) = self.free_ranges.last().cloned() {
-            if last.end < range.start {
-                self.free_ranges.push(range);
-                return Ok(());
-            }
+
+        // Get insertion position.
+        let i = self.free_ranges.iter()
+            .position(|r| r.start > range.start)
+            .unwrap_or(self.free_ranges.len());
+
+        // Try merging with neighboring ranges in the free list.
+        // Before: |left|-(range)-|right|
+        if i > 0 && range.start == self.free_ranges[i - 1].end {
+            // Merge with |left|.
+            self.free_ranges[i - 1].end =
+                if i < self.free_ranges.len() && range.end == self.free_ranges[i].start {
+                    // Check for possible merge with |left| and |right|.
+                    let right = self.free_ranges.remove(i);
+                    right.end
+                } else {
+                    range.end
+                };
+
+            return;
+        } else if i < self.free_ranges.len() && range.end == self.free_ranges[i].start {
+            // Merge with |right|.
+            self.free_ranges[i].start =
+                if i > 0 && range.start == self.free_ranges[i - 1].end {
+                    // Check for possible merge with |left| and |right|.
+                    let left = self.free_ranges.remove(i - 1);
+                    left.start
+                } else {
+                    range.start
+                };
+
+            return;
         }
 
-        for i in 0..self.free_ranges.len() {
-            // Input is immediately to the left of an existing empty range.
-            if range.end == self.free_ranges[i].start {
-                // Extend this range
-                self.free_ranges[i].start = range.start;
-                // Merge this into an adjacent range to the left if necessary.
-                if i > 0 && self.free_ranges[i - 1].end == self.free_ranges[i].start {
-                    let r = self.free_ranges.remove(i);
-                    self.free_ranges[i - 1].end = r.end;
-                }
-                return Ok(());
-            }
+        // Debug checks
+        assert!(
+            (i == 0 || self.free_ranges[i - 1].end < range.start) &&
+            (i >= self.free_ranges.len() || range.end < self.free_ranges[i].start)
+        );
 
-            // Input is immediately to the right of an existing empty range.
-            if range.start == self.free_ranges[i].end {
-                // Extend this range
-                self.free_ranges[i].end = range.end;
-
-                // Merge this into an adjacent range to the right if necessary.
-                if i + 1 != self.free_ranges.len()
-                    && self.free_ranges[i + 1].start == self.free_ranges[i].end
-                {
-                    let r = self.free_ranges.remove(i + 1);
-                    self.free_ranges[i].end = r.end;
-                }
-                return Ok(());
-            }
-
-            // Input is inbetween two empty ranges.
-            if i + 1 != self.free_ranges.len()
-                && range.start > self.free_ranges[i].end
-                && range.end < self.free_ranges[i + 1].start
-            {
-                self.free_ranges.insert(i + 1, range);
-                return Ok(());
-            }
-        }
-        return Err(());
+        self.free_ranges.insert(i, range);
     }
 
     pub fn reset(&mut self) {
@@ -142,7 +120,7 @@ mod tests {
         // Test if an allocation works
         assert_eq!(alloc.allocate_range(4), Some(0..4));
         // Free the prior allocation
-        assert!(alloc.free_range(0..4).is_ok());
+        alloc.free_range(0..4);
         // Make sure the free actually worked
         assert_eq!(alloc.free_ranges, vec![0..10]);
     }
@@ -153,7 +131,7 @@ mod tests {
         // Test if the allocator runs out of space correctly
         assert_eq!(alloc.allocate_range(10), Some(0..10));
         assert!(alloc.allocate_range(4).is_none());
-        assert!(alloc.free_range(0..10).is_ok());
+        alloc.free_range(0..10);
     }
 
     #[test]
@@ -163,7 +141,7 @@ mod tests {
         assert_eq!(alloc.allocate_range(3), Some(0..3));
         assert_eq!(alloc.allocate_range(3), Some(3..6));
         assert_eq!(alloc.allocate_range(3), Some(6..9));
-        assert!(alloc.free_range(3..6).is_ok());
+        alloc.free_range(3..6);
         assert_eq!(alloc.free_ranges, vec![3..6, 9..10]);
         // Now request space that the middle block can fill, but the end one can't.
         assert_eq!(alloc.allocate_range(3), Some(3..6));
@@ -184,11 +162,11 @@ mod tests {
         assert_eq!(alloc.allocate_range(10), Some(80..90));
         assert_eq!(alloc.allocate_range(10), Some(90..100));
         assert_eq!(alloc.free_ranges, vec![]);
-        assert!(alloc.free_range(10..20).is_ok());
-        assert!(alloc.free_range(30..40).is_ok());
-        assert!(alloc.free_range(50..60).is_ok());
-        assert!(alloc.free_range(70..80).is_ok());
-        assert!(alloc.free_range(90..100).is_ok());
+        alloc.free_range(10..20);
+        alloc.free_range(30..40);
+        alloc.free_range(50..60);
+        alloc.free_range(70..80);
+        alloc.free_range(90..100);
         // Check that the right blocks were freed.
         assert_eq!(alloc.free_ranges, vec![10..20, 30..40, 50..60, 70..80, 90..100]);
         // Fragment the memory on purpose a bit.
@@ -197,7 +175,7 @@ mod tests {
         assert_eq!(alloc.allocate_range(6), Some(50..56));
         assert_eq!(alloc.allocate_range(6), Some(70..76));
         assert_eq!(alloc.allocate_range(6), Some(90..96));
-        // Check for fragementation.
+        // Check for fragmentation.
         assert_eq!(alloc.free_ranges, vec![16..20, 36..40, 56..60, 76..80, 96..100]);
         // Fill up the fragmentation
         assert_eq!(alloc.allocate_range(4), Some(16..20));
@@ -217,10 +195,22 @@ mod tests {
         assert_eq!(alloc.allocate_range(3), Some(0..3));
         assert_eq!(alloc.allocate_range(3), Some(3..6));
         assert_eq!(alloc.allocate_range(3), Some(6..9));
-        assert!(alloc.free_range(3..6).is_ok());
+        alloc.free_range(3..6);
         assert_eq!(alloc.free_ranges, vec![3..6, 9..10]);
         // Now request space that can be filled by 3..6 but should be filled by 9..10
         // because 9..10 is a perfect fit.
         assert_eq!(alloc.allocate_range(1), Some(9..10));
+    }
+
+    #[test]
+    fn test_merge_neighbors() {
+        let mut alloc = RangeAllocator::new(0..9);
+        assert_eq!(alloc.allocate_range(3), Some(0..3));
+        assert_eq!(alloc.allocate_range(3), Some(3..6));
+        assert_eq!(alloc.allocate_range(3), Some(6..9));
+        alloc.free_range(0..3);
+        alloc.free_range(6..9);
+        alloc.free_range(3..6);
+        assert_eq!(alloc.free_ranges, vec![0..9]);
     }
 }

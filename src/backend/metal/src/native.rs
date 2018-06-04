@@ -274,7 +274,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                             ..
                         } => {
                             let handle_range = (*offset)..offset + encoder.encoded_length();
-                            let _ = range_allocator.free_range(handle_range);
+                            range_allocator.free_range(handle_range);
                         },
                     }
                 }
