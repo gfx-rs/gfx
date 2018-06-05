@@ -4,6 +4,7 @@ use std::marker::PhantomData;
 
 use {buffer, pso};
 use {Backend, DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset};
+use command::raw::DescriptorSetOffset;
 use queue::{Supports, Graphics};
 use super::{
     AttachmentClear, ClearValue, ClearValueRaw, CommandBuffer, RawCommandBuffer,
@@ -75,16 +76,19 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
     }
 
     ///
-    pub fn bind_graphics_descriptor_sets<T>(
+    pub fn bind_graphics_descriptor_sets<I, J>(
         &mut self,
         layout: &B::PipelineLayout,
         first_set: usize,
-        sets: T,
+        sets: I,
+        offsets: J,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<B::DescriptorSet>,
+        I: IntoIterator,
+        I::Item: Borrow<B::DescriptorSet>,
+        J: IntoIterator,
+        J::Item: Borrow<DescriptorSetOffset>,
     {
-        self.0.bind_graphics_descriptor_sets(layout, first_set, sets)
+        self.0.bind_graphics_descriptor_sets(layout, first_set, sets, offsets)
     }
 
     ///

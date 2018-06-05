@@ -48,7 +48,7 @@ pub enum DescriptorType {
     ///
     UniformBufferDynamic = 8,
     ///
-    UniformImageDynamic = 9,
+    StorageBufferDynamic = 9,
     /// Allows unfiltered loads of pixel local data in the fragment shader.
     InputAttachment = 10,
 }
