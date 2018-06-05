@@ -5,14 +5,13 @@ use std::ops::Range;
 use Backend;
 use {image, pso};
 use buffer::IndexBufferView;
-use command::raw::DescriptorSetOffset;
 use query::{Query, QueryControl, QueryId};
 use queue::capability::{Graphics, GraphicsOrCompute, Supports};
 use super::{
     CommandBuffer, RawCommandBuffer,
     RenderPassInlineEncoder, RenderPassSecondaryEncoder,
     Shot, Level, Primary,
-    ClearColorRaw, ClearDepthStencilRaw, ClearValueRaw,
+    ClearColorRaw, ClearDepthStencilRaw, ClearValueRaw, DescriptorSetOffset,
 };
 
 

@@ -563,10 +563,12 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn bind_graphics_descriptor_sets<I>(&mut self, _: &(), _: usize, _: I)
+    fn bind_graphics_descriptor_sets<I, J>(&mut self, _: &(), _: usize, _: I, _: J)
     where
         I: IntoIterator,
         I::Item: Borrow<()>,
+        J: IntoIterator,
+        J::Item: Borrow<command::DescriptorSetOffset>,
     {
         unimplemented!()
     }
@@ -575,10 +577,12 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn bind_compute_descriptor_sets<I>(&mut self, _: &(), _: usize, _: I)
+    fn bind_compute_descriptor_sets<I, J>(&mut self, _: &(), _: usize, _: I, _: J)
     where
         I: IntoIterator,
         I::Item: Borrow<()>,
+        J: IntoIterator,
+        J::Item: Borrow<command::DescriptorSetOffset>,
     {
         unimplemented!()
     }

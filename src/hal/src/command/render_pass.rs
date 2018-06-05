@@ -4,11 +4,10 @@ use std::marker::PhantomData;
 
 use {buffer, pso};
 use {Backend, DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset};
-use command::raw::DescriptorSetOffset;
 use queue::{Supports, Graphics};
 use super::{
     AttachmentClear, ClearValue, ClearValueRaw, CommandBuffer, RawCommandBuffer,
-    Shot, Level, Primary, Secondary, Submittable, Submit
+    Shot, Level, Primary, Secondary, Submittable, Submit, DescriptorSetOffset,
 };
 
 /// Specifies how commands for the following renderpasses will be recorded.
