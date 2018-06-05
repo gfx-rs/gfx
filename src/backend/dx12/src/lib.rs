@@ -16,6 +16,7 @@ extern crate wio;
 mod range_alloc;
 mod command;
 mod conv;
+mod descriptors_cpu;
 mod device;
 mod internal;
 mod native;
@@ -25,6 +26,7 @@ mod window;
 
 use hal::{error, format as f, image, memory, Features, Limits, QueueType};
 use hal::queue::{QueueFamily as HalQueueFamily, QueueFamilyId, Queues};
+use descriptors_cpu::DescriptorCpuPool;
 
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, winerror};
 use winapi::shared::minwindef::{FALSE, TRUE};
@@ -519,12 +521,11 @@ pub struct Device {
     format_properties: Arc<[f::Properties; f::NUM_FORMATS]>,
     heap_properties: &'static [HeapProperties],
     // CPU only pools
-    rtv_pool: Mutex<native::DescriptorCpuPool>,
-    dsv_pool: Mutex<native::DescriptorCpuPool>,
-    srv_pool: Mutex<native::DescriptorCpuPool>,
-    uav_pool: Mutex<native::DescriptorCpuPool>,
-    sampler_pool: Mutex<native::DescriptorCpuPool>,
-    descriptor_update_pools: Mutex<Vec<native::DescriptorCpuPool>>,
+    rtv_pool: Mutex<DescriptorCpuPool>,
+    dsv_pool: Mutex<DescriptorCpuPool>,
+    srv_uav_pool: Mutex<DescriptorCpuPool>,
+    sampler_pool: Mutex<DescriptorCpuPool>,
+    descriptor_update_pools: Mutex<Vec<descriptors_cpu::HeapLinear>>,
     // CPU/GPU descriptor heaps
     heap_srv_cbv_uav: Mutex<native::DescriptorHeap>,
     heap_sampler: Mutex<native::DescriptorHeap>,
@@ -549,70 +550,10 @@ impl Device {
         present_queue: ComPtr<d3d12::ID3D12CommandQueue>,
     ) -> Self {
         // Allocate descriptor heaps
-        let max_rtvs = 2048; // TODO
-        let rtv_pool = native::DescriptorCpuPool {
-            heap: Self::create_descriptor_heap_impl(
-                &mut device,
-                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-                false,
-                max_rtvs,
-            ),
-            offset: 0,
-            size: 0,
-            max_size: max_rtvs as _,
-        };
-
-        let max_dsvs = 128; // TODO
-        let dsv_pool = native::DescriptorCpuPool {
-            heap: Self::create_descriptor_heap_impl(
-                &mut device,
-                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
-                false,
-                max_dsvs,
-            ),
-            offset: 0,
-            size: 0,
-            max_size: max_dsvs as _,
-        };
-
-        let max_srvs = 0x1000; // TODO
-        let srv_pool = native::DescriptorCpuPool {
-            heap: Self::create_descriptor_heap_impl(
-                &mut device,
-                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-                false,
-                max_srvs,
-            ),
-            offset: 0,
-            size: 0,
-            max_size: max_srvs as _,
-        };
-
-        let max_uavs = 0x1000; // TODO
-        let uav_pool = native::DescriptorCpuPool {
-            heap: Self::create_descriptor_heap_impl(
-                &mut device,
-                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-                false,
-                max_uavs,
-            ),
-            offset: 0,
-            size: 0,
-            max_size: max_uavs as _,
-        };
-
-        let max_samplers = 2048; // D3D12 doesn't allow more samplers for one heap.
-        let sampler_pool = native::DescriptorCpuPool {
-            heap: Self::create_descriptor_heap_impl(
-                &mut device,
-                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
-                false,
-                max_samplers,
-            ),
-            offset: 0,
-            size: 0,
-            max_size: max_samplers as _,
-        };
+        let rtv_pool = DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+        let dsv_pool = DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+        let srv_uav_pool = DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        let sampler_pool = DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 
         let heap_srv_cbv_uav = Self::create_descriptor_heap_impl(
             &mut device,
@@ -625,7 +566,7 @@ impl Device {
             &mut device,
             d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
             true,
-            max_samplers,
+            2_048,
         );
 
         let draw_signature = Self::create_command_signature(
@@ -661,8 +602,7 @@ impl Device {
             heap_properties: physical_device.heap_properties,
             rtv_pool: Mutex::new(rtv_pool),
             dsv_pool: Mutex::new(dsv_pool),
-            srv_pool: Mutex::new(srv_pool),
-            uav_pool: Mutex::new(uav_pool),
+            srv_uav_pool: Mutex::new(srv_uav_pool),
             sampler_pool: Mutex::new(sampler_pool),
             descriptor_update_pools: Mutex::new(Vec::new()),
             heap_srv_cbv_uav: Mutex::new(heap_srv_cbv_uav),
