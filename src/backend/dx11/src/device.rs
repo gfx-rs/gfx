@@ -1,983 +1,1322 @@
-use std::{cmp, ptr, slice};
-use std::collections::BTreeMap as Map;
-use std::os::raw::c_void;
-use std::sync::Arc;
-use winapi;
-use core::{self, device as d, buffer, texture, mapping};
-use core::memory::{self, Bind, Typed};
-use core::handle::{self as h, Producer};
-use {Resources as R, Share, Buffer, Fence, Texture, Pipeline, Program, Shader};
-use command::RawCommandBuffer;
-use {CommandList, DeferredContext, ShaderModel};
-use native;
+use hal;
+use hal::queue::QueueFamilyId;
+use hal::range::RangeArg;
+use hal::{buffer, device, error, format, image, mapping, memory, pass, pool, pso, query};
+
+use winapi::shared::dxgi::{IDXGISwapChain, DXGI_SWAP_CHAIN_DESC, DXGI_SWAP_EFFECT_DISCARD};
+use winapi::shared::minwindef::{FALSE, TRUE};
+use winapi::shared::{dxgiformat, dxgitype, winerror};
+use winapi::um::{d3d11, d3dcommon};
+
 use wio::com::ComPtr;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct MappingGate {
-    pointer: *mut c_void,
-}
+use std::borrow::Borrow;
+use std::cell::RefCell;
+use std::mem;
+use std::ops::Range;
+use std::ptr;
+use std::sync::Arc;
 
-unsafe impl Send for MappingGate {}
-unsafe impl Sync for MappingGate {}
+use {
+    Backend, Buffer, BufferView, CommandPool, ComputePipeline, DescriptorPool, DescriptorSetLayout,
+    Fence, Framebuffer, GraphicsPipeline, Image, ImageView, InternalBuffer, Memory, PipelineLayout,
+    QueryPool, RenderPass, Sampler, Semaphore, ShaderModule, Surface, Swapchain, UnboundBuffer,
+    UnboundImage, ViewInfo,
+};
 
-impl core::mapping::Gate<R> for MappingGate {
-    unsafe fn set<T>(&self, index: usize, val: T) {
-        *(self.pointer as *mut T).offset(index as isize) = val;
-    }
-
-    unsafe fn slice<'a, 'b, T>(&'a self, len: usize) -> &'b [T] {
-        slice::from_raw_parts(self.pointer as *const T, len)
-    }
-
-    unsafe fn mut_slice<'a, 'b, T>(&'a self, len: usize) -> &'b mut [T] {
-        slice::from_raw_parts_mut(self.pointer as *mut T, len)
-    }
-}
-
-#[derive(Debug)]
-struct TextureParam {
-    levels: winapi::UINT,
-    format: winapi::DXGI_FORMAT,
-    bytes_per_texel: winapi::UINT,
-    bind: winapi::D3D11_BIND_FLAG,
-    usage: winapi::D3D11_USAGE,
-    cpu_access: winapi::D3D11_CPU_ACCESS_FLAG,
-}
+use {conv, internal, shader};
 
 pub struct Device {
-    device: ComPtr<winapi::ID3D11Device>,
-    share: Arc<Share>,
-    frame_handles: h::Manager<R>,
-    vs_cache: Map<u64, Vec<u8>>,
-    /// Create typed surface formats for the textures. This is useful for debugging
-    /// with PIX, since it doesn't understand typeless formats. This may also prevent
-    /// some valid views to be created because the typed formats can't be reinterpret.
-    use_texture_format_hint: bool,
-    sub_data_array: Vec<winapi::D3D11_SUBRESOURCE_DATA>,
-    feature_level: winapi::D3D_FEATURE_LEVEL,
+    raw: ComPtr<d3d11::ID3D11Device>,
+    pub(crate) context: ComPtr<d3d11::ID3D11DeviceContext>,
+    memory_properties: hal::MemoryProperties,
+    pub(crate) internal: internal::BufferImageCopy
 }
 
-impl Clone for Device {
-    fn clone(&self) -> Device {
-        Device::new(self.device.clone(), self.feature_level, self.share.clone())
-    }
-}
+unsafe impl Send for Device { }
+unsafe impl Sync for Device { }
 
 impl Device {
-    /// Create a new `Device`.
-    pub fn new(device: ComPtr<winapi::ID3D11Device>, feature_level: winapi::D3D_FEATURE_LEVEL, share: Arc<Share>) -> Device {
+    pub fn new(device: ComPtr<d3d11::ID3D11Device>, context: ComPtr<d3d11::ID3D11DeviceContext>, memory_properties: hal::MemoryProperties) -> Self {
         Device {
-            device: device,
-            share: share,
-            frame_handles: h::Manager::new(),
-            vs_cache: Map::new(),
-            use_texture_format_hint: false,
-            sub_data_array: Vec::new(),
-            feature_level: feature_level,
+            raw: device.clone(),
+            context,
+            memory_properties,
+            internal: internal::BufferImageCopy::new(device)
         }
     }
 
-    #[doc(hidden)]
-    pub fn wrap_back_buffer(&mut self, back_buffer: *mut winapi::ID3D11Texture2D, info: texture::Info,
-                            desc: texture::RenderDesc) -> h::RawRenderTargetView<R> {
-        use core::Device;
-        let raw_tex = Texture(native::Texture::D2(back_buffer));
-        let color_tex = self.share.handles.borrow_mut().make_texture(raw_tex, info);
-        self.view_texture_as_render_target_raw(&color_tex, desc).unwrap()
-    }
+    fn create_rasterizer_state(&self, rasterizer_desc: &pso::Rasterizer) -> Result<ComPtr<d3d11::ID3D11RasterizerState>, pso::CreationError> {
+        let mut rasterizer = ptr::null_mut();
+        let desc = conv::map_rasterizer_desc(rasterizer_desc);
 
-    /// Return the maximum supported shader model.
-    pub fn shader_model(&self) -> ShaderModel {
-        match self.feature_level {
-            winapi::D3D_FEATURE_LEVEL_10_0 => 40,
-            winapi::D3D_FEATURE_LEVEL_10_1 => 41,
-            winapi::D3D_FEATURE_LEVEL_11_0 => 50,
-            winapi::D3D_FEATURE_LEVEL_11_1 => 51,
-            _ => {
-                error!("Unknown feature level {:?}", self.feature_level);
-                0
-            },
-        }
-    }
-
-    pub fn create_command_buffer(&self) -> RawCommandBuffer<CommandList> {
-        CommandList::new().into()
-    }
-
-    pub fn create_command_buffer_native(&mut self) -> RawCommandBuffer<DeferredContext> {
-        let mut dc = unsafe { ComPtr::<winapi::ID3D11DeviceContext>::new(ptr::null_mut()) };
         let hr = unsafe {
-            self.device.CreateDeferredContext(0, &mut dc.as_mut() as *mut &mut _ as *mut *mut _)
-        };
-        if winapi::SUCCEEDED(hr) {
-            DeferredContext::new(dc).into()
-        }else {
-            panic!("Failed to create a deferred context")
-        }
-    }
-
-    fn create_buffer_internal(&mut self, info: buffer::Info, raw_data: Option<*const c_void>)
-                              -> Result<h::RawBuffer<R>, buffer::CreationError> {
-        use winapi::d3d11::*;
-        use data::{map_bind, map_usage};
-
-        let (subind, size) = match info.role {
-            buffer::Role::Vertex   =>
-                (D3D11_BIND_VERTEX_BUFFER, info.size),
-            buffer::Role::Index    => {
-                if info.stride != 2 && info.stride != 4 {
-                    error!("Only U16 and U32 index buffers are allowed");
-                    return Err(buffer::CreationError::Other);
-                }
-                (D3D11_BIND_INDEX_BUFFER, info.size)
-            },
-            buffer::Role::Constant  => // 16 bit alignment
-                (D3D11_BIND_CONSTANT_BUFFER, (info.size + 0xF) & !0xF),
-            buffer::Role::Staging =>
-                (D3D11_BIND_FLAG(0), info.size)
+            self.raw.CreateRasterizerState(
+                &desc,
+                &mut rasterizer as *mut *mut _ as *mut *mut _
+            )
         };
 
-        assert!(size >= info.size);
-        let (usage, cpu) = map_usage(info.usage, info.bind);
-        let bind = map_bind(info.bind) | subind;
-        if info.bind.contains(memory::RENDER_TARGET) | info.bind.contains(memory::DEPTH_STENCIL) {
-            return Err(buffer::CreationError::UnsupportedBind(info.bind))
-        }
-        let native_desc = D3D11_BUFFER_DESC {
-            ByteWidth: size as winapi::UINT,
-            Usage: usage,
-            BindFlags: bind.0,
-            CPUAccessFlags: cpu.0,
-            MiscFlags: 0,
-            StructureByteStride: 0, //TODO
-        };
-        let mut sub = D3D11_SUBRESOURCE_DATA {
-            pSysMem: ptr::null(),
-            SysMemPitch: 0,
-            SysMemSlicePitch: 0,
-        };
-        let sub_raw = match raw_data {
-            Some(data) => {
-                sub.pSysMem = data;
-                &sub as *const _
-            },
-            None => ptr::null(),
-        };
-
-        debug!("Creating Buffer with info {:?} and sub-data {:?}", info, sub);
-        let mut raw_buf = native::Buffer(ptr::null_mut());
-        let hr = unsafe {
-            self.device.CreateBuffer(&native_desc, sub_raw, &mut raw_buf.0)
-        };
-        if winapi::SUCCEEDED(hr) {
-            let buf = Buffer(raw_buf);
-
-            use core::memory::Usage::*;
-            let mapping = match info.usage {
-                Data | Dynamic => None,
-                Upload | Download => Some(MappingGate { pointer: ptr::null_mut() }),
-            };
-
-            Ok(self.share.handles.borrow_mut().make_buffer(buf, info, mapping))
+        if winerror::SUCCEEDED(hr) {
+            Ok(unsafe { ComPtr::from_raw(rasterizer) })
         } else {
-            error!("Failed to create a buffer with desc {:#?}, error {:x}", native_desc, hr);
-            Err(buffer::CreationError::Other)
+            Err(pso::CreationError::Other)
         }
     }
 
-    fn update_sub_data(&mut self, w: texture::Size, h: texture::Size, bpt: winapi::UINT)
-                       -> *const winapi::D3D11_SUBRESOURCE_DATA {
-        use winapi::UINT;
-        for sub in self.sub_data_array.iter_mut() {
-            sub.SysMemPitch = w as UINT * bpt;
-            sub.SysMemSlicePitch = (h as UINT) * sub.SysMemPitch;
-        }
-        self.sub_data_array.as_ptr()
-    }
+    fn create_blend_state(&self, blend_desc: &pso::BlendDesc) -> Result<ComPtr<d3d11::ID3D11BlendState>, pso::CreationError> {
+        let mut blend = ptr::null_mut();
+        let desc = conv::map_blend_desc(blend_desc);
 
-    fn create_texture_1d(&mut self, size: texture::Size, array: texture::Layer,
-                         tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG)
-                         -> Result<native::Texture, winapi::HRESULT>
-    {
-        use winapi::UINT;
-        let native_desc = winapi::D3D11_TEXTURE1D_DESC {
-            Width: size as UINT,
-            MipLevels: tp.levels,
-            ArraySize: array as UINT,
-            Format: tp.format,
-            Usage: tp.usage,
-            BindFlags: tp.bind.0,
-            CPUAccessFlags: tp.cpu_access.0,
-            MiscFlags: misc.0,
-        };
-        let sub_data = if self.sub_data_array.len() > 0 {
-            let num_data = array as usize * cmp::max(1, tp.levels) as usize;
-            if num_data != self.sub_data_array.len() {
-                error!("Texture1D with {} slices and {} levels is given {} data chunks",
-                    array, tp.levels, self.sub_data_array.len());
-                return Err(winapi::S_OK)
-            }
-            self.update_sub_data(size, 0, tp.bytes_per_texel)
-        }else {
-            ptr::null()
-        };
-
-        debug!("Creating Texture1D with size {:?}, layer {}, param {:?}, and sub-data {:p}",
-            size, array, tp, sub_data);
-        let mut raw = ptr::null_mut();
         let hr = unsafe {
-            (*self.device).CreateTexture1D(&native_desc, sub_data, &mut raw)
+            self.raw.CreateBlendState(
+                &desc,
+                &mut blend as *mut *mut _ as *mut *mut _
+            )
         };
-        if winapi::SUCCEEDED(hr) {
-            Ok(native::Texture::D1(raw))
-        }else {
-            error!("CreateTexture1D failed on {:#?} with error {:x}", native_desc, hr);
-            Err(hr)
+
+        if winerror::SUCCEEDED(hr) {
+            Ok(unsafe { ComPtr::from_raw(blend) })
+        } else {
+            Err(pso::CreationError::Other)
         }
     }
 
-    fn create_texture_2d(&mut self, size: [texture::Size; 2], array: texture::Layer, aa: texture::AaMode,
-                         tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG)
-                         -> Result<native::Texture, winapi::HRESULT>
-    {
-        use winapi::UINT;
-        use data::map_anti_alias;
+    fn create_depth_stencil_state(&self, depth_desc: &pso::DepthStencilDesc) -> Result<ComPtr<d3d11::ID3D11DepthStencilState>, pso::CreationError> {
+        let mut depth = ptr::null_mut();
+        let desc = conv::map_depth_stencil_desc(depth_desc);
 
-        let native_desc = winapi::D3D11_TEXTURE2D_DESC {
-            Width: size[0] as UINT,
-            Height: size[1] as UINT,
-            MipLevels: tp.levels,
-            ArraySize: array as UINT,
-            Format: tp.format,
-            SampleDesc: map_anti_alias(aa),
-            Usage: tp.usage,
-            BindFlags: tp.bind.0,
-            CPUAccessFlags: tp.cpu_access.0,
-            MiscFlags: misc.0,
-        };
-        let sub_data = if self.sub_data_array.len() > 0 {
-            let num_data = array as usize * cmp::max(1, tp.levels) as usize;
-            if num_data != self.sub_data_array.len() {
-                error!("Texture2D with {} slices and {} levels is given {} data chunks",
-                    array, tp.levels, self.sub_data_array.len());
-                return Err(winapi::S_OK)
-            }
-            self.update_sub_data(size[0], size[1], tp.bytes_per_texel)
-        }else {
-            ptr::null()
-        };
-
-        debug!("Creating Texture2D with size {:?}, layer {}, param {:?}, and sub-data {:p}",
-            size, array, tp, sub_data);
-        let mut raw = ptr::null_mut();
         let hr = unsafe {
-            (*self.device).CreateTexture2D(&native_desc, sub_data, &mut raw)
+            self.raw.CreateDepthStencilState(
+                &desc,
+                &mut depth as *mut *mut _ as *mut *mut _
+            )
         };
-        if winapi::SUCCEEDED(hr) {
-            Ok(native::Texture::D2(raw))
-        }else {
-            error!("CreateTexture2D failed on {:#?} with error {:x}", native_desc, hr);
-            Err(hr)
+
+        if winerror::SUCCEEDED(hr) {
+            Ok(unsafe { ComPtr::from_raw(depth) })
+        } else {
+            Err(pso::CreationError::Other)
         }
     }
 
-    fn create_texture_3d(&mut self, size: [texture::Size; 3],
-                         tp: TextureParam, misc: winapi::D3D11_RESOURCE_MISC_FLAG)
-                         -> Result<native::Texture, winapi::HRESULT>
-    {
-        use winapi::UINT;
-        let native_desc = winapi::D3D11_TEXTURE3D_DESC {
-            Width: size[0] as UINT,
-            Height: size[1] as UINT,
-            Depth: size[2] as UINT,
-            MipLevels: tp.levels,
-            Format: tp.format,
-            Usage: tp.usage,
-            BindFlags: tp.bind.0,
-            CPUAccessFlags: tp.cpu_access.0,
-            MiscFlags: misc.0,
-        };
-        let sub_data = if self.sub_data_array.len() > 0 {
-            if cmp::max(1, tp.levels) as usize != self.sub_data_array.len() {
-                error!("Texture3D with {} levels is given {} data chunks",
-                    tp.levels, self.sub_data_array.len());
-                return Err(winapi::S_OK)
-            }
-            self.update_sub_data(size[0], size[1], tp.bytes_per_texel)
-        }else {
-            ptr::null()
-        };
+    fn create_input_layout(&self, vs: ComPtr<d3dcommon::ID3DBlob>, vertex_buffers: &[pso::VertexBufferDesc], attributes: &[pso::AttributeDesc], input_assembler: &pso::InputAssemblerDesc) -> Result<(d3d11::D3D11_PRIMITIVE_TOPOLOGY, ComPtr<d3d11::ID3D11InputLayout>), pso::CreationError> {
+        let mut layout = ptr::null_mut();
 
-        debug!("Creating Texture3D with size {:?}, param {:?}, and sub-data {:p}",
-            size, tp, sub_data);
-        let mut raw = ptr::null_mut();
+        let input_elements = attributes
+            .iter()
+            .filter_map(|attrib| {
+                let buffer_desc = match vertex_buffers
+                    .iter().find(|buffer_desc| buffer_desc.binding == attrib.binding)
+                {
+                    Some(buffer_desc) => buffer_desc,
+                    None => {
+                        // TODO:
+                        // error!("Couldn't find associated vertex buffer description {:?}", attrib.binding);
+                        return Some(Err(pso::CreationError::Other));
+                    }
+                };
+
+                let slot_class = match buffer_desc.rate {
+                    0 => d3d11::D3D11_INPUT_PER_VERTEX_DATA,
+                    _ => d3d11::D3D11_INPUT_PER_INSTANCE_DATA,
+                };
+                let format = attrib.element.format;
+
+                Some(Ok(d3d11::D3D11_INPUT_ELEMENT_DESC {
+                    SemanticName: "TEXCOORD\0".as_ptr() as *const _, // Semantic name used by SPIRV-Cross
+                    SemanticIndex: attrib.location,
+                    Format: match conv::map_format(format) {
+                        Some(fm) => fm,
+                        None => {
+                            // TODO:
+                            // error!("Unable to find DXGI format for {:?}", format);
+                            return Some(Err(pso::CreationError::Other));
+                        }
+                    },
+                    InputSlot: attrib.binding as _,
+                    AlignedByteOffset: attrib.element.offset,
+                    InputSlotClass: slot_class,
+                    InstanceDataStepRate: buffer_desc.rate as _,
+                }))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
         let hr = unsafe {
-            (*self.device).CreateTexture3D(&native_desc, sub_data, &mut raw)
+            self.raw.CreateInputLayout(
+                input_elements.as_ptr(),
+                input_elements.len() as _,
+                vs.GetBufferPointer(),
+                vs.GetBufferSize(),
+                &mut layout as *mut *mut _ as *mut *mut _
+            )
         };
-        if winapi::SUCCEEDED(hr) {
-            Ok(native::Texture::D3(raw))
-        }else {
-            error!("CreateTexture3D failed on {:#?} with error {:x}", native_desc, hr);
-            Err(hr)
+
+        if winerror::SUCCEEDED(hr) {
+            let topology = conv::map_topology(input_assembler.primitive);
+
+            Ok((topology, unsafe { ComPtr::from_raw(layout) }))
+        } else {
+            Err(pso::CreationError::Other)
         }
     }
 
-    pub fn cleanup(&mut self) {
-        self.frame_handles.clear();
+    fn create_vertex_shader(&self, blob: ComPtr<d3dcommon::ID3DBlob>) -> Result<ComPtr<d3d11::ID3D11VertexShader>, pso::CreationError> {
+        let mut vs = ptr::null_mut();
+
+        let hr = unsafe {
+            self.raw.CreateVertexShader(
+                blob.GetBufferPointer(),
+                blob.GetBufferSize(),
+                ptr::null_mut(),
+                &mut vs as *mut *mut _ as *mut *mut _
+            )
+        };
+
+        if winerror::SUCCEEDED(hr) {
+            Ok(unsafe { ComPtr::from_raw(vs) })
+        } else {
+            Err(pso::CreationError::Other)
+        }
+    }
+
+    fn create_pixel_shader(&self, blob: ComPtr<d3dcommon::ID3DBlob>) -> Result<ComPtr<d3d11::ID3D11PixelShader>, pso::CreationError> {
+        let mut ps = ptr::null_mut();
+
+        let hr = unsafe {
+            self.raw.CreatePixelShader(
+                blob.GetBufferPointer(),
+                blob.GetBufferSize(),
+                ptr::null_mut(),
+                &mut ps as *mut *mut _ as *mut *mut _
+            )
+        };
+
+        if winerror::SUCCEEDED(hr) {
+            Ok(unsafe { ComPtr::from_raw(ps) })
+        } else {
+            Err(pso::CreationError::Other)
+        }
+    }
+
+    // TODO: fix return type.. 
+    fn extract_entry_point(
+        stage: pso::Stage,
+        source: &pso::EntryPoint<Backend>,
+        layout: &PipelineLayout,
+    ) -> Result<Option<ComPtr<d3dcommon::ID3DBlob>>, device::ShaderError> {
+        // TODO: entrypoint stuff
+        match *source.module {
+            ShaderModule::Dxbc(ref shader) => {
+                unimplemented!()
+
+                // Ok(Some(shader))
+            }
+            ShaderModule::Spirv(ref raw_data) => {
+                Ok(shader::compile_spirv_entrypoint(raw_data, stage, source, layout)?)
+            }
+        }
+    }
+
+    fn view_image_as_shader_resource(&self, info: ViewInfo) -> Result<ComPtr<d3d11::ID3D11ShaderResourceView>, image::ViewError> {
+        let mut desc: d3d11::D3D11_SHADER_RESOURCE_VIEW_DESC = unsafe { mem::zeroed() };
+        desc.Format = info.format;
+
+        let MostDetailedMip = info.range.levels.start as _;
+        let MipLevels = (info.range.levels.end - info.range.levels.start) as _;
+        // let FirstArraySlice = info.range.layers.start as _;
+        // let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
+
+        match info.view_kind {
+            image::ViewKind::D2 => {
+                desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_TEXTURE2D;
+                *unsafe{ desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_SRV {
+                    MostDetailedMip,
+                    MipLevels,
+                }
+            },
+            _ => unimplemented!()
+        }
+
+        let mut srv = ptr::null_mut();
+        let hr = unsafe {
+            self.raw.CreateShaderResourceView(
+                info.resource,
+                &desc,
+                &mut srv as *mut *mut _ as *mut *mut _
+            )
+        };
+
+        if winerror::SUCCEEDED(hr) {
+            Ok(unsafe { ComPtr::from_raw(srv) })
+        } else {
+            Err(image::ViewError::Unsupported)
+        }
+    }
+
+    fn view_image_as_render_target(&self, info: ViewInfo) -> Result<ComPtr<d3d11::ID3D11RenderTargetView>, image::ViewError> {
+        let mut desc: d3d11::D3D11_RENDER_TARGET_VIEW_DESC = unsafe { mem::zeroed() };
+        desc.Format = info.format;
+
+        match info.view_kind {
+            image::ViewKind::D2 => {
+                desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2D;
+                *unsafe{ desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_RTV {
+                    MipSlice: 0,
+                }
+            },
+            _ => unimplemented!()
+        }
+
+        let mut rtv = ptr::null_mut();
+        let hr = unsafe {
+            self.raw.CreateRenderTargetView(
+                info.resource,
+                &desc,
+                &mut rtv as *mut *mut _ as *mut *mut _
+            )
+        };
+
+        if winerror::SUCCEEDED(hr) {
+            Ok(unsafe { ComPtr::from_raw(rtv) })
+        } else {
+            Err(image::ViewError::Unsupported)
+        }
+    }
+
+    fn view_image_as_depth_stencil(&self, info: ViewInfo) -> Result<ComPtr<d3d11::ID3D11DepthStencilView>, image::ViewError> {
+        let mut desc: d3d11::D3D11_DEPTH_STENCIL_VIEW_DESC = unsafe { mem::zeroed() };
+        desc.Format = info.format;
+
+        match info.view_kind {
+            image::ViewKind::D2 => {
+                desc.ViewDimension = d3d11::D3D11_DSV_DIMENSION_TEXTURE2D;
+                *unsafe{ desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_DSV {
+                    MipSlice: 0,
+                }
+            },
+            _ => unimplemented!()
+        }
+
+        let mut dsv = ptr::null_mut();
+        let hr = unsafe {
+            self.raw.CreateDepthStencilView(
+                info.resource,
+                &desc,
+                &mut dsv as *mut *mut _ as *mut *mut _
+            )
+        };
+
+        if winerror::SUCCEEDED(hr) {
+            Ok(unsafe { ComPtr::from_raw(dsv) })
+        } else {
+            Err(image::ViewError::Unsupported)
+        }
     }
 }
 
-impl core::Device<R> for Device {
-    fn get_capabilities(&self) -> &core::Capabilities {
-        &self.share.capabilities
+impl hal::Device<Backend> for Device {
+    fn allocate_memory(
+        &self,
+        mem_type: hal::MemoryTypeId,
+        size: u64,
+    ) -> Result<Memory, device::OutOfMemory> {
+        // TODO:
+        Ok(Memory {
+            properties: self.memory_properties.memory_types[mem_type.0].properties,
+            buffer: RefCell::new(None),
+            size,
+        })
     }
 
-    fn create_buffer_raw(&mut self, info: buffer::Info) -> Result<h::RawBuffer<R>, buffer::CreationError> {
-        self.create_buffer_internal(info, None)
-    }
-
-    fn create_buffer_immutable_raw(&mut self, data: &[u8], stride: usize, role: buffer::Role, bind: Bind)
-                                -> Result<h::RawBuffer<R>, buffer::CreationError> {
-        let info = buffer::Info {
-            role: role,
-            usage: memory::Usage::Data,
-            bind: bind,
-            size: data.len(),
-            stride: stride,
-        };
-        self.create_buffer_internal(info, Some(data.as_ptr() as *const c_void))
-    }
-
-    fn create_shader(&mut self, stage: core::shade::Stage, code: &[u8])
-                     -> Result<h::Shader<R>, core::shade::CreateShaderError> {
-        use winapi::ID3D11DeviceChild;
-        use core::shade::{CreateShaderError, Stage};
-        use mirror::reflect_shader;
-
-        let dev = &mut self.device;
-        let len = code.len() as winapi::SIZE_T;
-        let (hr, object) = match stage {
-            Stage::Vertex => {
-                let mut ret = ptr::null_mut();
-                let hr = unsafe {
-                    dev.CreateVertexShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
-                };
-                (hr, ret as *mut ID3D11DeviceChild)
-            },
-            Stage::Hull => {
-                let mut ret = ptr::null_mut();
-                let hr = unsafe {
-                    dev.CreateHullShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
-                };
-                (hr, ret as *mut ID3D11DeviceChild)
-            },
-            Stage::Domain => {
-                let mut ret = ptr::null_mut();
-                let hr = unsafe {
-                    dev.CreateDomainShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
-                };
-                (hr, ret as *mut ID3D11DeviceChild)
-            },
-            Stage::Geometry => {
-                let mut ret = ptr::null_mut();
-                let hr = unsafe {
-                    dev.CreateGeometryShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
-                };
-                (hr, ret as *mut ID3D11DeviceChild)
-            },
-            Stage::Pixel => {
-                let mut ret = ptr::null_mut();
-                let hr = unsafe {
-                    dev.CreatePixelShader(code.as_ptr() as *const c_void, len, ptr::null_mut(), &mut ret)
-                };
-                (hr, ret as *mut ID3D11DeviceChild)
-            },
-            //_ => return Err(CreateShaderError::StageNotSupported(stage))
-        };
-
-        if winapi::SUCCEEDED(hr) {
-            let reflection = reflect_shader(code);
-            let hash = {
-                use std::collections::hash_map::DefaultHasher;
-                use std::hash::{Hash, Hasher};
-                let mut hasher = DefaultHasher::new();
-                code.hash(&mut hasher);
-                hasher.finish()
-            };
-            if stage == Stage::Vertex {
-                self.vs_cache.insert(hash, code.to_owned());
-            }
-            let shader = Shader {
-                object: object,
-                reflection: reflection,
-                code_hash: hash,
-            };
-            Ok(self.share.handles.borrow_mut().make_shader(shader))
-        }else {
-            Err(CreateShaderError::CompilationFailed(format!("code {}", hr)))
+    fn create_command_pool(
+        &self, family: QueueFamilyId, _create_flags: pool::CommandPoolCreateFlags
+    ) -> CommandPool {
+        // TODO:
+        CommandPool {
+            device: self.raw.clone(),
+            internal: self.internal.clone(),
         }
     }
 
-    fn create_program(&mut self, shader_set: &core::ShaderSet<R>)
-                      -> Result<h::Program<R>, core::shade::CreateProgramError> {
-        use winapi::{ID3D11VertexShader, ID3D11HullShader, ID3D11DomainShader, ID3D11GeometryShader, ID3D11PixelShader};
-        use core::shade::{ProgramInfo, Stage};
-        use mirror::populate_info;
-
-        let mut info = ProgramInfo {
-            vertex_attributes: Vec::new(),
-            globals: Vec::new(),
-            constant_buffers: Vec::new(),
-            textures: Vec::new(),
-            unordereds: Vec::new(),
-            samplers: Vec::new(),
-            outputs: Vec::new(),
-            output_depth: false,
-            knows_outputs: true,
-        };
-        let fh = &mut self.frame_handles;
-        let prog = match shader_set {
-            &core::ShaderSet::Simple(ref vs, ref ps) => {
-                let (vs, ps) = (vs.reference(fh), ps.reference(fh));
-                populate_info(&mut info, Stage::Vertex, vs.reflection);
-                populate_info(&mut info, Stage::Pixel,  ps.reflection);
-                unsafe { (*vs.object).AddRef(); (*ps.object).AddRef(); }
-                Program {
-                    vs: vs.object as *mut ID3D11VertexShader,
-                    hs: ptr::null_mut(),
-                    ds: ptr::null_mut(),
-                    gs: ptr::null_mut(),
-                    ps: ps.object as *mut ID3D11PixelShader,
-                    vs_hash: vs.code_hash,
-                }
-            },
-            &core::ShaderSet::Geometry(ref vs, ref gs, ref ps) => {
-                let (vs, gs, ps) = (vs.reference(fh), gs.reference(fh), ps.reference(fh));
-                populate_info(&mut info, Stage::Vertex,   vs.reflection);
-                populate_info(&mut info, Stage::Geometry, gs.reflection);
-                populate_info(&mut info, Stage::Pixel,    ps.reflection);
-                unsafe { (*vs.object).AddRef(); (*gs.object).AddRef(); (*ps.object).AddRef(); }
-                Program {
-                    vs: vs.object as *mut ID3D11VertexShader,
-                    hs: ptr::null_mut(),
-                    ds: ptr::null_mut(),
-                    gs: gs.object as *mut ID3D11GeometryShader,
-                    ps: ps.object as *mut ID3D11PixelShader,
-                    vs_hash: vs.code_hash,
-                }
-            },
-            &core::ShaderSet::Tessellated(ref vs, ref hs, ref ds, ref ps) => {
-                let (vs, hs, ds, ps) = (vs.reference(fh), hs.reference(fh), ds.reference(fh), ps.reference(fh));
-
-                populate_info(&mut info, Stage::Vertex, vs.reflection);
-                populate_info(&mut info, Stage::Hull,   hs.reflection);
-                populate_info(&mut info, Stage::Domain, ds.reflection);
-                populate_info(&mut info, Stage::Pixel,  ps.reflection);
-                unsafe { (*vs.object).AddRef(); (*hs.object).AddRef(); (*ds.object).AddRef(); (*ps.object).AddRef(); }
-                Program {
-                    vs: vs.object as *mut ID3D11VertexShader,
-                    hs: hs.object as *mut ID3D11HullShader,
-                    ds: ds.object as *mut ID3D11DomainShader,
-                    gs: ptr::null_mut(),
-                    ps: ps.object as *mut ID3D11PixelShader,
-                    vs_hash: vs.code_hash,
-                }
-            }
-        };
-        Ok(self.share.handles.borrow_mut().make_program(prog, info))
+    fn destroy_command_pool(&self, _pool: CommandPool) {
+        unimplemented!()
     }
 
-    fn create_pipeline_state_raw(&mut self, program: &h::Program<R>, desc: &core::pso::Descriptor)
-                                 -> Result<h::RawPipelineState<R>, core::pso::CreationError> {
-        use winapi::d3dcommon::*;
-        use core::Primitive::*;
-        use data::map_format;
-        use state;
-
-        let mut layouts = Vec::new();
-        let mut charbuf = [0; 256];
-        let mut charpos = 0;
-        for (attrib, at_desc) in program.get_info().vertex_attributes.iter().zip(desc.attributes.iter()) {
-            use winapi::UINT;
-            let (bdesc, elem) = match at_desc {
-                &Some((buf_id, ref el)) => match desc.vertex_buffers[buf_id as usize] {
-                    Some(ref bd) => (bd, el),
-                    None => return Err(core::pso::CreationError),
-                },
-                &None => continue,
-            };
-            if elem.offset & 1 != 0 {
-                error!("Vertex attribute {} must be aligned to 2 bytes, has offset {}",
-                    attrib.name, elem.offset);
-                return Err(core::pso::CreationError);
-            }
-            layouts.push(winapi::D3D11_INPUT_ELEMENT_DESC {
-                SemanticName: &charbuf[charpos],
-                SemanticIndex: 0,
-                Format: match map_format(elem.format, false) {
-                    Some(fm) => fm,
-                    None => {
-                        error!("Unable to find DXGI format for {:?}", elem.format);
-                        return Err(core::pso::CreationError);
-                    }
-                },
-                InputSlot: attrib.slot as UINT,
-                AlignedByteOffset: elem.offset as UINT,
-                InputSlotClass: if bdesc.rate == 0 {
-                    winapi::D3D11_INPUT_PER_VERTEX_DATA
-                }else {
-                    winapi::D3D11_INPUT_PER_INSTANCE_DATA
-                },
-                InstanceDataStepRate: bdesc.rate as UINT,
-            });
-            for (out, inp) in charbuf[charpos..].iter_mut().zip(attrib.name.as_bytes().iter()) {
-                *out = *inp as i8;
-            }
-            charpos += attrib.name.as_bytes().len() + 1;
-        }
-
-        let prog = *self.frame_handles.ref_program(program);
-        let vs_bin = match self.vs_cache.get(&prog.vs_hash) {
-            Some(ref code) => &code[..],
-            None => {
-                error!("VS hash {} is not found in the device cache", prog.vs_hash);
-                return Err(core::pso::CreationError);
-            }
-        };
-
-        let dev = &mut self.device;
-        let mut vertex_layout = ptr::null_mut();
-        let hr = unsafe {
-            dev.CreateInputLayout(
-                layouts.as_ptr(), layouts.len() as winapi::UINT,
-                vs_bin.as_ptr() as *const c_void, vs_bin.len() as winapi::SIZE_T,
-                &mut vertex_layout)
-        };
-        if !winapi::SUCCEEDED(hr) {
-            error!("Failed to create input layout from {:#?}, error {:x}", layouts, hr);
-            return Err(core::pso::CreationError);
-        }
-        let dummy_dsi = core::pso::DepthStencilInfo { depth: None, front: None, back: None };
-        //TODO: cache rasterizer, depth-stencil, and blend states
-        let caps = &self.share.capabilities;
-
-        let pso = Pipeline {
-            topology: match desc.primitive {
-                PointList       => D3D11_PRIMITIVE_TOPOLOGY_POINTLIST,
-                LineList        => D3D11_PRIMITIVE_TOPOLOGY_LINELIST,
-                LineStrip       => D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP,
-                TriangleList    => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-                TriangleStrip   => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
-                LineListAdjacency        => D3D11_PRIMITIVE_TOPOLOGY_LINELIST_ADJ,
-                LineStripAdjacency       => D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ,
-                TriangleListAdjacency    => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ,
-                TriangleStripAdjacency   => D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ,
-                PatchList(num)  => {
-                    if num == 0 || num > caps.max_patch_size {
-                        return Err(core::pso::CreationError)
-                    }
-                    D3D_PRIMITIVE_TOPOLOGY(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST.0 + (num as u32) - 1)
-                },
-            },
-            layout: vertex_layout,
-            vertex_buffers: desc.vertex_buffers,
-            attributes: desc.attributes,
-            program: prog,
-            rasterizer: state::make_rasterizer(dev, &desc.rasterizer, desc.scissor),
-            depth_stencil: state::make_depth_stencil(dev, match desc.depth_stencil {
-                Some((_, ref dsi)) => dsi,
-                None => &dummy_dsi,
-            }),
-            blend: state::make_blend(dev, &desc.color_targets),
-        };
-        Ok(self.share.handles.borrow_mut().make_pso(pso, program))
-    }
-
-    fn create_texture_raw(&mut self, desc: texture::Info, hint: Option<core::format::ChannelType>,
-                          data_opt: Option<&[&[u8]]>) -> Result<h::RawTexture<R>, texture::CreationError> {
-        use core::texture::{AaMode, CreationError, Kind};
-        use data::{map_bind, map_usage, map_surface, map_format};
-
-        let (usage, cpu_access) = map_usage(desc.usage, desc.bind);
-        let tparam = TextureParam {
-            levels: desc.levels as winapi::UINT,
-            format: match hint {
-                Some(channel) if self.use_texture_format_hint && !desc.bind.contains(memory::DEPTH_STENCIL) => {
-                    match map_format(core::format::Format(desc.format, channel), true) {
-                        Some(f) => f,
-                        None => return Err(CreationError::Format(desc.format, Some(channel)))
-                    }
-                },
-                _ => match map_surface(desc.format) {
-                    Some(f) => f,
-                    None => return Err(CreationError::Format(desc.format, None))
-                },
-            },
-            bytes_per_texel: (desc.format.get_total_bits() >> 3) as winapi::UINT,
-            bind: map_bind(desc.bind),
-            usage: usage,
-            cpu_access: cpu_access,
-        };
-
-        self.sub_data_array.clear();
-        if let Some(data) = data_opt {
-            for sub in data.iter() {
-                self.sub_data_array.push(winapi::D3D11_SUBRESOURCE_DATA {
-                    pSysMem: sub.as_ptr() as *const c_void,
-                    SysMemPitch: 0,
-                    SysMemSlicePitch: 0,
-                });
-            }
-        };
-        let misc = if usage != winapi::D3D11_USAGE_IMMUTABLE &&
-            desc.bind.contains(memory::RENDER_TARGET | memory::SHADER_RESOURCE) &&
-            desc.levels > 1 && data_opt.is_none() {
-            winapi::D3D11_RESOURCE_MISC_GENERATE_MIPS
-        }else {
-            winapi::D3D11_RESOURCE_MISC_FLAG(0)
-        };
-
-        let texture_result = match desc.kind {
-            Kind::D1(w) =>
-                self.create_texture_1d(w, 1, tparam, misc),
-            Kind::D1Array(w, d) =>
-                self.create_texture_1d(w, d, tparam, misc),
-            Kind::D2(w, h, aa) =>
-                self.create_texture_2d([w,h], 1, aa, tparam, misc),
-            Kind::D2Array(w, h, d, aa) =>
-                self.create_texture_2d([w,h], d, aa, tparam, misc),
-            Kind::D3(w, h, d) =>
-                self.create_texture_3d([w,h,d], tparam, misc),
-            Kind::Cube(w) =>
-                self.create_texture_2d([w,w], 6*1, AaMode::Single, tparam, misc | winapi::D3D11_RESOURCE_MISC_TEXTURECUBE),
-            Kind::CubeArray(w, d) =>
-                self.create_texture_2d([w,w], 6*d, AaMode::Single, tparam, misc | winapi::D3D11_RESOURCE_MISC_TEXTURECUBE),
-        };
-
-        match texture_result {
-            Ok(native) => {
-                let tex = Texture(native);
-                Ok(self.share.handles.borrow_mut().make_texture(tex, desc))
-            },
-            Err(_) => Err(CreationError::Kind),
-        }
-    }
-
-    fn view_buffer_as_shader_resource_raw(&mut self, _hbuf: &h::RawBuffer<R>, _: core::format::Format)
-                                      -> Result<h::RawShaderResourceView<R>, d::ResourceViewError> {
-        Err(d::ResourceViewError::Unsupported) //TODO
-    }
-
-    fn view_buffer_as_unordered_access_raw(&mut self, _hbuf: &h::RawBuffer<R>)
-                                       -> Result<h::RawUnorderedAccessView<R>, d::ResourceViewError> {
-        Err(d::ResourceViewError::Unsupported) //TODO
-    }
-
-    fn view_texture_as_shader_resource_raw(&mut self, htex: &h::RawTexture<R>, desc: texture::ResourceDesc)
-                                       -> Result<h::RawShaderResourceView<R>, d::ResourceViewError> {
-        use winapi::UINT;
-        use core::texture::{AaMode, Kind};
-        use data::map_format;
-        //TODO: support desc.layer parsing
-
-        let (dim, layers, has_levels) = match htex.get_info().kind {
-            Kind::D1(_) =>
-                (winapi::D3D11_SRV_DIMENSION_TEXTURE1D, 1, true),
-            Kind::D1Array(_, d) =>
-                (winapi::D3D11_SRV_DIMENSION_TEXTURE1DARRAY, d, true),
-            Kind::D2(_, _, AaMode::Single) =>
-                (winapi::D3D11_SRV_DIMENSION_TEXTURE2D, 1, true),
-            Kind::D2(_, _, _) =>
-                (winapi::D3D11_SRV_DIMENSION_TEXTURE2DMS, 1, false),
-            Kind::D2Array(_, _, d, AaMode::Single) =>
-                (winapi::D3D11_SRV_DIMENSION_TEXTURE2DARRAY, d, true),
-            Kind::D2Array(_, _, d, _) =>
-                (winapi::D3D11_SRV_DIMENSION_TEXTURE2DMSARRAY, d, false),
-            Kind::D3(_, _, _) =>
-                (winapi::D3D11_SRV_DIMENSION_TEXTURE3D, 1, true),
-            Kind::Cube(_) =>
-                (winapi::D3D11_SRV_DIMENSION_TEXTURECUBE, 1, true),
-            Kind::CubeArray(_, d) =>
-                (winapi::D3D11_SRV_DIMENSION_TEXTURECUBEARRAY, d, true),
-        };
-
-        let format = core::format::Format(htex.get_info().format, desc.channel);
-        let native_desc = winapi::D3D11_SHADER_RESOURCE_VIEW_DESC {
-            Format: match map_format(format, false) {
-                Some(fm) => fm,
-                None => return Err(d::ResourceViewError::Channel(desc.channel)),
-            },
-            ViewDimension: dim,
-            u: if has_levels {
-                assert!(desc.max >= desc.min);
-                [desc.min as UINT, (desc.max + 1 - desc.min) as UINT, 0, layers as UINT]
-            }else {
-                [0, layers as UINT, 0, 0]
-            },
-        };
-
-        let mut raw_view = ptr::null_mut();
-        let raw_tex = self.frame_handles.ref_texture(htex).as_resource();
-        let hr = unsafe {
-            (*self.device).CreateShaderResourceView(raw_tex, &native_desc, &mut raw_view)
-        };
-        if !winapi::SUCCEEDED(hr) {
-            error!("Failed to create SRV from {:#?}, error {:x}", native_desc, hr);
-            return Err(d::ResourceViewError::Unsupported);
-        }
-        Ok(self.share.handles.borrow_mut().make_texture_srv(native::Srv(raw_view), htex))
-    }
-
-    fn view_texture_as_unordered_access_raw(&mut self, _htex: &h::RawTexture<R>)
-                                        -> Result<h::RawUnorderedAccessView<R>, d::ResourceViewError> {
-        Err(d::ResourceViewError::Unsupported) //TODO
-    }
-
-    fn view_texture_as_render_target_raw(&mut self, htex: &h::RawTexture<R>, desc: texture::RenderDesc)
-                                         -> Result<h::RawRenderTargetView<R>, d::TargetViewError>
+    fn create_render_pass<'a, IA, IS, ID>(
+        &self,
+        attachments: IA,
+        subpasses: IS,
+        dependencies: ID,
+    ) -> RenderPass
+    where
+        IA: IntoIterator,
+        IA::Item: Borrow<pass::Attachment>,
+        IS: IntoIterator,
+        IS::Item: Borrow<pass::SubpassDesc<'a>>,
+        ID: IntoIterator,
+        ID::Item: Borrow<pass::SubpassDependency>,
     {
-        use winapi::UINT;
-        use core::texture::{AaMode, Kind};
-        use data::map_format;
+        // TODO: renderpass
 
-        let level = desc.level as UINT;
-        let (dim, extra) = match (htex.get_info().kind, desc.layer) {
-            (Kind::D1(..), None) =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE1D, [level, 0, 0]),
-            (Kind::D1Array(_, nlayers), Some(lid)) if lid < nlayers =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE1DARRAY, [level, lid as UINT, 1+lid as UINT]),
-            (Kind::D1Array(_, nlayers), None) =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE1DARRAY, [level, 0, nlayers as UINT]),
-            (Kind::D2(_, _, AaMode::Single), None) =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2D, [level, 0, 0]),
-            (Kind::D2(_, _, _), None) if level == 0 =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DMS, [0, 0, 0]),
-            (Kind::D2Array(_, _, nlayers, AaMode::Single), None) =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 0, nlayers as UINT]),
-            (Kind::D2Array(_, _, nlayers, AaMode::Single), Some(lid)) if lid < nlayers =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, lid as UINT, 1+lid as UINT]),
-            (Kind::D2Array(_, _, nlayers, _), None) if level == 0 =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY, [0, nlayers as UINT, 0]),
-            (Kind::D2Array(_, _, nlayers, _), Some(lid)) if level == 0 && lid < nlayers =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY, [lid as UINT, 1+lid as UINT, 0]),
-            (Kind::D3(_, _, depth), None) =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE3D, [level, 0, depth as UINT]),
-            (Kind::D3(_, _, depth), Some(lid)) if lid < depth =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE3D, [level, lid as UINT, 1+lid as UINT]),
-            (Kind::Cube(..), None) =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6]),
-            (Kind::Cube(..), Some(lid)) if lid < 6 =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, lid as UINT, 1+lid as UINT]),
-            (Kind::CubeArray(_, nlayers), None) =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6 * nlayers as UINT]),
-            (Kind::CubeArray(_, nlayers), Some(lid)) if lid < nlayers =>
-                (winapi::D3D11_RTV_DIMENSION_TEXTURE2DARRAY, [level, 6 * lid as UINT, 6 * (1+lid) as UINT]),
-            (_, None) => return Err(d::TargetViewError::Level(desc.level)),
-            (_, Some(lid)) => return Err(d::TargetViewError::Layer(texture::LayerError::OutOfBounds(lid, 0))), //TODO
-        };
-        let format = core::format::Format(htex.get_info().format, desc.channel);
-        let native_desc = winapi::D3D11_RENDER_TARGET_VIEW_DESC {
-            Format: match map_format(format, true) {
-                Some(fm) => fm,
-                None => return Err(d::TargetViewError::Channel(desc.channel)),
-            },
-            ViewDimension: dim,
-            u: extra,
-        };
-        let mut raw_view = ptr::null_mut();
-        let raw_tex = self.frame_handles.ref_texture(htex).as_resource();
-        let hr = unsafe {
-            (*self.device).CreateRenderTargetView(raw_tex, &native_desc, &mut raw_view)
-        };
-        if !winapi::SUCCEEDED(hr) {
-            error!("Failed to create RTV from {:#?}, error {:x}", native_desc, hr);
-            return Err(d::TargetViewError::Unsupported);
-        }
-        let size = htex.get_info().kind.level_dimensions(desc.level);
-        Ok(self.share.handles.borrow_mut().make_rtv(native::Rtv(raw_view), htex, size))
+        RenderPass
     }
 
-    fn view_texture_as_depth_stencil_raw(&mut self, htex: &h::RawTexture<R>, desc: texture::DepthStencilDesc)
-                                         -> Result<h::RawDepthStencilView<R>, d::TargetViewError>
+    fn create_pipeline_layout<IS, IR>(
+        &self,
+        sets: IS,
+        push_constant_ranges: IR,
+    ) -> PipelineLayout
+    where
+        IS: IntoIterator,
+        IS::Item: Borrow<DescriptorSetLayout>,
+        IR: IntoIterator,
+        IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
     {
-        use winapi::UINT;
-        use core::texture::{AaMode, Kind};
-        use data::{map_format, map_dsv_flags};
-
-        let level = desc.level as UINT;
-        let (dim, extra) = match (htex.get_info().kind, desc.layer) {
-            (Kind::D1(..), None) =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE1D, [level, 0, 0]),
-            (Kind::D1Array(_, nlayers), Some(lid)) if lid < nlayers =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE1DARRAY, [level, lid as UINT, 1+lid as UINT]),
-            (Kind::D1Array(_, nlayers), None) =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE1DARRAY, [level, 0, nlayers as UINT]),
-            (Kind::D2(_, _, AaMode::Single), None) =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE2D, [level, 0, 0]),
-            (Kind::D2(_, _, _), None) if level == 0 =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DMS, [0, 0, 0]),
-            (Kind::D2Array(_, _, nlayers, AaMode::Single), None) =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 0, nlayers as UINT]),
-            (Kind::D2Array(_, _, nlayers, AaMode::Single), Some(lid)) if lid < nlayers =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, lid as UINT, 1+lid as UINT]),
-            (Kind::D2Array(_, _, nlayers, _), None) if level == 0 =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY, [0, nlayers as UINT, 0]),
-            (Kind::D2Array(_, _, nlayers, _), Some(lid)) if level == 0 && lid < nlayers =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY, [lid as UINT, 1+lid as UINT, 0]),
-            (Kind::D3(..), _) => return Err(d::TargetViewError::Unsupported),
-            (Kind::Cube(..), None) =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6]),
-            (Kind::Cube(..), Some(lid)) if lid < 6 =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, lid as UINT, 1+lid as UINT]),
-            (Kind::CubeArray(_, nlayers), None) =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 0, 6 * nlayers as UINT]),
-            (Kind::CubeArray(_, nlayers), Some(lid)) if lid < nlayers =>
-                (winapi::D3D11_DSV_DIMENSION_TEXTURE2DARRAY, [level, 6 * lid as UINT, 6 * (1+lid) as UINT]),
-            (_, None) => return Err(d::TargetViewError::Level(desc.level)),
-            (_, Some(lid)) => return Err(d::TargetViewError::Layer(texture::LayerError::OutOfBounds(lid, 0))), //TODO
-        };
-
-        let channel = core::format::ChannelType::Uint; //doesn't matter
-        let format = core::format::Format(htex.get_info().format, channel);
-        let native_desc = winapi::D3D11_DEPTH_STENCIL_VIEW_DESC {
-            Format: match map_format(format, true) {
-                Some(fm) => fm,
-                None => return Err(d::TargetViewError::Channel(channel)),
-            },
-            ViewDimension: dim,
-            Flags: map_dsv_flags(desc.flags).0,
-            u: extra,
-        };
-
-        let mut raw_view = ptr::null_mut();
-        let raw_tex = self.frame_handles.ref_texture(htex).as_resource();
-        let hr = unsafe {
-            (*self.device).CreateDepthStencilView(raw_tex, &native_desc, &mut raw_view)
-        };
-        if !winapi::SUCCEEDED(hr) {
-            error!("Failed to create DSV from {:#?}, error {:x}", native_desc, hr);
-            return Err(d::TargetViewError::Unsupported);
-        }
-        let dim = htex.get_info().kind.level_dimensions(desc.level);
-        Ok(self.share.handles.borrow_mut().make_dsv(native::Dsv(raw_view), htex, dim))
+        // TODO: pipelinelayout
+        
+        PipelineLayout
     }
 
-    fn create_sampler(&mut self, info: texture::SamplerInfo) -> h::Sampler<R> {
-        use core::texture::FilterMethod;
-        use data::{FilterOp, map_function, map_filter, map_wrap};
+    fn create_graphics_pipeline<'a>(
+        &self,
+        desc: &pso::GraphicsPipelineDesc<'a, Backend>,
+    ) -> Result<GraphicsPipeline, pso::CreationError> {
+        let build_shader =
+            |stage: pso::Stage, source: Option<&pso::EntryPoint<'a, Backend>>| {
+                let source = match source {
+                    Some(src) => src,
+                    None => return Ok(None),
+                };
 
-        let op = if info.comparison.is_some() {FilterOp::Comparison} else {FilterOp::Product};
-        let native_desc = winapi::D3D11_SAMPLER_DESC {
-            Filter: map_filter(info.filter, op),
-            AddressU: map_wrap(info.wrap_mode.0),
-            AddressV: map_wrap(info.wrap_mode.1),
-            AddressW: map_wrap(info.wrap_mode.2),
-            MipLODBias: info.lod_bias.into(),
-            MaxAnisotropy: match info.filter {
-                FilterMethod::Anisotropic(max) => max as winapi::UINT,
-                _ => 0,
-            },
-            ComparisonFunc: map_function(info.comparison.unwrap_or(core::state::Comparison::Always)),
-            BorderColor: info.border.into(),
-            MinLOD: info.lod_range.0.into(),
-            MaxLOD: info.lod_range.1.into(),
-        };
+                Self::extract_entry_point(stage, source, desc.layout)
+                    .map_err(|err| pso::CreationError::Shader(err))
+            };
 
-        let mut raw_sampler = ptr::null_mut();
-        let hr = unsafe {
-            (*self.device).CreateSamplerState(&native_desc, &mut raw_sampler)
-        };
-        if winapi::SUCCEEDED(hr) {
-            self.share.handles.borrow_mut().make_sampler(native::Sampler(raw_sampler), info)
+        let vs = build_shader(pso::Stage::Vertex, Some(&desc.shaders.vertex))?.unwrap();
+        let ps = build_shader(pso::Stage::Fragment, desc.shaders.fragment.as_ref())?;
+        // TODO:
+        /*let gs = build_shader(pso::Stage::Geometry, desc.shaders.geometry.as_ref())?;
+        let ds = build_shader(pso::Stage::Domain, desc.shaders.domain.as_ref())?;
+        let hs = build_shader(pso::Stage::Hull, desc.shaders.hull.as_ref())?;*/
+
+        let (topology, input_layout) = self.create_input_layout(vs.clone(), &desc.vertex_buffers, &desc.attributes, &desc.input_assembler)?;
+        let rasterizer_state = self.create_rasterizer_state(&desc.rasterizer)?;
+        let blend_state = self.create_blend_state(&desc.blender)?;
+        let depth_stencil_state = if let Some(desc) = desc.depth_stencil {
+            Some(self.create_depth_stencil_state(&desc)?)
         } else {
-            error!("Unable to create a sampler with desc {:#?}, error {:x}", info, hr);
+            None
+        };
+
+        let vs = self.create_vertex_shader(vs)?;
+        let ps = if let Some(blob) = ps {
+            Some(self.create_pixel_shader(blob)?)
+        } else {
+            None
+        };
+
+        Ok(GraphicsPipeline {
+            vs,
+            ps,
+            topology,
+            input_layout,
+            rasterizer_state,
+            blend_state,
+            depth_stencil_state
+        })
+    }
+
+    fn create_compute_pipeline<'a>(
+        &self,
+        desc: &pso::ComputePipelineDesc<'a, Backend>,
+    ) -> Result<ComputePipeline, pso::CreationError> {
+        unimplemented!()
+    }
+
+    fn create_framebuffer<I>(
+        &self,
+        _renderpass: &RenderPass,
+        attachments: I,
+        extent: image::Extent,
+    ) -> Result<Framebuffer, device::FramebufferError>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<ImageView>
+    {
+        Ok(Framebuffer {
+            attachments: attachments.into_iter().map(|att| att.borrow().clone()).collect(),
+            layers: extent.depth as _,
+        })
+    }
+
+    fn create_shader_module(&self, raw_data: &[u8]) -> Result<ShaderModule, device::ShaderError> {
+        Ok(ShaderModule::Spirv(raw_data.into()))
+    }
+
+    fn create_buffer(
+        &self,
+        mut size: u64,
+        usage: buffer::Usage,
+    ) -> Result<UnboundBuffer, buffer::CreationError> {
+        use buffer::Usage;
+
+        let mut bind = 0;
+
+        if usage.contains(Usage::UNIFORM) { bind |= d3d11::D3D11_BIND_CONSTANT_BUFFER; }
+        if usage.contains(Usage::VERTEX) { bind |= d3d11::D3D11_BIND_VERTEX_BUFFER; }
+        if usage.contains(Usage::INDEX) { bind |= d3d11::D3D11_BIND_INDEX_BUFFER; }
+
+        // TODO: >=11.1
+        if usage.contains(Usage::UNIFORM_TEXEL) ||
+           usage.contains(Usage::STORAGE_TEXEL) ||
+           usage.contains(Usage::TRANSFER_SRC) { bind |= d3d11::D3D11_BIND_SHADER_RESOURCE; }
+
+        // TODO: how to do buffer copies
+        if usage.contains(Usage::TRANSFER_DST) { bind |= d3d11::D3D11_BIND_UNORDERED_ACCESS; }
+
+        Ok(UnboundBuffer {
+            usage,
+            bind,
+            size,
+            requirements: memory::Requirements {
+                size,
+                alignment: 1,
+                type_mask: 0x7,
+            }
+        })
+    }
+
+    fn get_buffer_requirements(&self, buffer: &UnboundBuffer) -> memory::Requirements {
+        buffer.requirements
+    }
+
+    fn bind_buffer_memory(
+        &self,
+        memory: &Memory,
+        offset: u64,
+        unbound_buffer: UnboundBuffer,
+    ) -> Result<Buffer, device::BindError> {
+        // TODO: offset
+        assert_eq!(0, offset);
+        // TODO: structured buffers
+        // assert_eq!(0, unbound_buffer.bind & d3d11::D3D11_BIND_SHADER_RESOURCE);
+        // TODO: change memory to be capable of more than one buffer?
+        // assert_eq!(None, memory.buffer);
+
+        use memory::Properties;
+
+        debug!("usage={:?}, props={:b}", unbound_buffer.usage, memory.properties);
+        let MiscFlags = if unbound_buffer.usage.contains(buffer::Usage::TRANSFER_SRC) {
+            d3d11::D3D11_RESOURCE_MISC_BUFFER_STRUCTURED
+        } else {
+            0
+        };
+
+        let buffer = if memory.properties == Properties::DEVICE_LOCAL {
+            // device local memory
+            let desc = d3d11::D3D11_BUFFER_DESC {
+                ByteWidth: unbound_buffer.size as _,
+                Usage: d3d11::D3D11_USAGE_DEFAULT,
+                BindFlags: unbound_buffer.bind,
+                CPUAccessFlags: 0,
+                MiscFlags,
+                StructureByteStride: 0,
+            };
+
+            let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
+            let hr = unsafe {
+                self.raw.CreateBuffer(
+                    &desc,
+                    ptr::null_mut(),
+                    &mut buffer as *mut *mut _ as *mut *mut _
+                )
+            };
+
+            if !winerror::SUCCEEDED(hr) {
+                return Err(device::BindError::WrongMemory);
+            } else {
+                InternalBuffer::Coherent(unsafe { ComPtr::from_raw(buffer) })
+            } 
+        } else if memory.properties == (Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::CPU_CACHED) {
+            // coherent device local and cpu-visible memory
+            let desc = d3d11::D3D11_BUFFER_DESC {
+                ByteWidth: unbound_buffer.size as _,
+                Usage: d3d11::D3D11_USAGE_DYNAMIC,
+                BindFlags: unbound_buffer.bind,
+                CPUAccessFlags: d3d11::D3D11_CPU_ACCESS_WRITE,
+                MiscFlags,
+                StructureByteStride: 0,
+            };
+
+            let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
+            let hr = unsafe {
+                self.raw.CreateBuffer(
+                    &desc,
+                    ptr::null_mut(),
+                    &mut buffer as *mut *mut _ as *mut *mut _
+                )
+            };
+
+            if !winerror::SUCCEEDED(hr) {
+                return Err(device::BindError::WrongMemory);
+            } else {
+                InternalBuffer::Coherent(unsafe { ComPtr::from_raw(buffer) })
+            } 
+        } else if memory.properties == (Properties::CPU_VISIBLE | Properties::CPU_CACHED) {
+            // non-coherent cpu-visible memory, need to create two buffers to
+            // allow gpu-read beyond copying 
+            let staging = {
+                let desc = d3d11::D3D11_BUFFER_DESC {
+                    ByteWidth: unbound_buffer.size as _,
+                    Usage: d3d11::D3D11_USAGE_STAGING,
+                    BindFlags: 0,
+                    CPUAccessFlags: d3d11::D3D11_CPU_ACCESS_READ | d3d11::D3D11_CPU_ACCESS_WRITE,
+                    MiscFlags: 0,
+                    StructureByteStride: 0,
+                };
+
+                let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
+                let hr = unsafe {
+                    self.raw.CreateBuffer(
+                        &desc,
+                        ptr::null_mut(),
+                        &mut buffer as *mut *mut _ as *mut *mut _
+                    )
+                };
+
+                if !winerror::SUCCEEDED(hr) {
+                    return Err(device::BindError::WrongMemory);
+                } else {
+                    unsafe { ComPtr::from_raw(buffer) }
+                } 
+            };
+
+            let device = {
+                let desc = d3d11::D3D11_BUFFER_DESC {
+                    ByteWidth: unbound_buffer.size as _,
+                    // TODO: dynamic?
+                    Usage: d3d11::D3D11_USAGE_DEFAULT,
+                    BindFlags: unbound_buffer.bind,
+                    CPUAccessFlags: 0,
+                    MiscFlags,
+                    StructureByteStride: if unbound_buffer.usage.contains(buffer::Usage::TRANSFER_SRC) { 4 } else { 0 },
+                };
+
+                let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
+                let hr = unsafe {
+                    self.raw.CreateBuffer(
+                        &desc,
+                        ptr::null_mut(),
+                        &mut buffer as *mut *mut _ as *mut *mut _
+                    )
+                };
+
+                if !winerror::SUCCEEDED(hr) {
+                    return Err(device::BindError::WrongMemory);
+                } else {
+                    unsafe { ComPtr::from_raw(buffer) }
+                } 
+            };
+
+            InternalBuffer::NonCoherent {
+                device,
+                staging
+            }
+        } else {
             unimplemented!()
+        };
+
+        let srv = if unbound_buffer.usage.contains(buffer::Usage::TRANSFER_SRC) {
+            let mut desc = unsafe { mem::zeroed::<d3d11::D3D11_SHADER_RESOURCE_VIEW_DESC>() };
+            desc.Format = dxgiformat::DXGI_FORMAT_UNKNOWN;
+            desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_BUFFER;
+            unsafe {
+                let mut buffer_srv = desc.u.Buffer_mut();
+                *buffer_srv.u1.FirstElement_mut() = 0;
+                *buffer_srv.u2.NumElements_mut() = unbound_buffer.size as u32 / 4;
+            };
+
+            let mut srv = ptr::null_mut();
+            let hr = unsafe {
+                self.raw.CreateShaderResourceView(
+                    buffer.device_local_buffer().as_raw() as *mut _,
+                    &desc,
+                    &mut srv as *mut *mut _ as *mut *mut _
+                )
+            };
+
+            if !winerror::SUCCEEDED(hr) {
+                // TODO: better errors
+                return Err(device::BindError::WrongMemory);
+            } else {
+                Some(unsafe { ComPtr::from_raw(srv) })
+            }
+        } else {
+            None
+        };
+
+        // TODO:
+        memory.buffer.replace(Some(buffer.clone()));
+
+        Ok(Buffer {
+            buffer,
+            srv,
+            size: unbound_buffer.size
+        })
+    }
+
+    fn create_buffer_view<R: RangeArg<u64>>(
+        &self,
+        buffer: &Buffer,
+        format: Option<format::Format>,
+        range: R,
+    ) -> Result<BufferView, buffer::ViewError> {
+        unimplemented!()
+    }
+
+    fn create_image(
+        &self,
+        kind: image::Kind,
+        mip_levels: image::Level,
+        format: format::Format,
+        tiling: image::Tiling,
+        usage: image::Usage,
+        flags: image::StorageFlags,
+    ) -> Result<UnboundImage, image::CreationError> {
+        use image::Usage;
+        //
+        // TODO: create desc 
+
+        let surface_desc = format.base_format().0.desc();
+        let bytes_per_texel  = surface_desc.bits / 8;
+        let ext = kind.extent();
+        let size = (ext.width * ext.height * ext.depth) as u64 * bytes_per_texel as u64;
+
+        let mut bind = 0;
+        
+        if usage.contains(Usage::TRANSFER_SRC) ||
+           usage.contains(Usage::SAMPLED) ||
+           usage.contains(Usage::STORAGE) { bind |= d3d11::D3D11_BIND_SHADER_RESOURCE; }
+
+        if usage.contains(Usage::COLOR_ATTACHMENT) { bind |= d3d11::D3D11_BIND_RENDER_TARGET; }
+        if usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) { bind |= d3d11::D3D11_BIND_DEPTH_STENCIL; }
+
+        // TODO: how to do buffer copies
+        if usage.contains(Usage::TRANSFER_DST) { bind |= d3d11::D3D11_BIND_UNORDERED_ACCESS; }
+
+        debug!("{:b}", bind);
+
+        Ok(UnboundImage {
+            kind,
+            mip_levels,
+            format,
+            tiling,
+            usage,
+            flags,
+            bind,
+            // TODO: 
+            requirements: memory::Requirements {
+                size: size,
+                alignment: 1,
+                type_mask: 0x1,
+            },
+        })
+    }
+
+    fn get_image_requirements(&self, image: &UnboundImage) -> memory::Requirements {
+        image.requirements
+    }
+
+    fn get_image_subresource_footprint(
+        &self, _image: &Image, _sub: image::Subresource
+    ) -> image::SubresourceFootprint {
+        unimplemented!()
+    }
+
+    fn bind_image_memory(
+        &self,
+        memory: &Memory,
+        offset: u64,
+        image: UnboundImage,
+    ) -> Result<Image, device::BindError> {
+        use memory::Properties;
+
+        let base_format = image.format.base_format();
+        let format_desc = base_format.0.desc();
+        let bytes_per_block = (format_desc.bits / 8) as _;
+        let block_dim = format_desc.dim;
+        let extent = image.kind.extent();
+
+        let (bind, usage, cpu) = if memory.properties == Properties::DEVICE_LOCAL {
+            (image.bind, d3d11::D3D11_USAGE_DEFAULT, 0)
+        } else if memory.properties == (Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::CPU_CACHED) {
+            (image.bind, d3d11::D3D11_USAGE_DYNAMIC, d3d11::D3D11_CPU_ACCESS_WRITE)
+        } else if memory.properties == (Properties::CPU_VISIBLE | Properties::CPU_CACHED) {
+            (0, d3d11::D3D11_USAGE_STAGING, d3d11::D3D11_CPU_ACCESS_READ | d3d11::D3D11_CPU_ACCESS_WRITE)
+        } else {
+            unimplemented!()
+        };
+
+        let dxgi_format = conv::map_format(image.format).unwrap();
+        let typeless_format = conv::typeless_format(dxgi_format).unwrap();
+
+        let (resource, levels) = match image.kind {
+            image::Kind::D2(width, height, layers, _) => {
+
+                debug!("{:b}", bind);
+                let desc = d3d11::D3D11_TEXTURE2D_DESC {
+                    Width: width,
+                    Height: height,
+                    MipLevels: image.mip_levels as _,
+                    ArraySize: layers as _,
+                    Format: typeless_format,
+                    SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
+                        Count: 1,
+                        Quality: 0
+                    },
+                    Usage: usage,
+                    BindFlags: bind,
+                    CPUAccessFlags: cpu,
+                    MiscFlags: 0
+                };
+
+                let mut resource = ptr::null_mut();
+                let hr = unsafe {
+                    self.raw.CreateTexture2D(
+                        &desc,
+                        ptr::null_mut(),
+                        &mut resource as *mut *mut _ as *mut *mut _
+                    )
+                };
+
+                if !winerror::SUCCEEDED(hr) {
+                    // TODO: better errors
+                    return Err(device::BindError::WrongMemory);
+                }
+
+                (resource, layers)
+            },
+            _ => unimplemented!()
+        };
+
+        let uav = if image.usage.contains(image::Usage::TRANSFER_DST) {
+            let mut desc = unsafe { mem::zeroed::<d3d11::D3D11_UNORDERED_ACCESS_VIEW_DESC>() };
+            desc.Format = dxgiformat::DXGI_FORMAT_R32_UINT;
+            desc.ViewDimension = d3d11::D3D11_UAV_DIMENSION_TEXTURE2D;
+
+            let mut uav = ptr::null_mut();
+            let hr = unsafe {
+                self.raw.CreateUnorderedAccessView(
+                    resource,
+                    &desc,
+                    &mut uav as *mut *mut _ as *mut *mut _
+                )
+            };
+
+            if !winerror::SUCCEEDED(hr) {
+                // TODO: better errors
+                return Err(device::BindError::WrongMemory);
+            } else {
+                Some(unsafe { ComPtr::from_raw(uav) })
+            }
+        } else {
+            None
+        };
+
+
+        let rtv = if image.usage.contains(image::Usage::COLOR_ATTACHMENT) {
+            let mut rtv = ptr::null_mut();
+            let hr = unsafe {
+                self.raw.CreateRenderTargetView(
+                    resource,
+                    ptr::null_mut(),
+                    &mut rtv as *mut *mut _ as *mut *mut _
+                )
+            };
+
+            if !winerror::SUCCEEDED(hr) {
+                return Err(device::BindError::WrongMemory);
+            } else {
+                Some(unsafe { ComPtr::from_raw(rtv) })
+            }
+        } else {
+            None
+        };
+
+        Ok(Image {
+            resource: resource,
+            kind: image.kind,
+            usage: image.usage,
+            storage_flags: image.flags,
+            dxgi_format,
+            bytes_per_block: bytes_per_block,
+            block_dim: block_dim,
+            num_levels: levels as _,
+            uav,
+            rtv //unsafe { ComPtr::from_raw(rtv) }
+        })
+    }
+
+    fn create_image_view(
+        &self,
+        image: &Image,
+        view_kind: image::ViewKind,
+        format: format::Format,
+        _swizzle: format::Swizzle,
+        range: image::SubresourceRange,
+    ) -> Result<ImageView, image::ViewError> {
+        let info = ViewInfo {
+            resource: image.resource,
+            kind: image.kind,
+            flags: image.storage_flags,
+            view_kind,
+            format: conv::map_format(format)
+                .ok_or(image::ViewError::BadFormat)?,
+            range,
+        };
+
+        Ok(ImageView {
+            srv_handle: if image.usage.contains(image::Usage::SAMPLED) {
+                Some(self.view_image_as_shader_resource(info.clone())?)
+            } else {
+                None
+            },
+            // TODO:
+            rtv_handle: if image.usage.contains(image::Usage::COLOR_ATTACHMENT) {
+                Some(self.view_image_as_render_target(info.clone())?)
+            } else {
+                None
+            },
+            uav_handle: None,
+            dsv_handle: if image.usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
+                Some(self.view_image_as_depth_stencil(info.clone())?)
+            } else {
+                None
+            },
+        })
+    }
+
+    fn create_sampler(&self, info: image::SamplerInfo) -> Sampler {
+        let op = match info.comparison {
+            Some(_) => d3d11::D3D11_FILTER_REDUCTION_TYPE_COMPARISON,
+            None => d3d11::D3D11_FILTER_REDUCTION_TYPE_STANDARD,
+        };
+
+        let desc = d3d11::D3D11_SAMPLER_DESC {
+            Filter: conv::map_filter(info.min_filter, info.mag_filter, info.mip_filter, op, info.anisotropic),
+            AddressU: conv::map_wrapping(info.wrap_mode.0),
+            AddressV: conv::map_wrapping(info.wrap_mode.1),
+            AddressW: conv::map_wrapping(info.wrap_mode.2),
+            MipLODBias: info.lod_bias.into(),
+            MaxAnisotropy: match info.anisotropic {
+                image::Anisotropic::Off => 0,
+                image::Anisotropic::On(aniso) => aniso as _
+            },
+            ComparisonFunc: info.comparison.map_or(0, |comp| conv::map_comparison(comp)),
+            BorderColor: info.border.into(),
+            MinLOD: info.lod_range.start.into(),
+            MaxLOD: info.lod_range.end.into(),
+        };
+
+        let mut sampler = ptr::null_mut();
+        let hr = unsafe {
+            self.raw.CreateSamplerState(
+                &desc,
+                &mut sampler as *mut *mut _ as *mut *mut _
+            )
+        };
+
+        assert_eq!(true, winerror::SUCCEEDED(hr));
+
+        Sampler {
+            sampler_handle: unsafe { ComPtr::from_raw(sampler) }
         }
     }
 
-    fn create_semaphore(&mut self) -> h::Semaphore<R> {
-        self.share.handles.borrow_mut().make_semaphore(())
+    fn create_descriptor_pool<I>(
+        &self,
+        max_sets: usize,
+        descriptor_pools: I,
+    ) -> DescriptorPool
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorRangeDesc>
+    {
+        // TODO: descriptor pool
+
+        DescriptorPool
     }
 
-    fn create_fence(&mut self, _signalled: bool) -> h::Fence<R> {
-        self.share.handles.borrow_mut().make_fence(Fence)
+    fn create_descriptor_set_layout<I, J>(
+        &self, bindings: I, _immutable_samplers: J
+    ) -> DescriptorSetLayout
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
+        J: IntoIterator,
+        J::Item: Borrow<Sampler>,
+    {
+        // TODO: descriptorsetlayout
+
+        DescriptorSetLayout {
+            bindings: bindings.into_iter().map(|b| b.borrow().clone()).collect()
+        }
     }
 
-    fn reset_fences(&mut self, fences: &[&h::Fence<R>]) {
-        // TODO: noop?
+    fn write_descriptor_sets<'a, I, J>(&self, write_iter: I)
+    where
+        I: IntoIterator<Item = pso::DescriptorSetWrite<'a, Backend, J>>,
+        J: IntoIterator,
+        J::Item: Borrow<pso::Descriptor<'a, Backend>>,
+    {
+        
+        for write in write_iter {
+            let mut offset = write.array_offset as u64;
+            let mut target_binding = write.binding as usize;
+            //let mut bind_info = &write.set.binding_infos[target_binding];
+            for descriptor in write.descriptors {
+                // spill over the writes onto the next binding
+                /*while offset >= bind_info.count {
+                    assert_eq!(offset, bind_info.count);
+                    target_binding += 1;
+                    bind_info = &write.set.binding_infos[target_binding];
+                    offset = 0;
+                }*/
+
+                debug!("offset={}, target_binding={}", offset, target_binding);
+                match *descriptor.borrow() {
+                    pso::Descriptor::Buffer(buffer, ref range) => {
+                        write.set.cbv_handles.borrow_mut().push((target_binding as _, buffer.device_local_buffer()));
+                        debug!("buffer={:#?}, range={:#?}", buffer, range);
+                    }
+                    pso::Descriptor::Image(image, _layout) => {
+                        write.set.srv_handles.borrow_mut().push((target_binding as _, image.srv_handle.clone().unwrap()));
+                        debug!("image={:#?}, layout={:#?}", image, _layout);
+                    }
+                    pso::Descriptor::CombinedImageSampler(image, _layout, sampler) => {
+                    }
+                    pso::Descriptor::Sampler(sampler) => {
+                        write.set.sampler_handles.borrow_mut().push((target_binding as _, sampler.sampler_handle.clone()));
+                        debug!("sampler={:#?}", sampler);
+                    }
+                    pso::Descriptor::UniformTexelBuffer(buffer_view) => {
+                    }
+                    pso::Descriptor::StorageTexelBuffer(buffer_view) => {
+                    }
+                }
+                offset += 1;
+            }
+        }
     }
 
-    fn wait_for_fences(&mut self, _fences: &[&h::Fence<R>], _wait: d::WaitFor, _timeout_ms: u32) -> bool {
-        // TODO: noop?
+    fn copy_descriptor_sets<'a, I>(&self, copy_iter: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<pso::DescriptorSetCopy<'a, Backend>>,
+    {
+        unimplemented!()
+    }
+
+    fn map_memory<R>(&self, memory: &Memory, range: R) -> Result<*mut u8, mapping::Error>
+    where
+        R: RangeArg<u64>,
+    {
+        let buffer = match memory.buffer.borrow().clone().unwrap() {
+            InternalBuffer::Coherent(buf) => buf,
+            InternalBuffer::NonCoherent { device, staging } => staging
+        };
+        let mut mapped = unsafe { mem::zeroed::<d3d11::D3D11_MAPPED_SUBRESOURCE>() };
+        let hr = unsafe {
+            self.context.Map(
+                buffer.as_raw() as _,
+                0,
+                // TODO:
+                d3d11::D3D11_MAP_WRITE,
+                0,
+                &mut mapped
+            )
+        };
+
+        if winerror::SUCCEEDED(hr) {
+            Ok(mapped.pData as _)
+        } else {
+            // TODO: better error
+            Err(mapping::Error::InvalidAccess)
+        }
+    }
+
+    fn unmap_memory(&self, memory: &Memory) {
+        let (buffer, device_buffer) = match memory.buffer.borrow().clone().unwrap() {
+            InternalBuffer::Coherent(buf) => (buf, None),
+            InternalBuffer::NonCoherent { device, staging } => (staging, Some(device))
+        };
+
+        unsafe {
+            self.context.Unmap(
+                buffer.as_raw() as _,
+                0,
+            );
+
+            // coherency!
+            if let Some(device_buffer) = device_buffer {
+                self.context.CopyResource(
+                    device_buffer.as_raw() as _,
+                    buffer.as_raw() as _,
+                );
+            }
+        }
+    }
+
+    fn flush_mapped_memory_ranges<'a, I, R>(&self, ranges: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<(&'a Memory, R)>,
+        R: RangeArg<u64>,
+    {
+        // TODO: flush?
+    }
+
+    fn invalidate_mapped_memory_ranges<'a, I, R>(&self, ranges: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<(&'a Memory, R)>,
+        R: RangeArg<u64>,
+    {
+        unimplemented!()
+    }
+
+    fn create_semaphore(&self) -> Semaphore {
+        // TODO:
+        Semaphore
+    }
+
+    fn create_fence(&self, signalled: bool) -> Fence {
+        // TODO:
+        Fence
+    }
+
+    fn reset_fence(&self, fence: &Fence) {
+        // TODO:
+    }
+
+    fn wait_for_fences<I>(&self, fences: I, wait: device::WaitFor, timeout_ms: u32) -> bool
+    where
+        I: IntoIterator,
+        I::Item: Borrow<Fence>,
+    {
+        // TODO:
         true
     }
 
-    fn read_mapping<'a, 'b, T>(&'a mut self, buf: &'b h::Buffer<R, T>)
-                               -> Result<mapping::Reader<'b, R, T>,
-                                         mapping::Error>
-        where T: Copy
-    {
-        unsafe {
-            mapping::read(buf.raw(), |mut m| {
-                ensure_mapped(&mut m, buf.raw(), winapi::d3d11::D3D11_MAP_READ, self)
-            })
-        }
+    fn get_fence_status(&self, _fence: &Fence) -> bool {
+        unimplemented!()
     }
 
-    fn write_mapping<'a, 'b, T>(&'a mut self, buf: &'b h::Buffer<R, T>)
-                               -> Result<mapping::Writer<'b, R, T>,
-                                         mapping::Error>
-        where T: Copy
-    {
-        unsafe {
-            mapping::write(buf.raw(), |mut m| {
-                // not MAP_WRITE_DISCARD because we are STAGING
-                ensure_mapped(&mut m, buf.raw(), winapi::d3d11::D3D11_MAP_WRITE, self)
-            })
-        }
+    fn free_memory(&self, memory: Memory) {
+        unimplemented!()
     }
-}
 
-pub fn ensure_mapped(mapping: &mut MappingGate,
-                     buffer: &h::RawBuffer<R>,
-                     map_type: winapi::d3d11::D3D11_MAP,
-                     device: &mut Device) {
-    if mapping.pointer.is_null() {
-        let raw_handle = *buffer.resource();
-        let mut ctx = ptr::null_mut();
+    fn create_query_pool(&self, query_ty: query::QueryType, count: u32) -> QueryPool {
+        unimplemented!()
+    }
 
-        unsafe {
-            device.device.GetImmediateContext(&mut ctx);
-        }
+    fn destroy_query_pool(&self, _pool: QueryPool) {
+        unimplemented!()
+    }
 
-        let mut sres = winapi::d3d11::D3D11_MAPPED_SUBRESOURCE {
-            pData: ptr::null_mut(),
-            RowPitch: 0,
-            DepthPitch: 0,
+    fn destroy_shader_module(&self, shader_lib: ShaderModule) {
+
+    }
+
+    fn destroy_render_pass(&self, _rp: RenderPass) {
+        unimplemented!()
+    }
+
+    fn destroy_pipeline_layout(&self, layout: PipelineLayout) {
+        unimplemented!()
+    }
+
+    fn destroy_graphics_pipeline(&self, pipeline: GraphicsPipeline) {
+        unimplemented!()
+    }
+
+    fn destroy_compute_pipeline(&self, pipeline: ComputePipeline) {
+        unimplemented!()
+    }
+
+    fn destroy_framebuffer(&self, _fb: Framebuffer) {
+        unimplemented!()
+    }
+
+    fn destroy_buffer(&self, buffer: Buffer) {
+        unimplemented!()
+    }
+
+    fn destroy_buffer_view(&self, _view: BufferView) {
+        unimplemented!()
+    }
+
+    fn destroy_image(&self, image: Image) {
+        unimplemented!()
+    }
+
+    fn destroy_image_view(&self, _view: ImageView) {
+        unimplemented!()
+    }
+
+    fn destroy_sampler(&self, _sampler: Sampler) {
+        unimplemented!()
+    }
+
+    fn destroy_descriptor_pool(&self, pool: DescriptorPool) {
+        unimplemented!()
+    }
+
+    fn destroy_descriptor_set_layout(&self, _layout: DescriptorSetLayout) {
+        unimplemented!()
+    }
+
+    fn destroy_fence(&self, _fence: Fence) {
+        unimplemented!()
+    }
+
+    fn destroy_semaphore(&self, _semaphore: Semaphore) {
+        unimplemented!()
+    }
+
+    fn create_swapchain(
+        &self,
+        surface: &mut Surface,
+        config: hal::SwapchainConfig,
+    ) -> (Swapchain, hal::Backbuffer<Backend>) {
+        // TODO: use IDXGIFactory2 for >=11.1
+        // TODO: this function should be able to fail (Result)?
+
+        use conv::map_format;
+
+        debug!("{:#?}", config);
+
+        let (non_srgb_format, format) = {
+            // NOTE: DXGI doesn't allow sRGB format on the swapchain, but
+            //       creating RTV of swapchain buffers with sRGB works
+            let format = match config.color_format {
+                format::Format::Bgra8Srgb => format::Format::Bgra8Unorm,
+                format::Format::Rgba8Srgb => format::Format::Rgba8Unorm,
+                format => format,
+            };
+
+            (map_format(format).unwrap(), map_format(config.color_format).unwrap())
         };
 
-        let dst = raw_handle.as_resource() as *mut winapi::d3d11::ID3D11Resource;
-        let hr = unsafe {
-            (*ctx).Map(dst, 0, map_type, 0, &mut sres)
+        let mut desc = DXGI_SWAP_CHAIN_DESC {
+            BufferDesc: dxgitype::DXGI_MODE_DESC {
+                Width: surface.width,
+                Height: surface.height,
+                // TODO: should this grab max value of all monitor hz? vsync
+                //       will clamp to current monitor anyways?
+                RefreshRate: dxgitype::DXGI_RATIONAL {
+                    Numerator: 1,
+                    Denominator: 60
+                },
+                Format: non_srgb_format,
+                ScanlineOrdering: dxgitype::DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED,
+                Scaling: dxgitype::DXGI_MODE_SCALING_UNSPECIFIED
+            },
+            // TODO: msaa on backbuffer?
+            SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
+                Count: 1,
+                Quality: 0
+            },
+            BufferUsage: dxgitype::DXGI_USAGE_RENDER_TARGET_OUTPUT,
+            BufferCount: config.image_count,
+            OutputWindow: surface.wnd_handle,
+            // TODO:
+            Windowed: TRUE,
+            // TODO:
+            SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
+            Flags: 0
+        };
+        let swapchain = {
+            let mut swapchain: *mut IDXGISwapChain = ptr::null_mut();
+            let hr = unsafe {
+                surface.factory.CreateSwapChain(
+                    self.raw.as_raw() as *mut _,
+                    &mut desc as *mut _,
+                    &mut swapchain as *mut *mut _ as *mut *mut _
+                )
+            };
+
+            if !winerror::SUCCEEDED(hr) {
+                // TODO: return error
+
+            }
+
+            unsafe { ComPtr::from_raw(swapchain) }
         };
 
-        if winapi::SUCCEEDED(hr) {
-            mapping.pointer = sres.pData;
-        } else {
-            panic!("Unable to map a buffer {:?}, error {:x}", buffer, hr);
-        }
-    }
-}
+        let images = (0..config.image_count).map(|i| {
+            let mut resource: *mut d3d11::ID3D11Resource = ptr::null_mut();
 
-pub fn ensure_unmapped(mapping: &mut MappingGate,
-                       buffer: &buffer::Raw<R>,
-                       context: &mut ComPtr<winapi::ID3D11DeviceContext>) {
-    if !mapping.pointer.is_null() {
-        let raw_handle = *buffer.resource();
-        unsafe {
-            context.Unmap(raw_handle.as_resource() as *mut winapi::d3d11::ID3D11Resource, 0);
-        }
+            unsafe {
+                swapchain.GetBuffer(
+                    i as _,
+                    &d3d11::IID_ID3D11Resource,
+                    &mut resource as *mut *mut _ as *mut *mut _
+                );
+            };
 
-        mapping.pointer = ptr::null_mut();
+            let mut desc: d3d11::D3D11_RENDER_TARGET_VIEW_DESC = unsafe { mem::zeroed() };
+            desc.Format = format;
+            desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2D;
+            // NOTE: the rest of the desc should be fine (zeroed)
+
+            let mut rtv = ptr::null_mut();
+            let hr = unsafe {
+                self.raw.CreateRenderTargetView(
+                    resource,
+                    &desc,
+                    &mut rtv as *mut *mut _ as *mut *mut _
+                )
+            };
+
+            if !winerror::SUCCEEDED(hr) {
+                // TODO: error
+            }
+
+            let format_desc = config
+                .color_format
+                .surface_desc();
+
+            let bytes_per_block = (format_desc.bits / 8) as _;
+            let block_dim = format_desc.dim;
+
+            let kind = image::Kind::D2(surface.width, surface.height, 1, 1);
+
+            Image {
+                resource,
+                kind,
+                usage: config.image_usage,
+                storage_flags: image::StorageFlags::empty(),
+                // NOTE: not the actual format of the backbuffer(s)
+                dxgi_format: format,
+                bytes_per_block,
+                block_dim,
+                num_levels: 1,
+                uav: None,
+                rtv: Some(unsafe { ComPtr::from_raw(rtv) })
+            }
+        }).collect();
+
+        (Swapchain { dxgi_swapchain: swapchain }, hal::Backbuffer::Images(images))
     }
+
+    fn destroy_swapchain(&self, _swapchain: Swapchain) {
+        unimplemented!()
+    }
+
+    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+        unimplemented!()
+    }
+
 }
