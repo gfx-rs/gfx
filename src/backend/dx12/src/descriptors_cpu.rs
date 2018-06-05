@@ -11,7 +11,7 @@ pub struct HeapLinear {
     num: usize,
     size: usize,
     start: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
-    raw: ComPtr<d3d12::ID3D12DescriptorHeap>,
+    _raw: ComPtr<d3d12::ID3D12DescriptorHeap>,
 }
 
 impl HeapLinear {
@@ -44,7 +44,7 @@ impl HeapLinear {
             num: 0,
             size,
             start,
-            raw: unsafe { ComPtr::from_raw(heap) },
+            _raw: unsafe { ComPtr::from_raw(heap) },
         }
     }
 
@@ -68,19 +68,25 @@ impl HeapLinear {
     }
 }
 
-// Fixed-size (64) free-list allocator for CPU descriptors.
+const HEAP_SIZE_FIXED: u32 = 64;
+
+// Fixed-size free-list allocator for CPU descriptors.
 struct Heap {
+    // Bit flag representation of occupied handles in the heap.
+    //
+    //  0 - Occupied
+    //  1 - free
     occupancy: u64,
     handle_size: usize,
     start: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
-    raw: ComPtr<d3d12::ID3D12DescriptorHeap>,
+    _raw: ComPtr<d3d12::ID3D12DescriptorHeap>,
 }
 
 impl Heap {
     pub fn new(device: &ComPtr<d3d12::ID3D12Device>, ty: d3d12::D3D12_DESCRIPTOR_HEAP_TYPE) -> Self {
         let desc = d3d12::D3D12_DESCRIPTOR_HEAP_DESC {
             Type: ty,
-            NumDescriptors: 64,
+            NumDescriptors: HEAP_SIZE_FIXED,
             Flags: d3d12::D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
             NodeMask: 0,
         };
@@ -98,18 +104,19 @@ impl Heap {
 
         Heap {
             handle_size,
-            occupancy: 0,
+            occupancy: !0, // all free!
             start,
-            raw: unsafe { ComPtr::from_raw(heap) },
+            _raw: unsafe { ComPtr::from_raw(heap) },
         }
     }
 
     pub fn alloc_handle(&mut self) -> d3d12::D3D12_CPU_DESCRIPTOR_HANDLE {
-        // Find first free slot
-        let slot = (0..64)
-            .position(|i| self.occupancy & (1 << i) == 0)
-            .expect("Descriptor heap is full");
-        self.occupancy |= 1 << slot;
+        assert!(!self.full());
+
+        // Find first free slot.
+        let slot = self.occupancy.trailing_zeros() as usize;
+        // Set the slot as occupied.
+        self.occupancy ^= 1 << slot;
 
         d3d12::D3D12_CPU_DESCRIPTOR_HANDLE {
             ptr: self.start.ptr + self.handle_size * slot,
@@ -117,7 +124,7 @@ impl Heap {
     }
 
     pub fn full(&self) -> bool {
-        self.occupancy == !0
+        self.occupancy == 0
     }
 }
 
