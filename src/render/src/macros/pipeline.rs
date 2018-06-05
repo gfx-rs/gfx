@@ -141,7 +141,7 @@ macro_rules! gfx_graphics_pipeline {
                     $(
                         descs.extend(<$cmp as pso::Component<'a, B>>::descriptor_set(&self.$cmp_name));
                     )*
-                    cmd_buffer.bind_graphics_descriptor_sets(meta.layout.resource(), 0, descs);
+                    cmd_buffer.bind_graphics_descriptor_sets(meta.layout.resource(), 0, descs, &[]);
                     // TODO: difference with viewport ?
                     let extent = self.framebuffer.info().extent;
                     let render_rect = pso::Rect {

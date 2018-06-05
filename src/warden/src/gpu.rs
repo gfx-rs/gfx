@@ -967,6 +967,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                                 .get(name)
                                                 .expect(&format!("Missing descriptor set: {}", name))
                                         }),
+                                        &[],
                                     );
                                 }
                                 Dc::Draw { ref vertices, ref instances } => {
@@ -998,6 +999,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                 .get(name)
                                 .expect(&format!("Missing descriptor set: {}", name))
                         }),
+                        &[],
                     );
                     command_buf.dispatch(dispatch);
                 }
