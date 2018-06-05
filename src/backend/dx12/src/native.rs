@@ -152,11 +152,13 @@ pub struct Framebuffer {
     pub(crate) layers: image::Layer,
 }
 
-#[derive(Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Buffer {
     pub(crate) resource: *mut d3d12::ID3D12Resource,
     pub(crate) size_in_bytes: u32,
-    pub(crate) clear_uav: Option<DualHandle>,
+    #[derivative(Debug="ignore")]
+    pub(crate) clear_uav: Option<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE>,
 }
 unsafe impl Send for Buffer { }
 unsafe impl Sync for Buffer { }
@@ -388,23 +390,6 @@ impl DescriptorHeap {
             gpu: d3d12::D3D12_GPU_DESCRIPTOR_HANDLE { ptr: self.start.gpu.ptr + self.handle_size * index },
             size,
         }
-    }
-}
-
-#[derive(Debug)]
-pub struct DescriptorCpuPool {
-    pub(crate) heap: DescriptorHeap,
-    pub(crate) offset: u64,
-    pub(crate) size: u64,
-    pub(crate) max_size: u64,
-}
-
-impl DescriptorCpuPool {
-    pub(crate) fn alloc_handles(&mut self, count: u64) -> DualHandle {
-        assert!(self.size + count <= self.max_size);
-        let index = self.offset + self.size;
-        self.size += count;
-        self.heap.at(index, count)
     }
 }
 

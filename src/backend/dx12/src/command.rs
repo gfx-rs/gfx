@@ -16,7 +16,7 @@ use winapi::shared::{dxgiformat, winerror};
 
 use wio::com::ComPtr;
 
-use {conv, device, internal, native as n, Backend, Device, Shared, MAX_VERTEX_BUFFERS, validate_line_width};
+use {conv, device, descriptors_cpu, internal, native as n, Backend, Device, Shared, MAX_VERTEX_BUFFERS, validate_line_width};
 use device::ViewInfo;
 use root_constants::RootConstant;
 use smallvec::SmallVec;
@@ -1249,19 +1249,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         pass_cache.framebuffer.attachments[rtv_id]
                     };
 
-                    let mut rtv_pool = n::DescriptorCpuPool {
-                        heap: Device::create_descriptor_heap_impl(
-                            &mut device.clone(),
-                            d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-                            false,
-                            clear_rects.len()
-                        ),
-                        offset: 0,
-                        size: 0,
-                        max_size: clear_rects.len() as _
-                    };
-
-                    self.rtv_pools.push(rtv_pool.heap.raw.clone());
+                    let mut rtv_pool = descriptors_cpu::HeapLinear::new(
+                        &device,
+                        d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+                        clear_rects.len()
+                    );
 
                     for clear_rect in &clear_rects {
                         let rect = [get_rect(&clear_rect.rect)];
@@ -1278,9 +1270,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 layers: clear_rect.layers.clone()
                             }
                         };
-                        let rtv = Device::view_image_as_render_target_impl(
+                        let rtv = rtv_pool.alloc_handle();
+                        Device::view_image_as_render_target_impl(
                             &mut device,
-                            &mut rtv_pool,
+                            rtv,
                             view_info
                         ).unwrap();
 
@@ -1841,6 +1834,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         );
         unsafe { self.raw.ResourceBarrier(1, &pre_barrier) };
 
+        warn!("fill_buffer currently unimplemented");
+        // TODO: GPU handle must be in the current heap. Atm we use a CPU descriptor heap for allocation
+        //       which is not shader visible.
+        /*
         let handle = buffer.clear_uav.unwrap();
         unsafe {
             self.raw.ClearUnorderedAccessViewUint(
@@ -1852,6 +1849,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 &rect as *const _,
             );
         }
+        */
 
         let post_barrier = Self::transition_barrier(
             d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {

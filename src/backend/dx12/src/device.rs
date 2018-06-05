@@ -19,7 +19,7 @@ use hal::queue::{RawCommandQueue, QueueFamilyId};
 use hal::range::RangeArg;
 
 use {
-    conv, native as n, root_constants, window as w,
+    conv, descriptors_cpu, native as n, root_constants, window as w,
     Backend as B, Device, MemoryGroup, QUEUE_FAMILIES, MAX_VERTEX_BUFFERS, NUM_HEAP_PROPERTIES,
 };
 use pool::RawCommandPool;
@@ -560,8 +560,10 @@ impl Device {
     }
 
     pub(crate) fn view_image_as_render_target_impl(
-        device: &mut ComPtr<d3d12::ID3D12Device>, pool: &mut n::DescriptorCpuPool, info: ViewInfo
-    ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
+        device: &mut ComPtr<d3d12::ID3D12Device>,
+        handle: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
+        info: ViewInfo,
+    ) -> Result<(), image::ViewError> {
         #![allow(non_snake_case)]
 
         let mut desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
@@ -642,21 +644,21 @@ impl Device {
             }
         };
 
-        let handle = pool.alloc_handles(1).cpu;
-
         unsafe {
             device.CreateRenderTargetView(info.resource, &desc, handle);
         }
 
-        Ok(handle)
+        Ok(())
     }
 
     fn view_image_as_render_target(
         &self, info: ViewInfo
     ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
         let mut pool = self.rtv_pool.lock().unwrap();
+        let handle = pool.alloc_handle();
 
-        Self::view_image_as_render_target_impl(&mut self.raw.clone(), &mut *pool, info)
+        Self::view_image_as_render_target_impl(&mut self.raw.clone(), handle, info)
+            .map(|_| handle)
     }
 
     fn view_image_as_depth_stencil(
@@ -728,7 +730,7 @@ impl Device {
             }
         };
 
-        let handle = self.dsv_pool.lock().unwrap().alloc_handles(1).cpu;
+        let handle = self.dsv_pool.lock().unwrap().alloc_handle();
         unsafe {
             self.raw.clone().CreateDepthStencilView(info.resource, &desc, handle);
         }
@@ -857,7 +859,7 @@ impl Device {
         };
 
         let desc = Self::build_image_as_shader_resource_desc(&info)?;
-        let handle = self.srv_pool.lock().unwrap().alloc_handles(1).cpu;
+        let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
         unsafe {
             self.raw.clone().CreateShaderResourceView(info.resource, &desc, handle);
         }
@@ -933,7 +935,7 @@ impl Device {
             }
         }
 
-        let handle = self.uav_pool.lock().unwrap().alloc_handles(1).cpu;
+        let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
         unsafe {
             self.raw.clone().CreateUnorderedAccessView(info.resource, ptr::null_mut(), &desc, handle);
         }
@@ -1863,7 +1865,7 @@ impl d::Device<B> for Device {
         });
 
         let clear_uav = if buffer.usage.contains(buffer::Usage::TRANSFER_DST) {
-            let handles = self.uav_pool.lock().unwrap().alloc_handles(1);
+            let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
             let mut view_desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
                 Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
                 ViewDimension: d3d12::D3D12_UAV_DIMENSION_BUFFER,
@@ -1883,10 +1885,10 @@ impl d::Device<B> for Device {
                     resource as *mut _,
                     ptr::null_mut(),
                     &view_desc,
-                    handles.cpu,
+                    handle,
                 );
             }
-            Some(handles)
+            Some(handle)
         } else {
             None
         };
@@ -1937,7 +1939,7 @@ impl d::Device<B> for Device {
                 Flags: d3d12::D3D12_BUFFER_SRV_FLAG_NONE,
             };
 
-            let handle = self.srv_pool.lock().unwrap().alloc_handles(1).cpu;
+            let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
             unsafe {
                 self.raw.clone().CreateShaderResourceView(buffer.resource, &desc, handle);
             }
@@ -1961,7 +1963,7 @@ impl d::Device<B> for Device {
                 CounterOffsetInBytes: 0,
             };
 
-            let handle = self.uav_pool.lock().unwrap().alloc_handles(1).cpu;
+            let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
             unsafe {
                 self.raw.clone().CreateUnorderedAccessView(buffer.resource, ptr::null_mut(), &desc, handle);
             }
@@ -2278,7 +2280,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_sampler(&self, info: image::SamplerInfo) -> n::Sampler {
-        let handle = self.sampler_pool.lock().unwrap().alloc_handles(1).cpu;
+        let handle = self.sampler_pool.lock().unwrap().alloc_handle();
 
         let op = match info.comparison {
             Some(_) => d3d12::D3D12_FILTER_REDUCTION_TYPE_COMPARISON,
@@ -2428,21 +2430,17 @@ impl d::Device<B> for Device {
                     pso::Descriptor::Buffer(buffer, ref range) => {
                         if update_pool_index == descriptor_update_pools.len() {
                             let max_size = 1u64<<12; //arbitrary
-                            descriptor_update_pools.push(n::DescriptorCpuPool {
-                                heap: Self::create_descriptor_heap_impl(
-                                    &mut self.raw.clone(),
+                            descriptor_update_pools.push(
+                                descriptors_cpu::HeapLinear::new(
+                                    &self.raw,
                                     d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-                                    false,
                                     max_size as _,
-                                ),
-                                offset: 0,
-                                size: 0,
-                                max_size,
-                            });
+                                )
+                            );
                         }
                         let heap = descriptor_update_pools.last_mut().unwrap();
-                        let handle = heap.alloc_handles(1).cpu;
-                        if heap.size == heap.max_size {
+                        let handle = heap.alloc_handle();
+                        if heap.full() {
                             // pool is full, move to the next one
                             update_pool_index += 1;
                         }
@@ -2561,7 +2559,7 @@ impl d::Device<B> for Device {
 
         // reset the temporary CPU-size descriptor pools
         for buffer_desc_pool in descriptor_update_pools.iter_mut() {
-            buffer_desc_pool.size = 0;
+            buffer_desc_pool.clear();
         }
     }
 
