@@ -166,15 +166,18 @@ impl PipelineCache {
         }
     }
 
-    fn bind_descriptor_sets<'a, T>(
+    fn bind_descriptor_sets<'a, I, J>(
         &mut self,
         layout: &n::PipelineLayout,
         first_set: usize,
-        sets: T,
+        sets: I,
+        offsets: J,
     ) -> [*mut d3d12::ID3D12DescriptorHeap; 2]
     where
-        T: IntoIterator,
-        T::Item: Borrow<n::DescriptorSet>,
+        I: IntoIterator,
+        I::Item: Borrow<n::DescriptorSet>,
+        J: IntoIterator,
+        J::Item: Borrow<com::DescriptorSetOffset>,
     {
         let mut sets = sets.into_iter().peekable();
         let (
@@ -1732,16 +1735,19 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_graphics_descriptor_sets<'a, T>(
+    fn bind_graphics_descriptor_sets<'a, I, J>(
         &mut self,
         layout: &n::PipelineLayout,
         first_set: usize,
-        sets: T,
+        sets: I,
+        offsets: J,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<n::DescriptorSet>,
+        I: IntoIterator,
+        I::Item: Borrow<n::DescriptorSet>,
+        J: IntoIterator,
+        J::Item: Borrow<com::DescriptorSetOffset>,
     {
-        self.active_descriptor_heaps = self.gr_pipeline.bind_descriptor_sets(layout, first_set, sets);
+        self.active_descriptor_heaps = self.gr_pipeline.bind_descriptor_sets(layout, first_set, sets, offsets);
         self.bind_descriptor_heaps();
     }
 
@@ -1766,16 +1772,19 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.comp_pipeline.pipeline = Some((pipeline.raw, pipeline.signature));
     }
 
-    fn bind_compute_descriptor_sets<T>(
+    fn bind_compute_descriptor_sets<I, J>(
         &mut self,
         layout: &n::PipelineLayout,
         first_set: usize,
-        sets: T,
+        sets: I,
+        offsets: J,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<n::DescriptorSet>,
+        I: IntoIterator,
+        I::Item: Borrow<n::DescriptorSet>,
+        J: IntoIterator,
+        J::Item: Borrow<com::DescriptorSetOffset>,
     {
-        self.active_descriptor_heaps = self.comp_pipeline.bind_descriptor_sets(layout, first_set, sets);
+        self.active_descriptor_heaps = self.comp_pipeline.bind_descriptor_sets(layout, first_set, sets, offsets);
         self.bind_descriptor_heaps();
     }
 

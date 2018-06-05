@@ -5,7 +5,7 @@ use std::borrow::Borrow;
 use {Backend, WorkGroupCount};
 use buffer::Offset;
 use queue::capability::{Compute, Supports};
-use super::{CommandBuffer, RawCommandBuffer, Shot, Level};
+use super::{CommandBuffer, DescriptorSetOffset, RawCommandBuffer, Shot, Level};
 
 impl<'a, B: Backend, C: Supports<Compute>, S: Shot, L: Level> CommandBuffer<'a, B, C, S, L> {
     /// Identical to the `RawCommandBuffer` method of the same name.
@@ -14,16 +14,19 @@ impl<'a, B: Backend, C: Supports<Compute>, S: Shot, L: Level> CommandBuffer<'a, 
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn bind_compute_descriptor_sets<T>(
+    pub fn bind_compute_descriptor_sets<I, J>(
         &mut self,
         layout: &B::PipelineLayout,
         first_set: usize,
-        sets: T,
+        sets: I,
+        offsets: J,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<B::DescriptorSet>,
+        I: IntoIterator,
+        I::Item: Borrow<B::DescriptorSet>,
+        J: IntoIterator,
+        J::Item: Borrow<DescriptorSetOffset>,
     {
-        self.raw.bind_compute_descriptor_sets(layout, first_set, sets)
+        self.raw.bind_compute_descriptor_sets(layout, first_set, sets, offsets)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.

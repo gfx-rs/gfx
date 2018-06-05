@@ -541,12 +541,12 @@ impl HeapProperties {
             pso::DescriptorType::InputAttachment |
             pso::DescriptorType::SampledImage |
             pso::DescriptorType::UniformTexelBuffer |
+            pso::DescriptorType::UniformBufferDynamic |
             pso::DescriptorType::UniformBuffer => HeapProperties::new(true, false, false),
             pso::DescriptorType::StorageImage |
             pso::DescriptorType::StorageTexelBuffer |
+            pso::DescriptorType::StorageBufferDynamic |
             pso::DescriptorType::StorageBuffer => HeapProperties::new(true, false, true),
-            pso::DescriptorType::UniformBufferDynamic |
-            pso::DescriptorType::UniformImageDynamic => unimplemented!(),
         }
 
     }

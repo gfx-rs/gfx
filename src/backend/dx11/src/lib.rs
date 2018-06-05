@@ -308,7 +308,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         };
 
         let device = device::Device::new(device, cxt, self.memory_properties.clone());
-        
+
         // TODO: deferred context => 1 cxt/queue?
         let queues = Queues::new(
             families
@@ -490,7 +490,7 @@ pub struct CommandBuffer {
 }
 
 unsafe impl Send for CommandBuffer {}
-unsafe impl Sync for CommandBuffer {} 
+unsafe impl Sync for CommandBuffer {}
 
 impl CommandBuffer {
     fn create_deferred(device: ComPtr<d3d11::ID3D11Device>, internal: internal::BufferImageCopy) -> Self {
@@ -544,7 +544,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
 
         let depth_view = framebuffer.attachments.iter().find(|a| a.dsv_handle.is_some());
 
-        
+
         unsafe {
             for (clear, view) in clear_values.into_iter().zip(framebuffer.attachments.iter()) {
                 let clear = clear.borrow();
@@ -729,10 +729,12 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_graphics_descriptor_sets<'a, T>(&mut self, layout: &PipelineLayout, first_set: usize, sets: T)
+    fn bind_graphics_descriptor_sets<'a, I, J>(&mut self, layout: &PipelineLayout, first_set: usize, sets: I, _offsets: J)
     where
-        T: IntoIterator,
-        T::Item: Borrow<DescriptorSet>,
+        I: IntoIterator,
+        I::Item: Borrow<DescriptorSet>,
+        J: IntoIterator,
+        J::Item: Borrow<command::DescriptorSetOffset>,
     {
         for set in sets.into_iter() {
             let set = set.borrow();
@@ -759,10 +761,12 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
 
-    fn bind_compute_descriptor_sets<T>(&mut self, layout: &PipelineLayout, first_set: usize, sets: T)
+    fn bind_compute_descriptor_sets<I, J>(&mut self, layout: &PipelineLayout, first_set: usize, sets: I, offsets: J)
     where
-        T: IntoIterator,
-        T::Item: Borrow<DescriptorSet>,
+        I: IntoIterator,
+        I::Item: Borrow<DescriptorSet>,
+        J: IntoIterator,
+        J::Item: Borrow<command::DescriptorSetOffset>,
     {
         unimplemented!()
     }
@@ -900,7 +904,7 @@ pub struct Memory {
 }
 
 unsafe impl Send for Memory {}
-unsafe impl Sync for Memory {} 
+unsafe impl Sync for Memory {}
 
 pub struct CommandPool {
     device: ComPtr<d3d11::ID3D11Device>,
@@ -908,7 +912,7 @@ pub struct CommandPool {
 }
 
 unsafe impl Send for CommandPool {}
-unsafe impl Sync for CommandPool {} 
+unsafe impl Sync for CommandPool {}
 
 impl hal::pool::RawCommandPool<Backend> for CommandPool {
     fn reset(&mut self) {
@@ -996,7 +1000,7 @@ impl Buffer {
 }
 
 unsafe impl Send for Buffer {}
-unsafe impl Sync for Buffer {} 
+unsafe impl Sync for Buffer {}
 
 #[derive(Debug)]
 pub struct BufferView;
@@ -1129,7 +1133,7 @@ pub struct DescriptorSet {
 }
 
 unsafe impl Send for DescriptorSet {}
-unsafe impl Sync for DescriptorSet {} 
+unsafe impl Sync for DescriptorSet {}
 
 impl DescriptorSet {
     pub fn new() -> Self {

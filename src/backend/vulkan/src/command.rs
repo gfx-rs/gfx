@@ -53,18 +53,21 @@ where
 }
 
 impl CommandBuffer {
-    fn bind_descriptor_sets<T>(
+    fn bind_descriptor_sets<I, J>(
         &mut self,
         bind_point: vk::PipelineBindPoint,
         layout: &n::PipelineLayout,
         first_set: usize,
-        sets: T,
+        sets: I,
+        offsets: J,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<n::DescriptorSet>,
+        I: IntoIterator,
+        I::Item: Borrow<n::DescriptorSet>,
+        J: IntoIterator,
+        J::Item: Borrow<com::DescriptorSetOffset>,
     {
-        let sets: SmallVec<[vk::DescriptorSet; 16]> = sets.into_iter().map(|set| set.borrow().raw).collect();
-        let dynamic_offsets = &[]; // TODO
+        let sets: SmallVec<[_; 16]> = sets.into_iter().map(|set| set.borrow().raw).collect();
+        let dynamic_offsets: SmallVec<[_; 16]> = offsets.into_iter().map(|offset| *offset.borrow()).collect();
 
         unsafe {
             self.device.0.cmd_bind_descriptor_sets(
@@ -73,7 +76,7 @@ impl CommandBuffer {
                 layout.raw,
                 first_set as u32,
                 &sets,
-                dynamic_offsets,
+                &dynamic_offsets,
             );
         }
     }
@@ -605,20 +608,24 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_graphics_descriptor_sets<T>(
+    fn bind_graphics_descriptor_sets<I, J>(
         &mut self,
         layout: &n::PipelineLayout,
         first_set: usize,
-        sets: T,
+        sets: I,
+        offsets: J,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<n::DescriptorSet>,
+        I: IntoIterator,
+        I::Item: Borrow<n::DescriptorSet>,
+        J: IntoIterator,
+        J::Item: Borrow<com::DescriptorSetOffset>,
     {
         self.bind_descriptor_sets(
             vk::PipelineBindPoint::Graphics,
             layout,
             first_set,
             sets,
+            offsets,
         );
     }
 
@@ -632,20 +639,24 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_compute_descriptor_sets<T>(
+    fn bind_compute_descriptor_sets<I, J>(
         &mut self,
         layout: &n::PipelineLayout,
         first_set: usize,
-        sets: T,
+        sets: I,
+        offsets: J,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<n::DescriptorSet>,
+        I: IntoIterator,
+        I::Item: Borrow<n::DescriptorSet>,
+        J: IntoIterator,
+        J::Item: Borrow<com::DescriptorSetOffset>,
     {
         self.bind_descriptor_sets(
             vk::PipelineBindPoint::Compute,
             layout,
             first_set,
             sets,
+            offsets,
         );
     }
 

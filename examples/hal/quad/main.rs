@@ -560,7 +560,7 @@ fn main() {
             cmd_buffer.set_scissors(0, &[viewport.rect]);
             cmd_buffer.bind_graphics_pipeline(&pipeline.as_ref().unwrap());
             cmd_buffer.bind_vertex_buffers(0, pso::VertexBufferSet(vec![(&vertex_buffer, 0)]));
-            cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, Some(&desc_set)); //TODO
+            cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, Some(&desc_set), &[]); //TODO
 
             {
                 let mut encoder = cmd_buffer.begin_render_pass_inline(

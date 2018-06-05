@@ -130,7 +130,7 @@ fn main() {
             }),
         );
         command_buffer.bind_compute_pipeline(&pipeline);
-        command_buffer.bind_compute_descriptor_sets(&pipeline_layout, 0, &[desc_set]);
+        command_buffer.bind_compute_descriptor_sets(&pipeline_layout, 0, &[desc_set], &[]);
         command_buffer.dispatch([numbers.len() as u32, 1, 1]);
         command_buffer.pipeline_barrier(
             pso::PipelineStage::COMPUTE_SHADER .. pso::PipelineStage::TRANSFER,

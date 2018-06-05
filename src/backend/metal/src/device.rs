@@ -683,7 +683,9 @@ impl hal::Device<Backend> for Device {
                             };
                             match set_binding.ty {
                                 pso::DescriptorType::UniformBuffer |
-                                pso::DescriptorType::StorageBuffer => {
+                                pso::DescriptorType::StorageBuffer |
+                                pso::DescriptorType::UniformBufferDynamic |
+                                pso::DescriptorType::StorageBufferDynamic => {
                                     res.buffer_id = counters.buffers as _;
                                     counters.buffers += 1;
                                 }
@@ -705,8 +707,6 @@ impl hal::Device<Backend> for Device {
                                     counters.textures += 1;
                                     counters.samplers += 1;
                                 }
-                                pso::DescriptorType::UniformBufferDynamic |
-                                pso::DescriptorType::UniformImageDynamic => unimplemented!(),
                             };
                             assert_eq!(set_binding.count, 1); //TODO
                             let location = msl::ResourceBindingLocation {
@@ -1378,7 +1378,7 @@ impl hal::Device<Backend> for Device {
                                 let start = range.start.unwrap_or(0);
                                 let end = range.end.unwrap_or(buf_length);
                                 assert!(end <= buf_length);
-                                vec[array_offset] = Some((buffer.raw.clone(), start));
+                                vec[array_offset].base = Some((buffer.raw.clone(), start));
                             }
                             (&pso::Descriptor::Sampler(..), _) |
                             (&pso::Descriptor::Image(..), _) |

@@ -834,14 +834,17 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         self.update_blend_targets(blend_targets);
     }
 
-    fn bind_graphics_descriptor_sets<T>(
+    fn bind_graphics_descriptor_sets<I, J>(
         &mut self,
         _layout: &n::PipelineLayout,
         _first_set: usize,
-        _sets: T,
+        _sets: I,
+        _offsets: J,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<n::DescriptorSet>,
+        I: IntoIterator,
+        I::Item: Borrow<n::DescriptorSet>,
+        J: IntoIterator,
+        J::Item: Borrow<command::DescriptorSetOffset>,
     {
         // TODO
     }
@@ -857,14 +860,17 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn bind_compute_descriptor_sets<T>(
+    fn bind_compute_descriptor_sets<I, J>(
         &mut self,
         _layout: &n::PipelineLayout,
         _first_set: usize,
-        _sets: T,
+        _sets: I,
+        _offsets: J,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<n::DescriptorSet>,
+        I: IntoIterator,
+        I::Item: Borrow<n::DescriptorSet>,
+        J: IntoIterator,
+        J::Item: Borrow<command::DescriptorSetOffset>,
     {
         // TODO
     }

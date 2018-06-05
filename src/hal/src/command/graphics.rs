@@ -11,7 +11,7 @@ use super::{
     CommandBuffer, RawCommandBuffer,
     RenderPassInlineEncoder, RenderPassSecondaryEncoder,
     Shot, Level, Primary,
-    ClearColorRaw, ClearDepthStencilRaw, ClearValueRaw,
+    ClearColorRaw, ClearDepthStencilRaw, ClearValueRaw, DescriptorSetOffset,
 };
 
 
@@ -192,16 +192,19 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn bind_graphics_descriptor_sets<T>(
+    pub fn bind_graphics_descriptor_sets<I, J>(
         &mut self,
         layout: &B::PipelineLayout,
         first_set: usize,
-        sets: T,
+        sets: I,
+        offsets: J,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<B::DescriptorSet>,
+        I: IntoIterator,
+        I::Item: Borrow<B::DescriptorSet>,
+        J: IntoIterator,
+        J::Item: Borrow<DescriptorSetOffset>,
     {
-        self.raw.bind_graphics_descriptor_sets(layout, first_set, sets)
+        self.raw.bind_graphics_descriptor_sets(layout, first_set, sets, offsets)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.

@@ -48,6 +48,8 @@ pub union ClearValueRaw {
     _align: [u32; 4],
 }
 
+/// Offset for dynamic descriptors.
+pub type DescriptorSetOffset = u32;
 
 bitflags! {
     /// Option flags for various command buffer settings.
@@ -304,14 +306,17 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
 
     /// Takes an iterator of graphics `DescriptorSet`'s, and binds them to the command buffer.
     /// `first_set` is the index that the first descriptor is mapped to in the command buffer.
-    fn bind_graphics_descriptor_sets<T>(
+    fn bind_graphics_descriptor_sets<I, J>(
         &mut self,
         layout: &B::PipelineLayout,
         first_set: usize,
-        sets: T,
+        sets: I,
+        offsets: J,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<B::DescriptorSet>;
+        I: IntoIterator,
+        I::Item: Borrow<B::DescriptorSet>,
+        J: IntoIterator,
+        J::Item: Borrow<DescriptorSetOffset>;
 
     /// Bind a compute pipeline.
     ///
@@ -326,14 +331,17 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
 
     /// Takes an iterator of compute `DescriptorSet`'s, and binds them to the command buffer,
     /// `first_set` is the index that the first descriptor is mapped to in the command buffer.
-    fn bind_compute_descriptor_sets<T>(
+    fn bind_compute_descriptor_sets<I, J>(
         &mut self,
         layout: &B::PipelineLayout,
         first_set: usize,
-        sets: T,
+        sets: I,
+        offsets: J,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<B::DescriptorSet>;
+        I: IntoIterator,
+        I::Item: Borrow<B::DescriptorSet>,
+        J: IntoIterator,
+        J::Item: Borrow<DescriptorSetOffset>;
 
     /// Execute a workgroup in the compute pipeline. `x`, `y` and `z` are the
     /// number of local workgroups to dispatch along each "axis"; a total of `x`*`y`*`z`
