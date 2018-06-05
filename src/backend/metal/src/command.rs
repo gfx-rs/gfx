@@ -2008,18 +2008,22 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .pre_render_commands(commands);
     }
 
-    fn bind_graphics_descriptor_sets<'a, T>(
+    fn bind_graphics_descriptor_sets<'a, I, J>(
         &mut self,
         layout: &native::PipelineLayout,
         first_set: usize,
-        sets: T,
+        sets: I,
+        offsets: J,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<native::DescriptorSet>,
+        I: IntoIterator,
+        I::Item: Borrow<native::DescriptorSet>,
+        J: IntoIterator,
+        J::Item: Borrow<com::DescriptorSetOffset>,
     {
         use spirv_cross::{msl, spirv};
 
         let mut commands = Vec::new(); //TODO: re-use the storage
+        let mut offset_iter = offsets.into_iter();
 
         for (set_index, desc_set) in sets.into_iter().enumerate() {
             let location_vs = msl::ResourceBindingLocation {
@@ -2089,8 +2093,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 Buffer(ref buffers) => {
                                     let start = res.buffer_id as usize;
                                     for (i, bref) in buffers.iter().enumerate() {
-                                        let (buffer, offset) = match *bref {
-                                            Some((ref buffer, offset)) => (Some(buffer.clone()), offset),
+                                        let (buffer, offset) = match bref.base {
+                                            Some((ref buffer, mut offset)) => {
+                                                if bref.dynamic {
+                                                    offset += *offset_iter
+                                                        .next()
+                                                        .expect("No dynamic offset provided!")
+                                                        .borrow() as u64;
+                                                }
+                                                resources.add_buffer(start + i, buffer.as_ref(), offset as _);
+                                                (Some(buffer.clone()), offset)
+                                            }
                                             None => (None, 0),
                                         };
                                         commands.push(soft::RenderCommand::BindBuffer {
@@ -2099,9 +2112,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                             buffer,
                                             offset,
                                         });
-                                        if let Some((ref buffer, offset)) = *bref {
-                                            resources.add_buffer(start + i, buffer.as_ref(), offset as _);
-                                        }
                                     }
                                 }
                             }
@@ -2156,8 +2166,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 Buffer(ref buffers) => {
                                     let start = res.buffer_id as usize;
                                     for (i, bref) in buffers.iter().enumerate() {
-                                        let (buffer, offset) = match *bref {
-                                            Some((ref buffer, offset)) => {
+                                        let (buffer, offset) = match bref.base {
+                                            Some((ref buffer, mut offset)) => {
+                                                if bref.dynamic {
+                                                    offset += *offset_iter
+                                                        .next()
+                                                        .expect("No dynamic offset provided!")
+                                                        .borrow() as u64;
+                                                }
                                                 resources.add_buffer(start + i, buffer.as_ref(), offset as _);
                                                 (Some(buffer.clone()), offset)
                                             },
@@ -2218,17 +2234,22 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .pre_compute_commands(iter::once(command));
     }
 
-    fn bind_compute_descriptor_sets<'a, T>(
+    fn bind_compute_descriptor_sets<'a, I, J>(
         &mut self,
         layout: &native::PipelineLayout,
         first_set: usize,
-        sets: T,
+        sets: I,
+        offsets: J,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<native::DescriptorSet>,
+        I: IntoIterator,
+        I::Item: Borrow<native::DescriptorSet>,
+        J: IntoIterator,
+        J::Item: Borrow<com::DescriptorSetOffset>,
     {
         use spirv_cross::{msl, spirv};
+
         let mut commands = Vec::new();
+        let mut offset_iter = offsets.into_iter();
 
         for (set_index, desc_set) in sets.into_iter().enumerate() {
             let resources = &mut self.state.resources_cs;
@@ -2289,8 +2310,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 Buffer(ref buffers) => {
                                     let start = res.buffer_id as usize;
                                     for (i, bref) in buffers.iter().enumerate() {
-                                        let (buffer, offset) = match *bref {
-                                            Some((ref buffer, offset)) => {
+                                        let (buffer, offset) = match bref.base {
+                                            Some((ref buffer, mut offset)) => {
+                                                if bref.dynamic {
+                                                    offset += *offset_iter
+                                                        .next()
+                                                        .expect("No dynamic offset provided!")
+                                                        .borrow() as u64;
+                                                }
                                                 resources.add_buffer(start + i, buffer.as_ref(), offset as _);
                                                 (Some(buffer.clone()), offset)
                                             },
