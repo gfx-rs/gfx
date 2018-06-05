@@ -2440,7 +2440,7 @@ impl d::Device<B> for Device {
                         }
                         let heap = descriptor_update_pools.last_mut().unwrap();
                         let handle = heap.alloc_handle();
-                        if heap.full() {
+                        if heap.is_full() {
                             // pool is full, move to the next one
                             update_pool_index += 1;
                         }

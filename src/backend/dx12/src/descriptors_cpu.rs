@@ -49,7 +49,7 @@ impl HeapLinear {
     }
 
     pub fn alloc_handle(&mut self) -> d3d12::D3D12_CPU_DESCRIPTOR_HANDLE {
-        assert!(!self.full());
+        assert!(!self.is_full());
 
         let slot = self.num;
         self.num += 1;
@@ -59,7 +59,7 @@ impl HeapLinear {
         }
     }
 
-    pub fn full(&self) -> bool {
+    pub fn is_full(&self) -> bool {
         self.num >= self.size
     }
 
@@ -68,15 +68,15 @@ impl HeapLinear {
     }
 }
 
-const HEAP_SIZE_FIXED: u32 = 64;
+const HEAP_SIZE_FIXED: usize = 64;
 
 // Fixed-size free-list allocator for CPU descriptors.
 struct Heap {
-    // Bit flag representation of occupied handles in the heap.
+    // Bit flag representation of available handles in the heap.
     //
     //  0 - Occupied
     //  1 - free
-    occupancy: u64,
+    availability: u64,
     handle_size: usize,
     start: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
     _raw: ComPtr<d3d12::ID3D12DescriptorHeap>,
@@ -86,7 +86,7 @@ impl Heap {
     pub fn new(device: &ComPtr<d3d12::ID3D12Device>, ty: d3d12::D3D12_DESCRIPTOR_HEAP_TYPE) -> Self {
         let desc = d3d12::D3D12_DESCRIPTOR_HEAP_DESC {
             Type: ty,
-            NumDescriptors: HEAP_SIZE_FIXED,
+            NumDescriptors: HEAP_SIZE_FIXED as _,
             Flags: d3d12::D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
             NodeMask: 0,
         };
@@ -104,27 +104,26 @@ impl Heap {
 
         Heap {
             handle_size,
-            occupancy: !0, // all free!
+            availability: !0, // all free!
             start,
             _raw: unsafe { ComPtr::from_raw(heap) },
         }
     }
 
     pub fn alloc_handle(&mut self) -> d3d12::D3D12_CPU_DESCRIPTOR_HANDLE {
-        assert!(!self.full());
-
         // Find first free slot.
-        let slot = self.occupancy.trailing_zeros() as usize;
+        let slot = self.availability.trailing_zeros() as usize;
+        assert!(slot < HEAP_SIZE_FIXED);
         // Set the slot as occupied.
-        self.occupancy ^= 1 << slot;
+        self.availability ^= 1 << slot;
 
         d3d12::D3D12_CPU_DESCRIPTOR_HANDLE {
             ptr: self.start.ptr + self.handle_size * slot,
         }
     }
 
-    pub fn full(&self) -> bool {
-        self.occupancy == 0
+    pub fn is_full(&self) -> bool {
+        self.availability == 0
     }
 }
 
@@ -161,7 +160,7 @@ impl DescriptorCpuPool {
 
         let heap = &mut self.heaps[heap_id];
         let handle = heap.alloc_handle();
-        if heap.full() {
+        if heap.is_full() {
             self.free_list.remove(&heap_id);
         }
 
