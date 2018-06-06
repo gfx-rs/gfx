@@ -103,7 +103,7 @@ pub enum Resource {
         input_assembler: hal::pso::InputAssemblerDesc,
         blender: hal::pso::BlendDesc,
         #[serde(default)]
-        depth_stencil: Option<hal::pso::DepthStencilDesc>,
+        depth_stencil: hal::pso::DepthStencilDesc,
         layout: String,
         subpass: SubpassRef,
     },

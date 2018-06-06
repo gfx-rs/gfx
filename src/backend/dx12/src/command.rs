@@ -1668,16 +1668,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         unsafe { self.raw.OMSetBlendFactor(&color); }
     }
 
-    fn set_stencil_reference(&mut self, front: pso::StencilValue, back: pso::StencilValue) {
-        if front != back {
-            error!(
-                "Unable to set different stencil ref values for front ({}) and back ({})",
-                front,
-                back,
+    fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue) {
+        assert!(!faces.is_empty());
+
+        if !faces.is_all() {
+            warn!(
+                "Stencil ref values set for both faces but only one was requested ({})",
+                faces.bits(),
             );
         }
 
-        unsafe { self.raw.OMSetStencilRef(front as _); }
+        unsafe { self.raw.OMSetStencilRef(value as _); }
     }
 
     fn set_depth_bounds(&mut self, bounds: Range<f32>) {

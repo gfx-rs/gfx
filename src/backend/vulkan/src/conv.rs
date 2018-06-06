@@ -265,10 +265,12 @@ pub fn map_polygon_mode(rm: pso::PolygonMode) -> (vk::PolygonMode, f32) {
     }
 }
 
-pub fn map_cull_face(cf: pso::CullFace) -> vk::CullModeFlags {
+pub fn map_cull_face(cf: pso::Face) -> vk::CullModeFlags {
     match cf {
-        pso::CullFace::Front   => vk::CULL_MODE_FRONT_BIT,
-        pso::CullFace::Back    => vk::CULL_MODE_BACK_BIT,
+        pso::Face::FRONT => vk::CULL_MODE_FRONT_BIT,
+        pso::Face::BACK => vk::CULL_MODE_BACK_BIT,
+        f if f == pso::Face::FRONT | pso::Face::BACK => vk::CULL_MODE_FRONT_AND_BACK,
+        _ => vk::CULL_MODE_NONE,
     }
 }
 
@@ -313,9 +315,18 @@ pub fn map_stencil_side(side: &pso::StencilFace) -> vk::StencilOpState {
         pass_op: map_stencil_op(side.op_pass),
         depth_fail_op: map_stencil_op(side.op_depth_fail),
         compare_op: map_comparison(side.fun),
-        compare_mask: side.mask_read as u32,
-        write_mask: side.mask_write as u32,
-        reference: 0,
+        compare_mask: match side.mask_read {
+            pso::State::Static(mr) => mr,
+            pso::State::Dynamic => !0,
+        },
+        write_mask: match side.mask_write {
+            pso::State::Static(mw) => mw,
+            pso::State::Dynamic => !0,
+        },
+        reference: match side.reference {
+            pso::State::Static(r) => r,
+            pso::State::Dynamic => 0,
+        },
     }
 }
 

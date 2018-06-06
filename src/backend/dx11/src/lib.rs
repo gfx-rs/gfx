@@ -692,7 +692,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn set_stencil_reference(&mut self, front: pso::StencilValue, back: pso::StencilValue) {
+    fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue) {
         unimplemented!()
     }
 

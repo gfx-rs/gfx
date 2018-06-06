@@ -775,7 +775,25 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn set_stencil_reference(&mut self, front: pso::StencilValue, back: pso::StencilValue) {
+    fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue) {
+        assert!(!faces.is_empty());
+
+        let mut front = 0;
+        let mut back = 0;
+
+        if let Some((last_front, last_back)) = self.cache.stencil_ref {
+            front = last_front;
+            back = last_back;
+        }
+
+        if faces.contains(pso::Face::FRONT) {
+            front = value;
+        }
+
+        if faces.contains(pso::Face::BACK) {
+            back = value;
+        }
+
         // Only cache the stencil references values until
         // we assembled all the pieces to set the stencil state
         // from the pipeline.

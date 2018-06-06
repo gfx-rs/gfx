@@ -148,7 +148,6 @@ pub fn map_topology(primitive: Primitive) -> D3D12_PRIMITIVE_TOPOLOGY {
 
 pub fn map_rasterizer(rasterizer: &pso::Rasterizer) -> D3D12_RASTERIZER_DESC {
     use hal::pso::PolygonMode::*;
-    use hal::pso::CullFace::*;
     use hal::pso::FrontFace::*;
 
     D3D12_RASTERIZER_DESC {
@@ -164,9 +163,10 @@ pub fn map_rasterizer(rasterizer: &pso::Rasterizer) -> D3D12_RASTERIZER_DESC {
             Fill => D3D12_FILL_MODE_SOLID,
         },
         CullMode: match rasterizer.cull_face {
-            None => D3D12_CULL_MODE_NONE,
-            Some(Front) => D3D12_CULL_MODE_FRONT,
-            Some(Back) => D3D12_CULL_MODE_BACK,
+            Some(cf) if cf == pso::Face::FRONT => D3D12_CULL_MODE_FRONT,
+            Some(cf) if cf == pso::Face::BACK => D3D12_CULL_MODE_BACK,
+            Some(_) => panic!("Culling both front and back faces is not supported"),
+            _ => D3D12_CULL_MODE_NONE,
         },
         FrontCounterClockwise: match rasterizer.front_face {
             Clockwise => FALSE,
@@ -278,8 +278,14 @@ pub fn map_depth_stencil(dsi: &pso::DepthStencilDesc) -> D3D12_DEPTH_STENCIL_DES
         DepthWriteMask: if depth_write {D3D12_DEPTH_WRITE_MASK_ALL} else {D3D12_DEPTH_WRITE_MASK_ZERO},
         DepthFunc: depth_func,
         StencilEnable: stencil_on,
-        StencilReadMask: read_mask as _,
-        StencilWriteMask: write_mask as _,
+        StencilReadMask: match read_mask {
+            pso::State::Static(rm) => rm as _,
+            pso::State::Dynamic => !0,
+        },
+        StencilWriteMask: match write_mask {
+            pso::State::Static(wm) => wm as _,
+            pso::State::Dynamic => !0,
+        },
         FrontFace: front,
         BackFace: back,
     }

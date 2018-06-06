@@ -3,7 +3,7 @@
 use {image, pass, Backend, Primitive};
 use super::{BasePipeline, EntryPoint, PipelineCreationFlags};
 use super::input_assembler::{AttributeDesc, InputAssemblerDesc, VertexBufferDesc};
-use super::output_merger::{ColorBlendDesc, DepthStencilDesc};
+use super::output_merger::{ColorBlendDesc, DepthStencilDesc, Face};
 
 use std::ops::Range;
 
@@ -48,7 +48,6 @@ pub type ColorValue = [f32; 4];
 pub type DepthValue = f32;
 /// A single value from a stencil buffer.
 pub type StencilValue = u32;
-
 
 /// A complete set of shaders to build a graphics pipeline.
 ///
@@ -116,7 +115,7 @@ pub struct GraphicsPipelineDesc<'a, B: Backend> {
     /// Description of how blend operations should be performed.
     pub blender: BlendDesc,
     /// Depth stencil (DSV)
-    pub depth_stencil: Option<DepthStencilDesc>,
+    pub depth_stencil: DepthStencilDesc,
     /// Multisampling.
     pub multisampling: Option<Multisampling>,
     /// Static pipeline states.
@@ -148,7 +147,7 @@ impl<'a, B: Backend> GraphicsPipelineDesc<'a, B> {
             attributes: Vec::new(),
             input_assembler: InputAssemblerDesc::new(primitive),
             blender: BlendDesc::default(),
-            depth_stencil: None,
+            depth_stencil: DepthStencilDesc::default(),
             multisampling: None,
             baked_states: BakedStates::default(),
             layout,
@@ -170,19 +169,6 @@ pub enum PolygonMode {
     Line(f32),
     /// Rasterize as a face.
     Fill,
-}
-
-/// Which faces of the polygon, if any, to cull. Face culling
-/// is often used to reduce the amount of geometry that has to get
-/// drawn, so the renderer, for instance, doesn't have to worry about
-/// drawing the insides of closed objects.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum CullFace {
-    /// Cull front faces
-    Front,
-    /// Cull back faces.
-    Back,
 }
 
 /// The front face winding order of a set of vertices. This is
@@ -222,7 +208,7 @@ pub struct Rasterizer {
     /// How to rasterize this primitive.
     pub polygon_mode: PolygonMode,
     /// Which face should be culled.
-    pub cull_face: Option<CullFace>,
+    pub cull_face: Option<Face>,
     /// Which vertex winding is considered to be the front face for culling.
     pub front_face: FrontFace,
     /// Whether or not to enable depth clamping; when enabled, instead of

@@ -1,8 +1,8 @@
 use hal::format::{Format};
 use hal::pso::{
-    BlendDesc, BlendOp, BlendState, ColorBlendDesc, Comparison, CullFace, DepthStencilDesc,
-    DepthTest, Factor, PolygonMode, Rasterizer, Rect, StencilFace, StencilOp, StencilTest,
-    Viewport, Stage,
+    BlendDesc, BlendOp, BlendState, ColorBlendDesc, Comparison, DepthStencilDesc,
+    DepthTest, Face, Factor, PolygonMode, Rasterizer, Rect, StencilFace, StencilOp, StencilTest,
+    Viewport, Stage, State,
 };
 use hal::image::{Anisotropic, Filter, WrapMode};
 use hal::{IndexType, Primitive};
@@ -232,11 +232,12 @@ fn map_fill_mode(mode: PolygonMode) -> D3D11_FILL_MODE {
     }
 }
 
-fn map_cull_mode(mode: Option<CullFace>) -> D3D11_CULL_MODE {
+fn map_cull_mode(mode: Option<Face>) -> D3D11_CULL_MODE {
     match mode {
-        Some(CullFace::Front) => D3D11_CULL_FRONT,
-        Some(CullFace::Back) => D3D11_CULL_BACK,
-        None => D3D11_CULL_NONE,
+        Some(cf) if cf == Face::FRONT => D3D11_CULL_FRONT,
+        Some(cf) if cf == Face::BACK => D3D11_CULL_BACK,
+        Some(_) => panic!("Culling both front and back faces is not supported"),
+        _ => D3D11_CULL_NONE,
     }
 }
 
@@ -383,8 +384,14 @@ pub(crate) fn map_depth_stencil_desc(desc: &DepthStencilDesc) -> D3D11_DEPTH_STE
         DepthWriteMask: if depth_write {D3D11_DEPTH_WRITE_MASK_ALL} else {D3D11_DEPTH_WRITE_MASK_ZERO},
         DepthFunc: depth_func,
         StencilEnable: stencil_on,
-        StencilReadMask: read_mask as _,
-        StencilWriteMask: write_mask as _,
+        StencilReadMask: match read_mask {
+            State::Static(rm) => rm as _,
+            State::Dynamic => !0,
+        },
+        StencilWriteMask: match write_mask {
+            State::Static(wm) => wm as _,
+            State::Dynamic => !0
+        },
         FrontFace: front,
         BackFace: back,
     }

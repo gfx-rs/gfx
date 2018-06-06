@@ -1,11 +1,10 @@
-use command::IndexBuffer;
-use native::RasterizerState;
+use command::{IndexBuffer};
+use native::{RasterizerState};
 
 use hal;
 use metal;
 
 use std::ops::Range;
-
 
 pub fn push_data(constants: &[u32]) -> Vec<u8> {
     constants
@@ -20,6 +19,8 @@ pub enum RenderCommand {
     SetScissor(metal::MTLScissorRect),
     SetBlendColor(hal::pso::ColorValue),
     SetDepthBias(hal::pso::DepthBias),
+    SetDepthStencilDesc(metal::DepthStencilState),
+    SetStencilReferenceValues(hal::pso::StencilValue, hal::pso::StencilValue),
     BindBuffer {
         stage: hal::pso::Stage,
         index: usize,
@@ -44,7 +45,6 @@ pub enum RenderCommand {
     BindPipeline(
         metal::RenderPipelineState,
         Option<RasterizerState>,
-        Option<metal::DepthStencilState>,
     ),
     Draw {
         primitive_type: metal::MTLPrimitiveType,

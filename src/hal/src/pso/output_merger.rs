@@ -3,6 +3,7 @@
 //! the input shader results, depth/stencil information, etc.
 
 use super::graphics::StencilValue;
+use super::State;
 
 /// A pixel-wise comparison function.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -237,7 +238,7 @@ pub enum StencilOp {
     Keep,
     /// Set the value in the stencil buffer to zero.
     Zero,
-    /// Set the stencil buffer value to `value` from `StencilSide`
+    /// Set the stencil buffer value to `reference` from `StencilFace`.
     Replace,
     /// Increment the stencil buffer value, clamping to its maximum value.
     IncrementClamp,
@@ -259,15 +260,17 @@ pub struct StencilFace {
     pub fun: Comparison,
     /// A mask that is ANDd with both the stencil buffer value and the reference value when they
     /// are read before doing the stencil test.
-    pub mask_read: StencilValue,
+    pub mask_read: State<StencilValue>,
     /// A mask that is ANDd with the stencil value before writing to the stencil buffer.
-    pub mask_write: StencilValue,
+    pub mask_write: State<StencilValue>,
     /// What operation to do if the stencil test fails.
     pub op_fail: StencilOp,
     /// What operation to do if the stencil test passes but the depth test fails.
     pub op_depth_fail: StencilOp,
     /// What operation to do if both the depth and stencil test pass.
     pub op_pass: StencilOp,
+    /// The reference value used for stencil tests.
+    pub reference: State<StencilValue>,
 }
 
 /// Defines a stencil test. Stencil testing is an operation
@@ -303,3 +306,14 @@ pub struct DepthStencilDesc {
     /// Stencil test/write.
     pub stencil: StencilTest,
 }
+
+bitflags!(
+    /// Face.
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    pub struct Face: u32 {
+        /// Front face.
+        const FRONT = 0x1;
+        /// Back face.
+        const BACK = 0x2;
+    }
+);
