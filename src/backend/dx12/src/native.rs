@@ -395,6 +395,7 @@ impl DescriptorHeap {
 
 /// Slice of an descriptor heap, which is allocated for a pool.
 /// Pools will create descriptor sets inside this slice.
+#[derive(Debug)]
 pub struct DescriptorHeapSlice {
     pub(crate) slice: Range<u64>,
     pub(crate) free_list: RangeAllocator<u64>,
@@ -402,7 +403,7 @@ pub struct DescriptorHeapSlice {
 
 impl DescriptorHeapSlice {
     pub(crate) fn clear(&mut self) {
-        self.range_allocator.reset();
+        self.free_list.reset();
     }
 }
 
@@ -418,6 +419,7 @@ unsafe impl Sync for DescriptorPool {}
 
 impl HalDescriptorPool<Backend> for DescriptorPool {
     fn allocate_set(&mut self, layout: &DescriptorSetLayout) -> Result<DescriptorSet, pso::AllocationError> {
+        /*
         let mut binding_infos = Vec::new();
         let mut first_gpu_sampler = None;
         let mut first_gpu_view = None;
@@ -430,7 +432,7 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
             binding_infos[binding.binding as usize] = DescriptorBindingInfo {
                 count: binding.count as _,
                 view_range: if has_view {
-                    let handle = self.heap_srv_cbv_uav.alloc_handles(binding.count as u64)
+                    let handle = self.heap_srv_cbv_uav.allocate(binding.count as u64)
                         .ok_or(pso::AllocationError::OutOfPoolMemory)?;
                     if first_gpu_view.is_none() {
                         first_gpu_view = Some(handle.gpu);
@@ -445,7 +447,7 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                     None
                 },
                 sampler_range: if has_sampler {
-                    let handle = self.heap_sampler.alloc_handles(binding.count as u64)
+                    let handle = self.heap_sampler.allocate(binding.count as u64)
                         .ok_or(pso::AllocationError::OutOfPoolMemory)?;
                     if first_gpu_sampler.is_none() {
                         first_gpu_sampler = Some(handle.gpu);
@@ -470,9 +472,12 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
             first_gpu_sampler,
             first_gpu_view,
         })
+        */
+        unimplemented!()
     }
 
     fn free_sets(&mut self, descriptor_sets: &[DescriptorSet]) {
+        /*
         for descriptor_set in descriptor_sets {
             for binding_info in &descriptor_set.binding_infos {
                 if let Some(ref view_range) = binding_info.view_range {
@@ -488,6 +493,8 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                 }
             }
         }
+        */
+        unimplemented!()
     }
 
     fn reset(&mut self) {

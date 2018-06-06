@@ -10,7 +10,7 @@ use winapi::um::winuser::GetClientRect;
 use wio::com::ComPtr;
 
 use hal::{self, format as f, image as i};
-use {descriptors_cpu, native as n, Backend, Instance, PhysicalDevice, QueueFamily};
+use {descriptors, Backend, Instance, PhysicalDevice, QueueFamily};
 
 use std::os::raw::c_void;
 
@@ -97,7 +97,7 @@ pub struct Swapchain {
     pub(crate) next_frame: usize,
     pub(crate) frame_queue: VecDeque<usize>,
     #[allow(dead_code)]
-    pub(crate) rtv_heap: descriptors_cpu::HeapLinear,
+    pub(crate) rtv_heap: descriptors::HeapLinear,
 }
 
 impl hal::Swapchain<Backend> for Swapchain {

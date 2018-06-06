@@ -1411,14 +1411,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
 
         // Descriptor heap for the current blit, only storing the src image
-        let srv_heap = descriptors::HeapLinear::new(
+        let mut srv_heap = descriptors::HeapLinear::new(
             &device,
             d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
             true,
             1,
         );
         let srv_handle = srv_heap.alloc_handle();
-        self.temporary_gpu_heaps.push(srv_heap.înto_raw);
 
         let srv_desc = Device::build_image_as_shader_resource_desc(
             &ViewInfo {
@@ -1436,8 +1435,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         ).unwrap();
         unsafe {
             device.CreateShaderResourceView(src.resource, &srv_desc, srv_handle.cpu);
-            self.raw.SetDescriptorHeaps(1, &mut srv_heap.raw.as_raw());
+            self.raw.SetDescriptorHeaps(1, &mut srv_heap.as_raw());
         }
+
+        self.temporary_gpu_heaps.push(srv_heap.into_raw());
 
         let filter = match filter {
             image::Filter::Nearest => d3d12::D3D12_FILTER_MIN_MAG_MIP_POINT,
@@ -1459,13 +1460,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let num_layers = r.dst_subresource.layers.end - first_layer;
 
             // WORKAROUND: renderdoc crashes if we destroy the pool too early
-            let rtv_pool = Device::create_descriptor_heap_impl(
-                &mut device.clone(),
+            let rtv_pool = descriptors::HeapLinear::new(
+                &device,
                 d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
                 false,
                 num_layers as _,
             );
-            self.rtv_pools.push(rtv_pool.raw.clone());
 
             let key = match r.dst_subresource.aspects {
                 format::Aspects::COLOR => {
@@ -1484,7 +1484,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             PlaneSlice: 0, // TODO
                         };
 
-                        let view = rtv_pool.at(i as _, 0).cpu;
+                        let view = rtv_pool.at(i as _).cpu;
                         unsafe {
                             device.CreateRenderTargetView(dst.resource, &desc, view);
                         }
@@ -1541,7 +1541,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 };
 
                 list.push(Instance {
-                    rtv: rtv_pool.at(i as _, 0).cpu,
+                    rtv: rtv_pool.at(i as _).cpu,
                     viewport,
                     data,
                 });
@@ -1555,6 +1555,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     }
                 ));
             }
+
+            self.rtv_pools.push(rtv_pool.into_raw());
         }
 
         // pre barriers

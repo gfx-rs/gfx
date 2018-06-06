@@ -19,7 +19,7 @@ use hal::queue::{RawCommandQueue, QueueFamilyId};
 use hal::range::RangeArg;
 
 use {
-    conv, descriptors_cpu, native as n, root_constants, window as w,
+    conv, descriptors, native as n, root_constants, window as w,
     Backend as B, Device, MemoryGroup, QUEUE_FAMILIES, MAX_VERTEX_BUFFERS, NUM_HEAP_PROPERTIES,
 };
 use pool::RawCommandPool;
@@ -512,7 +512,7 @@ impl Device {
     }
 
     pub(crate) fn create_descriptor_heap(
-        device: &mut ComPtr<d3d12::ID3D12Device>,
+        device: &ComPtr<d3d12::ID3D12Device>,
         heap_type: d3d12::D3D12_DESCRIPTOR_HEAP_TYPE,
         shader_visible: bool,
         capacity: usize,
@@ -537,7 +537,7 @@ impl Device {
                 &d3d12::ID3D12DescriptorHeap::uuidof(),
                 &mut heap as *mut *mut _ as *mut *mut _,
             );
-            ComPtr::from_ptr(heap)
+            ComPtr::from_raw(heap)
         }
     }
 
@@ -2337,7 +2337,7 @@ impl d::Device<B> for Device {
                 .allocate(num_srv_cbv_uav as _)
                 .unwrap(); // TODO: error/resize
             n::DescriptorHeapSlice {
-                slice,
+                slice: slice.clone(),
                 free_list: RangeAllocator::new(slice),
             }
         };
@@ -2347,11 +2347,11 @@ impl d::Device<B> for Device {
                 .heap_sampler
                 .lock()
                 .unwrap();
-            let range = heap_sampler
+            let slice = heap_sampler
                 .allocate(num_samplers as _)
                 .unwrap(); // TODO: error/resize
             n::DescriptorHeapSlice {
-                slice,
+                slice: slice.clone(),
                 free_list: RangeAllocator::new(slice),
             }
         };
@@ -2421,7 +2421,7 @@ impl d::Device<B> for Device {
                             );
                         }
                         let heap = descriptor_update_pools.last_mut().unwrap();
-                        let handle = heap.alloc_handle();
+                        let handle = heap.alloc_handle().cpu;
                         if heap.is_full() {
                             // pool is full, move to the next one
                             update_pool_index += 1;
@@ -2920,7 +2920,7 @@ impl d::Device<B> for Device {
             ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2D,
             .. unsafe { mem::zeroed() }
         };
-        let rtv_heap = descriptors::HeapLinear::new(
+        let mut rtv_heap = descriptors::HeapLinear::new(
             &self.raw,
             d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
             false,
@@ -2973,7 +2973,7 @@ impl d::Device<B> for Device {
                     &mut resource as *mut *mut _ as *mut *mut _);
             }
 
-            let rtv = rtv_heap.alloc_handle();
+            let rtv = rtv_heap.alloc_handle().cpu;
             unsafe { self.raw.clone().CreateRenderTargetView(resource, &rtv_desc, rtv); }
 
             let surface_type = config

@@ -1,6 +1,7 @@
 use Device;
 use descriptors::DualHandle;
 use range_alloc::RangeAllocator;
+use std::ops::Range;
 use winapi::um::d3d12;
 use wio::com::ComPtr;
 
@@ -32,14 +33,10 @@ pub struct SamplerGpuHeap {
 
 impl SamplerGpuHeap {
     pub fn new(device: &ComPtr<d3d12::ID3D12Device>, size: usize) -> Self {
-        let cpu_heap = Device::create_descriptor_heap(
-            device,
-            D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
-            false,
-            size,
-        );
+        let ty = d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
+        let cpu_heap = Device::create_descriptor_heap(device, ty, false, size);
         let handle_size = unsafe {
-            device.GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER) as usize
+            device.GetDescriptorHandleIncrementSize(ty) as usize
         };
         let start = unsafe { cpu_heap.GetCPUDescriptorHandleForHeapStart() };
 
@@ -53,20 +50,21 @@ impl SamplerGpuHeap {
         }
     }
 
-    pub fn allocate(&mut self, num: usize) -> Option<Range> {
+    pub fn allocate(&mut self, num: usize) -> Option<Range<u64>> {
         self.free_list.allocate_range(num as _)
     }
 
-    pub fn free(&mut self, range: Range) {
+    pub fn free(&mut self, range: Range<u64>) {
         self.free_list.free_range(range);
     }
 
     fn create_gpu_heap(&mut self) {
+        let num_samplers = 2_048; // Sampler heap size limit of D3D12
         let heap = Device::create_descriptor_heap(
             &self.device,
-            D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
+            d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
             true,
-            2_048, // Sampler heap size limit of D3D12
+            num_samplers
         );
         let start = DualHandle {
             cpu: unsafe { heap.GetCPUDescriptorHandleForHeapStart() },
@@ -76,7 +74,7 @@ impl SamplerGpuHeap {
         self.gpu_heaps.push(
             Heap {
                 start,
-                free_list: RangeAllocator::new(0 .. size as _),
+                free_list: RangeAllocator::new(0 .. num_samplers as _),
                 _raw: heap,
             }
         );

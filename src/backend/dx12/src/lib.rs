@@ -525,10 +525,10 @@ pub struct Device {
     dsv_pool: Mutex<DescriptorCpuPool>,
     srv_uav_pool: Mutex<DescriptorCpuPool>,
     sampler_pool: Mutex<DescriptorCpuPool>,
-    descriptor_update_pools: Mutex<Vec<descriptors_cpu::HeapLinear>>,
+    descriptor_update_pools: Mutex<Vec<descriptors::HeapLinear>>,
     // CPU/GPU descriptor heaps
-    heap_srv_cbv_uav: Mutex<descriptors_gpu::SamplerGpuHeap>,
-    heap_sampler: Mutex<descriptors_gpu::CbvSrvUavGpuHeap>,
+    heap_srv_cbv_uav: Mutex<descriptors::CbvSrvUavGpuHeap>,
+    heap_sampler: Mutex<descriptors::SamplerGpuHeap>,
     events: Mutex<Vec<winnt::HANDLE>>,
     shared: Arc<Shared>,
     // Present queue exposed by the `Present` queue family.
@@ -555,12 +555,12 @@ impl Device {
         let srv_uav_pool = DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         let sampler_pool = DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 
-        let max_descriptors = 1_000_000, // maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
-        let heap_srv_cbv_uav = descriptors_gpu::CbvSrvUavGpuHeap::new(
+        let max_descriptors = 1_000_000; // maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
+        let heap_srv_cbv_uav = descriptors::CbvSrvUavGpuHeap::new(
             &mut device,
             max_descriptors
         );
-        let heap_sampler = descriptors_gpu::SamplerGpuHeap::new(
+        let heap_sampler = descriptors::SamplerGpuHeap::new(
             &mut device,
             max_descriptors,
         );

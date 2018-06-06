@@ -1,11 +1,15 @@
 
+use Device;
+use winapi::um::d3d12;
+use wio::com::ComPtr;
+
 mod cbv_srv_uav;
 mod cpu;
 mod sampler;
 
-pub use cbv_srv_uav::CbvSrvUavGpuHeap;
-pub use cpu::DescriptorCpuPool;
-pub use sampler::SamplerGpuHeap;
+pub use self::cbv_srv_uav::CbvSrvUavGpuHeap;
+pub use self::cpu::DescriptorCpuPool;
+pub use self::sampler::SamplerGpuHeap;
 
 #[derive(Copy, Clone)]
 pub struct DualHandle {
@@ -17,10 +21,10 @@ impl DualHandle {
     pub fn offset(&self, offset: usize, handle_size: usize) -> DualHandle {
         DualHandle {
             cpu: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE {
-                self.cpu.ptr + (handle_size * offset) as _,
+                ptr: self.cpu.ptr + handle_size * offset,
             },
             gpu: d3d12::D3D12_GPU_DESCRIPTOR_HANDLE {
-                self.gpu.ptr + (handle_size * offset) as _,
+                ptr: self.gpu.ptr + (handle_size * offset) as u64,
             },
         }
     }
@@ -64,8 +68,17 @@ impl HeapLinear {
         let slot = self.num;
         self.num += 1;
 
-        d3d12::D3D12_CPU_DESCRIPTOR_HANDLE {
-            ptr: self.start.ptr + self.handle_size * slot,
+        self.at(slot)
+    }
+
+    pub fn at(&self, idx: usize) -> DualHandle {
+        DualHandle {
+            cpu: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE {
+                ptr: self.start.cpu.ptr + self.handle_size * idx,
+            },
+            gpu: d3d12::D3D12_GPU_DESCRIPTOR_HANDLE {
+                ptr: self.start.gpu.ptr + (self.handle_size * idx) as u64,
+            },
         }
     }
 
@@ -79,5 +92,9 @@ impl HeapLinear {
 
     pub fn into_raw(self) -> ComPtr<d3d12::ID3D12DescriptorHeap> {
         self.raw
+    }
+
+    pub fn as_raw(&self) -> *mut d3d12::ID3D12DescriptorHeap {
+        self.raw.as_raw()
     }
 }
