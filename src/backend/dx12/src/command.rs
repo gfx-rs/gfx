@@ -179,6 +179,8 @@ impl PipelineCache {
         J: IntoIterator,
         J::Item: Borrow<com::DescriptorSetOffset>,
     {
+        assert!(offsets.into_iter().next().is_none()); //TODO
+
         let mut sets = sets.into_iter().peekable();
         let (
             srv_cbv_uav_start, sampler_start,
@@ -1225,10 +1227,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         U: IntoIterator,
         U::Item: Borrow<pso::ClearRect>,
     {
-        assert!(
-            self.pass_cache.is_some(),
-            "`clear_attachments` can only be called inside a renderpass"
-        );
+        let pass_cache = match self.pass_cache {
+            Some(ref cache) => cache,
+            None => panic!("`clear_attachments` can only be called inside a renderpass")
+        };
+        let sub_pass = &pass_cache.render_pass.subpasses[self.cur_subpass];
 
         let clear_rects: SmallVec<[pso::ClearRect; 16]> = rects
             .into_iter()
@@ -1238,18 +1241,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut device = self.shared.service_pipes.device.clone();
 
         for clear in clears {
-            let clear = clear.borrow();
-            match *clear {
-                com::AttachmentClear::Color(index, cv) => {
+            match *clear.borrow() {
+                com::AttachmentClear::Color { index, value } => {
                     let attachment = {
-                        let pass_cache = self.pass_cache.as_ref().unwrap();
-                        let rtv_id = pass_cache
-                            .render_pass
-                            .subpasses[self.cur_subpass]
-                            .color_attachments[index]
-                            .0;
-
-                        pass_cache.framebuffer.attachments[rtv_id]
+                        let rtv_id = sub_pass.color_attachments[index];
+                        pass_cache.framebuffer.attachments[rtv_id.0]
                     };
 
                     let mut rtv_pool = descriptors_cpu::HeapLinear::new(
@@ -1269,7 +1265,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             format: attachment.dxgi_format,
                             range: image::SubresourceRange {
                                 aspects: Aspects::COLOR,
-                                levels: 0 .. 1,
+                                levels: attachment.mip_levels.0 .. attachment.mip_levels.1,
                                 layers: clear_rect.layers.clone()
                             }
                         };
@@ -1282,12 +1278,54 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                         self.clear_render_target_view(
                             rtv,
-                            cv.into(),
+                            value.into(),
                             &rect,
                         );
                     }
                 }
-                _ => unimplemented!(),
+                com::AttachmentClear::DepthStencil { depth, stencil } => {
+                    let attachment = {
+                        let dsv_id = sub_pass.depth_stencil_attachment.unwrap();
+                        pass_cache.framebuffer.attachments[dsv_id.0]
+                    };
+
+                    let mut dsv_pool = descriptors_cpu::HeapLinear::new(
+                        &device,
+                        d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
+                        clear_rects.len()
+                    );
+
+                    for clear_rect in &clear_rects {
+                        let rect = [get_rect(&clear_rect.rect)];
+
+                        let view_info = device::ViewInfo {
+                            resource: attachment.resource,
+                            kind: attachment.kind,
+                            flags: image::StorageFlags::empty(),
+                            view_kind: image::ViewKind::D2Array,
+                            format: attachment.dxgi_format,
+                            range: image::SubresourceRange {
+                                aspects: if depth.is_some()  { Aspects::DEPTH } else { Aspects::empty() } |
+                                    if stencil.is_some() { Aspects::STENCIL } else {Aspects::empty() },
+                                levels: attachment.mip_levels.0 .. attachment.mip_levels.1,
+                                layers: clear_rect.layers.clone()
+                            }
+                        };
+                        let dsv = dsv_pool.alloc_handle();
+                        Device::view_image_as_depth_stencil_impl(
+                            &mut device,
+                            dsv,
+                            view_info
+                        ).unwrap();
+
+                        self.clear_depth_stencil_view(
+                            dsv,
+                            depth,
+                            stencil,
+                            &rect,
+                        );
+                    }
+                }
             }
         }
     }
@@ -1844,7 +1882,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         );
         unsafe { self.raw.ResourceBarrier(1, &pre_barrier) };
 
-        warn!("fill_buffer currently unimplemented");
+        error!("fill_buffer currently unimplemented");
         // TODO: GPU handle must be in the current heap. Atm we use a CPU descriptor heap for allocation
         //       which is not shader visible.
         /*

@@ -90,27 +90,6 @@ pub fn map_clear_color(value: command::ClearColor) -> vk::ClearColorValue {
     }
 }
 
-pub fn map_clear_depth_stencil(value: command::ClearDepthStencil) -> vk::ClearDepthStencilValue {
-    vk::ClearDepthStencilValue {
-        depth: value.0,
-        stencil: value.1,
-    }
-}
-
-pub fn map_clear_depth(depth: pso::DepthValue) -> vk::ClearDepthStencilValue {
-    vk::ClearDepthStencilValue {
-        depth,
-        stencil: 0,
-    }
-}
-
-pub fn map_clear_stencil(stencil: pso::StencilValue) -> vk::ClearDepthStencilValue {
-    vk::ClearDepthStencilValue {
-        depth: 0.0,
-        stencil,
-    }
-}
-
 pub fn map_offset(offset: image::Offset) -> vk::Offset3D {
     vk::Offset3D {
         x: offset.x,

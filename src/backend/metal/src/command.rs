@@ -1305,11 +1305,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             },
             soft::ComputeCommand::BindBufferData {
                 index: 1,
-                bytes: unsafe { 
+                bytes: unsafe {
                     slice::from_raw_parts(
-                        value_and_length.as_ptr() as _, 
+                        value_and_length.as_ptr() as _,
                         mem::size_of::<u32>() * value_and_length.len()
-                    ).to_owned() 
+                    ).to_owned()
                 },
             },
             soft::ComputeCommand::Dispatch {
@@ -1522,7 +1522,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         for clear in clears {
             let key = match *clear.borrow() {
-                com::AttachmentClear::Color(index, value) => {
+                com::AttachmentClear::Color { index, value } => {
                     let (format, channel) = self.state.framebuffer_inner.colors[index];
                     //Note: technically we should be able to derive the Channel from the
                     // `value` variant, but this is blocked by the portability that is
@@ -1541,38 +1541,19 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         stencil: None
                     }
                 }
-                com::AttachmentClear::Depth(value) => {
-                    let format = self.state.framebuffer_inner.depth_stencil.unwrap();
-                    vertex_is_dirty = true;
-                    for v in &mut vertices {
-                        v.pos[2] = value;
-                    }
-                    ClearKey {
-                        color: None,
-                        depth: Some(format),
-                        stencil: None,
-                    }
-                }
-                com::AttachmentClear::Stencil(_value) => {
+                com::AttachmentClear::DepthStencil { depth, stencil } => {
                     let format = self.state.framebuffer_inner.depth_stencil.unwrap();
                     //TODO: soft::RenderCommand::SetStencilReference
+                    if let Some(value) = depth {
+                        for v in &mut vertices {
+                            v.pos[2] = value;
+                        }
+                        vertex_is_dirty = true;
+                    }
                     ClearKey {
                         color: None,
-                        depth: None,
-                        stencil: Some(format),
-                    }
-                }
-                com::AttachmentClear::DepthStencil(value) => {
-                    let format = self.state.framebuffer_inner.depth_stencil.unwrap();
-                    vertex_is_dirty = true;
-                    for v in &mut vertices {
-                        v.pos[2] = value.0;
-                    }
-                    //TODO: soft::RenderCommand::SetStencilReference
-                    ClearKey {
-                        color: None,
-                        depth: Some(format),
-                        stencil: Some(format),
+                        depth: depth.map(|_| format),
+                        stencil: stencil.map(|_| format),
                     }
                 }
             };
@@ -2520,11 +2501,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 });
                 compute_commands.push(soft::ComputeCommand::BindBufferData {
                     index: 2,
-                    bytes: unsafe { 
+                    bytes: unsafe {
                         slice::from_raw_parts(
-                            &(r.size as u32) as *const u32 as _, 
+                            &(r.size as u32) as *const u32 as _,
                             mem::size_of::<u32>()
-                        ).to_owned() 
+                        ).to_owned()
                     }
                 });
                 compute_commands.push(soft::ComputeCommand::Dispatch {

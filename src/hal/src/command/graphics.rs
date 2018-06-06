@@ -116,15 +116,19 @@ impl From<ClearValue> for ClearValueRaw {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum AttachmentClear {
     /// Clear color attachment.
-    ///
-    /// First tuple element denotes the index of the color attachment.
-    Color(usize, ClearColor),
-    /// Clear depth component of the attachment.
-    Depth(pso::DepthValue),
-    /// Clear stencil component of the attachment.
-    Stencil(pso::StencilValue),
-    /// Clear depth-stencil component of the attachment.
-    DepthStencil(ClearDepthStencil),
+    Color {
+        /// Index inside the `SubpassDesc::colors` array.
+        index: usize,
+        /// Value to clear with.
+        value: ClearColor,
+    },
+    /// Clear depth-stencil attachment.
+    DepthStencil {
+        /// Depth value to clear with.
+        depth: Option<pso::DepthValue>,
+        /// Stencil value to clear with.
+        stencil: Option<pso::StencilValue>,
+    },
 }
 
 /// Parameters for an image resolve operation,
