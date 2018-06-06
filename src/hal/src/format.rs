@@ -592,27 +592,19 @@ impl Format {
         self.base_format().0.desc()
     }
 
-    /// Retuns aspect flags of the format.
-    pub fn aspects(self) -> Aspects {
-        self.base_format()
-            .0
-            .desc()
-            .aspects
-    }
-
     /// Returns if the format has a color aspect.
     pub fn is_color(self) -> bool {
-        self.aspects().contains(Aspects::COLOR)
+        self.surface_desc().aspects.contains(Aspects::COLOR)
     }
 
     /// Returns if the format has a depth aspect.
     pub fn is_depth(self) -> bool {
-        self.aspects().contains(Aspects::DEPTH)
+        self.surface_desc().aspects.contains(Aspects::DEPTH)
     }
 
     /// Returns if the format has a stencil aspect.
     pub fn is_stencil(self) -> bool {
-        self.aspects().contains(Aspects::STENCIL)
+        self.surface_desc().aspects.contains(Aspects::STENCIL)
     }
 }
 

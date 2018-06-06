@@ -6,7 +6,7 @@ use std::ops::Range;
 use std::os::raw::{c_void, c_long};
 use std::sync::{Arc, Condvar, Mutex};
 
-use hal::{self, image, pass, pso};
+use hal::{self, image, pso};
 
 use cocoa::foundation::{NSUInteger};
 use metal;
@@ -32,9 +32,7 @@ unsafe impl Sync for ShaderModule {}
 #[derive(Debug)]
 pub struct RenderPass {
     pub(crate) desc: metal::RenderPassDescriptor,
-    pub(crate) attachments: Vec<pass::Attachment>,
-    pub(crate) color_channels: Vec<Option<Channel>>,
-    pub(crate) depth_stencil_aspects: hal::format::Aspects,
+    pub(crate) attachments: Vec<hal::pass::Attachment>,
 }
 
 unsafe impl Send for RenderPass {}
@@ -43,7 +41,7 @@ unsafe impl Sync for RenderPass {}
 #[derive(Clone, Debug, Default)]
 pub struct FramebufferInner {
     pub extent: image::Extent,
-    pub colors: Vec<(metal::MTLPixelFormat, Option<Channel>)>,
+    pub colors: Vec<(metal::MTLPixelFormat, Channel)>,
     pub depth_stencil: Option<metal::MTLPixelFormat>,
 }
 

@@ -613,35 +613,34 @@ impl hal::Device<Backend> for Device {
         let attachments = attachments.into_iter()
             .map(|attachment| attachment.borrow().clone())
             .collect::<Vec<_>>();
-        let mut color_channels = Vec::new();
-        let mut depth_stencil_aspects = format::Aspects::empty();
+        let mut num_colors = 0;
 
         for attachment in &attachments {
-            let is_depth = match attachment.format {
-                Some(f) => f.is_depth(),
+            let aspects = match attachment.format {
+                Some(f) => f.surface_desc().aspects,
                 None => continue,
             };
 
-            let mtl_attachment: &metal::RenderPassAttachmentDescriptorRef = if is_depth {
-                depth_stencil_aspects = attachment.format
-                    .map(|f| f.surface_desc().aspects)
-                    .unwrap_or(format::Aspects::empty());
-                if depth_stencil_aspects.contains(format::Aspects::STENCIL) {
+            let mtl_attachment: &metal::RenderPassAttachmentDescriptorRef = if aspects.contains(format::Aspects::COLOR) {
+                num_colors += 1;
+                pass
+                    .color_attachments()
+                    .object_at(num_colors - 1)
+                    .expect("too many color attachments")
+            } else {
+                if aspects.contains(format::Aspects::STENCIL) {
                     let stencil = pass
                         .stencil_attachment()
                         .expect("no stencil attachment");
                     stencil.set_load_action(conv::map_load_operation(attachment.stencil_ops.load));
                     stencil.set_store_action(conv::map_store_operation(attachment.stencil_ops.store));
                 }
+                if !aspects.contains(format::Aspects::DEPTH) {
+                    continue
+                }
                 pass
                     .depth_attachment()
                     .expect("no depth attachement")
-            } else {
-                color_channels.push(attachment.format.map(|f| f.base_format().1.into()));
-                pass
-                    .color_attachments()
-                    .object_at(color_channels.len() - 1)
-                    .expect("too many color attachments")
             };
 
             mtl_attachment.set_load_action(conv::map_load_operation(attachment.ops.load));
@@ -651,8 +650,6 @@ impl hal::Device<Backend> for Device {
         n::RenderPass {
             desc: pass,
             attachments,
-            color_channels,
-            depth_stencil_aspects,
         }
     }
 
@@ -1108,37 +1105,37 @@ impl hal::Device<Backend> for Device {
 
         let mut inner = n::FramebufferInner {
             extent,
-            colors: Vec::with_capacity(renderpass.color_channels.len()),
+            colors: Vec::new(),
             depth_stencil: None,
         };
 
-        let mut attachments = attachments.into_iter();
-        for (i, &channel) in renderpass.color_channels.iter().enumerate() {
-            let attachment = attachments.next().expect("Not enough colour attachments provided");
+        for (rat, attachment) in renderpass.attachments.iter().zip(attachments) {
             let at = attachment.borrow();
-            inner.colors.push((at.mtl_format, channel));
-            descriptor
-                .color_attachments()
-                .object_at(i)
-                .expect("too many color attachments")
-                .set_texture(Some(&at.raw));
-        }
-
-        let depth_attachment = attachments.next();
-        if let Some(_) = attachments.next() {
-            panic!("Metal does not support multiple depth attachments")
-        }
-
-        if let Some(attachment) = depth_attachment {
-            let at = attachment.borrow();
-            inner.depth_stencil = Some(at.mtl_format);
-            if renderpass.depth_stencil_aspects.contains(format::Aspects::DEPTH) {
+            let (aspects, channel) = match rat.format {
+                Some(format) => (format.surface_desc().aspects, format.base_format().1.into()),
+                None => continue,
+            };
+            if aspects.contains(format::Aspects::COLOR) {
+                descriptor
+                    .color_attachments()
+                    .object_at(inner.colors.len())
+                    .expect("too many color attachments")
+                    .set_texture(Some(&at.raw));
+                inner.colors.push((at.mtl_format, channel));
+            }
+            if aspects.contains(format::Aspects::DEPTH) {
+                inner.depth_stencil = Some(at.mtl_format);
                 descriptor
                     .depth_attachment()
                     .unwrap()
                     .set_texture(Some(&at.raw));
             }
-            if renderpass.depth_stencil_aspects.contains(format::Aspects::STENCIL) {
+            if aspects.contains(format::Aspects::STENCIL) {
+                if let Some(mtl_format) = inner.depth_stencil {
+                    assert_eq!(mtl_format, at.mtl_format);
+                } else {
+                    inner.depth_stencil = Some(at.mtl_format);
+                }
                 descriptor
                     .stencil_attachment()
                     .unwrap()
