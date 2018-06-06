@@ -13,7 +13,7 @@ use std::slice;
 use hal::{buffer, command as com, error, memory, pool, pso};
 use hal::{DrawCount, VertexCount, VertexOffset, InstanceCount, IndexCount, WorkGroupCount};
 use hal::format::{Aspects, FormatDesc};
-use hal::image::{Filter, Layout, SubresourceRange};
+use hal::image::{Extent, Filter, Layout, SubresourceRange};
 use hal::query::{Query, QueryControl, QueryId};
 use hal::queue::{RawCommandQueue, RawSubmission};
 use hal::range::RangeArg;
@@ -134,12 +134,27 @@ impl State {
         self.vertex_buffers.clear();
     }
 
+    fn clamp_scissor(&self, sr: MTLScissorRect) -> MTLScissorRect {
+        let ex = self.framebuffer_inner.extent;
+        let x = sr.x.min(ex.width as u64 - 1);
+        let y = sr.y.min(ex.height as u64 - 1);
+        MTLScissorRect {
+            x,
+            y,
+            width: (sr.x + sr.width).min(ex.width as u64) - x,
+            height: (sr.y + sr.height).min(ex.height as u64) - y,
+        }
+    }
+
     fn make_render_commands(&self) -> Vec<soft::RenderCommand> {
         // TODO: re-use storage
         let mut commands = Vec::new();
         // Apply previously bound values for this command buffer
         commands.extend(self.viewport.map(soft::RenderCommand::SetViewport));
-        commands.extend(self.scissors.map(soft::RenderCommand::SetScissor));
+        if let Some(sr) = self.scissors {
+            let clamped = self.clamp_scissor(sr);
+            commands.push(soft::RenderCommand::SetScissor(clamped));
+        }
         commands.extend(self.blend_color.map(soft::RenderCommand::SetBlendColor));
         commands.push(soft::RenderCommand::SetDepthBias(
             self.rasterizer_state.clone().map(|r| r.depth_bias).unwrap_or_default()
@@ -1024,7 +1039,12 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 stencil_back_reference: 0,
                 push_constants: Vec::new(),
                 vertex_buffers: Vec::new(),
-                framebuffer_inner: native::FramebufferInner::default(),
+                framebuffer_inner: native::FramebufferInner {
+                    extent: Extent::default(),
+                    aspects: Aspects::empty(),
+                    colors: Vec::new(),
+                    depth_stencil: None,
+                }
             },
         }).collect();
 
@@ -1083,7 +1103,8 @@ impl CommandBuffer {
             height: rect.h as _,
         };
         self.state.scissors = Some(scissor);
-        soft::RenderCommand::SetScissor(scissor)
+        let clamped = self.state.clamp_scissor(scissor);
+        soft::RenderCommand::SetScissor(clamped)
     }
 
     fn set_blend_color(&mut self, color: &pso::ColorValue) -> soft::RenderCommand {
@@ -1521,7 +1542,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .unwrap();
 
         for clear in clears {
-            let key = match *clear.borrow() {
+            let (aspects, key) = match *clear.borrow() {
                 com::AttachmentClear::Color { index, value } => {
                     let (format, channel) = self.state.framebuffer_inner.colors[index];
                     //Note: technically we should be able to derive the Channel from the
@@ -1535,26 +1556,31 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             slice::from_raw_parts(raw_value.float32.as_ptr() as *const u8, 16)
                         }.to_owned(),
                     });
-                    ClearKey {
-                        color: Some((format, index as u8, channel)),
-                        depth: None,
-                        stencil: None
-                    }
+                    (Aspects::COLOR, ClearKey {
+                        format,
+                        color: Some((index as u8, channel)),
+                        depth_stencil: false,
+                    })
                 }
                 com::AttachmentClear::DepthStencil { depth, stencil } => {
                     let format = self.state.framebuffer_inner.depth_stencil.unwrap();
-                    //TODO: soft::RenderCommand::SetStencilReference
+                    let mut aspects = Aspects::empty();
                     if let Some(value) = depth {
                         for v in &mut vertices {
                             v.pos[2] = value;
                         }
                         vertex_is_dirty = true;
+                        aspects |= Aspects::DEPTH;
                     }
-                    ClearKey {
+                    if let Some(_) = stencil {
+                        //TODO: soft::RenderCommand::SetStencilReference
+                        aspects |= Aspects::STENCIL;
+                    }
+                    (aspects, ClearKey {
+                        format,
                         color: None,
-                        depth: depth.map(|_| format),
-                        stencil: stencil.map(|_| format),
-                    }
+                        depth_stencil: true,
+                    })
                 }
             };
 
@@ -1571,12 +1597,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     }
                 });
             }
-            let pso = pipes.get_clear_image(key, &self.shared.device).to_owned();
+            let pso = pipes.get_clear_image(
+                key,
+                self.state.framebuffer_inner.aspects,
+                &self.shared.device
+            ).to_owned();
             commands.push(soft::RenderCommand::BindPipeline(pso, None));
 
-            if key.depth.is_some() || key.stencil.is_some() {
+            if !aspects.contains(Aspects::COLOR) {
                 commands.push(soft::RenderCommand::SetDepthStencilDesc(
-                    pipes.get_depth_stencil(key.depth.is_some(), key.stencil.is_some()).to_owned()
+                    pipes.get_depth_stencil(aspects).to_owned()
                 ));
             }
 
@@ -1752,10 +1782,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         ];
 
         if src.format_desc.aspects.intersects(Aspects::DEPTH | Aspects::STENCIL) {
-            prelude.push(soft::RenderCommand::SetDepthStencilDesc(pipes.get_depth_stencil(
-                src.format_desc.aspects.contains(Aspects::DEPTH),
-                src.format_desc.aspects.contains(Aspects::STENCIL),
-            ).to_owned()));
+            prelude.push(soft::RenderCommand::SetDepthStencilDesc(
+                pipes.get_depth_stencil(src.format_desc.aspects).to_owned()
+            ));
         }
 
         for ((aspects, level), list) in vertices {

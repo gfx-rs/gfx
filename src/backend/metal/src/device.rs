@@ -869,14 +869,18 @@ impl hal::Device<Backend> for Device {
                     return Err(pso::CreationError::Other);
                 }
             };
-            if format.is_depth() {
-                pipeline.set_depth_attachment_pixel_format(mtl_format);
-            } else {
+            if format.is_color() {
                 let descriptor = pipeline
                     .color_attachments()
                     .object_at(i)
                     .expect("too many color attachments");
                 descriptor.set_pixel_format(mtl_format);
+            }
+            if format.is_depth() {
+                pipeline.set_depth_attachment_pixel_format(mtl_format);
+            }
+            if format.is_stencil() {
+                pipeline.set_stencil_attachment_pixel_format(mtl_format);
             }
         }
 
@@ -1105,17 +1109,21 @@ impl hal::Device<Backend> for Device {
 
         let mut inner = n::FramebufferInner {
             extent,
+            aspects: format::Aspects::empty(),
             colors: Vec::new(),
             depth_stencil: None,
         };
 
         for (rat, attachment) in renderpass.attachments.iter().zip(attachments) {
             let at = attachment.borrow();
-            let (aspects, channel) = match rat.format {
-                Some(format) => (format.surface_desc().aspects, format.base_format().1.into()),
+            let format = match rat.format {
+                Some(format) => format,
                 None => continue,
             };
+            let aspects = format.surface_desc().aspects;
+            inner.aspects |= aspects;
             if aspects.contains(format::Aspects::COLOR) {
+                let channel = format.base_format().1.into();
                 descriptor
                     .color_attachments()
                     .object_at(inner.colors.len())
@@ -1131,8 +1139,8 @@ impl hal::Device<Backend> for Device {
                     .set_texture(Some(&at.raw));
             }
             if aspects.contains(format::Aspects::STENCIL) {
-                if let Some(mtl_format) = inner.depth_stencil {
-                    assert_eq!(mtl_format, at.mtl_format);
+                if let Some(old_format) = inner.depth_stencil {
+                    assert_eq!(old_format, at.mtl_format);
                 } else {
                     inner.depth_stencil = Some(at.mtl_format);
                 }
