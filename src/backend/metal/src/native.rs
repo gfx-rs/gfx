@@ -78,6 +78,23 @@ impl Default for RasterizerState {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct DepthStencilState {
+    pub depth_stencil_desc: Option<metal::DepthStencilState>,
+    pub stencil_front_reference: pso::State<pso::StencilValue>,
+    pub stencil_back_reference: pso::State<pso::StencilValue>,
+}
+
+impl Default for DepthStencilState {
+    fn default() -> Self {
+        DepthStencilState {
+            depth_stencil_desc: None,
+            stencil_front_reference: pso::State::Static(0),
+            stencil_back_reference: pso::State::Static(0),
+        }
+    }
+}
+
 pub type VertexBufferMap = HashMap<(pso::BufferIndex, pso::ElemOffset), pso::VertexBufferDesc>;
 
 #[derive(Debug)]
@@ -90,7 +107,7 @@ pub struct GraphicsPipeline {
     pub(crate) primitive_type: metal::MTLPrimitiveType,
     pub(crate) attribute_buffer_index: u32,
     pub(crate) rasterizer_state: Option<RasterizerState>,
-    pub(crate) depth_stencil_state: Option<metal::DepthStencilState>,
+    pub(crate) depth_stencil_state: DepthStencilState,
     pub(crate) baked_states: pso::BakedStates,
     /// The mapping of additional vertex buffer bindings over the original ones.
     /// This is needed because Vulkan allows attribute offsets to exceed the strides,

@@ -229,3 +229,13 @@ pub enum Constant {
     F32(f32),
     F64(f64),
 }
+
+/// Pipeline state which may be static or dynamic.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum State<T> {
+    /// Static state that cannot be altered.
+    Static(T),
+    /// Dynamic state set through a command buffer.
+    Dynamic,
+}

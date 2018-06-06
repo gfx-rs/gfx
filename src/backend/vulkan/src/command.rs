@@ -542,30 +542,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_stencil_reference(
-        &mut self, front: pso::StencilValue, back: pso::StencilValue
-    ) {
+    fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue) {
         unsafe {
-            if front == back {
-                // set front _and_ back
-                self.device.0.cmd_set_stencil_reference(
-                    self.raw,
-                    vk::STENCIL_FRONT_AND_BACK,
-                    front as u32,
-                );
-            } else {
-                // set both individually
-                self.device.0.cmd_set_stencil_reference(
-                    self.raw,
-                    vk::STENCIL_FACE_FRONT_BIT,
-                    front as u32,
-                );
-                self.device.0.cmd_set_stencil_reference(
-                    self.raw,
-                    vk::STENCIL_FACE_BACK_BIT,
-                    back as u32,
-                );
-            }
+            // Vulkan and HAL share same faces bit flags
+            self.device.0.cmd_set_stencil_reference(self.raw, mem::transmute(faces), value);
         }
     }
 

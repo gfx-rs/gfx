@@ -255,7 +255,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     /// Sets the stencil reference value for comparison operations and store operations.
     /// Will be used on the LHS of stencil compare ops and as store value when the
     /// store op is Reference.
-    fn set_stencil_reference(&mut self, front: pso::StencilValue, back: pso::StencilValue);
+    fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue);
 
     /// Set the blend constant values dynamically.
     fn set_blend_constants(&mut self, pso::ColorValue);

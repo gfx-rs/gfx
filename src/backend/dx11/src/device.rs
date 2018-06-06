@@ -403,11 +403,7 @@ impl hal::Device<Backend> for Device {
         let (topology, input_layout) = self.create_input_layout(vs.clone(), &desc.vertex_buffers, &desc.attributes, &desc.input_assembler)?;
         let rasterizer_state = self.create_rasterizer_state(&desc.rasterizer)?;
         let blend_state = self.create_blend_state(&desc.blender)?;
-        let depth_stencil_state = if let Some(desc) = desc.depth_stencil {
-            Some(self.create_depth_stencil_state(&desc)?)
-        } else {
-            None
-        };
+        let depth_stencil_state = Some(self.create_depth_stencil_state(&desc.depth_stencil)?);
 
         let vs = self.create_vertex_shader(vs)?;
         let ps = if let Some(blob) = ps {

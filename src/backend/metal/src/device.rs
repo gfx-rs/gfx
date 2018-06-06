@@ -3,6 +3,7 @@ use {
     Shared, Surface, Swapchain, validate_line_width
 };
 use {conversions as conv, command, native as n};
+use native;
 
 use std::borrow::Borrow;
 use std::collections::hash_map::{Entry, HashMap};
@@ -892,7 +893,8 @@ impl hal::Device<Backend> for Device {
             }
         }
 
-        let depth_stencil_state = pipeline_desc.depth_stencil.map(|depth_stencil| {
+        let depth_stencil = pipeline_desc.depth_stencil;
+        let depth_stencil_state = {
             let desc = metal::DepthStencilDescriptor::new();
 
             match depth_stencil.depth {
@@ -904,14 +906,43 @@ impl hal::Device<Backend> for Device {
             }
 
             match depth_stencil.stencil {
-                pso::StencilTest::On { .. } => {
-                    unimplemented!()
+                pso::StencilTest::On { ref front, ref back } => {
+                    let front_desc = metal::StencilDescriptor::new();
+                    front_desc.set_stencil_compare_function(conv::map_compare_function(front.fun));
+                    if let pso::State::Static(mr) = front.mask_read {
+                        front_desc.set_read_mask(mr);
+                    }
+                    if let pso::State::Static(mw) = front.mask_write {
+                        front_desc.set_write_mask(mw);
+                    }
+                    front_desc.set_stencil_failure_operation(conv::map_stencil_op(front.op_fail));
+                    front_desc.set_depth_failure_operation(conv::map_stencil_op(front.op_depth_fail));
+                    front_desc.set_depth_stencil_pass_operation(conv::map_stencil_op(front.op_pass));
+
+                    desc.set_front_face_stencil(Some(&front_desc));
+
+                    let back_desc = metal::StencilDescriptor::new();
+                    back_desc.set_stencil_compare_function(conv::map_compare_function(back.fun));                    
+                    if let pso::State::Static(mr) = back.mask_read {
+                        back_desc.set_read_mask(mr);
+                    }
+                    if let pso::State::Static(mw) = back.mask_write {
+                        back_desc.set_write_mask(mw);
+                    }
+                    back_desc.set_stencil_failure_operation(conv::map_stencil_op(back.op_fail));
+                    back_desc.set_depth_failure_operation(conv::map_stencil_op(back.op_depth_fail));
+                    back_desc.set_depth_stencil_pass_operation(conv::map_stencil_op(back.op_pass));
+
+                    desc.set_back_face_stencil(Some(&back_desc));
                 }
                 pso::StencilTest::Off => {}
             }
 
-            device.new_depth_stencil_state(&desc)
-        });
+            native::DepthStencilState {
+                depth_stencil_desc: Some(device.new_depth_stencil_state(&desc)),
+                ..Default::default()
+            }
+        };
 
         // Vertex buffers
         let vertex_descriptor = metal::VertexDescriptor::new();

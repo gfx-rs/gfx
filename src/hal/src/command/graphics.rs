@@ -226,8 +226,8 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn set_stencil_reference(&mut self, front: pso::StencilValue, back: pso::StencilValue) {
-        self.raw.set_stencil_reference(front, back)
+    pub fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue) {
+        self.raw.set_stencil_reference(faces, value);
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.

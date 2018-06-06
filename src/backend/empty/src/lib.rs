@@ -517,7 +517,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn set_stencil_reference(&mut self, _: pso::StencilValue, _: pso::StencilValue) {
+    fn set_stencil_reference(&mut self, _: pso::Face, _: pso::StencilValue) {
         unimplemented!()
     }
 

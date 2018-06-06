@@ -109,8 +109,8 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
     }
 
     ///
-    pub fn set_stencil_reference(&mut self, front: pso::StencilValue, back: pso::StencilValue) {
-        self.0.set_stencil_reference(front, back)
+    pub fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue) {
+        self.0.set_stencil_reference(faces, value);
     }
 
     ///

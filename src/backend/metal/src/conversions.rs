@@ -2,7 +2,7 @@ use PrivateCapabilities;
 
 use hal::{pass, image, pso, IndexType};
 use hal::format::Format;
-use hal::pso::Comparison;
+use hal::pso::{Comparison, StencilOp};
 use metal::*;
 
 impl PrivateCapabilities {
@@ -347,5 +347,18 @@ pub fn map_offset(offset: image::Offset) -> MTLOrigin {
         x: offset.x as _,
         y: offset.y as _,
         z: offset.z as _,
+    }
+}
+
+pub fn map_stencil_op(op: StencilOp) -> MTLStencilOperation {
+    match op {
+        StencilOp::Keep => MTLStencilOperation::Keep,
+        StencilOp::Zero => MTLStencilOperation::Zero,
+        StencilOp::Replace => MTLStencilOperation::Replace,
+        StencilOp::IncrementClamp => MTLStencilOperation::IncrementClamp,
+        StencilOp::IncrementWrap => MTLStencilOperation::IncrementWrap,
+        StencilOp::DecrementClamp => MTLStencilOperation::DecrementClamp,
+        StencilOp::DecrementWrap => MTLStencilOperation::DecrementWrap,
+        StencilOp::Invert => MTLStencilOperation::Invert,
     }
 }

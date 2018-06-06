@@ -506,7 +506,7 @@ impl d::Device<B> for Device {
             };
             info_multisample_states.push(multisampling_state);
 
-            let depth_stencil = desc.depth_stencil.unwrap_or_default();
+            let depth_stencil = desc.depth_stencil;
             let (depth_test_enable, depth_write_enable, depth_compare_op) = match depth_stencil.depth {
                 pso::DepthTest::On { fun, write } => (vk::VK_TRUE, write as _, conv::map_comparison(fun)),
                 pso::DepthTest::Off => (vk::VK_FALSE, vk::VK_FALSE, vk::CompareOp::Never),

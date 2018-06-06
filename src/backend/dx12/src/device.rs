@@ -1626,7 +1626,7 @@ impl d::Device<B> for Device {
             },
             SampleMask: UINT::max_value(),
             RasterizerState: conv::map_rasterizer(&desc.rasterizer),
-            DepthStencilState: desc.depth_stencil.as_ref().map_or(unsafe { mem::zeroed() }, conv::map_depth_stencil),
+            DepthStencilState: conv::map_depth_stencil(&desc.depth_stencil),
             InputLayout: d3d12::D3D12_INPUT_LAYOUT_DESC {
                 pInputElementDescs: if input_element_descs.is_empty() { ptr::null() } else { input_element_descs.as_ptr() },
                 NumElements: input_element_descs.len() as u32,
@@ -1657,28 +1657,27 @@ impl d::Device<B> for Device {
 
         // Create PSO
         let mut pipeline = ptr::null_mut();
-        let hr = match desc.depth_stencil {
-            Some(ds) if ds.depth_bounds => {
-                // The DepthBoundsTestEnable option isn't available in the original D3D12_GRAPHICS_PIPELINE_STATE_DESC struct.
-                // Instead, we must use the newer subobject stream method.
-                match self.raw.cast::<d3d12::ID3D12Device2>() {
-                    Err(hr) => hr,
-                    Ok(device2) => {
-                        let mut pss_stream = GraphicsPipelineStateSubobjectStream::new(&pso_desc, true);
-                        let pss_desc = d3d12::D3D12_PIPELINE_STATE_STREAM_DESC {
-                            SizeInBytes: mem::size_of_val(&pss_stream),
-                            pPipelineStateSubobjectStream: &mut pss_stream as *mut _ as _,
-                        };
-                        unsafe {
-                            device2.CreatePipelineState(
-                                &pss_desc,
-                                &d3d12::IID_ID3D12PipelineState,
-                                &mut pipeline as *mut *mut _ as *mut *mut _)
-                        }
+        let hr = if desc.depth_stencil.depth_bounds {
+            // The DepthBoundsTestEnable option isn't available in the original D3D12_GRAPHICS_PIPELINE_STATE_DESC struct.
+            // Instead, we must use the newer subobject stream method.
+            match self.raw.cast::<d3d12::ID3D12Device2>() {
+                Err(hr) => hr,
+                Ok(device2) => {
+                    let mut pss_stream = GraphicsPipelineStateSubobjectStream::new(&pso_desc, true);
+                    let pss_desc = d3d12::D3D12_PIPELINE_STATE_STREAM_DESC {
+                        SizeInBytes: mem::size_of_val(&pss_stream),
+                        pPipelineStateSubobjectStream: &mut pss_stream as *mut _ as _,
+                    };
+                    unsafe {
+                        device2.CreatePipelineState(
+                            &pss_desc,
+                            &d3d12::IID_ID3D12PipelineState,
+                            &mut pipeline as *mut *mut _ as *mut *mut _)
                     }
                 }
             }
-            _ => unsafe {
+        } else {
+            unsafe {
                 self.raw.clone().CreateGraphicsPipelineState(
                     &pso_desc,
                     &d3d12::IID_ID3D12PipelineState,
@@ -1696,7 +1695,7 @@ impl d::Device<B> for Device {
 
         if winerror::SUCCEEDED(hr) {
             let mut baked_states = desc.baked_states.clone();
-            if !desc.depth_stencil.map(|ds| ds.depth_bounds).unwrap_or(false) {
+            if !desc.depth_stencil.depth_bounds {
                 baked_states.depth_bounds = None;
             }
 

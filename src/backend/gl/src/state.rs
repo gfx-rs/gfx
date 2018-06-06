@@ -31,7 +31,6 @@ pub fn bind_polygon_mode(gl: &gl::Gl, mode: pso::PolygonMode, bias: Option<pso::
 }
 
 pub fn bind_rasterizer(gl: &gl::Gl, r: &pso::Rasterizer, is_embedded: bool) {
-    use hal::pso::CullFace::*;
     use hal::pso::FrontFace::*;
 
     unsafe {
@@ -42,16 +41,17 @@ pub fn bind_rasterizer(gl: &gl::Gl, r: &pso::Rasterizer, is_embedded: bool) {
     };
 
     match r.cull_face {
-        Some(face) => unsafe {
+        Some(cf) if !cf.is_empty() => unsafe {
             gl.Enable(gl::CULL_FACE);
-            gl.CullFace(match face {
-                Front => gl::FRONT,
-                Back => gl::BACK,
+            gl.CullFace(match cf {
+                pso::Face::FRONT => gl::FRONT,
+                pso::Face::BACK => gl::BACK,
+                _ => gl::FRONT_AND_BACK,
             });
-        },
-        None => unsafe {
+        }
+        _ => unsafe {
             gl.Disable(gl::CULL_FACE);
-        },
+        }
     }
 
     if !is_embedded {
@@ -113,22 +113,34 @@ fn map_operation(op: pso::StencilOp) -> gl::types::GLenum {
 pub fn bind_stencil(
     gl: &gl::Gl,
     stencil: &pso::StencilTest,
-    refs: (pso::StencilValue, pso::StencilValue),
-    cull: Option<pso::CullFace>,
+    (ref_front, ref_back): (pso::StencilValue, pso::StencilValue),
+    cull: Option<pso::Face>,
 ) {
-    fn bind_side(gl: &gl::Gl, face: gl::types::GLenum, side: &pso::StencilFace, ref_value: pso::StencilValue) { unsafe {
-        gl.StencilFuncSeparate(face, map_comparison(side.fun), ref_value as _, side.mask_read as _);
-        gl.StencilMaskSeparate(face, side.mask_write as _);
-        gl.StencilOpSeparate(face, map_operation(side.op_fail), map_operation(side.op_depth_fail), map_operation(side.op_pass));
-    }}
+    fn bind_side(gl: &gl::Gl, face: gl::types::GLenum, side: &pso::StencilFace, ref_value: pso::StencilValue) {
+        unsafe {
+            let mr = match side.mask_read {
+                pso::State::Static(v) => v,
+                pso::State::Dynamic => !0,
+            };
+            let mw = match side.mask_write {
+                pso::State::Static(v) => v,
+                pso::State::Dynamic => !0,
+            };
+            gl.StencilFuncSeparate(face, map_comparison(side.fun), ref_value as _, mr);
+            gl.StencilMaskSeparate(face, mw);
+            gl.StencilOpSeparate(face, map_operation(side.op_fail), map_operation(side.op_depth_fail), map_operation(side.op_pass));
+        }
+    }
     match *stencil {
         pso::StencilTest::On { ref front, ref back } => {
             unsafe { gl.Enable(gl::STENCIL_TEST) };
-            if cull != Some(pso::CullFace::Front) {
-                bind_side(gl, gl::FRONT, front, refs.0);
-            }
-            if cull != Some(pso::CullFace::Back) {
-                bind_side(gl, gl::BACK, back, refs.1);
+            if let Some(cf) = cull {
+                if !cf.contains(pso::Face::FRONT) {
+                    bind_side(gl, gl::FRONT, front, ref_front);
+                }
+                if !cf.contains(pso::Face::BACK) {
+                    bind_side(gl, gl::BACK, back, ref_back);
+                }
             }
         }
         pso::StencilTest::Off => unsafe {
