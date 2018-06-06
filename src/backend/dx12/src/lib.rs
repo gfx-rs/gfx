@@ -16,7 +16,7 @@ extern crate wio;
 mod range_alloc;
 mod command;
 mod conv;
-mod descriptors_cpu;
+mod descriptors;
 mod device;
 mod internal;
 mod native;
@@ -26,7 +26,7 @@ mod window;
 
 use hal::{error, format as f, image, memory, Features, Limits, QueueType};
 use hal::queue::{QueueFamily as HalQueueFamily, QueueFamilyId, Queues};
-use descriptors_cpu::DescriptorCpuPool;
+use descriptors::DescriptorCpuPool;
 
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, winerror};
 use winapi::shared::minwindef::{FALSE, TRUE};
@@ -527,8 +527,8 @@ pub struct Device {
     sampler_pool: Mutex<DescriptorCpuPool>,
     descriptor_update_pools: Mutex<Vec<descriptors_cpu::HeapLinear>>,
     // CPU/GPU descriptor heaps
-    heap_srv_cbv_uav: Mutex<native::DescriptorHeap>,
-    heap_sampler: Mutex<native::DescriptorHeap>,
+    heap_srv_cbv_uav: Mutex<descriptors_gpu::SamplerGpuHeap>,
+    heap_sampler: Mutex<descriptors_gpu::CbvSrvUavGpuHeap>,
     events: Mutex<Vec<winnt::HANDLE>>,
     shared: Arc<Shared>,
     // Present queue exposed by the `Present` queue family.
@@ -555,18 +555,14 @@ impl Device {
         let srv_uav_pool = DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         let sampler_pool = DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 
-        let heap_srv_cbv_uav = Self::create_descriptor_heap_impl(
+        let max_descriptors = 1_000_000, // maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
+        let heap_srv_cbv_uav = descriptors_gpu::CbvSrvUavGpuHeap::new(
             &mut device,
-            d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-            true,
-            1_000_000, // maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
+            max_descriptors
         );
-
-        let heap_sampler = Self::create_descriptor_heap_impl(
+        let heap_sampler = descriptors_gpu::SamplerGpuHeap::new(
             &mut device,
-            d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
-            true,
-            2_048,
+            max_descriptors,
         );
 
         let draw_signature = Self::create_command_signature(

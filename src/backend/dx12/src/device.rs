@@ -511,12 +511,12 @@ impl Device {
         unsafe { ComPtr::from_raw(signature) }
     }
 
-    pub(crate) fn create_descriptor_heap_impl(
+    pub(crate) fn create_descriptor_heap(
         device: &mut ComPtr<d3d12::ID3D12Device>,
         heap_type: d3d12::D3D12_DESCRIPTOR_HEAP_TYPE,
         shader_visible: bool,
         capacity: usize,
-    ) -> n::DescriptorHeap {
+    ) -> ComPtr<d3d12::ID3D12DescriptorHeap> {
         assert_ne!(capacity, 0);
 
         let desc = d3d12::D3D12_DESCRIPTOR_HEAP_DESC {
@@ -531,31 +531,13 @@ impl Device {
         };
 
         let mut heap: *mut d3d12::ID3D12DescriptorHeap = ptr::null_mut();
-
-        let descriptor_size = unsafe {
+        unsafe {
             device.CreateDescriptorHeap(
                 &desc,
-                &d3d12::IID_ID3D12DescriptorHeap,
+                &d3d12::ID3D12DescriptorHeap::uuidof(),
                 &mut heap as *mut *mut _ as *mut *mut _,
             );
-            device.GetDescriptorHandleIncrementSize(heap_type) as usize
-        };
-
-        let cpu_handle = unsafe { (*heap).GetCPUDescriptorHandleForHeapStart() };
-        let gpu_handle = unsafe { (*heap).GetGPUDescriptorHandleForHeapStart() };
-
-        let range_allocator = RangeAllocator::new(0..(capacity as u64));
-
-        n::DescriptorHeap {
-            raw: unsafe { ComPtr::from_raw(heap) },
-            handle_size: descriptor_size as _,
-            total_handles: capacity as _,
-            start: n::DualHandle {
-                cpu: cpu_handle,
-                gpu: gpu_handle,
-                size: 0,
-            },
-            range_allocator,
+            ComPtr::from_ptr(heap)
         }
     }
 
@@ -2326,9 +2308,11 @@ impl d::Device<B> for Device {
         let mut num_srv_cbv_uav = 0;
         let mut num_samplers = 0;
 
-        let descriptor_pools = descriptor_pools.into_iter()
-                                               .map(|desc| *desc.borrow())
-                                               .collect::<Vec<_>>();
+        let descriptor_pools = descriptor_pools
+            .into_iter()
+            .map(|desc| *desc.borrow())
+            .collect::<Vec<_>>();
+
         for desc in &descriptor_pools {
             match desc.ty {
                 pso::DescriptorType::Sampler => {
@@ -2349,16 +2333,12 @@ impl d::Device<B> for Device {
                 .heap_srv_cbv_uav
                 .lock()
                 .unwrap();
-
-            let range = heap_srv_cbv_uav
-                .range_allocator
-                .allocate_range(num_srv_cbv_uav as _)
+            let slice = heap_srv_cbv_uav
+                .allocate(num_srv_cbv_uav as _)
                 .unwrap(); // TODO: error/resize
             n::DescriptorHeapSlice {
-                heap: heap_srv_cbv_uav.raw.clone(),
-                handle_size: heap_srv_cbv_uav.handle_size as _,
-                range_allocator: RangeAllocator::new(range),
-                start: heap_srv_cbv_uav.start,
+                slice,
+                free_list: RangeAllocator::new(slice),
             }
         };
 
@@ -2367,16 +2347,12 @@ impl d::Device<B> for Device {
                 .heap_sampler
                 .lock()
                 .unwrap();
-
             let range = heap_sampler
-                .range_allocator
-                .allocate_range(num_samplers as _)
+                .allocate(num_samplers as _)
                 .unwrap(); // TODO: error/resize
             n::DescriptorHeapSlice {
-                heap: heap_sampler.raw.clone(),
-                handle_size: heap_sampler.handle_size as _,
-                range_allocator: RangeAllocator::new(range),
-                start: heap_sampler.start,
+                slice,
+                free_list: RangeAllocator::new(slice),
             }
         };
 
@@ -2436,9 +2412,10 @@ impl d::Device<B> for Device {
                         if update_pool_index == descriptor_update_pools.len() {
                             let max_size = 1u64<<12; //arbitrary
                             descriptor_update_pools.push(
-                                descriptors_cpu::HeapLinear::new(
+                                descriptors::HeapLinear::new(
                                     &self.raw,
                                     d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                                    false,
                                     max_size as _,
                                 )
                             );
@@ -2943,8 +2920,8 @@ impl d::Device<B> for Device {
             ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2D,
             .. unsafe { mem::zeroed() }
         };
-        let rtv_heap = Device::create_descriptor_heap_impl(
-            &mut self.raw.clone(),
+        let rtv_heap = descriptors::HeapLinear::new(
+            &self.raw,
             d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
             false,
             config.image_count as _,
@@ -2996,10 +2973,8 @@ impl d::Device<B> for Device {
                     &mut resource as *mut *mut _ as *mut *mut _);
             }
 
-            let rtv_handle = rtv_heap.at(i as _, 0).cpu;
-            unsafe {
-                self.raw.clone().CreateRenderTargetView(resource, &rtv_desc, rtv_handle);
-            }
+            let rtv = rtv_heap.alloc_handle();
+            unsafe { self.raw.clone().CreateRenderTargetView(resource, &rtv_desc, rtv); }
 
             let surface_type = config
                 .color_format
@@ -3033,7 +3008,7 @@ impl d::Device<B> for Device {
                 },
                 bytes_per_block,
                 block_dim,
-                clear_cv: vec![rtv_handle],
+                clear_cv: vec![rtv],
                 clear_dv: Vec::new(),
                 clear_sv: Vec::new(),
             }

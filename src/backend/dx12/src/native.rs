@@ -395,34 +395,12 @@ impl DescriptorHeap {
 
 /// Slice of an descriptor heap, which is allocated for a pool.
 /// Pools will create descriptor sets inside this slice.
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct DescriptorHeapSlice {
-    #[derivative(Debug="ignore")]
-    pub(crate) heap: ComPtr<d3d12::ID3D12DescriptorHeap>,
-    pub(crate) start: DualHandle,
-    pub(crate) handle_size: u64,
-    pub(crate) range_allocator: RangeAllocator<u64>,
+    pub(crate) slice: Range<u64>,
+    pub(crate) free_list: RangeAllocator<u64>,
 }
 
 impl DescriptorHeapSlice {
-    pub(crate) fn alloc_handles(&mut self, count: u64) -> Option<DualHandle> {
-        self.range_allocator.allocate_range(count).map(|range| {
-            DualHandle {
-                cpu: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: self.start.cpu.ptr + (self.handle_size * range.start) as usize },
-                gpu: d3d12::D3D12_GPU_DESCRIPTOR_HANDLE { ptr: self.start.gpu.ptr + (self.handle_size * range.start) as u64 },
-                size: count,
-            }
-        })
-    }
-
-    /// Free handles previously given out by this `DescriptorHeapSlice`.  Do not use this with handles not given out by this `DescriptorHeapSlice`.
-    pub(crate) fn free_handles(&mut self, handle: DualHandle) {
-        let start = (handle.gpu.ptr - self.start.gpu.ptr) / self.handle_size;
-        let handle_range = start..start + handle.size as u64;
-        self.range_allocator.free_range(handle_range);
-    }
-
     pub(crate) fn clear(&mut self) {
         self.range_allocator.reset();
     }

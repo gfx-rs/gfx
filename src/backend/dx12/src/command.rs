@@ -16,7 +16,7 @@ use winapi::shared::{dxgiformat, winerror};
 
 use wio::com::ComPtr;
 
-use {conv, device, descriptors_cpu, internal, native as n, Backend, Device, Shared, MAX_VERTEX_BUFFERS, validate_line_width};
+use {conv, device, descriptors, internal, native as n, Backend, Device, Shared, MAX_VERTEX_BUFFERS, validate_line_width};
 use device::ViewInfo;
 use root_constants::RootConstant;
 use smallvec::SmallVec;
@@ -1248,9 +1248,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         pass_cache.framebuffer.attachments[rtv_id.0]
                     };
 
-                    let mut rtv_pool = descriptors_cpu::HeapLinear::new(
+                    let mut rtv_pool = descriptors::HeapLinear::new(
                         &device,
                         d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+                        false,
                         clear_rects.len()
                     );
 
@@ -1269,7 +1270,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 layers: clear_rect.layers.clone()
                             }
                         };
-                        let rtv = rtv_pool.alloc_handle();
+                        let rtv = rtv_pool.alloc_handle().cpu;
                         Device::view_image_as_render_target_impl(
                             &mut device,
                             rtv,
@@ -1410,13 +1411,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
 
         // Descriptor heap for the current blit, only storing the src image
-        let srv_heap = Device::create_descriptor_heap_impl(
-            &mut device.clone(),
+        let srv_heap = descriptors::HeapLinear::new(
+            &device,
             d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
             true,
             1,
         );
-        let srv_handle = srv_heap.at(0, 0);
+        let srv_handle = srv_heap.alloc_handle();
+        self.temporary_gpu_heaps.push(srv_heap.înto_raw);
 
         let srv_desc = Device::build_image_as_shader_resource_desc(
             &ViewInfo {
@@ -1436,7 +1438,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             device.CreateShaderResourceView(src.resource, &srv_desc, srv_handle.cpu);
             self.raw.SetDescriptorHeaps(1, &mut srv_heap.raw.as_raw());
         }
-        self.temporary_gpu_heaps.push(srv_heap.raw);
 
         let filter = match filter {
             image::Filter::Nearest => d3d12::D3D12_FILTER_MIN_MAG_MIP_POINT,
