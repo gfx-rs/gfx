@@ -180,7 +180,7 @@ impl PhysicalDevice {
                 argument_buffers: Self::supports_any(device, ARGUMENT_BUFFER_SUPPORT) && false, //TODO
                 shared_textures: !Self::is_mac(device),
                 format_depth24_stencil8: device.d24_s8_supported(),
-                format_depth32_stencil8: false, //TODO: crashing the Metal validation layer upon copying from buffer
+                format_depth32_stencil8: true, //TODO: crashing the Metal validation layer upon copying from buffer
                 format_min_srgb_channels: if Self::is_mac(&*device) {4} else {1},
                 format_b5: !Self::is_mac(device),
                 max_buffers_per_stage: 31,
@@ -614,6 +614,8 @@ impl hal::Device<Backend> for Device {
             .map(|attachment| attachment.borrow().clone())
             .collect::<Vec<_>>();
         let mut color_channels = Vec::new();
+        let mut depth_stencil_aspects = format::Aspects::empty();
+
         for attachment in &attachments {
             let is_depth = match attachment.format {
                 Some(f) => f.is_depth(),
@@ -621,6 +623,16 @@ impl hal::Device<Backend> for Device {
             };
 
             let mtl_attachment: &metal::RenderPassAttachmentDescriptorRef = if is_depth {
+                depth_stencil_aspects = attachment.format
+                    .map(|f| f.surface_desc().aspects)
+                    .unwrap_or(format::Aspects::empty());
+                if depth_stencil_aspects.contains(format::Aspects::STENCIL) {
+                    let stencil = pass
+                        .stencil_attachment()
+                        .expect("no stencil attachment");
+                    stencil.set_load_action(conv::map_load_operation(attachment.stencil_ops.load));
+                    stencil.set_store_action(conv::map_store_operation(attachment.stencil_ops.store));
+                }
                 pass
                     .depth_attachment()
                     .expect("no depth attachement")
@@ -640,6 +652,7 @@ impl hal::Device<Backend> for Device {
             desc: pass,
             attachments,
             color_channels,
+            depth_stencil_aspects,
         }
     }
 
@@ -1119,11 +1132,18 @@ impl hal::Device<Backend> for Device {
         if let Some(attachment) = depth_attachment {
             let at = attachment.borrow();
             inner.depth_stencil = Some(at.mtl_format);
-            descriptor
-                .depth_attachment()
-                .unwrap()
-                .set_texture(Some(&at.raw));
-            // TODO: stencil
+            if renderpass.depth_stencil_aspects.contains(format::Aspects::DEPTH) {
+                descriptor
+                    .depth_attachment()
+                    .unwrap()
+                    .set_texture(Some(&at.raw));
+            }
+            if renderpass.depth_stencil_aspects.contains(format::Aspects::STENCIL) {
+                descriptor
+                    .stencil_attachment()
+                    .unwrap()
+                    .set_texture(Some(&at.raw));
+            }
         }
 
         Ok(n::Framebuffer { descriptor, inner })

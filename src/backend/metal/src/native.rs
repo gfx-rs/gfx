@@ -34,6 +34,7 @@ pub struct RenderPass {
     pub(crate) desc: metal::RenderPassDescriptor,
     pub(crate) attachments: Vec<pass::Attachment>,
     pub(crate) color_channels: Vec<Option<Channel>>,
+    pub(crate) depth_stencil_aspects: hal::format::Aspects,
 }
 
 unsafe impl Send for RenderPass {}
