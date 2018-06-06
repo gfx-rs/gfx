@@ -363,36 +363,27 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .into_iter()
             .map(|clear| {
                 match *clear.borrow() {
-                    com::AttachmentClear::Color(index, cv) => {
+                    com::AttachmentClear::Color { index, value } => {
                         vk::ClearAttachment {
                             aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
                             color_attachment: index as _,
-                            clear_value: vk::ClearValue { color: conv::map_clear_color(cv) },
+                            clear_value: vk::ClearValue { color: conv::map_clear_color(value) },
                         }
                     }
-                    com::AttachmentClear::Depth(v) => {
+                    com::AttachmentClear::DepthStencil { depth, stencil } => {
                         vk::ClearAttachment {
-                            aspect_mask: vk::IMAGE_ASPECT_DEPTH_BIT,
+                            aspect_mask: if depth.is_some() { vk::IMAGE_ASPECT_DEPTH_BIT } else { vk::ImageAspectFlags::empty() } |
+                                if stencil.is_some() { vk::IMAGE_ASPECT_STENCIL_BIT } else { vk::ImageAspectFlags::empty() },
                             color_attachment: 0,
-                            clear_value: vk::ClearValue { depth: conv::map_clear_depth(v) },
-                        }
-                    }
-                    com::AttachmentClear::Stencil(v) => {
-                        vk::ClearAttachment {
-                            aspect_mask: vk::IMAGE_ASPECT_STENCIL_BIT,
-                            color_attachment: 0,
-                            clear_value: vk::ClearValue { depth: conv::map_clear_stencil(v) },
-                        }
-                    }
-                    com::AttachmentClear::DepthStencil(cv) => {
-                        vk::ClearAttachment {
-                            aspect_mask: vk::IMAGE_ASPECT_DEPTH_BIT | vk::IMAGE_ASPECT_STENCIL_BIT,
-                            color_attachment: 0,
-                            clear_value: vk::ClearValue { depth: conv::map_clear_depth_stencil(cv) },
+                            clear_value: vk::ClearValue {
+                                depth: vk::ClearDepthStencilValue {
+                                    depth: depth.unwrap_or_default(),
+                                    stencil: stencil.unwrap_or_default(),
+                                },
+                            },
                         }
                     }
                 }
-
             })
             .collect();
 

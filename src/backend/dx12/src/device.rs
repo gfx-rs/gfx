@@ -575,7 +575,7 @@ impl Device {
         let MipSlice = info.range.levels.start as _;
         let FirstArraySlice = info.range.layers.start as _;
         let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
-
+        assert_eq!(info.range.levels.start + 1, info.range.levels.end);
         assert!(info.range.layers.end <= info.kind.num_layers());
         let is_msaa = info.kind.num_samples() > 1;
 
@@ -654,16 +654,16 @@ impl Device {
     fn view_image_as_render_target(
         &self, info: ViewInfo
     ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
-        let mut pool = self.rtv_pool.lock().unwrap();
-        let handle = pool.alloc_handle();
-
+        let handle = self.rtv_pool.lock().unwrap().alloc_handle();
         Self::view_image_as_render_target_impl(&mut self.raw.clone(), handle, info)
             .map(|_| handle)
     }
 
-    fn view_image_as_depth_stencil(
-        &self, info: ViewInfo
-    ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
+    pub(crate) fn view_image_as_depth_stencil_impl(
+        device: &mut ComPtr<d3d12::ID3D12Device>,
+        handle: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
+        info: ViewInfo,
+    ) -> Result<(), image::ViewError> {
         #![allow(non_snake_case)]
 
         let mut desc = d3d12::D3D12_DEPTH_STENCIL_VIEW_DESC {
@@ -676,7 +676,6 @@ impl Device {
         let MipSlice = info.range.levels.start as _;
         let FirstArraySlice = info.range.layers.start as _;
         let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
-
         assert_eq!(info.range.levels.start + 1, info.range.levels.end);
         assert!(info.range.layers.end <= info.kind.num_layers());
         let is_msaa = info.kind.num_samples() > 1;
@@ -730,12 +729,19 @@ impl Device {
             }
         };
 
-        let handle = self.dsv_pool.lock().unwrap().alloc_handle();
         unsafe {
-            self.raw.clone().CreateDepthStencilView(info.resource, &desc, handle);
+            device.CreateDepthStencilView(info.resource, &desc, handle);
         }
 
-        Ok(handle)
+        Ok(())
+    }
+
+    fn view_image_as_depth_stencil(
+        &self, info: ViewInfo
+    ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
+        let handle = self.dsv_pool.lock().unwrap().alloc_handle();
+        Self::view_image_as_depth_stencil_impl(&mut self.raw.clone(), handle, info)
+            .map(|_| handle)
     }
 
     pub(crate) fn build_image_as_shader_resource_desc(info: &ViewInfo) -> Result<d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC, image::ViewError> {
