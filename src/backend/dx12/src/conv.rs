@@ -163,10 +163,10 @@ pub fn map_rasterizer(rasterizer: &pso::Rasterizer) -> D3D12_RASTERIZER_DESC {
             Fill => D3D12_FILL_MODE_SOLID,
         },
         CullMode: match rasterizer.cull_face {
-            Some(cf) if cf == pso::Face::FRONT => D3D12_CULL_MODE_FRONT,
-            Some(cf) if cf == pso::Face::BACK => D3D12_CULL_MODE_BACK,
-            Some(_) => panic!("Culling both front and back faces is not supported"),
-            _ => D3D12_CULL_MODE_NONE,
+            pso::Face::NONE => D3D12_CULL_MODE_NONE,
+            pso::Face::FRONT => D3D12_CULL_MODE_FRONT,
+            pso::Face::BACK => D3D12_CULL_MODE_BACK,
+            _ => panic!("Culling both front and back faces is not supported"),
         },
         FrontCounterClockwise: match rasterizer.front_face {
             Clockwise => FALSE,

@@ -267,10 +267,10 @@ pub fn map_polygon_mode(rm: pso::PolygonMode) -> (vk::PolygonMode, f32) {
 
 pub fn map_cull_face(cf: pso::Face) -> vk::CullModeFlags {
     match cf {
+        pso::Face::NONE => vk::CULL_MODE_NONE,
         pso::Face::FRONT => vk::CULL_MODE_FRONT_BIT,
         pso::Face::BACK => vk::CULL_MODE_BACK_BIT,
-        f if f == pso::Face::FRONT | pso::Face::BACK => vk::CULL_MODE_FRONT_AND_BACK,
-        _ => vk::CULL_MODE_NONE,
+        _ => vk::CULL_MODE_FRONT_AND_BACK,
     }
 }
 

@@ -183,7 +183,7 @@ impl<B: Backend> Device<B> {
         use image::Usage;
         use hal::image::{Layout, Tiling};
 
-        let aspects = format.aspects();
+        let aspects = format.surface_desc().aspects;
         let flags = image::StorageFlags::empty();
         let image = self.raw.create_image(kind, mip_levels, format, Tiling::Optimal, usage, flags)?;
         let (image, memory) = allocator.allocate_image(self, usage, image);

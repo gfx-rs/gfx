@@ -180,7 +180,7 @@ impl PhysicalDevice {
                 argument_buffers: Self::supports_any(device, ARGUMENT_BUFFER_SUPPORT) && false, //TODO
                 shared_textures: !Self::is_mac(device),
                 format_depth24_stencil8: device.d24_s8_supported(),
-                format_depth32_stencil8: false, //TODO: crashing the Metal validation layer upon copying from buffer
+                format_depth32_stencil8: true, //TODO: crashing the Metal validation layer upon copying from buffer
                 format_min_srgb_channels: if Self::is_mac(&*device) {4} else {1},
                 format_b5: !Self::is_mac(device),
                 max_buffers_per_stage: 31,
@@ -613,23 +613,34 @@ impl hal::Device<Backend> for Device {
         let attachments = attachments.into_iter()
             .map(|attachment| attachment.borrow().clone())
             .collect::<Vec<_>>();
-        let mut color_channels = Vec::new();
+        let mut num_colors = 0;
+
         for attachment in &attachments {
-            let is_depth = match attachment.format {
-                Some(f) => f.is_depth(),
+            let aspects = match attachment.format {
+                Some(f) => f.surface_desc().aspects,
                 None => continue,
             };
 
-            let mtl_attachment: &metal::RenderPassAttachmentDescriptorRef = if is_depth {
+            let mtl_attachment: &metal::RenderPassAttachmentDescriptorRef = if aspects.contains(format::Aspects::COLOR) {
+                num_colors += 1;
+                pass
+                    .color_attachments()
+                    .object_at(num_colors - 1)
+                    .expect("too many color attachments")
+            } else {
+                if aspects.contains(format::Aspects::STENCIL) {
+                    let stencil = pass
+                        .stencil_attachment()
+                        .expect("no stencil attachment");
+                    stencil.set_load_action(conv::map_load_operation(attachment.stencil_ops.load));
+                    stencil.set_store_action(conv::map_store_operation(attachment.stencil_ops.store));
+                }
+                if !aspects.contains(format::Aspects::DEPTH) {
+                    continue
+                }
                 pass
                     .depth_attachment()
                     .expect("no depth attachement")
-            } else {
-                color_channels.push(attachment.format.map(|f| f.base_format().1.into()));
-                pass
-                    .color_attachments()
-                    .object_at(color_channels.len() - 1)
-                    .expect("too many color attachments")
             };
 
             mtl_attachment.set_load_action(conv::map_load_operation(attachment.ops.load));
@@ -639,7 +650,6 @@ impl hal::Device<Backend> for Device {
         n::RenderPass {
             desc: pass,
             attachments,
-            color_channels,
         }
     }
 
@@ -1095,35 +1105,42 @@ impl hal::Device<Backend> for Device {
 
         let mut inner = n::FramebufferInner {
             extent,
-            colors: Vec::with_capacity(renderpass.color_channels.len()),
+            colors: Vec::new(),
             depth_stencil: None,
         };
 
-        let mut attachments = attachments.into_iter();
-        for (i, &channel) in renderpass.color_channels.iter().enumerate() {
-            let attachment = attachments.next().expect("Not enough colour attachments provided");
+        for (rat, attachment) in renderpass.attachments.iter().zip(attachments) {
             let at = attachment.borrow();
-            inner.colors.push((at.mtl_format, channel));
-            descriptor
-                .color_attachments()
-                .object_at(i)
-                .expect("too many color attachments")
-                .set_texture(Some(&at.raw));
-        }
-
-        let depth_attachment = attachments.next();
-        if let Some(_) = attachments.next() {
-            panic!("Metal does not support multiple depth attachments")
-        }
-
-        if let Some(attachment) = depth_attachment {
-            let at = attachment.borrow();
-            inner.depth_stencil = Some(at.mtl_format);
-            descriptor
-                .depth_attachment()
-                .unwrap()
-                .set_texture(Some(&at.raw));
-            // TODO: stencil
+            let (aspects, channel) = match rat.format {
+                Some(format) => (format.surface_desc().aspects, format.base_format().1.into()),
+                None => continue,
+            };
+            if aspects.contains(format::Aspects::COLOR) {
+                descriptor
+                    .color_attachments()
+                    .object_at(inner.colors.len())
+                    .expect("too many color attachments")
+                    .set_texture(Some(&at.raw));
+                inner.colors.push((at.mtl_format, channel));
+            }
+            if aspects.contains(format::Aspects::DEPTH) {
+                inner.depth_stencil = Some(at.mtl_format);
+                descriptor
+                    .depth_attachment()
+                    .unwrap()
+                    .set_texture(Some(&at.raw));
+            }
+            if aspects.contains(format::Aspects::STENCIL) {
+                if let Some(mtl_format) = inner.depth_stencil {
+                    assert_eq!(mtl_format, at.mtl_format);
+                } else {
+                    inner.depth_stencil = Some(at.mtl_format);
+                }
+                descriptor
+                    .stencil_attachment()
+                    .unwrap()
+                    .set_texture(Some(&at.raw));
+            }
         }
 
         Ok(n::Framebuffer { descriptor, inner })

@@ -1,6 +1,6 @@
 use {AutoreleasePool, Backend, Shared, validate_line_width};
 use {native, window};
-use internal::{BlitVertex, ClearKey, ClearVertex};
+use internal::{BlitVertex, Channel, ClearKey, ClearVertex};
 
 use std::borrow::{self, Borrow};
 use std::cell::RefCell;
@@ -1536,7 +1536,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         }.to_owned(),
                     });
                     ClearKey {
-                        color: Some((format, index as u8, channel.unwrap())),
+                        color: Some((format, index as u8, channel)),
                         depth: None,
                         stencil: None
                     }
@@ -1979,22 +1979,33 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let descriptor: metal::RenderPassDescriptor = unsafe {
             msg_send![framebuffer.descriptor, copy]
         };
+        let mut num_colors = 0;
 
-        for (i, value) in clear_values.into_iter().enumerate() {
-            let value = *value.borrow();
-            match render_pass.color_channels.get(i) {
-                Some(channel) => {
-                    let color_desc = descriptor.color_attachments().object_at(i).expect("too many clear values");
-                    let mtl_color = channel
-                        .expect("Unable to clear an attachment with unknown format")
-                        .interpret(unsafe { value.color });
-                    color_desc.set_clear_color(mtl_color);
-                }
-                None => {
-                    let depth_desc = descriptor.depth_attachment().expect("no depth attachment");
-                    let mtl_depth = unsafe { value.depth_stencil.depth as f64 };
-                    depth_desc.set_clear_depth(mtl_depth);
-                }
+        for (rat, clear_value) in render_pass.attachments.iter().zip(clear_values) {
+            let value = *clear_value.borrow();
+            let (aspects, channel) = match rat.format {
+                Some(format) => (format.surface_desc().aspects, Channel::from(format.base_format().1)),
+                None => continue,
+            };
+            if aspects.contains(Aspects::COLOR) {
+                let color_desc = descriptor
+                    .color_attachments()
+                    .object_at(num_colors)
+                    .unwrap();
+                let mtl_color = channel
+                    .interpret(unsafe { value.color });
+                color_desc.set_clear_color(mtl_color);
+                num_colors += 1;
+            }
+            if aspects.contains(Aspects::DEPTH) {
+                let depth_desc = descriptor.depth_attachment().unwrap();
+                let mtl_depth = unsafe { value.depth_stencil.depth as f64 };
+                depth_desc.set_clear_depth(mtl_depth);
+            }
+            if aspects.contains(Aspects::STENCIL) {
+                let depth_desc = descriptor.stencil_attachment().unwrap();
+                let mtl_stencil = unsafe { value.depth_stencil.stencil };
+                depth_desc.set_clear_stencil(mtl_stencil);
             }
         }
 
